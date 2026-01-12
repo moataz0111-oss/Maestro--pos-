@@ -93,10 +93,6 @@ const AVAILABLE_PERMISSIONS = [
 
 // تجميع الصلاحيات حسب المجموعة
 const PERMISSION_GROUPS = [...new Set(AVAILABLE_PERMISSIONS.map(p => p.group))];
-  { id: 'categories', name: 'الفئات', description: 'إدارة الفئات' },
-  { id: 'users', name: 'المستخدمين', description: 'إدارة المستخدمين' },
-  { id: 'settings', name: 'الإعدادات', description: 'الوصول للإعدادات' },
-];
 
 export default function Settings() {
   const { user, hasRole, logout } = useAuth();
@@ -110,6 +106,7 @@ export default function Settings() {
   const [deliveryApps, setDeliveryApps] = useState([]);
   const [categories, setCategories] = useState([]);
   const [products, setProducts] = useState([]);
+  const [kitchenSections, setKitchenSections] = useState([]);
   const [newEmail, setNewEmail] = useState('');
   const [loading, setLoading] = useState(true);
   
@@ -117,10 +114,13 @@ export default function Settings() {
   const [userDialogOpen, setUserDialogOpen] = useState(false);
   const [editUserDialogOpen, setEditUserDialogOpen] = useState(false);
   const [branchDialogOpen, setBranchDialogOpen] = useState(false);
+  const [editBranchDialogOpen, setEditBranchDialogOpen] = useState(false);
   const [printerDialogOpen, setPrinterDialogOpen] = useState(false);
   const [categoryDialogOpen, setCategoryDialogOpen] = useState(false);
   const [productDialogOpen, setProductDialogOpen] = useState(false);
   const [editProductDialogOpen, setEditProductDialogOpen] = useState(false);
+  const [kitchenSectionDialogOpen, setKitchenSectionDialogOpen] = useState(false);
+  const [editKitchenSectionDialogOpen, setEditKitchenSectionDialogOpen] = useState(false);
   
   // Form data
   const [userForm, setUserForm] = useState({
@@ -130,16 +130,21 @@ export default function Settings() {
   const [branchForm, setBranchForm] = useState({
     name: '', address: '', phone: '', email: ''
   });
+  const [editBranchForm, setEditBranchForm] = useState(null);
   const [printerForm, setPrinterForm] = useState({
     name: '', ip_address: '', port: 9100, branch_id: '', printer_type: 'receipt'
   });
   const [categoryForm, setCategoryForm] = useState({
-    name: '', name_en: '', icon: '', color: '#D4AF37', sort_order: 0
+    name: '', name_en: '', icon: '', color: '#D4AF37', sort_order: 0, kitchen_section_id: ''
   });
   const [productForm, setProductForm] = useState({
     name: '', name_en: '', category_id: '', price: '', cost: '', operating_cost: '', image: '', description: '', barcode: ''
   });
   const [editProductForm, setEditProductForm] = useState(null);
+  const [kitchenSectionForm, setKitchenSectionForm] = useState({
+    name: '', name_en: '', color: '#D4AF37', icon: '🍳', printer_id: '', branch_id: '', sort_order: 0
+  });
+  const [editKitchenSectionForm, setEditKitchenSectionForm] = useState(null);
 
   useEffect(() => {
     if (hasRole(['admin', 'manager'])) {
@@ -151,13 +156,31 @@ export default function Settings() {
 
   const fetchData = async () => {
     try {
-      const [usersRes, branchesRes, printersRes, settingsRes, appsRes, categoriesRes, productsRes] = await Promise.all([
+      const [usersRes, branchesRes, printersRes, settingsRes, appsRes, categoriesRes, productsRes, sectionsRes] = await Promise.all([
         axios.get(`${API}/users`),
         axios.get(`${API}/branches`),
         axios.get(`${API}/printers`),
         axios.get(`${API}/settings`),
         axios.get(`${API}/delivery-apps`),
         axios.get(`${API}/categories`),
+        axios.get(`${API}/products`),
+        axios.get(`${API}/kitchen-sections`)
+      ]);
+
+      setUsers(usersRes.data);
+      setBranches(branchesRes.data);
+      setPrinters(printersRes.data);
+      setEmailRecipients(settingsRes.data.email_recipients?.emails || []);
+      setDeliveryApps(appsRes.data);
+      setCategories(categoriesRes.data);
+      setProducts(productsRes.data);
+      setKitchenSections(sectionsRes.data);
+    } catch (error) {
+      console.error('Failed to fetch settings:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
         axios.get(`${API}/products`)
       ]);
 
