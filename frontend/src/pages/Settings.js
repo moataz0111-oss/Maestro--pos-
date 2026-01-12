@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
+import { formatPrice } from '../utils/currency';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Input } from '../components/ui/input';
@@ -22,7 +23,10 @@ import {
   Trash2,
   Sun,
   Moon,
-  Monitor
+  Monitor,
+  Truck,
+  Percent,
+  Save
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -57,6 +61,7 @@ export default function Settings() {
   const [branches, setBranches] = useState([]);
   const [printers, setPrinters] = useState([]);
   const [emailRecipients, setEmailRecipients] = useState([]);
+  const [deliveryApps, setDeliveryApps] = useState([]);
   const [newEmail, setNewEmail] = useState('');
   const [loading, setLoading] = useState(true);
   
@@ -86,17 +91,19 @@ export default function Settings() {
 
   const fetchData = async () => {
     try {
-      const [usersRes, branchesRes, printersRes, settingsRes] = await Promise.all([
+      const [usersRes, branchesRes, printersRes, settingsRes, appsRes] = await Promise.all([
         axios.get(`${API}/users`),
         axios.get(`${API}/branches`),
         axios.get(`${API}/printers`),
-        axios.get(`${API}/settings`)
+        axios.get(`${API}/settings`),
+        axios.get(`${API}/delivery-apps`)
       ]);
 
       setUsers(usersRes.data);
       setBranches(branchesRes.data);
       setPrinters(printersRes.data);
       setEmailRecipients(settingsRes.data.email_recipients?.emails || []);
+      setDeliveryApps(appsRes.data);
     } catch (error) {
       console.error('Failed to fetch settings:', error);
     } finally {
@@ -181,6 +188,25 @@ export default function Settings() {
     }
   };
 
+  const handleUpdateDeliveryApp = async (appId, commissionRate) => {
+    try {
+      const app = deliveryApps.find(a => a.id === appId);
+      await axios.post(`${API}/delivery-app-settings`, {
+        app_id: appId,
+        name: app.name,
+        name_en: app.name_en,
+        commission_type: 'percentage',
+        commission_rate: parseFloat(commissionRate),
+        is_active: app.is_active !== false,
+        payment_terms: 'weekly'
+      });
+      toast.success('تم تحديث نسبة العمولة');
+      fetchData();
+    } catch (error) {
+      toast.error('فشل في التحديث');
+    }
+  };
+
   const getRoleText = (role) => {
     const roles = {
       admin: 'مدير النظام',
@@ -221,11 +247,12 @@ export default function Settings() {
 
       <main className="max-w-5xl mx-auto px-6 py-6">
         <Tabs defaultValue="appearance" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-5">
+          <TabsList className="grid w-full grid-cols-6">
             <TabsTrigger value="appearance">المظهر</TabsTrigger>
             {hasRole(['admin', 'manager']) && <TabsTrigger value="users">المستخدمين</TabsTrigger>}
             {hasRole(['admin']) && <TabsTrigger value="branches">الفروع</TabsTrigger>}
             {hasRole(['admin', 'manager']) && <TabsTrigger value="printers">الطابعات</TabsTrigger>}
+            {hasRole(['admin']) && <TabsTrigger value="delivery">شركات التوصيل</TabsTrigger>}
             {hasRole(['admin']) && <TabsTrigger value="notifications">الإشعارات</TabsTrigger>}
           </TabsList>
 
@@ -614,6 +641,65 @@ export default function Settings() {
                       ))}
                     </div>
                   )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+          )}
+
+          {/* Delivery Apps */}
+          {hasRole(['admin']) && (
+            <TabsContent value="delivery">
+              <Card className="border-border/50 bg-card">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-foreground">
+                    <Truck className="h-5 w-5" />
+                    إعدادات شركات التوصيل
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-sm text-muted-foreground mb-4">
+                    تحكم في نسب الاستقطاع لكل شركة توصيل
+                  </p>
+                  <div className="space-y-4">
+                    {deliveryApps.map(app => (
+                      <div key={app.id} className="p-4 bg-muted/30 rounded-lg">
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
+                              <Truck className="h-5 w-5 text-primary" />
+                            </div>
+                            <div>
+                              <p className="font-medium text-foreground">{app.name}</p>
+                              <p className="text-xs text-muted-foreground">{app.name_en}</p>
+                            </div>
+                          </div>
+                          <span className={`text-xs px-2 py-1 rounded-full ${
+                            app.is_active !== false ? 'bg-green-500/10 text-green-500' : 'bg-red-500/10 text-red-500'
+                          }`}>
+                            {app.is_active !== false ? 'مفعل' : 'معطل'}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <Label className="text-sm text-muted-foreground whitespace-nowrap">نسبة العمولة:</Label>
+                          <div className="flex items-center gap-2 flex-1">
+                            <Input
+                              type="number"
+                              defaultValue={app.commission_rate || 0}
+                              min="0"
+                              max="100"
+                              step="0.5"
+                              className="w-24"
+                              onBlur={(e) => handleUpdateDeliveryApp(app.id, e.target.value)}
+                            />
+                            <Percent className="h-4 w-4 text-muted-foreground" />
+                          </div>
+                          <p className="text-sm text-muted-foreground">
+                            (حالياً: {app.commission_rate || 0}%)
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </CardContent>
               </Card>
             </TabsContent>
