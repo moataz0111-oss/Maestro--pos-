@@ -1129,11 +1129,12 @@ export default function Settings() {
                         <div className="grid grid-cols-2 gap-4">
                           <div>
                             <Label className="text-foreground">الفرع</Label>
-                            <Select value={kitchenSectionForm.branch_id} onValueChange={(v) => setKitchenSectionForm({ ...kitchenSectionForm, branch_id: v })}>
+                            <Select value={kitchenSectionForm.branch_id || 'none'} onValueChange={(v) => setKitchenSectionForm({ ...kitchenSectionForm, branch_id: v === 'none' ? '' : v })}>
                               <SelectTrigger className="mt-1">
                                 <SelectValue placeholder="اختر فرع" />
                               </SelectTrigger>
                               <SelectContent>
+                                <SelectItem value="none">اختر فرع</SelectItem>
                                 {branches.map(branch => (
                                   <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>
                                 ))}
@@ -1142,12 +1143,12 @@ export default function Settings() {
                           </div>
                           <div>
                             <Label className="text-foreground">الطابعة</Label>
-                            <Select value={kitchenSectionForm.printer_id} onValueChange={(v) => setKitchenSectionForm({ ...kitchenSectionForm, printer_id: v })}>
+                            <Select value={kitchenSectionForm.printer_id || 'none'} onValueChange={(v) => setKitchenSectionForm({ ...kitchenSectionForm, printer_id: v === 'none' ? '' : v })}>
                               <SelectTrigger className="mt-1">
                                 <SelectValue placeholder="اختر طابعة (اختياري)" />
                               </SelectTrigger>
                               <SelectContent>
-                                <SelectItem value="">بدون طابعة</SelectItem>
+                                <SelectItem value="none">بدون طابعة</SelectItem>
                                 {printers.map(printer => (
                                   <SelectItem key={printer.id} value={printer.id}>{printer.name}</SelectItem>
                                 ))}
