@@ -1,0 +1,185 @@
+{
+  "identity": {
+    "name": "Maestro EGP",
+    "description": "A premium, high-efficiency POS and Cost Control system for the Iraqi hospitality sector.",
+    "tone": "Professional, Elegant, Efficient, Authoritative.",
+    "aesthetic": "Midnight Luxury (Dark) & Executive Clean (Light).",
+    "direction": "rtl"
+  },
+  "typography": {
+    "primary_font": "Cairo",
+    "secondary_font": "Tajawal",
+    "font_weights": {
+      "regular": 400,
+      "medium": 500,
+      "bold": 700,
+      "black": 900
+    },
+    "usage": {
+      "headings": "Cairo, font-bold, tracking-tight",
+      "body": "Tajawal, font-medium, leading-relaxed",
+      "numbers": "Cairo, font-bold (Use tabular-nums for prices)"
+    }
+  },
+  "colors": {
+    "palette": {
+      "primary": {
+        "DEFAULT": "#D4AF37",
+        "foreground": "#000000",
+        "hover": "#B5952F",
+        "active": "#967D25"
+      },
+      "secondary": {
+        "DEFAULT": "#1E293B",
+        "foreground": "#FFFFFF"
+      },
+      "background": {
+        "light": "#F8FAFC",
+        "dark": "#09090B"
+      },
+      "surface": {
+        "light": "#FFFFFF",
+        "dark": "#18181B"
+      },
+      "accent": {
+        "success": "#10B981",
+        "warning": "#F59E0B",
+        "error": "#EF4444",
+        "info": "#3B82F6"
+      }
+    },
+    "gradients": {
+      "gold_rush": "linear-gradient(135deg, #D4AF37 0%, #FCD34D 100%)",
+      "midnight_bloom": "linear-gradient(180deg, rgba(24,24,27,0) 0%, rgba(24,24,27,0.9) 100%)"
+    }
+  },
+  "layout_strategy": {
+    "global": {
+      "direction": "rtl",
+      "container": "w-full max-w-[1920px] mx-auto",
+      "spacing_scale": "generous (p-6, p-8 for containers)"
+    },
+    "pos_screen": {
+      "type": "Three-Column Layout",
+      "structure": [
+        {
+          "area": "sidebar_categories",
+          "position": "Right (w-24)",
+          "style": "Vertical Icon Bar, sticky"
+        },
+        {
+          "area": "item_grid",
+          "position": "Center (flex-1)",
+          "style": "Bento Grid (grid-cols-3 md:grid-cols-4 lg:grid-cols-5), gap-4"
+        },
+        {
+          "area": "order_summary",
+          "position": "Left (w-96)",
+          "style": "Fixed panel, high contrast, large totals"
+        }
+      ]
+    },
+    "dashboard": {
+      "type": "Admin Shell",
+      "structure": [
+        {
+          "area": "sidebar_nav",
+          "position": "Right (w-64)",
+          "style": "Collapsible, dark mode by default"
+        },
+        {
+          "area": "header",
+          "position": "Top",
+          "style": "Glassmorphism, contains Branch Selector & User Profile"
+        },
+        {
+          "area": "main_content",
+          "position": "Center",
+          "style": "Control Room Grid (Dense data display)"
+        }
+      ]
+    }
+  },
+  "components": {
+    "buttons": {
+      "primary": "bg-primary text-primary-foreground hover:bg-primary/90 shadow-lg shadow-primary/20 rounded-lg font-bold transition-all active:scale-95",
+      "secondary": "bg-secondary text-secondary-foreground hover:bg-secondary/80 rounded-lg font-medium",
+      "ghost": "hover:bg-accent hover:text-accent-foreground rounded-md",
+      "pos_item": "relative overflow-hidden rounded-xl border border-border/50 bg-card hover:border-primary/50 hover:shadow-xl transition-all duration-300 group"
+    },
+    "cards": {
+      "dashboard": "bg-card text-card-foreground rounded-xl border border-border shadow-sm p-6",
+      "glass": "bg-black/40 backdrop-blur-xl border border-white/10 shadow-2xl"
+    },
+    "inputs": {
+      "default": "h-12 bg-background border-input focus:ring-2 focus:ring-primary/50 rounded-lg text-lg"
+    }
+  },
+  "visual_enhancers": {
+    "glassmorphism": "backdrop-blur-md bg-background/80 border-b border-border/50",
+    "shadows": {
+      "glow": "0 0 20px -5px var(--primary)",
+      "depth": "0 10px 40px -10px rgba(0,0,0,0.5)"
+    },
+    "animations": {
+      "hover_lift": "hover:-translate-y-1 transition-transform duration-200",
+      "click_press": "active:scale-95 transition-transform duration-75"
+    }
+  },
+  "media": {
+    "image_mapping": {
+      "burgers": [
+        "https://images.pexels.com/photos/18796078/pexels-photo-18796078.jpeg",
+        "https://images.pexels.com/photos/5672397/pexels-photo-5672397.jpeg"
+      ],
+      "pizza": [
+        "https://images.pexels.com/photos/35532821/pexels-photo-35532821.jpeg",
+        "https://images.pexels.com/photos/34956178/pexels-photo-34956178.jpeg"
+      ],
+      "coffee": [
+        "https://images.pexels.com/photos/29799615/pexels-photo-29799615.jpeg",
+        "https://images.pexels.com/photos/15800375/pexels-photo-15800375.jpeg"
+      ],
+      "desserts": [
+        "https://images.pexels.com/photos/29538417/pexels-photo-29538417.jpeg",
+        "https://images.pexels.com/photos/15564368/pexels-photo-15564368.jpeg",
+        "https://images.pexels.com/photos/5702852/pexels-photo-5702852.jpeg"
+      ]
+    },
+    "icons": "Use Lucide-React. For POS categories, use large stroke-width (1.5px) icons."
+  },
+  "accessibility": {
+    "contrast": "Ensure 4.5:1 for text. Use Gold text on Black bg, or Black text on Gold bg.",
+    "touch_targets": "Minimum 48x48px for all POS interactions.",
+    "sound": "Implement 'use-sound' library for click feedback on POS items."
+  },
+  "instructions_to_main_agent": [
+    "1. RTL CONFIGURATION: You MUST add 'dir=rtl' to the root html tag or the main layout wrapper. Use Tailwind logical properties (ms-*, me-*, ps-*, pe-*) instead of left/right where possible.",
+    "2. FONT SETUP: Import 'Cairo' and 'Tajawal' from Google Fonts in index.css immediately.",
+    "3. THEME TOGGLE: Implement a robust ThemeProvider that supports 'system', 'dark', 'light'. Default to 'dark' for POS routes.",
+    "4. POS LAYOUT: The POS screen is the core. It must be full-screen, immersive, and disable standard browser scrolling if possible (app-like feel).",
+    "5. SOUND: Add a subtle 'click' sound effect to the POS item buttons. This is a requested feature.",
+    "6. CURRENCY: All prices must be formatted as 'IQD 15,000' or '15,000 د.ع'. Use a utility function for this.",
+    "7. MOCK DATA: Use the provided image URLs to create a realistic 'MenuSeeder' script or mock data file."
+  ],
+  "UNIVERSAL_GUIDELINES_FOR_MAIN_AGENT": [
+    "Dark colors look good when used independently without gradients. DO NOT use dark colors as gradients",
+    "Don't make generic centered layouts, simplistic gradients, and uniform styling.",
+    "Create depth through layered design elements with z-index hierarchy",
+    "Use glass-morphism effects with backdrop filters (12-24px blur)",
+    "You MUST NOT apply universal transition. Eg: transition: all. This results in breaking transforms. Always add transitions for specific interactive elements like button, input excluding transforms",
+    "You MUST NOT center align the app container, ie do not add .App { text-align: center; } in the css file. This disrupts the human natural reading flow of text",
+    "Always use modern button styles like pill-shaped, or sharp button with interaction animations & color relevant to the app style",
+    "NEVER: use AI assistant Emoji characters like 🤖🧠💭💡🔮🎯📚🎭🎬🎪🎉🎊🎁🎀🎂🍰🎈🎨🎰💰💵💳🏦💎🪙💸🤑📊📈📉💹🔢🏆🥇 etc for icons.",
+    "Every interaction needs micro-animations - hover states, transitions, parallax effects, and entrance animations. Static = dead.",
+    "Use 2-3x more spacing than feels comfortable. Cramped designs look cheap.",
+    "Subtle grain textures, noise overlays, custom cursors, selection states, and loading animations: separates good from extraordinary.",
+    "Main agent relies on these image URLs. Missing categories (especially sponsor logos) = main agent will use placeholder text which is FORBIDDEN",
+    "Prioritize using pre-existing components from src/components/ui when applicable",
+    "Create new components that match the style and conventions of existing components when needed",
+    "Examine existing components to understand the project's component patterns before creating new ones",
+    "Components MUST use named exports (export const ComponentName = ...)",
+    "Pages MUST use default exports (export default function PageName() {...})",
+    "Use sonner for toasts. Sonner component are located in /app/src/components/ui/sonner.tsx"
+  ]
+}
