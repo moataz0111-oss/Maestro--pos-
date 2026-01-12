@@ -567,9 +567,10 @@ export default function Settings() {
 
       <main className="max-w-5xl mx-auto px-6 py-6">
         <Tabs defaultValue="appearance" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-4 lg:grid-cols-8">
+          <TabsList className="grid w-full grid-cols-4 lg:grid-cols-9">
             <TabsTrigger value="appearance">المظهر</TabsTrigger>
             {hasRole(['admin', 'manager']) && <TabsTrigger value="users">المستخدمين</TabsTrigger>}
+            {hasRole(['admin', 'manager']) && <TabsTrigger value="customers">العملاء</TabsTrigger>}
             {hasRole(['admin']) && <TabsTrigger value="branches">الفروع</TabsTrigger>}
             {hasRole(['admin', 'manager']) && <TabsTrigger value="categories">الفئات</TabsTrigger>}
             {hasRole(['admin', 'manager']) && <TabsTrigger value="products">المنتجات</TabsTrigger>}
