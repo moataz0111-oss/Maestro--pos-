@@ -14,14 +14,7 @@
 - تتبع التوصيل والسائقين
 - تكامل مع تطبيقات التوصيل (توترز، طلبات، بالي، عالسريع، طلباتي)
 - الوضع الليلي/النهاري التلقائي
-- أصوات النقر على الأزرار
 - واجهة عربية RTL
-
-### الإضافات المطلوبة من المستخدم:
-- حفظ الطلب على الطاولة أو الديلفري باسم السائق أو التطبيق
-- زر حفظ وإرسال للمطبخ قبل الدفع
-- الطلبات تظهر بالمبيعات قبل الإغلاق
-- ترحيل الطلبات الآجلة لشركات التوصيل
 
 ---
 
@@ -50,136 +43,86 @@
 
 ---
 
-## Core Requirements
+## What's Been Implemented (as of Jan 12, 2026)
 
-### 1. Authentication & Authorization
-- [x] تسجيل دخول JWT
-- [x] صلاحيات حسب الدور
-- [x] صلاحيات حسب الفرع
-
-### 2. Branch Management
-- [x] إضافة/تعديل/حذف الفروع
-- [x] تعيين المستخدمين للفروع
-
-### 3. POS System
-- [x] شاشة نقاط البيع الرئيسية
-- [x] الفئات والمنتجات مع الصور
-- [x] السلة مع تعديل الكميات
-- [x] أنواع الطلبات (داخلي، سفري، توصيل)
-- [x] اختيار الطاولة للطلبات الداخلية
-- [x] طرق الدفع (نقدي، بطاقة، آجل)
-- [x] زر المطبخ لحفظ الطلب قبل الدفع
-- [x] أصوات النقر
-
-### 4. Table Management
-- [x] عرض الطاولات بالأقسام
-- [x] حالة الطاولة (متاحة، مشغولة، محجوزة)
-- [x] إضافة طاولات جديدة
-
-### 5. Order Management
-- [x] قائمة الطلبات مع فلاتر
-- [x] تحديث حالة الطلب
-- [x] تفاصيل الطلب
-- [x] الطلبات المعلقة للمطبخ
-
-### 6. Inventory Management
-- [x] المواد الخام
-- [x] المنتجات النهائية
-- [x] إضافة/سحب الكميات
-- [x] تنبيه نقص المخزون
-
-### 7. Delivery Management
-- [x] إدارة السائقين
-- [x] تعيين السائق للطلب
-- [x] تتبع حالة التوصيل
-- [x] تكامل تطبيقات التوصيل
-
-### 8. Shift Management
-- [x] فتح/إغلاق الشفت
-- [x] حساب الفرق النقدي
-- [x] تقرير إغلاق الصندوق
-
-### 9. Reports
-- [x] تقرير المبيعات اليومية
-- [x] تقرير المخزون
-- [x] تقرير حسابات شركات التوصيل الآجلة
-
-### 10. Settings
-- [x] إدارة المستخدمين
-- [x] إدارة الفروع
-- [x] إدارة الطابعات
-- [x] إشعارات البريد الإلكتروني
-- [x] المظهر (فاتح/داكن/تلقائي)
-
----
-
-## What's Been Implemented
-
-### Date: 2025-01-12
-
-#### Backend (FastAPI + MongoDB)
+### Backend (FastAPI + MongoDB)
 - ✅ نظام المصادقة JWT
-- ✅ CRUD للمستخدمين والفروع
-- ✅ CRUD للفئات والمنتجات
+- ✅ CRUD للمستخدمين مع الصلاحيات والفروع
+- ✅ CRUD للفروع
+- ✅ CRUD للفئات والمنتجات (مع التكاليف والربح)
 - ✅ CRUD للمخزون مع transactions
 - ✅ CRUD للطاولات
 - ✅ نظام الطلبات الكامل مع الحالات
-- ✅ إدارة الشفتات
+- ✅ إدارة الشفتات (فتح/إغلاق مع حساب العجز/الفائض)
 - ✅ إدارة السائقين
-- ✅ التقارير (مبيعات، مخزون، آجل)
-- ✅ إعدادات النظام
+- ✅ إدارة المصاريف اليومية
+- ✅ إدارة المشتريات
+- ✅ التقارير الشاملة (7 أنواع):
+  - تقرير المبيعات
+  - تقرير المشتريات
+  - تقرير المخزون
+  - تقرير المصاريف
+  - تقرير الأرباح والخسائر
+  - تقرير الأصناف
+  - تقرير شركات التوصيل (الآجل)
+- ✅ إعدادات شركات التوصيل مع نسب الاستقطاع
+- ✅ إعدادات الطابعات
+- ✅ إعدادات البريد الإلكتروني
 - ✅ Seed data للبيانات الأولية
 
-#### Frontend (React + Tailwind + Shadcn)
+### Frontend (React + Tailwind + Shadcn)
 - ✅ صفحة تسجيل الدخول
-- ✅ لوحة التحكم الرئيسية
+- ✅ لوحة التحكم الرئيسية مع 8 إجراءات سريعة
 - ✅ شاشة نقاط البيع (POS) كاملة
 - ✅ صفحة الطاولات
 - ✅ صفحة الطلبات
 - ✅ صفحة المخزون
 - ✅ صفحة التوصيل والسائقين
-- ✅ صفحة الإعدادات
+- ✅ صفحة المصاريف اليومية
+- ✅ صفحة التقارير الشاملة (7 تبويبات)
+- ✅ صفحة الإعدادات مع 8 تبويبات:
+  - المظهر (فاتح/داكن/تلقائي)
+  - المستخدمين (إضافة/تعديل/حذف/صلاحيات)
+  - الفروع
+  - الفئات (إضافة/تعديل/حذف)
+  - المنتجات (إضافة/تعديل/حذف مع التكاليف والربح)
+  - الطابعات
+  - شركات التوصيل (نسب الاستقطاع)
+  - الإشعارات (البريد الإلكتروني)
 - ✅ الوضع الليلي/النهاري التلقائي
-- ✅ أصوات النقر
 - ✅ واجهة عربية RTL
 
 ---
 
 ## Prioritized Backlog
 
-### P0 - Critical (Must Have)
+### P0 - Critical (Must Have) ✅ COMPLETED
 - [x] Authentication
 - [x] POS Core
 - [x] Orders
 - [x] Tables
+- [x] User Management with Permissions
+- [x] Categories/Products Management
+- [x] Reports (7 types)
+- [x] Expenses Management
 
 ### P1 - High Priority
 - [x] Inventory Management
 - [x] Shift Management
 - [x] Delivery Tracking
-- [ ] Receipt Printing (Hardware Integration)
+- [ ] Receipt Printing (Hardware Integration) - requires network printer
 
 ### P2 - Medium Priority
-- [x] Email Reports (SendGrid configured)
+- [x] Email Reports (SendGrid configured - requires API key)
 - [ ] Stripe Payment Integration
 - [ ] Real-time Kitchen Display
 - [ ] Customer Loyalty Program
 
 ### P3 - Low Priority
 - [ ] Mobile App
-- [ ] Analytics Dashboard
+- [ ] Analytics Dashboard with Charts
 - [ ] Multi-language Support
 - [ ] API for Third-party Integration
-
----
-
-## Next Action Items
-
-1. **إضافة طباعة الفواتير** - تكامل مع طابعات الإيصالات
-2. **تفعيل SendGrid** - إضافة API Key لإرسال التقارير
-3. **Stripe Integration** - تفعيل الدفع بالبطاقة
-4. **شاشة المطبخ** - عرض الطلبات للتحضير في الوقت الحقيقي
-5. **تقارير متقدمة** - رسوم بيانية للمبيعات والأداء
 
 ---
 
@@ -203,3 +146,55 @@
 ### Default Cashier
 - Email: cashier@maestroegp.com
 - Password: cashier123
+
+---
+
+## API Reference
+
+### Authentication
+- `POST /api/auth/login` - تسجيل الدخول
+- `POST /api/auth/register` - إنشاء مستخدم
+- `GET /api/auth/me` - معلومات المستخدم الحالي
+
+### Users
+- `GET /api/users` - قائمة المستخدمين
+- `PUT /api/users/{id}` - تعديل مستخدم
+- `DELETE /api/users/{id}` - حذف مستخدم
+
+### Categories
+- `GET /api/categories` - قائمة الفئات
+- `POST /api/categories` - إضافة فئة
+- `PUT /api/categories/{id}` - تعديل فئة
+- `DELETE /api/categories/{id}` - حذف فئة
+
+### Products
+- `GET /api/products` - قائمة المنتجات
+- `POST /api/products` - إضافة منتج
+- `PUT /api/products/{id}` - تعديل منتج
+- `DELETE /api/products/{id}` - حذف منتج
+
+### Orders
+- `GET /api/orders` - قائمة الطلبات
+- `POST /api/orders` - إنشاء طلب
+- `PUT /api/orders/{id}/status` - تحديث حالة الطلب
+- `PUT /api/orders/{id}/payment` - تحديث طريقة الدفع
+
+### Reports
+- `GET /api/reports/sales` - تقرير المبيعات
+- `GET /api/reports/purchases` - تقرير المشتريات
+- `GET /api/reports/inventory` - تقرير المخزون
+- `GET /api/reports/expenses` - تقرير المصاريف
+- `GET /api/reports/profit-loss` - تقرير الأرباح والخسائر
+- `GET /api/reports/products` - تقرير الأصناف
+- `GET /api/reports/delivery-credits` - تقرير شركات التوصيل
+
+### Shifts
+- `POST /api/shifts` - فتح شفت
+- `POST /api/shifts/{id}/close` - إغلاق شفت
+- `GET /api/shifts/current` - الشفت الحالي
+
+---
+
+## Test Reports
+- `/app/test_reports/iteration_1.json` - Initial build tests
+- `/app/test_reports/iteration_2.json` - New features tests (100% pass rate)
