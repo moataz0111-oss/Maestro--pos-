@@ -20,7 +20,9 @@ import {
   LogOut,
   Sun,
   Moon,
-  LayoutGrid
+  LayoutGrid,
+  BarChart3,
+  Receipt
 } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 
