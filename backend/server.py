@@ -941,7 +941,9 @@ async def get_operating_costs(branch_id: Optional[str] = None, current_user: dic
 
 @api_router.post("/tables", response_model=TableResponse)
 async def create_table(table: TableCreate, current_user: dict = Depends(get_current_user)):
-    if current_user["role"] not in [UserRole.ADMIN, UserRole.MANAGER]:
+    # السماح للمدير والأدمن أو من لديه صلاحية tables
+    user_permissions = current_user.get("permissions", [])
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.MANAGER] and "tables" not in user_permissions:
         raise HTTPException(status_code=403, detail="غير مصرح")
     
     table_doc = {
