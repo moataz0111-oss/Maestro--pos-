@@ -940,16 +940,362 @@ export default function Settings() {
                           <p className="text-sm text-muted-foreground">{branch.address}</p>
                           <p className="text-sm text-muted-foreground">{branch.phone}</p>
                         </div>
-                        <span className={`text-xs px-2 py-1 rounded-full ${
-                          branch.is_active ? 'bg-green-500/10 text-green-500' : 'bg-red-500/10 text-red-500'
-                        }`}>
-                          {branch.is_active ? 'نشط' : 'معطل'}
-                        </span>
+                        <div className="flex items-center gap-3">
+                          <span className={`text-xs px-2 py-1 rounded-full ${
+                            branch.is_active !== false ? 'bg-green-500/10 text-green-500' : 'bg-red-500/10 text-red-500'
+                          }`}>
+                            {branch.is_active !== false ? 'نشط' : 'معطل'}
+                          </span>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="text-blue-500 hover:bg-blue-500/10"
+                            onClick={() => handleEditBranch(branch)}
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="text-destructive hover:bg-destructive/10"
+                            onClick={() => handleDeleteBranch(branch.id)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </div>
                     ))}
                   </div>
                 </CardContent>
               </Card>
+
+              {/* Edit Branch Dialog */}
+              <Dialog open={editBranchDialogOpen} onOpenChange={setEditBranchDialogOpen}>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle className="text-foreground">تعديل الفرع</DialogTitle>
+                  </DialogHeader>
+                  {editBranchForm && (
+                    <form onSubmit={handleUpdateBranch} className="space-y-4">
+                      <div>
+                        <Label className="text-foreground">اسم الفرع</Label>
+                        <Input
+                          value={editBranchForm.name}
+                          onChange={(e) => setEditBranchForm({ ...editBranchForm, name: e.target.value })}
+                          required
+                          className="mt-1"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-foreground">العنوان</Label>
+                        <Input
+                          value={editBranchForm.address}
+                          onChange={(e) => setEditBranchForm({ ...editBranchForm, address: e.target.value })}
+                          required
+                          className="mt-1"
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <Label className="text-foreground">الهاتف</Label>
+                          <Input
+                            value={editBranchForm.phone}
+                            onChange={(e) => setEditBranchForm({ ...editBranchForm, phone: e.target.value })}
+                            required
+                            className="mt-1"
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-foreground">البريد الإلكتروني</Label>
+                          <Input
+                            type="email"
+                            value={editBranchForm.email}
+                            onChange={(e) => setEditBranchForm({ ...editBranchForm, email: e.target.value })}
+                            className="mt-1"
+                          />
+                        </div>
+                      </div>
+                      <div className="flex gap-2 pt-4">
+                        <Button type="button" variant="outline" onClick={() => setEditBranchDialogOpen(false)} className="flex-1">
+                          إلغاء
+                        </Button>
+                        <Button type="submit" className="flex-1 bg-primary text-primary-foreground">
+                          حفظ التعديلات
+                        </Button>
+                      </div>
+                    </form>
+                  )}
+                </DialogContent>
+              </Dialog>
+            </TabsContent>
+          )}
+
+          {/* Kitchen Sections */}
+          {hasRole(['admin', 'manager']) && (
+            <TabsContent value="kitchen">
+              <Card className="border-border/50 bg-card">
+                <CardHeader className="flex flex-row items-center justify-between">
+                  <CardTitle className="flex items-center gap-2 text-foreground">
+                    <ChefHat className="h-5 w-5" />
+                    أقسام المطبخ
+                  </CardTitle>
+                  <Dialog open={kitchenSectionDialogOpen} onOpenChange={setKitchenSectionDialogOpen}>
+                    <DialogTrigger asChild>
+                      <Button className="bg-primary text-primary-foreground">
+                        <Plus className="h-4 w-4 ml-2" />
+                        إضافة قسم
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent>
+                      <DialogHeader>
+                        <DialogTitle className="text-foreground">إضافة قسم مطبخ جديد</DialogTitle>
+                      </DialogHeader>
+                      <form onSubmit={handleCreateKitchenSection} className="space-y-4">
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <Label className="text-foreground">اسم القسم (عربي)</Label>
+                            <Input
+                              value={kitchenSectionForm.name}
+                              onChange={(e) => setKitchenSectionForm({ ...kitchenSectionForm, name: e.target.value })}
+                              placeholder="المطبخ الساخن"
+                              required
+                              className="mt-1"
+                            />
+                          </div>
+                          <div>
+                            <Label className="text-foreground">اسم القسم (إنجليزي)</Label>
+                            <Input
+                              value={kitchenSectionForm.name_en}
+                              onChange={(e) => setKitchenSectionForm({ ...kitchenSectionForm, name_en: e.target.value })}
+                              placeholder="Hot Kitchen"
+                              className="mt-1"
+                            />
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-3 gap-4">
+                          <div>
+                            <Label className="text-foreground">الأيقونة</Label>
+                            <Input
+                              value={kitchenSectionForm.icon}
+                              onChange={(e) => setKitchenSectionForm({ ...kitchenSectionForm, icon: e.target.value })}
+                              placeholder="🍳"
+                              className="mt-1"
+                            />
+                          </div>
+                          <div>
+                            <Label className="text-foreground">اللون</Label>
+                            <Input
+                              type="color"
+                              value={kitchenSectionForm.color}
+                              onChange={(e) => setKitchenSectionForm({ ...kitchenSectionForm, color: e.target.value })}
+                              className="mt-1 h-10"
+                            />
+                          </div>
+                          <div>
+                            <Label className="text-foreground">الترتيب</Label>
+                            <Input
+                              type="number"
+                              value={kitchenSectionForm.sort_order}
+                              onChange={(e) => setKitchenSectionForm({ ...kitchenSectionForm, sort_order: parseInt(e.target.value) || 0 })}
+                              className="mt-1"
+                            />
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <Label className="text-foreground">الفرع</Label>
+                            <Select value={kitchenSectionForm.branch_id} onValueChange={(v) => setKitchenSectionForm({ ...kitchenSectionForm, branch_id: v })}>
+                              <SelectTrigger className="mt-1">
+                                <SelectValue placeholder="اختر فرع" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {branches.map(branch => (
+                                  <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div>
+                            <Label className="text-foreground">الطابعة</Label>
+                            <Select value={kitchenSectionForm.printer_id} onValueChange={(v) => setKitchenSectionForm({ ...kitchenSectionForm, printer_id: v })}>
+                              <SelectTrigger className="mt-1">
+                                <SelectValue placeholder="اختر طابعة (اختياري)" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="">بدون طابعة</SelectItem>
+                                {printers.map(printer => (
+                                  <SelectItem key={printer.id} value={printer.id}>{printer.name}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+                        <div className="flex gap-2 pt-4">
+                          <Button type="button" variant="outline" onClick={() => setKitchenSectionDialogOpen(false)} className="flex-1">
+                            إلغاء
+                          </Button>
+                          <Button type="submit" className="flex-1 bg-primary text-primary-foreground">
+                            إنشاء
+                          </Button>
+                        </div>
+                      </form>
+                    </DialogContent>
+                  </Dialog>
+                </CardHeader>
+                <CardContent>
+                  {kitchenSections.length === 0 ? (
+                    <div className="text-center py-8">
+                      <ChefHat className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                      <p className="text-muted-foreground">لا توجد أقسام مطبخ</p>
+                      <p className="text-sm text-muted-foreground mt-2">أضف أقسام المطبخ لتنظيم الطلبات (مثل: المطبخ الساخن، المطبخ البارد، المشروبات)</p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                      {kitchenSections.map(section => (
+                        <div key={section.id} className="relative p-4 bg-muted/30 rounded-lg border border-border/50">
+                          <div className="flex items-center gap-3">
+                            <div 
+                              className="w-12 h-12 rounded-lg flex items-center justify-center text-2xl"
+                              style={{ backgroundColor: `${section.color}20` }}
+                            >
+                              {section.icon || '🍳'}
+                            </div>
+                            <div>
+                              <p className="font-medium text-foreground">{section.name}</p>
+                              {section.name_en && <p className="text-xs text-muted-foreground">{section.name_en}</p>}
+                            </div>
+                          </div>
+                          <div className="absolute top-2 left-2 flex gap-1">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-blue-500 hover:bg-blue-500/10"
+                              onClick={() => handleEditKitchenSection(section)}
+                            >
+                              <Edit className="h-3 w-3" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-destructive hover:bg-destructive/10"
+                              onClick={() => handleDeleteKitchenSection(section.id)}
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                          </div>
+                          <p className="text-xs text-muted-foreground mt-3">
+                            {categories.filter(c => c.kitchen_section_id === section.id).length} فئة
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Category Assignment */}
+                  {kitchenSections.length > 0 && categories.length > 0 && (
+                    <div className="mt-6 pt-6 border-t border-border">
+                      <h3 className="font-medium text-foreground mb-4 flex items-center gap-2">
+                        <Utensils className="h-4 w-4" />
+                        ربط الفئات بأقسام المطبخ
+                      </h3>
+                      <div className="space-y-2">
+                        {categories.map(cat => (
+                          <div key={cat.id} className="flex items-center justify-between p-3 bg-muted/20 rounded-lg">
+                            <div className="flex items-center gap-3">
+                              <span className="text-lg">{cat.icon || '📦'}</span>
+                              <span className="text-foreground">{cat.name}</span>
+                            </div>
+                            <Select 
+                              value={cat.kitchen_section_id || 'none'} 
+                              onValueChange={(v) => handleAssignCategoryToSection(cat.id, v === 'none' ? null : v)}
+                            >
+                              <SelectTrigger className="w-[180px]">
+                                <SelectValue placeholder="اختر قسم" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="none">بدون قسم</SelectItem>
+                                {kitchenSections.map(section => (
+                                  <SelectItem key={section.id} value={section.id}>
+                                    {section.icon} {section.name}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Edit Kitchen Section Dialog */}
+              <Dialog open={editKitchenSectionDialogOpen} onOpenChange={setEditKitchenSectionDialogOpen}>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle className="text-foreground">تعديل قسم المطبخ</DialogTitle>
+                  </DialogHeader>
+                  {editKitchenSectionForm && (
+                    <form onSubmit={handleUpdateKitchenSection} className="space-y-4">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <Label className="text-foreground">اسم القسم (عربي)</Label>
+                          <Input
+                            value={editKitchenSectionForm.name}
+                            onChange={(e) => setEditKitchenSectionForm({ ...editKitchenSectionForm, name: e.target.value })}
+                            required
+                            className="mt-1"
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-foreground">اسم القسم (إنجليزي)</Label>
+                          <Input
+                            value={editKitchenSectionForm.name_en}
+                            onChange={(e) => setEditKitchenSectionForm({ ...editKitchenSectionForm, name_en: e.target.value })}
+                            className="mt-1"
+                          />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-3 gap-4">
+                        <div>
+                          <Label className="text-foreground">الأيقونة</Label>
+                          <Input
+                            value={editKitchenSectionForm.icon}
+                            onChange={(e) => setEditKitchenSectionForm({ ...editKitchenSectionForm, icon: e.target.value })}
+                            className="mt-1"
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-foreground">اللون</Label>
+                          <Input
+                            type="color"
+                            value={editKitchenSectionForm.color}
+                            onChange={(e) => setEditKitchenSectionForm({ ...editKitchenSectionForm, color: e.target.value })}
+                            className="mt-1 h-10"
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-foreground">الترتيب</Label>
+                          <Input
+                            type="number"
+                            value={editKitchenSectionForm.sort_order}
+                            onChange={(e) => setEditKitchenSectionForm({ ...editKitchenSectionForm, sort_order: parseInt(e.target.value) || 0 })}
+                            className="mt-1"
+                          />
+                        </div>
+                      </div>
+                      <div className="flex gap-2 pt-4">
+                        <Button type="button" variant="outline" onClick={() => setEditKitchenSectionDialogOpen(false)} className="flex-1">
+                          إلغاء
+                        </Button>
+                        <Button type="submit" className="flex-1 bg-primary text-primary-foreground">
+                          حفظ التعديلات
+                        </Button>
+                      </div>
+                    </form>
+                  )}
+                </DialogContent>
+              </Dialog>
             </TabsContent>
           )}
 
