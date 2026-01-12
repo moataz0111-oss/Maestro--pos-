@@ -169,7 +169,7 @@ export default function Settings() {
 
   const fetchData = async () => {
     try {
-      const [usersRes, branchesRes, printersRes, settingsRes, appsRes, categoriesRes, productsRes, sectionsRes] = await Promise.all([
+      const [usersRes, branchesRes, printersRes, settingsRes, appsRes, categoriesRes, productsRes, sectionsRes, customersRes] = await Promise.all([
         axios.get(`${API}/users`),
         axios.get(`${API}/branches`),
         axios.get(`${API}/printers`),
@@ -177,7 +177,8 @@ export default function Settings() {
         axios.get(`${API}/delivery-apps`),
         axios.get(`${API}/categories`),
         axios.get(`${API}/products`),
-        axios.get(`${API}/kitchen-sections`)
+        axios.get(`${API}/kitchen-sections`),
+        axios.get(`${API}/customers`)
       ]);
 
       setUsers(usersRes.data);
@@ -188,6 +189,7 @@ export default function Settings() {
       setCategories(categoriesRes.data);
       setProducts(productsRes.data);
       setKitchenSections(sectionsRes.data);
+      setCustomers(customersRes.data);
     } catch (error) {
       console.error('Failed to fetch settings:', error);
     } finally {
