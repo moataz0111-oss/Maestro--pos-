@@ -73,6 +73,8 @@ export default function Dashboard() {
     { label: 'نقاط البيع', icon: ShoppingCart, path: '/pos', color: 'bg-primary' },
     { label: 'الطاولات', icon: LayoutGrid, path: '/tables', color: 'bg-blue-500' },
     { label: 'الطلبات', icon: Package, path: '/orders', color: 'bg-green-500' },
+    { label: 'التقارير', icon: BarChart3, path: '/reports', color: 'bg-amber-500' },
+    { label: 'المصاريف', icon: Receipt, path: '/expenses', color: 'bg-red-500' },
     { label: 'المخزون', icon: Package, path: '/inventory', color: 'bg-purple-500' },
     { label: 'التوصيل', icon: Truck, path: '/delivery', color: 'bg-orange-500' },
     { label: 'الإعدادات', icon: Settings, path: '/settings', color: 'bg-gray-500' },
