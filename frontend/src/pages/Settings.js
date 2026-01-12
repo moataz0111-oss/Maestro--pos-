@@ -34,7 +34,12 @@ import {
   Check,
   X,
   ChefHat,
-  Utensils
+  Utensils,
+  UserCheck,
+  Phone,
+  MapPin,
+  Ban,
+  Search
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
