@@ -126,12 +126,14 @@ export default function Settings() {
 
   const fetchData = async () => {
     try {
-      const [usersRes, branchesRes, printersRes, settingsRes, appsRes] = await Promise.all([
+      const [usersRes, branchesRes, printersRes, settingsRes, appsRes, categoriesRes, productsRes] = await Promise.all([
         axios.get(`${API}/users`),
         axios.get(`${API}/branches`),
         axios.get(`${API}/printers`),
         axios.get(`${API}/settings`),
-        axios.get(`${API}/delivery-apps`)
+        axios.get(`${API}/delivery-apps`),
+        axios.get(`${API}/categories`),
+        axios.get(`${API}/products`)
       ]);
 
       setUsers(usersRes.data);
@@ -139,6 +141,8 @@ export default function Settings() {
       setPrinters(printersRes.data);
       setEmailRecipients(settingsRes.data.email_recipients?.emails || []);
       setDeliveryApps(appsRes.data);
+      setCategories(categoriesRes.data);
+      setProducts(productsRes.data);
     } catch (error) {
       console.error('Failed to fetch settings:', error);
     } finally {
