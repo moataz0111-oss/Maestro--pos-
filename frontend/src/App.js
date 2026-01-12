@@ -13,6 +13,8 @@ import Orders from "./pages/Orders";
 import Inventory from "./pages/Inventory";
 import Delivery from "./pages/Delivery";
 import Settings from "./pages/Settings";
+import Reports from "./pages/Reports";
+import Expenses from "./pages/Expenses";
 
 // Protected Route Component
 const ProtectedRoute = ({ children }) => {
