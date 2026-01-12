@@ -163,7 +163,7 @@ export default function Tables() {
               ))}
             </select>
 
-            {hasRole(['admin', 'manager']) && (
+            {(hasRole(['admin', 'manager']) || hasPermission('tables')) && (
               <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
                 <DialogTrigger asChild>
                   <Button className="bg-primary text-primary-foreground" data-testid="add-table-btn">
