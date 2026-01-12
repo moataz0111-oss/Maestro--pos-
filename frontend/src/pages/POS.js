@@ -68,7 +68,7 @@ export default function POS() {
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
   const [deliveryAddress, setDeliveryAddress] = useState('');
-  const [buzzerNumber, setBuzzerNumber] = useState(''); // رقم جهاز التنبيه للسفري
+  const [buzzerNumber, setBuzzerNumber] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('cash');
   const [discount, setDiscount] = useState(0);
   const [deliveryApp, setDeliveryApp] = useState('');
@@ -81,6 +81,14 @@ export default function POS() {
   const [kitchenDialogOpen, setKitchenDialogOpen] = useState(false);
   const [orderNotes, setOrderNotes] = useState('');
   const [pendingOrders, setPendingOrders] = useState([]);
+  
+  // حالات جديدة للعملاء والطلبات المعلقة
+  const [customerData, setCustomerData] = useState(null);
+  const [customerHistory, setCustomerHistory] = useState([]);
+  const [showCustomerHistory, setShowCustomerHistory] = useState(false);
+  const [pendingTakeawayOrders, setPendingTakeawayOrders] = useState([]);
+  const [selectedPendingOrder, setSelectedPendingOrder] = useState(null);
+  const [editingOrder, setEditingOrder] = useState(null);
 
   useEffect(() => {
     fetchData();
