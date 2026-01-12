@@ -226,6 +226,7 @@ class OrderCreate(BaseModel):
     discount: float = 0.0
     notes: Optional[str] = None
     delivery_app: Optional[str] = None  # toters, talabat, baly, etc.
+    driver_id: Optional[str] = None  # السائق المعين
 
 class OrderResponse(BaseModel):
     model_config = ConfigDict(extra="ignore")
