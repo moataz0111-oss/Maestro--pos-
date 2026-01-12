@@ -551,12 +551,12 @@ export default function POS() {
               </Select>
 
               {/* اختيار السائق */}
-              <Select value={selectedDriver} onValueChange={setSelectedDriver}>
+              <Select value={selectedDriver || "none"} onValueChange={(v) => setSelectedDriver(v === "none" ? "" : v)}>
                 <SelectTrigger className="h-10">
                   <SelectValue placeholder="اختر السائق (اختياري)" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">بدون سائق</SelectItem>
+                  <SelectItem value="none">بدون سائق</SelectItem>
                   {drivers.filter(d => d.is_available).map(driver => (
                     <SelectItem key={driver.id} value={driver.id}>{driver.name}</SelectItem>
                   ))}
