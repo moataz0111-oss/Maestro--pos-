@@ -170,7 +170,15 @@ export default function POS() {
   }, []);
 
   const subtotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-  const total = subtotal - discount;
+  
+  // حساب عمولة شركة التوصيل
+  const selectedDeliveryApp = deliveryApps.find(a => a.id === deliveryApp);
+  const commissionRate = selectedDeliveryApp?.commission_rate || 0;
+  const commissionAmount = subtotal * (commissionRate / 100);
+  
+  // المجموع بعد الخصم والعمولة
+  const totalBeforeCommission = subtotal - discount;
+  const netTotal = totalBeforeCommission - commissionAmount; // المبلغ الصافي بعد خصم العمولة
 
   // حفظ الطلب وإرسال للمطبخ (بدون دفع)
   const handleSaveAndSendToKitchen = async () => {
