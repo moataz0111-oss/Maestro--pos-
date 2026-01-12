@@ -297,14 +297,44 @@ export default function Tables() {
                       {getStatusText(table.status)}
                     </span>
                     
+                    {table.status === 'available' && (
+                      <Button
+                        size="sm"
+                        className="w-full mt-3 bg-primary text-primary-foreground"
+                        onClick={(e) => { e.stopPropagation(); navigate(`/pos?table=${table.id}`); }}
+                      >
+                        فتح طلب
+                      </Button>
+                    )}
+                    
                     {table.status === 'occupied' && (
+                      <div className="space-y-2 mt-3">
+                        <Button
+                          size="sm"
+                          className="w-full bg-blue-500 text-white hover:bg-blue-600"
+                          onClick={(e) => { e.stopPropagation(); navigate(`/pos?table=${table.id}`); }}
+                        >
+                          متابعة الطلب
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="w-full"
+                          onClick={(e) => { e.stopPropagation(); updateTableStatus(table.id, 'available'); }}
+                        >
+                          تحرير الطاولة
+                        </Button>
+                      </div>
+                    )}
+                    
+                    {table.status === 'reserved' && (
                       <Button
                         size="sm"
                         variant="outline"
                         className="w-full mt-3"
                         onClick={(e) => { e.stopPropagation(); updateTableStatus(table.id, 'available'); }}
                       >
-                        تحرير الطاولة
+                        إلغاء الحجز
                       </Button>
                     )}
                   </CardContent>
