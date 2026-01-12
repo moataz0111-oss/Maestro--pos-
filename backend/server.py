@@ -774,6 +774,100 @@ async def update_order_status(order_id: str, status: str, current_user: dict = D
     
     return {"message": "تم التحديث"}
 
+# تحديث طريقة الدفع للطلب المعلق
+@api_router.put("/orders/{order_id}/payment")
+async def update_order_payment(order_id: str, payment_method: str, current_user: dict = Depends(get_current_user)):
+    order = await db.orders.find_one({"id": order_id})
+    if not order:
+        raise HTTPException(status_code=404, detail="الطلب غير موجود")
+    
+    update_data = {
+        "payment_method": payment_method,
+        "updated_at": datetime.now(timezone.utc).isoformat()
+    }
+    
+    if payment_method == PaymentMethod.CREDIT:
+        update_data["payment_status"] = "credit"
+        # إذا كان على تطبيق توصيل - ترحيل للحساب الآجل
+        if order.get("delivery_app"):
+            update_data["credit_transferred"] = True
+    elif payment_method in [PaymentMethod.CASH, PaymentMethod.CARD]:
+        update_data["payment_status"] = "paid"
+    
+    await db.orders.update_one({"id": order_id}, {"$set": update_data})
+    
+    return {"message": "تم تحديث طريقة الدفع"}
+
+# ترحيل الطلب الآجل لشركة التوصيل
+@api_router.put("/orders/{order_id}/transfer-credit")
+async def transfer_order_credit(order_id: str, current_user: dict = Depends(get_current_user)):
+    order = await db.orders.find_one({"id": order_id})
+    if not order:
+        raise HTTPException(status_code=404, detail="الطلب غير موجود")
+    
+    if order.get("payment_method") != PaymentMethod.CREDIT:
+        raise HTTPException(status_code=400, detail="الطلب ليس آجل")
+    
+    if not order.get("delivery_app"):
+        raise HTTPException(status_code=400, detail="الطلب ليس على تطبيق توصيل")
+    
+    await db.orders.update_one(
+        {"id": order_id},
+        {"$set": {
+            "credit_transferred": True,
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        }}
+    )
+    
+    # يمكن إضافة سجل في جدول منفصل لحسابات شركات التوصيل
+    credit_record = {
+        "id": str(uuid.uuid4()),
+        "order_id": order_id,
+        "delivery_app": order["delivery_app"],
+        "amount": order["total"],
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.delivery_app_credits.insert_one(credit_record)
+    
+    return {"message": f"تم ترحيل الطلب لحساب {order['delivery_app']}"}
+
+# تقرير حسابات شركات التوصيل الآجلة
+@api_router.get("/reports/delivery-credits")
+async def get_delivery_credits_report(
+    delivery_app: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    query = {"payment_method": PaymentMethod.CREDIT, "credit_transferred": True}
+    if delivery_app:
+        query["delivery_app"] = delivery_app
+    if start_date:
+        query["created_at"] = {"$gte": start_date}
+    if end_date:
+        query.setdefault("created_at", {})["$lte"] = end_date + "T23:59:59"
+    
+    orders = await db.orders.find(query, {"_id": 0}).to_list(10000)
+    
+    by_app = {}
+    for o in orders:
+        app = o.get("delivery_app", "مباشر")
+        if app not in by_app:
+            by_app[app] = {"count": 0, "total": 0, "orders": []}
+        by_app[app]["count"] += 1
+        by_app[app]["total"] += o["total"]
+        by_app[app]["orders"].append({
+            "order_number": o["order_number"],
+            "total": o["total"],
+            "created_at": o["created_at"]
+        })
+    
+    return {
+        "total_credit": sum(o["total"] for o in orders),
+        "total_orders": len(orders),
+        "by_delivery_app": by_app
+    }
+
 # ==================== SHIFT ROUTES ====================
 
 @api_router.post("/shifts", response_model=ShiftResponse)
