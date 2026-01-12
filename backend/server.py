@@ -269,6 +269,31 @@ class TableResponse(BaseModel):
     status: str = "available"
     current_order_id: Optional[str] = None
 
+# Customer Models - إدارة العملاء
+class CustomerCreate(BaseModel):
+    name: str
+    phone: str
+    phone2: Optional[str] = None  # رقم إضافي
+    address: Optional[str] = None
+    area: Optional[str] = None  # المنطقة
+    notes: Optional[str] = None
+    is_blocked: bool = False  # حظر العميل
+
+class CustomerResponse(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str
+    name: str
+    phone: str
+    phone2: Optional[str] = None
+    address: Optional[str] = None
+    area: Optional[str] = None
+    notes: Optional[str] = None
+    is_blocked: bool = False
+    total_orders: int = 0
+    total_spent: float = 0.0
+    last_order_date: Optional[str] = None
+    created_at: str
+
 # Order Models
 class OrderItemCreate(BaseModel):
     product_id: str
