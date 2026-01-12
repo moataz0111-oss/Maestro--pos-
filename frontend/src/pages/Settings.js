@@ -431,6 +431,68 @@ export default function Settings() {
     }
   };
 
+  // Kitchen Section handlers
+  const handleCreateKitchenSection = async (e) => {
+    e.preventDefault();
+    try {
+      await axios.post(`${API}/kitchen-sections`, kitchenSectionForm);
+      toast.success('تم إنشاء قسم المطبخ');
+      setKitchenSectionDialogOpen(false);
+      setKitchenSectionForm({ name: '', name_en: '', color: '#D4AF37', icon: '🍳', printer_id: '', branch_id: '', sort_order: 0 });
+      fetchData();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'فشل في إنشاء قسم المطبخ');
+    }
+  };
+
+  const handleEditKitchenSection = (s) => {
+    setEditKitchenSectionForm({
+      id: s.id,
+      name: s.name,
+      name_en: s.name_en || '',
+      color: s.color || '#D4AF37',
+      icon: s.icon || '🍳',
+      printer_id: s.printer_id || '',
+      branch_id: s.branch_id || '',
+      sort_order: s.sort_order || 0
+    });
+    setEditKitchenSectionDialogOpen(true);
+  };
+
+  const handleUpdateKitchenSection = async (e) => {
+    e.preventDefault();
+    try {
+      await axios.put(`${API}/kitchen-sections/${editKitchenSectionForm.id}`, editKitchenSectionForm);
+      toast.success('تم تحديث قسم المطبخ');
+      setEditKitchenSectionDialogOpen(false);
+      setEditKitchenSectionForm(null);
+      fetchData();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'فشل في تحديث قسم المطبخ');
+    }
+  };
+
+  const handleDeleteKitchenSection = async (sectionId) => {
+    if (!confirm('هل أنت متأكد من حذف هذا القسم؟')) return;
+    try {
+      await axios.delete(`${API}/kitchen-sections/${sectionId}`);
+      toast.success('تم حذف قسم المطبخ');
+      fetchData();
+    } catch (error) {
+      toast.error('فشل في حذف قسم المطبخ');
+    }
+  };
+
+  const handleAssignCategoryToSection = async (categoryId, sectionId) => {
+    try {
+      await axios.put(`${API}/categories/${categoryId}/kitchen-section`, { kitchen_section_id: sectionId });
+      toast.success('تم تحديث قسم المطبخ للفئة');
+      fetchData();
+    } catch (error) {
+      toast.error('فشل في التحديث');
+    }
+  };
+
   const handleUpdateDeliveryApp = async (appId, commissionRate) => {
     try {
       const app = deliveryApps.find(a => a.id === appId);
