@@ -227,6 +227,137 @@ export default function Settings() {
     }
   };
 
+  const handleEditUser = (u) => {
+    setEditUserForm({
+      id: u.id,
+      full_name: u.full_name,
+      role: u.role,
+      branch_id: u.branch_id || '',
+      permissions: u.permissions || [],
+      is_active: u.is_active !== false
+    });
+    setEditUserDialogOpen(true);
+  };
+
+  const handleUpdateUser = async (e) => {
+    e.preventDefault();
+    try {
+      await axios.put(`${API}/users/${editUserForm.id}`, {
+        full_name: editUserForm.full_name,
+        role: editUserForm.role,
+        branch_id: editUserForm.branch_id || null,
+        permissions: editUserForm.permissions,
+        is_active: editUserForm.is_active
+      });
+      toast.success('تم تحديث المستخدم');
+      setEditUserDialogOpen(false);
+      setEditUserForm(null);
+      fetchData();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'فشل في تحديث المستخدم');
+    }
+  };
+
+  const toggleUserPermission = (permId) => {
+    if (!editUserForm) return;
+    const perms = editUserForm.permissions || [];
+    if (perms.includes(permId)) {
+      setEditUserForm({ ...editUserForm, permissions: perms.filter(p => p !== permId) });
+    } else {
+      setEditUserForm({ ...editUserForm, permissions: [...perms, permId] });
+    }
+  };
+
+  // Category handlers
+  const handleCreateCategory = async (e) => {
+    e.preventDefault();
+    try {
+      await axios.post(`${API}/categories`, categoryForm);
+      toast.success('تم إنشاء الفئة');
+      setCategoryDialogOpen(false);
+      setCategoryForm({ name: '', name_en: '', icon: '', color: '#D4AF37', sort_order: 0 });
+      fetchData();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'فشل في إنشاء الفئة');
+    }
+  };
+
+  const handleDeleteCategory = async (categoryId) => {
+    if (!confirm('هل أنت متأكد من حذف هذه الفئة؟')) return;
+    try {
+      await axios.delete(`${API}/categories/${categoryId}`);
+      toast.success('تم حذف الفئة');
+      fetchData();
+    } catch (error) {
+      toast.error('فشل في حذف الفئة');
+    }
+  };
+
+  // Product handlers
+  const handleCreateProduct = async (e) => {
+    e.preventDefault();
+    try {
+      await axios.post(`${API}/products`, {
+        ...productForm,
+        price: parseFloat(productForm.price) || 0,
+        cost: parseFloat(productForm.cost) || 0,
+        operating_cost: parseFloat(productForm.operating_cost) || 0
+      });
+      toast.success('تم إنشاء المنتج');
+      setProductDialogOpen(false);
+      setProductForm({ name: '', name_en: '', category_id: '', price: '', cost: '', operating_cost: '', image: '', description: '', barcode: '' });
+      fetchData();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'فشل في إنشاء المنتج');
+    }
+  };
+
+  const handleEditProduct = (p) => {
+    setEditProductForm({
+      id: p.id,
+      name: p.name,
+      name_en: p.name_en || '',
+      category_id: p.category_id,
+      price: p.price,
+      cost: p.cost || 0,
+      operating_cost: p.operating_cost || 0,
+      image: p.image || '',
+      description: p.description || '',
+      barcode: p.barcode || '',
+      is_available: p.is_available !== false
+    });
+    setEditProductDialogOpen(true);
+  };
+
+  const handleUpdateProduct = async (e) => {
+    e.preventDefault();
+    try {
+      await axios.put(`${API}/products/${editProductForm.id}`, {
+        ...editProductForm,
+        price: parseFloat(editProductForm.price) || 0,
+        cost: parseFloat(editProductForm.cost) || 0,
+        operating_cost: parseFloat(editProductForm.operating_cost) || 0
+      });
+      toast.success('تم تحديث المنتج');
+      setEditProductDialogOpen(false);
+      setEditProductForm(null);
+      fetchData();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'فشل في تحديث المنتج');
+    }
+  };
+
+  const handleDeleteProduct = async (productId) => {
+    if (!confirm('هل أنت متأكد من حذف هذا المنتج؟')) return;
+    try {
+      await axios.delete(`${API}/products/${productId}`);
+      toast.success('تم حذف المنتج');
+      fetchData();
+    } catch (error) {
+      toast.error('فشل في حذف المنتج');
+    }
+  };
+
   const handleUpdateDeliveryApp = async (appId, commissionRate) => {
     try {
       const app = deliveryApps.find(a => a.id === appId);
