@@ -1023,6 +1023,13 @@ async def create_order(order: OrderCreate, current_user: dict = Depends(get_curr
         payment_status = "paid"
         order_status = OrderStatus.PREPARING
     
+    # الحصول على اسم شركة التوصيل
+    delivery_app_name = None
+    if order.delivery_app:
+        delivery_app_doc = await db.delivery_apps.find_one({"id": order.delivery_app})
+        if delivery_app_doc:
+            delivery_app_name = delivery_app_doc.get("name")
+    
     order_doc = {
         "id": str(uuid.uuid4()),
         "order_number": order_number,
@@ -1031,6 +1038,7 @@ async def create_order(order: OrderCreate, current_user: dict = Depends(get_curr
         "customer_name": order.customer_name,
         "customer_phone": order.customer_phone,
         "delivery_address": order.delivery_address,
+        "buzzer_number": order.buzzer_number,  # رقم جهاز التنبيه
         "items": items_with_cost,
         "subtotal": subtotal,
         "discount": order.discount,
@@ -1044,6 +1052,7 @@ async def create_order(order: OrderCreate, current_user: dict = Depends(get_curr
         "payment_method": order.payment_method,
         "payment_status": payment_status,
         "delivery_app": order.delivery_app,
+        "delivery_app_name": delivery_app_name,  # اسم شركة التوصيل
         "delivery_commission": delivery_commission,
         "driver_id": order.driver_id,
         "notes": order.notes,
