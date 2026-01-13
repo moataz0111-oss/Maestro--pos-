@@ -158,6 +158,8 @@ function AppRoutes() {
       />
       {/* صفحة السائق - بدون حماية للوصول من الهاتف */}
       <Route path="/driver" element={<DriverPortal />} />
+      {/* صفحة Super Admin - لوحة تحكم المالك */}
+      <Route path="/super-admin" element={<SuperAdmin />} />
       <Route path="*" element={<Navigate to="/" />} />
     </Routes>
   );
