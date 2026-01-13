@@ -3,43 +3,74 @@ import { Phone, PhoneOff, User, MapPin, ShoppingCart, X, Clock, PhoneIncoming } 
 import { Button } from './ui/button';
 import { Card } from './ui/card';
 import { formatPrice } from '../utils/currency';
+import { getSoundSettings } from '../utils/sound';
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
-
-// صوت الرنين - نغمة أطول
-const RING_SOUND_URL = 'https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3';
 
 export default function IncomingCallPopup({ onClose, onAnswer, onCreateOrder }) {
   const [activeCalls, setActiveCalls] = useState([]);
   const [isRinging, setIsRinging] = useState(false);
-  const [dismissed, setDismissed] = useState({}); // المكالمات التي تم رفضها/إنهاؤها
-  const audioRef = useRef(null);
+  const [dismissed, setDismissed] = useState({});
+  const audioContextRef = useRef(null);
+  const ringIntervalRef = useRef(null);
   const pollIntervalRef = useRef(null);
 
-  // تشغيل صوت الرنين
-  const playRingSound = () => {
-    try {
-      if (audioRef.current) {
-        audioRef.current.loop = true;
-        audioRef.current.volume = 0.7;
-        audioRef.current.play().catch(() => {});
+  // تشغيل صوت الرنين باستخدام Web Audio API
+  const playRingSound = useCallback(() => {
+    const settings = getSoundSettings();
+    if (!settings.enabled || !settings.callRingtone) return;
+    
+    // إيقاف أي رنين سابق
+    stopRingSound();
+    
+    const volume = settings.volume || 0.7;
+    
+    // تشغيل الرنين كل ثانية
+    const playRingTone = () => {
+      try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        
+        // نغمة رنين هاتف (تردد مزدوج)
+        const playTone = (freq, startTime, duration) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.frequency.value = freq;
+          osc.type = 'sine';
+          gain.gain.setValueAtTime(volume * 0.3, startTime);
+          gain.gain.exponentialRampToValueAtTime(0.01, startTime + duration);
+          osc.start(startTime);
+          osc.stop(startTime + duration);
+        };
+        
+        // رنين هاتف كلاسيكي (440Hz و 480Hz متناوب)
+        playTone(440, ctx.currentTime, 0.1);
+        playTone(480, ctx.currentTime + 0.1, 0.1);
+        playTone(440, ctx.currentTime + 0.2, 0.1);
+        playTone(480, ctx.currentTime + 0.3, 0.1);
+        playTone(440, ctx.currentTime + 0.4, 0.1);
+        playTone(480, ctx.currentTime + 0.5, 0.1);
+        
+      } catch (e) {
+        console.log('Ring sound error:', e);
       }
-    } catch (e) {
-      console.log('Audio play error:', e);
-    }
-  };
+    };
+    
+    // تشغيل فوري
+    playRingTone();
+    
+    // تكرار كل 1.5 ثانية
+    ringIntervalRef.current = setInterval(playRingTone, 1500);
+  }, []);
 
   // إيقاف صوت الرنين
-  const stopRingSound = () => {
-    try {
-      if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current.currentTime = 0;
-      }
-    } catch (e) {
-      console.log('Audio stop error:', e);
+  const stopRingSound = useCallback(() => {
+    if (ringIntervalRef.current) {
+      clearInterval(ringIntervalRef.current);
+      ringIntervalRef.current = null;
     }
-  };
+  }, []);
 
   // جلب المكالمات النشطة
   const fetchActiveCalls = useCallback(async () => {
