@@ -32,7 +32,9 @@ import {
   AlertCircle,
   CheckCircle,
   XCircle,
-  Banknote
+  Banknote,
+  Crown,
+  Building2
 } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 import { toast } from 'sonner';
