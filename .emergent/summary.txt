@@ -1,186 +1,185 @@
 <analysis>**original_problem_statement:**
-المستخدم يريد بناء نظام شامل لإدارة المطاعم والكافيهات باسم Maestro EGP. المتطلبات تشمل نظام مستخدمين (مع صلاحيات)، إدارة المخزون، نقاط بيع (POS)، إدارة الطلبات (داخلي، سفري، توصيل)، طرق دفع متنوعة، تقارير مفصلة، إدارة فروع، ورديات، وعملاء.
-أحدث الطلبات تشمل:
-- تطبيق ويب تقدمي (PWA) للسائقين يعمل بتسجيل الدخول (اسم مستخدم/كلمة مرور) بدلاً من الروابط الفردية.
-- خريطة تتبع مباشرة للسائقين في لوحة التحكم، مع أيقونات دراجات نارية متحركة ومواقع محدثة.
-- تقارير جديدة للمبيعات (ملغاة، خصومات، آجلة).
-- ميزة إغلاق الصندوق للكاشير في نهاية اليوم، مع جرد فئات النقود.
-- إصلاح مشكلة عدم قدرة المستخدمين الجدد على تسجيل الدخول.
-- إصلاح مشكلة عدم ظهور طلبات الطاولات المشغولة في قائمة الطلبات المعلقة.
+المستخدم يريد بناء نظام شامل لإدارة المطاعم والكافيهات باسم Maestro EGP. المتطلبات تشمل نظام مستخدمين (مع صلاحيات)، إدارة المخزون، نقاط بيع (POS)، إدارة الطلبات، طرق دفع، تقارير، إدارة فروع، ورديات، وعملاء.
+تطورت المتطلبات لتشمل:
+- تطبيق ويب تقدمي (PWA) للسائقين.
+- خريطة تتبع مباشرة للسائقين.
+- ميزة إغلاق الصندوق للكاشير.
+- **نظام متعدد العملاء (Multi-tenant):** طلب المستخدم نظامًا يمكنه من خلاله بيع البرنامج لعملاء متعددين، مع لوحة تحكم Super Admin لإدارة هؤلاء العملاء (المستأجرين) وفصل بيانات كل عميل بشكل كامل.
+- إشعارات صوتية للسائقين عند استلام طلب جديد.
+- فتح وردية تلقائيًا للكاشير عند تسجيل الدخول.
+- القدرة على إعادة تعيين/تصفير بيانات المبيعات لعميل معين.
+- إصلاح تقرير إغلاق الصندوق لعرض المجاميع الصحيحة للمبيعات.
 
 **User's preferred language**: Arabic (العربية)
 
 **what currently exists?**
-تطبيق ويب كامل (FastAPI + React) مع نظام مصادقة JWT وصلاحيات للمستخدمين (مدير، مدير فرع، كاشير، سائق).
+تطبيق ويب كامل (FastAPI + React + MongoDB) مع نظام مصادقة JWT. تم تطبيق بنية متعددة العملاء (Multi-tenant) بشكل واسع.
 
 **الميزات الرئيسية المنفذة:**
-- **نظام نقاط البيع (POS):** يدعم الطلبات المحلية (طاولات)، السفري، والتوصيل. تم إصلاح الخلل حيث لم تكن الطلبات المحفوظة تظهر في قائمة الطلبات المعلقة.
-- **إدارة السائقين والتوصيل:**
-    - صفحة إدارة توصيل () تعرض خريطة تتبع حية (باستخدام Leaflet/OpenStreetMap) مع أيقونات دراجات نارية متحركة 🏍️ لمواقع السائقين، ويتم تحديثها تلقائيًا.
-    - إمكانية إضافة وتعديل وحذف السائقين.
-    - إمكانية ربط حسابات السائقين بحسابات مستخدمين من نوع delivery.
-- **بوابة السائق (PWA):**
-    - رابط موحد () يتطلب تسجيل الدخول باسم المستخدم وكلمة المرور.
-    - تعمل كتطبيق ويب تقدمي (PWA) يمكن تثبيته على الهاتف.
-    - يرسل موقع السائق (GPS) تلقائيًا كل 30 ثانية لتحديث الخريطة.
-- **إدارة المستخدمين:**
-    - تم إصلاح مشكلة تسجيل دخول المستخدمين الجدد.
-    - تمت إضافة ميزة إعادة تعيين كلمة المرور للمستخدمين من قبل المسؤول.
-- **التقارير:** تم البدء في إضافة واجهة وتقارير جديدة (الإلغاء، الخصم، الآجل).
-- **إغلاق الصندوق:** تم البدء في إضافة واجهة ومكونات لميزة إغلاق الصندوق للكاشير.
+- **نظام Super Admin:**
+    - لوحة تحكم خاصة () لإدارة العملاء (Tenants).
+    - إمكانية إنشاء عملاء جدد وتعيين اشتراكات لهم.
+    - لوحة تحكم تعرض إحصائيات عامة وقائمة بالعملاء مع أزرار للتحكم (عرض مباشر، الدخول كعميل، تعطيل/تفعيل، حذف).
+    - يتطلب إنشاء حساب الـ Super Admin مفتاح سري خاص ().
+- **فصل البيانات (Data Isolation):** تم تعديل جميع نماذج البيانات والـ APIs تقريبًا لتشمل ، مما يضمن أن كل عميل يرى بياناته فقط.
+- **إصلاح تضارب الجلسات:** تم حل مشكلة تداخل جلسات تسجيل الدخول بين التطبيق الرئيسي وبوابة السائق باستخدام مفاتيح  فريدة.
+- **بوابة السائق:** تحتوي الآن على إشعارات صوتية للطلبات الجديدة مع زر للتحكم في الصوت.
+- **نظام الورديات:** يتم فتح وردية جديدة تلقائيًا لأي مستخدم بصلاحية كاشير عند تسجيل الدخول.
 
 **Last working item**:
-- **Last item agent was working**: تنفيذ طلب المستخدم بعرض أيقونات دراجات نارية 🏍️ على خريطة تتبع السائقين بدلاً من النقاط العادية، وجعلها خريطة حقيقية تفاعلية (باستخدام Leaflet/OpenStreetMap).
-- **Status**: USER VERIFICATION PENDING
-- **Agent Testing Done**: Y (Agent tested by updating driver locations via API and verified the map visually with screenshots).
-- **Which testing method agent to use?**: screenshot tool (to verify the map UI and driver icons).
+- **Last item agent was working**: الاستجابة لطلب المستخدم بإضافة ميزة تصفير المبيعات وإصلاح تقرير إغلاق الصندوق. بدأ الوكيل بإنشاء API لتصفير بيانات العميل وكان على وشك إصلاح API إغلاق الصندوق لعرض الإجماليات الصحيحة (نقدي، آجل، توصيل).
+- **Status**: IN PROGRESS
+- **Agent Testing Done**: N
+- **Which testing method agent to use?**: both. استخدام  لاختبار واجهات برمجة التطبيقات (APIs) الخاصة بإعادة التعيين وإغلاق الصندوق، ثم استخدام  للتحقق من واجهة المستخدم لزر إعادة التعيين والبيانات الصحيحة في نافذة إغلاق الصندوق.
 - **User Testing Done**: N
 
 **All Pending/In progress Issue list**:
-- **Issue 1:** (P0) تضارب في جلسات المستخدم بين التطبيق الرئيسي وبوابة السائق.
+- **Issue 1:** (P0) لوحة تحكم Super Admin تظهر فارغة عند المستخدم.
   **Issues Detail:**
   - **Issue 1:**
-     - **Description:** عند تسجيل الدخول إلى بوابة السائق () ثم محاولة فتح الرابط الرئيسي للنظام ()، يتم إعادة توجيه المستخدم إلى بوابة السائق مرة أخرى. السبب هو أن كلا التطبيقين يستخدمان  في نفس النطاق، مما يسبب تضاربًا في حالة المصادقة.
-     - **Attempted fixes:** قدم الوكيل حلولاً يدوية للمستخدم (استخدام وضع التصفح الخفي أو مسح بيانات الموقع). لم يتم تنفيذ أي إصلاح دائم في الكود.
+     - **Description:** أبلغ المستخدم أنه لا يرى أي عملاء في صفحة ، على الرغم من وجودهم في قاعدة البيانات. أظهرت لقطة شاشة من المستخدم لوحة تحكم فارغة، بينما أظهرت اختبارات الوكيل أن العميل يظهر بشكل صحيح. هذه مشكلة حرجة تمنع المستخدم من الاستفادة من ميزة إدارة العملاء.
+     - **Attempted fixes:** تحقق الوكيل من أن ה-API الخلفي يعمل بشكل صحيح. قام الوكيل بتنظيف بعض التعليمات البرمجية المكررة في  لتحسين منطق التحقق من الـ token.
      - **Next debug checklist:**
-        1.  في ، قم بتغيير مفاتيح  المستخدمة لتكون فريدة وخاصة ببوابة السائق فقط (مثل  بدلاً من ).
-        2.  في ، تأكد من أن التطبيق الرئيسي يستخدم فقط مفاتيح  الخاصة به.
-        3.  يمكن النظر في استخدام مسارات منفصلة تمامًا أو نطاقات فرعية إذا استمرت المشكلة لضمان عزل الجلسات بشكل كامل.
-     - **Why fix this issue and what will be achieved with the fix?**: هذا الخلل يسبب إرباكًا كبيرًا للمستخدم ويمنع مسؤولي النظام من الوصول إلى لوحة التحكم بسهولة إذا كانوا قد اختبروا بوابة السائق. إصلاحه سيضمن تجربة مستخدم سلسة ومنطقية.
-     - **Status**: NOT STARTED
+        1.  أعد فحص ، وتحديداً دالة  وكيفية التعامل مع الـ  عند تحميل الصفحة.
+        2.  التحقق من أي أخطاء تظهر في console المتصفح عند المستخدم.
+        3.  التأكد من أن الـ  المحفوظ في  () صالح ويتم إرساله بشكل صحيح في الـ headers لطلبات الـ API.
+        4.  إضافة معالجة أخطاء أفضل في الواجهة الأمامية لتسجيل الخروج تلقائيًا إذا كان الـ  غير صالح بدلاً من عرض صفحة فارغة.
+     - **Why fix this issue and what will be achieved with the fix?**: إصلاح هذا الخلل ضروري لتمكين المستخدم من إدارة العملاء، وهي ميزة أساسية طلبها.
+     - **Status**: IN PROGRESS
      - **Is recurring issue?**: Y
      - **Should Test frontend/backend/both after fix?**: frontend
      - **Blocked on other issue**: None
 
 **In progress Task List**:
-- **Task 1:** (P0) استكمال ميزة إغلاق الصندوق (Close Cash Register).
-  - **Where to resume**: في ، تم إضافة الزر والنافذة المنبثقة () والحالات المتعلقة بها. الخطوات التالية هي:
-      1.  ربط النموذج في النافذة المنبثقة لإرسال البيانات.
-      2.  إنشاء endpoint جديد في  (مثل ) لاستقبال بيانات جرد الصندوق وحفظها في قاعدة البيانات.
-      3.  ربط الواجهة الأمامية بالـ API الجديد.
-  - **What will be achieved with this?**: سيتمكن الكاشير من جرد الصندوق وتسجيل المبالغ النقدية في نهاية الوردية، مما يوفر تقارير مالية دقيقة.
-  - **Status**: IN PROGRESS
+- **Task 1:** (P0) إصلاح واستكمال تقرير إغلاق الصندوق.
+  - **Description:** أبلغ المستخدم أن نافذة ملخص إغلاق الصندوق تعرض جميع قيم المبيعات (نقدي، آجل، توصيل) كـ صفر بشكل غير صحيح.
+  - **Where to resume**: في ملف ، يجب تعديل الـ endpoint المسؤول عن إغلاق الوردية (على الأرجح ) ليقوم بتجميع بيانات المبيعات بشكل صحيح من الطلبات المرتبطة بالوردية المحددة قبل إرجاع الملخص.
+  - **What will be achieved with this?**: سيحصل الكاشير على تقرير مالي دقيق في نهاية ورديته.
+  - **Status**: NOT STARTED
   - **Should Test frontend/backend/both after fix?**: both
   - **Blocked on something**: None
 
-- **Task 2:** (P1) استكمال واختبار التقارير الجديدة.
-  - **Where to resume**: تم إضافة الـ Endpoints في  (, , ) والتبويبات في . الخطوات التالية هي:
-      1.  التأكد من أن دوال  في  تستدعي هذه الـ Endpoints بشكل صحيح.
-      2.  عرض البيانات المستلمة في جداول أو بطاقات داخل كل تبويب.
-      3.  اختبار كل تقرير للتأكد من دقة البيانات المعروضة.
-  - **What will be achieved with this?**: تزويد الإدارة برؤى أعمق حول العمليات المالية، مثل الطلبات الملغاة، الخصومات الممنوحة، والمدفوعات الآجلة.
-  - **Status**: IN PROGRESS
+- **Task 2:** (P1) إضافة واجهة مستخدم لميزة تصفير المبيعات.
+  - **Description:** طلب المستخدم وجود زر في لوحة تحكم Super Admin لتصفير بيانات المبيعات لعميل معين.
+  - **Where to resume**: تم إنشاء الـ API الخلفي (). الخطوة التالية هي إضافة زر في واجهة المستخدم في  لكل عميل يستدعي هذا الـ API.
+  - **What will be achieved with this?**: سيتمكن المستخدم (Super Admin) من مسح البيانات التجريبية للعملاء بسهولة.
+  - **Status**: NOT STARTED
   - **Should Test frontend/backend/both after fix?**: both
-  - **Blocked on something**: None
+  - **Blocked on something**: Issue 1: لوحة تحكم Super Admin تظهر فارغة. يجب إصلاح الواجهة أولاً.
 
 **Upcoming and Future Tasks**
 - **Upcoming Tasks:**
-    - **(P1) تكامل هوية المتصل (Caller ID):** بحث وتقديم خيارات للمستخدم لتنفيذ ميزة عرض معلومات العميل عند تلقي مكالمة هاتفية.
-    - **(P1) تقارير البريد الإلكتروني:** تنفيذ إرسال تقارير ملخصة يومية عبر البريد الإلكتروني.
+    - **(P1) تحسين خريطة التتبع:** جعل واجهة خريطة السائقين تبدو أكثر احترافية.
+    - **(P1) إعدادات النظام:** واجهة لإدارة مظهر النظام (اللوجو، الاسم) وصلاحيات رؤية الفروع.
+    - **(P1) تتبع وقت السائق:** حساب وعرض الوقت الذي يستغرقه السائق لتسليم الطلب.
+    - **(P2) تقارير الأصناف:** إنشاء تقارير مبيعات مفصلة حسب الصنف وتصديرها إلى Excel.
 - **Future Tasks:**
-    - **(P2) تكامل الطابعة:** بحث وتنفيذ طريقة لطباعة الإيصالات على طابعات الشبكة المحلية.
-    - **(P2) أصوات النقر (Click Sounds):** إضافة مؤثرات صوتية عند النقر على جميع عناصر الواجهة التفاعلية.
-    - **(P0 - CRITICAL) إعادة هيكلة الكود الخلفي (Backend Refactoring):** ملف  تجاوز 2300 سطر ويحتاج بشكل عاجل إلى تقسيمه إلى هيكل مشروع منظم (routes, models, services) لضمان قابلية الصيانة المستقبلية.
+    - **(P2) تخصيص الفواتير والطابعات:** التحكم في شكل الفاتورة وربط تلقائي مع الطابعات المحلية.
+    - **(P2) إدارة وصفات المنتجات:** نظام لإدارة المواد الخام والمكونات.
+    - **(P2) تكامل هوية المتصل (Caller ID).**
+    - **(P0 - CRITICAL) إعادة هيكلة الكود الخلفي:** ملف  أصبح ضخمًا جدًا ويجب تقسيمه بشكل عاجل إلى هيكل مشروع منظم (routes, models, services) لضمان استقرار وصيانة المشروع.
 
 **Completed work in this session**
-- **إصلاح الطلبات المعلقة:** تم إصلاح الخلل حيث لم تكن طلبات السفرى والطاولات تظهر في قائمة الطلبات المعلقة.
-- **بوابة سائق موحدة (PWA):** تم تحويل بوابة السائق إلى تطبيق ويب تقدمي () مع تسجيل دخول آمن بدلاً من الروابط الفردية.
-- **خريطة تتبع حية:** تم تنفيذ خريطة تتبع للسائقين في صفحة التوصيل باستخدام أيقونات دراجات نارية متحركة 🏍️ ومواقع محدثة تلقائيًا.
-- **إدارة كاملة للسائقين:** تمت إضافة وظائف التعديل والحذف والربط بحسابات المستخدمين للسائقين.
-- **إصلاح مشاكل المستخدمين:** تم حل مشكلة عدم قدرة المستخدمين الجدد على تسجيل الدخول عبر إضافة ميزة إعادة تعيين كلمة المرور.
-- **تحسينات واجهة نقاط البيع:** يمكن الآن فتح طلب الطاولة المشغولة مباشرة بالضغط على الطاولة الحمراء.
-- **حل مشكلة السائق غير موجود:** تم حل الخطأ الذي كان يظهر في بوابة السائق بسبب استخدام روابط قديمة.
+- **نظام Super Admin متعدد العملاء:** تم بنجاح إنشاء بنية تحتية كاملة لإدارة العملاء (tenants)، بما في ذلك لوحة تحكم خاصة، وإنشاء عملاء، وفصل كامل للبيانات.
+- **فصل البيانات (Data Isolation):** تم تعديل جميع أجزاء النظام تقريبًا للعمل بناءً على ، مما يضمن خصوصية بيانات كل عميل.
+- **إصلاح تضارب الجلسات:** تم حل مشكلة تداخل  بين التطبيق وبوابة السائق.
+- **فتح الوردية التلقائي للكاشير:** تم تنفيذ الميزة بنجاح.
+- **إشعارات صوتية للسائقين:** تمت إضافة إشعارات صوتية للطلبات الجديدة في بوابة السائق.
 
 **Earlier issues found/mentioned but not fixed**
-- **Issue 1:** The main app URL () sometimes incorrectly redirects to the driver login page due to shared  state. (Detailed in All Pending/In progress Issue list).
+- القضية الرئيسية المذكورة هي لوحة تحكم Super Admin تظهر فارغة عند المستخدم، وهي مفصلة في قائمة القضايا المعلقة.
 
 **Known issue recurrence from previous fork**
-- The Pending Orders workflow issue was a recurrence from a previous fork and is now **RESOLVED**.
+- لا يوجد.
 
 **Code Architecture**
 
 
 **Key Technical Concepts**
-- **Backend:** FastAPI
-- **Frontend:** React.js
-- **Database:** MongoDB
-- **Styling:** TailwindCSS, shadcn/ui
-- **Authentication:** JWT (JSON Web Tokens)
-- **Mapping:** Leaflet.js, OpenStreetMap
+- **Multi-tenancy Architecture**
+- **Data Isolation** via 
+- **Role-Based Access Control (RBAC)** including  role
+- **PWA (Progressive Web App)**
+- **JWT Authentication**
 
 **key DB schema**
-- **drivers:** {name, phone, branch_id, is_active, : Optional[str], : Optional[dict]}
-- **users:** {username, password_hash, role: ('admin', 'manager', 'cashier', 'delivery'), branch_id, permissions}
-- **orders:** {..., status: ('pending', 'preparing', 'ready', 'delivered', 'cancelled'), : ('pending', 'paid')}
+- **tenants:** 
+- **users:** 
+- **orders, products, categories, branches, etc.:** All now include a  field.
 
 **changes in tech stack**
-- **Added:** ,  for the driver tracking map.
+- لا توجد تغييرات جوهرية في التقنيات، التغييرات كانت معمارية.
 
 **All files of reference**
-- : Heavily modified with new endpoints for driver location, reports, user management, and linking drivers.
-- : Completely rewritten as a login-based PWA.
-- : Overhauled to include driver CRUD, user linking, and the Leaflet map component.
-- : Logic updated to correctly handle and display pending orders for all types.
-- : Updated to add the 'delivery' role and the reset password feature.
-- : Routing logic modified for the  role.
-- : New file for PWA configuration.
-- : New file for the PWA service worker.
+- : تم تعديله بشكل كبير لدعم بنية الـ Multi-tenancy، وفصل البيانات، وواجهات Super Admin.
+- : ملف جديد تم إنشاؤه وتعديله لواجهة تحكم Super Admin.
+- : تم تحديثه لإصلاح تضارب الجلسات وإضافة منطق فتح الوردية التلقائي.
+- : تم تحديثه لإضافة الإشعارات الصوتية.
+- : تم تحديثه لإضافة مسار .
 
 **Areas that need refactoring**:
-- **CRITICAL:** The  file is now extremely large and complex. It is the single most significant source of technical debt and must be refactored into a proper project structure (e.g., separating routes, models, and business logic) to ensure the project's long-term health.
+- **CRITICAL:** ملف  أصبح يشكل خطرًا على استقرار المشروع. يجب اقتراح إعادة هيكلته كأولوية قصوى على المستخدم.
 
 **key api endpoints**
-- **PUT** : Updates a driver's GPS location.
-- **GET** : Retrieves locations of all active drivers.
-- **PUT** : Updates driver details.
-- **DELETE** : Deletes a driver.
-- **POST** : Links a driver to a user account.
-- **GET** : Retrieves driver information based on the logged-in user's token.
-- **POST** : Allows an admin to reset a user's password.
-- **GET** : Modified to support filtering by  and .
-- **GET** , , : New endpoints for new reports.
+- **POST** : لإنشاء حساب Super Admin الأولي.
+- **POST** : لتسجيل دخول Super Admin.
+- **GET** : لجلب قائمة جميع العملاء.
+- **POST** : لإنشاء عميل جديد.
+- **POST** : لتوليد token للدخول كنظام العميل.
+- **POST** : لتصفير بيانات العميل.
+- تم تعديل غالبية الـ APIs الأخرى لتصفية البيانات بناءً على .
 
 **Critical Info for New Agent**
-- Your highest priority after user feedback should be to address the pending tasks: Close Cash Register and the new reports.
-- Immediately after, you must address the critical usability issue of  conflict between the main app and driver portal.
-- The backend monolith  is a ticking time bomb. You should strongly propose its refactoring as a top-priority task to the user to ensure system stability and future development speed.
+- **الأولوية القصوى هي إصلاح لوحة تحكم Super Admin التي تظهر فارغة للمستخدم.** هذا الخلل يمنعه من استخدام الميزة الأساسية التي طلبها.
+- الأولوية الثانية هي إصلاح تقرير إغلاق الصندوق ليعرض البيانات الصحيحة.
+- يجب أن تحترم جميع التعديلات المستقبلية بنية فصل البيانات عبر .
+- ملف  يمثل ديونًا فنية هائلة ويجب التخطيط لإعادة هيكلته.
 
 **documents and test reports created in this job**
--  (Updated)
+-  (تم تحديثه)
 - 
 
-**Last 10 User Messages and any pending HUMAN messages**
-10. User wants motorcycle icons on the tracking map. **Status: Completed (Verification Pending)**
-9.  User reports the main admin link opens the driver portal. **Status: Workaround provided, permanent fix needed.**
-8.  User asks for the admin link again. **Status: Provided.**
-7.  User wants a single login-based link for all drivers. **Status: Completed.**
-6.  User reports an error Failed to fetch data for user Hani. **Status: Resolved.**
-5.  User shows a screenshot of the login error. **Status: Acknowledged.**
-4.  User reports new users cannot log in. **Status: Resolved.**
-3.  User requests new reports (cancellation, discount, deferred) and a close cash register feature. **Status: IN PROGRESS.**
-2.  User wants to edit drivers. **Status: Completed.**
-1.  User wants to open an occupied table's order by clicking on the table in the POS view. **Status: Completed.**
+**Last 10 User Messages and any pending HUMAN messages** 
+10. يريد تصفير المبيعات وإصلاح مجاميع إغلاق الصندوق. (IN PROGRESS)
+9.  أبلغ أن لوحة تحكم Super Admin لا تعرض أي عملاء. (IN PROGRESS)
+8.  وافق على إكمال فصل البيانات. (DONE)
+7.  طلب تغيير مفتاح السر إلى . (DONE)
+6.  طلب تأكيد فصل البيانات وإضافة أيقونة إدارة العملاء وميزة الدخول المباشر. (DONE)
+5.  طلب إنشاء نظام Super Admin لبيع البرنامج. (DONE)
+4.  طلب فتح الوردية تلقائياً للكاشير. (DONE)
+3.  وافق على اقتراح إضافة إشعارات صوتية للسائق.
+2.  وافق على إضافة إشعارات صوتية للسائق. (DONE)
+1.  أنهى الوكيل مهمة سابقة واقترح تحسينات.
 
 **Project Health Check:**
-- **Broken:** The routing conflict caused by shared  is a significant usability bug that prevents seamless switching between admin and driver views.
+- **Broken:** واجهة تحكم Super Admin لا تعمل بشكل صحيح عند المستخدم، مما يجعل ميزة إدارة العملاء غير قابلة للاستخدام بالنسبة له.
 - **Mocked:** None.
 
 **3rd Party Integrations**
-- **Leaflet / OpenStreetMap:** Used for the driver tracking map.
-- **Planned:** SendGrid (Email), Telephony/Caller ID Service, Stripe (Payments).
+- Leaflet / OpenStreetMap
 
 **Testing status**
-- **Testing agent used after significant changes:** YES.
+- **Testing agent used after significant changes:** YES
 - **Troubleshoot agent used after agent stuck in loop:** NO
 - **Test files created:** 
-- **Known regressions:** None.
+- **Known regressions:** The Super Admin dashboard is not rendering data correctly for the user.
 
 **Credentials to test flow:**
-- **Admin:**  | 
-- **Manager:**  | 
-- **Cashier:**  | 
-- **Delivery:**  | 
+- **Super Admin:**
+    - **Login Page:** 
+    - **Email:** 
+    - **Password:** 
+    - **Secret Key (for setup):** 
+- **Tenant Admin (مطعم البيت العراقي):**
+    - **Login Page:** 
+    - **Email:** 
+    - **Password:** 
+- **Original System Admin:**
+    - **Login Page:** 
+    - **Email:** 
+    - **Password:** 
 
 **What agent forgot to execute**
-- The agent has not implemented a permanent code fix for the  conflict issue between the main application and the driver portal.
-- The Close Cash Register feature and the new reports (Cancelled, Discount, Deferred) were started but are not complete. The backend logic and final UI connections are still pending.</analysis>
+- لم يقم الوكيل بحل مشكلة المستخدم المتعلقة بلوحة تحكم Super Admin الفارغة بشكل نهائي.
+- لم يقم الوكيل بتنفيذ الواجهة الأمامية (الزر) لميزة تصفير بيانات العميل.
+- لم يبدأ الوكيل في إصلاح الخلل المنطقي في تقرير إغلاق الصندوق.</analysis>
