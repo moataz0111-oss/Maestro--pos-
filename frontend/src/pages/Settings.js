@@ -952,8 +952,18 @@ export default function Settings() {
                                 size="icon"
                                 className="text-blue-500 hover:bg-blue-500/10"
                                 onClick={() => handleEditUser(u)}
+                                title="تعديل"
                               >
                                 <Edit className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="text-orange-500 hover:bg-orange-500/10"
+                                onClick={() => handleResetPassword(u)}
+                                title="إعادة تعيين كلمة المرور"
+                              >
+                                <Key className="h-4 w-4" />
                               </Button>
                               {u.id !== user.id && (
                                 <Button
@@ -961,6 +971,7 @@ export default function Settings() {
                                   size="icon"
                                   className="text-destructive hover:bg-destructive/10"
                                   onClick={() => handleDeleteUser(u.id)}
+                                  title="حذف"
                                 >
                                   <Trash2 className="h-4 w-4" />
                                 </Button>
