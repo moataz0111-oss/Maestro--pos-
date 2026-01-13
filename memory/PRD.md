@@ -156,6 +156,15 @@
 - `PUT /api/customers/{id}` - تحديث عميل
 - `DELETE /api/customers/{id}` - حذف عميل
 
+### Drivers Location Tracking (جديد)
+- `PUT /api/drivers/portal/{driver_id}/location` - تحديث موقع السائق GPS
+- `GET /api/drivers/locations` - جلب مواقع جميع السائقين للخريطة
+
+### Driver Portal (جديد)
+- `GET /api/drivers/portal/{driver_id}` - بيانات السائق والطلبات
+- `GET /api/drivers/portal/by-phone/{phone}` - بوابة السائق بالهاتف
+- `PUT /api/drivers/portal/{driver_id}/complete` - إكمال توصيل طلب
+
 ### Orders
 - `GET /api/orders?status=pending` - الطلبات المعلقة
 - `GET /api/orders/{id}` - تفاصيل طلب
