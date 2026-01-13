@@ -103,7 +103,7 @@ export default function IncomingCallPopup({ onClose, onAnswer, onCreateOrder }) 
     } catch (error) {
       console.error('Error fetching calls:', error);
     }
-  }, [isRinging, dismissed]);
+  }, [isRinging, dismissed, playRingSound, stopRingSound]);
 
   // الرد على المكالمة
   const handleAnswer = async (callId) => {
