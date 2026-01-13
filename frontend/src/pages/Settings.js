@@ -158,6 +158,16 @@ export default function Settings() {
     auto_save_new_callers: true,
     play_sound: true
   });
+  
+  // Sound Settings States
+  const [soundSettings, setSoundSettings] = useState({
+    enabled: true,
+    buttonSounds: true,
+    orderNotifications: true,
+    callRingtone: true,
+    driverNotifications: true,
+    volume: 0.7
+  });
   const [callCenterTestStatus, setCallCenterTestStatus] = useState(null);
   const [webhookUrl, setWebhookUrl] = useState('');
   
