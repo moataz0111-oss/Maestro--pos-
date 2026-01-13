@@ -902,8 +902,8 @@ async def create_inventory_item(item: InventoryItemCreate, current_user: dict = 
     return inv_doc
 
 @api_router.get("/inventory", response_model=List[InventoryResponse])
-async def get_inventory(branch_id: Optional[str] = None, item_type: Optional[str] = None):
-    query = {}
+async def get_inventory(branch_id: Optional[str] = None, item_type: Optional[str] = None, current_user: dict = Depends(get_current_user)):
+    query = build_tenant_query(current_user)  # فلترة حسب tenant_id
     if branch_id:
         query["branch_id"] = branch_id
     if item_type:
@@ -913,7 +913,8 @@ async def get_inventory(branch_id: Optional[str] = None, item_type: Optional[str
 
 @api_router.post("/inventory/transaction")
 async def inventory_transaction(transaction: InventoryTransaction, current_user: dict = Depends(get_current_user)):
-    item = await db.inventory.find_one({"id": transaction.inventory_id})
+    query = build_tenant_query(current_user, {"id": transaction.inventory_id})
+    item = await db.inventory.find_one(query)
     if not item:
         raise HTTPException(status_code=404, detail="الصنف غير موجود")
     
@@ -938,6 +939,7 @@ async def inventory_transaction(transaction: InventoryTransaction, current_user:
         "quantity": transaction.quantity,
         "notes": transaction.notes,
         "user_id": current_user["id"],
+        "tenant_id": get_user_tenant_id(current_user),  # فصل البيانات
         "created_at": datetime.now(timezone.utc).isoformat()
     }
     await db.inventory_transactions.insert_one(trans_doc)
