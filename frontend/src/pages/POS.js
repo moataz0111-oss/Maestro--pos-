@@ -506,23 +506,49 @@ export default function POS() {
   return (
     <div className="min-h-screen bg-background flex" dir="rtl">
       {/* Categories Sidebar - Right */}
-      <div className="w-48 border-l border-border bg-card flex flex-col">
+      <div className="w-56 border-l border-border bg-card flex flex-col">
         <div className="p-3 border-b border-border">
           <h2 className="font-bold text-foreground text-sm">الفئات</h2>
         </div>
         <ScrollArea className="flex-1">
-          <div className="p-2 space-y-1">
+          <div className="p-2 space-y-2">
             {categories.map(cat => (
-              <Button
+              <button
                 key={cat.id}
-                variant={selectedCategory === cat.id ? 'default' : 'ghost'}
-                className={`w-full justify-start h-auto py-3 ${selectedCategory === cat.id ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}
                 onClick={() => { setSelectedCategory(cat.id); playClick(); }}
+                className={`w-full rounded-xl overflow-hidden transition-all ${
+                  selectedCategory === cat.id 
+                    ? 'ring-2 ring-primary ring-offset-2 scale-105' 
+                    : 'hover:scale-102 hover:shadow-md'
+                }`}
                 data-testid={`category-${cat.id}`}
               >
-                <span className="ml-2 text-lg">{cat.icon}</span>
-                <span className="truncate">{cat.name}</span>
-              </Button>
+                <div className="relative">
+                  {cat.image ? (
+                    <img 
+                      src={cat.image} 
+                      alt={cat.name}
+                      className="w-full h-20 object-cover"
+                    />
+                  ) : (
+                    <div className="w-full h-20 bg-gradient-to-br from-primary/20 to-primary/40 flex items-center justify-center">
+                      <span className="text-3xl">{cat.icon || '📦'}</span>
+                    </div>
+                  )}
+                  <div className={`absolute inset-0 flex items-end ${
+                    selectedCategory === cat.id 
+                      ? 'bg-gradient-to-t from-primary/90 to-transparent' 
+                      : 'bg-gradient-to-t from-black/70 to-transparent'
+                  }`}>
+                    <div className="p-2 w-full">
+                      <span className="text-white font-bold text-sm drop-shadow-lg flex items-center gap-1">
+                        <span>{cat.icon}</span>
+                        {cat.name}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </button>
             ))}
           </div>
         </ScrollArea>
