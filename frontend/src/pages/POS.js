@@ -875,39 +875,67 @@ export default function POS() {
                 onChange={(e) => setDeliveryAddress(e.target.value)}
                 data-testid="delivery-address"
               />
+              
+              {/* اختيار السائق أولاً */}
+              <div>
+                <p className="text-sm text-muted-foreground mb-2">اختر السائق: <span className="text-red-500">*</span></p>
+                <div className="grid grid-cols-2 gap-2">
+                  {drivers.filter(d => d.is_available).map(driver => (
+                    <button
+                      key={driver.id}
+                      onClick={() => { setSelectedDriver(driver.id); playClick(); }}
+                      className={`p-3 rounded-lg text-sm transition-all flex items-center gap-2 ${
+                        selectedDriver === driver.id 
+                          ? 'bg-green-500 text-white ring-2 ring-green-300' 
+                          : 'bg-muted/50 text-foreground hover:bg-muted border border-border'
+                      }`}
+                    >
+                      <Truck className="h-4 w-4" />
+                      <span>{driver.name}</span>
+                    </button>
+                  ))}
+                  {drivers.filter(d => d.is_available).length === 0 && (
+                    <p className="text-sm text-red-500 col-span-2 text-center py-2">لا يوجد سائقين متاحين</p>
+                  )}
+                </div>
+                {selectedDriver && (
+                  <p className="text-xs text-green-500 mt-1">
+                    ✓ سيتم تحويل الطلب مباشرة للسائق
+                  </p>
+                )}
+              </div>
+              
+              {/* شركة التوصيل */}
               <div>
                 <p className="text-sm text-muted-foreground mb-2">شركة التوصيل:</p>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-3 gap-1">
                   <button
                     onClick={() => { setDeliveryApp(''); playClick(); }}
-                    className={`p-2 rounded-lg text-sm transition-all ${
+                    className={`p-2 rounded-lg text-xs transition-all ${
                       deliveryApp === '' 
                         ? 'bg-primary text-primary-foreground' 
                         : 'bg-muted/50 text-muted-foreground hover:bg-muted'
                     }`}
                   >
-                    بدون شركة
+                    بدون
                   </button>
                   {deliveryApps.map(app => (
                     <button
                       key={app.id}
                       onClick={() => { setDeliveryApp(app.id); playClick(); }}
-                      className={`p-2 rounded-lg text-sm transition-all ${
+                      className={`p-2 rounded-lg text-xs transition-all ${
                         deliveryApp === app.id 
                           ? 'bg-primary text-primary-foreground' 
                           : 'bg-muted/50 text-foreground hover:bg-muted'
                       }`}
                     >
                       {app.name}
-                      {app.commission_rate > 0 && (
-                        <span className="text-xs opacity-70 block">{app.commission_rate}%</span>
-                      )}
                     </button>
                   ))}
                 </div>
               </div>
-              {drivers.length > 0 && (
-                <Select value={selectedDriver || 'none'} onValueChange={(v) => setSelectedDriver(v === 'none' ? '' : v)}>
+            </div>
+          )}
                   <SelectTrigger>
                     <SelectValue placeholder="اختر سائق (اختياري)" />
                   </SelectTrigger>
