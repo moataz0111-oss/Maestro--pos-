@@ -2359,6 +2359,245 @@ async def get_products_report(
         "low_selling": sorted(result, key=lambda x: x["quantity_sold"])[:10]
     }
 
+@api_router.get("/reports/cancellations")
+async def get_cancellations_report(
+    start_date: str,
+    end_date: str,
+    branch_id: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """تقرير الإلغاءات"""
+    query = {
+        "status": "cancelled",
+        "created_at": {"$gte": start_date, "$lte": end_date + "T23:59:59"}
+    }
+    if branch_id:
+        query["branch_id"] = branch_id
+    
+    cancelled_orders = await db.orders.find(query, {"_id": 0}).to_list(500)
+    
+    # حساب إجمالي الطلبات للنسبة
+    total_query = {"created_at": {"$gte": start_date, "$lte": end_date + "T23:59:59"}}
+    if branch_id:
+        total_query["branch_id"] = branch_id
+    total_orders = await db.orders.count_documents(total_query)
+    
+    # إلغاءات اليوم
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    today_query = {"status": "cancelled", "created_at": {"$regex": f"^{today}"}}
+    if branch_id:
+        today_query["branch_id"] = branch_id
+    today_cancelled = await db.orders.count_documents(today_query)
+    
+    total_value = sum(o.get("total", 0) for o in cancelled_orders)
+    cancellation_rate = (len(cancelled_orders) / total_orders * 100) if total_orders > 0 else 0
+    
+    return {
+        "total_cancelled": len(cancelled_orders),
+        "total_value": total_value,
+        "cancellation_rate": cancellation_rate,
+        "today_cancelled": today_cancelled,
+        "orders": cancelled_orders
+    }
+
+@api_router.get("/reports/discounts")
+async def get_discounts_report(
+    start_date: str,
+    end_date: str,
+    branch_id: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """تقرير الخصومات"""
+    query = {
+        "discount": {"$gt": 0},
+        "created_at": {"$gte": start_date, "$lte": end_date + "T23:59:59"}
+    }
+    if branch_id:
+        query["branch_id"] = branch_id
+    
+    orders = await db.orders.find(query, {"_id": 0}).to_list(500)
+    
+    # حساب إجمالي المبيعات للنسبة
+    sales_query = {"created_at": {"$gte": start_date, "$lte": end_date + "T23:59:59"}, "status": {"$ne": "cancelled"}}
+    if branch_id:
+        sales_query["branch_id"] = branch_id
+    all_orders = await db.orders.find(sales_query, {"total": 1}).to_list(5000)
+    total_sales = sum(o.get("total", 0) for o in all_orders)
+    
+    total_discounts = sum(o.get("discount", 0) for o in orders)
+    discount_percentage = (total_discounts / total_sales * 100) if total_sales > 0 else 0
+    average_discount = total_discounts / len(orders) if orders else 0
+    
+    return {
+        "total_discounts": total_discounts,
+        "orders_with_discount": len(orders),
+        "average_discount": average_discount,
+        "discount_percentage": discount_percentage,
+        "orders": orders
+    }
+
+@api_router.get("/reports/credit")
+async def get_credit_report(
+    start_date: str,
+    end_date: str,
+    branch_id: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """تقرير الآجل"""
+    query = {
+        "payment_method": "credit",
+        "created_at": {"$gte": start_date, "$lte": end_date + "T23:59:59"}
+    }
+    if branch_id:
+        query["branch_id"] = branch_id
+    
+    orders = await db.orders.find(query, {"_id": 0}).to_list(500)
+    
+    total_credit = sum(o.get("total", 0) for o in orders)
+    collected = sum(o.get("total", 0) for o in orders if o.get("credit_collected"))
+    remaining = total_credit - collected
+    
+    return {
+        "total_credit": total_credit,
+        "total_orders": len(orders),
+        "collected_amount": collected,
+        "remaining_amount": remaining,
+        "orders": orders
+    }
+
+# ==================== CASH REGISTER ROUTES ====================
+
+class CashRegisterClose(BaseModel):
+    denominations: dict  # {"250": 10, "500": 5, ...}
+    notes: Optional[str] = None
+
+@api_router.post("/cash-register/close")
+async def close_cash_register(data: CashRegisterClose, current_user: dict = Depends(get_current_user)):
+    """إغلاق الصندوق"""
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    branch_id = current_user.get("branch_id")
+    
+    # حساب المبلغ المحسوب من الفئات
+    denomination_values = {
+        "250": 250, "500": 500, "1000": 1000, "5000": 5000,
+        "10000": 10000, "25000": 25000, "50000": 50000
+    }
+    calculated_total = sum(
+        denomination_values.get(k, int(k)) * v 
+        for k, v in data.denominations.items()
+    )
+    
+    # جلب مبيعات اليوم النقدية
+    sales_query = {
+        "created_at": {"$regex": f"^{today}"},
+        "payment_method": "cash",
+        "status": {"$ne": "cancelled"}
+    }
+    if branch_id:
+        sales_query["branch_id"] = branch_id
+    
+    cash_orders = await db.orders.find(sales_query, {"total": 1}).to_list(500)
+    expected_cash = sum(o.get("total", 0) for o in cash_orders)
+    
+    # جلب المصاريف النقدية
+    expenses_query = {"date": today, "payment_method": "cash"}
+    if branch_id:
+        expenses_query["branch_id"] = branch_id
+    expenses = await db.expenses.find(expenses_query, {"amount": 1}).to_list(100)
+    total_expenses = sum(e.get("amount", 0) for e in expenses)
+    
+    # الفرق
+    difference = calculated_total - (expected_cash - total_expenses)
+    
+    # حفظ سجل الإغلاق
+    close_record = {
+        "id": str(uuid.uuid4()),
+        "date": today,
+        "branch_id": branch_id,
+        "cashier_id": current_user.get("id"),
+        "cashier_name": current_user.get("full_name") or current_user.get("username"),
+        "denominations": data.denominations,
+        "calculated_total": calculated_total,
+        "expected_cash": expected_cash,
+        "total_expenses": total_expenses,
+        "expected_balance": expected_cash - total_expenses,
+        "difference": difference,
+        "notes": data.notes,
+        "closed_at": datetime.now(timezone.utc).isoformat()
+    }
+    
+    await db.cash_register_closes.insert_one(close_record)
+    
+    return {
+        "message": "تم إغلاق الصندوق بنجاح",
+        "summary": {
+            "calculated_total": calculated_total,
+            "expected_cash": expected_cash,
+            "total_expenses": total_expenses,
+            "expected_balance": expected_cash - total_expenses,
+            "difference": difference,
+            "status": "متطابق" if abs(difference) < 100 else ("زيادة" if difference > 0 else "نقص")
+        }
+    }
+
+@api_router.get("/cash-register/today")
+async def get_today_cash_register(current_user: dict = Depends(get_current_user)):
+    """جلب بيانات صندوق اليوم"""
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    branch_id = current_user.get("branch_id")
+    
+    # مبيعات اليوم النقدية
+    sales_query = {
+        "created_at": {"$regex": f"^{today}"},
+        "payment_method": "cash",
+        "status": {"$ne": "cancelled"}
+    }
+    if branch_id:
+        sales_query["branch_id"] = branch_id
+    
+    cash_orders = await db.orders.find(sales_query, {"_id": 0, "total": 1, "order_number": 1}).to_list(500)
+    total_cash_sales = sum(o.get("total", 0) for o in cash_orders)
+    
+    # مبيعات البطاقة
+    card_query = sales_query.copy()
+    card_query["payment_method"] = "card"
+    card_orders = await db.orders.find(card_query, {"total": 1}).to_list(500)
+    total_card_sales = sum(o.get("total", 0) for o in card_orders)
+    
+    # الآجل
+    credit_query = sales_query.copy()
+    credit_query["payment_method"] = "credit"
+    credit_orders = await db.orders.find(credit_query, {"total": 1}).to_list(500)
+    total_credit = sum(o.get("total", 0) for o in credit_orders)
+    
+    # المصاريف
+    expenses_query = {"date": today}
+    if branch_id:
+        expenses_query["branch_id"] = branch_id
+    expenses = await db.expenses.find(expenses_query, {"_id": 0}).to_list(100)
+    total_expenses = sum(e.get("amount", 0) for e in expenses)
+    
+    # آخر إغلاق
+    last_close_query = {"branch_id": branch_id} if branch_id else {}
+    last_close = await db.cash_register_closes.find_one(
+        last_close_query, 
+        {"_id": 0},
+        sort=[("closed_at", -1)]
+    )
+    
+    return {
+        "date": today,
+        "cash_sales": total_cash_sales,
+        "card_sales": total_card_sales,
+        "credit_sales": total_credit,
+        "total_sales": total_cash_sales + total_card_sales + total_credit,
+        "orders_count": len(cash_orders) + len(card_orders) + len(credit_orders),
+        "expenses": expenses,
+        "total_expenses": total_expenses,
+        "expected_cash": total_cash_sales - total_expenses,
+        "last_close": last_close
+    }
+
 # ==================== SETTINGS ROUTES ====================
 
 @api_router.get("/settings")
