@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { useParams, useSearchParams } from 'react-router-dom';
+import React, { useState, useEffect, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import axios from 'axios';
 import { formatPrice } from '../utils/currency';
 import { Card, CardContent } from '../components/ui/card';
@@ -17,7 +17,13 @@ import {
   AlertCircle,
   CheckCircle,
   User,
-  DollarSign
+  DollarSign,
+  Download,
+  Locate,
+  MapPinOff,
+  Wifi,
+  WifiOff,
+  Share2
 } from 'lucide-react';
 import { toast, Toaster } from 'sonner';
 
@@ -33,11 +39,118 @@ export default function DriverPortal() {
   const [stats, setStats] = useState({ unpaid_total: 0, paid_today: 0, pending_orders: 0 });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  
+  // GPS Tracking states
+  const [locationEnabled, setLocationEnabled] = useState(false);
+  const [currentLocation, setCurrentLocation] = useState(null);
+  const [locationError, setLocationError] = useState(null);
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [isPWAInstallable, setIsPWAInstallable] = useState(false);
+  const [deferredPrompt, setDeferredPrompt] = useState(null);
+
+  // Register Service Worker for PWA
+  useEffect(() => {
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js')
+        .then((registration) => {
+          console.log('SW registered:', registration);
+        })
+        .catch((error) => {
+          console.log('SW registration failed:', error);
+        });
+    }
+
+    // Listen for PWA install prompt
+    const handleBeforeInstallPrompt = (e) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+      setIsPWAInstallable(true);
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+
+    // Online/Offline status
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
+  // GPS Location tracking
+  const startLocationTracking = useCallback(() => {
+    if (!navigator.geolocation) {
+      setLocationError('جهازك لا يدعم GPS');
+      return;
+    }
+
+    const watchId = navigator.geolocation.watchPosition(
+      async (position) => {
+        const { latitude, longitude } = position.coords;
+        setCurrentLocation({ latitude, longitude });
+        setLocationEnabled(true);
+        setLocationError(null);
+
+        // Send location to server
+        if (driver?.id) {
+          try {
+            await axios.put(`${API}/drivers/portal/${driver.id}/location`, {
+              latitude,
+              longitude
+            });
+          } catch (err) {
+            console.error('Failed to update location:', err);
+          }
+        }
+      },
+      (error) => {
+        console.error('GPS error:', error);
+        setLocationError(
+          error.code === 1 ? 'يرجى السماح بالوصول للموقع' :
+          error.code === 2 ? 'الموقع غير متاح' :
+          'خطأ في تحديد الموقع'
+        );
+        setLocationEnabled(false);
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 30000
+      }
+    );
+
+    return () => navigator.geolocation.clearWatch(watchId);
+  }, [driver?.id]);
+
+  // Start tracking when driver is loaded
+  useEffect(() => {
+    if (driver) {
+      const cleanup = startLocationTracking();
+      
+      // Update location every 30 seconds
+      const locationInterval = setInterval(() => {
+        if (currentLocation && driver?.id) {
+          axios.put(`${API}/drivers/portal/${driver.id}/location`, currentLocation)
+            .catch(console.error);
+        }
+      }, 30000);
+
+      return () => {
+        if (cleanup) cleanup();
+        clearInterval(locationInterval);
+      };
+    }
+  }, [driver, startLocationTracking, currentLocation]);
 
   useEffect(() => {
     if (driverId || driverPhone) {
       fetchDriverData();
-      // تحديث كل 15 ثانية
       const interval = setInterval(fetchDriverData, 15000);
       return () => clearInterval(interval);
     } else {
@@ -48,7 +161,6 @@ export default function DriverPortal() {
 
   const fetchDriverData = async () => {
     try {
-      // جلب بيانات السائق
       let driverData;
       if (driverId) {
         const res = await axios.get(`${API}/drivers/portal/${driverId}`);
@@ -81,13 +193,61 @@ export default function DriverPortal() {
   };
 
   const openNavigation = (address) => {
-    // فتح خرائط جوجل مع العنوان
-    const url = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`;
-    window.open(url, '_blank');
+    // Open Google Maps or Waze with the address
+    const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`;
+    const wazeUrl = `https://waze.com/ul?q=${encodeURIComponent(address)}`;
+    
+    // Show options
+    const useWaze = window.confirm('فتح في Google Maps?\n\nاضغط إلغاء لفتح Waze');
+    window.open(useWaze ? googleMapsUrl : wazeUrl, '_blank');
+  };
+
+  const openNavigationWithCoords = (lat, lng, address) => {
+    if (lat && lng) {
+      const googleMapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`;
+      const wazeUrl = `https://waze.com/ul?ll=${lat},${lng}&navigate=yes`;
+      
+      const useWaze = window.confirm('فتح في Google Maps?\n\nاضغط إلغاء لفتح Waze');
+      window.open(useWaze ? googleMapsUrl : wazeUrl, '_blank');
+    } else {
+      openNavigation(address);
+    }
   };
 
   const callCustomer = (phone) => {
     window.location.href = `tel:${phone}`;
+  };
+
+  const installPWA = async () => {
+    if (!deferredPrompt) return;
+    
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    
+    if (outcome === 'accepted') {
+      toast.success('تم تثبيت التطبيق!');
+      setIsPWAInstallable(false);
+    }
+    setDeferredPrompt(null);
+  };
+
+  const shareApp = async () => {
+    const shareUrl = `${window.location.origin}/driver?id=${driver?.id}`;
+    
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: 'Maestro Driver',
+          text: 'رابط تطبيق السائق',
+          url: shareUrl
+        });
+      } catch (err) {
+        console.log('Share failed:', err);
+      }
+    } else {
+      navigator.clipboard.writeText(shareUrl);
+      toast.success('تم نسخ الرابط!');
+    }
   };
 
   if (loading) {
@@ -113,7 +273,6 @@ export default function DriverPortal() {
     );
   }
 
-  // تقسيم الطلبات
   const activeOrders = orders.filter(o => o.status !== 'delivered' && o.status !== 'cancelled');
   const completedOrders = orders.filter(o => o.status === 'delivered');
 
@@ -125,23 +284,85 @@ export default function DriverPortal() {
       <header className="bg-gray-800 border-b border-gray-700 px-4 py-4 sticky top-0 z-50">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-green-500/20 rounded-full flex items-center justify-center">
+            <div className="w-12 h-12 bg-green-500/20 rounded-full flex items-center justify-center relative">
               <Truck className="h-6 w-6 text-green-500" />
+              {/* Online/Offline indicator */}
+              <span className={`absolute bottom-0 right-0 w-3 h-3 rounded-full ${isOnline ? 'bg-green-500' : 'bg-red-500'}`} />
             </div>
             <div>
               <h1 className="font-bold text-lg">{driver?.name}</h1>
-              <p className="text-xs text-gray-400">{driver?.phone}</p>
+              <div className="flex items-center gap-2 text-xs text-gray-400">
+                <span>{driver?.phone}</span>
+                {locationEnabled ? (
+                  <span className="flex items-center gap-1 text-green-400">
+                    <Locate className="h-3 w-3" />
+                    GPS
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-1 text-red-400">
+                    <MapPinOff className="h-3 w-3" />
+                    GPS
+                  </span>
+                )}
+              </div>
             </div>
           </div>
-          <Button 
-            variant="ghost" 
-            size="icon"
-            onClick={fetchDriverData}
-            className="text-gray-400"
-          >
-            <RefreshCw className="h-5 w-5" />
-          </Button>
+          
+          <div className="flex items-center gap-2">
+            {isPWAInstallable && (
+              <Button 
+                variant="ghost" 
+                size="icon"
+                onClick={installPWA}
+                className="text-green-400"
+                title="تثبيت التطبيق"
+              >
+                <Download className="h-5 w-5" />
+              </Button>
+            )}
+            <Button 
+              variant="ghost" 
+              size="icon"
+              onClick={shareApp}
+              className="text-gray-400"
+              title="مشاركة"
+            >
+              <Share2 className="h-5 w-5" />
+            </Button>
+            <Button 
+              variant="ghost" 
+              size="icon"
+              onClick={fetchDriverData}
+              className="text-gray-400"
+            >
+              <RefreshCw className="h-5 w-5" />
+            </Button>
+          </div>
         </div>
+        
+        {/* GPS Error Banner */}
+        {locationError && (
+          <div className="mt-3 bg-red-500/20 text-red-400 px-3 py-2 rounded-lg text-sm flex items-center gap-2">
+            <AlertCircle className="h-4 w-4" />
+            {locationError}
+            <Button 
+              size="sm" 
+              variant="ghost"
+              onClick={startLocationTracking}
+              className="mr-auto text-red-300"
+            >
+              إعادة المحاولة
+            </Button>
+          </div>
+        )}
+        
+        {/* Offline Banner */}
+        {!isOnline && (
+          <div className="mt-3 bg-yellow-500/20 text-yellow-400 px-3 py-2 rounded-lg text-sm flex items-center gap-2">
+            <WifiOff className="h-4 w-4" />
+            غير متصل بالإنترنت
+          </div>
+        )}
       </header>
 
       {/* Stats */}
@@ -306,6 +527,24 @@ export default function DriverPortal() {
                 </span>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* PWA Install Banner */}
+      {isPWAInstallable && (
+        <div className="fixed bottom-4 left-4 right-4 bg-green-600 rounded-xl p-4 shadow-lg">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Download className="h-6 w-6" />
+              <div>
+                <p className="font-bold">تثبيت التطبيق</p>
+                <p className="text-xs text-green-200">للوصول السريع</p>
+              </div>
+            </div>
+            <Button onClick={installPWA} className="bg-white text-green-600 hover:bg-green-50">
+              تثبيت
+            </Button>
           </div>
         </div>
       )}
