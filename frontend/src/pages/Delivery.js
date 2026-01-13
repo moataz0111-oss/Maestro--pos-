@@ -399,8 +399,12 @@ export default function Delivery() {
         </div>
 
         <Tabs defaultValue="drivers" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-2 max-w-md">
+          <TabsList className="grid w-full grid-cols-3 max-w-lg">
             <TabsTrigger value="drivers">السائقين والحسابات</TabsTrigger>
+            <TabsTrigger value="map" className="flex items-center gap-1">
+              <Map className="h-4 w-4" />
+              الخريطة
+            </TabsTrigger>
             <TabsTrigger value="pending">طلبات جاهزة للتوصيل</TabsTrigger>
           </TabsList>
 
