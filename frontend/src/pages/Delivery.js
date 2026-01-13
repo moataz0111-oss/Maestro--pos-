@@ -540,6 +540,28 @@ export default function Delivery() {
                           عرض التفاصيل
                         </Button>
                         
+                        {/* أزرار التعديل والحذف */}
+                        <div className="flex gap-2 mt-2">
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            className="flex-1"
+                            onClick={(e) => { e.stopPropagation(); openEditDialog(driver); }}
+                          >
+                            <Edit className="h-4 w-4 ml-1" />
+                            تعديل
+                          </Button>
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            className="flex-1 text-red-500 hover:text-red-600 hover:bg-red-500/10"
+                            onClick={(e) => { e.stopPropagation(); handleDeleteDriver(driver.id, driver.name); }}
+                          >
+                            <Trash2 className="h-4 w-4 ml-1" />
+                            حذف
+                          </Button>
+                        </div>
+                        
                         {/* رابط السائق للهاتف */}
                         <div className="mt-2 p-2 bg-blue-500/10 rounded-lg">
                           <p className="text-xs text-blue-400 mb-1">رابط للسائق:</p>
