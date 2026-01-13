@@ -2419,6 +2419,200 @@ export default function Settings() {
                   </div>
                 </CardContent>
               </Card>
+              
+              {/* قسم إعدادات الأصوات */}
+              <Card className="border-border/50 bg-card mt-6">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-foreground">
+                    <Volume2 className="h-5 w-5" />
+                    إعدادات الأصوات والتنبيهات
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  {/* التحكم الرئيسي */}
+                  <div className="flex items-center justify-between p-4 bg-muted/30 rounded-lg border border-border/50">
+                    <div className="flex items-center gap-3">
+                      {soundSettings.enabled ? (
+                        <Volume2 className="h-6 w-6 text-primary" />
+                      ) : (
+                        <VolumeX className="h-6 w-6 text-muted-foreground" />
+                      )}
+                      <div>
+                        <h4 className="font-medium text-foreground">تفعيل الأصوات</h4>
+                        <p className="text-sm text-muted-foreground">تشغيل/إيقاف جميع الأصوات في التطبيق</p>
+                      </div>
+                    </div>
+                    <Switch
+                      checked={soundSettings.enabled}
+                      onCheckedChange={(checked) => {
+                        const newSettings = {...soundSettings, enabled: checked};
+                        setSoundSettings(newSettings);
+                        saveSoundSettings(newSettings);
+                        toast.success(checked ? 'تم تفعيل الأصوات' : 'تم إيقاف الأصوات');
+                      }}
+                    />
+                  </div>
+                  
+                  {/* مستوى الصوت */}
+                  <div className="p-4 bg-muted/20 rounded-lg">
+                    <div className="flex items-center justify-between mb-3">
+                      <Label className="text-foreground">مستوى الصوت</Label>
+                      <span className="text-sm text-muted-foreground">{Math.round(soundSettings.volume * 100)}%</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="0"
+                      max="1"
+                      step="0.1"
+                      value={soundSettings.volume}
+                      onChange={(e) => {
+                        const newSettings = {...soundSettings, volume: parseFloat(e.target.value)};
+                        setSoundSettings(newSettings);
+                        saveSoundSettings(newSettings);
+                      }}
+                      className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-primary"
+                      disabled={!soundSettings.enabled}
+                    />
+                  </div>
+                  
+                  {/* أنواع الأصوات */}
+                  <div className="grid gap-4">
+                    <h4 className="font-medium text-foreground border-b border-border pb-2">أنواع التنبيهات</h4>
+                    
+                    {/* أصوات الأزرار */}
+                    <div className="flex items-center justify-between p-3 rounded-lg hover:bg-muted/20 transition-colors">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 bg-blue-500/20 rounded-lg">
+                          <Bell className="h-4 w-4 text-blue-400" />
+                        </div>
+                        <div>
+                          <h5 className="font-medium text-foreground">أصوات الأزرار</h5>
+                          <p className="text-xs text-muted-foreground">صوت عند الضغط على الأزرار والعناصر</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => playClick()}
+                          disabled={!soundSettings.enabled || !soundSettings.buttonSounds}
+                          className="text-xs"
+                        >
+                          تجربة
+                        </Button>
+                        <Switch
+                          checked={soundSettings.buttonSounds}
+                          disabled={!soundSettings.enabled}
+                          onCheckedChange={(checked) => {
+                            const newSettings = {...soundSettings, buttonSounds: checked};
+                            setSoundSettings(newSettings);
+                            saveSoundSettings(newSettings);
+                          }}
+                        />
+                      </div>
+                    </div>
+                    
+                    {/* إشعارات الطلبات */}
+                    <div className="flex items-center justify-between p-3 rounded-lg hover:bg-muted/20 transition-colors">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 bg-green-500/20 rounded-lg">
+                          <ShoppingCart className="h-4 w-4 text-green-400" />
+                        </div>
+                        <div>
+                          <h5 className="font-medium text-foreground">إشعارات الطلبات الجديدة</h5>
+                          <p className="text-xs text-muted-foreground">صوت عند ورود طلب جديد</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => playNewOrderNotification()}
+                          disabled={!soundSettings.enabled || !soundSettings.orderNotifications}
+                          className="text-xs"
+                        >
+                          تجربة
+                        </Button>
+                        <Switch
+                          checked={soundSettings.orderNotifications}
+                          disabled={!soundSettings.enabled}
+                          onCheckedChange={(checked) => {
+                            const newSettings = {...soundSettings, orderNotifications: checked};
+                            setSoundSettings(newSettings);
+                            saveSoundSettings(newSettings);
+                          }}
+                        />
+                      </div>
+                    </div>
+                    
+                    {/* رنين المكالمات */}
+                    <div className="flex items-center justify-between p-3 rounded-lg hover:bg-muted/20 transition-colors">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 bg-yellow-500/20 rounded-lg">
+                          <PhoneIncoming className="h-4 w-4 text-yellow-400" />
+                        </div>
+                        <div>
+                          <h5 className="font-medium text-foreground">رنين المكالمات الواردة</h5>
+                          <p className="text-xs text-muted-foreground">صوت رنين عند ورود مكالمة من الكول سنتر</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => playIncomingCall()}
+                          disabled={!soundSettings.enabled || !soundSettings.callRingtone}
+                          className="text-xs"
+                        >
+                          تجربة
+                        </Button>
+                        <Switch
+                          checked={soundSettings.callRingtone}
+                          disabled={!soundSettings.enabled}
+                          onCheckedChange={(checked) => {
+                            const newSettings = {...soundSettings, callRingtone: checked};
+                            setSoundSettings(newSettings);
+                            saveSoundSettings(newSettings);
+                          }}
+                        />
+                      </div>
+                    </div>
+                    
+                    {/* إشعارات السائقين */}
+                    <div className="flex items-center justify-between p-3 rounded-lg hover:bg-muted/20 transition-colors">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 bg-purple-500/20 rounded-lg">
+                          <Truck className="h-4 w-4 text-purple-400" />
+                        </div>
+                        <div>
+                          <h5 className="font-medium text-foreground">إشعارات السائقين</h5>
+                          <p className="text-xs text-muted-foreground">صوت عند تعيين طلب للسائق</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => playSuccess()}
+                          disabled={!soundSettings.enabled || !soundSettings.driverNotifications}
+                          className="text-xs"
+                        >
+                          تجربة
+                        </Button>
+                        <Switch
+                          checked={soundSettings.driverNotifications}
+                          disabled={!soundSettings.enabled}
+                          onCheckedChange={(checked) => {
+                            const newSettings = {...soundSettings, driverNotifications: checked};
+                            setSoundSettings(newSettings);
+                            saveSoundSettings(newSettings);
+                          }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
             </TabsContent>
           )}
 
