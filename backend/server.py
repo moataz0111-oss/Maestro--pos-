@@ -3515,6 +3515,25 @@ async def delete_tenant(tenant_id: str, current_user: dict = Depends(verify_supe
 @api_router.post("/super-admin/tenants/{tenant_id}/reset-password")
 async def reset_tenant_admin_password(tenant_id: str, new_password: str, current_user: dict = Depends(verify_super_admin)):
     """إعادة تعيين كلمة مرور مدير المستأجر"""
+    
+    # التحقق إذا كان النظام الرئيسي
+    if tenant_id == "main-system":
+        # البحث عن admin النظام الرئيسي
+        admin = await db.users.find_one({
+            "$or": [{"tenant_id": {"$exists": False}}, {"tenant_id": None}],
+            "role": UserRole.ADMIN
+        })
+        if not admin:
+            raise HTTPException(status_code=404, detail="مدير النظام الرئيسي غير موجود")
+        
+        await db.users.update_one(
+            {"id": admin["id"]},
+            {"$set": {"password": hash_password(new_password)}}
+        )
+        
+        return {"message": "تم إعادة تعيين كلمة مرور مدير النظام الرئيسي", "email": admin["email"]}
+    
+    # للعملاء العاديين
     tenant = await db.tenants.find_one({"id": tenant_id})
     if not tenant:
         raise HTTPException(status_code=404, detail="المستأجر غير موجود")
