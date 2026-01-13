@@ -51,7 +51,7 @@ const ProtectedRoute = ({ children }) => {
 
 // Public Route (redirect to home if authenticated)
 const PublicRoute = ({ children }) => {
-  const { isAuthenticated, loading } = useAuth();
+  const { isAuthenticated, loading, user } = useAuth();
   
   if (loading) {
     return (
@@ -62,6 +62,11 @@ const PublicRoute = ({ children }) => {
         </div>
       </div>
     );
+  }
+  
+  // إذا كان مستخدم delivery، لا نعتبره authenticated للنظام الرئيسي
+  if (isAuthenticated && user?.role === 'delivery') {
+    return children;
   }
   
   return isAuthenticated ? <Navigate to="/" /> : children;
