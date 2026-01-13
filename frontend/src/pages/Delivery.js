@@ -59,63 +59,7 @@ const DriverMap = ({ drivers, mapContainerRef }) => {
   const mapRef = useRef(null);
   const markersRef = useRef({});
 
-  useEffect(() => {
-    // تحميل Leaflet
-    const loadLeaflet = async () => {
-      if (window.L) {
-        initMap();
-        return;
-      }
-
-      // تحميل CSS
-      if (!document.getElementById('leaflet-css')) {
-        const link = document.createElement('link');
-        link.id = 'leaflet-css';
-        link.rel = 'stylesheet';
-        link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
-        document.head.appendChild(link);
-      }
-
-      // تحميل JS
-      const script = document.createElement('script');
-      script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
-      script.onload = () => initMap();
-      document.head.appendChild(script);
-    };
-
-    const initMap = () => {
-      if (!mapContainerRef.current || mapRef.current) return;
-
-      const L = window.L;
-      
-      // إنشاء الخريطة
-      const map = L.map(mapContainerRef.current).setView([33.3152, 44.3661], 13);
-      
-      // إضافة طبقة الخريطة
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '© OpenStreetMap'
-      }).addTo(map);
-
-      mapRef.current = map;
-      updateMarkers();
-    };
-
-    loadLeaflet();
-
-    return () => {
-      if (mapRef.current) {
-        mapRef.current.remove();
-        mapRef.current = null;
-      }
-    };
-  }, []);
-
-  // تحديث علامات السائقين
-  useEffect(() => {
-    updateMarkers();
-  }, [drivers]);
-
-  const updateMarkers = () => {
+  const updateMarkers = useCallback(() => {
     if (!mapRef.current || !window.L) return;
 
     const L = window.L;
@@ -233,28 +177,30 @@ const DriverMap = ({ drivers, mapContainerRef }) => {
     driversWithLocation.forEach(driver => {
       const icon = driver.current_order ? busyMotorcycleIcon : motorcycleIcon;
       
+      const popupContent = `
+        <div style="text-align: center; direction: rtl; min-width: 150px;">
+          <strong style="font-size: 14px;">${driver.name}</strong><br/>
+          <span style="color: #666;">${driver.phone}</span>
+          ${driver.current_order ? `
+            <hr style="margin: 8px 0; border-color: #eee;"/>
+            <span style="color: #f97316; font-weight: bold;">طلب #${driver.current_order.order_number}</span><br/>
+            <small style="color: #888;">${driver.current_order.delivery_address || ''}</small>
+          ` : `
+            <hr style="margin: 8px 0; border-color: #eee;"/>
+            <span style="color: #10b981;">متاح للتوصيل</span>
+          `}
+          <br/>
+          <small style="color: #999;">آخر تحديث: ${
+            driver.location_updated_at 
+              ? new Date(driver.location_updated_at).toLocaleTimeString('ar-IQ', { hour: '2-digit', minute: '2-digit' })
+              : 'غير معروف'
+          }</small>
+        </div>
+      `;
+
       const marker = L.marker([driver.location_lat, driver.location_lng], { icon })
         .addTo(mapRef.current)
-        .bindPopup(`
-          <div style="text-align: center; direction: rtl; min-width: 150px;">
-            <strong style="font-size: 14px;">${driver.name}</strong><br/>
-            <span style="color: #666;">${driver.phone}</span>
-            ${driver.current_order ? `
-              <hr style="margin: 8px 0; border-color: #eee;"/>
-              <span style="color: #f97316; font-weight: bold;">طلب #${driver.current_order.order_number}</span><br/>
-              <small style="color: #888;">${driver.current_order.delivery_address || ''}</small>
-            ` : `
-              <hr style="margin: 8px 0; border-color: #eee;"/>
-              <span style="color: #10b981;">متاح للتوصيل</span>
-            `}
-            <br/>
-            <small style="color: #999;">آخر تحديث: ${
-              driver.location_updated_at 
-                ? new Date(driver.location_updated_at).toLocaleTimeString('ar-IQ', { hour: '2-digit', minute: '2-digit' })
-                : 'غير معروف'
-            }</small>
-          </div>
-        `);
+        .bindPopup(popupContent);
 
       markersRef.current[driver.id] = marker;
     });
@@ -266,7 +212,63 @@ const DriverMap = ({ drivers, mapContainerRef }) => {
       );
       mapRef.current.fitBounds(bounds, { padding: [50, 50] });
     }
-  };
+  }, [drivers]);
+
+  useEffect(() => {
+    // تحميل Leaflet
+    const loadLeaflet = async () => {
+      if (window.L) {
+        initMap();
+        return;
+      }
+
+      // تحميل CSS
+      if (!document.getElementById('leaflet-css')) {
+        const link = document.createElement('link');
+        link.id = 'leaflet-css';
+        link.rel = 'stylesheet';
+        link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+        document.head.appendChild(link);
+      }
+
+      // تحميل JS
+      const script = document.createElement('script');
+      script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+      script.onload = () => initMap();
+      document.head.appendChild(script);
+    };
+
+    const initMap = () => {
+      if (!mapContainerRef.current || mapRef.current) return;
+
+      const L = window.L;
+      
+      // إنشاء الخريطة
+      const map = L.map(mapContainerRef.current).setView([33.3152, 44.3661], 13);
+      
+      // إضافة طبقة الخريطة
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap'
+      }).addTo(map);
+
+      mapRef.current = map;
+      updateMarkers();
+    };
+
+    loadLeaflet();
+
+    return () => {
+      if (mapRef.current) {
+        mapRef.current.remove();
+        mapRef.current = null;
+      }
+    };
+  }, [mapContainerRef, updateMarkers]);
+
+  // تحديث علامات السائقين
+  useEffect(() => {
+    updateMarkers();
+  }, [drivers, updateMarkers]);
 
   // إضافة CSS للـ animation
   useEffect(() => {
