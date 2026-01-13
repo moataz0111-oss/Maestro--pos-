@@ -999,12 +999,13 @@ async def get_purchases(
 
 @api_router.post("/expenses")
 async def create_expense(expense: ExpenseCreate, current_user: dict = Depends(get_current_user)):
-    if current_user["role"] not in [UserRole.ADMIN, UserRole.MANAGER, UserRole.SUPERVISOR]:
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.MANAGER, UserRole.SUPERVISOR, UserRole.SUPER_ADMIN]:
         raise HTTPException(status_code=403, detail="غير مصرح")
     
     expense_doc = {
         "id": str(uuid.uuid4()),
         **expense.model_dump(),
+        "tenant_id": get_user_tenant_id(current_user),  # فصل البيانات
         "date": expense.date or datetime.now(timezone.utc).strftime("%Y-%m-%d"),
         "created_by": current_user["id"],
         "created_at": datetime.now(timezone.utc).isoformat()
@@ -1021,7 +1022,7 @@ async def get_expenses(
     end_date: Optional[str] = None,
     current_user: dict = Depends(get_current_user)
 ):
-    query = {}
+    query = build_tenant_query(current_user)  # فلترة حسب tenant_id
     if branch_id:
         query["branch_id"] = branch_id
     if category:
