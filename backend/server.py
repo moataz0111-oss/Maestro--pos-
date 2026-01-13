@@ -1965,12 +1965,13 @@ async def close_cash_register(close_data: CashRegisterClose, background_tasks: B
 
 @api_router.post("/drivers", response_model=DriverResponse)
 async def create_driver(driver: DriverCreate, current_user: dict = Depends(get_current_user)):
-    if current_user["role"] not in [UserRole.ADMIN, UserRole.MANAGER]:
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.MANAGER, UserRole.SUPER_ADMIN]:
         raise HTTPException(status_code=403, detail="غير مصرح")
     
     driver_doc = {
         "id": str(uuid.uuid4()),
         **driver.model_dump(),
+        "tenant_id": get_user_tenant_id(current_user),  # فصل البيانات
         "is_available": True,
         "current_order_id": None,
         "total_deliveries": 0
@@ -1980,15 +1981,18 @@ async def create_driver(driver: DriverCreate, current_user: dict = Depends(get_c
     return driver_doc
 
 @api_router.get("/drivers", response_model=List[DriverResponse])
-async def get_drivers(branch_id: Optional[str] = None):
-    query = {"branch_id": branch_id} if branch_id else {}
+async def get_drivers(branch_id: Optional[str] = None, current_user: dict = Depends(get_current_user)):
+    query = build_tenant_query(current_user)  # فلترة حسب tenant_id
+    if branch_id:
+        query["branch_id"] = branch_id
     drivers = await db.drivers.find(query, {"_id": 0}).to_list(100)
     return drivers
 
 @api_router.put("/drivers/{driver_id}")
 async def update_driver(driver_id: str, driver: DriverCreate, current_user: dict = Depends(get_current_user)):
     """تعديل بيانات السائق"""
-    existing = await db.drivers.find_one({"id": driver_id})
+    query = build_tenant_query(current_user, {"id": driver_id})
+    existing = await db.drivers.find_one(query)
     if not existing:
         raise HTTPException(status_code=404, detail="السائق غير موجود")
     
@@ -2007,7 +2011,8 @@ async def update_driver(driver_id: str, driver: DriverCreate, current_user: dict
 @api_router.put("/drivers/{driver_id}/link-user")
 async def link_driver_to_user(driver_id: str, user_id: str, current_user: dict = Depends(get_current_user)):
     """ربط السائق بحساب مستخدم"""
-    driver = await db.drivers.find_one({"id": driver_id})
+    query = build_tenant_query(current_user, {"id": driver_id})
+    driver = await db.drivers.find_one(query)
     if not driver:
         raise HTTPException(status_code=404, detail="السائق غير موجود")
     
