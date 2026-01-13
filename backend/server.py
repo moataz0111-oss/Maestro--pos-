@@ -1190,8 +1190,24 @@ async def get_customer(customer_id: str, current_user: dict = Depends(get_curren
 @api_router.get("/customers/by-phone/{phone}")
 async def get_customer_by_phone(phone: str, current_user: dict = Depends(get_current_user)):
     """البحث عن عميل بالهاتف مع سجل الطلبات"""
-    query = build_tenant_query(current_user)
-    query["$or"] = [{"phone": phone}, {"phone2": phone}]
+    tenant_id = get_user_tenant_id(current_user)
+    
+    # بناء query للبحث عن العميل بالهاتف مع مراعاة tenant_id
+    phone_conditions = [{"phone": phone}, {"phone2": phone}]
+    
+    if tenant_id:
+        # المستخدم العميل يرى فقط بياناته
+        query = {"$and": [{"tenant_id": tenant_id}, {"$or": phone_conditions}]}
+    elif current_user.get("role") == UserRole.SUPER_ADMIN:
+        # Super Admin يرى الكل
+        query = {"$or": phone_conditions}
+    else:
+        # المستخدم الرئيسي (بدون tenant_id) يرى البيانات الرئيسية فقط
+        query = {"$and": [
+            {"$or": [{"tenant_id": {"$exists": False}}, {"tenant_id": None}]},
+            {"$or": phone_conditions}
+        ]}
+    
     customer = await db.customers.find_one(query, {"_id": 0})
     
     if not customer:
