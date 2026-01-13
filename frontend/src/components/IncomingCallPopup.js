@@ -11,9 +11,16 @@ export default function IncomingCallPopup({ onClose, onAnswer, onCreateOrder }) 
   const [activeCalls, setActiveCalls] = useState([]);
   const [isRinging, setIsRinging] = useState(false);
   const [dismissed, setDismissed] = useState({});
-  const audioContextRef = useRef(null);
   const ringIntervalRef = useRef(null);
   const pollIntervalRef = useRef(null);
+
+  // إيقاف صوت الرنين
+  const stopRingSound = useCallback(() => {
+    if (ringIntervalRef.current) {
+      clearInterval(ringIntervalRef.current);
+      ringIntervalRef.current = null;
+    }
+  }, []);
 
   // تشغيل صوت الرنين باستخدام Web Audio API
   const playRingSound = useCallback(() => {
@@ -62,15 +69,7 @@ export default function IncomingCallPopup({ onClose, onAnswer, onCreateOrder }) 
     
     // تكرار كل 1.5 ثانية
     ringIntervalRef.current = setInterval(playRingTone, 1500);
-  }, []);
-
-  // إيقاف صوت الرنين
-  const stopRingSound = useCallback(() => {
-    if (ringIntervalRef.current) {
-      clearInterval(ringIntervalRef.current);
-      ringIntervalRef.current = null;
-    }
-  }, []);
+  }, [stopRingSound]);
 
   // جلب المكالمات النشطة
   const fetchActiveCalls = useCallback(async () => {
