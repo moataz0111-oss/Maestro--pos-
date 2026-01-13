@@ -7,6 +7,7 @@ import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
+import { ScrollArea } from '../components/ui/scroll-area';
 import {
   ArrowRight,
   Truck,
@@ -17,7 +18,18 @@ import {
   Check,
   Package,
   Plus,
-  Navigation
+  Navigation,
+  DollarSign,
+  CreditCard,
+  AlertCircle,
+  CheckCircle,
+  XCircle,
+  RefreshCw,
+  Eye,
+  Wallet,
+  Receipt,
+  TrendingUp,
+  History
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -27,6 +39,12 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '../components/ui/dialog';
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from '../components/ui/tabs';
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -41,6 +59,14 @@ export default function Delivery() {
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [formData, setFormData] = useState({ name: '', phone: '' });
+  
+  // حالات جديدة لمتابعة الطلبات
+  const [driverOrders, setDriverOrders] = useState([]);
+  const [selectedDriver, setSelectedDriver] = useState(null);
+  const [driverOrdersDialogOpen, setDriverOrdersDialogOpen] = useState(false);
+  const [driverStats, setDriverStats] = useState({});
+  const [collectPaymentDialogOpen, setCollectPaymentDialogOpen] = useState(false);
+  const [paymentAmount, setPaymentAmount] = useState(0);
 
   useEffect(() => {
     fetchData();
@@ -57,13 +83,30 @@ export default function Delivery() {
         axios.get(`${API}/branches`)
       ]);
 
-      setDrivers(driversRes.data);
+      const driversData = driversRes.data;
+      setDrivers(driversData);
       setPendingOrders(ordersRes.data.filter(o => o.order_type === 'delivery' && !o.driver_id));
       setBranches(branchesRes.data);
 
       if (!selectedBranch && branchesRes.data.length > 0) {
         setSelectedBranch(branchesRes.data[0].id);
       }
+
+      // جلب إحصائيات كل سائق
+      const statsPromises = driversData.map(async (driver) => {
+        try {
+          const statsRes = await axios.get(`${API}/drivers/${driver.id}/stats`);
+          return { driverId: driver.id, stats: statsRes.data };
+        } catch {
+          return { driverId: driver.id, stats: { unpaid_total: 0, paid_total: 0, pending_orders: 0 } };
+        }
+      });
+      
+      const statsResults = await Promise.all(statsPromises);
+      const statsMap = {};
+      statsResults.forEach(s => { statsMap[s.driverId] = s.stats; });
+      setDriverStats(statsMap);
+      
     } catch (error) {
       console.error('Failed to fetch data:', error);
     } finally {
@@ -97,13 +140,70 @@ export default function Delivery() {
     }
   };
 
-  const completeDelivery = async (driverId) => {
+  const completeDelivery = async (driverId, orderId = null) => {
     try {
-      await axios.put(`${API}/drivers/${driverId}/complete`);
+      if (orderId) {
+        await axios.put(`${API}/drivers/${driverId}/complete?order_id=${orderId}`);
+      } else {
+        await axios.put(`${API}/drivers/${driverId}/complete`);
+      }
       toast.success('تم تسليم الطلب بنجاح');
       fetchData();
+      if (selectedDriver) {
+        fetchDriverOrders(selectedDriver.id);
+      }
     } catch (error) {
       toast.error('فشل في تحديث الحالة');
+    }
+  };
+
+  // جلب طلبات سائق معين
+  const fetchDriverOrders = async (driverId) => {
+    try {
+      const res = await axios.get(`${API}/drivers/${driverId}/orders`);
+      setDriverOrders(res.data);
+    } catch (error) {
+      console.error('Failed to fetch driver orders:', error);
+      toast.error('فشل في جلب طلبات السائق');
+    }
+  };
+
+  // فتح تفاصيل السائق
+  const openDriverDetails = async (driver) => {
+    setSelectedDriver(driver);
+    await fetchDriverOrders(driver.id);
+    setDriverOrdersDialogOpen(true);
+  };
+
+  // تسجيل دفعة من السائق
+  const handleCollectPayment = async () => {
+    if (!selectedDriver || paymentAmount <= 0) return;
+    
+    try {
+      await axios.post(`${API}/drivers/${selectedDriver.id}/collect-payment`, {
+        amount: paymentAmount
+      });
+      toast.success(`تم تسجيل دفعة بقيمة ${formatPrice(paymentAmount)}`);
+      setCollectPaymentDialogOpen(false);
+      setPaymentAmount(0);
+      fetchData();
+      fetchDriverOrders(selectedDriver.id);
+    } catch (error) {
+      toast.error('فشل في تسجيل الدفعة');
+    }
+  };
+
+  // تحديد طلب كمدفوع
+  const markOrderAsPaid = async (orderId) => {
+    try {
+      await axios.put(`${API}/orders/${orderId}/driver-payment`, { is_paid: true });
+      toast.success('تم تحديد الطلب كمدفوع');
+      fetchData();
+      if (selectedDriver) {
+        fetchDriverOrders(selectedDriver.id);
+      }
+    } catch (error) {
+      toast.error('فشل في تحديث حالة الدفع');
     }
   };
 
@@ -117,6 +217,11 @@ export default function Delivery() {
       </div>
     );
   }
+
+  // حساب الإجماليات
+  const totalUnpaid = Object.values(driverStats).reduce((sum, s) => sum + (s.unpaid_total || 0), 0);
+  const totalPaid = Object.values(driverStats).reduce((sum, s) => sum + (s.paid_today || 0), 0);
+  const totalPendingOrders = Object.values(driverStats).reduce((sum, s) => sum + (s.pending_orders || 0), 0);
 
   return (
     <div className="min-h-screen bg-background" data-testid="delivery-page">
@@ -134,6 +239,11 @@ export default function Delivery() {
           </div>
 
           <div className="flex items-center gap-3">
+            <Button variant="outline" size="sm" onClick={fetchData}>
+              <RefreshCw className="h-4 w-4 ml-1" />
+              تحديث
+            </Button>
+            
             <select
               value={selectedBranch || ''}
               onChange={(e) => setSelectedBranch(e.target.value)}
@@ -192,84 +302,174 @@ export default function Delivery() {
       </header>
 
       <main className="max-w-7xl mx-auto px-6 py-6">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Drivers */}
-          <div>
-            <h2 className="text-lg font-bold font-cairo mb-4 text-foreground">السائقين</h2>
-            <div className="space-y-3">
+        {/* إحصائيات سريعة */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+          <Card className="border-border/50 bg-card">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-muted-foreground">إجمالي غير المدفوع</p>
+                  <p className="text-2xl font-bold text-red-500">{formatPrice(totalUnpaid)}</p>
+                </div>
+                <div className="w-12 h-12 bg-red-500/10 rounded-xl flex items-center justify-center">
+                  <AlertCircle className="h-6 w-6 text-red-500" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          
+          <Card className="border-border/50 bg-card">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-muted-foreground">المدفوع اليوم</p>
+                  <p className="text-2xl font-bold text-green-500">{formatPrice(totalPaid)}</p>
+                </div>
+                <div className="w-12 h-12 bg-green-500/10 rounded-xl flex items-center justify-center">
+                  <CheckCircle className="h-6 w-6 text-green-500" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          
+          <Card className="border-border/50 bg-card">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-muted-foreground">طلبات معلقة</p>
+                  <p className="text-2xl font-bold text-amber-500">{totalPendingOrders}</p>
+                </div>
+                <div className="w-12 h-12 bg-amber-500/10 rounded-xl flex items-center justify-center">
+                  <Package className="h-6 w-6 text-amber-500" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          
+          <Card className="border-border/50 bg-card">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-muted-foreground">السائقين النشطين</p>
+                  <p className="text-2xl font-bold text-blue-500">{drivers.filter(d => !d.is_available).length}/{drivers.length}</p>
+                </div>
+                <div className="w-12 h-12 bg-blue-500/10 rounded-xl flex items-center justify-center">
+                  <Truck className="h-6 w-6 text-blue-500" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        <Tabs defaultValue="drivers" className="space-y-6">
+          <TabsList className="grid w-full grid-cols-2 max-w-md">
+            <TabsTrigger value="drivers">السائقين والحسابات</TabsTrigger>
+            <TabsTrigger value="pending">طلبات جاهزة للتوصيل</TabsTrigger>
+          </TabsList>
+
+          {/* السائقين */}
+          <TabsContent value="drivers">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {drivers.length === 0 ? (
-                <Card className="border-border/50 bg-card">
-                  <CardContent className="py-8 text-center">
-                    <Truck className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                    <p className="text-muted-foreground">لا يوجد سائقين</p>
+                <Card className="border-border/50 bg-card col-span-full">
+                  <CardContent className="py-12 text-center">
+                    <Truck className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
+                    <p className="text-muted-foreground text-lg">لا يوجد سائقين</p>
+                    <p className="text-sm text-muted-foreground">أضف سائقين لبدء إدارة التوصيل</p>
                   </CardContent>
                 </Card>
               ) : (
-                drivers.map(driver => (
-                  <Card 
-                    key={driver.id}
-                    className={`border-border/50 bg-card ${driver.current_order_id ? 'ring-2 ring-orange-500' : ''}`}
-                    data-testid={`driver-card-${driver.id}`}
-                  >
-                    <CardContent className="p-4">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-4">
-                          <div className={`w-12 h-12 rounded-full flex items-center justify-center ${
-                            driver.is_available ? 'bg-green-500/10' : 'bg-orange-500/10'
-                          }`}>
-                            <Truck className={`h-6 w-6 ${driver.is_available ? 'text-green-500' : 'text-orange-500'}`} />
+                drivers.map(driver => {
+                  const stats = driverStats[driver.id] || { unpaid_total: 0, paid_today: 0, pending_orders: 0 };
+                  return (
+                    <Card 
+                      key={driver.id}
+                      className={`border-border/50 bg-card transition-all hover:shadow-lg cursor-pointer ${
+                        driver.current_order_id ? 'ring-2 ring-orange-500' : ''
+                      } ${stats.unpaid_total > 0 ? 'border-r-4 border-r-red-500' : ''}`}
+                      onClick={() => openDriverDetails(driver)}
+                      data-testid={`driver-card-${driver.id}`}
+                    >
+                      <CardContent className="p-4">
+                        <div className="flex items-center justify-between mb-4">
+                          <div className="flex items-center gap-3">
+                            <div className={`w-12 h-12 rounded-full flex items-center justify-center ${
+                              driver.is_available ? 'bg-green-500/10' : 'bg-orange-500/10'
+                            }`}>
+                              <Truck className={`h-6 w-6 ${driver.is_available ? 'text-green-500' : 'text-orange-500'}`} />
+                            </div>
+                            <div>
+                              <h3 className="font-bold text-foreground">{driver.name}</h3>
+                              <p className="text-xs text-muted-foreground flex items-center gap-1">
+                                <Phone className="h-3 w-3" />
+                                {driver.phone}
+                              </p>
+                            </div>
                           </div>
-                          <div>
-                            <h3 className="font-bold text-foreground">{driver.name}</h3>
-                            <p className="text-sm text-muted-foreground flex items-center gap-1">
-                              <Phone className="h-3 w-3" />
-                              {driver.phone}
-                            </p>
-                          </div>
-                        </div>
-                        <div className="text-left">
                           <span className={`text-xs px-2 py-1 rounded-full ${
                             driver.is_available ? 'bg-green-500/10 text-green-500' : 'bg-orange-500/10 text-orange-500'
                           }`}>
                             {driver.is_available ? 'متاح' : 'في مهمة'}
                           </span>
-                          <p className="text-xs text-muted-foreground mt-1">
-                            {driver.total_deliveries} توصيلات
-                          </p>
                         </div>
-                      </div>
 
-                      {driver.current_order_id && (
-                        <div className="mt-4 pt-4 border-t border-border">
-                          <div className="flex items-center justify-between">
-                            <span className="text-sm text-muted-foreground">في طريقه لتوصيل طلب</span>
-                            <Button
-                              size="sm"
-                              className="bg-green-500 hover:bg-green-600 text-white"
-                              onClick={() => completeDelivery(driver.id)}
-                            >
-                              <Check className="h-4 w-4 ml-1" />
-                              تم التسليم
-                            </Button>
+                        {/* إحصائيات السائق */}
+                        <div className="grid grid-cols-2 gap-2 mb-3">
+                          <div className="bg-red-500/10 p-2 rounded-lg text-center">
+                            <p className="text-xs text-muted-foreground">غير مدفوع</p>
+                            <p className="text-sm font-bold text-red-500">{formatPrice(stats.unpaid_total || 0)}</p>
+                          </div>
+                          <div className="bg-green-500/10 p-2 rounded-lg text-center">
+                            <p className="text-xs text-muted-foreground">مدفوع اليوم</p>
+                            <p className="text-sm font-bold text-green-500">{formatPrice(stats.paid_today || 0)}</p>
                           </div>
                         </div>
-                      )}
-                    </CardContent>
-                  </Card>
-                ))
+
+                        <div className="flex items-center justify-between text-xs text-muted-foreground">
+                          <span>{driver.total_deliveries || 0} توصيلة</span>
+                          <span>{stats.pending_orders || 0} طلب معلق</span>
+                        </div>
+
+                        {driver.current_order_id && (
+                          <div className="mt-3 pt-3 border-t border-border">
+                            <div className="flex items-center justify-between">
+                              <span className="text-sm text-orange-500">في طريقه للتوصيل</span>
+                              <Button
+                                size="sm"
+                                className="bg-green-500 hover:bg-green-600 text-white"
+                                onClick={(e) => { e.stopPropagation(); completeDelivery(driver.id); }}
+                              >
+                                <Check className="h-4 w-4 ml-1" />
+                                تم التسليم
+                              </Button>
+                            </div>
+                          </div>
+                        )}
+
+                        <Button 
+                          variant="outline" 
+                          className="w-full mt-3"
+                          onClick={(e) => { e.stopPropagation(); openDriverDetails(driver); }}
+                        >
+                          <Eye className="h-4 w-4 ml-2" />
+                          عرض التفاصيل
+                        </Button>
+                      </CardContent>
+                    </Card>
+                  );
+                })
               )}
             </div>
-          </div>
+          </TabsContent>
 
-          {/* Pending Delivery Orders */}
-          <div>
-            <h2 className="text-lg font-bold font-cairo mb-4 text-foreground">طلبات جاهزة للتوصيل</h2>
-            <div className="space-y-3">
+          {/* طلبات جاهزة للتوصيل */}
+          <TabsContent value="pending">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {pendingOrders.length === 0 ? (
-                <Card className="border-border/50 bg-card">
-                  <CardContent className="py-8 text-center">
-                    <Package className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                    <p className="text-muted-foreground">لا توجد طلبات جاهزة للتوصيل</p>
+                <Card className="border-border/50 bg-card col-span-full">
+                  <CardContent className="py-12 text-center">
+                    <Package className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
+                    <p className="text-muted-foreground text-lg">لا توجد طلبات جاهزة للتوصيل</p>
                   </CardContent>
                 </Card>
               ) : (
@@ -286,9 +486,9 @@ export default function Delivery() {
                             <span className="bg-primary/10 text-primary px-2 py-0.5 rounded-full text-sm font-bold">
                               #{order.order_number}
                             </span>
-                            {order.delivery_app && (
+                            {order.delivery_app_name && (
                               <span className="text-xs px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-500">
-                                {order.delivery_app}
+                                {order.delivery_app_name}
                               </span>
                             )}
                           </div>
@@ -341,9 +541,173 @@ export default function Delivery() {
                 ))
               )}
             </div>
-          </div>
-        </div>
+          </TabsContent>
+        </Tabs>
       </main>
+
+      {/* نافذة تفاصيل السائق */}
+      <Dialog open={driverOrdersDialogOpen} onOpenChange={setDriverOrdersDialogOpen}>
+        <DialogContent className="max-w-2xl max-h-[85vh]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center justify-between text-foreground">
+              <div className="flex items-center gap-2">
+                <Truck className="h-5 w-5 text-primary" />
+                {selectedDriver?.name} - سجل الطلبات
+              </div>
+              {selectedDriver && driverStats[selectedDriver.id]?.unpaid_total > 0 && (
+                <Button 
+                  size="sm"
+                  className="bg-green-500 hover:bg-green-600 text-white"
+                  onClick={() => {
+                    setPaymentAmount(driverStats[selectedDriver.id]?.unpaid_total || 0);
+                    setCollectPaymentDialogOpen(true);
+                  }}
+                >
+                  <Wallet className="h-4 w-4 ml-1" />
+                  تحصيل المبلغ
+                </Button>
+              )}
+            </DialogTitle>
+          </DialogHeader>
+
+          {selectedDriver && (
+            <div className="space-y-4">
+              {/* ملخص */}
+              <div className="grid grid-cols-3 gap-3">
+                <div className="bg-red-500/10 p-3 rounded-lg text-center">
+                  <p className="text-xs text-muted-foreground">غير مدفوع</p>
+                  <p className="text-lg font-bold text-red-500">
+                    {formatPrice(driverStats[selectedDriver.id]?.unpaid_total || 0)}
+                  </p>
+                </div>
+                <div className="bg-green-500/10 p-3 rounded-lg text-center">
+                  <p className="text-xs text-muted-foreground">مدفوع اليوم</p>
+                  <p className="text-lg font-bold text-green-500">
+                    {formatPrice(driverStats[selectedDriver.id]?.paid_today || 0)}
+                  </p>
+                </div>
+                <div className="bg-blue-500/10 p-3 rounded-lg text-center">
+                  <p className="text-xs text-muted-foreground">إجمالي التوصيلات</p>
+                  <p className="text-lg font-bold text-blue-500">
+                    {selectedDriver.total_deliveries || 0}
+                  </p>
+                </div>
+              </div>
+
+              {/* قائمة الطلبات */}
+              <div>
+                <h4 className="font-medium text-foreground mb-2 flex items-center gap-2">
+                  <History className="h-4 w-4" />
+                  الطلبات (غير المدفوعة أولاً)
+                </h4>
+                <ScrollArea className="h-[350px]">
+                  <div className="space-y-2">
+                    {driverOrders.length === 0 ? (
+                      <p className="text-center text-muted-foreground py-8">لا توجد طلبات</p>
+                    ) : (
+                      driverOrders.map(order => (
+                        <div 
+                          key={order.id}
+                          className={`p-3 rounded-lg border ${
+                            order.driver_payment_status === 'paid' 
+                              ? 'bg-green-500/5 border-green-500/30' 
+                              : 'bg-red-500/5 border-red-500/30'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                                order.driver_payment_status === 'paid' ? 'bg-green-500/20' : 'bg-red-500/20'
+                              }`}>
+                                {order.driver_payment_status === 'paid' 
+                                  ? <CheckCircle className="h-4 w-4 text-green-500" />
+                                  : <AlertCircle className="h-4 w-4 text-red-500" />
+                                }
+                              </div>
+                              <div>
+                                <div className="flex items-center gap-2">
+                                  <span className="font-medium text-foreground">#{order.order_number}</span>
+                                  <span className={`text-xs px-2 py-0.5 rounded-full ${
+                                    order.driver_payment_status === 'paid' 
+                                      ? 'bg-green-500/20 text-green-500' 
+                                      : 'bg-red-500/20 text-red-500'
+                                  }`}>
+                                    {order.driver_payment_status === 'paid' ? 'مدفوع' : 'غير مدفوع'}
+                                  </span>
+                                </div>
+                                <p className="text-xs text-muted-foreground">
+                                  {order.customer_name} - {new Date(order.created_at).toLocaleDateString('ar-IQ')}
+                                </p>
+                              </div>
+                            </div>
+                            <div className="text-left">
+                              <p className="font-bold text-foreground">{formatPrice(order.total)}</p>
+                              {order.driver_payment_status !== 'paid' && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="mt-1 h-7 text-xs border-green-500 text-green-500 hover:bg-green-500/10"
+                                  onClick={() => markOrderAsPaid(order.id)}
+                                >
+                                  <Check className="h-3 w-3 ml-1" />
+                                  تم الدفع
+                                </Button>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </ScrollArea>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* نافذة تحصيل الدفعة */}
+      <Dialog open={collectPaymentDialogOpen} onOpenChange={setCollectPaymentDialogOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="text-foreground flex items-center gap-2">
+              <Wallet className="h-5 w-5 text-green-500" />
+              تحصيل مبلغ من {selectedDriver?.name}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="bg-muted/50 p-4 rounded-lg text-center">
+              <p className="text-sm text-muted-foreground">المبلغ المستحق</p>
+              <p className="text-2xl font-bold text-red-500">
+                {formatPrice(driverStats[selectedDriver?.id]?.unpaid_total || 0)}
+              </p>
+            </div>
+            
+            <div>
+              <Label className="text-foreground">المبلغ المحصل</Label>
+              <Input
+                type="number"
+                value={paymentAmount}
+                onChange={(e) => setPaymentAmount(Number(e.target.value))}
+                className="mt-1 text-lg font-bold text-center"
+              />
+            </div>
+            
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => setCollectPaymentDialogOpen(false)} className="flex-1">
+                إلغاء
+              </Button>
+              <Button 
+                onClick={handleCollectPayment}
+                className="flex-1 bg-green-500 hover:bg-green-600 text-white"
+              >
+                <Check className="h-4 w-4 ml-1" />
+                تأكيد التحصيل
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
