@@ -152,26 +152,16 @@ export default function SuperAdmin() {
 
   const fetchData = async () => {
     try {
-      console.log('Fetching data with token:', token?.substring(0, 20) + '...');
+      console.log('Fetching data...');
       const [tenantsRes, statsRes] = await Promise.all([
         axios.get(`${API}/super-admin/tenants`),
         axios.get(`${API}/super-admin/stats`)
       ]);
-      console.log('Tenants received:', tenantsRes.data);
-      console.log('Stats received:', statsRes.data);
+      console.log('Tenants:', tenantsRes.data);
       setTenants(tenantsRes.data);
       setStats(statsRes.data);
     } catch (error) {
       console.error('Failed to fetch data:', error);
-      toast.error('فشل في جلب البيانات');
-    }
-  };
-        axios.get(`${API}/super-admin/tenants`),
-        axios.get(`${API}/super-admin/stats`)
-      ]);
-      setTenants(tenantsRes.data);
-      setStats(statsRes.data);
-    } catch (error) {
       toast.error('فشل في جلب البيانات');
     }
   };
