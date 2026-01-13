@@ -395,6 +395,18 @@ export default function Dashboard() {
               </Button>
             )}
 
+            {/* Call Logs Button */}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => navigate('/call-logs')}
+              className="gap-2 border-cyan-500 text-cyan-500 hover:bg-cyan-500/10"
+              data-testid="call-logs-btn"
+            >
+              <Headphones className="h-4 w-4" />
+              سجل المكالمات
+            </Button>
+
             {/* Close Cash Register Button */}
             <Button
               variant="outline"
