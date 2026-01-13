@@ -480,6 +480,18 @@ export default function DriverPortal() {
   const activeOrders = orders.filter(o => o.status !== 'delivered' && o.status !== 'cancelled');
   const completedOrders = orders.filter(o => o.status === 'delivered');
 
+  // تبديل حالة الصوت
+  const toggleSound = () => {
+    setSoundEnabled(!soundEnabled);
+    toast.info(soundEnabled ? 'تم إيقاف الإشعارات الصوتية' : 'تم تفعيل الإشعارات الصوتية');
+  };
+
+  // اختبار الصوت
+  const testSound = () => {
+    playDriverNotification();
+    toast.info('جاري تشغيل صوت الإشعار...');
+  };
+
   return (
     <div className="min-h-screen bg-gray-900 text-white" dir="rtl">
       <Toaster position="top-center" richColors />
@@ -512,6 +524,18 @@ export default function DriverPortal() {
           </div>
           
           <div className="flex items-center gap-2">
+            {/* Sound Toggle Button */}
+            <Button 
+              variant="ghost" 
+              size="icon"
+              onClick={toggleSound}
+              className={soundEnabled ? "text-green-400" : "text-gray-500"}
+              title={soundEnabled ? "إيقاف الصوت" : "تفعيل الصوت"}
+              data-testid="sound-toggle-btn"
+            >
+              {soundEnabled ? <Volume2 className="h-5 w-5" /> : <VolumeX className="h-5 w-5" />}
+            </Button>
+            
             {isPWAInstallable && (
               <Button 
                 variant="ghost" 
