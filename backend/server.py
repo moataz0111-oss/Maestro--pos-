@@ -123,6 +123,7 @@ class CategoryCreate(BaseModel):
     name: str
     name_en: Optional[str] = None
     icon: Optional[str] = None
+    image: Optional[str] = None
     color: Optional[str] = None
     sort_order: int = 0
 
@@ -132,6 +133,7 @@ class CategoryResponse(BaseModel):
     name: str
     name_en: Optional[str] = None
     icon: Optional[str] = None
+    image: Optional[str] = None
     color: Optional[str] = None
     sort_order: int = 0
     is_active: bool = True
