@@ -117,6 +117,18 @@ export default function Reports() {
           const delRes = await axios.get(`${API}/reports/delivery-credits`, { params });
           setDeliveryCreditsReport(delRes.data);
           break;
+        case 'cancellations':
+          const cancelRes = await axios.get(`${API}/reports/cancellations`, { params });
+          setCancellationsReport(cancelRes.data);
+          break;
+        case 'discounts':
+          const discRes = await axios.get(`${API}/reports/discounts`, { params });
+          setDiscountsReport(discRes.data);
+          break;
+        case 'credit':
+          const creditRes = await axios.get(`${API}/reports/credit`, { params });
+          setCreditReport(creditRes.data);
+          break;
       }
     } catch (error) {
       console.error('Failed to fetch reports:', error);
