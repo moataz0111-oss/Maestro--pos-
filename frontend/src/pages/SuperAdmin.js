@@ -1224,6 +1224,36 @@ export default function SuperAdmin() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Reset Sales Confirmation Modal */}
+      <Dialog open={showResetSalesConfirm} onOpenChange={setShowResetSalesConfirm}>
+        <DialogContent className="max-w-sm bg-gray-800 border-gray-700 text-white">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-orange-400">
+              <RotateCcw className="h-5 w-5" />
+              تصفير المبيعات
+            </DialogTitle>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            <p className="text-sm text-gray-400">
+              هل أنت متأكد من تصفير مبيعات <strong className="text-white">{selectedTenant?.name}</strong>؟
+            </p>
+            <p className="text-sm text-orange-400 bg-orange-500/10 p-3 rounded-lg">
+              ⚠️ سيتم حذف جميع الطلبات والورديات وإعادة تعيين إحصائيات العملاء. هذا الإجراء لا يمكن التراجع عنه!
+            </p>
+          </div>
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowResetSalesConfirm(false)} className="border-gray-600">
+              إلغاء
+            </Button>
+            <Button onClick={resetTenantSales} className="bg-orange-600 hover:bg-orange-700">
+              تصفير المبيعات
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
