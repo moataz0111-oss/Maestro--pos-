@@ -325,20 +325,6 @@ export const playDeliveryComplete = () => {
   }
 };
 
-export default {
-  playClick,
-  playSuccess,
-  playError,
-  playNewOrderNotification,
-  playKitchenBell,
-  playUrgentAlert,
-  playDriverNotification,
-  playDeliveryComplete,
-  playIncomingCall,
-  getSoundSettings,
-  saveSoundSettings,
-};
-
 // ==================== إعدادات الصوت ====================
 
 const DEFAULT_SOUND_SETTINGS = {
@@ -425,9 +411,53 @@ export const playIncomingCall = () => {
     setTimeout(() => {
       try {
         const ctx2 = new (window.AudioContext || window.webkitAudioContext)();
-        playRingTone(ctx2.currentTime);
-        playRingTone(ctx2.currentTime + 0.25);
-        playRingTone(ctx2.currentTime + 0.5);
+        const playRingTone2 = (startTime) => {
+          const osc1 = ctx2.createOscillator();
+          const gain1 = ctx2.createGain();
+          osc1.connect(gain1);
+          gain1.connect(ctx2.destination);
+          osc1.frequency.value = 440;
+          osc1.type = 'sine';
+          gain1.gain.setValueAtTime(volume * 0.2, startTime);
+          gain1.gain.setValueAtTime(0, startTime + 0.1);
+          osc1.start(startTime);
+          osc1.stop(startTime + 0.1);
+          
+          const osc2 = ctx2.createOscillator();
+          const gain2 = ctx2.createGain();
+          osc2.connect(gain2);
+          gain2.connect(ctx2.destination);
+          osc2.frequency.value = 480;
+          osc2.type = 'sine';
+          gain2.gain.setValueAtTime(volume * 0.2, startTime + 0.1);
+          gain2.gain.setValueAtTime(0, startTime + 0.2);
+          osc2.start(startTime + 0.1);
+          osc2.stop(startTime + 0.2);
+        };
+        playRingTone2(ctx2.currentTime);
+        playRingTone2(ctx2.currentTime + 0.25);
+        playRingTone2(ctx2.currentTime + 0.5);
+      } catch (e) {}
+    }, 1000);
+    
+  } catch (error) {
+    console.warn('Incoming call sound failed:', error);
+  }
+};
+
+export default {
+  playClick,
+  playSuccess,
+  playError,
+  playNewOrderNotification,
+  playKitchenBell,
+  playUrgentAlert,
+  playDriverNotification,
+  playDeliveryComplete,
+  playIncomingCall,
+  getSoundSettings,
+  saveSoundSettings,
+};
       } catch (e) {}
     }, 1000);
     
