@@ -198,6 +198,11 @@
 - [x] Order Editing
 - [x] Customer Management
 - [x] Print Bill Preview
+- [x] **إصلاح الطلبات المعلقة** (جديد)
+- [x] **تتبع السائقين GPS** (جديد)
+- [x] **خريطة تتبع السائقين** (جديد)
+- [x] **تطبيق السائق PWA** (جديد)
+- [x] **دور سائق التوصيل** (جديد)
 
 ### P1 - Upcoming
 - [ ] Caller ID Integration (يحتاج بحث تقني)
