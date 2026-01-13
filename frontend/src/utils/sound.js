@@ -283,7 +283,9 @@ export const playDriverNotification = () => {
         const ctx2 = new (window.AudioContext || window.webkitAudioContext)();
         playTone(1174.66, ctx2.currentTime, 0.3, 0.2);
         playTone(880.00, ctx2.currentTime + 0.15, 0.3, 0.2);
-      } catch (e) {}
+      } catch (e) {
+        // ignore audio context errors
+      }
     }, 1200);
     
   } catch (error) {
