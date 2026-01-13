@@ -294,6 +294,23 @@ export default function Settings() {
     }
   };
 
+  const handleResetPassword = async (u) => {
+    const newPassword = prompt(`أدخل كلمة المرور الجديدة للمستخدم "${u.full_name}":`, '');
+    if (!newPassword) return;
+    
+    if (newPassword.length < 4) {
+      toast.error('كلمة المرور يجب أن تكون 4 أحرف على الأقل');
+      return;
+    }
+    
+    try {
+      await axios.put(`${API}/users/${u.id}/reset-password`, { new_password: newPassword });
+      toast.success(`تم تغيير كلمة المرور للمستخدم ${u.full_name}`);
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'فشل في تغيير كلمة المرور');
+    }
+  };
+
   const handleCreatePrinter = async (e) => {
     e.preventDefault();
     try {
