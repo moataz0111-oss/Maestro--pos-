@@ -38,10 +38,32 @@ export default function Dashboard() {
   const [stats, setStats] = useState(null);
   const [recentOrders, setRecentOrders] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [dashboardSettings, setDashboardSettings] = useState({
+    showPOS: true,
+    showTables: true,
+    showOrders: true,
+    showExpenses: true,
+    showInventory: true,
+    showDelivery: true,
+    showReports: true,
+    showSettings: true
+  });
 
   useEffect(() => {
     fetchData();
+    fetchDashboardSettings();
   }, [selectedBranch]);
+
+  const fetchDashboardSettings = async () => {
+    try {
+      const res = await axios.get(`${API}/settings/dashboard`);
+      if (res.data && Object.keys(res.data).length > 0) {
+        setDashboardSettings(res.data);
+      }
+    } catch (error) {
+      console.error('Failed to fetch dashboard settings:', error);
+    }
+  };
 
   const fetchData = async () => {
     try {
