@@ -603,6 +603,24 @@ async def delete_user(user_id: str, current_user: dict = Depends(get_current_use
     await db.users.delete_one({"id": user_id})
     return {"message": "تم حذف المستخدم"}
 
+class PasswordReset(BaseModel):
+    new_password: str
+
+@api_router.put("/users/{user_id}/reset-password")
+async def reset_user_password(user_id: str, data: PasswordReset, current_user: dict = Depends(get_current_user)):
+    """إعادة تعيين كلمة مرور المستخدم"""
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.MANAGER]:
+        raise HTTPException(status_code=403, detail="غير مصرح")
+    
+    user = await db.users.find_one({"id": user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="المستخدم غير موجود")
+    
+    hashed = hash_password(data.new_password)
+    await db.users.update_one({"id": user_id}, {"$set": {"password": hashed}})
+    
+    return {"message": "تم تغيير كلمة المرور بنجاح"}
+
 # ==================== BRANCH ROUTES ====================
 
 @api_router.post("/branches", response_model=BranchResponse)
