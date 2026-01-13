@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useSearchParams } from 'react-router-dom';
 import axios from 'axios';
 import { formatPrice } from '../utils/currency';
 import { Card, CardContent } from '../components/ui/card';
 import { Button } from '../components/ui/button';
-import { ScrollArea } from '../components/ui/scroll-area';
+import { Input } from '../components/ui/input';
+import { Label } from '../components/ui/label';
 import {
   Truck,
   Phone,
@@ -23,16 +23,22 @@ import {
   MapPinOff,
   Wifi,
   WifiOff,
-  Share2
+  Share2,
+  LogIn,
+  Lock,
+  Mail,
+  LogOut
 } from 'lucide-react';
 import { toast, Toaster } from 'sonner';
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
 export default function DriverPortal() {
-  const [searchParams] = useSearchParams();
-  const driverId = searchParams.get('id');
-  const driverPhone = searchParams.get('phone');
+  // حالة تسجيل الدخول
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [loginForm, setLoginForm] = useState({ email: '', password: '' });
+  const [loginLoading, setLoginLoading] = useState(false);
+  const [loginError, setLoginError] = useState('');
   
   const [driver, setDriver] = useState(null);
   const [orders, setOrders] = useState([]);
@@ -47,6 +53,21 @@ export default function DriverPortal() {
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [isPWAInstallable, setIsPWAInstallable] = useState(false);
   const [deferredPrompt, setDeferredPrompt] = useState(null);
+
+  // التحقق من وجود جلسة محفوظة
+  useEffect(() => {
+    const savedDriver = localStorage.getItem('driverSession');
+    if (savedDriver) {
+      try {
+        const driverData = JSON.parse(savedDriver);
+        setDriver(driverData);
+        setIsLoggedIn(true);
+      } catch (e) {
+        localStorage.removeItem('driverSession');
+      }
+    }
+    setLoading(false);
+  }, []);
 
   // Register Service Worker for PWA
   useEffect(() => {
@@ -82,6 +103,72 @@ export default function DriverPortal() {
       window.removeEventListener('offline', handleOffline);
     };
   }, []);
+
+  // تسجيل الدخول
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    setLoginLoading(true);
+    setLoginError('');
+    
+    try {
+      // تسجيل الدخول للحصول على بيانات المستخدم
+      const loginRes = await axios.post(`${API}/auth/login`, {
+        email: loginForm.email,
+        password: loginForm.password
+      });
+      
+      const userData = loginRes.data.user;
+      
+      // التحقق من أن المستخدم سائق توصيل
+      if (userData.role !== 'delivery') {
+        setLoginError('هذا الحساب ليس حساب سائق توصيل');
+        setLoginLoading(false);
+        return;
+      }
+      
+      // جلب بيانات السائق المرتبط بالمستخدم
+      const driverRes = await axios.get(`${API}/drivers/by-user/${userData.id}`, {
+        headers: { Authorization: `Bearer ${loginRes.data.token}` }
+      });
+      
+      const driverData = {
+        ...driverRes.data,
+        token: loginRes.data.token,
+        user_id: userData.id
+      };
+      
+      // حفظ الجلسة
+      localStorage.setItem('driverSession', JSON.stringify(driverData));
+      localStorage.setItem('driverToken', loginRes.data.token);
+      
+      setDriver(driverData);
+      setIsLoggedIn(true);
+      toast.success('تم تسجيل الدخول بنجاح!');
+      
+    } catch (err) {
+      console.error('Login error:', err);
+      if (err.response?.status === 401) {
+        setLoginError('البريد الإلكتروني أو كلمة المرور غير صحيحة');
+      } else if (err.response?.status === 404) {
+        setLoginError('لم يتم ربط حسابك بسائق. تواصل مع الإدارة');
+      } else {
+        setLoginError(err.response?.data?.detail || 'فشل تسجيل الدخول');
+      }
+    } finally {
+      setLoginLoading(false);
+    }
+  };
+
+  // تسجيل الخروج
+  const handleLogout = () => {
+    localStorage.removeItem('driverSession');
+    localStorage.removeItem('driverToken');
+    setDriver(null);
+    setIsLoggedIn(false);
+    setOrders([]);
+    setStats({ unpaid_total: 0, paid_today: 0, pending_orders: 0 });
+    toast.success('تم تسجيل الخروج');
+  };
 
   // GPS Location tracking
   const startLocationTracking = useCallback(() => {
@@ -130,7 +217,7 @@ export default function DriverPortal() {
 
   // Start tracking when driver is loaded
   useEffect(() => {
-    if (driver) {
+    if (driver && isLoggedIn) {
       const cleanup = startLocationTracking();
       
       // Update location every 30 seconds
@@ -146,39 +233,31 @@ export default function DriverPortal() {
         clearInterval(locationInterval);
       };
     }
-  }, [driver, startLocationTracking, currentLocation]);
+  }, [driver, isLoggedIn, startLocationTracking, currentLocation]);
 
+  // Fetch driver data
   useEffect(() => {
-    if (driverId || driverPhone) {
+    if (driver?.id && isLoggedIn) {
       fetchDriverData();
       const interval = setInterval(fetchDriverData, 15000);
       return () => clearInterval(interval);
-    } else {
-      setError('لم يتم تحديد السائق');
-      setLoading(false);
     }
-  }, [driverId, driverPhone]);
+  }, [driver?.id, isLoggedIn]);
 
   const fetchDriverData = async () => {
+    if (!driver?.id) return;
+    
     try {
-      let driverData;
-      if (driverId) {
-        const res = await axios.get(`${API}/drivers/portal/${driverId}`);
-        driverData = res.data;
-      } else if (driverPhone) {
-        const res = await axios.get(`${API}/drivers/portal/by-phone/${driverPhone}`);
-        driverData = res.data;
-      }
-      
-      setDriver(driverData.driver);
-      setOrders(driverData.orders);
-      setStats(driverData.stats);
+      const res = await axios.get(`${API}/drivers/portal/${driver.id}`);
+      setOrders(res.data.orders || []);
+      setStats(res.data.stats || { unpaid_total: 0, paid_today: 0, pending_orders: 0 });
       setError(null);
     } catch (err) {
       console.error('Error fetching driver data:', err);
-      setError('فشل في جلب البيانات');
-    } finally {
-      setLoading(false);
+      if (err.response?.status === 404) {
+        setError('السائق غير موجود');
+        handleLogout();
+      }
     }
   };
 
@@ -193,25 +272,11 @@ export default function DriverPortal() {
   };
 
   const openNavigation = (address) => {
-    // Open Google Maps or Waze with the address
     const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`;
     const wazeUrl = `https://waze.com/ul?q=${encodeURIComponent(address)}`;
     
-    // Show options
     const useWaze = window.confirm('فتح في Google Maps?\n\nاضغط إلغاء لفتح Waze');
     window.open(useWaze ? googleMapsUrl : wazeUrl, '_blank');
-  };
-
-  const openNavigationWithCoords = (lat, lng, address) => {
-    if (lat && lng) {
-      const googleMapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`;
-      const wazeUrl = `https://waze.com/ul?ll=${lat},${lng}&navigate=yes`;
-      
-      const useWaze = window.confirm('فتح في Google Maps?\n\nاضغط إلغاء لفتح Waze');
-      window.open(useWaze ? googleMapsUrl : wazeUrl, '_blank');
-    } else {
-      openNavigation(address);
-    }
   };
 
   const callCustomer = (phone) => {
@@ -231,25 +296,99 @@ export default function DriverPortal() {
     setDeferredPrompt(null);
   };
 
-  const shareApp = async () => {
-    const shareUrl = `${window.location.origin}/driver?id=${driver?.id}`;
-    
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          title: 'Maestro Driver',
-          text: 'رابط تطبيق السائق',
-          url: shareUrl
-        });
-      } catch (err) {
-        console.log('Share failed:', err);
-      }
-    } else {
-      navigator.clipboard.writeText(shareUrl);
-      toast.success('تم نسخ الرابط!');
-    }
-  };
+  // صفحة تسجيل الدخول
+  if (!isLoggedIn) {
+    return (
+      <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center p-4" dir="rtl">
+        <Toaster position="top-center" richColors />
+        
+        <Card className="w-full max-w-sm bg-gray-800 border-gray-700">
+          <CardContent className="p-6">
+            {/* Logo */}
+            <div className="text-center mb-6">
+              <div className="w-20 h-20 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Truck className="h-10 w-10 text-green-500" />
+              </div>
+              <h1 className="text-2xl font-bold text-white">بوابة السائق</h1>
+              <p className="text-gray-400 text-sm mt-1">Maestro EGP</p>
+            </div>
 
+            {/* Login Form */}
+            <form onSubmit={handleLogin} className="space-y-4">
+              <div>
+                <Label className="text-gray-300">البريد الإلكتروني</Label>
+                <div className="relative mt-1">
+                  <Mail className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-500" />
+                  <Input
+                    type="email"
+                    value={loginForm.email}
+                    onChange={(e) => setLoginForm({ ...loginForm, email: e.target.value })}
+                    className="pr-10 bg-gray-700 border-gray-600 text-white placeholder:text-gray-500"
+                    placeholder="example@maestroegp.com"
+                    required
+                    dir="ltr"
+                  />
+                </div>
+              </div>
+              
+              <div>
+                <Label className="text-gray-300">كلمة المرور</Label>
+                <div className="relative mt-1">
+                  <Lock className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-500" />
+                  <Input
+                    type="password"
+                    value={loginForm.password}
+                    onChange={(e) => setLoginForm({ ...loginForm, password: e.target.value })}
+                    className="pr-10 bg-gray-700 border-gray-600 text-white placeholder:text-gray-500"
+                    placeholder="••••••••"
+                    required
+                  />
+                </div>
+              </div>
+
+              {loginError && (
+                <div className="bg-red-500/20 text-red-400 px-3 py-2 rounded-lg text-sm flex items-center gap-2">
+                  <AlertCircle className="h-4 w-4" />
+                  {loginError}
+                </div>
+              )}
+
+              <Button 
+                type="submit" 
+                className="w-full bg-green-500 hover:bg-green-600 text-white"
+                disabled={loginLoading}
+              >
+                {loginLoading ? (
+                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <>
+                    <LogIn className="h-5 w-5 ml-2" />
+                    تسجيل الدخول
+                  </>
+                )}
+              </Button>
+            </form>
+
+            {/* PWA Install */}
+            {isPWAInstallable && (
+              <div className="mt-6 pt-4 border-t border-gray-700">
+                <Button 
+                  variant="outline" 
+                  className="w-full border-green-500 text-green-400 hover:bg-green-500/10"
+                  onClick={installPWA}
+                >
+                  <Download className="h-5 w-5 ml-2" />
+                  تثبيت التطبيق
+                </Button>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // Loading state
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-900 flex items-center justify-center">
@@ -267,7 +406,6 @@ export default function DriverPortal() {
         <div className="text-center">
           <AlertCircle className="h-16 w-16 text-red-500 mx-auto mb-4" />
           <p className="text-red-400 text-lg">{error}</p>
-          <p className="text-gray-500 text-sm mt-2">تأكد من الرابط الصحيح</p>
         </div>
       </div>
     );
@@ -286,7 +424,6 @@ export default function DriverPortal() {
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 bg-green-500/20 rounded-full flex items-center justify-center relative">
               <Truck className="h-6 w-6 text-green-500" />
-              {/* Online/Offline indicator */}
               <span className={`absolute bottom-0 right-0 w-3 h-3 rounded-full ${isOnline ? 'bg-green-500' : 'bg-red-500'}`} />
             </div>
             <div>
@@ -323,19 +460,19 @@ export default function DriverPortal() {
             <Button 
               variant="ghost" 
               size="icon"
-              onClick={shareApp}
-              className="text-gray-400"
-              title="مشاركة"
-            >
-              <Share2 className="h-5 w-5" />
-            </Button>
-            <Button 
-              variant="ghost" 
-              size="icon"
               onClick={fetchDriverData}
               className="text-gray-400"
             >
               <RefreshCw className="h-5 w-5" />
+            </Button>
+            <Button 
+              variant="ghost" 
+              size="icon"
+              onClick={handleLogout}
+              className="text-red-400"
+              title="تسجيل الخروج"
+            >
+              <LogOut className="h-5 w-5" />
             </Button>
           </div>
         </div>
