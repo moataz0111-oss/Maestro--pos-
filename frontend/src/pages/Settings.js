@@ -879,6 +879,7 @@ export default function Settings() {
                                 <SelectItem value="manager">مدير</SelectItem>
                                 <SelectItem value="supervisor">مشرف</SelectItem>
                                 <SelectItem value="cashier">كاشير</SelectItem>
+                                <SelectItem value="delivery">سائق توصيل</SelectItem>
                               </SelectContent>
                             </Select>
                           </div>
