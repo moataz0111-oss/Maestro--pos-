@@ -33,7 +33,9 @@ import {
   Map,
   Locate,
   Edit,
-  Trash2
+  Trash2,
+  Link,
+  UserCheck
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
