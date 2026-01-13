@@ -231,6 +231,9 @@ export default function Settings() {
     } else {
       setLoading(false);
     }
+    // تحميل إعدادات الصوت
+    const savedSoundSettings = getSoundSettings();
+    setSoundSettings(savedSoundSettings);
   }, []);
 
   const fetchData = async () => {
