@@ -362,6 +362,11 @@ class ShiftClose(BaseModel):
     closing_cash: float
     notes: Optional[str] = None
 
+# نموذج إغلاق الصندوق المتقدم مع جرد الفئات
+class CashRegisterClose(BaseModel):
+    denominations: Dict[str, int] = {}  # {"250": 5, "500": 10, "1000": 20, ...}
+    notes: Optional[str] = None
+
 class ShiftResponse(BaseModel):
     model_config = ConfigDict(extra="ignore")
     id: str
@@ -380,11 +385,17 @@ class ShiftResponse(BaseModel):
     cash_sales: float = 0.0
     credit_sales: float = 0.0
     delivery_app_sales: Dict[str, float] = {}
+    driver_sales: float = 0.0  # مبيعات السائقين
     total_expenses: float = 0.0
     net_profit: float = 0.0
     started_at: str
     ended_at: Optional[str] = None
     status: str
+    denominations: Optional[Dict[str, int]] = None  # تفاصيل الجرد
+    cancelled_orders: int = 0  # عدد الطلبات الملغاة
+    cancelled_amount: float = 0.0  # إجمالي الإلغاءات
+    discounts_total: float = 0.0  # إجمالي الخصومات
+    cancelled_by: List[Dict] = []  # تفاصيل من قام بالإلغاء
 
 # Delivery Driver Models
 class DriverCreate(BaseModel):
