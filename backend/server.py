@@ -49,6 +49,7 @@ class UserRole:
     MANAGER = "manager"
     SUPERVISOR = "supervisor"
     CASHIER = "cashier"
+    DELIVERY = "delivery"  # دور جديد للسائقين
 
 class OrderType:
     DINE_IN = "dine_in"
