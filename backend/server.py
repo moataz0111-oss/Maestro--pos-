@@ -2975,78 +2975,8 @@ async def get_credit_report(
 
 # ==================== CASH REGISTER ROUTES ====================
 
-class CashRegisterClose(BaseModel):
-    denominations: dict  # {"250": 10, "500": 5, ...}
-    notes: Optional[str] = None
-
-@api_router.post("/cash-register/close")
-async def close_cash_register(data: CashRegisterClose, current_user: dict = Depends(get_current_user)):
-    """إغلاق الصندوق"""
-    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    branch_id = current_user.get("branch_id")
-    
-    # حساب المبلغ المحسوب من الفئات
-    denomination_values = {
-        "250": 250, "500": 500, "1000": 1000, "5000": 5000,
-        "10000": 10000, "25000": 25000, "50000": 50000
-    }
-    calculated_total = sum(
-        denomination_values.get(k, int(k)) * v 
-        for k, v in data.denominations.items()
-    )
-    
-    # جلب مبيعات اليوم النقدية
-    sales_query = {
-        "created_at": {"$regex": f"^{today}"},
-        "payment_method": "cash",
-        "status": {"$ne": "cancelled"}
-    }
-    if branch_id:
-        sales_query["branch_id"] = branch_id
-    
-    cash_orders = await db.orders.find(sales_query, {"total": 1}).to_list(500)
-    expected_cash = sum(o.get("total", 0) for o in cash_orders)
-    
-    # جلب المصاريف النقدية
-    expenses_query = {"date": today, "payment_method": "cash"}
-    if branch_id:
-        expenses_query["branch_id"] = branch_id
-    expenses = await db.expenses.find(expenses_query, {"amount": 1}).to_list(100)
-    total_expenses = sum(e.get("amount", 0) for e in expenses)
-    
-    # الفرق
-    difference = calculated_total - (expected_cash - total_expenses)
-    
-    # حفظ سجل الإغلاق
-    close_record = {
-        "id": str(uuid.uuid4()),
-        "date": today,
-        "branch_id": branch_id,
-        "cashier_id": current_user.get("id"),
-        "cashier_name": current_user.get("full_name") or current_user.get("username"),
-        "denominations": data.denominations,
-        "calculated_total": calculated_total,
-        "expected_cash": expected_cash,
-        "total_expenses": total_expenses,
-        "expected_balance": expected_cash - total_expenses,
-        "difference": difference,
-        "notes": data.notes,
-        "closed_at": datetime.now(timezone.utc).isoformat()
-    }
-    
-    await db.cash_register_closes.insert_one(close_record)
-    
-    return {
-        "message": "تم إغلاق الصندوق بنجاح",
-        "summary": {
-            "calculated_total": calculated_total,
-            "expected_cash": expected_cash,
-            "total_expenses": total_expenses,
-            "expected_balance": expected_cash - total_expenses,
-            "difference": difference,
-            "status": "متطابق" if abs(difference) < 100 else ("زيادة" if difference > 0 else "نقص")
-        }
-    }
+# Note: The main cash register close endpoint is defined above at /api/cash-register/close 
+# with the complete functionality including shift management
 
 @api_router.get("/cash-register/today")
 async def get_today_cash_register(current_user: dict = Depends(get_current_user)):
