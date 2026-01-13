@@ -439,7 +439,9 @@ export const playIncomingCall = () => {
         playRingTone2(ctx2.currentTime);
         playRingTone2(ctx2.currentTime + 0.25);
         playRingTone2(ctx2.currentTime + 0.5);
-      } catch (e) {}
+      } catch (e) {
+        // ignore audio context errors
+      }
     }, 1000);
     
   } catch (error) {
