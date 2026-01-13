@@ -1256,6 +1256,7 @@ async def create_order(order: OrderCreate, current_user: dict = Depends(get_curr
         "profit": profit,
         "branch_id": order.branch_id,
         "cashier_id": current_user["id"],
+        "tenant_id": get_user_tenant_id(current_user),  # فصل البيانات لكل عميل
         "status": order_status,
         "payment_method": order.payment_method,
         "payment_status": payment_status,
