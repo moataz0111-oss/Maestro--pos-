@@ -1513,6 +1513,60 @@ async def get_current_shift(current_user: dict = Depends(get_current_user)):
     )
     return shift
 
+@api_router.post("/shifts/auto-open")
+async def auto_open_shift(current_user: dict = Depends(get_current_user)):
+    """فتح وردية تلقائياً للكاشير عند تسجيل الدخول"""
+    
+    # التحقق من وجود وردية مفتوحة
+    existing = await db.shifts.find_one({
+        "cashier_id": current_user["id"], 
+        "status": "open"
+    }, {"_id": 0})
+    
+    if existing:
+        # إرجاع الوردية الموجودة
+        return {"shift": existing, "was_existing": True, "message": "وردية مفتوحة بالفعل"}
+    
+    # الحصول على الفرع الافتراضي للمستخدم أو أول فرع
+    branch_id = current_user.get("branch_id")
+    if not branch_id:
+        branch = await db.branches.find_one({}, {"_id": 0, "id": 1})
+        branch_id = branch["id"] if branch else None
+    
+    if not branch_id:
+        raise HTTPException(status_code=400, detail="لا يوجد فرع محدد")
+    
+    # فتح وردية جديدة برصيد افتتاحي 0
+    shift_doc = {
+        "id": str(uuid.uuid4()),
+        "cashier_id": current_user["id"],
+        "cashier_name": current_user["full_name"],
+        "branch_id": branch_id,
+        "opening_cash": 0.0,  # رصيد افتتاحي 0
+        "closing_cash": None,
+        "expected_cash": 0.0,
+        "cash_difference": None,
+        "total_sales": 0.0,
+        "total_cost": 0.0,
+        "gross_profit": 0.0,
+        "total_orders": 0,
+        "card_sales": 0.0,
+        "cash_sales": 0.0,
+        "credit_sales": 0.0,
+        "delivery_app_sales": {},
+        "driver_sales": 0.0,
+        "total_expenses": 0.0,
+        "net_profit": 0.0,
+        "started_at": datetime.now(timezone.utc).isoformat(),
+        "ended_at": None,
+        "status": "open"
+    }
+    
+    await db.shifts.insert_one(shift_doc)
+    del shift_doc["_id"]
+    
+    return {"shift": shift_doc, "was_existing": False, "message": "تم فتح وردية جديدة تلقائياً"}
+
 @api_router.post("/shifts/{shift_id}/close")
 async def close_shift(shift_id: str, close_data: ShiftClose, background_tasks: BackgroundTasks, current_user: dict = Depends(get_current_user)):
     shift = await db.shifts.find_one({"id": shift_id})
