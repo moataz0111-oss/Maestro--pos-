@@ -2049,6 +2049,303 @@ export default function Settings() {
             </TabsContent>
           )}
 
+          {/* Call Center - إعدادات الكول سنتر */}
+          {hasRole(['admin']) && (
+            <TabsContent value="callcenter">
+              <div className="space-y-6">
+                {/* بطاقة التفعيل والمزود */}
+                <Card className="border-border/50 bg-card">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2 text-foreground">
+                      <Headphones className="h-5 w-5" />
+                      إعدادات الكول سنتر (Caller ID)
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-6">
+                    {/* تفعيل الكول سنتر */}
+                    <div className="flex items-center justify-between p-4 bg-muted/30 rounded-lg">
+                      <div>
+                        <h4 className="font-medium text-foreground">تفعيل نظام الكول سنتر</h4>
+                        <p className="text-sm text-muted-foreground">عند التفعيل، سيظهر رقم المتصل تلقائياً عند ورود مكالمة</p>
+                      </div>
+                      <Switch 
+                        checked={callCenterConfig.enabled}
+                        onCheckedChange={(checked) => setCallCenterConfig(prev => ({...prev, enabled: checked}))}
+                      />
+                    </div>
+
+                    {/* اختيار المزود */}
+                    <div className="space-y-2">
+                      <Label>مزود الخدمة</Label>
+                      <Select 
+                        value={callCenterConfig.provider} 
+                        onValueChange={(value) => setCallCenterConfig(prev => ({...prev, provider: value}))}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="اختر نظام الكول سنتر" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="3cx">3CX</SelectItem>
+                          <SelectItem value="ringcentral">RingCentral</SelectItem>
+                          <SelectItem value="zoiper">Zoiper</SelectItem>
+                          <SelectItem value="cloudtalk">CloudTalk</SelectItem>
+                          <SelectItem value="freshdesk">Freshdesk Contact Center</SelectItem>
+                          <SelectItem value="asterisk">Asterisk / FreePBX</SelectItem>
+                          <SelectItem value="twilio">Twilio</SelectItem>
+                          <SelectItem value="custom">نظام مخصص (Custom API)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {/* بيانات API */}
+                    {callCenterConfig.provider && (
+                      <div className="grid grid-cols-2 gap-4 p-4 border border-border rounded-lg">
+                        <div className="col-span-2">
+                          <Label>رابط API</Label>
+                          <Input 
+                            value={callCenterConfig.api_url}
+                            onChange={(e) => setCallCenterConfig(prev => ({...prev, api_url: e.target.value}))}
+                            placeholder="https://api.yourprovider.com/v1"
+                            dir="ltr"
+                          />
+                        </div>
+                        <div>
+                          <Label>API Key / Client ID</Label>
+                          <Input 
+                            value={callCenterConfig.api_key}
+                            onChange={(e) => setCallCenterConfig(prev => ({...prev, api_key: e.target.value}))}
+                            placeholder="your-api-key"
+                            dir="ltr"
+                          />
+                        </div>
+                        <div>
+                          <Label>API Secret / Token</Label>
+                          <Input 
+                            type="password"
+                            value={callCenterConfig.api_secret}
+                            onChange={(e) => setCallCenterConfig(prev => ({...prev, api_secret: e.target.value}))}
+                            placeholder="your-api-secret"
+                            dir="ltr"
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                {/* بطاقة Webhook */}
+                <Card className="border-border/50 bg-card">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2 text-foreground">
+                      <Globe className="h-5 w-5" />
+                      إعداد Webhook
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <p className="text-sm text-muted-foreground">
+                      قم بإضافة هذا الرابط في إعدادات نظام الكول سنتر الخاص بك لاستقبال المكالمات الواردة
+                    </p>
+                    
+                    <div className="flex gap-2">
+                      <Input 
+                        value={`${process.env.REACT_APP_BACKEND_URL}/api/callcenter/webhook`}
+                        readOnly
+                        dir="ltr"
+                        className="font-mono text-sm"
+                      />
+                      <Button 
+                        variant="outline"
+                        onClick={() => {
+                          navigator.clipboard.writeText(`${process.env.REACT_APP_BACKEND_URL}/api/callcenter/webhook`);
+                          toast.success('تم نسخ الرابط');
+                        }}
+                      >
+                        <Copy className="h-4 w-4" />
+                      </Button>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label>Webhook Secret (اختياري)</Label>
+                      <Input 
+                        value={callCenterConfig.webhook_secret}
+                        onChange={(e) => setCallCenterConfig(prev => ({...prev, webhook_secret: e.target.value}))}
+                        placeholder="للتحقق من صحة الطلبات"
+                        dir="ltr"
+                      />
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* بطاقة الخيارات */}
+                <Card className="border-border/50 bg-card">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2 text-foreground">
+                      <SettingsIcon className="h-5 w-5" />
+                      خيارات العرض
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h4 className="font-medium text-foreground">نافذة منبثقة تلقائية</h4>
+                        <p className="text-sm text-muted-foreground">عرض نافذة المتصل تلقائياً عند ورود مكالمة</p>
+                      </div>
+                      <Switch 
+                        checked={callCenterConfig.auto_popup}
+                        onCheckedChange={(checked) => setCallCenterConfig(prev => ({...prev, auto_popup: checked}))}
+                      />
+                    </div>
+                    
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h4 className="font-medium text-foreground">حفظ الأرقام الجديدة تلقائياً</h4>
+                        <p className="text-sm text-muted-foreground">حفظ أرقام المتصلين الجدد في قاعدة العملاء</p>
+                      </div>
+                      <Switch 
+                        checked={callCenterConfig.auto_save_new_callers}
+                        onCheckedChange={(checked) => setCallCenterConfig(prev => ({...prev, auto_save_new_callers: checked}))}
+                      />
+                    </div>
+                    
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h4 className="font-medium text-foreground">صوت التنبيه</h4>
+                        <p className="text-sm text-muted-foreground">تشغيل صوت عند ورود مكالمة جديدة</p>
+                      </div>
+                      <Switch 
+                        checked={callCenterConfig.play_sound}
+                        onCheckedChange={(checked) => setCallCenterConfig(prev => ({...prev, play_sound: checked}))}
+                      />
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* بطاقة الاختبار والحفظ */}
+                <Card className="border-border/50 bg-card">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2 text-foreground">
+                      <TestTube className="h-5 w-5" />
+                      اختبار الاتصال
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="flex gap-2">
+                      <Button 
+                        variant="outline"
+                        onClick={async () => {
+                          try {
+                            setCallCenterTestStatus('testing');
+                            const res = await axios.post(`${API}/callcenter/test`, callCenterConfig);
+                            setCallCenterTestStatus(res.data.success ? 'success' : 'failed');
+                            toast.success('تم الاتصال بنجاح!');
+                          } catch (error) {
+                            setCallCenterTestStatus('failed');
+                            toast.error('فشل الاتصال: ' + (error.response?.data?.detail || 'خطأ غير معروف'));
+                          }
+                        }}
+                        disabled={!callCenterConfig.provider || callCenterTestStatus === 'testing'}
+                        className="gap-2"
+                      >
+                        {callCenterTestStatus === 'testing' ? (
+                          <RefreshCw className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <TestTube className="h-4 w-4" />
+                        )}
+                        اختبار الاتصال
+                      </Button>
+                      
+                      <Button 
+                        variant="outline"
+                        onClick={async () => {
+                          try {
+                            await axios.post(`${API}/callcenter/simulate`, { phone: '07801234567' });
+                            toast.success('تم إرسال مكالمة تجريبية!');
+                          } catch (error) {
+                            toast.error('فشل إرسال المكالمة التجريبية');
+                          }
+                        }}
+                        className="gap-2"
+                      >
+                        <PhoneIncoming className="h-4 w-4" />
+                        محاكاة مكالمة واردة
+                      </Button>
+                      
+                      {callCenterTestStatus === 'success' && (
+                        <span className="flex items-center gap-1 text-green-500">
+                          <Check className="h-4 w-4" />
+                          متصل
+                        </span>
+                      )}
+                      {callCenterTestStatus === 'failed' && (
+                        <span className="flex items-center gap-1 text-red-500">
+                          <X className="h-4 w-4" />
+                          فشل الاتصال
+                        </span>
+                      )}
+                    </div>
+                    
+                    <div className="flex justify-end gap-2 pt-4 border-t">
+                      <Button 
+                        onClick={async () => {
+                          try {
+                            await axios.post(`${API}/callcenter/config`, callCenterConfig);
+                            toast.success('تم حفظ الإعدادات');
+                          } catch (error) {
+                            toast.error('فشل حفظ الإعدادات');
+                          }
+                        }}
+                        className="gap-2 bg-primary"
+                      >
+                        <Save className="h-4 w-4" />
+                        حفظ الإعدادات
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* دليل الإعداد */}
+                <Card className="border-border/50 bg-card">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2 text-foreground">
+                      <BarChart className="h-5 w-5" />
+                      دليل الإعداد السريع
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-4 text-sm">
+                      <div className="p-3 bg-blue-500/10 rounded-lg border border-blue-500/20">
+                        <h5 className="font-medium text-blue-400 mb-2">3CX</h5>
+                        <ol className="list-decimal list-inside space-y-1 text-muted-foreground">
+                          <li>اذهب إلى Settings → Integrations → CRM</li>
+                          <li>اختر "Custom CRM" وأضف رابط Webhook</li>
+                          <li>انسخ API Key من إعدادات 3CX</li>
+                        </ol>
+                      </div>
+                      
+                      <div className="p-3 bg-purple-500/10 rounded-lg border border-purple-500/20">
+                        <h5 className="font-medium text-purple-400 mb-2">RingCentral</h5>
+                        <ol className="list-decimal list-inside space-y-1 text-muted-foreground">
+                          <li>اذهب إلى Developer Console</li>
+                          <li>أنشئ تطبيق جديد واحصل على Client ID و Secret</li>
+                          <li>أضف Webhook URL في إعدادات التطبيق</li>
+                        </ol>
+                      </div>
+                      
+                      <div className="p-3 bg-green-500/10 rounded-lg border border-green-500/20">
+                        <h5 className="font-medium text-green-400 mb-2">Asterisk / FreePBX</h5>
+                        <ol className="list-decimal list-inside space-y-1 text-muted-foreground">
+                          <li>قم بتثبيت AGI Script للاتصال بالنظام</li>
+                          <li>أضف الـ Script في extensions.conf</li>
+                          <li>استخدم AMI للاتصال بـ API</li>
+                        </ol>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            </TabsContent>
+          )}
+
           {/* Notifications */}
           {hasRole(['admin']) && (
             <TabsContent value="notifications">
