@@ -175,19 +175,31 @@ export default function POS() {
 
   const fetchPendingOrders = async () => {
     try {
-      const res = await axios.get(`${API}/orders`, { 
-        params: { status: 'pending' } 
-      });
-      const orders = res.data;
+      // جلب الطلبات المعلقة (pending) والطلبات غير المدفوعة للطاولات
+      const [pendingRes, unpaidDineInRes] = await Promise.all([
+        axios.get(`${API}/orders`, { params: { status: 'pending' } }),
+        axios.get(`${API}/orders`, { params: { payment_status: 'pending', order_type: 'dine_in' } })
+      ]);
+      
+      // دمج الطلبات وإزالة التكرارات
+      const allOrders = [...pendingRes.data];
+      const pendingIds = new Set(pendingRes.data.map(o => o.id));
+      
+      // إضافة طلبات الطاولات غير المدفوعة التي ليست في القائمة
+      for (const order of unpaidDineInRes.data) {
+        if (!pendingIds.has(order.id) && order.status !== 'delivered' && order.status !== 'cancelled') {
+          allOrders.push(order);
+        }
+      }
       
       // إشعار صوتي للطلبات الجديدة
-      if (prevOrdersCount.current > 0 && orders.length > prevOrdersCount.current) {
+      if (prevOrdersCount.current > 0 && allOrders.length > prevOrdersCount.current) {
         playSuccess();
         toast.success('طلب جديد!', { duration: 5000 });
       }
-      prevOrdersCount.current = orders.length;
+      prevOrdersCount.current = allOrders.length;
       
-      setPendingOrders(orders);
+      setPendingOrders(allOrders);
     } catch (error) {
       console.error('Failed to fetch pending orders:', error);
     }
