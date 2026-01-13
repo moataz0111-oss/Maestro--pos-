@@ -202,7 +202,7 @@ export default function IncomingCallPopup({ onClose, onAnswer, onCreateOrder }) 
       }
       stopRingSound();
     };
-  }, [fetchActiveCalls]);
+  }, [fetchActiveCalls, stopRingSound]);
 
   // تنظيف المكالمات المرفوضة بعد دقيقة
   useEffect(() => {
