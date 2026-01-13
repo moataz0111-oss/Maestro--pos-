@@ -90,6 +90,7 @@ export default function SuperAdmin() {
   const [showResetPassword, setShowResetPassword] = useState(false);
   const [showLiveView, setShowLiveView] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showResetSalesConfirm, setShowResetSalesConfirm] = useState(false);
   
   // New tenant form
   const [newTenantForm, setNewTenantForm] = useState({
