@@ -380,6 +380,20 @@ export default function Dashboard() {
               {isDark ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
             </Button>
 
+            {/* Super Admin Button - للمدير فقط */}
+            {user?.role === 'admin' && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => navigate('/super-admin')}
+                className="gap-2 border-purple-500 text-purple-500 hover:bg-purple-500/10"
+                data-testid="super-admin-btn"
+              >
+                <Crown className="h-4 w-4" />
+                إدارة العملاء
+              </Button>
+            )}
+
             {/* Close Cash Register Button */}
             <Button
               variant="outline"
