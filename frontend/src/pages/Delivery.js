@@ -1293,7 +1293,7 @@ export default function Delivery() {
             {deliveryUsers.length === 0 && (
               <div className="p-3 bg-yellow-500/10 rounded-lg text-yellow-500 text-sm">
                 <AlertCircle className="h-4 w-4 inline ml-1" />
-                لا يوجد مستخدمين بدور "سائق توصيل". أنشئ مستخدم جديد من الإعدادات أولاً.
+                لا يوجد مستخدمين بدور سائق توصيل. أنشئ مستخدم جديد من الإعدادات أولاً.
               </div>
             )}
             
