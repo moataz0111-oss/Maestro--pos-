@@ -45,6 +45,7 @@ logger = logging.getLogger(__name__)
 # ==================== MODELS ====================
 
 class UserRole:
+    SUPER_ADMIN = "super_admin"  # مالك النظام الرئيسي
     ADMIN = "admin"
     MANAGER = "manager"
     SUPERVISOR = "supervisor"
@@ -69,6 +70,33 @@ class PaymentMethod:
     CREDIT = "credit"
     PENDING = "pending"
 
+# ==================== TENANT MODELS (Multi-tenant) ====================
+
+class TenantCreate(BaseModel):
+    name: str  # اسم المطعم/الكافيه
+    slug: str  # رابط فريد (مثل: my-restaurant)
+    owner_name: str  # اسم المالك
+    owner_email: EmailStr
+    owner_phone: str
+    subscription_type: str = "trial"  # trial, basic, premium
+    max_branches: int = 1
+    max_users: int = 5
+
+class TenantResponse(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str
+    name: str
+    slug: str
+    owner_name: str
+    owner_email: str
+    owner_phone: str
+    subscription_type: str
+    max_branches: int
+    max_users: int
+    is_active: bool
+    created_at: str
+    expires_at: Optional[str] = None
+
 # User Models
 class UserCreate(BaseModel):
     username: str
@@ -78,6 +106,7 @@ class UserCreate(BaseModel):
     role: str = UserRole.CASHIER
     branch_id: Optional[str] = None
     permissions: List[str] = []
+    tenant_id: Optional[str] = None  # للنظام متعدد المستأجرين
 
 class UserLogin(BaseModel):
     email: str
@@ -94,6 +123,7 @@ class UserResponse(BaseModel):
     permissions: List[str] = []
     is_active: bool = True
     created_at: str
+    tenant_id: Optional[str] = None
 
 class UserUpdate(BaseModel):
     full_name: Optional[str] = None
