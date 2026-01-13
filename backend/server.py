@@ -3392,6 +3392,63 @@ async def create_tenant(tenant: TenantCreate, current_user: dict = Depends(verif
 @api_router.get("/super-admin/tenants/{tenant_id}")
 async def get_tenant_details(tenant_id: str, current_user: dict = Depends(verify_super_admin)):
     """تفاصيل مستأجر معين"""
+    
+    # التحقق إذا كان النظام الرئيسي
+    if tenant_id == "main-system":
+        # جلب مستخدمي النظام الرئيسي (بدون tenant_id)
+        users = await db.users.find({
+            "$or": [{"tenant_id": {"$exists": False}}, {"tenant_id": None}],
+            "role": {"$ne": UserRole.SUPER_ADMIN}
+        }, {"_id": 0, "password": 0}).to_list(100)
+        
+        branches = await db.branches.find({
+            "$or": [{"tenant_id": {"$exists": False}}, {"tenant_id": None}]
+        }, {"_id": 0}).to_list(50)
+        
+        # إحصائيات المبيعات للنظام الرئيسي
+        today = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
+        orders_today = await db.orders.count_documents({
+            "$or": [{"tenant_id": {"$exists": False}}, {"tenant_id": None}],
+            "created_at": {"$gte": today}
+        })
+        
+        total_sales_cursor = db.orders.aggregate([
+            {"$match": {"$or": [{"tenant_id": {"$exists": False}}, {"tenant_id": None}], "status": {"$ne": "cancelled"}}},
+            {"$group": {"_id": None, "total": {"$sum": "$total"}}}
+        ])
+        total_sales_result = await total_sales_cursor.to_list(1)
+        total_sales = total_sales_result[0]["total"] if total_sales_result else 0
+        
+        # إجمالي الطلبات
+        total_orders = await db.orders.count_documents({
+            "$or": [{"tenant_id": {"$exists": False}}, {"tenant_id": None}]
+        })
+        
+        return {
+            "tenant": {
+                "id": "main-system",
+                "name": "🏠 النظام الرئيسي",
+                "slug": "main",
+                "owner_name": "المالك",
+                "owner_email": "admin@maestroegp.com",
+                "owner_phone": "",
+                "subscription_type": "premium",
+                "is_active": True,
+                "is_main_system": True,
+                "created_at": "2024-01-01T00:00:00"
+            },
+            "users": users,
+            "branches": branches,
+            "stats": {
+                "users_count": len(users),
+                "branches_count": len(branches),
+                "orders_today": orders_today,
+                "total_sales": total_sales,
+                "total_orders": total_orders
+            }
+        }
+    
+    # للعملاء العاديين
     tenant = await db.tenants.find_one({"id": tenant_id}, {"_id": 0})
     if not tenant:
         raise HTTPException(status_code=404, detail="المستأجر غير موجود")
