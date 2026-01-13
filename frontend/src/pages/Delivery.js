@@ -217,6 +217,35 @@ export default function Delivery() {
     setEditDialogOpen(true);
   };
 
+  const openLinkUserDialog = async (driver) => {
+    setSelectedDriverForLink(driver);
+    try {
+      // جلب مستخدمي التوصيل
+      const res = await axios.get(`${API}/users`);
+      const deliveryUsers = res.data.filter(u => u.role === 'delivery');
+      setDeliveryUsers(deliveryUsers);
+      setSelectedUserId(driver.user_id || '');
+      setLinkUserDialogOpen(true);
+    } catch (error) {
+      toast.error('فشل في جلب المستخدمين');
+    }
+  };
+
+  const handleLinkUser = async () => {
+    if (!selectedUserId) {
+      toast.error('يرجى اختيار مستخدم');
+      return;
+    }
+    try {
+      await axios.put(`${API}/drivers/${selectedDriverForLink.id}/link-user?user_id=${selectedUserId}`);
+      toast.success('تم ربط السائق بالمستخدم');
+      setLinkUserDialogOpen(false);
+      fetchData();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'فشل في ربط السائق');
+    }
+  };
+
   const assignDriver = async (driverId, orderId) => {
     try {
       await axios.put(`${API}/drivers/${driverId}/assign?order_id=${orderId}`);
