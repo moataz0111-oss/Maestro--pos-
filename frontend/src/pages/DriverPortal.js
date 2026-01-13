@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import axios from 'axios';
 import { formatPrice } from '../utils/currency';
+import { playDriverNotification, playDeliveryComplete } from '../utils/sound';
 import { Card, CardContent } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -27,7 +28,10 @@ import {
   LogIn,
   Lock,
   Mail,
-  LogOut
+  LogOut,
+  Volume2,
+  VolumeX,
+  Bell
 } from 'lucide-react';
 import { toast, Toaster } from 'sonner';
 
@@ -45,6 +49,10 @@ export default function DriverPortal() {
   const [stats, setStats] = useState({ unpaid_total: 0, paid_today: 0, pending_orders: 0 });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  
+  // Sound notification states
+  const [soundEnabled, setSoundEnabled] = useState(true);
+  const previousOrdersRef = useRef([]);
   
   // GPS Tracking states
   const [locationEnabled, setLocationEnabled] = useState(false);
