@@ -1624,8 +1624,29 @@ async def update_driver(driver_id: str, driver: DriverCreate, current_user: dict
         "phone": driver.phone,
     }
     
+    # إذا تم توفير user_id، نربط السائق بالمستخدم
+    if driver.user_id:
+        update_data["user_id"] = driver.user_id
+    
     await db.drivers.update_one({"id": driver_id}, {"$set": update_data})
     return {"message": "تم تعديل السائق"}
+
+@api_router.put("/drivers/{driver_id}/link-user")
+async def link_driver_to_user(driver_id: str, user_id: str, current_user: dict = Depends(get_current_user)):
+    """ربط السائق بحساب مستخدم"""
+    driver = await db.drivers.find_one({"id": driver_id})
+    if not driver:
+        raise HTTPException(status_code=404, detail="السائق غير موجود")
+    
+    user = await db.users.find_one({"id": user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="المستخدم غير موجود")
+    
+    if user.get("role") != "delivery":
+        raise HTTPException(status_code=400, detail="المستخدم ليس سائق توصيل")
+    
+    await db.drivers.update_one({"id": driver_id}, {"$set": {"user_id": user_id}})
+    return {"message": "تم ربط السائق بالمستخدم"}
 
 @api_router.delete("/drivers/{driver_id}")
 async def delete_driver(driver_id: str, current_user: dict = Depends(get_current_user)):
