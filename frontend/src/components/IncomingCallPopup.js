@@ -171,53 +171,51 @@ export default function IncomingCallPopup({ onClose, onAnswer, onCreateOrder }) 
 
   return (
     <>
-      <audio ref={audioRef} src={RING_SOUND} />
+      <audio ref={audioRef} src={RING_SOUND_URL} preload="auto" />
       
       {activeCalls.map((call) => (
         <div
           key={call.call_id}
-          className={`fixed top-4 left-1/2 -translate-x-1/2 z-[9999] animate-in slide-in-from-top duration-300 ${
-            call.status === 'ringing' ? 'animate-pulse' : ''
-          }`}
+          className="fixed top-4 left-1/2 -translate-x-1/2 z-[9999]"
+          style={{ animation: 'slideInFromTop 0.3s ease-out' }}
         >
-          <Card className={`w-[400px] overflow-hidden shadow-2xl border-2 ${
+          <Card className={`w-[420px] overflow-hidden shadow-2xl border-2 ${
             call.status === 'ringing' 
-              ? 'border-green-500 bg-gradient-to-b from-green-900/90 to-gray-900/95' 
-              : 'border-blue-500 bg-gradient-to-b from-blue-900/90 to-gray-900/95'
-          } backdrop-blur-lg`}>
+              ? 'border-green-500 bg-gradient-to-b from-green-900/95 to-gray-900/98' 
+              : 'border-blue-500 bg-gradient-to-b from-blue-900/95 to-gray-900/98'
+          } backdrop-blur-xl`}>
             {/* Header */}
             <div className={`p-4 ${
-              call.status === 'ringing' ? 'bg-green-500/20' : 'bg-blue-500/20'
+              call.status === 'ringing' ? 'bg-green-500/30' : 'bg-blue-500/30'
             }`}>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className={`p-3 rounded-full ${
                     call.status === 'ringing' 
-                      ? 'bg-green-500 animate-bounce' 
+                      ? 'bg-green-500 animate-pulse' 
                       : 'bg-blue-500'
                   }`}>
                     <PhoneIncoming className="h-6 w-6 text-white" />
                   </div>
                   <div>
                     <h3 className="text-lg font-bold text-white">
-                      {call.status === 'ringing' ? 'مكالمة واردة...' : 'مكالمة نشطة'}
+                      {call.status === 'ringing' ? '📞 مكالمة واردة...' : '🔊 مكالمة نشطة'}
                     </h3>
-                    <p className="text-sm text-gray-300 font-mono" dir="ltr">
+                    <p className="text-sm text-gray-200 font-mono" dir="ltr">
                       {call.phone}
                     </p>
                   </div>
                 </div>
                 
-                {call.status !== 'ringing' && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => handleEndCall(call.call_id)}
-                    className="text-gray-400 hover:text-white"
-                  >
-                    <X className="h-5 w-5" />
-                  </Button>
-                )}
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => handleDismiss(call.call_id)}
+                  className="text-gray-300 hover:text-white hover:bg-white/10"
+                  title="إخفاء"
+                >
+                  <X className="h-5 w-5" />
+                </Button>
               </div>
             </div>
             
@@ -225,12 +223,12 @@ export default function IncomingCallPopup({ onClose, onAnswer, onCreateOrder }) 
             <div className="p-4 space-y-3">
               <div className="flex items-center gap-3 text-white">
                 <User className="h-5 w-5 text-gray-400" />
-                <span className="font-medium">
+                <span className="font-medium text-lg">
                   {call.caller_name || (call.is_new_customer ? 'عميل جديد' : 'غير معروف')}
                 </span>
                 {call.is_new_customer && (
-                  <span className="px-2 py-0.5 text-xs bg-yellow-500/20 text-yellow-400 rounded-full">
-                    جديد
+                  <span className="px-2 py-0.5 text-xs bg-yellow-500/30 text-yellow-300 rounded-full border border-yellow-500/50">
+                    ✨ جديد
                   </span>
                 )}
               </div>
@@ -258,12 +256,12 @@ export default function IncomingCallPopup({ onClose, onAnswer, onCreateOrder }) 
               
               {/* آخر طلب */}
               {call.last_order && (
-                <div className="mt-3 p-3 bg-gray-800/50 rounded-lg">
+                <div className="mt-3 p-3 bg-gray-800/70 rounded-lg border border-gray-700">
                   <div className="flex items-center gap-2 text-sm text-gray-400 mb-2">
                     <Clock className="h-4 w-4" />
                     آخر طلب
                   </div>
-                  <div className="text-white text-sm">
+                  <div className="text-white text-sm font-medium">
                     طلب #{call.last_order.order_number} • {formatPrice(call.last_order.total)}
                   </div>
                   <div className="text-gray-400 text-xs mt-1">
@@ -275,19 +273,19 @@ export default function IncomingCallPopup({ onClose, onAnswer, onCreateOrder }) 
             </div>
             
             {/* Actions */}
-            <div className="p-4 pt-0 flex gap-2">
+            <div className="p-4 pt-0 flex gap-3">
               {call.status === 'ringing' ? (
                 <>
                   <Button
                     onClick={() => handleEndCall(call.call_id)}
-                    className="flex-1 bg-red-600 hover:bg-red-700 text-white gap-2"
+                    className="flex-1 h-12 bg-red-600 hover:bg-red-700 text-white gap-2 text-base font-medium"
                   >
                     <PhoneOff className="h-5 w-5" />
                     رفض
                   </Button>
                   <Button
                     onClick={() => handleAnswer(call.call_id)}
-                    className="flex-1 bg-green-600 hover:bg-green-700 text-white gap-2"
+                    className="flex-1 h-12 bg-green-600 hover:bg-green-700 text-white gap-2 text-base font-medium"
                   >
                     <Phone className="h-5 w-5" />
                     رد
@@ -298,14 +296,14 @@ export default function IncomingCallPopup({ onClose, onAnswer, onCreateOrder }) 
                   <Button
                     onClick={() => handleEndCall(call.call_id)}
                     variant="outline"
-                    className="flex-1 border-red-500 text-red-500 hover:bg-red-500/10 gap-2"
+                    className="flex-1 h-12 border-red-500 text-red-400 hover:bg-red-500/20 gap-2 text-base font-medium"
                   >
                     <PhoneOff className="h-5 w-5" />
                     إنهاء
                   </Button>
                   <Button
                     onClick={() => handleCreateOrder(call)}
-                    className="flex-1 bg-primary hover:bg-primary/90 text-white gap-2"
+                    className="flex-1 h-12 bg-primary hover:bg-primary/90 text-white gap-2 text-base font-medium"
                   >
                     <ShoppingCart className="h-5 w-5" />
                     إنشاء طلب
@@ -316,6 +314,19 @@ export default function IncomingCallPopup({ onClose, onAnswer, onCreateOrder }) 
           </Card>
         </div>
       ))}
+      
+      <style>{`
+        @keyframes slideInFromTop {
+          from {
+            opacity: 0;
+            transform: translate(-50%, -100%);
+          }
+          to {
+            opacity: 1;
+            transform: translate(-50%, 0);
+          }
+        }
+      `}</style>
     </>
   );
 }
