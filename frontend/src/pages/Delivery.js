@@ -456,6 +456,22 @@ export default function Delivery() {
                           <Eye className="h-4 w-4 ml-2" />
                           عرض التفاصيل
                         </Button>
+                        
+                        {/* رابط السائق للهاتف */}
+                        <div className="mt-2 p-2 bg-blue-500/10 rounded-lg">
+                          <p className="text-xs text-blue-400 mb-1">رابط للسائق:</p>
+                          <button
+                            className="text-xs text-blue-300 hover:text-blue-200 break-all text-right"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const url = `${window.location.origin}/driver?id=${driver.id}`;
+                              navigator.clipboard.writeText(url);
+                              toast.success('تم نسخ الرابط!');
+                            }}
+                          >
+                            📋 انسخ الرابط
+                          </button>
+                        </div>
                       </CardContent>
                     </Card>
                   );
