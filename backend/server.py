@@ -38,6 +38,20 @@ app = FastAPI(title="Maestro EGP API", version="2.0.0")
 api_router = APIRouter(prefix="/api")
 security = HTTPBearer()
 
+# ==================== HEALTH CHECK ====================
+
+@app.get("/")
+def read_root():
+    return {"status": "Server is running successfully 🚀", "app": "Maestro EGP", "version": "2.0.0"}
+
+@app.get("/health")
+def health_check():
+    return {"status": "ok"}
+
+@api_router.get("/health")
+def api_health_check():
+    return {"status": "ok", "api": "Maestro EGP API"}
+
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
