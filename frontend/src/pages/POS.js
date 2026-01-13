@@ -270,7 +270,28 @@ export default function POS() {
     }
   };
 
-  // البحث عن عميل بالهاتف
+  // البحث التلقائي عن عميل بالهاتف (للكول سنتر)
+  const searchCustomerByPhone = async (phone) => {
+    if (!phone || phone.length < 4) return;
+    
+    try {
+      const res = await axios.get(`${API}/customers/by-phone/${phone}`);
+      if (res.data) {
+        setCustomerData(res.data);
+        setCustomerName(res.data.name);
+        setDeliveryAddress(res.data.address || '');
+        setCustomerHistory(res.data.recent_orders || []);
+        setShowCustomerInfo(true);
+      }
+    } catch (error) {
+      if (error.response?.status === 404) {
+        // عميل جديد
+        setCustomerData(null);
+      }
+    }
+  };
+
+  // البحث عن عميل بالهاتف (يدوي)
   const handleSearchCustomer = async () => {
     if (!customerSearchPhone || customerSearchPhone.length < 4) {
       toast.error('أدخل رقم هاتف صحيح');
