@@ -171,6 +171,44 @@ export default function Delivery() {
     }
   };
 
+  const handleEditDriver = async (e) => {
+    e.preventDefault();
+    try {
+      await axios.put(`${API}/drivers/${editFormData.id}`, {
+        name: editFormData.name,
+        phone: editFormData.phone,
+        is_active: editFormData.is_active
+      });
+      toast.success('تم تعديل السائق');
+      setEditDialogOpen(false);
+      setEditFormData({ id: '', name: '', phone: '', is_active: true });
+      fetchData();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'فشل في تعديل السائق');
+    }
+  };
+
+  const handleDeleteDriver = async (driverId, driverName) => {
+    if (!window.confirm(`هل أنت متأكد من حذف السائق "${driverName}"؟`)) return;
+    try {
+      await axios.delete(`${API}/drivers/${driverId}`);
+      toast.success('تم حذف السائق');
+      fetchData();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'فشل في حذف السائق');
+    }
+  };
+
+  const openEditDialog = (driver) => {
+    setEditFormData({
+      id: driver.id,
+      name: driver.name,
+      phone: driver.phone,
+      is_active: driver.is_available !== false
+    });
+    setEditDialogOpen(true);
+  };
+
   const assignDriver = async (driverId, orderId) => {
     try {
       await axios.put(`${API}/drivers/${driverId}/assign?order_id=${orderId}`);
