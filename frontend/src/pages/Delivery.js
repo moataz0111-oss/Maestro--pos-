@@ -948,6 +948,47 @@ export default function Delivery() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* نافذة تعديل السائق */}
+      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="text-foreground flex items-center gap-2">
+              <Edit className="h-5 w-5 text-blue-500" />
+              تعديل بيانات السائق
+            </DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleEditDriver} className="space-y-4">
+            <div>
+              <Label className="text-foreground">اسم السائق</Label>
+              <Input
+                value={editFormData.name}
+                onChange={(e) => setEditFormData({ ...editFormData, name: e.target.value })}
+                placeholder="اسم السائق"
+                required
+              />
+            </div>
+            <div>
+              <Label className="text-foreground">رقم الهاتف</Label>
+              <Input
+                value={editFormData.phone}
+                onChange={(e) => setEditFormData({ ...editFormData, phone: e.target.value })}
+                placeholder="07xxxxxxxxx"
+                required
+              />
+            </div>
+            <div className="flex gap-2">
+              <Button type="button" variant="outline" onClick={() => setEditDialogOpen(false)} className="flex-1">
+                إلغاء
+              </Button>
+              <Button type="submit" className="flex-1 bg-blue-500 hover:bg-blue-600 text-white">
+                <Check className="h-4 w-4 ml-1" />
+                حفظ التعديلات
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
