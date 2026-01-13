@@ -89,7 +89,9 @@ export default function Delivery() {
       setBranches(branchesRes.data);
 
       if (!selectedBranch && branchesRes.data.length > 0) {
-        setSelectedBranch(branchesRes.data[0].id);
+        // اختيار أول فرع نشط
+        const activeBranch = branchesRes.data.find(b => b.is_active !== false);
+        setSelectedBranch(activeBranch?.id || branchesRes.data[0].id);
       }
 
       // جلب إحصائيات كل سائق
