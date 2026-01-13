@@ -713,18 +713,42 @@ export default function POS() {
           )}
           
           {orderType === 'dine_in' && (
-            <Select value={selectedTable || ''} onValueChange={setSelectedTable} disabled={!!editingOrder?.table_id}>
-              <SelectTrigger data-testid="table-select">
-                <SelectValue placeholder="اختر طاولة" />
-              </SelectTrigger>
-              <SelectContent>
-                {tables.filter(t => t.status === 'available' || t.id === selectedTable).map(table => (
-                  <SelectItem key={table.id} value={table.id}>
-                    طاولة {table.number} ({table.capacity} أشخاص)
-                  </SelectItem>
+            <div className="space-y-2">
+              <p className="text-sm text-muted-foreground mb-2">اختر طاولة:</p>
+              <div className="grid grid-cols-5 gap-2">
+                {tables.map(table => (
+                  <button
+                    key={table.id}
+                    onClick={() => {
+                      if (table.status === 'available' || table.id === selectedTable) {
+                        setSelectedTable(table.id);
+                        playClick();
+                      }
+                    }}
+                    disabled={table.status !== 'available' && table.id !== selectedTable}
+                    className={`
+                      aspect-square rounded-lg font-bold text-lg transition-all
+                      ${selectedTable === table.id 
+                        ? 'bg-primary text-primary-foreground ring-2 ring-primary ring-offset-2' 
+                        : table.status === 'available'
+                          ? 'bg-green-500/20 text-green-500 hover:bg-green-500/30 border border-green-500/50'
+                          : table.status === 'occupied'
+                            ? 'bg-red-500/20 text-red-500 border border-red-500/50 cursor-not-allowed'
+                            : 'bg-yellow-500/20 text-yellow-500 border border-yellow-500/50 cursor-not-allowed'
+                      }
+                    `}
+                    data-testid={`table-btn-${table.number}`}
+                  >
+                    {table.number}
+                  </button>
                 ))}
-              </SelectContent>
-            </Select>
+              </div>
+              {selectedTable && (
+                <p className="text-xs text-primary mt-2">
+                  ✓ تم اختيار طاولة {tables.find(t => t.id === selectedTable)?.number}
+                </p>
+              )}
+            </div>
           )}
 
           {orderType === 'takeaway' && (
