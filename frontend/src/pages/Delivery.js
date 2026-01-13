@@ -69,6 +69,13 @@ export default function Delivery() {
   const [driverStats, setDriverStats] = useState({});
   const [collectPaymentDialogOpen, setCollectPaymentDialogOpen] = useState(false);
   const [paymentAmount, setPaymentAmount] = useState(0);
+  
+  // حالات جديدة للخريطة
+  const [driverLocations, setDriverLocations] = useState([]);
+  const [mapLoaded, setMapLoaded] = useState(false);
+  const mapContainerRef = useRef(null);
+  const mapInstanceRef = useRef(null);
+  const markersRef = useRef({});
 
   useEffect(() => {
     fetchData();
