@@ -58,6 +58,9 @@ export default function Reports() {
   const [profitLossReport, setProfitLossReport] = useState(null);
   const [productsReport, setProductsReport] = useState(null);
   const [deliveryCreditsReport, setDeliveryCreditsReport] = useState(null);
+  const [cancellationsReport, setCancellationsReport] = useState(null);
+  const [discountsReport, setDiscountsReport] = useState(null);
+  const [creditReport, setCreditReport] = useState(null);
 
   useEffect(() => {
     fetchBranches();
