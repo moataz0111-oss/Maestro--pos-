@@ -492,6 +492,34 @@ export default function POS() {
     navigate('/pos');
   };
 
+  // إلغاء الطلب بالكامل
+  const handleCancelOrder = async () => {
+    if (!editingOrder) return;
+    
+    if (!confirm('هل أنت متأكد من إلغاء هذا الطلب؟')) return;
+    
+    setSubmitting(true);
+    try {
+      const res = await axios.put(`${API}/orders/${editingOrder.id}/cancel`);
+      playSuccess();
+      toast.success(res.data.was_quick_cancel 
+        ? 'تم إلغاء الطلب (إلغاء سريع)' 
+        : 'تم إلغاء الطلب'
+      );
+      clearCart();
+      await fetchPendingOrders();
+      
+      // تحديث الطاولات
+      const tablesRes = await axios.get(`${API}/tables`);
+      setTables(tablesRes.data);
+    } catch (error) {
+      console.error('Failed to cancel order:', error);
+      toast.error(error.response?.data?.detail || 'فشل في إلغاء الطلب');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
