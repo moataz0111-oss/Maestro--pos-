@@ -218,8 +218,6 @@ export default function IncomingCallPopup({ onClose, onAnswer, onCreateOrder }) 
 
   return (
     <>
-      <audio ref={audioRef} src={RING_SOUND_URL} preload="auto" />
-      
       {activeCalls.map((call) => (
         <div
           key={call.call_id}
