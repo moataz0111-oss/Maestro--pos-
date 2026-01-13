@@ -780,6 +780,20 @@ export default function SuperAdmin() {
                           {tenant.is_active ? <Power className="h-4 w-4" /> : <PowerOff className="h-4 w-4" />}
                         </Button>
                         
+                        {/* تصفير المبيعات */}
+                        <Button 
+                          variant="ghost" 
+                          size="icon"
+                          onClick={() => {
+                            setSelectedTenant(tenant);
+                            setShowResetSalesConfirm(true);
+                          }}
+                          className="text-orange-400 hover:text-orange-300 hover:bg-orange-500/10"
+                          title="تصفير المبيعات"
+                        >
+                          <RotateCcw className="h-4 w-4" />
+                        </Button>
+                        
                         {/* حذف */}
                         <Button 
                           variant="ghost" 
