@@ -54,16 +54,16 @@ export default function DriverPortal() {
   const [isPWAInstallable, setIsPWAInstallable] = useState(false);
   const [deferredPrompt, setDeferredPrompt] = useState(null);
 
-  // التحقق من وجود جلسة محفوظة
+  // التحقق من وجود جلسة محفوظة - استخدام مفاتيح خاصة ببوابة السائق
   useEffect(() => {
-    const savedDriver = localStorage.getItem('driverSession');
+    const savedDriver = localStorage.getItem('maestro_driver_session');
     if (savedDriver) {
       try {
         const driverData = JSON.parse(savedDriver);
         setDriver(driverData);
         setIsLoggedIn(true);
       } catch (e) {
-        localStorage.removeItem('driverSession');
+        localStorage.removeItem('maestro_driver_session');
       }
     }
     setLoading(false);
@@ -137,9 +137,9 @@ export default function DriverPortal() {
         user_id: userData.id
       };
       
-      // حفظ الجلسة
-      localStorage.setItem('driverSession', JSON.stringify(driverData));
-      localStorage.setItem('driverToken', loginRes.data.token);
+      // حفظ الجلسة - استخدام مفاتيح خاصة ببوابة السائق
+      localStorage.setItem('maestro_driver_session', JSON.stringify(driverData));
+      localStorage.setItem('maestro_driver_token', loginRes.data.token);
       
       setDriver(driverData);
       setIsLoggedIn(true);
@@ -161,8 +161,8 @@ export default function DriverPortal() {
 
   // تسجيل الخروج
   const handleLogout = () => {
-    localStorage.removeItem('driverSession');
-    localStorage.removeItem('driverToken');
+    localStorage.removeItem('maestro_driver_session');
+    localStorage.removeItem('maestro_driver_token');
     setDriver(null);
     setIsLoggedIn(false);
     setOrders([]);
