@@ -34,7 +34,8 @@ import {
   XCircle,
   Banknote,
   Crown,
-  Building2
+  Building2,
+  Headphones
 } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 import { toast } from 'sonner';
