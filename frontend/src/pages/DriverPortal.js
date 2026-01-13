@@ -252,12 +252,57 @@ export default function DriverPortal() {
     }
   }, [driver?.id, isLoggedIn]);
 
+  // التحقق من الطلبات الجديدة وتشغيل الإشعار الصوتي
+  const checkForNewOrders = useCallback((newOrders) => {
+    if (!soundEnabled) return;
+    
+    const activeOrders = newOrders.filter(o => o.status !== 'delivered' && o.status !== 'cancelled');
+    const previousActiveOrders = previousOrdersRef.current.filter(o => o.status !== 'delivered' && o.status !== 'cancelled');
+    
+    // البحث عن طلبات جديدة
+    const newOrderIds = activeOrders.map(o => o.id);
+    const prevOrderIds = previousActiveOrders.map(o => o.id);
+    
+    const brandNewOrders = newOrderIds.filter(id => !prevOrderIds.includes(id));
+    
+    if (brandNewOrders.length > 0 && previousOrdersRef.current.length > 0) {
+      // تشغيل صوت الإشعار
+      playDriverNotification();
+      
+      // إظهار إشعار Toast
+      toast.success(
+        <div className="flex items-center gap-2">
+          <Bell className="h-5 w-5 text-green-500 animate-bounce" />
+          <span>طلب جديد! ({brandNewOrders.length})</span>
+        </div>,
+        { duration: 5000 }
+      );
+      
+      // محاولة إظهار إشعار النظام
+      if ('Notification' in window && Notification.permission === 'granted') {
+        new Notification('🛵 طلب توصيل جديد!', {
+          body: `لديك ${brandNewOrders.length} طلب جديد للتوصيل`,
+          icon: '/favicon.ico',
+          vibrate: [200, 100, 200]
+        });
+      }
+    }
+    
+    // تحديث المرجع للطلبات السابقة
+    previousOrdersRef.current = newOrders;
+  }, [soundEnabled]);
+
   const fetchDriverData = async () => {
     if (!driver?.id) return;
     
     try {
       const res = await axios.get(`${API}/drivers/portal/${driver.id}`);
-      setOrders(res.data.orders || []);
+      const newOrders = res.data.orders || [];
+      
+      // التحقق من الطلبات الجديدة
+      checkForNewOrders(newOrders);
+      
+      setOrders(newOrders);
       setStats(res.data.stats || { unpaid_total: 0, paid_today: 0, pending_orders: 0 });
       setError(null);
     } catch (err) {
@@ -269,9 +314,22 @@ export default function DriverPortal() {
     }
   };
 
+  // طلب إذن الإشعارات عند تسجيل الدخول
+  useEffect(() => {
+    if (isLoggedIn && 'Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
+  }, [isLoggedIn]);
+
   const markAsDelivered = async (orderId) => {
     try {
       await axios.put(`${API}/drivers/portal/${driver.id}/complete?order_id=${orderId}`);
+      
+      // تشغيل صوت إتمام التوصيل
+      if (soundEnabled) {
+        playDeliveryComplete();
+      }
+      
       toast.success('تم تسليم الطلب بنجاح!');
       fetchDriverData();
     } catch (err) {
