@@ -391,6 +391,7 @@ class DriverCreate(BaseModel):
     name: str
     phone: str
     branch_id: str
+    user_id: Optional[str] = None  # ربط بحساب مستخدم
 
 class DriverResponse(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -401,6 +402,15 @@ class DriverResponse(BaseModel):
     is_available: bool = True
     current_order_id: Optional[str] = None
     total_deliveries: int = 0
+    user_id: Optional[str] = None
+    # معلومات الموقع
+    location_lat: Optional[float] = None
+    location_lng: Optional[float] = None
+    location_updated_at: Optional[str] = None
+
+class DriverLocationUpdate(BaseModel):
+    latitude: float
+    longitude: float
 
 # Delivery App Settings - إعدادات شركات التوصيل
 class DeliveryAppSettingCreate(BaseModel):
