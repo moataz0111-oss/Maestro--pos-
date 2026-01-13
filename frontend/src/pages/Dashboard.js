@@ -62,6 +62,15 @@ export default function Dashboard() {
     showReports: true,
     showSettings: true
   });
+  
+  // حالات إغلاق الصندوق
+  const [cashRegisterOpen, setCashRegisterOpen] = useState(false);
+  const [cashRegisterData, setCashRegisterData] = useState(null);
+  const [denominations, setDenominations] = useState({
+    "250": 0, "500": 0, "1000": 0, "5000": 0, "10000": 0, "25000": 0, "50000": 0
+  });
+  const [closeNotes, setCloseNotes] = useState('');
+  const [closingResult, setClosingResult] = useState(null);
 
   useEffect(() => {
     fetchData();
