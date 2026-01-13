@@ -1641,6 +1641,14 @@ async def delete_driver(driver_id: str, current_user: dict = Depends(get_current
     await db.drivers.delete_one({"id": driver_id})
     return {"message": "تم حذف السائق"}
 
+@api_router.get("/drivers/by-user/{user_id}")
+async def get_driver_by_user(user_id: str, current_user: dict = Depends(get_current_user)):
+    """جلب السائق المرتبط بحساب المستخدم"""
+    driver = await db.drivers.find_one({"user_id": user_id}, {"_id": 0})
+    if not driver:
+        raise HTTPException(status_code=404, detail="لم يتم ربط حسابك بسائق")
+    return driver
+
 @api_router.put("/drivers/{driver_id}/assign")
 async def assign_driver(driver_id: str, order_id: str, current_user: dict = Depends(get_current_user)):
     await db.drivers.update_one(
