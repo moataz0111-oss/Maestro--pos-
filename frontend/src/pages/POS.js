@@ -1034,8 +1034,8 @@ export default function POS() {
             ))}
           </div>
 
-          {/* Action Buttons - 4 buttons */}
-          <div className="grid grid-cols-4 gap-2">
+          {/* Action Buttons */}
+          <div className={`grid gap-2 ${editingOrder ? 'grid-cols-5' : 'grid-cols-4'}`}>
             <Button
               variant="outline"
               className="h-12"
@@ -1045,6 +1045,19 @@ export default function POS() {
             >
               <X className="h-5 w-5" />
             </Button>
+            
+            {/* زر إلغاء الطلب - يظهر فقط عند التعديل */}
+            {editingOrder && (
+              <Button
+                variant="outline"
+                className="h-12 border-red-500 text-red-500 hover:bg-red-500/10"
+                onClick={handleCancelOrder}
+                disabled={submitting}
+                data-testid="cancel-order-btn"
+              >
+                <Trash2 className="h-5 w-5" />
+              </Button>
+            )}
             
             {/* زر طباعة الفاتورة */}
             <Button
