@@ -3175,8 +3175,8 @@ async def get_printers(branch_id: Optional[str] = None):
 # ==================== SUPER ADMIN & TENANT MANAGEMENT ====================
 # نظام إدارة المستأجرين - لوحة تحكم المالك الرئيسي
 
-# كلمة سر خاصة للـ Super Admin
-SUPER_ADMIN_SECRET = "271018"
+# كلمة سر خاصة للـ Super Admin - من متغيرات البيئة
+SUPER_ADMIN_SECRET = os.environ.get("SUPER_ADMIN_SECRET", "271018")
 
 # التحقق من صلاحية Super Admin
 async def verify_super_admin(current_user: dict = Depends(get_current_user)):
