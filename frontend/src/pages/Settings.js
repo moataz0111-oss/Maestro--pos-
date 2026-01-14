@@ -901,6 +901,20 @@ export default function Settings() {
                         onCheckedChange={(checked) => setDashboardSettings({...dashboardSettings, showWarehouse: checked})}
                       />
                     </div>
+                    
+                    {/* Call Logs */}
+                    <div className="flex items-center justify-between p-4 bg-muted/30 rounded-xl">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-cyan-500/10 rounded-lg flex items-center justify-center">
+                          <Phone className="h-5 w-5 text-cyan-500" />
+                        </div>
+                        <span className="font-medium text-foreground">سجل المكالمات</span>
+                      </div>
+                      <Switch
+                        checked={dashboardSettings.showCallLogs}
+                        onCheckedChange={(checked) => setDashboardSettings({...dashboardSettings, showCallLogs: checked})}
+                      />
+                    </div>
                   </div>
                   
                   <Button 
