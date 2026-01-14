@@ -2059,6 +2059,222 @@ export default function SuperAdmin() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Tenant Features Modal */}
+      <Dialog open={showFeaturesModal} onOpenChange={setShowFeaturesModal}>
+        <DialogContent className="max-w-2xl bg-gray-800 border-gray-700 text-white">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Settings className="h-5 w-5 text-purple-400" />
+              صلاحيات الميزات - {selectedTenant?.name}
+            </DialogTitle>
+          </DialogHeader>
+          
+          <div className="space-y-6">
+            {/* Quick Actions */}
+            <div className="flex gap-3">
+              <Button 
+                onClick={enableAllFeatures}
+                className="flex-1 bg-green-600 hover:bg-green-700 gap-2"
+              >
+                <Check className="h-4 w-4" />
+                تفعيل الكل
+              </Button>
+              <Button 
+                onClick={disableAllFeatures}
+                variant="outline"
+                className="flex-1 border-gray-600 gap-2"
+              >
+                <X className="h-4 w-4" />
+                تعطيل الكل
+              </Button>
+            </div>
+
+            {/* Features Grid */}
+            <div className="grid grid-cols-2 gap-4">
+              {/* الميزات الأساسية */}
+              <div className="space-y-3">
+                <h4 className="font-bold text-sm text-gray-400 mb-2">الميزات الأساسية</h4>
+                
+                <label className="flex items-center justify-between p-3 bg-gray-700/50 rounded-lg cursor-pointer hover:bg-gray-700">
+                  <span className="flex items-center gap-2">
+                    <span className="w-8 h-8 bg-primary/20 rounded-lg flex items-center justify-center">💳</span>
+                    <span>نقاط البيع</span>
+                  </span>
+                  <Switch
+                    checked={tenantFeatures.showPOS}
+                    onCheckedChange={() => toggleFeature('showPOS')}
+                    disabled={true}
+                  />
+                </label>
+
+                <label className="flex items-center justify-between p-3 bg-gray-700/50 rounded-lg cursor-pointer hover:bg-gray-700">
+                  <span className="flex items-center gap-2">
+                    <span className="w-8 h-8 bg-blue-500/20 rounded-lg flex items-center justify-center">🪑</span>
+                    <span>الطاولات</span>
+                  </span>
+                  <Switch
+                    checked={tenantFeatures.showTables}
+                    onCheckedChange={() => toggleFeature('showTables')}
+                  />
+                </label>
+
+                <label className="flex items-center justify-between p-3 bg-gray-700/50 rounded-lg cursor-pointer hover:bg-gray-700">
+                  <span className="flex items-center gap-2">
+                    <span className="w-8 h-8 bg-green-500/20 rounded-lg flex items-center justify-center">📋</span>
+                    <span>الطلبات</span>
+                  </span>
+                  <Switch
+                    checked={tenantFeatures.showOrders}
+                    onCheckedChange={() => toggleFeature('showOrders')}
+                  />
+                </label>
+
+                <label className="flex items-center justify-between p-3 bg-gray-700/50 rounded-lg cursor-pointer hover:bg-gray-700">
+                  <span className="flex items-center gap-2">
+                    <span className="w-8 h-8 bg-amber-500/20 rounded-lg flex items-center justify-center">📊</span>
+                    <span>التقارير</span>
+                  </span>
+                  <Switch
+                    checked={tenantFeatures.showReports}
+                    onCheckedChange={() => toggleFeature('showReports')}
+                  />
+                </label>
+
+                <label className="flex items-center justify-between p-3 bg-gray-700/50 rounded-lg cursor-pointer hover:bg-gray-700">
+                  <span className="flex items-center gap-2">
+                    <span className="w-8 h-8 bg-red-500/20 rounded-lg flex items-center justify-center">💸</span>
+                    <span>المصاريف</span>
+                  </span>
+                  <Switch
+                    checked={tenantFeatures.showExpenses}
+                    onCheckedChange={() => toggleFeature('showExpenses')}
+                  />
+                </label>
+
+                <label className="flex items-center justify-between p-3 bg-gray-700/50 rounded-lg cursor-pointer hover:bg-gray-700">
+                  <span className="flex items-center gap-2">
+                    <span className="w-8 h-8 bg-purple-500/20 rounded-lg flex items-center justify-center">📦</span>
+                    <span>المخزون</span>
+                  </span>
+                  <Switch
+                    checked={tenantFeatures.showInventory}
+                    onCheckedChange={() => toggleFeature('showInventory')}
+                  />
+                </label>
+              </div>
+
+              {/* الميزات المتقدمة */}
+              <div className="space-y-3">
+                <h4 className="font-bold text-sm text-gray-400 mb-2">الميزات المتقدمة</h4>
+                
+                <label className="flex items-center justify-between p-3 bg-gray-700/50 rounded-lg cursor-pointer hover:bg-gray-700">
+                  <span className="flex items-center gap-2">
+                    <span className="w-8 h-8 bg-orange-500/20 rounded-lg flex items-center justify-center">🚚</span>
+                    <span>التوصيل</span>
+                  </span>
+                  <Switch
+                    checked={tenantFeatures.showDelivery}
+                    onCheckedChange={() => toggleFeature('showDelivery')}
+                  />
+                </label>
+
+                <label className="flex items-center justify-between p-3 bg-gray-700/50 rounded-lg cursor-pointer hover:bg-gray-700">
+                  <span className="flex items-center gap-2">
+                    <span className="w-8 h-8 bg-yellow-500/20 rounded-lg flex items-center justify-center">👨‍🍳</span>
+                    <span>شاشة المطبخ</span>
+                  </span>
+                  <Switch
+                    checked={tenantFeatures.showKitchen}
+                    onCheckedChange={() => toggleFeature('showKitchen')}
+                  />
+                </label>
+
+                <label className="flex items-center justify-between p-3 bg-gray-700/50 rounded-lg cursor-pointer hover:bg-gray-700">
+                  <span className="flex items-center gap-2">
+                    <span className="w-8 h-8 bg-green-500/20 rounded-lg flex items-center justify-center">👥</span>
+                    <span>الموارد البشرية</span>
+                  </span>
+                  <Switch
+                    checked={tenantFeatures.showHR}
+                    onCheckedChange={() => toggleFeature('showHR')}
+                  />
+                </label>
+
+                <label className="flex items-center justify-between p-3 bg-gray-700/50 rounded-lg cursor-pointer hover:bg-gray-700">
+                  <span className="flex items-center gap-2">
+                    <span className="w-8 h-8 bg-indigo-500/20 rounded-lg flex items-center justify-center">🔄</span>
+                    <span>التحويلات (المخازن)</span>
+                  </span>
+                  <Switch
+                    checked={tenantFeatures.showWarehouse}
+                    onCheckedChange={() => toggleFeature('showWarehouse')}
+                  />
+                </label>
+
+                <label className="flex items-center justify-between p-3 bg-gray-700/50 rounded-lg cursor-pointer hover:bg-gray-700">
+                  <span className="flex items-center gap-2">
+                    <span className="w-8 h-8 bg-cyan-500/20 rounded-lg flex items-center justify-center">📞</span>
+                    <span>الكول سنتر</span>
+                  </span>
+                  <Switch
+                    checked={tenantFeatures.showCallCenter}
+                    onCheckedChange={() => toggleFeature('showCallCenter')}
+                  />
+                </label>
+
+                <label className="flex items-center justify-between p-3 bg-gray-700/50 rounded-lg cursor-pointer hover:bg-gray-700">
+                  <span className="flex items-center gap-2">
+                    <span className="w-8 h-8 bg-cyan-500/20 rounded-lg flex items-center justify-center">📝</span>
+                    <span>سجل المكالمات</span>
+                  </span>
+                  <Switch
+                    checked={tenantFeatures.showCallLogs}
+                    onCheckedChange={() => toggleFeature('showCallLogs')}
+                  />
+                </label>
+
+                <label className="flex items-center justify-between p-3 bg-gray-700/50 rounded-lg cursor-pointer hover:bg-gray-700">
+                  <span className="flex items-center gap-2">
+                    <span className="w-8 h-8 bg-gray-500/20 rounded-lg flex items-center justify-center">⚙️</span>
+                    <span>الإعدادات</span>
+                  </span>
+                  <Switch
+                    checked={tenantFeatures.showSettings}
+                    onCheckedChange={() => toggleFeature('showSettings')}
+                    disabled={true}
+                  />
+                </label>
+              </div>
+            </div>
+
+            {/* Info Note */}
+            <div className="p-3 bg-blue-500/10 rounded-lg border border-blue-500/30">
+              <p className="text-sm text-blue-300">
+                💡 الميزات المعطلة لن تظهر في لوحة تحكم العميل. نقاط البيع والإعدادات دائماً مفعّلة.
+              </p>
+            </div>
+          </div>
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowFeaturesModal(false)} className="border-gray-600">
+              إلغاء
+            </Button>
+            <Button 
+              onClick={saveTenantFeatures} 
+              className="bg-purple-600 hover:bg-purple-700"
+              disabled={featuresLoading}
+            >
+              {featuresLoading ? (
+                <RefreshCw className="h-4 w-4 animate-spin ml-2" />
+              ) : (
+                <Check className="h-4 w-4 ml-2" />
+              )}
+              حفظ الصلاحيات
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
