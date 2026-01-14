@@ -371,6 +371,54 @@ export default function SuperAdmin() {
     }
   };
 
+  const openEditTenant = (tenant) => {
+    setSelectedTenant(tenant);
+    setEditTenantForm({
+      name: tenant.name || '',
+      owner_name: tenant.owner_name || '',
+      owner_email: tenant.owner_email || '',
+      owner_phone: tenant.owner_phone || '',
+      subscription_type: tenant.subscription_type || 'trial',
+      max_branches: tenant.max_branches || 1,
+      max_users: tenant.max_users || 5,
+      send_welcome_email: false,
+      temp_password: ''
+    });
+    setShowEditTenant(true);
+  };
+
+  const updateTenant = async () => {
+    setLoading(true);
+    try {
+      const updateData = {
+        name: editTenantForm.name,
+        owner_name: editTenantForm.owner_name,
+        owner_email: editTenantForm.owner_email,
+        owner_phone: editTenantForm.owner_phone,
+        subscription_type: editTenantForm.subscription_type,
+        max_branches: editTenantForm.max_branches,
+        max_users: editTenantForm.max_users,
+        send_welcome_email: editTenantForm.send_welcome_email,
+        temp_password: editTenantForm.temp_password
+      };
+      
+      await axios.put(`${API}/super-admin/tenants/${selectedTenant.id}`, updateData);
+      
+      if (editTenantForm.send_welcome_email) {
+        toast.success('تم تحديث البيانات وإرسال البريد الإلكتروني');
+      } else {
+        toast.success('تم تحديث بيانات العميل بنجاح');
+      }
+      
+      setShowEditTenant(false);
+      fetchData();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'فشل في تحديث البيانات');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const copyToClipboard = (text) => {
     navigator.clipboard.writeText(text);
     toast.success('تم النسخ');
