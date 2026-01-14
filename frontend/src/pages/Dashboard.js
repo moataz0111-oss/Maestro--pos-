@@ -85,7 +85,9 @@ export default function Dashboard() {
     showInventory: true,
     showDelivery: true,
     showReports: true,
-    showSettings: true
+    showSettings: true,
+    showHR: true,
+    showWarehouse: true
   });
   
   // حالات إغلاق الصندوق
