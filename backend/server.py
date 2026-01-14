@@ -5179,10 +5179,9 @@ async def end_call(call_id: str, current_user: dict = Depends(get_current_user))
         call_data["ended_at"] = datetime.now(timezone.utc).isoformat()
         
         # حفظ سجل المكالمة
-        await db.call_logs.insert_one({
-            "_id": None,  # سيتم تجاهله
-            **call_data
-        })
+        call_log = {k: v for k, v in call_data.items() if k != '_id'}
+        call_log["id"] = call_id
+        await db.call_logs.insert_one(call_log)
         
         return {"message": "تم إنهاء المكالمة", "call": call_data}
     raise HTTPException(status_code=404, detail="المكالمة غير موجودة")
