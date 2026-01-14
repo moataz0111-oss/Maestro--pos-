@@ -224,7 +224,8 @@ export default function Settings() {
     showReports: true,
     showSettings: true,
     showHR: true,
-    showWarehouse: true
+    showWarehouse: true,
+    showCallLogs: true
   });
 
   useEffect(() => {
