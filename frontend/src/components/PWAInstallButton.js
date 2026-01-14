@@ -13,23 +13,17 @@ export default function PWAInstallButton({ variant = 'default', className = '' }
   const [isInstallable, setIsInstallable] = useState(false);
   const [isInstalled, setIsInstalled] = useState(false);
   const [showInstructions, setShowInstructions] = useState(false);
-  const [platform, setPlatform] = useState('unknown');
+  const [platform, setPlatform] = useState(() => {
+    // تحديد نوع الجهاز مباشرة
+    const userAgent = navigator.userAgent.toLowerCase();
+    if (/iphone|ipad|ipod/.test(userAgent)) return 'ios';
+    if (/android/.test(userAgent)) return 'android';
+    if (/windows/.test(userAgent)) return 'windows';
+    if (/mac/.test(userAgent)) return 'mac';
+    return 'desktop';
+  });
 
   useEffect(() => {
-    // تحديد نوع الجهاز
-    const userAgent = navigator.userAgent.toLowerCase();
-    if (/iphone|ipad|ipod/.test(userAgent)) {
-      setPlatform('ios');
-    } else if (/android/.test(userAgent)) {
-      setPlatform('android');
-    } else if (/windows/.test(userAgent)) {
-      setPlatform('windows');
-    } else if (/mac/.test(userAgent)) {
-      setPlatform('mac');
-    } else {
-      setPlatform('desktop');
-    }
-
     // التحقق من أن التطبيق مثبت بالفعل
     if (window.matchMedia('(display-mode: standalone)').matches) {
       setIsInstalled(true);
