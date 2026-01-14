@@ -4554,9 +4554,10 @@ async def set_dashboard_settings(settings: Dict[str, Any], current_user: dict = 
     return {"message": "تم حفظ إعدادات الصفحة الرئيسية"}
 
 @api_router.get("/settings/dashboard")
-async def get_dashboard_settings():
-    """جلب إعدادات الصفحة الرئيسية"""
-    settings = await db.settings.find_one({"type": "dashboard_settings"}, {"_id": 0})
+async def get_dashboard_settings(current_user: dict = Depends(get_current_user)):
+    """جلب إعدادات الصفحة الرئيسية مع مراعاة ميزات العميل"""
+    
+    # الإعدادات الافتراضية الكاملة
     default_settings = {
         "showPOS": True,
         "showTables": True,
@@ -4569,11 +4570,33 @@ async def get_dashboard_settings():
         "showHR": True,
         "showWarehouse": True,
         "showCallLogs": True,
+        "showCallCenter": True,
         "showKitchen": True
     }
+    
+    # جلب إعدادات لوحة القيادة المحفوظة
+    settings = await db.settings.find_one({"type": "dashboard_settings"}, {"_id": 0})
     if settings and settings.get("value"):
-        # دمج الإعدادات الافتراضية مع المحفوظة لضمان ظهور الخيارات الجديدة
-        return {**default_settings, **settings.get("value", {})}
+        default_settings = {**default_settings, **settings.get("value", {})}
+    
+    # إذا كان المستخدم Super Admin، أرجع كل الميزات
+    if current_user.get("role") == UserRole.SUPER_ADMIN:
+        return default_settings
+    
+    # إذا كان المستخدم بدون tenant_id (النظام الرئيسي)، أرجع كل الميزات
+    tenant_id = get_user_tenant_id(current_user)
+    if not tenant_id:
+        return default_settings
+    
+    # جلب ميزات العميل
+    tenant = await db.tenants.find_one({"id": tenant_id}, {"_id": 0, "enabled_features": 1})
+    if tenant and tenant.get("enabled_features"):
+        tenant_features = tenant["enabled_features"]
+        # دمج الميزات - العميل يرى فقط الميزات المفعّلة له
+        for key in default_settings:
+            if key in tenant_features:
+                default_settings[key] = tenant_features[key] and default_settings[key]
+    
     return default_settings
 
 # ==================== LOGIN BACKGROUNDS API ====================
