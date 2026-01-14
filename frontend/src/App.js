@@ -172,6 +172,24 @@ function AppRoutes() {
           </ProtectedRoute>
         } 
       />
+      {/* إدارة الموارد البشرية */}
+      <Route 
+        path="/hr" 
+        element={
+          <ProtectedRoute>
+            <HR />
+          </ProtectedRoute>
+        } 
+      />
+      {/* إدارة المخزون والتحويلات */}
+      <Route 
+        path="/warehouse" 
+        element={
+          <ProtectedRoute>
+            <WarehouseTransfers />
+          </ProtectedRoute>
+        } 
+      />
       {/* صفحة السائق - بدون حماية للوصول من الهاتف */}
       <Route path="/driver" element={<DriverPortal />} />
       {/* صفحة Super Admin - لوحة تحكم المالك */}
