@@ -1,7 +1,7 @@
 {
-  "short_name": "Maestro Driver",
-  "name": "Maestro EGP - تطبيق السائق",
-  "description": "تطبيق متابعة الطلبات للسائقين",
+  "short_name": "Maestro Admin",
+  "name": "Maestro EGP - لوحة الإدارة",
+  "description": "نظام إدارة المطاعم والكافيهات",
   "icons": [
     {
       "src": "/icons/icon-72.png",
@@ -59,24 +59,43 @@
       "purpose": "maskable"
     }
   ],
-  "id": "/driver",
-  "start_url": "/driver",
+  "id": "/",
+  "start_url": "/",
   "scope": "/",
   "display": "standalone",
-  "orientation": "portrait",
-  "theme_color": "#10b981",
+  "orientation": "any",
+  "theme_color": "#111827",
   "background_color": "#111827",
   "lang": "ar",
   "dir": "rtl",
   "categories": ["business", "productivity"],
-  "prefer_related_applications": false,
+  "shortcuts": [
+    {
+      "name": "نقاط البيع",
+      "short_name": "POS",
+      "url": "/pos",
+      "icons": [{ "src": "/icons/icon-96.png", "sizes": "96x96" }]
+    },
+    {
+      "name": "التقارير",
+      "short_name": "Reports",
+      "url": "/reports",
+      "icons": [{ "src": "/icons/icon-96.png", "sizes": "96x96" }]
+    },
+    {
+      "name": "شاشة المطبخ",
+      "short_name": "Kitchen",
+      "url": "/kitchen",
+      "icons": [{ "src": "/icons/icon-96.png", "sizes": "96x96" }]
+    }
+  ],
   "screenshots": [
     {
       "src": "/icons/icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
-      "form_factor": "narrow",
-      "label": "تطبيق السائق"
+      "form_factor": "wide",
+      "label": "لوحة الإدارة"
     }
   ]
 }
