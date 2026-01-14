@@ -2039,6 +2039,418 @@ async def pay_payroll(payroll_id: str, current_user: dict = Depends(get_current_
     
     return {"message": "تم صرف الراتب", "payroll": await db.payroll.find_one({"id": payroll_id}, {"_id": 0})}
 
+@api_router.get("/payroll/{payroll_id}/print")
+async def get_payroll_print_data(payroll_id: str, current_user: dict = Depends(get_current_user)):
+    """جلب بيانات طباعة كشف الراتب"""
+    query = build_tenant_query(current_user, {"id": payroll_id})
+    payroll = await db.payroll.find_one(query, {"_id": 0})
+    
+    if not payroll:
+        raise HTTPException(status_code=404, detail="كشف الراتب غير موجود")
+    
+    # جلب بيانات الموظف
+    employee = await db.employees.find_one({"id": payroll["employee_id"]}, {"_id": 0})
+    
+    # جلب بيانات الفرع
+    branch = None
+    if employee and employee.get("branch_id"):
+        branch = await db.branches.find_one({"id": employee["branch_id"]}, {"_id": 0})
+    
+    # جلب تفاصيل الخصومات
+    month = payroll.get("month", "")
+    start_date = f"{month}-01"
+    end_date = f"{month}-31"
+    
+    deductions = await db.deductions.find({
+        "employee_id": payroll["employee_id"],
+        "date": {"$gte": start_date, "$lte": end_date}
+    }, {"_id": 0}).to_list(100)
+    
+    # جلب تفاصيل المكافآت
+    bonuses = await db.bonuses.find({
+        "employee_id": payroll["employee_id"],
+        "date": {"$gte": start_date, "$lte": end_date}
+    }, {"_id": 0}).to_list(100)
+    
+    # جلب تفاصيل السلف
+    advances = await db.advances.find({
+        "employee_id": payroll["employee_id"],
+        "status": {"$in": ["approved", "paid"]}
+    }, {"_id": 0}).to_list(100)
+    
+    return {
+        "payroll": payroll,
+        "employee": employee,
+        "branch": branch,
+        "deductions": deductions,
+        "bonuses": bonuses,
+        "advances": advances,
+        "print_date": datetime.now(timezone.utc).isoformat()
+    }
+
+@api_router.post("/payroll/generate-all")
+async def generate_all_payroll(
+    month: str,  # YYYY-MM
+    current_user: dict = Depends(get_current_user)
+):
+    """توليد كشوفات رواتب لجميع الموظفين"""
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.SUPER_ADMIN]:
+        raise HTTPException(status_code=403, detail="غير مصرح")
+    
+    # جلب جميع الموظفين النشطين
+    query = build_tenant_query(current_user, {"is_active": True})
+    employees = await db.employees.find(query, {"_id": 0}).to_list(500)
+    
+    generated = []
+    errors = []
+    
+    for emp in employees:
+        try:
+            # التحقق من عدم وجود كشف سابق
+            existing = await db.payroll.find_one({
+                "employee_id": emp["id"],
+                "month": month
+            })
+            
+            if existing:
+                errors.append({"employee_id": emp["id"], "error": "كشف موجود مسبقاً"})
+                continue
+            
+            # حساب الراتب
+            start_date = f"{month}-01"
+            end_date = f"{month}-31"
+            
+            # الخصومات
+            deductions = await db.deductions.find({
+                "employee_id": emp["id"],
+                "date": {"$gte": start_date, "$lte": end_date}
+            }, {"_id": 0}).to_list(100)
+            total_deductions = sum([d.get("amount", 0) for d in deductions])
+            
+            # المكافآت
+            bonuses = await db.bonuses.find({
+                "employee_id": emp["id"],
+                "date": {"$gte": start_date, "$lte": end_date}
+            }, {"_id": 0}).to_list(100)
+            total_bonuses = sum([b.get("amount", 0) for b in bonuses])
+            
+            # السلف
+            advances = await db.advances.find({
+                "employee_id": emp["id"],
+                "status": "approved",
+                "remaining_amount": {"$gt": 0}
+            }, {"_id": 0}).to_list(100)
+            advance_deduction = sum([a.get("monthly_deduction", 0) for a in advances])
+            
+            # صافي الراتب
+            basic_salary = emp.get("salary", 0)
+            net_salary = basic_salary + total_bonuses - total_deductions - advance_deduction
+            
+            # إنشاء كشف الراتب
+            payroll_doc = {
+                "id": str(uuid.uuid4()),
+                "employee_id": emp["id"],
+                "employee_name": emp.get("name"),
+                "month": month,
+                "basic_salary": basic_salary,
+                "total_bonuses": total_bonuses,
+                "total_deductions": total_deductions,
+                "advance_deduction": advance_deduction,
+                "net_salary": net_salary,
+                "status": "draft",
+                "tenant_id": get_user_tenant_id(current_user),
+                "created_by": current_user["id"],
+                "created_at": datetime.now(timezone.utc).isoformat(),
+                "paid_at": None
+            }
+            
+            await db.payroll.insert_one(payroll_doc)
+            generated.append({"employee_id": emp["id"], "employee_name": emp.get("name"), "net_salary": net_salary})
+            
+        except Exception as e:
+            errors.append({"employee_id": emp["id"], "error": str(e)})
+    
+    return {
+        "message": f"تم توليد {len(generated)} كشف راتب",
+        "generated": generated,
+        "errors": errors
+    }
+
+# ==================== COUPONS & PROMOTIONS ROUTES - الكوبونات والعروض ====================
+
+class CouponCreate(BaseModel):
+    code: str
+    name: str
+    description: Optional[str] = None
+    discount_type: str = "percentage"  # percentage, fixed
+    discount_value: float
+    min_order_amount: float = 0
+    max_discount: Optional[float] = None  # للنسبة المئوية فقط
+    usage_limit: Optional[int] = None  # عدد مرات الاستخدام الكلي
+    usage_per_customer: int = 1  # عدد مرات الاستخدام لكل عميل
+    valid_from: str
+    valid_until: str
+    is_active: bool = True
+    applicable_to: str = "all"  # all, category, product
+    applicable_ids: List[str] = []  # category_ids أو product_ids
+    loyalty_tier_required: Optional[str] = None  # bronze, silver, gold, platinum
+    first_order_only: bool = False
+
+class PromotionCreate(BaseModel):
+    name: str
+    description: Optional[str] = None
+    promotion_type: str = "buy_x_get_y"  # buy_x_get_y, bundle, happy_hour, flash_sale
+    buy_quantity: int = 1
+    get_quantity: int = 1
+    discount_percent: float = 100  # للعنصر المجاني
+    bundle_price: Optional[float] = None
+    start_time: Optional[str] = None  # HH:MM للـ happy_hour
+    end_time: Optional[str] = None
+    valid_from: str
+    valid_until: str
+    applicable_products: List[str] = []
+    applicable_categories: List[str] = []
+    is_active: bool = True
+    loyalty_tier_required: Optional[str] = None
+
+@api_router.get("/coupons")
+async def get_coupons(current_user: dict = Depends(get_current_user)):
+    """قائمة الكوبونات"""
+    query = build_tenant_query(current_user)
+    coupons = await db.coupons.find(query, {"_id": 0}).sort("created_at", -1).to_list(200)
+    return coupons
+
+@api_router.post("/coupons")
+async def create_coupon(coupon: CouponCreate, current_user: dict = Depends(get_current_user)):
+    """إنشاء كوبون"""
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.MANAGER, UserRole.SUPER_ADMIN]:
+        raise HTTPException(status_code=403, detail="غير مصرح")
+    
+    # التحقق من عدم تكرار الكود
+    existing = await db.coupons.find_one({"code": coupon.code.upper()})
+    if existing:
+        raise HTTPException(status_code=400, detail="كود الكوبون موجود مسبقاً")
+    
+    coupon_doc = {
+        "id": str(uuid.uuid4()),
+        **coupon.model_dump(),
+        "code": coupon.code.upper(),
+        "used_count": 0,
+        "total_discount_given": 0,
+        "tenant_id": get_user_tenant_id(current_user),
+        "created_by": current_user["id"],
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    
+    await db.coupons.insert_one(coupon_doc)
+    if "_id" in coupon_doc:
+        del coupon_doc["_id"]
+    
+    return {"message": "تم إنشاء الكوبون", "coupon": coupon_doc}
+
+@api_router.put("/coupons/{coupon_id}")
+async def update_coupon(coupon_id: str, coupon: CouponCreate, current_user: dict = Depends(get_current_user)):
+    """تحديث كوبون"""
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.MANAGER, UserRole.SUPER_ADMIN]:
+        raise HTTPException(status_code=403, detail="غير مصرح")
+    
+    await db.coupons.update_one(
+        {"id": coupon_id},
+        {"$set": {**coupon.model_dump(), "code": coupon.code.upper(), "updated_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    return {"message": "تم التحديث"}
+
+@api_router.delete("/coupons/{coupon_id}")
+async def delete_coupon(coupon_id: str, current_user: dict = Depends(get_current_user)):
+    """حذف كوبون"""
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.SUPER_ADMIN]:
+        raise HTTPException(status_code=403, detail="غير مصرح")
+    
+    await db.coupons.delete_one({"id": coupon_id})
+    return {"message": "تم الحذف"}
+
+@api_router.post("/coupons/validate")
+async def validate_coupon(
+    code: str,
+    order_total: float,
+    customer_id: Optional[str] = None,
+    customer_phone: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """التحقق من صلاحية الكوبون"""
+    coupon = await db.coupons.find_one({"code": code.upper(), "is_active": True}, {"_id": 0})
+    
+    if not coupon:
+        raise HTTPException(status_code=404, detail="الكوبون غير صالح")
+    
+    now = datetime.now(timezone.utc).isoformat()
+    
+    # التحقق من التاريخ
+    if coupon.get("valid_from") > now:
+        raise HTTPException(status_code=400, detail="الكوبون لم يبدأ بعد")
+    
+    if coupon.get("valid_until") < now:
+        raise HTTPException(status_code=400, detail="الكوبون منتهي الصلاحية")
+    
+    # التحقق من الحد الأدنى للطلب
+    if order_total < coupon.get("min_order_amount", 0):
+        raise HTTPException(
+            status_code=400, 
+            detail=f"الحد الأدنى للطلب {coupon.get('min_order_amount')} د.ع"
+        )
+    
+    # التحقق من عدد الاستخدامات الكلي
+    if coupon.get("usage_limit") and coupon.get("used_count", 0) >= coupon.get("usage_limit"):
+        raise HTTPException(status_code=400, detail="الكوبون استُنفد")
+    
+    # التحقق من استخدام العميل
+    if customer_phone:
+        customer_uses = await db.coupon_usage.count_documents({
+            "coupon_id": coupon["id"],
+            "customer_phone": customer_phone
+        })
+        if customer_uses >= coupon.get("usage_per_customer", 1):
+            raise HTTPException(status_code=400, detail="لقد استخدمت هذا الكوبون مسبقاً")
+    
+    # التحقق من مستوى الولاء المطلوب
+    if coupon.get("loyalty_tier_required"):
+        if customer_phone:
+            member = await db.loyalty_members.find_one({"phone": customer_phone}, {"_id": 0})
+            if not member:
+                raise HTTPException(status_code=400, detail="يجب أن تكون عضواً في برنامج الولاء")
+            
+            tier_order = {"bronze": 1, "silver": 2, "gold": 3, "platinum": 4}
+            required_tier = tier_order.get(coupon.get("loyalty_tier_required").lower(), 0)
+            member_tier = tier_order.get(member.get("current_tier", "bronze").lower(), 1)
+            
+            if member_tier < required_tier:
+                raise HTTPException(
+                    status_code=400, 
+                    detail=f"هذا الكوبون متاح لأعضاء {coupon.get('loyalty_tier_required')} فأعلى"
+                )
+    
+    # التحقق من الطلب الأول
+    if coupon.get("first_order_only") and customer_phone:
+        previous_orders = await db.orders.count_documents({"customer_phone": customer_phone})
+        if previous_orders > 0:
+            raise HTTPException(status_code=400, detail="هذا الكوبون للطلب الأول فقط")
+    
+    # حساب الخصم
+    if coupon.get("discount_type") == "percentage":
+        discount = order_total * (coupon.get("discount_value", 0) / 100)
+        if coupon.get("max_discount"):
+            discount = min(discount, coupon.get("max_discount"))
+    else:
+        discount = coupon.get("discount_value", 0)
+    
+    return {
+        "valid": True,
+        "coupon": coupon,
+        "discount": round(discount, 2),
+        "final_total": round(order_total - discount, 2)
+    }
+
+@api_router.post("/coupons/{coupon_id}/use")
+async def use_coupon(
+    coupon_id: str,
+    order_id: str,
+    discount_amount: float,
+    customer_phone: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """تسجيل استخدام كوبون"""
+    # تحديث عداد الاستخدام
+    await db.coupons.update_one(
+        {"id": coupon_id},
+        {
+            "$inc": {"used_count": 1, "total_discount_given": discount_amount}
+        }
+    )
+    
+    # تسجيل الاستخدام
+    usage_doc = {
+        "id": str(uuid.uuid4()),
+        "coupon_id": coupon_id,
+        "order_id": order_id,
+        "customer_phone": customer_phone,
+        "discount_amount": discount_amount,
+        "used_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.coupon_usage.insert_one(usage_doc)
+    
+    return {"message": "تم تسجيل الاستخدام"}
+
+# العروض الترويجية
+@api_router.get("/promotions")
+async def get_promotions(current_user: dict = Depends(get_current_user)):
+    """قائمة العروض"""
+    query = build_tenant_query(current_user)
+    promotions = await db.promotions.find(query, {"_id": 0}).sort("created_at", -1).to_list(100)
+    return promotions
+
+@api_router.post("/promotions")
+async def create_promotion(promotion: PromotionCreate, current_user: dict = Depends(get_current_user)):
+    """إنشاء عرض"""
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.MANAGER, UserRole.SUPER_ADMIN]:
+        raise HTTPException(status_code=403, detail="غير مصرح")
+    
+    promotion_doc = {
+        "id": str(uuid.uuid4()),
+        **promotion.model_dump(),
+        "used_count": 0,
+        "tenant_id": get_user_tenant_id(current_user),
+        "created_by": current_user["id"],
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    
+    await db.promotions.insert_one(promotion_doc)
+    if "_id" in promotion_doc:
+        del promotion_doc["_id"]
+    
+    return {"message": "تم إنشاء العرض", "promotion": promotion_doc}
+
+@api_router.put("/promotions/{promotion_id}")
+async def update_promotion(promotion_id: str, promotion: PromotionCreate, current_user: dict = Depends(get_current_user)):
+    """تحديث عرض"""
+    await db.promotions.update_one(
+        {"id": promotion_id},
+        {"$set": {**promotion.model_dump(), "updated_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    return {"message": "تم التحديث"}
+
+@api_router.delete("/promotions/{promotion_id}")
+async def delete_promotion(promotion_id: str, current_user: dict = Depends(get_current_user)):
+    """حذف عرض"""
+    await db.promotions.delete_one({"id": promotion_id})
+    return {"message": "تم الحذف"}
+
+@api_router.get("/promotions/active")
+async def get_active_promotions(current_user: dict = Depends(get_current_user)):
+    """العروض النشطة حالياً"""
+    now = datetime.now(timezone.utc).isoformat()
+    current_time = datetime.now(timezone.utc).strftime("%H:%M")
+    
+    query = build_tenant_query(current_user, {
+        "is_active": True,
+        "valid_from": {"$lte": now},
+        "valid_until": {"$gte": now}
+    })
+    
+    promotions = await db.promotions.find(query, {"_id": 0}).to_list(50)
+    
+    # تصفية Happy Hour
+    active_promotions = []
+    for promo in promotions:
+        if promo.get("promotion_type") == "happy_hour":
+            start = promo.get("start_time", "00:00")
+            end = promo.get("end_time", "23:59")
+            if start <= current_time <= end:
+                active_promotions.append(promo)
+        else:
+            active_promotions.append(promo)
+    
+    return active_promotions
+
 # ==================== INVENTORY TRANSFER ROUTES - تحويلات المخزون ====================
 
 async def get_next_transfer_number() -> int:
