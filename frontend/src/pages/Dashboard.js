@@ -269,6 +269,8 @@ export default function Dashboard() {
     { label: 'المصاريف', icon: Receipt, path: '/expenses', color: 'bg-red-500', key: 'showExpenses' },
     { label: 'المخزون', icon: Package, path: '/inventory', color: 'bg-purple-500', key: 'showInventory' },
     { label: 'التوصيل', icon: Truck, path: '/delivery', color: 'bg-orange-500', key: 'showDelivery' },
+    { label: 'الموارد البشرية', icon: UserCog, path: '/hr', color: 'bg-green-500', key: 'showHR' },
+    { label: 'التحويلات', icon: ArrowLeftRight, path: '/warehouse', color: 'bg-indigo-500', key: 'showWarehouse' },
     { label: 'الإعدادات', icon: Settings, path: '/settings', color: 'bg-gray-500', key: 'showSettings' },
   ];
   
