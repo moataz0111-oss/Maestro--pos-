@@ -760,7 +760,12 @@ def build_tenant_query(user: dict, base_query: dict = None) -> dict:
     else:
         # المستخدم الرئيسي (بدون tenant_id) يرى فقط البيانات الرئيسية
         if user.get("role") != UserRole.SUPER_ADMIN:
-            query["$or"] = [{"tenant_id": {"$exists": False}}, {"tenant_id": None}]
+            # البيانات الرئيسية هي التي ليس لها tenant_id أو tenant_id فارغ أو None أو ""
+            query["$or"] = [
+                {"tenant_id": {"$exists": False}},
+                {"tenant_id": None},
+                {"tenant_id": ""}
+            ]
     
     return query
 
