@@ -5080,6 +5080,61 @@ async def get_tenant_details(tenant_id: str, current_user: dict = Depends(verify
         }
     }
 
+@api_router.put("/super-admin/tenants/{tenant_id}/features")
+async def update_tenant_features(tenant_id: str, features: dict, current_user: dict = Depends(verify_super_admin)):
+    """تحديث ميزات العميل المتاحة"""
+    tenant = await db.tenants.find_one({"id": tenant_id})
+    if not tenant:
+        raise HTTPException(status_code=404, detail="المستأجر غير موجود")
+    
+    # قائمة الميزات المسموح بها
+    allowed_features = [
+        "showPOS", "showTables", "showOrders", "showExpenses",
+        "showInventory", "showDelivery", "showReports", "showSettings",
+        "showHR", "showWarehouse", "showCallLogs", "showCallCenter", "showKitchen"
+    ]
+    
+    # فلترة الميزات المرسلة
+    enabled_features = {k: v for k, v in features.items() if k in allowed_features}
+    
+    # تحديث العميل
+    await db.tenants.update_one(
+        {"id": tenant_id},
+        {"$set": {"enabled_features": enabled_features}}
+    )
+    
+    return {"message": "تم تحديث ميزات العميل", "features": enabled_features}
+
+@api_router.get("/super-admin/tenants/{tenant_id}/features")
+async def get_tenant_features(tenant_id: str, current_user: dict = Depends(verify_super_admin)):
+    """جلب ميزات العميل المتاحة"""
+    tenant = await db.tenants.find_one({"id": tenant_id}, {"_id": 0, "enabled_features": 1, "name": 1})
+    if not tenant:
+        raise HTTPException(status_code=404, detail="المستأجر غير موجود")
+    
+    # الميزات الافتراضية للعميل الجديد
+    default_features = {
+        "showPOS": True,
+        "showTables": True,
+        "showOrders": True,
+        "showExpenses": True,
+        "showInventory": True,
+        "showDelivery": True,
+        "showReports": True,
+        "showSettings": True,
+        "showHR": False,
+        "showWarehouse": False,
+        "showCallLogs": False,
+        "showCallCenter": False,
+        "showKitchen": False
+    }
+    
+    # دمج الميزات المحفوظة مع الافتراضية
+    saved_features = tenant.get("enabled_features", {})
+    features = {**default_features, **saved_features}
+    
+    return {"tenant_name": tenant.get("name"), "features": features}
+
 @api_router.put("/super-admin/tenants/{tenant_id}")
 async def update_tenant(tenant_id: str, updates: dict, background_tasks: BackgroundTasks, current_user: dict = Depends(verify_super_admin)):
     """تحديث بيانات مستأجر مع إرسال بريد إلكتروني تلقائي"""
