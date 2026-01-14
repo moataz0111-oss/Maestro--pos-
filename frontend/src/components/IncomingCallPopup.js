@@ -12,11 +12,14 @@ export default function IncomingCallPopup() {
   const navigate = useNavigate();
   const [activeCalls, setActiveCalls] = useState([]);
   const [isRinging, setIsRinging] = useState(false);
-  const [dismissed, setDismissed] = useState({});
   const [isLoading, setIsLoading] = useState({});
+  
+  // استخدام useRef للحفاظ على المكالمات المرفوضة بين الـ renders
+  const dismissedRef = useRef(new Set());
   const ringIntervalRef = useRef(null);
   const pollIntervalRef = useRef(null);
   const audioContextRef = useRef(null);
+  const lastFetchRef = useRef(0);
 
   // إيقاف صوت الرنين
   const stopRingSound = useCallback(() => {
@@ -30,6 +33,7 @@ export default function IncomingCallPopup() {
       } catch (e) {}
       audioContextRef.current = null;
     }
+    setIsRinging(false);
   }, []);
 
   // تشغيل صوت الرنين
@@ -37,7 +41,8 @@ export default function IncomingCallPopup() {
     const settings = getSoundSettings();
     if (!settings.enabled || !settings.callRingtone) return;
     
-    stopRingSound();
+    // منع تشغيل صوت جديد إذا كان يعمل بالفعل
+    if (ringIntervalRef.current) return;
     
     const volume = settings.volume || 0.7;
     
@@ -70,16 +75,22 @@ export default function IncomingCallPopup() {
     
     playRingTone();
     ringIntervalRef.current = setInterval(playRingTone, 1200);
-  }, [stopRingSound]);
+    setIsRinging(true);
+  }, []);
 
   // جلب المكالمات النشطة
   const fetchActiveCalls = useCallback(async () => {
+    // منع الطلبات المتكررة السريعة
+    const now = Date.now();
+    if (now - lastFetchRef.current < 1500) return;
+    lastFetchRef.current = now;
+    
     try {
       const token = localStorage.getItem('token');
       if (!token) return;
       
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 2000);
+      const timeoutId = setTimeout(() => controller.abort(), 3000);
       
       const res = await fetch(`${API}/callcenter/active-calls`, {
         headers: { 'Authorization': `Bearer ${token}` },
@@ -91,31 +102,26 @@ export default function IncomingCallPopup() {
       if (res.ok) {
         const calls = await res.json();
         
-        setActiveCalls(prev => {
-          const filteredCalls = calls.filter(c => !dismissed[c.call_id]);
-          const ringingCalls = filteredCalls.filter(c => c.status === 'ringing');
-          
-          if (ringingCalls.length > 0) {
-            if (!isRinging) {
-              setIsRinging(true);
-              playRingSound();
-            }
-          } else {
-            if (isRinging) {
-              setIsRinging(false);
-              stopRingSound();
-            }
-          }
-          
-          return filteredCalls;
-        });
+        // تصفية المكالمات المرفوضة
+        const filteredCalls = calls.filter(c => !dismissedRef.current.has(c.call_id));
+        
+        // التحقق من وجود مكالمات رنين
+        const hasRingingCalls = filteredCalls.some(c => c.status === 'ringing');
+        
+        if (hasRingingCalls && !isRinging) {
+          playRingSound();
+        } else if (!hasRingingCalls && isRinging) {
+          stopRingSound();
+        }
+        
+        setActiveCalls(filteredCalls);
       }
     } catch (error) {
       if (error.name !== 'AbortError') {
         console.error('Error fetching calls:', error);
       }
     }
-  }, [dismissed, isRinging, playRingSound, stopRingSound]);
+  }, [isRinging, playRingSound, stopRingSound]);
 
   // الرد على المكالمة
   const handleAnswer = async (callId) => {
@@ -130,8 +136,8 @@ export default function IncomingCallPopup() {
       });
       
       stopRingSound();
-      setIsRinging(false);
       
+      // تحديث حالة المكالمة محلياً
       setActiveCalls(prev => prev.map(c => 
         c.call_id === callId ? {...c, status: 'answered'} : c
       ));
@@ -147,17 +153,17 @@ export default function IncomingCallPopup() {
     if (isLoading[callId]) return;
     setIsLoading(prev => ({ ...prev, [callId]: true }));
     
+    // إضافة للقائمة المرفوضة فوراً
+    dismissedRef.current.add(callId);
+    stopRingSound();
+    setActiveCalls(prev => prev.filter(c => c.call_id !== callId));
+    
     try {
-      stopRingSound();
-      setIsRinging(false);
-      setDismissed(prev => ({...prev, [callId]: true}));
-      setActiveCalls(prev => prev.filter(c => c.call_id !== callId));
-      
       const token = localStorage.getItem('token');
-      fetch(`${API}/callcenter/calls/${callId}/end`, {
+      await fetch(`${API}/callcenter/calls/${callId}/end`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` }
-      }).catch(() => {});
+      });
     } catch (error) {
       console.error('Error ending call:', error);
     } finally {
@@ -167,20 +173,18 @@ export default function IncomingCallPopup() {
 
   // إغلاق النافذة فقط
   const handleDismiss = (callId) => {
+    dismissedRef.current.add(callId);
     stopRingSound();
-    setIsRinging(false);
-    setDismissed(prev => ({...prev, [callId]: true}));
     setActiveCalls(prev => prev.filter(c => c.call_id !== callId));
   };
 
   // إنشاء طلب للمتصل
   const handleCreateOrder = (call) => {
     if (isLoading[call.call_id]) return;
-    setIsLoading(prev => ({ ...prev, [call.call_id]: true }));
     
+    // إضافة للقائمة المرفوضة فوراً
+    dismissedRef.current.add(call.call_id);
     stopRingSound();
-    setIsRinging(false);
-    setDismissed(prev => ({...prev, [call.call_id]: true}));
     setActiveCalls(prev => prev.filter(c => c.call_id !== call.call_id));
     
     // إنهاء المكالمة في الخلفية
@@ -190,7 +194,7 @@ export default function IncomingCallPopup() {
       headers: { 'Authorization': `Bearer ${token}` }
     }).catch(() => {});
     
-    // التنقل لصفحة POS باستخدام React Router (بدون إعادة تحميل)
+    // التنقل لصفحة POS
     const params = new URLSearchParams({
       phone: call.phone || '',
       name: call.caller_name || '',
@@ -201,10 +205,11 @@ export default function IncomingCallPopup() {
   };
 
   useEffect(() => {
+    // جلب فوري
     fetchActiveCalls();
     
-    // جلب كل ثانيتين للاستجابة السريعة
-    pollIntervalRef.current = setInterval(fetchActiveCalls, 2000);
+    // جلب كل 2.5 ثانية
+    pollIntervalRef.current = setInterval(fetchActiveCalls, 2500);
     
     return () => {
       if (pollIntervalRef.current) {
@@ -214,11 +219,11 @@ export default function IncomingCallPopup() {
     };
   }, []);
 
-  // تنظيف المكالمات المرفوضة بعد 30 ثانية
+  // تنظيف المكالمات المرفوضة بعد 60 ثانية
   useEffect(() => {
     const cleanup = setInterval(() => {
-      setDismissed({});
-    }, 30000);
+      dismissedRef.current.clear();
+    }, 60000);
     
     return () => clearInterval(cleanup);
   }, []);
