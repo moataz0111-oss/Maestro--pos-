@@ -22,6 +22,9 @@ import InstallApp from "./pages/InstallApp";
 import HR from "./pages/HR";
 import WarehouseTransfers from "./pages/WarehouseTransfers";
 import KitchenDisplay from "./pages/KitchenDisplay";
+import Loyalty from "./pages/Loyalty";
+import Recipes from "./pages/Recipes";
+import Invoices from "./pages/Invoices";
 
 // Components
 import IncomingCallPopup from "./components/IncomingCallPopup";
