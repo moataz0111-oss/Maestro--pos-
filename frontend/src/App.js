@@ -191,6 +191,15 @@ function AppRoutes() {
           </ProtectedRoute>
         } 
       />
+      {/* شاشة المطبخ */}
+      <Route 
+        path="/kitchen" 
+        element={
+          <ProtectedRoute>
+            <KitchenDisplay />
+          </ProtectedRoute>
+        } 
+      />
       {/* صفحة السائق - بدون حماية للوصول من الهاتف */}
       <Route path="/driver" element={<DriverPortal />} />
       {/* صفحة Super Admin - لوحة تحكم المالك */}
