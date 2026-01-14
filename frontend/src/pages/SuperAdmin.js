@@ -132,6 +132,25 @@ export default function SuperAdmin() {
   const [copiedCredentials, setCopiedCredentials] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState('overview');
+  
+  // Background settings states
+  const [backgroundSettings, setBackgroundSettings] = useState({
+    backgrounds: [],
+    animation_enabled: true,
+    transition_type: 'fade',
+    transition_duration: 1.5,
+    auto_play: true,
+    show_logo: true,
+    logo_url: '',
+    logo_animation: 'pulse',
+    overlay_color: 'rgba(0,0,0,0.5)',
+    text_color: '#ffffff'
+  });
+  const [showAddBackground, setShowAddBackground] = useState(false);
+  const [newBackgroundUrl, setNewBackgroundUrl] = useState('');
+  const [newBackgroundTitle, setNewBackgroundTitle] = useState('');
+  const [newBackgroundAnimation, setNewBackgroundAnimation] = useState('fade');
+  const [backgroundsLoading, setBackgroundsLoading] = useState(false);
 
   useEffect(() => {
     if (token) {
@@ -146,6 +165,7 @@ export default function SuperAdmin() {
   useEffect(() => {
     if (isAuthenticated) {
       fetchData();
+      fetchBackgroundSettings();
     }
   }, [isAuthenticated]);
 
