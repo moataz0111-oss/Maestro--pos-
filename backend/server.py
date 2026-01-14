@@ -1412,7 +1412,12 @@ async def get_orders(
     if branch_id:
         query["branch_id"] = branch_id
     if status:
-        query["status"] = status
+        # دعم حالات متعددة مفصولة بفاصلة
+        statuses = [s.strip() for s in status.split(',')]
+        if len(statuses) > 1:
+            query["status"] = {"$in": statuses}
+        else:
+            query["status"] = status
     if date:
         query["created_at"] = {"$regex": f"^{date}"}
     if payment_status:
