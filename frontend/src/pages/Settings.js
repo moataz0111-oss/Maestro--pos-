@@ -415,6 +415,8 @@ export default function Settings() {
   const handleEditUser = (u) => {
     setEditUserForm({
       id: u.id,
+      username: u.username,
+      email: u.email,
       full_name: u.full_name,
       role: u.role,
       branch_id: u.branch_id || '',
@@ -428,6 +430,8 @@ export default function Settings() {
     e.preventDefault();
     try {
       await axios.put(`${API}/users/${editUserForm.id}`, {
+        username: editUserForm.username,
+        email: editUserForm.email,
         full_name: editUserForm.full_name,
         role: editUserForm.role,
         branch_id: editUserForm.branch_id || null,
