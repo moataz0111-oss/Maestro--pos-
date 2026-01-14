@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Phone, PhoneOff, User, MapPin, ShoppingCart, X, Clock, PhoneIncoming } from 'lucide-react';
 import { Button } from './ui/button';
 import { Card } from './ui/card';
@@ -7,12 +8,15 @@ import { getSoundSettings } from '../utils/sound';
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
-export default function IncomingCallPopup({ onClose, onAnswer, onCreateOrder }) {
+export default function IncomingCallPopup() {
+  const navigate = useNavigate();
   const [activeCalls, setActiveCalls] = useState([]);
   const [isRinging, setIsRinging] = useState(false);
   const [dismissed, setDismissed] = useState({});
+  const [isLoading, setIsLoading] = useState({});
   const ringIntervalRef = useRef(null);
   const pollIntervalRef = useRef(null);
+  const audioContextRef = useRef(null);
 
   // إيقاف صوت الرنين
   const stopRingSound = useCallback(() => {
@@ -20,24 +24,28 @@ export default function IncomingCallPopup({ onClose, onAnswer, onCreateOrder }) 
       clearInterval(ringIntervalRef.current);
       ringIntervalRef.current = null;
     }
+    if (audioContextRef.current) {
+      try {
+        audioContextRef.current.close();
+      } catch (e) {}
+      audioContextRef.current = null;
+    }
   }, []);
 
-  // تشغيل صوت الرنين باستخدام Web Audio API
+  // تشغيل صوت الرنين
   const playRingSound = useCallback(() => {
     const settings = getSoundSettings();
     if (!settings.enabled || !settings.callRingtone) return;
     
-    // إيقاف أي رنين سابق
     stopRingSound();
     
     const volume = settings.volume || 0.7;
     
-    // تشغيل الرنين كل ثانية
     const playRingTone = () => {
       try {
         const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        audioContextRef.current = ctx;
         
-        // نغمة رنين هاتف (تردد مزدوج)
         const playTone = (freq, startTime, duration) => {
           const osc = ctx.createOscillator();
           const gain = ctx.createGain();
@@ -51,24 +59,17 @@ export default function IncomingCallPopup({ onClose, onAnswer, onCreateOrder }) 
           osc.stop(startTime + duration);
         };
         
-        // رنين هاتف كلاسيكي (440Hz و 480Hz متناوب)
         playTone(440, ctx.currentTime, 0.1);
         playTone(480, ctx.currentTime + 0.1, 0.1);
         playTone(440, ctx.currentTime + 0.2, 0.1);
         playTone(480, ctx.currentTime + 0.3, 0.1);
-        playTone(440, ctx.currentTime + 0.4, 0.1);
-        playTone(480, ctx.currentTime + 0.5, 0.1);
-        
       } catch (e) {
         console.log('Ring sound error:', e);
       }
     };
     
-    // تشغيل فوري
     playRingTone();
-    
-    // تكرار كل 1.5 ثانية
-    ringIntervalRef.current = setInterval(playRingTone, 1500);
+    ringIntervalRef.current = setInterval(playRingTone, 1200);
   }, [stopRingSound]);
 
   // جلب المكالمات النشطة
@@ -77,35 +78,50 @@ export default function IncomingCallPopup({ onClose, onAnswer, onCreateOrder }) 
       const token = localStorage.getItem('token');
       if (!token) return;
       
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 2000);
+      
       const res = await fetch(`${API}/callcenter/active-calls`, {
-        headers: { 'Authorization': `Bearer ${token}` }
+        headers: { 'Authorization': `Bearer ${token}` },
+        signal: controller.signal
       });
+      
+      clearTimeout(timeoutId);
       
       if (res.ok) {
         const calls = await res.json();
         
-        // فلترة المكالمات التي تم رفضها محلياً
-        const filteredCalls = calls.filter(c => !dismissed[c.call_id]);
-        
-        const ringingCalls = filteredCalls.filter(c => c.status === 'ringing');
-        
-        if (ringingCalls.length > 0 && !isRinging) {
-          setIsRinging(true);
-          playRingSound();
-        } else if (ringingCalls.length === 0 && isRinging) {
-          setIsRinging(false);
-          stopRingSound();
-        }
-        
-        setActiveCalls(filteredCalls);
+        setActiveCalls(prev => {
+          const filteredCalls = calls.filter(c => !dismissed[c.call_id]);
+          const ringingCalls = filteredCalls.filter(c => c.status === 'ringing');
+          
+          if (ringingCalls.length > 0) {
+            if (!isRinging) {
+              setIsRinging(true);
+              playRingSound();
+            }
+          } else {
+            if (isRinging) {
+              setIsRinging(false);
+              stopRingSound();
+            }
+          }
+          
+          return filteredCalls;
+        });
       }
     } catch (error) {
-      console.error('Error fetching calls:', error);
+      if (error.name !== 'AbortError') {
+        console.error('Error fetching calls:', error);
+      }
     }
-  }, [isRinging, dismissed, playRingSound, stopRingSound]);
+  }, [dismissed, isRinging, playRingSound, stopRingSound]);
 
   // الرد على المكالمة
   const handleAnswer = async (callId) => {
+    if (isLoading[callId]) return;
+    setIsLoading(prev => ({ ...prev, [callId]: true }));
+    
     try {
       const token = localStorage.getItem('token');
       await fetch(`${API}/callcenter/calls/${callId}/answer`, {
@@ -116,56 +132,54 @@ export default function IncomingCallPopup({ onClose, onAnswer, onCreateOrder }) 
       stopRingSound();
       setIsRinging(false);
       
-      // تحديث حالة المكالمة محلياً
       setActiveCalls(prev => prev.map(c => 
         c.call_id === callId ? {...c, status: 'answered'} : c
       ));
-      
-      if (onAnswer) onAnswer(callId);
     } catch (error) {
       console.error('Error answering call:', error);
+    } finally {
+      setIsLoading(prev => ({ ...prev, [callId]: false }));
     }
   };
 
   // إنهاء/رفض المكالمة
   const handleEndCall = async (callId) => {
+    if (isLoading[callId]) return;
+    setIsLoading(prev => ({ ...prev, [callId]: true }));
+    
     try {
-      const token = localStorage.getItem('token');
-      await fetch(`${API}/callcenter/calls/${callId}/end`, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      
       stopRingSound();
       setIsRinging(false);
-      
-      // إضافة للمكالمات المرفوضة لعدم إظهارها مرة أخرى
       setDismissed(prev => ({...prev, [callId]: true}));
-      
-      // إزالة من القائمة محلياً
       setActiveCalls(prev => prev.filter(c => c.call_id !== callId));
       
-      if (onClose) onClose();
+      const token = localStorage.getItem('token');
+      fetch(`${API}/callcenter/calls/${callId}/end`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` }
+      }).catch(() => {});
     } catch (error) {
       console.error('Error ending call:', error);
+    } finally {
+      setIsLoading(prev => ({ ...prev, [callId]: false }));
     }
   };
 
-  // إغلاق النافذة فقط (بدون إنهاء المكالمة)
+  // إغلاق النافذة فقط
   const handleDismiss = (callId) => {
-    setDismissed(prev => ({...prev, [callId]: true}));
-    setActiveCalls(prev => prev.filter(c => c.call_id !== callId));
     stopRingSound();
     setIsRinging(false);
+    setDismissed(prev => ({...prev, [callId]: true}));
+    setActiveCalls(prev => prev.filter(c => c.call_id !== callId));
   };
 
   // إنشاء طلب للمتصل
   const handleCreateOrder = (call) => {
-    // إيقاف الرنين
+    if (isLoading[call.call_id]) return;
+    setIsLoading(prev => ({ ...prev, [call.call_id]: true }));
+    
     stopRingSound();
     setIsRinging(false);
-    
-    // إضافة للمكالمات المنتهية
     setDismissed(prev => ({...prev, [call.call_id]: true}));
     setActiveCalls(prev => prev.filter(c => c.call_id !== call.call_id));
     
@@ -176,25 +190,21 @@ export default function IncomingCallPopup({ onClose, onAnswer, onCreateOrder }) 
       headers: { 'Authorization': `Bearer ${token}` }
     }).catch(() => {});
     
-    // التنقل لصفحة POS مع بيانات العميل ونوع التوصيل
+    // التنقل لصفحة POS باستخدام React Router (بدون إعادة تحميل)
     const params = new URLSearchParams({
       phone: call.phone || '',
       name: call.caller_name || '',
       from_call: 'true'
     });
     
-    window.location.href = `/pos?${params.toString()}`;
+    navigate(`/pos?${params.toString()}`);
   };
 
   useEffect(() => {
-    // جلب المكالمات فوراً
-    const initialFetch = async () => {
-      await fetchActiveCalls();
-    };
-    initialFetch();
+    fetchActiveCalls();
     
-    // جلب كل 3 ثواني (بدلاً من ثانيتين)
-    pollIntervalRef.current = setInterval(fetchActiveCalls, 3000);
+    // جلب كل ثانيتين للاستجابة السريعة
+    pollIntervalRef.current = setInterval(fetchActiveCalls, 2000);
     
     return () => {
       if (pollIntervalRef.current) {
@@ -202,13 +212,13 @@ export default function IncomingCallPopup({ onClose, onAnswer, onCreateOrder }) 
       }
       stopRingSound();
     };
-  }, [fetchActiveCalls, stopRingSound]);
+  }, []);
 
-  // تنظيف المكالمات المرفوضة بعد دقيقة
+  // تنظيف المكالمات المرفوضة بعد 30 ثانية
   useEffect(() => {
     const cleanup = setInterval(() => {
       setDismissed({});
-    }, 60000);
+    }, 30000);
     
     return () => clearInterval(cleanup);
   }, []);
@@ -257,6 +267,7 @@ export default function IncomingCallPopup({ onClose, onAnswer, onCreateOrder }) 
                   onClick={() => handleDismiss(call.call_id)}
                   className="text-gray-300 hover:text-white hover:bg-white/10"
                   title="إخفاء"
+                  disabled={isLoading[call.call_id]}
                 >
                   <X className="h-5 w-5" />
                 </Button>
@@ -322,35 +333,39 @@ export default function IncomingCallPopup({ onClose, onAnswer, onCreateOrder }) 
                 <>
                   <Button
                     onClick={() => handleEndCall(call.call_id)}
-                    className="flex-1 h-12 bg-red-600 hover:bg-red-700 text-white gap-2 text-base font-medium"
+                    disabled={isLoading[call.call_id]}
+                    className="flex-1 h-12 bg-red-600 hover:bg-red-700 text-white gap-2 text-base font-medium disabled:opacity-50"
                   >
                     <PhoneOff className="h-5 w-5" />
-                    رفض
+                    {isLoading[call.call_id] ? '...' : 'رفض'}
                   </Button>
                   <Button
                     onClick={() => handleAnswer(call.call_id)}
-                    className="flex-1 h-12 bg-green-600 hover:bg-green-700 text-white gap-2 text-base font-medium"
+                    disabled={isLoading[call.call_id]}
+                    className="flex-1 h-12 bg-green-600 hover:bg-green-700 text-white gap-2 text-base font-medium disabled:opacity-50"
                   >
                     <Phone className="h-5 w-5" />
-                    رد
+                    {isLoading[call.call_id] ? '...' : 'رد'}
                   </Button>
                 </>
               ) : (
                 <>
                   <Button
                     onClick={() => handleEndCall(call.call_id)}
+                    disabled={isLoading[call.call_id]}
                     variant="outline"
-                    className="flex-1 h-12 border-red-500 text-red-400 hover:bg-red-500/20 gap-2 text-base font-medium"
+                    className="flex-1 h-12 border-red-500 text-red-400 hover:bg-red-500/20 gap-2 text-base font-medium disabled:opacity-50"
                   >
                     <PhoneOff className="h-5 w-5" />
-                    إنهاء
+                    {isLoading[call.call_id] ? '...' : 'إنهاء'}
                   </Button>
                   <Button
                     onClick={() => handleCreateOrder(call)}
-                    className="flex-1 h-12 bg-primary hover:bg-primary/90 text-white gap-2 text-base font-medium"
+                    disabled={isLoading[call.call_id]}
+                    className="flex-1 h-12 bg-primary hover:bg-primary/90 text-white gap-2 text-base font-medium disabled:opacity-50"
                   >
                     <ShoppingCart className="h-5 w-5" />
-                    إنشاء طلب
+                    {isLoading[call.call_id] ? '...' : 'إنشاء طلب'}
                   </Button>
                 </>
               )}
