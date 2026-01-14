@@ -1331,6 +1331,140 @@ export default function SuperAdmin() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Edit Tenant Modal */}
+      <Dialog open={showEditTenant} onOpenChange={setShowEditTenant}>
+        <DialogContent className="max-w-lg bg-gray-800 border-gray-700 text-white">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Edit className="h-5 w-5 text-yellow-400" />
+              تعديل بيانات العميل
+            </DialogTitle>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>اسم المطعم/الكافيه</Label>
+                <Input
+                  value={editTenantForm.name}
+                  onChange={(e) => setEditTenantForm({...editTenantForm, name: e.target.value})}
+                  className="bg-gray-700/50 border-gray-600"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>اسم المالك</Label>
+                <Input
+                  value={editTenantForm.owner_name}
+                  onChange={(e) => setEditTenantForm({...editTenantForm, owner_name: e.target.value})}
+                  className="bg-gray-700/50 border-gray-600"
+                />
+              </div>
+            </div>
+            
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>البريد الإلكتروني</Label>
+                <Input
+                  type="email"
+                  value={editTenantForm.owner_email}
+                  onChange={(e) => setEditTenantForm({...editTenantForm, owner_email: e.target.value})}
+                  className="bg-gray-700/50 border-gray-600"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>الهاتف</Label>
+                <Input
+                  value={editTenantForm.owner_phone}
+                  onChange={(e) => setEditTenantForm({...editTenantForm, owner_phone: e.target.value})}
+                  className="bg-gray-700/50 border-gray-600"
+                />
+              </div>
+            </div>
+            
+            <div className="grid grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <Label>نوع الاشتراك</Label>
+                <Select 
+                  value={editTenantForm.subscription_type}
+                  onValueChange={(v) => setEditTenantForm({...editTenantForm, subscription_type: v})}
+                >
+                  <SelectTrigger className="bg-gray-700/50 border-gray-600">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="bg-gray-800 border-gray-700">
+                    <SelectItem value="trial">تجريبي</SelectItem>
+                    <SelectItem value="basic">أساسي</SelectItem>
+                    <SelectItem value="premium">مميز</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>أقصى عدد فروع</Label>
+                <Input
+                  type="number"
+                  min="1"
+                  value={editTenantForm.max_branches}
+                  onChange={(e) => setEditTenantForm({...editTenantForm, max_branches: parseInt(e.target.value)})}
+                  className="bg-gray-700/50 border-gray-600"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>أقصى عدد مستخدمين</Label>
+                <Input
+                  type="number"
+                  min="1"
+                  value={editTenantForm.max_users}
+                  onChange={(e) => setEditTenantForm({...editTenantForm, max_users: parseInt(e.target.value)})}
+                  className="bg-gray-700/50 border-gray-600"
+                />
+              </div>
+            </div>
+
+            {/* Email Section */}
+            <div className="p-4 bg-blue-500/10 rounded-lg border border-blue-500/30 space-y-3">
+              <div className="flex items-center gap-3">
+                <input
+                  type="checkbox"
+                  id="sendEmail"
+                  checked={editTenantForm.send_welcome_email}
+                  onChange={(e) => setEditTenantForm({...editTenantForm, send_welcome_email: e.target.checked})}
+                  className="w-4 h-4 rounded border-gray-600 bg-gray-700 text-blue-500"
+                />
+                <Label htmlFor="sendEmail" className="flex items-center gap-2 cursor-pointer">
+                  <Mail className="h-4 w-4 text-blue-400" />
+                  إرسال بريد ترحيبي للعميل
+                </Label>
+              </div>
+              
+              {editTenantForm.send_welcome_email && (
+                <div className="space-y-2 pt-2">
+                  <Label className="text-sm text-gray-400">كلمة مرور مؤقتة (اختياري)</Label>
+                  <Input
+                    type="text"
+                    value={editTenantForm.temp_password}
+                    onChange={(e) => setEditTenantForm({...editTenantForm, temp_password: e.target.value})}
+                    className="bg-gray-700/50 border-gray-600"
+                    placeholder="اتركها فارغة لاستخدام كلمة المرور الافتراضية"
+                  />
+                  <p className="text-xs text-gray-500">
+                    سيتم إرسال رسالة تحتوي على: الرابط، اسم المستخدم، كلمة المرور، وشرح طريقة الدخول
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowEditTenant(false)} className="border-gray-600">
+              إلغاء
+            </Button>
+            <Button onClick={updateTenant} className="bg-yellow-600 hover:bg-yellow-700" disabled={loading}>
+              {loading ? 'جاري الحفظ...' : 'حفظ التعديلات'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
