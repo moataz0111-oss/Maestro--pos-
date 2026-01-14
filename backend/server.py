@@ -487,6 +487,230 @@ class Currency(BaseModel):
     symbol: str
     exchange_rate: float
 
+# ==================== HR MODELS - إدارة الموارد البشرية ====================
+
+class EmployeeCreate(BaseModel):
+    name: str
+    phone: str
+    email: Optional[str] = None
+    national_id: Optional[str] = None  # رقم الهوية
+    position: str  # المسمى الوظيفي
+    department: Optional[str] = None  # القسم
+    branch_id: str
+    hire_date: str  # تاريخ التعيين
+    salary: float  # الراتب الأساسي
+    salary_type: str = "monthly"  # monthly, daily, hourly
+    work_hours_per_day: float = 8.0  # ساعات العمل اليومية
+    user_id: Optional[str] = None  # ربط بحساب مستخدم
+
+class EmployeeResponse(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str
+    name: str
+    phone: str
+    email: Optional[str] = None
+    national_id: Optional[str] = None
+    position: str
+    department: Optional[str] = None
+    branch_id: str
+    hire_date: str
+    salary: float
+    salary_type: str
+    work_hours_per_day: float
+    user_id: Optional[str] = None
+    is_active: bool = True
+    created_at: str
+    tenant_id: Optional[str] = None
+
+class EmployeeUpdate(BaseModel):
+    name: Optional[str] = None
+    phone: Optional[str] = None
+    email: Optional[str] = None
+    national_id: Optional[str] = None
+    position: Optional[str] = None
+    department: Optional[str] = None
+    branch_id: Optional[str] = None
+    salary: Optional[float] = None
+    salary_type: Optional[str] = None
+    work_hours_per_day: Optional[float] = None
+    is_active: Optional[bool] = None
+
+# نموذج الحضور والانصراف
+class AttendanceCreate(BaseModel):
+    employee_id: str
+    date: str  # YYYY-MM-DD
+    check_in: Optional[str] = None  # وقت الحضور HH:MM
+    check_out: Optional[str] = None  # وقت الانصراف HH:MM
+    status: str = "present"  # present, absent, late, early_leave, holiday
+    notes: Optional[str] = None
+    source: str = "manual"  # manual, fingerprint, system
+
+class AttendanceResponse(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str
+    employee_id: str
+    employee_name: Optional[str] = None
+    date: str
+    check_in: Optional[str] = None
+    check_out: Optional[str] = None
+    worked_hours: Optional[float] = None
+    status: str
+    notes: Optional[str] = None
+    source: str
+    created_at: str
+
+# نموذج السلف
+class AdvanceCreate(BaseModel):
+    employee_id: str
+    amount: float
+    reason: Optional[str] = None
+    deduction_months: int = 1  # عدد أشهر الاستقطاع
+    date: Optional[str] = None
+
+class AdvanceResponse(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str
+    employee_id: str
+    employee_name: Optional[str] = None
+    amount: float
+    remaining_amount: float
+    deducted_amount: float = 0
+    deduction_months: int
+    monthly_deduction: float
+    reason: Optional[str] = None
+    status: str  # pending, approved, rejected, paid
+    date: str
+    created_by: str
+    created_at: str
+
+# نموذج الخصومات
+class DeductionCreate(BaseModel):
+    employee_id: str
+    deduction_type: str  # absence, late, early_leave, violation, other
+    amount: Optional[float] = None  # مبلغ ثابت
+    hours: Optional[float] = None  # عدد الساعات
+    days: Optional[float] = None  # عدد الأيام
+    reason: str
+    date: str
+
+class DeductionResponse(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str
+    employee_id: str
+    employee_name: Optional[str] = None
+    deduction_type: str
+    amount: float
+    hours: Optional[float] = None
+    days: Optional[float] = None
+    reason: str
+    date: str
+    created_by: str
+    created_at: str
+
+# نموذج المكافآت والوقت الإضافي
+class BonusCreate(BaseModel):
+    employee_id: str
+    bonus_type: str  # performance, overtime, holiday, other
+    amount: Optional[float] = None  # مبلغ ثابت
+    hours: Optional[float] = None  # ساعات إضافية
+    reason: str
+    date: str
+
+class BonusResponse(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str
+    employee_id: str
+    employee_name: Optional[str] = None
+    bonus_type: str
+    amount: float
+    hours: Optional[float] = None
+    reason: str
+    date: str
+    created_by: str
+    created_at: str
+
+# نموذج كشف الراتب
+class PayrollCreate(BaseModel):
+    employee_id: str
+    month: str  # YYYY-MM
+    basic_salary: float
+    total_deductions: float = 0
+    total_bonuses: float = 0
+    advance_deduction: float = 0
+    net_salary: float
+    notes: Optional[str] = None
+
+class PayrollResponse(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str
+    employee_id: str
+    employee_name: Optional[str] = None
+    month: str
+    basic_salary: float
+    worked_days: int = 0
+    absent_days: int = 0
+    late_hours: float = 0
+    overtime_hours: float = 0
+    total_deductions: float
+    total_bonuses: float
+    advance_deduction: float
+    net_salary: float
+    status: str  # draft, approved, paid
+    notes: Optional[str] = None
+    created_by: str
+    created_at: str
+    paid_at: Optional[str] = None
+
+# ==================== INVENTORY TRANSFER MODELS - تحويلات المخزون ====================
+
+class InventoryTransferCreate(BaseModel):
+    from_branch_id: str  # الفرع المرسل (أو المخزن الرئيسي)
+    to_branch_id: str  # الفرع المستلم
+    items: List[Dict[str, Any]]  # [{inventory_id, quantity, notes}]
+    transfer_type: str = "warehouse_to_branch"  # warehouse_to_branch, branch_to_warehouse, branch_to_branch
+    notes: Optional[str] = None
+
+class InventoryTransferResponse(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str
+    transfer_number: int
+    from_branch_id: str
+    from_branch_name: Optional[str] = None
+    to_branch_id: str
+    to_branch_name: Optional[str] = None
+    items: List[Dict[str, Any]]
+    transfer_type: str
+    status: str  # pending, approved, shipped, received, cancelled
+    notes: Optional[str] = None
+    created_by: str
+    created_at: str
+    approved_by: Optional[str] = None
+    approved_at: Optional[str] = None
+    received_by: Optional[str] = None
+    received_at: Optional[str] = None
+
+# نموذج طلب شراء
+class PurchaseRequestCreate(BaseModel):
+    branch_id: str  # الفرع الطالب
+    items: List[Dict[str, Any]]  # [{name, quantity, unit, notes}]
+    priority: str = "normal"  # urgent, high, normal, low
+    notes: Optional[str] = None
+
+class PurchaseRequestResponse(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str
+    request_number: int
+    branch_id: str
+    branch_name: Optional[str] = None
+    items: List[Dict[str, Any]]
+    priority: str
+    status: str  # pending, approved, ordered, received, cancelled
+    notes: Optional[str] = None
+    created_by: str
+    created_at: str
+    approved_by: Optional[str] = None
+    approved_at: Optional[str] = None
+
 # ==================== AUTH HELPERS ====================
 
 def hash_password(password: str) -> str:
