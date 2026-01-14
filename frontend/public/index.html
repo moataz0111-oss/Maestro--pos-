@@ -34,6 +34,19 @@
         These two scripts have been added for the Visual Edits, please do not edit or remove them
         -->
         <script>
+            // Register Service Worker for PWA
+            if ('serviceWorker' in navigator) {
+                window.addEventListener('load', function() {
+                    navigator.serviceWorker.register('/sw.js', { scope: '/' })
+                        .then(function(registration) {
+                            console.log('SW registered successfully:', registration.scope);
+                        })
+                        .catch(function(error) {
+                            console.log('SW registration failed:', error);
+                        });
+                });
+            }
+            
             // Only load visual edit scripts when inside an iframe
             if (window.self !== window.top) {
                 // Load debug monitor script
