@@ -5,7 +5,7 @@
 
 ---
 
-## ✅ Completed Features (Jan 14, 2026)
+## ✅ Completed Features (Jan 14-15, 2026)
 
 ### Core Features
 - [x] نظام المصادقة (JWT)
@@ -21,6 +21,8 @@
 - [x] فصل البيانات بين العملاء
 - [x] تصفير المبيعات للعملاء
 - [x] إعادة تعيين كلمات المرور
+- [x] **تعديل بيانات العملاء الكاملة** (NEW - Jan 15, 2026)
+- [x] **إرسال بريد ترحيبي تلقائي للعملاء** (NEW - Jan 15, 2026)
 
 ### Call Center System
 - [x] إعدادات ربط الكول سنتر
@@ -34,7 +36,7 @@
 - [x] مستوى الصوت
 - [x] أصوات الأزرار والإشعارات
 
-### HR System (NEW - Jan 14, 2026)
+### HR System (Jan 14, 2026)
 - [x] إدارة الموظفين (CRUD)
 - [x] تسجيل الحضور والانصراف
 - [x] نظام السلف مع الاستقطاع الشهري
@@ -43,17 +45,18 @@
 - [x] حساب كشوفات الرواتب التلقائي
 - [x] ربط الرواتب بالتكلفة التشغيلية
 
-### Warehouse & Inventory System (NEW - Jan 14, 2026)
+### Warehouse & Inventory System (Jan 14, 2026)
 - [x] تحويلات المخزون بين الفروع
 - [x] سير عمل التحويلات (انتظار -> موافقة -> شحن -> استلام)
 - [x] طلبات الشراء من الفروع
 - [x] أولويات طلبات الشراء (عاجل، مرتفع، عادي، منخفض)
 
-### Bug Fixes (Jan 14, 2026)
+### Bug Fixes (Jan 14-15, 2026)
 - [x] إصلاح عدم ظهور المستخدمين الجدد عند العملاء
 - [x] إصلاح البحث عن العميل بالهاتف
 - [x] إصلاح عرض الطلبات المعلقة
 - [x] إصلاح صوت رنين المكالمات
+- [x] **إصلاح تسرب بيانات المستخدمين** (P0 CRITICAL - Fixed Jan 15, 2026)
 
 ---
 
@@ -68,18 +71,20 @@
 ├── utils/auth.py
 └── api/ (routes - pending)
 ```
-- [ ] تقسيم server.py (4500+ سطر)
+- [ ] تقسيم server.py (5000+ سطر)
 
 ### PWA Driver Portal
 - [ ] إصلاح تثبيت تطبيق السائقين على Android/iOS
+- [ ] إصلاح تثبيت تطبيق الإدارة على Windows/Mac/POS
 
 ---
 
 ## 📋 Upcoming Tasks (P1)
 - [ ] ربط أجهزة البصمة (ZKTeco) للحضور التلقائي
+- [ ] خلفيات متحركة لصفحة تسجيل الدخول (تحكم من Super Admin)
+- [ ] تحسين خريطة تتبع السائقين (مثل تطبيقات التوصيل)
 - [ ] طباعة بيانات الخصومات للموظفين
-- [ ] تحسين واجهة تعديل بيانات المستخدمين (username, email)
-- [ ] تحسين خريطة تتبع السائقين
+- [ ] تحسين واجهة تعديل بيانات المستخدمين
 - [ ] إعدادات النظام العامة (لوجو، اسم)
 - [ ] حساب وقت توصيل الطلب
 
@@ -98,6 +103,7 @@
 - URL: `/super-admin`
 - Email: `owner@maestroegp.com`
 - Password: `owner123`
+- Secret Key: `271018`
 
 ### Main System Admin
 - URL: `/login`
@@ -115,10 +121,19 @@
 
 ### Auth
 - `POST /api/auth/login`
-- `POST /api/users` (NEW - creates user with tenant_id)
+- `POST /api/users` (creates user with tenant_id)
 - `GET /api/auth/me`
 
-### HR System (NEW)
+### Super Admin (NEW)
+- `POST /api/super-admin/login` (requires secret_key)
+- `GET /api/super-admin/tenants`
+- `POST /api/super-admin/tenants` (with auto welcome email)
+- `PUT /api/super-admin/tenants/{id}` (edit tenant data + optional welcome email)
+- `DELETE /api/super-admin/tenants/{id}/permanent`
+- `POST /api/super-admin/tenants/{id}/reset-password`
+- `POST /api/super-admin/tenants/{id}/reset-sales`
+
+### HR System
 - `GET/POST /api/employees`
 - `GET/POST /api/attendance`
 - `GET/POST /api/advances`
@@ -128,7 +143,7 @@
 - `POST /api/payroll/calculate`
 - `PUT /api/payroll/{id}/pay`
 
-### Warehouse System (NEW)
+### Warehouse System
 - `GET/POST /api/inventory-transfers`
 - `PUT /api/inventory-transfers/{id}/approve`
 - `PUT /api/inventory-transfers/{id}/ship`
@@ -155,6 +170,7 @@
 - **Database**: MongoDB
 - **Auth**: JWT
 - **Maps**: Leaflet / OpenStreetMap
+- **Email**: SendGrid (for welcome emails)
 
 ---
 
@@ -165,4 +181,6 @@
 - ✅ All APIs: Working
 - ✅ HR System: Working (100% tests passed)
 - ✅ Warehouse System: Working (100% tests passed)
+- ✅ User Data Isolation: Working (100% tests passed - Jan 15)
+- ✅ Tenant Edit Feature: Working (100% tests passed - Jan 15)
 - ✅ Ready for Production
