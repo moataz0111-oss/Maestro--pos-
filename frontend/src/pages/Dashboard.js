@@ -87,7 +87,8 @@ export default function Dashboard() {
     showReports: true,
     showSettings: true,
     showHR: true,
-    showWarehouse: true
+    showWarehouse: true,
+    showCallLogs: true
   });
   
   // حالات إغلاق الصندوق
