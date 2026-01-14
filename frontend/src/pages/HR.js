@@ -484,6 +484,9 @@ export default function HR() {
             <TabsTrigger value="payroll" className="flex items-center gap-2">
               <FileText className="h-4 w-4" /> كشوفات الرواتب
             </TabsTrigger>
+            <TabsTrigger value="biometric" className="flex items-center gap-2">
+              <Fingerprint className="h-4 w-4" /> أجهزة البصمة
+            </TabsTrigger>
           </TabsList>
 
           {/* Employees Tab */}
