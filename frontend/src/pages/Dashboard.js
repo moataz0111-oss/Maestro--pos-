@@ -409,6 +409,30 @@ export default function Dashboard() {
               سجل المكالمات
             </Button>
 
+            {/* HR Button */}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => navigate('/hr')}
+              className="gap-2 border-green-500 text-green-500 hover:bg-green-500/10"
+              data-testid="hr-btn"
+            >
+              <UserCog className="h-4 w-4" />
+              الموارد البشرية
+            </Button>
+
+            {/* Warehouse Button */}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => navigate('/warehouse')}
+              className="gap-2 border-indigo-500 text-indigo-500 hover:bg-indigo-500/10"
+              data-testid="warehouse-btn"
+            >
+              <ArrowLeftRight className="h-4 w-4" />
+              المخزون
+            </Button>
+
             {/* Close Cash Register Button */}
             <Button
               variant="outline"
