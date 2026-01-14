@@ -806,6 +806,17 @@ export default function SuperAdmin() {
                           <ExternalLink className="h-4 w-4" />
                         </Button>
                         
+                        {/* تعديل البيانات */}
+                        <Button 
+                          variant="ghost" 
+                          size="icon"
+                          onClick={() => openEditTenant(tenant)}
+                          className="text-yellow-400 hover:text-yellow-300 hover:bg-yellow-500/10"
+                          title="تعديل البيانات"
+                        >
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        
                         {/* التفاصيل */}
                         <Button 
                           variant="ghost" 
