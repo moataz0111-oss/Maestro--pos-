@@ -203,6 +203,33 @@ function AppRoutes() {
           </ProtectedRoute>
         } 
       />
+      {/* برنامج الولاء */}
+      <Route 
+        path="/loyalty" 
+        element={
+          <ProtectedRoute>
+            <Loyalty />
+          </ProtectedRoute>
+        } 
+      />
+      {/* الوصفات والمواد الخام */}
+      <Route 
+        path="/recipes" 
+        element={
+          <ProtectedRoute>
+            <Recipes />
+          </ProtectedRoute>
+        } 
+      />
+      {/* الفواتير والطباعة */}
+      <Route 
+        path="/invoices" 
+        element={
+          <ProtectedRoute>
+            <Invoices />
+          </ProtectedRoute>
+        } 
+      />
       {/* صفحة السائق - بدون حماية للوصول من الهاتف */}
       <Route path="/driver" element={<DriverPortal />} />
       {/* صفحة Super Admin - لوحة تحكم المالك */}
