@@ -46,9 +46,11 @@ import {
   Gift,
   Minus,
   ArrowRight,
-  Home
+  Home,
+  Fingerprint
 } from 'lucide-react';
 import { toast, Toaster } from 'sonner';
+import BiometricDevices from '../components/BiometricDevices';
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
