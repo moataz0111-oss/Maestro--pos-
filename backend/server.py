@@ -4598,6 +4598,16 @@ async def create_tenant(tenant: TenantCreate, background_tasks: BackgroundTasks,
     
     del tenant_doc["_id"]
     
+    # إرسال بريد ترحيبي تلقائياً
+    background_tasks.add_task(
+        send_welcome_email,
+        recipient_email=tenant.owner_email,
+        tenant_name=tenant.name,
+        owner_name=tenant.owner_name,
+        username=tenant.owner_email,
+        password=admin_password
+    )
+    
     return {
         "tenant": tenant_doc,
         "admin_credentials": {
@@ -4605,7 +4615,8 @@ async def create_tenant(tenant: TenantCreate, background_tasks: BackgroundTasks,
             "password": admin_password,
             "message": "يرجى تغيير كلمة المرور فور تسجيل الدخول"
         },
-        "access_url": f"/tenant/{tenant.slug}"
+        "access_url": f"/tenant/{tenant.slug}",
+        "email_sent": True
     }
 
 @api_router.get("/super-admin/tenants/{tenant_id}")
