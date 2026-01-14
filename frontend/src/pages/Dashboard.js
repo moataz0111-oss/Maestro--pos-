@@ -418,6 +418,9 @@ export default function Dashboard() {
               إغلاق الصندوق
             </Button>
 
+            {/* PWA Install Button */}
+            <PWAInstallButton variant="outline" className="gap-2" />
+
             {/* Logout */}
             <Button
               variant="ghost"
