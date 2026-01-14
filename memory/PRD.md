@@ -1,7 +1,7 @@
 # Maestro EGP - PRD (Product Requirements Document)
 
 ## Original Problem Statement
-نظام شامل لإدارة المطاعم والكافيهات باسم "Maestro EGP" مع دعم Multi-tenant، تتبع السائقين، نظام كول سنتر، وإعدادات الأصوات.
+نظام شامل لإدارة المطاعم والكافيهات باسم "Maestro EGP" مع دعم Multi-tenant، تتبع السائقين، نظام كول سنتر، إدارة الموارد البشرية، وتحويلات المخزون.
 
 ---
 
@@ -22,26 +22,38 @@
 - [x] تصفير المبيعات للعملاء
 - [x] إعادة تعيين كلمات المرور
 
-### Call Center System (NEW)
+### Call Center System
 - [x] إعدادات ربط الكول سنتر
 - [x] Webhook لاستقبال المكالمات
 - [x] إشعار منبثق للمكالمات الواردة
 - [x] ملء تلقائي لبيانات العميل في POS
 - [x] صفحة سجل المكالمات
-- [x] دليل إعداد الأجهزة
 
-### Sound Settings (NEW)
+### Sound Settings
 - [x] التحكم بتفعيل/إيقاف الأصوات
 - [x] مستوى الصوت
-- [x] أصوات الأزرار
-- [x] إشعارات الطلبات
-- [x] رنين المكالمات
-- [x] إشعارات السائقين
+- [x] أصوات الأزرار والإشعارات
+
+### HR System (NEW - Jan 14, 2026)
+- [x] إدارة الموظفين (CRUD)
+- [x] تسجيل الحضور والانصراف
+- [x] نظام السلف مع الاستقطاع الشهري
+- [x] نظام الخصومات (غياب، تأخير، مخالفة)
+- [x] نظام المكافآت والوقت الإضافي
+- [x] حساب كشوفات الرواتب التلقائي
+- [x] ربط الرواتب بالتكلفة التشغيلية
+
+### Warehouse & Inventory System (NEW - Jan 14, 2026)
+- [x] تحويلات المخزون بين الفروع
+- [x] سير عمل التحويلات (انتظار -> موافقة -> شحن -> استلام)
+- [x] طلبات الشراء من الفروع
+- [x] أولويات طلبات الشراء (عاجل، مرتفع، عادي، منخفض)
 
 ### Bug Fixes (Jan 14, 2026)
-- [x] إصلاح البحث عن العميل بالهاتف (MongoDB $or conflict)
-- [x] إصلاح عرض الطلبات المعلقة (شمول جميع الحالات)
-- [x] إصلاح صوت رنين المكالمات (Web Audio API)
+- [x] إصلاح عدم ظهور المستخدمين الجدد عند العملاء
+- [x] إصلاح البحث عن العميل بالهاتف
+- [x] إصلاح عرض الطلبات المعلقة
+- [x] إصلاح صوت رنين المكالمات
 
 ---
 
@@ -56,17 +68,23 @@
 ├── utils/auth.py
 └── api/ (routes - pending)
 ```
-- [ ] تقسيم server.py (4220 سطر)
+- [ ] تقسيم server.py (4500+ سطر)
+
+### PWA Driver Portal
+- [ ] إصلاح تثبيت تطبيق السائقين على Android/iOS
 
 ---
 
 ## 📋 Upcoming Tasks (P1)
+- [ ] ربط أجهزة البصمة (ZKTeco) للحضور التلقائي
+- [ ] طباعة بيانات الخصومات للموظفين
+- [ ] تحسين واجهة تعديل بيانات المستخدمين (username, email)
 - [ ] تحسين خريطة تتبع السائقين
 - [ ] إعدادات النظام العامة (لوجو، اسم)
-- [ ] تقارير المبيعات بالأصناف + تصدير Excel
 - [ ] حساب وقت توصيل الطلب
 
 ## 🔮 Future Tasks (P2)
+- [ ] تقارير المبيعات بالأصناف + تصدير Excel
 - [ ] تخصيص الفاتورة وربط الطابعات
 - [ ] إدارة وصفات المنتجات
 - [ ] Kitchen Display System
@@ -97,8 +115,26 @@
 
 ### Auth
 - `POST /api/auth/login`
-- `POST /api/auth/register`
+- `POST /api/users` (NEW - creates user with tenant_id)
 - `GET /api/auth/me`
+
+### HR System (NEW)
+- `GET/POST /api/employees`
+- `GET/POST /api/attendance`
+- `GET/POST /api/advances`
+- `GET/POST /api/deductions`
+- `GET/POST /api/bonuses`
+- `GET/POST /api/payroll`
+- `POST /api/payroll/calculate`
+- `PUT /api/payroll/{id}/pay`
+
+### Warehouse System (NEW)
+- `GET/POST /api/inventory-transfers`
+- `PUT /api/inventory-transfers/{id}/approve`
+- `PUT /api/inventory-transfers/{id}/ship`
+- `PUT /api/inventory-transfers/{id}/receive`
+- `GET/POST /api/purchase-requests`
+- `PUT /api/purchase-requests/{id}/approve`
 
 ### Orders
 - `GET /api/orders`
@@ -110,11 +146,6 @@
 - `POST /api/callcenter/simulate`
 - `GET /api/callcenter/active-calls`
 - `GET /api/callcenter/call-logs`
-
-### Super Admin
-- `POST /api/super-admin/login`
-- `GET /api/super-admin/tenants`
-- `POST /api/super-admin/reset-sales`
 
 ---
 
@@ -132,4 +163,6 @@
 - ✅ Frontend Build: Passed
 - ✅ Database: Connected
 - ✅ All APIs: Working
+- ✅ HR System: Working (100% tests passed)
+- ✅ Warehouse System: Working (100% tests passed)
 - ✅ Ready for Production
