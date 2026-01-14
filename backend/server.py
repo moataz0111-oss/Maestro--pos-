@@ -820,6 +820,115 @@ async def send_shift_report_email(shift_data: dict, recipient_emails: List[str])
     except Exception as e:
         logger.error(f"Failed to send email: {e}")
 
+async def send_welcome_email(recipient_email: str, tenant_name: str, owner_name: str, username: str, password: str):
+    """إرسال بريد ترحيبي للعميل الجديد مع بيانات الدخول"""
+    if not SENDGRID_API_KEY or not recipient_email:
+        logger.warning("SendGrid not configured or no recipient")
+        return
+    
+    frontend_url = os.environ.get('FRONTEND_URL', 'https://maestroegp.com')
+    
+    html_content = f"""
+    <html dir="rtl" style="font-family: 'Cairo', Arial, sans-serif;">
+    <body style="background: #1a1a2e; padding: 40px 20px;">
+        <div style="max-width: 600px; margin: 0 auto; background: linear-gradient(145deg, #16213e, #1a1a2e); border-radius: 20px; padding: 40px; box-shadow: 0 20px 60px rgba(0,0,0,0.3); border: 1px solid rgba(212, 175, 55, 0.2);">
+            
+            <!-- Header -->
+            <div style="text-align: center; margin-bottom: 30px;">
+                <h1 style="color: #D4AF37; font-size: 32px; margin: 0;">👑 Maestro EGP</h1>
+                <p style="color: #9ca3af; font-size: 14px; margin-top: 10px;">نظام إدارة المطاعم والكافيهات</p>
+            </div>
+            
+            <!-- Welcome Message -->
+            <div style="background: rgba(212, 175, 55, 0.1); border-radius: 15px; padding: 25px; margin-bottom: 25px; border: 1px solid rgba(212, 175, 55, 0.2);">
+                <h2 style="color: #ffffff; margin: 0 0 15px 0; font-size: 22px;">مرحباً {owner_name}! 🎉</h2>
+                <p style="color: #d1d5db; margin: 0; line-height: 1.8;">
+                    تم إنشاء حسابك في <strong style="color: #D4AF37;">{tenant_name}</strong> بنجاح على منصة Maestro EGP.
+                    يمكنك الآن البدء في إدارة مطعمك/الكافيه الخاص بك بكل سهولة.
+                </p>
+            </div>
+            
+            <!-- Credentials Box -->
+            <div style="background: #0f172a; border-radius: 15px; padding: 25px; margin-bottom: 25px; border: 1px solid #334155;">
+                <h3 style="color: #D4AF37; margin: 0 0 20px 0; font-size: 18px;">🔐 بيانات تسجيل الدخول</h3>
+                
+                <div style="margin-bottom: 15px;">
+                    <p style="color: #9ca3af; margin: 0 0 5px 0; font-size: 12px;">البريد الإلكتروني / اسم المستخدم:</p>
+                    <p style="color: #ffffff; background: #1e293b; padding: 12px 15px; border-radius: 8px; margin: 0; font-family: monospace; font-size: 14px;">{username}</p>
+                </div>
+                
+                <div>
+                    <p style="color: #9ca3af; margin: 0 0 5px 0; font-size: 12px;">كلمة المرور:</p>
+                    <p style="color: #ffffff; background: #1e293b; padding: 12px 15px; border-radius: 8px; margin: 0; font-family: monospace; font-size: 14px;">{password}</p>
+                </div>
+            </div>
+            
+            <!-- Login Button -->
+            <div style="text-align: center; margin-bottom: 30px;">
+                <a href="{frontend_url}/login" style="display: inline-block; background: linear-gradient(145deg, #D4AF37, #B8860B); color: #000000; text-decoration: none; padding: 15px 40px; border-radius: 10px; font-weight: bold; font-size: 16px; box-shadow: 0 4px 15px rgba(212, 175, 55, 0.3);">
+                    🚀 تسجيل الدخول الآن
+                </a>
+            </div>
+            
+            <!-- Features Section -->
+            <div style="background: rgba(16, 185, 129, 0.1); border-radius: 15px; padding: 20px; margin-bottom: 25px; border: 1px solid rgba(16, 185, 129, 0.2);">
+                <h3 style="color: #10B981; margin: 0 0 15px 0; font-size: 16px;">✨ ماذا يمكنك أن تفعل؟</h3>
+                <ul style="color: #d1d5db; margin: 0; padding-right: 20px; line-height: 2;">
+                    <li>إدارة الطلبات (محلي، سفري، توصيل)</li>
+                    <li>تتبع السائقين على الخريطة</li>
+                    <li>إدارة المخزون والمنتجات</li>
+                    <li>تقارير المبيعات والأرباح</li>
+                    <li>إدارة الموظفين والرواتب</li>
+                    <li>نظام الكول سنتر</li>
+                </ul>
+            </div>
+            
+            <!-- Instructions -->
+            <div style="background: rgba(59, 130, 246, 0.1); border-radius: 15px; padding: 20px; margin-bottom: 25px; border: 1px solid rgba(59, 130, 246, 0.2);">
+                <h3 style="color: #3B82F6; margin: 0 0 15px 0; font-size: 16px;">📋 خطوات البدء</h3>
+                <ol style="color: #d1d5db; margin: 0; padding-right: 20px; line-height: 2;">
+                    <li>سجل دخولك باستخدام البيانات أعلاه</li>
+                    <li>قم بتغيير كلمة المرور من الإعدادات</li>
+                    <li>أضف الفروع والموظفين</li>
+                    <li>أضف التصنيفات والمنتجات</li>
+                    <li>ابدأ استقبال الطلبات! 🎯</li>
+                </ol>
+            </div>
+            
+            <!-- Warning -->
+            <div style="background: rgba(239, 68, 68, 0.1); border-radius: 10px; padding: 15px; margin-bottom: 25px; border: 1px solid rgba(239, 68, 68, 0.2);">
+                <p style="color: #EF4444; margin: 0; font-size: 13px;">
+                    ⚠️ <strong>هام:</strong> يرجى تغيير كلمة المرور فور تسجيل الدخول للحفاظ على أمان حسابك.
+                </p>
+            </div>
+            
+            <!-- Footer -->
+            <div style="text-align: center; border-top: 1px solid #334155; padding-top: 20px;">
+                <p style="color: #6b7280; font-size: 12px; margin: 0;">
+                    للدعم الفني: support@maestroegp.com
+                </p>
+                <p style="color: #6b7280; font-size: 11px; margin: 10px 0 0 0;">
+                    © {datetime.now().year} Maestro EGP - جميع الحقوق محفوظة
+                </p>
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+    
+    try:
+        message = Mail(
+            from_email=SENDER_EMAIL,
+            to_emails=[recipient_email],
+            subject=f"🎉 مرحباً في {tenant_name} - بيانات الدخول",
+            html_content=html_content
+        )
+        sg = SendGridAPIClient(SENDGRID_API_KEY)
+        sg.send(message)
+        logger.info(f"Welcome email sent to {recipient_email}")
+    except Exception as e:
+        logger.error(f"Failed to send welcome email: {e}")
+
 # ==================== HELPER FUNCTIONS ====================
 
 async def get_delivery_app_commission(app_id: str) -> float:
