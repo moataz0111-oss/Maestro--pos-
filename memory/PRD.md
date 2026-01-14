@@ -5,7 +5,7 @@
 
 ---
 
-## ✅ Completed Features (Jan 15, 2026)
+## ✅ All Completed Features (Updated Jan 15, 2026)
 
 ### Core System
 - [x] نظام المصادقة (JWT)
@@ -49,19 +49,19 @@
 - [x] تحويلات المخزون
 - [x] طلبات الشراء
 
-### 🆕 PWA Enhancement (Jan 15, 2026)
+### PWA Enhancement
 - [x] Service Worker v3 محسّن
 - [x] manifest-admin.json للوحة الإدارة
 - [x] مكون PWAInstallButton
 - [x] تعليمات التثبيت لجميع الأجهزة
 
-### 🆕 Biometric Device Integration (Jan 15, 2026)
+### Biometric Device Integration
 - [x] pyzk مثبت للاتصال بأجهزة ZKTeco
 - [x] واجهة API كاملة للأجهزة
 - [x] واجهة مستخدم في HR
 - [x] دعم Push SDK
 
-### 🆕 Loyalty Program (Jan 15, 2026)
+### Loyalty Program
 - [x] نظام نقاط الولاء الكامل
 - [x] 4 مستويات (برونزي، فضي، ذهبي، بلاتيني)
 - [x] كسب واستبدال النقاط
@@ -69,7 +69,7 @@
 - [x] مضاعفات النقاط حسب المستوى
 - [x] واجهة مستخدم كاملة `/loyalty`
 
-### 🆕 Recipes & Raw Materials (Jan 15, 2026)
+### Recipes & Raw Materials
 - [x] إدارة المواد الخام (11 تصنيف)
 - [x] إنشاء وصفات للمنتجات
 - [x] حساب التكلفة التلقائي
@@ -77,7 +77,7 @@
 - [x] تنبيهات المخزون المنخفض
 - [x] واجهة مستخدم كاملة `/recipes`
 
-### 🆕 Invoice Customization & Printing (Jan 15, 2026)
+### Invoice Customization & Printing
 - [x] قوالب فواتير مخصصة
 - [x] دعم طابعات حرارية (58mm/80mm)
 - [x] إعدادات الشعار والعنوان والتذييل
@@ -85,33 +85,45 @@
 - [x] إدارة الطابعات (Network/USB/Bluetooth)
 - [x] واجهة مستخدم كاملة `/invoices`
 
-### 🆕 Push Notifications Infrastructure (Jan 15, 2026)
+### Push Notifications Infrastructure
 - [x] واجهة API لتسجيل FCM tokens
 - [x] إرسال إشعارات (user/role/branch/all)
 - [x] قوالب إشعارات جاهزة
 - [x] سجل الإشعارات
 - [x] firebase-admin مثبت
 
----
+### 🆕 Payroll Automation (Jan 15, 2026)
+- [x] ربط السلف والخصومات بالرواتب تلقائياً
+- [x] API لتوليد كشوفات رواتب لجميع الموظفين دفعة واحدة
+- [x] API لجلب بيانات طباعة كشف الراتب
+- [x] صفحة طباعة كشف الراتب `/payroll/print/:id`
+- [x] تصميم احترافي للطباعة مع:
+  - تفاصيل الموظف والفرع
+  - جدول المكافآت
+  - جدول الخصومات
+  - استقطاع السلف
+  - ملخص صافي الراتب
+  - توقيعات
+- [x] زر طباعة في صفحة HR
 
-## 🔄 Needs Testing/Configuration
-
-### PWA
-- [ ] يحتاج اختبار من المستخدم على جهاز فعلي (iOS/Android/Desktop)
-
-### Biometric Devices
-- [ ] يحتاج اتصال فعلي بجهاز ZKTeco لاختبار المزامنة
-
-### Push Notifications
-- [ ] يحتاج تكوين Firebase project وإضافة المفاتيح
-
----
-
-## 📋 Future Tasks (P2)
-- [ ] إشعارات Push حية للسائقين (يحتاج Firebase setup)
-- [ ] ربط السلف والخصومات بالرواتب تلقائياً
-- [ ] كشوف رواتب مطبوعة
-- [ ] إكمال إعادة هيكلة server.py
+### 🆕 Coupons & Promotions System (Jan 15, 2026)
+- [x] نظام الكوبونات الكامل:
+  - كوبون نسبة مئوية أو مبلغ ثابت
+  - حد أدنى للطلب
+  - حد أقصى للخصم
+  - عدد استخدامات كلي ولكل عميل
+  - تاريخ بداية ونهاية الصلاحية
+  - ربط بمستوى الولاء (للأعضاء المميزين)
+  - خيار للطلب الأول فقط
+  - التحقق من صلاحية الكوبون
+  - تتبع الاستخدامات
+- [x] نظام العروض الترويجية:
+  - اشترِ X واحصل على Y
+  - ساعة السعادة (Happy Hour)
+  - باقات بسعر ثابت
+  - ربط بمستوى الولاء
+- [x] واجهة مستخدم كاملة `/coupons`
+- [x] إحصائيات الكوبونات والعروض
 
 ---
 
@@ -132,52 +144,32 @@
 
 ## 📡 New API Endpoints (Jan 15, 2026)
 
-### Loyalty Program
-- `GET /api/loyalty/settings` - إعدادات الولاء
-- `PUT /api/loyalty/settings` - تحديث الإعدادات
-- `GET /api/loyalty/members` - قائمة الأعضاء
-- `POST /api/loyalty/members` - إضافة عضو
-- `POST /api/loyalty/earn` - كسب نقاط
-- `POST /api/loyalty/redeem` - استبدال نقاط
-- `GET /api/loyalty/transactions/{member_id}` - سجل المعاملات
+### Payroll
+- `GET /api/payroll/{id}/print` - بيانات طباعة كشف الراتب
+- `POST /api/payroll/generate-all` - توليد كشوفات لجميع الموظفين
 
-### Recipes & Raw Materials
-- `GET /api/recipes/categories` - تصنيفات المواد
-- `GET /api/recipes/materials` - قائمة المواد الخام
-- `POST /api/recipes/materials` - إضافة مادة
-- `GET /api/recipes` - قائمة الوصفات
-- `POST /api/recipes` - إنشاء وصفة
-- `GET /api/recipes/alerts/low-stock` - تنبيهات المخزون
+### Coupons
+- `GET /api/coupons` - قائمة الكوبونات
+- `POST /api/coupons` - إنشاء كوبون
+- `PUT /api/coupons/{id}` - تعديل كوبون
+- `DELETE /api/coupons/{id}` - حذف كوبون
+- `POST /api/coupons/validate` - التحقق من صلاحية الكوبون
+- `POST /api/coupons/{id}/use` - تسجيل استخدام الكوبون
 
-### Invoice & Printing
-- `GET /api/invoices/templates` - قوالب الفواتير
-- `POST /api/invoices/templates` - إنشاء قالب
-- `GET /api/invoices/printers` - قائمة الطابعات
-- `POST /api/invoices/printers` - إضافة طابعة
-- `POST /api/invoices/print/{order_id}` - طباعة فاتورة
-
-### Push Notifications
-- `POST /api/notifications/fcm/register` - تسجيل token
-- `POST /api/notifications/send` - إرسال إشعار
-- `GET /api/notifications/logs` - سجل الإشعارات
+### Promotions
+- `GET /api/promotions` - قائمة العروض
+- `POST /api/promotions` - إنشاء عرض
+- `PUT /api/promotions/{id}` - تعديل عرض
+- `DELETE /api/promotions/{id}` - حذف عرض
+- `GET /api/promotions/active` - العروض النشطة حالياً
 
 ---
 
 ## 📁 New Files Created (Jan 15, 2026)
 
-### Backend
-- `/app/backend/api/loyalty.py` - نماذج الولاء
-- `/app/backend/api/recipes.py` - نماذج الوصفات
-- `/app/backend/api/invoices.py` - نماذج الفواتير
-- `/app/backend/api/notifications.py` - نماذج الإشعارات
-
 ### Frontend
-- `/app/frontend/src/pages/Loyalty.js` - صفحة الولاء
-- `/app/frontend/src/pages/Recipes.js` - صفحة الوصفات
-- `/app/frontend/src/pages/Invoices.js` - صفحة الفواتير
-- `/app/frontend/src/components/PWAInstallButton.js`
-- `/app/frontend/src/components/BiometricDevices.js`
-- `/app/frontend/public/manifest-admin.json`
+- `/app/frontend/src/pages/Coupons.js` - صفحة الكوبونات والعروض
+- `/app/frontend/src/pages/PayrollPrint.js` - صفحة طباعة كشف الراتب
 
 ---
 
@@ -203,12 +195,22 @@
 - ✅ Loyalty Program: Working
 - ✅ Recipes System: Working
 - ✅ Invoice Templates: Working
+- ✅ Payroll Print: Working
+- ✅ Coupons & Promotions: Working
 - ✅ Ready for Production
 
 ---
 
-## ⚠️ Notes
+## 🔄 Needs Configuration
 1. **PWA**: يحتاج اختبار على أجهزة فعلية
 2. **Biometric**: يحتاج جهاز ZKTeco للاتصال الفعلي
 3. **Push Notifications**: يحتاج إعداد Firebase project
-4. **Refactoring**: server.py أصبح ~6700 سطر - يُفضل التقسيم تدريجياً
+
+---
+
+## 📋 Future Enhancements (P2/P3)
+- [ ] إشعارات Push حية للسائقين (يحتاج Firebase setup)
+- [ ] نظام حجوزات الطاولات مسبقاً
+- [ ] تطبيق موبايل للعملاء
+- [ ] تقارير ذكية بالرسوم البيانية
+- [ ] ربط مع شركات التوصيل الخارجية
