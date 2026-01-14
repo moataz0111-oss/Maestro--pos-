@@ -19,6 +19,8 @@ import DriverPortal from "./pages/DriverPortal";
 import SuperAdmin from "./pages/SuperAdmin";
 import CallLogs from "./pages/CallLogs";
 import InstallApp from "./pages/InstallApp";
+import HR from "./pages/HR";
+import WarehouseTransfers from "./pages/WarehouseTransfers";
 
 // Components
 import IncomingCallPopup from "./components/IncomingCallPopup";
