@@ -38,7 +38,9 @@ import {
   Headphones,
   UserCog,
   ArrowLeftRight,
-  ChefHat
+  ChefHat,
+  Gift,
+  FileText
 } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 import { toast } from 'sonner';
