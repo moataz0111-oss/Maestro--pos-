@@ -453,6 +453,95 @@ export default function SuperAdmin() {
     toast.success('تم النسخ');
   };
 
+  // ==================== Background Management Functions ====================
+  
+  const fetchBackgroundSettings = async () => {
+    try {
+      const res = await axios.get(`${API}/login-backgrounds`);
+      setBackgroundSettings(res.data);
+    } catch (error) {
+      console.log('Error fetching background settings');
+    }
+  };
+
+  const saveBackgroundSettings = async () => {
+    setBackgroundsLoading(true);
+    try {
+      await axios.put(`${API}/login-backgrounds`, backgroundSettings);
+      toast.success('تم حفظ إعدادات الخلفيات');
+    } catch (error) {
+      toast.error('فشل في حفظ الإعدادات');
+    } finally {
+      setBackgroundsLoading(false);
+    }
+  };
+
+  const addNewBackground = async () => {
+    if (!newBackgroundUrl) {
+      toast.error('الرجاء إدخال رابط الصورة');
+      return;
+    }
+    
+    setBackgroundsLoading(true);
+    try {
+      const res = await axios.post(`${API}/login-backgrounds/upload`, null, {
+        params: {
+          file_url: newBackgroundUrl,
+          title: newBackgroundTitle,
+          animation_type: newBackgroundAnimation
+        }
+      });
+      
+      setBackgroundSettings(prev => ({
+        ...prev,
+        backgrounds: [...prev.backgrounds, res.data.background]
+      }));
+      
+      setShowAddBackground(false);
+      setNewBackgroundUrl('');
+      setNewBackgroundTitle('');
+      setNewBackgroundAnimation('fade');
+      toast.success('تم إضافة الخلفية');
+    } catch (error) {
+      toast.error('فشل في إضافة الخلفية');
+    } finally {
+      setBackgroundsLoading(false);
+    }
+  };
+
+  const deleteBackground = async (bgId) => {
+    try {
+      await axios.delete(`${API}/login-backgrounds/${bgId}`);
+      setBackgroundSettings(prev => ({
+        ...prev,
+        backgrounds: prev.backgrounds.filter(b => b.id !== bgId)
+      }));
+      toast.success('تم حذف الخلفية');
+    } catch (error) {
+      toast.error('فشل في حذف الخلفية');
+    }
+  };
+
+  const toggleBackgroundActive = (bgId) => {
+    setBackgroundSettings(prev => ({
+      ...prev,
+      backgrounds: prev.backgrounds.map(b => 
+        b.id === bgId ? { ...b, is_active: !b.is_active } : b
+      )
+    }));
+  };
+
+  const updateBackgroundAnimation = (bgId, animationType) => {
+    setBackgroundSettings(prev => ({
+      ...prev,
+      backgrounds: prev.backgrounds.map(b => 
+        b.id === bgId ? { ...b, animation_type: animationType } : b
+      )
+    }));
+  };
+
+  // ==================== End Background Functions ====================
+
   const filteredTenants = tenants.filter(t => 
     t.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     t.owner_email.toLowerCase().includes(searchQuery.toLowerCase()) ||
