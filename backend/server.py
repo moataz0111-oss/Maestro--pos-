@@ -657,15 +657,24 @@ async def get_me(current_user: dict = Depends(get_current_user)):
 
 @api_router.get("/users", response_model=List[UserResponse])
 async def get_users(current_user: dict = Depends(get_current_user)):
-    if current_user["role"] not in [UserRole.ADMIN, UserRole.MANAGER]:
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.MANAGER, UserRole.SUPER_ADMIN]:
         raise HTTPException(status_code=403, detail="غير مصرح")
-    users = await db.users.find({}, {"_id": 0, "password": 0}).to_list(1000)
+    
+    # فلترة المستخدمين حسب tenant_id
+    query = build_tenant_query(current_user)
+    users = await db.users.find(query, {"_id": 0, "password": 0}).to_list(1000)
     return users
 
 @api_router.put("/users/{user_id}")
 async def update_user(user_id: str, update: UserUpdate, current_user: dict = Depends(get_current_user)):
-    if current_user["role"] not in [UserRole.ADMIN, UserRole.MANAGER]:
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.MANAGER, UserRole.SUPER_ADMIN]:
         raise HTTPException(status_code=403, detail="غير مصرح")
+    
+    # التحقق من أن المستخدم ينتمي لنفس الـ tenant
+    query = build_tenant_query(current_user, {"id": user_id})
+    user = await db.users.find_one(query)
+    if not user:
+        raise HTTPException(status_code=404, detail="المستخدم غير موجود")
     
     update_data = {k: v for k, v in update.model_dump().items() if v is not None}
     if update_data:
@@ -676,8 +685,15 @@ async def update_user(user_id: str, update: UserUpdate, current_user: dict = Dep
 
 @api_router.delete("/users/{user_id}")
 async def delete_user(user_id: str, current_user: dict = Depends(get_current_user)):
-    if current_user["role"] != UserRole.ADMIN:
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.SUPER_ADMIN]:
         raise HTTPException(status_code=403, detail="غير مصرح")
+    
+    # التحقق من أن المستخدم ينتمي لنفس الـ tenant
+    query = build_tenant_query(current_user, {"id": user_id})
+    user = await db.users.find_one(query)
+    if not user:
+        raise HTTPException(status_code=404, detail="المستخدم غير موجود")
+    
     await db.users.delete_one({"id": user_id})
     return {"message": "تم حذف المستخدم"}
 
