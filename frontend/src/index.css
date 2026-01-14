@@ -254,3 +254,19 @@ input[type="number"] {
         display: contents !important;
     }
 }
+
+/* Hide Emergent watermark/badge */
+[class*="emergent"],
+[id*="emergent"],
+[data-emergent],
+a[href*="emergentagent.com"],
+div[style*="position: fixed"][style*="bottom"],
+.emergent-badge,
+.emergent-watermark,
+#emergent-badge,
+#emergent-watermark {
+    display: none !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+}
