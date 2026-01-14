@@ -679,6 +679,18 @@ async def update_user(user_id: str, update: UserUpdate, current_user: dict = Dep
         raise HTTPException(status_code=404, detail="المستخدم غير موجود")
     
     update_data = {k: v for k, v in update.model_dump().items() if v is not None}
+    
+    # التحقق من عدم تكرار البريد الإلكتروني أو اسم المستخدم
+    if update_data.get("email"):
+        existing = await db.users.find_one({"email": update_data["email"], "id": {"$ne": user_id}})
+        if existing:
+            raise HTTPException(status_code=400, detail="البريد الإلكتروني مستخدم بالفعل")
+    
+    if update_data.get("username"):
+        existing = await db.users.find_one({"username": update_data["username"], "id": {"$ne": user_id}})
+        if existing:
+            raise HTTPException(status_code=400, detail="اسم المستخدم مستخدم بالفعل")
+    
     if update_data:
         await db.users.update_one({"id": user_id}, {"$set": update_data})
     
