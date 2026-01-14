@@ -4362,6 +4362,119 @@ async def get_dashboard_settings():
         return {**default_settings, **settings.get("value", {})}
     return default_settings
 
+# ==================== LOGIN BACKGROUNDS API ====================
+
+class LoginBackgroundCreate(BaseModel):
+    image_url: str
+    title: Optional[str] = None
+    animation_type: str = "fade"  # fade, slide, zoom, kenburns, parallax
+    animation_duration: int = 8  # بالثواني
+    overlay_opacity: float = 0.5
+    is_active: bool = True
+    sort_order: int = 0
+
+class LoginBackgroundSettings(BaseModel):
+    backgrounds: List[Dict[str, Any]] = []
+    animation_enabled: bool = True
+    transition_type: str = "fade"  # fade, slide, crossfade
+    transition_duration: float = 1.5  # بالثواني
+    auto_play: bool = True
+    show_logo: bool = True
+    logo_url: Optional[str] = None
+    logo_animation: str = "pulse"  # pulse, bounce, glow, none
+    overlay_color: str = "rgba(0,0,0,0.5)"
+    text_color: str = "#ffffff"
+
+@api_router.get("/login-backgrounds")
+async def get_login_backgrounds():
+    """جلب إعدادات خلفيات صفحة الدخول (عام - بدون مصادقة)"""
+    settings = await db.settings.find_one({"type": "login_backgrounds"}, {"_id": 0})
+    
+    default_settings = {
+        "backgrounds": [],
+        "animation_enabled": True,
+        "transition_type": "fade",
+        "transition_duration": 1.5,
+        "auto_play": True,
+        "show_logo": True,
+        "logo_url": None,
+        "logo_animation": "pulse",
+        "overlay_color": "rgba(0,0,0,0.5)",
+        "text_color": "#ffffff"
+    }
+    
+    if settings and settings.get("value"):
+        return {**default_settings, **settings.get("value", {})}
+    return default_settings
+
+@api_router.put("/login-backgrounds")
+async def update_login_backgrounds(settings: LoginBackgroundSettings, current_user: dict = Depends(verify_super_admin)):
+    """تحديث إعدادات خلفيات صفحة الدخول (Super Admin فقط)"""
+    
+    await db.settings.update_one(
+        {"type": "login_backgrounds"},
+        {"$set": {"type": "login_backgrounds", "value": settings.model_dump()}},
+        upsert=True
+    )
+    return {"message": "تم حفظ إعدادات الخلفيات"}
+
+@api_router.post("/login-backgrounds/upload")
+async def upload_login_background(
+    file_url: str,
+    title: Optional[str] = None,
+    animation_type: str = "fade",
+    current_user: dict = Depends(verify_super_admin)
+):
+    """إضافة خلفية جديدة"""
+    
+    # جلب الإعدادات الحالية
+    settings = await db.settings.find_one({"type": "login_backgrounds"}, {"_id": 0})
+    current_backgrounds = []
+    if settings and settings.get("value"):
+        current_backgrounds = settings["value"].get("backgrounds", [])
+    
+    # إضافة الخلفية الجديدة
+    new_background = {
+        "id": str(uuid.uuid4()),
+        "image_url": file_url,
+        "title": title,
+        "animation_type": animation_type,
+        "animation_duration": 8,
+        "overlay_opacity": 0.5,
+        "is_active": True,
+        "sort_order": len(current_backgrounds),
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    
+    current_backgrounds.append(new_background)
+    
+    # حفظ التحديث
+    await db.settings.update_one(
+        {"type": "login_backgrounds"},
+        {"$set": {"type": "login_backgrounds", "value.backgrounds": current_backgrounds}},
+        upsert=True
+    )
+    
+    return {"message": "تم إضافة الخلفية", "background": new_background}
+
+@api_router.delete("/login-backgrounds/{background_id}")
+async def delete_login_background(background_id: str, current_user: dict = Depends(verify_super_admin)):
+    """حذف خلفية"""
+    
+    settings = await db.settings.find_one({"type": "login_backgrounds"}, {"_id": 0})
+    if not settings or not settings.get("value"):
+        raise HTTPException(status_code=404, detail="لا توجد خلفيات")
+    
+    backgrounds = settings["value"].get("backgrounds", [])
+    backgrounds = [b for b in backgrounds if b.get("id") != background_id]
+    
+    await db.settings.update_one(
+        {"type": "login_backgrounds"},
+        {"$set": {"value.backgrounds": backgrounds}}
+    )
+    
+    return {"message": "تم حذف الخلفية"}
+
 # ==================== PRINTER ROUTES ====================
 
 class PrinterCreate(BaseModel):
