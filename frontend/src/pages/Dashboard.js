@@ -53,6 +53,7 @@ import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { ScrollArea } from '../components/ui/scroll-area';
 import { Separator } from '../components/ui/separator';
+import PWAInstallButton from '../components/PWAInstallButton';
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
