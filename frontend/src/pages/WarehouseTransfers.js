@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { formatPrice } from '../utils/currency';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
@@ -26,13 +27,16 @@ import {
   CheckCircle,
   XCircle,
   Search,
-  FileText
+  FileText,
+  ArrowRight,
+  Home
 } from 'lucide-react';
 import { toast, Toaster } from 'sonner';
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
 export default function WarehouseTransfers() {
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('transfers');
   const [transfers, setTransfers] = useState([]);
   const [purchaseRequests, setPurchaseRequests] = useState([]);
