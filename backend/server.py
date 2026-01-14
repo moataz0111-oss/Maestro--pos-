@@ -4230,7 +4230,7 @@ async def set_dashboard_settings(settings: Dict[str, Any], current_user: dict = 
 async def get_dashboard_settings():
     """جلب إعدادات الصفحة الرئيسية"""
     settings = await db.settings.find_one({"type": "dashboard_settings"}, {"_id": 0})
-    return settings.get("value", {
+    default_settings = {
         "showPOS": True,
         "showTables": True,
         "showOrders": True,
@@ -4238,8 +4238,14 @@ async def get_dashboard_settings():
         "showInventory": True,
         "showDelivery": True,
         "showReports": True,
-        "showSettings": True
-    }) if settings else {}
+        "showSettings": True,
+        "showHR": True,
+        "showWarehouse": True
+    }
+    if settings and settings.get("value"):
+        # دمج الإعدادات الافتراضية مع المحفوظة لضمان ظهور الخيارات الجديدة
+        return {**default_settings, **settings.get("value", {})}
+    return default_settings
 
 # ==================== PRINTER ROUTES ====================
 
