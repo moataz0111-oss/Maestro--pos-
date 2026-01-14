@@ -24,6 +24,7 @@ import {
 import { ScrollArea } from '../components/ui/scroll-area';
 import { Separator } from '../components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
+import { Switch } from '../components/ui/switch';
 import {
   Building2,
   Users,
@@ -57,7 +58,15 @@ import {
   ExternalLink,
   UserCheck,
   Layers,
-  RotateCcw
+  RotateCcw,
+  Image,
+  Palette,
+  Upload,
+  Play,
+  Pause,
+  Move,
+  Maximize,
+  X
 } from 'lucide-react';
 import { toast, Toaster } from 'sonner';
 
