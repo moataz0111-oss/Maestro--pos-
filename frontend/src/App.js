@@ -21,6 +21,7 @@ import CallLogs from "./pages/CallLogs";
 import InstallApp from "./pages/InstallApp";
 import HR from "./pages/HR";
 import WarehouseTransfers from "./pages/WarehouseTransfers";
+import KitchenDisplay from "./pages/KitchenDisplay";
 
 // Components
 import IncomingCallPopup from "./components/IncomingCallPopup";
