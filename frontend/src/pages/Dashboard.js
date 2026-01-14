@@ -280,6 +280,9 @@ export default function Dashboard() {
     { label: 'الموارد البشرية', icon: UserCog, path: '/hr', color: 'bg-green-500', key: 'showHR' },
     { label: 'التحويلات', icon: ArrowLeftRight, path: '/warehouse', color: 'bg-indigo-500', key: 'showWarehouse' },
     { label: 'سجل المكالمات', icon: Headphones, path: '/call-logs', color: 'bg-cyan-500', key: 'showCallLogs' },
+    { label: 'برنامج الولاء', icon: Gift, path: '/loyalty', color: 'bg-pink-500', key: 'showLoyalty' },
+    { label: 'الوصفات', icon: ChefHat, path: '/recipes', color: 'bg-teal-500', key: 'showRecipes' },
+    { label: 'الفواتير', icon: FileText, path: '/invoices', color: 'bg-slate-500', key: 'showInvoices' },
     { label: 'الإعدادات', icon: Settings, path: '/settings', color: 'bg-gray-500', key: 'showSettings' },
   ];
   
