@@ -4065,8 +4065,17 @@ async def simulate_incoming_call(data: dict, current_user: dict = Depends(get_cu
 
 @api_router.get("/callcenter/active-calls")
 async def get_active_calls(current_user: dict = Depends(get_current_user)):
-    """جلب المكالمات النشطة"""
-    return list(active_calls.values())
+    """جلب المكالمات النشطة للمستخدم الحالي"""
+    tenant_id = get_user_tenant_id(current_user)
+    
+    # فلترة المكالمات حسب tenant_id
+    if tenant_id:
+        filtered_calls = [c for c in active_calls.values() if c.get("tenant_id") == tenant_id]
+    else:
+        # النظام الرئيسي يرى المكالمات بدون tenant_id
+        filtered_calls = [c for c in active_calls.values() if not c.get("tenant_id")]
+    
+    return filtered_calls
 
 @api_router.post("/callcenter/calls/{call_id}/answer")
 async def answer_call(call_id: str, current_user: dict = Depends(get_current_user)):
