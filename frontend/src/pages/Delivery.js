@@ -35,7 +35,8 @@ import {
   Edit,
   Trash2,
   Link,
-  UserCheck
+  UserCheck,
+  Maximize
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -51,6 +52,7 @@ import {
   TabsList,
   TabsTrigger,
 } from '../components/ui/tabs';
+import DriverTrackingMap from '../components/DriverTrackingMap';
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
