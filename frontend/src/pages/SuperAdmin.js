@@ -560,7 +560,95 @@ export default function SuperAdmin() {
     }));
   };
 
-  // ==================== End Background Functions ====================
+  // ==================== Tenant Features Functions ====================
+  
+  const openFeaturesModal = async (tenant) => {
+    setSelectedTenant(tenant);
+    setFeaturesLoading(true);
+    
+    try {
+      const res = await axios.get(`${API}/super-admin/tenants/${tenant.id}/features`);
+      setTenantFeatures(res.data.features);
+    } catch (error) {
+      // استخدام الافتراضي إذا لم تكن هناك ميزات محفوظة
+      setTenantFeatures({
+        showPOS: true,
+        showTables: true,
+        showOrders: true,
+        showExpenses: true,
+        showInventory: true,
+        showDelivery: true,
+        showReports: true,
+        showSettings: true,
+        showHR: false,
+        showWarehouse: false,
+        showCallLogs: false,
+        showCallCenter: false,
+        showKitchen: false
+      });
+    } finally {
+      setFeaturesLoading(false);
+      setShowFeaturesModal(true);
+    }
+  };
+
+  const saveTenantFeatures = async () => {
+    setFeaturesLoading(true);
+    try {
+      await axios.put(`${API}/super-admin/tenants/${selectedTenant.id}/features`, tenantFeatures);
+      toast.success('تم حفظ صلاحيات العميل');
+      setShowFeaturesModal(false);
+    } catch (error) {
+      toast.error('فشل في حفظ الصلاحيات');
+    } finally {
+      setFeaturesLoading(false);
+    }
+  };
+
+  const toggleFeature = (featureKey) => {
+    setTenantFeatures(prev => ({
+      ...prev,
+      [featureKey]: !prev[featureKey]
+    }));
+  };
+
+  const enableAllFeatures = () => {
+    setTenantFeatures({
+      showPOS: true,
+      showTables: true,
+      showOrders: true,
+      showExpenses: true,
+      showInventory: true,
+      showDelivery: true,
+      showReports: true,
+      showSettings: true,
+      showHR: true,
+      showWarehouse: true,
+      showCallLogs: true,
+      showCallCenter: true,
+      showKitchen: true
+    });
+  };
+
+  const disableAllFeatures = () => {
+    setTenantFeatures({
+      showPOS: true, // نقطة البيع إجبارية
+      showTables: false,
+      showOrders: false,
+      showExpenses: false,
+      showInventory: false,
+      showDelivery: false,
+      showReports: false,
+      showSettings: true, // الإعدادات إجبارية
+      showHR: false,
+      showWarehouse: false,
+      showCallLogs: false,
+      showCallCenter: false,
+      showKitchen: false
+    });
+  };
+
+  // ==================== End Tenant Features Functions ====================
 
   const filteredTenants = tenants.filter(t => 
     t.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
