@@ -473,7 +473,13 @@ export default function SuperAdmin() {
       temp_password: '',
       logo_url: tenant.logo_url || ''
     });
-    setLogoPreviewUrl(tenant.logo_url || '');
+    // تحويل المسار النسبي إلى مطلق للمعاينة
+    const logoUrl = tenant.logo_url || '';
+    if (logoUrl.startsWith('/api')) {
+      setLogoPreviewUrl(`${API}${logoUrl.replace('/api', '')}`);
+    } else {
+      setLogoPreviewUrl(logoUrl);
+    }
     setLogoFile(null);
     setShowEditTenant(true);
   };
