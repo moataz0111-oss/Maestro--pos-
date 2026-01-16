@@ -129,6 +129,7 @@ export default function Dashboard() {
   useEffect(() => {
     fetchData();
     fetchDashboardSettings();
+    fetchTenantInfo();
   }, [selectedBranch]);
 
   // تحميل ترتيب الأيقونات المحفوظ
@@ -142,6 +143,16 @@ export default function Dashboard() {
       }
     }
   }, [user?.id]);
+
+  // جلب معلومات العميل (الشعار والاسم)
+  const fetchTenantInfo = async () => {
+    try {
+      const res = await axios.get(`${API}/tenant/info`);
+      setTenantInfo(res.data);
+    } catch (error) {
+      console.log('No tenant info available');
+    }
+  };
 
   const fetchDashboardSettings = async () => {
     try {
