@@ -5391,17 +5391,22 @@ async def get_printers(branch_id: Optional[str] = None):
 # ==================== SUPER ADMIN & TENANT MANAGEMENT ====================
 # نظام إدارة المستأجرين - لوحة تحكم المالك الرئيسي
 
+class SuperAdminLoginRequest(BaseModel):
+    email: str
+    password: str
+    secret_key: str
+
 @api_router.post("/super-admin/login")
-async def super_admin_login(email: str, password: str, secret_key: str):
+async def super_admin_login(request: SuperAdminLoginRequest):
     """تسجيل دخول Super Admin"""
-    if secret_key != SUPER_ADMIN_SECRET:
+    if request.secret_key != SUPER_ADMIN_SECRET:
         raise HTTPException(status_code=403, detail="مفتاح السر غير صحيح")
     
-    user = await db.users.find_one({"email": email, "role": UserRole.SUPER_ADMIN})
+    user = await db.users.find_one({"email": request.email, "role": UserRole.SUPER_ADMIN})
     if not user:
         raise HTTPException(status_code=401, detail="المستخدم غير موجود")
     
-    if not verify_password(password, user["password"]):
+    if not verify_password(request.password, user["password"]):
         raise HTTPException(status_code=401, detail="كلمة المرور غير صحيحة")
     
     token = create_token(user["id"], user["role"], user.get("branch_id"))
