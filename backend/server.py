@@ -5706,9 +5706,9 @@ async def update_tenant(tenant_id: str, updates: dict, background_tasks: Backgro
     
     # قائمة الحقول المسموح بتحديثها
     allowed_updates = [
-        "name", "owner_name", "owner_email", "owner_phone", 
+        "name", "name_en", "name_ar", "owner_name", "owner_email", "owner_phone", 
         "subscription_type", "max_branches", "max_users", 
-        "is_active", "expires_at"
+        "is_active", "expires_at", "logo_url"
     ]
     update_data = {k: v for k, v in updates.items() if k in allowed_updates}
     
