@@ -322,6 +322,8 @@ export default function Dashboard() {
     { label: 'التقارير الذكية', icon: PieChart, path: '/smart-reports', color: 'bg-gradient-to-br from-emerald-400 to-emerald-600', key: 'showSmartReports', id: 'smart-reports' },
     { label: 'المصاريف', icon: Receipt, path: '/expenses', color: 'bg-gradient-to-br from-red-400 to-red-600', key: 'showExpenses', id: 'expenses' },
     { label: 'المخزون', icon: Package, path: '/inventory', color: 'bg-gradient-to-br from-purple-400 to-purple-600', key: 'showInventory', id: 'inventory' },
+    { label: 'المشتريات', icon: ShoppingBag, path: '/purchasing', color: 'bg-gradient-to-br from-blue-500 to-blue-700', key: 'showPurchasing', id: 'purchasing' },
+    { label: 'طلبات الفروع', icon: Warehouse, path: '/branch-orders', color: 'bg-gradient-to-br from-lime-400 to-lime-600', key: 'showBranchOrders', id: 'branch-orders' },
     { label: 'التوصيل', icon: Truck, path: '/delivery', color: 'bg-gradient-to-br from-orange-500 to-orange-700', key: 'showDelivery', id: 'delivery' },
     { label: 'الحجوزات', icon: CalendarDays, path: '/reservations', color: 'bg-gradient-to-br from-rose-400 to-rose-600', key: 'showReservations', id: 'reservations' },
     { label: 'التقييمات', icon: Star, path: '/reviews', color: 'bg-gradient-to-br from-amber-500 to-orange-500', key: 'showReviews', id: 'reviews' },
