@@ -812,9 +812,9 @@ export default function SuperAdmin() {
   // ==================== End Tenant Features Functions ====================
 
   const filteredTenants = tenants.filter(t => 
-    t.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    t.owner_email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    t.slug.toLowerCase().includes(searchQuery.toLowerCase())
+    (t.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (t.owner_email || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (t.slug || '').toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   const getSubscriptionBadge = (type) => {
