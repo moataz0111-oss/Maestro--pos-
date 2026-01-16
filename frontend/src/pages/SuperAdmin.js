@@ -2635,6 +2635,111 @@ export default function SuperAdmin() {
                 </div>
               </div>
 
+              {/* خيارات الإعدادات */}
+              <div className="space-y-3">
+                <h4 className="font-bold text-sm text-gray-400 mb-2">خيارات الإعدادات (تحكم في ما يظهر داخل الإعدادات)</h4>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                  <label className="flex items-center justify-between p-3 bg-gray-700/50 rounded-lg cursor-pointer hover:bg-gray-700">
+                    <span className="flex items-center gap-2">
+                      <span className="w-8 h-8 bg-blue-500/20 rounded-lg flex items-center justify-center">👤</span>
+                      <span>المستخدمين</span>
+                    </span>
+                    <Switch
+                      checked={tenantFeatures.settingsUsers}
+                      onCheckedChange={() => toggleFeature('settingsUsers')}
+                    />
+                  </label>
+
+                  <label className="flex items-center justify-between p-3 bg-gray-700/50 rounded-lg cursor-pointer hover:bg-gray-700">
+                    <span className="flex items-center gap-2">
+                      <span className="w-8 h-8 bg-green-500/20 rounded-lg flex items-center justify-center">👥</span>
+                      <span>العملاء</span>
+                    </span>
+                    <Switch
+                      checked={tenantFeatures.settingsCustomers}
+                      onCheckedChange={() => toggleFeature('settingsCustomers')}
+                    />
+                  </label>
+
+                  <label className="flex items-center justify-between p-3 bg-gray-700/50 rounded-lg cursor-pointer hover:bg-gray-700">
+                    <span className="flex items-center gap-2">
+                      <span className="w-8 h-8 bg-purple-500/20 rounded-lg flex items-center justify-center">🏢</span>
+                      <span>الفروع</span>
+                    </span>
+                    <Switch
+                      checked={tenantFeatures.settingsBranches}
+                      onCheckedChange={() => toggleFeature('settingsBranches')}
+                    />
+                  </label>
+
+                  <label className="flex items-center justify-between p-3 bg-gray-700/50 rounded-lg cursor-pointer hover:bg-gray-700">
+                    <span className="flex items-center gap-2">
+                      <span className="w-8 h-8 bg-amber-500/20 rounded-lg flex items-center justify-center">📂</span>
+                      <span>الفئات</span>
+                    </span>
+                    <Switch
+                      checked={tenantFeatures.settingsCategories}
+                      onCheckedChange={() => toggleFeature('settingsCategories')}
+                    />
+                  </label>
+
+                  <label className="flex items-center justify-between p-3 bg-gray-700/50 rounded-lg cursor-pointer hover:bg-gray-700">
+                    <span className="flex items-center gap-2">
+                      <span className="w-8 h-8 bg-red-500/20 rounded-lg flex items-center justify-center">📦</span>
+                      <span>المنتجات</span>
+                    </span>
+                    <Switch
+                      checked={tenantFeatures.settingsProducts}
+                      onCheckedChange={() => toggleFeature('settingsProducts')}
+                    />
+                  </label>
+
+                  <label className="flex items-center justify-between p-3 bg-gray-700/50 rounded-lg cursor-pointer hover:bg-gray-700">
+                    <span className="flex items-center gap-2">
+                      <span className="w-8 h-8 bg-gray-600/20 rounded-lg flex items-center justify-center">🖨️</span>
+                      <span>الطابعات</span>
+                    </span>
+                    <Switch
+                      checked={tenantFeatures.settingsPrinters}
+                      onCheckedChange={() => toggleFeature('settingsPrinters')}
+                    />
+                  </label>
+
+                  <label className="flex items-center justify-between p-3 bg-gray-700/50 rounded-lg cursor-pointer hover:bg-gray-700">
+                    <span className="flex items-center gap-2">
+                      <span className="w-8 h-8 bg-orange-500/20 rounded-lg flex items-center justify-center">🚚</span>
+                      <span>شركات التوصيل</span>
+                    </span>
+                    <Switch
+                      checked={tenantFeatures.settingsDeliveryCompanies}
+                      onCheckedChange={() => toggleFeature('settingsDeliveryCompanies')}
+                    />
+                  </label>
+
+                  <label className="flex items-center justify-between p-3 bg-gray-700/50 rounded-lg cursor-pointer hover:bg-gray-700">
+                    <span className="flex items-center gap-2">
+                      <span className="w-8 h-8 bg-cyan-500/20 rounded-lg flex items-center justify-center">📞</span>
+                      <span>الكول سنتر</span>
+                    </span>
+                    <Switch
+                      checked={tenantFeatures.settingsCallCenter}
+                      onCheckedChange={() => toggleFeature('settingsCallCenter')}
+                    />
+                  </label>
+
+                  <label className="flex items-center justify-between p-3 bg-gray-700/50 rounded-lg cursor-pointer hover:bg-gray-700">
+                    <span className="flex items-center gap-2">
+                      <span className="w-8 h-8 bg-pink-500/20 rounded-lg flex items-center justify-center">🔔</span>
+                      <span>الإشعارات</span>
+                    </span>
+                    <Switch
+                      checked={tenantFeatures.settingsNotifications}
+                      onCheckedChange={() => toggleFeature('settingsNotifications')}
+                    />
+                  </label>
+                </div>
+              </div>
+
               {/* Info Note */}
               <div className="p-3 bg-blue-500/10 rounded-lg border border-blue-500/30">
                 <p className="text-sm text-blue-300">
