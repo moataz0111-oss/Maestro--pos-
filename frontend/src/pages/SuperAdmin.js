@@ -496,6 +496,38 @@ export default function SuperAdmin() {
     }
   };
 
+  // رفع خلفية من الجهاز
+  const uploadBackgroundFromDevice = async (file) => {
+    if (!file) return;
+    
+    setBackgroundsLoading(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('title', newBackgroundTitle || file.name);
+      formData.append('animation_type', newBackgroundAnimation);
+      
+      const res = await axios.post(`${API}/upload/background`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      
+      setBackgroundSettings(prev => ({
+        ...prev,
+        backgrounds: [...prev.backgrounds, res.data.background]
+      }));
+      
+      setShowAddBackground(false);
+      setNewBackgroundUrl('');
+      setNewBackgroundTitle('');
+      setNewBackgroundAnimation('fade');
+      toast.success('تم رفع الخلفية بنجاح');
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'فشل في رفع الخلفية');
+    } finally {
+      setBackgroundsLoading(false);
+    }
+  };
+
   const addNewBackground = async () => {
     if (!newBackgroundUrl) {
       toast.error('الرجاء إدخال رابط الصورة');
@@ -526,6 +558,26 @@ export default function SuperAdmin() {
       toast.error('فشل في إضافة الخلفية');
     } finally {
       setBackgroundsLoading(false);
+    }
+  };
+
+  // رفع شعار العميل
+  const uploadTenantLogo = async (file, tenantId) => {
+    if (!file) return null;
+    
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      if (tenantId) formData.append('tenant_id', tenantId);
+      
+      const res = await axios.post(`${API}/upload/logo`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      
+      return res.data.logo_url;
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'فشل في رفع الشعار');
+      return null;
     }
   };
 
