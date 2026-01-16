@@ -2074,7 +2074,7 @@ export default function SuperAdmin() {
 
       {/* Edit Tenant Modal */}
       <Dialog open={showEditTenant} onOpenChange={setShowEditTenant}>
-        <DialogContent className="max-w-lg bg-gray-800 border-gray-700 text-white">
+        <DialogContent className="max-w-2xl bg-gray-800 border-gray-700 text-white max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Edit className="h-5 w-5 text-yellow-400" />
@@ -2083,9 +2083,85 @@ export default function SuperAdmin() {
           </DialogHeader>
           
           <div className="space-y-4">
+            {/* هوية المطعم - شعار واسم */}
+            <div className="p-4 bg-yellow-500/10 rounded-lg border border-yellow-500/30 space-y-4">
+              <h3 className="text-sm font-bold text-yellow-400 flex items-center gap-2">
+                <Image className="h-4 w-4" />
+                هوية المطعم (تظهر للعميل)
+              </h3>
+              
+              {/* شعار المطعم */}
+              <div className="flex items-start gap-4">
+                <div className="flex-shrink-0">
+                  <Label className="text-xs text-gray-400 block mb-2">شعار المطعم</Label>
+                  <div className="w-24 h-24 bg-gray-700/50 rounded-xl border-2 border-dashed border-gray-600 flex items-center justify-center overflow-hidden">
+                    {logoPreviewUrl ? (
+                      <img 
+                        src={logoPreviewUrl} 
+                        alt="شعار" 
+                        className="w-full h-full object-contain"
+                      />
+                    ) : (
+                      <Upload className="h-8 w-8 text-gray-500" />
+                    )}
+                  </div>
+                </div>
+                <div className="flex-1 space-y-2">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => {
+                      const file = e.target.files[0];
+                      if (file) {
+                        setLogoFile(file);
+                        setLogoPreviewUrl(URL.createObjectURL(file));
+                      }
+                    }}
+                    className="hidden"
+                    id="logo-file-input"
+                  />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => document.getElementById('logo-file-input').click()}
+                    className="border-gray-600 text-gray-300"
+                  >
+                    <Upload className="h-4 w-4 ml-2" />
+                    رفع من الجهاز
+                  </Button>
+                  <p className="text-xs text-gray-500">PNG, JPG (أقصى 5MB)</p>
+                </div>
+              </div>
+
+              {/* اسم المطعم بالعربي والإنجليزي */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>اسم المطعم (عربي)</Label>
+                  <Input
+                    placeholder="مثال: مطعم الشرق"
+                    value={editTenantForm.name_ar}
+                    onChange={(e) => setEditTenantForm({...editTenantForm, name_ar: e.target.value})}
+                    className="bg-gray-700/50 border-gray-600"
+                    dir="rtl"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>اسم المطعم (إنجليزي)</Label>
+                  <Input
+                    placeholder="e.g. Al Sharq Restaurant"
+                    value={editTenantForm.name_en}
+                    onChange={(e) => setEditTenantForm({...editTenantForm, name_en: e.target.value})}
+                    className="bg-gray-700/50 border-gray-600"
+                    dir="ltr"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* بيانات المالك والاشتراك */}
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>اسم المطعم/الكافيه</Label>
+                <Label>اسم المطعم/الكافيه (للنظام)</Label>
                 <Input
                   value={editTenantForm.name}
                   onChange={(e) => setEditTenantForm({...editTenantForm, name: e.target.value})}
