@@ -5011,7 +5011,13 @@ async def get_dashboard_settings(current_user: dict = Depends(get_current_user))
         "showWarehouse": True,
         "showCallLogs": True,
         "showCallCenter": True,
-        "showKitchen": True
+        "showKitchen": True,
+        "showLoyalty": True,
+        "showCoupons": True,
+        "showRecipes": True,
+        "showReservations": True,
+        "showReviews": True,
+        "showSmartReports": True
     }
     
     # جلب إعدادات لوحة القيادة المحفوظة
