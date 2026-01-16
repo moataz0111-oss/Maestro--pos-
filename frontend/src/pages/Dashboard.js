@@ -96,8 +96,22 @@ export default function Dashboard() {
     showSettings: true,
     showHR: true,
     showWarehouse: true,
-    showCallLogs: true
+    showCallLogs: true,
+    showKitchen: true,
+    showLoyalty: true,
+    showCoupons: true,
+    showRecipes: true,
+    showReservations: true,
+    showReviews: true,
+    showSmartReports: true
   });
+  
+  // حالات السحب والإفلات
+  const [isReordering, setIsReordering] = useState(false);
+  const [draggedItem, setDraggedItem] = useState(null);
+  const [actionsOrder, setActionsOrder] = useState([]);
+  const longPressTimerRef = useRef(null);
+  const [touchStartPos, setTouchStartPos] = useState({ x: 0, y: 0 });
   
   // حالات إغلاق الصندوق
   const [cashRegisterOpen, setCashRegisterOpen] = useState(false);
@@ -115,6 +129,18 @@ export default function Dashboard() {
     fetchData();
     fetchDashboardSettings();
   }, [selectedBranch]);
+
+  // تحميل ترتيب الأيقونات المحفوظ
+  useEffect(() => {
+    const savedOrder = localStorage.getItem(`dashboard_order_${user?.id}`);
+    if (savedOrder) {
+      try {
+        setActionsOrder(JSON.parse(savedOrder));
+      } catch (e) {
+        console.log('Error loading saved order');
+      }
+    }
+  }, [user?.id]);
 
   const fetchDashboardSettings = async () => {
     try {
