@@ -442,6 +442,8 @@ export default function SuperAdmin() {
     setSelectedTenant(tenant);
     setEditTenantForm({
       name: tenant.name || '',
+      name_ar: tenant.name_ar || '',
+      name_en: tenant.name_en || '',
       owner_name: tenant.owner_name || '',
       owner_email: tenant.owner_email || '',
       owner_phone: tenant.owner_phone || '',
@@ -449,16 +451,30 @@ export default function SuperAdmin() {
       max_branches: tenant.max_branches || 1,
       max_users: tenant.max_users || 5,
       send_welcome_email: false,
-      temp_password: ''
+      temp_password: '',
+      logo_url: tenant.logo_url || ''
     });
+    setLogoPreviewUrl(tenant.logo_url || '');
+    setLogoFile(null);
     setShowEditTenant(true);
   };
 
   const updateTenant = async () => {
     setLoading(true);
     try {
+      // رفع الشعار أولاً إذا تم اختياره
+      let logoUrl = editTenantForm.logo_url;
+      if (logoFile) {
+        const uploadedLogoUrl = await uploadTenantLogo(logoFile, selectedTenant.id);
+        if (uploadedLogoUrl) {
+          logoUrl = uploadedLogoUrl;
+        }
+      }
+
       const updateData = {
         name: editTenantForm.name,
+        name_ar: editTenantForm.name_ar,
+        name_en: editTenantForm.name_en,
         owner_name: editTenantForm.owner_name,
         owner_email: editTenantForm.owner_email,
         owner_phone: editTenantForm.owner_phone,
@@ -466,7 +482,8 @@ export default function SuperAdmin() {
         max_branches: editTenantForm.max_branches,
         max_users: editTenantForm.max_users,
         send_welcome_email: editTenantForm.send_welcome_email,
-        temp_password: editTenantForm.temp_password
+        temp_password: editTenantForm.temp_password,
+        logo_url: logoUrl
       };
       
       await axios.put(`${API}/super-admin/tenants/${selectedTenant.id}`, updateData);
@@ -478,6 +495,8 @@ export default function SuperAdmin() {
       }
       
       setShowEditTenant(false);
+      setLogoFile(null);
+      setLogoPreviewUrl('');
       fetchData();
     } catch (error) {
       toast.error(error.response?.data?.detail || 'فشل في تحديث البيانات');
