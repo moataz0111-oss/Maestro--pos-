@@ -5087,6 +5087,19 @@ async def get_tenant_info(current_user: dict = Depends(get_current_user)):
     
     return tenant
 
+# ==================== LOGIN BACKGROUNDS API ====================
+
+# كلمة سر خاصة للـ Super Admin - من متغيرات البيئة
+SUPER_ADMIN_SECRET = os.environ.get("SUPER_ADMIN_SECRET", "271018")
+
+# التحقق من صلاحية Super Admin
+async def verify_super_admin(current_user: dict = Depends(get_current_user)):
+    if current_user.get("role") != UserRole.SUPER_ADMIN:
+        raise HTTPException(status_code=403, detail="صلاحيات Super Admin مطلوبة")
+    return current_user
+
+# ==================== SYSTEM BRANDING API ====================
+
 @api_router.get("/system/branding")
 async def get_system_branding(current_user: dict = Depends(verify_super_admin)):
     """جلب إعدادات هوية النظام الرئيسي"""
@@ -5113,17 +5126,6 @@ async def update_system_branding(branding: dict, current_user: dict = Depends(ve
     )
     
     return {"message": "تم تحديث هوية النظام بنجاح", "branding": update_data}
-
-# ==================== LOGIN BACKGROUNDS API ====================
-
-# كلمة سر خاصة للـ Super Admin - من متغيرات البيئة
-SUPER_ADMIN_SECRET = os.environ.get("SUPER_ADMIN_SECRET", "271018")
-
-# التحقق من صلاحية Super Admin
-async def verify_super_admin(current_user: dict = Depends(get_current_user)):
-    if current_user.get("role") != UserRole.SUPER_ADMIN:
-        raise HTTPException(status_code=403, detail="صلاحيات Super Admin مطلوبة")
-    return current_user
 
 class LoginBackgroundCreate(BaseModel):
     image_url: str
