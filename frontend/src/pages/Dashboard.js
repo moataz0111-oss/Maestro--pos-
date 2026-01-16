@@ -107,7 +107,9 @@ export default function Dashboard() {
     showRecipes: true,
     showReservations: true,
     showReviews: true,
-    showSmartReports: true
+    showSmartReports: true,
+    showPurchasing: true,
+    showBranchOrders: true
   });
   
   // حالات السحب والإفلات
