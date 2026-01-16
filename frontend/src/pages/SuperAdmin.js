@@ -282,12 +282,10 @@ export default function SuperAdmin() {
     setLoading(true);
     
     try {
-      const res = await axios.post(`${API}/super-admin/login`, null, {
-        params: {
-          email: loginForm.email,
-          password: loginForm.password,
-          secret_key: loginForm.secret_key
-        }
+      const res = await axios.post(`${API}/super-admin/login`, {
+        email: loginForm.email,
+        password: loginForm.password,
+        secret_key: loginForm.secret_key
       });
       
       localStorage.setItem('super_admin_token', res.data.token);
