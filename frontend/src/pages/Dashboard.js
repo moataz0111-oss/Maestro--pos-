@@ -565,6 +565,20 @@ export default function Dashboard() {
               </Button>
             )}
 
+            {/* Dashboard Background Button - للعملاء */}
+            {user?.tenant_id && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowBackgroundDialog(true)}
+                className="gap-2 border-pink-500 text-pink-500 hover:bg-pink-500/10"
+                data-testid="tenant-backgrounds-btn"
+              >
+                <Image className="h-4 w-4" />
+                الخلفيات
+              </Button>
+            )}
+
             {/* Super Admin Button - للمالك فقط (بدون tenant_id) */}
             {user?.role === 'admin' && !user?.tenant_id && (
               <Button
