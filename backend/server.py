@@ -5421,10 +5421,16 @@ async def super_admin_login(request: SuperAdminLoginRequest):
         }
     }
 
+class SuperAdminRegisterRequest(BaseModel):
+    email: str
+    password: str
+    full_name: str
+    secret_key: str
+
 @api_router.post("/super-admin/register")
-async def register_super_admin(secret_key: str, email: str, password: str, full_name: str):
+async def register_super_admin(request: SuperAdminRegisterRequest):
     """إنشاء حساب Super Admin (مرة واحدة فقط)"""
-    if secret_key != SUPER_ADMIN_SECRET:
+    if request.secret_key != SUPER_ADMIN_SECRET:
         raise HTTPException(status_code=403, detail="مفتاح السر غير صحيح")
     
     # التحقق من عدم وجود Super Admin
