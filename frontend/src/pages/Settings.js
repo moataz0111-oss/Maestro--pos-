@@ -244,6 +244,7 @@ export default function Settings() {
   useEffect(() => {
     if (hasRole(['admin', 'manager'])) {
       fetchData();
+      fetchSettingsPermissions();
     } else {
       setLoading(false);
     }
@@ -251,6 +252,28 @@ export default function Settings() {
     const savedSoundSettings = getSoundSettings();
     setSoundSettings(savedSoundSettings);
   }, []);
+
+  // جلب صلاحيات الإعدادات المتاحة للعميل
+  const fetchSettingsPermissions = async () => {
+    try {
+      const res = await axios.get(`${API}/settings/dashboard`);
+      if (res.data) {
+        setSettingsPermissions({
+          settingsUsers: res.data.settingsUsers !== false,
+          settingsCustomers: res.data.settingsCustomers !== false,
+          settingsBranches: res.data.settingsBranches !== false,
+          settingsCategories: res.data.settingsCategories !== false,
+          settingsProducts: res.data.settingsProducts !== false,
+          settingsPrinters: res.data.settingsPrinters !== false,
+          settingsDeliveryCompanies: res.data.settingsDeliveryCompanies !== false,
+          settingsCallCenter: res.data.settingsCallCenter !== false,
+          settingsNotifications: res.data.settingsNotifications !== false
+        });
+      }
+    } catch (error) {
+      console.log('Using default settings permissions');
+    }
+  };
 
   const fetchData = async () => {
     try {
