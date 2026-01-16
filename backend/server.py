@@ -5272,7 +5272,7 @@ async def upload_background_file(
     
     # إنشاء URL للصورة
     base_url = os.environ.get('REACT_APP_BACKEND_URL', '')
-    image_url = f"{base_url}/uploads/backgrounds/{filename}"
+    image_url = f"{base_url}/api/uploads/backgrounds/{filename}"
     
     # جلب الإعدادات الحالية
     settings = await db.settings.find_one({"type": "login_backgrounds"}, {"_id": 0})
