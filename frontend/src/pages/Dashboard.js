@@ -441,23 +441,23 @@ export default function Dashboard() {
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto p-6 space-y-6">
+      <main className="max-w-7xl mx-auto p-4 md:p-6 space-y-4 md:space-y-6 overflow-y-auto">
         {/* Quick Actions */}
         <section>
-          <h2 className="text-lg font-bold font-cairo mb-4 text-foreground">الإجراءات السريعة</h2>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+          <h2 className="text-base md:text-lg font-bold font-cairo mb-3 text-foreground">الإجراءات السريعة</h2>
+          <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2 md:gap-3">
             {quickActions.map((action) => (
               <Button
                 key={action.path}
                 variant="outline"
-                className="h-auto py-6 flex flex-col items-center gap-3 bg-card hover:bg-card/80 border-border/50 hover:border-primary/50 transition-all hover:-translate-y-1"
+                className="h-auto py-3 md:py-4 flex flex-col items-center gap-2 bg-card hover:bg-card/80 border-border/50 hover:border-primary/50 transition-all hover:-translate-y-0.5"
                 onClick={() => navigate(action.path)}
                 data-testid={`quick-action-${action.path.slice(1)}`}
               >
-                <div className={`w-12 h-12 ${action.color} rounded-xl flex items-center justify-center`}>
-                  <action.icon className="h-6 w-6 text-white" />
+                <div className={`w-10 h-10 md:w-11 md:h-11 ${action.color} rounded-xl flex items-center justify-center`}>
+                  <action.icon className="h-5 w-5 md:h-5.5 md:w-5.5 text-white" />
                 </div>
-                <span className="text-sm font-medium text-foreground">{action.label}</span>
+                <span className="text-xs md:text-sm font-medium text-foreground text-center leading-tight">{action.label}</span>
               </Button>
             ))}
           </div>
@@ -465,18 +465,18 @@ export default function Dashboard() {
 
         {/* Stats Cards */}
         <section>
-          <h2 className="text-lg font-bold font-cairo mb-4 text-foreground">إحصائيات اليوم</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <h2 className="text-base md:text-lg font-bold font-cairo mb-3 text-foreground">إحصائيات اليوم</h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             {statCards.map((stat, idx) => (
               <Card key={idx} className="border-border/50 bg-card" data-testid={`stat-card-${idx}`}>
-                <CardContent className="p-6">
+                <CardContent className="p-4 md:p-5">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm text-muted-foreground mb-1">{stat.label}</p>
-                      <p className="text-2xl font-bold font-cairo tabular-nums text-foreground">{stat.value}</p>
+                      <p className="text-xs md:text-sm text-muted-foreground mb-1">{stat.label}</p>
+                      <p className="text-xl md:text-2xl font-bold font-cairo tabular-nums text-foreground">{stat.value}</p>
                     </div>
-                    <div className={`w-12 h-12 ${stat.bg} rounded-xl flex items-center justify-center`}>
-                      <stat.icon className={`h-6 w-6 ${stat.color}`} />
+                    <div className={`w-10 h-10 md:w-11 md:h-11 ${stat.bg} rounded-xl flex items-center justify-center`}>
+                      <stat.icon className={`h-5 w-5 md:h-5.5 md:w-5.5 ${stat.color}`} />
                     </div>
                   </div>
                 </CardContent>
