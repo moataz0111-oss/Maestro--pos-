@@ -142,7 +142,37 @@ export default function Dashboard() {
     fetchDashboardSettings();
     fetchTenantInfo();
     fetchDashboardBackgrounds();
+    autoOpenShift(); // فتح الوردية تلقائياً
   }, [selectedBranch]);
+
+  // فتح الوردية تلقائياً عند الدخول
+  const autoOpenShift = async () => {
+    try {
+      // التحقق من وجود وردية مفتوحة
+      const checkRes = await axios.get(`${API}/shifts/current`);
+      if (!checkRes.data || checkRes.data.message === 'لا توجد وردية مفتوحة') {
+        // فتح وردية جديدة
+        await axios.post(`${API}/shifts/open`, {
+          opening_cash: 0,
+          branch_id: selectedBranch || null
+        });
+        console.log('تم فتح الوردية تلقائياً');
+      }
+    } catch (error) {
+      // إذا لم تكن هناك وردية، نفتح واحدة جديدة
+      if (error.response?.status === 404) {
+        try {
+          await axios.post(`${API}/shifts/open`, {
+            opening_cash: 0,
+            branch_id: selectedBranch || null
+          });
+          console.log('تم فتح الوردية تلقائياً');
+        } catch (openError) {
+          console.log('الوردية مفتوحة بالفعل أو حدث خطأ');
+        }
+      }
+    }
+  };
 
   // تحميل ترتيب الأيقونات المحفوظ
   useEffect(() => {
