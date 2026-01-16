@@ -300,24 +300,27 @@ export default function Dashboard() {
 
   // الأزرار السريعة مع التحكم بالظهور
   const allQuickActions = [
-    { label: 'نقاط البيع', icon: ShoppingCart, path: '/pos', color: 'bg-primary', key: 'showPOS' },
-    { label: 'الطاولات', icon: LayoutGrid, path: '/tables', color: 'bg-blue-500', key: 'showTables' },
-    { label: 'شاشة المطبخ', icon: ChefHat, path: '/kitchen', color: 'bg-yellow-500', key: 'showKitchen' },
-    { label: 'التقارير', icon: BarChart3, path: '/reports', color: 'bg-amber-500', key: 'showReports' },
-    { label: 'المصاريف', icon: Receipt, path: '/expenses', color: 'bg-red-500', key: 'showExpenses' },
-    { label: 'المخزون', icon: Package, path: '/inventory', color: 'bg-purple-500', key: 'showInventory' },
-    { label: 'التوصيل', icon: Truck, path: '/delivery', color: 'bg-orange-500', key: 'showDelivery' },
-    { label: 'الموارد البشرية', icon: UserCog, path: '/hr', color: 'bg-green-500', key: 'showHR' },
-    { label: 'التحويلات', icon: ArrowLeftRight, path: '/warehouse', color: 'bg-indigo-500', key: 'showWarehouse' },
-    { label: 'سجل المكالمات', icon: Headphones, path: '/call-logs', color: 'bg-cyan-500', key: 'showCallLogs' },
-    { label: 'برنامج الولاء', icon: Gift, path: '/loyalty', color: 'bg-pink-500', key: 'showLoyalty' },
-    { label: 'الكوبونات', icon: Gift, path: '/coupons', color: 'bg-violet-500', key: 'showCoupons' },
-    { label: 'الوصفات', icon: ChefHat, path: '/recipes', color: 'bg-teal-500', key: 'showRecipes' },
-    { label: 'الإعدادات', icon: Settings, path: '/settings', color: 'bg-gray-500', key: 'showSettings' },
+    { label: 'نقاط البيع', icon: ShoppingCart, path: '/pos', color: 'bg-gradient-to-br from-orange-400 to-orange-600', key: 'showPOS', id: 'pos' },
+    { label: 'الطاولات', icon: LayoutGrid, path: '/tables', color: 'bg-gradient-to-br from-blue-400 to-blue-600', key: 'showTables', id: 'tables' },
+    { label: 'شاشة المطبخ', icon: ChefHat, path: '/kitchen', color: 'bg-gradient-to-br from-yellow-400 to-yellow-600', key: 'showKitchen', id: 'kitchen' },
+    { label: 'التقارير', icon: BarChart3, path: '/reports', color: 'bg-gradient-to-br from-amber-400 to-amber-600', key: 'showReports', id: 'reports' },
+    { label: 'التقارير الذكية', icon: PieChart, path: '/smart-reports', color: 'bg-gradient-to-br from-emerald-400 to-emerald-600', key: 'showSmartReports', id: 'smart-reports' },
+    { label: 'المصاريف', icon: Receipt, path: '/expenses', color: 'bg-gradient-to-br from-red-400 to-red-600', key: 'showExpenses', id: 'expenses' },
+    { label: 'المخزون', icon: Package, path: '/inventory', color: 'bg-gradient-to-br from-purple-400 to-purple-600', key: 'showInventory', id: 'inventory' },
+    { label: 'التوصيل', icon: Truck, path: '/delivery', color: 'bg-gradient-to-br from-orange-500 to-orange-700', key: 'showDelivery', id: 'delivery' },
+    { label: 'الحجوزات', icon: CalendarDays, path: '/reservations', color: 'bg-gradient-to-br from-rose-400 to-rose-600', key: 'showReservations', id: 'reservations' },
+    { label: 'التقييمات', icon: Star, path: '/reviews', color: 'bg-gradient-to-br from-amber-500 to-orange-500', key: 'showReviews', id: 'reviews' },
+    { label: 'الموارد البشرية', icon: UserCog, path: '/hr', color: 'bg-gradient-to-br from-green-400 to-green-600', key: 'showHR', id: 'hr' },
+    { label: 'التحويلات', icon: ArrowLeftRight, path: '/warehouse', color: 'bg-gradient-to-br from-indigo-400 to-indigo-600', key: 'showWarehouse', id: 'warehouse' },
+    { label: 'سجل المكالمات', icon: Headphones, path: '/call-logs', color: 'bg-gradient-to-br from-cyan-400 to-cyan-600', key: 'showCallLogs', id: 'call-logs' },
+    { label: 'برنامج الولاء', icon: Gift, path: '/loyalty', color: 'bg-gradient-to-br from-pink-400 to-pink-600', key: 'showLoyalty', id: 'loyalty' },
+    { label: 'الكوبونات', icon: Gift, path: '/coupons', color: 'bg-gradient-to-br from-violet-400 to-violet-600', key: 'showCoupons', id: 'coupons' },
+    { label: 'الوصفات', icon: ChefHat, path: '/recipes', color: 'bg-gradient-to-br from-teal-400 to-teal-600', key: 'showRecipes', id: 'recipes' },
+    { label: 'الإعدادات', icon: Settings, path: '/settings', color: 'bg-gradient-to-br from-gray-400 to-gray-600', key: 'showSettings', id: 'settings' },
   ];
   
   // فلترة الأزرار حسب الإعدادات والصلاحيات
-  const quickActions = allQuickActions.filter(action => {
+  const filteredActions = allQuickActions.filter(action => {
     // التحقق من إعدادات الصفحة الرئيسية
     if (!dashboardSettings[action.key]) return false;
     
@@ -330,6 +333,99 @@ export default function Dashboard() {
     
     return true;
   });
+
+  // ترتيب الأزرار حسب الترتيب المحفوظ
+  const quickActions = actionsOrder.length > 0
+    ? actionsOrder
+        .map(id => filteredActions.find(a => a.id === id))
+        .filter(Boolean)
+        .concat(filteredActions.filter(a => !actionsOrder.includes(a.id)))
+    : filteredActions;
+
+  // معالجات السحب والإفلات
+  const handleLongPressStart = (e, action) => {
+    const touch = e.touches ? e.touches[0] : e;
+    setTouchStartPos({ x: touch.clientX, y: touch.clientY });
+    
+    longPressTimerRef.current = setTimeout(() => {
+      setIsReordering(true);
+      setDraggedItem(action.id);
+      // اهتزاز خفيف للتنبيه (إذا كان مدعوماً)
+      if (navigator.vibrate) {
+        navigator.vibrate(50);
+      }
+    }, 500); // 500ms للضغطة المطولة
+  };
+
+  const handleLongPressEnd = () => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  };
+
+  const handleDragStart = (e, action) => {
+    setDraggedItem(action.id);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleDragOver = (e, action) => {
+    e.preventDefault();
+    if (draggedItem && draggedItem !== action.id) {
+      const newOrder = [...(actionsOrder.length > 0 ? actionsOrder : quickActions.map(a => a.id))];
+      const draggedIndex = newOrder.indexOf(draggedItem);
+      const targetIndex = newOrder.indexOf(action.id);
+      
+      if (draggedIndex !== -1 && targetIndex !== -1) {
+        newOrder.splice(draggedIndex, 1);
+        newOrder.splice(targetIndex, 0, draggedItem);
+        setActionsOrder(newOrder);
+      }
+    }
+  };
+
+  const handleDragEnd = () => {
+    setDraggedItem(null);
+    // حفظ الترتيب الجديد
+    if (actionsOrder.length > 0) {
+      localStorage.setItem(`dashboard_order_${user?.id}`, JSON.stringify(actionsOrder));
+      toast.success('تم حفظ الترتيب الجديد');
+    }
+  };
+
+  const handleTouchMove = (e, action) => {
+    if (!isReordering || !draggedItem) return;
+    
+    const touch = e.touches[0];
+    const elements = document.elementsFromPoint(touch.clientX, touch.clientY);
+    const targetButton = elements.find(el => el.dataset?.actionId);
+    
+    if (targetButton && targetButton.dataset.actionId !== draggedItem) {
+      const newOrder = [...(actionsOrder.length > 0 ? actionsOrder : quickActions.map(a => a.id))];
+      const draggedIndex = newOrder.indexOf(draggedItem);
+      const targetIndex = newOrder.indexOf(targetButton.dataset.actionId);
+      
+      if (draggedIndex !== -1 && targetIndex !== -1) {
+        newOrder.splice(draggedIndex, 1);
+        newOrder.splice(targetIndex, 0, draggedItem);
+        setActionsOrder(newOrder);
+      }
+    }
+  };
+
+  const handleTouchEnd = () => {
+    handleLongPressEnd();
+    if (isReordering && actionsOrder.length > 0) {
+      localStorage.setItem(`dashboard_order_${user?.id}`, JSON.stringify(actionsOrder));
+      toast.success('تم حفظ الترتيب الجديد');
+    }
+    setDraggedItem(null);
+  };
+
+  const exitReorderMode = () => {
+    setIsReordering(false);
+    setDraggedItem(null);
+  };
 
   const statCards = [
     { 
