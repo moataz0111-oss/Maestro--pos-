@@ -812,7 +812,7 @@ export default function Settings() {
                   شركات التوصيل
                 </TabsTrigger>
               )}
-              {hasRole(['admin']) && (
+              {hasRole(['admin']) && settingsPermissions.settingsCallCenter && (
                 <TabsTrigger 
                   value="callcenter"
                   className="flex-shrink-0 px-4 py-2.5 text-sm font-medium rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
@@ -820,7 +820,7 @@ export default function Settings() {
                   الكول سنتر
                 </TabsTrigger>
               )}
-              {hasRole(['admin']) && (
+              {hasRole(['admin']) && settingsPermissions.settingsNotifications && (
                 <TabsTrigger 
                   value="notifications"
                   className="flex-shrink-0 px-4 py-2.5 text-sm font-medium rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
