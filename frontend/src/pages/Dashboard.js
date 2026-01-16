@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
@@ -39,7 +39,12 @@ import {
   UserCog,
   ArrowLeftRight,
   ChefHat,
-  Gift
+  Gift,
+  Star,
+  CalendarDays,
+  PieChart,
+  GripVertical,
+  Move
 } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 import { toast } from 'sonner';
