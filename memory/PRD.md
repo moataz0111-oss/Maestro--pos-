@@ -5,7 +5,7 @@
 
 ---
 
-## ✅ All Completed Features (Updated Jan 15, 2026)
+## ✅ All Completed Features (Updated Jan 16, 2026)
 
 ### Core System
 - [x] نظام المصادقة (JWT)
@@ -65,65 +65,38 @@
 - [x] نظام نقاط الولاء الكامل
 - [x] 4 مستويات (برونزي، فضي، ذهبي، بلاتيني)
 - [x] كسب واستبدال النقاط
-- [x] نقاط ترحيب وإحالة وعيد ميلاد
-- [x] مضاعفات النقاط حسب المستوى
-- [x] واجهة مستخدم كاملة `/loyalty`
 
 ### Recipes & Raw Materials
-- [x] إدارة المواد الخام (11 تصنيف)
+- [x] إدارة المواد الخام
 - [x] إنشاء وصفات للمنتجات
 - [x] حساب التكلفة التلقائي
-- [x] حساب هامش الربح
-- [x] تنبيهات المخزون المنخفض
-- [x] واجهة مستخدم كاملة `/recipes`
 
-### Invoice Customization & Printing
-- [x] قوالب فواتير مخصصة
-- [x] دعم طابعات حرارية (58mm/80mm)
-- [x] إعدادات الشعار والعنوان والتذييل
-- [x] معاينة الفاتورة
-- [x] إدارة الطابعات (Network/USB/Bluetooth)
-- [x] واجهة مستخدم كاملة `/invoices`
-
-### Push Notifications Infrastructure
-- [x] واجهة API لتسجيل FCM tokens
-- [x] إرسال إشعارات (user/role/branch/all)
-- [x] قوالب إشعارات جاهزة
-- [x] سجل الإشعارات
-- [x] firebase-admin مثبت
-
-### 🆕 Payroll Automation (Jan 15, 2026)
-- [x] ربط السلف والخصومات بالرواتب تلقائياً
-- [x] API لتوليد كشوفات رواتب لجميع الموظفين دفعة واحدة
-- [x] API لجلب بيانات طباعة كشف الراتب
-- [x] صفحة طباعة كشف الراتب `/payroll/print/:id`
-- [x] تصميم احترافي للطباعة مع:
-  - تفاصيل الموظف والفرع
-  - جدول المكافآت
-  - جدول الخصومات
-  - استقطاع السلف
-  - ملخص صافي الراتب
-  - توقيعات
-- [x] زر طباعة في صفحة HR
-
-### 🆕 Coupons & Promotions System (Jan 15, 2026)
-- [x] نظام الكوبونات الكامل:
-  - كوبون نسبة مئوية أو مبلغ ثابت
-  - حد أدنى للطلب
-  - حد أقصى للخصم
-  - عدد استخدامات كلي ولكل عميل
-  - تاريخ بداية ونهاية الصلاحية
-  - ربط بمستوى الولاء (للأعضاء المميزين)
-  - خيار للطلب الأول فقط
-  - التحقق من صلاحية الكوبون
-  - تتبع الاستخدامات
-- [x] نظام العروض الترويجية:
-  - اشترِ X واحصل على Y
-  - ساعة السعادة (Happy Hour)
-  - باقات بسعر ثابت
-  - ربط بمستوى الولاء
+### Coupons & Promotions System
+- [x] نظام الكوبونات الكامل
+- [x] نظام العروض الترويجية
 - [x] واجهة مستخدم كاملة `/coupons`
-- [x] إحصائيات الكوبونات والعروض
+
+### Payroll System
+- [x] ربط السلف والخصومات بالرواتب تلقائياً
+- [x] صفحة طباعة كشف الراتب `/payroll/print/:id`
+
+### 🆕 Background & Logo Upload System (Jan 16, 2026)
+- [x] **رفع الخلفيات من الجهاز**: خيار جديد لرفع الصور مباشرة
+- [x] **معالجة تلقائية للصور**: تحويل جميع الصيغ إلى JPEG بحجم مناسب (1920x1080)
+- [x] **دعم صيغ متعددة**: JPEG, PNG, GIF, WEBP, HEIC, BMP, TIFF
+- [x] **واجهة سحب وإفلات**: منطقة رفع بديهية
+
+### 🆕 Tenant Identity Management (Jan 16, 2026)
+- [x] **شعار المطعم**: رفع شعار مخصص لكل عميل من الجهاز
+- [x] **اسم المطعم (عربي)**: حقل جديد للاسم بالعربي
+- [x] **اسم المطعم (إنجليزي)**: حقل جديد للاسم بالإنجليزي
+- [x] **تحكم من المالك**: يتحكم Super Admin فقط في هوية العميل
+
+### 🆕 Dashboard UI Improvements (Jan 16, 2026)
+- [x] **تصغير الأزرار**: أزرار الإجراءات السريعة أصغر وأكثر كثافة
+- [x] **قابلية التمرير**: الصفحة قابلة للتمرير لعرض جميع الخيارات
+- [x] **شبكة أفضل**: 3 أعمدة على الجوال، 4 متوسط، 6 كبير
+- [x] **إزالة قسم الفواتير**: تم حذفه حسب طلب المستخدم
 
 ---
 
@@ -142,34 +115,29 @@
 
 ---
 
-## 📡 New API Endpoints (Jan 15, 2026)
+## 📡 New API Endpoints (Jan 16, 2026)
 
-### Payroll
-- `GET /api/payroll/{id}/print` - بيانات طباعة كشف الراتب
-- `POST /api/payroll/generate-all` - توليد كشوفات لجميع الموظفين
+### File Upload
+- `POST /api/upload/background` - رفع خلفية من الجهاز (multipart/form-data)
+- `POST /api/upload/logo` - رفع شعار للعميل (multipart/form-data)
 
-### Coupons
-- `GET /api/coupons` - قائمة الكوبونات
-- `POST /api/coupons` - إنشاء كوبون
-- `PUT /api/coupons/{id}` - تعديل كوبون
-- `DELETE /api/coupons/{id}` - حذف كوبون
-- `POST /api/coupons/validate` - التحقق من صلاحية الكوبون
-- `POST /api/coupons/{id}/use` - تسجيل استخدام الكوبون
-
-### Promotions
-- `GET /api/promotions` - قائمة العروض
-- `POST /api/promotions` - إنشاء عرض
-- `PUT /api/promotions/{id}` - تعديل عرض
-- `DELETE /api/promotions/{id}` - حذف عرض
-- `GET /api/promotions/active` - العروض النشطة حالياً
+### Tenant Updates
+- `PUT /api/super-admin/tenants/{id}` - تحديث بيانات العميل (يشمل name_ar, name_en, logo_url)
 
 ---
 
-## 📁 New Files Created (Jan 15, 2026)
+## 📁 New/Modified Files (Jan 16, 2026)
+
+### Backend
+- `/app/backend/server.py` - إضافة APIs رفع الملفات ومعالجة الصور
+- `/app/backend/uploads/` - مجلد جديد للملفات المرفوعة
+  - `/backgrounds/` - خلفيات صفحة الدخول
+  - `/logos/` - شعارات العملاء
 
 ### Frontend
-- `/app/frontend/src/pages/Coupons.js` - صفحة الكوبونات والعروض
-- `/app/frontend/src/pages/PayrollPrint.js` - صفحة طباعة كشف الراتب
+- `/app/frontend/src/pages/SuperAdmin.js` - تحديث نوافذ إضافة الخلفية وتعديل العميل
+- `/app/frontend/src/pages/Dashboard.js` - تحسين حجم الأزرار والتخطيط
+- `/app/frontend/src/App.js` - إزالة مسار الفواتير
 
 ---
 
@@ -181,6 +149,7 @@
 - **Excel**: openpyxl
 - **Biometric**: pyzk (ZKTeco)
 - **Push**: firebase-admin
+- **Image Processing**: Pillow (PIL)
 
 ---
 
@@ -188,15 +157,14 @@
 - ✅ All Core APIs Working
 - ✅ Kitchen Display: Working
 - ✅ Excel Export: Working
-- ✅ Login Backgrounds: Working
+- ✅ Login Backgrounds: Working (with device upload)
 - ✅ Driver Map: Working
-- ✅ Biometric Devices UI: Working
 - ✅ PWA Install Button: Working
 - ✅ Loyalty Program: Working
 - ✅ Recipes System: Working
-- ✅ Invoice Templates: Working
-- ✅ Payroll Print: Working
 - ✅ Coupons & Promotions: Working
+- ✅ Background Upload: Working
+- ✅ Logo Upload: Working
 - ✅ Ready for Production
 
 ---
@@ -208,9 +176,25 @@
 
 ---
 
-## 📋 Future Enhancements (P2/P3)
-- [ ] إشعارات Push حية للسائقين (يحتاج Firebase setup)
-- [ ] نظام حجوزات الطاولات مسبقاً
-- [ ] تطبيق موبايل للعملاء
+## 📋 Backlog / Future Enhancements
+
+### P0 - High Priority
+- [ ] إعادة هيكلة server.py (ملف كبير جداً)
+- [ ] نظام طلبات بين الفروع والمخزن
+- [ ] نظام متكامل للمشتريات
+- [ ] تنبيهات تلقائية عند انخفاض المخزون
+
+### P1 - Medium Priority
+- [ ] تحسين خريطة السائقين الحية (خط السير والتتبع الدقيق)
+- [ ] الخلفيات المتجاوبة (وضع مظلم/فاتح)
+- [ ] إشعارات Push (Firebase) للسائقين
+- [ ] تكامل أجهزة البصمة ZKTeco (كتابة منطق الاتصال)
+- [ ] نظام الولاء والوصفات (إكمال الواجهات)
+- [ ] نظام تقييم العملاء للطلبات
+- [ ] نظام حجوزات الطاولات
 - [ ] تقارير ذكية بالرسوم البيانية
-- [ ] ربط مع شركات التوصيل الخارجية
+
+### P2 - Low Priority
+- [ ] ميزة السحب والإفلات لترتيب أيقونات Dashboard
+- [ ] أزرار رجوع موحدة في جميع الصفحات
+- [ ] تقسيم ملفات SuperAdmin.js و HR.js
