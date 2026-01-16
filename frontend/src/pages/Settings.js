@@ -146,6 +146,19 @@ export default function Settings() {
   const [newEmail, setNewEmail] = useState('');
   const [loading, setLoading] = useState(true);
   
+  // صلاحيات الميزات المتاحة للعميل
+  const [settingsPermissions, setSettingsPermissions] = useState({
+    settingsUsers: true,
+    settingsCustomers: true,
+    settingsBranches: true,
+    settingsCategories: true,
+    settingsProducts: true,
+    settingsPrinters: true,
+    settingsDeliveryCompanies: true,
+    settingsCallCenter: true,
+    settingsNotifications: true
+  });
+  
   // Call Center States
   const [callCenterConfig, setCallCenterConfig] = useState({
     enabled: false,
