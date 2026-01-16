@@ -485,15 +485,9 @@ export default function SuperAdmin() {
     try {
       // رفع الشعار أولاً إذا تم اختياره
       let logoUrl = editTenantForm.logo_url;
-      console.log('=== Update Tenant Started ===');
-      console.log('Logo file:', logoFile);
-      console.log('Current logo_url:', logoUrl);
-      console.log('Selected tenant:', selectedTenant?.id);
       
       if (logoFile) {
-        console.log('Uploading logo file...');
         const uploadedLogoUrl = await uploadTenantLogo(logoFile, selectedTenant.id);
-        console.log('Uploaded logo URL:', uploadedLogoUrl);
         if (uploadedLogoUrl) {
           logoUrl = uploadedLogoUrl;
         }
@@ -514,8 +508,6 @@ export default function SuperAdmin() {
         logo_url: logoUrl
       };
       
-      console.log('Update data being sent:', updateData);
-      
       await axios.put(`${API}/super-admin/tenants/${selectedTenant.id}`, updateData);
       
       if (editTenantForm.send_welcome_email) {
@@ -529,7 +521,6 @@ export default function SuperAdmin() {
       setLogoPreviewUrl('');
       fetchData();
     } catch (error) {
-      console.error('Update tenant error:', error.response?.data || error);
       toast.error(error.response?.data?.detail || 'فشل في تحديث البيانات');
     } finally {
       setLoading(false);
