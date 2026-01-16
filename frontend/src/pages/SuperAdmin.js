@@ -1140,15 +1140,15 @@ export default function SuperAdmin() {
                     <div className="flex items-center gap-4">
                       <div className={`w-3 h-3 rounded-full ${tenant.is_active ? 'bg-green-500' : 'bg-red-500'}`} />
                       <div>
-                        <h3 className="font-bold">{tenant.name}</h3>
+                        <h3 className="font-bold">{tenant.name || tenant.slug || 'بدون اسم'}</h3>
                         <div className="flex items-center gap-3 text-sm text-gray-400">
                           <span className="flex items-center gap-1">
                             <Mail className="h-3 w-3" />
-                            {tenant.owner_email}
+                            {tenant.owner_email || '-'}
                           </span>
                           <span className="flex items-center gap-1">
                             <Globe className="h-3 w-3" />
-                            /{tenant.slug}
+                            /{tenant.slug || '-'}
                           </span>
                         </div>
                       </div>
