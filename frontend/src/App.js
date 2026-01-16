@@ -31,6 +31,8 @@ import PayrollPrint from "./pages/PayrollPrint";
 import Reservations from "./pages/Reservations";
 import Reviews from "./pages/Reviews";
 import SmartReports from "./pages/SmartReports";
+import Purchasing from "./pages/Purchasing";
+import BranchOrders from "./pages/BranchOrders";
 
 // Components
 import IncomingCallPopup from "./components/IncomingCallPopup";
@@ -270,6 +272,24 @@ function AppRoutes() {
         element={
           <ProtectedRoute>
             <SmartReports />
+          </ProtectedRoute>
+        } 
+      />
+      {/* المشتريات */}
+      <Route 
+        path="/purchasing" 
+        element={
+          <ProtectedRoute>
+            <Purchasing />
+          </ProtectedRoute>
+        } 
+      />
+      {/* طلبات الفروع */}
+      <Route 
+        path="/branch-orders" 
+        element={
+          <ProtectedRoute>
+            <BranchOrders />
           </ProtectedRoute>
         } 
       />
