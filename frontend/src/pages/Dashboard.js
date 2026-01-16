@@ -606,7 +606,7 @@ export default function Dashboard() {
             <div className="w-12 h-12 bg-primary rounded-xl flex items-center justify-center overflow-hidden shadow-lg">
               {tenantInfo?.logo_url ? (
                 <img 
-                  src={tenantInfo.logo_url} 
+                  src={tenantInfo.logo_url.startsWith('/') ? `${API}${tenantInfo.logo_url.replace('/api', '')}` : tenantInfo.logo_url} 
                   alt="Logo" 
                   className="w-full h-full object-cover"
                 />
