@@ -6471,6 +6471,136 @@ async def get_low_stock_alerts(current_user: dict = Depends(get_current_user)):
     alerts.sort(key=lambda x: x["shortage"], reverse=True)
     return alerts
 
+# ==================== BRANCH ORDERS - طلبات الفروع ====================
+
+class BranchOrderCreate(BaseModel):
+    to_branch_id: str
+    items: List[Dict[str, Any]]
+    priority: str = "normal"  # low, normal, high
+    notes: Optional[str] = None
+
+class BranchOrderStatusUpdate(BaseModel):
+    status: str  # pending, approved, in_transit, delivered, rejected
+    notes: Optional[str] = None
+
+@api_router.get("/branch-orders")
+async def get_branch_orders(
+    type: Optional[str] = None,  # outgoing, incoming
+    status: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """جلب طلبات الفروع"""
+    query = build_tenant_query(current_user)
+    
+    user_branch_id = current_user.get("branch_id")
+    
+    if type == "outgoing" and user_branch_id:
+        query["from_branch_id"] = user_branch_id
+    elif type == "incoming" and user_branch_id:
+        query["to_branch_id"] = user_branch_id
+    
+    if status:
+        query["status"] = status
+    
+    orders = await db.branch_orders.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
+    
+    # جلب أسماء الفروع
+    for order in orders:
+        from_branch = await db.branches.find_one({"id": order.get("from_branch_id")}, {"_id": 0, "name": 1})
+        to_branch = await db.branches.find_one({"id": order.get("to_branch_id")}, {"_id": 0, "name": 1})
+        order["from_branch"] = {"id": order.get("from_branch_id"), "name": from_branch.get("name") if from_branch else "المخزن الرئيسي"}
+        order["to_branch"] = {"id": order.get("to_branch_id"), "name": to_branch.get("name") if to_branch else "المخزن الرئيسي"}
+    
+    return orders
+
+@api_router.post("/branch-orders")
+async def create_branch_order(order: BranchOrderCreate, current_user: dict = Depends(get_current_user)):
+    """إنشاء طلب فرع جديد"""
+    tenant_id = get_user_tenant_id(current_user)
+    
+    # إنشاء رقم الطلب
+    last_order = await db.branch_orders.find_one(
+        {"tenant_id": tenant_id} if tenant_id else {},
+        {"_id": 0, "order_number": 1},
+        sort=[("created_at", -1)]
+    )
+    order_num = 1
+    if last_order and last_order.get("order_number"):
+        try:
+            order_num = int(last_order["order_number"].replace("BO-", "")) + 1
+        except:
+            order_num = 1
+    
+    order_doc = {
+        "id": str(uuid.uuid4()),
+        "order_number": f"BO-{str(order_num).zfill(4)}",
+        "from_branch_id": current_user.get("branch_id") or "main",
+        "to_branch_id": order.to_branch_id,
+        "items": order.items,
+        "status": "pending",
+        "priority": order.priority,
+        "notes": order.notes,
+        "tenant_id": tenant_id,
+        "created_by": current_user["id"],
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    
+    await db.branch_orders.insert_one(order_doc)
+    del order_doc["_id"]
+    
+    # إضافة معلومات الفروع
+    from_branch = await db.branches.find_one({"id": order_doc["from_branch_id"]}, {"_id": 0, "name": 1})
+    to_branch = await db.branches.find_one({"id": order_doc["to_branch_id"]}, {"_id": 0, "name": 1})
+    order_doc["from_branch"] = {"id": order_doc["from_branch_id"], "name": from_branch.get("name") if from_branch else "الفرع الحالي"}
+    order_doc["to_branch"] = {"id": order_doc["to_branch_id"], "name": to_branch.get("name") if to_branch else "المخزن الرئيسي"}
+    
+    return order_doc
+
+@api_router.put("/branch-orders/{order_id}/status")
+async def update_branch_order_status(order_id: str, update: BranchOrderStatusUpdate, current_user: dict = Depends(get_current_user)):
+    """تحديث حالة طلب الفرع"""
+    query = build_tenant_query(current_user, {"id": order_id})
+    
+    order = await db.branch_orders.find_one(query)
+    if not order:
+        raise HTTPException(status_code=404, detail="الطلب غير موجود")
+    
+    update_data = {"status": update.status}
+    
+    if update.status == "approved":
+        update_data["approved_by"] = current_user["id"]
+        update_data["approved_at"] = datetime.now(timezone.utc).isoformat()
+    elif update.status == "in_transit":
+        update_data["shipped_at"] = datetime.now(timezone.utc).isoformat()
+        update_data["shipped_by"] = current_user["id"]
+    elif update.status == "delivered":
+        update_data["delivered_at"] = datetime.now(timezone.utc).isoformat()
+        update_data["received_by"] = current_user["id"]
+    elif update.status == "rejected":
+        update_data["rejected_at"] = datetime.now(timezone.utc).isoformat()
+        update_data["rejected_by"] = current_user["id"]
+    
+    if update.notes:
+        update_data["status_notes"] = update.notes
+    
+    await db.branch_orders.update_one({"id": order_id}, {"$set": update_data})
+    return await db.branch_orders.find_one({"id": order_id}, {"_id": 0})
+
+@api_router.delete("/branch-orders/{order_id}")
+async def delete_branch_order(order_id: str, current_user: dict = Depends(get_current_user)):
+    """حذف طلب فرع"""
+    query = build_tenant_query(current_user, {"id": order_id})
+    
+    order = await db.branch_orders.find_one(query)
+    if not order:
+        raise HTTPException(status_code=404, detail="الطلب غير موجود")
+    
+    if order["status"] not in ["pending", "rejected"]:
+        raise HTTPException(status_code=400, detail="لا يمكن حذف طلب تمت معالجته")
+    
+    await db.branch_orders.delete_one({"id": order_id})
+    return {"message": "تم حذف الطلب"}
+
 # ==================== CALL CENTER / CALLER ID ====================
 
 class CallCenterConfig(BaseModel):
