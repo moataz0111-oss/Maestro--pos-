@@ -1,238 +1,137 @@
-# Maestro EGP - PRD (Product Requirements Document)
+# PRD - نظام إدارة المطاعم والكافيهات (Maestro EGP)
 
-## Original Problem Statement
-نظام شامل لإدارة المطاعم والكافيهات باسم "Maestro EGP" مع دعم Multi-tenant، تتبع السائقين، نظام كول سنتر، إدارة الموارد البشرية، وتحويلات المخزون.
+## المشكلة الأصلية
+بناء نظام شامل لإدارة المطاعم والكافيهات يدعم:
+- إدارة نقاط البيع (POS)
+- إدارة الفروع المتعددة
+- إدارة الموارد البشرية والرواتب
+- إدارة المخزون والمشتريات
+- نظام التوصيل وتتبع السائقين
+- تقارير وإحصائيات ذكية
+- دعم Multi-tenancy (عدة عملاء)
 
----
+## الجلسة الحالية - 16 يناير 2026
 
-## ✅ All Completed Features (Updated Jan 16, 2026)
+### ✅ ما تم إنجازه:
 
-### Core System
-- [x] نظام المصادقة (JWT)
-- [x] إدارة المنتجات والتصنيفات
-- [x] إدارة الطلبات (محلي، سفري، توصيل)
-- [x] إدارة الطاولات
-- [x] إدارة الورديات والصندوق
-- [x] إدارة السائقين والتوصيل
-- [x] إشعارات صوتية
+#### 1. نظام المشتريات والموردين (P0)
+- **صفحة المشتريات `/purchasing`:**
+  - عرض قائمة الموردين وإضافة موردين جدد
+  - إنشاء أوامر الشراء وتتبع حالتها
+  - تنبيهات انخفاض المخزون مع زر طلب سريع
+  - إدارة المواد الخام
+- **APIs:**
+  - `GET/POST /api/suppliers`
+  - `GET/POST /api/purchase-orders`
+  - `PUT /api/purchase-orders/{id}/status`
+  - `GET /api/raw-materials`
+  - `GET /api/inventory/low-stock-alerts`
 
-### Multi-tenant System
-- [x] لوحة تحكم Super Admin
-- [x] فصل البيانات بين العملاء
-- [x] نظام صلاحيات الميزات (Feature Flags)
-- [x] تعديل بيانات العملاء + بريد ترحيبي
+#### 2. نظام طلبات الفروع (P0)
+- **صفحة طلبات الفروع `/branch-orders`:**
+  - عرض الطلبات الصادرة والواردة
+  - إنشاء طلبات بين الفروع والمخزن الرئيسي
+  - تتبع حالة الطلبات (قيد الانتظار، موافق، قيد التوصيل، تم التسليم)
+- **APIs:**
+  - `GET/POST /api/branch-orders`
+  - `PUT /api/branch-orders/{id}/status`
 
-### Login Page 
-- [x] خلفيات متحركة قابلة للتخصيص (6 خلفيات)
-- [x] 5 أنواع حركات (fade, zoom, kenburns, slide, parallax)
-- [x] تحكم كامل من Super Admin
-- [x] رفع خلفيات من الجهاز
+#### 3. صلاحيات الميزات في SuperAdmin
+- **21 ميزة** قابلة للتفعيل/التعطيل لكل عميل:
+  - نقاط البيع، الطاولات، الطلبات، التقارير، المصاريف، المخزون، التوصيل
+  - شاشة المطبخ، الموارد البشرية، التحويلات (المخازن)
+  - الكول سنتر، سجل المكالمات، برنامج الولاء، الكوبونات
+  - الوصفات، الحجوزات، التقييمات، التقارير الذكية
+  - **المشتريات والموردين** (جديد)
+  - **طلبات الفروع** (جديد)
 
-### Kitchen Display System (KDS)
-- [x] شاشة المطبخ KDS كاملة
-- [x] تتبع الطلبات والأوقات
+#### 4. خلفيات Dashboard للعملاء
+- **APIs:**
+  - `GET /api/dashboard-backgrounds`
+  - `PUT /api/dashboard-backgrounds/select`
+- 6 خلفيات افتراضية متاحة
+- العميل يتحكم في خلفية Dashboard فقط (ليس صفحة تسجيل الدخول)
 
-### Excel Export
-- [x] تصدير تقارير المبيعات
-- [x] تصدير تقارير المنتجات والمصاريف
+### 📊 نتائج الاختبارات
+- **Backend:** 16/16 اختبار ناجح (100%)
+- **Frontend:** جميع الصفحات والميزات تعمل بشكل صحيح
 
-### Call Center
-- [x] Webhook للمكالمات
-- [x] إشعار منبثق + سجل مكالمات
+## المهام المتبقية
 
-### HR System
-- [x] إدارة الموظفين (CRUD)
-- [x] تسجيل الحضور والانصراف
-- [x] نظام السلف والخصومات
-- [x] كشوفات الرواتب + صفحة طباعة
+### 🔴 أولوية قصوى (P0)
+- [ ] إعادة هيكلة `/app/backend/server.py` (الملف كبير جداً)
+- [ ] ربط صفحات الحجوزات والتقييمات والتقارير الذكية بـ Backend حقيقي
 
-### Warehouse System
-- [x] تحويلات المخزون
-- [x] طلبات الشراء
+### 🟡 أولوية عالية (P1)
+- [ ] تحسين خريطة السائقين الحية (خط السير)
+- [ ] إشعارات Push للسائقين (Firebase)
+- [ ] إكمال ميزة السحب والإفلات لترتيب أيقونات Dashboard
 
-### PWA Enhancement
-- [x] Service Worker v3 محسّن
-- [x] manifest-admin.json للوحة الإدارة
-- [x] مكون PWAInstallButton
-- [x] تعليمات التثبيت لجميع الأجهزة
+### 🟢 أولوية متوسطة (P2)
+- [ ] التحقق من وظيفة PWA
+- [ ] إكمال تكامل أجهزة البصمة (ZKTeco)
+- [ ] بناء نظام ولاء العملاء
+- [ ] بناء نظام إدارة الوصفات
 
-### Biometric Device Integration
-- [x] pyzk مثبت للاتصال بأجهزة ZKTeco
-- [x] واجهة API كاملة للأجهزة
-- [x] واجهة مستخدم في HR
-- [x] دعم Push SDK
+## البنية التقنية
 
-### Loyalty Program
-- [x] نظام نقاط الولاء الكامل
-- [x] 4 مستويات (برونزي، فضي، ذهبي، بلاتيني)
-- [x] كسب واستبدال النقاط
+### Backend
+```
+/app/backend/
+├── server.py              # الملف الرئيسي (كبير، يحتاج تقسيم)
+├── api/
+│   ├── biometric.py       # أجهزة البصمة
+│   ├── login_backgrounds.py
+│   └── purchasing.py      # (ملف إضافي - غير مستخدم حالياً)
+├── static/uploads/        # الصور المرفوعة
+└── requirements.txt
+```
 
-### Recipes & Raw Materials
-- [x] إدارة المواد الخام
-- [x] إنشاء وصفات للمنتجات
-- [x] حساب التكلفة التلقائي
+### Frontend
+```
+/app/frontend/src/
+├── pages/
+│   ├── Dashboard.js       # لوحة التحكم الرئيسية
+│   ├── SuperAdmin.js      # إدارة العملاء
+│   ├── Purchasing.js      # المشتريات (جديد)
+│   ├── BranchOrders.js    # طلبات الفروع (جديد)
+│   ├── Reservations.js    # الحجوزات (واجهة فقط)
+│   ├── Reviews.js         # التقييمات (واجهة فقط)
+│   └── SmartReports.js    # التقارير الذكية (واجهة فقط)
+└── App.js
+```
 
-### Coupons & Promotions System
-- [x] نظام الكوبونات الكامل
-- [x] نظام العروض الترويجية
-- [x] واجهة مستخدم كاملة `/coupons`
+### قاعدة البيانات (MongoDB)
+- `tenants`: العملاء مع `enabled_features`
+- `users`: المستخدمين
+- `branches`: الفروع
+- `suppliers`: الموردين (جديد)
+- `purchase_orders`: أوامر الشراء (جديد)
+- `branch_orders`: طلبات الفروع (جديد)
+- `raw_materials`: المواد الخام (جديد)
+- `tenant_settings`: إعدادات العميل (جديد)
+- `dashboard_backgrounds`: خلفيات Dashboard (جديد)
 
-### 🆕 Background & Logo Upload System (Jan 16, 2026)
-- [x] **رفع الخلفيات من الجهاز**: خيار جديد لرفع الصور مباشرة
-- [x] **معالجة تلقائية للصور**: تحويل جميع الصيغ إلى JPEG بحجم مناسب
-- [x] **دعم صيغ متعددة**: JPEG, PNG, GIF, WEBP, HEIC, BMP, TIFF
-- [x] **6 خلفيات متاحة** للنظام
-
-### 🆕 Tenant Identity Management (Jan 16, 2026)
-- [x] **شعار المطعم**: رفع شعار مخصص لكل عميل
-- [x] **اسم المطعم (عربي/إنجليزي)**: حقول جديدة
-- [x] **تحكم من المالك**: يتحكم Super Admin فقط
-
-### 🆕 Dashboard Reorder Feature (Jan 16, 2026)
-- [x] **ميزة السحب والإفلات**: اضغط مطولاً لإعادة ترتيب الأيقونات
-- [x] **حفظ الترتيب**: يحفظ في localStorage لكل مستخدم
-- [x] **تصميم جديد**: أيقونات بتدرجات لونية جميلة
-- [x] **شبكة محسنة**: 3/4/6 أعمدة حسب حجم الشاشة
-
-### 🆕 New Pages (Jan 16, 2026)
-- [x] **الحجوزات** (`/reservations`): إدارة حجوزات الطاولات
-  - إنشاء حجز جديد
-  - تأكيد/إلغاء الحجوزات
-  - فلترة بالتاريخ والحالة
-  - إحصائيات يومية
-  
-- [x] **التقييمات** (`/reviews`): نظام تقييم العملاء
-  - عرض التقييمات مع النجوم
-  - تقييم مفصل (طعام، خدمة، توصيل)
-  - إضافة ردود الإدارة
-  - إحصائيات وتوزيع التقييمات
-  
-- [x] **التقارير الذكية** (`/smart-reports`): تحليلات متقدمة
-  - إحصائيات المبيعات والطلبات
-  - رؤى ذكية (Insights)
-  - المنتجات الأكثر مبيعاً مع نسب النمو
-  - المبيعات حسب الساعة
-  - مقارنات الأداء (يومي/أسبوعي/شهري)
-  - توزيع أنواع الطلبات (Pie Chart)
-
----
-
-## 🔑 Test Credentials
+## بيانات الاختبار
 
 ### Super Admin
-- URL: `/super-admin`
 - Email: `owner@maestroegp.com`
 - Password: `owner123`
 - Secret Key: `271018`
+- URL: `/super-admin`
 
-### Main System Admin
-- URL: `/login`
+### Admin النظام الرئيسي
 - Email: `admin@maestroegp.com`
 - Password: `admin123`
+- URL: `/login`
+
+## التكاملات الخارجية
+- Leaflet/OpenStreetMap: تتبع السائقين
+- openpyxl: تصدير Excel
+- Pillow: معالجة الصور
+- react-beautiful-dnd: السحب والإفلات
+- pyzk: أجهزة البصمة (مثبت، لم يستخدم بعد)
+- firebase-admin: إشعارات Push (مخطط له)
 
 ---
-
-## 📡 API Endpoints
-
-### File Upload
-- `POST /api/upload/background` - رفع خلفية من الجهاز
-- `POST /api/upload/logo` - رفع شعار للعميل
-
-### Reservations
-- `GET /api/reservations` - جلب الحجوزات
-- `POST /api/reservations` - إنشاء حجز
-- `PUT /api/reservations/{id}/status` - تحديث حالة الحجز
-- `DELETE /api/reservations/{id}` - حذف حجز
-
-### Reviews
-- `GET /api/reviews` - جلب التقييمات
-- `POST /api/reviews/{id}/reply` - إضافة رد
-
-### Smart Reports
-- `GET /api/reports/smart` - جلب التقارير الذكية
-
----
-
-## 📁 Project Structure
-
-```
-/app
-├── backend/
-│   ├── server.py (6000+ lines - needs refactoring)
-│   ├── api/
-│   │   ├── biometric.py
-│   │   ├── login_backgrounds.py
-│   │   └── ... (other modules)
-│   └── uploads/
-│       ├── backgrounds/
-│       └── logos/
-├── frontend/
-│   └── src/
-│       ├── pages/
-│       │   ├── Dashboard.js (✅ with reorder feature)
-│       │   ├── Reservations.js (🆕)
-│       │   ├── Reviews.js (🆕)
-│       │   ├── SmartReports.js (🆕)
-│       │   └── ...
-│       └── App.js
-└── memory/
-    └── PRD.md
-```
-
----
-
-## 🛠️ Tech Stack
-- **Frontend**: React + Tailwind CSS + Shadcn/UI
-- **Backend**: FastAPI (Python)
-- **Database**: MongoDB
-- **Maps**: Leaflet / OpenStreetMap
-- **Excel**: openpyxl
-- **Biometric**: pyzk (ZKTeco)
-- **Image Processing**: Pillow (PIL)
-
----
-
-## 📊 Deployment Status
-- ✅ All Core APIs Working
-- ✅ Kitchen Display: Working
-- ✅ Excel Export: Working
-- ✅ Login Backgrounds: Working (6 backgrounds)
-- ✅ Driver Map: Working
-- ✅ PWA Install Button: Working
-- ✅ Loyalty Program: Working
-- ✅ Recipes System: Working
-- ✅ Coupons & Promotions: Working
-- ✅ Background Upload: Working
-- ✅ Logo Upload: Working
-- ✅ Dashboard Reorder: Working
-- ✅ Reservations: Working
-- ✅ Reviews: Working
-- ✅ Smart Reports: Working
-- ✅ Ready for Production
-
----
-
-## 🔄 Needs Configuration
-1. **PWA**: يحتاج اختبار على أجهزة فعلية
-2. **Biometric**: يحتاج جهاز ZKTeco للاتصال الفعلي
-3. **Push Notifications**: يحتاج إعداد Firebase project
-
----
-
-## 📋 Backlog / Future Enhancements
-
-### P0 - High Priority
-- [ ] إعادة هيكلة server.py (ملف كبير جداً)
-- [ ] نظام طلبات بين الفروع والمخزن
-- [ ] نظام متكامل للمشتريات
-- [ ] تنبيهات تلقائية عند انخفاض المخزون
-
-### P1 - Medium Priority
-- [ ] تحسين خريطة السائقين الحية
-- [ ] إشعارات Push (Firebase) للسائقين
-- [ ] تكامل أجهزة البصمة ZKTeco (كتابة منطق الاتصال)
-- [ ] الخلفيات المتجاوبة (وضع مظلم/فاتح)
-
-### P2 - Low Priority
-- [ ] أزرار رجوع موحدة في جميع الصفحات
-- [ ] تقسيم ملفات SuperAdmin.js و HR.js
+آخر تحديث: 16 يناير 2026
