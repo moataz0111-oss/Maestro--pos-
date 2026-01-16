@@ -632,12 +632,14 @@ export default function SuperAdmin() {
       formData.append('file', file);
       if (tenantId) formData.append('tenant_id', tenantId);
       
-      const res = await axios.post(`${API}/upload/logo`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      });
+      // لا نحتاج لتحديد Content-Type يدوياً - axios سيضيفه تلقائياً مع الـ boundary الصحيح
+      // والـ Authorization header موجود في axios.defaults.headers.common
+      const res = await axios.post(`${API}/upload/logo`, formData);
       
+      console.log('Logo upload response:', res.data);
       return res.data.logo_url;
     } catch (error) {
+      console.error('Logo upload error:', error.response?.data || error);
       toast.error(error.response?.data?.detail || 'فشل في رفع الشعار');
       return null;
     }
