@@ -756,7 +756,7 @@ export default function Settings() {
                   الرئيسية
                 </TabsTrigger>
               )}
-              {hasRole(['admin', 'manager']) && (
+              {hasRole(['admin', 'manager']) && settingsPermissions.settingsUsers && (
                 <TabsTrigger 
                   value="users"
                   className="flex-shrink-0 px-4 py-2.5 text-sm font-medium rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
@@ -764,7 +764,7 @@ export default function Settings() {
                   المستخدمين
                 </TabsTrigger>
               )}
-              {hasRole(['admin', 'manager']) && (
+              {hasRole(['admin', 'manager']) && settingsPermissions.settingsCustomers && (
                 <TabsTrigger 
                   value="customers"
                   className="flex-shrink-0 px-4 py-2.5 text-sm font-medium rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
@@ -772,7 +772,7 @@ export default function Settings() {
                   العملاء
                 </TabsTrigger>
               )}
-              {hasRole(['admin']) && (
+              {hasRole(['admin']) && settingsPermissions.settingsBranches && (
                 <TabsTrigger 
                   value="branches"
                   className="flex-shrink-0 px-4 py-2.5 text-sm font-medium rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
@@ -780,7 +780,7 @@ export default function Settings() {
                   الفروع
                 </TabsTrigger>
               )}
-              {hasRole(['admin', 'manager']) && (
+              {hasRole(['admin', 'manager']) && settingsPermissions.settingsCategories && (
                 <TabsTrigger 
                   value="categories"
                   className="flex-shrink-0 px-4 py-2.5 text-sm font-medium rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
@@ -788,7 +788,7 @@ export default function Settings() {
                   الفئات
                 </TabsTrigger>
               )}
-              {hasRole(['admin', 'manager']) && (
+              {hasRole(['admin', 'manager']) && settingsPermissions.settingsProducts && (
                 <TabsTrigger 
                   value="products"
                   className="flex-shrink-0 px-4 py-2.5 text-sm font-medium rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
@@ -796,7 +796,7 @@ export default function Settings() {
                   المنتجات
                 </TabsTrigger>
               )}
-              {hasRole(['admin', 'manager']) && (
+              {hasRole(['admin', 'manager']) && settingsPermissions.settingsPrinters && (
                 <TabsTrigger 
                   value="printers"
                   className="flex-shrink-0 px-4 py-2.5 text-sm font-medium rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
@@ -804,7 +804,7 @@ export default function Settings() {
                   الطابعات
                 </TabsTrigger>
               )}
-              {hasRole(['admin']) && (
+              {hasRole(['admin']) && settingsPermissions.settingsDeliveryCompanies && (
                 <TabsTrigger 
                   value="delivery"
                   className="flex-shrink-0 px-4 py-2.5 text-sm font-medium rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
