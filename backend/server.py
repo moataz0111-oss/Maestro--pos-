@@ -6601,6 +6601,65 @@ async def delete_branch_order(order_id: str, current_user: dict = Depends(get_cu
     await db.branch_orders.delete_one({"id": order_id})
     return {"message": "تم حذف الطلب"}
 
+# ==================== DASHBOARD BACKGROUNDS ====================
+
+@api_router.get("/dashboard-backgrounds")
+async def get_dashboard_backgrounds(current_user: dict = Depends(get_current_user)):
+    """جلب خلفيات Dashboard المتاحة للعميل"""
+    tenant_id = get_user_tenant_id(current_user)
+    
+    # جلب الخلفيات الافتراضية (متاحة للجميع)
+    default_backgrounds = [
+        "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=1920",
+        "https://images.unsplash.com/photo-1554679665-f5537f187268?w=1920",
+        "https://images.unsplash.com/photo-1466978913421-dad2ebd01d17?w=1920",
+        "https://images.unsplash.com/photo-1552566626-52f8b828add9?w=1920",
+        "https://images.unsplash.com/photo-1559329007-40df8a9345d8?w=1920",
+        "https://images.unsplash.com/photo-1514933651103-005eec06c04b?w=1920"
+    ]
+    
+    # جلب الخلفيات المرفوعة من قبل العميل
+    tenant_backgrounds = await db.dashboard_backgrounds.find(
+        {"tenant_id": tenant_id} if tenant_id else {},
+        {"_id": 0}
+    ).to_list(50)
+    
+    # جلب الخلفية المحددة حالياً
+    settings = await db.tenant_settings.find_one(
+        {"tenant_id": tenant_id} if tenant_id else {"tenant_id": None},
+        {"_id": 0, "dashboard_background": 1}
+    )
+    
+    return {
+        "backgrounds": default_backgrounds + [bg["url"] for bg in tenant_backgrounds],
+        "selected": settings.get("dashboard_background") if settings else None
+    }
+
+@api_router.put("/dashboard-backgrounds/select")
+async def select_dashboard_background(data: dict, current_user: dict = Depends(get_current_user)):
+    """اختيار خلفية Dashboard للعميل"""
+    tenant_id = get_user_tenant_id(current_user)
+    background_url = data.get("background_url")
+    
+    # تحديث أو إنشاء إعدادات العميل
+    await db.tenant_settings.update_one(
+        {"tenant_id": tenant_id} if tenant_id else {"tenant_id": None},
+        {
+            "$set": {
+                "dashboard_background": background_url,
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+                "updated_by": current_user["id"]
+            },
+            "$setOnInsert": {
+                "tenant_id": tenant_id,
+                "created_at": datetime.now(timezone.utc).isoformat()
+            }
+        },
+        upsert=True
+    )
+    
+    return {"message": "تم تحديث الخلفية", "background_url": background_url}
+
 # ==================== CALL CENTER / CALLER ID ====================
 
 class CallCenterConfig(BaseModel):
