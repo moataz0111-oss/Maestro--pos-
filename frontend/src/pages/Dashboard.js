@@ -39,8 +39,7 @@ import {
   UserCog,
   ArrowLeftRight,
   ChefHat,
-  Gift,
-  FileText
+  Gift
 } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 import { toast } from 'sonner';
