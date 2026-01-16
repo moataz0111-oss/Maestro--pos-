@@ -5439,16 +5439,16 @@ async def register_super_admin(request: SuperAdminRegisterRequest):
         raise HTTPException(status_code=400, detail="يوجد Super Admin بالفعل")
     
     # التحقق من عدم وجود البريد
-    email_exists = await db.users.find_one({"email": email})
+    email_exists = await db.users.find_one({"email": request.email})
     if email_exists:
         raise HTTPException(status_code=400, detail="البريد الإلكتروني مستخدم")
     
     user_doc = {
         "id": str(uuid.uuid4()),
         "username": "super_admin",
-        "email": email,
-        "password": hash_password(password),
-        "full_name": full_name,
+        "email": request.email,
+        "password": hash_password(request.password),
+        "full_name": request.full_name,
         "role": UserRole.SUPER_ADMIN,
         "branch_id": None,
         "tenant_id": None,
