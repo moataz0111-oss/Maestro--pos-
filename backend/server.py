@@ -39,9 +39,20 @@ JWT_EXPIRATION_HOURS = 24
 SENDGRID_API_KEY = os.environ.get('SENDGRID_API_KEY', '')
 SENDER_EMAIL = os.environ.get('SENDER_EMAIL', 'noreply@maestroegp.com')
 
+# Static Files Configuration
+UPLOAD_DIR = ROOT_DIR / "uploads"
+UPLOAD_DIR.mkdir(exist_ok=True)
+BACKGROUNDS_DIR = UPLOAD_DIR / "backgrounds"
+BACKGROUNDS_DIR.mkdir(exist_ok=True)
+LOGOS_DIR = UPLOAD_DIR / "logos"
+LOGOS_DIR.mkdir(exist_ok=True)
+
 app = FastAPI(title="Maestro EGP API", version="2.0.0")
 api_router = APIRouter(prefix="/api")
 security = HTTPBearer()
+
+# Mount static files directory
+app.mount("/uploads", StaticFiles(directory=str(UPLOAD_DIR)), name="uploads")
 
 # ==================== HEALTH CHECK ====================
 
