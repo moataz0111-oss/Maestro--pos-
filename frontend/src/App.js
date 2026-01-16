@@ -246,6 +246,33 @@ function AppRoutes() {
           </ProtectedRoute>
         } 
       />
+      {/* الحجوزات */}
+      <Route 
+        path="/reservations" 
+        element={
+          <ProtectedRoute>
+            <Reservations />
+          </ProtectedRoute>
+        } 
+      />
+      {/* التقييمات */}
+      <Route 
+        path="/reviews" 
+        element={
+          <ProtectedRoute>
+            <Reviews />
+          </ProtectedRoute>
+        } 
+      />
+      {/* التقارير الذكية */}
+      <Route 
+        path="/smart-reports" 
+        element={
+          <ProtectedRoute>
+            <SmartReports />
+          </ProtectedRoute>
+        } 
+      />
       {/* صفحة السائق - بدون حماية للوصول من الهاتف */}
       <Route path="/driver" element={<DriverPortal />} />
       {/* صفحة Super Admin - لوحة تحكم المالك */}
