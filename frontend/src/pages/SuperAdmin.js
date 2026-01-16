@@ -137,6 +137,7 @@ export default function SuperAdmin() {
   // Tenant features
   const [showFeaturesModal, setShowFeaturesModal] = useState(false);
   const [tenantFeatures, setTenantFeatures] = useState({
+    // الميزات الأساسية
     showPOS: true,
     showTables: true,
     showOrders: true,
@@ -157,7 +158,17 @@ export default function SuperAdmin() {
     showReviews: true,
     showSmartReports: true,
     showPurchasing: false,
-    showBranchOrders: false
+    showBranchOrders: false,
+    // خيارات الإعدادات
+    settingsUsers: true,
+    settingsCustomers: true,
+    settingsBranches: true,
+    settingsCategories: true,
+    settingsProducts: true,
+    settingsPrinters: true,
+    settingsDeliveryCompanies: true,
+    settingsCallCenter: true,
+    settingsNotifications: true
   });
   const [featuresLoading, setFeaturesLoading] = useState(false);
   
