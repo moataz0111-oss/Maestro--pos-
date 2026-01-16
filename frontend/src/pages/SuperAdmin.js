@@ -119,6 +119,8 @@ export default function SuperAdmin() {
   // Edit tenant form
   const [editTenantForm, setEditTenantForm] = useState({
     name: '',
+    name_ar: '',
+    name_en: '',
     owner_name: '',
     owner_email: '',
     owner_phone: '',
@@ -126,8 +128,11 @@ export default function SuperAdmin() {
     max_branches: 1,
     max_users: 5,
     send_welcome_email: false,
-    temp_password: ''
+    temp_password: '',
+    logo_url: ''
   });
+  const [logoFile, setLogoFile] = useState(null);
+  const [logoPreviewUrl, setLogoPreviewUrl] = useState('');
   
   // Tenant features
   const [showFeaturesModal, setShowFeaturesModal] = useState(false);
