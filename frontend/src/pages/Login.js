@@ -402,6 +402,63 @@ export default function Login() {
         </CardHeader>
 
         <CardContent className="pt-6">
+          {/* Database Initialization Panel */}
+          {showDbInit && (
+            <div className="mb-6 p-4 bg-amber-500/10 border border-amber-500/30 rounded-lg" data-testid="db-init-panel">
+              <div className="flex items-start gap-3">
+                <Database className="h-5 w-5 text-amber-400 flex-shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <h3 className="text-amber-400 font-bold text-sm mb-2">هل هذا أول استخدام للتطبيق؟</h3>
+                  <p className="text-gray-300 text-xs mb-3">
+                    إذا كنت تستخدم التطبيق لأول مرة بعد النشر، قم بتهيئة قاعدة البيانات أولاً لإنشاء الحسابات الأساسية.
+                  </p>
+                  
+                  {dbInitResult?.success ? (
+                    <div className="bg-green-500/20 border border-green-500/30 rounded-lg p-3 mb-3">
+                      <div className="flex items-center gap-2 text-green-400 mb-2">
+                        <CheckCircle className="h-4 w-4" />
+                        <span className="font-bold text-sm">تم تهيئة قاعدة البيانات بنجاح!</span>
+                      </div>
+                      <div className="text-xs text-gray-300 space-y-1">
+                        <p><strong>البريد:</strong> admin@maestroegp.com</p>
+                        <p><strong>كلمة المرور:</strong> admin123</p>
+                      </div>
+                    </div>
+                  ) : dbInitResult?.success === false ? (
+                    <div className="bg-red-500/20 border border-red-500/30 rounded-lg p-3 mb-3">
+                      <p className="text-red-400 text-xs">{dbInitResult.error}</p>
+                    </div>
+                  ) : null}
+                  
+                  <Button
+                    type="button"
+                    onClick={initializeDatabase}
+                    disabled={dbInitLoading || dbInitResult?.success}
+                    className="w-full h-10 text-sm font-bold bg-amber-500 text-black hover:bg-amber-400 disabled:opacity-50"
+                    data-testid="init-db-button"
+                  >
+                    {dbInitLoading ? (
+                      <span className="flex items-center gap-2">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        جاري التهيئة...
+                      </span>
+                    ) : dbInitResult?.success ? (
+                      <span className="flex items-center gap-2">
+                        <CheckCircle className="h-4 w-4" />
+                        تم بنجاح - سجل الدخول الآن
+                      </span>
+                    ) : (
+                      <span className="flex items-center gap-2">
+                        <Database className="h-4 w-4" />
+                        تهيئة قاعدة البيانات
+                      </span>
+                    )}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
+
           <form onSubmit={handleSubmit} className="space-y-5">
             {error && (
               <div 
