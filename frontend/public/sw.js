@@ -1,169 +1,107 @@
-const CACHE_NAME = 'maestro-app-v3';
-const STATIC_CACHE = 'maestro-static-v3';
-const DYNAMIC_CACHE = 'maestro-dynamic-v3';
+// Service Worker v5 - Network First Strategy for Speed
+const CACHE_NAME = 'maestro-app-v5';
+const CACHE_VERSION = Date.now(); // Force update on each deploy
 
-// الملفات الأساسية للتخزين المؤقت
+// Only cache essential static files
 const STATIC_FILES = [
-  '/',
-  '/driver',
-  '/login',
-  '/manifest.json',
-  '/manifest-admin.json',
-  '/icons/icon-72.png',
-  '/icons/icon-96.png',
-  '/icons/icon-128.png',
-  '/icons/icon-144.png',
-  '/icons/icon-152.png',
   '/icons/icon-192.png',
-  '/icons/icon-384.png',
   '/icons/icon-512.png'
 ];
 
-// الملفات التي يجب تحديثها دائماً
-const NETWORK_ONLY = [
-  '/api/',
-  '/socket'
-];
-
-// Install - تخزين الملفات الأساسية
+// Install - Skip waiting immediately
 self.addEventListener('install', (event) => {
-  console.log('[SW] Installing v3...');
-  event.waitUntil(
-    caches.open(STATIC_CACHE)
-      .then((cache) => {
-        console.log('[SW] Caching static files');
-        // تخزين كل ملف على حدة لتجنب الفشل الكامل
-        return Promise.allSettled(
-          STATIC_FILES.map(file => 
-            cache.add(file).catch(err => console.log(`[SW] Failed to cache ${file}:`, err))
-          )
-        );
-      })
-      .then(() => {
-        console.log('[SW] Static files cached successfully');
-        return self.skipWaiting();
-      })
-      .catch((err) => {
-        console.log('[SW] Cache failed:', err);
-      })
-  );
+  console.log('[SW v5] Installing...');
+  self.skipWaiting();
 });
 
-// Activate - تنظيف الكاش القديم
+// Activate - Clean ALL old caches immediately
 self.addEventListener('activate', (event) => {
-  console.log('[SW] Activating v3...');
-  const currentCaches = [CACHE_NAME, STATIC_CACHE, DYNAMIC_CACHE];
-  
+  console.log('[SW v5] Activating...');
   event.waitUntil(
-    caches.keys()
-      .then((cacheNames) => {
-        return Promise.all(
-          cacheNames
-            .filter((name) => !currentCaches.includes(name))
-            .map((name) => {
-              console.log('[SW] Deleting old cache:', name);
-              return caches.delete(name);
-            })
-        );
-      })
-      .then(() => {
-        console.log('[SW] Claiming clients');
-        return self.clients.claim();
-      })
+    caches.keys().then((cacheNames) => {
+      return Promise.all(
+        cacheNames.map((cache) => {
+          if (cache !== CACHE_NAME) {
+            console.log('[SW v5] Deleting old cache:', cache);
+            return caches.delete(cache);
+          }
+        })
+      );
+    }).then(() => {
+      console.log('[SW v5] Taking control of clients');
+      return self.clients.claim();
+    })
   );
 });
 
-// Fetch - استراتيجيات مختلفة حسب نوع الطلب
+// Fetch - ALWAYS use Network First for HTML/JS/CSS
 self.addEventListener('fetch', (event) => {
   const { request } = event;
   const url = new URL(request.url);
   
-  // تجاهل الطلبات غير HTTP/HTTPS
-  if (!url.protocol.startsWith('http')) {
-    return;
-  }
+  // Skip non-HTTP requests
+  if (!url.protocol.startsWith('http')) return;
   
-  // تجاهل طلبات chrome-extension وغيرها
-  if (url.origin !== location.origin) {
-    return;
-  }
+  // Skip cross-origin requests
+  if (url.origin !== location.origin) return;
   
-  // للـ API - Network Only (لا نخزنها مؤقتاً)
-  if (NETWORK_ONLY.some(path => url.pathname.includes(path))) {
+  // API calls - Always network only
+  if (url.pathname.startsWith('/api')) {
     event.respondWith(fetch(request));
     return;
   }
   
-  // للملفات الثابتة (icons, manifest) - Cache First
-  if (url.pathname.includes('/icons/') || url.pathname.includes('manifest')) {
-    event.respondWith(
-      caches.match(request)
-        .then((cached) => {
-          if (cached) {
-            return cached;
-          }
-          return fetch(request).then((response) => {
-            if (response.ok) {
-              const clone = response.clone();
-              caches.open(STATIC_CACHE).then((cache) => cache.put(request, clone));
-            }
-            return response;
-          });
-        })
-    );
-    return;
-  }
-  
-  // للصفحات الرئيسية - Stale While Revalidate
+  // HTML pages (navigation) - Network First, no cache
   if (request.mode === 'navigate') {
     event.respondWith(
-      caches.match(request)
-        .then((cached) => {
-          const fetchPromise = fetch(request)
-            .then((response) => {
-              if (response.ok) {
-                const clone = response.clone();
-                caches.open(DYNAMIC_CACHE).then((cache) => cache.put(request, clone));
-              }
-              return response;
-            })
-            .catch(() => cached);
-          
-          return cached || fetchPromise;
-        })
+      fetch(request)
+        .catch(() => caches.match(request))
     );
     return;
   }
   
-  // لبقية الطلبات - Network First with Cache Fallback
-  event.respondWith(
-    fetch(request)
-      .then((response) => {
-        if (response.ok) {
-          const clone = response.clone();
-          caches.open(DYNAMIC_CACHE).then((cache) => cache.put(request, clone));
-        }
-        return response;
+  // JS/CSS files - Network First for fresh content
+  if (url.pathname.includes('.js') || url.pathname.includes('.css')) {
+    event.respondWith(
+      fetch(request)
+        .catch(() => caches.match(request))
+    );
+    return;
+  }
+  
+  // Icons and images - Cache first for speed
+  if (url.pathname.includes('/icons/') || url.pathname.includes('.png') || url.pathname.includes('.jpg')) {
+    event.respondWith(
+      caches.match(request).then((cached) => {
+        if (cached) return cached;
+        return fetch(request).then((response) => {
+          if (response.ok) {
+            const clone = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
+          }
+          return response;
+        });
       })
-      .catch(() => caches.match(request))
-  );
+    );
+    return;
+  }
+  
+  // Everything else - Network only
+  event.respondWith(fetch(request));
 });
 
-// Push Notifications (للمستقبل)
+// Push Notifications
 self.addEventListener('push', (event) => {
   if (event.data) {
     const data = event.data.json();
-    const options = {
-      body: data.body,
-      icon: '/icons/icon-192.png',
-      badge: '/icons/icon-72.png',
-      vibrate: [200, 100, 200],
-      tag: data.tag || 'maestro-notification',
-      renotify: true,
-      data: data.data
-    };
     event.waitUntil(
-      self.registration.showNotification(data.title, options)
+      self.registration.showNotification(data.title, {
+        body: data.body,
+        icon: '/icons/icon-192.png',
+        badge: '/icons/icon-72.png',
+        vibrate: [200, 100, 200],
+        tag: data.tag || 'maestro-notification'
+      })
     );
   }
 });
@@ -171,9 +109,17 @@ self.addEventListener('push', (event) => {
 // Notification Click
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  event.waitUntil(
-    clients.openWindow('/driver')
-  );
+  event.waitUntil(clients.openWindow('/driver'));
 });
 
-console.log('[SW] Service Worker loaded');
+// Message handler - for manual cache clear
+self.addEventListener('message', (event) => {
+  if (event.data === 'CLEAR_CACHE') {
+    caches.keys().then((names) => {
+      names.forEach((name) => caches.delete(name));
+    });
+    console.log('[SW v5] All caches cleared');
+  }
+});
+
+console.log('[SW v5] Loaded');
