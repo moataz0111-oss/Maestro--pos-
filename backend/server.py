@@ -4861,8 +4861,17 @@ async def get_sales_report(
         # المستخدم الرئيسي يرى فقط الطلبات بدون tenant_id
         query["$or"] = [{"tenant_id": {"$exists": False}}, {"tenant_id": None}]
     
-    if branch_id:
+    # فلترة الفرع - التحقق من صلاحية المستخدم
+    user_branch_id = current_user.get("branch_id")
+    user_role = current_user.get("role")
+    
+    # الموظفون المقيدون بفرع يرون فقط بيانات فرعهم
+    if user_branch_id and user_role not in [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.MANAGER]:
+        query["branch_id"] = user_branch_id
+    elif branch_id:
+        # المدراء يمكنهم اختيار أي فرع
         query["branch_id"] = branch_id
+    
     if start_date:
         query["created_at"] = {"$gte": start_date}
     if end_date:
