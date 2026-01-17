@@ -1622,27 +1622,49 @@ export default function Settings() {
                           {/* صلاحيات الموظف */}
                           <div>
                             <Label className="text-foreground mb-2 block">الصلاحيات</Label>
-                            <div className="border rounded-lg p-3 max-h-48 overflow-y-auto bg-muted/30">
-                              <div className="grid grid-cols-2 gap-2">
-                                {STAFF_PERMISSIONS.map(perm => (
-                                  <div key={perm.id} className="flex items-center gap-2">
-                                    <Switch
-                                      checked={staffForm.permissions?.includes(perm.id)}
-                                      onCheckedChange={(checked) => {
-                                        const newPerms = checked 
-                                          ? [...(staffForm.permissions || []), perm.id]
-                                          : (staffForm.permissions || []).filter(p => p !== perm.id);
-                                        setStaffForm({ ...staffForm, permissions: newPerms });
-                                      }}
-                                    />
-                                    <div>
+                            <div className="border rounded-lg p-3 max-h-64 overflow-y-auto bg-muted/30 space-y-4">
+                              {/* صلاحيات الصفحات */}
+                              <div>
+                                <h4 className="text-sm font-medium text-foreground mb-2 border-b pb-1">📄 الصفحات الرئيسية</h4>
+                                <div className="grid grid-cols-2 gap-2">
+                                  {STAFF_PERMISSIONS.filter(p => p.group === 'pages').map(perm => (
+                                    <div key={perm.id} className="flex items-center gap-2">
+                                      <Switch
+                                        checked={staffForm.permissions?.includes(perm.id)}
+                                        onCheckedChange={(checked) => {
+                                          const newPerms = checked 
+                                            ? [...(staffForm.permissions || []), perm.id]
+                                            : (staffForm.permissions || []).filter(p => p !== perm.id);
+                                          setStaffForm({ ...staffForm, permissions: newPerms });
+                                        }}
+                                      />
                                       <span className="text-sm text-foreground">{perm.name}</span>
                                     </div>
-                                  </div>
-                                ))}
+                                  ))}
+                                </div>
+                              </div>
+                              {/* صلاحيات الإعدادات */}
+                              <div>
+                                <h4 className="text-sm font-medium text-foreground mb-2 border-b pb-1">⚙️ الإعدادات</h4>
+                                <div className="grid grid-cols-2 gap-2">
+                                  {STAFF_PERMISSIONS.filter(p => p.group === 'settings').map(perm => (
+                                    <div key={perm.id} className="flex items-center gap-2">
+                                      <Switch
+                                        checked={staffForm.permissions?.includes(perm.id)}
+                                        onCheckedChange={(checked) => {
+                                          const newPerms = checked 
+                                            ? [...(staffForm.permissions || []), perm.id]
+                                            : (staffForm.permissions || []).filter(p => p !== perm.id);
+                                          setStaffForm({ ...staffForm, permissions: newPerms });
+                                        }}
+                                      />
+                                      <span className="text-sm text-foreground">{perm.name}</span>
+                                    </div>
+                                  ))}
+                                </div>
                               </div>
                             </div>
-                            <p className="text-xs text-muted-foreground mt-1">حدد الصفحات التي يمكن للموظف رؤيتها</p>
+                            <p className="text-xs text-muted-foreground mt-1">حدد الصفحات والإعدادات التي يمكن للموظف رؤيتها</p>
                           </div>
                           
                           <div className="flex gap-2 pt-4">
