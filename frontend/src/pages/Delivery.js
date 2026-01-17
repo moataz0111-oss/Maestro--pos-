@@ -95,6 +95,11 @@ export default function Delivery() {
   const [collectPaymentDialogOpen, setCollectPaymentDialogOpen] = useState(false);
   const [paymentAmount, setPaymentAmount] = useState(0);
   
+  // حالات تحويل الطلب لسائق آخر
+  const [transferDriverDialogOpen, setTransferDriverDialogOpen] = useState(false);
+  const [orderToTransfer, setOrderToTransfer] = useState(null);
+  const [targetDriverId, setTargetDriverId] = useState('');
+  
   // حالات جديدة للخريطة
   const [driverLocations, setDriverLocations] = useState([]);
   const [mapLoaded, setMapLoaded] = useState(false);
