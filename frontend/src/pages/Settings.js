@@ -387,7 +387,8 @@ export default function Settings() {
         role: editStaffForm.role,
         branch_id: editStaffForm.branch_id,
         job_title: editStaffForm.job_title,
-        is_active: editStaffForm.is_active
+        is_active: editStaffForm.is_active,
+        permissions: editStaffForm.permissions || []
       });
       toast.success('تم تحديث بيانات الموظف');
       setEditStaffDialogOpen(false);
