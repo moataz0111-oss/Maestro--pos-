@@ -138,7 +138,9 @@ function AppRoutes() {
         path="/pos" 
         element={
           <ProtectedRoute>
-            <POS />
+            <PermissionRoute permission="pos">
+              <POS />
+            </PermissionRoute>
           </ProtectedRoute>
         } 
       />
@@ -146,7 +148,9 @@ function AppRoutes() {
         path="/tables" 
         element={
           <ProtectedRoute>
-            <Tables />
+            <PermissionRoute permission="tables">
+              <Tables />
+            </PermissionRoute>
           </ProtectedRoute>
         } 
       />
@@ -154,7 +158,9 @@ function AppRoutes() {
         path="/orders" 
         element={
           <ProtectedRoute>
-            <Orders />
+            <PermissionRoute permission="orders">
+              <Orders />
+            </PermissionRoute>
           </ProtectedRoute>
         } 
       />
@@ -162,7 +168,9 @@ function AppRoutes() {
         path="/inventory" 
         element={
           <ProtectedRoute>
-            <Inventory />
+            <PermissionRoute permission="inventory">
+              <Inventory />
+            </PermissionRoute>
           </ProtectedRoute>
         } 
       />
@@ -170,7 +178,9 @@ function AppRoutes() {
         path="/delivery" 
         element={
           <ProtectedRoute>
-            <Delivery />
+            <PermissionRoute permission="delivery">
+              <Delivery />
+            </PermissionRoute>
           </ProtectedRoute>
         } 
       />
@@ -178,7 +188,9 @@ function AppRoutes() {
         path="/settings" 
         element={
           <ProtectedRoute>
-            <Settings />
+            <PermissionRoute permission="settings">
+              <Settings />
+            </PermissionRoute>
           </ProtectedRoute>
         } 
       />
