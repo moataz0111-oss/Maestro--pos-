@@ -237,6 +237,172 @@ def health_check():
 def api_health_check():
     return {"status": "ok", "api": "Maestro EGP API"}
 
+# ==================== DATABASE INITIALIZATION ENDPOINT ====================
+
+@api_router.get("/init-db")
+async def initialize_database_endpoint():
+    """
+    Endpoint لتهيئة قاعدة البيانات يدوياً
+    يمكن استدعاؤه عبر: GET /api/init-db
+    """
+    try:
+        # التحقق من وجود Super Admin
+        super_admin = await db.users.find_one({"role": "super_admin"})
+        
+        if super_admin:
+            # التحقق من وجود خلفيات
+            login_bg = await db.settings.find_one({"type": "login_backgrounds"})
+            if not login_bg:
+                bg_doc = {
+                    "type": "login_backgrounds",
+                    "backgrounds": [
+                        {
+                            "id": str(uuid.uuid4()),
+                            "image_url": "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=1920",
+                            "title": "مطعم فاخر",
+                            "is_active": True
+                        },
+                        {
+                            "id": str(uuid.uuid4()),
+                            "image_url": "https://images.unsplash.com/photo-1552566626-52f8b828add9?w=1920",
+                            "title": "مطعم حديث",
+                            "is_active": True
+                        }
+                    ],
+                    "settings": {
+                        "transition_effect": "fade",
+                        "transition_speed": 5,
+                        "overlay_color": "rgba(0,0,0,0.5)",
+                        "text_color": "#ffffff"
+                    }
+                }
+                await db.settings.insert_one(bg_doc)
+            
+            return {
+                "status": "already_initialized",
+                "message": "قاعدة البيانات مهيأة مسبقاً",
+                "credentials": {
+                    "super_admin": "owner@maestroegp.com / owner123 (مفتاح السر: 271018)",
+                    "admin": "admin@maestroegp.com / admin123"
+                }
+            }
+        
+        # إنشاء Super Admin
+        super_admin_password = bcrypt.hashpw("owner123".encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+        super_admin_doc = {
+            "id": str(uuid.uuid4()),
+            "username": "super_admin",
+            "email": "owner@maestroegp.com",
+            "password": super_admin_password,
+            "full_name": "Owner",
+            "role": "super_admin",
+            "branch_id": None,
+            "tenant_id": None,
+            "permissions": ["all", "super_admin"],
+            "is_active": True,
+            "created_at": datetime.now(timezone.utc).isoformat()
+        }
+        await db.users.insert_one(super_admin_doc)
+        
+        # إنشاء مدير النظام الرئيسي
+        admin_password = bcrypt.hashpw("admin123".encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+        admin_doc = {
+            "id": str(uuid.uuid4()),
+            "username": "admin",
+            "email": "admin@maestroegp.com",
+            "password": admin_password,
+            "full_name": "مدير النظام",
+            "role": "admin",
+            "branch_id": None,
+            "tenant_id": None,
+            "permissions": ["all"],
+            "is_active": True,
+            "created_at": datetime.now(timezone.utc).isoformat()
+        }
+        await db.users.insert_one(admin_doc)
+        
+        # إنشاء الفرع الرئيسي
+        branch_doc = {
+            "id": str(uuid.uuid4()),
+            "name": "الفرع الرئيسي",
+            "code": "MAIN",
+            "address": "العنوان الرئيسي",
+            "phone": "",
+            "is_main": True,
+            "is_active": True,
+            "tenant_id": None,
+            "created_at": datetime.now(timezone.utc).isoformat()
+        }
+        await db.branches.insert_one(branch_doc)
+        
+        # إعدادات النظام
+        branding_doc = {
+            "type": "system_branding",
+            "value": {
+                "name": "Maestro",
+                "name_ar": "Maestro",
+                "name_en": "Maestro",
+                "logo_url": None
+            }
+        }
+        await db.settings.insert_one(branding_doc)
+        
+        # خلفيات تسجيل الدخول
+        bg_doc = {
+            "type": "login_backgrounds",
+            "backgrounds": [
+                {
+                    "id": str(uuid.uuid4()),
+                    "image_url": "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=1920",
+                    "title": "مطعم فاخر",
+                    "is_active": True
+                },
+                {
+                    "id": str(uuid.uuid4()),
+                    "image_url": "https://images.unsplash.com/photo-1552566626-52f8b828add9?w=1920",
+                    "title": "مطعم حديث",
+                    "is_active": True
+                },
+                {
+                    "id": str(uuid.uuid4()),
+                    "image_url": "https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=1920",
+                    "title": "طعام شهي",
+                    "is_active": True
+                }
+            ],
+            "settings": {
+                "transition_effect": "fade",
+                "transition_speed": 5,
+                "overlay_color": "rgba(0,0,0,0.5)",
+                "text_color": "#ffffff"
+            }
+        }
+        await db.settings.insert_one(bg_doc)
+        
+        return {
+            "status": "success",
+            "message": "تم تهيئة قاعدة البيانات بنجاح!",
+            "credentials": {
+                "super_admin": {
+                    "url": "/super-admin",
+                    "email": "owner@maestroegp.com",
+                    "password": "owner123",
+                    "secret_key": "271018"
+                },
+                "admin": {
+                    "url": "/login",
+                    "email": "admin@maestroegp.com",
+                    "password": "admin123"
+                }
+            }
+        }
+        
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": f"حدث خطأ: {str(e)}"
+        }
+
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
