@@ -69,7 +69,52 @@
     </head>
     <body>
         <noscript>You need to enable JavaScript to run this app.</noscript>
-        <div id="root"></div>
+        <div id="root">
+            <!-- Loading Screen - يظهر أثناء تحميل التطبيق -->
+            <div id="initial-loader" style="
+                min-height: 100vh;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            ">
+                <div style="
+                    width: 80px;
+                    height: 80px;
+                    background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+                    border-radius: 20px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    margin-bottom: 24px;
+                    animation: pulse 2s infinite;
+                ">
+                    <span style="color: white; font-size: 36px; font-weight: bold;">M</span>
+                </div>
+                <h1 style="color: white; font-size: 28px; margin: 0 0 8px 0; font-weight: 600;">Maestro</h1>
+                <p style="color: #94a3b8; font-size: 14px; margin: 0 0 24px 0;">نظام إدارة المطاعم</p>
+                <div style="
+                    width: 48px;
+                    height: 48px;
+                    border: 3px solid rgba(99, 102, 241, 0.3);
+                    border-top-color: #6366f1;
+                    border-radius: 50%;
+                    animation: spin 1s linear infinite;
+                "></div>
+                <p style="color: #64748b; font-size: 12px; margin-top: 16px;">جاري التحميل...</p>
+            </div>
+            <style>
+                @keyframes spin {
+                    to { transform: rotate(360deg); }
+                }
+                @keyframes pulse {
+                    0%, 100% { transform: scale(1); }
+                    50% { transform: scale(1.05); }
+                }
+            </style>
+        </div>
         <!--
       This HTML file is a template.
       If you open it directly in the browser, you will see an empty page.
