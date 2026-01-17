@@ -4026,6 +4026,11 @@ async def get_cash_register_summary(current_user: dict = Depends(get_current_use
     if tenant_id:
         shift_query["tenant_id"] = tenant_id
     
+    # إذا كان المستخدم مرتبط بفرع معين، نتحقق من أن الوردية في نفس الفرع
+    user_branch_id = current_user.get("branch_id")
+    if user_branch_id:
+        shift_query["branch_id"] = user_branch_id
+    
     shift = await db.shifts.find_one(shift_query, {"_id": 0})
     
     if not shift:
