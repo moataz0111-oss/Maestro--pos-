@@ -944,17 +944,31 @@ export default function Delivery() {
                             </div>
                             <div className="text-left">
                               <p className="font-bold text-foreground">{formatPrice(order.total)}</p>
-                              {order.driver_payment_status !== 'paid' && (
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  className="mt-1 h-7 text-xs border-green-500 text-green-500 hover:bg-green-500/10"
-                                  onClick={() => markOrderAsPaid(order.id)}
-                                >
-                                  <Check className="h-3 w-3 ml-1" />
-                                  تم الدفع
-                                </Button>
-                              )}
+                              <div className="flex gap-1 mt-1">
+                                {order.status !== 'delivered' && (
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-7 text-xs border-amber-500 text-amber-500 hover:bg-amber-500/10"
+                                    onClick={() => openTransferDriverDialog(order)}
+                                    data-testid={`transfer-order-${order.id}`}
+                                  >
+                                    <ArrowLeftRight className="h-3 w-3 ml-1" />
+                                    تحويل
+                                  </Button>
+                                )}
+                                {order.driver_payment_status !== 'paid' && (
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-7 text-xs border-green-500 text-green-500 hover:bg-green-500/10"
+                                    onClick={() => markOrderAsPaid(order.id)}
+                                  >
+                                    <Check className="h-3 w-3 ml-1" />
+                                    تم الدفع
+                                  </Button>
+                                )}
+                              </div>
                             </div>
                           </div>
                         </div>
