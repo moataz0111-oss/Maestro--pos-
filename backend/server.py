@@ -3736,11 +3736,15 @@ async def get_current_shift(current_user: dict = Depends(get_current_user)):
 async def auto_open_shift(current_user: dict = Depends(get_current_user)):
     """فتح وردية تلقائياً للكاشير عند تسجيل الدخول"""
     
+    # الحصول على tenant_id
+    tenant_id = await get_user_tenant_id(current_user)
+    
     # التحقق من وجود وردية مفتوحة
-    existing = await db.shifts.find_one({
-        "cashier_id": current_user["id"], 
-        "status": "open"
-    }, {"_id": 0})
+    query = {"cashier_id": current_user["id"], "status": "open"}
+    if tenant_id:
+        query["tenant_id"] = tenant_id
+        
+    existing = await db.shifts.find_one(query, {"_id": 0})
     
     if existing:
         # إرجاع الوردية الموجودة
@@ -3749,17 +3753,30 @@ async def auto_open_shift(current_user: dict = Depends(get_current_user)):
     # الحصول على الفرع الافتراضي للمستخدم أو أول فرع
     branch_id = current_user.get("branch_id")
     if not branch_id:
-        branch = await db.branches.find_one({}, {"_id": 0, "id": 1})
+        branch_query = {"tenant_id": tenant_id} if tenant_id else {}
+        branch = await db.branches.find_one(branch_query, {"_id": 0, "id": 1})
         branch_id = branch["id"] if branch else None
     
     if not branch_id:
-        raise HTTPException(status_code=400, detail="لا يوجد فرع محدد")
+        # إنشاء فرع افتراضي إذا لم يوجد
+        default_branch = {
+            "id": str(uuid.uuid4()),
+            "name": "الفرع الرئيسي",
+            "address": "",
+            "phone": "",
+            "is_active": True,
+            "created_at": datetime.now(timezone.utc).isoformat()
+        }
+        if tenant_id:
+            default_branch["tenant_id"] = tenant_id
+        await db.branches.insert_one(default_branch)
+        branch_id = default_branch["id"]
     
     # فتح وردية جديدة برصيد افتتاحي 0
     shift_doc = {
         "id": str(uuid.uuid4()),
         "cashier_id": current_user["id"],
-        "cashier_name": current_user["full_name"],
+        "cashier_name": current_user.get("full_name") or current_user.get("username"),
         "branch_id": branch_id,
         "opening_cash": 0.0,  # رصيد افتتاحي 0
         "closing_cash": None,
@@ -3780,6 +3797,9 @@ async def auto_open_shift(current_user: dict = Depends(get_current_user)):
         "ended_at": None,
         "status": "open"
     }
+    
+    if tenant_id:
+        shift_doc["tenant_id"] = tenant_id
     
     await db.shifts.insert_one(shift_doc)
     del shift_doc["_id"]
