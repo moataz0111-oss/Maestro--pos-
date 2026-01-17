@@ -3154,6 +3154,69 @@ async def update_table_status(table_id: str, status: str, current_user: dict = D
     await db.tables.update_one({"id": table_id}, {"$set": {"status": status}})
     return {"message": "تم التحديث"}
 
+@api_router.post("/tables/transfer")
+async def transfer_table_order(
+    from_table_id: str = Body(...),
+    to_table_id: str = Body(...),
+    order_id: str = Body(None),
+    current_user: dict = Depends(get_current_user)
+):
+    """تحويل الطلب من طاولة إلى أخرى"""
+    
+    # التحقق من الطاولة المصدر
+    from_table = await db.tables.find_one({"id": from_table_id})
+    if not from_table:
+        raise HTTPException(status_code=404, detail="الطاولة المصدر غير موجودة")
+    
+    if from_table.get("status") != "occupied":
+        raise HTTPException(status_code=400, detail="الطاولة المصدر ليست مشغولة")
+    
+    # التحقق من الطاولة المستهدفة
+    to_table = await db.tables.find_one({"id": to_table_id})
+    if not to_table:
+        raise HTTPException(status_code=404, detail="الطاولة المستهدفة غير موجودة")
+    
+    if to_table.get("status") != "available":
+        raise HTTPException(status_code=400, detail="الطاولة المستهدفة غير متاحة")
+    
+    # الحصول على الطلب الحالي
+    actual_order_id = order_id or from_table.get("current_order_id")
+    if actual_order_id:
+        # تحديث الطلب
+        await db.orders.update_one(
+            {"id": actual_order_id},
+            {"$set": {
+                "table_id": to_table_id,
+                "table_number": to_table.get("number"),
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+                "transfer_history": {
+                    "from_table": from_table.get("number"),
+                    "to_table": to_table.get("number"),
+                    "transferred_at": datetime.now(timezone.utc).isoformat(),
+                    "transferred_by": current_user["id"]
+                }
+            }}
+        )
+    
+    # تحديث حالة الطاولات
+    await db.tables.update_one(
+        {"id": from_table_id},
+        {"$set": {"status": "available", "current_order_id": None}}
+    )
+    
+    await db.tables.update_one(
+        {"id": to_table_id},
+        {"$set": {"status": "occupied", "current_order_id": actual_order_id}}
+    )
+    
+    logger.info(f"Order transferred from table {from_table.get('number')} to table {to_table.get('number')}")
+    
+    return {
+        "message": f"تم تحويل الطلب من طاولة {from_table.get('number')} إلى طاولة {to_table.get('number')}",
+        "from_table": from_table.get("number"),
+        "to_table": to_table.get("number")
+    }
+
 @api_router.delete("/tables/{table_id}")
 async def delete_table(table_id: str, current_user: dict = Depends(get_current_user)):
     """حذف طاولة - فقط للمالك أو المدير"""
