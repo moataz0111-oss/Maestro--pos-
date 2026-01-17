@@ -3737,7 +3737,7 @@ async def auto_open_shift(current_user: dict = Depends(get_current_user)):
     """فتح وردية تلقائياً للكاشير عند تسجيل الدخول"""
     
     # الحصول على tenant_id
-    tenant_id = await get_user_tenant_id(current_user)
+    tenant_id = get_user_tenant_id(current_user)
     
     # التحقق من وجود وردية مفتوحة
     query = {"cashier_id": current_user["id"], "status": "open"}
