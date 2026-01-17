@@ -352,20 +352,37 @@ export default function Delivery() {
     }
   };
 
-  // فتح نافذة تحويل السائق وجلب جميع السائقين
-  const openTransferDriverDialog = async (order) => {
-    setOrderToTransfer(order);
+  // فتح نافذة تحويل السائق وجلب جميع السائقين وبيانات الطلب
+  const openTransferDriverDialog = async (orderInfo) => {
     setTransferDriverDialogOpen(true);
     
-    // جلب جميع السائقين (بدون فلتر الفرع)
     try {
-      const res = await axios.get(`${API}/drivers`);
-      // استبعاد السائق الحالي فقط
-      const filteredDrivers = res.data.filter(d => d.id !== order.driver_id);
+      // جلب جميع السائقين
+      const driversRes = await axios.get(`${API}/drivers`);
+      const filteredDrivers = driversRes.data.filter(d => d.id !== orderInfo.driver_id);
       setAllDriversForTransfer(filteredDrivers);
+      
+      // جلب بيانات الطلب الفعلية إذا كان لدينا order_id
+      if (orderInfo.id) {
+        try {
+          const orderRes = await axios.get(`${API}/orders/${orderInfo.id}`);
+          setOrderToTransfer({
+            ...orderInfo,
+            order_number: orderRes.data.order_number || orderInfo.order_number,
+            total: orderRes.data.total || orderInfo.total,
+            customer_name: orderRes.data.customer_name
+          });
+        } catch (orderError) {
+          // إذا فشل جلب الطلب، استخدم البيانات الموجودة
+          setOrderToTransfer(orderInfo);
+        }
+      } else {
+        setOrderToTransfer(orderInfo);
+      }
     } catch (error) {
-      console.error('Error fetching drivers:', error);
+      console.error('Error opening transfer dialog:', error);
       setAllDriversForTransfer([]);
+      setOrderToTransfer(orderInfo);
     }
   };
 
