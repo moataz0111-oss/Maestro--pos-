@@ -12,9 +12,11 @@ const getBackendUrl = () => {
     return window.location.origin;
   }
   
-  // في بيئة التطوير، استخدم REACT_APP_BACKEND_URL
-  if (typeof process !== 'undefined' && process.env && process.env.REACT_APP_BACKEND_URL) {
-    return process.env.REACT_APP_BACKEND_URL;
+  // في بيئة التطوير، استخدم REACT_APP_BACKEND_URL (يتم تحويله أثناء البناء)
+  // process.env.REACT_APP_* متاح فقط في React لأنه يتم استبداله أثناء البناء
+  const envUrl = process.env.REACT_APP_BACKEND_URL;
+  if (envUrl) {
+    return envUrl;
   }
   
   // Fallback للبيئة المحلية
