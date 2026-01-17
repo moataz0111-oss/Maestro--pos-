@@ -912,7 +912,7 @@ export default function Settings() {
                   الأدوار والموظفين
                 </TabsTrigger>
               )}
-              {hasRole(['admin', 'manager', 'branch_manager']) && settingsPermissions.settingsCustomers && (
+              {(hasRole(['admin', 'manager', 'branch_manager']) || hasSettingsPermission('settings_customers')) && settingsPermissions.settingsCustomers && (
                 <TabsTrigger 
                   value="customers"
                   className="flex-shrink-0 px-4 py-2.5 text-sm font-medium rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
@@ -928,7 +928,7 @@ export default function Settings() {
                   الفروع
                 </TabsTrigger>
               )}
-              {hasRole(['admin', 'manager', 'branch_manager']) && settingsPermissions.settingsCategories && (
+              {(hasRole(['admin', 'manager', 'branch_manager']) || hasSettingsPermission('settings_categories')) && settingsPermissions.settingsCategories && (
                 <TabsTrigger 
                   value="categories"
                   className="flex-shrink-0 px-4 py-2.5 text-sm font-medium rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
@@ -936,7 +936,7 @@ export default function Settings() {
                   الفئات
                 </TabsTrigger>
               )}
-              {hasRole(['admin', 'manager', 'branch_manager']) && settingsPermissions.settingsProducts && (
+              {(hasRole(['admin', 'manager', 'branch_manager']) || hasSettingsPermission('settings_products')) && settingsPermissions.settingsProducts && (
                 <TabsTrigger 
                   value="products"
                   className="flex-shrink-0 px-4 py-2.5 text-sm font-medium rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
@@ -944,7 +944,7 @@ export default function Settings() {
                   المنتجات
                 </TabsTrigger>
               )}
-              {hasRole(['admin', 'manager', 'branch_manager']) && settingsPermissions.settingsPrinters && (
+              {(hasRole(['admin', 'manager', 'branch_manager']) || hasSettingsPermission('settings_printers')) && settingsPermissions.settingsPrinters && (
                 <TabsTrigger 
                   value="printers"
                   className="flex-shrink-0 px-4 py-2.5 text-sm font-medium rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
@@ -952,7 +952,7 @@ export default function Settings() {
                   الطابعات
                 </TabsTrigger>
               )}
-              {hasRole(['admin']) && settingsPermissions.settingsDeliveryCompanies && (
+              {(hasRole(['admin']) || hasSettingsPermission('settings_delivery')) && settingsPermissions.settingsDeliveryCompanies && (
                 <TabsTrigger 
                   value="delivery"
                   className="flex-shrink-0 px-4 py-2.5 text-sm font-medium rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
@@ -968,7 +968,7 @@ export default function Settings() {
                   الكول سنتر
                 </TabsTrigger>
               )}
-              {hasRole(['admin']) && settingsPermissions.settingsNotifications && (
+              {(hasRole(['admin']) || hasSettingsPermission('settings_notifications')) && settingsPermissions.settingsNotifications && (
                 <TabsTrigger 
                   value="notifications"
                   className="flex-shrink-0 px-4 py-2.5 text-sm font-medium rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
