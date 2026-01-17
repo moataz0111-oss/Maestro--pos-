@@ -5971,6 +5971,7 @@ class StaffCreate(BaseModel):
     role: str = "cashier"  # cashier, supervisor, delivery, branch_manager
     branch_id: str
     job_title: Optional[str] = None  # المسمى الوظيفي المخصص
+    permissions: Optional[List[str]] = None  # صلاحيات الموظف
 
 class StaffUpdate(BaseModel):
     """نموذج تحديث بيانات موظف"""
@@ -5980,6 +5981,7 @@ class StaffUpdate(BaseModel):
     branch_id: Optional[str] = None
     job_title: Optional[str] = None
     is_active: Optional[bool] = None
+    permissions: Optional[List[str]] = None  # صلاحيات الموظف
 
 class StaffResponse(BaseModel):
     """نموذج الاستجابة لبيانات الموظف"""
@@ -5995,6 +5997,7 @@ class StaffResponse(BaseModel):
     is_active: bool = True
     last_login: Optional[str] = None
     created_at: Optional[str] = None
+    permissions: Optional[List[str]] = None  # صلاحيات الموظف
 
 # الأدوار المتاحة للموظفين (غير Admin و SuperAdmin)
 STAFF_ROLES = {
