@@ -10,154 +10,103 @@
 - تقارير وإحصائيات ذكية
 - دعم Multi-tenancy (عدة عملاء)
 
-## الجلسة الحالية - 17 يناير 2026 (الإصدار 13)
+## الجلسة الحالية - 17 يناير 2026 (الإصدار 14)
 
 ### ✅ ما تم إنجازه في هذه الجلسة:
 
 #### 1. إصلاح تقرير إغلاق الصندوق (P0) ✅
 - **المشكلة:** تقرير إغلاق الصندوق كان يعرض جميع القيم كأصفار
-- **السبب:** 
-  - ملف `api.js` كان يستخدم `window.location.origin` (localhost:3000) بدلاً من `REACT_APP_BACKEND_URL`
-  - الشرط `typeof process !== 'undefined' && process.env && process.env.REACT_APP_BACKEND_URL` كان غير صحيح لأن React يستبدل متغيرات البيئة أثناء البناء
-- **الحل:**
-  - تعديل `/app/frontend/src/utils/api.js` لاستخدام `process.env.REACT_APP_BACKEND_URL` مباشرة
-- **الاختبارات:** تم اختبار GET /api/cash-register/summary و POST /api/cash-register/close - جميع القيم تظهر بشكل صحيح
+- **الحل:** تعديل `/app/frontend/src/utils/api.js` لاستخدام `process.env.REACT_APP_BACKEND_URL` بشكل صحيح
+- **الاختبار:** تقرير الصندوق يعرض القيم الصحيحة (total_sales, cash_sales, total_orders)
 
 #### 2. إكمال ميزة تحويل الطلب لسائق آخر (P1) ✅
-- **المشكلة:** 
-  - بيانات الطلب لا تظهر في نافذة التحويل
-  - السائق الجديد لا يُعين له current_order_id
-- **الحل:**
-  - إضافة `current_order` للـ `DriverResponse` model في server.py
-  - إضافة `driver_name` و `driver_phone` للـ `OrderResponse` model
-  - إصلاح تحديث `current_order_id` للسائقين عند تحويل الطلب (إزالة من القديم، إضافة للجديد)
-  - إصلاح bug: عند إنشاء طلب مع `driver_id`، يتم الآن ملء `driver_name` و `driver_phone`
-- **الاختبارات:** 11/11 اختبار ناجح (100%)
+- إضافة `current_order` للـ `DriverResponse` model
+- إضافة `driver_name` و `driver_phone` للـ `OrderResponse` model
+- إصلاح تحديث `current_order_id` للسائقين عند التحويل
+- **اختبار:** 11/11 tests passed
 
-#### 3. تحسين التحديث التلقائي لجميع العملاء ✅
-- **الملف:** `/app/backend/init_data.py`
-- **الإضافات:**
-  - إعادة تعيين `current_order_id` للسائقين الذين لديهم طلبات تم تسليمها أو إلغائها
-  - فحص الطلبات القديمة التي لا تحتوي على `shift_id`
+#### 3. نظام إدارة الموظفين والأدوار (جديد) ✅
+- **APIs جديدة:**
+  - `GET /api/staff/roles` - 6 أدوار متاحة (مدير فرع، مشرف، كاشير، سائق توصيل، جرسون، مطبخ)
+  - `POST /api/staff` - إنشاء موظف مع تخصيص فرع
+  - `GET /api/staff` - جلب قائمة الموظفين
+  - `PUT /api/staff/{id}` - تحديث بيانات موظف
+  - `DELETE /api/staff/{id}` - تعطيل موظف
+  - `POST /api/staff/{id}/reset-password` - إعادة تعيين كلمة المرور
 
-### 📊 نتائج الاختبارات (Iteration 13)
-- **Backend:** 11/11 اختبار ناجح (100%)
-  - تسجيل الدخول
-  - فتح وردية تلقائياً
-  - إنشاء طلب
-  - ملخص الصندوق (يعرض قيم صحيحة)
-  - إغلاق الصندوق (يرجع تقرير صحيح)
-  - تحويل السائق (يحدث كلا السائقين)
-  - جلب السائقين مع الطلبات
-  - جلب تفاصيل الطلب (يحتوي على driver_name و driver_phone)
+- **فلترة الفروع للموظفين:**
+  - الكاشير يرى **فقط فرعه** (1 فرع)
+  - الكاشير يرى **فقط طلبات فرعه**
+  - المدير (admin) يرى **جميع الفروع** (3 فروع)
 
-## ملفات التغييرات:
+- **واجهة المستخدم:**
+  - تبويب جديد "الأدوار والموظفين" في صفحة الإعدادات
+  - جدول الموظفين مع (الاسم، البريد، الدور، الفرع، الحالة)
+  - فلترة بالفروع والأدوار
+  - نوافذ إضافة/تعديل الموظفين
+
+### 📊 نتائج الاختبارات
+- **Iteration 13:** 11/11 tests passed (100%) - إصلاح تقرير الصندوق وتحويل السائق
+- **Iteration 14:** 13/13 tests passed (100%) - نظام الموظفين والأدوار
+
+## ملفات التغييرات الرئيسية:
 - `/app/frontend/src/utils/api.js`: إصلاح تحديد API URL
 - `/app/backend/server.py`:
-  - إضافة `current_order` للـ `DriverResponse` model
-  - إضافة `driver_name` و `driver_phone` للـ `OrderResponse` model
-  - إصلاح تحديث `current_order_id` عند تحويل السائق
-  - إصلاح ملء `driver_name` و `driver_phone` عند إنشاء طلب
-- `/app/backend/init_data.py`: إضافة تحديثات تلقائية للسائقين
-
-## الجلسات السابقة
-
-### الجلسة 12 - 16 يناير 2026
-- ✅ إصلاح مشكلة رفع شعار العميل
-- ✅ إضافة null checks في filteredTenants
-
-### الجلسة 11 - 16 يناير 2026
-- ✅ حل مشكلة النشر وتهيئة قاعدة البيانات
-- ✅ إضافة زر تهيئة قاعدة البيانات مع مفتاح سري
-
-### الجلسات السابقة
-- ✅ نظام المشتريات والموردين
-- ✅ نظام طلبات الفروع
-- ✅ صلاحيات الميزات في SuperAdmin (30 ميزة)
-- ✅ خلفية Dashboard للعملاء
-- ✅ فتح الوردية تلقائياً
-- ✅ رفع الشعارات
+  - قسم جديد: ROLES & STAFF MANAGEMENT
+  - دوال جديدة: `build_branch_query`, `user_can_access_branch`
+  - إضافة `current_order` للـ `DriverResponse`
+  - إضافة `driver_name`, `driver_phone` للـ `OrderResponse`
+- `/app/frontend/src/pages/Settings.js`:
+  - تبويب جديد "الأدوار والموظفين"
+  - دوال جديدة: `fetchStaffData`, `handleCreateStaff`, `handleUpdateStaff`, `handleDeleteStaff`
 
 ## المهام المتبقية
 
 ### 🔴 أولوية قصوى (P0)
-- [ ] إعادة هيكلة `/app/backend/server.py` (8000+ سطر - يحتاج تقسيم)
+- [ ] إعادة هيكلة `/app/backend/server.py` (9000+ سطر)
 
 ### 🟡 أولوية عالية (P1)
-- [ ] تحسين خريطة السائقين الحية (خط السير)
+- [ ] تحسين خريطة السائقين الحية
 - [ ] إشعارات Push للسائقين (Firebase)
-- [ ] إكمال ميزة السحب والإفلات لترتيب أيقونات Dashboard
 
 ### 🟢 أولوية متوسطة (P2)
-- [ ] التحقق من وظيفة PWA
 - [ ] إكمال تكامل أجهزة البصمة (ZKTeco)
-- [ ] بناء نظام ولاء العملاء (Loyalty)
-- [ ] بناء نظام إدارة الوصفات
+- [ ] نظام ولاء العملاء (Loyalty)
+- [ ] نظام إدارة الوصفات
 - [ ] إضافة وضع مظلم/فاتح
 
 ### 🔵 أولوية منخفضة (P3)
-- [ ] إعادة هيكلة مكونات الواجهة الأمامية الكبيرة (Dashboard.js, Delivery.js)
-
-## البنية التقنية
-
-### Backend
-```
-/app/backend/
-├── server.py              # الملف الرئيسي (8000+ سطر)
-├── init_data.py           # تهيئة قاعدة البيانات والتحديثات التلقائية
-├── api/
-│   ├── biometric.py
-│   └── login_backgrounds.py
-├── uploads/
-│   ├── backgrounds/
-│   └── logos/
-├── tests/
-│   └── test_iteration*.py
-└── requirements.txt
-```
-
-### Frontend
-```
-/app/frontend/src/
-├── utils/
-│   └── api.js             # تحديد API URL ديناميكياً
-├── pages/
-│   ├── Dashboard.js       # لوحة التحكم
-│   ├── SuperAdmin.js      # إدارة العملاء
-│   ├── Settings.js        # الإعدادات
-│   ├── Delivery.js        # التوصيل وإدارة السائقين
-│   ├── POS.js             # نقاط البيع
-│   ├── Tables.js          # الطاولات
-│   └── ...
-└── App.js
-```
-
-### قاعدة البيانات (MongoDB)
-مجموعات رئيسية:
-- `users` - المستخدمين
-- `orders` - الطلبات (مع driver_id, driver_name, driver_phone)
-- `drivers` - السائقين (مع current_order_id, is_available)
-- `shifts` - الورديات
-- `tenants` - العملاء
-- `branches` - الفروع
-- `products` - المنتجات
+- [ ] إعادة هيكلة مكونات الواجهة الأمامية الكبيرة
 
 ## بيانات الاختبار
+
+### Admin النظام الرئيسي
+- Email: `admin@maestroegp.com`
+- Password: `admin123`
 
 ### Super Admin
 - Email: `owner@maestroegp.com`
 - Password: `owner123`
 - Secret Key: `271018`
-- URL: `/super-admin`
 
-### Admin النظام الرئيسي
-- Email: `admin@maestroegp.com`
-- Password: `admin123`
-- URL: `/login`
+### Cashier (للاختبار)
+- Email: `cashier1@test.com`
+- Password: `test123`
+- Branch: الفرع الرئيسي
 
 ### فرع الاختبار
 - Branch ID: `d2edb16f-240f-4323-b481-9fb676db9465`
 
+## الأدوار المتاحة للموظفين
+| الدور | الاسم بالعربي | الصلاحيات |
+|-------|---------------|-----------|
+| `branch_manager` | مدير فرع | إدارة الفرع الكاملة |
+| `supervisor` | مشرف | مراقبة وإشراف |
+| `cashier` | كاشير | نقاط البيع فقط - فرع محدد |
+| `delivery` | سائق توصيل | التوصيل فقط |
+| `waiter` | جرسون | الطاولات والطلبات |
+| `kitchen` | مطبخ | عرض الطلبات للتحضير |
+
 ---
-آخر تحديث: 17 يناير 2026 - 9:00 PM
-نسبة الإنجاز: 96%
+آخر تحديث: 17 يناير 2026 - 9:30 PM
+نسبة الإنجاز: 97%
