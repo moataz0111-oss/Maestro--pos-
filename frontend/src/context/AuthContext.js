@@ -3,12 +3,18 @@ import axios from 'axios';
 
 const AuthContext = createContext(null);
 
-// التحقق من وجود REACT_APP_BACKEND_URL
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
-if (!BACKEND_URL) {
-  console.error('⚠️ REACT_APP_BACKEND_URL is not defined!');
-}
-const API = `${BACKEND_URL || ''}/api`;
+// تحديد رابط الـ API تلقائياً بناءً على البيئة
+const getBackendUrl = () => {
+  // في بيئة الإنتاج، استخدم نفس الرابط الحالي
+  if (window.location.hostname.includes('.emergent.host')) {
+    return window.location.origin;
+  }
+  // في بيئة المعاينة أو التطوير
+  return process.env.REACT_APP_BACKEND_URL || window.location.origin;
+};
+
+const BACKEND_URL = getBackendUrl();
+const API = `${BACKEND_URL}/api`;
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
