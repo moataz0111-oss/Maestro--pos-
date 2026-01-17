@@ -145,6 +145,25 @@ async def init_database():
     else:
         print("ℹ️ Categories already exist")
     
+    # ==================== 7. إعدادات النظام الافتراضية (للجميع) ====================
+    default_settings = await db.settings.find_one({"type": "default_tenant_settings"})
+    if not default_settings:
+        settings_doc = {
+            "type": "default_tenant_settings",
+            "value": {
+                "auto_open_shift": True,  # فتح الوردية تلقائياً
+                "default_opening_cash": 0,  # رصيد افتتاحي افتراضي
+                "require_shift_for_pos": False,  # لا يتطلب وردية لفتح نقاط البيع
+                "auto_create_branch": True,  # إنشاء فرع تلقائياً
+                "default_currency": "IQD",
+                "default_language": "ar"
+            }
+        }
+        await db.settings.insert_one(settings_doc)
+        print("✅ Default tenant settings created")
+    else:
+        print("ℹ️ Default tenant settings already exist")
+    
     print("\n🎉 Database initialization complete!")
     print("=" * 50)
     print("📋 Login Credentials:")
