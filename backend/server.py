@@ -3608,9 +3608,15 @@ async def get_orders(
     order_type: Optional[str] = None,
     current_user: dict = Depends(get_current_user)
 ):
-    query = build_tenant_query(current_user)  # فلترة حسب tenant_id
+    # فلترة حسب tenant_id و branch_id للمستخدم
+    query = build_branch_query(current_user)
+    
+    # إذا تم تحديد فرع في الطلب، تحقق من صلاحية الوصول
     if branch_id:
+        if not user_can_access_branch(current_user, branch_id):
+            raise HTTPException(status_code=403, detail="لا يمكنك الوصول لهذا الفرع")
         query["branch_id"] = branch_id
+    
     if status:
         # دعم حالات متعددة مفصولة بفاصلة
         statuses = [s.strip() for s in status.split(',')]
