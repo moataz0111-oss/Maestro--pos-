@@ -115,6 +115,41 @@ export default function Tables() {
     }
   };
 
+  // تحويل الطلب من طاولة إلى أخرى
+  const handleTransferTable = async () => {
+    if (!selectedTableForTransfer || !targetTableId) {
+      toast.error('الرجاء اختيار الطاولة المستهدفة');
+      return;
+    }
+    
+    try {
+      await axios.post(`${API}/tables/transfer`, {
+        from_table_id: selectedTableForTransfer.id,
+        to_table_id: targetTableId,
+        order_id: selectedTableForTransfer.current_order_id
+      });
+      
+      toast.success('تم تحويل الطلب بنجاح');
+      setTransferDialogOpen(false);
+      setSelectedTableForTransfer(null);
+      setTargetTableId('');
+      fetchData();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'فشل في تحويل الطلب');
+    }
+  };
+
+  // فتح نافذة التحويل
+  const openTransferDialog = (table) => {
+    setSelectedTableForTransfer(table);
+    setTransferDialogOpen(true);
+  };
+
+  // الطاولات المتاحة للتحويل
+  const availableTablesForTransfer = tables.filter(
+    t => t.status === 'available' && t.id !== selectedTableForTransfer?.id
+  );
+
   const getStatusColor = (status) => {
     const colors = {
       available: 'bg-green-500',
