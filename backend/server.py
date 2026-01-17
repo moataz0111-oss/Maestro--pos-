@@ -958,6 +958,9 @@ class DriverResponse(BaseModel):
     location_lat: Optional[float] = None
     location_lng: Optional[float] = None
     location_updated_at: Optional[str] = None
+    # معلومات الطلب الحالي (اختياري)
+    current_order: Optional[Dict[str, Any]] = None
+    is_active: bool = True
 
 class DriverLocationUpdate(BaseModel):
     latitude: float
