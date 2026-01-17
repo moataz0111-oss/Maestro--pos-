@@ -1125,6 +1125,84 @@ export default function Delivery() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* نافذة تحويل الطلب لسائق آخر */}
+      <Dialog open={transferDriverDialogOpen} onOpenChange={setTransferDriverDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-foreground flex items-center gap-2">
+              <ArrowLeftRight className="h-5 w-5 text-amber-500" />
+              تحويل الطلب لسائق آخر
+            </DialogTitle>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            {orderToTransfer && (
+              <div className="bg-muted/50 p-3 rounded-lg">
+                <div className="flex justify-between items-center">
+                  <div>
+                    <p className="text-sm text-muted-foreground">رقم الطلب:</p>
+                    <p className="font-bold text-lg text-foreground">#{orderToTransfer.order_number}</p>
+                  </div>
+                  <div className="text-left">
+                    <p className="text-sm text-muted-foreground">المبلغ:</p>
+                    <p className="font-bold text-primary">{formatPrice(orderToTransfer.total)}</p>
+                  </div>
+                </div>
+                <div className="mt-2 pt-2 border-t border-border">
+                  <p className="text-sm text-muted-foreground">السائق الحالي:</p>
+                  <p className="font-medium text-foreground">{orderToTransfer.driver_name || selectedDriver?.name || 'غير معين'}</p>
+                </div>
+              </div>
+            )}
+            
+            <div>
+              <Label className="text-foreground">اختر السائق الجديد:</Label>
+              <Select value={targetDriverId} onValueChange={setTargetDriverId}>
+                <SelectTrigger className="mt-2">
+                  <SelectValue placeholder="اختر السائق" />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableDriversForTransfer.map(driver => (
+                    <SelectItem key={driver.id} value={driver.id}>
+                      <div className="flex items-center gap-2">
+                        <span className={`w-2 h-2 rounded-full ${driver.is_available ? 'bg-green-500' : 'bg-orange-500'}`}></span>
+                        {driver.name} - {driver.is_available ? 'متاح' : 'في مهمة'}
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              
+              {availableDriversForTransfer.length === 0 && (
+                <p className="text-sm text-amber-500 mt-2">لا يوجد سائقين آخرين نشطين</p>
+              )}
+            </div>
+          </div>
+          
+          <div className="flex gap-2">
+            <Button 
+              variant="outline" 
+              onClick={() => {
+                setTransferDriverDialogOpen(false);
+                setOrderToTransfer(null);
+                setTargetDriverId('');
+              }}
+              className="flex-1"
+            >
+              إلغاء
+            </Button>
+            <Button 
+              onClick={handleTransferDriver}
+              disabled={!targetDriverId}
+              className="flex-1 bg-amber-500 text-white hover:bg-amber-600"
+            >
+              <ArrowLeftRight className="h-4 w-4 ml-2" />
+              تحويل
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
