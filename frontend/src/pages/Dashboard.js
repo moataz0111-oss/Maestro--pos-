@@ -437,9 +437,44 @@ export default function Dashboard() {
     // التحقق من إعدادات الصفحة الرئيسية
     if (!dashboardSettings[action.key]) return false;
     
-    // التحقق من صلاحيات الكاشير
+    // المدير (admin) يرى كل شيء
+    if (user?.role === 'admin' || user?.role === 'super_admin') return true;
+    
+    // مدير الفرع يرى كل شيء
+    if (user?.role === 'branch_manager') return true;
+    
+    // التحقق من صلاحيات الموظف
+    const permissionMap = {
+      'showPOS': 'pos',
+      'showTables': 'tables',
+      'showKitchen': 'kitchen',
+      'showReports': 'reports',
+      'showSmartReports': 'reports',
+      'showExpenses': 'expenses',
+      'showInventory': 'inventory',
+      'showPurchasing': 'inventory',
+      'showBranchOrders': 'inventory',
+      'showDelivery': 'delivery',
+      'showReservations': 'orders',
+      'showReviews': 'reports',
+      'showHR': 'settings',
+      'showWarehouse': 'inventory',
+      'showCallLogs': 'orders',
+      'showLoyalty': 'settings',
+      'showCoupons': 'settings',
+      'showRecipes': 'inventory',
+      'showSettings': 'settings',
+    };
+    
+    const requiredPermission = permissionMap[action.key];
+    
+    // إذا كان لديه صلاحيات محددة
+    if (user?.permissions && user.permissions.length > 0) {
+      return user.permissions.includes(requiredPermission);
+    }
+    
+    // الكاشير يرى فقط: نقاط البيع، الطاولات، المصاريف، التوصيل (افتراضياً)
     if (user?.role === 'cashier') {
-      // الكاشير يرى فقط: نقاط البيع، الطاولات، المصاريف، التوصيل
       const allowedForCashier = ['showPOS', 'showTables', 'showExpenses', 'showDelivery'];
       return allowedForCashier.includes(action.key);
     }
