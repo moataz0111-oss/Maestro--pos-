@@ -946,14 +946,13 @@ export default function Delivery() {
                                 variant="outline"
                                 className="h-7 text-xs border-amber-500 text-amber-500"
                                 onClick={() => {
-                                  setOrderToTransfer({
+                                  openTransferDriverDialog({
                                     id: driver.current_order_id,
                                     order_number: driver.current_order?.order_number || '---',
                                     total: driver.current_order?.total || 0,
                                     driver_id: driver.id,
                                     driver_name: driver.name
                                   });
-                                  setTransferDriverDialogOpen(true);
                                 }}
                               >
                                 <ArrowLeftRight className="h-3 w-3" />
