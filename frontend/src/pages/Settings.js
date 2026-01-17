@@ -185,6 +185,18 @@ export default function Settings() {
   const [callCenterTestStatus, setCallCenterTestStatus] = useState(null);
   const [webhookUrl, setWebhookUrl] = useState('');
   
+  // Staff Management States - إدارة الموظفين
+  const [staffList, setStaffList] = useState([]);
+  const [staffRoles, setStaffRoles] = useState({});
+  const [staffDialogOpen, setStaffDialogOpen] = useState(false);
+  const [editStaffDialogOpen, setEditStaffDialogOpen] = useState(false);
+  const [staffForm, setStaffForm] = useState({
+    full_name: '', email: '', phone: '', password: '', role: 'cashier', branch_id: '', job_title: ''
+  });
+  const [editStaffForm, setEditStaffForm] = useState(null);
+  const [staffLoading, setStaffLoading] = useState(false);
+  const [staffFilter, setStaffFilter] = useState({ branch_id: '', role: '' });
+  
   // Dialog states
   const [userDialogOpen, setUserDialogOpen] = useState(false);
   const [editUserDialogOpen, setEditUserDialogOpen] = useState(false);
