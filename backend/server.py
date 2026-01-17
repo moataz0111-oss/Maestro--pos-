@@ -1642,6 +1642,14 @@ async def create_branch(branch: BranchCreate, current_user: dict = Depends(get_c
 @api_router.get("/branches", response_model=List[BranchResponse])
 async def get_branches(current_user: dict = Depends(get_current_user)):
     query = build_tenant_query(current_user)  # فلترة حسب tenant_id
+    
+    # المستخدمون المرتبطون بفرع معين يرون فقط فرعهم
+    user_branch_id = current_user.get("branch_id")
+    user_role = current_user.get("role")
+    
+    if user_branch_id and user_role not in [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.MANAGER]:
+        query["id"] = user_branch_id
+    
     branches = await db.branches.find(query, {"_id": 0}).to_list(100)
     return branches
 
