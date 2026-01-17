@@ -10,6 +10,38 @@ import axios from 'axios';
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
+// خلفيات افتراضية في حالة فشل جلب الخلفيات من الخادم
+const DEFAULT_BACKGROUNDS = {
+  backgrounds: [
+    {
+      id: 'default-1',
+      image_url: 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=1920',
+      title: 'مطعم فاخر',
+      is_active: true
+    },
+    {
+      id: 'default-2',
+      image_url: 'https://images.unsplash.com/photo-1552566626-52f8b828add9?w=1920',
+      title: 'مطعم حديث',
+      is_active: true
+    },
+    {
+      id: 'default-3',
+      image_url: 'https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=1920',
+      title: 'طعام شهي',
+      is_active: true
+    }
+  ],
+  settings: {
+    transition_effect: 'fade',
+    transition_speed: 5,
+    overlay_color: 'rgba(0,0,0,0.5)',
+    text_color: '#ffffff'
+  },
+  auto_play: true,
+  transition_duration: 1.5
+};
+
 // Animation styles
 const animationStyles = {
   fade: {
