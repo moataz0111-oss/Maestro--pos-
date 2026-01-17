@@ -429,6 +429,65 @@ export default function Tables() {
           </Card>
         )}
       </main>
+
+      {/* نافذة تحويل الطلب */}
+      <Dialog open={transferDialogOpen} onOpenChange={setTransferDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="text-foreground flex items-center gap-2">
+              <ArrowLeftRight className="h-5 w-5" />
+              تحويل الطلب إلى طاولة أخرى
+            </DialogTitle>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            {selectedTableForTransfer && (
+              <div className="bg-muted/50 p-3 rounded-lg">
+                <p className="text-sm text-muted-foreground">من الطاولة:</p>
+                <p className="font-bold text-lg text-foreground">طاولة رقم {selectedTableForTransfer.number}</p>
+              </div>
+            )}
+            
+            <div>
+              <Label className="text-foreground">إلى الطاولة:</Label>
+              <Select value={targetTableId} onValueChange={setTargetTableId}>
+                <SelectTrigger className="mt-2">
+                  <SelectValue placeholder="اختر الطاولة المستهدفة" />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableTablesForTransfer.map(table => (
+                    <SelectItem key={table.id} value={table.id}>
+                      طاولة {table.number} - {table.section || 'عام'} ({table.capacity} أشخاص)
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              
+              {availableTablesForTransfer.length === 0 && (
+                <p className="text-sm text-amber-500 mt-2">لا توجد طاولات متاحة للتحويل</p>
+              )}
+            </div>
+          </div>
+          
+          <div className="flex gap-2">
+            <Button 
+              variant="outline" 
+              onClick={() => setTransferDialogOpen(false)}
+              className="flex-1"
+            >
+              إلغاء
+            </Button>
+            <Button 
+              onClick={handleTransferTable}
+              disabled={!targetTableId}
+              className="flex-1 bg-amber-500 text-white hover:bg-amber-600"
+            >
+              <MoveRight className="h-4 w-4 ml-2" />
+              تحويل
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
