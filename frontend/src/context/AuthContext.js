@@ -3,13 +3,19 @@ import axios from 'axios';
 
 const AuthContext = createContext(null);
 
-const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
+// التحقق من وجود REACT_APP_BACKEND_URL
+const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+if (!BACKEND_URL) {
+  console.error('⚠️ REACT_APP_BACKEND_URL is not defined!');
+}
+const API = `${BACKEND_URL || ''}/api`;
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [token, setToken] = useState(localStorage.getItem('token'));
   const [loading, setLoading] = useState(true);
   const [currentShift, setCurrentShift] = useState(null);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     if (token) {
@@ -24,6 +30,7 @@ export const AuthProvider = ({ children }) => {
     try {
       const response = await axios.get(`${API}/auth/me`);
       setUser(response.data);
+      setError(null);
       
       // فتح وردية تلقائياً للكاشير أو المدير
       if (['cashier', 'manager', 'admin'].includes(response.data.role)) {
@@ -31,7 +38,12 @@ export const AuthProvider = ({ children }) => {
       }
     } catch (error) {
       console.error('Failed to fetch user:', error);
-      logout();
+      // لا نقوم بـ logout إذا كان الخطأ من الشبكة
+      if (error.response?.status === 401 || error.response?.status === 403) {
+        logout();
+      } else {
+        setError('فشل في الاتصال بالخادم');
+      }
     } finally {
       setLoading(false);
     }
