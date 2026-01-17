@@ -172,6 +172,67 @@ async def init_database():
     if result.modified_count > 0:
         print(f"✅ Activated {result.modified_count} existing drivers")
     
+    # ==================== 9. تحديثات تلقائية لجميع العملاء ====================
+    print("\n🔄 Applying automatic updates to all tenants...")
+    
+    # 9.1 تفعيل جميع السائقين (حتى لو is_active = false)
+    drivers_activated = await db.drivers.update_many(
+        {},
+        {"$set": {"is_active": True}}
+    )
+    print(f"   ✅ All drivers activated: {drivers_activated.modified_count}")
+    
+    # 9.2 إضافة is_available للسائقين الذين ليس لديهم هذا الحقل
+    drivers_available = await db.drivers.update_many(
+        {"is_available": {"$exists": False}},
+        {"$set": {"is_available": True}}
+    )
+    if drivers_available.modified_count > 0:
+        print(f"   ✅ Set is_available for {drivers_available.modified_count} drivers")
+    
+    # 9.3 إنشاء فرع افتراضي لكل عميل ليس لديه فرع
+    tenants = await db.tenants.find({}, {"_id": 0, "id": 1, "name": 1}).to_list(None)
+    for tenant in tenants:
+        tenant_branch = await db.branches.find_one({"tenant_id": tenant["id"]})
+        if not tenant_branch:
+            default_branch = {
+                "id": str(uuid.uuid4()),
+                "name": "الفرع الرئيسي",
+                "address": "",
+                "phone": "",
+                "is_active": True,
+                "is_main": True,
+                "tenant_id": tenant["id"],
+                "created_at": datetime.now(timezone.utc).isoformat()
+            }
+            await db.branches.insert_one(default_branch)
+            print(f"   ✅ Created default branch for tenant: {tenant.get('name', tenant['id'][:8])}")
+    
+    # 9.4 تفعيل جميع الفروع
+    branches_activated = await db.branches.update_many(
+        {"is_active": {"$exists": False}},
+        {"$set": {"is_active": True}}
+    )
+    if branches_activated.modified_count > 0:
+        print(f"   ✅ Activated {branches_activated.modified_count} branches")
+    
+    # 9.5 إغلاق جميع الورديات القديمة المفتوحة (أكثر من 24 ساعة)
+    from datetime import timedelta
+    old_shifts_cutoff = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
+    old_shifts = await db.shifts.update_many(
+        {
+            "status": "open",
+            "started_at": {"$lt": old_shifts_cutoff}
+        },
+        {"$set": {
+            "status": "auto_closed",
+            "ended_at": datetime.now(timezone.utc).isoformat(),
+            "auto_closed_reason": "تم الإغلاق تلقائياً بعد 24 ساعة"
+        }}
+    )
+    if old_shifts.modified_count > 0:
+        print(f"   ✅ Auto-closed {old_shifts.modified_count} old shifts")
+    
     print("\n🎉 Database initialization complete!")
     print("=" * 50)
     print("📋 Login Credentials:")
