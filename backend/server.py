@@ -216,6 +216,30 @@ async def init_database():
                         "image_url": "https://images.unsplash.com/photo-1552566626-52f8b828add9?w=1920",
                         "title": "مطعم حديث",
                         "is_active": True
+                    },
+                    {
+                        "id": str(uuid.uuid4()),
+                        "image_url": "https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=1920",
+                        "title": "طعام شهي",
+                        "is_active": True
+                    },
+                    {
+                        "id": str(uuid.uuid4()),
+                        "image_url": "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=1920",
+                        "title": "مطعم أنيق",
+                        "is_active": True
+                    },
+                    {
+                        "id": str(uuid.uuid4()),
+                        "image_url": "https://images.unsplash.com/photo-1559339352-11d035aa65de?w=1920",
+                        "title": "كافيه عصري",
+                        "is_active": True
+                    },
+                    {
+                        "id": str(uuid.uuid4()),
+                        "image_url": "https://images.unsplash.com/photo-1466978913421-dad2ebd01d17?w=1920",
+                        "title": "مطبخ احترافي",
+                        "is_active": True
                     }
                 ],
                 "settings": {
@@ -226,7 +250,7 @@ async def init_database():
                 }
             }
             await db.settings.insert_one(bg_doc)
-            logger.info("✅ Login backgrounds added")
+            logger.info("✅ Login backgrounds added (6 images)")
             
     except Exception as e:
         logger.error(f"❌ Database initialization error: {str(e)}")
