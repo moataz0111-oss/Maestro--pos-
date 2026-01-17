@@ -263,7 +263,71 @@ async def startup_event():
     """يتم تشغيله عند بدء التطبيق"""
     logger.info("🚀 Starting Maestro EGP API...")
     await init_database()
+    
+    # تشغيل التحديثات التلقائية لجميع العملاء
+    await apply_automatic_updates()
+    
     logger.info("✅ Application started successfully")
+
+async def apply_automatic_updates():
+    """تطبيق التحديثات التلقائية على جميع العملاء عند كل بدء تشغيل"""
+    logger.info("🔄 Applying automatic updates to all tenants...")
+    
+    try:
+        # 1. تفعيل جميع السائقين
+        drivers_result = await db.drivers.update_many(
+            {},
+            {"$set": {"is_active": True}}
+        )
+        if drivers_result.modified_count > 0:
+            logger.info(f"   ✅ Activated {drivers_result.modified_count} drivers")
+        
+        # 2. إضافة is_available للسائقين
+        await db.drivers.update_many(
+            {"is_available": {"$exists": False}},
+            {"$set": {"is_available": True}}
+        )
+        
+        # 3. تفعيل جميع الفروع
+        await db.branches.update_many(
+            {"is_active": {"$exists": False}},
+            {"$set": {"is_active": True}}
+        )
+        
+        # 4. إنشاء فرع افتراضي لكل عميل ليس لديه فرع
+        tenants = await db.tenants.find({}, {"_id": 0, "id": 1, "name": 1}).to_list(None)
+        for tenant in tenants:
+            tenant_branch = await db.branches.find_one({"tenant_id": tenant["id"]})
+            if not tenant_branch:
+                default_branch = {
+                    "id": str(uuid.uuid4()),
+                    "name": "الفرع الرئيسي",
+                    "address": "",
+                    "phone": "",
+                    "is_active": True,
+                    "is_main": True,
+                    "tenant_id": tenant["id"],
+                    "created_at": datetime.now(timezone.utc).isoformat()
+                }
+                await db.branches.insert_one(default_branch)
+                logger.info(f"   ✅ Created branch for: {tenant.get('name', tenant['id'][:8])}")
+        
+        # 5. إغلاق الورديات القديمة (أكثر من 24 ساعة)
+        old_cutoff = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
+        old_shifts = await db.shifts.update_many(
+            {"status": "open", "started_at": {"$lt": old_cutoff}},
+            {"$set": {
+                "status": "auto_closed",
+                "ended_at": datetime.now(timezone.utc).isoformat(),
+                "auto_closed_reason": "تم الإغلاق تلقائياً بعد 24 ساعة"
+            }}
+        )
+        if old_shifts.modified_count > 0:
+            logger.info(f"   ✅ Auto-closed {old_shifts.modified_count} old shifts")
+        
+        logger.info("✅ Automatic updates applied successfully")
+    except Exception as e:
+        logger.error(f"❌ Error applying automatic updates: {e}")
 
 # ==================== HEALTH CHECK ====================
 
