@@ -786,84 +786,228 @@ export default function Delivery() {
             </Card>
           </TabsContent>
 
-          {/* طلبات جاهزة للتوصيل */}
+          {/* طلبات جاهزة للتوصيل - محسن */}
           <TabsContent value="pending">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {pendingOrders.length === 0 ? (
-                <Card className="border-border/50 bg-card col-span-full">
-                  <CardContent className="py-12 text-center">
-                    <Package className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
-                    <p className="text-muted-foreground text-lg">لا توجد طلبات جاهزة للتوصيل</p>
-                  </CardContent>
-                </Card>
-              ) : (
-                pendingOrders.map(order => (
-                  <Card 
-                    key={order.id}
-                    className="border-border/50 bg-card"
-                    data-testid={`order-card-${order.id}`}
-                  >
-                    <CardContent className="p-4">
-                      <div className="flex items-start justify-between mb-3">
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <span className="bg-primary/10 text-primary px-2 py-0.5 rounded-full text-sm font-bold">
-                              #{order.order_number}
-                            </span>
-                            {order.delivery_app_name && (
-                              <span className="text-xs px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-500">
-                                {order.delivery_app_name}
-                              </span>
-                            )}
+            {/* إحصائيات حركة اليوم */}
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
+              <Card className="border-border/50 bg-gradient-to-br from-blue-500/10 to-blue-600/5">
+                <CardContent className="p-3 text-center">
+                  <Package className="h-5 w-5 mx-auto mb-1 text-blue-500" />
+                  <p className="text-xs text-muted-foreground">جاهزة للتوصيل</p>
+                  <p className="text-xl font-bold text-blue-500">{pendingOrders.length}</p>
+                </CardContent>
+              </Card>
+              <Card className="border-border/50 bg-gradient-to-br from-orange-500/10 to-orange-600/5">
+                <CardContent className="p-3 text-center">
+                  <Truck className="h-5 w-5 mx-auto mb-1 text-orange-500" />
+                  <p className="text-xs text-muted-foreground">في الطريق</p>
+                  <p className="text-xl font-bold text-orange-500">
+                    {drivers.filter(d => d.current_order_id).length}
+                  </p>
+                </CardContent>
+              </Card>
+              <Card className="border-border/50 bg-gradient-to-br from-green-500/10 to-green-600/5">
+                <CardContent className="p-3 text-center">
+                  <CheckCircle className="h-5 w-5 mx-auto mb-1 text-green-500" />
+                  <p className="text-xs text-muted-foreground">تم التسليم اليوم</p>
+                  <p className="text-xl font-bold text-green-500">
+                    {Object.values(driverStats).reduce((sum, s) => sum + (s.delivered_today || 0), 0)}
+                  </p>
+                </CardContent>
+              </Card>
+              <Card className="border-border/50 bg-gradient-to-br from-purple-500/10 to-purple-600/5">
+                <CardContent className="p-3 text-center">
+                  <DollarSign className="h-5 w-5 mx-auto mb-1 text-purple-500" />
+                  <p className="text-xs text-muted-foreground">تم التحصيل</p>
+                  <p className="text-xl font-bold text-purple-500">{formatPrice(totalPaid)}</p>
+                </CardContent>
+              </Card>
+              <Card className="border-border/50 bg-gradient-to-br from-red-500/10 to-red-600/5">
+                <CardContent className="p-3 text-center">
+                  <AlertCircle className="h-5 w-5 mx-auto mb-1 text-red-500" />
+                  <p className="text-xs text-muted-foreground">غير محصل</p>
+                  <p className="text-xl font-bold text-red-500">{formatPrice(totalUnpaid)}</p>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* قائمة الطلبات مع حالاتها */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* الطلبات الجاهزة للتعيين */}
+              <Card className="border-border/50 bg-card">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base flex items-center gap-2 text-blue-500">
+                    <Package className="h-5 w-5" />
+                    جاهزة للتعيين
+                    <span className="bg-blue-500/20 text-blue-500 px-2 py-0.5 rounded-full text-xs mr-auto">
+                      {pendingOrders.filter(o => !o.driver_id).length}
+                    </span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <ScrollArea className="h-[400px]">
+                    <div className="space-y-3">
+                      {pendingOrders.filter(o => !o.driver_id).length === 0 ? (
+                        <p className="text-center text-muted-foreground py-8 text-sm">لا توجد طلبات</p>
+                      ) : (
+                        pendingOrders.filter(o => !o.driver_id).map(order => (
+                          <div 
+                            key={order.id}
+                            className="p-3 rounded-lg border border-blue-500/30 bg-blue-500/5"
+                          >
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="font-bold text-foreground">#{order.order_number}</span>
+                              <span className="text-primary font-bold">{formatPrice(order.total)}</span>
+                            </div>
+                            <p className="text-sm text-muted-foreground truncate">{order.customer_name || 'زبون'}</p>
+                            <p className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
+                              <Clock className="h-3 w-3" />
+                              {new Date(order.created_at).toLocaleTimeString('ar-IQ', { hour: '2-digit', minute: '2-digit' })}
+                            </p>
+                            <div className="flex flex-wrap gap-1 mt-2">
+                              {drivers.filter(d => d.is_available).slice(0, 3).map(driver => (
+                                <Button
+                                  key={driver.id}
+                                  size="sm"
+                                  className="h-7 text-xs bg-blue-500 hover:bg-blue-600 text-white"
+                                  onClick={() => assignDriver(driver.id, order.id)}
+                                >
+                                  {driver.name}
+                                </Button>
+                              ))}
+                            </div>
                           </div>
-                          <h3 className="font-medium mt-2 text-foreground">{order.customer_name || 'زبون'}</h3>
-                        </div>
-                        <p className="text-lg font-bold text-primary">{formatPrice(order.total)}</p>
-                      </div>
+                        ))
+                      )}
+                    </div>
+                  </ScrollArea>
+                </CardContent>
+              </Card>
 
-                      <div className="space-y-2 text-sm text-muted-foreground mb-4">
-                        {order.customer_phone && (
-                          <p className="flex items-center gap-2">
-                            <Phone className="h-4 w-4" />
-                            {order.customer_phone}
-                          </p>
-                        )}
-                        {order.delivery_address && (
-                          <p className="flex items-center gap-2">
-                            <MapPin className="h-4 w-4" />
-                            {order.delivery_address}
-                          </p>
-                        )}
-                        <p className="flex items-center gap-2">
-                          <Clock className="h-4 w-4" />
-                          {new Date(order.created_at).toLocaleTimeString('ar-IQ', { hour: '2-digit', minute: '2-digit' })}
-                        </p>
-                      </div>
+              {/* في حيازة السائق (في الطريق) */}
+              <Card className="border-border/50 bg-card">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base flex items-center gap-2 text-orange-500">
+                    <Truck className="h-5 w-5" />
+                    في حيازة السائق
+                    <span className="bg-orange-500/20 text-orange-500 px-2 py-0.5 rounded-full text-xs mr-auto">
+                      {drivers.filter(d => d.current_order_id).length}
+                    </span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <ScrollArea className="h-[400px]">
+                    <div className="space-y-3">
+                      {drivers.filter(d => d.current_order_id).length === 0 ? (
+                        <p className="text-center text-muted-foreground py-8 text-sm">لا توجد طلبات في الطريق</p>
+                      ) : (
+                        drivers.filter(d => d.current_order_id).map(driver => (
+                          <div 
+                            key={driver.id}
+                            className="p-3 rounded-lg border border-orange-500/30 bg-orange-500/5"
+                          >
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="flex items-center gap-2">
+                                <div className="w-8 h-8 bg-orange-500/20 rounded-full flex items-center justify-center">
+                                  <Truck className="h-4 w-4 text-orange-500" />
+                                </div>
+                                <div>
+                                  <p className="font-bold text-foreground text-sm">{driver.name}</p>
+                                  <p className="text-xs text-orange-500">#{driver.current_order?.order_number || '---'}</p>
+                                </div>
+                              </div>
+                              <span className="text-primary font-bold">
+                                {formatPrice(driver.current_order?.total || 0)}
+                              </span>
+                            </div>
+                            <p className="text-xs text-muted-foreground truncate mb-2">
+                              {driver.current_order?.customer_name || 'زبون'}
+                            </p>
+                            <div className="flex gap-2">
+                              <Button
+                                size="sm"
+                                className="flex-1 h-7 text-xs bg-green-500 hover:bg-green-600 text-white"
+                                onClick={() => completeDelivery(driver.id)}
+                              >
+                                <Check className="h-3 w-3 ml-1" />
+                                تم التسليم
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-7 text-xs border-amber-500 text-amber-500"
+                                onClick={() => {
+                                  setOrderToTransfer({
+                                    id: driver.current_order_id,
+                                    order_number: driver.current_order?.order_number || '---',
+                                    total: driver.current_order?.total || 0,
+                                    driver_id: driver.id,
+                                    driver_name: driver.name
+                                  });
+                                  setTransferDriverDialogOpen(true);
+                                }}
+                              >
+                                <ArrowLeftRight className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </ScrollArea>
+                </CardContent>
+              </Card>
 
-                      {/* Assign Driver */}
-                      <div className="border-t border-border pt-3">
-                        <p className="text-sm text-muted-foreground mb-2">تعيين سائق:</p>
-                        <div className="flex flex-wrap gap-2">
-                          {drivers.filter(d => d.is_available).map(driver => (
-                            <Button
-                              key={driver.id}
-                              size="sm"
-                              variant="outline"
-                              onClick={() => assignDriver(driver.id, order.id)}
-                            >
-                              <Navigation className="h-4 w-4 ml-1" />
-                              {driver.name}
-                            </Button>
-                          ))}
-                          {drivers.filter(d => d.is_available).length === 0 && (
-                            <p className="text-sm text-muted-foreground">لا يوجد سائقين متاحين</p>
-                          )}
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))
-              )}
+              {/* حركة اليوم - آخر الطلبات المسلمة */}
+              <Card className="border-border/50 bg-card">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base flex items-center gap-2 text-green-500">
+                    <History className="h-5 w-5" />
+                    حركة اليوم
+                    <span className="bg-green-500/20 text-green-500 px-2 py-0.5 rounded-full text-xs mr-auto">
+                      {driverOrders.filter(o => o.status === 'delivered').length}
+                    </span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <ScrollArea className="h-[400px]">
+                    <div className="space-y-2">
+                      {driverOrders.filter(o => o.status === 'delivered').length === 0 ? (
+                        <p className="text-center text-muted-foreground py-8 text-sm">لا توجد طلبات مسلمة اليوم</p>
+                      ) : (
+                        driverOrders.filter(o => o.status === 'delivered').slice(0, 20).map((order, index) => (
+                          <div 
+                            key={order.id}
+                            className={`p-2 rounded-lg border ${
+                              order.driver_payment_status === 'paid' 
+                                ? 'border-green-500/30 bg-green-500/5' 
+                                : 'border-red-500/30 bg-red-500/5'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs text-muted-foreground">{index + 1}.</span>
+                                <div>
+                                  <p className="text-sm font-medium text-foreground">#{order.order_number}</p>
+                                  <p className="text-xs text-muted-foreground">{order.driver_name || 'سائق'}</p>
+                                </div>
+                              </div>
+                              <div className="text-left">
+                                <p className="text-sm font-bold text-foreground">{formatPrice(order.total)}</p>
+                                <span className={`text-xs ${
+                                  order.driver_payment_status === 'paid' ? 'text-green-500' : 'text-red-500'
+                                }`}>
+                                  {order.driver_payment_status === 'paid' ? '✓ محصل' : '○ غير محصل'}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </ScrollArea>
+                </CardContent>
+              </Card>
             </div>
           </TabsContent>
         </Tabs>
