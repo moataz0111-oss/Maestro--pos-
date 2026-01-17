@@ -389,7 +389,7 @@ async def initialize_database_endpoint():
         }
         await db.settings.insert_one(branding_doc)
         
-        # خلفيات تسجيل الدخول
+        # خلفيات تسجيل الدخول - 6 خلفيات
         bg_doc = {
             "type": "login_backgrounds",
             "backgrounds": [
@@ -410,6 +410,24 @@ async def initialize_database_endpoint():
                     "image_url": "https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=1920",
                     "title": "طعام شهي",
                     "is_active": True
+                },
+                {
+                    "id": str(uuid.uuid4()),
+                    "image_url": "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=1920",
+                    "title": "مطعم أنيق",
+                    "is_active": True
+                },
+                {
+                    "id": str(uuid.uuid4()),
+                    "image_url": "https://images.unsplash.com/photo-1559339352-11d035aa65de?w=1920",
+                    "title": "كافيه عصري",
+                    "is_active": True
+                },
+                {
+                    "id": str(uuid.uuid4()),
+                    "image_url": "https://images.unsplash.com/photo-1466978913421-dad2ebd01d17?w=1920",
+                    "title": "مطبخ احترافي",
+                    "is_active": True
                 }
             ],
             "settings": {
@@ -424,6 +442,7 @@ async def initialize_database_endpoint():
         return {
             "status": "success",
             "message": "تم تهيئة قاعدة البيانات بنجاح!",
+            "backgrounds_count": 6,
             "credentials": {
                 "super_admin": {
                     "url": "/super-admin",
