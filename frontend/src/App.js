@@ -70,6 +70,28 @@ const ProtectedRoute = ({ children }) => {
   return children;
 };
 
+// Permission Route - للتحقق من صلاحية الوصول للصفحة
+const PermissionRoute = ({ children, permission }) => {
+  const { hasPermission, user } = useAuth();
+  
+  // المدير (admin) لديه جميع الصلاحيات
+  if (user?.role === 'admin' || user?.role === 'super_admin') {
+    return children;
+  }
+  
+  // مدير الفرع لديه معظم الصلاحيات
+  if (user?.role === 'branch_manager') {
+    return children;
+  }
+  
+  // التحقق من الصلاحية
+  if (!hasPermission(permission)) {
+    return <Navigate to="/" />;
+  }
+  
+  return children;
+};
+
 // Public Route (redirect to home if authenticated)
 const PublicRoute = ({ children }) => {
   const { isAuthenticated, loading, user } = useAuth();
