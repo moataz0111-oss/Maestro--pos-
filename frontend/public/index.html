@@ -59,9 +59,23 @@
             // Register Service Worker for PWA
             if ('serviceWorker' in navigator) {
                 window.addEventListener('load', function() {
+                    // Clear old caches first
+                    if ('caches' in window) {
+                        caches.keys().then(function(names) {
+                            for (let name of names) {
+                                if (!name.includes('v5')) {
+                                    caches.delete(name);
+                                    console.log('Deleted old cache:', name);
+                                }
+                            }
+                        });
+                    }
+                    
                     navigator.serviceWorker.register('/sw.js', { scope: '/' })
                         .then(function(registration) {
-                            console.log('SW registered successfully:', registration.scope);
+                            console.log('SW registered:', registration.scope);
+                            // Force update check
+                            registration.update();
                         })
                         .catch(function(error) {
                             console.log('SW registration failed:', error);
