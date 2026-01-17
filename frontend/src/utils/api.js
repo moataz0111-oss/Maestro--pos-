@@ -7,16 +7,15 @@ const getBackendUrl = () => {
     return window.location.origin;
   }
   // في بيئة المعاينة أو التطوير
-  return process.env.REACT_APP_BACKEND_URL || (typeof window !== 'undefined' ? window.location.origin : '');
+  if (typeof process !== 'undefined' && process.env && process.env.REACT_APP_BACKEND_URL) {
+    return process.env.REACT_APP_BACKEND_URL;
+  }
+  // Fallback
+  return typeof window !== 'undefined' ? window.location.origin : '';
 };
 
-// تصدير كـ singleton لتجنب إعادة الحساب
-const BACKEND_URL = getBackendUrl();
-const API_URL = `${BACKEND_URL}/api`;
+// تصدير كـ singleton
+export const BACKEND_URL = getBackendUrl();
+export const API_URL = `${BACKEND_URL}/api`;
 
-// دالة للحصول على الـ API URL (يمكن استخدامها في أي مكان)
-export const getApiUrl = () => API_URL;
-export const getBaseUrl = () => BACKEND_URL;
-
-export { BACKEND_URL, API_URL };
 export default API_URL;
