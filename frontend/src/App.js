@@ -198,7 +198,9 @@ function AppRoutes() {
         path="/reports" 
         element={
           <ProtectedRoute>
-            <Reports />
+            <PermissionRoute permission="reports">
+              <Reports />
+            </PermissionRoute>
           </ProtectedRoute>
         } 
       />
@@ -206,7 +208,9 @@ function AppRoutes() {
         path="/expenses" 
         element={
           <ProtectedRoute>
-            <Expenses />
+            <PermissionRoute permission="expenses">
+              <Expenses />
+            </PermissionRoute>
           </ProtectedRoute>
         } 
       />
