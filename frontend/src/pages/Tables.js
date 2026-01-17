@@ -378,6 +378,16 @@ export default function Tables() {
                         <Button
                           size="sm"
                           variant="outline"
+                          className="w-full border-amber-500 text-amber-500 hover:bg-amber-500/10"
+                          onClick={(e) => { e.stopPropagation(); openTransferDialog(table); }}
+                          data-testid={`transfer-table-${table.id}`}
+                        >
+                          <ArrowLeftRight className="h-4 w-4 ml-1" />
+                          تحويل الطلب
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
                           className="w-full"
                           onClick={(e) => { e.stopPropagation(); updateTableStatus(table.id, 'available'); }}
                           data-testid={`free-table-${table.id}`}
