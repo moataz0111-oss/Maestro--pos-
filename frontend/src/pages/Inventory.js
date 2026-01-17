@@ -1,21 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { API_URL, BACKEND_URL } from '../utils/api';
 import { useNavigate } from 'react-router-dom';
-import { API_URL, BACKEND_URL } from '../utils/api';
 import axios from 'axios';
-import { API_URL, BACKEND_URL } from '../utils/api';
 import { useAuth } from '../context/AuthContext';
-import { API_URL, BACKEND_URL } from '../utils/api';
 import { formatPrice } from '../utils/currency';
-import { API_URL, BACKEND_URL } from '../utils/api';
 import { Button } from '../components/ui/button';
-import { API_URL, BACKEND_URL } from '../utils/api';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
-import { API_URL, BACKEND_URL } from '../utils/api';
 import { Input } from '../components/ui/input';
-import { API_URL, BACKEND_URL } from '../utils/api';
 import { Label } from '../components/ui/label';
-import { API_URL, BACKEND_URL } from '../utils/api';
 import {
   ArrowRight,
   Package,
@@ -29,7 +20,6 @@ import {
   ArrowDownCircle
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { API_URL, BACKEND_URL } from '../utils/api';
 import {
   Dialog,
   DialogContent,

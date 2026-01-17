@@ -1,17 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { API_URL, BACKEND_URL } from '../utils/api';
 import { useParams, useNavigate } from 'react-router-dom';
-import { API_URL, BACKEND_URL } from '../utils/api';
 import axios from 'axios';
-import { API_URL, BACKEND_URL } from '../utils/api';
 import { Button } from '../components/ui/button';
-import { API_URL, BACKEND_URL } from '../utils/api';
 import { Card, CardContent } from '../components/ui/card';
-import { API_URL, BACKEND_URL } from '../utils/api';
 import { Badge } from '../components/ui/badge';
-import { API_URL, BACKEND_URL } from '../utils/api';
 import { Printer, ArrowRight, Download } from 'lucide-react';
-import { API_URL, BACKEND_URL } from '../utils/api';
 
 const API = API_URL;
 

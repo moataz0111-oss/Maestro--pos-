@@ -1,27 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { API_URL, BACKEND_URL } from '../utils/api';
 import axios from 'axios';
-import { API_URL, BACKEND_URL } from '../utils/api';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
-import { API_URL, BACKEND_URL } from '../utils/api';
 import { Button } from '../components/ui/button';
-import { API_URL, BACKEND_URL } from '../utils/api';
 import { Input } from '../components/ui/input';
-import { API_URL, BACKEND_URL } from '../utils/api';
 import { Label } from '../components/ui/label';
-import { API_URL, BACKEND_URL } from '../utils/api';
 import { Badge } from '../components/ui/badge';
-import { API_URL, BACKEND_URL } from '../utils/api';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
-import { API_URL, BACKEND_URL } from '../utils/api';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/ui/dialog';
-import { API_URL, BACKEND_URL } from '../utils/api';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
-import { API_URL, BACKEND_URL } from '../utils/api';
 import { Textarea } from '../components/ui/textarea';
-import { API_URL, BACKEND_URL } from '../utils/api';
 import { ScrollArea } from '../components/ui/scroll-area';
-import { API_URL, BACKEND_URL } from '../utils/api';
 import {
   Package,
   Plus,
@@ -42,9 +30,7 @@ import {
   Check
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { API_URL, BACKEND_URL } from '../utils/api';
 import { useNavigate } from 'react-router-dom';
-import { API_URL, BACKEND_URL } from '../utils/api';
 
 const API = API_URL;
 

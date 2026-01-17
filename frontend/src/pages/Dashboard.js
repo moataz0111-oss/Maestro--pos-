@@ -64,7 +64,6 @@ import { ScrollArea } from '../components/ui/scroll-area';
 import { Separator } from '../components/ui/separator';
 import PWAInstallButton from '../components/PWAInstallButton';
 
-import { API_URL } from '../utils/api';
 const API = API_URL;
 
 // فئات النقود العراقية

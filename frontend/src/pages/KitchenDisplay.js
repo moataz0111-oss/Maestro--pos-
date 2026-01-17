@@ -1,15 +1,9 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { API_URL, BACKEND_URL } from '../utils/api';
 import axios from 'axios';
-import { API_URL, BACKEND_URL } from '../utils/api';
 import { Card, CardContent } from '../components/ui/card';
-import { API_URL, BACKEND_URL } from '../utils/api';
 import { Button } from '../components/ui/button';
-import { API_URL, BACKEND_URL } from '../utils/api';
 import { Badge } from '../components/ui/badge';
-import { API_URL, BACKEND_URL } from '../utils/api';
 import { formatPrice } from '../utils/currency';
-import { API_URL, BACKEND_URL } from '../utils/api';
 import { 
   ChefHat, 
   Clock, 
@@ -30,9 +24,7 @@ import {
   Home
 } from 'lucide-react';
 import { toast, Toaster } from 'sonner';
-import { API_URL, BACKEND_URL } from '../utils/api';
 import { useNavigate } from 'react-router-dom';
-import { API_URL, BACKEND_URL } from '../utils/api';
 
 const API = API_URL;
 
