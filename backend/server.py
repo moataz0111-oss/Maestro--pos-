@@ -4354,6 +4354,30 @@ async def get_driver_by_user(user_id: str, current_user: dict = Depends(get_curr
         raise HTTPException(status_code=404, detail="لم يتم ربط حسابك بسائق")
     return driver
 
+@api_router.get("/drivers/{driver_id}/with-order")
+async def get_driver_with_current_order(driver_id: str, current_user: dict = Depends(get_current_user)):
+    """جلب السائق مع بيانات الطلب الحالي"""
+    driver = await db.drivers.find_one({"id": driver_id}, {"_id": 0})
+    if not driver:
+        raise HTTPException(status_code=404, detail="السائق غير موجود")
+    
+    # جلب بيانات الطلب الحالي إذا كان موجوداً
+    if driver.get("current_order_id"):
+        order = await db.orders.find_one({"id": driver["current_order_id"]}, {"_id": 0})
+        if order:
+            driver["current_order"] = {
+                "id": order.get("id"),
+                "order_number": order.get("order_number"),
+                "total": order.get("total", 0),
+                "customer_name": order.get("customer_name"),
+                "customer_phone": order.get("customer_phone"),
+                "delivery_address": order.get("delivery_address"),
+                "status": order.get("status"),
+                "created_at": order.get("created_at")
+            }
+    
+    return driver
+
 @api_router.put("/drivers/{driver_id}/assign")
 async def assign_driver(driver_id: str, order_id: str, current_user: dict = Depends(get_current_user)):
     await db.drivers.update_one(
