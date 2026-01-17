@@ -605,7 +605,7 @@ export default function Delivery() {
 
                         {driver.current_order_id && (
                           <div className="mt-3 pt-3 border-t border-border">
-                            <div className="flex items-center justify-between">
+                            <div className="flex items-center justify-between mb-2">
                               <span className="text-sm text-orange-500">في طريقه للتوصيل</span>
                               <Button
                                 size="sm"
@@ -616,6 +616,28 @@ export default function Delivery() {
                                 تم التسليم
                               </Button>
                             </div>
+                            {/* زر تحويل الطلب لسائق آخر */}
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="w-full border-amber-500 text-amber-500 hover:bg-amber-500/10"
+                              onClick={(e) => { 
+                                e.stopPropagation(); 
+                                // إنشاء كائن طلب وهمي للتحويل
+                                setOrderToTransfer({
+                                  id: driver.current_order_id,
+                                  order_number: driver.current_order?.order_number || '---',
+                                  total: driver.current_order?.total || 0,
+                                  driver_id: driver.id,
+                                  driver_name: driver.name
+                                });
+                                setTransferDriverDialogOpen(true);
+                              }}
+                              data-testid={`transfer-driver-order-${driver.id}`}
+                            >
+                              <ArrowLeftRight className="h-4 w-4 ml-1" />
+                              تحويل لسائق آخر
+                            </Button>
                           </div>
                         )}
 
