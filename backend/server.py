@@ -8853,6 +8853,16 @@ async def notify_new_order(order: dict, tenant_id: str):
 # Include router and middleware
 app.include_router(api_router)
 
+# Middleware to prevent caching of API responses
+@app.middleware("http")
+async def add_no_cache_headers(request, call_next):
+    response = await call_next(request)
+    if request.url.path.startswith("/api"):
+        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+    return response
+
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
