@@ -5,7 +5,7 @@ import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card';
-import { Lock, Mail, Eye, EyeOff, AlertCircle } from 'lucide-react';
+import { Lock, Mail, Eye, EyeOff, AlertCircle, Database, CheckCircle, Loader2 } from 'lucide-react';
 import axios from 'axios';
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -92,6 +92,12 @@ export default function Login() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   
+  // Database initialization states
+  const [showDbInit, setShowDbInit] = useState(false);
+  const [dbInitLoading, setDbInitLoading] = useState(false);
+  const [dbInitResult, setDbInitResult] = useState(null);
+  const [loginFailCount, setLoginFailCount] = useState(0);
+  
   // Background states
   const [backgroundSettings, setBackgroundSettings] = useState(null);
   const [currentBgIndex, setCurrentBgIndex] = useState(0);
@@ -99,6 +105,32 @@ export default function Login() {
   
   const { login } = useAuth();
   const navigate = useNavigate();
+  
+  // Function to initialize database
+  const initializeDatabase = async () => {
+    setDbInitLoading(true);
+    setDbInitResult(null);
+    try {
+      const res = await axios.get(`${API}/init-db`);
+      setDbInitResult({
+        success: true,
+        data: res.data
+      });
+      // Show success for 3 seconds then allow login
+      setTimeout(() => {
+        setShowDbInit(false);
+        setError('');
+        setLoginFailCount(0);
+      }, 5000);
+    } catch (err) {
+      setDbInitResult({
+        success: false,
+        error: err.response?.data?.detail || err.message || 'فشل في تهيئة قاعدة البيانات'
+      });
+    } finally {
+      setDbInitLoading(false);
+    }
+  };
 
   // Fetch background settings
   useEffect(() => {
@@ -148,6 +180,12 @@ export default function Login() {
       navigate('/');
     } else {
       setError(result.error);
+      // After 2 failed login attempts, show database initialization option
+      const newFailCount = loginFailCount + 1;
+      setLoginFailCount(newFailCount);
+      if (newFailCount >= 2) {
+        setShowDbInit(true);
+      }
     }
     
     setLoading(false);
