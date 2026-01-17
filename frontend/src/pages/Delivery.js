@@ -99,6 +99,7 @@ export default function Delivery() {
   const [transferDriverDialogOpen, setTransferDriverDialogOpen] = useState(false);
   const [orderToTransfer, setOrderToTransfer] = useState(null);
   const [targetDriverId, setTargetDriverId] = useState('');
+  const [allDriversForTransfer, setAllDriversForTransfer] = useState([]);
   
   // حالات جديدة للخريطة
   const [driverLocations, setDriverLocations] = useState([]);
