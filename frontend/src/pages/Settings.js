@@ -191,11 +191,26 @@ export default function Settings() {
   const [staffDialogOpen, setStaffDialogOpen] = useState(false);
   const [editStaffDialogOpen, setEditStaffDialogOpen] = useState(false);
   const [staffForm, setStaffForm] = useState({
-    full_name: '', email: '', phone: '', password: '', role: 'cashier', branch_id: '', job_title: ''
+    full_name: '', email: '', phone: '', password: '', role: 'cashier', branch_id: '', job_title: '', permissions: []
   });
   const [editStaffForm, setEditStaffForm] = useState(null);
   const [staffLoading, setStaffLoading] = useState(false);
   const [staffFilter, setStaffFilter] = useState({ branch_id: '', role: '' });
+  
+  // صلاحيات الموظفين المبسطة
+  const STAFF_PERMISSIONS = [
+    { id: 'pos', name: 'نقاط البيع', description: 'إنشاء وإدارة الطلبات' },
+    { id: 'pos_discount', name: 'إعطاء خصومات', description: 'السماح بإعطاء خصومات' },
+    { id: 'orders', name: 'الطلبات', description: 'عرض الطلبات' },
+    { id: 'tables', name: 'الطاولات', description: 'إدارة الطاولات' },
+    { id: 'kitchen', name: 'شاشة المطبخ', description: 'عرض طلبات المطبخ' },
+    { id: 'delivery', name: 'التوصيل', description: 'إدارة التوصيل' },
+    { id: 'inventory', name: 'المخزون', description: 'عرض المخزون' },
+    { id: 'reports', name: 'التقارير', description: 'عرض التقارير' },
+    { id: 'expenses', name: 'المصاريف', description: 'عرض وإضافة المصاريف' },
+    { id: 'shifts_close', name: 'إغلاق الصندوق', description: 'إغلاق صندوق الوردية' },
+    { id: 'settings', name: 'الإعدادات', description: 'الوصول للإعدادات' },
+  ];
   
   // Dialog states
   const [userDialogOpen, setUserDialogOpen] = useState(false);
