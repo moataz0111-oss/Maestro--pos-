@@ -321,13 +321,77 @@ export default function HR() {
     }
   };
 
+  // تصدير تقرير الرواتب الشامل
+  const exportPayrollReport = async (format = 'excel') => {
+    try {
+      toast.loading('جاري تحضير الملف...');
+      const token = localStorage.getItem('token');
+      const branchId = getBranchIdForApi();
+      
+      const response = await axios.get(
+        `${API}/reports/payroll/export/excel?month=${selectedMonth}${branchId ? `&branch_id=${branchId}` : ''}`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+          responseType: 'blob'
+        }
+      );
+      
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `payroll_report_${selectedMonth}.xlsx`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      
+      toast.dismiss();
+      toast.success('تم تحميل الملف بنجاح');
+    } catch (error) {
+      toast.dismiss();
+      toast.error('فشل في تصدير الملف');
+    }
+  };
+
+  // تصدير مفردات مرتب موظف
+  const exportEmployeeSalarySlip = async (employeeId, employeeName, format = 'excel') => {
+    try {
+      toast.loading('جاري تحضير الملف...');
+      const token = localStorage.getItem('token');
+      
+      const response = await axios.get(
+        `${API}/reports/employee-salary-slip/${employeeId}/export/excel?month=${selectedMonth}`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+          responseType: 'blob'
+        }
+      );
+      
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `salary_slip_${employeeName}_${selectedMonth}.xlsx`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      
+      toast.dismiss();
+      toast.success('تم تحميل مفردات المرتب بنجاح');
+    } catch (error) {
+      toast.dismiss();
+      toast.error('فشل في تصدير مفردات المرتب');
+    }
+  };
+
   // Stats
   const stats = {
     totalEmployees: employees.filter(e => e.is_active).length,
     totalSalaries: employees.filter(e => e.is_active).reduce((sum, e) => sum + (e.salary || 0), 0),
     pendingAdvances: advances.filter(a => a.status === 'approved' && a.remaining_amount > 0).reduce((sum, a) => sum + a.remaining_amount, 0),
     monthlyDeductions: deductions.reduce((sum, d) => sum + d.amount, 0),
-    monthlyBonuses: bonuses.reduce((sum, b) => sum + b.amount, 0)
+    monthlyBonuses: bonuses.reduce((sum, b) => sum + b.amount, 0),
+    netPayable: payrollSummary?.totals?.net_payable || 0
   };
 
   const filteredEmployees = employees.filter(e => 
