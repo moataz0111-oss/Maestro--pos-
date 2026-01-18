@@ -262,6 +262,26 @@ export default function Dashboard() {
     }
   };
 
+  // جلب رابط قائمة العملاء
+  const fetchMenuLink = async () => {
+    try {
+      const res = await axios.get(`${API}/customer/menu-link`);
+      setMenuLink(res.data.menu_url);
+      setShowMenuLinkDialog(true);
+    } catch (error) {
+      // إذا فشل، نستخدم الرابط الافتراضي
+      const baseUrl = process.env.REACT_APP_BACKEND_URL || window.location.origin;
+      setMenuLink(`${baseUrl}/menu/default`);
+      setShowMenuLinkDialog(true);
+    }
+  };
+
+  // نسخ رابط القائمة
+  const copyMenuLink = () => {
+    navigator.clipboard.writeText(menuLink);
+    toast.success('تم نسخ الرابط!');
+  };
+
   const fetchDashboardSettings = async () => {
     try {
       const res = await axios.get(`${API}/settings/dashboard`);
