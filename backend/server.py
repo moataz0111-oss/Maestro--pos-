@@ -12059,6 +12059,251 @@ async def stripe_webhook(request: Request):
         return {"error": str(e)}
 
 
+# ==================== PAYMENT SETTINGS APIs ====================
+
+class PaymentSettingsUpdate(BaseModel):
+    stripe_enabled: Optional[bool] = True
+    stripe_publishable_key: Optional[str] = None
+    stripe_secret_key: Optional[str] = None
+    stripe_currency: Optional[str] = "USD"
+    stripe_mode: Optional[str] = "test"  # test or live
+    zaincash_enabled: Optional[bool] = True
+    zaincash_phone: Optional[str] = None
+    zaincash_name: Optional[str] = None
+    zaincash_qr_image: Optional[str] = None
+    cash_enabled: Optional[bool] = True
+    delivery_fee: Optional[int] = 5000
+    min_order_amount: Optional[int] = 10000
+
+@api_router.get("/payment-settings")
+async def get_payment_settings(current_user: dict = Depends(get_current_user)):
+    """جلب إعدادات الدفع"""
+    tenant_id = get_user_tenant_id(current_user) or "default"
+    
+    settings = await db.payment_settings.find_one(
+        {"tenant_id": tenant_id},
+        {"_id": 0, "stripe_secret_key": 0}  # إخفاء المفتاح السري
+    )
+    
+    if not settings:
+        settings = {
+            "tenant_id": tenant_id,
+            "stripe_enabled": True,
+            "stripe_publishable_key": "",
+            "stripe_currency": "USD",
+            "stripe_mode": "test",
+            "zaincash_enabled": True,
+            "zaincash_phone": "",
+            "zaincash_name": "",
+            "zaincash_qr_image": "",
+            "cash_enabled": True,
+            "delivery_fee": 5000,
+            "min_order_amount": 10000
+        }
+    
+    # إخفاء المفتاح السري (عرض فقط أنه موجود أو لا)
+    settings["stripe_secret_key_set"] = bool(settings.get("stripe_secret_key"))
+    
+    return settings
+
+@api_router.post("/payment-settings")
+async def update_payment_settings(
+    settings: PaymentSettingsUpdate,
+    current_user: dict = Depends(get_current_user)
+):
+    """تحديث إعدادات الدفع"""
+    if not has_role(current_user, ['admin', 'owner']):
+        raise HTTPException(status_code=403, detail="غير مصرح لك بتعديل الإعدادات")
+    
+    tenant_id = get_user_tenant_id(current_user) or "default"
+    
+    update_data = {
+        "tenant_id": tenant_id,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+        "updated_by": current_user.get("id")
+    }
+    
+    # إضافة الحقول غير الفارغة فقط
+    settings_dict = settings.dict(exclude_unset=True, exclude_none=True)
+    update_data.update(settings_dict)
+    
+    # تشفير المفتاح السري (في الإنتاج يجب استخدام تشفير حقيقي)
+    if "stripe_secret_key" in update_data and update_data["stripe_secret_key"]:
+        # في الإنتاج: استخدم تشفير AES أو KMS
+        # هنا نحتفظ به كما هو للتبسيط
+        pass
+    
+    await db.payment_settings.update_one(
+        {"tenant_id": tenant_id},
+        {"$set": update_data},
+        upsert=True
+    )
+    
+    return {"success": True, "message": "تم حفظ الإعدادات بنجاح"}
+
+@api_router.post("/payment-settings/zaincash-qr")
+async def upload_zaincash_qr(
+    file: UploadFile = File(...),
+    current_user: dict = Depends(get_current_user)
+):
+    """رفع صورة QR Code لزين كاش"""
+    if not has_role(current_user, ['admin', 'owner']):
+        raise HTTPException(status_code=403, detail="غير مصرح لك")
+    
+    tenant_id = get_user_tenant_id(current_user) or "default"
+    
+    # حفظ الصورة
+    file_ext = file.filename.split('.')[-1] if '.' in file.filename else 'png'
+    filename = f"zaincash_qr_{tenant_id}.{file_ext}"
+    file_path = UPLOAD_DIR / "payment" / filename
+    
+    (UPLOAD_DIR / "payment").mkdir(exist_ok=True)
+    
+    content = await file.read()
+    async with aiofiles.open(file_path, 'wb') as f:
+        await f.write(content)
+    
+    image_url = f"/uploads/payment/{filename}"
+    
+    # تحديث الإعدادات
+    await db.payment_settings.update_one(
+        {"tenant_id": tenant_id},
+        {"$set": {"zaincash_qr_image": image_url}},
+        upsert=True
+    )
+    
+    return {"success": True, "image_url": image_url}
+
+
+# ==================== REAL-TIME NOTIFICATIONS APIs ====================
+
+# تخزين الإشعارات غير المقروءة في الذاكرة (للتبسيط)
+# في الإنتاج: استخدم Redis أو WebSockets
+pending_notifications = {}
+
+@api_router.get("/notifications/pending-orders")
+async def get_pending_order_notifications(
+    branch_id: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """جلب الطلبات الجديدة (للكاشير)"""
+    tenant_id = get_user_tenant_id(current_user) or "default"
+    
+    # جلب الطلبات الجديدة من آخر 5 دقائق
+    five_minutes_ago = (datetime.now(timezone.utc) - timedelta(minutes=5)).isoformat()
+    
+    query = {
+        "status": "pending",
+        "source": "customer_app",
+        "created_at": {"$gte": five_minutes_ago}
+    }
+    
+    if branch_id:
+        query["branch_id"] = branch_id
+    elif tenant_id != "default":
+        query["tenant_id"] = tenant_id
+    
+    orders = await db.orders.find(
+        query,
+        {"_id": 0, "id": 1, "order_number": 1, "customer_name": 1, 
+         "total": 1, "created_at": 1, "payment_method": 1, "items": 1}
+    ).sort("created_at", -1).to_list(20)
+    
+    # تحديد الطلبات الجديدة (غير المشاهدة)
+    user_id = current_user.get("id", "")
+    viewed_key = f"{tenant_id}_{user_id}"
+    viewed_orders = pending_notifications.get(viewed_key, set())
+    
+    new_orders = []
+    for order in orders:
+        order["is_new"] = order["id"] not in viewed_orders
+        new_orders.append(order)
+    
+    return {
+        "orders": new_orders,
+        "new_count": sum(1 for o in new_orders if o.get("is_new")),
+        "total_count": len(new_orders)
+    }
+
+@api_router.post("/notifications/mark-seen")
+async def mark_orders_as_seen(
+    order_ids: List[str] = Body(...),
+    current_user: dict = Depends(get_current_user)
+):
+    """تحديد الطلبات كمشاهدة"""
+    tenant_id = get_user_tenant_id(current_user) or "default"
+    user_id = current_user.get("id", "")
+    viewed_key = f"{tenant_id}_{user_id}"
+    
+    if viewed_key not in pending_notifications:
+        pending_notifications[viewed_key] = set()
+    
+    pending_notifications[viewed_key].update(order_ids)
+    
+    return {"success": True, "marked_count": len(order_ids)}
+
+@api_router.get("/notifications/sound-alert")
+async def check_sound_alert(
+    last_check: Optional[str] = None,
+    branch_id: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """التحقق من وجود طلبات جديدة تحتاج تنبيه صوتي"""
+    tenant_id = get_user_tenant_id(current_user) or "default"
+    
+    # تحديد وقت آخر فحص
+    if last_check:
+        try:
+            check_time = last_check
+        except:
+            check_time = (datetime.now(timezone.utc) - timedelta(seconds=30)).isoformat()
+    else:
+        check_time = (datetime.now(timezone.utc) - timedelta(seconds=30)).isoformat()
+    
+    query = {
+        "status": "pending",
+        "source": "customer_app",
+        "created_at": {"$gt": check_time}
+    }
+    
+    if branch_id:
+        query["branch_id"] = branch_id
+    elif tenant_id != "default":
+        query["tenant_id"] = tenant_id
+    
+    new_orders_count = await db.orders.count_documents(query)
+    
+    return {
+        "has_new_orders": new_orders_count > 0,
+        "new_orders_count": new_orders_count,
+        "check_time": datetime.now(timezone.utc).isoformat()
+    }
+
+
+# ==================== SECURE CARD DATA (Stripe handles this) ====================
+# ملاحظة مهمة: بيانات البطاقة لا تُخزن في قاعدة البيانات أبداً
+# Stripe يتعامل مع جميع بيانات البطاقة الحساسة
+# نحن نخزن فقط: آخر 4 أرقام، نوع البطاقة، تاريخ الانتهاء (للعرض فقط)
+
+@api_router.get("/payment-transactions")
+async def get_payment_transactions(
+    limit: int = 20,
+    current_user: dict = Depends(get_current_user)
+):
+    """جلب سجل المعاملات المالية"""
+    if not has_role(current_user, ['admin', 'owner']):
+        raise HTTPException(status_code=403, detail="غير مصرح لك")
+    
+    tenant_id = get_user_tenant_id(current_user) or "default"
+    
+    transactions = await db.payment_transactions.find(
+        {"tenant_id": tenant_id},
+        {"_id": 0}
+    ).sort("created_at", -1).limit(limit).to_list(limit)
+    
+    return {"transactions": transactions}
+
+
 # Include router and middleware
 app.include_router(api_router)
 
