@@ -234,17 +234,9 @@ export default function Reports() {
         <div className="flex flex-wrap items-center gap-4">
           <div>
             <Label className="text-xs text-muted-foreground">الفرع</Label>
-            <Select value={selectedBranch} onValueChange={setSelectedBranch}>
-              <SelectTrigger className="w-[180px] mt-1">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">جميع الفروع</SelectItem>
-                {branches.map(b => (
-                  <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div className="mt-1">
+              <BranchSelector />
+            </div>
           </div>
           <div>
             <Label className="text-xs text-muted-foreground">من تاريخ</Label>
