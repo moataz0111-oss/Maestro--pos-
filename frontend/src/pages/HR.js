@@ -800,9 +800,14 @@ export default function HR() {
                   <BarChart3 className="h-5 w-5" />
                   تقرير الرواتب الشامل - {selectedMonth}
                 </CardTitle>
-                <Button onClick={() => exportPayrollReport('excel')}>
-                  <FileSpreadsheet className="h-4 w-4 ml-2" /> تصدير Excel
-                </Button>
+                <div className="flex gap-2">
+                  <Button onClick={() => exportPayrollReport('excel')}>
+                    <FileSpreadsheet className="h-4 w-4 ml-2" /> Excel
+                  </Button>
+                  <Button variant="outline" onClick={() => exportPayrollPDF()}>
+                    <FileText className="h-4 w-4 ml-2" /> PDF
+                  </Button>
+                </div>
               </CardHeader>
               <CardContent>
                 {payrollSummary ? (
