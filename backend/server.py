@@ -11518,10 +11518,15 @@ class CustomerOrderItem(BaseModel):
     quantity: int
     notes: Optional[str] = None
 
+class DeliveryLocation(BaseModel):
+    lat: float
+    lng: float
+
 class CustomerOrderCreate(BaseModel):
     items: List[CustomerOrderItem]
     delivery_address: str
     delivery_notes: Optional[str] = None
+    delivery_location: Optional[DeliveryLocation] = None
     payment_method: str = "cash"
     customer_name: Optional[str] = None
     customer_phone: Optional[str] = None
