@@ -30,7 +30,10 @@ import {
   ChefHat,
   X,
   ArrowRight,
-  Search
+  Search,
+  Download,
+  Smartphone,
+  Share2
 } from 'lucide-react';
 
 const API = process.env.REACT_APP_BACKEND_URL + '/api';
@@ -49,6 +52,8 @@ export default function CustomerMenu() {
   const [showTracking, setShowTracking] = useState(false);
   const [currentOrder, setCurrentOrder] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [deferredPrompt, setDeferredPrompt] = useState(null);
+  const [showInstallBanner, setShowInstallBanner] = useState(false);
   
   // بيانات العميل
   const [customerName, setCustomerName] = useState('');
