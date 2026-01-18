@@ -9193,6 +9193,375 @@ async def get_hourly_report(
         "hourly": hourly_data
     }
 
+# ==================== SMART REPORTS EXPORT ====================
+
+@api_router.get("/smart-reports/export/excel")
+async def export_smart_report_excel(
+    report_type: str = "sales",  # sales, products, hourly
+    period: str = "month",
+    branch_id: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """تصدير التقارير الذكية إلى Excel"""
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+    
+    tenant_id = get_user_tenant_id(current_user)
+    
+    wb = Workbook()
+    ws = wb.active
+    
+    # التنسيق
+    header_fill = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
+    header_font = Font(bold=True, color="FFFFFF", size=11)
+    thin_border = Border(
+        left=Side(style='thin'),
+        right=Side(style='thin'),
+        top=Side(style='thin'),
+        bottom=Side(style='thin')
+    )
+    
+    # تحديد الفترة
+    now = datetime.now(timezone.utc)
+    if period == "today":
+        start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    elif period == "week":
+        start = now - timedelta(days=7)
+    elif period == "month":
+        start = now - timedelta(days=30)
+    elif period == "year":
+        start = now - timedelta(days=365)
+    else:
+        start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    
+    # Build query
+    query = build_tenant_query(current_user)
+    
+    # فلترة الفرع
+    user_branch_id = current_user.get("branch_id")
+    user_role = current_user.get("role")
+    if user_branch_id and user_role not in [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.MANAGER]:
+        query["branch_id"] = user_branch_id
+    elif branch_id:
+        query["branch_id"] = branch_id
+    
+    query["created_at"] = {"$gte": start.isoformat()}
+    
+    if report_type == "sales":
+        ws.title = "تقرير المبيعات الذكي"
+        orders = await db.orders.find(query, {"_id": 0}).to_list(10000)
+        
+        # العنوان
+        ws.merge_cells('A1:F1')
+        ws['A1'] = f"تقرير المبيعات الذكي - {period}"
+        ws['A1'].font = Font(bold=True, size=14)
+        ws['A1'].alignment = Alignment(horizontal='center')
+        
+        # الرؤوس
+        headers = ['#', 'رقم الطلب', 'التاريخ', 'النوع', 'طريقة الدفع', 'المبلغ']
+        for col, header in enumerate(headers, 1):
+            cell = ws.cell(row=3, column=col, value=header)
+            cell.fill = header_fill
+            cell.font = header_font
+            cell.alignment = Alignment(horizontal='center')
+            cell.border = thin_border
+        
+        order_types = {"dine_in": "محلي", "takeaway": "سفري", "delivery": "توصيل"}
+        payment_methods = {"cash": "نقدي", "card": "بطاقة", "credit": "آجل"}
+        
+        row_num = 4
+        total = 0
+        for idx, order in enumerate(orders, 1):
+            total += order.get("total", 0)
+            data = [
+                idx,
+                order.get("order_number", ""),
+                order.get("created_at", "")[:10],
+                order_types.get(order.get("order_type"), order.get("order_type", "")),
+                payment_methods.get(order.get("payment_method"), order.get("payment_method", "")),
+                order.get("total", 0)
+            ]
+            for col, value in enumerate(data, 1):
+                cell = ws.cell(row=row_num, column=col, value=value)
+                cell.border = thin_border
+                if col == 6:
+                    cell.number_format = '#,##0'
+            row_num += 1
+        
+        # الإجمالي
+        ws.cell(row=row_num, column=5, value="الإجمالي:").font = Font(bold=True)
+        ws.cell(row=row_num, column=6, value=total).font = Font(bold=True)
+        ws.cell(row=row_num, column=6).number_format = '#,##0'
+        
+    elif report_type == "products":
+        ws.title = "المنتجات الأكثر مبيعاً"
+        orders = await db.orders.find(query, {"_id": 0}).to_list(10000)
+        
+        # حساب مبيعات المنتجات
+        product_sales = {}
+        for order in orders:
+            for item in order.get("items", []):
+                pid = item.get("product_id")
+                name = item.get("name", "غير معروف")
+                if pid not in product_sales:
+                    product_sales[pid] = {"name": name, "qty": 0, "revenue": 0}
+                product_sales[pid]["qty"] += item.get("quantity", 0)
+                product_sales[pid]["revenue"] += item.get("price", 0) * item.get("quantity", 0)
+        
+        # ترتيب حسب الكمية
+        sorted_products = sorted(product_sales.values(), key=lambda x: x["qty"], reverse=True)[:20]
+        
+        ws.merge_cells('A1:D1')
+        ws['A1'] = "المنتجات الأكثر مبيعاً"
+        ws['A1'].font = Font(bold=True, size=14)
+        ws['A1'].alignment = Alignment(horizontal='center')
+        
+        headers = ['#', 'المنتج', 'الكمية', 'الإيرادات']
+        for col, header in enumerate(headers, 1):
+            cell = ws.cell(row=3, column=col, value=header)
+            cell.fill = header_fill
+            cell.font = header_font
+            cell.alignment = Alignment(horizontal='center')
+            cell.border = thin_border
+        
+        row_num = 4
+        for idx, prod in enumerate(sorted_products, 1):
+            data = [idx, prod["name"], prod["qty"], prod["revenue"]]
+            for col, value in enumerate(data, 1):
+                cell = ws.cell(row=row_num, column=col, value=value)
+                cell.border = thin_border
+                if col == 4:
+                    cell.number_format = '#,##0'
+            row_num += 1
+    
+    elif report_type == "hourly":
+        ws.title = "التقرير الساعي"
+        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        query["created_at"] = {"$regex": f"^{today}"}
+        
+        orders = await db.orders.find(query, {"_id": 0, "created_at": 1, "total": 1}).to_list(10000)
+        
+        hourly_data = {str(h).zfill(2): {"orders": 0, "sales": 0} for h in range(24)}
+        for order in orders:
+            try:
+                created_at = order.get("created_at", "")
+                if "T" in created_at:
+                    hour = created_at.split("T")[1][:2]
+                else:
+                    hour = "00"
+                if hour in hourly_data:
+                    hourly_data[hour]["orders"] += 1
+                    hourly_data[hour]["sales"] += order.get("total", 0)
+            except:
+                pass
+        
+        ws.merge_cells('A1:D1')
+        ws['A1'] = f"التقرير الساعي - {today}"
+        ws['A1'].font = Font(bold=True, size=14)
+        ws['A1'].alignment = Alignment(horizontal='center')
+        
+        headers = ['الساعة', 'عدد الطلبات', 'المبيعات']
+        for col, header in enumerate(headers, 1):
+            cell = ws.cell(row=3, column=col, value=header)
+            cell.fill = header_fill
+            cell.font = header_font
+            cell.alignment = Alignment(horizontal='center')
+            cell.border = thin_border
+        
+        row_num = 4
+        for hour in sorted(hourly_data.keys()):
+            data = [f"{hour}:00", hourly_data[hour]["orders"], hourly_data[hour]["sales"]]
+            for col, value in enumerate(data, 1):
+                cell = ws.cell(row=row_num, column=col, value=value)
+                cell.border = thin_border
+                if col == 3:
+                    cell.number_format = '#,##0'
+            row_num += 1
+    
+    # ضبط عرض الأعمدة
+    for col in ws.columns:
+        max_length = 0
+        column = col[0].column_letter
+        for cell in col:
+            try:
+                if len(str(cell.value)) > max_length:
+                    max_length = len(str(cell.value))
+            except:
+                pass
+        ws.column_dimensions[column].width = max(max_length + 2, 12)
+    
+    output = BytesIO()
+    wb.save(output)
+    output.seek(0)
+    
+    return StreamingResponse(
+        output,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename=smart_report_{report_type}_{period}.xlsx"}
+    )
+
+@api_router.get("/smart-reports/export/pdf")
+async def export_smart_report_pdf(
+    report_type: str = "sales",
+    period: str = "month",
+    branch_id: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """تصدير التقارير الذكية إلى PDF"""
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import A4, landscape
+    from reportlab.lib.styles import getSampleStyleSheet
+    from reportlab.lib.units import cm
+    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+    
+    tenant_id = get_user_tenant_id(current_user)
+    
+    # تحديد الفترة
+    now = datetime.now(timezone.utc)
+    if period == "today":
+        start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    elif period == "week":
+        start = now - timedelta(days=7)
+    elif period == "month":
+        start = now - timedelta(days=30)
+    elif period == "year":
+        start = now - timedelta(days=365)
+    else:
+        start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    
+    # Build query
+    query = build_tenant_query(current_user)
+    
+    user_branch_id = current_user.get("branch_id")
+    user_role = current_user.get("role")
+    if user_branch_id and user_role not in [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.MANAGER]:
+        query["branch_id"] = user_branch_id
+    elif branch_id:
+        query["branch_id"] = branch_id
+    
+    query["created_at"] = {"$gte": start.isoformat()}
+    
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=landscape(A4), rightMargin=1*cm, leftMargin=1*cm, topMargin=1*cm, bottomMargin=1*cm)
+    
+    styles = getSampleStyleSheet()
+    elements = []
+    
+    title_style = styles['Heading1']
+    title_style.alignment = 1
+    
+    headers = []
+    data_rows = []
+    totals_row = None
+    title_text = ""
+    
+    if report_type == "sales":
+        title_text = f"تقرير المبيعات الذكي - {period}"
+        orders = await db.orders.find(query, {"_id": 0}).to_list(10000)
+        
+        headers = ["#", "رقم الطلب", "التاريخ", "النوع", "طريقة الدفع", "المبلغ"]
+        order_types = {"dine_in": "محلي", "takeaway": "سفري", "delivery": "توصيل"}
+        payment_methods = {"cash": "نقدي", "card": "بطاقة", "credit": "آجل"}
+        
+        total = 0
+        for idx, order in enumerate(orders[:100], 1):  # Limit to 100 for PDF
+            total += order.get("total", 0)
+            data_rows.append([
+                str(idx),
+                order.get("order_number", ""),
+                order.get("created_at", "")[:10],
+                order_types.get(order.get("order_type"), order.get("order_type", "")),
+                payment_methods.get(order.get("payment_method"), order.get("payment_method", "")),
+                f"{order.get('total', 0):,.0f}"
+            ])
+        
+        totals_row = ["", "", "", "", "الإجمالي:", f"{total:,.0f}"]
+        
+    elif report_type == "products":
+        title_text = "المنتجات الأكثر مبيعاً"
+        orders = await db.orders.find(query, {"_id": 0}).to_list(10000)
+        
+        product_sales = {}
+        for order in orders:
+            for item in order.get("items", []):
+                pid = item.get("product_id")
+                name = item.get("name", "غير معروف")
+                if pid not in product_sales:
+                    product_sales[pid] = {"name": name, "qty": 0, "revenue": 0}
+                product_sales[pid]["qty"] += item.get("quantity", 0)
+                product_sales[pid]["revenue"] += item.get("price", 0) * item.get("quantity", 0)
+        
+        sorted_products = sorted(product_sales.values(), key=lambda x: x["qty"], reverse=True)[:20]
+        
+        headers = ["#", "المنتج", "الكمية", "الإيرادات"]
+        for idx, prod in enumerate(sorted_products, 1):
+            data_rows.append([str(idx), prod["name"], str(prod["qty"]), f"{prod['revenue']:,.0f}"])
+    
+    elif report_type == "hourly":
+        title_text = f"التقرير الساعي - {datetime.now(timezone.utc).strftime('%Y-%m-%d')}"
+        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        query["created_at"] = {"$regex": f"^{today}"}
+        
+        orders = await db.orders.find(query, {"_id": 0, "created_at": 1, "total": 1}).to_list(10000)
+        
+        hourly_data = {str(h).zfill(2): {"orders": 0, "sales": 0} for h in range(24)}
+        for order in orders:
+            try:
+                created_at = order.get("created_at", "")
+                if "T" in created_at:
+                    hour = created_at.split("T")[1][:2]
+                else:
+                    hour = "00"
+                if hour in hourly_data:
+                    hourly_data[hour]["orders"] += 1
+                    hourly_data[hour]["sales"] += order.get("total", 0)
+            except:
+                pass
+        
+        headers = ["الساعة", "عدد الطلبات", "المبيعات"]
+        for hour in sorted(hourly_data.keys()):
+            data_rows.append([f"{hour}:00", str(hourly_data[hour]["orders"]), f"{hourly_data[hour]['sales']:,.0f}"])
+    
+    # Build PDF
+    elements.append(Paragraph(title_text, title_style))
+    elements.append(Spacer(1, 20))
+    
+    if headers and data_rows:
+        table_data = [headers] + data_rows
+        if totals_row:
+            table_data.append(totals_row)
+        
+        col_widths = [doc.width / len(headers)] * len(headers)
+        table = Table(table_data, colWidths=col_widths)
+        
+        style = TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#4472C4')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
+            ('FONTSIZE', (0, 0), (-1, 0), 10),
+            ('FONTSIZE', (0, 1), (-1, -1), 9),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -2), [colors.white, colors.HexColor('#F5F5F5')]),
+        ])
+        
+        if totals_row:
+            style.add('BACKGROUND', (0, -1), (-1, -1), colors.HexColor('#E6E6E6'))
+            style.add('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold')
+        
+        table.setStyle(style)
+        elements.append(table)
+    
+    doc.build(elements)
+    buffer.seek(0)
+    
+    return StreamingResponse(
+        buffer,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename=smart_report_{report_type}_{period}.pdf"}
+    )
+
 # ==================== CALL CENTER / CALLER ID ====================
 
 class CallCenterConfig(BaseModel):
