@@ -908,8 +908,71 @@ export default function Dashboard() {
 
         {/* Stats Cards */}
         <section>
-          <h2 className="text-base md:text-lg font-bold font-cairo mb-3 text-foreground">إحصائيات اليوم</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-base md:text-lg font-bold font-cairo text-foreground">الإحصائيات</h2>
+            <div className="flex items-center gap-2">
+              {/* فلتر الفترة الزمنية */}
+              <div className="flex bg-muted rounded-lg p-1 gap-1">
+                {[
+                  { key: 'today', label: 'اليوم' },
+                  { key: 'week', label: 'الأسبوع' },
+                  { key: 'month', label: 'الشهر' },
+                  { key: 'all_time', label: 'الكل' }
+                ].map(period => (
+                  <Button
+                    key={period.key}
+                    variant={statsPeriod === period.key ? 'default' : 'ghost'}
+                    size="sm"
+                    onClick={() => setStatsPeriod(period.key)}
+                    className={`h-7 px-2 text-xs ${statsPeriod === period.key ? 'bg-primary text-primary-foreground' : ''}`}
+                    data-testid={`period-${period.key}`}
+                  >
+                    {period.label}
+                  </Button>
+                ))}
+              </div>
+              
+              {/* زر إدارة اليوم */}
+              {dayStatus && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowDayCloseDialog(true)}
+                  className={`gap-1 ${dayStatus.should_close ? 'border-orange-500 text-orange-500 animate-pulse' : ''}`}
+                  data-testid="day-management-btn"
+                >
+                  <CalendarDays className="h-4 w-4" />
+                  إدارة اليوم
+                  {dayStatus.pending_orders_count > 0 && (
+                    <span className="bg-red-500 text-white text-xs rounded-full px-1.5 py-0.5 mr-1">
+                      {dayStatus.pending_orders_count}
+                    </span>
+                  )}
+                </Button>
+              )}
+            </div>
+          </div>
+          
+          {/* تنبيه الورديات المفتوحة */}
+          {dayStatus?.should_close && (
+            <div className="mb-3 p-3 bg-orange-500/10 border border-orange-500/30 rounded-lg flex items-center gap-3">
+              <AlertCircle className="h-5 w-5 text-orange-500 flex-shrink-0" />
+              <div className="flex-1">
+                <p className="text-sm font-medium text-orange-600">تنبيه: مر أكثر من 24 ساعة على فتح الوردية</p>
+                <p className="text-xs text-muted-foreground">يُنصح بإغلاق اليوم وترحيل البيانات لبدء يوم جديد</p>
+              </div>
+              <Button 
+                size="sm" 
+                variant="outline" 
+                className="border-orange-500 text-orange-500 hover:bg-orange-500 hover:text-white"
+                onClick={() => setShowDayCloseDialog(true)}
+              >
+                إغلاق الآن
+              </Button>
+            </div>
+          )}
+          
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {statCards.map((stat, idx) => (
               <Card key={idx} className="border-border/50 bg-card" data-testid={`stat-card-${idx}`}>
                 <CardContent className="p-4 md:p-5">
