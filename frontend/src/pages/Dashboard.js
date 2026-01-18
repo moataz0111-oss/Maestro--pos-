@@ -144,6 +144,13 @@ export default function Dashboard() {
   const [isClosing, setIsClosing] = useState(false);
   const [showReport, setShowReport] = useState(false);
   
+  // إشعارات الطلبات الجديدة من تطبيق العملاء
+  const [newOrdersCount, setNewOrdersCount] = useState(0);
+  const [pendingCustomerOrders, setPendingCustomerOrders] = useState([]);
+  const [showNewOrderAlert, setShowNewOrderAlert] = useState(false);
+  const [lastCheckTime, setLastCheckTime] = useState(null);
+  const notificationAudioRef = useRef(null);
+  
   // حالات خلفية Dashboard
   const [showBackgroundDialog, setShowBackgroundDialog] = useState(false);
   const [dashboardBackgrounds, setDashboardBackgrounds] = useState([]);
