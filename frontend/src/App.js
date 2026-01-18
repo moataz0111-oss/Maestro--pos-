@@ -347,14 +347,16 @@ function App() {
     <ErrorBoundary>
       <ThemeProvider>
         <AuthProvider>
-          <div className="App" dir="rtl">
-            <BrowserRouter>
-              <AppRoutes />
-              <Toaster position="top-center" richColors />
-              {/* Incoming Call Popup - يظهر في جميع الصفحات */}
-              <IncomingCallPopup />
-            </BrowserRouter>
-          </div>
+          <BranchProvider>
+            <div className="App" dir="rtl">
+              <BrowserRouter>
+                <AppRoutes />
+                <Toaster position="top-center" richColors />
+                {/* Incoming Call Popup - يظهر في جميع الصفحات */}
+                <IncomingCallPopup />
+              </BrowserRouter>
+            </div>
+          </BranchProvider>
         </AuthProvider>
       </ThemeProvider>
     </ErrorBoundary>
