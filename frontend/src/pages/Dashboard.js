@@ -148,6 +148,7 @@ export default function Dashboard() {
     fetchDashboardSettings();
     fetchTenantInfo();
     fetchDashboardBackgrounds();
+    fetchDayStatus();
     autoOpenShift(); // فتح الوردية تلقائياً
   }, [selectedBranchId]);
 
