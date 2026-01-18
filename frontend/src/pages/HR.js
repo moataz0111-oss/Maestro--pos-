@@ -501,7 +501,7 @@ export default function HR() {
 
       {/* Stats */}
       <div className="container mx-auto px-4 py-6">
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
+        <div className="grid grid-cols-2 md:grid-cols-6 gap-4 mb-6">
           <Card className="bg-blue-500/10 border-blue-500/20">
             <CardContent className="p-4 text-center">
               <Users className="h-8 w-8 text-blue-500 mx-auto mb-2" />
