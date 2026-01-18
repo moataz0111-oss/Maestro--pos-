@@ -949,6 +949,46 @@ export default function Dashboard() {
         </div>
       </header>
 
+      {/* تنبيه الطلبات الجديدة من تطبيق العملاء */}
+      {showNewOrderAlert && newOrdersCount > 0 && (
+        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 animate-bounce">
+          <div className="bg-gradient-to-r from-green-500 to-emerald-500 text-white px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-4">
+            <div className="relative">
+              <ShoppingBag className="h-8 w-8" />
+              <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs font-bold px-2 py-1 rounded-full animate-pulse">
+                {newOrdersCount}
+              </span>
+            </div>
+            <div>
+              <p className="font-bold text-lg">طلب جديد من تطبيق العملاء!</p>
+              <p className="text-sm text-green-100">اضغط لعرض التفاصيل</p>
+            </div>
+            <div className="flex gap-2">
+              <Button 
+                variant="secondary" 
+                size="sm"
+                onClick={() => {
+                  markOrdersAsSeen(pendingCustomerOrders.map(o => o.id));
+                  navigate('/orders');
+                }}
+              >
+                عرض الطلبات
+              </Button>
+              <Button 
+                variant="ghost" 
+                size="icon"
+                className="text-white hover:bg-white/20"
+                onClick={() => {
+                  markOrdersAsSeen(pendingCustomerOrders.map(o => o.id));
+                }}
+              >
+                <X className="h-5 w-5" />
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <main className="max-w-7xl mx-auto p-4 md:p-6 space-y-4 md:space-y-6 overflow-y-auto">
         {/* Quick Actions with Background */}
         <section 
