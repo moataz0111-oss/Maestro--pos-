@@ -341,6 +341,8 @@ function AppRoutes() {
       <Route path="/super-admin" element={<SuperAdmin />} />
       {/* صفحة إدارة النظام */}
       <Route path="/system-admin" element={<ProtectedRoute><SystemAdmin /></ProtectedRoute>} />
+      {/* قائمة العملاء - بدون حماية */}
+      <Route path="/menu/:tenantId" element={<CustomerMenu />} />
       <Route path="*" element={<Navigate to="/" />} />
     </Routes>
   );
