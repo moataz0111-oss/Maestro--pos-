@@ -1053,7 +1053,7 @@ export default function Dashboard() {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {stats?.by_payment_method && Object.entries(stats.by_payment_method).map(([method, amount]) => (
+                {periodStats?.by_payment_method && Object.entries(periodStats.by_payment_method).map(([method, amount]) => (
                   <div key={method} className="space-y-2">
                     <div className="flex justify-between text-sm">
                       <span className="text-muted-foreground">
@@ -1064,13 +1064,13 @@ export default function Dashboard() {
                     <div className="w-full bg-muted rounded-full h-2">
                       <div 
                         className="bg-primary h-2 rounded-full transition-all"
-                        style={{ width: `${(amount / (stats?.total_sales || 1)) * 100}%` }}
+                        style={{ width: `${(amount / (periodStats?.total_sales || 1)) * 100}%` }}
                       />
                     </div>
                   </div>
                 ))}
-                {(!stats?.by_payment_method || Object.keys(stats.by_payment_method).length === 0) && (
-                  <p className="text-center text-muted-foreground py-8">لا توجد مبيعات اليوم</p>
+                {(!periodStats?.by_payment_method || Object.keys(periodStats.by_payment_method).length === 0) && (
+                  <p className="text-center text-muted-foreground py-8">لا توجد مبيعات في هذه الفترة</p>
                 )}
               </div>
             </CardContent>
@@ -1078,14 +1078,14 @@ export default function Dashboard() {
         </div>
 
         {/* Delivery Apps Stats */}
-        {stats?.by_delivery_app && Object.keys(stats.by_delivery_app).length > 0 && (
+        {periodStats?.by_delivery_app && Object.keys(periodStats.by_delivery_app).length > 0 && (
           <Card className="border-border/50 bg-card">
             <CardHeader>
               <CardTitle className="text-lg font-cairo text-foreground">مبيعات تطبيقات التوصيل</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                {Object.entries(stats.by_delivery_app).map(([app, amount]) => (
+                {Object.entries(periodStats.by_delivery_app).map(([app, amount]) => (
                   <div key={app} className="text-center p-4 bg-muted/30 rounded-lg">
                     <p className="text-sm text-muted-foreground mb-1 capitalize">{app}</p>
                     <p className="text-lg font-bold tabular-nums text-foreground">{formatPrice(amount)}</p>
