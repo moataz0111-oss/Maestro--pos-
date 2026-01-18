@@ -2581,11 +2581,11 @@ export default function Settings() {
                         </div>
                       </div>
                       <div>
-                        <Label className="text-foreground">رابط الصورة</Label>
-                        <Input
+                        <ImageUploader
                           value={editProductForm.image}
-                          onChange={(e) => setEditProductForm({ ...editProductForm, image: e.target.value })}
-                          className="mt-1"
+                          onChange={(url) => setEditProductForm({ ...editProductForm, image: url })}
+                          type="product"
+                          label="صورة المنتج"
                         />
                       </div>
                       <div>
