@@ -10,7 +10,7 @@ from fastapi.security import HTTPBearer
 
 from core.database import db
 from core.config import JWT_SECRET, JWT_ALGORITHM, JWT_EXPIRATION_HOURS
-from models.schemas import UserRole
+from models.enums import UserRole
 
 security = HTTPBearer()
 
