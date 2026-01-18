@@ -145,7 +145,7 @@ export default function Dashboard() {
     fetchTenantInfo();
     fetchDashboardBackgrounds();
     autoOpenShift(); // فتح الوردية تلقائياً
-  }, [selectedBranch]);
+  }, [selectedBranchId]);
 
   // فتح الوردية تلقائياً عند الدخول
   const autoOpenShift = async () => {
@@ -156,7 +156,7 @@ export default function Dashboard() {
         // فتح وردية جديدة
         await axios.post(`${API}/shifts/open`, {
           opening_cash: 0,
-          branch_id: selectedBranch || null
+          branch_id: getBranchIdForApi()
         });
         console.log('تم فتح الوردية تلقائياً');
       }
@@ -166,7 +166,7 @@ export default function Dashboard() {
         try {
           await axios.post(`${API}/shifts/open`, {
             opening_cash: 0,
-            branch_id: selectedBranch || null
+            branch_id: getBranchIdForApi()
           });
           console.log('تم فتح الوردية تلقائياً');
         } catch (openError) {
