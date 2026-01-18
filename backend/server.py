@@ -47,6 +47,12 @@ BACKGROUNDS_DIR = UPLOAD_DIR / "backgrounds"
 BACKGROUNDS_DIR.mkdir(exist_ok=True)
 LOGOS_DIR = UPLOAD_DIR / "logos"
 LOGOS_DIR.mkdir(exist_ok=True)
+IMAGES_DIR = UPLOAD_DIR / "images"
+IMAGES_DIR.mkdir(exist_ok=True)
+PRODUCTS_DIR = IMAGES_DIR / "products"
+PRODUCTS_DIR.mkdir(exist_ok=True)
+CATEGORIES_DIR = IMAGES_DIR / "categories"
+CATEGORIES_DIR.mkdir(exist_ok=True)
 
 app = FastAPI(title="Maestro EGP API", version="2.0.0")
 api_router = APIRouter(prefix="/api")
