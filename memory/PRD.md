@@ -10,7 +10,7 @@
 - تقارير وإحصائيات ذكية
 - دعم Multi-tenancy (عدة عملاء)
 
-## الجلسة الحالية - 18 يناير 2026 (الإصدار 17)
+## الجلسة الحالية - 18 يناير 2026 (الإصدار 18)
 
 ### ✅ ما تم إنجازه في هذه الجلسة:
 
@@ -25,64 +25,46 @@
 - **API جديد:** `/api/reports/payroll/export/excel` - تصدير تقرير الرواتب Excel
 - **API جديد:** `/api/reports/employee-salary-slip/{employee_id}/export/excel` - تصدير مفردات المرتب Excel
 
-#### 3. تحديث صفحة الموارد البشرية ✅
-- إضافة تبويب "تقرير الرواتب" جديد
-- إضافة فلتر الفروع (`BranchSelector`)
-- إضافة زر تصدير Excel للتقرير الشامل
-- إضافة زر تصدير مفردات المرتب لكل موظف
-- إضافة بطاقة "المستحقات" في الإحصائيات
+#### 3. نظام رفع الصور ✅
+- **API جديد:** `/api/upload/image` - رفع صورة عامة
+- **API جديد:** `/api/upload/product-image` - رفع صورة منتج
+- **API جديد:** `/api/upload/category-image` - رفع صورة فئة
+- **مكون جديد:** `ImageUploader.js` مع:
+  - خيار إدخال رابط الصورة
+  - خيار رفع صورة من الجهاز
+  - معاينة الصورة
+  - دعم جميع الصيغ: JPG, PNG, GIF, WEBP, HEIC, BMP, TIFF
 
-#### 4. تحديث جميع نقاط النهاية للتقارير ✅
-- جميع التقارير تدعم فلترة الفروع
-- `/api/reports/sales`, `/api/reports/purchases`, `/api/reports/inventory`
-- `/api/reports/expenses`, `/api/reports/profit-loss`, `/api/reports/products`
-- `/api/reports/delivery-credits`, `/api/reports/cancellations`, `/api/reports/discounts`, `/api/reports/credit`
+#### 4. تحديث صفحة الإعدادات ✅
+- استخدام `ImageUploader` في نموذج إضافة فئة
+- استخدام `ImageUploader` في نموذج تعديل فئة
+- استخدام `ImageUploader` في نموذج إضافة منتج
+- استخدام `ImageUploader` في نموذج تعديل منتج
 
 ### 📊 حالة النشر
-✅ **جاهز للنشر** - تم التحقق مرتين بواسطة وكيل النشر
+✅ **جاهز للنشر بنسبة 100%** - تم التحقق ثلاث مرات بواسطة وكيل النشر
 
 ## ملفات التغييرات:
 - `/app/frontend/src/context/BranchContext.js` (جديد)
 - `/app/frontend/src/components/BranchSelector.js` (جديد)
+- `/app/frontend/src/components/ImageUploader.js` (جديد)
 - `/app/frontend/src/App.js` (تحديث)
 - `/app/frontend/src/pages/Dashboard.js` (تحديث)
 - `/app/frontend/src/pages/Reports.js` (تحديث)
 - `/app/frontend/src/pages/HR.js` (تحديث كبير)
+- `/app/frontend/src/pages/Settings.js` (تحديث - ImageUploader)
 - `/app/backend/server.py` (تحديث كبير - APIs جديدة)
 
-## جدول الصلاحيات
+## APIs الجديدة
 
-### صلاحيات الصفحات الرئيسية
-| ID | الاسم | الوصف |
-|----|-------|--------|
-| `pos` | نقاط البيع | إنشاء وإدارة الطلبات |
-| `pos_discount` | إعطاء خصومات | السماح بإعطاء خصومات |
-| `orders` | الطلبات | عرض الطلبات |
-| `tables` | الطاولات | إدارة الطاولات |
-| `kitchen` | شاشة المطبخ | عرض طلبات المطبخ |
-| `delivery` | التوصيل | إدارة التوصيل |
-| `inventory` | المخزون | عرض المخزون |
-| `reports` | التقارير | عرض التقارير |
-| `expenses` | المصاريف | عرض وإضافة المصاريف |
-| `shifts_close` | إغلاق الصندوق | إغلاق صندوق الوردية |
+### رفع الصور
+| Method | Endpoint | الوصف |
+|--------|----------|--------|
+| POST | `/api/upload/image` | رفع صورة عامة |
+| POST | `/api/upload/product-image` | رفع صورة منتج |
+| POST | `/api/upload/category-image` | رفع صورة فئة |
 
-### صلاحيات الإعدادات
-| ID | الاسم | الوصف |
-|----|-------|--------|
-| `settings` | الإعدادات | الوصول للإعدادات |
-| `settings_appearance` | المظهر | تغيير مظهر التطبيق |
-| `settings_dashboard` | الرئيسية | إعدادات الصفحة الرئيسية |
-| `settings_customers` | العملاء | إدارة العملاء |
-| `settings_categories` | الفئات | إدارة فئات المنتجات |
-| `settings_products` | المنتجات | إدارة المنتجات |
-| `settings_branches` | الفروع | إدارة الفروع |
-| `settings_printers` | الطابعات | إدارة الطابعات |
-| `settings_kitchen` | أقسام المطبخ | إدارة أقسام المطبخ |
-| `settings_delivery` | شركات التوصيل | إدارة شركات التوصيل |
-| `settings_notifications` | الإشعارات | إعدادات الإشعارات |
-
-## APIs الجديدة للرواتب
-
+### تقارير الرواتب
 | Method | Endpoint | الوصف |
 |--------|----------|--------|
 | GET | `/api/reports/payroll-summary` | تقرير شامل للرواتب |
@@ -93,11 +75,12 @@
 ## المهام المتبقية
 
 ### 🔴 أولوية قصوى (P0)
-- [ ] إعادة هيكلة `/app/backend/server.py` (10000+ سطر)
+- [ ] إعادة هيكلة `/app/backend/server.py` (10200+ سطر)
 
 ### 🟡 أولوية عالية (P1)
 - [ ] تحسين خريطة السائقين الحية
 - [ ] إشعارات Push للسائقين (Firebase)
+- [ ] تصدير PDF للتقارير
 
 ### 🟢 أولوية متوسطة (P2)
 - [ ] إكمال تكامل أجهزة البصمة (ZKTeco)
@@ -115,5 +98,5 @@
 | كاشير | cashier@test.com | 123456 | فرع محدد فقط |
 
 ---
-آخر تحديث: 18 يناير 2026 - 12:40 AM
+آخر تحديث: 18 يناير 2026 - 12:50 AM
 نسبة الإنجاز: 99%
