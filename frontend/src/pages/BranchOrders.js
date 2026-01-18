@@ -53,11 +53,13 @@ export default function BranchOrders() {
   const navigate = useNavigate();
   const [orders, setOrders] = useState([]);
   const [branches, setBranches] = useState([]);
-  const [products, setProducts] = useState([]);
+  const [products, setProducts] = useState([]); // المنتجات النهائية للبيع
+  const [inventoryItems, setInventoryItems] = useState([]); // عناصر المخزون
   const [loading, setLoading] = useState(true);
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [selectedTab, setSelectedTab] = useState('outgoing');
   const [filterStatus, setFilterStatus] = useState('all');
+  const [itemSource, setItemSource] = useState('inventory'); // inventory or products
   
   const [form, setForm] = useState({
     to_branch_id: '',
@@ -74,14 +76,16 @@ export default function BranchOrders() {
 
   const fetchData = async () => {
     try {
-      const [ordersRes, branchesRes, productsRes] = await Promise.all([
+      const [ordersRes, branchesRes, productsRes, inventoryRes] = await Promise.all([
         axios.get(`${API}/branch-orders`, { params: { type: selectedTab } }),
         axios.get(`${API}/branches`),
-        axios.get(`${API}/products`)
+        axios.get(`${API}/products`),
+        axios.get(`${API}/inventory`)
       ]);
       setOrders(ordersRes.data);
       setBranches(branchesRes.data);
       setProducts(productsRes.data);
+      setInventoryItems(inventoryRes.data);
     } catch (error) {
       // بيانات تجريبية
       setBranches([
@@ -96,6 +100,7 @@ export default function BranchOrders() {
         { id: '3', name: 'صلصة خاصة', unit: 'لتر' },
         { id: '4', name: 'خبز برجر', unit: 'قطعة' }
       ]);
+      setInventoryItems([]);
       setOrders([
         {
           id: '1',
