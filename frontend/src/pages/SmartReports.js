@@ -275,6 +275,27 @@ export default function SmartReports() {
               </SelectContent>
             </Select>
             
+            {/* Export Buttons */}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => exportToExcel('sales')}
+              title="تصدير Excel"
+            >
+              <FileSpreadsheet className="h-4 w-4 ml-1" />
+              Excel
+            </Button>
+            
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => exportToPDF('sales')}
+              title="تصدير PDF"
+            >
+              <FileText className="h-4 w-4 ml-1" />
+              PDF
+            </Button>
+            
             <Button
               variant="outline"
               size="icon"
