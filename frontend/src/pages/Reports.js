@@ -48,10 +48,9 @@ const API = API_URL;
 
 export default function Reports() {
   const { user, hasRole } = useAuth();
+  const { selectedBranchId, branches, getBranchIdForApi, canSelectAllBranches } = useBranch();
   const navigate = useNavigate();
   
-  const [branches, setBranches] = useState([]);
-  const [selectedBranch, setSelectedBranch] = useState('all');
   const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
   const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
   const [loading, setLoading] = useState(true);
@@ -70,28 +69,16 @@ export default function Reports() {
   const [creditReport, setCreditReport] = useState(null);
 
   useEffect(() => {
-    fetchBranches();
-  }, []);
-
-  useEffect(() => {
     fetchReports();
-  }, [selectedBranch, startDate, endDate, activeTab]);
-
-  const fetchBranches = async () => {
-    try {
-      const res = await axios.get(`${API}/branches`);
-      setBranches(res.data);
-    } catch (error) {
-      console.error('Failed to fetch branches:', error);
-    }
-  };
+  }, [selectedBranchId, startDate, endDate, activeTab]);
 
   const fetchReports = async () => {
     setLoading(true);
+    const branchId = getBranchIdForApi();
     const params = {
       start_date: startDate,
       end_date: endDate,
-      ...(selectedBranch !== 'all' && { branch_id: selectedBranch })
+      ...(branchId && { branch_id: branchId })
     };
 
     try {
