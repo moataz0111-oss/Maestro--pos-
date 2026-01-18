@@ -1719,6 +1719,76 @@ export default function Dashboard() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Menu Link Dialog - رابط قائمة العملاء */}
+      <Dialog open={showMenuLinkDialog} onOpenChange={setShowMenuLinkDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Share2 className="h-5 w-5 text-green-500" />
+              رابط قائمة العملاء
+            </DialogTitle>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            <p className="text-sm text-muted-foreground">
+              شارك هذا الرابط مع عملائك ليتمكنوا من رؤية قائمة الطعام وإرسال الطلبات مباشرة!
+            </p>
+            
+            <div className="flex items-center gap-2">
+              <Input 
+                value={menuLink} 
+                readOnly 
+                className="text-left direction-ltr"
+              />
+              <Button onClick={copyMenuLink} variant="outline" size="icon">
+                <Copy className="h-4 w-4" />
+              </Button>
+            </div>
+            
+            <div className="flex gap-2">
+              <Button 
+                className="flex-1 gap-2" 
+                onClick={() => window.open(menuLink, '_blank')}
+              >
+                <Link className="h-4 w-4" />
+                فتح القائمة
+              </Button>
+              <Button 
+                variant="outline" 
+                className="gap-2"
+                onClick={() => {
+                  if (navigator.share) {
+                    navigator.share({
+                      title: 'قائمة الطعام',
+                      text: 'اطلع على قائمة الطعام واطلب الآن!',
+                      url: menuLink
+                    });
+                  } else {
+                    copyMenuLink();
+                  }
+                }}
+              >
+                <Share2 className="h-4 w-4" />
+                مشاركة
+              </Button>
+            </div>
+            
+            <div className="bg-muted/30 rounded-lg p-4 text-center">
+              <QrCode className="h-16 w-16 mx-auto mb-2 text-muted-foreground" />
+              <p className="text-sm text-muted-foreground">
+                يمكنك طباعة QR Code لهذا الرابط ووضعه على طاولات المطعم
+              </p>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowMenuLinkDialog(false)}>
+              إغلاق
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
