@@ -3576,17 +3576,52 @@ export default function Settings() {
                           <Input 
                             placeholder="مثال: أحمد محمد"
                             className="bg-muted/30"
+                            value={paymentSettings.zaincash_name}
+                            onChange={(e) => setPaymentSettings(prev => ({...prev, zaincash_name: e.target.value}))}
                           />
                         </div>
                         
                         <div>
                           <Label className="text-foreground mb-2 block">رمز QR الخاص بمحفظتك (اختياري)</Label>
                           <div className="border-2 border-dashed border-muted-foreground/30 rounded-lg p-6 text-center">
-                            <Upload className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
-                            <p className="text-sm text-muted-foreground">اسحب صورة QR Code هنا أو</p>
-                            <Button variant="outline" size="sm" className="mt-2">
-                              اختر صورة
-                            </Button>
+                            {paymentSettings.zaincash_qr_image ? (
+                              <div className="relative">
+                                <img 
+                                  src={paymentSettings.zaincash_qr_image} 
+                                  alt="QR Code" 
+                                  className="w-32 h-32 mx-auto object-contain"
+                                />
+                                <Button 
+                                  variant="destructive" 
+                                  size="sm" 
+                                  className="mt-2"
+                                  onClick={() => setPaymentSettings(prev => ({...prev, zaincash_qr_image: ''}))}
+                                >
+                                  <Trash2 className="h-4 w-4 ml-1" />
+                                  حذف
+                                </Button>
+                              </div>
+                            ) : (
+                              <>
+                                <Upload className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
+                                <p className="text-sm text-muted-foreground">اسحب صورة QR Code هنا أو</p>
+                                <label className="cursor-pointer">
+                                  <Button variant="outline" size="sm" className="mt-2" asChild>
+                                    <span>اختر صورة</span>
+                                  </Button>
+                                  <input 
+                                    type="file" 
+                                    accept="image/*"
+                                    className="hidden"
+                                    onChange={(e) => {
+                                      if (e.target.files?.[0]) {
+                                        uploadZainCashQR(e.target.files[0]);
+                                      }
+                                    }}
+                                  />
+                                </label>
+                              </>
+                            )}
                           </div>
                         </div>
                         
@@ -3596,8 +3631,12 @@ export default function Settings() {
                           </p>
                         </div>
 
-                        <Button className="w-full bg-pink-500 hover:bg-pink-600">
-                          <Save className="h-4 w-4 ml-2" />
+                        <Button 
+                          className="w-full bg-pink-500 hover:bg-pink-600"
+                          onClick={saveZainCashSettings}
+                          disabled={paymentSaving}
+                        >
+                          {paymentSaving ? <RefreshCw className="h-4 w-4 ml-2 animate-spin" /> : <Save className="h-4 w-4 ml-2" />}
                           حفظ إعدادات زين كاش
                         </Button>
                       </div>
@@ -3621,7 +3660,8 @@ export default function Settings() {
                           <Input 
                             type="number" 
                             placeholder="0"
-                            defaultValue="5000"
+                            value={paymentSettings.delivery_fee}
+                            onChange={(e) => setPaymentSettings(prev => ({...prev, delivery_fee: parseInt(e.target.value) || 0}))}
                             className="bg-muted/30"
                           />
                         </div>
@@ -3630,14 +3670,19 @@ export default function Settings() {
                           <Input 
                             type="number" 
                             placeholder="0"
-                            defaultValue="10000"
+                            value={paymentSettings.min_order_amount}
+                            onChange={(e) => setPaymentSettings(prev => ({...prev, min_order_amount: parseInt(e.target.value) || 0}))}
                             className="bg-muted/30"
                           />
                         </div>
                       </div>
                       
-                      <Button className="w-full mt-4 bg-orange-500 hover:bg-orange-600">
-                        <Save className="h-4 w-4 ml-2" />
+                      <Button 
+                        className="w-full mt-4 bg-orange-500 hover:bg-orange-600"
+                        onClick={saveDeliverySettings}
+                        disabled={paymentSaving}
+                      >
+                        {paymentSaving ? <RefreshCw className="h-4 w-4 ml-2 animate-spin" /> : <Save className="h-4 w-4 ml-2" />}
                         حفظ رسوم التوصيل
                       </Button>
                     </div>
