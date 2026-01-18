@@ -35,6 +35,7 @@ import Reviews from "./pages/Reviews";
 import SmartReports from "./pages/SmartReports";
 import Purchasing from "./pages/Purchasing";
 import BranchOrders from "./pages/BranchOrders";
+import SystemAdmin from "./pages/SystemAdmin";
 
 // Components
 import IncomingCallPopup from "./components/IncomingCallPopup";
