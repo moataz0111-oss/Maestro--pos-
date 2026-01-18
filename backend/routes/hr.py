@@ -19,7 +19,7 @@ from models.schemas import (
 from utils.auth import get_current_user, build_tenant_query, get_user_tenant_id
 from models.enums import UserRole
 
-router = APIRouter(prefix="/hr", tags=["Human Resources"])
+router = APIRouter(tags=["Human Resources"])
 
 # ==================== الموظفين ====================
 
