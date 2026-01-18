@@ -5024,7 +5024,24 @@ async def get_purchases_report(
 
 @api_router.get("/reports/inventory")
 async def get_inventory_report(branch_id: Optional[str] = None, current_user: dict = Depends(get_current_user)):
-    query = {"branch_id": branch_id} if branch_id else {}
+    tenant_id = get_user_tenant_id(current_user)
+    query = {}
+    
+    # فلترة حسب tenant_id
+    if tenant_id:
+        query["tenant_id"] = tenant_id
+    else:
+        query["$or"] = [{"tenant_id": {"$exists": False}}, {"tenant_id": None}]
+    
+    # فلترة الفرع - التحقق من صلاحية المستخدم
+    user_branch_id = current_user.get("branch_id")
+    user_role = current_user.get("role")
+    
+    if user_branch_id and user_role not in [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.MANAGER]:
+        query["branch_id"] = user_branch_id
+    elif branch_id:
+        query["branch_id"] = branch_id
+    
     items = await db.inventory.find(query, {"_id": 0}).to_list(1000)
     
     low_stock = [i for i in items if i["quantity"] <= i["min_quantity"]]
