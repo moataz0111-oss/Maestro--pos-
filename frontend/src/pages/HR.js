@@ -109,22 +109,24 @@ export default function HR() {
 
   useEffect(() => {
     fetchData();
-  }, [selectedBranch, selectedMonth]);
+  }, [selectedBranchId, selectedMonth]);
 
   const fetchData = async () => {
     setLoading(true);
     try {
       const token = localStorage.getItem('token');
       const headers = { Authorization: `Bearer ${token}` };
+      const branchId = getBranchIdForApi();
       
-      const [empRes, branchRes, attRes, advRes, dedRes, bonRes, payRes] = await Promise.all([
-        axios.get(`${API}/employees${selectedBranch !== 'all' ? `?branch_id=${selectedBranch}` : ''}`, { headers }),
+      const [empRes, branchRes, attRes, advRes, dedRes, bonRes, payRes, summaryRes] = await Promise.all([
+        axios.get(`${API}/employees${branchId ? `?branch_id=${branchId}` : ''}`, { headers }),
         axios.get(`${API}/branches`, { headers }),
         axios.get(`${API}/attendance?start_date=${selectedMonth}-01&end_date=${selectedMonth}-31`, { headers }),
         axios.get(`${API}/advances`, { headers }),
         axios.get(`${API}/deductions?start_date=${selectedMonth}-01&end_date=${selectedMonth}-31`, { headers }),
         axios.get(`${API}/bonuses?start_date=${selectedMonth}-01&end_date=${selectedMonth}-31`, { headers }),
-        axios.get(`${API}/payroll?month=${selectedMonth}`, { headers })
+        axios.get(`${API}/payroll?month=${selectedMonth}`, { headers }),
+        axios.get(`${API}/reports/payroll-summary?month=${selectedMonth}${branchId ? `&branch_id=${branchId}` : ''}`, { headers }).catch(() => ({ data: null }))
       ]);
       
       setEmployees(empRes.data);
@@ -134,6 +136,7 @@ export default function HR() {
       setDeductions(dedRes.data);
       setBonuses(bonRes.data);
       setPayrolls(payRes.data);
+      setPayrollSummary(summaryRes.data);
     } catch (error) {
       console.error('Error fetching data:', error);
       toast.error('فشل في تحميل البيانات');
