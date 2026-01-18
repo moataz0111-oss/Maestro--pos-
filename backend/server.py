@@ -10885,6 +10885,354 @@ async def notify_new_order(order: dict, tenant_id: str):
     except Exception as e:
         logger.error(f"Failed to send notification: {e}")
 
+
+# ==================== COMPREHENSIVE DASHBOARD STATS ====================
+
+@api_router.get("/dashboard/stats")
+async def get_dashboard_stats(
+    branch_id: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """إحصائيات Dashboard الشاملة - يومي/أسبوعي/شهري/إجمالي"""
+    tenant_id = get_user_tenant_id(current_user)
+    
+    # تحديد الفلتر الأساسي
+    base_query = {"status": {"$ne": OrderStatus.CANCELLED}}
+    
+    if tenant_id:
+        base_query["tenant_id"] = tenant_id
+    else:
+        base_query["$or"] = [{"tenant_id": {"$exists": False}}, {"tenant_id": None}]
+    
+    # فلترة الفرع
+    user_branch_id = current_user.get("branch_id")
+    user_role = current_user.get("role")
+    
+    if user_branch_id and user_role not in [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.MANAGER]:
+        base_query["branch_id"] = user_branch_id
+    elif branch_id:
+        base_query["branch_id"] = branch_id
+    
+    # حساب التواريخ
+    now = datetime.now(timezone.utc)
+    today = now.strftime('%Y-%m-%d')
+    week_ago = (now - timedelta(days=7)).strftime('%Y-%m-%d')
+    month_ago = (now - timedelta(days=30)).strftime('%Y-%m-%d')
+    
+    # استعلامات الفترات المختلفة
+    async def get_period_stats(start_date: Optional[str] = None):
+        query = base_query.copy()
+        if start_date:
+            query["created_at"] = {"$gte": start_date}
+        
+        orders = await db.orders.find(query, {"_id": 0, "total": 1, "total_cost": 1, "profit": 1, "payment_method": 1}).to_list(10000)
+        
+        total_sales = sum(o.get("total", 0) for o in orders)
+        total_orders = len(orders)
+        avg_order = total_sales / total_orders if total_orders > 0 else 0
+        total_profit = sum(o.get("profit", 0) for o in orders)
+        
+        by_payment = {}
+        for o in orders:
+            pm = o.get("payment_method", "cash")
+            by_payment[pm] = by_payment.get(pm, 0) + o.get("total", 0)
+        
+        return {
+            "total_sales": total_sales,
+            "total_orders": total_orders,
+            "average_order_value": avg_order,
+            "total_profit": total_profit,
+            "by_payment_method": by_payment
+        }
+    
+    # جلب جميع الإحصائيات بالتوازي
+    today_stats, week_stats, month_stats, all_stats = await asyncio.gather(
+        get_period_stats(today),
+        get_period_stats(week_ago),
+        get_period_stats(month_ago),
+        get_period_stats(None)
+    )
+    
+    # جلب آخر الطلبات
+    recent_query = base_query.copy()
+    recent_orders = await db.orders.find(recent_query, {"_id": 0}).sort("created_at", -1).limit(10).to_list(10)
+    
+    # جلب معلومات الوردية الحالية
+    shift_query = {"status": "open"}
+    if branch_id:
+        shift_query["branch_id"] = branch_id
+    current_shift = await db.shifts.find_one(shift_query, {"_id": 0})
+    
+    # جلب الطلبات المعلقة
+    pending_query = base_query.copy()
+    pending_query["status"] = {"$in": ["pending", "preparing", "ready"]}
+    pending_count = await db.orders.count_documents(pending_query)
+    
+    return {
+        "today": today_stats,
+        "week": week_stats,
+        "month": month_stats,
+        "all_time": all_stats,
+        "recent_orders": recent_orders,
+        "current_shift": current_shift,
+        "pending_orders_count": pending_count,
+        "current_date": today,
+        "server_time": now.isoformat()
+    }
+
+
+# ==================== AUTO DAY CLOSE SYSTEM (نظام الترحيل التلقائي) ====================
+
+class DayCloseRequest(BaseModel):
+    force: bool = False  # إغلاق إجباري حتى مع وجود طلبات معلقة
+    notes: Optional[str] = None
+
+class DayCloseResponse(BaseModel):
+    success: bool
+    message: str
+    day_summary: Optional[Dict] = None
+    pending_orders: Optional[List] = None
+    shifts_closed: int = 0
+
+@api_router.get("/day-management/status")
+async def get_day_status(
+    branch_id: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """حالة اليوم الحالي - هل يوجد ورديات مفتوحة، طلبات معلقة، إلخ"""
+    tenant_id = get_user_tenant_id(current_user)
+    
+    base_query = {}
+    if tenant_id:
+        base_query["tenant_id"] = tenant_id
+    
+    if branch_id:
+        base_query["branch_id"] = branch_id
+    
+    # الورديات المفتوحة
+    shift_query = {**base_query, "status": "open"}
+    open_shifts = await db.shifts.find(shift_query, {"_id": 0}).to_list(100)
+    
+    # الطلبات المعلقة
+    pending_query = {**base_query, "status": {"$in": ["pending", "preparing", "ready"]}}
+    pending_orders = await db.orders.find(pending_query, {"_id": 0, "id": 1, "order_number": 1, "status": 1, "total": 1, "created_at": 1}).to_list(100)
+    
+    # آخر إغلاق يومي
+    last_close = await db.day_closures.find_one(base_query, sort=[("closed_at", -1)])
+    if last_close:
+        last_close.pop("_id", None)
+    
+    # حساب عمر الوردية (بالساعات)
+    oldest_shift_hours = 0
+    if open_shifts:
+        for shift in open_shifts:
+            started = datetime.fromisoformat(shift["started_at"].replace("Z", "+00:00"))
+            hours = (datetime.now(timezone.utc) - started).total_seconds() / 3600
+            if hours > oldest_shift_hours:
+                oldest_shift_hours = hours
+    
+    return {
+        "open_shifts": open_shifts,
+        "open_shifts_count": len(open_shifts),
+        "pending_orders": pending_orders,
+        "pending_orders_count": len(pending_orders),
+        "last_day_close": last_close,
+        "oldest_shift_hours": round(oldest_shift_hours, 1),
+        "should_close": oldest_shift_hours >= 24,  # إشعار إذا مر 24 ساعة
+        "can_close": len(pending_orders) == 0  # يمكن الإغلاق إذا لا توجد طلبات معلقة
+    }
+
+@api_router.post("/day-management/close", response_model=DayCloseResponse)
+async def close_day(
+    request: DayCloseRequest,
+    branch_id: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """إغلاق اليوم وترحيل البيانات"""
+    tenant_id = get_user_tenant_id(current_user)
+    
+    base_query = {}
+    if tenant_id:
+        base_query["tenant_id"] = tenant_id
+    
+    if branch_id:
+        base_query["branch_id"] = branch_id
+    
+    # التحقق من الطلبات المعلقة
+    pending_query = {**base_query, "status": {"$in": ["pending", "preparing", "ready"]}}
+    pending_orders = await db.orders.find(pending_query, {"_id": 0}).to_list(100)
+    
+    if pending_orders and not request.force:
+        return DayCloseResponse(
+            success=False,
+            message="يوجد طلبات معلقة يجب إغلاقها أولاً",
+            pending_orders=pending_orders
+        )
+    
+    # إغلاق جميع الورديات المفتوحة
+    shift_query = {**base_query, "status": "open"}
+    open_shifts = await db.shifts.find(shift_query, {"_id": 0}).to_list(100)
+    
+    shifts_closed = 0
+    total_day_sales = 0
+    total_day_profit = 0
+    total_day_expenses = 0
+    
+    for shift in open_shifts:
+        # حساب إحصائيات الوردية
+        orders = await db.orders.find({
+            "shift_id": shift["id"],
+            "status": {"$ne": OrderStatus.CANCELLED}
+        }).to_list(1000)
+        
+        shift_sales = sum(o.get("total", 0) for o in orders)
+        shift_profit = sum(o.get("profit", 0) for o in orders)
+        
+        expenses = await db.expenses.find({
+            "branch_id": shift.get("branch_id"),
+            "created_at": {"$gte": shift["started_at"]}
+        }).to_list(100)
+        shift_expenses = sum(e.get("amount", 0) for e in expenses)
+        
+        # تحديث الوردية كمغلقة
+        await db.shifts.update_one(
+            {"id": shift["id"]},
+            {"$set": {
+                "status": "closed",
+                "ended_at": datetime.now(timezone.utc).isoformat(),
+                "closed_by": current_user.get("full_name", current_user.get("username")),
+                "closed_by_id": current_user.get("id"),
+                "auto_closed": not request.force,
+                "total_sales": shift_sales,
+                "total_expenses": shift_expenses,
+                "net_profit": shift_profit - shift_expenses,
+                "notes": request.notes or "إغلاق يومي تلقائي"
+            }}
+        )
+        
+        shifts_closed += 1
+        total_day_sales += shift_sales
+        total_day_profit += shift_profit
+        total_day_expenses += shift_expenses
+    
+    # إذا كان هناك طلبات معلقة مع force=True، نغلقها كملغية
+    if pending_orders and request.force:
+        for order in pending_orders:
+            await db.orders.update_one(
+                {"id": order["id"]},
+                {"$set": {
+                    "status": OrderStatus.CANCELLED,
+                    "cancelled_reason": "إغلاق يومي إجباري",
+                    "cancelled_at": datetime.now(timezone.utc).isoformat(),
+                    "cancelled_by": current_user.get("full_name")
+                }}
+            )
+    
+    # إنشاء سجل إغلاق اليوم
+    day_summary = {
+        "id": str(uuid.uuid4()),
+        "date": datetime.now(timezone.utc).strftime('%Y-%m-%d'),
+        "closed_at": datetime.now(timezone.utc).isoformat(),
+        "closed_by": current_user.get("full_name", current_user.get("username")),
+        "closed_by_id": current_user.get("id"),
+        "branch_id": branch_id,
+        "tenant_id": tenant_id,
+        "shifts_closed": shifts_closed,
+        "total_sales": total_day_sales,
+        "total_profit": total_day_profit,
+        "total_expenses": total_day_expenses,
+        "net_profit": total_day_profit - total_day_expenses,
+        "forced_close": request.force,
+        "pending_orders_cancelled": len(pending_orders) if request.force else 0,
+        "notes": request.notes
+    }
+    
+    await db.day_closures.insert_one(day_summary)
+    day_summary.pop("_id", None)
+    
+    return DayCloseResponse(
+        success=True,
+        message=f"تم إغلاق اليوم بنجاح - {shifts_closed} وردية",
+        day_summary=day_summary,
+        shifts_closed=shifts_closed
+    )
+
+@api_router.get("/day-management/history")
+async def get_day_close_history(
+    branch_id: Optional[str] = None,
+    limit: int = 30,
+    current_user: dict = Depends(get_current_user)
+):
+    """سجل إغلاقات الأيام السابقة"""
+    tenant_id = get_user_tenant_id(current_user)
+    
+    query = {}
+    if tenant_id:
+        query["tenant_id"] = tenant_id
+    if branch_id:
+        query["branch_id"] = branch_id
+    
+    closures = await db.day_closures.find(query, {"_id": 0}).sort("closed_at", -1).limit(limit).to_list(limit)
+    return closures
+
+
+# ==================== AUTO DAY CLOSE SCHEDULER (المجدول التلقائي) ====================
+
+async def auto_close_old_shifts():
+    """إغلاق تلقائي للورديات القديمة (أكثر من 24 ساعة)"""
+    try:
+        cutoff = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
+        
+        # البحث عن الورديات المفتوحة لأكثر من 24 ساعة
+        old_shifts = await db.shifts.find({
+            "status": "open",
+            "started_at": {"$lt": cutoff}
+        }).to_list(100)
+        
+        for shift in old_shifts:
+            # حساب الإحصائيات
+            orders = await db.orders.find({
+                "shift_id": shift["id"],
+                "status": {"$ne": OrderStatus.CANCELLED}
+            }).to_list(1000)
+            
+            total_sales = sum(o.get("total", 0) for o in orders)
+            total_profit = sum(o.get("profit", 0) for o in orders)
+            
+            # إغلاق الوردية تلقائياً
+            await db.shifts.update_one(
+                {"id": shift["id"]},
+                {"$set": {
+                    "status": "closed",
+                    "ended_at": datetime.now(timezone.utc).isoformat(),
+                    "auto_closed": True,
+                    "total_sales": total_sales,
+                    "net_profit": total_profit,
+                    "notes": "إغلاق تلقائي بعد 24 ساعة"
+                }}
+            )
+            
+            logger.info(f"Auto-closed shift {shift['id']} after 24 hours")
+        
+        if old_shifts:
+            logger.info(f"Auto-closed {len(old_shifts)} old shifts")
+            
+    except Exception as e:
+        logger.error(f"Error in auto_close_old_shifts: {e}")
+
+# إضافة مهمة الإغلاق التلقائي عند بدء التطبيق
+@app.on_event("startup")
+async def start_auto_close_scheduler():
+    """بدء مجدول الإغلاق التلقائي"""
+    async def scheduler():
+        while True:
+            await asyncio.sleep(3600)  # كل ساعة
+            await auto_close_old_shifts()
+    
+    asyncio.create_task(scheduler())
+    logger.info("✅ Auto day close scheduler started")
+
+
 # Include router and middleware
 app.include_router(api_router)
 
