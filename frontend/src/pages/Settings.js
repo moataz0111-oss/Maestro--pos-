@@ -3347,6 +3347,158 @@ export default function Settings() {
             </TabsContent>
           )}
 
+          {/* Payment Settings - إعدادات الدفع الإلكتروني */}
+          {hasRole(['admin']) && (
+            <TabsContent value="payments">
+              <div className="space-y-6">
+                <Card className="border-border/50 bg-card">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2 text-foreground">
+                      <CreditCard className="h-5 w-5" />
+                      إعدادات الدفع الإلكتروني
+                    </CardTitle>
+                    <p className="text-sm text-muted-foreground">
+                      إعداد بوابات الدفع لاستقبال المدفوعات من العملاء
+                    </p>
+                  </CardHeader>
+                  <CardContent className="space-y-6">
+                    {/* Stripe Settings */}
+                    <div className="p-4 border rounded-lg bg-muted/20">
+                      <div className="flex items-center gap-3 mb-4">
+                        <div className="p-2 bg-purple-500/20 rounded-lg">
+                          <CreditCard className="h-5 w-5 text-purple-400" />
+                        </div>
+                        <div>
+                          <h4 className="font-bold text-foreground">Stripe</h4>
+                          <p className="text-xs text-muted-foreground">قبول بطاقات الائتمان والخصم (Visa, Mastercard)</p>
+                        </div>
+                        <Badge className="mr-auto bg-green-500/20 text-green-400">مُفعّل</Badge>
+                      </div>
+                      
+                      <div className="space-y-4">
+                        <div>
+                          <Label className="text-foreground mb-2 block">حالة الحساب</Label>
+                          <div className="p-3 bg-green-500/10 border border-green-500/30 rounded-lg">
+                            <div className="flex items-center gap-2">
+                              <CheckCircle className="h-5 w-5 text-green-500" />
+                              <span className="text-green-400 font-medium">الحساب متصل ويعمل</span>
+                            </div>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              يتم استخدام مفتاح Stripe من إعدادات النظام
+                            </p>
+                          </div>
+                        </div>
+                        
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="p-3 bg-muted/30 rounded-lg">
+                            <p className="text-xs text-muted-foreground">العملة الافتراضية</p>
+                            <p className="font-bold text-foreground">USD (دولار أمريكي)</p>
+                          </div>
+                          <div className="p-3 bg-muted/30 rounded-lg">
+                            <p className="text-xs text-muted-foreground">وضع الاختبار</p>
+                            <p className="font-bold text-yellow-400">مُفعّل</p>
+                          </div>
+                        </div>
+
+                        <div className="p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+                          <p className="text-sm text-blue-400">
+                            💡 <strong>ملاحظة:</strong> لاستقبال مدفوعات حقيقية، يرجى التواصل مع الدعم الفني لتفعيل وضع الإنتاج وربط حسابك البنكي.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Delivery Fee Settings */}
+                    <div className="p-4 border rounded-lg bg-muted/20">
+                      <div className="flex items-center gap-3 mb-4">
+                        <div className="p-2 bg-orange-500/20 rounded-lg">
+                          <Truck className="h-5 w-5 text-orange-400" />
+                        </div>
+                        <div>
+                          <h4 className="font-bold text-foreground">رسوم التوصيل</h4>
+                          <p className="text-xs text-muted-foreground">تحديد رسوم التوصيل للطلبات</p>
+                        </div>
+                      </div>
+                      
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <Label className="text-foreground mb-2 block">رسوم التوصيل (د.ع)</Label>
+                          <Input 
+                            type="number" 
+                            placeholder="0"
+                            defaultValue="5000"
+                            className="bg-muted/30"
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-foreground mb-2 block">الحد الأدنى للطلب (د.ع)</Label>
+                          <Input 
+                            type="number" 
+                            placeholder="0"
+                            defaultValue="10000"
+                            className="bg-muted/30"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Payment Methods */}
+                    <div className="p-4 border rounded-lg bg-muted/20">
+                      <h4 className="font-bold text-foreground mb-4 flex items-center gap-2">
+                        <Wallet className="h-5 w-5" />
+                        طرق الدفع المتاحة
+                      </h4>
+                      
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
+                          <div className="flex items-center gap-3">
+                            <Banknote className="h-5 w-5 text-green-400" />
+                            <span className="text-foreground">الدفع نقداً عند الاستلام</span>
+                          </div>
+                          <Switch defaultChecked />
+                        </div>
+                        
+                        <div className="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
+                          <div className="flex items-center gap-3">
+                            <CreditCard className="h-5 w-5 text-blue-400" />
+                            <span className="text-foreground">بطاقة ائتمان (Stripe)</span>
+                          </div>
+                          <Switch defaultChecked />
+                        </div>
+                        
+                        <div className="flex items-center justify-between p-3 bg-muted/30 rounded-lg opacity-50">
+                          <div className="flex items-center gap-3">
+                            <Smartphone className="h-5 w-5 text-purple-400" />
+                            <span className="text-foreground">زين كاش</span>
+                            <Badge variant="outline" className="text-xs">قريباً</Badge>
+                          </div>
+                          <Switch disabled />
+                        </div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Transaction History */}
+                <Card className="border-border/50 bg-card">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2 text-foreground">
+                      <Receipt className="h-5 w-5" />
+                      آخر المعاملات المالية
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-center py-8 text-muted-foreground">
+                      <CreditCard className="h-12 w-12 mx-auto mb-3 opacity-50" />
+                      <p>لا توجد معاملات مالية بعد</p>
+                      <p className="text-xs mt-1">ستظهر هنا المعاملات عند استلام مدفوعات من العملاء</p>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            </TabsContent>
+          )}
+
           {/* Customers - إدارة العملاء */}
           {hasRole(['admin', 'manager', 'branch_manager']) && (
             <TabsContent value="customers">
