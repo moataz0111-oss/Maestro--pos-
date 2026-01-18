@@ -64,12 +64,55 @@ export default function CustomerMenu() {
   const [selectedBranch, setSelectedBranch] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
+  // PWA Install handling
+  useEffect(() => {
+    const handler = (e) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+      // إظهار بانر التثبيت بعد 3 ثواني
+      setTimeout(() => setShowInstallBanner(true), 3000);
+    };
+    
+    window.addEventListener('beforeinstallprompt', handler);
+    
+    // التحقق من iOS
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
+    
+    if (isIOS && !isStandalone) {
+      setTimeout(() => setShowInstallBanner(true), 3000);
+    }
+    
+    return () => window.removeEventListener('beforeinstallprompt', handler);
+  }, []);
+
+  const handleInstallClick = async () => {
+    if (deferredPrompt) {
+      deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      if (outcome === 'accepted') {
+        toast.success('تم تثبيت التطبيق بنجاح!');
+      }
+      setDeferredPrompt(null);
+      setShowInstallBanner(false);
+    }
+  };
+
   useEffect(() => {
     fetchMenu();
     // تحميل السلة من localStorage
     const savedCart = localStorage.getItem(`cart_${tenantId}`);
     if (savedCart) {
       setCart(JSON.parse(savedCart));
+    }
+    
+    // تحميل بيانات العميل المحفوظة
+    const savedCustomer = localStorage.getItem(`customer_${tenantId}`);
+    if (savedCustomer) {
+      const data = JSON.parse(savedCustomer);
+      setCustomerName(data.name || '');
+      setCustomerPhone(data.phone || '');
+      setDeliveryAddress(data.address || '');
     }
   }, [tenantId]);
 
@@ -85,6 +128,20 @@ export default function CustomerMenu() {
       setCategories(res.data.categories);
       setProducts(res.data.products);
       setBranches(res.data.branches || []);
+      
+      // تحديث عنوان الصفحة بشعار المطعم
+      if (res.data.restaurant?.name) {
+        document.title = res.data.restaurant.name + ' - القائمة';
+      }
+      
+      // تحديث أيقونة الصفحة إذا كان هناك شعار
+      if (res.data.restaurant?.logo) {
+        const link = document.querySelector("link[rel*='icon']") || document.createElement('link');
+        link.type = 'image/x-icon';
+        link.rel = 'shortcut icon';
+        link.href = res.data.restaurant.logo;
+        document.getElementsByTagName('head')[0].appendChild(link);
+      }
       
       if (res.data.branches?.length > 0) {
         setSelectedBranch(res.data.branches[0].id);
