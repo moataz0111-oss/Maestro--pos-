@@ -281,9 +281,34 @@ export default function Dashboard() {
   };
 
   // نسخ رابط القائمة
-  const copyMenuLink = () => {
-    navigator.clipboard.writeText(menuLink);
-    toast.success('تم نسخ الرابط!');
+  const copyMenuLink = async () => {
+    try {
+      // Try modern clipboard API first
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(menuLink);
+        toast.success('تم نسخ الرابط!');
+      } else {
+        // Fallback for older browsers or non-secure contexts
+        const textArea = document.createElement('textarea');
+        textArea.value = menuLink;
+        textArea.style.position = 'fixed';
+        textArea.style.left = '-999999px';
+        textArea.style.top = '-999999px';
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        try {
+          document.execCommand('copy');
+          toast.success('تم نسخ الرابط!');
+        } catch (err) {
+          toast.error('فشل في نسخ الرابط');
+        }
+        document.body.removeChild(textArea);
+      }
+    } catch (err) {
+      // Final fallback - show the link for manual copy
+      toast.info(`الرابط: ${menuLink}`);
+    }
   };
 
   const fetchDashboardSettings = async () => {
