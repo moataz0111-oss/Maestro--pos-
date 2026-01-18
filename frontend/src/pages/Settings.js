@@ -2119,16 +2119,13 @@ export default function Settings() {
                           </div>
                         </div>
                         <div>
-                          <Label className="text-foreground">رابط الصورة</Label>
-                          <Input
+                          <ImageUploader
                             value={categoryForm.image}
-                            onChange={(e) => setCategoryForm({ ...categoryForm, image: e.target.value })}
+                            onChange={(url) => setCategoryForm({ ...categoryForm, image: url })}
+                            type="category"
+                            label="صورة الفئة"
                             placeholder="https://example.com/image.jpg"
-                            className="mt-1"
                           />
-                          {categoryForm.image && (
-                            <img src={categoryForm.image} alt="معاينة" className="mt-2 h-20 w-20 object-cover rounded-lg" />
-                          )}
                         </div>
                         <div className="grid grid-cols-3 gap-4">
                           <div>
