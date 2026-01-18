@@ -471,17 +471,18 @@ export default function HR() {
                 onChange={(e) => setSelectedMonth(e.target.value)}
                 className="w-40"
               />
-              <Select value={selectedBranch} onValueChange={setSelectedBranch}>
-                <SelectTrigger className="w-40">
-                  <SelectValue placeholder="جميع الفروع" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">جميع الفروع</SelectItem>
-                  {branches.map(branch => (
-                    <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <BranchSelector />
+              
+              {/* زر تصدير التقرير */}
+              <Button
+                variant="outline"
+                onClick={() => exportPayrollReport('excel')}
+                className="h-10"
+                title="تصدير تقرير الرواتب"
+              >
+                <FileSpreadsheet className="h-5 w-5 ml-2" />
+                تصدير Excel
+              </Button>
               
               {/* زر الصفحة الرئيسية */}
               <Button
