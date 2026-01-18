@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { API_URL, BACKEND_URL } from '../utils/api';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import { useAuth } from '../context/AuthContext';
+import { useBranch } from '../context/BranchContext';
 import { formatPrice } from '../utils/currency';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
@@ -13,6 +15,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Switch } from '../components/ui/switch';
 import { Textarea } from '../components/ui/textarea';
+import BranchSelector from '../components/BranchSelector';
 import {
   Users,
   UserPlus,
@@ -48,7 +51,9 @@ import {
   Minus,
   ArrowRight,
   Home,
-  Fingerprint
+  Fingerprint,
+  FileSpreadsheet,
+  BarChart3
 } from 'lucide-react';
 import { toast, Toaster } from 'sonner';
 import BiometricDevices from '../components/BiometricDevices';
