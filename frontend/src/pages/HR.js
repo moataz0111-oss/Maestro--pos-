@@ -876,20 +876,20 @@ export default function HR() {
                               <td className="p-3 text-yellow-600">{formatPrice(emp.advances_deduction)}</td>
                               <td className="p-3 font-bold text-cyan-600">{formatPrice(emp.net_payable)}</td>
                               <td className="p-3">
-                                <div className="flex gap-2">
+                                <div className="flex gap-1">
                                   <Button 
                                     size="sm" 
                                     variant="outline"
                                     onClick={() => exportEmployeeSalarySlip(emp.id, emp.name, 'excel')}
-                                    title="تصدير مفردات المرتب"
+                                    title="Excel"
                                   >
                                     <FileSpreadsheet className="h-4 w-4" />
                                   </Button>
                                   <Button 
                                     size="sm" 
                                     variant="outline"
-                                    onClick={() => calculatePayroll(emp.id)}
-                                    title="إنشاء كشف راتب"
+                                    onClick={() => exportEmployeeSalarySlipPDF(emp.id, emp.name)}
+                                    title="PDF"
                                   >
                                     <FileText className="h-4 w-4" />
                                   </Button>
