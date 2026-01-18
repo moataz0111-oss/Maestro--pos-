@@ -384,6 +384,69 @@ export default function HR() {
     }
   };
 
+  // تصدير تقرير الرواتب PDF
+  const exportPayrollPDF = async () => {
+    try {
+      toast.loading('جاري تحضير ملف PDF...');
+      const token = localStorage.getItem('token');
+      const branchId = getBranchIdForApi();
+      
+      const response = await axios.get(
+        `${API}/reports/payroll/export/pdf?month=${selectedMonth}${branchId ? `&branch_id=${branchId}` : ''}`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+          responseType: 'blob'
+        }
+      );
+      
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `payroll_report_${selectedMonth}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      
+      toast.dismiss();
+      toast.success('تم تحميل ملف PDF بنجاح');
+    } catch (error) {
+      toast.dismiss();
+      toast.error('فشل في تصدير الملف');
+    }
+  };
+
+  // تصدير مفردات مرتب PDF
+  const exportEmployeeSalarySlipPDF = async (employeeId, employeeName) => {
+    try {
+      toast.loading('جاري تحضير ملف PDF...');
+      const token = localStorage.getItem('token');
+      
+      const response = await axios.get(
+        `${API}/reports/employee-salary-slip/${employeeId}/export/pdf?month=${selectedMonth}`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+          responseType: 'blob'
+        }
+      );
+      
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `salary_slip_${employeeName}_${selectedMonth}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      
+      toast.dismiss();
+      toast.success('تم تحميل مفردات المرتب PDF بنجاح');
+    } catch (error) {
+      toast.dismiss();
+      toast.error('فشل في تصدير مفردات المرتب');
+    }
+  };
+
   // Stats
   const stats = {
     totalEmployees: employees.filter(e => e.is_active).length,
