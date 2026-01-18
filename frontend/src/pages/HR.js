@@ -697,7 +697,10 @@ export default function HR() {
                           </td>
                           <td className="p-3">
                             <div className="flex items-center gap-2">
-                              <Button size="sm" variant="outline" onClick={() => calculatePayroll(emp.id)}>
+                              <Button size="sm" variant="outline" onClick={() => exportEmployeeSalarySlip(emp.id, emp.name, 'excel')} title="تصدير مفردات المرتب">
+                                <FileSpreadsheet className="h-4 w-4" />
+                              </Button>
+                              <Button size="sm" variant="outline" onClick={() => calculatePayroll(emp.id)} title="إنشاء كشف راتب">
                                 <FileText className="h-4 w-4" />
                               </Button>
                               <Button size="sm" variant="outline" onClick={() => {
@@ -709,10 +712,10 @@ export default function HR() {
                                   work_hours_per_day: emp.work_hours_per_day
                                 });
                                 setEmployeeDialogOpen(true);
-                              }}>
+                              }} title="تعديل">
                                 <Edit className="h-4 w-4" />
                               </Button>
-                              <Button size="sm" variant="destructive" onClick={() => handleDeleteEmployee(emp.id)}>
+                              <Button size="sm" variant="destructive" onClick={() => handleDeleteEmployee(emp.id)} title="حذف">
                                 <Trash2 className="h-4 w-4" />
                               </Button>
                             </div>
