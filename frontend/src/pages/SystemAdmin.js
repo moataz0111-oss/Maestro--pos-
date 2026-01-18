@@ -58,7 +58,7 @@ export default function SystemAdmin() {
 
   const fetchStats = async () => {
     try {
-      const res = await axios.get(`${API}/system/stats`);
+      const res = await axios.get(`${API}/system/stats`, { headers: getAuthHeaders() });
       setStats(res.data);
     } catch (error) {
       console.error('Failed to fetch stats:', error);
@@ -67,7 +67,7 @@ export default function SystemAdmin() {
 
   const fetchBackups = async () => {
     try {
-      const res = await axios.get(`${API}/system/backup/list`);
+      const res = await axios.get(`${API}/system/backup/list`, { headers: getAuthHeaders() });
       setBackups(res.data.backups || []);
     } catch (error) {
       console.error('Failed to fetch backups:', error);
@@ -77,7 +77,7 @@ export default function SystemAdmin() {
   const createBackup = async () => {
     setBackupLoading(true);
     try {
-      const res = await axios.post(`${API}/system/backup`);
+      const res = await axios.post(`${API}/system/backup`, {}, { headers: getAuthHeaders() });
       toast.success(res.data.message);
       fetchBackups();
     } catch (error) {
