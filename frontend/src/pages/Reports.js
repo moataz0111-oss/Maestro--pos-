@@ -171,6 +171,45 @@ export default function Reports() {
     }
   };
 
+  // Export to PDF
+  const exportToPDF = async (reportType) => {
+    try {
+      toast.loading('جاري تحضير ملف PDF...');
+      
+      const branchId = getBranchIdForApi();
+      const params = {
+        report_type: reportType,
+        start_date: startDate,
+        end_date: endDate
+      };
+      
+      if (branchId) {
+        params.branch_id = branchId;
+      }
+      
+      const response = await axios.get(`${API}/reports/export/pdf`, {
+        params,
+        responseType: 'blob'
+      });
+      
+      // Create download link
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `report_${reportType}_${startDate}_to_${endDate}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      
+      toast.dismiss();
+      toast.success('تم تحميل ملف PDF بنجاح');
+    } catch (error) {
+      toast.dismiss();
+      toast.error('فشل في تصدير الملف');
+    }
+  };
+
   const StatCard = ({ title, value, subtitle, icon: Icon, color = 'primary', trend }) => (
     <Card className="border-border/50 bg-card">
       <CardContent className="p-4">
