@@ -69,7 +69,13 @@ import {
   PhoneCall,
   PhoneIncoming,
   PhoneOutgoing,
-  Globe
+  Globe,
+  CreditCard,
+  Wallet,
+  Banknote,
+  Smartphone,
+  Receipt,
+  CheckCircle
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
