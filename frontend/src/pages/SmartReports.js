@@ -22,7 +22,9 @@ import {
   ArrowDownRight,
   Utensils,
   Package,
-  Star
+  Star,
+  FileSpreadsheet,
+  FileText
 } from 'lucide-react';
 import {
   Select,
@@ -49,6 +51,63 @@ export default function SmartReports() {
   useEffect(() => {
     fetchReportData();
   }, [period]);
+
+  // Export functions
+  const exportToExcel = async (reportType) => {
+    try {
+      toast.loading('جاري تحضير الملف...');
+      const token = localStorage.getItem('token');
+      
+      const response = await axios.get(`${API}/smart-reports/export/excel`, {
+        params: { report_type: reportType, period },
+        headers: { Authorization: `Bearer ${token}` },
+        responseType: 'blob'
+      });
+      
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `smart_report_${reportType}_${period}.xlsx`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      
+      toast.dismiss();
+      toast.success('تم تحميل الملف بنجاح');
+    } catch (error) {
+      toast.dismiss();
+      toast.error('فشل في تصدير الملف');
+    }
+  };
+
+  const exportToPDF = async (reportType) => {
+    try {
+      toast.loading('جاري تحضير ملف PDF...');
+      const token = localStorage.getItem('token');
+      
+      const response = await axios.get(`${API}/smart-reports/export/pdf`, {
+        params: { report_type: reportType, period },
+        headers: { Authorization: `Bearer ${token}` },
+        responseType: 'blob'
+      });
+      
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `smart_report_${reportType}_${period}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      
+      toast.dismiss();
+      toast.success('تم تحميل ملف PDF بنجاح');
+    } catch (error) {
+      toast.dismiss();
+      toast.error('فشل في تصدير الملف');
+    }
+  };
 
   const fetchReportData = async () => {
     setLoading(true);
