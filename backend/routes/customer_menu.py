@@ -32,13 +32,19 @@ class CustomerOrderItem(BaseModel):
     notes: Optional[str] = None
     addons: Optional[List[str]] = []
 
+class DeliveryLocation(BaseModel):
+    lat: float
+    lng: float
+
 class CustomerOrder(BaseModel):
     items: List[CustomerOrderItem]
     delivery_address: str
     delivery_notes: Optional[str] = None
+    delivery_location: Optional[DeliveryLocation] = None
     payment_method: str = "cash"  # cash, card, zain_cash
     customer_phone: Optional[str] = None
     customer_name: Optional[str] = None
+    branch_id: Optional[str] = None
 
 class PaymentInfo(BaseModel):
     card_number: Optional[str] = None
@@ -104,6 +110,19 @@ async def get_menu_routes(db):
             {"_id": 0}
         ) or {}
         
+        # جلب الفروع
+        branches = await db.branches.find(
+            {"tenant_id": tenant_id, "is_active": {"$ne": False}},
+            {"_id": 0}
+        ).to_list(50)
+        
+        # إذا لم يكن هناك فروع، أنشئ فرع افتراضي
+        if not branches:
+            branches = await db.branches.find(
+                {"is_active": {"$ne": False}},
+                {"_id": 0}
+            ).to_list(50)
+        
         return {
             "restaurant": {
                 "id": tenant_id,
@@ -115,11 +134,12 @@ async def get_menu_routes(db):
                 "working_hours": settings.get("working_hours", {}),
                 "delivery_fee": settings.get("delivery_fee", 0),
                 "min_order": settings.get("min_order", 0),
-                "accepts_online_payment": settings.get("accepts_online_payment", False),
-                "payment_methods": settings.get("payment_methods", ["cash"])
+                "accepts_online_payment": True,  # تفعيل الدفع الإلكتروني
+                "payment_methods": ["cash", "card"]
             },
             "categories": categories,
-            "products": products
+            "products": products,
+            "branches": branches
         }
     
     @router.get("/menu/{menu_slug}/product/{product_id}")
