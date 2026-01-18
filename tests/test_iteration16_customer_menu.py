@@ -352,8 +352,15 @@ class TestPaymentAPI:
         """GET /api/payments/status/{session_id} - Should handle invalid session"""
         response = requests.get(f"{BASE_URL}/api/payments/status/invalid-session-id")
         
-        # Should return error for invalid session
-        assert response.status_code in [404, 500]
+        # Should return error for invalid session (520 is Cloudflare wrapper for 500)
+        assert response.status_code in [404, 500, 520]
+        
+        # Verify error message is returned
+        if response.status_code in [500, 520]:
+            data = response.json()
+            assert "detail" in data
+            print(f"Error detail: {data['detail']}")
+        
         print(f"Invalid session status: {response.status_code}")
 
 
