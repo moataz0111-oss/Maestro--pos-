@@ -3370,48 +3370,115 @@ export default function Settings() {
                   </CardHeader>
                   <CardContent className="space-y-6">
                     {/* Stripe Settings */}
-                    <div className="p-4 border rounded-lg bg-muted/20">
+                    <div className="p-4 border rounded-lg bg-gradient-to-br from-purple-500/10 to-blue-500/10">
                       <div className="flex items-center gap-3 mb-4">
                         <div className="p-2 bg-purple-500/20 rounded-lg">
                           <CreditCard className="h-5 w-5 text-purple-400" />
                         </div>
-                        <div>
-                          <h4 className="font-bold text-foreground">Stripe</h4>
-                          <p className="text-xs text-muted-foreground">قبول بطاقات الائتمان والخصم (Visa, Mastercard)</p>
+                        <div className="flex-1">
+                          <h4 className="font-bold text-foreground">Stripe - بطاقات الائتمان</h4>
+                          <p className="text-xs text-muted-foreground">قبول بطاقات Visa, Mastercard والمزيد</p>
                         </div>
-                        <Badge className="mr-auto bg-green-500/20 text-green-400">مُفعّل</Badge>
+                        <Switch defaultChecked />
                       </div>
                       
                       <div className="space-y-4">
                         <div>
-                          <Label className="text-foreground mb-2 block">حالة الحساب</Label>
-                          <div className="p-3 bg-green-500/10 border border-green-500/30 rounded-lg">
-                            <div className="flex items-center gap-2">
-                              <CheckCircle className="h-5 w-5 text-green-500" />
-                              <span className="text-green-400 font-medium">الحساب متصل ويعمل</span>
-                            </div>
-                            <p className="text-xs text-muted-foreground mt-1">
-                              يتم استخدام مفتاح Stripe من إعدادات النظام
-                            </p>
-                          </div>
+                          <Label className="text-foreground mb-2 block">المفتاح العام (Publishable Key)</Label>
+                          <Input 
+                            placeholder="pk_live_xxxxxxxxxxxx"
+                            className="bg-muted/30 font-mono text-sm"
+                          />
+                        </div>
+                        
+                        <div>
+                          <Label className="text-foreground mb-2 block">المفتاح السري (Secret Key)</Label>
+                          <Input 
+                            type="password"
+                            placeholder="sk_live_xxxxxxxxxxxx"
+                            className="bg-muted/30 font-mono text-sm"
+                          />
+                          <p className="text-xs text-muted-foreground mt-1">
+                            يمكنك الحصول على المفاتيح من <a href="https://dashboard.stripe.com/apikeys" target="_blank" rel="noreferrer" className="text-blue-400 hover:underline">لوحة تحكم Stripe</a>
+                          </p>
                         </div>
                         
                         <div className="grid grid-cols-2 gap-4">
                           <div className="p-3 bg-muted/30 rounded-lg">
-                            <p className="text-xs text-muted-foreground">العملة الافتراضية</p>
-                            <p className="font-bold text-foreground">USD (دولار أمريكي)</p>
+                            <p className="text-xs text-muted-foreground">العملة</p>
+                            <select className="w-full bg-transparent text-foreground font-bold mt-1">
+                              <option value="USD">USD (دولار أمريكي)</option>
+                              <option value="IQD">IQD (دينار عراقي)</option>
+                            </select>
                           </div>
                           <div className="p-3 bg-muted/30 rounded-lg">
-                            <p className="text-xs text-muted-foreground">وضع الاختبار</p>
-                            <p className="font-bold text-yellow-400">مُفعّل</p>
+                            <p className="text-xs text-muted-foreground">الوضع</p>
+                            <select className="w-full bg-transparent text-foreground font-bold mt-1">
+                              <option value="test">وضع الاختبار</option>
+                              <option value="live">وضع الإنتاج</option>
+                            </select>
                           </div>
                         </div>
 
-                        <div className="p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg">
-                          <p className="text-sm text-blue-400">
-                            💡 <strong>ملاحظة:</strong> لاستقبال مدفوعات حقيقية، يرجى التواصل مع الدعم الفني لتفعيل وضع الإنتاج وربط حسابك البنكي.
+                        <Button className="w-full bg-purple-500 hover:bg-purple-600">
+                          <Save className="h-4 w-4 ml-2" />
+                          حفظ إعدادات Stripe
+                        </Button>
+                      </div>
+                    </div>
+
+                    {/* Zain Cash Settings */}
+                    <div className="p-4 border rounded-lg bg-gradient-to-br from-pink-500/10 to-purple-500/10">
+                      <div className="flex items-center gap-3 mb-4">
+                        <div className="p-2 bg-pink-500/20 rounded-lg">
+                          <Smartphone className="h-5 w-5 text-pink-400" />
+                        </div>
+                        <div className="flex-1">
+                          <h4 className="font-bold text-foreground">زين كاش - Zain Cash</h4>
+                          <p className="text-xs text-muted-foreground">المحفظة الإلكترونية الأكثر انتشاراً في العراق</p>
+                        </div>
+                        <Switch defaultChecked />
+                      </div>
+                      
+                      <div className="space-y-4">
+                        <div>
+                          <Label className="text-foreground mb-2 block">رقم محفظة زين كاش</Label>
+                          <Input 
+                            placeholder="07xx xxx xxxx"
+                            type="tel"
+                            className="bg-muted/30 text-lg tracking-wider"
+                          />
+                        </div>
+                        
+                        <div>
+                          <Label className="text-foreground mb-2 block">اسم صاحب المحفظة</Label>
+                          <Input 
+                            placeholder="مثال: أحمد محمد"
+                            className="bg-muted/30"
+                          />
+                        </div>
+                        
+                        <div>
+                          <Label className="text-foreground mb-2 block">رمز QR الخاص بمحفظتك (اختياري)</Label>
+                          <div className="border-2 border-dashed border-muted-foreground/30 rounded-lg p-6 text-center">
+                            <Upload className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
+                            <p className="text-sm text-muted-foreground">اسحب صورة QR Code هنا أو</p>
+                            <Button variant="outline" size="sm" className="mt-2">
+                              اختر صورة
+                            </Button>
+                          </div>
+                        </div>
+                        
+                        <div className="p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
+                          <p className="text-sm text-yellow-400">
+                            ⚠️ <strong>تنبيه:</strong> سيظهر رقم محفظتك ورمز QR للعملاء عند اختيار الدفع بزين كاش
                           </p>
                         </div>
+
+                        <Button className="w-full bg-pink-500 hover:bg-pink-600">
+                          <Save className="h-4 w-4 ml-2" />
+                          حفظ إعدادات زين كاش
+                        </Button>
                       </div>
                     </div>
 
@@ -3447,39 +3514,43 @@ export default function Settings() {
                           />
                         </div>
                       </div>
+                      
+                      <Button className="w-full mt-4 bg-orange-500 hover:bg-orange-600">
+                        <Save className="h-4 w-4 ml-2" />
+                        حفظ رسوم التوصيل
+                      </Button>
                     </div>
 
-                    {/* Payment Methods */}
+                    {/* Payment Methods Summary */}
                     <div className="p-4 border rounded-lg bg-muted/20">
                       <h4 className="font-bold text-foreground mb-4 flex items-center gap-2">
                         <Wallet className="h-5 w-5" />
-                        طرق الدفع المتاحة
+                        ملخص طرق الدفع المتاحة للعملاء
                       </h4>
                       
                       <div className="space-y-3">
-                        <div className="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
+                        <div className="flex items-center justify-between p-3 bg-green-500/10 rounded-lg border border-green-500/30">
                           <div className="flex items-center gap-3">
                             <Banknote className="h-5 w-5 text-green-400" />
                             <span className="text-foreground">الدفع نقداً عند الاستلام</span>
                           </div>
-                          <Switch defaultChecked />
+                          <Badge className="bg-green-500/20 text-green-400">مُفعّل</Badge>
                         </div>
                         
-                        <div className="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
+                        <div className="flex items-center justify-between p-3 bg-blue-500/10 rounded-lg border border-blue-500/30">
                           <div className="flex items-center gap-3">
                             <CreditCard className="h-5 w-5 text-blue-400" />
                             <span className="text-foreground">بطاقة ائتمان (Stripe)</span>
                           </div>
-                          <Switch defaultChecked />
+                          <Badge className="bg-blue-500/20 text-blue-400">مُفعّل</Badge>
                         </div>
                         
-                        <div className="flex items-center justify-between p-3 bg-muted/30 rounded-lg opacity-50">
+                        <div className="flex items-center justify-between p-3 bg-purple-500/10 rounded-lg border border-purple-500/30">
                           <div className="flex items-center gap-3">
                             <Smartphone className="h-5 w-5 text-purple-400" />
                             <span className="text-foreground">زين كاش</span>
-                            <Badge variant="outline" className="text-xs">قريباً</Badge>
                           </div>
-                          <Switch disabled />
+                          <Badge className="bg-purple-500/20 text-purple-400">مُفعّل</Badge>
                         </div>
                       </div>
                     </div>
