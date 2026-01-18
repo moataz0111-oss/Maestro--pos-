@@ -2410,12 +2410,12 @@ export default function Settings() {
                           </div>
                         </div>
                         <div>
-                          <Label className="text-foreground">رابط الصورة</Label>
-                          <Input
+                          <ImageUploader
                             value={productForm.image}
-                            onChange={(e) => setProductForm({ ...productForm, image: e.target.value })}
+                            onChange={(url) => setProductForm({ ...productForm, image: url })}
+                            type="product"
+                            label="صورة المنتج"
                             placeholder="https://example.com/image.jpg"
-                            className="mt-1"
                           />
                         </div>
                         <div>
