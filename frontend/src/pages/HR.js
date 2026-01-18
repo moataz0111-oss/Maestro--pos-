@@ -537,6 +537,13 @@ export default function HR() {
               <p className="text-sm text-muted-foreground">مكافآت الشهر</p>
             </CardContent>
           </Card>
+          <Card className="bg-cyan-500/10 border-cyan-500/20">
+            <CardContent className="p-4 text-center">
+              <DollarSign className="h-8 w-8 text-cyan-500 mx-auto mb-2" />
+              <p className="text-lg font-bold text-cyan-500">{formatPrice(stats.netPayable)}</p>
+              <p className="text-sm text-muted-foreground">المستحقات</p>
+            </CardContent>
+          </Card>
         </div>
 
         {/* Tabs */}
