@@ -10,41 +10,36 @@
 - تقارير وإحصائيات ذكية
 - دعم Multi-tenancy (عدة عملاء)
 
-## الجلسة الحالية - 18 يناير 2026 (الإصدار 16)
+## الجلسة الحالية - 18 يناير 2026 (الإصدار 17)
 
 ### ✅ ما تم إنجازه في هذه الجلسة:
 
 #### 1. نظام فلترة الفروع الشامل ✅
 - إنشاء `BranchContext.js` - Context عام للفرع المحدد
 - إنشاء `BranchSelector.js` - مكون اختيار الفرع في الشريط العلوي
-- تحديث `App.js` لإضافة `BranchProvider`
-- تحديث `Dashboard.js` لاستخدام `useBranch`
-- تحديث `Reports.js` لاستخدام الفلتر العام
+- تحديث جميع الصفحات لاستخدام الفلتر العام
 
-#### 2. تحديث جميع نقاط النهاية للتقارير ✅
-- `/api/reports/sales` - مبيعات الفرع أو الجميع
-- `/api/reports/purchases` - مشتريات الفرع
-- `/api/reports/inventory` - مخزون الفرع
-- `/api/reports/expenses` - مصاريف الفرع
-- `/api/reports/profit-loss` - أرباح وخسائر
-- `/api/reports/delivery-credits` - عمولات التوصيل
-- `/api/reports/products` - منتجات الفرع
-- `/api/reports/cancellations` - إلغاءات
-- `/api/reports/discounts` - خصومات
-- `/api/reports/credit` - آجل
+#### 2. تقرير الرواتب الشامل ✅
+- **API جديد:** `/api/reports/payroll-summary` - تقرير شامل للرواتب والمكافآت والخصومات والسلف
+- **API جديد:** `/api/reports/employee-salary-slip/{employee_id}` - مفردات مرتب موظف واحد
+- **API جديد:** `/api/reports/payroll/export/excel` - تصدير تقرير الرواتب Excel
+- **API جديد:** `/api/reports/employee-salary-slip/{employee_id}/export/excel` - تصدير مفردات المرتب Excel
 
-#### 3. ميزات الفلترة:
-- **المدراء (admin/manager):** يمكنهم اختيار "جميع الفروع" أو فرع معين
-- **الموظفون:** يرون فقط بيانات فرعهم المحدد
-- **الاحتفاظ بالاختيار:** يتم حفظ الفرع المحدد في localStorage
+#### 3. تحديث صفحة الموارد البشرية ✅
+- إضافة تبويب "تقرير الرواتب" جديد
+- إضافة فلتر الفروع (`BranchSelector`)
+- إضافة زر تصدير Excel للتقرير الشامل
+- إضافة زر تصدير مفردات المرتب لكل موظف
+- إضافة بطاقة "المستحقات" في الإحصائيات
+
+#### 4. تحديث جميع نقاط النهاية للتقارير ✅
+- جميع التقارير تدعم فلترة الفروع
+- `/api/reports/sales`, `/api/reports/purchases`, `/api/reports/inventory`
+- `/api/reports/expenses`, `/api/reports/profit-loss`, `/api/reports/products`
+- `/api/reports/delivery-credits`, `/api/reports/cancellations`, `/api/reports/discounts`, `/api/reports/credit`
 
 ### 📊 حالة النشر
-✅ **جاهز للنشر** - تم التحقق من جميع متطلبات النشر:
-- Environment variables configured
-- CORS allows all origins
-- MongoDB connection from environment
-- No hardcoded URLs
-- Supervisor configuration correct
+✅ **جاهز للنشر** - تم التحقق مرتين بواسطة وكيل النشر
 
 ## ملفات التغييرات:
 - `/app/frontend/src/context/BranchContext.js` (جديد)
@@ -52,7 +47,8 @@
 - `/app/frontend/src/App.js` (تحديث)
 - `/app/frontend/src/pages/Dashboard.js` (تحديث)
 - `/app/frontend/src/pages/Reports.js` (تحديث)
-- `/app/backend/server.py` (تحديث - جميع تقارير الفروع)
+- `/app/frontend/src/pages/HR.js` (تحديث كبير)
+- `/app/backend/server.py` (تحديث كبير - APIs جديدة)
 
 ## جدول الصلاحيات
 
@@ -85,10 +81,19 @@
 | `settings_delivery` | شركات التوصيل | إدارة شركات التوصيل |
 | `settings_notifications` | الإشعارات | إعدادات الإشعارات |
 
+## APIs الجديدة للرواتب
+
+| Method | Endpoint | الوصف |
+|--------|----------|--------|
+| GET | `/api/reports/payroll-summary` | تقرير شامل للرواتب |
+| GET | `/api/reports/employee-salary-slip/{id}` | مفردات مرتب موظف |
+| GET | `/api/reports/payroll/export/excel` | تصدير تقرير الرواتب |
+| GET | `/api/reports/employee-salary-slip/{id}/export/excel` | تصدير مفردات المرتب |
+
 ## المهام المتبقية
 
 ### 🔴 أولوية قصوى (P0)
-- [ ] إعادة هيكلة `/app/backend/server.py` (9600+ سطر)
+- [ ] إعادة هيكلة `/app/backend/server.py` (10000+ سطر)
 
 ### 🟡 أولوية عالية (P1)
 - [ ] تحسين خريطة السائقين الحية
@@ -110,5 +115,5 @@
 | كاشير | cashier@test.com | 123456 | فرع محدد فقط |
 
 ---
-آخر تحديث: 18 يناير 2026 - 12:25 AM
+آخر تحديث: 18 يناير 2026 - 12:40 AM
 نسبة الإنجاز: 99%
