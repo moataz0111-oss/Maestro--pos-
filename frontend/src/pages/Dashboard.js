@@ -166,6 +166,61 @@ export default function Dashboard() {
     autoOpenShift(); // فتح الوردية تلقائياً
   }, [selectedBranchId]);
 
+  // التحقق من الطلبات الجديدة كل 10 ثواني
+  useEffect(() => {
+    checkNewOrders();
+    const interval = setInterval(checkNewOrders, 10000);
+    return () => clearInterval(interval);
+  }, [selectedBranchId]);
+
+  // التحقق من الطلبات الجديدة من تطبيق العملاء
+  const checkNewOrders = async () => {
+    try {
+      const params = lastCheckTime ? { last_check: lastCheckTime } : {};
+      if (selectedBranchId && selectedBranchId !== 'all') {
+        params.branch_id = selectedBranchId;
+      }
+      
+      const res = await axios.get(`${API}/notifications/sound-alert`, { params });
+      
+      if (res.data.has_new_orders && res.data.new_orders_count > 0) {
+        setNewOrdersCount(res.data.new_orders_count);
+        setShowNewOrderAlert(true);
+        playNotificationSound();
+        
+        // جلب تفاصيل الطلبات الجديدة
+        const ordersRes = await axios.get(`${API}/notifications/pending-orders`, { params });
+        setPendingCustomerOrders(ordersRes.data.orders);
+      }
+      
+      setLastCheckTime(res.data.check_time);
+    } catch (error) {
+      console.error('Failed to check new orders:', error);
+    }
+  };
+
+  // تشغيل صوت الإشعار
+  const playNotificationSound = () => {
+    try {
+      if (!notificationAudioRef.current) {
+        notificationAudioRef.current = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2teleAkFfrzT3MNqIgRfs9PduXYPCnCv0NzAZxQMSrbU38ZjGAZbtNXexWkKDF+z1N7FaQ4NV7TV38dpCw1dtdTfxWkNDFu11N/FaQsNXbXU38VpDQ1ctNXfxWkMDV211N/GaAwNXLTU38VpDA1dtdTfxWkMDVy01N/FaQ0NW7TU38VpDA1ctNXfxWkMDVy01d/FaQwNXbXU38VpDAxctNXfxWkMDV211N/FaQwNXLTV38VpDA1dtdTfxWgNDVy01N/FaQwNXbXU38VpDQxctNXfxWkMDVy01N/FaQ0MXLTV38VpDA1dtNTfxWkMDF201N/FaAwNXLTV38VpDQxdtNTfxWkMDVy01d/FaQ0MXbTU38VpDAxctNXfxWkNDF201N/FaAwNXbTU38VpDQxctNXfxWkMDVy01d/FaQ0MXLTU38VpDAxdtNXfxWkNDFy01N/FaQwNXbTU38VpDA1ctNTfxWkNDF201N/FaQwNXbTU38VoDA1ctNTfxWkMDV201N/FaA0NXLTU38VpDA1dtNTfxWkMDVy01N/FaQ0MXLTU38VoDQ1ctNTfxWkMDV201N/FaQwNXLTU38VoDQ1ctNTfxWkNDFy01N/FaAwNXbTU38VoDQ1ctNXfxWgNDFy01d/FaAwNXbTU38VpDQxctNTfxWgMDV201d/FaAwNXLTU38VpDA1dtNTfxWgMDV201d/FaA0MXLTU38VoDA1dtNXfxWgNDFy01d/FaAwNXbTU38VoDA1ctNXfxWgMDV201N/FaA0NXLTU38VoDA1ctNXfxWgNDFy01N/FaAwNXbTV38VoDA1ctNXfxWgNDFy01N/FaAwNXLTV38VoDA1ctNXfxWgNDFy01d/FaA0MXLTV38VoDA1ctNXfxWgNDFy01d/FaAwNXLTU38VoDQ1ctNXfxWgMDV201d/FaA0MXLTU38VoDA1ctNXfxWgNDFy01d/FaAwNXLTV38VoDQ1ctNXfxWgMDV201d/FaA0MXLTU38VoDA1ctNXfxWgMDV201N/FaA0NXLTU38VoDA1dtNTfxWgMDV201d/FaAwNXLTV38VoDQ1ctNTfxWgMDV201d/FaA0MXLTU38VoDA1ctNXfxWgMDV201d/FaA0MXLTU38VoDA1ctNXfxWgNDFy01d/FaAwNXLTU38VoDQ1ctNXfxWgMDV201N/FaA0NXLTU38VoDA1ctNXfxWgNDFy01d/FaAwNXLTU38VoDA1ctNXfxWgNDFy01d/FaAwNXLTU38VoDQ1ctNXfxWgMDVy01d/FaA0MXLTU38VoDA1ctNXfxWgMDV201N/FaA0NXLTU38VoDA1ctNXfxWgNDFy01d/FaAwNXLTU38VoDA1ctNXfxWgNDFy01d/FaAwAA');
+        notificationAudioRef.current.volume = 0.5;
+      }
+      notificationAudioRef.current.play().catch(() => {});
+    } catch (e) {}
+  };
+
+  // تحديد الطلبات كمشاهدة
+  const markOrdersAsSeen = async (orderIds) => {
+    try {
+      await axios.post(`${API}/notifications/mark-seen`, orderIds);
+      setShowNewOrderAlert(false);
+      setNewOrdersCount(0);
+    } catch (error) {
+      console.error('Failed to mark orders as seen:', error);
+    }
+  };
+
   // فتح الوردية تلقائياً عند الدخول
   const autoOpenShift = async () => {
     try {
