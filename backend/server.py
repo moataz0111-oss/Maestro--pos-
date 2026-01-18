@@ -5206,12 +5206,31 @@ async def get_profit_loss_report(
 @api_router.get("/reports/delivery-credits")
 async def get_delivery_credits_report(
     delivery_app: Optional[str] = None,
+    branch_id: Optional[str] = None,
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
     current_user: dict = Depends(get_current_user)
 ):
+    tenant_id = get_user_tenant_id(current_user)
+    
     # جلب جميع الطلبات التي لها شركة توصيل (وليس فقط الآجل)
     query = {"delivery_app": {"$ne": None, "$exists": True}}
+    
+    # فلترة حسب tenant_id
+    if tenant_id:
+        query["tenant_id"] = tenant_id
+    else:
+        query["$or"] = [{"tenant_id": {"$exists": False}}, {"tenant_id": None}]
+    
+    # فلترة الفرع - التحقق من صلاحية المستخدم
+    user_branch_id = current_user.get("branch_id")
+    user_role = current_user.get("role")
+    
+    if user_branch_id and user_role not in [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.MANAGER]:
+        query["branch_id"] = user_branch_id
+    elif branch_id:
+        query["branch_id"] = branch_id
+    
     if delivery_app:
         query["delivery_app"] = delivery_app
     if start_date:
