@@ -92,6 +92,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../components/ui/select';
+import ImageUploader from '../components/ImageUploader';
 
 const API = API_URL;
 
