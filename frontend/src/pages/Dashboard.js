@@ -96,6 +96,8 @@ export default function Dashboard() {
   const [dayStatus, setDayStatus] = useState(null); // حالة اليوم
   const [showDayCloseDialog, setShowDayCloseDialog] = useState(false);
   const [closingDay, setClosingDay] = useState(false);
+  const [showMenuLinkDialog, setShowMenuLinkDialog] = useState(false);
+  const [menuLink, setMenuLink] = useState('');
   const [dashboardSettings, setDashboardSettings] = useState({
     showPOS: true,
     showTables: true,
