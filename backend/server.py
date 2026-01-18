@@ -5124,10 +5124,26 @@ async def get_profit_loss_report(
     end_date: Optional[str] = None,
     current_user: dict = Depends(get_current_user)
 ):
+    tenant_id = get_user_tenant_id(current_user)
+    
     # Get sales data
     sales_query = {"status": {"$ne": OrderStatus.CANCELLED}}
-    if branch_id:
+    
+    # فلترة حسب tenant_id
+    if tenant_id:
+        sales_query["tenant_id"] = tenant_id
+    else:
+        sales_query["$or"] = [{"tenant_id": {"$exists": False}}, {"tenant_id": None}]
+    
+    # فلترة الفرع - التحقق من صلاحية المستخدم
+    user_branch_id = current_user.get("branch_id")
+    user_role = current_user.get("role")
+    
+    if user_branch_id and user_role not in [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.MANAGER]:
+        sales_query["branch_id"] = user_branch_id
+    elif branch_id:
         sales_query["branch_id"] = branch_id
+    
     if start_date:
         sales_query["created_at"] = {"$gte": start_date}
     if end_date:
@@ -5142,8 +5158,16 @@ async def get_profit_loss_report(
     
     # Get expenses
     expense_query = {}
-    if branch_id:
+    if tenant_id:
+        expense_query["tenant_id"] = tenant_id
+    else:
+        expense_query["$or"] = [{"tenant_id": {"$exists": False}}, {"tenant_id": None}]
+    
+    if user_branch_id and user_role not in [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.MANAGER]:
+        expense_query["branch_id"] = user_branch_id
+    elif branch_id:
         expense_query["branch_id"] = branch_id
+    
     if start_date:
         expense_query["date"] = {"$gte": start_date}
     if end_date:
