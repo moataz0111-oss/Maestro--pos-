@@ -5309,13 +5309,35 @@ async def get_products_report(
     end_date: Optional[str] = None,
     current_user: dict = Depends(get_current_user)
 ):
+    tenant_id = get_user_tenant_id(current_user)
+    
     # Get all products
-    products = await db.products.find({}, {"_id": 0}).to_list(1000)
+    product_query = {}
+    if tenant_id:
+        product_query["tenant_id"] = tenant_id
+    else:
+        product_query["$or"] = [{"tenant_id": {"$exists": False}}, {"tenant_id": None}]
+    
+    products = await db.products.find(product_query, {"_id": 0}).to_list(1000)
     
     # Get orders for sales data
     order_query = {"status": {"$ne": OrderStatus.CANCELLED}}
-    if branch_id:
+    
+    # فلترة حسب tenant_id
+    if tenant_id:
+        order_query["tenant_id"] = tenant_id
+    else:
+        order_query["$or"] = [{"tenant_id": {"$exists": False}}, {"tenant_id": None}]
+    
+    # فلترة الفرع - التحقق من صلاحية المستخدم
+    user_branch_id = current_user.get("branch_id")
+    user_role = current_user.get("role")
+    
+    if user_branch_id and user_role not in [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.MANAGER]:
+        order_query["branch_id"] = user_branch_id
+    elif branch_id:
         order_query["branch_id"] = branch_id
+    
     if start_date:
         order_query["created_at"] = {"$gte": start_date}
     if end_date:
