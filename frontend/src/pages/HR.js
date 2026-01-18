@@ -552,6 +552,9 @@ export default function HR() {
             <TabsTrigger value="employees" className="flex items-center gap-2">
               <Users className="h-4 w-4" /> الموظفين
             </TabsTrigger>
+            <TabsTrigger value="salary-report" className="flex items-center gap-2">
+              <BarChart3 className="h-4 w-4" /> تقرير الرواتب
+            </TabsTrigger>
             <TabsTrigger value="attendance" className="flex items-center gap-2">
               <Calendar className="h-4 w-4" /> الحضور
             </TabsTrigger>
