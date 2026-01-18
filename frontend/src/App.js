@@ -36,6 +36,7 @@ import SmartReports from "./pages/SmartReports";
 import Purchasing from "./pages/Purchasing";
 import BranchOrders from "./pages/BranchOrders";
 import SystemAdmin from "./pages/SystemAdmin";
+import CustomerMenu from "./pages/CustomerMenu";
 
 // Components
 import IncomingCallPopup from "./components/IncomingCallPopup";
