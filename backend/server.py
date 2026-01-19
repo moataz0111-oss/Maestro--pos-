@@ -4108,15 +4108,42 @@ async def create_order(order: OrderCreate, current_user: dict = Depends(get_curr
                 {"$set": {"is_available": False, "current_order_id": order_doc["id"]}}
             )
     
-    # Deduct inventory
+    # Deduct inventory - خصم المواد الخام من مخزون الفرع بناءً على الوصفات
     for item in order.items:
         product = await db.products.find_one({"id": item.product_id})
-        if product and product.get("ingredients"):
-            for ing in product["ingredients"]:
-                await db.inventory.update_one(
-                    {"id": ing["inventory_id"]},
-                    {"$inc": {"quantity": -ing["quantity"] * item.quantity}}
+        if product:
+            # أولاً: تحقق من وجود وصفة في المنتج النهائي المرتبط
+            finished_product_id = product.get("finished_product_id")
+            if finished_product_id:
+                finished_product = await db.inventory.find_one(
+                    {"id": finished_product_id, "item_type": "finished"},
+                    {"_id": 0}
                 )
+                if finished_product and finished_product.get("recipe"):
+                    # خصم من المواد الخام بناءً على الوصفة
+                    for ingredient in finished_product["recipe"]:
+                        raw_material_id = ingredient.get("raw_material_id")
+                        qty_per_unit = ingredient.get("quantity", 0)
+                        total_to_deduct = qty_per_unit * item.quantity
+                        
+                        # خصم من مخزون الفرع
+                        await db.inventory.update_one(
+                            {"id": raw_material_id, "branch_id": order.branch_id},
+                            {"$inc": {"quantity": -total_to_deduct}}
+                        )
+                        # أو من المخزون الرئيسي إذا لم يكن موجوداً في الفرع
+                        await db.inventory.update_one(
+                            {"id": raw_material_id, "branch_id": "main"},
+                            {"$inc": {"quantity": -total_to_deduct}}
+                        )
+            
+            # ثانياً: استخدم المكونات القديمة إذا كانت موجودة (للتوافق مع البيانات القديمة)
+            elif product.get("ingredients"):
+                for ing in product["ingredients"]:
+                    await db.inventory.update_one(
+                        {"id": ing["inventory_id"]},
+                        {"$inc": {"quantity": -ing["quantity"] * item.quantity}}
+                    )
     
     return order_doc
 
