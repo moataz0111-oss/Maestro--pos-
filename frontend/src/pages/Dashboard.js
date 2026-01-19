@@ -92,6 +92,21 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const printRef = useRef();
   
+  // دالة للتحقق من صلاحيات لوحة التحكم
+  const hasDashboardPermission = (permissionId) => {
+    // المدير والسوبر أدمن لديهم جميع الصلاحيات
+    if (user?.role === 'admin' || user?.role === 'super_admin') return true;
+    // مدير الفرع لديه معظم الصلاحيات
+    if (user?.role === 'branch_manager') return true;
+    // التحقق من صلاحيات الموظف
+    if (user?.permissions && user.permissions.length > 0) {
+      return user.permissions.includes(permissionId);
+    }
+    // افتراضياً: الكاشير لا يرى هذه الخيارات
+    if (user?.role === 'cashier') return false;
+    return false;
+  };
+  
   const [stats, setStats] = useState(null);
   const [recentOrders, setRecentOrders] = useState([]);
   const [loading, setLoading] = useState(true);
