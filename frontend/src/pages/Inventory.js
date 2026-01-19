@@ -309,10 +309,12 @@ export default function Inventory() {
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="كغم">كغم</SelectItem>
+                            <SelectItem value="كيلو">كيلو</SelectItem>
                             <SelectItem value="غرام">غرام</SelectItem>
                             <SelectItem value="لتر">لتر</SelectItem>
                             <SelectItem value="مل">مل</SelectItem>
                             <SelectItem value="قطعة">قطعة</SelectItem>
+                            <SelectItem value="حبة">حبة</SelectItem>
                             <SelectItem value="علبة">علبة</SelectItem>
                             <SelectItem value="كرتون">كرتون</SelectItem>
                           </SelectContent>
