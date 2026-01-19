@@ -8549,15 +8549,15 @@ async def get_raw_materials(
     category: Optional[str] = None,
     current_user: dict = Depends(get_current_user)
 ):
-    """جلب المواد الخام"""
-    query = build_tenant_query(current_user)
+    """جلب المواد الخام من جدول inventory"""
+    query = build_tenant_query(current_user, {"item_type": "raw"})
     
     if branch_id:
         query["branch_id"] = branch_id
     if category:
         query["category"] = category
     
-    materials = await db.raw_materials.find(query, {"_id": 0}).sort("name", 1).to_list(500)
+    materials = await db.inventory.find(query, {"_id": 0}).sort("name", 1).to_list(500)
     return materials
 
 @api_router.post("/raw-materials")
