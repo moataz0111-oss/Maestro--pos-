@@ -8926,8 +8926,116 @@ async def get_branch_orders(
 
 @api_router.post("/branch-orders")
 async def create_branch_order(order: BranchOrderCreate, current_user: dict = Depends(get_current_user)):
-    """إنشاء طلب فرع جديد"""
+    """
+    إنشاء طلب فرع جديد - يسحب من المنتجات النهائية ويخصم المواد الخام تلقائياً
+    
+    النظام الجديد:
+    1. الفرع يطلب منتجات نهائية (مثل: لحم برغر جاهز)
+    2. المنتج النهائي له وصفة (مكونات من المواد الخام)
+    3. عند إرسال الطلب، يتم خصم المواد الخام من المخزون الرئيسي
+    """
     tenant_id = get_user_tenant_id(current_user)
+    
+    # التحقق من المنتجات النهائية وتجهيز تفاصيل الطلب
+    order_items_details = []
+    raw_materials_to_deduct = {}  # {raw_material_id: total_quantity_needed}
+    insufficient_products = []
+    insufficient_materials = []
+    
+    for item in order.items:
+        product_id = item.get("product_id")
+        requested_qty = item.get("quantity", 0)
+        
+        if requested_qty <= 0:
+            continue
+        
+        # جلب المنتج النهائي
+        product = await db.inventory.find_one(
+            {"id": product_id, "item_type": "finished"},
+            {"_id": 0}
+        )
+        
+        if not product:
+            continue
+        
+        # التحقق من توفر المنتج النهائي
+        available_qty = product.get("quantity", 0)
+        if available_qty < requested_qty:
+            insufficient_products.append({
+                "name": product["name"],
+                "requested": requested_qty,
+                "available": available_qty
+            })
+            continue
+        
+        # تجميع المواد الخام المطلوبة من الوصفة
+        recipe = product.get("recipe", [])
+        for ingredient in recipe:
+            raw_material_id = ingredient.get("raw_material_id")
+            qty_per_unit = ingredient.get("quantity", 0)
+            total_needed = qty_per_unit * requested_qty
+            
+            if raw_material_id in raw_materials_to_deduct:
+                raw_materials_to_deduct[raw_material_id]["quantity"] += total_needed
+            else:
+                raw_materials_to_deduct[raw_material_id] = {
+                    "quantity": total_needed,
+                    "name": ingredient.get("raw_material_name", ""),
+                    "unit": ingredient.get("unit", "")
+                }
+        
+        order_items_details.append({
+            "product_id": product_id,
+            "product_name": product["name"],
+            "quantity": requested_qty,
+            "unit": product.get("unit", "قطعة"),
+            "cost_per_unit": product.get("cost_per_unit", 0),
+            "recipe": recipe
+        })
+    
+    # إذا كانت هناك منتجات غير متوفرة
+    if insufficient_products:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "message": "بعض المنتجات غير متوفرة بالكمية المطلوبة",
+                "insufficient_products": insufficient_products
+            }
+        )
+    
+    # التحقق من توفر المواد الخام
+    for raw_material_id, details in raw_materials_to_deduct.items():
+        raw_material = await db.inventory.find_one(
+            {"id": raw_material_id, "item_type": "raw"},
+            {"_id": 0}
+        )
+        
+        if not raw_material:
+            insufficient_materials.append({
+                "name": details["name"],
+                "required": details["quantity"],
+                "available": 0
+            })
+        elif raw_material.get("quantity", 0) < details["quantity"]:
+            insufficient_materials.append({
+                "name": raw_material["name"],
+                "required": details["quantity"],
+                "available": raw_material.get("quantity", 0),
+                "unit": raw_material.get("unit", "")
+            })
+    
+    # إذا كانت هناك مواد خام غير كافية
+    if insufficient_materials:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "message": "المواد الخام غير كافية في المخزون الرئيسي",
+                "insufficient_materials": insufficient_materials
+            }
+        )
+    
+    if not order_items_details:
+        raise HTTPException(status_code=400, detail="لا توجد منتجات صالحة في الطلب")
     
     # إنشاء رقم الطلب
     last_order = await db.branch_orders.find_one(
@@ -8942,12 +9050,55 @@ async def create_branch_order(order: BranchOrderCreate, current_user: dict = Dep
         except:
             order_num = 1
     
+    order_id = str(uuid.uuid4())
+    
+    # خصم المواد الخام من المخزون الرئيسي
+    deducted_materials = []
+    for raw_material_id, details in raw_materials_to_deduct.items():
+        await db.inventory.update_one(
+            {"id": raw_material_id},
+            {"$inc": {"quantity": -details["quantity"]}}
+        )
+        
+        # تسجيل حركة المخزون
+        movement_doc = {
+            "id": str(uuid.uuid4()),
+            "inventory_id": raw_material_id,
+            "transaction_type": "out",
+            "quantity": details["quantity"],
+            "notes": f"طلب فرع - {order_num}",
+            "reference_type": "branch_order",
+            "reference_id": order_id,
+            "created_by": current_user["id"],
+            "created_at": datetime.now(timezone.utc).isoformat()
+        }
+        await db.inventory_transactions.insert_one(movement_doc)
+        
+        deducted_materials.append({
+            "raw_material_id": raw_material_id,
+            "raw_material_name": details["name"],
+            "quantity_deducted": details["quantity"],
+            "unit": details["unit"]
+        })
+    
+    # خصم المنتجات النهائية من المخزون الرئيسي
+    for item in order_items_details:
+        await db.inventory.update_one(
+            {"id": item["product_id"]},
+            {"$inc": {"quantity": -item["quantity"]}}
+        )
+    
+    # حساب إجمالي التكلفة
+    total_cost = sum(item["quantity"] * item["cost_per_unit"] for item in order_items_details)
+    
     order_doc = {
-        "id": str(uuid.uuid4()),
+        "id": order_id,
         "order_number": f"BO-{str(order_num).zfill(4)}",
-        "from_branch_id": current_user.get("branch_id") or "main",
+        "from_branch_id": "warehouse",  # من المخزن الرئيسي دائماً
         "to_branch_id": order.to_branch_id,
-        "items": order.items,
+        "items": order_items_details,
+        "raw_materials_deducted": deducted_materials,
+        "total_cost": total_cost,
         "status": "pending",
         "priority": order.priority,
         "notes": order.notes,
@@ -8960,10 +9111,9 @@ async def create_branch_order(order: BranchOrderCreate, current_user: dict = Dep
     del order_doc["_id"]
     
     # إضافة معلومات الفروع
-    from_branch = await db.branches.find_one({"id": order_doc["from_branch_id"]}, {"_id": 0, "name": 1})
     to_branch = await db.branches.find_one({"id": order_doc["to_branch_id"]}, {"_id": 0, "name": 1})
-    order_doc["from_branch"] = {"id": order_doc["from_branch_id"], "name": from_branch.get("name") if from_branch else "الفرع الحالي"}
-    order_doc["to_branch"] = {"id": order_doc["to_branch_id"], "name": to_branch.get("name") if to_branch else "المخزن الرئيسي"}
+    order_doc["from_branch"] = {"id": "warehouse", "name": "المخزن الرئيسي"}
+    order_doc["to_branch"] = {"id": order_doc["to_branch_id"], "name": to_branch.get("name") if to_branch else "الفرع"}
     
     return order_doc
 
