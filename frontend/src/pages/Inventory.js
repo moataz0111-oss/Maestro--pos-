@@ -87,6 +87,7 @@ export default function Inventory() {
 
       setItems(itemsRes.data);
       setBranches(branchesRes.data);
+      setFinishedProducts(finishedRes.data || []);
 
       if (!selectedBranch && branchesRes.data.length > 0) {
         setSelectedBranch(branchesRes.data[0].id);
