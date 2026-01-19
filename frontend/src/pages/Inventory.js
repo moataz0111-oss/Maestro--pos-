@@ -88,7 +88,6 @@ export default function Inventory() {
         axios.get(`${API}/branches`),
         axios.get(`${API}/finished-products`)
       ]);
-      ]);
 
       setItems(itemsRes.data);
       setBranches(branchesRes.data);
