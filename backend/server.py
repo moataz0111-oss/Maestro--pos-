@@ -8592,11 +8592,301 @@ async def get_low_stock_alerts(current_user: dict = Depends(get_current_user)):
     alerts.sort(key=lambda x: x["shortage"], reverse=True)
     return alerts
 
+# ==================== FINISHED PRODUCTS - المنتجات النهائية ====================
+
+class FinishedProductCreate(BaseModel):
+    """إنشاء منتج نهائي مع وصفته"""
+    name: str
+    name_en: Optional[str] = None
+    unit: str = "قطعة"
+    quantity: float = 0.0  # الكمية المتوفرة
+    min_quantity: float = 0.0  # الحد الأدنى للتنبيه
+    cost_per_unit: float = 0.0  # سيتم حسابها تلقائياً من الوصفة
+    selling_price: float = 0.0  # سعر البيع
+    recipe: List[Dict[str, Any]] = []  # [{raw_material_id, quantity}]
+    description: Optional[str] = None
+    category: str = "general"
+
+class FinishedProductUpdate(BaseModel):
+    """تحديث منتج نهائي"""
+    name: Optional[str] = None
+    name_en: Optional[str] = None
+    unit: Optional[str] = None
+    quantity: Optional[float] = None
+    min_quantity: Optional[float] = None
+    selling_price: Optional[float] = None
+    recipe: Optional[List[Dict[str, Any]]] = None
+    description: Optional[str] = None
+    category: Optional[str] = None
+    is_active: Optional[bool] = None
+
+@api_router.post("/finished-products")
+async def create_finished_product(product: FinishedProductCreate, current_user: dict = Depends(get_current_user)):
+    """إنشاء منتج نهائي جديد مع وصفته (المواد الخام المكونة له)"""
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.MANAGER, UserRole.SUPER_ADMIN]:
+        raise HTTPException(status_code=403, detail="غير مصرح")
+    
+    tenant_id = get_user_tenant_id(current_user)
+    
+    # حساب تكلفة الوحدة من الوصفة
+    recipe_cost = 0.0
+    recipe_details = []
+    
+    for ingredient in product.recipe:
+        raw_material_id = ingredient.get("raw_material_id")
+        qty = ingredient.get("quantity", 0)
+        
+        # جلب المادة الخام من المخزون
+        raw_material = await db.inventory.find_one(
+            {"id": raw_material_id, "item_type": "raw"},
+            {"_id": 0}
+        )
+        
+        if raw_material:
+            ingredient_cost = qty * raw_material.get("cost_per_unit", 0)
+            recipe_cost += ingredient_cost
+            recipe_details.append({
+                "raw_material_id": raw_material_id,
+                "raw_material_name": raw_material.get("name", ""),
+                "quantity": qty,
+                "unit": raw_material.get("unit", ""),
+                "cost_per_unit": raw_material.get("cost_per_unit", 0),
+                "total_cost": ingredient_cost
+            })
+    
+    product_doc = {
+        "id": str(uuid.uuid4()),
+        "name": product.name,
+        "name_en": product.name_en,
+        "unit": product.unit,
+        "quantity": product.quantity,
+        "min_quantity": product.min_quantity,
+        "cost_per_unit": recipe_cost,  # التكلفة المحسوبة من الوصفة
+        "selling_price": product.selling_price,
+        "recipe": recipe_details,
+        "description": product.description,
+        "category": product.category,
+        "item_type": "finished",
+        "tenant_id": tenant_id,
+        "branch_id": "main",  # المنتجات النهائية في المخزن الرئيسي
+        "is_active": True,
+        "created_by": current_user["id"],
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "last_updated": datetime.now(timezone.utc).isoformat()
+    }
+    
+    await db.inventory.insert_one(product_doc)
+    del product_doc["_id"]
+    return product_doc
+
+@api_router.get("/finished-products")
+async def get_finished_products(
+    category: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """جلب جميع المنتجات النهائية"""
+    query = build_tenant_query(current_user, {"item_type": "finished"})
+    
+    if category:
+        query["category"] = category
+    
+    products = await db.inventory.find(query, {"_id": 0}).to_list(500)
+    return products
+
+@api_router.get("/finished-products/{product_id}")
+async def get_finished_product(product_id: str, current_user: dict = Depends(get_current_user)):
+    """جلب منتج نهائي محدد مع وصفته"""
+    query = build_tenant_query(current_user, {"id": product_id, "item_type": "finished"})
+    product = await db.inventory.find_one(query, {"_id": 0})
+    
+    if not product:
+        raise HTTPException(status_code=404, detail="المنتج غير موجود")
+    
+    return product
+
+@api_router.put("/finished-products/{product_id}")
+async def update_finished_product(
+    product_id: str, 
+    update: FinishedProductUpdate, 
+    current_user: dict = Depends(get_current_user)
+):
+    """تحديث منتج نهائي ووصفته"""
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.MANAGER, UserRole.SUPER_ADMIN]:
+        raise HTTPException(status_code=403, detail="غير مصرح")
+    
+    query = build_tenant_query(current_user, {"id": product_id, "item_type": "finished"})
+    product = await db.inventory.find_one(query)
+    
+    if not product:
+        raise HTTPException(status_code=404, detail="المنتج غير موجود")
+    
+    update_data = {k: v for k, v in update.model_dump().items() if v is not None}
+    
+    # إذا تم تحديث الوصفة، أعد حساب التكلفة
+    if "recipe" in update_data and update_data["recipe"]:
+        recipe_cost = 0.0
+        recipe_details = []
+        
+        for ingredient in update_data["recipe"]:
+            raw_material_id = ingredient.get("raw_material_id")
+            qty = ingredient.get("quantity", 0)
+            
+            raw_material = await db.inventory.find_one(
+                {"id": raw_material_id, "item_type": "raw"},
+                {"_id": 0}
+            )
+            
+            if raw_material:
+                ingredient_cost = qty * raw_material.get("cost_per_unit", 0)
+                recipe_cost += ingredient_cost
+                recipe_details.append({
+                    "raw_material_id": raw_material_id,
+                    "raw_material_name": raw_material.get("name", ""),
+                    "quantity": qty,
+                    "unit": raw_material.get("unit", ""),
+                    "cost_per_unit": raw_material.get("cost_per_unit", 0),
+                    "total_cost": ingredient_cost
+                })
+        
+        update_data["recipe"] = recipe_details
+        update_data["cost_per_unit"] = recipe_cost
+    
+    update_data["last_updated"] = datetime.now(timezone.utc).isoformat()
+    
+    await db.inventory.update_one({"id": product_id}, {"$set": update_data})
+    return await db.inventory.find_one({"id": product_id}, {"_id": 0})
+
+@api_router.delete("/finished-products/{product_id}")
+async def delete_finished_product(product_id: str, current_user: dict = Depends(get_current_user)):
+    """حذف منتج نهائي"""
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.SUPER_ADMIN]:
+        raise HTTPException(status_code=403, detail="غير مصرح")
+    
+    query = build_tenant_query(current_user, {"id": product_id, "item_type": "finished"})
+    product = await db.inventory.find_one(query)
+    
+    if not product:
+        raise HTTPException(status_code=404, detail="المنتج غير موجود")
+    
+    await db.inventory.delete_one({"id": product_id})
+    return {"message": "تم حذف المنتج"}
+
+@api_router.post("/finished-products/{product_id}/manufacture")
+async def manufacture_finished_product(
+    product_id: str,
+    data: dict = Body(...),
+    current_user: dict = Depends(get_current_user)
+):
+    """تصنيع منتج نهائي (خصم المواد الخام وزيادة كمية المنتج النهائي)"""
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.MANAGER, UserRole.SUPER_ADMIN]:
+        raise HTTPException(status_code=403, detail="غير مصرح")
+    
+    quantity_to_manufacture = data.get("quantity", 1)
+    
+    query = build_tenant_query(current_user, {"id": product_id, "item_type": "finished"})
+    product = await db.inventory.find_one(query, {"_id": 0})
+    
+    if not product:
+        raise HTTPException(status_code=404, detail="المنتج غير موجود")
+    
+    if not product.get("recipe"):
+        raise HTTPException(status_code=400, detail="المنتج ليس له وصفة محددة")
+    
+    # التحقق من توفر المواد الخام
+    insufficient_materials = []
+    for ingredient in product["recipe"]:
+        raw_material = await db.inventory.find_one(
+            {"id": ingredient["raw_material_id"], "item_type": "raw"},
+            {"_id": 0}
+        )
+        
+        if not raw_material:
+            insufficient_materials.append({
+                "name": ingredient.get("raw_material_name", "مادة غير معروفة"),
+                "required": ingredient["quantity"] * quantity_to_manufacture,
+                "available": 0
+            })
+        else:
+            required_qty = ingredient["quantity"] * quantity_to_manufacture
+            if raw_material.get("quantity", 0) < required_qty:
+                insufficient_materials.append({
+                    "name": raw_material["name"],
+                    "required": required_qty,
+                    "available": raw_material.get("quantity", 0)
+                })
+    
+    if insufficient_materials:
+        raise HTTPException(
+            status_code=400, 
+            detail={
+                "message": "المواد الخام غير كافية للتصنيع",
+                "insufficient_materials": insufficient_materials
+            }
+        )
+    
+    # خصم المواد الخام
+    for ingredient in product["recipe"]:
+        required_qty = ingredient["quantity"] * quantity_to_manufacture
+        await db.inventory.update_one(
+            {"id": ingredient["raw_material_id"]},
+            {"$inc": {"quantity": -required_qty}}
+        )
+        
+        # تسجيل حركة المخزون
+        movement_doc = {
+            "id": str(uuid.uuid4()),
+            "inventory_id": ingredient["raw_material_id"],
+            "transaction_type": "out",
+            "quantity": required_qty,
+            "notes": f"تصنيع {quantity_to_manufacture} {product['unit']} من {product['name']}",
+            "reference_type": "manufacturing",
+            "reference_id": product_id,
+            "created_by": current_user["id"],
+            "created_at": datetime.now(timezone.utc).isoformat()
+        }
+        await db.inventory_transactions.insert_one(movement_doc)
+    
+    # زيادة كمية المنتج النهائي
+    await db.inventory.update_one(
+        {"id": product_id},
+        {
+            "$inc": {"quantity": quantity_to_manufacture},
+            "$set": {"last_updated": datetime.now(timezone.utc).isoformat()}
+        }
+    )
+    
+    # تسجيل عملية التصنيع
+    manufacturing_doc = {
+        "id": str(uuid.uuid4()),
+        "product_id": product_id,
+        "product_name": product["name"],
+        "quantity_manufactured": quantity_to_manufacture,
+        "recipe_used": product["recipe"],
+        "total_cost": product.get("cost_per_unit", 0) * quantity_to_manufacture,
+        "tenant_id": get_user_tenant_id(current_user),
+        "created_by": current_user["id"],
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.manufacturing_logs.insert_one(manufacturing_doc)
+    
+    updated_product = await db.inventory.find_one({"id": product_id}, {"_id": 0})
+    return {
+        "message": f"تم تصنيع {quantity_to_manufacture} {product['unit']} من {product['name']}",
+        "product": updated_product
+    }
+
+@api_router.get("/raw-materials")
+async def get_raw_materials(current_user: dict = Depends(get_current_user)):
+    """جلب جميع المواد الخام من المخزون"""
+    query = build_tenant_query(current_user, {"item_type": "raw"})
+    materials = await db.inventory.find(query, {"_id": 0}).to_list(500)
+    return materials
+
 # ==================== BRANCH ORDERS - طلبات الفروع ====================
 
 class BranchOrderCreate(BaseModel):
     to_branch_id: str
-    items: List[Dict[str, Any]]
+    items: List[Dict[str, Any]]  # [{product_id, quantity}] - منتجات نهائية فقط
     priority: str = "normal"  # low, normal, high
     notes: Optional[str] = None
 
