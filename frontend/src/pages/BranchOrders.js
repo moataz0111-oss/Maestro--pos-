@@ -89,7 +89,6 @@ export default function BranchOrders() {
         item.item_type === null || item.item_type === undefined
       );
       setFinishedProducts(finished);
-      console.log('Finished products:', finished);
     } catch (error) {
       // بيانات تجريبية
       setBranches([
