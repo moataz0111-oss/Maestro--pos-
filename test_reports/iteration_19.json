@@ -1,0 +1,112 @@
+{
+  "summary": "Iteration 19 - Branch Orders with Recipe System and Auto Raw Material Deduction Testing Complete. All 17 backend tests passed (100%). Frontend E2E tests passed for Branch Orders page including new order dialog with recipe status display, order details with raw materials deducted section, tabs, and filters.",
+  
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "New Order Dialog",
+        "issues": ["Minor: DialogContent missing aria-describedby (accessibility warning in console)"]
+      }
+    ]
+  },
+  
+  "passed_tests": [
+    "GET /api/health - Returns status ok",
+    "POST /api/auth/login - Admin login successful (401 without auth)",
+    "GET /api/raw-materials - Returns raw materials list",
+    "GET /api/finished-products - Returns finished products with recipe status",
+    "POST /api/finished-products - Create finished product with recipe",
+    "POST /api/branch-orders - Create order with auto raw material deduction",
+    "POST /api/branch-orders - Verify correct quantities deducted from raw materials",
+    "POST /api/branch-orders - Rejects products without recipe (400)",
+    "POST /api/branch-orders - Rejects insufficient raw materials (400)",
+    "POST /api/branch-orders - Rejects empty items (400)",
+    "POST /api/branch-orders - Rejects zero quantity items (400)",
+    "POST /api/branch-orders - Rejects non-existent product ID (400)",
+    "GET /api/branch-orders - Returns orders list",
+    "GET /api/branch-orders?type=outgoing - Returns outgoing orders",
+    "GET /api/branch-orders?type=incoming - Returns incoming orders",
+    "PUT /api/branch-orders/{id}/status - Update order status",
+    "Order details include raw_materials_deducted array"
+  ],
+  
+  "verified_features": {
+    "branch_orders_api": {
+      "status": "Working",
+      "notes": "POST /api/branch-orders creates orders and automatically deducts raw materials from main warehouse based on product recipes"
+    },
+    "recipe_validation": {
+      "status": "Working",
+      "notes": "API correctly rejects orders for products without recipes"
+    },
+    "raw_material_availability_check": {
+      "status": "Working",
+      "notes": "API correctly rejects orders when raw materials are insufficient"
+    },
+    "raw_material_deduction": {
+      "status": "Working",
+      "notes": "Correct quantities are deducted from raw materials after order creation"
+    },
+    "recipe_status_display": {
+      "status": "Working",
+      "notes": "Product dropdown shows recipe status: green 'وصفة X مكونات' for products with recipe, red 'بدون وصفة' for products without"
+    },
+    "order_details_deducted_materials": {
+      "status": "Working",
+      "notes": "Order details dialog shows 'المواد الخام المخصومة' section in blue with material name, quantity, and unit"
+    },
+    "branch_orders_page": {
+      "status": "Working",
+      "notes": "Page displays orders with tabs (outgoing/incoming), status filter, new order button, and order cards"
+    },
+    "new_order_dialog": {
+      "status": "Working",
+      "notes": "Dialog shows branch selector, priority selector, product selector with recipe status, quantity input, and submit button"
+    }
+  },
+  
+  "test_report_links": [
+    "/app/tests/test_iteration19_branch_orders_recipe_deduction.py",
+    "/app/test_reports/pytest/pytest_results_iter19.xml"
+  ],
+  
+  "action_items": [],
+  
+  "critical_code_review_comments": [
+    "Branch orders API correctly implements recipe-based raw material deduction",
+    "Finished products created via /api/finished-products endpoint include recipe with calculated cost",
+    "Order response includes raw_materials_deducted array with material details",
+    "Frontend correctly displays recipe status in product dropdown (green for with recipe, red for without)",
+    "Order details dialog shows deducted raw materials in highlighted blue section",
+    "API properly validates: product has recipe, raw materials are sufficient, items are not empty"
+  ],
+  
+  "updated_files": [
+    "/app/tests/test_iteration19_branch_orders_recipe_deduction.py"
+  ],
+  
+  "success_rate": {
+    "backend": "100% (17/17 tests passed)",
+    "frontend": "100% (All UI elements verified)"
+  },
+  
+  "test_credentials": {
+    "api_url": "https://chef-recipes-5.preview.emergentagent.com",
+    "admin_email": "admin@maestroegp.com",
+    "admin_password": "admin123"
+  },
+  
+  "seed_data_creation": "Created test raw materials and finished products with TEST_ prefix during testing. Cleanup performed at end of tests.",
+  
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  
+  "context_for_next_testing_agent": "Iteration 19 completed. Branch Orders with Recipe System features all working: 1) POST /api/branch-orders - creates orders from finished products and automatically deducts raw materials from main warehouse based on recipes, 2) API validates: product must have recipe, raw materials must be sufficient, 3) GET /api/finished-products - returns products with recipe array showing ingredients, 4) Branch Orders page (/branch-orders) - displays orders with tabs (outgoing/incoming), filters, new order dialog with product selection showing recipe status (green for with recipe, red for without), 5) Order details show 'المواد الخام المخصومة' (Raw Materials Deducted) section in blue. The system correctly tracks: finished products -> recipes -> raw materials -> automatic deduction on order creation."
+}
