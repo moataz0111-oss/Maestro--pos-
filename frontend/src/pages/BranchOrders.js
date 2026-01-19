@@ -116,10 +116,9 @@ export default function BranchOrders() {
       return;
     }
     
-    // التحقق من الكمية المتاحة
-    const availableQty = product.quantity || 0;
-    if (quantity > availableQty) {
-      toast.error(`الكمية المطلوبة (${quantity}) أكبر من المتوفر (${availableQty} ${product.unit})`);
+    // التحقق من وجود وصفة للمنتج
+    if (!product.recipe || product.recipe.length === 0) {
+      toast.error(`المنتج "${product.name}" ليس له وصفة محددة. قم بإضافة وصفة أولاً.`);
       return;
     }
     
@@ -127,12 +126,7 @@ export default function BranchOrders() {
     const existingIndex = form.items.findIndex(item => item.product_id === product.id);
     if (existingIndex >= 0) {
       const newItems = [...form.items];
-      const newQty = newItems[existingIndex].quantity + quantity;
-      if (newQty > availableQty) {
-        toast.error(`الكمية الإجمالية (${newQty}) أكبر من المتوفر (${availableQty} ${product.unit})`);
-        return;
-      }
-      newItems[existingIndex].quantity = newQty;
+      newItems[existingIndex].quantity += quantity;
       setForm(prev => ({ ...prev, items: newItems }));
       toast.success(`تم تحديث كمية ${product.name}`);
     } else {
