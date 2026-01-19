@@ -1095,29 +1095,31 @@ export default function Dashboard() {
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-base md:text-lg font-bold font-cairo text-foreground">الإحصائيات</h2>
             <div className="flex items-center gap-2">
-              {/* فلتر الفترة الزمنية */}
-              <div className="flex bg-muted rounded-lg p-1 gap-1">
-                {[
-                  { key: 'today', label: 'اليوم' },
-                  { key: 'week', label: 'الأسبوع' },
-                  { key: 'month', label: 'الشهر' },
-                  { key: 'all_time', label: 'الكل' }
-                ].map(period => (
-                  <Button
-                    key={period.key}
-                    variant={statsPeriod === period.key ? 'default' : 'ghost'}
-                    size="sm"
-                    onClick={() => setStatsPeriod(period.key)}
-                    className={`h-7 px-2 text-xs ${statsPeriod === period.key ? 'bg-primary text-primary-foreground' : ''}`}
-                    data-testid={`period-${period.key}`}
-                  >
-                    {period.label}
-                  </Button>
-                ))}
-              </div>
+              {/* فلتر الفترة الزمنية - يظهر فقط لمن لديه صلاحية */}
+              {hasDashboardPermission('dashboard_stats_filters') && (
+                <div className="flex bg-muted rounded-lg p-1 gap-1">
+                  {[
+                    { key: 'today', label: 'اليوم' },
+                    { key: 'week', label: 'الأسبوع' },
+                    { key: 'month', label: 'الشهر' },
+                    { key: 'all_time', label: 'الكل' }
+                  ].map(period => (
+                    <Button
+                      key={period.key}
+                      variant={statsPeriod === period.key ? 'default' : 'ghost'}
+                      size="sm"
+                      onClick={() => setStatsPeriod(period.key)}
+                      className={`h-7 px-2 text-xs ${statsPeriod === period.key ? 'bg-primary text-primary-foreground' : ''}`}
+                      data-testid={`period-${period.key}`}
+                    >
+                      {period.label}
+                    </Button>
+                  ))}
+                </div>
+              )}
               
-              {/* زر إدارة اليوم */}
-              {dayStatus && (
+              {/* زر إدارة اليوم - يظهر فقط لمن لديه صلاحية */}
+              {hasDashboardPermission('dashboard_day_management') && dayStatus && (
                 <Button
                   variant="outline"
                   size="sm"
