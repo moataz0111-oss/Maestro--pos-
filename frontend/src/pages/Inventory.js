@@ -151,6 +151,53 @@ export default function Inventory() {
     }
   };
 
+  // إضافة مكون للوصفة
+  const addIngredientToRecipe = () => {
+    if (!recipeIngredient.raw_material_id || recipeIngredient.quantity <= 0) {
+      toast.error('اختر مادة خام وحدد الكمية');
+      return;
+    }
+
+    const material = rawMaterials.find(m => m.id === recipeIngredient.raw_material_id);
+    if (!material) return;
+
+    // التحقق من عدم التكرار
+    const exists = formData.recipe.find(r => r.raw_material_id === recipeIngredient.raw_material_id);
+    if (exists) {
+      toast.error('هذه المادة موجودة بالفعل في الوصفة');
+      return;
+    }
+
+    const newIngredient = {
+      raw_material_id: material.id,
+      raw_material_name: material.name,
+      quantity: recipeIngredient.quantity,
+      unit: material.unit,
+      cost_per_unit: material.cost_per_unit || 0
+    };
+
+    setFormData(prev => ({
+      ...prev,
+      recipe: [...prev.recipe, newIngredient]
+    }));
+
+    setRecipeIngredient({ raw_material_id: '', quantity: 0 });
+    toast.success(`تمت إضافة ${material.name}`);
+  };
+
+  // حذف مكون من الوصفة
+  const removeIngredientFromRecipe = (index) => {
+    setFormData(prev => ({
+      ...prev,
+      recipe: prev.recipe.filter((_, i) => i !== index)
+    }));
+  };
+
+  // حساب تكلفة الوصفة
+  const calculateRecipeCost = () => {
+    return formData.recipe.reduce((sum, ing) => sum + (ing.quantity * (ing.cost_per_unit || 0)), 0);
+  };
+
   const handleTransaction = async (type) => {
     try {
       await axios.post(`${API}/inventory/transaction`, {
