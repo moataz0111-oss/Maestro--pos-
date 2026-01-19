@@ -115,10 +115,24 @@ export default function Inventory() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      await axios.post(`${API}/inventory`, {
-        ...formData,
-        branch_id: selectedBranch
-      });
+      // إذا كان منتج نهائي وله وصفة، استخدم API المنتجات النهائية
+      if (formData.item_type === 'finished' && formData.recipe.length > 0) {
+        await axios.post(`${API}/finished-products`, {
+          name: formData.name,
+          name_en: formData.name_en,
+          unit: formData.unit,
+          quantity: formData.quantity,
+          min_quantity: formData.min_quantity,
+          selling_price: formData.cost_per_unit,
+          recipe: formData.recipe,
+          category: 'general'
+        });
+      } else {
+        await axios.post(`${API}/inventory`, {
+          ...formData,
+          branch_id: selectedBranch
+        });
+      }
       toast.success('تم إضافة الصنف');
       setDialogOpen(false);
       setFormData({
@@ -128,7 +142,8 @@ export default function Inventory() {
         quantity: 0,
         min_quantity: 0,
         cost_per_unit: 0,
-        item_type: itemType
+        item_type: itemType,
+        recipe: []
       });
       fetchData();
     } catch (error) {
