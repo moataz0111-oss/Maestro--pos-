@@ -132,6 +132,11 @@ const AVAILABLE_PERMISSIONS = [
   { id: 'settings', name: 'الإعدادات', description: 'الوصول للإعدادات', group: 'الإدارة' },
   { id: 'shifts', name: 'الورديات', description: 'إدارة الورديات', group: 'الإدارة' },
   { id: 'shifts_close', name: 'إغلاق الصندوق', description: 'إغلاق صندوق الوردية', group: 'الإدارة' },
+  // صلاحيات لوحة التحكم
+  { id: 'dashboard_stats_filters', name: 'فلاتر الإحصائيات', description: 'إظهار أزرار (اليوم، الأسبوع، الشهر، الكل)', group: 'لوحة التحكم' },
+  { id: 'dashboard_day_management', name: 'إدارة اليوم', description: 'إظهار زر إدارة اليوم وترحيل البيانات', group: 'لوحة التحكم' },
+  { id: 'dashboard_quick_actions', name: 'الأزرار السريعة', description: 'إظهار أزرار الإجراءات السريعة', group: 'لوحة التحكم' },
+  { id: 'dashboard_statistics', name: 'الإحصائيات', description: 'إظهار بطاقات الإحصائيات', group: 'لوحة التحكم' },
 ];
 
 // تجميع الصلاحيات حسب المجموعة
