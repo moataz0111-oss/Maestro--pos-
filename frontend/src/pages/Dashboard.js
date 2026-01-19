@@ -1139,8 +1139,8 @@ export default function Dashboard() {
             </div>
           </div>
           
-          {/* تنبيه الورديات المفتوحة */}
-          {dayStatus?.should_close && (
+          {/* تنبيه الورديات المفتوحة - يظهر فقط لمن لديه صلاحية */}
+          {hasDashboardPermission('dashboard_day_management') && dayStatus?.should_close && (
             <div className="mb-3 p-3 bg-orange-500/10 border border-orange-500/30 rounded-lg flex items-center gap-3">
               <AlertCircle className="h-5 w-5 text-orange-500 flex-shrink-0" />
               <div className="flex-1">
