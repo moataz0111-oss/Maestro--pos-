@@ -149,10 +149,22 @@ export default function BranchOrders() {
   };
 
   const addItemToOrder = () => {
-    if (!selectedProduct || quantity < 1) return;
+    console.log('Adding item - selectedProduct:', selectedProduct, 'quantity:', quantity);
+    console.log('Available products:', finishedProducts);
+    
+    if (!selectedProduct || quantity < 1) {
+      console.log('Validation failed: selectedProduct or quantity invalid');
+      return;
+    }
     
     const item = finishedProducts.find(p => p.id === selectedProduct);
-    if (!item) return;
+    console.log('Found item:', item);
+    
+    if (!item) {
+      console.log('Item not found in finishedProducts');
+      toast.error('المنتج غير موجود');
+      return;
+    }
     
     // التحقق من الكمية المتاحة
     if (item.quantity !== null && item.quantity !== undefined && quantity > item.quantity) {
@@ -168,7 +180,8 @@ export default function BranchOrders() {
       cost_per_unit: item.cost_per_unit || 0
     };
     
-    setForm({ ...form, items: [...form.items, newItem] });
+    console.log('New item to add:', newItem);
+    setForm(prevForm => ({ ...prevForm, items: [...prevForm.items, newItem] }));
     setSelectedProduct('');
     setQuantity(1);
     toast.success(`تمت إضافة ${item.name}`);
