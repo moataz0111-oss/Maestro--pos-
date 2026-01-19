@@ -49,6 +49,7 @@ export default function Inventory() {
   const navigate = useNavigate();
   
   const [items, setItems] = useState([]);
+  const [finishedProducts, setFinishedProducts] = useState([]);
   const [branches, setBranches] = useState([]);
   const [selectedBranch, setSelectedBranch] = useState(null);
   const [itemType, setItemType] = useState('raw');
@@ -56,6 +57,7 @@ export default function Inventory() {
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [transactionDialog, setTransactionDialog] = useState(null);
+  const [selectedRecipe, setSelectedRecipe] = useState(null);
   const [formData, setFormData] = useState({
     name: '',
     name_en: '',
@@ -76,9 +78,11 @@ export default function Inventory() {
 
   const fetchData = async () => {
     try {
-      const [itemsRes, branchesRes] = await Promise.all([
+      const [itemsRes, branchesRes, finishedRes] = await Promise.all([
         axios.get(`${API}/inventory`, { params: { branch_id: selectedBranch, item_type: itemType } }),
-        axios.get(`${API}/branches`)
+        axios.get(`${API}/branches`),
+        axios.get(`${API}/finished-products`)
+      ]);
       ]);
 
       setItems(itemsRes.data);
