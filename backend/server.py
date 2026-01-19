@@ -8927,19 +8927,20 @@ async def get_branch_orders(
 @api_router.post("/branch-orders")
 async def create_branch_order(order: BranchOrderCreate, current_user: dict = Depends(get_current_user)):
     """
-    إنشاء طلب فرع جديد - يسحب من المنتجات النهائية ويخصم المواد الخام تلقائياً
+    إنشاء طلب فرع جديد - يخصم المواد الخام تلقائياً من المخزون المركزي
     
-    النظام الجديد:
-    1. الفرع يطلب منتجات نهائية (مثل: لحم برغر جاهز)
+    النظام:
+    1. الفرع يطلب منتجات نهائية (مثل: برغر لحم)
     2. المنتج النهائي له وصفة (مكونات من المواد الخام)
-    3. عند إرسال الطلب، يتم خصم المواد الخام من المخزون الرئيسي
+    3. عند إرسال الطلب، يتم خصم المواد الخام مباشرة من المخزون المركزي
+    4. لا يُشترط وجود كمية مسبقة من المنتج النهائي (الخصم من المواد الخام مباشرة)
     """
     tenant_id = get_user_tenant_id(current_user)
     
-    # التحقق من المنتجات النهائية وتجهيز تفاصيل الطلب
+    # تجهيز تفاصيل الطلب
     order_items_details = []
     raw_materials_to_deduct = {}  # {raw_material_id: total_quantity_needed}
-    insufficient_products = []
+    products_without_recipe = []
     insufficient_materials = []
     
     for item in order.items:
@@ -8958,18 +8959,13 @@ async def create_branch_order(order: BranchOrderCreate, current_user: dict = Dep
         if not product:
             continue
         
-        # التحقق من توفر المنتج النهائي
-        available_qty = product.get("quantity", 0)
-        if available_qty < requested_qty:
-            insufficient_products.append({
-                "name": product["name"],
-                "requested": requested_qty,
-                "available": available_qty
-            })
+        # التحقق من وجود وصفة للمنتج
+        recipe = product.get("recipe", [])
+        if not recipe:
+            products_without_recipe.append(product["name"])
             continue
         
         # تجميع المواد الخام المطلوبة من الوصفة
-        recipe = product.get("recipe", [])
         for ingredient in recipe:
             raw_material_id = ingredient.get("raw_material_id")
             qty_per_unit = ingredient.get("quantity", 0)
@@ -8993,13 +8989,13 @@ async def create_branch_order(order: BranchOrderCreate, current_user: dict = Dep
             "recipe": recipe
         })
     
-    # إذا كانت هناك منتجات غير متوفرة
-    if insufficient_products:
+    # إذا كانت هناك منتجات بدون وصفة
+    if products_without_recipe:
         raise HTTPException(
             status_code=400,
             detail={
-                "message": "بعض المنتجات غير متوفرة بالكمية المطلوبة",
-                "insufficient_products": insufficient_products
+                "message": "بعض المنتجات ليس لها وصفة محددة",
+                "products_without_recipe": products_without_recipe
             }
         )
     
