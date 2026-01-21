@@ -1926,7 +1926,16 @@ export default function Dashboard() {
             </div>
             
             <div className="bg-muted/30 rounded-lg p-4 text-center">
-              <QrCode className="h-16 w-16 mx-auto mb-2 text-muted-foreground" />
+              <div className="bg-white p-4 rounded-lg inline-block mb-2">
+                <QRCodeSVG 
+                  value={menuLink} 
+                  size={150}
+                  level="H"
+                  includeMargin={false}
+                  bgColor="#ffffff"
+                  fgColor="#000000"
+                />
+              </div>
               <p className="text-sm text-muted-foreground">
                 يمكنك طباعة QR Code لهذا الرابط ووضعه على طاولات المطعم
               </p>
