@@ -303,10 +303,15 @@ export default function CustomerMenu() {
 
   const fetchMenu = async () => {
     try {
+      console.log('Fetching menu for tenant:', tenantId);
+      console.log('API URL:', `${API}/customer/menu/${tenantId}`);
+      
       const res = await axios.get(`${API}/customer/menu/${tenantId}`);
+      console.log('Menu response:', res.data);
+      
       setRestaurant(res.data.restaurant);
-      setCategories(res.data.categories);
-      setProducts(res.data.products);
+      setCategories(res.data.categories || []);
+      setProducts(res.data.products || []);
       
       // فلترة الفروع - إخفاء "الفرع الرئيسي" إذا وُجدت فروع أخرى
       let fetchedBranches = res.data.branches || [];
@@ -326,10 +331,12 @@ export default function CustomerMenu() {
         document.title = res.data.restaurant.name + ' - القائمة';
       }
       
-      // If only one branch, auto-select it
-      if (fetchedBranches.length === 1) {
-        setSelectedBranch(fetchedBranches[0].id);
-        localStorage.setItem(`branch_${tenantId}`, fetchedBranches[0].id);
+      // If only one branch or no branches, skip branch selection
+      if (fetchedBranches.length <= 1) {
+        if (fetchedBranches.length === 1) {
+          setSelectedBranch(fetchedBranches[0].id);
+          localStorage.setItem(`branch_${tenantId}`, fetchedBranches[0].id);
+        }
         setStep('menu');
       }
       
@@ -337,7 +344,17 @@ export default function CustomerMenu() {
         setSelectedCategory(res.data.categories[0].id);
       }
     } catch (error) {
-      toast.error('فشل في تحميل القائمة');
+      console.error('Error fetching menu:', error);
+      console.error('Error details:', error.response?.data);
+      
+      // رسالة خطأ أوضح
+      if (error.response?.status === 404) {
+        toast.error('المطعم غير موجود');
+      } else if (error.code === 'ERR_NETWORK') {
+        toast.error('خطأ في الاتصال بالخادم');
+      } else {
+        toast.error('فشل في تحميل القائمة');
+      }
     } finally {
       setLoading(false);
     }
