@@ -1969,7 +1969,7 @@ export default function Dashboard() {
                 <p className="text-xs font-medium mb-2">QR للقائمة</p>
                 <div className="bg-white p-3 rounded-lg inline-block">
                   <QRCodeSVG 
-                    value={menuLink} 
+                    value={menuLink || 'loading'} 
                     size={100}
                     level="H"
                     includeMargin={false}
@@ -1982,7 +1982,7 @@ export default function Dashboard() {
                 <p className="text-xs font-medium mb-2 text-orange-700">QR لتثبيت التطبيق ⭐</p>
                 <div className="bg-white p-3 rounded-lg inline-block">
                   <QRCodeSVG 
-                    value={menuLink.replace(/\/menu\/.*$/, '/customer-pwa/')} 
+                    value={menuLink ? menuLink.replace(/\/menu\/.*$/, '/customer-pwa/') : 'loading'} 
                     size={100}
                     level="H"
                     includeMargin={false}
