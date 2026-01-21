@@ -1342,6 +1342,20 @@ export default function SuperAdmin() {
                           <RotateCcw className="h-4 w-4" />
                         </Button>
                         
+                        {/* تصفير المخزون */}
+                        <Button 
+                          variant="ghost" 
+                          size="icon"
+                          onClick={() => {
+                            setSelectedTenant(tenant);
+                            setShowResetInventoryConfirm(true);
+                          }}
+                          className="text-purple-400 hover:text-purple-300 hover:bg-purple-500/10"
+                          title="تصفير المخزون والمشتريات"
+                        >
+                          <Package className="h-4 w-4" />
+                        </Button>
+                        
                         {/* حذف - مخفي للنظام الرئيسي */}
                         {!tenant.is_main_system && (
                           <Button 
