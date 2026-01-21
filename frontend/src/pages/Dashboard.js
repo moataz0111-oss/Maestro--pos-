@@ -56,7 +56,8 @@ import {
   Share2,
   Copy,
   Link,
-  QrCode
+  QrCode,
+  Smartphone
 } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 import { toast } from 'sonner';
