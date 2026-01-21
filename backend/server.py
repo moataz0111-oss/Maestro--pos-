@@ -2006,9 +2006,11 @@ async def get_expenses(
 
 @api_router.get("/expenses/categories")
 async def get_expense_categories():
+    """جلب التصنيفات الافتراضية"""
     return [
         {"id": "rent", "name": "إيجار"},
         {"id": "utilities", "name": "كهرباء وماء"},
+        {"id": "gas", "name": "غاز"},
         {"id": "salaries", "name": "رواتب"},
         {"id": "advance", "name": "سلف"},
         {"id": "maintenance", "name": "صيانة"},
@@ -2017,6 +2019,46 @@ async def get_expense_categories():
         {"id": "transport", "name": "نقل"},
         {"id": "other", "name": "أخرى"}
     ]
+
+@api_router.get("/expense-categories")
+async def get_custom_expense_categories(current_user: dict = Depends(get_current_user)):
+    """جلب التصنيفات المخصصة"""
+    tenant_id = current_user.get("tenant_id")
+    query = {"tenant_id": tenant_id} if tenant_id else {}
+    
+    categories = await db.expense_categories.find(
+        query,
+        {"_id": 0}
+    ).to_list(100)
+    
+    return categories
+
+@api_router.post("/expense-categories")
+async def create_expense_category(category: Dict[str, Any], current_user: dict = Depends(get_current_user)):
+    """إنشاء تصنيف مصاريف جديد"""
+    tenant_id = current_user.get("tenant_id")
+    
+    # التحقق من عدم وجود التصنيف مسبقاً
+    existing = await db.expense_categories.find_one({
+        "id": category.get("id"),
+        "tenant_id": tenant_id
+    })
+    
+    if existing:
+        return {"message": "التصنيف موجود بالفعل", "category": existing}
+    
+    category_doc = {
+        "id": category.get("id"),
+        "name": category.get("name"),
+        "icon": category.get("icon", "🏷️"),
+        "tenant_id": tenant_id,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    
+    await db.expense_categories.insert_one(category_doc)
+    category_doc.pop("_id", None)
+    
+    return category_doc
 
 # ==================== OPERATING COST ROUTES - التكاليف التشغيلية ====================
 
