@@ -12170,14 +12170,21 @@ async def get_customer_menu(tenant_id: str):
         {"_id": 0}
     ).to_list(50)
     
-    # جلب الإعدادات
+    # جلب الإعدادات - للحصول على الشعار والاسم
     settings = await db.tenant_settings.find_one({"tenant_id": tid}, {"_id": 0}) or {}
+    
+    # جلب إعدادات المطعم الرئيسية (fallback)
+    main_settings = await db.settings.find_one({}, {"_id": 0}) or {}
+    
+    # تحديد الشعار والاسم - الأولوية: tenant -> settings -> main_settings
+    restaurant_logo = tenant.get("logo") or settings.get("restaurant_logo") or main_settings.get("restaurant_logo", "")
+    restaurant_name = tenant.get("name") or settings.get("restaurant_name") or main_settings.get("restaurant_name", "المطعم")
     
     return {
         "restaurant": {
             "id": tid,
-            "name": tenant.get("name", ""),
-            "logo": tenant.get("logo", ""),
+            "name": restaurant_name,
+            "logo": restaurant_logo,
             "description": tenant.get("description", ""),
             "phone": tenant.get("phone", ""),
             "address": tenant.get("address", ""),
