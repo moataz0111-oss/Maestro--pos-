@@ -133,8 +133,35 @@ export default function Expenses() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
+      let categoryToUse = formData.category;
+      
+      // إذا تم اختيار "أخرى" وكتب المستخدم اسم تصنيف جديد
+      if (formData.category === 'other' && formData.custom_category_name.trim()) {
+        // إنشاء تصنيف جديد
+        const newCategoryId = formData.custom_category_name.toLowerCase().replace(/\s+/g, '_');
+        const newCategory = {
+          id: newCategoryId,
+          name: formData.custom_category_name.trim(),
+          icon: '🏷️'
+        };
+        
+        // حفظ التصنيف الجديد في قاعدة البيانات
+        try {
+          await axios.post(`${API}/expense-categories`, newCategory);
+          // تحديث قائمة التصنيفات
+          fetchCategories();
+          toast.success(`تم إضافة تصنيف "${formData.custom_category_name}" للقائمة`);
+        } catch (err) {
+          // التصنيف موجود بالفعل - استخدمه
+          console.log('Category may already exist');
+        }
+        
+        categoryToUse = newCategoryId;
+      }
+      
       await axios.post(`${API}/expenses`, {
         ...formData,
+        category: categoryToUse,
         amount: parseFloat(formData.amount),
         branch_id: selectedBranch
       });
@@ -146,7 +173,8 @@ export default function Expenses() {
         amount: '',
         payment_method: 'cash',
         reference_number: '',
-        date: new Date().toISOString().split('T')[0]
+        date: new Date().toISOString().split('T')[0],
+        custom_category_name: ''
       });
       fetchData();
     } catch (error) {
