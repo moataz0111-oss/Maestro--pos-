@@ -73,6 +73,8 @@ export default function HR() {
   const [bonuses, setBonuses] = useState([]);
   const [payrolls, setPayrolls] = useState([]);
   const [payrollSummary, setPayrollSummary] = useState(null);
+  const [employeeRatings, setEmployeeRatings] = useState({ ratings: [], summary: {} });
+  const [ratingsLoading, setRatingsLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7));
