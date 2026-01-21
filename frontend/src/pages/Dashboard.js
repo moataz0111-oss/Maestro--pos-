@@ -1889,7 +1889,7 @@ export default function Dashboard() {
                   }
                   
                   try {
-                    const res = await axios.post(`${API}/inventory-system/inventory-reset`, {
+                    const res = await axios.post(`${API}/inventory-reset`, {
                       reset_branch_orders: resetBranchOrders,
                       reset_purchases: resetPurchases,
                       reset_manufacturing: resetManufacturing,
