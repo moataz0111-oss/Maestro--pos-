@@ -189,13 +189,13 @@ export default function Expenses() {
   }, {});
 
   const getCategoryName = (catId) => {
-    const cat = EXPENSE_CATEGORIES.find(c => c.id === catId);
+    const cat = expenseCategories.find(c => c.id === catId);
     return cat ? cat.name : catId;
   };
 
   const getCategoryIcon = (catId) => {
-    const cat = EXPENSE_CATEGORIES.find(c => c.id === catId);
-    return cat ? cat.icon : '📋';
+    const cat = expenseCategories.find(c => c.id === catId);
+    return cat ? cat.icon : '🏷️';
   };
 
   if (loading) {
