@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+    <meta name="theme-color" content="#f97316" />
+    <meta name="description" content="اطلب طعامك المفضل بسهولة - قائمة الطعام" />
+    
+    <!-- PWA Meta Tags for iOS -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="قائمة الطعام" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    
+    <!-- Apple Touch Icons - Customer App ONLY -->
+    <link rel="apple-touch-icon" href="/icons/customer-icon-192.png" />
+    <link rel="apple-touch-icon" sizes="152x152" href="/icons/customer-icon-192.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/icons/customer-icon-512.png" />
+    <link rel="apple-touch-icon" sizes="167x167" href="/icons/customer-icon-192.png" />
+    <link rel="apple-touch-startup-image" href="/icons/customer-icon-512.png" />
+    
+    <!-- Favicons -->
+    <link rel="icon" type="image/png" sizes="32x32" href="/icons/customer-icon-192.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/icons/customer-icon-192.png" />
+    <link rel="shortcut icon" href="/icons/customer-icon-192.png" />
+    
+    <!-- Customer PWA Manifest - Isolated scope -->
+    <link rel="manifest" href="/customer-pwa/manifest.json" />
+    
+    <title>قائمة الطعام - اطلب الآن</title>
+    
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body { 
+            height: 100%; 
+            overflow: hidden;
+        }
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+        .loader {
+            text-align: center;
+            color: white;
+            padding: 20px;
+        }
+        .logo {
+            width: 100px;
+            height: 100px;
+            background: #000;
+            border-radius: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 24px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+        .logo img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        .logo span {
+            color: #f97316;
+            font-size: 56px;
+            font-weight: bold;
+        }
+        h1 {
+            font-size: 28px;
+            margin-bottom: 8px;
+            text-shadow: 0 2px 10px rgba(0,0,0,0.2);
+        }
+        .subtitle {
+            font-size: 16px;
+            opacity: 0.9;
+            margin-bottom: 30px;
+        }
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid rgba(255,255,255,0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+        }
+        .loading-text {
+            margin-top: 16px;
+            font-size: 14px;
+            opacity: 0.8;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        /* Install instructions for iOS */
+        .install-hint {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            right: 20px;
+            background: rgba(0,0,0,0.8);
+            border-radius: 16px;
+            padding: 16px;
+            color: white;
+            text-align: center;
+            display: none;
+        }
+        .install-hint.show {
+            display: block;
+            animation: slideUp 0.3s ease;
+        }
+        @keyframes slideUp {
+            from { transform: translateY(100px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+        .install-hint p {
+            font-size: 14px;
+            line-height: 1.6;
+        }
+        .share-icon {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            vertical-align: middle;
+            margin: 0 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="loader">
+        <div class="logo">
+            <span>M</span>
+        </div>
+        <h1>قائمة الطعام</h1>
+        <p class="subtitle">اطلب وجباتك المفضلة</p>
+        <div class="spinner"></div>
+        <p class="loading-text">جارٍ التحميل...</p>
+    </div>
+    
+    <!-- iOS Install Hint -->
+    <div class="install-hint" id="installHint">
+        <p>
+            لتثبيت التطبيق: اضغط على 
+            <svg class="share-icon" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M12 2l3 3-1.4 1.4L12 4.8l-1.6 1.6L9 5l3-3zm0 6v8h-2V8h2zm-7 7v2h14v-2H5z"/>
+            </svg>
+            ثم "إضافة للشاشة الرئيسية"
+        </p>
+    </div>
+    
+    <script>
+        // Check if running as PWA (standalone mode)
+        var isStandalone = window.matchMedia('(display-mode: standalone)').matches || 
+                          window.navigator.standalone === true;
+        
+        // Check if iOS
+        var isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+        
+        // Register service worker for this scope
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('/customer-sw.js', { 
+                scope: '/customer-pwa/' 
+            }).then(function(reg) {
+                console.log('Customer SW registered:', reg.scope);
+            }).catch(function(err) {
+                console.log('Customer SW failed:', err);
+            });
+        }
+        
+        // Show install hint for iOS Safari (not in standalone mode)
+        if (isIOS && !isStandalone) {
+            setTimeout(function() {
+                document.getElementById('installHint').classList.add('show');
+            }, 2000);
+        }
+        
+        // Redirect to the actual menu after a short delay
+        setTimeout(function() {
+            // Use replace to avoid back button issues
+            window.location.replace('/menu/default');
+        }, 1500);
+    </script>
+</body>
+</html>
