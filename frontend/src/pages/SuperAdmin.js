@@ -2351,6 +2351,45 @@ export default function SuperAdmin() {
         </DialogContent>
       </Dialog>
 
+      {/* Reset Inventory Confirmation Modal */}
+      <Dialog open={showResetInventoryConfirm} onOpenChange={setShowResetInventoryConfirm}>
+        <DialogContent className="max-w-sm bg-gray-800 border-gray-700 text-white">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-purple-400">
+              <Package className="h-5 w-5" />
+              تصفير المخزون والمشتريات
+            </DialogTitle>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            <p className="text-sm text-gray-400">
+              هل أنت متأكد من تصفير بيانات المخزون لـ <strong className="text-white">{selectedTenant?.name}</strong>؟
+            </p>
+            <div className="text-sm text-purple-400 bg-purple-500/10 p-3 rounded-lg space-y-2">
+              <p className="font-bold">⚠️ سيتم حذف:</p>
+              <ul className="list-disc list-inside text-xs space-y-1">
+                <li>طلبات الفروع</li>
+                <li>فواتير الشراء</li>
+                <li>سجلات التصنيع</li>
+                <li>كميات المواد الخام</li>
+                <li>كميات المنتجات المصنعة</li>
+                <li>مخزون الفروع</li>
+              </ul>
+              <p className="text-red-400 mt-2">هذا الإجراء لا يمكن التراجع عنه!</p>
+            </div>
+          </div>
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowResetInventoryConfirm(false)} className="border-gray-600">
+              إلغاء
+            </Button>
+            <Button onClick={resetTenantInventory} className="bg-purple-600 hover:bg-purple-700">
+              تصفير المخزون
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Edit Tenant Modal */}
       <Dialog open={showEditTenant} onOpenChange={setShowEditTenant}>
         <DialogContent className="max-w-2xl bg-gray-800 border-gray-700 text-white max-h-[90vh] overflow-y-auto">
