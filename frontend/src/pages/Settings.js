@@ -2596,8 +2596,8 @@ export default function Settings() {
                               ربط بمنتج مصنع (للخصم التلقائي)
                             </Label>
                             <Select 
-                              value={productForm.manufactured_product_id || ''} 
-                              onValueChange={(v) => setProductForm({ ...productForm, manufactured_product_id: v || null })}
+                              value={productForm.manufactured_product_id || 'none'} 
+                              onValueChange={(v) => setProductForm({ ...productForm, manufactured_product_id: v === 'none' ? null : v })}
                             >
                               <SelectTrigger className="mt-2">
                                 <SelectValue placeholder="اختر المنتج المصنع (اختياري)" />
