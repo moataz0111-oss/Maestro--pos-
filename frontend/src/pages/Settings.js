@@ -369,7 +369,7 @@ export default function Settings() {
 
   const fetchData = async () => {
     try {
-      const [usersRes, branchesRes, printersRes, settingsRes, appsRes, categoriesRes, productsRes, sectionsRes, customersRes] = await Promise.all([
+      const [usersRes, branchesRes, printersRes, settingsRes, appsRes, categoriesRes, productsRes, sectionsRes, customersRes, mfgProductsRes] = await Promise.all([
         axios.get(`${API}/users`),
         axios.get(`${API}/branches`),
         axios.get(`${API}/printers`),
@@ -378,7 +378,8 @@ export default function Settings() {
         axios.get(`${API}/categories`),
         axios.get(`${API}/products`),
         axios.get(`${API}/kitchen-sections`),
-        axios.get(`${API}/customers`)
+        axios.get(`${API}/customers`),
+        axios.get(`${API}/manufactured-products`).catch(() => ({ data: [] }))
       ]);
 
       setUsers(usersRes.data);
@@ -390,6 +391,7 @@ export default function Settings() {
       setProducts(productsRes.data);
       setKitchenSections(sectionsRes.data);
       setCustomers(customersRes.data);
+      setManufacturedProducts(mfgProductsRes.data || []);
       
       // تعيين الفرع الافتراضي لنموذج المستخدم الجديد
       if (branchesRes.data.length > 0) {
