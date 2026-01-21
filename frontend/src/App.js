@@ -31,7 +31,7 @@ import Recipes from "./pages/Recipes";
 import Coupons from "./pages/Coupons";
 import PayrollPrint from "./pages/PayrollPrint";
 import Reservations from "./pages/Reservations";
-import Reviews from "./pages/Reviews";
+// import Reviews from "./pages/Reviews"; // تم حذفها
 import SmartReports from "./pages/SmartReports";
 import Purchasing from "./pages/Purchasing";
 import BranchOrders from "./pages/BranchOrders";
@@ -303,15 +303,7 @@ function AppRoutes() {
           </ProtectedRoute>
         } 
       />
-      {/* التقييمات */}
-      <Route 
-        path="/reviews" 
-        element={
-          <ProtectedRoute>
-            <Reviews />
-          </ProtectedRoute>
-        } 
-      />
+      {/* التقييمات - تم حذفها */}
       {/* التقارير الذكية */}
       <Route 
         path="/smart-reports" 
