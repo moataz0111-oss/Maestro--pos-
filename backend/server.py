@@ -6806,6 +6806,80 @@ async def get_general_settings():
     settings = await db.settings.find_one({"type": "general"}, {"_id": 0})
     return settings.get("value", {}) if settings else {}
 
+@api_router.put("/settings/restaurant")
+async def update_restaurant_settings(settings: Dict[str, Any], current_user: dict = Depends(get_current_user)):
+    """حفظ إعدادات المطعم (الاسم والشعار)"""
+    if current_user["role"] != UserRole.ADMIN:
+        raise HTTPException(status_code=403, detail="غير مصرح")
+    
+    # جلب tenant_id من المستخدم
+    tenant_id = current_user.get("tenant_id")
+    
+    # تحديث tenant إذا كان موجود
+    if tenant_id:
+        await db.tenants.update_one(
+            {"id": tenant_id},
+            {"$set": {
+                "name": settings.get("name"),
+                "name_ar": settings.get("name_ar"),
+                "logo_url": settings.get("logo_url"),
+                "updated_at": datetime.now(timezone.utc).isoformat()
+            }}
+        )
+    
+    # تحديث default tenant أيضاً إذا لم يكن هناك tenant محدد
+    if not tenant_id or tenant_id == "default":
+        await db.tenants.update_one(
+            {"id": "default"},
+            {"$set": {
+                "name": settings.get("name"),
+                "name_ar": settings.get("name_ar"),
+                "logo_url": settings.get("logo_url"),
+                "updated_at": datetime.now(timezone.utc).isoformat()
+            }},
+            upsert=True
+        )
+    
+    # حفظ في settings أيضاً
+    await db.settings.update_one(
+        {"type": "restaurant"},
+        {"$set": {
+            "type": "restaurant",
+            "name": settings.get("name"),
+            "name_ar": settings.get("name_ar"),
+            "logo_url": settings.get("logo_url"),
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        }},
+        upsert=True
+    )
+    
+    return {"message": "تم حفظ إعدادات المطعم بنجاح"}
+
+@api_router.get("/settings/restaurant")
+async def get_restaurant_settings(current_user: dict = Depends(get_current_user)):
+    """جلب إعدادات المطعم"""
+    tenant_id = current_user.get("tenant_id", "default")
+    
+    # محاولة جلب من tenant
+    tenant = await db.tenants.find_one({"id": tenant_id}, {"_id": 0})
+    if tenant and tenant.get("name"):
+        return {
+            "name": tenant.get("name"),
+            "name_ar": tenant.get("name_ar"),
+            "logo_url": tenant.get("logo_url")
+        }
+    
+    # محاولة جلب من settings
+    settings = await db.settings.find_one({"type": "restaurant"}, {"_id": 0})
+    if settings:
+        return {
+            "name": settings.get("name", ""),
+            "name_ar": settings.get("name_ar", ""),
+            "logo_url": settings.get("logo_url", "")
+        }
+    
+    return {"name": "", "name_ar": "", "logo_url": ""}
+
 @api_router.put("/settings/dashboard")
 async def set_dashboard_settings(settings: Dict[str, Any], current_user: dict = Depends(get_current_user)):
     """حفظ إعدادات الصفحة الرئيسية - التحكم في الصفحات الظاهرة"""
