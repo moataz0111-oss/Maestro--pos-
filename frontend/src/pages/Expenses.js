@@ -35,7 +35,8 @@ import {
 
 const API = API_URL;
 
-const EXPENSE_CATEGORIES = [
+// التصنيفات الافتراضية
+const DEFAULT_EXPENSE_CATEGORIES = [
   { id: 'rent', name: 'إيجار', icon: '🏠' },
   { id: 'utilities', name: 'كهرباء وماء', icon: '💡' },
   { id: 'gas', name: 'غاز', icon: '🔥' },
@@ -59,18 +60,47 @@ export default function Expenses() {
   const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
+  
+  // التصنيفات المخصصة (يتم جلبها من قاعدة البيانات)
+  const [customCategories, setCustomCategories] = useState([]);
+  const [expenseCategories, setExpenseCategories] = useState(DEFAULT_EXPENSE_CATEGORIES);
+  
   const [formData, setFormData] = useState({
     category: 'other',
     description: '',
     amount: '',
     payment_method: 'cash',
     reference_number: '',
-    date: new Date().toISOString().split('T')[0]
+    date: new Date().toISOString().split('T')[0],
+    custom_category_name: '' // حقل جديد للتصنيف المخصص
   });
+
+  useEffect(() => {
+    fetchCategories();
+  }, []);
 
   useEffect(() => {
     fetchData();
   }, [selectedBranch, selectedCategory, startDate, endDate]);
+
+  // جلب التصنيفات المخصصة
+  const fetchCategories = async () => {
+    try {
+      const res = await axios.get(`${API}/expense-categories`);
+      const custom = res.data || [];
+      setCustomCategories(custom);
+      // دمج التصنيفات الافتراضية مع المخصصة
+      const allCategories = [
+        ...DEFAULT_EXPENSE_CATEGORIES.filter(c => c.id !== 'other'),
+        ...custom.map(c => ({ id: c.id, name: c.name, icon: c.icon || '🏷️' })),
+        DEFAULT_EXPENSE_CATEGORIES.find(c => c.id === 'other') // "أخرى" في النهاية
+      ];
+      setExpenseCategories(allCategories);
+    } catch (error) {
+      console.log('Using default categories');
+      setExpenseCategories(DEFAULT_EXPENSE_CATEGORIES);
+    }
+  };
 
   const fetchData = async () => {
     try {
