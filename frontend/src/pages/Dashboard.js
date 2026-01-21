@@ -136,7 +136,6 @@ export default function Dashboard() {
     showCoupons: true,
     showRecipes: true,
     showReservations: true,
-    showReviews: true,
     showSmartReports: true,
     showPurchasing: true,
     showBranchOrders: true,
