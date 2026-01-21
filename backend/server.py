@@ -2748,6 +2748,201 @@ async def generate_all_payroll(
         "errors": errors
     }
 
+# ==================== EMPLOYEE RATINGS - تقييم الموظفين التلقائي ====================
+
+@api_router.get("/employee-ratings")
+async def get_employee_ratings(
+    month: str = None,  # YYYY-MM
+    branch_id: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """حساب تقييم الموظفين بناءً على الحضور والانصراف والخصومات"""
+    tenant_id = get_user_tenant_id(current_user)
+    
+    if not month:
+        month = datetime.now().strftime("%Y-%m")
+    
+    # جلب الموظفين
+    emp_query = {"tenant_id": tenant_id, "is_active": True}
+    if branch_id:
+        emp_query["branch_id"] = branch_id
+    
+    employees = await db.employees.find(emp_query, {"_id": 0}).to_list(500)
+    
+    ratings = []
+    
+    for emp in employees:
+        emp_id = emp["id"]
+        
+        # حساب أيام العمل في الشهر (26 يوم افتراضياً)
+        work_days_expected = 26
+        
+        # جلب سجلات الحضور للشهر
+        attendance_records = await db.attendance.find({
+            "tenant_id": tenant_id,
+            "employee_id": emp_id,
+            "date": {"$regex": f"^{month}"}
+        }, {"_id": 0}).to_list(100)
+        
+        # حساب أيام الحضور
+        attendance_days = len(attendance_records)
+        
+        # حساب التأخير (إذا الحضور بعد الساعة 9 صباحاً)
+        late_count = 0
+        early_leave_count = 0
+        total_work_hours = 0
+        
+        for record in attendance_records:
+            check_in = record.get("check_in")
+            check_out = record.get("check_out")
+            
+            if check_in:
+                try:
+                    check_in_time = datetime.strptime(check_in, "%H:%M")
+                    expected_time = datetime.strptime(emp.get("work_start", "09:00"), "%H:%M")
+                    if check_in_time > expected_time:
+                        late_count += 1
+                except:
+                    pass
+            
+            if check_out:
+                try:
+                    check_out_time = datetime.strptime(check_out, "%H:%M")
+                    expected_end = datetime.strptime(emp.get("work_end", "17:00"), "%H:%M")
+                    if check_out_time < expected_end:
+                        early_leave_count += 1
+                except:
+                    pass
+            
+            # حساب ساعات العمل
+            if check_in and check_out:
+                try:
+                    ci = datetime.strptime(check_in, "%H:%M")
+                    co = datetime.strptime(check_out, "%H:%M")
+                    hours = (co - ci).seconds / 3600
+                    total_work_hours += hours
+                except:
+                    pass
+        
+        # جلب الخصومات للشهر
+        deductions = await db.deductions.find({
+            "tenant_id": tenant_id,
+            "employee_id": emp_id,
+            "month": month
+        }, {"_id": 0}).to_list(100)
+        
+        total_deductions = sum(d.get("amount", 0) for d in deductions)
+        deduction_count = len(deductions)
+        
+        # جلب المكافآت للشهر
+        bonuses = await db.bonuses.find({
+            "tenant_id": tenant_id,
+            "employee_id": emp_id,
+            "month": month
+        }, {"_id": 0}).to_list(100)
+        
+        total_bonuses = sum(b.get("amount", 0) for b in bonuses)
+        bonus_count = len(bonuses)
+        
+        # ========== حساب التقييم ==========
+        # التقييم من 100 نقطة
+        
+        # 1. تقييم الحضور (40 نقطة)
+        attendance_percentage = (attendance_days / work_days_expected) * 100 if work_days_expected > 0 else 0
+        attendance_score = min(40, (attendance_percentage / 100) * 40)
+        
+        # 2. تقييم الالتزام بالمواعيد (30 نقطة)
+        punctuality_issues = late_count + early_leave_count
+        punctuality_deduction = min(30, punctuality_issues * 3)  # خصم 3 نقاط لكل تأخير/خروج مبكر
+        punctuality_score = max(0, 30 - punctuality_deduction)
+        
+        # 3. تقييم عدم وجود خصومات (20 نقطة)
+        deduction_penalty = min(20, deduction_count * 5)  # خصم 5 نقاط لكل خصم
+        discipline_score = max(0, 20 - deduction_penalty)
+        
+        # 4. نقاط المكافآت (10 نقاط إضافية)
+        bonus_score = min(10, bonus_count * 2)  # 2 نقطة لكل مكافأة
+        
+        # المجموع
+        total_score = attendance_score + punctuality_score + discipline_score + bonus_score
+        
+        # تحديد المستوى
+        if total_score >= 90:
+            level = "ممتاز"
+            level_color = "green"
+        elif total_score >= 75:
+            level = "جيد جداً"
+            level_color = "blue"
+        elif total_score >= 60:
+            level = "جيد"
+            level_color = "yellow"
+        elif total_score >= 50:
+            level = "مقبول"
+            level_color = "orange"
+        else:
+            level = "ضعيف"
+            level_color = "red"
+        
+        ratings.append({
+            "employee_id": emp_id,
+            "employee_name": emp.get("name", ""),
+            "branch_id": emp.get("branch_id"),
+            "position": emp.get("position", ""),
+            "month": month,
+            
+            # إحصائيات الحضور
+            "attendance_days": attendance_days,
+            "work_days_expected": work_days_expected,
+            "attendance_percentage": round(attendance_percentage, 1),
+            "late_count": late_count,
+            "early_leave_count": early_leave_count,
+            "total_work_hours": round(total_work_hours, 1),
+            
+            # إحصائيات الخصومات والمكافآت
+            "deduction_count": deduction_count,
+            "total_deductions": total_deductions,
+            "bonus_count": bonus_count,
+            "total_bonuses": total_bonuses,
+            
+            # التقييم
+            "scores": {
+                "attendance": round(attendance_score, 1),
+                "punctuality": round(punctuality_score, 1),
+                "discipline": round(discipline_score, 1),
+                "bonus": round(bonus_score, 1)
+            },
+            "total_score": round(total_score, 1),
+            "level": level,
+            "level_color": level_color
+        })
+    
+    # ترتيب حسب التقييم
+    ratings.sort(key=lambda x: x["total_score"], reverse=True)
+    
+    # إحصائيات عامة
+    if ratings:
+        avg_score = sum(r["total_score"] for r in ratings) / len(ratings)
+        excellent_count = len([r for r in ratings if r["total_score"] >= 90])
+        good_count = len([r for r in ratings if 75 <= r["total_score"] < 90])
+        average_count = len([r for r in ratings if 60 <= r["total_score"] < 75])
+        poor_count = len([r for r in ratings if r["total_score"] < 60])
+    else:
+        avg_score = 0
+        excellent_count = good_count = average_count = poor_count = 0
+    
+    return {
+        "month": month,
+        "ratings": ratings,
+        "summary": {
+            "total_employees": len(ratings),
+            "average_score": round(avg_score, 1),
+            "excellent_count": excellent_count,
+            "good_count": good_count,
+            "average_count": average_count,
+            "poor_count": poor_count
+        }
+    }
+
 # ==================== PAYROLL REPORTS & EXPORT - تقارير الرواتب والتصدير ====================
 
 @api_router.get("/reports/payroll-summary")
