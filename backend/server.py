@@ -8384,6 +8384,80 @@ async def reset_tenant_sales(tenant_id: str, confirm: bool = False, current_user
         "deleted_shifts": shifts_result.deleted_count
     }
 
+@api_router.post("/super-admin/tenants/{tenant_id}/reset-inventory")
+async def reset_tenant_inventory(tenant_id: str, confirm: bool = False, current_user: dict = Depends(verify_super_admin)):
+    """تصفير بيانات المخزون والمشتريات لعميل معين - للمالك فقط"""
+    
+    if not confirm:
+        raise HTTPException(status_code=400, detail="يجب تأكيد التصفير بإرسال confirm=true")
+    
+    results = {
+        "reset_counts": {},
+        "tenant_name": ""
+    }
+    
+    # التحقق إذا كان النظام الرئيسي
+    if tenant_id == "main-system":
+        query = {"$or": [{"tenant_id": {"$exists": False}}, {"tenant_id": None}]}
+        results["tenant_name"] = "النظام الرئيسي"
+    else:
+        tenant = await db.tenants.find_one({"id": tenant_id})
+        if not tenant:
+            raise HTTPException(status_code=404, detail="العميل غير موجود")
+        query = {"tenant_id": tenant_id}
+        results["tenant_name"] = tenant.get("name", tenant_id)
+    
+    # حذف طلبات الفروع
+    deleted = await db.branch_orders_new.delete_many(query)
+    results["reset_counts"]["branch_orders"] = deleted.deleted_count
+    
+    # حذف فواتير الشراء
+    deleted_purchases = await db.purchases_new.delete_many(query)
+    results["reset_counts"]["purchases"] = deleted_purchases.deleted_count
+    
+    # حذف طلبات الشراء
+    deleted_requests = await db.purchase_requests.delete_many(query)
+    results["reset_counts"]["purchase_requests"] = deleted_requests.deleted_count
+    
+    # حذف سجلات التصنيع
+    deleted_mfg = await db.manufacturing_records.delete_many(query)
+    results["reset_counts"]["manufacturing_records"] = deleted_mfg.deleted_count
+    
+    # حذف حركات المخزون
+    deleted_movements = await db.inventory_movements.delete_many(query)
+    results["reset_counts"]["inventory_movements"] = deleted_movements.deleted_count
+    
+    # تصفير كميات المواد الخام (دون حذف المواد نفسها)
+    updated_raw = await db.raw_materials.update_many(
+        query,
+        {"$set": {"quantity": 0}}
+    )
+    results["reset_counts"]["raw_materials_qty_reset"] = updated_raw.modified_count
+    
+    # تصفير مخزون التصنيع
+    updated_mfg_inv = await db.manufacturing_inventory.update_many(
+        query,
+        {"$set": {"quantity": 0}}
+    )
+    results["reset_counts"]["manufacturing_inventory_reset"] = updated_mfg_inv.modified_count
+    
+    # تصفير كميات المنتجات المصنعة
+    updated_products = await db.manufactured_products.update_many(
+        query,
+        {"$set": {"quantity": 0}}
+    )
+    results["reset_counts"]["manufactured_products_qty_reset"] = updated_products.modified_count
+    
+    # حذف مخزون الفروع
+    deleted_branch_inv = await db.branch_inventory.delete_many(query)
+    results["reset_counts"]["branch_inventory"] = deleted_branch_inv.deleted_count
+    
+    return {
+        "message": f"تم تصفير بيانات المخزون لـ '{results['tenant_name']}' بنجاح",
+        "success": True,
+        **results
+    }
+
 # ==================== SUPPLIERS & PURCHASING ====================
 
 class SupplierCreate(BaseModel):
