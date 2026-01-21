@@ -619,10 +619,10 @@ export default function Dashboard() {
     { label: 'التقارير', icon: BarChart3, path: '/reports', color: 'bg-gradient-to-br from-amber-400 to-amber-600', key: 'showReports', id: 'reports' },
     { label: 'التقارير الذكية', icon: PieChart, path: '/smart-reports', color: 'bg-gradient-to-br from-emerald-400 to-emerald-600', key: 'showSmartReports', id: 'smart-reports' },
     { label: 'المصاريف', icon: Receipt, path: '/expenses', color: 'bg-gradient-to-br from-red-400 to-red-600', key: 'showExpenses', id: 'expenses' },
-    { label: 'المخزون', icon: Package, path: '/inventory', color: 'bg-gradient-to-br from-purple-400 to-purple-600', key: 'showInventory', id: 'inventory' },
     { label: 'المشتريات', icon: ShoppingBag, path: '/purchases-new', color: 'bg-gradient-to-br from-blue-500 to-blue-700', key: 'showPurchasing', id: 'purchasing' },
     { label: 'المخزن والتصنيع', icon: Warehouse, path: '/warehouse-manufacturing', color: 'bg-gradient-to-br from-indigo-500 to-indigo-700', key: 'showWarehouse', id: 'warehouse-manufacturing' },
     { label: 'طلبات الفروع', icon: Truck, path: '/branch-orders', color: 'bg-gradient-to-br from-lime-400 to-lime-600', key: 'showBranchOrders', id: 'branch-orders' },
+    { label: 'تقارير المخزون', icon: Package, path: '/inventory-reports', color: 'bg-gradient-to-br from-purple-500 to-purple-700', key: 'showInventoryReports', id: 'inventory-reports' },
     { label: 'التوصيل', icon: Truck, path: '/delivery', color: 'bg-gradient-to-br from-orange-500 to-orange-700', key: 'showDelivery', id: 'delivery' },
     { label: 'الحجوزات', icon: CalendarDays, path: '/reservations', color: 'bg-gradient-to-br from-rose-400 to-rose-600', key: 'showReservations', id: 'reservations' },
     { label: 'التقييمات', icon: Star, path: '/reviews', color: 'bg-gradient-to-br from-amber-500 to-orange-500', key: 'showReviews', id: 'reviews' },
@@ -630,7 +630,6 @@ export default function Dashboard() {
     { label: 'سجل المكالمات', icon: Headphones, path: '/call-logs', color: 'bg-gradient-to-br from-cyan-400 to-cyan-600', key: 'showCallLogs', id: 'call-logs' },
     { label: 'برنامج الولاء', icon: Gift, path: '/loyalty', color: 'bg-gradient-to-br from-pink-400 to-pink-600', key: 'showLoyalty', id: 'loyalty' },
     { label: 'الكوبونات', icon: Gift, path: '/coupons', color: 'bg-gradient-to-br from-violet-400 to-violet-600', key: 'showCoupons', id: 'coupons' },
-    { label: 'الوصفات', icon: ChefHat, path: '/recipes', color: 'bg-gradient-to-br from-teal-400 to-teal-600', key: 'showRecipes', id: 'recipes' },
     { label: 'الإعدادات', icon: Settings, path: '/settings', color: 'bg-gradient-to-br from-gray-400 to-gray-600', key: 'showSettings', id: 'settings' },
   ];
   
