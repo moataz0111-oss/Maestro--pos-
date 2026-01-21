@@ -1871,7 +1871,7 @@ export default function Dashboard() {
 
       {/* Menu Link Dialog - رابط قائمة العملاء */}
       <Dialog open={showMenuLinkDialog} onOpenChange={setShowMenuLinkDialog}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Share2 className="h-5 w-5 text-green-500" />
@@ -1884,15 +1884,52 @@ export default function Dashboard() {
               شارك هذا الرابط مع عملائك ليتمكنوا من رؤية قائمة الطعام وإرسال الطلبات مباشرة!
             </p>
             
-            <div className="flex items-center gap-2">
-              <Input 
-                value={menuLink} 
-                readOnly 
-                className="text-left direction-ltr"
-              />
-              <Button onClick={copyMenuLink} variant="outline" size="icon">
-                <Copy className="h-4 w-4" />
-              </Button>
+            {/* رابط القائمة العادي */}
+            <div className="p-3 border rounded-lg space-y-3">
+              <div className="flex items-center gap-2 text-sm font-medium">
+                <Link className="h-4 w-4 text-blue-500" />
+                رابط القائمة (للتصفح)
+              </div>
+              <div className="flex items-center gap-2">
+                <Input 
+                  value={menuLink} 
+                  readOnly 
+                  className="text-left direction-ltr text-sm"
+                />
+                <Button onClick={copyMenuLink} variant="outline" size="icon">
+                  <Copy className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+            
+            {/* رابط تثبيت التطبيق */}
+            <div className="p-3 border-2 border-orange-200 bg-orange-50 rounded-lg space-y-3">
+              <div className="flex items-center gap-2 text-sm font-medium text-orange-700">
+                <Smartphone className="h-4 w-4" />
+                رابط تثبيت التطبيق (PWA) ⭐
+              </div>
+              <p className="text-xs text-orange-600">
+                استخدم هذا الرابط للعملاء الذين يريدون تثبيت التطبيق على هواتفهم
+              </p>
+              <div className="flex items-center gap-2">
+                <Input 
+                  value={menuLink.replace('/menu/default', '/customer-pwa/')} 
+                  readOnly 
+                  className="text-left direction-ltr text-sm bg-white"
+                />
+                <Button 
+                  onClick={() => {
+                    const pwaLink = menuLink.replace('/menu/default', '/customer-pwa/');
+                    navigator.clipboard?.writeText(pwaLink);
+                    toast.success('تم نسخ رابط التطبيق!');
+                  }} 
+                  variant="outline" 
+                  size="icon"
+                  className="border-orange-300"
+                >
+                  <Copy className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
             
             <div className="flex gap-2">
@@ -1923,21 +1960,38 @@ export default function Dashboard() {
               </Button>
             </div>
             
-            <div className="bg-muted/30 rounded-lg p-4 text-center">
-              <div className="bg-white p-4 rounded-lg inline-block mb-2">
-                <QRCodeSVG 
-                  value={menuLink} 
-                  size={150}
-                  level="H"
-                  includeMargin={false}
-                  bgColor="#ffffff"
-                  fgColor="#000000"
-                />
+            {/* QR Codes */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="bg-muted/30 rounded-lg p-3 text-center">
+                <p className="text-xs font-medium mb-2">QR للقائمة</p>
+                <div className="bg-white p-3 rounded-lg inline-block">
+                  <QRCodeSVG 
+                    value={menuLink} 
+                    size={100}
+                    level="H"
+                    includeMargin={false}
+                    bgColor="#ffffff"
+                    fgColor="#000000"
+                  />
+                </div>
               </div>
-              <p className="text-sm text-muted-foreground">
-                يمكنك طباعة QR Code لهذا الرابط ووضعه على طاولات المطعم
-              </p>
+              <div className="bg-orange-50 rounded-lg p-3 text-center border border-orange-200">
+                <p className="text-xs font-medium mb-2 text-orange-700">QR لتثبيت التطبيق ⭐</p>
+                <div className="bg-white p-3 rounded-lg inline-block">
+                  <QRCodeSVG 
+                    value={menuLink.replace('/menu/default', '/customer-pwa/')} 
+                    size={100}
+                    level="H"
+                    includeMargin={false}
+                    bgColor="#ffffff"
+                    fgColor="#f97316"
+                  />
+                </div>
+              </div>
             </div>
+            <p className="text-xs text-muted-foreground text-center">
+              استخدم QR البرتقالي للعملاء الذين يريدون تثبيت التطبيق
+            </p>
           </div>
 
           <DialogFooter>
