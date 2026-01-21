@@ -1315,7 +1315,7 @@ export default function Settings() {
                         if (restaurantLogoFile) {
                           const formData = new FormData();
                           formData.append('file', restaurantLogoFile);
-                          const uploadRes = await axios.post(`${API}/upload/logo`, formData, {
+                          const uploadRes = await axios.post(`${API}/upload/restaurant-logo`, formData, {
                             headers: { 'Content-Type': 'multipart/form-data' }
                           });
                           logoUrl = uploadRes.data.url;
