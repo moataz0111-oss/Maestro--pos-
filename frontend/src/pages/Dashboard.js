@@ -627,7 +627,7 @@ export default function Dashboard() {
     { label: 'تقارير المخزون', icon: Package, path: '/inventory-reports', color: 'bg-gradient-to-br from-purple-500 to-purple-700', key: 'showInventoryReports', id: 'inventory-reports' },
     { label: 'التوصيل', icon: Truck, path: '/delivery', color: 'bg-gradient-to-br from-orange-500 to-orange-700', key: 'showDelivery', id: 'delivery' },
     { label: 'الحجوزات', icon: CalendarDays, path: '/reservations', color: 'bg-gradient-to-br from-rose-400 to-rose-600', key: 'showReservations', id: 'reservations' },
-    { label: 'التقييمات', icon: Star, path: '/reviews', color: 'bg-gradient-to-br from-amber-500 to-orange-500', key: 'showReviews', id: 'reviews' },
+    { label: 'تقييم الموظفين', icon: Star, path: '/reviews', color: 'bg-gradient-to-br from-amber-500 to-orange-500', key: 'showReviews', id: 'reviews' },
     { label: 'الموارد البشرية', icon: UserCog, path: '/hr', color: 'bg-gradient-to-br from-green-400 to-green-600', key: 'showHR', id: 'hr' },
     { label: 'سجل المكالمات', icon: Headphones, path: '/call-logs', color: 'bg-gradient-to-br from-cyan-400 to-cyan-600', key: 'showCallLogs', id: 'call-logs' },
     { label: 'برنامج الولاء', icon: Gift, path: '/loyalty', color: 'bg-gradient-to-br from-pink-400 to-pink-600', key: 'showLoyalty', id: 'loyalty' },
