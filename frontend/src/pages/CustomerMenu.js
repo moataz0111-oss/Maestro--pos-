@@ -490,20 +490,21 @@ export default function CustomerMenu() {
   if (step === 'branches' && branches.length > 1) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-orange-50 to-red-50" dir="rtl">
-        {/* Header */}
+        {/* Header مع شعار المطعم */}
         <header className="bg-gradient-to-r from-orange-500 to-red-500 text-white shadow-lg">
           <div className="max-w-lg mx-auto px-4 py-6">
             <div className="flex items-center gap-4">
-              {restaurant?.logo ? (
-                <img src={restaurant.logo} alt="" className="w-16 h-16 rounded-full object-cover bg-white shadow-lg" />
-              ) : (
-                <div className="w-16 h-16 rounded-full bg-black flex items-center justify-center shadow-lg">
-                  <span className="text-orange-500 text-3xl font-bold">M</span>
-                </div>
-              )}
+              {/* شعار المطعم - يجلب من بيانات المطعم أو يعرض شعار افتراضي */}
+              <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-amber-400 to-yellow-500 flex items-center justify-center shadow-lg border-2 border-white/30 overflow-hidden">
+                {restaurant?.logo ? (
+                  <img src={restaurant.logo} alt={restaurant?.name} className="w-full h-full object-cover" />
+                ) : (
+                  <span className="text-black text-3xl font-bold">M</span>
+                )}
+              </div>
               <div>
                 <h1 className="text-2xl font-bold">{restaurant?.name || 'المطعم'}</h1>
-                <p className="text-orange-100">اختر الفرع الأقرب إليك</p>
+                <p className="text-orange-100 text-sm">اختر الفرع الأقرب إليك</p>
               </div>
             </div>
           </div>
