@@ -1914,15 +1914,17 @@ export default function Dashboard() {
               </p>
               <div className="flex items-center gap-2">
                 <Input 
-                  value={menuLink.replace(/\/menu\/.*$/, '/customer-pwa/')} 
+                  value={menuLink ? menuLink.replace(/\/menu\/.*$/, '/customer-pwa/') : ''} 
                   readOnly 
                   className="text-left direction-ltr text-sm bg-white"
                 />
                 <Button 
                   onClick={() => {
-                    const pwaLink = menuLink.replace(/\/menu\/.*$/, '/customer-pwa/');
-                    navigator.clipboard?.writeText(pwaLink);
-                    toast.success('تم نسخ رابط التطبيق!');
+                    const pwaLink = menuLink ? menuLink.replace(/\/menu\/.*$/, '/customer-pwa/') : '';
+                    if (pwaLink) {
+                      navigator.clipboard?.writeText(pwaLink);
+                      toast.success('تم نسخ رابط التطبيق!');
+                    }
                   }} 
                   variant="outline" 
                   size="icon"
