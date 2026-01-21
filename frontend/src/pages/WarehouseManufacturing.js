@@ -276,6 +276,88 @@ export default function WarehouseManufacturing() {
     }
   };
 
+  // إضافة صنف لتحويل الفرع
+  const addItemToBranchTransfer = (material) => {
+    const existing = branchTransferForm.items.find(i => i.raw_material_id === material.id);
+    if (existing) {
+      toast.info('هذا الصنف موجود بالفعل');
+      return;
+    }
+    setBranchTransferForm(prev => ({
+      ...prev,
+      items: [...prev.items, {
+        raw_material_id: material.id,
+        raw_material_name: material.name,
+        quantity: 1,
+        unit: material.unit,
+        available: material.quantity
+      }]
+    }));
+  };
+
+  // تحديث كمية تحويل الفرع
+  const updateBranchTransferQty = (index, qty) => {
+    setBranchTransferForm(prev => {
+      const newItems = [...prev.items];
+      newItems[index].quantity = parseFloat(qty) || 0;
+      return { ...prev, items: newItems };
+    });
+  };
+
+  // حذف صنف من تحويل الفرع
+  const removeBranchTransferItem = (index) => {
+    setBranchTransferForm(prev => ({
+      ...prev,
+      items: prev.items.filter((_, i) => i !== index)
+    }));
+  };
+
+  // تحويل للفرع
+  const handleTransferToBranch = async () => {
+    if (!branchTransferForm.to_branch_id) {
+      toast.error('الرجاء اختيار الفرع');
+      return;
+    }
+    if (branchTransferForm.items.length === 0) {
+      toast.error('الرجاء إضافة مواد للتحويل');
+      return;
+    }
+    
+    // التحقق من الكميات
+    for (const item of branchTransferForm.items) {
+      if (item.quantity <= 0) {
+        toast.error(`الكمية يجب أن تكون أكبر من صفر للمادة: ${item.raw_material_name}`);
+        return;
+      }
+      if (item.quantity > item.available) {
+        toast.error(`الكمية المطلوبة أكبر من المتاح للمادة: ${item.raw_material_name}`);
+        return;
+      }
+    }
+    
+    setSubmitting(true);
+    try {
+      await axios.post(`${API}/warehouse-transfers`, {
+        transfer_type: 'warehouse_to_branch',
+        to_branch_id: branchTransferForm.to_branch_id,
+        items: branchTransferForm.items.map(i => ({
+          raw_material_id: i.raw_material_id,
+          quantity: i.quantity
+        })),
+        notes: branchTransferForm.notes
+      }, { headers });
+      
+      toast.success('تم التحويل للفرع بنجاح');
+      setShowBranchTransferDialog(false);
+      setBranchTransferForm({ to_branch_id: '', items: [], notes: '' });
+      fetchData();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'فشل في التحويل');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   // إضافة مكون للوصفة
   const addIngredientToRecipe = () => {
     if (!newIngredient.raw_material_id || newIngredient.quantity <= 0) {
