@@ -11,7 +11,7 @@ import requests
 import os
 import time
 
-BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://resto-inventory-43.preview.emergentagent.com')
+BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://total-reset.preview.emergentagent.com')
 
 class TestPaymentSettingsAPI:
     """Payment Settings API Tests"""
