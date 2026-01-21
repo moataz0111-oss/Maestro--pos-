@@ -3756,6 +3756,127 @@ export default function Settings() {
             </TabsContent>
           )}
 
+          {/* إعدادات المخزون */}
+          {hasRole(['admin']) && (
+            <TabsContent value="inventory-settings">
+              <div className="space-y-6">
+                <Card className="border-border/50 bg-card">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2 text-foreground">
+                      <Package className="h-5 w-5" />
+                      إعدادات نظام المخزون
+                    </CardTitle>
+                    <p className="text-sm text-muted-foreground">
+                      التحكم في طريقة عمل المخزون والخصم التلقائي
+                    </p>
+                  </CardHeader>
+                  <CardContent className="space-y-6">
+                    {/* نوع المخزون */}
+                    <div className="p-4 border rounded-lg bg-blue-500/10">
+                      <Label className="text-foreground font-bold mb-4 flex items-center gap-2">
+                        <Store className="h-5 w-5 text-blue-500" />
+                        نوع المخزون
+                      </Label>
+                      <div className="grid grid-cols-2 gap-4 mt-4">
+                        <div 
+                          className={`p-4 border-2 rounded-lg cursor-pointer transition-all ${
+                            inventorySettings.inventory_mode === 'centralized' 
+                              ? 'border-primary bg-primary/10' 
+                              : 'border-border hover:border-primary/50'
+                          }`}
+                          onClick={() => setInventorySettings(prev => ({...prev, inventory_mode: 'centralized'}))}
+                        >
+                          <div className="flex items-center gap-2 mb-2">
+                            <div className={`w-4 h-4 rounded-full border-2 ${
+                              inventorySettings.inventory_mode === 'centralized' 
+                                ? 'border-primary bg-primary' 
+                                : 'border-muted-foreground'
+                            }`}>
+                              {inventorySettings.inventory_mode === 'centralized' && (
+                                <Check className="h-3 w-3 text-white" />
+                              )}
+                            </div>
+                            <span className="font-bold">مخزون مركزي</span>
+                          </div>
+                          <p className="text-sm text-muted-foreground">
+                            مخزون واحد مركزي يوزع على جميع الفروع. الخصم يتم من المخزون المركزي عند البيع.
+                          </p>
+                        </div>
+                        <div 
+                          className={`p-4 border-2 rounded-lg cursor-pointer transition-all ${
+                            inventorySettings.inventory_mode === 'per_branch' 
+                              ? 'border-primary bg-primary/10' 
+                              : 'border-border hover:border-primary/50'
+                          }`}
+                          onClick={() => setInventorySettings(prev => ({...prev, inventory_mode: 'per_branch'}))}
+                        >
+                          <div className="flex items-center gap-2 mb-2">
+                            <div className={`w-4 h-4 rounded-full border-2 ${
+                              inventorySettings.inventory_mode === 'per_branch' 
+                                ? 'border-primary bg-primary' 
+                                : 'border-muted-foreground'
+                            }`}>
+                              {inventorySettings.inventory_mode === 'per_branch' && (
+                                <Check className="h-3 w-3 text-white" />
+                              )}
+                            </div>
+                            <span className="font-bold">مخزون منفصل لكل فرع</span>
+                          </div>
+                          <p className="text-sm text-muted-foreground">
+                            كل فرع له مخزونه الخاص. الخصم يتم من مخزون الفرع المحدد عند البيع.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* خيارات إضافية */}
+                    <div className="p-4 border rounded-lg">
+                      <Label className="text-foreground font-bold mb-4 block">خيارات إضافية</Label>
+                      <div className="space-y-4">
+                        <div className="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
+                          <div className="flex items-center gap-3">
+                            <ShoppingCart className="h-5 w-5 text-green-500" />
+                            <div>
+                              <p className="font-medium">الخصم التلقائي عند البيع</p>
+                              <p className="text-xs text-muted-foreground">خصم الكميات تلقائياً من المخزون عند إتمام البيع</p>
+                            </div>
+                          </div>
+                          <Switch 
+                            checked={inventorySettings.auto_deduct_on_sale}
+                            onCheckedChange={(checked) => setInventorySettings(prev => ({...prev, auto_deduct_on_sale: checked}))}
+                          />
+                        </div>
+                        
+                        <div className="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
+                          <div className="flex items-center gap-3">
+                            <Bell className="h-5 w-5 text-yellow-500" />
+                            <div>
+                              <p className="font-medium">تنبيهات نقص المخزون</p>
+                              <p className="text-xs text-muted-foreground">إرسال تنبيه عند وصول المخزون للحد الأدنى</p>
+                            </div>
+                          </div>
+                          <Switch 
+                            checked={inventorySettings.low_stock_notifications}
+                            onCheckedChange={(checked) => setInventorySettings(prev => ({...prev, low_stock_notifications: checked}))}
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <Button 
+                      className="w-full bg-blue-500 hover:bg-blue-600"
+                      onClick={saveInventorySettings}
+                      disabled={savingInventorySettings}
+                    >
+                      {savingInventorySettings ? <RefreshCw className="h-4 w-4 ml-2 animate-spin" /> : <Save className="h-4 w-4 ml-2" />}
+                      حفظ إعدادات المخزون
+                    </Button>
+                  </CardContent>
+                </Card>
+              </div>
+            </TabsContent>
+          )}
+
           {/* Customers - إدارة العملاء */}
           {hasRole(['admin', 'manager', 'branch_manager']) && (
             <TabsContent value="customers">
