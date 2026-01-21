@@ -1,34 +1,35 @@
-// Service Worker v5 - Network First Strategy for Speed
-const CACHE_NAME = 'maestro-app-v5';
+// Service Worker v6 - Network First Strategy for Speed
+const CACHE_NAME = 'maestro-app-v6';
 const CACHE_VERSION = Date.now(); // Force update on each deploy
 
 // Only cache essential static files
 const STATIC_FILES = [
   '/icons/icon-192.png',
-  '/icons/icon-512.png'
+  '/icons/icon-512.png',
+  '/icons/customer-icon-192.png',
+  '/icons/customer-icon-512.png'
 ];
 
 // Install - Skip waiting immediately
 self.addEventListener('install', (event) => {
-  console.log('[SW v5] Installing...');
+  console.log('[SW v6] Installing...');
   self.skipWaiting();
 });
 
 // Activate - Clean ALL old caches immediately
 self.addEventListener('activate', (event) => {
-  console.log('[SW v5] Activating...');
+  console.log('[SW v6] Activating...');
   event.waitUntil(
     caches.keys().then((cacheNames) => {
       return Promise.all(
         cacheNames.map((cache) => {
-          if (cache !== CACHE_NAME) {
-            console.log('[SW v5] Deleting old cache:', cache);
-            return caches.delete(cache);
-          }
+          // Delete ALL old caches
+          console.log('[SW v6] Deleting cache:', cache);
+          return caches.delete(cache);
         })
       );
     }).then(() => {
-      console.log('[SW v5] Taking control of clients');
+      console.log('[SW v6] Taking control of clients');
       return self.clients.claim();
     })
   );
@@ -44,6 +45,12 @@ self.addEventListener('fetch', (event) => {
   
   // Skip cross-origin requests
   if (url.origin !== location.origin) return;
+  
+  // NEVER cache manifest files - always fetch fresh
+  if (url.pathname.includes('manifest')) {
+    event.respondWith(fetch(request, { cache: 'no-store' }));
+    return;
+  }
   
   // API calls - Always network only
   if (url.pathname.startsWith('/api')) {
