@@ -699,12 +699,14 @@ class ProductCreate(BaseModel):
     price: float
     cost: float = 0.0  # تكلفة ما قبل التصنيع
     operating_cost: float = 0.0  # تكلفة تشغيلية
+    packaging_cost: float = 0.0  # تكلفة التغليف (للسفري/التوصيل)
     image: Optional[str] = None
     description: Optional[str] = None
     is_available: bool = True
     ingredients: List[Dict[str, Any]] = []
     barcode: Optional[str] = None
     finished_product_id: Optional[str] = None  # ربط بالمنتج النهائي للخصم التلقائي من الوصفة
+    manufactured_product_id: Optional[str] = None  # ربط بالمنتج المصنع من النظام الجديد
 
 class ProductResponse(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -715,6 +717,7 @@ class ProductResponse(BaseModel):
     price: float
     cost: float = 0.0
     operating_cost: float = 0.0
+    packaging_cost: float = 0.0  # تكلفة التغليف
     profit: float = 0.0  # حقل محسوب
     image: Optional[str] = None
     description: Optional[str] = None
@@ -722,6 +725,7 @@ class ProductResponse(BaseModel):
     ingredients: List[Dict[str, Any]] = []
     barcode: Optional[str] = None
     finished_product_id: Optional[str] = None  # ربط بالمنتج النهائي
+    manufactured_product_id: Optional[str] = None  # ربط بالمنتج المصنع من النظام الجديد
 
 # Inventory Models
 class InventoryItemCreate(BaseModel):
