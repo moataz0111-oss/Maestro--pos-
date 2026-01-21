@@ -467,6 +467,18 @@ export default function SuperAdmin() {
     }
   };
 
+  const resetTenantInventory = async () => {
+    try {
+      await axios.post(`${API}/super-admin/tenants/${selectedTenant.id}/reset-inventory?confirm=true`);
+      toast.success('تم تصفير بيانات المخزون بنجاح');
+      setShowResetInventoryConfirm(false);
+      setSelectedTenant(null);
+      fetchData();
+    } catch (error) {
+      toast.error('فشل في تصفير المخزون: ' + (error.response?.data?.detail || error.message));
+    }
+  };
+
   const openEditTenant = (tenant) => {
     setSelectedTenant(tenant);
     setEditTenantForm({
