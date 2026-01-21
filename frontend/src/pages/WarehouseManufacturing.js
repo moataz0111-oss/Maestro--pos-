@@ -514,6 +514,15 @@ export default function WarehouseManufacturing() {
                   تحويل للفرع
                 </Button>
                 <Button 
+                  variant="outline"
+                  onClick={() => navigate('/purchases-new')}
+                  className="border-blue-500 text-blue-600 hover:bg-blue-50"
+                  data-testid="purchase-request-btn"
+                >
+                  <Truck className="h-4 w-4 ml-2" />
+                  طلب من المشتريات
+                </Button>
+                <Button 
                   onClick={() => setShowAddRawMaterial(true)}
                   className="bg-primary"
                   data-testid="add-material-btn"
