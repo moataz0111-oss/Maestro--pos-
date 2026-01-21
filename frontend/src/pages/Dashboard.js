@@ -1939,7 +1939,7 @@ export default function Dashboard() {
                     const canvas = document.createElement('canvas');
                     const ctx = canvas.getContext('2d');
                     const svgData = new XMLSerializer().serializeToString(svg);
-                    const img = new Image();
+                    const img = new window.Image();
                     
                     // إضافة padding أبيض حول الصورة
                     canvas.width = 250;
