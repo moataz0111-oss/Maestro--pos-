@@ -40,6 +40,8 @@
                 var manifestLink = document.getElementById('app-manifest');
                 var themeColor = document.querySelector('meta[name="theme-color"]');
                 var appleTitle = document.querySelector('meta[name="apple-mobile-web-app-title"]');
+                var appleTouchIcons = document.querySelectorAll('link[rel="apple-touch-icon"]');
+                var appleStartupImage = document.querySelector('meta[name="apple-touch-startup-image"]');
                 
                 if (path.startsWith('/driver')) {
                     // Driver Portal - Green theme, Maestro Espedo
@@ -48,11 +50,16 @@
                     if (appleTitle) appleTitle.content = 'Maestro Espedo';
                     document.title = 'Maestro Espedo - بوابة السائق';
                 } else if (path.startsWith('/menu')) {
-                    // Customer Menu - Orange theme
-                    manifestLink.href = '/manifest-customer.json';
+                    // Customer Menu - Orange theme with black icon
+                    manifestLink.href = '/manifest-customer.json?v=' + Date.now();
                     if (themeColor) themeColor.content = '#f97316';
                     if (appleTitle) appleTitle.content = 'قائمة الطعام';
                     document.title = 'قائمة الطعام - اطلب الآن';
+                    // تغيير أيقونات iOS للعملاء
+                    appleTouchIcons.forEach(function(icon) {
+                        icon.href = '/icons/customer-icon-192.png';
+                    });
+                    if (appleStartupImage) appleStartupImage.content = '/icons/customer-icon-512.png';
                 } else {
                     // Admin Portal - Gold theme, Maestro EGP
                     manifestLink.href = '/manifest-admin.json';
