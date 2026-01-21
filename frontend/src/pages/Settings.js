@@ -406,10 +406,36 @@ export default function Settings() {
       
       // جلب إعدادات الدفع
       fetchPaymentSettings();
+      
+      // جلب إعدادات المخزون
+      fetchInventorySettings();
     } catch (error) {
       console.error('Failed to fetch settings:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // جلب إعدادات المخزون
+  const fetchInventorySettings = async () => {
+    try {
+      const res = await axios.get(`${API}/inventory-settings`);
+      setInventorySettings(prev => ({ ...prev, ...res.data }));
+    } catch (error) {
+      console.error('Failed to fetch inventory settings:', error);
+    }
+  };
+
+  // حفظ إعدادات المخزون
+  const saveInventorySettings = async () => {
+    setSavingInventorySettings(true);
+    try {
+      await axios.put(`${API}/inventory-settings`, inventorySettings);
+      toast.success('تم حفظ إعدادات المخزون');
+    } catch (error) {
+      toast.error('فشل في حفظ إعدادات المخزون');
+    } finally {
+      setSavingInventorySettings(false);
     }
   };
 
