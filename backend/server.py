@@ -3980,17 +3980,42 @@ async def create_order(order: OrderCreate, current_user: dict = Depends(get_curr
     tax = subtotal * 0.0  # No tax for Iraq
     total = subtotal - order.discount + tax
     
-    # Calculate total cost
+    # Calculate total cost including packaging for delivery/takeaway
     total_cost = 0
+    total_packaging_cost = 0
     items_with_cost = []
+    is_delivery_or_takeaway = order.order_type in ["delivery", "takeaway"]
+    
     for item in order.items:
         product = await db.products.find_one({"id": item.product_id}, {"_id": 0})
         item_cost = 0
+        packaging_cost = 0
+        
         if product:
-            item_cost = (product.get("cost", 0) + product.get("operating_cost", 0)) * item.quantity
+            # حساب تكلفة المنتج الأساسية
+            base_cost = product.get("cost", 0) + product.get("operating_cost", 0)
+            
+            # إضافة تكلفة التغليف للتوصيل والسفري فقط
+            if is_delivery_or_takeaway:
+                packaging_cost = product.get("packaging_cost", 0) * item.quantity
+                total_packaging_cost += packaging_cost
+            
+            # إذا كان المنتج مرتبط بمنتج مصنع، احصل على تكلفة المواد الخام
+            manufactured_product_id = product.get("manufactured_product_id")
+            if manufactured_product_id:
+                mfg_product = await db.manufactured_products.find_one(
+                    {"id": manufactured_product_id},
+                    {"_id": 0, "raw_material_cost": 1}
+                )
+                if mfg_product:
+                    base_cost = mfg_product.get("raw_material_cost", 0) + product.get("operating_cost", 0)
+            
+            item_cost = base_cost * item.quantity + packaging_cost
+        
         total_cost += item_cost
         item_dict = item.model_dump()
         item_dict["cost"] = item_cost
+        item_dict["packaging_cost"] = packaging_cost
         items_with_cost.append(item_dict)
     
     # Calculate delivery commission if applicable
