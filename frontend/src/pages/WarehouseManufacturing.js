@@ -277,20 +277,20 @@ export default function WarehouseManufacturing() {
   };
 
   // إضافة صنف لتحويل الفرع
-  const addItemToBranchTransfer = (material) => {
-    const existing = branchTransferForm.items.find(i => i.raw_material_id === material.id);
+  const addItemToBranchTransfer = (product) => {
+    const existing = branchTransferForm.items.find(i => i.product_id === product.id);
     if (existing) {
-      toast.info('هذا الصنف موجود بالفعل');
+      toast.info('هذا المنتج موجود بالفعل');
       return;
     }
     setBranchTransferForm(prev => ({
       ...prev,
       items: [...prev.items, {
-        raw_material_id: material.id,
-        raw_material_name: material.name,
+        product_id: product.id,
+        product_name: product.name,
         quantity: 1,
-        unit: material.unit,
-        available: material.quantity
+        unit: product.unit || 'قطعة',
+        available: product.quantity
       }]
     }));
   };
@@ -319,18 +319,18 @@ export default function WarehouseManufacturing() {
       return;
     }
     if (branchTransferForm.items.length === 0) {
-      toast.error('الرجاء إضافة مواد للتحويل');
+      toast.error('الرجاء إضافة منتجات للتحويل');
       return;
     }
     
     // التحقق من الكميات
     for (const item of branchTransferForm.items) {
       if (item.quantity <= 0) {
-        toast.error(`الكمية يجب أن تكون أكبر من صفر للمادة: ${item.raw_material_name}`);
+        toast.error(`الكمية يجب أن تكون أكبر من صفر للمنتج: ${item.product_name}`);
         return;
       }
       if (item.quantity > item.available) {
-        toast.error(`الكمية المطلوبة أكبر من المتاح للمادة: ${item.raw_material_name}`);
+        toast.error(`الكمية المطلوبة أكبر من المتاح للمنتج: ${item.product_name}`);
         return;
       }
     }
@@ -338,10 +338,10 @@ export default function WarehouseManufacturing() {
     setSubmitting(true);
     try {
       await axios.post(`${API}/warehouse-transfers`, {
-        transfer_type: 'warehouse_to_branch',
+        transfer_type: 'manufacturing_to_branch',
         to_branch_id: branchTransferForm.to_branch_id,
         items: branchTransferForm.items.map(i => ({
-          raw_material_id: i.raw_material_id,
+          product_id: i.product_id,
           quantity: i.quantity
         })),
         notes: branchTransferForm.notes
