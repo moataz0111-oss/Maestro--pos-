@@ -76,7 +76,9 @@ import {
   Banknote,
   Smartphone,
   Receipt,
-  CheckCircle
+  CheckCircle,
+  Factory,
+  Warehouse
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
