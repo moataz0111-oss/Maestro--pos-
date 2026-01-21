@@ -32,7 +32,8 @@ import {
   Truck,
   CheckCircle,
   Clock,
-  X
+  X,
+  Building2
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
