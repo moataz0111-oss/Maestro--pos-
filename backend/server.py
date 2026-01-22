@@ -13241,6 +13241,81 @@ async def mark_orders_as_seen(
     
     return {"success": True, "marked_count": len(order_ids)}
 
+@api_router.get("/notifications/delayed-orders")
+async def get_delayed_orders(
+    branch_id: Optional[str] = None,
+    delay_minutes: int = 15,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    جلب الطلبات المتأخرة - الطلبات التي مر عليها أكثر من المدة المحددة
+    delay_minutes: عدد الدقائق للاعتبار التأخير (افتراضي 15 دقيقة)
+    """
+    tenant_id = get_user_tenant_id(current_user)
+    
+    # حساب وقت الحد الأقصى للتأخير
+    delay_threshold = (datetime.now(timezone.utc) - timedelta(minutes=delay_minutes)).isoformat()
+    
+    # البحث عن الطلبات المتأخرة (pending أو preparing لأكثر من المدة المحددة)
+    query = {
+        "status": {"$in": ["pending", "preparing"]},
+        "created_at": {"$lt": delay_threshold}
+    }
+    
+    if branch_id and branch_id != 'all':
+        query["branch_id"] = branch_id
+    
+    if tenant_id:
+        query["tenant_id"] = tenant_id
+    
+    # جلب الطلبات المتأخرة
+    delayed_orders = await db.orders.find(query, {"_id": 0}).sort("created_at", 1).to_list(50)
+    
+    # حساب مدة التأخير لكل طلب
+    now = datetime.now(timezone.utc)
+    for order in delayed_orders:
+        try:
+            created_at = datetime.fromisoformat(order.get("created_at", "").replace("Z", "+00:00"))
+            delay_duration = now - created_at
+            order["delay_minutes"] = int(delay_duration.total_seconds() / 60)
+            
+            # تصنيف مستوى التأخير
+            if order["delay_minutes"] >= 45:
+                order["delay_level"] = "critical"  # حرج
+            elif order["delay_minutes"] >= 30:
+                order["delay_level"] = "high"  # عالي
+            elif order["delay_minutes"] >= 15:
+                order["delay_level"] = "medium"  # متوسط
+            else:
+                order["delay_level"] = "low"  # منخفض
+        except:
+            order["delay_minutes"] = 0
+            order["delay_level"] = "unknown"
+    
+    # تصنيف حسب نوع الطلب
+    delayed_by_type = {
+        "dine_in": [o for o in delayed_orders if o.get("order_type") == "dine_in"],
+        "takeaway": [o for o in delayed_orders if o.get("order_type") == "takeaway"],
+        "delivery": [o for o in delayed_orders if o.get("order_type") == "delivery"],
+    }
+    
+    # إحصائيات سريعة
+    stats = {
+        "total_delayed": len(delayed_orders),
+        "critical_count": len([o for o in delayed_orders if o.get("delay_level") == "critical"]),
+        "high_count": len([o for o in delayed_orders if o.get("delay_level") == "high"]),
+        "medium_count": len([o for o in delayed_orders if o.get("delay_level") == "medium"]),
+        "avg_delay_minutes": round(sum(o.get("delay_minutes", 0) for o in delayed_orders) / max(len(delayed_orders), 1), 1),
+        "max_delay_minutes": max((o.get("delay_minutes", 0) for o in delayed_orders), default=0)
+    }
+    
+    return {
+        "delayed_orders": delayed_orders,
+        "delayed_by_type": delayed_by_type,
+        "stats": stats,
+        "delay_threshold_minutes": delay_minutes
+    }
+
 @api_router.get("/notifications/sound-alert")
 async def check_sound_alert(
     last_check: Optional[str] = None,
