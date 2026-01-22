@@ -3,8 +3,8 @@
     <head>
         <meta charset="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
-        <meta name="theme-color" content="#f97316" />
-        <meta name="description" content="قائمة الطعام - اطلب وجباتك المفضلة" />
+        <meta name="theme-color" content="#1e40af" />
+        <meta name="description" content="نظام إدارة المطاعم - Maestro EGP" />
         
         <!-- PWA Meta Tags for iOS -->
         <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -12,27 +12,45 @@
         <meta name="apple-mobile-web-app-title" content="Maestro EGP" />
         <meta name="mobile-web-app-capable" content="yes" />
         
-        <!-- Apple Touch Icons - Customer App -->
-        <link rel="apple-touch-icon" href="%PUBLIC_URL%/icons/customer-icon-192.png" />
-        <link rel="apple-touch-icon" sizes="152x152" href="%PUBLIC_URL%/icons/customer-icon-192.png" />
-        <link rel="apple-touch-icon" sizes="180x180" href="%PUBLIC_URL%/icons/customer-icon-512.png" />
-        <link rel="apple-touch-icon" sizes="167x167" href="%PUBLIC_URL%/icons/customer-icon-192.png" />
+        <!-- Apple Touch Icons -->
+        <link rel="apple-touch-icon" href="%PUBLIC_URL%/icons/admin-icon-192.png" />
+        <link rel="apple-touch-icon" sizes="152x152" href="%PUBLIC_URL%/icons/admin-icon-192.png" />
+        <link rel="apple-touch-icon" sizes="180x180" href="%PUBLIC_URL%/icons/admin-icon-512.png" />
+        <link rel="apple-touch-icon" sizes="167x167" href="%PUBLIC_URL%/icons/admin-icon-192.png" />
         
         <!-- Favicons -->
-        <link rel="icon" type="image/png" sizes="32x32" href="%PUBLIC_URL%/icons/customer-icon-192.png" />
-        <link rel="icon" type="image/png" sizes="16x16" href="%PUBLIC_URL%/icons/customer-icon-192.png" />
-        <link rel="shortcut icon" href="%PUBLIC_URL%/icons/customer-icon-192.png" />
+        <link rel="icon" type="image/png" sizes="32x32" href="%PUBLIC_URL%/icons/admin-icon-192.png" />
+        <link rel="icon" type="image/png" sizes="16x16" href="%PUBLIC_URL%/icons/admin-icon-192.png" />
+        <link rel="shortcut icon" href="%PUBLIC_URL%/icons/admin-icon-192.png" />
         
-        <!-- Single Manifest -->
-        <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
+        <!-- Manifest - يتم تحديده ديناميكياً -->
+        <link rel="manifest" id="app-manifest" href="%PUBLIC_URL%/manifest.json" />
         
         <!-- Splash Screen for iOS -->
-        <meta name="apple-touch-startup-image" href="%PUBLIC_URL%/icons/customer-icon-512.png" />
+        <meta name="apple-touch-startup-image" href="%PUBLIC_URL%/icons/admin-icon-512.png" />
         
         <title>Maestro EGP</title>
         <script src="https://assets.emergent.sh/scripts/emergent-main.js"></script>
         
         <script>
+            // تحديد الـ manifest بناءً على المسار
+            (function() {
+                var path = window.location.pathname;
+                var manifestLink = document.getElementById('app-manifest');
+                var themeColor = document.querySelector('meta[name="theme-color"]');
+                
+                if (path.startsWith('/menu')) {
+                    // صفحة قائمة العملاء
+                    if (manifestLink) manifestLink.href = '/manifest-customer.json';
+                    if (themeColor) themeColor.content = '#f97316';
+                    document.title = 'قائمة الطعام';
+                } else {
+                    // نظام الإدارة
+                    if (manifestLink) manifestLink.href = '/manifest.json';
+                    if (themeColor) themeColor.content = '#1e40af';
+                }
+            })();
+            
             // Register Service Worker
             if ('serviceWorker' in navigator) {
                 window.addEventListener('load', function() {
