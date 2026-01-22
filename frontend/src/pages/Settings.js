@@ -3183,55 +3183,159 @@ export default function Settings() {
           {hasRole(['admin']) && (
             <TabsContent value="delivery">
               <Card className="border-border/50 bg-card">
-                <CardHeader>
+                <CardHeader className="flex flex-row items-center justify-between">
                   <CardTitle className="flex items-center gap-2 text-foreground">
                     <Truck className="h-5 w-5" />
                     إعدادات شركات التوصيل
                   </CardTitle>
+                  <Button 
+                    onClick={() => setShowAddDeliveryApp(true)}
+                    className="gap-2"
+                    data-testid="add-delivery-app-btn"
+                  >
+                    <Plus className="h-4 w-4" />
+                    إضافة شركة
+                  </Button>
                 </CardHeader>
                 <CardContent>
                   <p className="text-sm text-muted-foreground mb-4">
                     تحكم في نسب الاستقطاع لكل شركة توصيل
                   </p>
-                  <div className="space-y-4">
-                    {deliveryApps.map(app => (
-                      <div key={app.id} className="p-4 bg-muted/30 rounded-lg">
-                        <div className="flex items-center justify-between mb-3">
-                          <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
-                              <Truck className="h-5 w-5 text-primary" />
-                            </div>
-                            <div>
-                              <p className="font-medium text-foreground">{app.name}</p>
-                              <p className="text-xs text-muted-foreground">{app.name_en}</p>
-                            </div>
-                          </div>
-                          <span className={`text-xs px-2 py-1 rounded-full ${
-                            app.is_active !== false ? 'bg-green-500/10 text-green-500' : 'bg-red-500/10 text-red-500'
-                          }`}>
-                            {app.is_active !== false ? 'مفعل' : 'معطل'}
-                          </span>
+                  
+                  {/* نموذج إضافة شركة جديدة */}
+                  {showAddDeliveryApp && (
+                    <div className="mb-6 p-4 bg-primary/5 border border-primary/20 rounded-lg">
+                      <h4 className="font-medium text-foreground mb-4 flex items-center gap-2">
+                        <Plus className="h-4 w-4" />
+                        إضافة شركة توصيل جديدة
+                      </h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <Label className="text-foreground">اسم الشركة (عربي)</Label>
+                          <Input
+                            value={newDeliveryApp.name}
+                            onChange={(e) => setNewDeliveryApp({...newDeliveryApp, name: e.target.value})}
+                            placeholder="مثال: طلبات"
+                            className="mt-1"
+                          />
                         </div>
-                        <div className="flex items-center gap-3">
-                          <Label className="text-sm text-muted-foreground whitespace-nowrap">نسبة العمولة:</Label>
-                          <div className="flex items-center gap-2 flex-1">
-                            <Input
-                              type="number"
-                              defaultValue={app.commission_rate || 0}
-                              min="0"
-                              max="100"
-                              step="0.5"
-                              className="w-24"
-                              onBlur={(e) => handleUpdateDeliveryApp(app.id, e.target.value)}
+                        <div>
+                          <Label className="text-foreground">اسم الشركة (إنجليزي)</Label>
+                          <Input
+                            value={newDeliveryApp.name_en}
+                            onChange={(e) => setNewDeliveryApp({...newDeliveryApp, name_en: e.target.value})}
+                            placeholder="Example: Talabat"
+                            className="mt-1"
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-foreground">نسبة العمولة (%)</Label>
+                          <Input
+                            type="number"
+                            value={newDeliveryApp.commission_rate}
+                            onChange={(e) => setNewDeliveryApp({...newDeliveryApp, commission_rate: parseFloat(e.target.value) || 0})}
+                            min="0"
+                            max="100"
+                            step="0.5"
+                            placeholder="0"
+                            className="mt-1"
+                          />
+                        </div>
+                        <div className="flex items-end gap-2">
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="checkbox"
+                              id="delivery-app-active"
+                              checked={newDeliveryApp.is_active}
+                              onChange={(e) => setNewDeliveryApp({...newDeliveryApp, is_active: e.target.checked})}
+                              className="w-4 h-4"
                             />
-                            <Percent className="h-4 w-4 text-muted-foreground" />
+                            <Label htmlFor="delivery-app-active" className="text-foreground">تفعيل الشركة</Label>
                           </div>
-                          <p className="text-sm text-muted-foreground">
-                            (حالياً: {app.commission_rate || 0}%)
-                          </p>
                         </div>
                       </div>
-                    ))}
+                      <div className="flex gap-2 mt-4">
+                        <Button 
+                          onClick={handleAddDeliveryApp} 
+                          disabled={savingDeliveryApp}
+                          className="gap-2"
+                        >
+                          {savingDeliveryApp ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                          حفظ
+                        </Button>
+                        <Button 
+                          variant="outline" 
+                          onClick={() => {
+                            setShowAddDeliveryApp(false);
+                            setNewDeliveryApp({ name: '', name_en: '', commission_rate: 0, is_active: true });
+                          }}
+                        >
+                          إلغاء
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                  
+                  <div className="space-y-4">
+                    {deliveryApps.length === 0 ? (
+                      <div className="text-center py-8 text-muted-foreground">
+                        <Truck className="h-12 w-12 mx-auto mb-3 opacity-50" />
+                        <p>لا توجد شركات توصيل</p>
+                        <p className="text-sm">اضغط على "إضافة شركة" لإضافة شركة جديدة</p>
+                      </div>
+                    ) : (
+                      deliveryApps.map(app => (
+                        <div key={app.id} className="p-4 bg-muted/30 rounded-lg">
+                          <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center gap-3">
+                              <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
+                                <Truck className="h-5 w-5 text-primary" />
+                              </div>
+                              <div>
+                                <p className="font-medium text-foreground">{app.name}</p>
+                                <p className="text-xs text-muted-foreground">{app.name_en}</p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleToggleDeliveryApp(app)}
+                                className={app.is_active !== false ? 'text-green-500' : 'text-red-500'}
+                              >
+                                {app.is_active !== false ? 'مفعل' : 'معطل'}
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleDeleteDeliveryApp(app.id)}
+                                className="text-red-500 hover:text-red-600 hover:bg-red-500/10"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <Label className="text-sm text-muted-foreground whitespace-nowrap">نسبة العمولة:</Label>
+                            <div className="flex items-center gap-2 flex-1">
+                              <Input
+                                type="number"
+                                defaultValue={app.commission_rate || 0}
+                                min="0"
+                                max="100"
+                                step="0.5"
+                                className="w-24"
+                                onBlur={(e) => handleUpdateDeliveryApp(app.id, e.target.value)}
+                              />
+                              <Percent className="h-4 w-4 text-muted-foreground" />
+                            </div>
+                            <p className="text-sm text-muted-foreground">
+                              (حالياً: {app.commission_rate || 0}%)
+                            </p>
+                          </div>
+                        </div>
+                      ))
+                    )}
                   </div>
                 </CardContent>
               </Card>
