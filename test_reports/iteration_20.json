@@ -83,7 +83,7 @@
   },
   
   "test_credentials": {
-    "api_url": "https://restoinventory-6.preview.emergentagent.com",
+    "api_url": "https://food-flow-6.preview.emergentagent.com",
     "admin_email": "admin@maestroegp.com",
     "admin_password": "admin123"
   },
