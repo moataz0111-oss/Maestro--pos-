@@ -886,43 +886,45 @@ export default function POS() {
           {orderType === 'dine_in' && (
             <div className="space-y-2">
               <p className="text-sm text-muted-foreground mb-2">اختر طاولة:</p>
-              <div className="grid grid-cols-5 gap-2">
-                {tables.map(table => {
-                  const isOccupied = table.status === 'occupied';
-                  const isReserved = table.status === 'reserved';
-                  const isAvailable = table.status === 'available';
-                  const isSelected = selectedTable === table.id;
-                  
-                  return (
-                    <button
-                      key={table.id}
-                      onClick={async () => {
-                        playClick();
-                        if (isOccupied && table.current_order_id) {
-                          // فتح الطلب المرتبط بالطاولة المشغولة
-                          await loadOrderForEditing(table.current_order_id);
-                          toast.success(`تم فتح طلب الطاولة ${table.number}`);
-                        } else if (isAvailable || isSelected) {
-                          setSelectedTable(table.id);
-                        }
-                      }}
-                      style={{
-                        backgroundColor: isSelected ? '#8b5cf6' : isOccupied ? '#ef4444' : isReserved ? '#f59e0b' : '#22c55e',
-                        color: 'white'
-                      }}
-                      className={`
-                        aspect-square rounded-lg font-bold text-lg transition-all flex items-center justify-center
-                        ${isSelected ? 'ring-2 ring-primary ring-offset-2' : ''}
-                        ${isAvailable && !isSelected ? 'hover:opacity-80' : ''}
-                        ${isOccupied ? 'hover:ring-2 hover:ring-red-400 cursor-pointer' : ''}
-                        ${isReserved ? 'cursor-not-allowed opacity-90' : ''}
-                      `}
-                      data-testid={`table-btn-${table.number}`}
-                    >
-                      {table.number}
-                    </button>
-                  );
-                })}
+              <div className="max-h-48 overflow-y-auto border border-border/50 rounded-lg p-2 scrollbar-thin scrollbar-thumb-primary/50 scrollbar-track-muted/20">
+                <div className="grid grid-cols-5 gap-2">
+                  {tables.map(table => {
+                    const isOccupied = table.status === 'occupied';
+                    const isReserved = table.status === 'reserved';
+                    const isAvailable = table.status === 'available';
+                    const isSelected = selectedTable === table.id;
+                    
+                    return (
+                      <button
+                        key={table.id}
+                        onClick={async () => {
+                          playClick();
+                          if (isOccupied && table.current_order_id) {
+                            // فتح الطلب المرتبط بالطاولة المشغولة
+                            await loadOrderForEditing(table.current_order_id);
+                            toast.success(`تم فتح طلب الطاولة ${table.number}`);
+                          } else if (isAvailable || isSelected) {
+                            setSelectedTable(table.id);
+                          }
+                        }}
+                        style={{
+                          backgroundColor: isSelected ? '#8b5cf6' : isOccupied ? '#ef4444' : isReserved ? '#f59e0b' : '#22c55e',
+                          color: 'white'
+                        }}
+                        className={`
+                          aspect-square rounded-lg font-bold text-lg transition-all flex items-center justify-center
+                          ${isSelected ? 'ring-2 ring-primary ring-offset-2' : ''}
+                          ${isAvailable && !isSelected ? 'hover:opacity-80' : ''}
+                          ${isOccupied ? 'hover:ring-2 hover:ring-red-400 cursor-pointer' : ''}
+                          ${isReserved ? 'cursor-not-allowed opacity-90' : ''}
+                        `}
+                        data-testid={`table-btn-${table.number}`}
+                      >
+                        {table.number}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
               <div className="flex gap-4 text-xs mt-2">
                 <span className="flex items-center gap-1">
@@ -936,6 +938,9 @@ export default function POS() {
                 <span className="flex items-center gap-1">
                   <span className="w-3 h-3 rounded" style={{backgroundColor: '#f59e0b'}}></span>
                   محجوزة
+                </span>
+                <span className="text-muted-foreground mr-auto">
+                  ({tables.length} طاولة)
                 </span>
               </div>
               {selectedTable && (
