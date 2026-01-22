@@ -529,6 +529,20 @@ async def apply_automatic_updates():
             {"$set": {"is_available": True}}
         )
         
+        # 2.5 إصلاح السائقين المرتبطين بفروع غير موجودة
+        default_branch = await db.branches.find_one({"tenant_id": "default"})
+        if default_branch:
+            # جلب جميع الفروع الصالحة
+            valid_branch_ids = [b["id"] async for b in db.branches.find({}, {"id": 1})]
+            
+            # تحديث السائقين بفروع غير موجودة
+            drivers_fixed = await db.drivers.update_many(
+                {"branch_id": {"$nin": valid_branch_ids}},
+                {"$set": {"branch_id": default_branch["id"]}}
+            )
+            if drivers_fixed.modified_count > 0:
+                logger.info(f"   ✅ Fixed {drivers_fixed.modified_count} drivers with invalid branch_id")
+        
         # 3. تفعيل جميع الفروع
         await db.branches.update_many(
             {"is_active": {"$exists": False}},
