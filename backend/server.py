@@ -413,14 +413,14 @@ async def apply_automatic_updates():
         # 0. تحديث البيانات القديمة التي ليس لها tenant_id لتصبح "default"
         # تحديث المستخدمين الرئيسيين
         await db.users.update_many(
-            {"tenant_id": {"$in": [None, ""]}},
+            {"$or": [{"tenant_id": {"$exists": False}}, {"tenant_id": None}, {"tenant_id": ""}]},
             {"$set": {"tenant_id": "default"}}
         )
         logger.info("   ✅ Updated users without tenant_id")
         
         # تحديث السائقين
         drivers_tenant_result = await db.drivers.update_many(
-            {"tenant_id": {"$in": [None, ""]}},
+            {"$or": [{"tenant_id": {"$exists": False}}, {"tenant_id": None}, {"tenant_id": ""}]},
             {"$set": {"tenant_id": "default"}}
         )
         if drivers_tenant_result.modified_count > 0:
@@ -428,7 +428,7 @@ async def apply_automatic_updates():
         
         # تحديث الموظفين
         employees_tenant_result = await db.employees.update_many(
-            {"tenant_id": {"$in": [None, ""]}},
+            {"$or": [{"tenant_id": {"$exists": False}}, {"tenant_id": None}, {"tenant_id": ""}]},
             {"$set": {"tenant_id": "default"}}
         )
         if employees_tenant_result.modified_count > 0:
@@ -436,7 +436,7 @@ async def apply_automatic_updates():
         
         # تحديث الفروع
         branches_tenant_result = await db.branches.update_many(
-            {"tenant_id": {"$in": [None, ""]}},
+            {"$or": [{"tenant_id": {"$exists": False}}, {"tenant_id": None}, {"tenant_id": ""}]},
             {"$set": {"tenant_id": "default"}}
         )
         if branches_tenant_result.modified_count > 0:
@@ -444,7 +444,7 @@ async def apply_automatic_updates():
         
         # تحديث الفئات
         categories_tenant_result = await db.categories.update_many(
-            {"tenant_id": {"$in": [None, ""]}},
+            {"$or": [{"tenant_id": {"$exists": False}}, {"tenant_id": None}, {"tenant_id": ""}]},
             {"$set": {"tenant_id": "default"}}
         )
         if categories_tenant_result.modified_count > 0:
@@ -452,7 +452,7 @@ async def apply_automatic_updates():
         
         # تحديث المنتجات
         products_tenant_result = await db.products.update_many(
-            {"tenant_id": {"$in": [None, ""]}},
+            {"$or": [{"tenant_id": {"$exists": False}}, {"tenant_id": None}, {"tenant_id": ""}]},
             {"$set": {"tenant_id": "default"}}
         )
         if products_tenant_result.modified_count > 0:
@@ -460,7 +460,7 @@ async def apply_automatic_updates():
         
         # تحديث الطلبات
         orders_tenant_result = await db.orders.update_many(
-            {"tenant_id": {"$in": [None, ""]}},
+            {"$or": [{"tenant_id": {"$exists": False}}, {"tenant_id": None}, {"tenant_id": ""}]},
             {"$set": {"tenant_id": "default"}}
         )
         if orders_tenant_result.modified_count > 0:
@@ -468,7 +468,7 @@ async def apply_automatic_updates():
         
         # تحديث المصاريف
         expenses_tenant_result = await db.expenses.update_many(
-            {"tenant_id": {"$in": [None, ""]}},
+            {"$or": [{"tenant_id": {"$exists": False}}, {"tenant_id": None}, {"tenant_id": ""}]},
             {"$set": {"tenant_id": "default"}}
         )
         if expenses_tenant_result.modified_count > 0:
