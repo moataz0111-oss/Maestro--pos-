@@ -1212,6 +1212,69 @@ export default function Dashboard() {
             </div>
           )}
           
+          {/* تنبيه الطلبات المتأخرة */}
+          {delayedStats && delayedStats.total_delayed > 0 && (
+            <div 
+              className={`mb-3 p-3 rounded-lg flex items-center gap-3 cursor-pointer transition-all
+                ${delayedStats.critical_count > 0 
+                  ? 'bg-red-500/10 border border-red-500/30 animate-pulse' 
+                  : delayedStats.high_count > 0 
+                    ? 'bg-orange-500/10 border border-orange-500/30' 
+                    : 'bg-yellow-500/10 border border-yellow-500/30'
+                }`}
+              onClick={() => navigate('/orders')}
+              data-testid="delayed-orders-alert"
+            >
+              <Clock className={`h-5 w-5 flex-shrink-0 ${
+                delayedStats.critical_count > 0 ? 'text-red-500' : 
+                delayedStats.high_count > 0 ? 'text-orange-500' : 'text-yellow-500'
+              }`} />
+              <div className="flex-1">
+                <p className={`text-sm font-medium ${
+                  delayedStats.critical_count > 0 ? 'text-red-600' : 
+                  delayedStats.high_count > 0 ? 'text-orange-600' : 'text-yellow-600'
+                }`}>
+                  ⏰ {delayedStats.total_delayed} طلب متأخر
+                  {delayedStats.critical_count > 0 && (
+                    <span className="mr-2 px-2 py-0.5 bg-red-500 text-white text-xs rounded-full">
+                      {delayedStats.critical_count} حرج
+                    </span>
+                  )}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  أقصى تأخير: {delayedStats.max_delay_minutes} دقيقة | متوسط: {delayedStats.avg_delay_minutes} دقيقة
+                </p>
+              </div>
+              <div className="flex gap-2">
+                {delayedStats.critical_count > 0 && (
+                  <Badge variant="destructive" className="text-xs">
+                    {delayedStats.critical_count} حرج (+45د)
+                  </Badge>
+                )}
+                {delayedStats.high_count > 0 && (
+                  <Badge variant="outline" className="text-xs border-orange-500 text-orange-500">
+                    {delayedStats.high_count} عالي (+30د)
+                  </Badge>
+                )}
+              </div>
+              <Button 
+                size="sm" 
+                variant="outline" 
+                className={`${
+                  delayedStats.critical_count > 0 
+                    ? 'border-red-500 text-red-500 hover:bg-red-500 hover:text-white' 
+                    : 'border-orange-500 text-orange-500 hover:bg-orange-500 hover:text-white'
+                }`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  navigate('/orders');
+                }}
+              >
+                عرض الطلبات
+              </Button>
+            </div>
+          )}
+          
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {statCards.map((stat, idx) => (
               <Card key={idx} className="border-border/50 bg-card" data-testid={`stat-card-${idx}`}>
