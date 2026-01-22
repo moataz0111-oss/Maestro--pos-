@@ -524,6 +524,12 @@ export default function POS() {
       return;
     }
 
+    // التحقق من أن الطلب محفوظ مسبقاً للطلبات الجديدة
+    if (!editingOrder) {
+      toast.error('يجب حفظ الطلب أولاً قبل الدفع! اضغط على "حفظ وإرسال للمطبخ"');
+      return;
+    }
+
     if (orderType === 'dine_in' && !selectedTable && !editingOrder) {
       toast.error('يرجى اختيار طاولة');
       return;
@@ -550,8 +556,17 @@ export default function POS() {
         await axios.put(`${API}/orders/${editingOrder.id}/payment?payment_method=${paymentMethod}`);
         await axios.put(`${API}/orders/${editingOrder.id}/status?status=delivered`);
         
+        // ثالثاً: إغلاق الطاولة تلقائياً إذا كان طلب محلي
+        if (orderType === 'dine_in' && selectedTable) {
+          try {
+            await axios.put(`${API}/tables/${selectedTable}/status?status=available`);
+          } catch (err) {
+            console.log('Table status update:', err);
+          }
+        }
+        
         playSuccess();
-        toast.success(`تم إتمام الطلب #${editingOrder.order_number}`);
+        toast.success(`تم إتمام الطلب #${editingOrder.order_number} وإغلاق الطاولة`);
       } else {
         // طلب جديد مع دفع مباشر
         const orderData = {
@@ -571,6 +586,16 @@ export default function POS() {
         };
         
         const res = await axios.post(`${API}/orders`, orderData);
+        
+        // إغلاق الطاولة تلقائياً إذا كان طلب محلي
+        if (orderType === 'dine_in' && selectedTable) {
+          try {
+            await axios.put(`${API}/tables/${selectedTable}/status?status=available`);
+          } catch (err) {
+            console.log('Table status update:', err);
+          }
+        }
+        
         playSuccess();
         toast.success(`تم إنشاء الطلب #${res.data.order_number} بنجاح`);
       }
