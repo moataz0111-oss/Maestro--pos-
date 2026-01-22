@@ -1141,7 +1141,7 @@ class OrderResponse(BaseModel):
     total_cost: float = 0.0
     profit: float = 0.0
     branch_id: str
-    cashier_id: str
+    cashier_id: Optional[str] = None  # Made optional for orders without cashier
     status: str
     payment_method: str
     payment_status: str
@@ -1153,7 +1153,7 @@ class OrderResponse(BaseModel):
     driver_phone: Optional[str] = None  # هاتف السائق
     notes: Optional[str] = None
     created_at: str
-    updated_at: str
+    updated_at: Optional[str] = None  # Made optional for legacy orders
 
 # Shift Models
 class ShiftCreate(BaseModel):
