@@ -517,16 +517,10 @@ export default function POS() {
     }
   };
 
-  // تأكيد الطلب مع الدفع
+  // تأكيد الطلب مع الدفع - كل شيء في خطوة واحدة
   const handleSubmitOrder = async () => {
     if (cart.length === 0) {
       toast.error('السلة فارغة');
-      return;
-    }
-
-    // التحقق من أن الطلب محفوظ مسبقاً للطلبات الجديدة
-    if (!editingOrder) {
-      toast.error('يجب حفظ الطلب أولاً قبل الدفع! اضغط على "حفظ وإرسال للمطبخ"');
       return;
     }
 
@@ -542,33 +536,23 @@ export default function POS() {
 
     setSubmitting(true);
     try {
+      let orderNumber = '';
+      let orderId = '';
+      
       if (editingOrder) {
-        // تحديث الطلب الموجود مع الدفع
-        // أولاً: إضافة أي عناصر جديدة
+        // تحديث الطلب الموجود
+        orderId = editingOrder.id;
+        orderNumber = editingOrder.order_number;
+        
+        // إضافة أي عناصر جديدة
         const existingProductIds = editingOrder.items.map(i => i.product_id);
         const newItems = cart.filter(item => !existingProductIds.includes(item.product_id));
         
         if (newItems.length > 0) {
           await axios.put(`${API}/orders/${editingOrder.id}/add-items`, newItems);
         }
-        
-        // ثانياً: تحديث طريقة الدفع والحالة
-        await axios.put(`${API}/orders/${editingOrder.id}/payment?payment_method=${paymentMethod}`);
-        await axios.put(`${API}/orders/${editingOrder.id}/status?status=delivered`);
-        
-        // ثالثاً: إغلاق الطاولة تلقائياً إذا كان طلب محلي
-        if (orderType === 'dine_in' && selectedTable) {
-          try {
-            await axios.put(`${API}/tables/${selectedTable}/status?status=available`);
-          } catch (err) {
-            console.log('Table status update:', err);
-          }
-        }
-        
-        playSuccess();
-        toast.success(`تم إتمام الطلب #${editingOrder.order_number} وإغلاق الطاولة`);
       } else {
-        // طلب جديد مع دفع مباشر
+        // إنشاء طلب جديد أولاً
         const orderData = {
           order_type: orderType,
           table_id: orderType === 'dine_in' ? selectedTable : null,
@@ -586,20 +570,36 @@ export default function POS() {
         };
         
         const res = await axios.post(`${API}/orders`, orderData);
-        
-        // إغلاق الطاولة تلقائياً إذا كان طلب محلي
-        if (orderType === 'dine_in' && selectedTable) {
-          try {
-            await axios.put(`${API}/tables/${selectedTable}/status?status=available`);
-          } catch (err) {
-            console.log('Table status update:', err);
-          }
-        }
-        
-        playSuccess();
-        toast.success(`تم إنشاء الطلب #${res.data.order_number} بنجاح`);
+        orderId = res.data.id;
+        orderNumber = res.data.order_number;
       }
       
+      // تحديث طريقة الدفع وإغلاق الطلب
+      await axios.put(`${API}/orders/${orderId}/payment?payment_method=${paymentMethod}`);
+      await axios.put(`${API}/orders/${orderId}/status?status=delivered`);
+      
+      // إغلاق الطاولة تلقائياً إذا كان طلب محلي
+      if (orderType === 'dine_in' && (selectedTable || editingOrder?.table_id)) {
+        const tableId = selectedTable || editingOrder?.table_id;
+        try {
+          await axios.put(`${API}/tables/${tableId}/status?status=available`);
+        } catch (err) {
+          console.log('Table status update:', err);
+        }
+      }
+      
+      playSuccess();
+      
+      // رسالة مناسبة حسب نوع الطلب
+      if (orderType === 'dine_in') {
+        toast.success(`✅ تم إتمام الطلب #${orderNumber} وإغلاق الطاولة`);
+      } else if (orderType === 'takeaway') {
+        toast.success(`✅ تم إتمام الطلب السفري #${orderNumber}`);
+      } else {
+        toast.success(`✅ تم إتمام طلب التوصيل #${orderNumber}`);
+      }
+      
+      // تنظيف وتحديث
       clearCart();
       await fetchPendingOrders();
       
