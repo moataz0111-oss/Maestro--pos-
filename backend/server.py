@@ -334,6 +334,47 @@ async def init_database():
                 await db.branches.insert_one(branch_doc)
                 logger.info("✅ Default branch added")
             
+            # التحقق من السائقين - إضافة سائقين افتراضيين إذا كان العدد أقل من 3
+            drivers_count = await db.drivers.count_documents({"tenant_id": "default"})
+            if drivers_count < 3:
+                logger.info(f"🔧 Adding default drivers (current: {drivers_count})...")
+                # جلب فرع افتراضي
+                default_branch = await db.branches.find_one({"tenant_id": "default"})
+                branch_id = default_branch["id"] if default_branch else str(uuid.uuid4())
+                
+                for i in range(3 - drivers_count):
+                    driver_doc = {
+                        "id": str(uuid.uuid4()),
+                        "name": f"سائق {drivers_count + i + 1}",
+                        "phone": f"0780{1111111 + i}",
+                        "branch_id": branch_id,
+                        "is_active": True,
+                        "is_available": True,
+                        "tenant_id": "default",
+                        "total_deliveries": 0,
+                        "created_at": datetime.now(timezone.utc).isoformat()
+                    }
+                    await db.drivers.insert_one(driver_doc)
+                logger.info(f"✅ Added {3 - drivers_count} default drivers")
+            
+            # التحقق من الموظفين - إضافة موظفين افتراضيين إذا لم يكونوا موجودين
+            employees_count = await db.employees.count_documents({"tenant_id": "default"})
+            if employees_count < 2:
+                logger.info(f"🔧 Adding default employees (current: {employees_count})...")
+                for i in range(2 - employees_count):
+                    emp_doc = {
+                        "id": str(uuid.uuid4()),
+                        "name": f"موظف {employees_count + i + 1}",
+                        "position": "كاشير" if i == 0 else "طباخ",
+                        "phone": f"0780{3333333 + i}",
+                        "salary": 500000,
+                        "is_active": True,
+                        "tenant_id": "default",
+                        "created_at": datetime.now(timezone.utc).isoformat()
+                    }
+                    await db.employees.insert_one(emp_doc)
+                logger.info(f"✅ Added {2 - employees_count} default employees")
+        
         # التحقق من وجود خلفيات تسجيل الدخول
         login_bg = await db.settings.find_one({"type": "login_backgrounds"})
         if not login_bg:
