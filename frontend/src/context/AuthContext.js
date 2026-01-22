@@ -1,20 +1,10 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import axios from 'axios';
+import { API_URL, BACKEND_URL } from '../utils/api';
 
 const AuthContext = createContext(null);
 
-// تحديد رابط الـ API تلقائياً بناءً على البيئة
-const getBackendUrl = () => {
-  // في بيئة الإنتاج، استخدم نفس الرابط الحالي
-  if (window.location.hostname.includes('.emergent.host')) {
-    return window.location.origin;
-  }
-  // في بيئة المعاينة أو التطوير
-  return process.env.REACT_APP_BACKEND_URL || window.location.origin;
-};
-
-const BACKEND_URL = getBackendUrl();
-const API = `${BACKEND_URL}/api`;
+const API = API_URL;
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);

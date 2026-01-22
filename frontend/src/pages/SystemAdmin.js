@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import { API_URL, BACKEND_URL } from '../utils/api';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
@@ -19,15 +20,7 @@ import {
   Clock
 } from 'lucide-react';
 
-// تحديد رابط الـ API تلقائياً
-const getApiUrl = () => {
-  if (typeof window !== 'undefined') {
-    return window.location.origin + '/api';
-  }
-  return (process.env.REACT_APP_BACKEND_URL || '') + '/api';
-};
-
-const API = getApiUrl();
+const API = API_URL;
 
 // إعداد axios مع token
 const getAuthHeaders = () => {
