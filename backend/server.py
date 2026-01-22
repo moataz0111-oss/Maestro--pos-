@@ -5894,28 +5894,58 @@ async def get_delivery_app_settings():
     settings = await db.delivery_app_settings.find({}, {"_id": 0}).to_list(20)
     return settings
 
+@api_router.delete("/delivery-app-settings/{app_id}")
+async def delete_delivery_app_setting(app_id: str, current_user: dict = Depends(get_current_user)):
+    """حذف شركة توصيل"""
+    result = await db.delivery_app_settings.delete_one({"app_id": app_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="شركة التوصيل غير موجودة")
+    return {"success": True, "message": "تم حذف شركة التوصيل بنجاح"}
+
 @api_router.get("/delivery-apps")
 async def get_delivery_apps():
-    # Get default apps with their settings
+    # Get default apps
     default_apps = [
-        {"id": "toters", "name": "توترز", "name_en": "Toters", "icon": "Truck"},
-        {"id": "talabat", "name": "طلبات", "name_en": "Talabat", "icon": "ShoppingBag"},
-        {"id": "baly", "name": "بالي", "name_en": "Baly", "icon": "Package"},
-        {"id": "alsaree3", "name": "عالسريع", "name_en": "Al-Sari3", "icon": "Zap"},
-        {"id": "talabati", "name": "طلباتي", "name_en": "Talabati", "icon": "Box"},
+        {"id": "toters", "name": "توترز", "name_en": "Toters", "icon": "Truck", "is_default": True},
+        {"id": "talabat", "name": "طلبات", "name_en": "Talabat", "icon": "ShoppingBag", "is_default": True},
+        {"id": "baly", "name": "بالي", "name_en": "Baly", "icon": "Package", "is_default": True},
+        {"id": "alsaree3", "name": "عالسريع", "name_en": "Al-Sari3", "icon": "Zap", "is_default": True},
+        {"id": "talabati", "name": "طلباتي", "name_en": "Talabati", "icon": "Box", "is_default": True},
     ]
     
-    # Get settings for each app
+    # Get all settings from database (includes custom apps)
+    all_settings = await db.delivery_app_settings.find({}, {"_id": 0}).to_list(50)
+    
+    # Create a map of app_id to settings
+    settings_map = {s["app_id"]: s for s in all_settings}
+    
+    # Update default apps with their settings
+    result_apps = []
     for app in default_apps:
-        setting = await db.delivery_app_settings.find_one({"app_id": app["id"]}, {"_id": 0})
+        setting = settings_map.get(app["id"])
         if setting:
             app["commission_rate"] = setting.get("commission_rate", 0)
             app["is_active"] = setting.get("is_active", True)
         else:
             app["commission_rate"] = 0
             app["is_active"] = True
+        result_apps.append(app)
     
-    return default_apps
+    # Add custom apps (apps that are not in default list)
+    default_ids = {a["id"] for a in default_apps}
+    for setting in all_settings:
+        if setting["app_id"] not in default_ids:
+            result_apps.append({
+                "id": setting["app_id"],
+                "name": setting.get("name", setting["app_id"]),
+                "name_en": setting.get("name_en", setting["app_id"]),
+                "icon": "Truck",
+                "is_default": False,
+                "commission_rate": setting.get("commission_rate", 0),
+                "is_active": setting.get("is_active", True)
+            })
+    
+    return result_apps
 
 # ==================== COMPREHENSIVE REPORTS ====================
 
