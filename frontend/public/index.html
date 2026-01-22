@@ -23,7 +23,7 @@
         <link rel="icon" type="image/png" sizes="16x16" href="%PUBLIC_URL%/icons/admin-icon-192.png" />
         <link rel="shortcut icon" href="%PUBLIC_URL%/icons/admin-icon-192.png" />
         
-        <!-- Manifest - يتم تحديده ديناميكياً -->
+        <!-- Manifest - نظام الإدارة افتراضياً -->
         <link rel="manifest" id="app-manifest" href="%PUBLIC_URL%/manifest.json" />
         
         <!-- Splash Screen for iOS -->
@@ -33,46 +33,26 @@
         <script src="https://assets.emergent.sh/scripts/emergent-main.js"></script>
         
         <script>
-            // تحديد الـ manifest بناءً على المسار
+            // مسح جميع الـ caches فوراً عند التحميل
             (function() {
-                var path = window.location.pathname;
-                var manifestLink = document.getElementById('app-manifest');
-                var themeColor = document.querySelector('meta[name="theme-color"]');
-                
-                if (path.startsWith('/menu')) {
-                    // صفحة قائمة العملاء
-                    if (manifestLink) manifestLink.href = '/manifest-customer.json';
-                    if (themeColor) themeColor.content = '#f97316';
-                    document.title = 'قائمة الطعام';
-                } else {
-                    // نظام الإدارة
-                    if (manifestLink) manifestLink.href = '/manifest.json';
-                    if (themeColor) themeColor.content = '#1e40af';
-                }
-            })();
-            
-            // Register Service Worker
-            if ('serviceWorker' in navigator) {
-                window.addEventListener('load', function() {
-                    // Clear ALL old caches
-                    if ('caches' in window) {
-                        caches.keys().then(function(names) {
-                            names.forEach(function(name) {
-                                caches.delete(name);
-                                console.log('Deleted cache:', name);
-                            });
+                // مسح الـ caches
+                if ('caches' in window) {
+                    caches.keys().then(function(names) {
+                        names.forEach(function(name) {
+                            caches.delete(name);
                         });
-                    }
-                    
-                    // Unregister old service workers
+                    });
+                }
+                
+                // إلغاء تسجيل Service Workers
+                if ('serviceWorker' in navigator) {
                     navigator.serviceWorker.getRegistrations().then(function(registrations) {
                         registrations.forEach(function(registration) {
                             registration.unregister();
-                            console.log('Unregistered SW:', registration.scope);
                         });
                     });
-                });
-            }
+                }
+            })();
             
             // Only load visual edit scripts when inside an iframe
             if (window.self !== window.top) {
