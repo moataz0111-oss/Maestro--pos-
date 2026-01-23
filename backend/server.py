@@ -13651,16 +13651,16 @@ async def get_payment_transactions(
     return {"transactions": transactions}
 
 
+# Include reports routes (refactored) - PRIORITY over old routes
+from routes.reports_routes import router as reports_router
+app.include_router(reports_router, prefix="/api")
+
 # Include router and middleware
 app.include_router(api_router)
 
 # Include new inventory system routes
 from routes.inventory_system import router as inventory_router
 app.include_router(inventory_router)
-
-# Include reports routes (refactored)
-from routes.reports_routes import router as reports_router
-app.include_router(reports_router, prefix="/api")
 
 # Middleware to prevent caching of API responses
 @app.middleware("http")
