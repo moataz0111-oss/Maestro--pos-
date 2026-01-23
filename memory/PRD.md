@@ -7,37 +7,47 @@
 
 ## آخر التحديثات (23 يناير 2026)
 
-### ✅ إعادة هيكلة الكود (Code Refactoring)
-**تم نقل التقارير إلى ملفات منفصلة:**
+### ✅ إعادة هيكلة الكود الشاملة (Code Refactoring)
+**تم نقل ~1,500 سطر من server.py إلى 4 ملفات منفصلة:**
 
-1. **`/app/backend/routes/shared.py`** - ملف جديد للمشتركات:
-   - اتصال قاعدة البيانات (singleton)
-   - Enums (UserRole, OrderStatus, etc.)
-   - دوال المصادقة (get_current_user, create_token)
-   - دوال بناء الاستعلامات (build_tenant_query, build_branch_query)
+#### 1. `shared.py` (~150 سطر) - الدوال المشتركة:
+- اتصال قاعدة البيانات (singleton)
+- Enums (UserRole, OrderStatus, PaymentMethod, etc.)
+- دوال المصادقة (get_current_user, create_token)
+- دوال بناء الاستعلامات (build_tenant_query, build_branch_query)
 
-2. **`/app/backend/routes/reports_routes.py`** - ملف جديد للتقارير:
-   - `/reports/sales` - تقرير المبيعات
-   - `/reports/purchases` - تقرير المشتريات
-   - `/reports/inventory` - تقرير المخزون
-   - `/reports/expenses` - تقرير المصروفات
-   - `/reports/profit-loss` - تقرير الأرباح والخسائر
-   - `/reports/delivery-credits` - تقرير ديون التوصيل
-   - `/reports/products` - تقرير المنتجات
-   - `/reports/cancellations` - تقرير الإلغاءات
-   - `/reports/discounts` - تقرير الخصومات
-   - `/reports/credit` - تقرير الآجل
+#### 2. `reports_routes.py` (~600 سطر) - التقارير:
+- `/reports/sales` - تقرير المبيعات
+- `/reports/purchases` - تقرير المشتريات
+- `/reports/inventory` - تقرير المخزون
+- `/reports/expenses` - تقرير المصروفات
+- `/reports/profit-loss` - تقرير الأرباح والخسائر
+- `/reports/delivery-credits` - تقرير ديون التوصيل
+- `/reports/products` - تقرير المنتجات
+- `/reports/cancellations` - تقرير الإلغاءات
+- `/reports/discounts` - تقرير الخصومات
+- `/reports/credit` - تقرير الآجل
 
-3. **`/app/backend/REFACTORING.md`** - توثيق خطة إعادة الهيكلة
+#### 3. `drivers_routes.py` (~350 سطر) - السائقين:
+- CRUD للسائقين (إنشاء، قراءة، تعديل، حذف)
+- تعيين السائقين للطلبات
+- إكمال التوصيل وتتبع GPS
+- إحصائيات السائقين والدفعات
+- بوابة السائق (Portal) بدون مصادقة
 
-### ✅ تنظيف الكود وإصلاح أخطاء Lint
-- إصلاح 7 أخطاء في `/app/frontend/src/pages/Settings.js`
-- إضافة `Loader2` import
-- إصلاح `unescaped entities`
+#### 4. `payroll_routes.py` (~400 سطر) - الرواتب:
+- إدارة الخصومات والمكافآت
+- حساب وكشوف الرواتب
+- صرف الرواتب وتقارير ملخصة
+- كشف راتب الموظف
 
-### ✅ الاختبار الشامل
-- **الواجهة الخلفية:** 21/21 اختبار ناجح (100%)
+### ✅ نتائج الاختبار الشامل (Iteration 24):
+- **الواجهة الخلفية:** 26/26 اختبار ناجح (100%)
 - **الواجهة الأمامية:** جميع الصفحات تعمل بدون أخطاء
+- **لا يوجد أي تراجع (regression)** في الوظائف الأصلية
+
+### ✅ ملفات التوثيق:
+- `/app/backend/REFACTORING.md` - خطة إعادة الهيكلة والخطوات التالية
 
 ---
 
