@@ -965,8 +965,8 @@ export default function Dashboard() {
               الخلفيات
             </Button>
 
-            {/* Super Admin Button - للمالك فقط (بدون tenant_id) */}
-            {user?.role === 'admin' && !user?.tenant_id && (
+            {/* Super Admin Button - للمالك فقط */}
+            {(user?.role === 'super_admin' || (user?.role === 'admin' && !user?.tenant_id)) && (
               <Button
                 variant="outline"
                 size="sm"
@@ -975,7 +975,7 @@ export default function Dashboard() {
                 data-testid="super-admin-btn"
               >
                 <Crown className="h-4 w-4" />
-                إدارة العملاء
+                لوحة تحكم المالك
               </Button>
             )}
 
