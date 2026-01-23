@@ -3042,6 +3042,34 @@ export default function Settings() {
                           label="صورة المنتج"
                         />
                       </div>
+                      {/* ربط بمنتج مصنع */}
+                      {manufacturedProducts.length > 0 && (
+                        <div>
+                          <Label className="text-foreground font-medium mb-2 flex items-center gap-2">
+                            <Factory className="h-4 w-4 text-purple-500" />
+                            ربط بمنتج مصنع (للخصم التلقائي)
+                          </Label>
+                          <Select 
+                            value={editProductForm.manufactured_product_id || 'none'} 
+                            onValueChange={(v) => setEditProductForm({ ...editProductForm, manufactured_product_id: v === 'none' ? null : v })}
+                          >
+                            <SelectTrigger className="mt-2">
+                              <SelectValue placeholder="اختر المنتج المصنع (اختياري)" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="none">بدون ربط</SelectItem>
+                              {manufacturedProducts.map(mp => (
+                                <SelectItem key={mp.id} value={mp.id}>
+                                  {mp.name} ({mp.quantity} {mp.unit})
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <p className="text-xs text-muted-foreground mt-2">
+                            عند ربط المنتج، سيتم خصم المكونات تلقائياً من المخزون عند البيع
+                          </p>
+                        </div>
+                      )}
                       <div>
                         <Label className="text-foreground">الوصف</Label>
                         <Textarea
