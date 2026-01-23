@@ -937,7 +937,8 @@ export default function Settings() {
         price: parseFloat(editProductForm.price) || 0,
         cost: parseFloat(editProductForm.cost) || 0,
         operating_cost: parseFloat(editProductForm.operating_cost) || 0,
-        packaging_cost: parseFloat(editProductForm.packaging_cost) || 0
+        packaging_cost: parseFloat(editProductForm.packaging_cost) || 0,
+        manufactured_product_id: editProductForm.manufactured_product_id || null
       });
       toast.success('تم تحديث المنتج');
       setEditProductDialogOpen(false);
