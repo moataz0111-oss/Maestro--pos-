@@ -5,42 +5,50 @@ import { AuthProvider, useAuth } from "./context/AuthContext";
 import { ThemeProvider } from "./context/ThemeContext";
 import { BranchProvider } from "./context/BranchContext";
 import ErrorBoundary from "./components/ErrorBoundary";
+import React, { Suspense, lazy } from "react";
 
-// Pages
-import Login from "./pages/Login";
-import Dashboard from "./pages/Dashboard";
-import POS from "./pages/POS";
-import Tables from "./pages/Tables";
-import Orders from "./pages/Orders";
-import Inventory from "./pages/Inventory";
-import Delivery from "./pages/Delivery";
-import Settings from "./pages/Settings";
-import Reports from "./pages/Reports";
-import Expenses from "./pages/Expenses";
-import DriverPortal from "./pages/DriverPortal";
-import SuperAdmin from "./pages/SuperAdmin";
-import CallLogs from "./pages/CallLogs";
-import InstallApp from "./pages/InstallApp";
-import HR from "./pages/HR";
-import WarehouseTransfers from "./pages/WarehouseTransfers";
-import KitchenDisplay from "./pages/KitchenDisplay";
-import Loyalty from "./pages/Loyalty";
-import Recipes from "./pages/Recipes";
-// Invoices page removed as per user request
-// import Invoices from "./pages/Invoices";
-import Coupons from "./pages/Coupons";
-import PayrollPrint from "./pages/PayrollPrint";
-import Reservations from "./pages/Reservations";
-// import Reviews from "./pages/Reviews"; // تم حذفها
-import SmartReports from "./pages/SmartReports";
-import Purchasing from "./pages/Purchasing";
-import BranchOrders from "./pages/BranchOrders";
-import SystemAdmin from "./pages/SystemAdmin";
-import CustomerMenu from "./pages/CustomerMenu";
-import CustomerInstall from "./pages/CustomerInstall";
-import PurchasesPage from "./pages/PurchasesPage";
-import WarehouseManufacturing from "./pages/WarehouseManufacturing";
-import InventoryReports from "./pages/InventoryReports";
+// Loading Component
+const PageLoader = () => (
+  <div className="flex items-center justify-center min-h-screen bg-background">
+    <div className="flex flex-col items-center gap-4">
+      <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
+      <p className="text-muted-foreground">جاري التحميل...</p>
+    </div>
+  </div>
+);
+
+// Lazy loaded pages - تحميل الصفحات عند الحاجة فقط
+const Login = lazy(() => import("./pages/Login"));
+const Dashboard = lazy(() => import("./pages/Dashboard"));
+const POS = lazy(() => import("./pages/POS"));
+const Tables = lazy(() => import("./pages/Tables"));
+const Orders = lazy(() => import("./pages/Orders"));
+const Inventory = lazy(() => import("./pages/Inventory"));
+const Delivery = lazy(() => import("./pages/Delivery"));
+const Settings = lazy(() => import("./pages/Settings"));
+const Reports = lazy(() => import("./pages/Reports"));
+const Expenses = lazy(() => import("./pages/Expenses"));
+const DriverPortal = lazy(() => import("./pages/DriverPortal"));
+const SuperAdmin = lazy(() => import("./pages/SuperAdmin"));
+const CallLogs = lazy(() => import("./pages/CallLogs"));
+const InstallApp = lazy(() => import("./pages/InstallApp"));
+const HR = lazy(() => import("./pages/HR"));
+const WarehouseTransfers = lazy(() => import("./pages/WarehouseTransfers"));
+const KitchenDisplay = lazy(() => import("./pages/KitchenDisplay"));
+const Loyalty = lazy(() => import("./pages/Loyalty"));
+const Recipes = lazy(() => import("./pages/Recipes"));
+const Coupons = lazy(() => import("./pages/Coupons"));
+const PayrollPrint = lazy(() => import("./pages/PayrollPrint"));
+const Reservations = lazy(() => import("./pages/Reservations"));
+const SmartReports = lazy(() => import("./pages/SmartReports"));
+const Purchasing = lazy(() => import("./pages/Purchasing"));
+const BranchOrders = lazy(() => import("./pages/BranchOrders"));
+const SystemAdmin = lazy(() => import("./pages/SystemAdmin"));
+const CustomerMenu = lazy(() => import("./pages/CustomerMenu"));
+const CustomerInstall = lazy(() => import("./pages/CustomerInstall"));
+const PurchasesPage = lazy(() => import("./pages/PurchasesPage"));
+const WarehouseManufacturing = lazy(() => import("./pages/WarehouseManufacturing"));
+const InventoryReports = lazy(() => import("./pages/InventoryReports"));
 
 // Components
 import IncomingCallPopup from "./components/IncomingCallPopup";
