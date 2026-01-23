@@ -6,7 +6,7 @@ import pytest
 import requests
 import os
 
-BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://kitchen-manager-14.preview.emergentagent.com')
+BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://maeposv3.preview.emergentagent.com')
 
 class TestHealthAndAuth:
     """Health check and authentication tests"""
