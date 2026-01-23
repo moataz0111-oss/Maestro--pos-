@@ -103,7 +103,7 @@
   },
   
   "test_credentials": {
-    "api_url": "https://food-flow-6.preview.emergentagent.com",
+    "api_url": "https://kitchen-manager-14.preview.emergentagent.com",
     "customer_menu_url": "/menu/default"
   },
   
