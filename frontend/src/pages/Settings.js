@@ -78,7 +78,8 @@ import {
   Receipt,
   CheckCircle,
   Factory,
-  Warehouse
+  Warehouse,
+  Loader2
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -2101,7 +2102,7 @@ export default function Settings() {
                     <div className="text-center py-8 text-muted-foreground">جاري التحميل...</div>
                   ) : getFilteredStaff().length === 0 ? (
                     <div className="text-center py-8 text-muted-foreground">
-                      لا يوجد موظفين. اضغط "إضافة موظف" لإنشاء موظف جديد.
+                      لا يوجد موظفين. اضغط &quot;إضافة موظف&quot; لإنشاء موظف جديد.
                     </div>
                   ) : (
                     <div className="overflow-x-auto">
@@ -3281,7 +3282,7 @@ export default function Settings() {
                       <div className="text-center py-8 text-muted-foreground">
                         <Truck className="h-12 w-12 mx-auto mb-3 opacity-50" />
                         <p>لا توجد شركات توصيل</p>
-                        <p className="text-sm">اضغط على "إضافة شركة" لإضافة شركة جديدة</p>
+                        <p className="text-sm">اضغط على &quot;إضافة شركة&quot; لإضافة شركة جديدة</p>
                       </div>
                     ) : (
                       deliveryApps.map(app => (
@@ -3610,7 +3611,7 @@ export default function Settings() {
                         <h5 className="font-medium text-blue-400 mb-2">3CX</h5>
                         <ol className="list-decimal list-inside space-y-1 text-muted-foreground">
                           <li>اذهب إلى Settings → Integrations → CRM</li>
-                          <li>اختر "Custom CRM" وأضف رابط Webhook</li>
+                          <li>اختر &quot;Custom CRM&quot; وأضف رابط Webhook</li>
                           <li>انسخ API Key من إعدادات 3CX</li>
                         </ol>
                       </div>
