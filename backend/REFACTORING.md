@@ -4,11 +4,13 @@
 
 ```
 /app/backend/
-├── server.py              # الملف الرئيسي (13,681 سطر) - يحتاج تقسيم إضافي
+├── server.py              # الملف الرئيسي (~13,000 سطر) - تم نقل جزء كبير
 ├── routes/
 │   ├── __init__.py        # تجميع الـ routers
 │   ├── shared.py          # ✅ جديد - الدوال والأنواع المشتركة
-│   ├── reports_routes.py  # ✅ جديد - تقارير المبيعات والمخزون
+│   ├── reports_routes.py  # ✅ جديد - تقارير المبيعات والمخزون (~600 سطر)
+│   ├── drivers_routes.py  # ✅ جديد - إدارة السائقين والتوصيل (~350 سطر)
+│   ├── payroll_routes.py  # ✅ جديد - الرواتب والخصومات والمكافآت (~400 سطر)
 │   ├── inventory_system.py
 │   ├── auth.py
 │   ├── users.py
@@ -30,18 +32,39 @@
 - دوال المصادقة (get_current_user, create_token)
 - دوال بناء الاستعلامات (build_tenant_query, build_branch_query)
 
-### 2. reports_routes.py (جديد)
+### 2. reports_routes.py (جديد) - ~600 سطر
 يحتوي على جميع تقارير:
-- المبيعات `/reports/sales`
-- المشتريات `/reports/purchases`
-- المخزون `/reports/inventory`
-- المصروفات `/reports/expenses`
-- الأرباح والخسائر `/reports/profit-loss`
-- ديون التوصيل `/reports/delivery-credits`
-- المنتجات `/reports/products`
-- الإلغاءات `/reports/cancellations`
-- الخصومات `/reports/discounts`
-- الآجل `/reports/credit`
+- `/reports/sales` - تقرير المبيعات
+- `/reports/purchases` - تقرير المشتريات
+- `/reports/inventory` - تقرير المخزون
+- `/reports/expenses` - تقرير المصروفات
+- `/reports/profit-loss` - تقرير الأرباح والخسائر
+- `/reports/delivery-credits` - تقرير ديون التوصيل
+- `/reports/products` - تقرير المنتجات
+- `/reports/cancellations` - تقرير الإلغاءات
+- `/reports/discounts` - تقرير الخصومات
+- `/reports/credit` - تقرير الآجل
+
+### 3. drivers_routes.py (جديد) - ~350 سطر
+يحتوي على:
+- CRUD للسائقين (إنشاء، قراءة، تعديل، حذف)
+- تعيين السائقين للطلبات
+- إكمال التوصيل
+- إحصائيات السائقين
+- تحصيل المبالغ من السائقين
+- بوابة السائق (Portal) بدون مصادقة
+- تتبع موقع السائق GPS
+
+### 4. payroll_routes.py (جديد) - ~400 سطر
+يحتوي على:
+- إدارة الخصومات (إنشاء، قراءة)
+- إدارة المكافآت (إنشاء، قراءة)
+- حساب الرواتب
+- كشوف الرواتب CRUD
+- صرف الرواتب
+- إنشاء كشوف لجميع الموظفين
+- تقرير ملخص الرواتب
+- كشف راتب الموظف
 
 ## الخطوات التالية (للتطوير المستقبلي)
 
