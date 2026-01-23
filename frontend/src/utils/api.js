@@ -37,4 +37,41 @@ export const API_URL = `${BACKEND_URL}/api`;
 export const getApiUrl = () => API_URL;
 export const getBackendUrlFn = () => BACKEND_URL;
 
+// ==================== API CACHE ====================
+// نظام كاش بسيط لتسريع الاستجابة
+const apiCache = new Map();
+const CACHE_DURATION = 30000; // 30 ثانية
+
+export const cachedFetch = async (url, options = {}) => {
+  const cacheKey = `${url}-${JSON.stringify(options)}`;
+  const cached = apiCache.get(cacheKey);
+  
+  // إذا كان هناك كاش صالح، أعده مباشرة
+  if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
+    return cached.data;
+  }
+  
+  // اجلب البيانات الجديدة
+  const response = await fetch(url, options);
+  const data = await response.json();
+  
+  // خزّن في الكاش
+  apiCache.set(cacheKey, { data, timestamp: Date.now() });
+  
+  return data;
+};
+
+// مسح الكاش عند تحديث البيانات
+export const clearCache = (urlPattern) => {
+  if (urlPattern) {
+    for (const key of apiCache.keys()) {
+      if (key.includes(urlPattern)) {
+        apiCache.delete(key);
+      }
+    }
+  } else {
+    apiCache.clear();
+  }
+};
+
 export default API_URL;
