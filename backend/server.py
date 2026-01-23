@@ -13658,6 +13658,10 @@ app.include_router(api_router)
 from routes.inventory_system import router as inventory_router
 app.include_router(inventory_router)
 
+# Include reports routes (refactored)
+from routes.reports_routes import router as reports_router
+app.include_router(reports_router, prefix="/api")
+
 # Middleware to prevent caching of API responses
 @app.middleware("http")
 async def add_no_cache_headers(request, call_next):
