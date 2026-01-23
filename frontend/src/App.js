@@ -377,7 +377,8 @@ function AppRoutes() {
       <Route path="/menu/:tenantId" element={<CustomerMenu />} />
       <Route path="/install-app" element={<CustomerInstall />} />
       <Route path="*" element={<Navigate to="/" />} />
-    </Routes>
+      </Routes>
+    </Suspense>
   );
 }
 
