@@ -229,15 +229,15 @@ class TestSuperAdminAccess:
     def test_super_admin_branding_access(self, owner_token):
         """Test super admin can access branding settings"""
         headers = {"Authorization": f"Bearer {owner_token}"}
-        response = requests.get(f"{BASE_URL}/api/super-admin/branding", headers=headers)
+        response = requests.get(f"{BASE_URL}/api/system/branding", headers=headers)
         # Should return 200 for super_admin
         assert response.status_code == 200, f"Super admin should access branding: {response.text}"
-        print(f"✅ Super admin can access /api/super-admin/branding")
+        print(f"✅ Super admin can access /api/system/branding")
     
     def test_admin_cannot_access_super_admin_endpoints(self, admin_token):
         """Test regular admin cannot access super admin endpoints"""
         headers = {"Authorization": f"Bearer {admin_token}"}
-        response = requests.get(f"{BASE_URL}/api/super-admin/branding", headers=headers)
+        response = requests.get(f"{BASE_URL}/api/system/branding", headers=headers)
         # Should return 403 for regular admin
         assert response.status_code == 403, f"Regular admin should not access super admin endpoints: {response.status_code}"
         print(f"✅ Regular admin correctly denied access to super admin endpoints")
@@ -245,10 +245,10 @@ class TestSuperAdminAccess:
     def test_get_tenants_as_super_admin(self, owner_token):
         """Test super admin can get tenants list"""
         headers = {"Authorization": f"Bearer {owner_token}"}
-        response = requests.get(f"{BASE_URL}/api/tenants", headers=headers)
+        response = requests.get(f"{BASE_URL}/api/super-admin/tenants", headers=headers)
         assert response.status_code == 200, f"Failed to get tenants: {response.text}"
         tenants = response.json()
-        print(f"✅ GET /api/tenants - Found {len(tenants)} tenants")
+        print(f"✅ GET /api/super-admin/tenants - Found {len(tenants)} tenants")
 
 
 class TestCategoriesAPI:
