@@ -5580,6 +5580,66 @@ async def delete_login_background(background_id: str, current_user: dict = Depen
     
     return {"message": "تم حذف الخلفية"}
 
+@api_router.post("/login-backgrounds/upload-logo")
+async def upload_login_page_logo(
+    file: UploadFile = File(...),
+    current_user: dict = Depends(verify_super_admin)
+):
+    """رفع شعار صفحة تسجيل الدخول - للمالك فقط"""
+    
+    # التحقق من نوع الملف
+    allowed_types = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml']
+    if file.content_type not in allowed_types:
+        raise HTTPException(status_code=400, detail="نوع الملف غير مدعوم. يرجى استخدام JPG, PNG, GIF, WebP أو SVG")
+    
+    # معالجة وحفظ الصورة
+    filename = await process_and_save_image(file, LOGOS_DIR, max_size=(512, 512), quality=90)
+    
+    # إنشاء URL نسبي للشعار
+    logo_url = f"/api/uploads/logos/{filename}"
+    
+    # تحديث login_backgrounds مع الشعار الجديد
+    settings = await db.settings.find_one({"type": "login_backgrounds"}, {"_id": 0})
+    current_value = settings.get("value", {}) if settings else {}
+    
+    # تحديث logo_url فقط
+    await db.settings.update_one(
+        {"type": "login_backgrounds"},
+        {"$set": {"value.logo_url": logo_url}},
+        upsert=True
+    )
+    
+    return {"message": "تم رفع شعار صفحة تسجيل الدخول بنجاح", "logo_url": logo_url}
+
+@api_router.put("/login-backgrounds/logo-url")
+async def update_login_page_logo_url(
+    logo_url: str = Body(..., embed=True),
+    current_user: dict = Depends(verify_super_admin)
+):
+    """تحديث شعار صفحة تسجيل الدخول برابط خارجي - للمالك فقط"""
+    
+    # تحديث login_backgrounds مع الشعار الجديد
+    await db.settings.update_one(
+        {"type": "login_backgrounds"},
+        {"$set": {"value.logo_url": logo_url}},
+        upsert=True
+    )
+    
+    return {"message": "تم تحديث شعار صفحة تسجيل الدخول", "logo_url": logo_url}
+
+@api_router.delete("/login-backgrounds/logo")
+async def delete_login_page_logo(current_user: dict = Depends(verify_super_admin)):
+    """حذف شعار صفحة تسجيل الدخول - للمالك فقط"""
+    
+    # تحديث login_backgrounds بإزالة الشعار
+    await db.settings.update_one(
+        {"type": "login_backgrounds"},
+        {"$set": {"value.logo_url": None}},
+        upsert=True
+    )
+    
+    return {"message": "تم حذف شعار صفحة تسجيل الدخول"}
+
 # ==================== ROLES & STAFF MANAGEMENT - إدارة الأدوار والموظفين ====================
 # نظام إدارة الموظفين والصلاحيات للعملاء
 
