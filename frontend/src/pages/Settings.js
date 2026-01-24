@@ -2208,9 +2208,6 @@ export default function Settings() {
                         إضافة فرع
                       </Button>
                     </DialogTrigger>
-                        إضافة فرع
-                      </Button>
-                    </DialogTrigger>
                     <DialogContent>
                       <DialogHeader>
                         <DialogTitle className="text-foreground">إضافة فرع جديد</DialogTitle>
