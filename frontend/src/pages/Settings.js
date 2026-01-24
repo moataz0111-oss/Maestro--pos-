@@ -1590,34 +1590,215 @@ export default function Settings() {
             </TabsContent>
           )}
 
-          {/* Users */}
+          {/* Staff & Users Management - إدارة الموظفين والمستخدمين */}
           {hasRole(['admin', 'super_admin']) && (
-            <TabsContent value="users">
+            <TabsContent value="staff">
               <Card className="border-border/50 bg-card">
-                <CardHeader className="flex flex-row items-center justify-between">
+                <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-foreground">
                     <Users className="h-5 w-5" />
-                    إدارة المستخدمين
+                    إدارة المستخدمين والموظفين
                   </CardTitle>
-                  <Dialog open={userDialogOpen} onOpenChange={setUserDialogOpen}>
-                    <DialogTrigger asChild>
-                      <Button className="bg-primary text-primary-foreground">
-                        <Plus className="h-4 w-4 ml-2" />
-                        إضافة مستخدم
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent>
-                      <DialogHeader>
-                        <DialogTitle className="text-foreground">إضافة مستخدم جديد</DialogTitle>
-                      </DialogHeader>
-                      <form onSubmit={handleCreateUser} className="space-y-4">
-                        <div className="grid grid-cols-2 gap-4">
-                          <div>
-                            <Label className="text-foreground">اسم المستخدم</Label>
-                            <Input
-                              value={userForm.username}
-                              onChange={(e) => setUserForm({ ...userForm, username: e.target.value })}
-                              required
+                </CardHeader>
+                <CardContent>
+                  {/* تبويبات فرعية */}
+                  <Tabs defaultValue="system_users" className="w-full">
+                    <TabsList className="grid w-full grid-cols-2 mb-4">
+                      <TabsTrigger value="system_users">
+                        <Shield className="h-4 w-4 ml-2" />
+                        مستخدمي النظام
+                      </TabsTrigger>
+                      <TabsTrigger value="employees">
+                        <UserCog className="h-4 w-4 ml-2" />
+                        الموظفين
+                      </TabsTrigger>
+                    </TabsList>
+                    
+                    {/* قسم مستخدمي النظام */}
+                    <TabsContent value="system_users" className="space-y-4">
+                      <div className="flex justify-between items-center">
+                        <p className="text-sm text-muted-foreground">إدارة حسابات الدخول للنظام وصلاحياتهم</p>
+                        <Dialog open={userDialogOpen} onOpenChange={setUserDialogOpen}>
+                          <DialogTrigger asChild>
+                            <Button className="bg-primary text-primary-foreground">
+                              <Plus className="h-4 w-4 ml-2" />
+                              إضافة مستخدم
+                            </Button>
+                          </DialogTrigger>
+                          <DialogContent>
+                            <DialogHeader>
+                              <DialogTitle className="text-foreground">إضافة مستخدم جديد</DialogTitle>
+                            </DialogHeader>
+                            <form onSubmit={handleCreateUser} className="space-y-4">
+                              <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                  <Label className="text-foreground">اسم المستخدم</Label>
+                                  <Input
+                                    value={userForm.username}
+                                    onChange={(e) => setUserForm({ ...userForm, username: e.target.value })}
+                                    required
+                                    className="mt-1"
+                                  />
+                                </div>
+                                <div>
+                                  <Label className="text-foreground">الاسم الكامل</Label>
+                                  <Input
+                                    value={userForm.full_name}
+                                    onChange={(e) => setUserForm({ ...userForm, full_name: e.target.value })}
+                                    required
+                                    className="mt-1"
+                                  />
+                                </div>
+                              </div>
+                              <div>
+                                <Label className="text-foreground">البريد الإلكتروني</Label>
+                                <Input
+                                  type="email"
+                                  value={userForm.email}
+                                  onChange={(e) => setUserForm({ ...userForm, email: e.target.value })}
+                                  required
+                                  className="mt-1"
+                                />
+                              </div>
+                              <div>
+                                <Label className="text-foreground">كلمة المرور</Label>
+                                <Input
+                                  type="password"
+                                  value={userForm.password}
+                                  onChange={(e) => setUserForm({ ...userForm, password: e.target.value })}
+                                  required
+                                  className="mt-1"
+                                />
+                              </div>
+                              <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                  <Label className="text-foreground">الصلاحية</Label>
+                                  <Select value={userForm.role} onValueChange={(v) => setUserForm({ ...userForm, role: v })}>
+                                    <SelectTrigger className="mt-1">
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="cashier">كاشير</SelectItem>
+                                      <SelectItem value="waiter">ويتر</SelectItem>
+                                      <SelectItem value="kitchen">مطبخ</SelectItem>
+                                      <SelectItem value="manager">مدير</SelectItem>
+                                      <SelectItem value="admin">مدير عام</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                                <div>
+                                  <Label className="text-foreground">الفرع</Label>
+                                  <Select value={userForm.branch_id} onValueChange={(v) => setUserForm({ ...userForm, branch_id: v })}>
+                                    <SelectTrigger className="mt-1">
+                                      <SelectValue placeholder="اختر الفرع" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      {branches.map(branch => (
+                                        <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                              </div>
+                              <Button type="submit" className="w-full bg-primary text-primary-foreground">
+                                إنشاء المستخدم
+                              </Button>
+                            </form>
+                          </DialogContent>
+                        </Dialog>
+                      </div>
+                      
+                      {/* جدول المستخدمين */}
+                      <div className="border border-border rounded-lg overflow-hidden">
+                        <Table>
+                          <TableHeader>
+                            <TableRow className="bg-muted/50">
+                              <TableHead className="text-right">المستخدم</TableHead>
+                              <TableHead className="text-right">البريد</TableHead>
+                              <TableHead className="text-right">الصلاحية</TableHead>
+                              <TableHead className="text-right">الفرع</TableHead>
+                              <TableHead className="text-right">الإجراءات</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {users.map(u => (
+                              <TableRow key={u.id}>
+                                <TableCell>
+                                  <div className="flex items-center gap-2">
+                                    <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center">
+                                      <User className="h-4 w-4 text-primary" />
+                                    </div>
+                                    <div>
+                                      <p className="font-medium">{u.full_name || u.username}</p>
+                                      <p className="text-xs text-muted-foreground">@{u.username}</p>
+                                    </div>
+                                  </div>
+                                </TableCell>
+                                <TableCell>{u.email}</TableCell>
+                                <TableCell>
+                                  <span className={`px-2 py-1 rounded-full text-xs ${
+                                    u.role === 'admin' ? 'bg-red-500/20 text-red-400' :
+                                    u.role === 'manager' ? 'bg-blue-500/20 text-blue-400' :
+                                    u.role === 'cashier' ? 'bg-green-500/20 text-green-400' :
+                                    'bg-gray-500/20 text-gray-400'
+                                  }`}>
+                                    {u.role === 'admin' ? 'مدير عام' : u.role === 'manager' ? 'مدير' : u.role === 'cashier' ? 'كاشير' : u.role === 'waiter' ? 'ويتر' : u.role === 'kitchen' ? 'مطبخ' : u.role}
+                                  </span>
+                                </TableCell>
+                                <TableCell>{branches.find(b => b.id === u.branch_id)?.name || '-'}</TableCell>
+                                <TableCell>
+                                  <div className="flex gap-1">
+                                    <Button variant="ghost" size="sm" onClick={() => openEditUserDialog(u)}>
+                                      <Edit className="h-4 w-4" />
+                                    </Button>
+                                    <Button variant="ghost" size="sm" className="text-red-500" onClick={() => handleDeleteUser(u.id)}>
+                                      <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    </TabsContent>
+                    
+                    {/* قسم الموظفين */}
+                    <TabsContent value="employees" className="space-y-4">
+                      <div className="flex justify-between items-center flex-wrap gap-4">
+                        <div className="flex gap-2 flex-wrap">
+                          {/* فلترة بالفرع */}
+                          <Select value={staffFilter.branch_id} onValueChange={(val) => setStaffFilter({...staffFilter, branch_id: val === 'all' ? '' : val})}>
+                            <SelectTrigger className="w-[180px]">
+                              <SelectValue placeholder="جميع الفروع" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="all">جميع الفروع</SelectItem>
+                              {branches.map(branch => (
+                                <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          {/* فلترة بالدور */}
+                          <Select value={staffFilter.role} onValueChange={(val) => setStaffFilter({...staffFilter, role: val === 'all' ? '' : val})}>
+                            <SelectTrigger className="w-[150px]">
+                              <SelectValue placeholder="جميع الأدوار" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="all">جميع الأدوار</SelectItem>
+                              {Object.entries(staffRoles).map(([key, name]) => (
+                                <SelectItem key={key} value={key}>{name}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <Dialog open={staffDialogOpen} onOpenChange={setStaffDialogOpen}>
+                          <DialogTrigger asChild>
+                            <Button className="bg-primary text-primary-foreground">
+                              <Plus className="h-4 w-4 ml-2" />
+                              إضافة موظف
+                            </Button>
+                          </DialogTrigger>
                               className="mt-1"
                             />
                           </div>
