@@ -1718,6 +1718,116 @@ export default function POS() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* حوار الإرجاع */}
+      <Dialog open={refundDialogOpen} onOpenChange={closeRefundDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-foreground">
+              <RefreshCw className="h-5 w-5 text-orange-500" />
+              إرجاع طلب
+            </DialogTitle>
+          </DialogHeader>
+          
+          <div className="space-y-4 pt-4">
+            {/* البحث برقم الفاتورة */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-foreground">رقم الفاتورة</label>
+              <div className="flex gap-2">
+                <Input
+                  placeholder="أدخل رقم الفاتورة..."
+                  value={refundOrderId}
+                  onChange={(e) => setRefundOrderId(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && searchOrderForRefund()}
+                  className="flex-1"
+                  data-testid="refund-order-input"
+                />
+                <Button 
+                  onClick={searchOrderForRefund}
+                  disabled={refundLoading}
+                  variant="outline"
+                >
+                  {refundLoading ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+                </Button>
+              </div>
+            </div>
+            
+            {/* معلومات الطلب */}
+            {refundOrderInfo && (
+              <div className={`p-4 rounded-lg border ${refundOrderInfo.can_refund ? 'bg-green-500/10 border-green-500/30' : 'bg-red-500/10 border-red-500/30'}`}>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="font-bold text-lg">طلب #{refundOrderInfo.order_number}</span>
+                  {refundOrderInfo.is_refunded ? (
+                    <span className="px-2 py-1 bg-red-500/20 text-red-400 text-xs rounded-full">تم إرجاعه</span>
+                  ) : refundOrderInfo.can_refund ? (
+                    <span className="px-2 py-1 bg-green-500/20 text-green-400 text-xs rounded-full">قابل للإرجاع</span>
+                  ) : (
+                    <span className="px-2 py-1 bg-yellow-500/20 text-yellow-400 text-xs rounded-full">غير مدفوع</span>
+                  )}
+                </div>
+                
+                {refundOrderInfo.refunds && refundOrderInfo.refunds.length > 0 && (
+                  <div className="text-sm text-muted-foreground mt-2">
+                    <p>تم إرجاعه بتاريخ: {new Date(refundOrderInfo.refunds[0].created_at).toLocaleString('ar-IQ')}</p>
+                    <p>السبب: {refundOrderInfo.refunds[0].reason}</p>
+                  </div>
+                )}
+              </div>
+            )}
+            
+            {/* سبب الإرجاع */}
+            {refundOrderInfo && refundOrderInfo.can_refund && (
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-foreground">
+                  سبب الإرجاع <span className="text-red-500">*</span>
+                </label>
+                <Input
+                  placeholder="أدخل سبب الإرجاع (مطلوب)..."
+                  value={refundReason}
+                  onChange={(e) => setRefundReason(e.target.value)}
+                  className="w-full"
+                  data-testid="refund-reason-input"
+                />
+                <p className="text-xs text-muted-foreground">
+                  يجب إدخال سبب الإرجاع (3 أحرف على الأقل)
+                </p>
+              </div>
+            )}
+            
+            {/* أزرار الإجراءات */}
+            <div className="flex gap-2 pt-4">
+              <Button
+                variant="outline"
+                onClick={closeRefundDialog}
+                className="flex-1"
+              >
+                إلغاء
+              </Button>
+              
+              {refundOrderInfo && refundOrderInfo.can_refund && (
+                <Button
+                  onClick={processRefund}
+                  disabled={refundLoading || !refundReason.trim()}
+                  className="flex-1 bg-orange-500 hover:bg-orange-600"
+                  data-testid="confirm-refund-btn"
+                >
+                  {refundLoading ? (
+                    <>
+                      <RefreshCw className="h-4 w-4 ml-2 animate-spin" />
+                      جاري الإرجاع...
+                    </>
+                  ) : (
+                    <>
+                      <Check className="h-4 w-4 ml-2" />
+                      تأكيد الإرجاع
+                    </>
+                  )}
+                </Button>
+              )}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
