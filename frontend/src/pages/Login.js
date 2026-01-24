@@ -374,9 +374,16 @@ export default function Login() {
           >
             {backgroundSettings?.logo_url ? (
               <img 
-                src={backgroundSettings.logo_url} 
+                src={backgroundSettings.logo_url.startsWith('/api') 
+                  ? `${API}${backgroundSettings.logo_url.replace('/api', '')}` 
+                  : backgroundSettings.logo_url} 
                 alt="Logo" 
                 className="w-16 h-16 object-contain"
+                onError={(e) => {
+                  // إذا فشل تحميل الشعار، عرض الحرف M كبديل
+                  e.target.style.display = 'none';
+                  e.target.parentElement.innerHTML = '<span class="text-4xl font-black text-black font-cairo">M</span>';
+                }}
               />
             ) : (
               <span className="text-4xl font-black text-black font-cairo">M</span>
