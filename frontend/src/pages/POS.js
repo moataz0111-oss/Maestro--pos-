@@ -848,6 +848,19 @@ export default function POS() {
                 </span>
               )}
             </Button>
+            
+            {/* زر إرجاع الطلبات */}
+            {canRefund() && (
+              <Button 
+                variant="outline" 
+                className="border-orange-500/50 text-orange-500 hover:bg-orange-500/10"
+                onClick={openRefundDialog}
+                data-testid="refund-btn"
+              >
+                <RefreshCw className="h-4 w-4 ml-2" />
+                إرجاع طلب
+              </Button>
+            )}
           </div>
           
           <div className="flex items-center gap-4">
