@@ -2193,41 +2193,7 @@ export default function Settings() {
           )}
 
           {/* Branches */}
-          {hasRole(['admin', 'super_admin']) && (
-                            <th className="py-3 px-4 text-foreground font-medium">الإجراءات</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {getFilteredStaff().map(staff => (
-                            <tr key={staff.id} className="border-b border-border/50 hover:bg-muted/50">
-                              <td className="py-3 px-4">
-                                <div>
-                                  <div className="font-medium text-foreground">{staff.full_name}</div>
-                                  {staff.job_title && <div className="text-xs text-muted-foreground">{staff.job_title}</div>}
-                                </div>
-                              </td>
-                              <td className="py-3 px-4 text-muted-foreground">{staff.email}</td>
-                              <td className="py-3 px-4">
-                                <span className="px-2 py-1 rounded-full text-xs bg-primary/10 text-primary">
-                                  {staffRoles[staff.role] || staff.role}
-                                </span>
-                              </td>
-                              <td className="py-3 px-4 text-muted-foreground">{staff.branch_name || 'غير محدد'}</td>
-                              <td className="py-3 px-4">
-                                {staff.is_active !== false ? (
-                                  <span className="px-2 py-1 rounded-full text-xs bg-green-500/10 text-green-600">نشط</span>
-                                ) : (
-                                  <span className="px-2 py-1 rounded-full text-xs bg-red-500/10 text-red-600">معطل</span>
-                                )}
-                              </td>
-                              <td className="py-3 px-4">
-                                <div className="flex gap-1">
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => {
-                                      setEditStaffForm(staff);
-                                      setEditStaffDialogOpen(true);
+          {hasRole(['admin', 'super_admin']) && settingsPermissions.settingsBranches && (
                                     }}
                                   >
                                     <Edit className="h-4 w-4" />
