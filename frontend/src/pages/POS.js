@@ -311,6 +311,98 @@ export default function POS() {
     }
   };
 
+  // ========== دوال الإرجاع ==========
+  
+  // التحقق من صلاحية الإرجاع
+  const canRefund = () => {
+    if (!user) return false;
+    const role = user.role;
+    const permissions = user.permissions || [];
+    return role === 'admin' || role === 'super_admin' || role === 'manager' || permissions.includes('can_refund');
+  };
+
+  // البحث عن طلب للإرجاع
+  const searchOrderForRefund = async () => {
+    if (!refundOrderId.trim()) {
+      toast.error('أدخل رقم الفاتورة');
+      return;
+    }
+    
+    setRefundLoading(true);
+    try {
+      const res = await axios.get(`${API}/orders/${refundOrderId}/refund-status`);
+      setRefundOrderInfo(res.data);
+      
+      if (res.data.is_refunded) {
+        toast.warning('هذا الطلب تم إرجاعه مسبقاً');
+      } else if (!res.data.can_refund) {
+        toast.warning('لا يمكن إرجاع هذا الطلب (غير مدفوع)');
+      }
+    } catch (error) {
+      console.error('Failed to search order:', error);
+      toast.error(error.response?.data?.detail || 'الطلب غير موجود');
+      setRefundOrderInfo(null);
+    } finally {
+      setRefundLoading(false);
+    }
+  };
+
+  // تنفيذ الإرجاع
+  const processRefund = async () => {
+    if (!refundReason.trim() || refundReason.trim().length < 3) {
+      toast.error('يجب إدخال سبب الإرجاع (3 أحرف على الأقل)');
+      return;
+    }
+    
+    if (!refundOrderInfo || !refundOrderInfo.can_refund) {
+      toast.error('لا يمكن إرجاع هذا الطلب');
+      return;
+    }
+    
+    setRefundLoading(true);
+    try {
+      await axios.post(`${API}/refunds`, {
+        order_id: refundOrderInfo.order_id,
+        reason: refundReason.trim(),
+        refund_type: 'full'
+      });
+      
+      playSuccess();
+      toast.success(`تم إرجاع الطلب #${refundOrderInfo.order_number} بنجاح`);
+      
+      // إعادة تعيين الحالة وإغلاق الحوار
+      setRefundDialogOpen(false);
+      setRefundOrderId('');
+      setRefundReason('');
+      setRefundOrderInfo(null);
+      
+      // تحديث الطلبات المعلقة
+      await fetchPendingOrders();
+    } catch (error) {
+      console.error('Failed to process refund:', error);
+      toast.error(error.response?.data?.detail || 'فشل في إرجاع الطلب');
+    } finally {
+      setRefundLoading(false);
+    }
+  };
+
+  // فتح حوار الإرجاع
+  const openRefundDialog = () => {
+    if (!canRefund()) {
+      toast.error('ليس لديك صلاحية إرجاع الطلبات');
+      return;
+    }
+    setRefundDialogOpen(true);
+  };
+
+  // إغلاق حوار الإرجاع
+  const closeRefundDialog = () => {
+    setRefundDialogOpen(false);
+    setRefundOrderId('');
+    setRefundReason('');
+    setRefundOrderInfo(null);
+  };
+
   // البحث التلقائي عن عميل بالهاتف (للكول سنتر)
   const searchCustomerByPhone = async (phone) => {
     if (!phone || phone.length < 4) return;
