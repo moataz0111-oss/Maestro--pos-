@@ -121,6 +121,16 @@ export default function Reports() {
           const discRes = await axios.get(`${API}/reports/discounts`, { params });
           setDiscountsReport(discRes.data);
           break;
+        case 'refunds':
+          const refundsRes = await axios.get(`${API}/refunds`, { params: { date_from: startDate, date_to: endDate, ...(branchId && { branch_id: branchId }) } });
+          const refundsList = refundsRes.data;
+          setRefundsReport({
+            refunds: refundsList,
+            total_count: refundsList.length,
+            total_amount: refundsList.reduce((sum, r) => sum + (r.refund_amount || 0), 0),
+            orders_affected: new Set(refundsList.map(r => r.order_id)).size
+          });
+          break;
         case 'credit':
           const creditRes = await axios.get(`${API}/reports/credit`, { params });
           setCreditReport(creditRes.data);
