@@ -1805,69 +1805,30 @@ export default function Settings() {
                             <DialogHeader>
                               <DialogTitle className="text-foreground">إضافة موظف جديد</DialogTitle>
                             </DialogHeader>
-                    <Users className="h-5 w-5" />
-                    إدارة الموظفين والأدوار
-                  </CardTitle>
-                  <div className="flex gap-2 flex-wrap">
-                    {/* فلترة بالفرع */}
-                    <Select value={staffFilter.branch_id} onValueChange={(val) => setStaffFilter({...staffFilter, branch_id: val === 'all' ? '' : val})}>
-                      <SelectTrigger className="w-[180px]">
-                        <SelectValue placeholder="جميع الفروع" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">جميع الفروع</SelectItem>
-                        {branches.map(branch => (
-                          <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    {/* فلترة بالدور */}
-                    <Select value={staffFilter.role} onValueChange={(val) => setStaffFilter({...staffFilter, role: val === 'all' ? '' : val})}>
-                      <SelectTrigger className="w-[150px]">
-                        <SelectValue placeholder="جميع الأدوار" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">جميع الأدوار</SelectItem>
-                        {Object.entries(staffRoles).map(([key, name]) => (
-                          <SelectItem key={key} value={key}>{name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <Dialog open={staffDialogOpen} onOpenChange={setStaffDialogOpen}>
-                      <DialogTrigger asChild>
-                        <Button className="bg-primary text-primary-foreground">
-                          <Plus className="h-4 w-4 ml-2" />
-                          إضافة موظف
-                        </Button>
-                      </DialogTrigger>
-                      <DialogContent className="max-w-md">
-                        <DialogHeader>
-                          <DialogTitle className="text-foreground">إضافة موظف جديد</DialogTitle>
-                        </DialogHeader>
-                        <form onSubmit={handleCreateStaff} className="space-y-4">
-                          <div>
-                            <Label className="text-foreground">الاسم الكامل *</Label>
-                            <Input
-                              value={staffForm.full_name}
-                              onChange={(e) => setStaffForm({ ...staffForm, full_name: e.target.value })}
-                              required
-                              className="bg-background border-input"
-                            />
-                          </div>
-                          <div>
-                            <Label className="text-foreground">البريد الإلكتروني *</Label>
-                            <Input
-                              type="email"
-                              value={staffForm.email}
-                              onChange={(e) => setStaffForm({ ...staffForm, email: e.target.value })}
-                              required
-                              className="bg-background border-input"
-                            />
-                          </div>
-                          <div>
-                            <Label className="text-foreground">رقم الهاتف</Label>
-                            <Input
-                              value={staffForm.phone}
+                            <form onSubmit={handleCreateStaff} className="space-y-4">
+                              <div>
+                                <Label className="text-foreground">الاسم الكامل *</Label>
+                                <Input
+                                  value={staffForm.full_name}
+                                  onChange={(e) => setStaffForm({ ...staffForm, full_name: e.target.value })}
+                                  required
+                                  className="bg-background border-input"
+                                />
+                              </div>
+                              <div>
+                                <Label className="text-foreground">البريد الإلكتروني *</Label>
+                                <Input
+                                  type="email"
+                                  value={staffForm.email}
+                                  onChange={(e) => setStaffForm({ ...staffForm, email: e.target.value })}
+                                  required
+                                  className="bg-background border-input"
+                                />
+                              </div>
+                              <div>
+                                <Label className="text-foreground">رقم الهاتف</Label>
+                                <Input
+                                  value={staffForm.phone}
                               onChange={(e) => setStaffForm({ ...staffForm, phone: e.target.value })}
                               className="bg-background border-input"
                             />
