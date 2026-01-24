@@ -370,7 +370,7 @@ export default function Login() {
         <CardHeader className="text-center pb-2">
           {/* Logo */}
           <div 
-            className={`mx-auto mb-4 w-24 h-24 bg-gradient-to-br from-primary to-yellow-600 rounded-2xl flex items-center justify-center shadow-2xl ${getLogoAnimation(backgroundSettings?.logo_animation || 'pulse')}`}
+            className={`mx-auto mb-4 w-24 h-24 rounded-2xl flex items-center justify-center shadow-2xl overflow-hidden ${getLogoAnimation(backgroundSettings?.logo_animation || 'pulse')} ${!backgroundSettings?.logo_url ? 'bg-gradient-to-br from-primary to-yellow-600' : ''}`}
           >
             {backgroundSettings?.logo_url ? (
               <img 
@@ -378,10 +378,11 @@ export default function Login() {
                   ? `${API}${backgroundSettings.logo_url.replace('/api', '')}` 
                   : backgroundSettings.logo_url} 
                 alt="Logo" 
-                className="w-16 h-16 object-contain"
+                className="w-full h-full object-cover rounded-2xl"
                 onError={(e) => {
                   // إذا فشل تحميل الشعار، عرض الحرف M كبديل
                   e.target.style.display = 'none';
+                  e.target.parentElement.classList.add('bg-gradient-to-br', 'from-primary', 'to-yellow-600');
                   e.target.parentElement.innerHTML = '<span class="text-4xl font-black text-black font-cairo">M</span>';
                 }}
               />
