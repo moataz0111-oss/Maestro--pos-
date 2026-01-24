@@ -4684,7 +4684,8 @@ async def create_refund(refund: RefundCreate, current_user: dict = Depends(get_c
     }
     await db.expenses.insert_one(expense_doc)
     
-    del refund_doc["_id"] if "_id" in refund_doc else None
+    if "_id" in refund_doc:
+        del refund_doc["_id"]
     return refund_doc
 
 @api_router.get("/refunds")
