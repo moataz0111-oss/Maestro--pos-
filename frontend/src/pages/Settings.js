@@ -1169,21 +1169,13 @@ export default function Settings() {
                   الرئيسية
                 </TabsTrigger>
               )}
-              {hasRole(['admin', 'super_admin']) && settingsPermissions.settingsUsers && (
-                <TabsTrigger 
-                  value="users"
-                  className="flex-shrink-0 px-4 py-2.5 text-sm font-medium rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
-                >
-                  المستخدمين
-                </TabsTrigger>
-              )}
               {hasRole(['admin', 'super_admin']) && (
                 <TabsTrigger 
                   value="staff"
                   className="flex-shrink-0 px-4 py-2.5 text-sm font-medium rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
                 >
                   <Users className="h-4 w-4 ml-1" />
-                  الأدوار والموظفين
+                  المستخدمين والموظفين
                 </TabsTrigger>
               )}
               {(hasRole(['admin', 'super_admin', 'manager', 'branch_manager']) || hasSettingsPermission('settings_customers')) && settingsPermissions.settingsCustomers && (
