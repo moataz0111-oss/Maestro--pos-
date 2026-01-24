@@ -1758,7 +1758,7 @@ export default function Settings() {
                                 <TableCell>{branches.find(b => b.id === u.branch_id)?.name || '-'}</TableCell>
                                 <TableCell>
                                   <div className="flex gap-1">
-                                    <Button variant="ghost" size="sm" onClick={() => openEditUserDialog(u)}>
+                                    <Button variant="ghost" size="sm" onClick={() => handleEditUser(u)}>
                                       <Edit className="h-4 w-4" />
                                     </Button>
                                     <Button variant="ghost" size="sm" className="text-red-500" onClick={() => handleDeleteUser(u.id)}>
