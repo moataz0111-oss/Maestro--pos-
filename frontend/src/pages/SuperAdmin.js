@@ -1666,9 +1666,14 @@ export default function SuperAdmin() {
             </div>
 
             {/* Custom Logo */}
-            <div className="p-4 bg-gray-700/30 rounded-lg space-y-3">
+            <div className="p-4 bg-gray-700/30 rounded-lg space-y-4">
               <div className="flex items-center justify-between">
-                <Label>شعار مخصص (اختياري)</Label>
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 bg-gradient-to-br from-yellow-500/20 to-amber-500/20 rounded-lg flex items-center justify-center">
+                    <Crown className="h-4 w-4 text-yellow-400" />
+                  </div>
+                  <Label className="text-base font-medium">شعار صفحة تسجيل الدخول</Label>
+                </div>
                 <Switch
                   checked={backgroundSettings.show_logo}
                   onCheckedChange={(checked) => 
@@ -1676,15 +1681,114 @@ export default function SuperAdmin() {
                   }
                 />
               </div>
+              
               {backgroundSettings.show_logo && (
-                <Input
-                  placeholder="رابط الشعار (PNG أو SVG)"
-                  value={backgroundSettings.logo_url || ''}
-                  onChange={(e) => 
-                    setBackgroundSettings(prev => ({...prev, logo_url: e.target.value}))
-                  }
-                  className="bg-gray-700/50 border-gray-600"
-                />
+                <div className="space-y-4">
+                  {/* معاينة الشعار الحالي */}
+                  {(backgroundSettings.logo_url || loginLogoPreview) && (
+                    <div className="flex items-center gap-4 p-3 bg-gray-800/50 rounded-lg">
+                      <div className="w-20 h-20 bg-gradient-to-br from-primary to-yellow-600 rounded-xl flex items-center justify-center">
+                        <img 
+                          src={loginLogoPreview || (backgroundSettings.logo_url?.startsWith('/api') 
+                            ? `${API}${backgroundSettings.logo_url.replace('/api', '')}` 
+                            : backgroundSettings.logo_url)}
+                          alt="الشعار الحالي" 
+                          className="w-14 h-14 object-contain"
+                          onError={(e) => {
+                            e.target.style.display = 'none';
+                          }}
+                        />
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-sm text-gray-300">الشعار الحالي</p>
+                        <p className="text-xs text-gray-500 truncate max-w-xs">
+                          {backgroundSettings.logo_url || 'ملف محلي'}
+                        </p>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={deleteLoginLogo}
+                        className="text-red-400 hover:text-red-300 hover:bg-red-500/10"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  )}
+
+                  {/* خيارات إضافة الشعار */}
+                  <div className="flex gap-2 mb-3">
+                    <Button
+                      variant={loginLogoMode === 'upload' ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => setLoginLogoMode('upload')}
+                      className={loginLogoMode === 'upload' ? 'bg-primary text-black' : 'border-gray-600'}
+                    >
+                      <Upload className="h-4 w-4 ml-2" />
+                      رفع من الجهاز
+                    </Button>
+                    <Button
+                      variant={loginLogoMode === 'url' ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => setLoginLogoMode('url')}
+                      className={loginLogoMode === 'url' ? 'bg-primary text-black' : 'border-gray-600'}
+                    >
+                      <Globe className="h-4 w-4 ml-2" />
+                      رابط خارجي
+                    </Button>
+                  </div>
+
+                  {loginLogoMode === 'upload' ? (
+                    <div className="space-y-3">
+                      <div className="border-2 border-dashed border-gray-600 rounded-lg p-6 text-center hover:border-primary/50 transition-colors">
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={handleLoginLogoFileChange}
+                          className="hidden"
+                          id="login-logo-upload"
+                        />
+                        <label htmlFor="login-logo-upload" className="cursor-pointer">
+                          <Upload className="h-8 w-8 mx-auto text-gray-400 mb-2" />
+                          <p className="text-sm text-gray-300">انقر لاختيار صورة الشعار</p>
+                          <p className="text-xs text-gray-500 mt-1">PNG, JPG, SVG, WebP</p>
+                        </label>
+                      </div>
+                      
+                      {loginLogoPreview && (
+                        <div className="flex items-center gap-3">
+                          <img src={loginLogoPreview} alt="معاينة" className="w-16 h-16 object-contain rounded-lg bg-gray-700" />
+                          <Button
+                            onClick={() => uploadLoginLogo(loginLogoFile)}
+                            disabled={loginLogoUploading}
+                            className="bg-green-600 hover:bg-green-700 gap-2"
+                          >
+                            {loginLogoUploading ? (
+                              <>
+                                <RefreshCw className="h-4 w-4 animate-spin" />
+                                جاري الرفع...
+                              </>
+                            ) : (
+                              <>
+                                <Check className="h-4 w-4" />
+                                رفع الشعار
+                              </>
+                            )}
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <Input
+                      placeholder="رابط الشعار (PNG أو SVG)"
+                      value={backgroundSettings.logo_url || ''}
+                      onChange={(e) => 
+                        setBackgroundSettings(prev => ({...prev, logo_url: e.target.value}))
+                      }
+                      className="bg-gray-700/50 border-gray-600"
+                    />
+                  )}
+                </div>
               )}
             </div>
 
