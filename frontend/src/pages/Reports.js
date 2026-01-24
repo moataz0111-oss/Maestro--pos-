@@ -68,6 +68,7 @@ export default function Reports() {
   const [cancellationsReport, setCancellationsReport] = useState(null);
   const [discountsReport, setDiscountsReport] = useState(null);
   const [creditReport, setCreditReport] = useState(null);
+  const [refundsReport, setRefundsReport] = useState(null);
 
   useEffect(() => {
     fetchReports();
