@@ -1940,24 +1940,260 @@ export default function Settings() {
                       </DialogContent>
                     </Dialog>
                   </div>
-                </CardHeader>
-                <CardContent>
-                  {staffLoading ? (
-                    <div className="text-center py-8 text-muted-foreground">جاري التحميل...</div>
-                  ) : getFilteredStaff().length === 0 ? (
-                    <div className="text-center py-8 text-muted-foreground">
-                      لا يوجد موظفين. اضغط &quot;إضافة موظف&quot; لإنشاء موظف جديد.
-                    </div>
-                  ) : (
-                    <div className="overflow-x-auto">
-                      <table className="w-full">
-                        <thead className="border-b border-border">
-                          <tr className="text-right">
-                            <th className="py-3 px-4 text-foreground font-medium">الاسم</th>
-                            <th className="py-3 px-4 text-foreground font-medium">البريد</th>
-                            <th className="py-3 px-4 text-foreground font-medium">الدور</th>
-                            <th className="py-3 px-4 text-foreground font-medium">الفرع</th>
-                            <th className="py-3 px-4 text-foreground font-medium">الحالة</th>
+                      
+                      {/* جدول الموظفين */}
+                      <div className="border border-border rounded-lg overflow-hidden">
+                        <Table>
+                          <TableHeader>
+                            <TableRow className="bg-muted/50">
+                              <TableHead className="text-right">الاسم</TableHead>
+                              <TableHead className="text-right">البريد</TableHead>
+                              <TableHead className="text-right">الدور</TableHead>
+                              <TableHead className="text-right">الفرع</TableHead>
+                              <TableHead className="text-right">الحالة</TableHead>
+                              <TableHead className="text-right">الإجراءات</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {getFilteredStaff().map(staff => (
+                              <TableRow key={staff.id}>
+                                <TableCell>
+                                  <div>
+                                    <p className="font-medium">{staff.full_name}</p>
+                                    {staff.job_title && <p className="text-xs text-muted-foreground">{staff.job_title}</p>}
+                                  </div>
+                                </TableCell>
+                                <TableCell>{staff.email}</TableCell>
+                                <TableCell>
+                                  <span className="px-2 py-1 rounded-full text-xs bg-blue-500/20 text-blue-400">
+                                    {staffRoles[staff.role] || staff.role}
+                                  </span>
+                                </TableCell>
+                                <TableCell>{branches.find(b => b.id === staff.branch_id)?.name || '-'}</TableCell>
+                                <TableCell>
+                                  <span className={`px-2 py-1 rounded-full text-xs ${staff.is_active !== false ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
+                                    {staff.is_active !== false ? 'نشط' : 'معطل'}
+                                  </span>
+                                </TableCell>
+                                <TableCell>
+                                  <div className="flex gap-1">
+                                    <Button variant="ghost" size="sm" onClick={() => handleEditStaff(staff)}>
+                                      <Edit className="h-4 w-4" />
+                                    </Button>
+                                    <Button variant="ghost" size="sm" className="text-red-500" onClick={() => handleDeleteStaff(staff.id)}>
+                                      <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    </TabsContent>
+                  </Tabs>
+                </CardContent>
+              </Card>
+
+              {/* Edit User Dialog */}
+              <Dialog open={editUserDialogOpen} onOpenChange={setEditUserDialogOpen}>
+                <DialogContent className="max-w-2xl">
+                  <DialogHeader>
+                    <DialogTitle className="text-foreground">تعديل المستخدم</DialogTitle>
+                  </DialogHeader>
+                  {editUserForm && (
+                    <form onSubmit={handleUpdateUser} className="space-y-4">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <Label className="text-foreground">اسم المستخدم</Label>
+                          <Input
+                            value={editUserForm.username}
+                            onChange={(e) => setEditUserForm({ ...editUserForm, username: e.target.value })}
+                            required
+                            className="mt-1"
+                            dir="ltr"
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-foreground">البريد الإلكتروني</Label>
+                          <Input
+                            type="email"
+                            value={editUserForm.email}
+                            onChange={(e) => setEditUserForm({ ...editUserForm, email: e.target.value })}
+                            required
+                            className="mt-1"
+                            dir="ltr"
+                          />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <Label className="text-foreground">الاسم الكامل</Label>
+                          <Input
+                            value={editUserForm.full_name}
+                            onChange={(e) => setEditUserForm({ ...editUserForm, full_name: e.target.value })}
+                            required
+                            className="mt-1"
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-foreground">الصلاحية</Label>
+                          <Select value={editUserForm.role} onValueChange={(v) => setEditUserForm({ ...editUserForm, role: v })}>
+                            <SelectTrigger className="mt-1">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="admin">مدير النظام</SelectItem>
+                              <SelectItem value="manager">مدير</SelectItem>
+                              <SelectItem value="cashier">كاشير</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <Label className="text-foreground">الفرع</Label>
+                          <Select value={editUserForm.branch_id || 'none'} onValueChange={(v) => setEditUserForm({ ...editUserForm, branch_id: v === 'none' ? '' : v })}>
+                            <SelectTrigger className="mt-1">
+                              <SelectValue placeholder="اختر فرع" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="none">بدون فرع</SelectItem>
+                              {branches.map(branch => (
+                                <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="flex items-center gap-3 mt-6">
+                          <Switch
+                            checked={editUserForm.is_active}
+                            onCheckedChange={(checked) => setEditUserForm({ ...editUserForm, is_active: checked })}
+                          />
+                          <Label className="text-foreground">الحساب مفعل</Label>
+                        </div>
+                      </div>
+                      
+                      {/* Permissions */}
+                      <div>
+                        <Label className="text-foreground mb-3 block">الصلاحيات المخصصة</Label>
+                        <div className="max-h-[300px] overflow-y-auto space-y-4 pr-2">
+                          {PERMISSION_GROUPS.map(group => (
+                            <div key={group}>
+                              <p className="text-sm font-medium text-muted-foreground mb-2">{group}</p>
+                              <div className="grid grid-cols-2 gap-2">
+                                {AVAILABLE_PERMISSIONS.filter(p => p.group === group).map(perm => (
+                                  <div
+                                    key={perm.id}
+                                    className={`p-2 rounded-lg border cursor-pointer transition-all ${
+                                      editUserForm.permissions?.includes(perm.id)
+                                        ? 'border-primary bg-primary/10'
+                                        : 'border-border hover:border-primary/50'
+                                    }`}
+                                    onClick={() => toggleUserPermission(perm.id)}
+                                  >
+                                    <div className="flex items-center justify-between">
+                                      <span className="font-medium text-xs text-foreground">{perm.name}</span>
+                                      {editUserForm.permissions?.includes(perm.id) && (
+                                        <Check className="h-3 w-3 text-primary" />
+                                      )}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                      
+                      <div className="flex gap-2 pt-4">
+                        <Button type="button" variant="outline" onClick={() => setEditUserDialogOpen(false)} className="flex-1">
+                          إلغاء
+                        </Button>
+                        <Button type="submit" className="flex-1 bg-primary text-primary-foreground">
+                          حفظ التعديلات
+                        </Button>
+                      </div>
+                    </form>
+                  )}
+                </DialogContent>
+              </Dialog>
+
+              {/* Edit Staff Dialog */}
+              <Dialog open={editStaffDialogOpen} onOpenChange={setEditStaffDialogOpen}>
+                <DialogContent className="max-w-md">
+                  <DialogHeader>
+                    <DialogTitle className="text-foreground">تعديل بيانات الموظف</DialogTitle>
+                  </DialogHeader>
+                  {editStaffForm && (
+                    <form onSubmit={handleUpdateStaff} className="space-y-4">
+                      <div>
+                        <Label className="text-foreground">الاسم الكامل</Label>
+                        <Input
+                          value={editStaffForm.full_name}
+                          onChange={(e) => setEditStaffForm({ ...editStaffForm, full_name: e.target.value })}
+                          required
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-foreground">البريد الإلكتروني</Label>
+                        <Input
+                          type="email"
+                          value={editStaffForm.email}
+                          onChange={(e) => setEditStaffForm({ ...editStaffForm, email: e.target.value })}
+                          required
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-foreground">الدور</Label>
+                        <Select value={editStaffForm.role} onValueChange={(val) => setEditStaffForm({...editStaffForm, role: val})}>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {Object.entries(staffRoles).map(([key, name]) => (
+                              <SelectItem key={key} value={key}>{name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label className="text-foreground">الفرع</Label>
+                        <Select value={editStaffForm.branch_id} onValueChange={(val) => setEditStaffForm({...editStaffForm, branch_id: val})}>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {branches.map(branch => (
+                              <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Switch
+                          checked={editStaffForm.is_active !== false}
+                          onCheckedChange={(checked) => setEditStaffForm({ ...editStaffForm, is_active: checked })}
+                        />
+                        <Label className="text-foreground">الحساب نشط</Label>
+                      </div>
+                      <div className="flex gap-2 pt-4">
+                        <Button type="button" variant="outline" onClick={() => setEditStaffDialogOpen(false)} className="flex-1">
+                          إلغاء
+                        </Button>
+                        <Button type="submit" className="flex-1 bg-primary text-primary-foreground">
+                          حفظ التعديلات
+                        </Button>
+                      </div>
+                    </form>
+                  )}
+                </DialogContent>
+              </Dialog>
+            </TabsContent>
+          )}
+
+          {/* Branches */}
+          {hasRole(['admin', 'super_admin']) && (
                             <th className="py-3 px-4 text-foreground font-medium">الإجراءات</th>
                           </tr>
                         </thead>
