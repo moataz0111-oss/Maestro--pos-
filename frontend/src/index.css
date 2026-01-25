@@ -239,14 +239,20 @@ input[type="number"] {
 
 /* Print styles */
 @media print {
-    /* إخفاء كل شيء عدا الفاتورة */
-    body > *:not(.print-wrapper) {
+    /* إخفاء كل العناصر غير المطلوبة */
+    .no-print,
+    header,
+    nav,
+    aside,
+    footer,
+    .sidebar,
+    [data-radix-dialog-overlay] {
         display: none !important;
+        visibility: hidden !important;
     }
     
-    .no-print,
-    [role="dialog"]:not(.print-dialog),
-    [data-radix-dialog-overlay] {
+    /* إخفاء كل شيء في body عدا الفاتورة */
+    body > *:not(#root) {
         display: none !important;
     }
     
@@ -254,16 +260,17 @@ input[type="number"] {
     .print-receipt {
         display: block !important;
         visibility: visible !important;
-        position: fixed !important;
+        position: absolute !important;
         left: 0 !important;
         top: 0 !important;
-        width: 80mm !important;
-        min-height: 100vh !important;
-        padding: 3mm !important;
-        margin: 0 !important;
+        right: 0 !important;
+        width: 100% !important;
+        max-width: 80mm !important;
+        padding: 5mm !important;
+        margin: 0 auto !important;
         background: white !important;
         color: black !important;
-        font-size: 11px !important;
+        font-size: 12px !important;
         z-index: 99999 !important;
         -webkit-print-color-adjust: exact !important;
         print-color-adjust: exact !important;
@@ -275,20 +282,23 @@ input[type="number"] {
     }
     
     .print-receipt img {
-        max-width: 100% !important;
+        max-width: 60px !important;
         height: auto !important;
     }
     
-    body {
+    /* تنسيق الصفحة للطباعة */
+    html, body {
         background: white !important;
         color: black !important;
         margin: 0 !important;
         padding: 0 !important;
+        width: 100% !important;
+        height: auto !important;
     }
     
     @page {
         size: 80mm auto;
-        margin: 0;
+        margin: 2mm;
     }
 }
 
