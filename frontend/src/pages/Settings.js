@@ -342,6 +342,8 @@ export default function Settings() {
   const [printerForm, setPrinterForm] = useState({
     name: '', ip_address: '', port: 9100, branch_id: '', printer_type: 'receipt'
   });
+  const [editPrinterForm, setEditPrinterForm] = useState(null);
+  const [editPrinterDialogOpen, setEditPrinterDialogOpen] = useState(false);
   const [categoryForm, setCategoryForm] = useState({
     name: '', name_en: '', icon: '', image: '', color: '#D4AF37', sort_order: 0, kitchen_section_id: ''
   });
