@@ -1,185 +1,405 @@
 <analysis>**original_problem_statement:**
-بدأ المستخدم بطلب إعادة تصميم نظام المخزون والمشتريات، وتطور المشروع ليصبح نظام إدارة مطاعم متكامل. تركزت الطلبات الأخيرة على إضافة ميزات متقدمة للطابعات، وإصلاح مشاكل جوهرية في فصل البيانات بين العملاء (multi-tenancy)، وتحسينات في واجهة المستخدم.
+بدأ المستخدم بطلب إعادة تصميم نظام المخزون والمشتريات، وتطور المشروع ليصبح نظام إدارة مطاعم متكامل. تركزت الطلبات الأخيرة على إضافة ميزات متقدمة للطابعات، وإصلاح مشاكل جوهرية في فصل البيانات بين العملاء (multi-tenancy)، وتخصيص الفواتير بشكل دقيق، وإصلاح مشاكل في واجهة المستخدم.
 
-**الطلبات التي تم العمل عليها في هذه الجلسة:**
-1.  **ميزات الطابعات:** إضافة اختيار الطابعات للمنتجات، وإضافة أزرار تعديل وحذف، وميزة اختبار الاتصال، وصلاحيات طباعة متقدمة.
-2.  **مشكلة صلاحيات المالك:** أبلغ المستخدم عن أخطاء غير مسموح عند استخدام حساب المالك، مما استدعى تحقيقاً شاملاً.
-3.  **تنظيف بيانات النظام:** طلب المستخدم إزالة عملاء قدامى (مطعم الشام الأصيل) وإخفاء النظام الرئيسي من قائمة العملاء.
-4.  **تحسينات واجهة المستخدم:** طلب جعل شعار تسجيل الدخول دائرياً.
-5.  **مشكلة اختفاء الصور:** أبلغ المستخدم عن عدم ظهور صور المنتجات والفئات.
-6.  **فصل البيانات (Multi-tenancy):** طلب المستخدم مراجعة شاملة للتأكد من أن بيانات كل عميل (منتجات، فروع، طلبات، إلخ) معزولة تماماً عن العملاء الآخرين.
-7.  **تخصيص أنواع الطابعات:** طلب المستخدم أن تكون أنواع الطابعات حقل إدخال نصي بدلاً من قائمة ثابتة.
-8.  **تخصيص الفواتير:** طلب إضافة إمكانية التحكم في محتوى الفاتورة (شعار، رسالة شكر، معلومات الاتصال) من قبل المالك والعميل.
+**PRODUCT REQUIREMENTS:**
+1.  **معاينة الفاتورة:** يجب أن تظهر معاينة للفاتورة في صفحة الإعدادات.
+2.  **حساب تكلفة التغليف ():** إصلاح آلية احتسابها للطلبات الخارجية.
+3.  **تقرير جرد الصندوق:** إصلاح أي مشاكل في واجهة التقرير.
+4.  **طباعة الفاتورة:** يجب أن تتم طباعة الفاتورة فقط وليس الشاشة بأكملها.
+5.  **شعار الفاتورة:**
+    *   يجب أن يكون خيار رفع الشعار متاحاً للمالك (Super Admin) فقط.
+    *   يجب أن يظهر شعار النظام (شعار صفحة تسجيل الدخول) تلقائياً على جميع الفواتير.
+    *   يجب أن يظهر اسم المطعم ومعلوماته (الهاتف، العنوان) تحت الشعار.
+6.  **الرقم الضريبي:** يجب أن يتمكن العميل من التحكم في إظهار أو إخفاء الرقم الضريبي في الفاتورة.
+7.  **هيكل الفاتورة:**
+    *   **أعلى الفاتورة:** معلومات المطعم (الاسم، الطلبات، الهاتف).
+    *   **أسفل الفاتورة:** معلومات النظام (الشعار، أرقام التواصل، رسالة الترحيب).
+8.  **حقل الخصم:** يجب أن يظهر حقل الخصم في الفاتورة دائماً، حتى لو كانت قيمته صفراً.
+9.  **مشكلة في الدخول:** أبلغ المستخدم عن وجود مشكلة في الدخول إلى النظام.
 
 **User's preferred language**: Arabic (العربية). أيها الوكيل، يجب عليك الرد والتواصل مع المستخدم باللغة العربية فقط.
 
 **what currently exists?**
-- نظام إدارة مطاعم متكامل (React + FastAPI) متعدد المستأجرين (multi-tenant) يعمل بشكل صحيح.
-- **ميزات مكتملة في هذه الجلسة:**
-    - **إدارة كاملة للطابعات:** إضافة الطابعات، وتعديلها، وحذفها، مع واجهة لاختبار حالة الاتصال (متصل/غير متصل).
-    - **ربط المنتجات بالطابعات:** يمكن الآن تحديد طابعات معينة لكل منتج عند إضافته.
-    - **صلاحيات طباعة متقدمة (واجهة فقط):** تم بناء واجهة شاملة للتحكم في صلاحيات كل طابعة (فاتورة كاملة، طلبات بدون سعر، طباعة كل الأصناف، طباعة تلقائية)، ولكن المنطق الخلفي لتطبيق هذه الصلاحيات لم يُنفذ بعد.
-    - **أنواع طابعات مخصصة:** أصبح حقل نوع الطابعة نصياً للسماح للمستخدم بإدخال أسماء الأقسام التي يريدها.
-    - **إعدادات الفاتورة (جزء المالك):** يمكن للمالك الآن إضافة شعار ورسالة شكر وبيانات اتصال خاصة بالنظام ستظهر في الفواتير.
-- **إصلاحات جوهرية تمت في هذه الجلسة:**
-    - **فصل البيانات (Multi-tenancy):** تم إجراء مراجعة شاملة وإصلاح عشرات نقاط النهاية (endpoints) لضمان أن كل عميل يرى بياناته فقط. شمل ذلك الطلبات، الطاولات، الكوبونات، الموظفين، التقارير، وغيرها.
-    - **تنظيف قاعدة البيانات:** تم حذف العملاء غير المرغوب فيهم (مطعم الشام الأصيل، default) وكل البيانات المرتبطة بهم، وتم إصلاح كلمات مرور المستخدمين التالفة.
-- **تحسينات واجهة المستخدم:**
-    - أصبح شعار صفحة تسجيل الدخول دائرياً مع تأثير وميض (pulse).
-    - تم إخفاء النظام الرئيسي من قائمة العملاء في لوحة تحكم المالك لتبسيط الواجهة.
-    - تم إصلاح مشكلة عدم ظهور صور المنتجات والفئات.
+- نظام إدارة مطاعم متكامل (React + FastAPI) متعدد المستأجرين.
+- **إدارة الطابعات:** تم الانتهاء من الواجهات والمنطق الخلفي لإدارة الطابعات، بما في ذلك إضافة وتعديل وحذف واختبار الطابعات، وتطبيق الصلاحيات المتقدمة (مثل إخفاء الأسعار، طباعة أصناف منفصلة).
+- **تخصيص الفواتير:**
+    - **المالك:** يمكنه الآن رفع شعار النظام العام وتحديد رسالة شكر ومعلومات الاتصال الخاصة بالنظام من لوحة التحكم ().
+    - **العميل:** يمكنه إضافة معلومات مطعمه (أرقام الهواتف، العنوان، الرقم الضريبي) والتحكم في ظهور الرقم الضريبي من صفحة الإعدادات ().
+    - **الواجهة الأمامية (POS):** تم إصلاح مشكلة طباعة الصفحة بأكملها، والآن تفتح نافذة طباعة جديدة تحتوي على الفاتورة فقط.
+    - **التصميم:** تظهر الفاتورة الآن بالشعار الدائري للنظام في الأعلى، متبوعاً بمعلومات المطعم، ثم تفاصيل الطلب، ويظهر حقل الخصم دائماً.
+- **إصلاحات:**
+    - تم إصلاح مشكلة عدم ظهور صور المنتجات/الفئات في نقطة البيع (POS) عن طريق تصحيح  وعرض صور افتراضية.
+    - تم إصلاح خطأ برمجي () في  و  كان يمنع عرض الصفحات.
 
 **Last working item**:
--   **Last item agent was working**: كان الوكيل يعمل على ميزة **تخصيص الفواتير**. لقد انتهى من إضافة الواجهة الخلفية والواجهة الأمامية في لوحة تحكم **المالك (Super Admin)** ليتمكن من تحديد شعار النظام ورسالة الشكر ومعلومات الاتصال التي ستظهر في جميع الفواتير.
--   **Status**: IN PROGRESS
--   **Agent Testing Done**: N
--   **Which testing method agent to use?**: both. اختبار الواجهة الخلفية عبر  للتأكد من حفظ إعدادات الفاتورة، واختبار الواجهة الأمامية عبر لقطة شاشة للتحقق من ظهور الواجهة الجديدة في لوحة تحكم المالك. بعد ذلك، يجب إجراء اختبار شامل لطباعة فاتورة للتأكد من ظهور البيانات الجديدة.
+-   **Last item agent was working**: كان الوكيل يعمل على إصلاح مشكلة **الطباعة** التي أبلغ عنها المستخدم. المشكلة كانت أن الضغط على زر الطباعة لا يؤدي إلى أي استجابة. قام الوكيل بتغيير آلية الطباعة لتعتمد على فتح نافذة جديدة () تحتوي على محتوى الفاتورة فقط، مما حل المشكلة. كما تأكد من أن حقل الخصم يظهر دائماً في الفاتورة.
+-   **Status**: USER VERIFICATION PENDING
+-   **Agent Testing Done**: Y
+-   **Which testing method agent to use?**: screenshot tool. يجب أخذ لقطة شاشة بعد إضافة منتج للسلة والضغط على زر الطباعة في صفحة POS للتأكد من ظهور رسالة تم فتح نافذة الطباعة وأن الفاتورة تظهر بالشكل الصحيح.
 -   **User Testing Done**: N
 
 **All Pending/In progress Issue list**:
--   **Issue 1:** (P0) إكمال ميزة تخصيص الفواتير.
--   **Issue 2:** (P1) تنفيذ المنطق الخلفي لصلاحيات الطابعات.
--   **Issue 3:** (P2) إصلاح الطلبات القديمة التي لم يتم العمل عليها.
+-   **Issue 1:** (P0) مشكلة في الدخول إلى النظام.
+-   **Issue 2:** (P1) التأكد من صلاحيات المالك في تعديل معلومات النظام.
+-   **Issue 3:** (P2) إصلاح آلية احتساب .
+-   **Issue 4:** (P3) إصلاح واجهة تقرير جرد الصندوق.
 
 **Issues Detail:**
--   **Issue 1:** **إكمال ميزة تخصيص الفواتير.**
+-   **Issue 1:** **مشكلة في الدخول إلى النظام.**
+    -   **Attempted fixes**: أبلغ المستخدم عن مشكلة في الدخول للنظام وأرفق صورة تظهر خطأ في صفحة الإعدادات (). قام الوكيل بإصلاح الخطأ في  لكنه لم يتحقق مما إذا كانت مشكلة الدخول نفسها قد حُلت.
     -   **Next debug checklist**:
-        1.  **واجهة العميل:** إضافة واجهة في صفحة الإعدادات () تسمح للعميل (صاحب المطعم) بإضافة أرقام هواتفه الخاصة.
-        2.  **الواجهة الخلفية:** تعديل منطق توليد الفاتورة في  ليقوم بجلب إعدادات المالك (الشعار، رسالة الشكر) وإعدادات العميل (اسم المطعم، أرقام الهواتف) ودمجها معاً.
-        3.  **الطباعة:** تعديل مكون طباعة الفاتورة في الواجهة الأمامية لعرض كل هذه البيانات الجديدة بشكل صحيح.
-    -   **Why fix this issue and what will be achieved with the fix?**: تلبية طلب المستخدم الأخير وتوفير فواتير مخصصة لكل مطعم.
-    -   **Status**: IN PROGRESS
+        1.  اطلب من المستخدم وصف مشكلة تسجيل الدخول بالتفصيل (هل تظهر رسالة خطأ؟ هل الصفحة لا تستجيب؟).
+        2.  حاول تسجيل الدخول بحساب المالك () وحساب العميل () للتحقق من المشكلة.
+        3.  افحص سجلات الواجهة الخلفية (==> /var/log/supervisor/backend.err.log <==
+2026-01-25 20:09:34,020 - server - INFO - ✅ Application started successfully
+2026-01-25 20:09:34,020 - server - INFO - ✅ Auto day close scheduler started
+2026-01-25 20:09:34,028 - services.reliability_service - INFO - ✅ Database indexes created successfully
+INFO:     Application startup complete.
+WARNING:  WatchFiles detected changes in 'server.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [2891]
+INFO:     Started server process [4095]
+INFO:     Waiting for application startup.
+2026-01-25 20:18:10,255 - server - INFO - 🚀 Starting Maestro EGP API...
+2026-01-25 20:18:10,255 - server - INFO - 🔍 Checking database initialization...
+2026-01-25 20:18:10,270 - server - INFO - ✅ Database indexes created successfully
+2026-01-25 20:18:10,271 - server - INFO - ✅ Database connection successful
+2026-01-25 20:18:10,271 - server - INFO - ℹ️ Database already initialized - Super Admin exists
+2026-01-25 20:18:10,275 - server - INFO - 🔄 Applying automatic updates to all tenants...
+2026-01-25 20:18:10,276 - server - INFO -    ✅ Updated users without tenant_id
+2026-01-25 20:18:10,279 - server - INFO -    ✅ Updated 2 orders with default tenant_id
+2026-01-25 20:18:10,285 - server - INFO - ✅ Automatic updates applied successfully
+2026-01-25 20:18:10,285 - server - INFO - ✅ Application started successfully
+2026-01-25 20:18:10,285 - server - INFO - ✅ Auto day close scheduler started
+2026-01-25 20:18:10,295 - services.reliability_service - INFO - ✅ Database indexes created successfully
+INFO:     Application startup complete.
+WARNING:  WatchFiles detected changes in 'server.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [4095]
+INFO:     Started server process [5191]
+INFO:     Waiting for application startup.
+2026-01-25 20:30:00,721 - server - INFO - 🚀 Starting Maestro EGP API...
+2026-01-25 20:30:00,722 - server - INFO - 🔍 Checking database initialization...
+2026-01-25 20:30:00,733 - server - INFO - ✅ Database indexes created successfully
+2026-01-25 20:30:00,733 - server - INFO - ✅ Database connection successful
+2026-01-25 20:30:00,734 - server - INFO - ℹ️ Database already initialized - Super Admin exists
+2026-01-25 20:30:00,739 - server - INFO - 🔄 Applying automatic updates to all tenants...
+2026-01-25 20:30:00,739 - server - INFO -    ✅ Updated users without tenant_id
+2026-01-25 20:30:00,745 - server - INFO - ✅ Automatic updates applied successfully
+2026-01-25 20:30:00,745 - server - INFO - ✅ Application started successfully
+2026-01-25 20:30:00,745 - server - INFO - ✅ Auto day close scheduler started
+2026-01-25 20:30:00,753 - services.reliability_service - INFO - ✅ Database indexes created successfully
+INFO:     Application startup complete.
+WARNING:  WatchFiles detected changes in 'server.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [5191]
+INFO:     Started server process [8109]
+INFO:     Waiting for application startup.
+2026-01-25 20:57:19,009 - server - INFO - 🚀 Starting Maestro EGP API...
+2026-01-25 20:57:19,009 - server - INFO - 🔍 Checking database initialization...
+2026-01-25 20:57:19,045 - server - INFO - ✅ Database indexes created successfully
+2026-01-25 20:57:19,047 - server - INFO - ✅ Database connection successful
+2026-01-25 20:57:19,047 - server - INFO - ℹ️ Database already initialized - Super Admin exists
+2026-01-25 20:57:19,048 - server - INFO - 🔧 Adding default categories...
+2026-01-25 20:57:19,052 - server - INFO - ✅ Default categories added
+2026-01-25 20:57:19,053 - server - INFO - 🔧 Adding default products...
+2026-01-25 20:57:19,066 - server - INFO - ✅ Default products added
+2026-01-25 20:57:19,069 - server - INFO - 🔄 Applying automatic updates to all tenants...
+2026-01-25 20:57:19,070 - server - INFO -    ✅ Updated users without tenant_id
+2026-01-25 20:57:19,076 - server - INFO - ✅ Automatic updates applied successfully
+2026-01-25 20:57:19,076 - server - INFO - ✅ Application started successfully
+2026-01-25 20:57:19,076 - server - INFO - ✅ Auto day close scheduler started
+2026-01-25 20:57:19,083 - services.reliability_service - INFO - ✅ Database indexes created successfully
+INFO:     Application startup complete.
+INFO:     Will watch for changes in these directories: ['/app/backend']
+INFO:     Uvicorn running on http://0.0.0.0:8001 (Press CTRL+C to quit)
+INFO:     Started reloader process [48] using WatchFiles
+INFO:     Started server process [86]
+INFO:     Waiting for application startup.
+2026-01-25 21:39:36,442 - server - INFO - 🚀 Starting Maestro EGP API...
+2026-01-25 21:39:36,442 - server - INFO - 🔍 Checking database initialization...
+2026-01-25 21:39:36,456 - server - INFO - ✅ Database indexes created successfully
+2026-01-25 21:39:36,457 - server - INFO - ✅ Database connection successful
+2026-01-25 21:39:36,462 - server - INFO - ℹ️ Database already initialized - Super Admin exists
+2026-01-25 21:39:36,481 - server - INFO - 🔄 Applying automatic updates to all tenants...
+2026-01-25 21:39:36,484 - server - INFO -    ✅ Updated users without tenant_id
+2026-01-25 21:39:36,545 - server - INFO - ✅ Automatic updates applied successfully
+2026-01-25 21:39:36,545 - server - INFO - ✅ Application started successfully
+2026-01-25 21:39:36,545 - server - INFO - ✅ Auto day close scheduler started
+2026-01-25 21:39:36,559 - services.reliability_service - INFO - ✅ Database indexes created successfully
+INFO:     Application startup complete.
+INFO:     Will watch for changes in these directories: ['/app/backend']
+INFO:     Uvicorn running on http://0.0.0.0:8001 (Press CTRL+C to quit)
+INFO:     Started reloader process [46] using WatchFiles
+INFO:     Started server process [83]
+INFO:     Waiting for application startup.
+2026-01-25 22:01:45,361 - server - INFO - 🚀 Starting Maestro EGP API...
+2026-01-25 22:01:45,361 - server - INFO - 🔍 Checking database initialization...
+2026-01-25 22:01:45,374 - server - INFO - ✅ Database indexes created successfully
+2026-01-25 22:01:45,375 - server - INFO - ✅ Database connection successful
+2026-01-25 22:01:45,380 - server - INFO - ℹ️ Database already initialized - Super Admin exists
+2026-01-25 22:01:45,399 - server - INFO - 🔄 Applying automatic updates to all tenants...
+2026-01-25 22:01:45,402 - server - INFO -    ✅ Updated users without tenant_id
+2026-01-25 22:01:45,454 - server - INFO - ✅ Automatic updates applied successfully
+2026-01-25 22:01:45,454 - server - INFO - ✅ Application started successfully
+2026-01-25 22:01:45,454 - server - INFO - ✅ Auto day close scheduler started
+2026-01-25 22:01:45,464 - services.reliability_service - INFO - ✅ Database indexes created successfully
+INFO:     Application startup complete.
+
+==> /var/log/supervisor/backend.out.log <==
+INFO:     10.64.131.206:44496 - "GET /api/dashboard-backgrounds HTTP/1.1" 200 OK
+INFO:     10.64.131.202:57304 - "GET /api/settings/dashboard HTTP/1.1" 200 OK
+INFO:     10.64.131.204:52090 - "GET /api/tenant/info HTTP/1.1" 200 OK
+INFO:     10.64.131.203:41718 - "GET /api/shifts/current HTTP/1.1" 200 OK
+INFO:     10.64.131.204:52076 - "GET /api/day-management/status HTTP/1.1" 200 OK
+INFO:     10.64.131.202:34252 - "GET /api/notifications/sound-alert HTTP/1.1" 200 OK
+INFO:     10.64.131.202:34264 - "GET /api/notifications/delayed-orders?delay_minutes=15 HTTP/1.1" 200 OK
+INFO:     10.64.131.204:52076 - "GET /api/dashboard/stats HTTP/1.1" 200 OK
+INFO:     10.64.131.204:52076 - "GET /api/settings/dashboard HTTP/1.1" 200 OK
+INFO:     10.64.131.204:52090 - "GET /api/shifts/current HTTP/1.1" 200 OK
+INFO:     10.64.131.203:41718 - "GET /api/tenant/info HTTP/1.1" 200 OK
+INFO:     10.64.131.205:48296 - "GET /api/notifications/sound-alert HTTP/1.1" 200 OK
+INFO:     10.64.131.203:41718 - "GET /api/day-management/status HTTP/1.1" 200 OK
+INFO:     10.64.131.204:52090 - "GET /api/notifications/delayed-orders?delay_minutes=15 HTTP/1.1" 200 OK
+INFO:     10.64.131.203:41728 - "GET /api/dashboard-backgrounds HTTP/1.1" 200 OK
+INFO:     10.64.131.205:48296 - "GET /api/tables HTTP/1.1" 200 OK
+INFO:     10.64.131.205:34484 - "GET /api/branches HTTP/1.1" 200 OK
+INFO:     10.64.131.205:34484 - "GET /api/branches HTTP/1.1" 200 OK
+INFO:     10.64.131.206:44496 - "GET /api/tables HTTP/1.1" 200 OK
+INFO:     10.64.131.205:34484 - "GET /api/tables?branch_id=menumate-65 HTTP/1.1" 200 OK
+INFO:     10.64.131.204:52090 - "GET /api/callcenter/active-calls HTTP/1.1" 200 OK
+INFO:     10.64.131.202:34252 - "GET /api/callcenter/active-calls HTTP/1.1" 200 OK
+INFO:     10.64.131.205:34484 - "GET /api/branches HTTP/1.1" 200 OK
+INFO:     10.64.131.206:44496 - "GET /api/callcenter/active-calls HTTP/1.1" 200 OK
+INFO:     10.64.131.206:44496 - "GET /api/callcenter/active-calls HTTP/1.1" 200 OK
+INFO:     10.64.131.206:44496 - "GET /api/dashboard/stats HTTP/1.1" 200 OK
+INFO:     10.64.131.203:35654 - "GET /api/dashboard-backgrounds HTTP/1.1" 200 OK
+INFO:     10.64.131.202:34252 - "GET /api/settings/dashboard HTTP/1.1" 200 OK
+INFO:     10.64.131.204:52090 - "GET /api/notifications/delayed-orders?delay_minutes=15 HTTP/1.1" 200 OK
+INFO:     10.64.131.206:44496 - "GET /api/notifications/sound-alert HTTP/1.1" 200 OK
+INFO:     10.64.131.202:60454 - "GET /api/tenant/info HTTP/1.1" 200 OK
+INFO:     10.64.131.202:60448 - "GET /api/day-management/status HTTP/1.1" 200 OK
+INFO:     10.64.131.203:35654 - "GET /api/shifts/current HTTP/1.1" 200 OK
+INFO:     10.64.131.203:35654 - "GET /api/dashboard/stats HTTP/1.1" 200 OK
+INFO:     10.64.131.202:60454 - "GET /api/dashboard-backgrounds HTTP/1.1" 200 OK
+INFO:     10.64.131.205:34484 - "GET /api/settings/dashboard HTTP/1.1" 200 OK
+INFO:     10.64.131.202:60454 - "GET /api/notifications/delayed-orders?delay_minutes=15 HTTP/1.1" 200 OK
+INFO:     10.64.131.204:52090 - "GET /api/day-management/status HTTP/1.1" 200 OK
+INFO:     10.64.131.202:34252 - "GET /api/tenant/info HTTP/1.1" 200 OK
+INFO:     10.64.131.203:35654 - "GET /api/notifications/sound-alert HTTP/1.1" 200 OK
+INFO:     10.64.131.205:34484 - "GET /api/shifts/current HTTP/1.1" 200 OK
+INFO:     10.64.131.204:52090 - "GET /api/callcenter/active-calls HTTP/1.1" 200 OK
+INFO:     10.64.131.203:35654 - "GET /api/callcenter/active-calls HTTP/1.1" 200 OK
+INFO:     10.64.131.203:35654 - "GET /api/notifications/sound-alert HTTP/1.1" 200 OK
+INFO:     10.64.131.204:52090 - "GET /api/callcenter/active-calls HTTP/1.1" 200 OK
+INFO:     10.64.131.203:35654 - "GET /api/callcenter/active-calls HTTP/1.1" 200 OK
+INFO:     10.64.131.206:52490 - "GET /api/callcenter/active-calls HTTP/1.1" 200 OK
+INFO:     10.64.131.202:51416 - "GET /api/callcenter/active-calls HTTP/1.1" 200 OK
+INFO:     10.64.131.205:35624 - "GET /api/callcenter/active-calls HTTP/1.1" 200 OK
+INFO:     10.64.131.206:52494 - "GET /api/callcenter/active-calls HTTP/1.1" 200 OK
+INFO:     10.64.131.202:51418 - "GET /api/notifications/sound-alert HTTP/1.1" 200 OK
+INFO:     10.64.131.203:55024 - "GET /api/callcenter/active-calls HTTP/1.1" 200 OK
+INFO:     10.64.131.205:57190 - "GET /api/callcenter/active-calls HTTP/1.1" 200 OK
+INFO:     10.64.131.203:55024 - "GET /api/callcenter/active-calls HTTP/1.1" 200 OK
+INFO:     10.64.131.206:57460 - "GET /api/callcenter/active-calls HTTP/1.1" 200 OK
+INFO:     10.64.131.205:57196 - "GET /api/notifications/sound-alert HTTP/1.1" 200 OK
+INFO:     10.64.131.206:57460 - "GET /api/notifications/delayed-orders?delay_minutes=15 HTTP/1.1" 200 OK
+INFO:     10.64.131.204:38924 - "GET /api/callcenter/active-calls HTTP/1.1" 200 OK
+INFO:     10.64.131.202:50262 - "GET /api/callcenter/active-calls HTTP/1.1" 200 OK
+INFO:     10.64.131.202:50262 - "GET /api/callcenter/active-calls HTTP/1.1" 200 OK
+INFO:     10.64.131.202:50262 - "GET /api/callcenter/active-calls HTTP/1.1" 200 OK
+INFO:     10.64.131.205:40582 - "GET /api/notifications/sound-alert HTTP/1.1" 200 OK
+INFO:     10.64.131.206:44654 - "GET /api/callcenter/active-calls HTTP/1.1" 200 OK
+INFO:     10.64.131.206:44654 - "GET /api/callcenter/active-calls HTTP/1.1" 200 OK
+INFO:     10.64.131.203:58028 - "GET /api/callcenter/active-calls HTTP/1.1" 200 OK
+INFO:     10.64.131.202:35832 - "GET /api/callcenter/active-calls HTTP/1.1" 200 OK
+INFO:     10.64.131.205:41584 - "GET /api/notifications/sound-alert HTTP/1.1" 200 OK
+INFO:     10.64.131.206:43828 - "GET /api/callcenter/active-calls HTTP/1.1" 200 OK
+INFO:     10.64.131.202:50758 - "GET /api/callcenter/active-calls HTTP/1.1" 200 OK
+INFO:     10.64.131.205:35760 - "GET /api/callcenter/active-calls HTTP/1.1" 200 OK
+INFO:     10.64.131.204:39910 - "GET /api/callcenter/active-calls HTTP/1.1" 200 OK
+INFO:     10.64.131.205:35760 - "GET /api/notifications/sound-alert HTTP/1.1" 200 OK
+INFO:     10.64.131.206:54390 - "GET /api/notifications/delayed-orders?delay_minutes=15 HTTP/1.1" 200 OK
+INFO:     10.64.131.202:50762 - "GET /api/callcenter/active-calls HTTP/1.1" 200 OK
+INFO:     10.64.131.202:50762 - "GET /api/callcenter/active-calls HTTP/1.1" 200 OK
+INFO:     10.64.131.206:45894 - "GET /api/callcenter/active-calls HTTP/1.1" 200 OK
+INFO:     10.64.131.204:45446 - "GET /api/callcenter/active-calls HTTP/1.1" 200 OK
+INFO:     10.64.131.202:53206 - "GET /api/notifications/sound-alert HTTP/1.1" 200 OK
+INFO:     10.64.131.205:59066 - "GET /api/callcenter/active-calls HTTP/1.1" 200 OK
+INFO:     10.64.131.206:50952 - "GET /api/callcenter/active-calls HTTP/1.1" 200 OK
+INFO:     10.64.131.202:37734 - "GET /api/callcenter/active-calls HTTP/1.1" 200 OK
+INFO:     10.64.131.205:39144 - "GET /api/callcenter/active-calls HTTP/1.1" 200 OK
+INFO:     10.64.131.206:50958 - "GET /api/notifications/sound-alert HTTP/1.1" 200 OK
+INFO:     10.64.131.205:39144 - "GET /api/callcenter/active-calls HTTP/1.1" 200 OK
+INFO:     10.64.131.206:50958 - "GET /api/callcenter/active-calls HTTP/1.1" 200 OK
+INFO:     10.64.131.206:50958 - "GET /api/callcenter/active-calls HTTP/1.1" 200 OK
+INFO:     10.64.131.203:57990 - "GET /api/callcenter/active-calls HTTP/1.1" 200 OK
+INFO:     10.64.131.204:52146 - "GET /api/notifications/sound-alert HTTP/1.1" 200 OK
+INFO:     10.64.131.205:33664 - "GET /api/notifications/delayed-orders?delay_minutes=15 HTTP/1.1" 200 OK
+INFO:     10.64.131.204:52146 - "GET /api/callcenter/active-calls HTTP/1.1" 200 OK
+INFO:     10.64.131.204:52146 - "GET /api/callcenter/active-calls HTTP/1.1" 200 OK
+INFO:     10.64.131.203:41810 - "GET /api/callcenter/active-calls HTTP/1.1" 200 OK
+INFO:     10.64.131.205:41716 - "GET /api/callcenter/active-calls HTTP/1.1" 200 OK
+INFO:     10.64.131.206:46522 - "GET /api/notifications/sound-alert HTTP/1.1" 200 OK
+INFO:     10.64.131.204:45890 - "GET /api/callcenter/active-calls HTTP/1.1" 200 OK
+INFO:     10.64.131.204:45890 - "GET /api/callcenter/active-calls HTTP/1.1" 200 OK
+INFO:     10.64.131.205:52606 - "GET /api/callcenter/active-calls HTTP/1.1" 200 OK
+INFO:     10.64.131.206:48140 - "GET /api/callcenter/active-calls HTTP/1.1" 200 OK
+INFO:     10.64.131.206:48140 - "GET /api/notifications/sound-alert HTTP/1.1" 200 OK) أثناء محاولة تسجيل الدخول بحثاً عن أي أخطاء.
+        4.  راجع نقطة النهاية  في  ومنطق التحقق من كلمة المرور.
+    -   **Why fix this issue and what will be achieved with the fix?**: هذا الخطأ يمنع المستخدم من الوصول إلى النظام، وهو أمر حرج.
+    -   **Status**: NOT STARTED
     -   **Is recurring issue?**: N
     -   **Should Test frontend/backend/both after fix?**: both
     -   **Blocked on other issue**: None
 
--   **Issue 2:** **تنفيذ المنطق الخلفي لصلاحيات الطابعات.**
+-   **Issue 2:** **التأكد من صلاحيات المالك في تعديل معلومات النظام.**
     -   **Next debug checklist**:
-        1.  تحديد نقطة النهاية المسؤولة عن طباعة الطلبات في .
-        2.  قراءة صلاحيات الطابعة المستهدفة من قاعدة البيانات (, , ).
-        3.  تطبيق منطق  لتوليد بيانات الطباعة بناءً على هذه الصلاحيات (مثال: إذا كانت  تساوي ، يتم حذف الأسعار من البيانات المرتجعة).
-    -   **Why fix this issue and what will be achieved with the fix?**: تفعيل الميزة التي تم بناء واجهتها بالفعل، مما يسمح بتحكم دقيق في عملية الطباعة في المطبخ والكاشير.
-    -   **Status**: NOT STARTED
+        1.  سجل الدخول كمالك ().
+        2.  انتقل إلى لوحة تحكم المالك ().
+        3.  حاول رفع شعار جديد للنظام وتغيير رسالة الشكر وأرقام الهواتف.
+        4.  اضغط حفظ وتحقق من أن البيانات تم حفظها بنجاح عن طريق تحديث الصفحة.
+        5.  انتقل إلى صفحة POS كعميل وتحقق من أن الشعار والبيانات الجديدة تظهر في الفاتورة.
+    -   **Why fix this issue and what will be achieved with the fix?**: للتأكد من أن المالك لديه الصلاحيات الكاملة التي طلبها للتحكم في العلامة التجارية للنظام.
+    -   **Status**: TESTING PENDING
     -   **Is recurring issue?**: N
+    -   **Should Test frontend/backend/both after fix?**: both
+    -   **Blocked on other issue**: Issue 1 (إذا كان الدخول لا يعمل)
+
+-   **Issue 3:** **إصلاح آلية احتساب .**
+    -   **Next debug checklist**:
+        1.  راجع منطق إنشاء الطلب في  (حول السطر 4195).
+        2.  حدد ما إذا كان  يجب إضافته إلى  (المبلغ الذي يدفعه العميل) أم يظل تكلفة داخلية فقط.
+        3.  اسأل المستخدم للتأكيد: هل تريد إضافة تكلفة التغليف إلى المبلغ الإجمالي الذي يدفعه العميل، أم أنها مجرد تكلفة داخلية للمطعم؟
+    -   **Why fix this issue and what will be achieved with the fix?**: إغلاق مهمة قديمة وضمان دقة حسابات الطلبات.
+    -   **Status**: NOT STARTED
+    -   **Is recurring issue?**: Y
     -   **Should Test frontend/backend/both after fix?**: backend
     -   **Blocked on other issue**: None
 
--   **Issue 3:** **إصلاح الطلبات القديمة التي لم يتم العمل عليها.**
+-   **Issue 4:** **إصلاح واجهة تقرير جرد الصندوق.**
     -   **Next debug checklist**:
-        1.  **تكلفة التغليف:** مراجعة منطق حساب  في  والتأكد من إضافته إلى الإجمالي النهائي للعميل إذا كان هذا هو المطلوب. (يحتاج تأكيد من المستخدم).
-        2.  **تقرير جرد الصندوق:** مراجعة واجهة التقرير في  وإصلاح أي خلل في التنسيق بناءً على طلب المستخدم السابق.
-    -   **Why fix this issue and what will be achieved with the fix?**: إغلاق المهام المعلقة من الجلسات السابقة.
+        1.  راجع الكود في  الذي يعرض نافذة إدارة اليوم وترحيل البيانات.
+        2.  اسأل المستخدم: بخصوص تقرير جرد الصندوق في لوحة التحكم، ما هي المشكلة تحديداً في التنسيق أو الواجهة التي تلاحظها؟ هل يمكنك وصفها أو إرسال لقطة شاشة؟
+    -   **Why fix this issue and what will be achieved with the fix?**: تحسين تجربة المستخدم وإغلاق مهمة معلقة.
     -   **Status**: NOT STARTED
-    -   **Is recurring issue?**: Y (تم تأجيلها)
-    -   **Should Test frontend/backend/both after fix?**: both
+    -   **Is recurring issue?**: Y
+    -   **Should Test frontend/backend/both after fix?**: frontend
     -   **Blocked on other issue**: None
 
 **In progress Task List**:
--   **Task 1:** **تخصيص الفواتير.**
-    -   **Where to resume**: في ملف ، ابدأ بإضافة قسم جديد يسمح للعملاء بإدخال معلومات الاتصال الخاصة بمطعمهم (أرقام الهواتف).
-    -   **What will be achieved with this?**: سيتمكن كل مطعم من عرض معلومات الاتصال الخاصة به على فواتيره، بالإضافة إلى العلامة التجارية للنظام.
-    -   **Status**: IN PROGRESS
-    -   **Should Test frontend/backend/both after fix?**: Both
-    -   **Blocked on something**: None
+-   لا يوجد.
 
 **Upcoming and Future Tasks**
 -   **Upcoming Tasks:**
-    -   (P0) تنفيذ المنطق الخلفي لصلاحيات الطابعات (Issue 2).
-    -   (P1) إصلاح آلية احتساب  للطلبات الخارجية.
-    -   (P1) إصلاح الخلل في واجهة تقرير جرد الصندوق.
+    -   (P0) التحقق من المستخدم بخصوص إصلاح الطباعة الأخير.
+    -   (P1) تنفيذ بقية طلبات المستخدم الأخيرة (الشعار الافتراضي، الخصم، هيكل الفاتورة).
 -   **Future Tasks:**
-    -   (P2) استئناف وإكمال إعادة هيكلة  و .
-    -   وضع اللمسات الأخيرة على تصميم الشعار المفرغ.
-    -   تجهيز المواد النهائية للفيديو الترويجي.
-    -   تكامل SendGrid لإرسال التقارير (متوقف على تزويد المستخدم بمفتاح API).
+    -   (P2) استئناف وإكمال إعادة هيكلة  و  لتقليل حجمهما وتعقيدهما.
+    -   (P3) تكامل SendGrid لإرسال التقارير (متوقف على تزويد المستخدم بمفتاح API).
 
 **Completed work in this session**
--   **إصلاح شامل لفصل البيانات (Multi-tenancy):** تم تدقيق وإصلاح جميع نقاط النهاية تقريباً لضمان عزل بيانات كل عميل بشكل كامل.
--   **إدارة متقدمة للطابعات:** إضافة واجهات لإنشاء وتعديل وحذف واختبار الطابعات، بالإضافة إلى واجهة لتحديد صلاحيات الطباعة.
--   **تنظيف بيانات النظام:** تم حذف العملاء القدامى وإصلاح بيانات المستخدمين وإعادة إنشاء حساب المالك.
--   **إصلاح مشكلة صور المنتجات:** تم إصلاح عدم ظهور الصور عبر إضافة صور افتراضية.
--   **تحسينات واجهة المستخدم:** تعديل شعار تسجيل الدخول ليكون دائرياً وإخفاء العملاء غير المرغوب فيهم من لوحة تحكم المالك.
--   **إعدادات الفاتورة للمالك:** تمكين المالك من إضافة علامة تجارية موحدة (شعار، رسالة شكر) على جميع الفواتير.
+-   **إكمال ميزة تخصيص الفواتير:**
+    -   تمكين العميل من إضافة معلومات مطعمه (هاتف، عنوان) والتحكم في عرض الرقم الضريبي.
+    -   نقل ميزة رفع شعار الفاتورة إلى لوحة تحكم المالك فقط.
+-   **إكمال المنطق الخلفي لصلاحيات الطابعات:** أصبحت جميع الصلاحيات (إخفاء السعر، وضع الطباعة، إلخ) تعمل الآن.
+-   **إصلاح مشاكل واجهة المستخدم الحرجة:**
+    -   تم إصلاح مشكلة الطباعة التي كانت تنتج صفحة فارغة.
+    -   تم إصلاح مشكلة عدم ظهور صور المنتجات والفئات في نقطة البيع.
+    -   تم إصلاح أخطاء برمجية كانت تمنع عرض صفحات  و .
+-   **تحسين تصميم الفاتورة:**
+    -   أصبح الشعار الدائري لصفحة تسجيل الدخول يظهر تلقائياً في أعلى كل الفواتير.
+    -   تم إعادة ترتيب الفاتورة لتطابق طلب المستخدم (شعار النظام في الأعلى، ثم معلومات المطعم، ثم تفاصيل الطلب).
+    -   أصبح حقل الخصم يظهر دائماً في الفاتورة لزيادة الوضوح.
 
 **Earlier issues found/mentioned but not fixed**
--   **Issue 1:  calculation:** تم تحديد المشكلة المحتملة (لا يتم إضافتها إلى الإجمالي النهائي للعميل) ولكن لم يتم إصلاحها أو الحصول على تأكيد من المستخدم.
--   **Issue 2: Cash drawer report UI issue:** مشكلة واجهة مستخدم في تقرير جرد الصندوق تم ذكرها في الملخص السابق ولكن لم يتم العمل عليها.
+-   **Issue 1:  calculation:** تم تحديد المشكلة ولكن لم يتم إصلاحها.
+-   **Issue 2: Cash drawer report UI issue:** تم تحديد المشكلة ولكن لم يتم إصلاحها.
 
 **Known issue recurrence from previous fork**
--   **Issue recurrence in previous fork**: الحجم الكبير لملفي  و  لا يزال ديناً تقنياً حرجاً. زاد حجم  بشكل كبير في هذه الجلسة، مما يجعل إعادة هيكلته أكثر إلحاحاً.
+-   **Issue recurrence in previous fork**: الحجم الكبير والتعقيد المتزايد لملفي  و . هذا الدين التقني لا يزال قائماً ويزداد إلحاحاً مع كل ميزة جديدة.
 -   **Recurrence count**: متعدد.
--   **Status**: IN PROGRESS (متوقف حالياً).
+-   **Status**: NOT STARTED.
 
 **Code Architecture**
 
 
 **Key Technical Concepts**
--   **تدقيق وإصلاح Multi-tenancy:** استخدام دالة  بشكل موسع ومراجعة يدوية لعشرات نقاط النهاية لضمان إضافة فلتر  في جميع استعلامات قاعدة البيانات.
--   **إدارة حالة معقدة في React:** أصبح ملف  يدير حالات متعددة ومتداخلة للطابعات (قائمة، نموذج إضافة، نموذج تعديل، حالة اختبار الاتصال) مما يزيد من تعقيده.
--   **إعدادات ديناميكية:** إضافة نماذج ونقاط نهاية للسماح للمالك بتكوين جوانب من النظام (مثل تذييل الفاتورة) بشكل ديناميكي من لوحة التحكم.
+-   **CSS for Printing ()**: تم حل مشكلة الطباعة عن طريق إنشاء نافذة منبثقة جديدة () وكتابة محتوى HTML للفاتورة فيها، بدلاً من محاولة إخفاء عناصر الصفحة الأصلية.
+-   **Dynamic Invoice Composition**: يتم الآن تجميع الفاتورة في الواجهة الأمامية () عن طريق جلب بيانات من عدة مصادر: إعدادات النظام (), إعدادات العميل (), إعدادات المطعم (), وشعار صفحة الدخول ().
+-   **State Management**: أصبحت صفحة  تدير حالة معقدة تتضمن جلب 4 أنواع مختلفة من الإعدادات بالإضافة إلى بيانات الطلب الحالي لعرض الفاتورة بشكل صحيح.
 
 **key DB schema**
--   **printers:** تمت إضافة حقول جديدة:  (str),  (str),  (bool),  (bool),  (bool).
--   **settings:** تم استخدام هذه المجموعة لتخزين إعدادات الفاتورة على مستوى النظام، مثل  و .
+-   **settings:** تم توسيع استخدام هذه المجموعة لتشمل:
+    -   : لتخزين إعدادات الفاتورة على مستوى النظام (مثل , ).
+    -   : لتخزين إعدادات الفاتورة الخاصة بالعميل (مثل , , ).
+-   **login_backgrounds**: يتم الآن استخدام  من هذه المجموعة كشعار افتراضي للفواتير.
 
 **All files of reference**
 -   
 -   
 -   
 -   
+-   
 
 **Areas that need refactoring**:
--   **CRITICAL:** ملف  أصبح ضخماً للغاية (تجاوز 3500 سطر) وهشاً. يجب تقسيمه فوراً إلى مكونات أصغر (مثل , , ).
--   **CRITICAL:** ملف  لا يزال بحاجة ماسة إلى إعادة الهيكلة بتقسيمه إلى ملفات  متعددة.
+-   **CRITICAL:** ملف  لا يزال ضخماً جداً ويحتاج إلى تقسيمه إلى مكونات أصغر.
+-   **CRITICAL:** ملف  يحتاج إلى إعادة هيكلة عاجلة بتقسيمه إلى ملفات  منفصلة حسب الوظيفة (المصادقة، المنتجات، الطلبات، إلخ).
 
 **key api endpoints**
--   **PUT **: (جديد) لتحديث طابعة.
--   **DELETE **: (جديد) لحذف طابعة.
--   **POST **: (جديد) لاختبار الاتصال بطابعة.
 -   **GET **: (جديد) لجلب إعدادات الفاتورة للمالك.
 -   **PUT **: (جديد) لتحديث إعدادات الفاتورة للمالك.
--   **جميع نقاط النهاية تقريباً** تم تحديثها لضمان فلترة  (مثل , , , ).
+-   **GET **: (جديد) لجلب إعدادات الفاتورة للعميل.
+-   **PUT **: (جديد) لتحديث إعدادات الفاتورة للعميل.
+-   **POST **: تم تحديثه لتطبيق صلاحيات الطابعة بشكل كامل.
+-   **GET **: (جديد) لجلب بيانات الطباعة المجهزة للطابعات ذات الطباعة التلقائية.
+-   **GET **: يُستخدم الآن لجلب الشعار الافتراضي للفاتورة.
 
 **Critical Info for New Agent**
--   **أولوية قصوى لفصل البيانات:** المستخدم حساس جداً تجاه عزل بيانات العملاء. قبل إضافة أي ميزة جديدة، تأكد تماماً من أن جميع الاستعلامات المتعلقة بها مفلترة حسب .
--   **ملف  قنبلة موقوتة:** هذا الملف معقد للغاية وأي تعديل عليه محفوف بالمخاطر. اقترح على المستخدم إعادة هيكلته كخطوة ذات أولوية قبل إضافة المزيد من الميزات المتعلقة بالإعدادات.
--   **المنطق الخلفي غير مكتمل:** تم بناء واجهات معقدة (مثل صلاحيات الطابعة) ولكن المنطق الخلفي لتشغيلها غير موجود. يجب إكمال هذا المنطق لتفعيل الميزات.
--   **استجب لطلبات المستخدم العاجلة:** يغير المستخدم أولوياته باستمرار. كن مستعداً لإيقاف مهام الديون التقنية للتركيز على طلباته الجديدة، وادرس الصور ومقاطع الفيديو التي يرسلها بعناية.
+-   **أولوية قصوى لمشكلة الدخول:** أبلغ المستخدم عن مشكلة في تسجيل الدخول. يجب أن يكون هذا هو أول شيء تقوم بالتحقيق فيه وحله.
+-   **المستخدم بصري جداً:** يعتمد المستخدم على إرسال تسجيلات فيديو ولقطات شاشة للإبلاغ عن المشاكل. قم بتحليلها بعناية فائقة لفهم المطلوب بدقة.
+-   **منطق الطباعة:** منطق الطباعة الآن يعتمد على فتح نافذة جديدة. الكود المسؤول عن ذلك موجود في دالة  داخل .
+-   **الدين التقني:** ملفا  و  ضخمان ومعقدان. كن حذراً جداً عند التعديل عليهما، واقترح على المستخدم تخصيص وقت لإعادة هيكلتهما قريباً.
 
 **documents and test reports created in this job**
--   لا يوجد.
+-   /app/test_reports/iteration_27.json
+-   /app/test_reports/iteration_28.json
 
 **Last 10 User Messages and any pending HUMAN messages**
-1.  **[LATEST] المستخدم:** طلب شرحاً تفصيلياً لكل صلاحية من صلاحيات الطابعة. **(تم الرد)**
-2.  **المستخدم:** طلب أن تكون طباعة كل صنف على حدة تعني طباعة جميع الطلبات للمتابعة، وأن يكون نوع الطابعة حقل إدخال نصي. **(تم التنفيذ)**
-3.  **المستخدم:** طلب التحكم في أنواع الطابعات وإضافة صلاحيات طباعة مفصلة. **(تم التنفيذ - واجهة فقط)**
-4.  **المستخدم:** طلب تأكيداً نهائياً بأن بيانات كل عميل منفصلة تماماً في جميع أجزاء النظام. **(تم التحقيق والرد)**
-5.  **المستخدم:** سأل عما إذا كانت بيانات كل عميل منفصلة، مشيراً إلى أن طابعات النظام الرئيسي تظهر عند العملاء الآخرين. **(تم التحقيق والإصلاح)**
-6.  **المستخدم:** طلب إصلاح مشكلة عدم ظهور صور المنتجات والفئات ثم النشر. **(تم الإصلاح)**
-7.  **المستخدم:** طلب التحكم في حالة الاتصال للطابعات، جعل شعار الدخول دائري، توحيد حساب المالك، وإخفاء النظام الرئيسي من قائمة العملاء. **(تم التنفيذ)**
-8.  **المستخدم:** رد على الوكيل بخصوص مشكلتين: 1) لا توجد أزرار تعديل/حذف للطابعات 2) وجود خطأ صلاحيات عند استخدام حساب المالك. **(تم الإصلاح)**
-9.  **المستخدم:** وافق على خطة العمل المقترحة. **(تم الإقرار)**
-10. **الوكيل:** طلب من المستخدم تأكيداً بخصوص طريقة حساب تكلفة التغليف. **(معلق - لم يرد المستخدم)**
+1.  **[LATEST] المستخدم:** أبلغ عن مشكلة في عدم استجابة زر الطباعة وعدم ظهور حقل الخصم دائماً. (تم الإصلاح، بانتظار التحقق من المستخدم).
+2.  **الوكيل:** أنهى المهمة مع اقتراح إضافة باركود.
+3.  **المستخدم:** طلب أن يظهر الشعار الدائري لصفحة الدخول على جميع الفواتير، وأن يكون رفع الشعار ميزة للمالك فقط، وأن يظهر الخصم في الفاتورة، وأبلغ عن مشكلة في الدخول للنظام. (تم التنفيذ، ما عدا مشكلة الدخول).
+4.  **الوكيل:** أنهى المهمة بعد إصلاح مشاكل الطباعة والصور.
+5.  **المستخدم:** أبلغ عن مشاكل جديدة: الطباعة تطبع الشاشة كلها، شعار النظام لا يظهر، لا يوجد خيار لرفع شعار في لوحة المالك، وصور المنتجات لا تظهر. (تم الإصلاح).
+6.  **الوكيل:** سأل المستخدم عن مشكلة محددة في تقرير جرد الصندوق. (معلق - لم يرد المستخدم).
+7.  **المستخدم:** طلب إضافة معاينة للفاتورة في الإعدادات، وإصلاح ، وإصلاح واجهة تقرير جرد الصندوق. (تم تنفيذ معاينة الفاتورة فقط).
+8.  **الوكيل:** أبلغ المستخدم بإصلاح خطأ أيقونة  في لوحة تحكم المالك.
+9.  **المستخدم:** أبلغ عن خطأ  في لوحة تحكم المالك. (تم الإصلاح).
+10. **الوكيل:** أنهى المهمة بعد اجتياز اختبارات الواجهة الخلفية والأمامية.
 
 **Project Health Check:**
--   **Broken:** لا يوجد. التطبيق يعمل والمشاكل التي أبلغ عنها المستخدم تم حلها.
--   **Mocked:** المنطق الخلفي (Backend) لصلاحيات الطابعة (Print Permissions) غير موجود. الواجهة الأمامية تسمح بتعيين الصلاحيات، لكن النظام لا يطبقها عند الطباعة.
+-   **Broken:** من المحتمل أن تكون ميزة **تسجيل الدخول** معطلة أو بها مشكلة، بناءً على آخر رسالة من المستخدم. هذا يتطلب تحقيقاً فورياً.
+-   **Mocked:** لا يوجد.
 
 **3rd Party Integrations**
--   : استُخدمت سابقاً لمحاولات إنشاء الشعار.
 -   : المكتبة مثبتة ولكن التكامل غير نشط بانتظار مفتاح API.
 
 **Testing status**
--   **Testing agent used after significant changes:** NO. اعتمد الوكيل بشكل كبير على الاختبار الذاتي باستخدام  ولقطات الشاشة.
+-   **Testing agent used after significant changes:** YES. تم استخدامه مرتين وكانت النتائج ناجحة.
 -   **Troubleshoot agent used after agent stuck in loop:** NO.
 -   **Test files created:** NO.
--   **Known regressions:** لا يوجد، ولكن الإصلاحات الواسعة في فصل البيانات تتطلب الحذر عند إضافة ميزات جديدة.
+-   **Known regressions:** لا يوجد.
 
 **Credentials to test flow:**
 -   **Super Admin (المالك):** ( / )
 -   **Customer Admin (عميل):** ( / )
 
 **What agent forgot to execute**
--   لم يقم الوكيل بتنفيذ **المنطق الخلفي** لصلاحيات الطابعة المتقدمة التي أنشأ واجهتها.
--   لم يقم الوكيل بمعالجة طلب إصلاح واجهة **تقرير جرد الصندوق**.
--   لم يقم الوكيل بإصلاح مشكلة حساب **تكلفة التغليف**، على الرغم من أنه حدد المشكلة المحتملة في وقت مبكر.</analysis>
+-   لم يقم الوكيل بالتحقيق في **مشكلة تسجيل الدخول** التي ذكرها المستخدم صراحة. لقد ركز فقط على إصلاح خطأ الواجهة الأمامية الذي ظهر في لقطة الشاشة المرفقة.
+-   لم يقم بمعالجة الطلبات القديمة المتعلقة بـ **** و **تقرير جرد الصندوق**.</analysis>
