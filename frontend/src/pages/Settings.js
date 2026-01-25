@@ -786,7 +786,11 @@ export default function Settings() {
       ip_address: printer.ip_address,
       port: printer.port || 9100,
       branch_id: printer.branch_id,
-      printer_type: printer.printer_type || 'receipt'
+      printer_type: printer.printer_type || 'receipt',
+      print_mode: printer.print_mode || 'full_receipt',
+      show_prices: printer.show_prices !== false,
+      print_individual_items: printer.print_individual_items || false,
+      auto_print_on_order: printer.auto_print_on_order !== false
     });
     setEditPrinterDialogOpen(true);
   };
@@ -799,7 +803,11 @@ export default function Settings() {
         ip_address: editPrinterForm.ip_address,
         port: editPrinterForm.port,
         branch_id: editPrinterForm.branch_id,
-        printer_type: editPrinterForm.printer_type
+        printer_type: editPrinterForm.printer_type,
+        print_mode: editPrinterForm.print_mode,
+        show_prices: editPrinterForm.show_prices,
+        print_individual_items: editPrinterForm.print_individual_items,
+        auto_print_on_order: editPrinterForm.auto_print_on_order
       });
       toast.success('تم تحديث الطابعة');
       setEditPrinterDialogOpen(false);
