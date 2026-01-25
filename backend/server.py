@@ -3964,7 +3964,8 @@ async def delete_table(table_id: str, current_user: dict = Depends(get_current_u
     if current_user.get("role") not in ["admin", "manager"]:
         raise HTTPException(status_code=403, detail="ليس لديك صلاحية حذف الطاولات")
     
-    table = await db.tables.find_one({"id": table_id})
+    query = build_tenant_query(current_user, {"id": table_id})
+    table = await db.tables.find_one(query)
     if not table:
         raise HTTPException(status_code=404, detail="الطاولة غير موجودة")
     
@@ -3972,7 +3973,7 @@ async def delete_table(table_id: str, current_user: dict = Depends(get_current_u
     if table.get("status") == "occupied":
         raise HTTPException(status_code=400, detail="لا يمكن حذف طاولة مشغولة")
     
-    await db.tables.delete_one({"id": table_id})
+    await db.tables.delete_one(query)
     return {"message": "تم حذف الطاولة"}
 
 # ==================== CUSTOMER ROUTES - إدارة العملاء ====================
