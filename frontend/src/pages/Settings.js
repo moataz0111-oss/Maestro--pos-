@@ -3338,6 +3338,16 @@ export default function Settings() {
                             <div>
                               <p className="font-medium text-foreground">{printer.name}</p>
                               <p className="text-sm text-muted-foreground">{printer.ip_address}:{printer.port}</p>
+                              {/* عرض صلاحيات الطباعة */}
+                              <div className="flex flex-wrap gap-1 mt-1">
+                                <span className="text-xs text-muted-foreground">
+                                  {printer.print_mode === 'full_receipt' ? '📄 فاتورة كاملة' : 
+                                   printer.print_mode === 'orders_only' ? '📋 طلبات فقط' : 
+                                   printer.print_mode === 'selected_products' ? '🎯 منتجات محددة' : '📄 فاتورة'}
+                                </span>
+                                {!printer.show_prices && <span className="text-xs text-orange-400">• بدون أسعار</span>}
+                                {printer.print_individual_items && <span className="text-xs text-purple-400">• صنف بصنف</span>}
+                              </div>
                             </div>
                           </div>
                           <div className="flex items-center gap-2">
@@ -3354,9 +3364,19 @@ export default function Settings() {
                             ) : null}
                             
                             <span className={`text-xs px-2 py-1 rounded-full ${
-                              printer.printer_type === 'receipt' ? 'bg-blue-500/10 text-blue-500' : 'bg-orange-500/10 text-orange-500'
+                              printer.printer_type === 'receipt' ? 'bg-blue-500/10 text-blue-500' : 
+                              printer.printer_type === 'kitchen' ? 'bg-orange-500/10 text-orange-500' :
+                              printer.printer_type === 'bar' ? 'bg-purple-500/10 text-purple-500' :
+                              printer.printer_type === 'packaging' ? 'bg-green-500/10 text-green-500' :
+                              printer.printer_type === 'label' ? 'bg-pink-500/10 text-pink-500' :
+                              'bg-gray-500/10 text-gray-500'
                             }`}>
-                              {printer.printer_type === 'receipt' ? 'إيصالات' : 'مطبخ'}
+                              {printer.printer_type === 'receipt' ? 'إيصالات' : 
+                               printer.printer_type === 'kitchen' ? 'مطبخ' :
+                               printer.printer_type === 'bar' ? 'بار' :
+                               printer.printer_type === 'packaging' ? 'تغليف' :
+                               printer.printer_type === 'label' ? 'ملصقات' :
+                               printer.printer_type || 'عام'}
                             </span>
                             
                             {/* زر اختبار الاتصال */}
