@@ -5847,6 +5847,112 @@ async def verify_super_admin(current_user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=403, detail="صلاحيات Super Admin مطلوبة")
     return current_user
 
+# ==================== FIX DATA API ====================
+
+@api_router.post("/fix-data")
+async def fix_data_endpoint(current_user: dict = Depends(verify_super_admin)):
+    """
+    Endpoint لإصلاح البيانات القديمة
+    يمكن استدعاؤه فقط من قبل المالك
+    """
+    try:
+        results = {
+            "tables_fixed": 0,
+            "tables_deleted_duplicates": 0,
+            "categories_fixed": 0,
+            "products_fixed": 0,
+            "tenant_tables_created": 0,
+        }
+        
+        # 1. تحديث الطاولات القديمة التي ليس لها tenant_id لتصبح "default"
+        tables_result = await db.tables.update_many(
+            {"$or": [{"tenant_id": {"$exists": False}}, {"tenant_id": None}, {"tenant_id": ""}]},
+            {"$set": {"tenant_id": "default"}}
+        )
+        results["tables_fixed"] = tables_result.modified_count
+        
+        # 2. حذف الطاولات المكررة (نفس رقم الطاولة ونفس tenant_id)
+        pipeline = [
+            {"$group": {
+                "_id": {"number": "$number", "tenant_id": "$tenant_id"},
+                "count": {"$sum": 1},
+                "ids": {"$push": "$id"}
+            }},
+            {"$match": {"count": {"$gt": 1}}}
+        ]
+        duplicates = await db.tables.aggregate(pipeline).to_list(100)
+        for dup in duplicates:
+            # الاحتفاظ بأول طاولة وحذف الباقي
+            ids_to_delete = dup["ids"][1:]
+            delete_result = await db.tables.delete_many({"id": {"$in": ids_to_delete}})
+            results["tables_deleted_duplicates"] += delete_result.deleted_count
+        
+        # 3. إنشاء طاولات لكل عميل ليس لديه طاولات
+        tenants = await db.tenants.find({}, {"_id": 0, "id": 1, "name": 1}).to_list(None)
+        for tenant in tenants:
+            tenant_tables = await db.tables.count_documents({"tenant_id": tenant["id"]})
+            if tenant_tables == 0:
+                tenant_branch = await db.branches.find_one({"tenant_id": tenant["id"]})
+                branch_id = tenant_branch["id"] if tenant_branch else None
+                
+                default_tables = []
+                for i in range(1, 6):
+                    default_tables.append({
+                        "id": str(uuid.uuid4()),
+                        "number": i,
+                        "capacity": 4,
+                        "section": "القاعة الرئيسية",
+                        "status": "available",
+                        "current_order_id": None,
+                        "branch_id": branch_id,
+                        "tenant_id": tenant["id"]
+                    })
+                await db.tables.insert_many(default_tables)
+                results["tenant_tables_created"] += 5
+        
+        # 4. تحديث صور الفئات للنظام الرئيسي
+        category_images = {
+            "برغر": "https://images.unsplash.com/photo-1635275650933-7b0911815a2e?w=400",
+            "بيتزا": "https://images.unsplash.com/photo-1703073186021-021fb5a0bde1?w=400",
+            "مشروبات": "https://images.unsplash.com/photo-1657958977261-d75e81b4713f?w=400",
+            "حلويات": "https://images.unsplash.com/photo-1546902189-eaaf09f8e38f?w=400",
+            "سلطات": "https://images.unsplash.com/photo-1677653805080-59c57727c84e?w=400",
+        }
+        for cat_name, cat_image in category_images.items():
+            cat_result = await db.categories.update_many(
+                {"name": cat_name, "tenant_id": "default", "$or": [{"image": {"$exists": False}}, {"image": None}, {"image": ""}]},
+                {"$set": {"image": cat_image}}
+            )
+            results["categories_fixed"] += cat_result.modified_count
+        
+        # 5. تحديث صور المنتجات للنظام الرئيسي
+        product_images = {
+            "برغر كلاسيك": "https://images.unsplash.com/photo-1656439659132-24c68e36b553?w=400",
+            "برغر دبل": "https://images.unsplash.com/photo-1635275650933-7b0911815a2e?w=400",
+            "بيتزا مارغريتا": "https://images.unsplash.com/photo-1681567604770-0dc826c870ae?w=400",
+            "بيتزا خضار": "https://images.unsplash.com/photo-1602104980741-b87a33837f9f?w=400",
+            "كولا": "https://images.unsplash.com/photo-1657958977261-d75e81b4713f?w=400",
+            "عصير برتقال": "https://images.unsplash.com/photo-1716925539259-ce0115263d37?w=400",
+        }
+        for prod_name, prod_image in product_images.items():
+            prod_result = await db.products.update_many(
+                {"name": prod_name, "tenant_id": "default", "$or": [{"image": {"$exists": False}}, {"image": None}, {"image": ""}]},
+                {"$set": {"image": prod_image}}
+            )
+            results["products_fixed"] += prod_result.modified_count
+        
+        return {
+            "status": "success",
+            "message": "تم إصلاح البيانات بنجاح",
+            "results": results
+        }
+        
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": f"حدث خطأ: {str(e)}"
+        }
+
 # ==================== SYSTEM BRANDING API ====================
 
 @api_router.get("/system/branding")
