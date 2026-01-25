@@ -10530,10 +10530,17 @@ async def delete_invoice_template(template_id: str, current_user: dict = Depends
 
 @api_router.post("/invoices/print/{order_id}")
 async def print_invoice(order_id: str, print_type: str = "customer", printer_id: Optional[str] = None, current_user: dict = Depends(get_current_user)):
-    """طباعة فاتورة"""
-    order = await db.orders.find_one({"id": order_id}, {"_id": 0})
+    """طباعة فاتورة مع تطبيق صلاحيات الطابعة"""
+    query = build_tenant_query(current_user, {"id": order_id})
+    order = await db.orders.find_one(query, {"_id": 0})
     if not order:
         raise HTTPException(status_code=404, detail="الطلب غير موجود")
+    
+    # جلب إعدادات الطابعة إذا تم تحديدها
+    printer_settings = None
+    if printer_id:
+        printer_query = build_tenant_query(current_user, {"id": printer_id})
+        printer_settings = await db.printers.find_one(printer_query, {"_id": 0})
     
     # جلب قالب الفاتورة
     template = await db.invoice_templates.find_one({
@@ -10550,29 +10557,82 @@ async def print_invoice(order_id: str, print_type: str = "customer", printer_id:
             "paper_width": 80
         }
     
+    # تحضير الأصناف بناءً على صلاحيات الطابعة
+    items = order.get("items", [])
+    show_prices = True
+    print_mode = "full_receipt"
+    print_individual_items = False
+    
+    if printer_settings:
+        show_prices = printer_settings.get("show_prices", True)
+        print_mode = printer_settings.get("print_mode", "full_receipt")
+        print_individual_items = printer_settings.get("print_individual_items", False)
+    
+    # تطبيق صلاحيات الطابعة على الأصناف
+    processed_items = []
+    for item in items:
+        processed_item = {
+            "name": item.get("name"),
+            "name_en": item.get("name_en"),
+            "quantity": item.get("quantity", 1),
+            "notes": item.get("notes"),
+        }
+        
+        # إضافة الأسعار فقط إذا كان مسموحاً
+        if show_prices:
+            processed_item["price"] = item.get("price", 0)
+            processed_item["total"] = item.get("price", 0) * item.get("quantity", 1)
+        
+        processed_items.append(processed_item)
+    
     # تحضير بيانات الطلب للطباعة
     print_data = {
         "order_number": order.get("order_number", order["id"][:8]),
         "date": datetime.fromisoformat(order.get("created_at", datetime.now(timezone.utc).isoformat())).strftime("%Y-%m-%d %H:%M"),
         "table_number": order.get("table_number"),
         "customer_name": order.get("customer_name"),
-        "items": order.get("items", []),
-        "subtotal": order.get("subtotal", 0),
-        "discount": order.get("discount", 0),
-        "tax": order.get("tax", 0),
-        "total": order.get("total", 0),
-        "payment_method": order.get("payment_method", "cash"),
+        "items": processed_items,
         "order_type": order.get("order_type", "dine_in"),
-        "notes": order.get("notes")
+        "notes": order.get("notes"),
+        "print_mode": print_mode,
+        "show_prices": show_prices,
+        "print_individual_items": print_individual_items
     }
     
-    # TODO: إرسال للطابعة عبر الشبكة
-    # في الوقت الحالي، نرجع بيانات الطباعة
+    # إضافة المعلومات المالية فقط للفاتورة الكاملة وإذا كان عرض الأسعار مسموحاً
+    if print_mode == "full_receipt" and show_prices:
+        print_data["subtotal"] = order.get("subtotal", 0)
+        print_data["discount"] = order.get("discount", 0)
+        print_data["tax"] = order.get("tax", 0)
+        print_data["total"] = order.get("total", 0)
+        print_data["payment_method"] = order.get("payment_method", "cash")
+    
+    # إذا كانت طباعة كل صنف على حدة، نجهز مصفوفة من الطباعات
+    print_jobs = []
+    if print_individual_items:
+        for item in processed_items:
+            job = {
+                "order_number": print_data["order_number"],
+                "date": print_data["date"],
+                "table_number": print_data["table_number"],
+                "items": [item],
+                "notes": print_data["notes"],
+                "is_individual": True
+            }
+            print_jobs.append(job)
+    else:
+        print_jobs = [print_data]
     
     return {
         "message": "جاهز للطباعة",
         "print_data": print_data,
-        "template": template
+        "print_jobs": print_jobs,
+        "template": template,
+        "printer_settings": {
+            "print_mode": print_mode,
+            "show_prices": show_prices,
+            "print_individual_items": print_individual_items
+        }
     }
 
 # ==================== PUSH NOTIFICATIONS ROUTES ====================
