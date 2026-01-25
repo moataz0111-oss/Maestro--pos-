@@ -4685,6 +4685,147 @@ export default function Settings() {
             </TabsContent>
           )}
 
+          {/* Invoice Settings - إعدادات الفاتورة للعميل */}
+          {hasRole(['admin', 'super_admin', 'manager']) && (
+            <TabsContent value="invoice-settings">
+              <div className="space-y-6">
+                <Card className="border-border/50 bg-card">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2 text-foreground">
+                      <Receipt className="h-5 w-5" />
+                      إعدادات الفاتورة
+                    </CardTitle>
+                    <p className="text-sm text-muted-foreground">
+                      تخصيص معلومات المطعم التي تظهر على الفواتير المطبوعة
+                    </p>
+                  </CardHeader>
+                  <CardContent className="space-y-6">
+                    {/* معلومات الاتصال */}
+                    <div className="p-4 border rounded-lg bg-green-500/10">
+                      <Label className="text-foreground font-bold mb-4 flex items-center gap-2">
+                        <Phone className="h-5 w-5 text-green-500" />
+                        معلومات الاتصال
+                      </Label>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                        <div>
+                          <Label className="text-sm text-muted-foreground">رقم الهاتف الأول</Label>
+                          <Input
+                            value={invoiceSettings.phone}
+                            onChange={(e) => setInvoiceSettings(prev => ({...prev, phone: e.target.value}))}
+                            placeholder="مثال: 07701234567"
+                            className="mt-1"
+                            dir="ltr"
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-sm text-muted-foreground">رقم الهاتف الثاني (اختياري)</Label>
+                          <Input
+                            value={invoiceSettings.phone2}
+                            onChange={(e) => setInvoiceSettings(prev => ({...prev, phone2: e.target.value}))}
+                            placeholder="مثال: 07809876543"
+                            className="mt-1"
+                            dir="ltr"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* العنوان */}
+                    <div className="p-4 border rounded-lg bg-blue-500/10">
+                      <Label className="text-foreground font-bold mb-4 flex items-center gap-2">
+                        <MapPin className="h-5 w-5 text-blue-500" />
+                        العنوان
+                      </Label>
+                      <div className="mt-4">
+                        <Label className="text-sm text-muted-foreground">عنوان المطعم</Label>
+                        <Input
+                          value={invoiceSettings.address}
+                          onChange={(e) => setInvoiceSettings(prev => ({...prev, address: e.target.value}))}
+                          placeholder="مثال: بغداد - الكرادة - شارع الريحان"
+                          className="mt-1"
+                        />
+                      </div>
+                    </div>
+
+                    {/* الرقم الضريبي */}
+                    <div className="p-4 border rounded-lg bg-yellow-500/10">
+                      <Label className="text-foreground font-bold mb-4 flex items-center gap-2">
+                        <CreditCard className="h-5 w-5 text-yellow-500" />
+                        المعلومات الضريبية
+                      </Label>
+                      <div className="mt-4">
+                        <Label className="text-sm text-muted-foreground">الرقم الضريبي (اختياري)</Label>
+                        <Input
+                          value={invoiceSettings.tax_number}
+                          onChange={(e) => setInvoiceSettings(prev => ({...prev, tax_number: e.target.value}))}
+                          placeholder="مثال: 123456789"
+                          className="mt-1"
+                          dir="ltr"
+                        />
+                      </div>
+                    </div>
+
+                    {/* نصوص مخصصة */}
+                    <div className="p-4 border rounded-lg bg-purple-500/10">
+                      <Label className="text-foreground font-bold mb-4 flex items-center gap-2">
+                        <Edit className="h-5 w-5 text-purple-500" />
+                        نصوص مخصصة
+                      </Label>
+                      <div className="space-y-4 mt-4">
+                        <div>
+                          <Label className="text-sm text-muted-foreground">نص أعلى الفاتورة (اختياري)</Label>
+                          <Textarea
+                            value={invoiceSettings.custom_header}
+                            onChange={(e) => setInvoiceSettings(prev => ({...prev, custom_header: e.target.value}))}
+                            placeholder="مثال: أهلاً بكم في مطعمنا"
+                            className="mt-1"
+                            rows={2}
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-sm text-muted-foreground">نص أسفل الفاتورة (اختياري)</Label>
+                          <Textarea
+                            value={invoiceSettings.custom_footer}
+                            onChange={(e) => setInvoiceSettings(prev => ({...prev, custom_footer: e.target.value}))}
+                            placeholder="مثال: نتمنى لكم وجبة شهية!"
+                            className="mt-1"
+                            rows={2}
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* إظهار الشعار */}
+                    <div className="p-4 border rounded-lg">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <ImageIcon className="h-5 w-5 text-orange-500" />
+                          <div>
+                            <p className="font-medium">إظهار شعار المطعم في الفاتورة</p>
+                            <p className="text-xs text-muted-foreground">عرض شعار المطعم في أعلى الفاتورة المطبوعة</p>
+                          </div>
+                        </div>
+                        <Switch 
+                          checked={invoiceSettings.show_logo}
+                          onCheckedChange={(checked) => setInvoiceSettings(prev => ({...prev, show_logo: checked}))}
+                        />
+                      </div>
+                    </div>
+
+                    <Button 
+                      className="w-full bg-green-500 hover:bg-green-600"
+                      onClick={saveInvoiceSettings}
+                      disabled={savingInvoiceSettings}
+                    >
+                      {savingInvoiceSettings ? <RefreshCw className="h-4 w-4 ml-2 animate-spin" /> : <Save className="h-4 w-4 ml-2" />}
+                      حفظ إعدادات الفاتورة
+                    </Button>
+                  </CardContent>
+                </Card>
+              </div>
+            </TabsContent>
+          )}
+
           {/* Customers - إدارة العملاء */}
           {hasRole(['admin', 'super_admin', 'manager', 'branch_manager']) && (
             <TabsContent value="customers">
