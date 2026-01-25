@@ -4714,18 +4714,6 @@ export default function Settings() {
                     </div>
 
                     {/* معلومات الاتصال */}
-                                onClick={() => setInvoiceSettings(prev => ({...prev, invoice_logo: ''}))}
-                              >
-                                <X className="h-4 w-4 ml-1" />
-                                إزالة الشعار
-                              </Button>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* معلومات الاتصال */}
                     <div className="p-4 border rounded-lg bg-green-500/10">
                       <Label className="text-foreground font-bold mb-4 flex items-center gap-2">
                         <Phone className="h-5 w-5 text-green-500" />
