@@ -964,11 +964,16 @@ export default function POS() {
                 <CardContent className="p-3">
                   {product.image ? (
                     <img
-                      src={product.image}
+                      src={product.image.startsWith('/') ? `${API}${product.image}` : product.image}
                       alt={product.name}
                       className="w-full h-24 object-cover rounded-lg mb-2"
+                      onError={(e) => {
+                        e.target.style.display = 'none';
+                        if (e.target.nextSibling) e.target.nextSibling.style.display = 'flex';
+                      }}
                     />
-                  ) : (
+                  ) : null}
+                  {!product.image && (
                     <div className="w-full h-24 bg-muted rounded-lg mb-2 flex items-center justify-center">
                       <Package className="h-8 w-8 text-muted-foreground" />
                     </div>
