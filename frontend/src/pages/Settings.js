@@ -232,6 +232,18 @@ export default function Settings() {
   });
   const [savingInventorySettings, setSavingInventorySettings] = useState(false);
   
+  // إعدادات الفاتورة للعميل (صاحب المطعم)
+  const [invoiceSettings, setInvoiceSettings] = useState({
+    show_logo: true,
+    phone: '',
+    phone2: '',
+    address: '',
+    tax_number: '',
+    custom_header: '',
+    custom_footer: ''
+  });
+  const [savingInvoiceSettings, setSavingInvoiceSettings] = useState(false);
+  
   // صلاحيات الميزات المتاحة للعميل
   const [settingsPermissions, setSettingsPermissions] = useState({
     settingsUsers: true,
