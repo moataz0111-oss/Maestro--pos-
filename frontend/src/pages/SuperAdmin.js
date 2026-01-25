@@ -105,6 +105,19 @@ export default function SuperAdmin() {
   const [showResetSalesConfirm, setShowResetSalesConfirm] = useState(false);
   const [showResetInventoryConfirm, setShowResetInventoryConfirm] = useState(false);
   const [showEditTenant, setShowEditTenant] = useState(false);
+  const [showInvoiceSettings, setShowInvoiceSettings] = useState(false);
+  
+  // Invoice settings for system
+  const [invoiceSettings, setInvoiceSettings] = useState({
+    system_logo_url: '',
+    thank_you_message: 'شكراً لزيارتكم',
+    system_phone: '',
+    system_phone2: '',
+    system_email: '',
+    system_website: '',
+    footer_text: '',
+    show_system_branding: true
+  });
   
   // New tenant form
   const [newTenantForm, setNewTenantForm] = useState({
