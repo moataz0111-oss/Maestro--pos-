@@ -4849,9 +4849,6 @@ export default function Settings() {
                             <p className="text-xs text-gray-500 mt-1">الرقم الضريبي: {invoiceSettings.tax_number}</p>
                           )}
                         </div>
-                            />
-                          </div>
-                        )}
                         
                         {/* نص أعلى الفاتورة */}
                         {invoiceSettings.custom_header && (
