@@ -4192,6 +4192,7 @@ async def create_order(order: OrderCreate, current_user: dict = Depends(get_curr
         "subtotal": subtotal,
         "discount": order.discount,
         "tax": tax,
+        "packaging_cost": total_packaging_cost,  # تكلفة التغليف الإجمالية
         "total": total,
         "total_cost": total_cost,
         "profit": profit,
