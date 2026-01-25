@@ -180,14 +180,15 @@ export default function POS() {
 
   const fetchData = async () => {
     try {
-      const [catRes, prodRes, appsRes, shiftRes, invoiceRes, restaurantRes, sysInvoiceRes] = await Promise.all([
+      const [catRes, prodRes, appsRes, shiftRes, invoiceRes, restaurantRes, sysInvoiceRes, loginBgRes] = await Promise.all([
         axios.get(`${API}/categories`),
         axios.get(`${API}/products`),
         axios.get(`${API}/delivery-apps`),
         axios.get(`${API}/shifts/current`).catch(() => ({ data: null })),
         axios.get(`${API}/tenant/invoice-settings`).catch(() => ({ data: {} })),
         axios.get(`${API}/restaurant-settings`).catch(() => ({ data: {} })),
-        axios.get(`${API}/system/invoice-settings`).catch(() => ({ data: {} }))
+        axios.get(`${API}/system/invoice-settings`).catch(() => ({ data: {} })),
+        axios.get(`${API}/login-background`).catch(() => ({ data: {} }))
       ]);
 
       setCategories(catRes.data);
@@ -195,7 +196,15 @@ export default function POS() {
       setDeliveryApps(appsRes.data);
       setInvoiceSettings(invoiceRes.data || {});
       setRestaurantSettings(restaurantRes.data || {});
-      setSystemInvoiceSettings(sysInvoiceRes.data || {});
+      
+      // دمج شعار صفحة الدخول مع إعدادات الفاتورة للنظام
+      const sysInvoice = sysInvoiceRes.data || {};
+      const loginBg = loginBgRes.data || {};
+      // إذا لم يوجد شعار مخصص للفاتورة، استخدم شعار صفحة الدخول
+      if (!sysInvoice.system_logo_url && loginBg.logo_url) {
+        sysInvoice.system_logo_url = loginBg.logo_url;
+      }
+      setSystemInvoiceSettings(sysInvoice);
       
       // إذا لم تكن هناك وردية مفتوحة، افتح واحدة تلقائياً
       if (!shiftRes.data) {
