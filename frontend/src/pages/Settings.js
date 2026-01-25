@@ -769,7 +769,10 @@ export default function Settings() {
       await axios.post(`${API}/printers`, printerForm);
       toast.success('تم إضافة الطابعة');
       setPrinterDialogOpen(false);
-      setPrinterForm({ name: '', ip_address: '', port: 9100, branch_id: '', printer_type: 'receipt' });
+      setPrinterForm({ 
+        name: '', ip_address: '', port: 9100, branch_id: '', printer_type: 'receipt',
+        print_mode: 'full_receipt', show_prices: true, print_individual_items: false, auto_print_on_order: true
+      });
       fetchData();
     } catch (error) {
       toast.error(error.response?.data?.detail || 'فشل في إضافة الطابعة');
