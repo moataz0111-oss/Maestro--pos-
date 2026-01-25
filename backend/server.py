@@ -4413,11 +4413,13 @@ async def add_items_to_order(order_id: str, items: List[OrderItemCreate], curren
         }}
     )
     
-    return await db.orders.find_one({"id": order_id}, {"_id": 0})
+    query = build_tenant_query(current_user, {"id": order_id})
+    return await db.orders.find_one(query, {"_id": 0})
 
 @api_router.put("/orders/{order_id}/status")
 async def update_order_status(order_id: str, status: str, current_user: dict = Depends(get_current_user)):
-    order = await db.orders.find_one({"id": order_id})
+    query = build_tenant_query(current_user, {"id": order_id})
+    order = await db.orders.find_one(query)
     if not order:
         raise HTTPException(status_code=404, detail="الطلب غير موجود")
     
@@ -4428,7 +4430,7 @@ async def update_order_status(order_id: str, status: str, current_user: dict = D
             raise HTTPException(status_code=403, detail="ليس لديك صلاحية إلغاء الطلبات")
     
     await db.orders.update_one(
-        {"id": order_id},
+        query,
         {"$set": {"status": status, "updated_at": datetime.now(timezone.utc).isoformat()}}
     )
     
@@ -4443,7 +4445,8 @@ async def update_order_status(order_id: str, status: str, current_user: dict = D
 
 @api_router.put("/orders/{order_id}/payment")
 async def update_order_payment(order_id: str, payment_method: str, current_user: dict = Depends(get_current_user)):
-    order = await db.orders.find_one({"id": order_id})
+    query = build_tenant_query(current_user, {"id": order_id})
+    order = await db.orders.find_one(query)
     if not order:
         raise HTTPException(status_code=404, detail="الطلب غير موجود")
     
