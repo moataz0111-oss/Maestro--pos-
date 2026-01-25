@@ -3867,9 +3867,11 @@ async def create_table(table: TableCreate, current_user: dict = Depends(get_curr
     if current_user["role"] not in [UserRole.ADMIN, UserRole.MANAGER] and "tables" not in user_permissions:
         raise HTTPException(status_code=403, detail="غير مصرح")
     
+    tenant_id = get_user_tenant_id(current_user)
     table_doc = {
         "id": str(uuid.uuid4()),
         **table.model_dump(),
+        "tenant_id": tenant_id,  # فصل البيانات لكل عميل
         "status": "available",
         "current_order_id": None
     }
@@ -3878,14 +3880,17 @@ async def create_table(table: TableCreate, current_user: dict = Depends(get_curr
     return table_doc
 
 @api_router.get("/tables", response_model=List[TableResponse])
-async def get_tables(branch_id: Optional[str] = None):
-    query = {"branch_id": branch_id} if branch_id else {}
+async def get_tables(branch_id: Optional[str] = None, current_user: dict = Depends(get_current_user)):
+    query = build_tenant_query(current_user)  # فلترة حسب tenant_id
+    if branch_id:
+        query["branch_id"] = branch_id
     tables = await db.tables.find(query, {"_id": 0}).sort("number", 1).to_list(100)
     return tables
 
 @api_router.put("/tables/{table_id}/status")
 async def update_table_status(table_id: str, status: str, current_user: dict = Depends(get_current_user)):
-    await db.tables.update_one({"id": table_id}, {"$set": {"status": status}})
+    query = build_tenant_query(current_user, {"id": table_id})
+    await db.tables.update_one(query, {"$set": {"status": status}})
     return {"message": "تم التحديث"}
 
 @api_router.post("/tables/transfer")
@@ -3897,16 +3902,18 @@ async def transfer_table_order(
 ):
     """تحويل الطلب من طاولة إلى أخرى"""
     
-    # التحقق من الطاولة المصدر
-    from_table = await db.tables.find_one({"id": from_table_id})
+    # التحقق من الطاولة المصدر مع فلترة tenant_id
+    query = build_tenant_query(current_user, {"id": from_table_id})
+    from_table = await db.tables.find_one(query)
     if not from_table:
         raise HTTPException(status_code=404, detail="الطاولة المصدر غير موجودة")
     
     if from_table.get("status") != "occupied":
         raise HTTPException(status_code=400, detail="الطاولة المصدر ليست مشغولة")
     
-    # التحقق من الطاولة المستهدفة
-    to_table = await db.tables.find_one({"id": to_table_id})
+    # التحقق من الطاولة المستهدفة مع فلترة tenant_id
+    query = build_tenant_query(current_user, {"id": to_table_id})
+    to_table = await db.tables.find_one(query)
     if not to_table:
         raise HTTPException(status_code=404, detail="الطاولة المستهدفة غير موجودة")
     
