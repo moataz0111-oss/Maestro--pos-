@@ -4733,21 +4733,24 @@ async def check_order_refund_status(order_id: str, current_user: dict = Depends(
     """التحقق من حالة إرجاع طلب معين"""
     tenant_id = get_user_tenant_id(current_user)
     
-    # البحث عن الطلب
-    order_query = {"$or": [{"id": order_id}]}
+    # البحث عن الطلب برقم الفاتورة أو الـ ID
+    or_conditions = [{"id": order_id}]
     try:
         order_number = int(order_id)
-        order_query["$or"].append({"order_number": order_number})
+        or_conditions.append({"order_number": order_number})
     except ValueError:
         pass
     
+    # بناء الاستعلام مع tenant_id
     if tenant_id:
-        order_query["tenant_id"] = tenant_id
+        order_query = {"$and": [{"$or": or_conditions}, {"tenant_id": tenant_id}]}
+    else:
+        order_query = {"$or": or_conditions}
     
     order = await db.orders.find_one(order_query, {"_id": 0})
     
     if not order:
-        raise HTTPException(status_code=404, detail="الطلب غير موجود")
+        raise HTTPException(status_code=404, detail="الطلب غير موجود. تأكد من رقم الفاتورة")
     
     # البحث عن إرجاعات لهذا الطلب
     refunds = await db.refunds.find({"order_id": order["id"]}, {"_id": 0}).to_list(10)
@@ -4755,6 +4758,10 @@ async def check_order_refund_status(order_id: str, current_user: dict = Depends(
     return {
         "order_id": order["id"],
         "order_number": order.get("order_number"),
+        "order_type": order.get("order_type"),
+        "total": order.get("total", 0),
+        "payment_status": order.get("payment_status"),
+        "customer_name": order.get("customer_name"),
         "is_refunded": order.get("is_refunded", False),
         "can_refund": order.get("payment_status") in ["paid", "credit"] and not order.get("is_refunded"),
         "refunds": refunds
