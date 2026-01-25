@@ -3243,17 +3243,113 @@ export default function Settings() {
                               <p className="text-sm text-muted-foreground">{printer.ip_address}:{printer.port}</p>
                             </div>
                           </div>
-                          <span className={`text-xs px-2 py-1 rounded-full ${
-                            printer.printer_type === 'receipt' ? 'bg-blue-500/10 text-blue-500' : 'bg-orange-500/10 text-orange-500'
-                          }`}>
-                            {printer.printer_type === 'receipt' ? 'إيصالات' : 'مطبخ'}
-                          </span>
+                          <div className="flex items-center gap-3">
+                            <span className={`text-xs px-2 py-1 rounded-full ${
+                              printer.printer_type === 'receipt' ? 'bg-blue-500/10 text-blue-500' : 'bg-orange-500/10 text-orange-500'
+                            }`}>
+                              {printer.printer_type === 'receipt' ? 'إيصالات' : 'مطبخ'}
+                            </span>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="text-blue-500 hover:bg-blue-500/10"
+                              onClick={() => handleEditPrinter(printer)}
+                              data-testid={`edit-printer-${printer.id}`}
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="text-destructive hover:bg-destructive/10"
+                              onClick={() => handleDeletePrinter(printer.id)}
+                              data-testid={`delete-printer-${printer.id}`}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
                         </div>
                       ))}
                     </div>
                   )}
                 </CardContent>
               </Card>
+
+              {/* Edit Printer Dialog */}
+              <Dialog open={editPrinterDialogOpen} onOpenChange={setEditPrinterDialogOpen}>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle className="text-foreground">تعديل الطابعة</DialogTitle>
+                  </DialogHeader>
+                  {editPrinterForm && (
+                    <form onSubmit={handleUpdatePrinter} className="space-y-4">
+                      <div>
+                        <Label className="text-foreground">اسم الطابعة</Label>
+                        <Input
+                          value={editPrinterForm.name}
+                          onChange={(e) => setEditPrinterForm({ ...editPrinterForm, name: e.target.value })}
+                          required
+                          className="mt-1"
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <Label className="text-foreground">عنوان IP</Label>
+                          <Input
+                            value={editPrinterForm.ip_address}
+                            onChange={(e) => setEditPrinterForm({ ...editPrinterForm, ip_address: e.target.value })}
+                            placeholder="192.168.1.100"
+                            required
+                            className="mt-1"
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-foreground">المنفذ</Label>
+                          <Input
+                            type="number"
+                            value={editPrinterForm.port}
+                            onChange={(e) => setEditPrinterForm({ ...editPrinterForm, port: parseInt(e.target.value) || 9100 })}
+                            className="mt-1"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <Label className="text-foreground">الفرع</Label>
+                        <Select value={editPrinterForm.branch_id} onValueChange={(v) => setEditPrinterForm({ ...editPrinterForm, branch_id: v })}>
+                          <SelectTrigger className="mt-1">
+                            <SelectValue placeholder="اختر الفرع" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {branches.map(b => (
+                              <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label className="text-foreground">نوع الطابعة</Label>
+                        <Select value={editPrinterForm.printer_type} onValueChange={(v) => setEditPrinterForm({ ...editPrinterForm, printer_type: v })}>
+                          <SelectTrigger className="mt-1">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="receipt">طابعة إيصالات</SelectItem>
+                            <SelectItem value="kitchen">طابعة مطبخ</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="flex gap-2 pt-4">
+                        <Button type="button" variant="outline" onClick={() => setEditPrinterDialogOpen(false)} className="flex-1">
+                          إلغاء
+                        </Button>
+                        <Button type="submit" className="flex-1 bg-primary text-primary-foreground">
+                          تحديث
+                        </Button>
+                      </div>
+                    </form>
+                  )}
+                </DialogContent>
+              </Dialog>
             </TabsContent>
           )}
 
