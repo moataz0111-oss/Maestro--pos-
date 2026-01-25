@@ -243,9 +243,42 @@ input[type="number"] {
         display: none !important;
     }
     
+    /* إخفاء كل شيء عدا الفاتورة */
+    body * {
+        visibility: hidden !important;
+    }
+    
+    /* إظهار الفاتورة فقط */
+    .print-receipt,
+    .print-receipt * {
+        visibility: visible !important;
+    }
+    
+    .print-receipt {
+        position: absolute !important;
+        left: 0 !important;
+        top: 0 !important;
+        width: 80mm !important;
+        padding: 5mm !important;
+        margin: 0 !important;
+        background: white !important;
+        color: black !important;
+        font-size: 12px !important;
+    }
+    
     body {
         background: white !important;
         color: black !important;
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+    
+    /* إخفاء عناصر الحوار */
+    [role="dialog"],
+    [data-radix-dialog-overlay],
+    .fixed {
+        position: static !important;
+        background: transparent !important;
     }
 }
 
