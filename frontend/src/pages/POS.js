@@ -672,6 +672,7 @@ export default function POS() {
         const res = await axios.post(`${API}/orders`, orderData);
         orderId = res.data.id;
         orderNumber = res.data.order_number;
+        setLastOrderNumber(orderNumber); // حفظ رقم الفاتورة
       }
       
       // تحديث طريقة الدفع وإغلاق الطلب
