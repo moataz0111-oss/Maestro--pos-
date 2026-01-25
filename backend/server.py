@@ -4474,7 +4474,8 @@ async def cancel_order(order_id: str, current_user: dict = Depends(get_current_u
     - أكثر من دقيقتين: يُسجل كطلب ملغي (يظهر في التقارير)
     - بين دقيقة ودقيقتين: يُسجل كطلب ملغي فقط للمدير/المالك
     """
-    order = await db.orders.find_one({"id": order_id})
+    query = build_tenant_query(current_user, {"id": order_id})
+    order = await db.orders.find_one(query)
     if not order:
         raise HTTPException(status_code=404, detail="الطلب غير موجود")
     
