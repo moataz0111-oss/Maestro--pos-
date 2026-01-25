@@ -811,11 +811,16 @@ export default function POS() {
                 <div className="relative">
                   {cat.image ? (
                     <img 
-                      src={cat.image} 
+                      src={cat.image.startsWith('/') ? `${API}${cat.image}` : cat.image} 
                       alt={cat.name}
                       className="w-full h-20 object-cover"
+                      onError={(e) => {
+                        e.target.style.display = 'none';
+                        e.target.nextSibling && (e.target.nextSibling.style.display = 'flex');
+                      }}
                     />
-                  ) : (
+                  ) : null}
+                  {!cat.image && (
                     <div className="w-full h-20 bg-gradient-to-br from-primary/20 to-primary/40 flex items-center justify-center">
                       <span className="text-3xl">{cat.icon || '📦'}</span>
                     </div>
