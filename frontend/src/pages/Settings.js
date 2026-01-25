@@ -3363,12 +3363,7 @@ export default function Settings() {
                               printer.printer_type === 'label' ? 'bg-pink-500/10 text-pink-500' :
                               'bg-gray-500/10 text-gray-500'
                             }`}>
-                              {printer.printer_type === 'receipt' ? 'إيصالات' : 
-                               printer.printer_type === 'kitchen' ? 'مطبخ' :
-                               printer.printer_type === 'bar' ? 'بار' :
-                               printer.printer_type === 'packaging' ? 'تغليف' :
-                               printer.printer_type === 'label' ? 'ملصقات' :
-                               printer.printer_type || 'عام'}
+                              {printer.printer_type || 'عام'}
                             </span>
                             
                             {/* زر اختبار الاتصال */}
