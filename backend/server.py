@@ -4775,8 +4775,41 @@ async def check_order_refund_status(order_id: str, current_user: dict = Depends(
     
     order = orders[0]
     
+    # التحقق من تاريخ الطلب
+    order_date = order.get("created_at", "")
+    is_today = False
+    order_date_str = ""
+    
+    if order_date:
+        if isinstance(order_date, str):
+            order_datetime = datetime.fromisoformat(order_date.replace("Z", "+00:00"))
+        else:
+            order_datetime = order_date
+        
+        today = datetime.now(timezone.utc).date()
+        order_day = order_datetime.date()
+        is_today = (order_day == today)
+        order_date_str = order_day.strftime('%Y-%m-%d')
+    
     # البحث عن إرجاعات لهذا الطلب
     refunds = await db.refunds.find({"order_id": order["id"]}, {"_id": 0}).to_list(10)
+    
+    # تحديد إمكانية الإرجاع
+    can_refund = (
+        order.get("payment_status") in ["paid", "credit"] 
+        and not order.get("is_refunded") 
+        and is_today
+    )
+    
+    # رسالة توضيحية إذا لم يكن قابل للإرجاع
+    refund_message = None
+    if not can_refund:
+        if order.get("is_refunded"):
+            refund_message = "تم إرجاع هذا الطلب مسبقاً"
+        elif order.get("payment_status") not in ["paid", "credit"]:
+            refund_message = "الطلب غير مدفوع"
+        elif not is_today:
+            refund_message = f"لا يمكن إرجاع طلبات الأيام السابقة. تاريخ الطلب: {order_date_str}"
     
     return {
         "order_id": order["id"],
@@ -4786,8 +4819,11 @@ async def check_order_refund_status(order_id: str, current_user: dict = Depends(
         "payment_status": order.get("payment_status"),
         "customer_name": order.get("customer_name"),
         "created_at": order.get("created_at"),
+        "order_date": order_date_str,
+        "is_today": is_today,
         "is_refunded": order.get("is_refunded", False),
-        "can_refund": order.get("payment_status") in ["paid", "credit"] and not order.get("is_refunded"),
+        "can_refund": can_refund,
+        "refund_message": refund_message,
         "refunds": refunds
     }
 
