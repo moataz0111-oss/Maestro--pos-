@@ -68,7 +68,8 @@ import {
   Pause,
   Move,
   Maximize,
-  X
+  X,
+  Receipt
 } from 'lucide-react';
 import { toast, Toaster } from 'sonner';
 
