@@ -645,6 +645,38 @@ async def apply_automatic_updates():
         if old_shifts.modified_count > 0:
             logger.info(f"   ✅ Auto-closed {old_shifts.modified_count} old shifts")
         
+        # 6. تحديث الطاولات القديمة التي ليس لها tenant_id
+        tables_tenant_result = await db.tables.update_many(
+            {"$or": [{"tenant_id": {"$exists": False}}, {"tenant_id": None}, {"tenant_id": ""}]},
+            {"$set": {"tenant_id": "default"}}
+        )
+        if tables_tenant_result.modified_count > 0:
+            logger.info(f"   ✅ Updated {tables_tenant_result.modified_count} tables with default tenant_id")
+        
+        # 7. إنشاء طاولات افتراضية لكل عميل ليس لديه طاولات
+        for tenant in tenants:
+            tenant_tables = await db.tables.count_documents({"tenant_id": tenant["id"]})
+            if tenant_tables == 0:
+                # جلب فرع العميل
+                tenant_branch = await db.branches.find_one({"tenant_id": tenant["id"]})
+                branch_id = tenant_branch["id"] if tenant_branch else None
+                
+                # إنشاء 5 طاولات افتراضية
+                default_tables = []
+                for i in range(1, 6):
+                    default_tables.append({
+                        "id": str(uuid.uuid4()),
+                        "number": i,
+                        "capacity": 4,
+                        "section": "القاعة الرئيسية",
+                        "status": "available",
+                        "current_order_id": None,
+                        "branch_id": branch_id,
+                        "tenant_id": tenant["id"]
+                    })
+                await db.tables.insert_many(default_tables)
+                logger.info(f"   ✅ Created 5 default tables for: {tenant.get('name', tenant['id'][:8])}")
+        
         logger.info("✅ Automatic updates applied successfully")
     except Exception as e:
         logger.error(f"❌ Error applying automatic updates: {e}")
