@@ -10635,6 +10635,114 @@ async def print_invoice(order_id: str, print_type: str = "customer", printer_id:
         }
     }
 
+@api_router.get("/invoices/auto-print/{order_id}")
+async def get_auto_print_data(order_id: str, branch_id: Optional[str] = None, current_user: dict = Depends(get_current_user)):
+    """
+    جلب بيانات الطباعة التلقائية لكل الطابعات النشطة
+    يُستخدم عند إنشاء طلب جديد لإرسال بيانات الطباعة لكل طابعة
+    """
+    query = build_tenant_query(current_user, {"id": order_id})
+    order = await db.orders.find_one(query, {"_id": 0})
+    if not order:
+        raise HTTPException(status_code=404, detail="الطلب غير موجود")
+    
+    # جلب جميع الطابعات المفعّلة للطباعة التلقائية
+    printer_query = build_tenant_query(current_user, {
+        "is_active": True,
+        "auto_print_on_order": True
+    })
+    if branch_id:
+        printer_query["branch_id"] = branch_id
+    elif order.get("branch_id"):
+        printer_query["branch_id"] = order.get("branch_id")
+    
+    printers = await db.printers.find(printer_query, {"_id": 0}).to_list(50)
+    
+    if not printers:
+        return {"message": "لا توجد طابعات مفعّلة للطباعة التلقائية", "printers": []}
+    
+    # تجهيز بيانات الطباعة لكل طابعة
+    print_results = []
+    
+    for printer in printers:
+        show_prices = printer.get("show_prices", True)
+        print_mode = printer.get("print_mode", "full_receipt")
+        print_individual_items = printer.get("print_individual_items", False)
+        
+        # تحضير الأصناف بناءً على صلاحيات الطابعة
+        processed_items = []
+        for item in order.get("items", []):
+            processed_item = {
+                "name": item.get("name"),
+                "name_en": item.get("name_en"),
+                "quantity": item.get("quantity", 1),
+                "notes": item.get("notes"),
+            }
+            
+            if show_prices:
+                processed_item["price"] = item.get("price", 0)
+                processed_item["total"] = item.get("price", 0) * item.get("quantity", 1)
+            
+            processed_items.append(processed_item)
+        
+        # تحضير بيانات الطلب
+        print_data = {
+            "order_number": order.get("order_number", order["id"][:8]),
+            "date": datetime.fromisoformat(order.get("created_at", datetime.now(timezone.utc).isoformat())).strftime("%Y-%m-%d %H:%M"),
+            "table_number": order.get("table_number"),
+            "customer_name": order.get("customer_name"),
+            "items": processed_items,
+            "order_type": order.get("order_type", "dine_in"),
+            "notes": order.get("notes"),
+        }
+        
+        # إضافة المعلومات المالية للفاتورة الكاملة فقط
+        if print_mode == "full_receipt" and show_prices:
+            print_data["subtotal"] = order.get("subtotal", 0)
+            print_data["discount"] = order.get("discount", 0)
+            print_data["tax"] = order.get("tax", 0)
+            print_data["total"] = order.get("total", 0)
+            print_data["payment_method"] = order.get("payment_method", "cash")
+        
+        # تجهيز الطباعات
+        print_jobs = []
+        if print_individual_items:
+            for item in processed_items:
+                job = {
+                    "order_number": print_data["order_number"],
+                    "date": print_data["date"],
+                    "table_number": print_data["table_number"],
+                    "items": [item],
+                    "notes": print_data["notes"],
+                    "is_individual": True
+                }
+                print_jobs.append(job)
+        else:
+            print_jobs = [print_data]
+        
+        print_results.append({
+            "printer": {
+                "id": printer.get("id"),
+                "name": printer.get("name"),
+                "ip_address": printer.get("ip_address"),
+                "port": printer.get("port", 9100),
+                "printer_type": printer.get("printer_type")
+            },
+            "settings": {
+                "print_mode": print_mode,
+                "show_prices": show_prices,
+                "print_individual_items": print_individual_items
+            },
+            "print_jobs": print_jobs
+        })
+    
+    return {
+        "message": "بيانات الطباعة جاهزة",
+        "order_id": order_id,
+        "printers_count": len(print_results),
+        "printers": print_results
+    }
+
 # ==================== PUSH NOTIFICATIONS ROUTES ====================
 
 class FCMTokenCreate(BaseModel):
