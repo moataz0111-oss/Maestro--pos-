@@ -1760,7 +1760,7 @@ export default function POS() {
             {refundOrderInfo && (
               <div className={`p-4 rounded-lg border ${refundOrderInfo.can_refund ? 'bg-green-500/10 border-green-500/30' : 'bg-red-500/10 border-red-500/30'}`}>
                 <div className="flex items-center justify-between mb-2">
-                  <span className="font-bold text-lg">طلب #{refundOrderInfo.order_number}</span>
+                  <span className="font-bold text-lg">فاتورة #{refundOrderInfo.order_number}</span>
                   {refundOrderInfo.is_refunded ? (
                     <span className="px-2 py-1 bg-red-500/20 text-red-400 text-xs rounded-full">تم إرجاعه</span>
                   ) : refundOrderInfo.can_refund ? (
@@ -1770,8 +1770,25 @@ export default function POS() {
                   )}
                 </div>
                 
+                {/* تفاصيل الطلب */}
+                <div className="grid grid-cols-2 gap-2 text-sm mt-3">
+                  <div className="text-muted-foreground">نوع الطلب:</div>
+                  <div className="font-medium">
+                    {refundOrderInfo.order_type === 'dine_in' ? 'محلي' : 
+                     refundOrderInfo.order_type === 'takeaway' ? 'سفري' : 'توصيل'}
+                  </div>
+                  <div className="text-muted-foreground">المبلغ:</div>
+                  <div className="font-medium text-primary">{(refundOrderInfo.total || 0).toLocaleString()} د.ع</div>
+                  {refundOrderInfo.customer_name && (
+                    <>
+                      <div className="text-muted-foreground">العميل:</div>
+                      <div className="font-medium">{refundOrderInfo.customer_name}</div>
+                    </>
+                  )}
+                </div>
+                
                 {refundOrderInfo.refunds && refundOrderInfo.refunds.length > 0 && (
-                  <div className="text-sm text-muted-foreground mt-2">
+                  <div className="text-sm text-muted-foreground mt-3 pt-3 border-t border-border">
                     <p>تم إرجاعه بتاريخ: {new Date(refundOrderInfo.refunds[0].created_at).toLocaleString('ar-IQ')}</p>
                     <p>السبب: {refundOrderInfo.refunds[0].reason}</p>
                   </div>
