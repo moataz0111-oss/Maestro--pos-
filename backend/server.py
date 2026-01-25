@@ -6506,7 +6506,7 @@ async def test_printer_connection(printer_id: str, current_user: dict = Depends(
     
     # التحقق من أن الطابعة تنتمي لنفس العميل
     query = build_tenant_query(current_user, {"id": printer_id})
-    printer = await db.printers.find_one({"id": printer_id}, {"_id": 0})
+    printer = await db.printers.find_one(query, {"_id": 0})
     if not printer:
         raise HTTPException(status_code=404, detail="الطابعة غير موجودة")
     
@@ -6522,19 +6522,19 @@ async def test_printer_connection(printer_id: str, current_user: dict = Depends(
         if result == 0:
             # تحديث حالة الطابعة
             await db.printers.update_one(
-                {"id": printer_id},
+                query,
                 {"$set": {"is_online": True, "last_check": datetime.now(timezone.utc).isoformat()}}
             )
             return {"status": "online", "message": "الطابعة متصلة"}
         else:
             await db.printers.update_one(
-                {"id": printer_id},
+                query,
                 {"$set": {"is_online": False, "last_check": datetime.now(timezone.utc).isoformat()}}
             )
             return {"status": "offline", "message": "الطابعة غير متصلة"}
     except socket.error as e:
         await db.printers.update_one(
-            {"id": printer_id},
+            query,
             {"$set": {"is_online": False, "last_check": datetime.now(timezone.utc).isoformat()}}
         )
         return {"status": "error", "message": f"خطأ في الاتصال: {str(e)}"}
