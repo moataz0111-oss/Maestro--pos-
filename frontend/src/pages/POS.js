@@ -179,16 +179,20 @@ export default function POS() {
 
   const fetchData = async () => {
     try {
-      const [catRes, prodRes, appsRes, shiftRes] = await Promise.all([
+      const [catRes, prodRes, appsRes, shiftRes, invoiceRes, restaurantRes] = await Promise.all([
         axios.get(`${API}/categories`),
         axios.get(`${API}/products`),
         axios.get(`${API}/delivery-apps`),
-        axios.get(`${API}/shifts/current`).catch(() => ({ data: null }))
+        axios.get(`${API}/shifts/current`).catch(() => ({ data: null })),
+        axios.get(`${API}/tenant/invoice-settings`).catch(() => ({ data: {} })),
+        axios.get(`${API}/restaurant-settings`).catch(() => ({ data: {} }))
       ]);
 
       setCategories(catRes.data);
       setProducts(prodRes.data);
       setDeliveryApps(appsRes.data);
+      setInvoiceSettings(invoiceRes.data || {});
+      setRestaurantSettings(restaurantRes.data || {});
       
       // إذا لم تكن هناك وردية مفتوحة، افتح واحدة تلقائياً
       if (!shiftRes.data) {
