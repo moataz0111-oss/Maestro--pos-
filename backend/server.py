@@ -264,31 +264,35 @@ async def init_database():
             await db.settings.insert_one(bg_doc)
             logger.info("✅ Login backgrounds created (6 images)")
             
-            # إنشاء الفئات الافتراضية
+            # إنشاء الفئات الافتراضية مع الصور
             default_categories = [
-                {"id": str(uuid.uuid4()), "name": "برغر", "name_ar": "برغر", "sort_order": 1, "tenant_id": "default", "created_at": datetime.now(timezone.utc).isoformat()},
-                {"id": str(uuid.uuid4()), "name": "بيتزا", "name_ar": "بيتزا", "sort_order": 2, "tenant_id": "default", "created_at": datetime.now(timezone.utc).isoformat()},
-                {"id": str(uuid.uuid4()), "name": "مشروبات", "name_ar": "مشروبات", "sort_order": 3, "tenant_id": "default", "created_at": datetime.now(timezone.utc).isoformat()},
-                {"id": str(uuid.uuid4()), "name": "حلويات", "name_ar": "حلويات", "sort_order": 4, "tenant_id": "default", "created_at": datetime.now(timezone.utc).isoformat()},
-                {"id": str(uuid.uuid4()), "name": "سلطات", "name_ar": "سلطات", "sort_order": 5, "tenant_id": "default", "created_at": datetime.now(timezone.utc).isoformat()},
+                {"id": str(uuid.uuid4()), "name": "برغر", "name_ar": "برغر", "sort_order": 1, "tenant_id": "default", "image": "https://images.unsplash.com/photo-1635275650933-7b0911815a2e?w=400", "created_at": datetime.now(timezone.utc).isoformat()},
+                {"id": str(uuid.uuid4()), "name": "بيتزا", "name_ar": "بيتزا", "sort_order": 2, "tenant_id": "default", "image": "https://images.unsplash.com/photo-1703073186021-021fb5a0bde1?w=400", "created_at": datetime.now(timezone.utc).isoformat()},
+                {"id": str(uuid.uuid4()), "name": "مشروبات", "name_ar": "مشروبات", "sort_order": 3, "tenant_id": "default", "image": "https://images.unsplash.com/photo-1657958977261-d75e81b4713f?w=400", "created_at": datetime.now(timezone.utc).isoformat()},
+                {"id": str(uuid.uuid4()), "name": "حلويات", "name_ar": "حلويات", "sort_order": 4, "tenant_id": "default", "image": "https://images.unsplash.com/photo-1546902189-eaaf09f8e38f?w=400", "created_at": datetime.now(timezone.utc).isoformat()},
+                {"id": str(uuid.uuid4()), "name": "سلطات", "name_ar": "سلطات", "sort_order": 5, "tenant_id": "default", "image": "https://images.unsplash.com/photo-1677653805080-59c57727c84e?w=400", "created_at": datetime.now(timezone.utc).isoformat()},
             ]
             await db.categories.insert_many(default_categories)
-            logger.info("✅ Default categories created (5)")
+            logger.info("✅ Default categories created (5) with images")
             
-            # إنشاء منتجات افتراضية
+            # إنشاء منتجات افتراضية مع الصور
             burger_cat = default_categories[0]["id"]
             pizza_cat = default_categories[1]["id"]
             drinks_cat = default_categories[2]["id"]
+            desserts_cat = default_categories[3]["id"]
+            salads_cat = default_categories[4]["id"]
             default_products = [
-                {"id": str(uuid.uuid4()), "name": "برغر كلاسيك", "price": 5000, "cost": 2000, "category_id": burger_cat, "is_available": True, "tenant_id": "default", "created_at": datetime.now(timezone.utc).isoformat()},
-                {"id": str(uuid.uuid4()), "name": "برغر دبل", "price": 7500, "cost": 3000, "category_id": burger_cat, "is_available": True, "tenant_id": "default", "created_at": datetime.now(timezone.utc).isoformat()},
-                {"id": str(uuid.uuid4()), "name": "بيتزا مارغريتا", "price": 10000, "cost": 4000, "category_id": pizza_cat, "is_available": True, "tenant_id": "default", "created_at": datetime.now(timezone.utc).isoformat()},
-                {"id": str(uuid.uuid4()), "name": "بيتزا خضار", "price": 12000, "cost": 5000, "category_id": pizza_cat, "is_available": True, "tenant_id": "default", "created_at": datetime.now(timezone.utc).isoformat()},
-                {"id": str(uuid.uuid4()), "name": "كولا", "price": 1500, "cost": 500, "category_id": drinks_cat, "is_available": True, "tenant_id": "default", "created_at": datetime.now(timezone.utc).isoformat()},
-                {"id": str(uuid.uuid4()), "name": "عصير برتقال", "price": 2500, "cost": 1000, "category_id": drinks_cat, "is_available": True, "tenant_id": "default", "created_at": datetime.now(timezone.utc).isoformat()},
+                {"id": str(uuid.uuid4()), "name": "برغر كلاسيك", "price": 5000, "cost": 2000, "category_id": burger_cat, "is_available": True, "tenant_id": "default", "image": "https://images.unsplash.com/photo-1656439659132-24c68e36b553?w=400", "created_at": datetime.now(timezone.utc).isoformat()},
+                {"id": str(uuid.uuid4()), "name": "برغر دبل", "price": 7500, "cost": 3000, "category_id": burger_cat, "is_available": True, "tenant_id": "default", "image": "https://images.unsplash.com/photo-1635275650933-7b0911815a2e?w=400", "created_at": datetime.now(timezone.utc).isoformat()},
+                {"id": str(uuid.uuid4()), "name": "بيتزا مارغريتا", "price": 10000, "cost": 4000, "category_id": pizza_cat, "is_available": True, "tenant_id": "default", "image": "https://images.unsplash.com/photo-1681567604770-0dc826c870ae?w=400", "created_at": datetime.now(timezone.utc).isoformat()},
+                {"id": str(uuid.uuid4()), "name": "بيتزا خضار", "price": 12000, "cost": 5000, "category_id": pizza_cat, "is_available": True, "tenant_id": "default", "image": "https://images.unsplash.com/photo-1602104980741-b87a33837f9f?w=400", "created_at": datetime.now(timezone.utc).isoformat()},
+                {"id": str(uuid.uuid4()), "name": "كولا", "price": 1500, "cost": 500, "category_id": drinks_cat, "is_available": True, "tenant_id": "default", "image": "https://images.unsplash.com/photo-1657958977261-d75e81b4713f?w=400", "created_at": datetime.now(timezone.utc).isoformat()},
+                {"id": str(uuid.uuid4()), "name": "عصير برتقال", "price": 2500, "cost": 1000, "category_id": drinks_cat, "is_available": True, "tenant_id": "default", "image": "https://images.unsplash.com/photo-1716925539259-ce0115263d37?w=400", "created_at": datetime.now(timezone.utc).isoformat()},
+                {"id": str(uuid.uuid4()), "name": "كيكة شوكولاته", "price": 3500, "cost": 1500, "category_id": desserts_cat, "is_available": True, "tenant_id": "default", "image": "https://images.unsplash.com/photo-1546902189-eaaf09f8e38f?w=400", "created_at": datetime.now(timezone.utc).isoformat()},
+                {"id": str(uuid.uuid4()), "name": "سلطة خضراء", "price": 4000, "cost": 1200, "category_id": salads_cat, "is_available": True, "tenant_id": "default", "image": "https://images.unsplash.com/photo-1677653805080-59c57727c84e?w=400", "created_at": datetime.now(timezone.utc).isoformat()},
             ]
             await db.products.insert_many(default_products)
-            logger.info("✅ Default products created (6)")
+            logger.info("✅ Default products created (8) with images")
             
             # إنشاء سائقين افتراضيين
             default_drivers = [
