@@ -62,6 +62,7 @@ import {
   Layers,
   RotateCcw,
   Image,
+  Image as ImageIcon,
   Palette,
   Upload,
   Play,
