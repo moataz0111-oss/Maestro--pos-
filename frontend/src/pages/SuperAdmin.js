@@ -256,6 +256,7 @@ export default function SuperAdmin() {
       fetchData();
       fetchBackgroundSettings();
       fetchSystemBranding();
+      fetchInvoiceSettings();
     }
   }, [isAuthenticated]);
 
