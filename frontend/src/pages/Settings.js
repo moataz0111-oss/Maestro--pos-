@@ -4820,6 +4820,124 @@ export default function Settings() {
                       {savingInvoiceSettings ? <RefreshCw className="h-4 w-4 ml-2 animate-spin" /> : <Save className="h-4 w-4 ml-2" />}
                       حفظ إعدادات الفاتورة
                     </Button>
+
+                    {/* معاينة الفاتورة */}
+                    <div className="mt-6 p-4 border-2 border-dashed border-primary/50 rounded-lg">
+                      <Label className="text-foreground font-bold mb-4 flex items-center gap-2">
+                        <Eye className="h-5 w-5 text-primary" />
+                        معاينة الفاتورة
+                      </Label>
+                      <div className="mt-4 bg-white text-black p-6 rounded-lg shadow-lg max-w-sm mx-auto" style={{fontFamily: 'monospace'}}>
+                        {/* شعار المطعم */}
+                        {invoiceSettings.show_logo && restaurantSettings.logo_url && (
+                          <div className="text-center mb-4">
+                            <img 
+                              src={restaurantSettings.logo_url.startsWith('/api') 
+                                ? `${API}${restaurantSettings.logo_url.replace('/api', '')}` 
+                                : restaurantSettings.logo_url} 
+                              alt="شعار المطعم" 
+                              className="h-16 mx-auto object-contain"
+                              onError={(e) => e.target.style.display = 'none'}
+                            />
+                          </div>
+                        )}
+                        
+                        {/* اسم المطعم */}
+                        <div className="text-center mb-3">
+                          <h2 className="text-xl font-bold">{restaurantSettings.name || restaurantSettings.name_ar || 'اسم المطعم'}</h2>
+                          {invoiceSettings.address && (
+                            <p className="text-xs text-gray-600">{invoiceSettings.address}</p>
+                          )}
+                        </div>
+                        
+                        {/* نص أعلى الفاتورة */}
+                        {invoiceSettings.custom_header && (
+                          <div className="text-center mb-3 text-sm border-b pb-2">
+                            {invoiceSettings.custom_header}
+                          </div>
+                        )}
+                        
+                        {/* معلومات الفاتورة */}
+                        <div className="border-t border-b border-dashed py-2 mb-3 text-xs">
+                          <div className="flex justify-between">
+                            <span>رقم الفاتورة:</span>
+                            <span>#001234</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span>التاريخ:</span>
+                            <span>{new Date().toLocaleDateString('ar-IQ')}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span>الوقت:</span>
+                            <span>{new Date().toLocaleTimeString('ar-IQ', {hour: '2-digit', minute: '2-digit'})}</span>
+                          </div>
+                        </div>
+                        
+                        {/* الأصناف */}
+                        <div className="mb-3 text-sm">
+                          <div className="flex justify-between font-bold border-b pb-1 mb-2">
+                            <span>الصنف</span>
+                            <span>المبلغ</span>
+                          </div>
+                          <div className="flex justify-between py-1">
+                            <span>برجر لحم x2</span>
+                            <span>30,000</span>
+                          </div>
+                          <div className="flex justify-between py-1">
+                            <span>بطاطس x1</span>
+                            <span>5,000</span>
+                          </div>
+                          <div className="flex justify-between py-1">
+                            <span>كولا x2</span>
+                            <span>4,000</span>
+                          </div>
+                        </div>
+                        
+                        {/* الإجمالي */}
+                        <div className="border-t border-dashed pt-2 mb-3">
+                          <div className="flex justify-between text-sm">
+                            <span>المجموع:</span>
+                            <span>39,000</span>
+                          </div>
+                          <div className="flex justify-between font-bold text-lg mt-1">
+                            <span>الإجمالي:</span>
+                            <span>39,000 د.ع</span>
+                          </div>
+                        </div>
+                        
+                        {/* أرقام الهواتف */}
+                        {(invoiceSettings.phone || invoiceSettings.phone2) && (
+                          <div className="text-center text-xs border-t pt-2 mb-2">
+                            {invoiceSettings.phone && <p>📞 {invoiceSettings.phone}</p>}
+                            {invoiceSettings.phone2 && <p>📞 {invoiceSettings.phone2}</p>}
+                          </div>
+                        )}
+                        
+                        {/* الرقم الضريبي */}
+                        {invoiceSettings.tax_number && (
+                          <div className="text-center text-xs mb-2">
+                            <p>الرقم الضريبي: {invoiceSettings.tax_number}</p>
+                          </div>
+                        )}
+                        
+                        {/* نص أسفل الفاتورة */}
+                        {invoiceSettings.custom_footer && (
+                          <div className="text-center text-sm border-t pt-2 mt-2">
+                            {invoiceSettings.custom_footer}
+                          </div>
+                        )}
+                        
+                        {/* رسالة شكر افتراضية */}
+                        {!invoiceSettings.custom_footer && (
+                          <div className="text-center text-sm border-t pt-2 mt-2">
+                            شكراً لزيارتكم ❤️
+                          </div>
+                        )}
+                      </div>
+                      <p className="text-center text-xs text-muted-foreground mt-3">
+                        هذه معاينة تقريبية لشكل الفاتورة المطبوعة
+                      </p>
+                    </div>
                   </CardContent>
                 </Card>
               </div>
