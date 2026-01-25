@@ -814,6 +814,26 @@ export default function Settings() {
     }
   };
 
+  const handleTestPrinter = async (printerId) => {
+    setPrinterTestStatus(prev => ({ ...prev, [printerId]: 'testing' }));
+    try {
+      const res = await axios.post(`${API}/printers/${printerId}/test`);
+      setPrinterTestStatus(prev => ({ ...prev, [printerId]: res.data.status }));
+      if (res.data.status === 'online') {
+        toast.success('الطابعة متصلة ✓');
+      } else {
+        toast.error('الطابعة غير متصلة');
+      }
+      // تحديث البيانات بعد 3 ثواني
+      setTimeout(() => {
+        setPrinterTestStatus(prev => ({ ...prev, [printerId]: null }));
+      }, 5000);
+    } catch (error) {
+      setPrinterTestStatus(prev => ({ ...prev, [printerId]: 'error' }));
+      toast.error('فشل اختبار الاتصال');
+    }
+  };
+
   const handleAddEmail = async () => {
     if (!newEmail || !newEmail.includes('@')) {
       toast.error('يرجى إدخال بريد إلكتروني صحيح');
