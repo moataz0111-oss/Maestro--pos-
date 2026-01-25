@@ -348,7 +348,7 @@ export default function Settings() {
   const [editCategoryForm, setEditCategoryForm] = useState(null);
   const [editCategoryDialogOpen, setEditCategoryDialogOpen] = useState(false);
   const [productForm, setProductForm] = useState({
-    name: '', name_en: '', category_id: '', price: '', cost: '', operating_cost: '', packaging_cost: '', image: '', description: '', barcode: '', manufactured_product_id: ''
+    name: '', name_en: '', category_id: '', price: '', cost: '', operating_cost: '', packaging_cost: '', image: '', description: '', barcode: '', manufactured_product_id: '', printer_ids: []
   });
   const [editProductForm, setEditProductForm] = useState(null);
   const [manufacturedProducts, setManufacturedProducts] = useState([]);
