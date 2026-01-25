@@ -523,6 +523,29 @@ export default function Settings() {
     }
   };
 
+  // جلب إعدادات الفاتورة للعميل
+  const fetchInvoiceSettings = async () => {
+    try {
+      const res = await axios.get(`${API}/tenant/invoice-settings`);
+      setInvoiceSettings(prev => ({ ...prev, ...res.data }));
+    } catch (error) {
+      console.error('Failed to fetch invoice settings:', error);
+    }
+  };
+
+  // حفظ إعدادات الفاتورة للعميل
+  const saveInvoiceSettings = async () => {
+    setSavingInvoiceSettings(true);
+    try {
+      await axios.put(`${API}/tenant/invoice-settings`, invoiceSettings);
+      toast.success('تم حفظ إعدادات الفاتورة بنجاح');
+    } catch (error) {
+      toast.error('فشل في حفظ إعدادات الفاتورة');
+    } finally {
+      setSavingInvoiceSettings(false);
+    }
+  };
+
   // جلب إعدادات الدفع
   const fetchPaymentSettings = async () => {
     try {
