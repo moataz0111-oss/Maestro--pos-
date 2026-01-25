@@ -350,13 +350,19 @@ export default function POS() {
 
   // تنفيذ الإرجاع
   const processRefund = async () => {
-    if (!refundReason.trim() || refundReason.trim().length < 3) {
-      toast.error('يجب إدخال سبب الإرجاع (3 أحرف على الأقل)');
+    // التحقق من كتابة السبب (شرط إلزامي)
+    if (!refundReason.trim()) {
+      toast.error('يجب كتابة سبب الإرجاع أولاً');
+      return;
+    }
+    
+    if (refundReason.trim().length < 3) {
+      toast.error('سبب الإرجاع يجب أن يكون 3 أحرف على الأقل');
       return;
     }
     
     if (!refundOrderInfo || !refundOrderInfo.can_refund) {
-      toast.error('لا يمكن إرجاع هذا الطلب');
+      toast.error(refundOrderInfo?.refund_message || 'لا يمكن إرجاع هذا الطلب');
       return;
     }
     
@@ -369,7 +375,7 @@ export default function POS() {
       });
       
       playSuccess();
-      toast.success(`تم إرجاع الطلب #${refundOrderInfo.order_number} بنجاح`);
+      toast.success(`✅ تم إرجاع الفاتورة #${refundOrderInfo.order_number} بنجاح`);
       
       // إعادة تعيين الحالة وإغلاق الحوار
       setRefundDialogOpen(false);
