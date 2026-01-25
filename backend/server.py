@@ -4747,10 +4747,13 @@ async def check_order_refund_status(order_id: str, current_user: dict = Depends(
     else:
         order_query = {"$or": or_conditions}
     
-    order = await db.orders.find_one(order_query, {"_id": 0})
+    # جلب آخر طلب بهذا الرقم (الأحدث)
+    orders = await db.orders.find(order_query, {"_id": 0}).sort("created_at", -1).to_list(1)
     
-    if not order:
+    if not orders:
         raise HTTPException(status_code=404, detail="الطلب غير موجود. تأكد من رقم الفاتورة")
+    
+    order = orders[0]
     
     # البحث عن إرجاعات لهذا الطلب
     refunds = await db.refunds.find({"order_id": order["id"]}, {"_id": 0}).to_list(10)
@@ -4762,6 +4765,7 @@ async def check_order_refund_status(order_id: str, current_user: dict = Depends(
         "total": order.get("total", 0),
         "payment_status": order.get("payment_status"),
         "customer_name": order.get("customer_name"),
+        "created_at": order.get("created_at"),
         "is_refunded": order.get("is_refunded", False),
         "can_refund": order.get("payment_status") in ["paid", "credit"] and not order.get("is_refunded"),
         "refunds": refunds
