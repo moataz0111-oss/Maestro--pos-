@@ -6446,21 +6446,28 @@ class PrinterCreate(BaseModel):
 
 @api_router.post("/printers")
 async def create_printer(printer: PrinterCreate, current_user: dict = Depends(get_current_user)):
-    if current_user["role"] not in [UserRole.ADMIN, UserRole.MANAGER]:
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.MANAGER, UserRole.SUPER_ADMIN]:
         raise HTTPException(status_code=403, detail="غير مصرح")
     
+    tenant_id = get_user_tenant_id(current_user)
     printer_doc = {
         "id": str(uuid.uuid4()),
         **printer.model_dump(),
-        "is_active": True
+        "tenant_id": tenant_id,  # ربط الطابعة بالعميل
+        "is_active": True,
+        "is_online": False,
+        "last_check": None
     }
     await db.printers.insert_one(printer_doc)
     del printer_doc["_id"]
     return printer_doc
 
 @api_router.get("/printers")
-async def get_printers(branch_id: Optional[str] = None):
-    query = {"branch_id": branch_id} if branch_id else {}
+async def get_printers(branch_id: Optional[str] = None, current_user: dict = Depends(get_current_user)):
+    # فلترة حسب tenant_id لفصل بيانات كل عميل
+    query = build_tenant_query(current_user)
+    if branch_id:
+        query["branch_id"] = branch_id
     printers = await db.printers.find(query, {"_id": 0}).to_list(50)
     return printers
 
@@ -6469,7 +6476,9 @@ async def update_printer(printer_id: str, printer: PrinterCreate, current_user: 
     if current_user["role"] not in [UserRole.ADMIN, UserRole.MANAGER, UserRole.SUPER_ADMIN]:
         raise HTTPException(status_code=403, detail="غير مصرح")
     
-    existing = await db.printers.find_one({"id": printer_id})
+    # التحقق من أن الطابعة تنتمي لنفس العميل
+    query = build_tenant_query(current_user, {"id": printer_id})
+    existing = await db.printers.find_one(query)
     if not existing:
         raise HTTPException(status_code=404, detail="الطابعة غير موجودة")
     
@@ -6483,7 +6492,9 @@ async def delete_printer(printer_id: str, current_user: dict = Depends(get_curre
     if current_user["role"] not in [UserRole.ADMIN, UserRole.MANAGER, UserRole.SUPER_ADMIN]:
         raise HTTPException(status_code=403, detail="غير مصرح")
     
-    result = await db.printers.delete_one({"id": printer_id})
+    # التحقق من أن الطابعة تنتمي لنفس العميل
+    query = build_tenant_query(current_user, {"id": printer_id})
+    result = await db.printers.delete_one(query)
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="الطابعة غير موجودة")
     return {"message": "تم حذف الطابعة بنجاح"}
@@ -6493,6 +6504,8 @@ async def test_printer_connection(printer_id: str, current_user: dict = Depends(
     """اختبار اتصال الطابعة"""
     import socket
     
+    # التحقق من أن الطابعة تنتمي لنفس العميل
+    query = build_tenant_query(current_user, {"id": printer_id})
     printer = await db.printers.find_one({"id": printer_id}, {"_id": 0})
     if not printer:
         raise HTTPException(status_code=404, detail="الطابعة غير موجودة")
