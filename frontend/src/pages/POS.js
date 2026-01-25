@@ -188,7 +188,7 @@ export default function POS() {
         axios.get(`${API}/tenant/invoice-settings`).catch(() => ({ data: {} })),
         axios.get(`${API}/restaurant-settings`).catch(() => ({ data: {} })),
         axios.get(`${API}/system/invoice-settings`).catch(() => ({ data: {} })),
-        axios.get(`${API}/login-background`).catch(() => ({ data: {} }))
+        axios.get(`${API}/login-backgrounds`).catch(() => ({ data: {} }))
       ]);
 
       setCategories(catRes.data);
