@@ -368,9 +368,9 @@ export default function Login() {
         data-testid="login-card"
       >
         <CardHeader className="text-center pb-2">
-          {/* Logo */}
+          {/* Logo - دائري مع تأثير الوميض */}
           <div 
-            className={`mx-auto mb-4 w-24 h-24 rounded-2xl flex items-center justify-center shadow-2xl overflow-hidden ${getLogoAnimation(backgroundSettings?.logo_animation || 'pulse')} ${!backgroundSettings?.logo_url ? 'bg-gradient-to-br from-primary to-yellow-600' : ''}`}
+            className={`mx-auto mb-4 w-24 h-24 rounded-full flex items-center justify-center shadow-2xl overflow-hidden ${getLogoAnimation(backgroundSettings?.logo_animation || 'pulse')} ${!backgroundSettings?.logo_url ? 'bg-gradient-to-br from-primary to-yellow-600' : ''}`}
           >
             {backgroundSettings?.logo_url ? (
               <img 
@@ -378,7 +378,7 @@ export default function Login() {
                   ? `${API}${backgroundSettings.logo_url.replace('/api', '')}` 
                   : backgroundSettings.logo_url} 
                 alt="Logo" 
-                className="w-full h-full object-cover rounded-2xl"
+                className="w-full h-full object-cover rounded-full"
                 onError={(e) => {
                   // إذا فشل تحميل الشعار، عرض الحرف M كبديل
                   e.target.style.display = 'none';
