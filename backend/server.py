@@ -4359,8 +4359,9 @@ async def get_orders(
     return orders
 
 @api_router.get("/orders/{order_id}", response_model=OrderResponse)
-async def get_order(order_id: str):
-    order = await db.orders.find_one({"id": order_id}, {"_id": 0})
+async def get_order(order_id: str, current_user: dict = Depends(get_current_user)):
+    query = build_tenant_query(current_user, {"id": order_id})
+    order = await db.orders.find_one(query, {"_id": 0})
     if not order:
         raise HTTPException(status_code=404, detail="الطلب غير موجود")
     return order
