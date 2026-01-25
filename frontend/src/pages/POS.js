@@ -1768,8 +1768,85 @@ export default function POS() {
             <Button 
               className="flex-1 bg-blue-500 hover:bg-blue-600 text-white"
               onClick={() => {
-                window.print();
-                toast.info('جاري الطباعة...');
+                // طباعة باستخدام نافذة جديدة
+                const printContent = document.getElementById('receipt-to-print');
+                if (printContent) {
+                  const printWindow = window.open('', '_blank', 'width=400,height=600');
+                  printWindow.document.write(`
+                    <!DOCTYPE html>
+                    <html dir="rtl" lang="ar">
+                    <head>
+                      <meta charset="UTF-8">
+                      <title>طباعة الفاتورة</title>
+                      <style>
+                        * { margin: 0; padding: 0; box-sizing: border-box; }
+                        body { 
+                          font-family: 'Courier New', monospace; 
+                          font-size: 12px; 
+                          padding: 10px;
+                          background: white;
+                          color: black;
+                          width: 80mm;
+                          max-width: 80mm;
+                        }
+                        .text-center { text-align: center; }
+                        .text-left { text-align: left; }
+                        .text-right { text-align: right; }
+                        .font-bold { font-weight: bold; }
+                        .text-lg { font-size: 16px; }
+                        .text-sm { font-size: 11px; }
+                        .text-xs { font-size: 10px; }
+                        .mb-2 { margin-bottom: 8px; }
+                        .mb-3 { margin-bottom: 12px; }
+                        .mt-1 { margin-top: 4px; }
+                        .mt-2 { margin-top: 8px; }
+                        .mt-3 { margin-top: 12px; }
+                        .mt-4 { margin-top: 16px; }
+                        .pt-2 { padding-top: 8px; }
+                        .pt-3 { padding-top: 12px; }
+                        .pb-3 { padding-bottom: 12px; }
+                        .py-1 { padding-top: 4px; padding-bottom: 4px; }
+                        .p-1 { padding: 4px; }
+                        .border-t { border-top: 1px dashed #ccc; }
+                        .border-b { border-bottom: 1px dashed #ccc; }
+                        .border-t-2 { border-top: 2px solid #666; }
+                        .border-dashed { border-style: dashed; }
+                        .text-gray-500 { color: #666; }
+                        .text-gray-600 { color: #555; }
+                        .text-red-600 { color: #dc2626; }
+                        .bg-red-50 { background: #fef2f2; }
+                        .rounded { border-radius: 4px; }
+                        .rounded-full { border-radius: 50%; }
+                        table { width: 100%; border-collapse: collapse; }
+                        th, td { padding: 4px 2px; }
+                        img { max-width: 60px; height: auto; }
+                        .flex { display: flex; }
+                        .justify-between { justify-content: space-between; }
+                        .space-y-1 > * + * { margin-top: 4px; }
+                        @media print {
+                          body { width: 80mm; }
+                          @page { size: 80mm auto; margin: 2mm; }
+                        }
+                      </style>
+                    </head>
+                    <body>
+                      ${printContent.innerHTML}
+                      <script>
+                        window.onload = function() {
+                          window.print();
+                          window.onafterprint = function() {
+                            window.close();
+                          };
+                        };
+                      </script>
+                    </body>
+                    </html>
+                  `);
+                  printWindow.document.close();
+                  toast.success('تم فتح نافذة الطباعة');
+                } else {
+                  toast.error('فشل في تحميل الفاتورة');
+                }
               }}
             >
               <Printer className="h-4 w-4 ml-2" />
