@@ -102,6 +102,7 @@ export default function POS() {
   const [customerHistory, setCustomerHistory] = useState([]);
   const [showCustomerInfo, setShowCustomerInfo] = useState(false);
   const [printDialogOpen, setPrintDialogOpen] = useState(false);
+  const [lastOrderNumber, setLastOrderNumber] = useState(null); // آخر رقم فاتورة
   
   // حالات الإرجاع
   const [refundDialogOpen, setRefundDialogOpen] = useState(false);
