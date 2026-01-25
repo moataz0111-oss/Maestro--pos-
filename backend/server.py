@@ -4369,14 +4369,17 @@ async def get_order(order_id: str, current_user: dict = Depends(get_current_user
 @api_router.put("/orders/{order_id}/add-items")
 async def add_items_to_order(order_id: str, items: List[OrderItemCreate], current_user: dict = Depends(get_current_user)):
     """إضافة عناصر جديدة لطلب موجود"""
-    order = await db.orders.find_one({"id": order_id})
+    query = build_tenant_query(current_user, {"id": order_id})
+    order = await db.orders.find_one(query)
     if not order:
         raise HTTPException(status_code=404, detail="الطلب غير موجود")
     
     # إضافة العناصر الجديدة
     new_items = []
+    product_query = build_tenant_query(current_user)
     for item in items:
-        product = await db.products.find_one({"id": item.product_id})
+        product_query["id"] = item.product_id
+        product = await db.products.find_one(product_query)
         new_items.append({
             "product_id": item.product_id,
             "product_name": item.product_name,
