@@ -681,6 +681,35 @@ async def apply_automatic_updates():
                 await db.tables.insert_many(default_tables)
                 logger.info(f"   ✅ Created 5 default tables for: {tenant.get('name', tenant['id'][:8])}")
         
+        # 8. تحديث صور الفئات والمنتجات الافتراضية للنظام الرئيسي (إذا لم تكن موجودة)
+        category_images = {
+            "برغر": "https://images.unsplash.com/photo-1635275650933-7b0911815a2e?w=400",
+            "بيتزا": "https://images.unsplash.com/photo-1703073186021-021fb5a0bde1?w=400",
+            "مشروبات": "https://images.unsplash.com/photo-1657958977261-d75e81b4713f?w=400",
+            "حلويات": "https://images.unsplash.com/photo-1546902189-eaaf09f8e38f?w=400",
+            "سلطات": "https://images.unsplash.com/photo-1677653805080-59c57727c84e?w=400",
+        }
+        for cat_name, cat_image in category_images.items():
+            await db.categories.update_many(
+                {"name": cat_name, "tenant_id": "default", "$or": [{"image": {"$exists": False}}, {"image": None}, {"image": ""}]},
+                {"$set": {"image": cat_image}}
+            )
+        
+        product_images = {
+            "برغر كلاسيك": "https://images.unsplash.com/photo-1656439659132-24c68e36b553?w=400",
+            "برغر دبل": "https://images.unsplash.com/photo-1635275650933-7b0911815a2e?w=400",
+            "بيتزا مارغريتا": "https://images.unsplash.com/photo-1681567604770-0dc826c870ae?w=400",
+            "بيتزا خضار": "https://images.unsplash.com/photo-1602104980741-b87a33837f9f?w=400",
+            "كولا": "https://images.unsplash.com/photo-1657958977261-d75e81b4713f?w=400",
+            "عصير برتقال": "https://images.unsplash.com/photo-1716925539259-ce0115263d37?w=400",
+        }
+        for prod_name, prod_image in product_images.items():
+            await db.products.update_many(
+                {"name": prod_name, "tenant_id": "default", "$or": [{"image": {"$exists": False}}, {"image": None}, {"image": ""}]},
+                {"$set": {"image": prod_image}}
+            )
+        logger.info("   ✅ Updated default category and product images")
+        
         logger.info("✅ Automatic updates applied successfully")
     except Exception as e:
         logger.error(f"❌ Error applying automatic updates: {e}")
