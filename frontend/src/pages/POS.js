@@ -1575,8 +1575,10 @@ export default function POS() {
               <p className="text-xs text-gray-500">
                 {new Date().toLocaleDateString('ar-IQ')} {new Date().toLocaleTimeString('ar-IQ')}
               </p>
-              {editingOrder && (
-                <p className="text-xs">طلب #{editingOrder.order_number}</p>
+              {(editingOrder || lastOrderNumber) && (
+                <p className="text-sm font-bold mt-1 bg-gray-100 py-1 rounded">
+                  فاتورة رقم: #{editingOrder?.order_number || lastOrderNumber}
+                </p>
               )}
             </div>
             
