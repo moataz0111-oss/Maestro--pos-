@@ -3461,25 +3461,14 @@ export default function Settings() {
                         </Select>
                       </div>
                       <div>
-                        <Label className="text-foreground">نوع الطابعة</Label>
-                        <Select value={editPrinterForm.printer_type} onValueChange={(v) => setEditPrinterForm({ ...editPrinterForm, printer_type: v })}>
-                          <SelectTrigger className="mt-1">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {printerTypes.length > 0 ? printerTypes.map(type => (
-                              <SelectItem key={type.id} value={type.id}>{type.name}</SelectItem>
-                            )) : (
-                              <>
-                                <SelectItem value="receipt">طابعة إيصالات</SelectItem>
-                                <SelectItem value="kitchen">طابعة مطبخ</SelectItem>
-                                <SelectItem value="bar">طابعة بار/مشروبات</SelectItem>
-                                <SelectItem value="packaging">طابعة تغليف</SelectItem>
-                                <SelectItem value="label">طابعة ملصقات</SelectItem>
-                              </>
-                            )}
-                          </SelectContent>
-                        </Select>
+                        <Label className="text-foreground">نوع/قسم الطابعة</Label>
+                        <Input
+                          value={editPrinterForm.printer_type}
+                          onChange={(e) => setEditPrinterForm({ ...editPrinterForm, printer_type: e.target.value })}
+                          placeholder="مثال: مطبخ، بار، تغليف، كاشير..."
+                          className="mt-1"
+                        />
+                        <p className="text-xs text-muted-foreground mt-1">اكتب اسم القسم أو نوع الطابعة حسب احتياجك</p>
                       </div>
                       
                       {/* صلاحيات الطباعة */}
