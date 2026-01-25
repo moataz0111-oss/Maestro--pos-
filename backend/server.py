@@ -5998,6 +5998,149 @@ async def delete_login_page_logo(current_user: dict = Depends(verify_super_admin
     
     return {"message": "تم حذف شعار صفحة تسجيل الدخول"}
 
+# ==================== INVOICE/RECEIPT SETTINGS - إعدادات الفاتورة ====================
+
+class SystemInvoiceSettings(BaseModel):
+    """إعدادات الفاتورة للنظام (يتحكم فيها المالك)"""
+    system_logo_url: Optional[str] = None  # شعار النظام
+    thank_you_message: str = "شكراً لزيارتكم"  # رسالة الشكر
+    system_phone: Optional[str] = None  # رقم هاتف النظام
+    system_phone2: Optional[str] = None  # رقم هاتف ثاني
+    system_email: Optional[str] = None  # بريد النظام
+    system_website: Optional[str] = None  # موقع النظام
+    footer_text: Optional[str] = None  # نص إضافي في التذييل
+    show_system_branding: bool = True  # عرض شعار وبيانات النظام
+
+class TenantInvoiceSettings(BaseModel):
+    """إعدادات الفاتورة للعميل (المطعم)"""
+    show_logo: bool = True  # عرض الشعار
+    phone: Optional[str] = None  # رقم الهاتف
+    phone2: Optional[str] = None  # رقم هاتف ثاني
+    address: Optional[str] = None  # العنوان
+    tax_number: Optional[str] = None  # الرقم الضريبي
+    custom_header: Optional[str] = None  # نص إضافي في الترويسة
+    custom_footer: Optional[str] = None  # نص إضافي في التذييل
+
+@api_router.get("/system/invoice-settings")
+async def get_system_invoice_settings():
+    """جلب إعدادات الفاتورة للنظام (عام - للطباعة)"""
+    settings = await db.settings.find_one({"type": "system_invoice_settings"}, {"_id": 0})
+    
+    default_settings = {
+        "system_logo_url": None,
+        "thank_you_message": "شكراً لزيارتكم",
+        "system_phone": None,
+        "system_phone2": None,
+        "system_email": None,
+        "system_website": None,
+        "footer_text": None,
+        "show_system_branding": True
+    }
+    
+    if settings and settings.get("value"):
+        return {**default_settings, **settings.get("value", {})}
+    return default_settings
+
+@api_router.put("/system/invoice-settings")
+async def update_system_invoice_settings(settings: SystemInvoiceSettings, current_user: dict = Depends(verify_super_admin)):
+    """تحديث إعدادات الفاتورة للنظام (المالك فقط)"""
+    
+    await db.settings.update_one(
+        {"type": "system_invoice_settings"},
+        {"$set": {"value": settings.model_dump(), "updated_at": datetime.now(timezone.utc).isoformat()}},
+        upsert=True
+    )
+    
+    return {"message": "تم تحديث إعدادات الفاتورة", "settings": settings.model_dump()}
+
+@api_router.get("/tenant/invoice-settings")
+async def get_tenant_invoice_settings(current_user: dict = Depends(get_current_user)):
+    """جلب إعدادات الفاتورة للعميل"""
+    tenant_id = get_user_tenant_id(current_user)
+    
+    default_settings = {
+        "show_logo": True,
+        "phone": None,
+        "phone2": None,
+        "address": None,
+        "tax_number": None,
+        "custom_header": None,
+        "custom_footer": None
+    }
+    
+    if tenant_id:
+        settings = await db.tenant_invoice_settings.find_one({"tenant_id": tenant_id}, {"_id": 0})
+        if settings:
+            return {**default_settings, **settings}
+    
+    return default_settings
+
+@api_router.put("/tenant/invoice-settings")
+async def update_tenant_invoice_settings(settings: TenantInvoiceSettings, current_user: dict = Depends(get_current_user)):
+    """تحديث إعدادات الفاتورة للعميل"""
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.MANAGER]:
+        raise HTTPException(status_code=403, detail="غير مصرح")
+    
+    tenant_id = get_user_tenant_id(current_user)
+    
+    await db.tenant_invoice_settings.update_one(
+        {"tenant_id": tenant_id},
+        {"$set": {**settings.model_dump(), "tenant_id": tenant_id, "updated_at": datetime.now(timezone.utc).isoformat()}},
+        upsert=True
+    )
+    
+    return {"message": "تم تحديث إعدادات الفاتورة", "settings": settings.model_dump()}
+
+@api_router.get("/invoice-data/{order_id}")
+async def get_invoice_data(order_id: str, current_user: dict = Depends(get_current_user)):
+    """جلب بيانات الفاتورة الكاملة للطباعة"""
+    
+    # جلب الطلب
+    query = build_tenant_query(current_user, {"id": order_id})
+    order = await db.orders.find_one(query, {"_id": 0})
+    if not order:
+        raise HTTPException(status_code=404, detail="الطلب غير موجود")
+    
+    tenant_id = get_user_tenant_id(current_user)
+    
+    # جلب بيانات العميل (المطعم)
+    tenant = await db.tenants.find_one({"id": tenant_id}, {"_id": 0}) if tenant_id else None
+    
+    # جلب إعدادات فاتورة العميل
+    tenant_invoice = await db.tenant_invoice_settings.find_one({"tenant_id": tenant_id}, {"_id": 0}) if tenant_id else {}
+    
+    # جلب إعدادات النظام
+    system_settings = await db.settings.find_one({"type": "system_invoice_settings"}, {"_id": 0})
+    system_invoice = system_settings.get("value", {}) if system_settings else {}
+    
+    # جلب الفرع
+    branch = await db.branches.find_one({"id": order.get("branch_id")}, {"_id": 0, "name": 1, "address": 1, "phone": 1})
+    
+    return {
+        "order": order,
+        "tenant": {
+            "name": tenant.get("name") if tenant else "المطعم",
+            "logo_url": tenant.get("logo_url") if tenant else None,
+            "phone": tenant_invoice.get("phone") or (tenant.get("owner_phone") if tenant else None),
+            "phone2": tenant_invoice.get("phone2"),
+            "address": tenant_invoice.get("address") or (branch.get("address") if branch else None),
+            "tax_number": tenant_invoice.get("tax_number"),
+            "custom_header": tenant_invoice.get("custom_header"),
+            "custom_footer": tenant_invoice.get("custom_footer")
+        },
+        "system": {
+            "logo_url": system_invoice.get("system_logo_url"),
+            "thank_you_message": system_invoice.get("thank_you_message", "شكراً لزيارتكم"),
+            "phone": system_invoice.get("system_phone"),
+            "phone2": system_invoice.get("system_phone2"),
+            "email": system_invoice.get("system_email"),
+            "website": system_invoice.get("system_website"),
+            "footer_text": system_invoice.get("footer_text"),
+            "show_branding": system_invoice.get("show_system_branding", True)
+        },
+        "branch": branch
+    }
+
 # ==================== ROLES & STAFF MANAGEMENT - إدارة الأدوار والموظفين ====================
 # نظام إدارة الموظفين والصلاحيات للعملاء
 
