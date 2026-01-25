@@ -1818,12 +1818,16 @@ async def register(user: UserCreate):
 @api_router.post("/auth/login")
 async def login(credentials: UserLogin):
     user = await db.users.find_one({"email": credentials.email}, {"_id": 0})
-    if not user or not verify_password(credentials.password, user["password"]):
+    if not user or not verify_password(credentials.password, user.get("password_hash", user.get("password", ""))):
         raise HTTPException(status_code=401, detail="بيانات الدخول غير صحيحة")
     if not user.get("is_active", True):
         raise HTTPException(status_code=401, detail="الحساب معطل")
     
-    del user["password"]
+    # إزالة كلمة المرور من الاستجابة
+    if "password" in user:
+        del user["password"]
+    if "password_hash" in user:
+        del user["password_hash"]
     token = create_token(user["id"], user["role"], user.get("branch_id"))
     return {"user": user, "token": token}
 
