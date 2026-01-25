@@ -4700,6 +4700,95 @@ export default function Settings() {
                     </p>
                   </CardHeader>
                   <CardContent className="space-y-6">
+                    {/* شعار الفاتورة */}
+                    <div className="p-4 border rounded-lg bg-orange-500/10">
+                      <Label className="text-foreground font-bold mb-4 flex items-center gap-2">
+                        <ImageIcon className="h-5 w-5 text-orange-500" />
+                        شعار الفاتورة
+                      </Label>
+                      <div className="mt-4">
+                        <div className="flex items-center gap-4">
+                          {/* عرض الشعار الحالي */}
+                          <div className="w-24 h-24 border-2 border-dashed rounded-lg flex items-center justify-center bg-background overflow-hidden">
+                            {invoiceSettings.invoice_logo ? (
+                              <img 
+                                src={invoiceSettings.invoice_logo.startsWith('/') 
+                                  ? `${API}${invoiceSettings.invoice_logo}` 
+                                  : invoiceSettings.invoice_logo}
+                                alt="شعار الفاتورة"
+                                className="w-full h-full object-contain"
+                                onError={(e) => {
+                                  e.target.style.display = 'none';
+                                  e.target.nextSibling && (e.target.nextSibling.style.display = 'flex');
+                                }}
+                              />
+                            ) : restaurantSettings.logo_url ? (
+                              <img 
+                                src={restaurantSettings.logo_url.startsWith('/') 
+                                  ? `${API}${restaurantSettings.logo_url}` 
+                                  : restaurantSettings.logo_url}
+                                alt="شعار المطعم"
+                                className="w-full h-full object-contain"
+                              />
+                            ) : (
+                              <ImageIcon className="h-8 w-8 text-muted-foreground" />
+                            )}
+                          </div>
+                          
+                          {/* زر رفع الشعار */}
+                          <div className="flex-1">
+                            <label className="cursor-pointer">
+                              <input
+                                type="file"
+                                accept="image/*"
+                                className="hidden"
+                                onChange={async (e) => {
+                                  const file = e.target.files[0];
+                                  if (!file) return;
+                                  
+                                  const formData = new FormData();
+                                  formData.append('file', file);
+                                  
+                                  try {
+                                    toast.loading('جاري رفع الشعار...');
+                                    const res = await axios.post(`${API}/upload/image`, formData, {
+                                      headers: { 'Content-Type': 'multipart/form-data' }
+                                    });
+                                    setInvoiceSettings(prev => ({...prev, invoice_logo: res.data.url}));
+                                    toast.dismiss();
+                                    toast.success('تم رفع الشعار بنجاح');
+                                  } catch (error) {
+                                    toast.dismiss();
+                                    toast.error('فشل في رفع الشعار');
+                                  }
+                                }}
+                              />
+                              <Button variant="outline" className="w-full" asChild>
+                                <span>
+                                  <Upload className="h-4 w-4 ml-2" />
+                                  رفع شعار جديد
+                                </span>
+                              </Button>
+                            </label>
+                            <p className="text-xs text-muted-foreground mt-2">
+                              يُفضل صورة مربعة بخلفية شفافة (PNG)
+                            </p>
+                            {invoiceSettings.invoice_logo && (
+                              <Button 
+                                variant="ghost" 
+                                size="sm" 
+                                className="text-red-500 mt-2"
+                                onClick={() => setInvoiceSettings(prev => ({...prev, invoice_logo: ''}))}
+                              >
+                                <X className="h-4 w-4 ml-1" />
+                                إزالة الشعار
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
                     {/* معلومات الاتصال */}
                     <div className="p-4 border rounded-lg bg-green-500/10">
                       <Label className="text-foreground font-bold mb-4 flex items-center gap-2">
