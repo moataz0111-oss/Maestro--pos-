@@ -1713,13 +1713,13 @@ export default function POS() {
                 <span className="tabular-nums">{formatPrice(subtotal)}</span>
               </div>
               {discount > 0 && (
-                <div className="flex justify-between text-xs text-red-600">
-                  <span>الخصم:</span>
-                  <span className="tabular-nums">-{formatPrice(discount)}</span>
+                <div className="flex justify-between text-xs text-red-600 bg-red-50 p-1 rounded">
+                  <span>🏷️ الخصم:</span>
+                  <span className="tabular-nums font-bold">-{formatPrice(discount)}</span>
                 </div>
               )}
-              <div className="flex justify-between font-bold text-sm border-t border-gray-300 pt-1 mt-1">
-                <span>الإجمالي:</span>
+              <div className="flex justify-between font-bold text-sm border-t-2 border-gray-400 pt-2 mt-2">
+                <span>الإجمالي النهائي:</span>
                 <span className="tabular-nums">{formatPrice(totalBeforeCommission)}</span>
               </div>
             </div>
@@ -1731,22 +1731,36 @@ export default function POS() {
               </div>
             )}
             
-            {/* ========== أسفل الفاتورة - معلومات النظام ========== */}
-            {systemInvoiceSettings.show_system_branding !== false && (
-              <div className="text-center mt-4 pt-3 border-t-2 border-gray-400">
-                {/* شعار النظام */}
-                {systemInvoiceSettings.system_logo_url && (
-                  <div className="mb-2">
-                    <img 
-                      src={systemInvoiceSettings.system_logo_url.startsWith('/') 
-                        ? `${API}${systemInvoiceSettings.system_logo_url}` 
-                        : systemInvoiceSettings.system_logo_url}
-                      alt="شعار النظام" 
-                      className="h-10 mx-auto object-contain"
-                      onError={(e) => e.target.style.display = 'none'}
-                    />
-                  </div>
-                )}
+            {/* ========== أسفل الفاتورة - رسالة الشكر ومعلومات التواصل ========== */}
+            <div className="text-center mt-4 pt-3 border-t-2 border-gray-400">
+              {/* رسالة الشكر */}
+              <p className="text-xs font-bold">
+                {systemInvoiceSettings.thank_you_message || 'شكراً لزيارتكم ❤️'}
+              </p>
+              
+              {/* نص إضافي */}
+              {systemInvoiceSettings.footer_text && (
+                <p className="text-xs mt-1">{systemInvoiceSettings.footer_text}</p>
+              )}
+              
+              {/* أرقام النظام */}
+              {(systemInvoiceSettings.system_phone || systemInvoiceSettings.system_phone2) && (
+                <div className="text-xs mt-1">
+                  {systemInvoiceSettings.system_phone && <span>📞 {systemInvoiceSettings.system_phone}</span>}
+                  {systemInvoiceSettings.system_phone && systemInvoiceSettings.system_phone2 && <span> - </span>}
+                  {systemInvoiceSettings.system_phone2 && <span>{systemInvoiceSettings.system_phone2}</span>}
+                </div>
+              )}
+              
+              {/* البريد والموقع */}
+              {systemInvoiceSettings.system_email && (
+                <p className="text-xs">✉️ {systemInvoiceSettings.system_email}</p>
+              )}
+              {systemInvoiceSettings.system_website && (
+                <p className="text-xs">🌐 {systemInvoiceSettings.system_website}</p>
+              )}
+            </div>
+          </div>
                 
                 {/* رسالة الشكر */}
                 <p className="text-xs font-bold">
