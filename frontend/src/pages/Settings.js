@@ -415,7 +415,7 @@ export default function Settings() {
 
   const fetchData = async () => {
     try {
-      const [usersRes, branchesRes, printersRes, settingsRes, appsRes, categoriesRes, productsRes, sectionsRes, customersRes, mfgProductsRes] = await Promise.all([
+      const [usersRes, branchesRes, printersRes, settingsRes, appsRes, categoriesRes, productsRes, sectionsRes, customersRes, mfgProductsRes, printerTypesRes] = await Promise.all([
         axios.get(`${API}/users`),
         axios.get(`${API}/branches`),
         axios.get(`${API}/printers`),
@@ -425,7 +425,8 @@ export default function Settings() {
         axios.get(`${API}/products`),
         axios.get(`${API}/kitchen-sections`),
         axios.get(`${API}/customers`),
-        axios.get(`${API}/manufactured-products`).catch(() => ({ data: [] }))
+        axios.get(`${API}/manufactured-products`).catch(() => ({ data: [] })),
+        axios.get(`${API}/printer-types`).catch(() => ({ data: { default: [], custom: [] } }))
       ]);
 
       setUsers(usersRes.data);
@@ -438,6 +439,7 @@ export default function Settings() {
       setKitchenSections(sectionsRes.data);
       setCustomers(customersRes.data);
       setManufacturedProducts(mfgProductsRes.data || []);
+      setPrinterTypes([...(printerTypesRes.data?.default || []), ...(printerTypesRes.data?.custom || [])]);
       
       // تعيين الفرع الافتراضي لنموذج المستخدم الجديد
       if (branchesRes.data.length > 0) {
