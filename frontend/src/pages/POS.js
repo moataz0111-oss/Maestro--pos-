@@ -1588,7 +1588,7 @@ export default function POS() {
 
       {/* Print Bill Dialog - معاينة الفاتورة */}
       <Dialog open={printDialogOpen} onOpenChange={setPrintDialogOpen}>
-        <DialogContent className="max-w-sm no-print">
+        <DialogContent className="max-w-sm no-print print-dialog">
           <DialogHeader className="no-print">
             <DialogTitle className="flex items-center gap-2 text-foreground">
               <Receipt className="h-5 w-5 text-blue-500" />
@@ -1596,35 +1596,36 @@ export default function POS() {
             </DialogTitle>
           </DialogHeader>
           
-          <div className="print-receipt bg-white text-black p-4 rounded-lg font-mono text-sm" dir="rtl">
-            {/* شعار المطعم */}
-            {invoiceSettings.show_logo !== false && (restaurantSettings.logo_url || invoiceSettings.invoice_logo) && (
-              <div className="text-center mb-3">
-                <img 
-                  src={(() => {
-                    const logoUrl = invoiceSettings.invoice_logo || restaurantSettings.logo_url;
-                    if (logoUrl?.startsWith('/api')) {
-                      return `${API}${logoUrl.replace('/api', '')}`;
-                    }
-                    if (logoUrl?.startsWith('/uploads')) {
-                      return `${API}${logoUrl}`;
-                    }
-                    return logoUrl;
-                  })()}
-                  alt="شعار المطعم" 
-                  className="h-14 mx-auto object-contain"
-                  onError={(e) => e.target.style.display = 'none'}
-                />
-              </div>
-            )}
-            
-            <div className="text-center mb-3">
-              <h2 className="text-lg font-bold">{restaurantSettings.name || restaurantSettings.name_ar || 'Maestro EGP'}</h2>
+          <div className="print-receipt bg-white text-black p-4 rounded-lg font-mono text-sm" dir="rtl" id="receipt-to-print">
+            {/* ========== أعلى الفاتورة - معلومات المطعم ========== */}
+            <div className="text-center mb-3 border-b border-dashed border-gray-400 pb-3">
+              {/* اسم المطعم */}
+              <h2 className="text-lg font-bold">{restaurantSettings.name || restaurantSettings.name_ar || 'اسم المطعم'}</h2>
+              
+              {/* عنوان المطعم */}
               {invoiceSettings.address && (
-                <p className="text-xs text-gray-600">{invoiceSettings.address}</p>
+                <p className="text-xs text-gray-600 mt-1">{invoiceSettings.address}</p>
               )}
+              
+              {/* أرقام هاتف المطعم */}
+              {(invoiceSettings.phone || invoiceSettings.phone2) && (
+                <div className="text-xs mt-1">
+                  {invoiceSettings.phone && <span>📞 {invoiceSettings.phone}</span>}
+                  {invoiceSettings.phone && invoiceSettings.phone2 && <span> - </span>}
+                  {invoiceSettings.phone2 && <span>{invoiceSettings.phone2}</span>}
+                </div>
+              )}
+              
+              {/* الرقم الضريبي - إذا كان المستخدم يريد إظهاره */}
+              {invoiceSettings.tax_number && invoiceSettings.show_tax !== false && (
+                <p className="text-xs text-gray-500 mt-1">الرقم الضريبي: {invoiceSettings.tax_number}</p>
+              )}
+            </div>
+            
+            {/* معلومات الفاتورة */}
+            <div className="text-center mb-2">
               <p className="text-xs text-gray-500">
-                {new Date().toLocaleDateString('ar-IQ')} {new Date().toLocaleTimeString('ar-IQ')}
+                {new Date().toLocaleDateString('ar-IQ')} - {new Date().toLocaleTimeString('ar-IQ', {hour: '2-digit', minute: '2-digit'})}
               </p>
               {(editingOrder || lastOrderNumber) && (
                 <p className="text-sm font-bold mt-1 bg-gray-100 py-1 rounded">
@@ -1633,22 +1634,27 @@ export default function POS() {
               )}
             </div>
             
-            {/* نص أعلى الفاتورة */}
+            {/* نص أعلى الفاتورة المخصص */}
             {invoiceSettings.custom_header && (
-              <div className="text-center mb-2 text-xs border-b border-dashed pb-2">
+              <div className="text-center mb-2 text-xs">
                 {invoiceSettings.custom_header}
               </div>
             )}
             
-            <div className="border-t border-dashed border-gray-300 pt-2 mb-2">
+            {/* معلومات الطلب */}
+            <div className="border-t border-dashed border-gray-300 pt-2 mb-2 text-xs">
               {orderType === 'dine_in' && selectedTable && (
-                <p className="text-xs">طاولة: {tables.find(t => t.id === selectedTable)?.number}</p>
+                <p>طاولة: {tables.find(t => t.id === selectedTable)?.number}</p>
               )}
-              {customerName && <p className="text-xs">العميل: {customerName}</p>}
-              {customerPhone && <p className="text-xs">الهاتف: {customerPhone}</p>}
-              {buzzerNumber && <p className="text-xs">رقم التنبيه: {buzzerNumber}</p>}
+              {orderType === 'takeaway' && <p>🥡 طلب سفري</p>}
+              {orderType === 'delivery' && <p>🚗 طلب توصيل</p>}
+              {customerName && <p>العميل: {customerName}</p>}
+              {customerPhone && <p>الهاتف: {customerPhone}</p>}
+              {buzzerNumber && <p>رقم التنبيه: {buzzerNumber}</p>}
+              {deliveryAddress && <p>العنوان: {deliveryAddress}</p>}
             </div>
             
+            {/* ========== الأصناف ========== */}
             <div className="border-t border-dashed border-gray-300 py-2">
               <table className="w-full text-xs">
                 <thead>
@@ -1670,41 +1676,76 @@ export default function POS() {
               </table>
             </div>
             
+            {/* ========== المجاميع ========== */}
             <div className="border-t border-dashed border-gray-300 pt-2 space-y-1">
-              <div className="flex justify-between">
+              <div className="flex justify-between text-xs">
                 <span>المجموع الفرعي:</span>
                 <span className="tabular-nums">{formatPrice(subtotal)}</span>
               </div>
               {discount > 0 && (
-                <div className="flex justify-between text-red-600">
+                <div className="flex justify-between text-xs text-red-600">
                   <span>الخصم:</span>
                   <span className="tabular-nums">-{formatPrice(discount)}</span>
                 </div>
               )}
-              <div className="flex justify-between font-bold text-base border-t border-gray-300 pt-1">
+              <div className="flex justify-between font-bold text-sm border-t border-gray-300 pt-1 mt-1">
                 <span>الإجمالي:</span>
                 <span className="tabular-nums">{formatPrice(totalBeforeCommission)}</span>
               </div>
             </div>
             
-            {/* أرقام الهواتف */}
-            {(invoiceSettings.phone || invoiceSettings.phone2) && (
-              <div className="text-center text-xs border-t border-dashed pt-2 mt-2">
-                {invoiceSettings.phone && <p>📞 {invoiceSettings.phone}</p>}
-                {invoiceSettings.phone2 && <p>📞 {invoiceSettings.phone2}</p>}
+            {/* نص أسفل الفاتورة المخصص من المطعم */}
+            {invoiceSettings.custom_footer && (
+              <div className="text-center text-xs mt-3 pt-2 border-t border-dashed">
+                {invoiceSettings.custom_footer}
               </div>
             )}
             
-            {/* الرقم الضريبي */}
-            {invoiceSettings.tax_number && (
-              <div className="text-center text-xs mt-1">
-                <p>الرقم الضريبي: {invoiceSettings.tax_number}</p>
+            {/* ========== أسفل الفاتورة - معلومات النظام ========== */}
+            {systemInvoiceSettings.show_system_branding !== false && (
+              <div className="text-center mt-4 pt-3 border-t-2 border-gray-400">
+                {/* شعار النظام */}
+                {systemInvoiceSettings.system_logo_url && (
+                  <div className="mb-2">
+                    <img 
+                      src={systemInvoiceSettings.system_logo_url.startsWith('/') 
+                        ? `${API}${systemInvoiceSettings.system_logo_url}` 
+                        : systemInvoiceSettings.system_logo_url}
+                      alt="شعار النظام" 
+                      className="h-10 mx-auto object-contain"
+                      onError={(e) => e.target.style.display = 'none'}
+                    />
+                  </div>
+                )}
+                
+                {/* رسالة الشكر */}
+                <p className="text-xs font-bold">
+                  {systemInvoiceSettings.thank_you_message || 'شكراً لزيارتكم ❤️'}
+                </p>
+                
+                {/* نص إضافي */}
+                {systemInvoiceSettings.footer_text && (
+                  <p className="text-xs mt-1">{systemInvoiceSettings.footer_text}</p>
+                )}
+                
+                {/* أرقام النظام */}
+                {(systemInvoiceSettings.system_phone || systemInvoiceSettings.system_phone2) && (
+                  <div className="text-xs mt-1">
+                    {systemInvoiceSettings.system_phone && <span>📞 {systemInvoiceSettings.system_phone}</span>}
+                    {systemInvoiceSettings.system_phone && systemInvoiceSettings.system_phone2 && <span> - </span>}
+                    {systemInvoiceSettings.system_phone2 && <span>{systemInvoiceSettings.system_phone2}</span>}
+                  </div>
+                )}
+                
+                {/* البريد والموقع */}
+                {systemInvoiceSettings.system_email && (
+                  <p className="text-xs">✉️ {systemInvoiceSettings.system_email}</p>
+                )}
+                {systemInvoiceSettings.system_website && (
+                  <p className="text-xs">🌐 {systemInvoiceSettings.system_website}</p>
+                )}
               </div>
             )}
-            
-            <div className="text-center mt-3 text-xs text-gray-500 border-t border-dashed pt-2">
-              <p>{invoiceSettings.custom_footer || 'شكراً لزيارتكم ❤️'}</p>
-            </div>
           </div>
           
           <div className="flex gap-2 no-print">
