@@ -10673,8 +10673,8 @@ async def get_auto_print_data(order_id: str, branch_id: Optional[str] = None, cu
         processed_items = []
         for item in order.get("items", []):
             processed_item = {
-                "name": item.get("name"),
-                "name_en": item.get("name_en"),
+                "name": item.get("product_name") or item.get("name"),
+                "name_en": item.get("product_name_en") or item.get("name_en"),
                 "quantity": item.get("quantity", 1),
                 "notes": item.get("notes"),
             }
