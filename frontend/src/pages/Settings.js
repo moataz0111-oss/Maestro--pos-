@@ -340,11 +340,13 @@ export default function Settings() {
   });
   const [editBranchForm, setEditBranchForm] = useState(null);
   const [printerForm, setPrinterForm] = useState({
-    name: '', ip_address: '', port: 9100, branch_id: '', printer_type: 'receipt'
+    name: '', ip_address: '', port: 9100, branch_id: '', printer_type: 'receipt',
+    print_mode: 'full_receipt', show_prices: true, print_individual_items: false, auto_print_on_order: true
   });
   const [editPrinterForm, setEditPrinterForm] = useState(null);
   const [editPrinterDialogOpen, setEditPrinterDialogOpen] = useState(false);
   const [printerTestStatus, setPrinterTestStatus] = useState({}); // حالة اختبار الطابعات
+  const [printerTypes, setPrinterTypes] = useState([]);
   const [categoryForm, setCategoryForm] = useState({
     name: '', name_en: '', icon: '', image: '', color: '#D4AF37', sort_order: 0, kitchen_section_id: ''
   });
