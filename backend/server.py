@@ -6488,6 +6488,44 @@ async def delete_printer(printer_id: str, current_user: dict = Depends(get_curre
         raise HTTPException(status_code=404, detail="الطابعة غير موجودة")
     return {"message": "تم حذف الطابعة بنجاح"}
 
+@api_router.post("/printers/{printer_id}/test")
+async def test_printer_connection(printer_id: str, current_user: dict = Depends(get_current_user)):
+    """اختبار اتصال الطابعة"""
+    import socket
+    
+    printer = await db.printers.find_one({"id": printer_id}, {"_id": 0})
+    if not printer:
+        raise HTTPException(status_code=404, detail="الطابعة غير موجودة")
+    
+    ip = printer.get("ip_address", "")
+    port = printer.get("port", 9100)
+    
+    try:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(3)  # timeout 3 ثواني
+        result = sock.connect_ex((ip, port))
+        sock.close()
+        
+        if result == 0:
+            # تحديث حالة الطابعة
+            await db.printers.update_one(
+                {"id": printer_id},
+                {"$set": {"is_online": True, "last_check": datetime.now(timezone.utc).isoformat()}}
+            )
+            return {"status": "online", "message": "الطابعة متصلة"}
+        else:
+            await db.printers.update_one(
+                {"id": printer_id},
+                {"$set": {"is_online": False, "last_check": datetime.now(timezone.utc).isoformat()}}
+            )
+            return {"status": "offline", "message": "الطابعة غير متصلة"}
+    except socket.error as e:
+        await db.printers.update_one(
+            {"id": printer_id},
+            {"$set": {"is_online": False, "last_check": datetime.now(timezone.utc).isoformat()}}
+        )
+        return {"status": "error", "message": f"خطأ في الاتصال: {str(e)}"}
+
 # ==================== SUPER ADMIN & TENANT MANAGEMENT ====================
 # نظام إدارة المستأجرين - لوحة تحكم المالك الرئيسي
 
