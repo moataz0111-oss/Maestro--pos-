@@ -946,6 +946,7 @@ class TenantCreate(BaseModel):
     owner_email: EmailStr
     owner_phone: str
     subscription_type: str = "trial"  # trial, basic, premium, demo
+    subscription_duration: int = 1  # مدة الاشتراك بالأشهر (1, 3, 6, 12)
     max_branches: int = 1
     max_users: int = 5
     logo_url: Optional[str] = None  # شعار المطعم
