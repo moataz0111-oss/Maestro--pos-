@@ -76,6 +76,7 @@ export default function POS() {
   const [cart, setCart] = useState([]);
   const [orderType, setOrderType] = useState('dine_in');
   const [selectedTable, setSelectedTable] = useState(null);
+  const [selectedTableSection, setSelectedTableSection] = useState(null); // القسم المختار للطاولات
   const [tables, setTables] = useState([]);
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
