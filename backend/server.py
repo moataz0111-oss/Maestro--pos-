@@ -7899,8 +7899,11 @@ async def get_subscriptions_dashboard(current_user: dict = Depends(verify_super_
     
     # الأسعار الافتراضية بالدولار
     default_prices = {
-        "basic": {"monthly": 25, "name": "أساسي"},       # 25$/شهر
-        "premium": {"monthly": 50, "name": "مميز"},      # 50$/شهر
+        "bronze": {"monthly": 15, "name": "برونزية"},
+        "silver": {"monthly": 30, "name": "فضية"},
+        "gold": {"monthly": 50, "name": "ذهبية"},
+        "basic": {"monthly": 25, "name": "أساسي"},
+        "premium": {"monthly": 50, "name": "مميز"},
         "trial": {"monthly": 0, "name": "تجريبي"},
         "demo": {"monthly": 0, "name": "عرض"}
     }
