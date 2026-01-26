@@ -5,6 +5,31 @@
 
 ---
 
+## آخر التحديثات (27 يناير 2026) - الجزء 18
+
+### ✅ إصلاح شامل لوظائف رفع الصور
+
+#### المشاكل التي تم إصلاحها:
+1. **مشكلة Authorization header**: كانت دوال رفع الصور ترسل طلبات بدون token
+2. **زر رفع شعار صفحة الدخول**: كان معطلاً ولم يكن هناك input file
+
+#### الإصلاحات المطبقة:
+| الدالة | الملف | الإصلاح |
+|--------|------|---------|
+| `uploadSystemLogo` | SuperAdmin.js | إضافة Authorization header |
+| `uploadLoginLogo` | SuperAdmin.js | إضافة Authorization header |
+| `uploadBackgroundFromDevice` | SuperAdmin.js | إضافة Authorization header |
+| `uploadTenantLogo` | SuperAdmin.js | إضافة Authorization header |
+| `addNewBackground` | SuperAdmin.js | إضافة Authorization header |
+| Login Page Logo | SuperAdmin.js | إضافة file input وزر تأكيد الرفع |
+
+#### نتائج الاختبار - Iteration 40:
+- **Backend**: 100% (13/13 اختبار نجح)
+- **Frontend**: 100%
+- جميع وظائف الرفع تعمل بشكل صحيح الآن
+
+---
+
 ## آخر التحديثات (27 يناير 2026) - الجزء 17
 
 ### ✅ إضافة باقات اشتراك جديدة
