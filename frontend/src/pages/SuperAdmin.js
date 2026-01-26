@@ -1803,62 +1803,168 @@ export default function SuperAdmin() {
 
       {/* Modal: إدارة الميزات والصلاحيات */}
       <Dialog open={showFeaturesModal} onOpenChange={setShowFeaturesModal}>
-        <DialogContent className="bg-gray-800 border-gray-700 text-white max-w-3xl">
+        <DialogContent className="bg-gray-800 border-gray-700 text-white max-w-4xl max-h-[85vh] overflow-hidden">
           <DialogHeader>
-            <DialogTitle className="text-xl flex items-center gap-2">
-              <Settings className="h-5 w-5 text-purple-400" />
-              إدارة الميزات - {selectedTenant?.name}
-            </DialogTitle>
+            <div className="flex items-center justify-between">
+              <DialogTitle className="text-xl flex items-center gap-2">
+                <Settings className="h-5 w-5 text-purple-400" />
+                صلاحيات الميزات - {selectedTenant?.name}
+              </DialogTitle>
+              <div className="flex items-center gap-2">
+                <Button 
+                  size="sm" 
+                  className="bg-green-600 hover:bg-green-700 gap-1"
+                  onClick={() => {
+                    const allEnabled = {};
+                    Object.keys(tenantFeatures).forEach(key => allEnabled[key] = true);
+                    setTenantFeatures(allEnabled);
+                  }}
+                >
+                  <Check className="h-4 w-4" />
+                  تفعيل الكل
+                </Button>
+                <Button 
+                  size="sm" 
+                  variant="destructive"
+                  className="gap-1"
+                  onClick={() => {
+                    const allDisabled = {};
+                    Object.keys(tenantFeatures).forEach(key => allDisabled[key] = false);
+                    setTenantFeatures(allDisabled);
+                  }}
+                >
+                  <X className="h-4 w-4" />
+                  تعطيل الكل
+                </Button>
+              </div>
+            </div>
           </DialogHeader>
-          <div className="py-4 space-y-4 max-h-[60vh] overflow-y-auto">
+          <div className="py-4 space-y-6 overflow-y-auto max-h-[60vh] pr-2">
             {featuresLoading ? (
               <div className="text-center py-8">
                 <RefreshCw className="h-8 w-8 animate-spin mx-auto text-gray-400" />
               </div>
             ) : (
               <>
+                {/* الميزات الأساسية والمتقدمة */}
+                <div className="grid grid-cols-2 gap-6">
+                  {/* الميزات الأساسية */}
+                  <div className="space-y-3">
+                    <h3 className="font-bold text-green-400 flex items-center gap-2 border-b border-gray-700 pb-2">
+                      <Layers className="h-4 w-4" />
+                      الميزات الأساسية
+                    </h3>
+                    <div className="space-y-2">
+                      {[
+                        { key: 'showPOS', label: 'نقاط البيع', icon: Monitor },
+                        { key: 'showTables', label: 'الطاولات', icon: LayoutGrid },
+                        { key: 'showOrders', label: 'الطلبات', icon: FileText },
+                        { key: 'showReports', label: 'التقارير', icon: BarChart3 },
+                        { key: 'showExpenses', label: 'المصاريف', icon: Wallet },
+                        { key: 'showInventory', label: 'المخزون', icon: Package },
+                        { key: 'showDelivery', label: 'التوصيل', icon: Truck },
+                        { key: 'showKitchen', label: 'شاشة المطبخ', icon: ChefHat },
+                      ].map(item => (
+                        <label key={item.key} className="flex items-center justify-between p-2.5 bg-gray-700/30 rounded-lg hover:bg-gray-700/50 cursor-pointer">
+                          <div className="flex items-center gap-2">
+                            <item.icon className="h-4 w-4 text-gray-400" />
+                            <span className="text-sm">{item.label}</span>
+                          </div>
+                          <Switch
+                            checked={tenantFeatures[item.key] || false}
+                            onCheckedChange={(checked) => setTenantFeatures({...tenantFeatures, [item.key]: checked})}
+                          />
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* الميزات المتقدمة */}
+                  <div className="space-y-3">
+                    <h3 className="font-bold text-purple-400 flex items-center gap-2 border-b border-gray-700 pb-2">
+                      <Star className="h-4 w-4" />
+                      الميزات المتقدمة
+                    </h3>
+                    <div className="space-y-2">
+                      {[
+                        { key: 'showHR', label: 'الموارد البشرية', icon: Users },
+                        { key: 'showWarehouse', label: 'التحويلات (المخازن)', icon: ArrowLeftRight },
+                        { key: 'showCallCenter', label: 'كول سنتر', icon: Headphones },
+                        { key: 'showCallLogs', label: 'سجل المكالمات', icon: Phone },
+                        { key: 'showLoyalty', label: 'برامج الولاء', icon: Gift },
+                        { key: 'showCoupons', label: 'الكوبونات والعروض', icon: Tag },
+                        { key: 'showRecipes', label: 'الوصفات', icon: UtensilsCrossed },
+                        { key: 'showReservations', label: 'حجوزات الطاولات', icon: CalendarDays },
+                      ].map(item => (
+                        <label key={item.key} className="flex items-center justify-between p-2.5 bg-gray-700/30 rounded-lg hover:bg-gray-700/50 cursor-pointer">
+                          <div className="flex items-center gap-2">
+                            <item.icon className="h-4 w-4 text-gray-400" />
+                            <span className="text-sm">{item.label}</span>
+                          </div>
+                          <Switch
+                            checked={tenantFeatures[item.key] || false}
+                            onCheckedChange={(checked) => setTenantFeatures({...tenantFeatures, [item.key]: checked})}
+                          />
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {/* ميزات إضافية */}
                 <div className="space-y-3">
-                  <h3 className="font-bold text-gray-300">الصفحات الرئيسية</h3>
-                  <div className="grid grid-cols-3 gap-3">
+                  <h3 className="font-bold text-yellow-400 flex items-center gap-2 border-b border-gray-700 pb-2">
+                    <Sparkles className="h-4 w-4" />
+                    ميزات إضافية
+                  </h3>
+                  <div className="grid grid-cols-2 gap-3">
                     {[
-                      { key: 'showPOS', label: 'نقاط البيع' },
-                      { key: 'showTables', label: 'الطاولات' },
-                      { key: 'showOrders', label: 'الطلبات' },
-                      { key: 'showDelivery', label: 'التوصيل' },
-                      { key: 'showKitchen', label: 'المطبخ' },
-                      { key: 'showReports', label: 'التقارير' },
+                      { key: 'showSmartReports', label: 'التقارير الذكية', icon: BrainCircuit },
+                      { key: 'showBranchOrders', label: 'طلبات الفروع', icon: GitBranch },
+                      { key: 'showPurchasing', label: 'المشتريات', icon: ShoppingCart },
+                      { key: 'showReviews', label: 'التقييمات', icon: Star },
                     ].map(item => (
-                      <label key={item.key} className="flex items-center gap-2 p-2 bg-gray-700/30 rounded">
-                        <input
-                          type="checkbox"
+                      <label key={item.key} className="flex items-center justify-between p-2.5 bg-gray-700/30 rounded-lg hover:bg-gray-700/50 cursor-pointer">
+                        <div className="flex items-center gap-2">
+                          <item.icon className="h-4 w-4 text-gray-400" />
+                          <span className="text-sm">{item.label}</span>
+                        </div>
+                        <Switch
                           checked={tenantFeatures[item.key] || false}
-                          onChange={(e) => setTenantFeatures({...tenantFeatures, [item.key]: e.target.checked})}
-                          className="rounded"
+                          onCheckedChange={(checked) => setTenantFeatures({...tenantFeatures, [item.key]: checked})}
                         />
-                        <span className="text-sm">{item.label}</span>
                       </label>
                     ))}
                   </div>
                 </div>
+
+                {/* خيارات الإعدادات */}
                 <div className="space-y-3">
-                  <h3 className="font-bold text-gray-300">الإدارة والمخزون</h3>
+                  <h3 className="font-bold text-blue-400 flex items-center gap-2 border-b border-gray-700 pb-2">
+                    <Settings className="h-4 w-4" />
+                    خيارات الإعدادات (تحكم في ما يظهر داخل الإعدادات)
+                  </h3>
                   <div className="grid grid-cols-3 gap-3">
                     {[
-                      { key: 'showInventory', label: 'المخزون' },
-                      { key: 'showExpenses', label: 'المصروفات' },
-                      { key: 'showPurchasing', label: 'المشتريات' },
-                      { key: 'showWarehouse', label: 'المستودع' },
-                      { key: 'showHR', label: 'الموارد البشرية' },
-                      { key: 'showSettings', label: 'الإعدادات' },
+                      { key: 'settingsUsers', label: 'المستخدمين', icon: User },
+                      { key: 'settingsCustomers', label: 'العملاء', icon: Users },
+                      { key: 'settingsCategories', label: 'الفئات', icon: FolderTree },
+                      { key: 'settingsProducts', label: 'المنتجات', icon: Package },
+                      { key: 'settingsDeliveryCompanies', label: 'شركات التوصيل', icon: Truck },
+                      { key: 'settingsBranches', label: 'الفروع', icon: Building2 },
+                      { key: 'settingsPrinters', label: 'المطبوعات', icon: Printer },
+                      { key: 'settingsNotifications', label: 'الإشعارات', icon: Bell },
+                      { key: 'settingsCallCenter', label: 'كول سنتر', icon: Headphones },
                     ].map(item => (
-                      <label key={item.key} className="flex items-center gap-2 p-2 bg-gray-700/30 rounded">
-                        <input
-                          type="checkbox"
+                      <label key={item.key} className="flex items-center justify-between p-2.5 bg-gray-700/30 rounded-lg hover:bg-gray-700/50 cursor-pointer">
+                        <div className="flex items-center gap-2">
+                          <item.icon className="h-4 w-4 text-gray-400" />
+                          <span className="text-sm">{item.label}</span>
+                        </div>
+                        <Switch
                           checked={tenantFeatures[item.key] || false}
-                          onChange={(e) => setTenantFeatures({...tenantFeatures, [item.key]: e.target.checked})}
-                          className="rounded"
+                          onCheckedChange={(checked) => setTenantFeatures({...tenantFeatures, [item.key]: checked})}
                         />
-                        <span className="text-sm">{item.label}</span>
                       </label>
                     ))}
                   </div>
