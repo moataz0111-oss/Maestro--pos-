@@ -648,6 +648,29 @@ export default function SuperAdmin() {
     }
   };
 
+  const fetchLoginPageSettings = async () => {
+    try {
+      const res = await axios.get(`${API}/system/login-page-settings`);
+      if (res.data) {
+        setLoginPageSettings(res.data);
+      }
+    } catch (error) {
+      console.log('Error fetching login page settings');
+    }
+  };
+
+  const saveLoginPageSettings = async () => {
+    setLoading(true);
+    try {
+      await axios.put(`${API}/system/login-page-settings`, loginPageSettings);
+      toast.success('تم حفظ إعدادات صفحة الدخول بنجاح');
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'فشل في حفظ الإعدادات');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // ==================== System Branding Functions ====================
   
   const fetchSystemBranding = async () => {
