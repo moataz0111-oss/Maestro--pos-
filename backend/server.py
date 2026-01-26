@@ -945,10 +945,11 @@ class TenantCreate(BaseModel):
     owner_name: str  # اسم المالك
     owner_email: EmailStr
     owner_phone: str
-    subscription_type: str = "trial"  # trial, basic, premium
+    subscription_type: str = "trial"  # trial, basic, premium, demo
     max_branches: int = 1
     max_users: int = 5
     logo_url: Optional[str] = None  # شعار المطعم
+    is_demo: bool = False  # هل هو حساب تجريبي
 
 class TenantFeatures(BaseModel):
     """ميزات العميل المتاحة"""
