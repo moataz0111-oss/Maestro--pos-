@@ -535,8 +535,22 @@ export default function SuperAdmin() {
       }
       fetchData();
       fetchNotifications();
+      fetchSubscriptionsDashboard();
     } catch (error) {
       toast.error(error.response?.data?.detail || 'حدث خطأ');
+    }
+  };
+
+  // جلب لوحة معلومات الاشتراكات
+  const fetchSubscriptionsDashboard = async () => {
+    setLoadingDashboard(true);
+    try {
+      const res = await axios.get(`${API}/super-admin/subscriptions-dashboard`);
+      setSubscriptionsDashboard(res.data);
+    } catch (error) {
+      console.error('Error fetching subscriptions dashboard:', error);
+    } finally {
+      setLoadingDashboard(false);
     }
   };
 
