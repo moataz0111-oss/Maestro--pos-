@@ -7781,8 +7781,8 @@ async def get_notification_settings(current_user: dict = Depends(verify_super_ad
         default_settings = {
             "type": "notification_settings",
             "value": {
-                "days_before_expiry": 7,
-                "email_notifications": True,
+                "days_before_expiry": 15,
+                "email_notifications": False,
                 "push_notifications": True,
                 "notify_new_tenant": True,
                 "notify_tenant_status": True
@@ -7811,9 +7811,9 @@ async def get_expiring_subscriptions(current_user: dict = Depends(verify_super_a
     
     # جلب إعدادات الإشعارات
     settings = await db.settings.find_one({"type": "notification_settings"}, {"_id": 0})
-    days_before = 7
+    days_before = 15
     if settings and settings.get("value"):
-        days_before = settings["value"].get("days_before_expiry", 7)
+        days_before = settings["value"].get("days_before_expiry", 15)
     
     # حساب التاريخ المستهدف
     target_date = (datetime.now(timezone.utc) + timedelta(days=days_before)).isoformat()
