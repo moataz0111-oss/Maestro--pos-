@@ -6967,7 +6967,9 @@ async def super_admin_login(request: SuperAdminLoginRequest):
     if not user:
         raise HTTPException(status_code=401, detail="المستخدم غير موجود")
     
-    if not verify_password(request.password, user["password_hash"]):
+    # التحقق من كلمة المرور (الحقل قد يكون password أو password_hash)
+    password_field = user.get("password") or user.get("password_hash")
+    if not password_field or not verify_password(request.password, password_field):
         raise HTTPException(status_code=401, detail="كلمة المرور غير صحيحة")
     
     token = create_token(user["id"], user["role"], user.get("branch_id"))
