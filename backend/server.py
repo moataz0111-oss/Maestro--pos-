@@ -4034,7 +4034,7 @@ async def transfer_table_order(
 @api_router.delete("/tables/{table_id}")
 async def delete_table(table_id: str, current_user: dict = Depends(get_current_user)):
     """حذف طاولة - فقط للمالك أو المدير"""
-    if current_user.get("role") not in ["admin", "manager"]:
+    if current_user.get("role") not in ["super_admin", "admin", "manager"]:
         raise HTTPException(status_code=403, detail="ليس لديك صلاحية حذف الطاولات")
     
     query = build_tenant_query(current_user, {"id": table_id})
