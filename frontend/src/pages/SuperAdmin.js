@@ -1840,9 +1840,9 @@ export default function SuperAdmin() {
                           </div>
                           <div>
                             <p className="text-2xl font-bold text-purple-400">
-                              {(subscriptionsDashboard.expected_revenue.total_monthly || 0).toLocaleString()}
+                              ${(subscriptionsDashboard.expected_revenue.total_monthly || 0).toLocaleString()}
                             </p>
-                            <p className="text-xs text-gray-400">إيراد شهري متوقع (د.ع)</p>
+                            <p className="text-xs text-gray-400">إيراد شهري متوقع</p>
                           </div>
                         </div>
                       </div>
