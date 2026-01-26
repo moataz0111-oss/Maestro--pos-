@@ -6284,6 +6284,42 @@ async def update_tenant_invoice_settings(settings: TenantInvoiceSettings, curren
     
     return {"message": "تم تحديث إعدادات الفاتورة", "settings": settings.model_dump()}
 
+# ==================== Login Page Settings ====================
+
+@api_router.get("/system/login-page-settings")
+async def get_login_page_settings():
+    """جلب إعدادات صفحة الدخول"""
+    settings = await db.settings.find_one({"type": "login_page_settings"}, {"_id": 0})
+    
+    default_settings = {
+        "enable_animation": True,
+        "transition_type": "fade",
+        "transition_duration": 1.5,
+        "auto_change": True,
+        "logo_animation": "pulse",
+        "backgrounds": [],
+        "login_logo_enabled": True,
+        "login_logo_url": "",
+        "accent_color": "rgba(147, 51, 234, 0.5)"
+    }
+    
+    if settings and settings.get("value"):
+        return {**default_settings, **settings.get("value")}
+    
+    return default_settings
+
+@api_router.put("/system/login-page-settings")
+async def update_login_page_settings(settings: dict, current_user: dict = Depends(verify_super_admin)):
+    """تحديث إعدادات صفحة الدخول (المالك فقط)"""
+    
+    await db.settings.update_one(
+        {"type": "login_page_settings"},
+        {"$set": {"value": settings, "updated_at": datetime.now(timezone.utc).isoformat()}},
+        upsert=True
+    )
+    
+    return {"message": "تم تحديث إعدادات صفحة الدخول", "settings": settings}
+
 @api_router.get("/invoice-data/{order_id}")
 async def get_invoice_data(order_id: str, current_user: dict = Depends(get_current_user)):
     """جلب بيانات الفاتورة الكاملة للطباعة"""
