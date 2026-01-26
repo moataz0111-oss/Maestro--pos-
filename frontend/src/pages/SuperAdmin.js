@@ -556,10 +556,33 @@ export default function SuperAdmin() {
     try {
       const res = await axios.get(`${API}/super-admin/subscriptions-dashboard`);
       setSubscriptionsDashboard(res.data);
+      
+      // تحديث الأسعار من البيانات
+      if (res.data.subscription_prices) {
+        setSubscriptionPrices({
+          basic: res.data.subscription_prices.basic?.monthly || 25,
+          premium: res.data.subscription_prices.premium?.monthly || 50
+        });
+      }
     } catch (error) {
       console.error('Error fetching subscriptions dashboard:', error);
     } finally {
       setLoadingDashboard(false);
+    }
+  };
+
+  // حفظ أسعار الاشتراكات
+  const saveSubscriptionPrices = async () => {
+    setSavingPrices(true);
+    try {
+      await axios.put(`${API}/super-admin/subscription-prices`, subscriptionPrices);
+      toast.success('تم حفظ أسعار الاشتراكات');
+      setShowPricesModal(false);
+      fetchSubscriptionsDashboard();
+    } catch (error) {
+      toast.error('فشل في حفظ الأسعار');
+    } finally {
+      setSavingPrices(false);
     }
   };
 
