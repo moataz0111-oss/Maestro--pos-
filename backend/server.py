@@ -7147,7 +7147,7 @@ async def get_all_tenants(current_user: dict = Depends(verify_super_admin)):
 
 @api_router.post("/super-admin/tenants")
 async def create_tenant(tenant: TenantCreate, background_tasks: BackgroundTasks, current_user: dict = Depends(verify_super_admin)):
-    """إنشاء مستأجر جديد (عميل جديد) مع إرسال بريد ترحيبي"""
+    """إنشاء مستأجر جديد (عميل جديد) مع إرسال بريد ترحيبي وإشعار"""
     
     # التحقق من عدم وجود slug مكرر
     existing = await db.tenants.find_one({"slug": tenant.slug})
@@ -7161,11 +7161,16 @@ async def create_tenant(tenant: TenantCreate, background_tasks: BackgroundTasks,
     
     tenant_id = str(uuid.uuid4())
     
-    # تحديد تاريخ انتهاء الاشتراك
+    # تحديد تاريخ انتهاء الاشتراك بناءً على المدة المحددة
+    subscription_duration = getattr(tenant, 'subscription_duration', 1)  # افتراضي شهر واحد
+    
     if tenant.subscription_type == "trial":
         expires_at = (datetime.now(timezone.utc) + timedelta(days=14)).isoformat()
+    elif tenant.subscription_type == "demo":
+        expires_at = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
     else:
-        expires_at = (datetime.now(timezone.utc) + timedelta(days=365)).isoformat()
+        # استخدام مدة الاشتراك المحددة بالأشهر
+        expires_at = (datetime.now(timezone.utc) + timedelta(days=30 * subscription_duration)).isoformat()
     
     tenant_doc = {
         "id": tenant_id,
@@ -7175,6 +7180,7 @@ async def create_tenant(tenant: TenantCreate, background_tasks: BackgroundTasks,
         "owner_email": tenant.owner_email,
         "owner_phone": tenant.owner_phone,
         "subscription_type": tenant.subscription_type,
+        "subscription_duration": subscription_duration,
         "max_branches": tenant.max_branches,
         "max_users": tenant.max_users,
         "is_active": True,
