@@ -248,6 +248,14 @@ export default function SuperAdmin() {
   const [subscriptionsDashboard, setSubscriptionsDashboard] = useState(null);
   const [loadingDashboard, setLoadingDashboard] = useState(false);
   
+  // أسعار الاشتراكات
+  const [showPricesModal, setShowPricesModal] = useState(false);
+  const [subscriptionPrices, setSubscriptionPrices] = useState({
+    basic: 25,
+    premium: 50
+  });
+  const [savingPrices, setSavingPrices] = useState(false);
+  
   const [newPassword, setNewPassword] = useState('');
   const [copiedCredentials, setCopiedCredentials] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
