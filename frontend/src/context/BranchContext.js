@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import { API_URL } from '../utils/api';
 import { useAuth } from './AuthContext';
@@ -12,6 +12,7 @@ export const BranchProvider = ({ children }) => {
   const [branches, setBranches] = useState([]);
   const [selectedBranchId, setSelectedBranchId] = useState('all');
   const [loading, setLoading] = useState(true);
+  const [pendingOrdersCounts, setPendingOrdersCounts] = useState({}); // عدد الطلبات المعلقة لكل فرع
 
   // جلب الفروع عند تسجيل الدخول
   useEffect(() => {
@@ -28,11 +29,41 @@ export const BranchProvider = ({ children }) => {
     }
   }, []);
 
+  // جلب عدد الطلبات المعلقة لكل فرع
+  const fetchPendingOrdersCounts = useCallback(async (branchesList) => {
+    if (!branchesList || branchesList.length === 0) return;
+    
+    try {
+      const counts = {};
+      // جلب عدد الطلبات المعلقة لكل فرع
+      await Promise.all(branchesList.map(async (branch) => {
+        try {
+          const res = await axios.get(`${API}/orders`, {
+            params: { 
+              branch_id: branch.id, 
+              status: 'pending,preparing,ready' 
+            }
+          });
+          counts[branch.id] = res.data?.length || 0;
+        } catch (e) {
+          counts[branch.id] = 0;
+        }
+      }));
+      setPendingOrdersCounts(counts);
+    } catch (error) {
+      console.error('Failed to fetch pending orders counts:', error);
+    }
+  }, []);
+
   const fetchBranches = async () => {
     try {
       setLoading(true);
       const res = await axios.get(`${API}/branches`);
-      setBranches(res.data || []);
+      const branchesData = res.data || [];
+      setBranches(branchesData);
+      
+      // جلب عدد الطلبات المعلقة لكل فرع
+      await fetchPendingOrdersCounts(branchesData);
       
       // إذا كان المستخدم مرتبط بفرع معين، حدد فرعه تلقائياً
       if (user?.branch_id && !hasRole(['admin', 'super_admin', 'manager'])) {
@@ -45,6 +76,16 @@ export const BranchProvider = ({ children }) => {
       setLoading(false);
     }
   };
+
+  // تحديث عدد الطلبات المعلقة كل 30 ثانية
+  useEffect(() => {
+    if (branches.length > 0) {
+      const interval = setInterval(() => {
+        fetchPendingOrdersCounts(branches);
+      }, 30000);
+      return () => clearInterval(interval);
+    }
+  }, [branches, fetchPendingOrdersCounts]);
 
   // تغيير الفرع المحدد
   const selectBranch = (branchId) => {
