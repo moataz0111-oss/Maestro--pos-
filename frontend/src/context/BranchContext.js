@@ -126,7 +126,9 @@ export const BranchProvider = ({ children }) => {
       canSelectAllBranches,
       getBranchIdForApi,
       loading,
-      refreshBranches: fetchBranches
+      refreshBranches: fetchBranches,
+      pendingOrdersCounts,
+      refreshPendingCounts: () => fetchPendingOrdersCounts(branches)
     }}>
       {children}
     </BranchContext.Provider>
