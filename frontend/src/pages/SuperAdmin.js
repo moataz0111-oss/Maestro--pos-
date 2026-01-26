@@ -138,6 +138,12 @@ export default function SuperAdmin() {
   const [systemLogoPreview, setSystemLogoPreview] = useState('');
   const [uploadingSystemLogo, setUploadingSystemLogo] = useState(false);
   
+  // Image Cropper states
+  const [showImageCropper, setShowImageCropper] = useState(false);
+  const [cropperType, setCropperType] = useState('system'); // system, login, background, tenant
+  const [cropperAspectRatio, setCropperAspectRatio] = useState(1);
+  const [cropperTitle, setCropperTitle] = useState('تعديل الصورة');
+  
   // Invoice settings for system
   const [invoiceSettings, setInvoiceSettings] = useState({
     system_name: '',
