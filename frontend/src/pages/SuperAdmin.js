@@ -1305,6 +1305,15 @@ export default function SuperAdmin() {
           </div>
           
           <div className="flex items-center gap-4">
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={() => setShowInvoiceSettings(true)}
+              className="border-gray-600 text-gray-300 hover:bg-gray-700"
+            >
+              <Receipt className="h-4 w-4 ml-2" />
+              إعدادات الفواتير
+            </Button>
             <span className="text-sm text-gray-400">{user?.full_name}</span>
             <Button variant="ghost" size="icon" onClick={logout} className="text-gray-400 hover:text-white">
               <LogOut className="h-5 w-5" />
