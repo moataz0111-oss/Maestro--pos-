@@ -3458,6 +3458,102 @@ export default function SuperAdmin() {
         </DialogContent>
       </Dialog>
 
+      {/* Dialog تعديل أسعار الاشتراكات */}
+      <Dialog open={showPricesModal} onOpenChange={setShowPricesModal}>
+        <DialogContent className="bg-gray-800 text-white max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <DollarSign className="h-5 w-5 text-green-400" />
+              أسعار الاشتراكات (بالدولار)
+            </DialogTitle>
+          </DialogHeader>
+          
+          <div className="space-y-6 py-4">
+            {/* سعر الاشتراك الأساسي */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <Label className="text-gray-300 flex items-center gap-2">
+                  <div className="w-3 h-3 rounded-full bg-blue-500"></div>
+                  الاشتراك الأساسي
+                </Label>
+                <span className="text-xs text-gray-500">شهرياً</span>
+              </div>
+              <div className="relative">
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-green-400 font-bold">$</span>
+                <Input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={subscriptionPrices.basic}
+                  onChange={(e) => setSubscriptionPrices({...subscriptionPrices, basic: parseFloat(e.target.value) || 0})}
+                  className="bg-gray-700/50 border-gray-600 text-white pr-8 text-lg"
+                />
+              </div>
+            </div>
+
+            {/* سعر الاشتراك المميز */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <Label className="text-gray-300 flex items-center gap-2">
+                  <div className="w-3 h-3 rounded-full bg-purple-500"></div>
+                  الاشتراك المميز
+                </Label>
+                <span className="text-xs text-gray-500">شهرياً</span>
+              </div>
+              <div className="relative">
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-green-400 font-bold">$</span>
+                <Input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={subscriptionPrices.premium}
+                  onChange={(e) => setSubscriptionPrices({...subscriptionPrices, premium: parseFloat(e.target.value) || 0})}
+                  className="bg-gray-700/50 border-gray-600 text-white pr-8 text-lg"
+                />
+              </div>
+            </div>
+
+            {/* ملخص الأسعار */}
+            <div className="bg-gray-700/30 rounded-lg p-4">
+              <p className="text-sm text-gray-400 mb-3">ملخص الأسعار:</p>
+              <div className="space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span>أساسي (سنوي)</span>
+                  <span className="text-green-400">${(subscriptionPrices.basic * 12).toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span>مميز (سنوي)</span>
+                  <span className="text-green-400">${(subscriptionPrices.premium * 12).toFixed(2)}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowPricesModal(false)} className="border-gray-600">
+              إلغاء
+            </Button>
+            <Button 
+              onClick={saveSubscriptionPrices} 
+              disabled={savingPrices}
+              className="bg-green-600 hover:bg-green-700"
+            >
+              {savingPrices ? (
+                <>
+                  <Loader2 className="h-4 w-4 ml-2 animate-spin" />
+                  جاري الحفظ...
+                </>
+              ) : (
+                <>
+                  <Check className="h-4 w-4 ml-2" />
+                  حفظ الأسعار
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Dialog إضافة خلفية جديدة */}
       <Dialog open={showAddBackground} onOpenChange={setShowAddBackground}>
         <DialogContent className="bg-gray-800 text-white max-w-lg">
