@@ -1462,6 +1462,35 @@ export default function SuperAdmin() {
             <DialogTitle className="text-xl">إنشاء عميل جديد</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-4">
+            {/* اختيار نوع الحساب */}
+            <div className="space-y-2">
+              <Label className="text-base font-medium">نوع الحساب *</Label>
+              <div className="grid grid-cols-2 gap-4">
+                <Button
+                  type="button"
+                  variant={newTenantForm.is_demo ? "outline" : "default"}
+                  className={`h-20 flex flex-col items-center justify-center gap-2 ${
+                    !newTenantForm.is_demo ? 'bg-green-600 hover:bg-green-700 border-green-500' : 'border-gray-600 hover:bg-gray-700'
+                  }`}
+                  onClick={() => setNewTenantForm({...newTenantForm, is_demo: false, subscription_type: 'trial'})}
+                >
+                  <Building2 className="h-6 w-6" />
+                  <span>عميل فعلي</span>
+                </Button>
+                <Button
+                  type="button"
+                  variant={newTenantForm.is_demo ? "default" : "outline"}
+                  className={`h-20 flex flex-col items-center justify-center gap-2 ${
+                    newTenantForm.is_demo ? 'bg-yellow-600 hover:bg-yellow-700 border-yellow-500' : 'border-gray-600 hover:bg-gray-700'
+                  }`}
+                  onClick={() => setNewTenantForm({...newTenantForm, is_demo: true, subscription_type: 'demo'})}
+                >
+                  <Play className="h-6 w-6" />
+                  <span>حساب تجريبي</span>
+                </Button>
+              </div>
+            </div>
+
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>اسم المطعم *</Label>
