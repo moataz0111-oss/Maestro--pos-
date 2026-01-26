@@ -608,18 +608,6 @@ export default function SuperAdmin() {
     }
   };
 
-  const toggleTenantStatus = async (tenant) => {
-    try {
-      await axios.put(`${API}/super-admin/tenants/${tenant.id}`, {
-        is_active: !tenant.is_active
-      });
-      toast.success(tenant.is_active ? 'تم تعطيل العميل' : 'تم تفعيل العميل');
-      fetchData();
-    } catch (error) {
-      toast.error('فشل في تحديث الحالة');
-    }
-  };
-
   const deleteTenant = async () => {
     try {
       await axios.delete(`${API}/super-admin/tenants/${selectedTenant.id}?permanent=true`);
