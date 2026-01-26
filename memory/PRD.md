@@ -5,6 +5,28 @@
 
 ---
 
+## آخر التحديثات (26 يناير 2026) - الجزء 7
+
+### ✅ إصلاح هيكل مدير النظام
+- **المشكلة**: `admin@maestroegp.com` كان `super_admin` وليس عميل، لذلك لم يستطع إضافة فروع
+- **الحل**: تم تحويله إلى عميل عادي (role: admin) مع tenant خاص به
+- **النتيجة**: الآن "مدير النظام" له فروعه الخاصة (الفرع الرئيسي، الفرع الثاني، الفرع الثالث)
+
+### ✅ هيكل المستخدمين الصحيح
+| المستخدم | الدور | الوصف |
+|----------|-------|-------|
+| `owner@maestroegp.com` | super_admin | مالك النظام - يدخل لوحة تحكم المالك `/super-admin` |
+| `admin@maestroegp.com` | admin | مدير النظام - عميل له فروعه وموظفيه |
+| `hanialdujaili@gmail.com` | admin | عميل GRaffiti |
+| `hosam@hosamfood.com` | admin | عميل Hosam Food |
+
+### ✅ العملاء الحاليين
+- **Maestro** (مدير النظام): admin@maestroegp.com - 3 فروع
+- **GRaffiti burger**: hanialdujaili@gmail.com - 2 فروع (Aljadraia, Alsaydaia)
+- **Hosam Food**: hosam@hosamfood.com - 2 فروع
+
+---
+
 ## آخر التحديثات (26 يناير 2026) - الجزء 6
 
 ### ✅ تحسينات إضافية على فصل الفروع
