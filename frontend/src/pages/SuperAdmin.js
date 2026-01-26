@@ -1710,16 +1710,20 @@ export default function SuperAdmin() {
           <CardContent>
             {/* تبويبات لفصل العملاء الفعليين عن الحسابات التجريبية */}
             <Tabs defaultValue="active" className="w-full">
-              <TabsList className="grid w-full grid-cols-3 mb-4 bg-gray-700/50">
+              <TabsList className="grid w-full grid-cols-4 mb-4 bg-gray-700/50">
                 <TabsTrigger value="active" className="data-[state=active]:bg-green-600">
                   <Users className="h-4 w-4 ml-2" />
-                  العملاء الفعليين ({tenants.filter(t => !t.is_demo && t.subscription_type !== 'demo').length})
+                  العملاء ({tenants.filter(t => !t.is_demo && t.subscription_type !== 'demo').length})
                 </TabsTrigger>
                 <TabsTrigger value="demo" className="data-[state=active]:bg-yellow-600">
                   <Play className="h-4 w-4 ml-2" />
-                  الحسابات التجريبية ({tenants.filter(t => t.is_demo || t.subscription_type === 'demo').length})
+                  التجريبية ({tenants.filter(t => t.is_demo || t.subscription_type === 'demo').length})
                 </TabsTrigger>
-                <TabsTrigger value="all" className="data-[state=active]:bg-purple-600">
+                <TabsTrigger value="subscriptions" className="data-[state=active]:bg-purple-600">
+                  <Calendar className="h-4 w-4 ml-2" />
+                  الاشتراكات
+                </TabsTrigger>
+                <TabsTrigger value="all" className="data-[state=active]:bg-gray-600">
                   <Layers className="h-4 w-4 ml-2" />
                   الكل ({tenants.length})
                 </TabsTrigger>
