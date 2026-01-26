@@ -1665,6 +1665,270 @@ export default function SuperAdmin() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Modal: تعديل العميل */}
+      <Dialog open={showEditTenant} onOpenChange={setShowEditTenant}>
+        <DialogContent className="bg-gray-800 border-gray-700 text-white max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-xl">تعديل بيانات العميل</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4 max-h-[60vh] overflow-y-auto">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>اسم المطعم</Label>
+                <Input
+                  value={editTenantForm.name}
+                  onChange={(e) => setEditTenantForm({...editTenantForm, name: e.target.value})}
+                  className="bg-gray-700/50 border-gray-600"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>نوع الاشتراك</Label>
+                <Select 
+                  value={editTenantForm.subscription_type} 
+                  onValueChange={(v) => setEditTenantForm({...editTenantForm, subscription_type: v})}
+                >
+                  <SelectTrigger className="bg-gray-700/50 border-gray-600">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="demo">تجريبي</SelectItem>
+                    <SelectItem value="trial">فترة تجريبية</SelectItem>
+                    <SelectItem value="basic">أساسي</SelectItem>
+                    <SelectItem value="premium">مميز</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>اسم المالك</Label>
+                <Input
+                  value={editTenantForm.owner_name}
+                  onChange={(e) => setEditTenantForm({...editTenantForm, owner_name: e.target.value})}
+                  className="bg-gray-700/50 border-gray-600"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>البريد الإلكتروني</Label>
+                <Input
+                  value={editTenantForm.owner_email}
+                  onChange={(e) => setEditTenantForm({...editTenantForm, owner_email: e.target.value})}
+                  className="bg-gray-700/50 border-gray-600"
+                  dir="ltr"
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>رقم الهاتف</Label>
+                <Input
+                  value={editTenantForm.owner_phone}
+                  onChange={(e) => setEditTenantForm({...editTenantForm, owner_phone: e.target.value})}
+                  className="bg-gray-700/50 border-gray-600"
+                  dir="ltr"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>الحد الأقصى للفروع</Label>
+                <Input
+                  type="number"
+                  value={editTenantForm.max_branches}
+                  onChange={(e) => setEditTenantForm({...editTenantForm, max_branches: parseInt(e.target.value) || 1})}
+                  className="bg-gray-700/50 border-gray-600"
+                />
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowEditTenant(false)} className="border-gray-600">
+              إلغاء
+            </Button>
+            <Button onClick={updateTenant} className="bg-blue-600 hover:bg-blue-700">
+              <Check className="h-4 w-4 ml-2" />
+              حفظ التعديلات
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal: العرض المباشر */}
+      <Dialog open={showLiveView} onOpenChange={setShowLiveView}>
+        <DialogContent className="bg-gray-800 border-gray-700 text-white max-w-4xl">
+          <DialogHeader>
+            <DialogTitle className="text-xl flex items-center gap-2">
+              <Activity className="h-5 w-5 text-green-400" />
+              العرض المباشر - {selectedTenant?.name}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="py-4 space-y-4">
+            <div className="grid grid-cols-4 gap-4">
+              <Card className="bg-gray-700/50 border-gray-600">
+                <CardContent className="p-4 text-center">
+                  <p className="text-2xl font-bold text-green-400">{liveStats?.orders_today || 0}</p>
+                  <p className="text-sm text-gray-400">طلبات اليوم</p>
+                </CardContent>
+              </Card>
+              <Card className="bg-gray-700/50 border-gray-600">
+                <CardContent className="p-4 text-center">
+                  <p className="text-2xl font-bold text-blue-400">{liveStats?.sales_today?.toFixed(2) || '0.00'}</p>
+                  <p className="text-sm text-gray-400">مبيعات اليوم</p>
+                </CardContent>
+              </Card>
+              <Card className="bg-gray-700/50 border-gray-600">
+                <CardContent className="p-4 text-center">
+                  <p className="text-2xl font-bold text-yellow-400">{liveStats?.active_orders || 0}</p>
+                  <p className="text-sm text-gray-400">طلبات نشطة</p>
+                </CardContent>
+              </Card>
+              <Card className="bg-gray-700/50 border-gray-600">
+                <CardContent className="p-4 text-center">
+                  <p className="text-2xl font-bold text-purple-400">{liveStats?.users_count || 0}</p>
+                  <p className="text-sm text-gray-400">المستخدمين</p>
+                </CardContent>
+              </Card>
+            </div>
+            <div className="text-center text-gray-400 text-sm">
+              <RefreshCw className="inline h-4 w-4 ml-1 animate-spin" />
+              يتم التحديث تلقائياً كل 30 ثانية
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowLiveView(false)} className="border-gray-600">
+              إغلاق
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal: إدارة الميزات والصلاحيات */}
+      <Dialog open={showFeaturesModal} onOpenChange={setShowFeaturesModal}>
+        <DialogContent className="bg-gray-800 border-gray-700 text-white max-w-3xl">
+          <DialogHeader>
+            <DialogTitle className="text-xl flex items-center gap-2">
+              <Settings className="h-5 w-5 text-purple-400" />
+              إدارة الميزات - {selectedTenant?.name}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="py-4 space-y-4 max-h-[60vh] overflow-y-auto">
+            {featuresLoading ? (
+              <div className="text-center py-8">
+                <RefreshCw className="h-8 w-8 animate-spin mx-auto text-gray-400" />
+              </div>
+            ) : (
+              <>
+                <div className="space-y-3">
+                  <h3 className="font-bold text-gray-300">الصفحات الرئيسية</h3>
+                  <div className="grid grid-cols-3 gap-3">
+                    {[
+                      { key: 'showPOS', label: 'نقاط البيع' },
+                      { key: 'showTables', label: 'الطاولات' },
+                      { key: 'showOrders', label: 'الطلبات' },
+                      { key: 'showDelivery', label: 'التوصيل' },
+                      { key: 'showKitchen', label: 'المطبخ' },
+                      { key: 'showReports', label: 'التقارير' },
+                    ].map(item => (
+                      <label key={item.key} className="flex items-center gap-2 p-2 bg-gray-700/30 rounded">
+                        <input
+                          type="checkbox"
+                          checked={tenantFeatures[item.key] || false}
+                          onChange={(e) => setTenantFeatures({...tenantFeatures, [item.key]: e.target.checked})}
+                          className="rounded"
+                        />
+                        <span className="text-sm">{item.label}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  <h3 className="font-bold text-gray-300">الإدارة والمخزون</h3>
+                  <div className="grid grid-cols-3 gap-3">
+                    {[
+                      { key: 'showInventory', label: 'المخزون' },
+                      { key: 'showExpenses', label: 'المصروفات' },
+                      { key: 'showPurchasing', label: 'المشتريات' },
+                      { key: 'showWarehouse', label: 'المستودع' },
+                      { key: 'showHR', label: 'الموارد البشرية' },
+                      { key: 'showSettings', label: 'الإعدادات' },
+                    ].map(item => (
+                      <label key={item.key} className="flex items-center gap-2 p-2 bg-gray-700/30 rounded">
+                        <input
+                          type="checkbox"
+                          checked={tenantFeatures[item.key] || false}
+                          onChange={(e) => setTenantFeatures({...tenantFeatures, [item.key]: e.target.checked})}
+                          className="rounded"
+                        />
+                        <span className="text-sm">{item.label}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowFeaturesModal(false)} className="border-gray-600">
+              إلغاء
+            </Button>
+            <Button onClick={saveTenantFeatures} className="bg-purple-600 hover:bg-purple-700">
+              <Check className="h-4 w-4 ml-2" />
+              حفظ الميزات
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal: تأكيد تصفير المبيعات */}
+      <Dialog open={showResetSalesConfirm} onOpenChange={setShowResetSalesConfirm}>
+        <DialogContent className="bg-gray-800 border-gray-700 text-white">
+          <DialogHeader>
+            <DialogTitle className="text-xl text-orange-400">تأكيد تصفير المبيعات</DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            <p className="text-gray-300">
+              هل أنت متأكد من تصفير مبيعات <span className="font-bold text-white">{selectedTenant?.name}</span>؟
+            </p>
+            <p className="text-orange-400 text-sm mt-2">
+              ⚠️ سيتم حذف جميع الطلبات والمبيعات. هذا الإجراء لا يمكن التراجع عنه.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowResetSalesConfirm(false)} className="border-gray-600">
+              إلغاء
+            </Button>
+            <Button onClick={resetTenantSales} className="bg-orange-600 hover:bg-orange-700">
+              <RotateCcw className="h-4 w-4 ml-2" />
+              تصفير المبيعات
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal: تأكيد تصفير المخزون */}
+      <Dialog open={showResetInventoryConfirm} onOpenChange={setShowResetInventoryConfirm}>
+        <DialogContent className="bg-gray-800 border-gray-700 text-white">
+          <DialogHeader>
+            <DialogTitle className="text-xl text-purple-400">تأكيد تصفير المخزون</DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            <p className="text-gray-300">
+              هل أنت متأكد من تصفير مخزون <span className="font-bold text-white">{selectedTenant?.name}</span>؟
+            </p>
+            <p className="text-purple-400 text-sm mt-2">
+              ⚠️ سيتم حذف جميع بيانات المخزون والمشتريات. هذا الإجراء لا يمكن التراجع عنه.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowResetInventoryConfirm(false)} className="border-gray-600">
+              إلغاء
+            </Button>
+            <Button onClick={resetTenantInventory} className="bg-purple-600 hover:bg-purple-700">
+              <Package className="h-4 w-4 ml-2" />
+              تصفير المخزون
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
