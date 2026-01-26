@@ -1571,7 +1571,7 @@ export default function SuperAdmin() {
             <Button variant="outline" onClick={() => setShowDeleteConfirm(false)} className="border-gray-600">
               إلغاء
             </Button>
-            <Button onClick={handleDeleteTenant} className="bg-red-600 hover:bg-red-700">
+            <Button onClick={deleteTenant} className="bg-red-600 hover:bg-red-700">
               <Trash2 className="h-4 w-4 ml-2" />
               حذف نهائي
             </Button>
