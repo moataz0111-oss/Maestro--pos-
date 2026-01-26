@@ -1918,7 +1918,7 @@ export default function SuperAdmin() {
                           <TrendingUp className="h-5 w-5 text-green-400" />
                           <h3 className="font-bold">الإيرادات المتوقعة من التجديدات</h3>
                           <span className="mr-auto text-xl font-bold text-green-400">
-                            {subscriptionsDashboard.expected_revenue.from_expiring.toLocaleString()} د.ع
+                            ${subscriptionsDashboard.expected_revenue.from_expiring.toLocaleString()}
                           </span>
                         </div>
                         
@@ -1932,7 +1932,7 @@ export default function SuperAdmin() {
                                 </p>
                               </div>
                               <span className="text-green-400 font-medium">
-                                {item.expected_amount.toLocaleString()} د.ع
+                                ${item.expected_amount.toLocaleString()}
                               </span>
                             </div>
                           ))}
