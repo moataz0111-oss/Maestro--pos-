@@ -2919,10 +2919,38 @@ export default function SuperAdmin() {
                         className="bg-gray-700/50 border-gray-600 text-white"
                         dir="ltr"
                       />
-                      <Button variant="outline" className="border-gray-600 w-full">
-                        <Upload className="h-4 w-4 ml-2" />
-                        رفع شعار
-                      </Button>
+                      <div className="relative">
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          id="system-logo-upload-1"
+                          onChange={(e) => {
+                            const file = e.target.files[0];
+                            if (file) {
+                              uploadSystemLogo(file);
+                            }
+                          }}
+                        />
+                        <Button 
+                          variant="outline" 
+                          className="border-gray-600 w-full"
+                          disabled={uploadingSystemLogo}
+                          onClick={() => document.getElementById('system-logo-upload-1').click()}
+                        >
+                          {uploadingSystemLogo ? (
+                            <>
+                              <Loader2 className="h-4 w-4 ml-2 animate-spin" />
+                              جاري الرفع...
+                            </>
+                          ) : (
+                            <>
+                              <Upload className="h-4 w-4 ml-2" />
+                              رفع شعار
+                            </>
+                          )}
+                        </Button>
+                      </div>
                       <p className="text-xs text-gray-500">أدخل رابط صورة الشعار أو قم برفع صورة جديدة</p>
                     </div>
                   </div>
@@ -2953,9 +2981,35 @@ export default function SuperAdmin() {
                     )}
                   </div>
                   <div className="flex-1">
-                    <Button variant="outline" className="border-gray-600">
-                      <Upload className="h-4 w-4 ml-2" />
-                      رفع شعار النظام
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      id="system-logo-upload-2"
+                      onChange={(e) => {
+                        const file = e.target.files[0];
+                        if (file) {
+                          uploadSystemLogo(file);
+                        }
+                      }}
+                    />
+                    <Button 
+                      variant="outline" 
+                      className="border-gray-600"
+                      disabled={uploadingSystemLogo}
+                      onClick={() => document.getElementById('system-logo-upload-2').click()}
+                    >
+                      {uploadingSystemLogo ? (
+                        <>
+                          <Loader2 className="h-4 w-4 ml-2 animate-spin" />
+                          جاري الرفع...
+                        </>
+                      ) : (
+                        <>
+                          <Upload className="h-4 w-4 ml-2" />
+                          رفع شعار النظام
+                        </>
+                      )}
                     </Button>
                     <p className="text-xs text-gray-500 mt-2">سيظهر هذا الشعار في جميع فواتير العملاء</p>
                   </div>
