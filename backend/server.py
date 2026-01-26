@@ -7837,6 +7837,137 @@ async def get_expiring_subscriptions(current_user: dict = Depends(verify_super_a
         "days_before_alert": days_before
     }
 
+# ==================== لوحة معلومات الاشتراكات ====================
+
+@api_router.get("/super-admin/subscriptions-dashboard")
+async def get_subscriptions_dashboard(current_user: dict = Depends(verify_super_admin)):
+    """لوحة معلومات شاملة للاشتراكات"""
+    
+    now = datetime.now(timezone.utc)
+    
+    # جلب إعدادات التنبيه
+    settings = await db.settings.find_one({"type": "notification_settings"}, {"_id": 0})
+    days_before = 7
+    if settings and settings.get("value"):
+        days_before = settings["value"].get("days_before_expiry", 7)
+    
+    # حساب التواريخ
+    target_date = (now + timedelta(days=days_before)).isoformat()
+    now_iso = now.isoformat()
+    
+    # جلب جميع العملاء (غير التجريبية)
+    all_tenants = await db.tenants.find(
+        {"is_demo": {"$ne": True}},
+        {"_id": 0}
+    ).to_list(1000)
+    
+    # تصنيف الاشتراكات
+    active_subscriptions = []
+    expiring_soon = []
+    already_expired = []
+    
+    for tenant in all_tenants:
+        expires_at = tenant.get("expires_at")
+        if expires_at:
+            if expires_at < now_iso:
+                already_expired.append(tenant)
+            elif expires_at <= target_date:
+                expiring_soon.append(tenant)
+                if tenant.get("is_active"):
+                    active_subscriptions.append(tenant)
+            else:
+                if tenant.get("is_active"):
+                    active_subscriptions.append(tenant)
+        else:
+            if tenant.get("is_active"):
+                active_subscriptions.append(tenant)
+    
+    # إحصائيات حسب نوع الاشتراك
+    subscription_types = {}
+    for tenant in all_tenants:
+        sub_type = tenant.get("subscription_type", "unknown")
+        if sub_type not in subscription_types:
+            subscription_types[sub_type] = {"count": 0, "active": 0, "expired": 0}
+        subscription_types[sub_type]["count"] += 1
+        if tenant.get("is_active") and tenant not in already_expired:
+            subscription_types[sub_type]["active"] += 1
+        elif tenant in already_expired:
+            subscription_types[sub_type]["expired"] += 1
+    
+    # حساب الإيرادات المتوقعة من التجديدات
+    # أسعار الاشتراكات (افتراضية - يمكن تعديلها من الإعدادات)
+    subscription_prices = {
+        "basic": {"monthly": 50000, "name": "أساسي"},      # 50,000 دينار/شهر
+        "premium": {"monthly": 100000, "name": "مميز"},    # 100,000 دينار/شهر
+        "trial": {"monthly": 0, "name": "تجريبي"},
+        "demo": {"monthly": 0, "name": "عرض"}
+    }
+    
+    expected_revenue = {
+        "from_expiring": 0,
+        "from_active": 0,
+        "total_monthly": 0,
+        "details": []
+    }
+    
+    for tenant in expiring_soon:
+        sub_type = tenant.get("subscription_type", "basic")
+        duration = tenant.get("subscription_duration", 1)
+        price_per_month = subscription_prices.get(sub_type, {}).get("monthly", 0)
+        expected_revenue["from_expiring"] += price_per_month * duration
+        expected_revenue["details"].append({
+            "tenant_name": tenant.get("name"),
+            "subscription_type": sub_type,
+            "duration_months": duration,
+            "expected_amount": price_per_month * duration,
+            "expires_at": tenant.get("expires_at")
+        })
+    
+    for tenant in active_subscriptions:
+        sub_type = tenant.get("subscription_type", "basic")
+        price_per_month = subscription_prices.get(sub_type, {}).get("monthly", 0)
+        expected_revenue["from_active"] += price_per_month
+    
+    expected_revenue["total_monthly"] = expected_revenue["from_active"]
+    
+    # ترتيب الاشتراكات القريبة من الانتهاء حسب التاريخ
+    expiring_soon.sort(key=lambda x: x.get("expires_at", ""))
+    already_expired.sort(key=lambda x: x.get("expires_at", ""), reverse=True)
+    
+    # حساب عدد الأيام المتبقية لكل اشتراك
+    for tenant in expiring_soon:
+        if tenant.get("expires_at"):
+            try:
+                exp_date = datetime.fromisoformat(tenant["expires_at"].replace("Z", "+00:00"))
+                days_left = (exp_date - now).days
+                tenant["days_left"] = max(0, days_left)
+            except:
+                tenant["days_left"] = None
+    
+    for tenant in already_expired:
+        if tenant.get("expires_at"):
+            try:
+                exp_date = datetime.fromisoformat(tenant["expires_at"].replace("Z", "+00:00"))
+                days_ago = (now - exp_date).days
+                tenant["days_expired"] = days_ago
+            except:
+                tenant["days_expired"] = None
+    
+    return {
+        "summary": {
+            "total_tenants": len(all_tenants),
+            "active_subscriptions": len(active_subscriptions),
+            "expiring_soon": len(expiring_soon),
+            "already_expired": len(already_expired),
+            "days_before_alert": days_before
+        },
+        "subscription_types": subscription_types,
+        "expected_revenue": expected_revenue,
+        "expiring_soon_list": expiring_soon[:10],  # أول 10
+        "expired_list": already_expired[:10],  # أول 10
+        "subscription_prices": subscription_prices
+    }
+
 @api_router.post("/super-admin/impersonate/{tenant_id}")
 async def impersonate_tenant(tenant_id: str, current_user: dict = Depends(verify_super_admin)):
     """الدخول كعميل - للمشاهدة والتحكم المباشر"""
