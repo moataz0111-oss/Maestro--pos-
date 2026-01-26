@@ -1040,7 +1040,14 @@ export default function SuperAdmin() {
       const formData = new FormData();
       formData.append('file', file);
       
-      const res = await axios.post(`${API}/login-backgrounds/upload-logo`, formData);
+      const token = localStorage.getItem('super_admin_token');
+      
+      const res = await axios.post(`${API}/login-backgrounds/upload-logo`, formData, {
+        headers: { 
+          'Content-Type': 'multipart/form-data',
+          'Authorization': `Bearer ${token}`
+        }
+      });
       
       // تحديث الشعار في الإعدادات
       setBackgroundSettings(prev => ({
@@ -1053,6 +1060,7 @@ export default function SuperAdmin() {
       setLoginLogoPreview('');
       return res.data.logo_url;
     } catch (error) {
+      console.error('Upload login logo error:', error);
       toast.error(error.response?.data?.detail || 'فشل في رفع الشعار');
       return null;
     } finally {
