@@ -6202,6 +6202,7 @@ async def get_system_invoice_settings():
     settings = await db.settings.find_one({"type": "system_invoice_settings"}, {"_id": 0})
     
     default_settings = {
+        "system_name": None,
         "system_logo_url": None,
         "thank_you_message": "شكراً لزيارتكم",
         "system_phone": None,
