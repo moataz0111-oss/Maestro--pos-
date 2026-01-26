@@ -1034,8 +1034,14 @@ export default function SuperAdmin() {
       formData.append('file', file);
       if (tenantId) formData.append('tenant_id', tenantId);
       
-      // لا نحتاج لتحديد Content-Type يدوياً - axios سيضيفه تلقائياً مع الـ boundary الصحيح
-      const res = await axios.post(`${API}/upload/logo`, formData);
+      const token = localStorage.getItem('super_admin_token');
+      
+      const res = await axios.post(`${API}/upload/logo`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+          'Authorization': `Bearer ${token}`
+        }
+      });
       
       return res.data.logo_url;
     } catch (error) {
