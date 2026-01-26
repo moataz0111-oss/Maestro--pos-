@@ -549,6 +549,45 @@ export default function Tables() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* نافذة تأكيد حذف الطاولة */}
+      <Dialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="text-foreground flex items-center gap-2 text-red-500">
+              <Trash2 className="h-5 w-5" />
+              تأكيد حذف الطاولة
+            </DialogTitle>
+          </DialogHeader>
+          
+          <div className="py-4">
+            {tableToDelete && (
+              <div className="bg-red-500/10 p-4 rounded-lg text-center">
+                <p className="text-lg font-bold text-foreground">طاولة رقم {tableToDelete.number}</p>
+                <p className="text-sm text-muted-foreground">{tableToDelete.section || 'عام'} - {tableToDelete.capacity} أشخاص</p>
+                <p className="text-sm text-red-500 mt-3">⚠️ سيتم حذف هذه الطاولة نهائياً</p>
+              </div>
+            )}
+          </div>
+          
+          <div className="flex gap-2">
+            <Button 
+              variant="outline" 
+              onClick={() => { setDeleteConfirmOpen(false); setTableToDelete(null); }}
+              className="flex-1"
+            >
+              إلغاء
+            </Button>
+            <Button 
+              onClick={handleDeleteTable}
+              className="flex-1 bg-red-500 text-white hover:bg-red-600"
+            >
+              <Trash2 className="h-4 w-4 ml-2" />
+              حذف نهائياً
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
