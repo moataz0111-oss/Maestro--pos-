@@ -244,6 +244,10 @@ export default function SuperAdmin() {
   const [showNotificationSettings, setShowNotificationSettings] = useState(false);
   const [expiringSubscriptions, setExpiringSubscriptions] = useState({ expiring_soon: [], already_expired: [] });
   
+  // لوحة معلومات الاشتراكات
+  const [subscriptionsDashboard, setSubscriptionsDashboard] = useState(null);
+  const [loadingDashboard, setLoadingDashboard] = useState(false);
+  
   const [newPassword, setNewPassword] = useState('');
   const [copiedCredentials, setCopiedCredentials] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
