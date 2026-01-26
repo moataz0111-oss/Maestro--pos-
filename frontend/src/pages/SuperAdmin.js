@@ -315,7 +315,22 @@ export default function SuperAdmin() {
       fetchSystemBranding();
       fetchInvoiceSettings();
       fetchLoginPageSettings();
+      fetchNotifications();
+      fetchNotificationSettings();
+      fetchExpiringSubscriptions();
     }
+  }, [isAuthenticated]);
+
+  // Auto-refresh notifications every 30 seconds
+  useEffect(() => {
+    let interval;
+    if (isAuthenticated) {
+      interval = setInterval(() => {
+        fetchNotifications();
+        fetchExpiringSubscriptions();
+      }, 30000);
+    }
+    return () => clearInterval(interval);
   }, [isAuthenticated]);
 
   // Auto-refresh live stats
