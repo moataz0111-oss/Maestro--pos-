@@ -70,7 +70,28 @@ import {
   Move,
   Maximize,
   X,
-  Receipt
+  Receipt,
+  // Icons for features modal
+  Monitor,
+  LayoutGrid,
+  FileText,
+  Wallet,
+  Truck,
+  ChefHat,
+  ArrowLeftRight,
+  Headphones,
+  Gift,
+  Tag,
+  UtensilsCrossed,
+  CalendarDays,
+  BrainCircuit,
+  GitBranch,
+  Star,
+  User,
+  FolderTree,
+  Printer,
+  Bell,
+  Sparkles
 } from 'lucide-react';
 import { toast, Toaster } from 'sonner';
 
