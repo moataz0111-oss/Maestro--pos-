@@ -1493,8 +1493,61 @@ export default function SuperAdmin() {
 
   return renderDashboard();
 }
+                        className="text-red-400 hover:text-red-300"
+                      >
+                        <X className="h-4 w-4 ml-1" />
+                        إزالة
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              </div>
+              
+              {/* الأسماء */}
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label className="text-sm">اسم النظام (يظهر في Dashboard)</Label>
+                  <Input
+                    placeholder="مثال: Maestro"
+                    value={systemBranding.name}
+                    onChange={(e) => setSystemBranding({...systemBranding, name: e.target.value})}
+                    className="bg-gray-700/50 border-gray-600"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-sm">الاسم بالعربي (اختياري)</Label>
+                  <Input
+                    placeholder="مثال: مايسترو"
+                    value={systemBranding.name_ar}
+                    onChange={(e) => setSystemBranding({...systemBranding, name_ar: e.target.value})}
+                    className="bg-gray-700/50 border-gray-600"
+                    dir="rtl"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-sm">الاسم بالإنجليزي (اختياري)</Label>
+                  <Input
+                    placeholder="e.g. Maestro"
+                    value={systemBranding.name_en}
+                    onChange={(e) => setSystemBranding({...systemBranding, name_en: e.target.value})}
+                    className="bg-gray-700/50 border-gray-600"
+                  />
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
-// Export removed duplicate code - the component is complete above
+        {/* Invoice Settings Section - إعدادات الفاتورة */}
+        <Card className="bg-gray-800/50 border-gray-700">
+          <CardHeader className="flex flex-row items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-gradient-to-br from-green-500/20 to-emerald-500/20 rounded-xl flex items-center justify-center">
+                <Receipt className="h-5 w-5 text-green-400" />
+              </div>
+              <div>
+                <CardTitle className="text-lg">إعدادات الفاتورة</CardTitle>
+                <p className="text-sm text-gray-400">تحكم في مظهر الفواتير المطبوعة لجميع العملاء</p>
               </div>
             </div>
             <Button 
