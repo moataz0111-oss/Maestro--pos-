@@ -40,9 +40,11 @@ import {
   RefreshCw,
   AlertCircle,
   Bell,
-  Eye
+  Eye,
+  Building2
 } from 'lucide-react';
 import { toast } from 'sonner';
+import BranchSelector from '../components/BranchSelector';
 import {
   Dialog,
   DialogContent,
