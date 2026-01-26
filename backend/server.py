@@ -1009,9 +1009,9 @@ class UserLogin(BaseModel):
 class UserResponse(BaseModel):
     model_config = ConfigDict(extra="ignore")
     id: str
-    username: str
+    username: Optional[str] = ""
     email: str
-    full_name: str
+    full_name: Optional[str] = ""
     role: str
     branch_id: Optional[str] = None
     permissions: List[str] = []
