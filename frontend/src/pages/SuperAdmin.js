@@ -441,6 +441,101 @@ export default function SuperAdmin() {
     setIsAuthenticated(false);
   };
 
+  // ==================== دوال الإشعارات ====================
+  
+  const fetchNotifications = async () => {
+    try {
+      const res = await axios.get(`${API}/super-admin/notifications`);
+      setNotifications(res.data.notifications || []);
+      setUnreadCount(res.data.unread_count || 0);
+    } catch (error) {
+      console.error('Error fetching notifications:', error);
+    }
+  };
+
+  const fetchNotificationSettings = async () => {
+    try {
+      const res = await axios.get(`${API}/super-admin/notification-settings`);
+      setNotificationSettings(res.data);
+    } catch (error) {
+      console.error('Error fetching notification settings:', error);
+    }
+  };
+
+  const saveNotificationSettings = async () => {
+    try {
+      await axios.put(`${API}/super-admin/notification-settings`, notificationSettings);
+      toast.success('تم حفظ إعدادات الإشعارات');
+      setShowNotificationSettings(false);
+    } catch (error) {
+      toast.error('فشل في حفظ الإعدادات');
+    }
+  };
+
+  const fetchExpiringSubscriptions = async () => {
+    try {
+      const res = await axios.get(`${API}/super-admin/expiring-subscriptions`);
+      setExpiringSubscriptions(res.data);
+    } catch (error) {
+      console.error('Error fetching expiring subscriptions:', error);
+    }
+  };
+
+  const markNotificationAsRead = async (notificationId) => {
+    try {
+      await axios.put(`${API}/super-admin/notifications/${notificationId}/read`);
+      fetchNotifications();
+    } catch (error) {
+      console.error('Error marking notification as read:', error);
+    }
+  };
+
+  const markAllNotificationsAsRead = async () => {
+    try {
+      await axios.put(`${API}/super-admin/notifications/read-all`);
+      fetchNotifications();
+      toast.success('تم تعليم جميع الإشعارات كمقروءة');
+    } catch (error) {
+      toast.error('فشل في تعليم الإشعارات');
+    }
+  };
+
+  const deleteNotification = async (notificationId) => {
+    try {
+      await axios.delete(`${API}/super-admin/notifications/${notificationId}`);
+      fetchNotifications();
+    } catch (error) {
+      console.error('Error deleting notification:', error);
+    }
+  };
+
+  const clearAllNotifications = async () => {
+    try {
+      await axios.delete(`${API}/super-admin/notifications`);
+      fetchNotifications();
+      toast.success('تم حذف جميع الإشعارات');
+    } catch (error) {
+      toast.error('فشل في حذف الإشعارات');
+    }
+  };
+
+  // تفعيل/تعطيل العميل مع إشعار
+  const toggleTenantStatus = async (tenant) => {
+    try {
+      if (tenant.is_active) {
+        await axios.put(`${API}/super-admin/tenants/${tenant.id}/deactivate`);
+        toast.success('تم تعطيل العميل');
+      } else {
+        await axios.put(`${API}/super-admin/tenants/${tenant.id}/reactivate`);
+        toast.success('تم تفعيل العميل');
+      }
+      fetchData();
+      fetchNotifications();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'حدث خطأ');
+    }
+  };
+
   const createTenant = async () => {
     setLoading(true);
     
