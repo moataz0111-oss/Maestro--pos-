@@ -3546,7 +3546,7 @@ export default function SuperAdmin() {
 
       {/* Dialog تعديل أسعار الاشتراكات */}
       <Dialog open={showPricesModal} onOpenChange={setShowPricesModal}>
-        <DialogContent className="bg-gray-800 text-white max-w-md">
+        <DialogContent className="bg-gray-800 text-white max-w-lg">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <DollarSign className="h-5 w-5 text-green-400" />
@@ -3554,62 +3554,132 @@ export default function SuperAdmin() {
             </DialogTitle>
           </DialogHeader>
           
-          <div className="space-y-6 py-4">
-            {/* سعر الاشتراك الأساسي */}
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <Label className="text-gray-300 flex items-center gap-2">
-                  <div className="w-3 h-3 rounded-full bg-blue-500"></div>
-                  الاشتراك الأساسي
-                </Label>
-                <span className="text-xs text-gray-500">شهرياً</span>
+          <div className="space-y-4 py-4 max-h-[60vh] overflow-y-auto">
+            {/* الباقات الجديدة */}
+            <div className="grid grid-cols-3 gap-3">
+              {/* باقة برونزية */}
+              <div className="space-y-2 p-3 bg-amber-900/20 rounded-lg border border-amber-700/30">
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 rounded-full bg-amber-600"></div>
+                  <Label className="text-amber-400 text-sm font-bold">برونزية</Label>
+                </div>
+                <div className="relative">
+                  <span className="absolute right-2 top-1/2 -translate-y-1/2 text-green-400 text-sm">$</span>
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={subscriptionPrices.bronze}
+                    onChange={(e) => setSubscriptionPrices({...subscriptionPrices, bronze: parseFloat(e.target.value) || 0})}
+                    className="bg-gray-700/50 border-gray-600 text-white pr-6 text-center"
+                  />
+                </div>
+                <p className="text-xs text-gray-500 text-center">/شهر</p>
               </div>
-              <div className="relative">
-                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-green-400 font-bold">$</span>
-                <Input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={subscriptionPrices.basic}
-                  onChange={(e) => setSubscriptionPrices({...subscriptionPrices, basic: parseFloat(e.target.value) || 0})}
-                  className="bg-gray-700/50 border-gray-600 text-white pr-8 text-lg"
-                />
+
+              {/* باقة فضية */}
+              <div className="space-y-2 p-3 bg-gray-500/20 rounded-lg border border-gray-500/30">
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 rounded-full bg-gray-400"></div>
+                  <Label className="text-gray-300 text-sm font-bold">فضية</Label>
+                </div>
+                <div className="relative">
+                  <span className="absolute right-2 top-1/2 -translate-y-1/2 text-green-400 text-sm">$</span>
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={subscriptionPrices.silver}
+                    onChange={(e) => setSubscriptionPrices({...subscriptionPrices, silver: parseFloat(e.target.value) || 0})}
+                    className="bg-gray-700/50 border-gray-600 text-white pr-6 text-center"
+                  />
+                </div>
+                <p className="text-xs text-gray-500 text-center">/شهر</p>
+              </div>
+
+              {/* باقة ذهبية */}
+              <div className="space-y-2 p-3 bg-yellow-900/20 rounded-lg border border-yellow-600/30">
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
+                  <Label className="text-yellow-400 text-sm font-bold">ذهبية</Label>
+                </div>
+                <div className="relative">
+                  <span className="absolute right-2 top-1/2 -translate-y-1/2 text-green-400 text-sm">$</span>
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={subscriptionPrices.gold}
+                    onChange={(e) => setSubscriptionPrices({...subscriptionPrices, gold: parseFloat(e.target.value) || 0})}
+                    className="bg-gray-700/50 border-gray-600 text-white pr-6 text-center"
+                  />
+                </div>
+                <p className="text-xs text-gray-500 text-center">/شهر</p>
               </div>
             </div>
 
-            {/* سعر الاشتراك المميز */}
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <Label className="text-gray-300 flex items-center gap-2">
-                  <div className="w-3 h-3 rounded-full bg-purple-500"></div>
-                  الاشتراك المميز
-                </Label>
-                <span className="text-xs text-gray-500">شهرياً</span>
-              </div>
-              <div className="relative">
-                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-green-400 font-bold">$</span>
-                <Input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={subscriptionPrices.premium}
-                  onChange={(e) => setSubscriptionPrices({...subscriptionPrices, premium: parseFloat(e.target.value) || 0})}
-                  className="bg-gray-700/50 border-gray-600 text-white pr-8 text-lg"
-                />
+            <div className="border-t border-gray-700 pt-4">
+              <p className="text-xs text-gray-500 mb-3">الباقات القديمة (للتوافق)</p>
+              <div className="grid grid-cols-2 gap-3">
+                {/* سعر الاشتراك الأساسي */}
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <div className="w-2 h-2 rounded-full bg-blue-500"></div>
+                    <Label className="text-gray-400 text-xs">أساسي</Label>
+                  </div>
+                  <div className="relative">
+                    <span className="absolute right-2 top-1/2 -translate-y-1/2 text-green-400 text-sm">$</span>
+                    <Input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={subscriptionPrices.basic}
+                      onChange={(e) => setSubscriptionPrices({...subscriptionPrices, basic: parseFloat(e.target.value) || 0})}
+                      className="bg-gray-700/50 border-gray-600 text-white pr-6 text-sm"
+                    />
+                  </div>
+                </div>
+
+                {/* سعر الاشتراك المميز */}
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <div className="w-2 h-2 rounded-full bg-purple-500"></div>
+                    <Label className="text-gray-400 text-xs">مميز</Label>
+                  </div>
+                  <div className="relative">
+                    <span className="absolute right-2 top-1/2 -translate-y-1/2 text-green-400 text-sm">$</span>
+                    <Input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={subscriptionPrices.premium}
+                      onChange={(e) => setSubscriptionPrices({...subscriptionPrices, premium: parseFloat(e.target.value) || 0})}
+                      className="bg-gray-700/50 border-gray-600 text-white pr-6 text-sm"
+                    />
+                  </div>
+                </div>
               </div>
             </div>
 
             {/* ملخص الأسعار */}
             <div className="bg-gray-700/30 rounded-lg p-4">
-              <p className="text-sm text-gray-400 mb-3">ملخص الأسعار:</p>
-              <div className="space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span>أساسي (سنوي)</span>
-                  <span className="text-green-400">${(subscriptionPrices.basic * 12).toFixed(2)}</span>
+              <p className="text-sm text-gray-400 mb-3">ملخص الأسعار السنوية:</p>
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <div className="flex justify-between">
+                  <span className="text-amber-400">برونزية</span>
+                  <span className="text-green-400">${(subscriptionPrices.bronze * 12).toFixed(0)}/سنة</span>
                 </div>
-                <div className="flex justify-between text-sm">
-                  <span>مميز (سنوي)</span>
-                  <span className="text-green-400">${(subscriptionPrices.premium * 12).toFixed(2)}</span>
+                <div className="flex justify-between">
+                  <span className="text-gray-300">فضية</span>
+                  <span className="text-green-400">${(subscriptionPrices.silver * 12).toFixed(0)}/سنة</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-yellow-400">ذهبية</span>
+                  <span className="text-green-400">${(subscriptionPrices.gold * 12).toFixed(0)}/سنة</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-blue-400">أساسي</span>
+                  <span className="text-green-400">${(subscriptionPrices.basic * 12).toFixed(0)}/سنة</span>
                 </div>
               </div>
             </div>
