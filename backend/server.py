@@ -7398,6 +7398,20 @@ async def delete_tenant(tenant_id: str, current_user: dict = Depends(verify_supe
     
     return {"message": "تم تعطيل المستأجر وجميع مستخدميه"}
 
+@api_router.put("/super-admin/tenants/{tenant_id}/reactivate")
+async def reactivate_tenant(tenant_id: str, current_user: dict = Depends(verify_super_admin)):
+    """إعادة تفعيل مستأجر معطل"""
+    tenant = await db.tenants.find_one({"id": tenant_id})
+    if not tenant:
+        raise HTTPException(status_code=404, detail="المستأجر غير موجود")
+    
+    # إعادة التفعيل
+    await db.tenants.update_one({"id": tenant_id}, {"$set": {"is_active": True}})
+    await db.users.update_many({"tenant_id": tenant_id}, {"$set": {"is_active": True}})
+    
+    return {"message": "تم إعادة تفعيل المستأجر وجميع مستخدميه"}
+
+
 @api_router.post("/super-admin/tenants/{tenant_id}/reset-password")
 async def reset_tenant_admin_password(tenant_id: str, new_password: str, current_user: dict = Depends(verify_super_admin)):
     """إعادة تعيين كلمة مرور مدير المستأجر"""
