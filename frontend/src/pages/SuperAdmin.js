@@ -2288,6 +2288,9 @@ export default function SuperAdmin() {
                   <SelectContent>
                     <SelectItem value="demo">تجريبي</SelectItem>
                     <SelectItem value="trial">فترة تجريبية</SelectItem>
+                    <SelectItem value="bronze">🥉 برونزية</SelectItem>
+                    <SelectItem value="silver">🥈 فضية</SelectItem>
+                    <SelectItem value="gold">🥇 ذهبية</SelectItem>
                     <SelectItem value="basic">أساسي</SelectItem>
                     <SelectItem value="premium">مميز</SelectItem>
                   </SelectContent>
