@@ -3937,7 +3937,7 @@ async def update_purchase_request_status(request_id: str, status: str, current_u
 async def create_table(table: TableCreate, current_user: dict = Depends(get_current_user)):
     # السماح للمدير والأدمن أو من لديه صلاحية tables
     user_permissions = current_user.get("permissions", [])
-    if current_user["role"] not in [UserRole.ADMIN, UserRole.MANAGER] and "tables" not in user_permissions:
+    if current_user["role"] not in [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.MANAGER] and "tables" not in user_permissions:
         raise HTTPException(status_code=403, detail="غير مصرح")
     
     tenant_id = get_user_tenant_id(current_user)
