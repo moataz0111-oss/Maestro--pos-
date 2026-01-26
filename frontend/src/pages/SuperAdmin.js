@@ -958,8 +958,13 @@ export default function SuperAdmin() {
       formData.append('title', newBackgroundTitle || file.name);
       formData.append('animation_type', newBackgroundAnimation);
       
+      const token = localStorage.getItem('super_admin_token');
+      
       const res = await axios.post(`${API}/upload/background`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
+        headers: { 
+          'Content-Type': 'multipart/form-data',
+          'Authorization': `Bearer ${token}`
+        }
       });
       
       setBackgroundSettings(prev => ({
@@ -971,8 +976,11 @@ export default function SuperAdmin() {
       setNewBackgroundUrl('');
       setNewBackgroundTitle('');
       setNewBackgroundAnimation('fade');
+      setSelectedBackgroundFile(null);
+      setBackgroundPreviewUrl('');
       toast.success('تم رفع الخلفية بنجاح');
     } catch (error) {
+      console.error('Upload background error:', error);
       toast.error(error.response?.data?.detail || 'فشل في رفع الخلفية');
     } finally {
       setBackgroundsLoading(false);
@@ -987,11 +995,16 @@ export default function SuperAdmin() {
     
     setBackgroundsLoading(true);
     try {
+      const token = localStorage.getItem('super_admin_token');
+      
       const res = await axios.post(`${API}/login-backgrounds/upload`, null, {
         params: {
           file_url: newBackgroundUrl,
           title: newBackgroundTitle,
           animation_type: newBackgroundAnimation
+        },
+        headers: {
+          'Authorization': `Bearer ${token}`
         }
       });
       
