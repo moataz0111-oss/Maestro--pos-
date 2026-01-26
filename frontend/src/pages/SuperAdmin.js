@@ -1604,7 +1604,7 @@ export default function SuperAdmin() {
             <Button variant="outline" onClick={() => setShowResetPassword(false)} className="border-gray-600">
               إلغاء
             </Button>
-            <Button onClick={handleResetPassword} className="bg-yellow-600 hover:bg-yellow-700">
+            <Button onClick={resetPassword} className="bg-yellow-600 hover:bg-yellow-700">
               <Key className="h-4 w-4 ml-2" />
               تغيير كلمة المرور
             </Button>
