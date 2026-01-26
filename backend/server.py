@@ -7236,6 +7236,26 @@ async def create_tenant(tenant: TenantCreate, background_tasks: BackgroundTasks,
         password=admin_password
     )
     
+    # إنشاء إشعار للمالك عن العميل الجديد
+    notification_doc = {
+        "id": str(uuid.uuid4()),
+        "type": "new_tenant",
+        "title": "عميل جديد 🎉",
+        "message": f"تم إنشاء عميل جديد: {tenant.name} ({tenant.owner_name})",
+        "tenant_id": tenant_id,
+        "data": {
+            "tenant_name": tenant.name,
+            "owner_name": tenant.owner_name,
+            "owner_email": tenant.owner_email,
+            "subscription_type": tenant.subscription_type,
+            "subscription_duration": subscription_duration,
+            "expires_at": expires_at
+        },
+        "is_read": False,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.notifications.insert_one(notification_doc)
+    
     return {
         "tenant": tenant_doc,
         "admin_credentials": {
