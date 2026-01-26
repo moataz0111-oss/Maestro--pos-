@@ -828,6 +828,74 @@ export default function SuperAdmin() {
     }
   };
 
+  // فتح أداة قص الصور
+  const openImageCropper = (type, aspectRatio = 1, title = 'تعديل الصورة') => {
+    setCropperType(type);
+    setCropperAspectRatio(aspectRatio);
+    setCropperTitle(title);
+    setShowImageCropper(true);
+  };
+
+  // معالجة الصورة المقصوصة
+  const handleCroppedImage = async (file) => {
+    switch (cropperType) {
+      case 'system':
+        await uploadSystemLogo(file);
+        break;
+      case 'login':
+        await uploadLoginLogo(file);
+        break;
+      case 'background':
+        // رفع الخلفية مباشرة
+        setBackgroundsLoading(true);
+        try {
+          const formData = new FormData();
+          formData.append('file', file);
+          formData.append('title', newBackgroundTitle || 'خلفية جديدة');
+          formData.append('animation_type', newBackgroundAnimation);
+          
+          const token = localStorage.getItem('super_admin_token');
+          
+          const res = await axios.post(`${API}/upload/background`, formData, {
+            headers: { 
+              'Content-Type': 'multipart/form-data',
+              'Authorization': `Bearer ${token}`
+            }
+          });
+          
+          setBackgroundSettings(prev => ({
+            ...prev,
+            backgrounds: [...prev.backgrounds, res.data.background]
+          }));
+          
+          setShowAddBackground(false);
+          setNewBackgroundUrl('');
+          setNewBackgroundTitle('');
+          setNewBackgroundAnimation('fade');
+          setSelectedBackgroundFile(null);
+          setBackgroundPreviewUrl('');
+          toast.success('تم رفع الخلفية بنجاح');
+        } catch (error) {
+          console.error('Upload background error:', error);
+          toast.error(error.response?.data?.detail || 'فشل في رفع الخلفية');
+        } finally {
+          setBackgroundsLoading(false);
+        }
+        break;
+      case 'tenant':
+        if (selectedTenant) {
+          const logoUrl = await uploadTenantLogo(file, selectedTenant.id);
+          if (logoUrl) {
+            setSelectedTenant({...selectedTenant, logo_url: logoUrl});
+            toast.success('تم رفع شعار العميل بنجاح');
+          }
+        }
+        break;
+      default:
+        break;
+    }
+  };
+
   // رفع شعار النظام
   const uploadSystemLogo = async (file) => {
     if (!file) return;
