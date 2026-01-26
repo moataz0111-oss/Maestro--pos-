@@ -156,10 +156,10 @@ async def init_database():
                 "username": "super_admin",
                 "email": "owner@maestroegp.com",
                 "password": super_admin_password,
-                "full_name": "Owner",
+                "full_name": "مالك النظام",
                 "role": "super_admin",
                 "branch_id": None,
-                "tenant_id": "default",
+                "tenant_id": "system",
                 "permissions": ["all", "super_admin"],
                 "is_active": True,
                 "created_at": datetime.now(timezone.utc).isoformat()
