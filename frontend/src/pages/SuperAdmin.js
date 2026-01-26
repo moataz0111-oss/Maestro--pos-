@@ -4031,6 +4031,19 @@ export default function SuperAdmin() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Image Cropper Modal */}
+      <ImageCropper
+        open={showImageCropper}
+        onClose={() => setShowImageCropper(false)}
+        onCropComplete={handleCroppedImage}
+        aspectRatio={cropperAspectRatio}
+        title={cropperTitle}
+        circularCrop={false}
+        maxWidth={cropperType === 'background' ? 1920 : 512}
+        maxHeight={cropperType === 'background' ? 1080 : 512}
+        quality={0.9}
+      />
     </div>
   );
 }
