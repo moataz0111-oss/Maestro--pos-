@@ -830,18 +830,25 @@ export default function SuperAdmin() {
       const formData = new FormData();
       formData.append('file', file);
       
+      // الحصول على الـ token من localStorage
+      const token = localStorage.getItem('super_admin_token');
+      
       const res = await axios.post(`${API}/upload/logo`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
+        headers: { 
+          'Content-Type': 'multipart/form-data',
+          'Authorization': `Bearer ${token}`
+        }
       });
       
       const logoUrl = res.data.url || res.data.logo_url;
       setInvoiceSettings({...invoiceSettings, system_logo_url: logoUrl});
+      setSystemBranding({...systemBranding, logo_url: logoUrl});
       setSystemLogoPreview('');
       setSystemLogoFile(null);
       toast.success('تم رفع الشعار بنجاح');
     } catch (error) {
-      toast.error('فشل في رفع الشعار: ' + (error.response?.data?.detail || error.message));
       console.error('Upload error:', error);
+      toast.error('فشل في رفع الشعار: ' + (error.response?.data?.detail || error.message));
     } finally {
       setUploadingSystemLogo(false);
     }
