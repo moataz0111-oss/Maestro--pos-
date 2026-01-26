@@ -122,12 +122,13 @@ export default function POS() {
   // إشعارات الطلبات الجديدة
   const prevOrdersCount = useRef(0);
 
+  // إعادة جلب البيانات عند تغيير الفرع المحدد
   useEffect(() => {
     fetchData();
     // تحديث الطلبات المعلقة كل 30 ثانية
     const interval = setInterval(fetchPendingOrders, 30000);
     return () => clearInterval(interval);
-  }, []);
+  }, [selectedBranchId]);
 
   // قراءة الطاولة من URL
   useEffect(() => {
