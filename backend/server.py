@@ -7560,7 +7560,54 @@ async def reactivate_tenant(tenant_id: str, current_user: dict = Depends(verify_
     await db.tenants.update_one({"id": tenant_id}, {"$set": {"is_active": True}})
     await db.users.update_many({"tenant_id": tenant_id}, {"$set": {"is_active": True}})
     
+    # إنشاء إشعار عن التفعيل
+    notification_doc = {
+        "id": str(uuid.uuid4()),
+        "type": "tenant_activated",
+        "title": "تم تفعيل عميل ✅",
+        "message": f"تم إعادة تفعيل العميل: {tenant.get('name', 'غير معروف')}",
+        "tenant_id": tenant_id,
+        "data": {
+            "tenant_name": tenant.get("name"),
+            "owner_name": tenant.get("owner_name"),
+            "action": "activated"
+        },
+        "is_read": False,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.notifications.insert_one(notification_doc)
+    
     return {"message": "تم إعادة تفعيل المستأجر وجميع مستخدميه"}
+
+@api_router.put("/super-admin/tenants/{tenant_id}/deactivate")
+async def deactivate_tenant(tenant_id: str, current_user: dict = Depends(verify_super_admin)):
+    """تعطيل مستأجر"""
+    tenant = await db.tenants.find_one({"id": tenant_id})
+    if not tenant:
+        raise HTTPException(status_code=404, detail="المستأجر غير موجود")
+    
+    # التعطيل
+    await db.tenants.update_one({"id": tenant_id}, {"$set": {"is_active": False}})
+    await db.users.update_many({"tenant_id": tenant_id}, {"$set": {"is_active": False}})
+    
+    # إنشاء إشعار عن التعطيل
+    notification_doc = {
+        "id": str(uuid.uuid4()),
+        "type": "tenant_deactivated",
+        "title": "تم تعطيل عميل ⚠️",
+        "message": f"تم تعطيل العميل: {tenant.get('name', 'غير معروف')}",
+        "tenant_id": tenant_id,
+        "data": {
+            "tenant_name": tenant.get("name"),
+            "owner_name": tenant.get("owner_name"),
+            "action": "deactivated"
+        },
+        "is_read": False,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.notifications.insert_one(notification_doc)
+    
+    return {"message": "تم تعطيل المستأجر وجميع مستخدميه"}
 
 
 @api_router.post("/super-admin/tenants/{tenant_id}/reset-password")
