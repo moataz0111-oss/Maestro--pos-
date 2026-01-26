@@ -111,6 +111,7 @@ export default function SuperAdmin() {
   
   // Invoice settings for system
   const [invoiceSettings, setInvoiceSettings] = useState({
+    system_name: '',
     system_logo_url: '',
     thank_you_message: 'شكراً لزيارتكم',
     system_phone: '',
