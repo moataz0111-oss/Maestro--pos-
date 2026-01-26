@@ -230,6 +230,20 @@ export default function SuperAdmin() {
   });
   const [featuresLoading, setFeaturesLoading] = useState(false);
   
+  // Notifications states
+  const [notifications, setNotifications] = useState([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [notificationSettings, setNotificationSettings] = useState({
+    days_before_expiry: 7,
+    email_notifications: true,
+    push_notifications: true,
+    notify_new_tenant: true,
+    notify_tenant_status: true
+  });
+  const [showNotificationSettings, setShowNotificationSettings] = useState(false);
+  const [expiringSubscriptions, setExpiringSubscriptions] = useState({ expiring_soon: [], already_expired: [] });
+  
   const [newPassword, setNewPassword] = useState('');
   const [copiedCredentials, setCopiedCredentials] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
