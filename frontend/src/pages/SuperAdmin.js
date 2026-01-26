@@ -131,7 +131,8 @@ export default function SuperAdmin() {
     owner_phone: '',
     subscription_type: 'trial',
     max_branches: 1,
-    max_users: 5
+    max_users: 5,
+    is_demo: false
   });
   
   // Edit tenant form
