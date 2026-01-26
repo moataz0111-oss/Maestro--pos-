@@ -876,6 +876,12 @@ export default function POS() {
             </Button>
             <h1 className="text-xl font-bold font-cairo text-foreground">نقاط البيع</h1>
             
+            {/* اختيار الفرع */}
+            <div className="flex items-center gap-2">
+              <Building2 className="h-4 w-4 text-muted-foreground" />
+              <BranchSelector />
+            </div>
+            
             {/* مؤشر الطلبات المعلقة */}
             <Button 
               variant="outline" 
