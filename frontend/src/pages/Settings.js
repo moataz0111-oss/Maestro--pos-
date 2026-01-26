@@ -1737,7 +1737,7 @@ export default function Settings() {
 
           {/* Staff & Users Management - إدارة الموظفين والمستخدمين */}
           {/* super_admin يدير المستخدمين من لوحة تحكم المالك فقط */}
-          {hasRole(['admin']) && (
+          {hasRole(['admin', 'super_admin']) && (
             <TabsContent value="staff">
               <Card className="border-border/50 bg-card">
                 <CardHeader>
