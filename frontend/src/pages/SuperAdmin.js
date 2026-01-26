@@ -2056,6 +2056,145 @@ export default function SuperAdmin() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Modal: تفاصيل العميل */}
+      <Dialog open={showTenantDetails} onOpenChange={setShowTenantDetails}>
+        <DialogContent className="bg-gray-800 border-gray-700 text-white max-w-3xl">
+          <DialogHeader>
+            <DialogTitle className="text-xl flex items-center gap-2">
+              <Building2 className="h-5 w-5 text-purple-400" />
+              تفاصيل العميل - {selectedTenant?.name}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="py-4 space-y-6">
+            {tenantDetails ? (
+              <>
+                {/* معلومات أساسية */}
+                <div className="grid grid-cols-2 gap-6">
+                  <div className="space-y-4">
+                    <h3 className="font-bold text-green-400 flex items-center gap-2 border-b border-gray-700 pb-2">
+                      <Building2 className="h-4 w-4" />
+                      معلومات المطعم
+                    </h3>
+                    <div className="space-y-3">
+                      <div className="flex justify-between items-center p-2 bg-gray-700/30 rounded">
+                        <span className="text-gray-400">اسم المطعم</span>
+                        <span className="font-medium">{tenantDetails.name || '-'}</span>
+                      </div>
+                      <div className="flex justify-between items-center p-2 bg-gray-700/30 rounded">
+                        <span className="text-gray-400">المعرف (Slug)</span>
+                        <span className="font-medium text-blue-400" dir="ltr">/{tenantDetails.slug || '-'}</span>
+                      </div>
+                      <div className="flex justify-between items-center p-2 bg-gray-700/30 rounded">
+                        <span className="text-gray-400">نوع الاشتراك</span>
+                        <Badge className={
+                          tenantDetails.subscription_type === 'premium' ? 'bg-purple-500/20 text-purple-400' :
+                          tenantDetails.subscription_type === 'basic' ? 'bg-blue-500/20 text-blue-400' :
+                          'bg-yellow-500/20 text-yellow-400'
+                        }>
+                          {tenantDetails.subscription_type === 'premium' ? 'مميز' : 
+                           tenantDetails.subscription_type === 'basic' ? 'أساسي' : 
+                           tenantDetails.subscription_type === 'demo' ? 'تجريبي' : 'فترة تجريبية'}
+                        </Badge>
+                      </div>
+                      <div className="flex justify-between items-center p-2 bg-gray-700/30 rounded">
+                        <span className="text-gray-400">الحالة</span>
+                        <Badge className={tenantDetails.is_active ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}>
+                          {tenantDetails.is_active ? 'نشط' : 'معطل'}
+                        </Badge>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-4">
+                    <h3 className="font-bold text-blue-400 flex items-center gap-2 border-b border-gray-700 pb-2">
+                      <User className="h-4 w-4" />
+                      معلومات المالك
+                    </h3>
+                    <div className="space-y-3">
+                      <div className="flex justify-between items-center p-2 bg-gray-700/30 rounded">
+                        <span className="text-gray-400">اسم المالك</span>
+                        <span className="font-medium">{tenantDetails.owner_name || '-'}</span>
+                      </div>
+                      <div className="flex justify-between items-center p-2 bg-gray-700/30 rounded">
+                        <span className="text-gray-400">البريد الإلكتروني</span>
+                        <span className="font-medium text-blue-400" dir="ltr">{tenantDetails.owner_email || '-'}</span>
+                      </div>
+                      <div className="flex justify-between items-center p-2 bg-gray-700/30 rounded">
+                        <span className="text-gray-400">رقم الهاتف</span>
+                        <span className="font-medium" dir="ltr">{tenantDetails.owner_phone || '-'}</span>
+                      </div>
+                      <div className="flex justify-between items-center p-2 bg-gray-700/30 rounded">
+                        <span className="text-gray-400">تاريخ الإنشاء</span>
+                        <span className="font-medium">{tenantDetails.created_at ? new Date(tenantDetails.created_at).toLocaleDateString('ar-EG') : '-'}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* إحصائيات وحدود */}
+                <div className="space-y-4">
+                  <h3 className="font-bold text-yellow-400 flex items-center gap-2 border-b border-gray-700 pb-2">
+                    <BarChart3 className="h-4 w-4" />
+                    الحدود والإحصائيات
+                  </h3>
+                  <div className="grid grid-cols-4 gap-4">
+                    <div className="text-center p-4 bg-gray-700/30 rounded-lg">
+                      <p className="text-2xl font-bold text-blue-400">{tenantDetails.branches_count || 0}</p>
+                      <p className="text-sm text-gray-400">الفروع</p>
+                      <p className="text-xs text-gray-500 mt-1">الحد: {tenantDetails.max_branches || '-'}</p>
+                    </div>
+                    <div className="text-center p-4 bg-gray-700/30 rounded-lg">
+                      <p className="text-2xl font-bold text-green-400">{tenantDetails.users_count || 0}</p>
+                      <p className="text-sm text-gray-400">المستخدمين</p>
+                      <p className="text-xs text-gray-500 mt-1">الحد: {tenantDetails.max_users || '-'}</p>
+                    </div>
+                    <div className="text-center p-4 bg-gray-700/30 rounded-lg">
+                      <p className="text-2xl font-bold text-purple-400">{tenantDetails.orders_count || 0}</p>
+                      <p className="text-sm text-gray-400">الطلبات</p>
+                    </div>
+                    <div className="text-center p-4 bg-gray-700/30 rounded-lg">
+                      <p className="text-2xl font-bold text-yellow-400">{tenantDetails.products_count || 0}</p>
+                      <p className="text-sm text-gray-400">المنتجات</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* الشعار إن وجد */}
+                {tenantDetails.logo_url && (
+                  <div className="space-y-4">
+                    <h3 className="font-bold text-purple-400 flex items-center gap-2 border-b border-gray-700 pb-2">
+                      <ImageIcon className="h-4 w-4" />
+                      شعار المطعم
+                    </h3>
+                    <div className="flex justify-center">
+                      <img 
+                        src={tenantDetails.logo_url.startsWith('/api') ? `${API}${tenantDetails.logo_url.replace('/api', '')}` : tenantDetails.logo_url} 
+                        alt="Logo" 
+                        className="h-24 w-24 object-contain bg-gray-700/50 rounded-lg p-2"
+                      />
+                    </div>
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="text-center py-8">
+                <RefreshCw className="h-8 w-8 animate-spin mx-auto text-gray-400" />
+                <p className="text-gray-400 mt-2">جاري تحميل البيانات...</p>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowTenantDetails(false)} className="border-gray-600">
+              إغلاق
+            </Button>
+            <Button onClick={() => { setShowTenantDetails(false); openEditTenant(selectedTenant); }} className="bg-blue-600 hover:bg-blue-700">
+              <Edit className="h-4 w-4 ml-2" />
+              تعديل البيانات
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
