@@ -84,7 +84,7 @@
   },
   
   "test_credentials": {
-    "api_url": "https://restaurantmaster-1.preview.emergentagent.com",
+    "api_url": "https://resto-manager-221.preview.emergentagent.com",
     "admin_email": "admin@maestroegp.com",
     "admin_password": "admin123",
     "super_admin_email": "owner@maestroegp.com",
