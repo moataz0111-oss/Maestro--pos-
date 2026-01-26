@@ -282,11 +282,24 @@ export default function Tables() {
                     </div>
                     <div>
                       <Label className="text-foreground">القسم</Label>
+                      <Select 
+                        value={formData.section} 
+                        onValueChange={(value) => setFormData({ ...formData, section: value })}
+                      >
+                        <SelectTrigger className="mt-1">
+                          <SelectValue placeholder="اختر القسم" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {DEFAULT_SECTIONS.map(section => (
+                            <SelectItem key={section} value={section}>{section}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                       <Input
-                        value={formData.section}
+                        value={formData.section && !DEFAULT_SECTIONS.includes(formData.section) ? formData.section : ''}
                         onChange={(e) => setFormData({ ...formData, section: e.target.value })}
-                        placeholder="داخلي، خارجي، VIP..."
-                        className="mt-1"
+                        placeholder="أو اكتب قسم مخصص..."
+                        className="mt-2"
                       />
                     </div>
                     <div className="flex gap-2 pt-4">
