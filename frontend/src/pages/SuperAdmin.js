@@ -2622,15 +2622,24 @@ export default function SuperAdmin() {
                   </div>
                   <div className="space-y-2">
                     <Label className="text-gray-300">مدة الانتقال (ثواني)</Label>
-                    <Input
-                      type="number"
-                      step="0.5"
-                      min="0.5"
-                      max="5"
-                      value={backgroundSettings.transition_duration}
-                      onChange={(e) => setBackgroundSettings({...backgroundSettings, transition_duration: parseFloat(e.target.value)})}
-                      className="bg-gray-700/50 border-gray-600 text-white"
-                    />
+                    <Select 
+                      value={String(backgroundSettings.transition_duration || 1.5)} 
+                      onValueChange={(value) => setBackgroundSettings({...backgroundSettings, transition_duration: parseFloat(value)})}
+                    >
+                      <SelectTrigger className="bg-gray-700/50 border-gray-600">
+                        <SelectValue placeholder="اختر مدة الانتقال" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-gray-800 border-gray-700">
+                        <SelectItem value="0.5">0.5 ثانية</SelectItem>
+                        <SelectItem value="1">1 ثانية</SelectItem>
+                        <SelectItem value="1.5">1.5 ثانية</SelectItem>
+                        <SelectItem value="2">2 ثواني</SelectItem>
+                        <SelectItem value="2.5">2.5 ثانية</SelectItem>
+                        <SelectItem value="3">3 ثواني</SelectItem>
+                        <SelectItem value="4">4 ثواني</SelectItem>
+                        <SelectItem value="5">5 ثواني</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
                   <div className="space-y-2">
                     <Label className="text-gray-300">حركة الشعار</Label>
@@ -2713,6 +2722,18 @@ export default function SuperAdmin() {
                     <Label className="text-gray-300">لون الغطاء (Overlay Color)</Label>
                     <div className="flex items-center gap-3">
                       <Input
+                        type="color"
+                        value={backgroundSettings.overlay_color?.replace(/rgba?\([^)]+\)/, '#000000') || '#000000'}
+                        onChange={(e) => {
+                          const hex = e.target.value;
+                          const r = parseInt(hex.slice(1, 3), 16);
+                          const g = parseInt(hex.slice(3, 5), 16);
+                          const b = parseInt(hex.slice(5, 7), 16);
+                          setBackgroundSettings({...backgroundSettings, overlay_color: `rgba(${r},${g},${b},0.5)`});
+                        }}
+                        className="w-14 h-10 p-1 bg-gray-700/50 border-gray-600 cursor-pointer rounded"
+                      />
+                      <Input
                         type="text"
                         placeholder="rgba(0, 0, 0, 0.5)"
                         value={backgroundSettings.overlay_color || ''}
@@ -2720,15 +2741,17 @@ export default function SuperAdmin() {
                         className="bg-gray-700/50 border-gray-600 text-white flex-1"
                         dir="ltr"
                       />
-                      <div 
-                        className="w-10 h-10 rounded-lg border-2 border-gray-600"
-                        style={{ backgroundColor: backgroundSettings.overlay_color || 'rgba(0, 0, 0, 0.5)' }}
-                      />
                     </div>
                   </div>
                   <div className="space-y-2">
                     <Label className="text-gray-300">لون النص</Label>
                     <div className="flex items-center gap-3">
+                      <Input
+                        type="color"
+                        value={backgroundSettings.text_color || '#ffffff'}
+                        onChange={(e) => setBackgroundSettings({...backgroundSettings, text_color: e.target.value})}
+                        className="w-14 h-10 p-1 bg-gray-700/50 border-gray-600 cursor-pointer rounded"
+                      />
                       <Input
                         type="text"
                         placeholder="#ffffff"
@@ -2736,10 +2759,6 @@ export default function SuperAdmin() {
                         onChange={(e) => setBackgroundSettings({...backgroundSettings, text_color: e.target.value})}
                         className="bg-gray-700/50 border-gray-600 text-white flex-1"
                         dir="ltr"
-                      />
-                      <div 
-                        className="w-10 h-10 rounded-lg border-2 border-gray-600"
-                        style={{ backgroundColor: backgroundSettings.text_color || '#ffffff' }}
                       />
                     </div>
                   </div>
@@ -2753,49 +2772,77 @@ export default function SuperAdmin() {
                   الخلفيات ({backgroundSettings.backgrounds?.length || 0})
                 </h3>
                 <div className="grid grid-cols-3 gap-4">
-                  {(backgroundSettings.backgrounds || []).map((bg, idx) => (
-                    <div key={bg.id || idx} className="relative group">
-                      <img 
-                        src={bg.url?.startsWith('/api') ? `${API}${bg.url.replace('/api', '')}` : bg.url} 
-                        alt={bg.title || bg.name} 
-                        className="w-full h-24 object-cover rounded-lg"
-                      />
-                      <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center gap-2">
-                        <Button 
-                          size="sm" 
-                          variant="destructive" 
-                          className="h-8"
-                          onClick={() => {
-                            if (window.confirm('هل تريد حذف هذه الخلفية؟')) {
-                              setBackgroundSettings(prev => ({
-                                ...prev,
-                                backgrounds: prev.backgrounds.filter((_, i) => i !== idx)
-                              }));
-                            }
-                          }}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                  {(backgroundSettings.backgrounds || []).map((bg, idx) => {
+                    const bgUrl = bg.url?.startsWith('/api') 
+                      ? `${API}${bg.url.replace('/api', '')}` 
+                      : bg.url;
+                    return (
+                      <div key={bg.id || idx} className="relative group rounded-xl overflow-hidden bg-gray-700/30">
+                        {/* صورة الخلفية الكاملة */}
+                        <div className="aspect-video relative">
+                          <img 
+                            src={bgUrl} 
+                            alt={bg.title || bg.name} 
+                            className="w-full h-full object-cover"
+                            onError={(e) => {
+                              e.target.style.display = 'none';
+                            }}
+                          />
+                          {/* Overlay عند التحويم */}
+                          <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-all duration-300 flex items-center justify-center gap-2">
+                            <Button 
+                              size="sm" 
+                              variant="outline"
+                              className="border-white/50 text-white hover:bg-white/20"
+                              onClick={() => {
+                                setBackgroundSettings(prev => ({
+                                  ...prev,
+                                  backgrounds: prev.backgrounds.map((b, i) => 
+                                    i === idx ? {...b, enabled: !b.enabled} : b
+                                  )
+                                }));
+                              }}
+                            >
+                              {bg.enabled !== false ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                            </Button>
+                            <Button 
+                              size="sm" 
+                              variant="destructive"
+                              onClick={() => {
+                                if (window.confirm('هل تريد حذف هذه الخلفية؟')) {
+                                  setBackgroundSettings(prev => ({
+                                    ...prev,
+                                    backgrounds: prev.backgrounds.filter((_, i) => i !== idx)
+                                  }));
+                                }
+                              }}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                          {/* علامات الحالة */}
+                          {bg.enabled !== false && (
+                            <Badge className="absolute top-2 right-2 bg-green-500/90 text-white text-xs">مفعّل</Badge>
+                          )}
+                          {bg.enabled === false && (
+                            <Badge className="absolute top-2 right-2 bg-red-500/90 text-white text-xs">معطّل</Badge>
+                          )}
+                          <Badge className="absolute top-2 left-2 bg-blue-500/90 text-white text-xs">{bg.animation || 'fade'}</Badge>
+                        </div>
+                        {/* معلومات الخلفية */}
+                        <div className="p-3 bg-gray-800/80">
+                          <p className="text-sm font-medium text-white truncate">{bg.title || bg.name || 'خلفية'}</p>
+                        </div>
                       </div>
-                      <div className="absolute bottom-0 left-0 right-0 bg-black/70 p-1 rounded-b-lg">
-                        <p className="text-xs text-center text-white truncate">{bg.title || bg.name || 'خلفية'}</p>
-                      </div>
-                      {bg.enabled !== false && (
-                        <Badge className="absolute top-1 right-1 bg-green-500 text-xs">مفعّل</Badge>
-                      )}
-                      <div className="absolute top-1 left-1">
-                        <Badge className="bg-blue-500/80 text-xs">{bg.animation || 'fade'}</Badge>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
+                  {/* زر إضافة خلفية */}
                   <div 
-                    className="w-full h-24 bg-gray-700/50 rounded-lg flex items-center justify-center border-2 border-dashed border-gray-600 cursor-pointer hover:border-purple-500 transition-colors"
+                    className="aspect-video bg-gray-700/30 rounded-xl flex flex-col items-center justify-center border-2 border-dashed border-gray-600 cursor-pointer hover:border-purple-500 hover:bg-gray-700/50 transition-all duration-300"
                     onClick={() => setShowAddBackground(true)}
                   >
-                    <div className="text-center">
-                      <Plus className="h-6 w-6 text-gray-500 mx-auto" />
-                      <p className="text-xs text-gray-500 mt-1">إضافة خلفية</p>
-                    </div>
+                    <Plus className="h-10 w-10 text-gray-500 mb-2" />
+                    <p className="text-sm text-gray-400">إضافة خلفية</p>
                   </div>
                 </div>
               </div>
