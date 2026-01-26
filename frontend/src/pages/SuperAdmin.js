@@ -1158,6 +1158,80 @@ export default function SuperAdmin() {
     );
   }
 
+  // مكون بطاقة العميل
+  const TenantCard = ({ tenant, isDemo = false }) => (
+    <div 
+      className={`flex items-center justify-between p-4 rounded-lg hover:bg-gray-700/50 transition-colors ${
+        isDemo ? 'bg-yellow-900/20 border border-yellow-700/30' : 'bg-gray-700/30'
+      }`}
+    >
+      <div className="flex items-center gap-4">
+        <div className={`w-3 h-3 rounded-full ${tenant.is_active ? 'bg-green-500' : 'bg-red-500'}`} />
+        <div>
+          <div className="flex items-center gap-2">
+            <h3 className="font-bold">{tenant.name || tenant.slug || 'بدون اسم'}</h3>
+            {isDemo && (
+              <Badge className="bg-yellow-500/20 text-yellow-400 text-xs">
+                تجريبي
+              </Badge>
+            )}
+          </div>
+          <div className="flex items-center gap-3 text-sm text-gray-400">
+            <span className="flex items-center gap-1">
+              <Mail className="h-3 w-3" />
+              {tenant.owner_email || '-'}
+            </span>
+            <span className="flex items-center gap-1">
+              <Globe className="h-3 w-3" />
+              /{tenant.slug || '-'}
+            </span>
+          </div>
+        </div>
+      </div>
+      
+      <div className="flex items-center gap-4">
+        <div className="text-center">
+          <p className="text-sm text-gray-400">المستخدمين</p>
+          <p className="font-bold">{tenant.users_count || 0}</p>
+        </div>
+        <div className="text-center">
+          <p className="text-sm text-gray-400">الفروع</p>
+          <p className="font-bold">{tenant.branches_count || 0}</p>
+        </div>
+        <div className="text-center">
+          <p className="text-sm text-gray-400">الطلبات</p>
+          <p className="font-bold">{tenant.orders_count || 0}</p>
+        </div>
+        
+        {getSubscriptionBadge(tenant.subscription_type)}
+        
+        <div className="flex items-center gap-1">
+          <Button variant="ghost" size="icon" onClick={() => handleLiveView(tenant)} className="hover:bg-gray-600" title="عرض مباشر">
+            <Activity className="h-4 w-4 text-green-400" />
+          </Button>
+          <Button variant="ghost" size="icon" onClick={() => handleViewDetails(tenant)} className="hover:bg-gray-600" title="التفاصيل">
+            <Eye className="h-4 w-4" />
+          </Button>
+          <Button variant="ghost" size="icon" onClick={() => handleEditTenant(tenant)} className="hover:bg-gray-600" title="تعديل">
+            <Edit className="h-4 w-4 text-blue-400" />
+          </Button>
+          <Button variant="ghost" size="icon" onClick={() => handleManageFeatures(tenant)} className="hover:bg-gray-600" title="الميزات">
+            <Layers className="h-4 w-4 text-purple-400" />
+          </Button>
+          <Button variant="ghost" size="icon" onClick={() => { setSelectedTenant(tenant); setShowResetPassword(true); }} className="hover:bg-gray-600" title="كلمة المرور">
+            <Key className="h-4 w-4 text-yellow-400" />
+          </Button>
+          <Button variant="ghost" size="icon" onClick={() => handleToggleActive(tenant)} className="hover:bg-gray-600" title={tenant.is_active ? 'تعطيل' : 'تفعيل'}>
+            {tenant.is_active ? <PowerOff className="h-4 w-4 text-red-400" /> : <Power className="h-4 w-4 text-green-400" />}
+          </Button>
+          <Button variant="ghost" size="icon" onClick={() => { setSelectedTenant(tenant); setShowDeleteConfirm(true); }} className="hover:bg-red-600" title="حذف">
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+
   // Main Dashboard
   return (
     <div className="min-h-screen bg-gray-900 text-white" dir="rtl">
