@@ -1023,8 +1023,8 @@ class NotificationResponse(BaseModel):
 
 class NotificationSettings(BaseModel):
     """إعدادات الإشعارات للمالك"""
-    days_before_expiry: int = 7  # عدد الأيام قبل انتهاء الاشتراك للتنبيه
-    email_notifications: bool = True  # إرسال بريد إلكتروني
+    days_before_expiry: int = 15  # عدد الأيام قبل انتهاء الاشتراك للتنبيه (الافتراضي 15 يوم)
+    email_notifications: bool = False  # إرسال بريد إلكتروني (معطل افتراضياً)
     push_notifications: bool = True  # إشعارات المتصفح
     notify_new_tenant: bool = True  # إشعار عند إضافة عميل جديد
     notify_tenant_status: bool = True  # إشعار عند تفعيل/تعطيل عميل
