@@ -256,6 +256,9 @@ export default function SuperAdmin() {
   // أسعار الاشتراكات
   const [showPricesModal, setShowPricesModal] = useState(false);
   const [subscriptionPrices, setSubscriptionPrices] = useState({
+    bronze: 15,
+    silver: 30,
+    gold: 50,
     basic: 25,
     premium: 50
   });
