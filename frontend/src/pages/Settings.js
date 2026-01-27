@@ -1527,10 +1527,14 @@ export default function Settings() {
                         if (restaurantLogoFile) {
                           const formData = new FormData();
                           formData.append('file', restaurantLogoFile);
+                          const token = localStorage.getItem('token');
                           const uploadRes = await axios.post(`${API}/upload/restaurant-logo`, formData, {
-                            headers: { 'Content-Type': 'multipart/form-data' }
+                            headers: { 
+                              'Content-Type': 'multipart/form-data',
+                              'Authorization': `Bearer ${token}`
+                            }
                           });
-                          logoUrl = uploadRes.data.url;
+                          logoUrl = uploadRes.data.url || uploadRes.data.logo_url;
                         }
                         
                         // حفظ إعدادات المطعم
@@ -1544,8 +1548,8 @@ export default function Settings() {
                         setRestaurantLogoFile(null);
                         toast.success('تم حفظ إعدادات المطعم بنجاح');
                       } catch (error) {
+                        console.error('Save restaurant settings error:', error);
                         toast.error('فشل في حفظ الإعدادات: ' + (error.response?.data?.detail || error.message));
-                        console.error(error);
                       } finally {
                         setSavingRestaurant(false);
                       }
