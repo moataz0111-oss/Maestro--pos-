@@ -3432,24 +3432,34 @@ export default function SuperAdmin() {
                         className="hidden"
                         id="login-logo-upload"
                       />
-                      <Button 
-                        variant="outline" 
-                        className="border-gray-600 w-full"
-                        onClick={() => document.getElementById('login-logo-upload').click()}
-                        disabled={loginLogoUploading}
-                      >
-                        {loginLogoUploading ? (
-                          <>
-                            <Loader2 className="h-4 w-4 ml-2 animate-spin" />
-                            جاري الرفع...
-                          </>
-                        ) : (
-                          <>
-                            <Upload className="h-4 w-4 ml-2" />
-                            رفع شعار
-                          </>
-                        )}
-                      </Button>
+                      <div className="flex gap-2">
+                        <Button 
+                          variant="outline" 
+                          className="border-gray-600 flex-1"
+                          onClick={() => document.getElementById('login-logo-upload').click()}
+                          disabled={loginLogoUploading}
+                        >
+                          {loginLogoUploading ? (
+                            <>
+                              <Loader2 className="h-4 w-4 ml-2 animate-spin" />
+                              جاري الرفع...
+                            </>
+                          ) : (
+                            <>
+                              <Upload className="h-4 w-4 ml-2" />
+                              رفع مباشر
+                            </>
+                          )}
+                        </Button>
+                        <Button 
+                          variant="default" 
+                          className="bg-blue-600 hover:bg-blue-700"
+                          onClick={() => openImageCropper('login', 1, 'قص شعار صفحة الدخول')}
+                        >
+                          <Crop className="h-4 w-4 ml-2" />
+                          قص وتعديل
+                        </Button>
+                      </div>
                       {loginLogoFile && (
                         <Button 
                           variant="default" 
