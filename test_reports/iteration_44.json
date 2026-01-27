@@ -1,0 +1,96 @@
+{
+  "summary": "Iteration 44 - Bug fix verification: Owner (super_admin) can now modify restaurant settings. The fix changed role check from 'if role != ADMIN' to 'if role not in [ADMIN, SUPER_ADMIN]' in both /api/settings/restaurant and /api/upload/restaurant-logo endpoints.",
+  
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  
+  "passed_tests": [
+    "Backend: POST /api/auth/login as owner@maestroegp.com - returns super_admin role - PASSED",
+    "Backend: GET /api/settings/restaurant as owner (super_admin) - PASSED (200)",
+    "Backend: PUT /api/settings/restaurant as owner (super_admin) - PASSED (200) - BUG FIX VERIFIED",
+    "Backend: POST /api/upload/restaurant-logo as owner (super_admin) - PASSED (200) - BUG FIX VERIFIED",
+    "Backend: Request without token correctly returns 401/403 - PASSED",
+    "Frontend: Login as owner@maestroegp.com - PASSED",
+    "Frontend: Navigate to Settings > المطعم tab - PASSED",
+    "Frontend: Edit restaurant name (Arabic and English) - PASSED",
+    "Frontend: Save settings with success toast 'تم حفظ إعدادات المطعم بنجاح' - PASSED"
+  ],
+  
+  "bug_fix_verification": {
+    "original_issue": "المالك (owner@maestroegp.com) يحاول تعديل إعدادات المطعم ويظهر له 'غير مصرح'",
+    "root_cause": "APIs تتحقق من UserRole.ADMIN فقط بينما المالك لديه UserRole.SUPER_ADMIN",
+    "fix_locations": [
+      "/app/backend/server.py line 5724: PUT /api/settings/restaurant",
+      "/app/backend/server.py line 6819: POST /api/upload/restaurant-logo"
+    ],
+    "fix_description": "Changed role check from 'if role != ADMIN' to 'if role not in [ADMIN, SUPER_ADMIN]'",
+    "verification_status": "VERIFIED - All API calls return 200 for super_admin role"
+  },
+  
+  "api_responses_captured": [
+    {
+      "endpoint": "POST /api/auth/login",
+      "status": 200,
+      "user_role": "super_admin"
+    },
+    {
+      "endpoint": "GET /api/settings/restaurant",
+      "status": 200
+    },
+    {
+      "endpoint": "PUT /api/settings/restaurant",
+      "status": 200,
+      "response": "{\"message\":\"تم حفظ إعدادات المطعم بنجاح\"}"
+    },
+    {
+      "endpoint": "POST /api/upload/restaurant-logo",
+      "status": 200,
+      "response": "{\"message\":\"تم رفع الشعار بنجاح\",\"url\":\"/api/uploads/logos/xxx.jpg\"}"
+    }
+  ],
+  
+  "test_report_links": [
+    "/app/backend/tests/test_owner_restaurant_settings.py",
+    "/app/test_reports/pytest/pytest_results_iter44.xml"
+  ],
+  
+  "action_items": [],
+  
+  "critical_code_review_comments": [
+    "Fix correctly allows both ADMIN and SUPER_ADMIN roles to modify restaurant settings",
+    "Both PUT /api/settings/restaurant and POST /api/upload/restaurant-logo endpoints are fixed",
+    "Authorization check is consistent across both endpoints"
+  ],
+  
+  "updated_files": [
+    "/app/backend/tests/test_owner_restaurant_settings.py"
+  ],
+  
+  "success_rate": {
+    "backend": "100% (5/5 tests passed, 1 skipped due to missing admin user)",
+    "frontend": "100% (all UI flows working)"
+  },
+  
+  "test_credentials": {
+    "owner": {
+      "email": "owner@maestroegp.com",
+      "password": "owner123",
+      "role": "super_admin"
+    }
+  },
+  
+  "seed_data_creation": "",
+  
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  
+  "context_for_next_testing_agent": "Iteration 44 verified the bug fix for owner (super_admin) authorization in restaurant settings. The fix in server.py (lines 5724 and 6819) correctly allows both ADMIN and SUPER_ADMIN roles to modify restaurant settings. All backend APIs (/api/settings/restaurant GET/PUT, /api/upload/restaurant-logo POST) are working correctly for the owner. The owner (owner@maestroegp.com / owner123) can successfully edit restaurant name and upload logo without 'غير مصرح' error."
+}
