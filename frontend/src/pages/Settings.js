@@ -616,13 +616,18 @@ export default function Settings() {
     try {
       const formData = new FormData();
       formData.append('file', file);
+      const token = localStorage.getItem('token');
       const res = await axios.post(`${API}/payment-settings/zaincash-qr`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
+        headers: { 
+          'Content-Type': 'multipart/form-data',
+          'Authorization': `Bearer ${token}`
+        }
       });
       setPaymentSettings(prev => ({ ...prev, zaincash_qr_image: res.data.image_url }));
       toast.success('تم رفع صورة QR بنجاح');
     } catch (error) {
-      toast.error('فشل في رفع الصورة');
+      console.error('Upload ZainCash QR error:', error);
+      toast.error('فشل في رفع الصورة: ' + (error.response?.data?.detail || error.message));
     }
   };
 
