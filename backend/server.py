@@ -6812,9 +6812,10 @@ async def upload_restaurant_logo(
     file: UploadFile = File(...),
     current_user: dict = Depends(get_current_user)
 ):
-    """رفع شعار المطعم - للمدير"""
+    """رفع شعار المطعم - للمدير أو المالك"""
     
-    if current_user["role"] != UserRole.ADMIN:
+    # السماح للمدير (admin) والمالك (super_admin)
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.SUPER_ADMIN]:
         raise HTTPException(status_code=403, detail="غير مصرح")
     
     # التحقق من نوع الملف
