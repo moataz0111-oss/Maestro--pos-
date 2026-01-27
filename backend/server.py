@@ -5720,7 +5720,8 @@ async def get_general_settings():
 @api_router.put("/settings/restaurant")
 async def update_restaurant_settings(settings: Dict[str, Any], current_user: dict = Depends(get_current_user)):
     """حفظ إعدادات المطعم (الاسم والشعار)"""
-    if current_user["role"] != UserRole.ADMIN:
+    # السماح للمدير (admin) والمالك (super_admin)
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.SUPER_ADMIN]:
         raise HTTPException(status_code=403, detail="غير مصرح")
     
     # جلب tenant_id من المستخدم
