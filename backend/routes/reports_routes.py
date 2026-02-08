@@ -97,7 +97,7 @@ async def get_sales_report(
         by_date[date]["profit"] += o.get("profit", 0)
         
         for item in o.get("items", []):
-            pid = item.get("product_name", "Unknown")
+            pid = item.get("name", "غير معروف")
             if pid not in by_product:
                 by_product[pid] = {"quantity": 0, "revenue": 0}
             by_product[pid]["quantity"] += item.get("quantity", 0)
