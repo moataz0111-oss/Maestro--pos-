@@ -1,0 +1,44 @@
+{
+  "short_name": "قائمة الطعام",
+  "name": "قائمة الطعام - اطلب الآن",
+  "description": "اطلب طعامك المفضل بسهولة",
+  "icons": [
+    {
+      "src": "/icons/customer-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/customer-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/customer-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icons/customer-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "start_url": "/menu",
+  "scope": "/menu",
+  "display": "standalone",
+  "orientation": "portrait",
+  "theme_color": "#f97316",
+  "background_color": "#ffffff",
+  "lang": "ar",
+  "dir": "rtl",
+  "categories": [
+    "food",
+    "shopping"
+  ],
+  "prefer_related_applications": false
+}
