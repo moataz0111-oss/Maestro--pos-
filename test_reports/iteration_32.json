@@ -82,7 +82,7 @@
   },
   
   "test_credentials": {
-    "api_url": "https://eatery-system-24.preview.emergentagent.com",
+    "api_url": "https://restupos.preview.emergentagent.com",
     "client_graffiti": {
       "email": "hanialdujaili@gmail.com",
       "password": "graffiti123",
