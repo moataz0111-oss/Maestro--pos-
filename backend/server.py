@@ -12452,6 +12452,49 @@ async def create_customer_order(
         "order": order_doc
     }
 
+
+@api_router.get("/customer/orders/history")
+async def get_customer_order_history(
+    tenant_id: str = None,
+    phone: str = None
+):
+    """جلب سجل طلبات العميل بناءً على رقم الهاتف"""
+    if not phone:
+        return []
+    
+    query = {"customer_phone": phone}
+    if tenant_id:
+        # تحويل menu_slug إلى tenant_id إذا لزم الأمر
+        tenant = await db.tenants.find_one({"menu_slug": tenant_id})
+        if tenant:
+            query["tenant_id"] = tenant.get("id")
+        else:
+            query["tenant_id"] = tenant_id
+    
+    orders = await db.orders.find(
+        query,
+        {"_id": 0, "id": 1, "order_number": 1, "items": 1, "total": 1, 
+         "status": 1, "created_at": 1, "order_type": 1}
+    ).sort("created_at", -1).limit(20).to_list(20)
+    
+    # إضافة تسميات الحالة بالعربية
+    status_labels = {
+        "pending": "قيد الانتظار",
+        "preparing": "قيد التحضير",
+        "ready": "جاهز",
+        "out_for_delivery": "في الطريق",
+        "delivered": "تم التوصيل",
+        "completed": "مكتمل",
+        "cancelled": "ملغي"
+    }
+    
+    for order in orders:
+        order["status_label"] = status_labels.get(order.get("status"), order.get("status"))
+        order["items_count"] = len(order.get("items", []))
+    
+    return orders
+
+
 @api_router.get("/customer/orders/{tenant_id}")
 async def get_customer_orders(tenant_id: str, customer_token: str):
     """جلب طلبات العميل"""
