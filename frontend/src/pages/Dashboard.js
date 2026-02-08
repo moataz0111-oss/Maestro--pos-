@@ -2041,6 +2041,38 @@ export default function Dashboard() {
               شارك هذا الرابط مع عملائك ليتمكنوا من رؤية قائمة الطعام
             </p>
             
+            {/* رابط تثبيت التطبيق للزبائن */}
+            <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl p-4 border border-green-200">
+              <div className="flex items-center gap-3 mb-2">
+                <div className="w-10 h-10 bg-green-500 rounded-xl flex items-center justify-center">
+                  <Smartphone className="h-5 w-5 text-white" />
+                </div>
+                <div>
+                  <p className="font-bold text-green-800">رابط تثبيت التطبيق ⭐</p>
+                  <p className="text-xs text-green-600">للزبائن - يفتح على قائمة الطعام</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <Input 
+                  value={`${window.location.origin}/customer-app/`} 
+                  readOnly 
+                  className="text-left text-sm bg-white"
+                  style={{ direction: 'ltr' }}
+                />
+                <Button 
+                  onClick={() => {
+                    navigator.clipboard.writeText(`${window.location.origin}/customer-app/`);
+                    toast.success('تم نسخ رابط تثبيت التطبيق!');
+                  }} 
+                  variant="outline" 
+                  size="icon"
+                  className="border-green-300"
+                >
+                  <Copy className="h-4 w-4 text-green-600" />
+                </Button>
+              </div>
+            </div>
+            
             {/* QR Code */}
             <div className="bg-gradient-to-br from-orange-50 to-amber-50 rounded-xl p-6 text-center border border-orange-200">
               <div id="qr-code-container" className="bg-white p-4 rounded-xl inline-block shadow-lg">
