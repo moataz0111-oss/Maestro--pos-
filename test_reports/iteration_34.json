@@ -132,7 +132,7 @@
   },
   
   "test_credentials": {
-    "api_url": "https://resto-manager-221.preview.emergentagent.com",
+    "api_url": "https://eatery-system-24.preview.emergentagent.com",
     "owner": {
       "email": "owner@maestroegp.com",
       "password": "owner123",
