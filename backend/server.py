@@ -12353,6 +12353,14 @@ async def create_customer_order(
     customer_token: Optional[str] = None
 ):
     """إنشاء طلب من تطبيق العميل"""
+    # Resolve menu_slug to actual tenant_id if needed
+    tenant = await db.tenants.find_one(
+        {"$or": [{"id": tenant_id}, {"menu_slug": tenant_id}]},
+        {"_id": 0, "id": 1}
+    )
+    if tenant:
+        tenant_id = tenant["id"]
+    
     # جلب العميل
     customer = None
     if customer_token:
