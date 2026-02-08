@@ -1184,16 +1184,16 @@ class OrderResponse(BaseModel):
     buzzer_number: Optional[str] = None  # رقم جهاز التنبيه
     items: List[Dict[str, Any]]
     subtotal: float
-    discount: float
-    tax: float
+    discount: float = 0.0  # Default for legacy orders
+    tax: float = 0.0  # Default for legacy orders
     total: float
     total_cost: float = 0.0
     profit: float = 0.0
-    branch_id: str
+    branch_id: Optional[str] = None  # Made optional for customer orders
     cashier_id: Optional[str] = None  # Made optional for orders without cashier
-    status: str
-    payment_method: str
-    payment_status: str
+    status: str = "pending"  # Default status
+    payment_method: str = "cash"  # Default payment method
+    payment_status: str = "pending"  # Default for legacy orders
     delivery_app: Optional[str] = None
     delivery_app_name: Optional[str] = None  # اسم شركة التوصيل
     delivery_commission: float = 0.0
@@ -1201,8 +1201,9 @@ class OrderResponse(BaseModel):
     driver_name: Optional[str] = None  # اسم السائق
     driver_phone: Optional[str] = None  # هاتف السائق
     notes: Optional[str] = None
-    created_at: str
+    created_at: Optional[str] = None  # Made optional for legacy orders
     updated_at: Optional[str] = None  # Made optional for legacy orders
+    tenant_id: Optional[str] = None  # Added for tenant filtering
 
 # Shift Models
 class ShiftCreate(BaseModel):
