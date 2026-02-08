@@ -12153,6 +12153,42 @@ def hash_customer_password(password: str) -> str:
     import hashlib
     return hashlib.sha256(password.encode()).hexdigest()
 
+
+@api_router.get("/customer/restaurants")
+async def get_customer_restaurants():
+    """جلب قائمة المطاعم المتاحة للعملاء"""
+    # جلب جميع المستأجرين النشطين الذين لديهم menu_slug
+    tenants = await db.tenants.find(
+        {"menu_slug": {"$ne": None, "$exists": True}},
+        {"_id": 0}
+    ).to_list(100)
+    
+    restaurants = []
+    for tenant in tenants:
+        # جلب إعدادات المطعم
+        settings = await db.settings.find_one(
+            {"tenant_id": tenant.get("id"), "type": "restaurant"},
+            {"_id": 0}
+        )
+        
+        # جلب عدد الفروع
+        branches_count = await db.branches.count_documents({"tenant_id": tenant.get("id")})
+        
+        restaurant_data = settings.get("value", {}) if settings else {}
+        
+        restaurants.append({
+            "id": tenant.get("id"),
+            "name": restaurant_data.get("name") or tenant.get("name", "مطعم"),
+            "menu_slug": tenant.get("menu_slug"),
+            "logo": restaurant_data.get("logo"),
+            "description": restaurant_data.get("description"),
+            "address": restaurant_data.get("address"),
+            "branches_count": branches_count
+        })
+    
+    return restaurants
+
+
 @api_router.get("/customer/menu/{tenant_id}")
 async def get_customer_menu(tenant_id: str):
     """جلب قائمة الطعام للعملاء - بدون توثيق"""
