@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+        <meta name="theme-color" content="#f97316" />
+        <meta name="description" content="اطلب طعامك المفضل - قائمة الطعام" />
+        
+        <!-- PWA Meta Tags for iOS -->
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+        <meta name="apple-mobile-web-app-title" content="قائمة الطعام" />
+        <meta name="mobile-web-app-capable" content="yes" />
+        
+        <!-- Apple Touch Icons for Customer App -->
+        <link rel="apple-touch-icon" href="/icons/customer-icon-192.png" />
+        <link rel="apple-touch-icon" sizes="152x152" href="/icons/customer-icon-192.png" />
+        <link rel="apple-touch-icon" sizes="180x180" href="/icons/customer-icon-512.png" />
+        <link rel="apple-touch-icon" sizes="167x167" href="/icons/customer-icon-192.png" />
+        
+        <!-- Favicons -->
+        <link rel="icon" type="image/png" sizes="32x32" href="/icons/customer-icon-192.png" />
+        <link rel="icon" type="image/png" sizes="16x16" href="/icons/customer-icon-192.png" />
+        <link rel="shortcut icon" href="/icons/customer-icon-192.png" />
+        
+        <!-- Manifest للعملاء فقط - مسار فريد -->
+        <link rel="manifest" href="/customer-app/manifest.json" />
+        
+        <!-- Splash Screen for iOS -->
+        <meta name="apple-touch-startup-image" href="/icons/customer-icon-512.png" />
+        
+        <title>قائمة الطعام - اطلب الآن</title>
+        
+        <style>
+            * {
+                margin: 0;
+                padding: 0;
+                box-sizing: border-box;
+            }
+            body {
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
+                min-height: 100vh;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                color: white;
+                text-align: center;
+                padding: 20px;
+            }
+            .container {
+                max-width: 400px;
+                width: 100%;
+            }
+            .logo {
+                width: 120px;
+                height: 120px;
+                background: white;
+                border-radius: 24px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                margin: 0 auto 24px;
+                box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            }
+            .logo svg {
+                width: 60px;
+                height: 60px;
+                fill: #f97316;
+            }
+            h1 {
+                font-size: 28px;
+                margin-bottom: 12px;
+                font-weight: 700;
+            }
+            p {
+                font-size: 16px;
+                opacity: 0.9;
+                margin-bottom: 32px;
+                line-height: 1.6;
+            }
+            .btn {
+                display: inline-block;
+                background: white;
+                color: #ea580c;
+                padding: 16px 48px;
+                border-radius: 50px;
+                font-size: 18px;
+                font-weight: 600;
+                text-decoration: none;
+                box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+                transition: transform 0.2s, box-shadow 0.2s;
+            }
+            .btn:hover {
+                transform: translateY(-2px);
+                box-shadow: 0 6px 30px rgba(0,0,0,0.2);
+            }
+            .loader {
+                width: 50px;
+                height: 50px;
+                border: 4px solid rgba(255,255,255,0.3);
+                border-top-color: white;
+                border-radius: 50%;
+                animation: spin 1s linear infinite;
+                margin: 0 auto 20px;
+            }
+            @keyframes spin {
+                to { transform: rotate(360deg); }
+            }
+            .install-hint {
+                margin-top: 40px;
+                padding: 20px;
+                background: rgba(255,255,255,0.1);
+                border-radius: 16px;
+                font-size: 14px;
+            }
+            .install-hint strong {
+                display: block;
+                margin-bottom: 8px;
+            }
+            .hidden {
+                display: none;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container" id="loading">
+            <div class="loader"></div>
+            <h1>جاري التحميل...</h1>
+            <p>يرجى الانتظار</p>
+        </div>
+        
+        <div class="container hidden" id="content">
+            <div class="logo">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                    <path d="M11 9H9V2H7v7H5V2H3v7c0 2.12 1.66 3.84 3.75 3.97V22h2.5v-9.03C11.34 12.84 13 11.12 13 9V2h-2v7zm5-3v8h2.5v8H21V2c-2.76 0-5 2.24-5 4z"/>
+                </svg>
+            </div>
+            <h1>قائمة الطعام</h1>
+            <p>اطلب طعامك المفضل بسهولة وسرعة من أفضل المطاعم</p>
+            <a href="/menu" class="btn" id="openMenu">ابدأ الطلب</a>
+            
+            <div class="install-hint" id="installHint">
+                <strong>📲 لتثبيت التطبيق:</strong>
+                اضغط على زر المشاركة ثم "إضافة للشاشة الرئيسية"
+            </div>
+        </div>
+        
+        <script>
+            // إظهار المحتوى بعد التحميل
+            window.onload = function() {
+                document.getElementById('loading').classList.add('hidden');
+                document.getElementById('content').classList.remove('hidden');
+            };
+            
+            // التحقق من وضع standalone
+            if (window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone) {
+                // إذا كان التطبيق مثبتاً، انتقل مباشرة للقائمة
+                window.location.href = '/menu';
+            }
+            
+            // إخفاء تلميح التثبيت إذا لم يكن iOS
+            var isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+            if (!isIOS) {
+                var hint = document.getElementById('installHint');
+                if (hint) hint.style.display = 'none';
+            }
+        </script>
+    </body>
+</html>
+</file_text>
+</invoke>
