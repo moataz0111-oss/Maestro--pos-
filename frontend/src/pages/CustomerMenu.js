@@ -38,7 +38,10 @@ import {
   Loader2,
   X,
   Smartphone,
-  Wallet
+  Wallet,
+  History,
+  Package,
+  Calendar
 } from 'lucide-react';
 import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
