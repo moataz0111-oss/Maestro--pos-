@@ -197,14 +197,13 @@ export default function Login() {
     // التحقق إذا كان البريد الإلكتروني للمالك
     const ownerEmails = ['owner@maestroegp.com', 'hanialdujaili@gmail.com'];
     if (ownerEmails.includes(email.toLowerCase())) {
-      // إذا لم يتم إدخال المفتاح السري، اطلبه
-      if (!isOwnerLogin) {
-        setIsOwnerLogin(true);
+      // التحقق من المفتاح السري
+      if (!ownerSecretKey) {
+        setError('يرجى إدخال المفتاح السري');
         setLoading(false);
         return;
       }
       
-      // التحقق من المفتاح السري
       if (ownerSecretKey !== '271018') {
         setError('المفتاح السري غير صحيح');
         setLoading(false);
