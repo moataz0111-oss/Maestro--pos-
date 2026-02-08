@@ -288,11 +288,13 @@ export default function CustomerMenu() {
           const customerData = savedCustomer ? JSON.parse(savedCustomer) : {};
           customerData.location = [pos.coords.latitude, pos.coords.longitude];
           localStorage.setItem(`customer_${tenantId}`, JSON.stringify(customerData));
+          toast.success('تم تحديد موقعك تلقائياً');
         },
         (error) => {
           console.log('Could not auto-detect location:', error.message);
+          // لا نعرض رسالة خطأ لأنها تحدث تلقائياً وقد يرفض المستخدم الإذن
         },
-        { enableHighAccuracy: true, timeout: 10000 }
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
       );
     }
   };
