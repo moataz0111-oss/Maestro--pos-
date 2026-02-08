@@ -15,6 +15,19 @@ export default function RestaurantSelector() {
   const [searchQuery, setSearchQuery] = useState('');
   const navigate = useNavigate();
 
+  // تحديث manifest للعملاء
+  useEffect(() => {
+    const manifestLink = document.querySelector('link[rel="manifest"]');
+    if (manifestLink) {
+      manifestLink.href = '/manifest-customer.json?v=' + Date.now();
+    }
+    
+    const themeColor = document.querySelector('meta[name="theme-color"]');
+    if (themeColor) themeColor.content = '#f97316';
+    
+    document.title = 'اطلب طعامك - اختر مطعمك المفضل';
+  }, []);
+
   useEffect(() => {
     fetchRestaurants();
   }, []);
