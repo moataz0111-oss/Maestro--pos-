@@ -676,6 +676,7 @@ export default function Dashboard() {
   const allQuickActions = [
     { label: 'نقاط البيع', icon: ShoppingCart, path: '/pos', color: 'bg-gradient-to-br from-orange-400 to-orange-600', key: 'showPOS', id: 'pos' },
     { label: 'الطاولات', icon: LayoutGrid, path: '/tables', color: 'bg-gradient-to-br from-blue-400 to-blue-600', key: 'showTables', id: 'tables' },
+    { label: 'إدارة الطلبات', icon: ClipboardList, path: '/orders', color: 'bg-gradient-to-br from-amber-400 to-amber-600', key: 'showOrders', id: 'orders' },
     { label: 'شاشة المطبخ', icon: ChefHat, path: '/kitchen', color: 'bg-gradient-to-br from-yellow-400 to-yellow-600', key: 'showKitchen', id: 'kitchen' },
     { label: 'التقارير', icon: BarChart3, path: '/reports', color: 'bg-gradient-to-br from-amber-400 to-amber-600', key: 'showReports', id: 'reports' },
     { label: 'التقارير الذكية', icon: PieChart, path: '/smart-reports', color: 'bg-gradient-to-br from-emerald-400 to-emerald-600', key: 'showSmartReports', id: 'smart-reports' },
