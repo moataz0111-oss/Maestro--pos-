@@ -83,22 +83,43 @@ webpackConfig.devServer = (devServerConfig) => {
     devServerConfig = setupDevServer(devServerConfig);
   }
 
-  // Add health check endpoints if enabled
-  if (config.enableHealthCheck && setupHealthEndpoints && healthPluginInstance) {
-    const originalSetupMiddlewares = devServerConfig.setupMiddlewares;
+  // Store original setupMiddlewares
+  const originalSetupMiddlewares = devServerConfig.setupMiddlewares;
 
-    devServerConfig.setupMiddlewares = (middlewares, devServer) => {
-      // Call original setup if exists
-      if (originalSetupMiddlewares) {
-        middlewares = originalSetupMiddlewares(middlewares, devServer);
+  devServerConfig.setupMiddlewares = (middlewares, devServer) => {
+    // Add customer PWA middleware - تقديم customer.html للمسارات الخاصة بالزبائن
+    middlewares.unshift({
+      name: 'customer-pwa',
+      middleware: (req, res, next) => {
+        const fs = require('fs');
+        const customerPaths = ['/customer.html', '/menu', '/menu/'];
+        const isMenuPath = req.url.startsWith('/menu/') || req.url.startsWith('/menu?');
+        const isCustomerHtml = req.url === '/customer.html' || req.url.startsWith('/customer.html?');
+        
+        // تقديم customer.html فقط للمسار الدقيق /customer.html
+        if (isCustomerHtml) {
+          const customerHtmlPath = path.join(__dirname, 'public', 'customer.html');
+          if (fs.existsSync(customerHtmlPath)) {
+            res.setHeader('Content-Type', 'text/html');
+            return res.end(fs.readFileSync(customerHtmlPath, 'utf8'));
+          }
+        }
+        next();
       }
+    });
 
-      // Setup health endpoints
+    // Call original setup if exists
+    if (originalSetupMiddlewares) {
+      middlewares = originalSetupMiddlewares(middlewares, devServer);
+    }
+
+    // Setup health endpoints if enabled
+    if (config.enableHealthCheck && setupHealthEndpoints && healthPluginInstance) {
       setupHealthEndpoints(devServer, healthPluginInstance);
+    }
 
-      return middlewares;
-    };
-  }
+    return middlewares;
+  };
 
   return devServerConfig;
 };
