@@ -12303,27 +12303,19 @@ async def get_customer_menu(tenant_id: str):
         {"_id": 0}
     ).to_list(500)
     
-    # جلب الفروع - فقط للعميل المحدد
+    # جلب الفروع - فقط للعميل المحدد مع إخفاء الفروع الافتراضية
+    default_branch_names = ["الفرع الرئيسي", "Main Branch", "الفرع الثاني", "فرع المالك الرئيسي"]
     branches = await db.branches.find(
-        {"tenant_id": tid, "is_active": {"$ne": False}},
+        {
+            "tenant_id": tid, 
+            "is_active": {"$ne": False},
+            "name": {"$nin": default_branch_names}
+        },
         {"_id": 0}
     ).to_list(50)
     
-    # إذا لم توجد فروع، أنشئ فرع افتراضي
-    if not branches:
-        default_branch = {
-            "id": str(uuid.uuid4()),
-            "name": "الفرع الرئيسي",
-            "code": "MAIN",
-            "address": "",
-            "phone": "",
-            "is_main": True,
-            "is_active": True,
-            "tenant_id": tid,
-            "created_at": datetime.now(timezone.utc).isoformat()
-        }
-        await db.branches.insert_one(default_branch)
-        branches = [default_branch]
+    # إذا لم توجد فروع حقيقية، لا نُنشئ فرع افتراضي للعملاء
+    # بل نعرض رسالة أنه لا توجد فروع متاحة
     
     # جلب الإعدادات - للحصول على الشعار والاسم
     settings = await db.tenant_settings.find_one({"tenant_id": tid}, {"_id": 0}) or {}
