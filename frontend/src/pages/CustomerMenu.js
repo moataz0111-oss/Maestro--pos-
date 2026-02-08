@@ -648,9 +648,21 @@ export default function CustomerMenu() {
               {/* شعار المطعم */}
               <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-amber-400 to-yellow-500 flex items-center justify-center shadow-md border border-white/30 overflow-hidden">
                 {restaurant?.logo ? (
-                  <img src={restaurant.logo} alt={restaurant?.name} className="w-full h-full object-cover" />
+                  <img 
+                    src={restaurant.logo.startsWith('/api') 
+                      ? `${API}${restaurant.logo.replace('/api', '')}` 
+                      : restaurant.logo.startsWith('http') 
+                        ? restaurant.logo 
+                        : `${API}/uploads/logos/${restaurant.logo}`} 
+                    alt={restaurant?.name} 
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      e.target.style.display = 'none';
+                      e.target.parentElement.innerHTML = '<span class="text-black text-2xl font-bold">' + (restaurant?.name?.[0] || 'M') + '</span>';
+                    }}
+                  />
                 ) : (
-                  <span className="text-black text-2xl font-bold">M</span>
+                  <span className="text-black text-2xl font-bold">{restaurant?.name?.[0] || 'M'}</span>
                 )}
               </div>
               <div className="flex-1">
