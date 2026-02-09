@@ -562,6 +562,50 @@ export default function Settings() {
     }
   };
 
+  // جلب إعدادات المنطقة والعملة
+  const fetchRegionalSettings = async () => {
+    try {
+      const [regionalRes, currenciesRes, languagesRes, countriesRes] = await Promise.all([
+        axios.get(`${API}/tenant/regional-settings`),
+        axios.get(`${API}/system/currencies`),
+        axios.get(`${API}/system/languages`),
+        axios.get(`${API}/system/countries`)
+      ]);
+      setRegionalSettings(prev => ({ ...prev, ...regionalRes.data }));
+      setSupportedCurrencies(currenciesRes.data.currencies);
+      setSupportedLanguages(languagesRes.data.languages);
+      setSupportedCountries(countriesRes.data.countries);
+    } catch (error) {
+      console.error('Failed to fetch regional settings:', error);
+    }
+  };
+
+  // حفظ إعدادات المنطقة والعملة
+  const saveRegionalSettings = async () => {
+    setSavingRegionalSettings(true);
+    try {
+      await axios.put(`${API}/tenant/regional-settings`, regionalSettings);
+      toast.success('تم حفظ إعدادات المنطقة والعملة بنجاح');
+    } catch (error) {
+      toast.error('فشل في حفظ إعدادات المنطقة');
+    } finally {
+      setSavingRegionalSettings(false);
+    }
+  };
+
+  // تغيير البلد يغير العملة واللغة تلقائياً
+  const handleCountryChange = (countryCode) => {
+    const country = supportedCountries[countryCode];
+    if (country) {
+      setRegionalSettings(prev => ({
+        ...prev,
+        country: countryCode,
+        currency: country.currency,
+        language: country.language
+      }));
+    }
+  };
+
   // جلب إعدادات الدفع
   const fetchPaymentSettings = async () => {
     try {
