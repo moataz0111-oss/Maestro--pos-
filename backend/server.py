@@ -13258,6 +13258,7 @@ async def create_driver(
     name: str,
     phone: str,
     branch_id: Optional[str] = None,
+    pin: str = "1234",
     current_user: dict = Depends(get_current_user)
 ):
     """إنشاء سائق جديد"""
@@ -13272,6 +13273,7 @@ async def create_driver(
         "branch_id": branch_id,
         "name": name,
         "phone": phone,
+        "pin": pin,  # الرمز السري للسائق
         "is_active": True,
         "is_available": True,
         "current_location": None,
@@ -13281,6 +13283,7 @@ async def create_driver(
     
     await db.drivers.insert_one(driver)
     driver.pop("_id", None)
+    driver.pop("pin", None)  # لا ترجع PIN في الاستجابة
     
     return {"message": "تم إضافة السائق", "driver": driver}
 
@@ -13289,6 +13292,7 @@ async def update_driver(
     driver_id: str,
     name: Optional[str] = None,
     phone: Optional[str] = None,
+    pin: Optional[str] = None,
     is_active: Optional[bool] = None,
     is_available: Optional[bool] = None,
     branch_id: Optional[str] = None,
@@ -13303,6 +13307,7 @@ async def update_driver(
     update_data = {"updated_at": datetime.now(timezone.utc).isoformat()}
     if name: update_data["name"] = name
     if phone: update_data["phone"] = phone
+    if pin: update_data["pin"] = pin  # تحديث الرمز السري
     if is_active is not None: update_data["is_active"] = is_active
     if is_available is not None: update_data["is_available"] = is_available
     if branch_id: update_data["branch_id"] = branch_id
