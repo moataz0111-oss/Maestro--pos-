@@ -1,1 +1,6 @@
+# توجيه PWA الزبائن
+/menu.html    /menu.html    200
+/menu/*       /index.html   200
+
+# جميع المسارات الأخرى
 /*    /index.html   200
