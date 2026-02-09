@@ -129,6 +129,7 @@ export default function Dashboard() {
     showInventory: true,
     showDelivery: true,
     showReports: true,
+    showRatings: true,
     showSettings: true,
     showHR: true,
     showWarehouse: true,
