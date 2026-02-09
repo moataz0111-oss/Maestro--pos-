@@ -624,6 +624,84 @@ export default function SuperAdmin() {
     }
   };
 
+  // ==================== Currency Functions ====================
+  
+  // جلب إعدادات العملة للمالك
+  const fetchCurrencySettings = async () => {
+    try {
+      const res = await axios.get(`${API}/super-admin/currency-settings`);
+      setCurrencySettings(res.data);
+    } catch (error) {
+      console.error('Error fetching currency settings:', error);
+    }
+  };
+
+  // جلب ملخص المبيعات مع تحويل العملة
+  const fetchSalesSummary = async (displayCurrency = currencySettings.preferred_currency) => {
+    setLoadingSalesSummary(true);
+    try {
+      const res = await axios.get(`${API}/super-admin/sales-summary`, {
+        params: { display_currency: displayCurrency }
+      });
+      setSalesSummary(res.data);
+    } catch (error) {
+      console.error('Error fetching sales summary:', error);
+      toast.error('فشل في جلب ملخص المبيعات');
+    } finally {
+      setLoadingSalesSummary(false);
+    }
+  };
+
+  // جلب أسعار الصرف الحية
+  const fetchLiveRates = async () => {
+    setLoadingLiveRates(true);
+    try {
+      const res = await axios.get(`${API}/super-admin/live-exchange-rates`);
+      setLiveRates(res.data);
+      if (res.data.success) {
+        toast.success('تم جلب أسعار الصرف الحية');
+      } else {
+        toast.info(res.data.message || 'يتم استخدام الأسعار الثابتة');
+      }
+    } catch (error) {
+      console.error('Error fetching live rates:', error);
+      toast.error('فشل في جلب أسعار الصرف');
+    } finally {
+      setLoadingLiveRates(false);
+    }
+  };
+
+  // حفظ إعدادات العملة
+  const saveCurrencySettings = async () => {
+    setSavingCurrencySettings(true);
+    try {
+      await axios.put(`${API}/super-admin/currency-settings`, currencySettings);
+      toast.success('تم حفظ إعدادات العملة');
+      setShowCurrencySettingsModal(false);
+      // تحديث ملخص المبيعات بالعملة الجديدة
+      fetchSalesSummary(currencySettings.preferred_currency);
+    } catch (error) {
+      toast.error('فشل في حفظ إعدادات العملة');
+    } finally {
+      setSavingCurrencySettings(false);
+    }
+  };
+
+  // تحديث سعر صرف مخصص
+  const updateCustomRate = async (fromCurrency, toCurrency, rate) => {
+    try {
+      await axios.put(`${API}/super-admin/custom-exchange-rate`, null, {
+        params: { from_currency: fromCurrency, to_currency: toCurrency, rate }
+      });
+      toast.success(`تم تحديث سعر صرف ${fromCurrency}`);
+      fetchCurrencySettings();
+    } catch (error) {
+      toast.error('فشل في تحديث سعر الصرف');
+    }
+  };
+
+  // ==================== End Currency Functions ====================
+
   const createTenant = async () => {
     setLoading(true);
     
