@@ -653,13 +653,13 @@ export default function Login() {
                 نسيت كلمة المرور؟
               </button>
               
-              {/* زر بوابة السائقين */}
+              {/* زر تطبيق السائق */}
               <a 
-                href="/driver" 
+                href="/driver-app" 
                 className="flex items-center justify-center gap-2 text-sm text-amber-400 hover:text-amber-300 transition-colors py-2 px-4 rounded-lg border border-amber-500/30 hover:border-amber-500/50 hover:bg-amber-500/10 mx-auto"
               >
                 <Truck className="h-4 w-4" />
-                بوابة السائقين
+                تطبيق السائق
               </a>
               
               {/* Direct database init button - always visible */}
