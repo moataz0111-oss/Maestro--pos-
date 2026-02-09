@@ -12871,6 +12871,252 @@ async def remove_from_favorites(
     return {"message": "تم الحذف من المفضلة"}
 
 
+# ==================== نظام تقييم الطلبات ====================
+
+class OrderRating(BaseModel):
+    order_id: str
+    tenant_id: str
+    phone: str
+    rating: int  # 1-5 نجوم
+    comment: Optional[str] = None
+    food_quality: Optional[int] = None  # جودة الطعام 1-5
+    delivery_speed: Optional[int] = None  # سرعة التوصيل 1-5
+    service_quality: Optional[int] = None  # جودة الخدمة 1-5
+
+@api_router.post("/customer/rate-order")
+async def rate_order(rating: OrderRating):
+    """تقييم طلب من الزبون"""
+    if rating.rating < 1 or rating.rating > 5:
+        raise HTTPException(status_code=400, detail="التقييم يجب أن يكون من 1 إلى 5")
+    
+    # التحقق من وجود الطلب
+    order = await db.orders.find_one({"id": rating.order_id})
+    if not order:
+        raise HTTPException(status_code=404, detail="الطلب غير موجود")
+    
+    # التحقق من أن الطلب مكتمل
+    if order.get("status") not in ["delivered", "completed"]:
+        raise HTTPException(status_code=400, detail="لا يمكن تقييم طلب غير مكتمل")
+    
+    # التحقق من أن الرقم مطابق
+    if order.get("customer_phone") != rating.phone:
+        raise HTTPException(status_code=403, detail="رقم الهاتف غير مطابق")
+    
+    # التحقق من عدم وجود تقييم سابق
+    existing = await db.order_ratings.find_one({"order_id": rating.order_id})
+    if existing:
+        raise HTTPException(status_code=400, detail="تم تقييم هذا الطلب مسبقاً")
+    
+    # حفظ التقييم
+    rating_doc = {
+        "id": str(uuid.uuid4()),
+        **rating.model_dump(),
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    
+    await db.order_ratings.insert_one(rating_doc)
+    rating_doc.pop("_id", None)
+    
+    # تحديث متوسط تقييم الفرع
+    await update_branch_rating(order.get("branch_id"))
+    
+    return {"message": "شكراً لتقييمك! ⭐", "rating": rating_doc}
+
+async def update_branch_rating(branch_id: str):
+    """تحديث متوسط تقييم الفرع"""
+    if not branch_id:
+        return
+    
+    pipeline = [
+        {"$lookup": {
+            "from": "orders",
+            "localField": "order_id",
+            "foreignField": "id",
+            "as": "order"
+        }},
+        {"$unwind": "$order"},
+        {"$match": {"order.branch_id": branch_id}},
+        {"$group": {
+            "_id": None,
+            "avg_rating": {"$avg": "$rating"},
+            "total_ratings": {"$sum": 1},
+            "avg_food": {"$avg": "$food_quality"},
+            "avg_delivery": {"$avg": "$delivery_speed"},
+            "avg_service": {"$avg": "$service_quality"}
+        }}
+    ]
+    
+    result = await db.order_ratings.aggregate(pipeline).to_list(1)
+    
+    if result:
+        await db.branches.update_one(
+            {"id": branch_id},
+            {"$set": {
+                "rating": round(result[0].get("avg_rating", 0), 1),
+                "total_ratings": result[0].get("total_ratings", 0),
+                "food_rating": round(result[0].get("avg_food", 0) or 0, 1),
+                "delivery_rating": round(result[0].get("avg_delivery", 0) or 0, 1),
+                "service_rating": round(result[0].get("avg_service", 0) or 0, 1)
+            }}
+        )
+
+@api_router.get("/customer/order-rating/{order_id}")
+async def get_order_rating(order_id: str, phone: str = None):
+    """جلب تقييم طلب معين"""
+    rating = await db.order_ratings.find_one({"order_id": order_id}, {"_id": 0})
+    
+    if not rating:
+        return {"can_rate": True, "rating": None}
+    
+    return {"can_rate": False, "rating": rating}
+
+@api_router.get("/ratings/branch/{branch_id}")
+async def get_branch_ratings(branch_id: str, limit: int = 20, current_user: dict = Depends(get_current_user)):
+    """جلب تقييمات فرع معين"""
+    pipeline = [
+        {"$lookup": {
+            "from": "orders",
+            "localField": "order_id",
+            "foreignField": "id",
+            "as": "order"
+        }},
+        {"$unwind": "$order"},
+        {"$match": {"order.branch_id": branch_id}},
+        {"$sort": {"created_at": -1}},
+        {"$limit": limit},
+        {"$project": {
+            "_id": 0,
+            "id": 1,
+            "rating": 1,
+            "comment": 1,
+            "food_quality": 1,
+            "delivery_speed": 1,
+            "service_quality": 1,
+            "created_at": 1,
+            "customer_name": "$order.customer_name"
+        }}
+    ]
+    
+    ratings = await db.order_ratings.aggregate(pipeline).to_list(limit)
+    
+    # إحصائيات
+    branch = await db.branches.find_one({"id": branch_id}, {"_id": 0, "rating": 1, "total_ratings": 1, "food_rating": 1, "delivery_rating": 1, "service_rating": 1})
+    
+    return {
+        "ratings": ratings,
+        "stats": branch or {}
+    }
+
+@api_router.get("/ratings/tenant-summary")
+async def get_tenant_ratings_summary(current_user: dict = Depends(get_current_user)):
+    """ملخص تقييمات العميل (المطعم)"""
+    tenant_id = get_user_tenant_id(current_user)
+    
+    pipeline = [
+        {"$lookup": {
+            "from": "orders",
+            "localField": "order_id",
+            "foreignField": "id",
+            "as": "order"
+        }},
+        {"$unwind": "$order"},
+        {"$match": {"order.tenant_id": tenant_id}},
+        {"$group": {
+            "_id": None,
+            "avg_rating": {"$avg": "$rating"},
+            "total_ratings": {"$sum": 1},
+            "five_stars": {"$sum": {"$cond": [{"$eq": ["$rating", 5]}, 1, 0]}},
+            "four_stars": {"$sum": {"$cond": [{"$eq": ["$rating", 4]}, 1, 0]}},
+            "three_stars": {"$sum": {"$cond": [{"$eq": ["$rating", 3]}, 1, 0]}},
+            "two_stars": {"$sum": {"$cond": [{"$eq": ["$rating", 2]}, 1, 0]}},
+            "one_star": {"$sum": {"$cond": [{"$eq": ["$rating", 1]}, 1, 0]}},
+            "avg_food": {"$avg": "$food_quality"},
+            "avg_delivery": {"$avg": "$delivery_speed"},
+            "avg_service": {"$avg": "$service_quality"}
+        }}
+    ]
+    
+    result = await db.order_ratings.aggregate(pipeline).to_list(1)
+    
+    if not result:
+        return {
+            "avg_rating": 0,
+            "total_ratings": 0,
+            "distribution": {"5": 0, "4": 0, "3": 0, "2": 0, "1": 0},
+            "categories": {"food": 0, "delivery": 0, "service": 0}
+        }
+    
+    data = result[0]
+    return {
+        "avg_rating": round(data.get("avg_rating", 0), 1),
+        "total_ratings": data.get("total_ratings", 0),
+        "distribution": {
+            "5": data.get("five_stars", 0),
+            "4": data.get("four_stars", 0),
+            "3": data.get("three_stars", 0),
+            "2": data.get("two_stars", 0),
+            "1": data.get("one_star", 0)
+        },
+        "categories": {
+            "food": round(data.get("avg_food", 0) or 0, 1),
+            "delivery": round(data.get("avg_delivery", 0) or 0, 1),
+            "service": round(data.get("avg_service", 0) or 0, 1)
+        }
+    }
+
+@api_router.get("/super-admin/ratings-overview")
+async def get_super_admin_ratings_overview(current_user: dict = Depends(verify_super_admin)):
+    """ملخص تقييمات جميع العملاء للمالك"""
+    pipeline = [
+        {"$lookup": {
+            "from": "orders",
+            "localField": "order_id",
+            "foreignField": "id",
+            "as": "order"
+        }},
+        {"$unwind": "$order"},
+        {"$group": {
+            "_id": "$order.tenant_id",
+            "avg_rating": {"$avg": "$rating"},
+            "total_ratings": {"$sum": 1}
+        }}
+    ]
+    
+    tenant_ratings = await db.order_ratings.aggregate(pipeline).to_list(100)
+    
+    # جلب أسماء العملاء
+    result = []
+    for tr in tenant_ratings:
+        tenant = await db.tenants.find_one({"id": tr["_id"]}, {"_id": 0, "name": 1})
+        result.append({
+            "tenant_id": tr["_id"],
+            "tenant_name": tenant.get("name") if tenant else "غير معروف",
+            "avg_rating": round(tr.get("avg_rating", 0), 1),
+            "total_ratings": tr.get("total_ratings", 0)
+        })
+    
+    # الترتيب حسب التقييم
+    result.sort(key=lambda x: x["avg_rating"], reverse=True)
+    
+    # الإحصائيات العامة
+    total_pipeline = [
+        {"$group": {
+            "_id": None,
+            "avg_rating": {"$avg": "$rating"},
+            "total_ratings": {"$sum": 1}
+        }}
+    ]
+    total = await db.order_ratings.aggregate(total_pipeline).to_list(1)
+    
+    return {
+        "overall": {
+            "avg_rating": round(total[0].get("avg_rating", 0), 1) if total else 0,
+            "total_ratings": total[0].get("total_ratings", 0) if total else 0
+        },
+        "tenants": result
+    }
+
+
 @api_router.get("/customer/orders/{tenant_id}")
 async def get_customer_orders(tenant_id: str, customer_token: str):
     """جلب طلبات العميل"""
