@@ -405,6 +405,7 @@ class TestDriverAppIntegration:
             pytest.skip("Could not create test driver")
         
         driver_id = create_response.json().get("driver", {}).get("id")
+        print(f"Created driver ID: {driver_id}")
         
         try:
             # 3. Driver login
@@ -415,10 +416,10 @@ class TestDriverAppIntegration:
             assert login_response.status_code == 200
             login_data = login_response.json()
             assert login_data.get("driver") is not None
-            print(f"✅ Driver login successful: {login_data['driver']['name']}")
+            logged_in_driver_id = login_data["driver"]["id"]
+            print(f"✅ Driver login successful: {login_data['driver']['name']} (ID: {logged_in_driver_id})")
             
             # 4. Get driver orders (using driver_id from login response)
-            logged_in_driver_id = login_data["driver"]["id"]
             orders_response = requests.get(
                 f"{BASE_URL}/api/driver/orders",
                 params={"driver_id": logged_in_driver_id}
@@ -427,18 +428,19 @@ class TestDriverAppIntegration:
             orders = orders_response.json()
             print(f"✅ Driver orders fetched: {len(orders)} orders")
             
-            # 5. Update driver location
+            # 5. Update driver location (use logged_in_driver_id which is the same as driver_id)
             location_response = requests.post(
-                f"{BASE_URL}/api/drivers/{driver_id}/location",
+                f"{BASE_URL}/api/drivers/{logged_in_driver_id}/location",
                 json={"latitude": 33.3152, "longitude": 44.3661},
                 headers=headers
             )
+            print(f"Location update response: {location_response.status_code} - {location_response.text}")
             assert location_response.status_code == 200
             print(f"✅ Driver location updated")
             
             # 6. Get driver location
             get_location_response = requests.get(
-                f"{BASE_URL}/api/drivers/{driver_id}/location"
+                f"{BASE_URL}/api/drivers/{logged_in_driver_id}/location"
             )
             assert get_location_response.status_code == 200
             print(f"✅ Driver location retrieved")
@@ -446,9 +448,9 @@ class TestDriverAppIntegration:
             print("✅ Full driver flow test PASSED")
             
         finally:
-            # Cleanup
-            requests.delete(f"{BASE_URL}/api/drivers/{driver_id}", headers=headers)
-            print("✅ Test driver cleaned up")
+            # Cleanup - use the original driver_id from creation
+            cleanup_response = requests.delete(f"{BASE_URL}/api/drivers/{driver_id}", headers=headers)
+            print(f"✅ Test driver cleaned up (status: {cleanup_response.status_code})")
 
 
 class TestServiceWorkerEndpoints:
