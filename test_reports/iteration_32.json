@@ -82,7 +82,7 @@
   },
   
   "test_credentials": {
-    "api_url": "https://chef-track.preview.emergentagent.com",
+    "api_url": "https://resto-manager-235.preview.emergentagent.com",
     "client_graffiti": {
       "email": "hanialdujaili@gmail.com",
       "password": "graffiti123",
