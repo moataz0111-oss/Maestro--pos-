@@ -1,38 +1,61 @@
 // Currency formatting utilities for Maestro EGP
+// هذا الملف للتوافق مع الكود القديم - استخدم useCurrency() من CurrencyContext للتطبيقات الجديدة
 
-const CURRENCIES = {
-  IQD: { code: 'IQD', name: 'دينار عراقي', symbol: 'د.ع', rate: 1 },
-  USD: { code: 'USD', name: 'دولار أمريكي', symbol: '$', rate: 1460 },
+// العملات المدعومة
+export const CURRENCIES = {
+  IQD: { code: 'IQD', name: 'دينار عراقي', symbol: 'د.ع', rate: 1, decimals: 0 },
+  USD: { code: 'USD', name: 'دولار أمريكي', symbol: '$', rate: 1460, decimals: 2 },
+  SAR: { code: 'SAR', name: 'ريال سعودي', symbol: 'ر.س', rate: 389, decimals: 2 },
+  AED: { code: 'AED', name: 'درهم إماراتي', symbol: 'د.إ', rate: 398, decimals: 2 },
+  EGP: { code: 'EGP', name: 'جنيه مصري', symbol: 'ج.م', rate: 30, decimals: 2 },
+  JOD: { code: 'JOD', name: 'دينار أردني', symbol: 'د.أ', rate: 2060, decimals: 3 },
+  KWD: { code: 'KWD', name: 'دينار كويتي', symbol: 'د.ك', rate: 4750, decimals: 3 },
+  EUR: { code: 'EUR', name: 'يورو', symbol: '€', rate: 1580, decimals: 2 },
+};
+
+// جلب العملة من localStorage (للتوافق)
+const getCurrentCurrency = () => {
+  try {
+    const saved = localStorage.getItem('app_currency');
+    if (saved && CURRENCIES[saved]) {
+      return CURRENCIES[saved];
+    }
+  } catch (e) {}
+  return CURRENCIES.IQD;
 };
 
 /**
- * Format price in Iraqi Dinar
- * @param {number} amount - Amount in IQD
+ * Format price with current system currency
+ * @param {number} amount - Amount
  * @param {boolean} showSymbol - Whether to show currency symbol
  * @returns {string} Formatted price
  */
 export const formatPrice = (amount, showSymbol = true) => {
-  if (amount === null || amount === undefined) return '0';
+  if (amount === null || amount === undefined || isNaN(amount)) return showSymbol ? '0 د.ع' : '0';
+  
+  const currency = getCurrentCurrency();
   
   const formatted = new Intl.NumberFormat('ar-IQ', {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
+    minimumFractionDigits: currency.decimals || 0,
+    maximumFractionDigits: currency.decimals || 0,
   }).format(amount);
   
-  return showSymbol ? `${formatted} د.ع` : formatted;
+  return showSymbol ? `${formatted} ${currency.symbol}` : formatted;
 };
 
 /**
  * Format price with compact notation for large numbers
- * @param {number} amount - Amount in IQD
+ * @param {number} amount - Amount
  * @returns {string} Formatted price
  */
 export const formatPriceCompact = (amount) => {
+  const currency = getCurrentCurrency();
+  
   if (amount >= 1000000) {
-    return `${(amount / 1000000).toFixed(1)}M د.ع`;
+    return `${(amount / 1000000).toFixed(1)}M ${currency.symbol}`;
   }
   if (amount >= 1000) {
-    return `${(amount / 1000).toFixed(0)}K د.ع`;
+    return `${(amount / 1000).toFixed(0)}K ${currency.symbol}`;
   }
   return formatPrice(amount);
 };
@@ -69,10 +92,21 @@ export const parsePrice = (priceString) => {
   return parseFloat(cleaned) || 0;
 };
 
+/**
+ * Set the current currency (saves to localStorage)
+ * @param {string} currencyCode - Currency code (IQD, USD, etc.)
+ */
+export const setCurrency = (currencyCode) => {
+  if (CURRENCIES[currencyCode]) {
+    localStorage.setItem('app_currency', currencyCode);
+  }
+};
+
 export default {
   formatPrice,
   formatPriceCompact,
   convertCurrency,
   parsePrice,
+  setCurrency,
   CURRENCIES,
 };
