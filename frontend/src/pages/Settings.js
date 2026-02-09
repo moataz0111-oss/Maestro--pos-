@@ -575,10 +575,17 @@ export default function Settings() {
         axios.get(`${API}/system/languages`),
         axios.get(`${API}/system/countries`)
       ]);
-      setRegionalSettings(prev => ({ ...prev, ...regionalRes.data }));
+      
+      const settings = regionalRes.data;
+      setRegionalSettings(prev => ({ ...prev, ...settings }));
       setSupportedCurrencies(currenciesRes.data.currencies);
       setSupportedLanguages(languagesRes.data.languages);
       setSupportedCountries(countriesRes.data.countries);
+      
+      // حفظ في localStorage للاستخدام في كل النظام
+      if (settings.currency) localStorage.setItem('app_currency', settings.currency);
+      if (settings.language) localStorage.setItem('app_language', settings.language);
+      if (settings.country) localStorage.setItem('app_country', settings.country);
     } catch (error) {
       console.error('Failed to fetch regional settings:', error);
     }
