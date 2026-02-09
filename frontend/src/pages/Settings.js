@@ -4784,19 +4784,19 @@ export default function Settings() {
             </TabsContent>
           )}
 
-          {/* Invoice Settings - إعدادات الفاتورة للعميل */}
-          {hasRole(['admin', 'super_admin', 'manager']) && (
-            <TabsContent value="invoice-settings">
+          {/* System Settings - إعدادات النظام */}
+          {hasRole(['admin', 'super_admin']) && (
+            <TabsContent value="system-settings">
               <div className="space-y-6">
                 {/* قسم إعدادات المنطقة والعملة */}
                 <Card className="border-border/50 bg-card">
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2 text-foreground">
                       <Globe className="h-5 w-5" />
-                      إعدادات المنطقة والعملة
+                      إعدادات النظام العامة
                     </CardTitle>
                     <p className="text-sm text-muted-foreground">
-                      اختر البلد والعملة واللغة المناسبة لمطعمك
+                      اختر البلد والعملة واللغة للنظام بالكامل
                     </p>
                   </CardHeader>
                   <CardContent className="space-y-6">
@@ -4804,7 +4804,7 @@ export default function Settings() {
                     <div className="p-4 border rounded-lg bg-blue-500/10">
                       <Label className="text-foreground font-bold mb-4 flex items-center gap-2">
                         <Globe className="h-5 w-5 text-blue-500" />
-                        البلد
+                        بلد النظام
                       </Label>
                       <select
                         value={regionalSettings.country}
@@ -4818,7 +4818,7 @@ export default function Settings() {
                         ))}
                       </select>
                       <p className="text-xs text-muted-foreground mt-2">
-                        * تغيير البلد سيعدل العملة واللغة تلقائياً
+                        * تغيير البلد سيعدل العملة واللغة تلقائياً للنظام بالكامل
                       </p>
                     </div>
 
@@ -4826,7 +4826,7 @@ export default function Settings() {
                     <div className="p-4 border rounded-lg bg-green-500/10">
                       <Label className="text-foreground font-bold mb-4 flex items-center gap-2">
                         <Banknote className="h-5 w-5 text-green-500" />
-                        العملة الرئيسية
+                        عملة النظام الرئيسية
                       </Label>
                       <select
                         value={regionalSettings.currency}
@@ -4872,7 +4872,7 @@ export default function Settings() {
                     {/* اللغة */}
                     <div className="p-4 border rounded-lg bg-purple-500/10">
                       <Label className="text-foreground font-bold mb-4 flex items-center gap-2">
-                        🌐 اللغة
+                        🌐 لغة النظام
                       </Label>
                       <select
                         value={regionalSettings.language}
@@ -4901,13 +4901,49 @@ export default function Settings() {
                       ) : (
                         <>
                           <Save className="h-4 w-4 ml-2" />
-                          حفظ إعدادات المنطقة
+                          حفظ إعدادات النظام
                         </>
                       )}
                     </Button>
                   </CardContent>
                 </Card>
 
+                {/* إعدادات الإشعارات العامة */}
+                <Card className="border-border/50 bg-card">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2 text-foreground">
+                      <Bell className="h-5 w-5" />
+                      إشعارات النظام
+                    </CardTitle>
+                    <p className="text-sm text-muted-foreground">
+                      إعدادات الإشعارات والتنبيهات العامة
+                    </p>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="flex items-center justify-between p-3 border rounded-lg">
+                      <div>
+                        <p className="font-medium text-foreground">إشعارات الطلبات الجديدة</p>
+                        <p className="text-xs text-muted-foreground">إشعار صوتي عند وصول طلب جديد</p>
+                      </div>
+                      <Switch defaultChecked />
+                    </div>
+                    <div className="flex items-center justify-between p-3 border rounded-lg">
+                      <div>
+                        <p className="font-medium text-foreground">إشعارات المخزون المنخفض</p>
+                        <p className="text-xs text-muted-foreground">تنبيه عند انخفاض المخزون عن الحد الأدنى</p>
+                      </div>
+                      <Switch defaultChecked />
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            </TabsContent>
+          )}
+
+          {/* Invoice Settings - إعدادات الفاتورة للعميل */}
+          {hasRole(['admin', 'super_admin', 'manager']) && (
+            <TabsContent value="invoice-settings">
+              <div className="space-y-6">
                 {/* إعدادات الفاتورة */}
                 <Card className="border-border/50 bg-card">
                   <CardHeader>
