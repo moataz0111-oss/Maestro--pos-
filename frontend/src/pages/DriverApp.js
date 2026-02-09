@@ -488,7 +488,17 @@ export default function DriverApp() {
                         </a>
                       </div>
 
-                      {order.status !== 'delivered' && (
+                      {order.status === 'ready' && (
+                        <Button
+                          className="w-full bg-blue-500 hover:bg-blue-600 mb-2"
+                          onClick={() => startDelivery(order.id)}
+                        >
+                          <Navigation className="h-5 w-5 ml-2" />
+                          بدء التوصيل (في الطريق)
+                        </Button>
+                      )}
+
+                      {order.status === 'out_for_delivery' && (
                         <Button
                           className="w-full bg-green-500 hover:bg-green-600"
                           onClick={() => deliverOrder(order.id)}
