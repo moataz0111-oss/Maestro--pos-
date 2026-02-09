@@ -357,17 +357,44 @@ export default function DriverApp() {
 
             {/* الخريطة المصغرة */}
             {currentLocation && (
-              <div className="mt-4 h-40 rounded-lg overflow-hidden">
+              <div className="mt-4 h-48 rounded-xl overflow-hidden border border-gray-700 shadow-lg">
                 <MapContainer
                   center={currentLocation}
-                  zoom={16}
+                  zoom={17}
                   style={{ height: '100%', width: '100%' }}
                   zoomControl={false}
                 >
-                  <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+                  {/* خريطة داكنة مثل Waze */}
+                  <TileLayer 
+                    url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+                    attribution='&copy; CARTO'
+                  />
                   <MapUpdater center={currentLocation} />
-                  <Marker position={currentLocation}>
-                    <Popup>موقعك الحالي</Popup>
+                  <Marker 
+                    position={currentLocation}
+                    icon={L.divIcon({
+                      className: 'driver-location',
+                      html: `
+                        <div style="
+                          background: linear-gradient(135deg, #3b82f6, #06b6d4);
+                          width: 44px;
+                          height: 44px;
+                          border-radius: 50%;
+                          display: flex;
+                          align-items: center;
+                          justify-content: center;
+                          font-size: 22px;
+                          border: 3px solid white;
+                          box-shadow: 0 0 15px rgba(59,130,246,0.6), 0 4px 12px rgba(0,0,0,0.4);
+                        ">🛵</div>
+                      `,
+                      iconSize: [44, 44],
+                      iconAnchor: [22, 22]
+                    })}
+                  >
+                    <Popup>
+                      <div className="text-center font-bold">موقعك الحالي</div>
+                    </Popup>
                   </Marker>
                 </MapContainer>
               </div>
