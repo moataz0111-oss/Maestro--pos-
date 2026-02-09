@@ -13393,7 +13393,7 @@ async def assign_driver_to_order(
     current_user: dict = Depends(get_current_user)
 ):
     """تخصيص سائق للطلب"""
-    if current_user["role"] not in [UserRole.ADMIN, UserRole.MANAGER, UserRole.BRANCH_MANAGER, UserRole.CASHIER]:
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.MANAGER, UserRole.SUPERVISOR, UserRole.CASHIER]:
         raise HTTPException(status_code=403, detail="غير مصرح")
     
     tenant_id = get_user_tenant_id(current_user)
