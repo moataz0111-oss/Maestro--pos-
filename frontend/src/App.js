@@ -4,6 +4,7 @@ import { Toaster } from "./components/ui/sonner";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { ThemeProvider } from "./context/ThemeContext";
 import { BranchProvider } from "./context/BranchContext";
+import { CurrencyProvider } from "./context/CurrencyContext";
 import ErrorBoundary from "./components/ErrorBoundary";
 import React, { Suspense, lazy } from "react";
 
