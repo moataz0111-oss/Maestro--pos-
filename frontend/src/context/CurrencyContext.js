@@ -1,6 +1,7 @@
 // Currency Context - إدارة العملة في كل النظام
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import axios from 'axios';
+import { setCurrency as setLocalCurrency, refreshCurrencyCache } from '../utils/currency';
 
 // العملات المدعومة
 export const CURRENCIES = {
