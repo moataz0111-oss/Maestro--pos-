@@ -235,11 +235,50 @@ export default function Delivery() {
     }
   };
 
+  // تحديد/إلغاء تحديد سائق واحد
+  const toggleSelectDriver = (driverId) => {
+    setSelectedDrivers(prev => 
+      prev.includes(driverId) 
+        ? prev.filter(id => id !== driverId)
+        : [...prev, driverId]
+    );
+  };
+
+  // تحديد الكل / إلغاء تحديد الكل
+  const toggleSelectAll = () => {
+    if (selectedDrivers.length === drivers.length) {
+      setSelectedDrivers([]);
+    } else {
+      setSelectedDrivers(drivers.map(d => d.id));
+    }
+  };
+
+  // مسح السائقين المحددين
+  const handleDeleteSelectedDrivers = async () => {
+    if (selectedDrivers.length === 0) return;
+    
+    setDeleteConfirmOpen(false);
+    
+    try {
+      // مسح السائقين واحداً تلو الآخر
+      for (const driverId of selectedDrivers) {
+        await axios.delete(`${API}/drivers/${driverId}`);
+      }
+      toast.success(`تم حذف ${selectedDrivers.length} سائق بنجاح`);
+      setSelectedDrivers([]);
+      fetchData();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'فشل في حذف بعض السائقين');
+      fetchData();
+    }
+  };
+
   const openEditDialog = (driver) => {
     setEditFormData({
       id: driver.id,
       name: driver.name,
       phone: driver.phone,
+      pin: '',  // لا نعرض PIN الحالي
       is_active: driver.is_available !== false
     });
     setEditDialogOpen(true);
