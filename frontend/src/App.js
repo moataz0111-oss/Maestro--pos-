@@ -388,6 +388,8 @@ function AppRoutes() {
       <Route path="/menu" element={<RestaurantSelector />} />
       <Route path="/menu/:tenantId" element={<CustomerMenu />} />
       <Route path="/install-app" element={<CustomerInstall />} />
+      {/* تطبيق السائق - بدون حماية */}
+      <Route path="/driver" element={<DriverApp />} />
       <Route path="*" element={<Navigate to="/" />} />
       </Routes>
     </Suspense>
