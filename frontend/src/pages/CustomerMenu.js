@@ -902,6 +902,85 @@ export default function CustomerMenu() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Rating Dialog - نافذة التقييم */}
+      <Dialog open={showRatingDialog} onOpenChange={setShowRatingDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Star className="h-5 w-5 text-yellow-500" />
+              قيّم طلبك
+            </DialogTitle>
+          </DialogHeader>
+          
+          <div className="space-y-6 py-4">
+            {/* التقييم العام */}
+            <div className="text-center">
+              <p className="text-sm text-gray-600 mb-3">كيف كانت تجربتك العامة؟</p>
+              <div className="flex justify-center">
+                <StarRating value={rating} onChange={setRating} size="lg" />
+              </div>
+              <p className="text-lg font-bold text-yellow-600 mt-2">
+                {rating === 5 ? 'ممتاز! 🌟' : rating === 4 ? 'جيد جداً 👍' : rating === 3 ? 'جيد 😊' : rating === 2 ? 'مقبول 😐' : 'سيء 😞'}
+              </p>
+            </div>
+
+            {/* تقييمات تفصيلية */}
+            <div className="space-y-4 bg-gray-50 rounded-lg p-4">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-gray-600">🍽️ جودة الطعام</span>
+                <StarRating value={foodRating} onChange={setFoodRating} />
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-gray-600">🚚 سرعة التوصيل</span>
+                <StarRating value={deliveryRating} onChange={setDeliveryRating} />
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-gray-600">👨‍🍳 جودة الخدمة</span>
+                <StarRating value={serviceRating} onChange={setServiceRating} />
+              </div>
+            </div>
+
+            {/* تعليق اختياري */}
+            <div>
+              <label className="text-sm font-medium mb-2 block flex items-center gap-2">
+                <MessageSquare className="h-4 w-4" />
+                تعليقك (اختياري)
+              </label>
+              <Textarea
+                placeholder="شاركنا رأيك لنحسّن خدماتنا..."
+                value={ratingComment}
+                onChange={(e) => setRatingComment(e.target.value)}
+                className="w-full resize-none"
+                rows={3}
+              />
+            </div>
+          </div>
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowRatingDialog(false)}>
+              إلغاء
+            </Button>
+            <Button 
+              onClick={submitRating}
+              disabled={submittingRating}
+              className="bg-yellow-500 hover:bg-yellow-600"
+            >
+              {submittingRating ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin ml-2" />
+                  جاري الإرسال...
+                </>
+              ) : (
+                <>
+                  <Star className="h-4 w-4 ml-2" />
+                  إرسال التقييم
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 
