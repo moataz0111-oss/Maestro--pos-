@@ -2701,6 +2701,7 @@ export default function SuperAdmin() {
                       { key: 'showBranchOrders', label: 'طلبات الفروع', icon: GitBranch },
                       { key: 'showPurchasing', label: 'المشتريات', icon: ShoppingCart },
                       { key: 'showReviews', label: 'التقييمات', icon: Star },
+                      { key: 'showCustomerMenu', label: 'قائمة الطعام للعملاء', icon: QrCode },
                     ].map(item => (
                       <label key={item.key} className="flex items-center justify-between p-2.5 bg-gray-700/30 rounded-lg hover:bg-gray-700/50 cursor-pointer">
                         <div className="flex items-center gap-2">
