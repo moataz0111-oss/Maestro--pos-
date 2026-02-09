@@ -1877,34 +1877,52 @@ export default function CustomerMenu() {
                   </div>
                   
                   {/* إعادة الطلب */}
-                  <Button
-                    onClick={() => {
-                      // إعادة الطلب - إضافة نفس المنتجات للسلة
-                      if (order.items && order.items.length > 0) {
-                        const newCart = order.items.map(item => ({
-                          id: item.product_id || item.id,
-                          name: item.name,
-                          price: item.price,
-                          quantity: item.quantity,
-                          image: item.image
-                        }));
-                        setCart(newCart);
-                        setStep('cart');
-                        toast.success('تمت إضافة المنتجات للسلة');
-                      }
-                    }}
-                    variant="outline"
-                    className="w-full mt-3"
-                    size="sm"
-                  >
-                    <ShoppingCart className="h-4 w-4 ml-2" />
-                    إعادة الطلب
-                  </Button>
+                  <div className="flex gap-2 mt-3">
+                    <Button
+                      onClick={() => {
+                        // إعادة الطلب - إضافة نفس المنتجات للسلة
+                        if (order.items && order.items.length > 0) {
+                          const newCart = order.items.map(item => ({
+                            id: item.product_id || item.id,
+                            name: item.name,
+                            price: item.price,
+                            quantity: item.quantity,
+                            image: item.image
+                          }));
+                          setCart(newCart);
+                          setStep('cart');
+                          toast.success('تمت إضافة المنتجات للسلة');
+                        }
+                      }}
+                      variant="outline"
+                      className="flex-1"
+                      size="sm"
+                    >
+                      <ShoppingCart className="h-4 w-4 ml-2" />
+                      إعادة الطلب
+                    </Button>
+                    
+                    {/* زر التقييم - يظهر فقط للطلبات المكتملة */}
+                    {(order.status === 'delivered' || order.status === 'completed') && (
+                      <Button
+                        onClick={() => openRatingDialog(order)}
+                        variant="outline"
+                        className="flex-1 border-yellow-500 text-yellow-600 hover:bg-yellow-50"
+                        size="sm"
+                      >
+                        <Star className="h-4 w-4 ml-2" />
+                        قيّم الطلب
+                      </Button>
+                    )}
+                  </div>
                 </CardContent>
               </Card>
             ))
           )}
         </main>
+        
+        {/* Global Dialogs */}
+        {renderGlobalDialogs()}
       </div>
     );
   }
