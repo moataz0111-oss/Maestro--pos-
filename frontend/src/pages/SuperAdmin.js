@@ -94,7 +94,8 @@ import {
   FolderTree,
   Printer,
   Bell,
-  Sparkles
+  Sparkles,
+  QrCode
 } from 'lucide-react';
 import { toast, Toaster } from 'sonner';
 import ImageCropper from '../components/ImageCropper';
