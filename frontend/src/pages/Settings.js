@@ -4780,6 +4780,127 @@ export default function Settings() {
           {hasRole(['admin', 'super_admin', 'manager']) && (
             <TabsContent value="invoice-settings">
               <div className="space-y-6">
+                {/* قسم إعدادات المنطقة والعملة */}
+                <Card className="border-border/50 bg-card">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2 text-foreground">
+                      <Globe className="h-5 w-5" />
+                      إعدادات المنطقة والعملة
+                    </CardTitle>
+                    <p className="text-sm text-muted-foreground">
+                      اختر البلد والعملة واللغة المناسبة لمطعمك
+                    </p>
+                  </CardHeader>
+                  <CardContent className="space-y-6">
+                    {/* البلد */}
+                    <div className="p-4 border rounded-lg bg-blue-500/10">
+                      <Label className="text-foreground font-bold mb-4 flex items-center gap-2">
+                        <Globe className="h-5 w-5 text-blue-500" />
+                        البلد
+                      </Label>
+                      <select
+                        value={regionalSettings.country}
+                        onChange={(e) => handleCountryChange(e.target.value)}
+                        className="w-full mt-2 px-3 py-2 border rounded-lg bg-background text-foreground"
+                      >
+                        {Object.entries(supportedCountries).map(([code, country]) => (
+                          <option key={code} value={code}>
+                            {country.name} ({country.name_en})
+                          </option>
+                        ))}
+                      </select>
+                      <p className="text-xs text-muted-foreground mt-2">
+                        * تغيير البلد سيعدل العملة واللغة تلقائياً
+                      </p>
+                    </div>
+
+                    {/* العملة */}
+                    <div className="p-4 border rounded-lg bg-green-500/10">
+                      <Label className="text-foreground font-bold mb-4 flex items-center gap-2">
+                        <Banknote className="h-5 w-5 text-green-500" />
+                        العملة الرئيسية
+                      </Label>
+                      <select
+                        value={regionalSettings.currency}
+                        onChange={(e) => setRegionalSettings(prev => ({...prev, currency: e.target.value}))}
+                        className="w-full mt-2 px-3 py-2 border rounded-lg bg-background text-foreground"
+                      >
+                        {Object.entries(supportedCurrencies).map(([code, currency]) => (
+                          <option key={code} value={code}>
+                            {currency.name} ({currency.symbol}) - {currency.name_en}
+                          </option>
+                        ))}
+                      </select>
+                      
+                      {/* العملة الثانوية */}
+                      <div className="mt-4 flex items-center justify-between">
+                        <Label className="text-sm text-muted-foreground">
+                          عرض السعر بعملة ثانوية
+                        </Label>
+                        <Switch
+                          checked={regionalSettings.show_secondary_currency}
+                          onCheckedChange={(checked) => setRegionalSettings(prev => ({...prev, show_secondary_currency: checked}))}
+                        />
+                      </div>
+                      
+                      {regionalSettings.show_secondary_currency && (
+                        <div className="mt-3">
+                          <Label className="text-xs text-muted-foreground">العملة الثانوية</Label>
+                          <select
+                            value={regionalSettings.secondary_currency}
+                            onChange={(e) => setRegionalSettings(prev => ({...prev, secondary_currency: e.target.value}))}
+                            className="w-full mt-1 px-3 py-2 border rounded-lg bg-background text-foreground text-sm"
+                          >
+                            {Object.entries(supportedCurrencies).map(([code, currency]) => (
+                              <option key={code} value={code}>
+                                {currency.name} ({currency.symbol})
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* اللغة */}
+                    <div className="p-4 border rounded-lg bg-purple-500/10">
+                      <Label className="text-foreground font-bold mb-4 flex items-center gap-2">
+                        🌐 اللغة
+                      </Label>
+                      <select
+                        value={regionalSettings.language}
+                        onChange={(e) => setRegionalSettings(prev => ({...prev, language: e.target.value}))}
+                        className="w-full mt-2 px-3 py-2 border rounded-lg bg-background text-foreground"
+                      >
+                        {Object.entries(supportedLanguages).map(([code, lang]) => (
+                          <option key={code} value={code}>
+                            {lang.name} ({lang.name_en})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* زر الحفظ */}
+                    <Button
+                      onClick={saveRegionalSettings}
+                      disabled={savingRegionalSettings}
+                      className="w-full"
+                    >
+                      {savingRegionalSettings ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin ml-2" />
+                          جاري الحفظ...
+                        </>
+                      ) : (
+                        <>
+                          <Save className="h-4 w-4 ml-2" />
+                          حفظ إعدادات المنطقة
+                        </>
+                      )}
+                    </Button>
+                  </CardContent>
+                </Card>
+
+                {/* إعدادات الفاتورة */}
                 <Card className="border-border/50 bg-card">
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2 text-foreground">
