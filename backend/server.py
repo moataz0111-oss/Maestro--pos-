@@ -13418,15 +13418,25 @@ async def assign_driver_to_order(
 
 # ==================== DRIVER APP ROUTES ====================
 
-@api_router.get("/driver/login")
-async def driver_login(phone: str):
-    """تسجيل دخول السائق برقم الهاتف"""
+@api_router.post("/driver/login")
+async def driver_login(phone: str, pin: str):
+    """تسجيل دخول السائق برقم الهاتف والرمز السري"""
     driver = await db.drivers.find_one({"phone": phone}, {"_id": 0})
     
     if not driver:
-        return {"driver": None, "message": "رقم الهاتف غير مسجل كسائق"}
+        raise HTTPException(status_code=404, detail="رقم الهاتف غير مسجل كسائق")
     
-    return {"driver": driver}
+    # التحقق من الرمز السري
+    if driver.get("pin", "1234") != pin:
+        raise HTTPException(status_code=401, detail="الرمز السري غير صحيح")
+    
+    if not driver.get("is_active", True):
+        raise HTTPException(status_code=403, detail="حساب السائق غير مفعل")
+    
+    # إزالة PIN من الاستجابة لأسباب أمنية
+    driver_response = {k: v for k, v in driver.items() if k != "pin"}
+    
+    return {"driver": driver_response, "message": "تم تسجيل الدخول بنجاح"}
 
 @api_router.get("/driver/orders")
 async def get_driver_orders(driver_id: str):
