@@ -41,7 +41,10 @@ import {
   Wallet,
   History,
   Package,
-  Calendar
+  Calendar,
+  Heart,
+  Star,
+  Bookmark
 } from 'lucide-react';
 import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
