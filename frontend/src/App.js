@@ -223,6 +223,14 @@ function AppRoutes() {
         } 
       />
       <Route 
+        path="/ratings" 
+        element={
+          <ProtectedRoute>
+            <Ratings />
+          </ProtectedRoute>
+        } 
+      />
+      <Route 
         path="/expenses" 
         element={
           <ProtectedRoute>
