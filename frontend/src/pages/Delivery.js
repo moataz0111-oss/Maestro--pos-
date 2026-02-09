@@ -630,6 +630,38 @@ export default function Delivery() {
 
           {/* السائقين */}
           <TabsContent value="drivers">
+            {/* شريط أدوات تحديد ومسح السائقين */}
+            {drivers.length > 0 && (
+              <div className="flex items-center justify-between mb-4 p-3 bg-card rounded-lg border border-border/50">
+                <div className="flex items-center gap-3">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={toggleSelectAll}
+                    className={selectedDrivers.length === drivers.length ? 'bg-primary text-primary-foreground' : ''}
+                  >
+                    {selectedDrivers.length === drivers.length ? 'إلغاء تحديد الكل' : 'تحديد الكل'}
+                  </Button>
+                  {selectedDrivers.length > 0 && (
+                    <span className="text-sm text-muted-foreground">
+                      تم تحديد {selectedDrivers.length} من {drivers.length}
+                    </span>
+                  )}
+                </div>
+                {selectedDrivers.length > 0 && (
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={() => setDeleteConfirmOpen(true)}
+                    className="bg-red-500 hover:bg-red-600"
+                  >
+                    <Trash2 className="h-4 w-4 ml-2" />
+                    حذف المحدد ({selectedDrivers.length})
+                  </Button>
+                )}
+              </div>
+            )}
+
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {drivers.length === 0 ? (
                 <Card className="border-border/50 bg-card col-span-full">
@@ -642,18 +674,30 @@ export default function Delivery() {
               ) : (
                 drivers.map(driver => {
                   const stats = driverStats[driver.id] || { unpaid_total: 0, paid_today: 0, pending_orders: 0 };
+                  const isSelected = selectedDrivers.includes(driver.id);
                   return (
                     <Card 
                       key={driver.id}
                       className={`border-border/50 bg-card transition-all hover:shadow-lg cursor-pointer ${
                         driver.current_order_id ? 'ring-2 ring-orange-500' : ''
-                      } ${stats.unpaid_total > 0 ? 'border-r-4 border-r-red-500' : ''}`}
+                      } ${stats.unpaid_total > 0 ? 'border-r-4 border-r-red-500' : ''} ${
+                        isSelected ? 'ring-2 ring-primary' : ''
+                      }`}
                       onClick={() => openDriverDetails(driver)}
                       data-testid={`driver-card-${driver.id}`}
                     >
                       <CardContent className="p-4">
                         <div className="flex items-center justify-between mb-4">
                           <div className="flex items-center gap-3">
+                            {/* Checkbox للتحديد */}
+                            <div 
+                              className={`w-5 h-5 rounded border-2 flex items-center justify-center cursor-pointer ${
+                                isSelected ? 'bg-primary border-primary' : 'border-muted-foreground'
+                              }`}
+                              onClick={(e) => { e.stopPropagation(); toggleSelectDriver(driver.id); }}
+                            >
+                              {isSelected && <Check className="h-3 w-3 text-white" />}
+                            </div>
                             <div className={`w-12 h-12 rounded-full flex items-center justify-center ${
                               driver.is_available ? 'bg-green-500/10' : 'bg-orange-500/10'
                             }`}>
