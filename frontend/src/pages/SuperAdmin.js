@@ -1027,7 +1027,9 @@ export default function SuperAdmin() {
       setConfirmOwnerPassword('');
       setNewOwnerSecretKey('');
     } catch (error) {
-      toast.error('فشل في تحديث إعدادات المالك');
+      console.error('Error updating owner settings:', error);
+      const errorMsg = error.response?.data?.detail || 'فشل في تحديث إعدادات المالك';
+      toast.error(errorMsg);
     } finally {
       setSavingOwnerSettings(false);
     }
