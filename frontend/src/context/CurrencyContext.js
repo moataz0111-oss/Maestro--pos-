@@ -52,47 +52,76 @@ export const useCurrency = () => {
 };
 
 export const CurrencyProvider = ({ children }) => {
+  // محاولة قراءة العملة المحفوظة مسبقاً
+  const savedCurrency = localStorage.getItem('app_currency') || 'IQD';
+  
   const [settings, setSettings] = useState({
-    currency: 'IQD',
-    language: 'ar',
-    country: 'IQ',
+    currency: savedCurrency,
+    language: localStorage.getItem('app_language') || 'ar',
+    country: localStorage.getItem('app_country') || 'IQ',
     showSecondary: false,
     secondaryCurrency: 'USD',
   });
   const [loading, setLoading] = useState(true);
 
+  // دالة لجلب الإعدادات من الخادم
+  const fetchSettings = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      if (token) {
+        const API = process.env.REACT_APP_BACKEND_URL || '';
+        const res = await axios.get(`${API}/api/tenant/regional-settings`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (res.data) {
+          const newCurrency = res.data.currency || 'IQD';
+          setSettings(prev => ({
+            ...prev,
+            currency: newCurrency,
+            language: res.data.language || 'ar',
+            country: res.data.country || 'IQ',
+            showSecondary: res.data.show_secondary_currency || false,
+            secondaryCurrency: res.data.secondary_currency || 'USD',
+          }));
+          // تحديث localStorage و cache في currency.js
+          setLocalCurrency(newCurrency);
+          localStorage.setItem('app_language', res.data.language || 'ar');
+          localStorage.setItem('app_country', res.data.country || 'IQ');
+        }
+      }
+    } catch (error) {
+      console.log('Using default currency settings');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // جلب إعدادات النظام عند التحميل
   useEffect(() => {
-    const fetchSettings = async () => {
-      try {
-        const token = localStorage.getItem('token');
-        if (token) {
-          const API = process.env.REACT_APP_BACKEND_URL || '';
-          const res = await axios.get(`${API}/api/tenant/regional-settings`, {
-            headers: { Authorization: `Bearer ${token}` }
-          });
-          if (res.data) {
-            const newCurrency = res.data.currency || 'IQD';
-            setSettings(prev => ({
-              ...prev,
-              currency: newCurrency,
-              language: res.data.language || 'ar',
-              country: res.data.country || 'IQ',
-              showSecondary: res.data.show_secondary_currency || false,
-              secondaryCurrency: res.data.secondary_currency || 'USD',
-            }));
-            // تحديث localStorage و cache في currency.js
-            setLocalCurrency(newCurrency);
-          }
-        }
-      } catch (error) {
-        console.log('Using default currency settings');
-      } finally {
-        setLoading(false);
+    fetchSettings();
+  }, []);
+
+  // الاستماع لتغييرات تسجيل الدخول (عند تغيير token)
+  useEffect(() => {
+    const handleStorageChange = (e) => {
+      if (e.key === 'token' && e.newValue) {
+        // تم تسجيل دخول جديد - أعد جلب الإعدادات
+        setTimeout(fetchSettings, 500);
       }
     };
 
-    fetchSettings();
+    // الاستماع لحدث تسجيل الدخول المخصص
+    const handleLogin = () => {
+      setTimeout(fetchSettings, 500);
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    window.addEventListener('userLoggedIn', handleLogin);
+
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('userLoggedIn', handleLogin);
+    };
   }, []);
 
   // الحصول على معلومات العملة الحالية
