@@ -1,0 +1,84 @@
+{
+  "summary": "Iteration 60 - Testing driver portal login with phone/PIN, system settings tab, select all/clear all drivers, and permissions hiding for roles",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_results": {
+    "driver_portal_login": {
+      "status": "PASS",
+      "details": [
+        "Phone input field found",
+        "PIN input field found",
+        "Login with correct credentials (07901234567, 1234) successful",
+        "Wrong PIN shows error message 'الرمز السري غير صحيح'",
+        "Logout functionality works"
+      ]
+    },
+    "system_settings_tab": {
+      "status": "PASS",
+      "details": [
+        "System Settings tab (إعدادات النظام) found in Settings page",
+        "Currency settings section found",
+        "Language settings section found",
+        "Country settings section found"
+      ]
+    },
+    "select_all_clear_all_drivers": {
+      "status": "PASS",
+      "details": [
+        "Select All button (تحديد الكل) found",
+        "Clear All button (إلغاء تحديد الكل) appears after selecting all",
+        "Delete Selected button (حذف المحدد) appears when drivers selected",
+        "Select All button reappears after clearing selection"
+      ]
+    },
+    "permissions_hiding_for_roles": {
+      "status": "PASS",
+      "details": [
+        "Delivery role shows predefined permissions message",
+        "Waiter role shows predefined permissions message",
+        "Kitchen role shows predefined permissions message",
+        "Cashier role shows full permissions checkboxes (no predefined message)"
+      ]
+    },
+    "backend_api_tests": {
+      "status": "PASS",
+      "details": [
+        "13 passed, 1 skipped",
+        "Driver login with phone/PIN works",
+        "Wrong PIN returns 401",
+        "Unknown phone returns 404",
+        "Driver orders API works",
+        "Driver location update works",
+        "System currencies/languages/countries APIs work"
+      ]
+    }
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_driver_features_iter60.py",
+    "/app/test_reports/pytest/pytest_results_iter60.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [
+    "/app/backend/tests/test_driver_features_iter60.py"
+  ],
+  "success_rate": {
+    "backend": "100%",
+    "frontend": "100%"
+  },
+  "test_credentials": {
+    "tenant_admin": "email: demo@maestroegp.com, password: demo123",
+    "test_driver": "phone: 07901234567, pin: 1234"
+  },
+  "seed_data_creation": "None",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "All requested features are working correctly: Driver portal login with phone/PIN, System Settings tab with currency/language/country settings, Select All/Clear All drivers functionality, and permissions hiding for delivery/waiter/kitchen roles."
+}
