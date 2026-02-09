@@ -1809,6 +1809,25 @@ export default function POS() {
               {systemInvoiceSettings.system_website && (
                 <p className="text-xs">🌐 {systemInvoiceSettings.system_website}</p>
               )}
+              
+              {/* QR Code بمعلومات التواصل */}
+              {(systemInvoiceSettings.system_phone || systemInvoiceSettings.system_email || systemInvoiceSettings.system_website) && (
+                <div className="mt-3 flex justify-center">
+                  <QRCodeSVG 
+                    value={[
+                      systemInvoiceSettings.system_name || 'Maestro EGP',
+                      systemInvoiceSettings.system_phone ? `Tel: ${systemInvoiceSettings.system_phone}` : '',
+                      systemInvoiceSettings.system_phone2 ? `Tel2: ${systemInvoiceSettings.system_phone2}` : '',
+                      systemInvoiceSettings.system_email ? `Email: ${systemInvoiceSettings.system_email}` : '',
+                      systemInvoiceSettings.system_website || ''
+                    ].filter(Boolean).join('\n')}
+                    size={70}
+                    level="L"
+                    bgColor="#ffffff"
+                    fgColor="#000000"
+                  />
+                </div>
+              )}
             </div>
           </div>
           
