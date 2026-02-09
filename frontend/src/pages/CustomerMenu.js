@@ -2172,35 +2172,65 @@ export default function CustomerMenu() {
 
           {/* خريطة تتبع السائق */}
           {hasLocation && (
-            <div className="rounded-xl overflow-hidden shadow-lg border-2 border-green-200">
-              <div className="bg-green-500 text-white px-4 py-2 flex items-center gap-2">
-                <MapPin className="h-4 w-4" />
-                <span className="font-medium">موقع السائق على الخريطة</span>
-                <span className="text-xs bg-white/20 px-2 py-0.5 rounded-full mr-auto">مباشر</span>
+            <div className="rounded-xl overflow-hidden shadow-lg border border-gray-700">
+              <div className="bg-gradient-to-r from-blue-600 to-green-500 text-white px-4 py-3 flex items-center gap-2">
+                <MapPin className="h-5 w-5" />
+                <span className="font-bold">تتبع السائق</span>
+                <span className="text-xs bg-white/20 px-2 py-1 rounded-full mr-auto flex items-center gap-1">
+                  <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></span>
+                  مباشر
+                </span>
               </div>
-              <div className="h-64">
+              <div className="h-72 relative">
                 <MapContainer
                   center={[driver.current_location.latitude, driver.current_location.longitude]}
-                  zoom={15}
+                  zoom={16}
                   style={{ height: '100%', width: '100%' }}
                   zoomControl={false}
                 >
-                  <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+                  {/* خريطة داكنة مثل Waze */}
+                  <TileLayer 
+                    url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+                    attribution='&copy; <a href="https://carto.com/">CARTO</a>'
+                  />
                   
                   {/* موقع السائق */}
                   <Marker 
                     position={[driver.current_location.latitude, driver.current_location.longitude]}
                     icon={L.divIcon({
                       className: 'driver-marker',
-                      html: '<div style="background: linear-gradient(135deg, #3b82f6, #10b981); width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 20px; border: 3px solid white; box-shadow: 0 4px 12px rgba(0,0,0,0.3);">🛵</div>',
-                      iconSize: [40, 40],
-                      iconAnchor: [20, 20]
+                      html: `
+                        <div style="
+                          background: linear-gradient(135deg, #3b82f6, #06b6d4);
+                          width: 48px;
+                          height: 48px;
+                          border-radius: 50%;
+                          display: flex;
+                          align-items: center;
+                          justify-content: center;
+                          font-size: 24px;
+                          border: 4px solid white;
+                          box-shadow: 0 0 20px rgba(59,130,246,0.6), 0 4px 15px rgba(0,0,0,0.4);
+                          animation: pulse 2s infinite;
+                        ">🛵</div>
+                        <style>
+                          @keyframes pulse {
+                            0%, 100% { transform: scale(1); }
+                            50% { transform: scale(1.05); }
+                          }
+                        </style>
+                      `,
+                      iconSize: [48, 48],
+                      iconAnchor: [24, 24]
                     })}
                   >
                     <Popup>
-                      <div className="text-center">
-                        <p className="font-bold">{driver.name}</p>
-                        <p className="text-sm text-green-600">السائق</p>
+                      <div className="text-center p-2">
+                        <p className="font-bold text-lg">{driver.name}</p>
+                        <p className="text-blue-600 font-medium">🛵 السائق</p>
+                        <a href={`tel:${driver.phone}`} className="text-sm text-green-600 hover:underline">
+                          📞 {driver.phone}
+                        </a>
                       </div>
                     </Popup>
                   </Marker>
@@ -2211,20 +2241,54 @@ export default function CustomerMenu() {
                       position={[driverInfo.delivery_location.latitude, driverInfo.delivery_location.longitude]}
                       icon={L.divIcon({
                         className: 'delivery-marker',
-                        html: '<div style="background: linear-gradient(135deg, #f97316, #ef4444); width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 18px; border: 3px solid white; box-shadow: 0 4px 12px rgba(0,0,0,0.3);">📍</div>',
-                        iconSize: [36, 36],
-                        iconAnchor: [18, 18]
+                        html: `
+                          <div style="
+                            background: linear-gradient(135deg, #ef4444, #f97316);
+                            width: 44px;
+                            height: 44px;
+                            border-radius: 50%;
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            font-size: 22px;
+                            border: 4px solid white;
+                            box-shadow: 0 0 15px rgba(239,68,68,0.5), 0 4px 12px rgba(0,0,0,0.3);
+                          ">📍</div>
+                        `,
+                        iconSize: [44, 44],
+                        iconAnchor: [22, 22]
                       })}
                     >
                       <Popup>
-                        <div className="text-center">
-                          <p className="font-bold">موقع التوصيل</p>
-                          <p className="text-sm text-orange-600">عنوانك</p>
+                        <div className="text-center p-2">
+                          <p className="font-bold text-lg">موقع التوصيل</p>
+                          <p className="text-orange-600 font-medium">📍 عنوانك</p>
                         </div>
                       </Popup>
                     </Marker>
                   )}
                 </MapContainer>
+                
+                {/* شريط معلومات السائق */}
+                <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 to-transparent p-4">
+                  <div className="flex items-center justify-between text-white">
+                    <div className="flex items-center gap-3">
+                      <div className="w-12 h-12 bg-blue-500 rounded-full flex items-center justify-center text-xl">
+                        🛵
+                      </div>
+                      <div>
+                        <p className="font-bold">{driver.name}</p>
+                        <p className="text-sm text-gray-300">في الطريق إليك</p>
+                      </div>
+                    </div>
+                    <a 
+                      href={`tel:${driver.phone}`}
+                      className="bg-green-500 hover:bg-green-600 p-3 rounded-full transition-colors"
+                    >
+                      <Phone className="h-5 w-5" />
+                    </a>
+                  </div>
+                </div>
               </div>
             </div>
           )}
