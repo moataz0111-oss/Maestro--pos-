@@ -197,20 +197,14 @@ export default function Login() {
     // التحقق إذا كان البريد الإلكتروني للمالك
     const ownerEmails = ['owner@maestroegp.com', 'hanialdujaili@gmail.com'];
     if (ownerEmails.includes(email.toLowerCase())) {
-      // التحقق من المفتاح السري
+      // التحقق من وجود المفتاح السري
       if (!ownerSecretKey) {
         setError('يرجى إدخال المفتاح السري');
         setLoading(false);
         return;
       }
       
-      if (ownerSecretKey !== '271018') {
-        setError('المفتاح السري غير صحيح');
-        setLoading(false);
-        return;
-      }
-      
-      // التحقق من كلمة المرور عبر API super-admin/login
+      // إرسال الطلب للخادم للتحقق من البيانات
       try {
         const response = await axios.post(`${API}/super-admin/login`, {
           email,
