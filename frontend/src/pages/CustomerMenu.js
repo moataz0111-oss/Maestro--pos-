@@ -279,6 +279,7 @@ export default function CustomerMenu() {
     fetchMenu();
     loadSavedData();
     fetchOrderHistory();
+    fetchFavorites();
     // تحديد الموقع تلقائياً عند فتح التطبيق
     autoDetectLocation();
   }, [tenantId]);
