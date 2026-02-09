@@ -13476,6 +13476,9 @@ async def update_order_status(order_id: str, status: str):
     
     await db.orders.update_one({"id": order_id}, {"$set": update_data})
     
+    # إرسال إشعار Push للعميل عند تغيير حالة الطلب
+    await notify_order_status_change(order_id, status)
+    
     return {"message": "تم تحديث حالة الطلب", "status": status}
 
 
