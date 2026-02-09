@@ -19,24 +19,14 @@ export default function RestaurantSelector() {
   useEffect(() => {
     const manifestLink = document.querySelector('link[rel="manifest"]');
     if (manifestLink) {
-      manifestLink.href = '/manifest-customer.json?v=' + Date.now();
+      // استخدام manifest-menu.json الجديد
+      manifestLink.href = '/manifest-menu.json?v=' + Date.now();
     }
     
     const themeColor = document.querySelector('meta[name="theme-color"]');
     if (themeColor) themeColor.content = '#f97316';
     
     document.title = 'اطلب طعامك - اختر مطعمك المفضل';
-    
-    // تسجيل Service Worker للعملاء
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/sw-customer.js')
-        .then((registration) => {
-          console.log('Customer SW registered:', registration);
-        })
-        .catch((error) => {
-          console.log('Customer SW registration failed:', error);
-        });
-    }
   }, []);
 
   useEffect(() => {
