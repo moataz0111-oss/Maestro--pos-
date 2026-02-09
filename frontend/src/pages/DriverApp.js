@@ -51,6 +51,7 @@ const MapUpdater = ({ center }) => {
 export default function DriverApp() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [driverPhone, setDriverPhone] = useState('');
+  const [driverPin, setDriverPin] = useState('');
   const [driver, setDriver] = useState(null);
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -59,18 +60,21 @@ export default function DriverApp() {
   const [watchId, setWatchId] = useState(null);
   const [selectedOrder, setSelectedOrder] = useState(null);
 
-  // تسجيل دخول السائق برقم الهاتف
+  // تسجيل دخول السائق برقم الهاتف والرمز السري
   const loginDriver = async () => {
     if (!driverPhone || driverPhone.length < 10) {
       toast.error('يرجى إدخال رقم هاتف صحيح');
       return;
     }
+    
+    if (!driverPin || driverPin.length < 4) {
+      toast.error('يرجى إدخال الرمز السري (4 أرقام على الأقل)');
+      return;
+    }
 
     setLoading(true);
     try {
-      const res = await axios.get(`${API}/driver/login`, {
-        params: { phone: driverPhone }
-      });
+      const res = await axios.post(`${API}/driver/login?phone=${driverPhone}&pin=${driverPin}`);
       
       if (res.data.driver) {
         setDriver(res.data.driver);
@@ -78,11 +82,10 @@ export default function DriverApp() {
         localStorage.setItem('driver_phone', driverPhone);
         toast.success(`مرحباً ${res.data.driver.name}!`);
         fetchOrders(res.data.driver.id);
-      } else {
-        toast.error('رقم الهاتف غير مسجل كسائق');
       }
     } catch (error) {
-      toast.error('فشل في تسجيل الدخول');
+      const message = error.response?.data?.detail || 'فشل في تسجيل الدخول';
+      toast.error(message);
     } finally {
       setLoading(false);
     }
