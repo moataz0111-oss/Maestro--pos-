@@ -6486,16 +6486,21 @@ async def get_live_exchange_rates(current_user: dict = Depends(verify_super_admi
 
 @api_router.get("/super-admin/sales-summary")
 async def get_super_admin_sales_summary(
-    display_currency: str = "IQD",
+    display_currency: str = "USD",
     current_user: dict = Depends(verify_super_admin)
 ):
     """جلب ملخص المبيعات لجميع العملاء مع تحويل العملات"""
     
-    # جلب جميع العملاء
-    tenants = await db.tenants.find({}, {"_id": 0, "id": 1, "name": 1}).to_list(100)
+    # جلب جميع العملاء النشطين (ليس تجريبي)
+    tenants = await db.tenants.find(
+        {"is_demo": {"$ne": True}, "subscription_type": {"$ne": "demo"}}, 
+        {"_id": 0, "id": 1, "name": 1}
+    ).to_list(100)
     
     total_sales_usd = 0
+    total_orders = 0
     tenant_sales = []
+    active_tenants = 0
     
     for tenant in tenants:
         tenant_id = tenant.get("id")
@@ -6515,6 +6520,9 @@ async def get_super_admin_sales_summary(
             sales_in_tenant_currency = result[0].get("total", 0)
             orders_count = result[0].get("count", 0)
             
+            if sales_in_tenant_currency > 0:
+                active_tenants += 1
+            
             # تحويل للدولار
             if tenant_currency in SUPPORTED_CURRENCIES:
                 rate = SUPPORTED_CURRENCIES[tenant_currency]["rate_to_usd"]
@@ -6523,31 +6531,43 @@ async def get_super_admin_sales_summary(
                 sales_in_usd = sales_in_tenant_currency
             
             total_sales_usd += sales_in_usd
+            total_orders += orders_count
+            
+            # حساب المبيعات بالعملة المطلوبة
+            if display_currency in SUPPORTED_CURRENCIES:
+                display_rate = SUPPORTED_CURRENCIES[display_currency]["rate_to_usd"]
+                converted_sales = sales_in_usd / display_rate if display_rate > 0 else 0
+            else:
+                converted_sales = sales_in_usd
             
             tenant_sales.append({
-                "tenant_id": tenant_id,
-                "tenant_name": tenant.get("name"),
-                "orders_count": orders_count,
-                "sales_original": sales_in_tenant_currency,
-                "currency": tenant_currency,
-                "sales_in_usd": round(sales_in_usd, 2)
+                "name": tenant.get("name"),
+                "original_sales": sales_in_tenant_currency,
+                "original_currency": tenant_currency,
+                "converted_sales": round(converted_sales, 2),
+                "orders_count": orders_count
             })
+    
+    # ترتيب حسب المبيعات المحولة
+    tenant_sales.sort(key=lambda x: x["converted_sales"], reverse=True)
     
     # تحويل الإجمالي للعملة المطلوبة
     if display_currency in SUPPORTED_CURRENCIES:
         rate = SUPPORTED_CURRENCIES[display_currency]["rate_to_usd"]
-        total_in_display = total_sales_usd / rate
-        decimal_places = SUPPORTED_CURRENCIES[display_currency]["decimal_places"]
+        decimal_places = SUPPORTED_CURRENCIES[display_currency].get("decimal_places", 2)
+        total_in_display = total_sales_usd / rate if rate > 0 else 0
         total_in_display = round(total_in_display, decimal_places)
     else:
         total_in_display = total_sales_usd
     
     return {
-        "total_sales": total_in_display,
-        "display_currency": display_currency,
-        "currency_symbol": SUPPORTED_CURRENCIES.get(display_currency, {}).get("symbol", "$"),
+        "total_sales_converted": total_in_display,
         "total_sales_usd": round(total_sales_usd, 2),
-        "tenants": tenant_sales
+        "total_orders": total_orders,
+        "active_tenants": active_tenants,
+        "display_currency": display_currency,
+        "display_currency_symbol": SUPPORTED_CURRENCIES.get(display_currency, {}).get("symbol", "$"),
+        "tenant_sales": tenant_sales
     }
 
 # ==================== Login Page Settings ====================
