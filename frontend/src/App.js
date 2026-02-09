@@ -402,16 +402,18 @@ function App() {
     <ErrorBoundary>
       <ThemeProvider>
         <AuthProvider>
-          <BranchProvider>
-            <div className="App" dir="rtl">
-              <BrowserRouter>
-                <AppRoutes />
-                <Toaster position="top-center" richColors />
-                {/* Incoming Call Popup - يظهر في جميع الصفحات */}
-                <IncomingCallPopup />
-              </BrowserRouter>
-            </div>
-          </BranchProvider>
+          <CurrencyProvider>
+            <BranchProvider>
+              <div className="App" dir="rtl">
+                <BrowserRouter>
+                  <AppRoutes />
+                  <Toaster position="top-center" richColors />
+                  {/* Incoming Call Popup - يظهر في جميع الصفحات */}
+                  <IncomingCallPopup />
+                </BrowserRouter>
+              </div>
+            </BranchProvider>
+          </CurrencyProvider>
         </AuthProvider>
       </ThemeProvider>
     </ErrorBoundary>
