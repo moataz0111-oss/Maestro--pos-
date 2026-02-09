@@ -49,6 +49,7 @@ const CustomerInstall = lazy(() => import("./pages/CustomerInstall"));
 const RestaurantSelector = lazy(() => import("./pages/RestaurantSelector"));
 const PurchasesPage = lazy(() => import("./pages/PurchasesPage"));
 const Ratings = lazy(() => import("./pages/Ratings"));
+const DriverApp = lazy(() => import("./pages/DriverApp"));
 const WarehouseManufacturing = lazy(() => import("./pages/WarehouseManufacturing"));
 const InventoryReports = lazy(() => import("./pages/InventoryReports"));
 
