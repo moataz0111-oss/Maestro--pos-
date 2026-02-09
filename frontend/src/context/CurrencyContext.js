@@ -151,6 +151,11 @@ export const CurrencyProvider = ({ children }) => {
   const updateSettings = async (newSettings) => {
     setSettings(prev => ({ ...prev, ...newSettings }));
     
+    // تحديث العملة في localStorage و currency.js
+    if (newSettings.currency) {
+      setLocalCurrency(newSettings.currency);
+    }
+    
     // حفظ في الخادم
     try {
       const token = localStorage.getItem('token');
