@@ -121,15 +121,27 @@ class TestDriverPINAuthentication:
         if not token:
             pytest.skip("Could not get auth token")
         
+        # First get a branch_id
+        branches_response = self.session.get(
+            f"{BASE_URL}/api/branches",
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        if branches_response.status_code != 200 or not branches_response.json():
+            pytest.skip("Could not get branches")
+        
+        branch_id = branches_response.json()[0]["id"]
+        
         test_phone = f"079{uuid.uuid4().hex[:8]}"
         test_pin = "5678"
         
+        # Use JSON body (as the frontend does)
         response = self.session.post(
             f"{BASE_URL}/api/drivers",
-            params={
+            json={
                 "name": "TEST_Driver_PIN",
                 "phone": test_phone,
-                "pin": test_pin
+                "pin": test_pin,
+                "branch_id": branch_id
             },
             headers={"Authorization": f"Bearer {token}"}
         )
@@ -139,8 +151,8 @@ class TestDriverPINAuthentication:
         
         if response.status_code == 200:
             data = response.json()
-            assert "driver" in data, "Response should contain driver object"
-            driver = data["driver"]
+            # Response returns driver directly, not wrapped in "driver" key
+            driver = data
             assert "pin" not in driver, "PIN should not be returned in response"
             
             # Store driver ID for cleanup
@@ -178,6 +190,16 @@ class TestDriverPINAuthentication:
         if not token:
             pytest.skip("Could not get auth token")
         
+        # First get a branch_id
+        branches_response = self.session.get(
+            f"{BASE_URL}/api/branches",
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        if branches_response.status_code != 200 or not branches_response.json():
+            pytest.skip("Could not get branches")
+        
+        branch_id = branches_response.json()[0]["id"]
+        
         # First create a test driver
         test_phone = f"079{uuid.uuid4().hex[:8]}"
         original_pin = "1111"
@@ -185,10 +207,11 @@ class TestDriverPINAuthentication:
         
         create_response = self.session.post(
             f"{BASE_URL}/api/drivers",
-            params={
+            json={
                 "name": "TEST_Driver_Update_PIN",
                 "phone": test_phone,
-                "pin": original_pin
+                "pin": original_pin,
+                "branch_id": branch_id
             },
             headers={"Authorization": f"Bearer {token}"}
         )
@@ -196,7 +219,7 @@ class TestDriverPINAuthentication:
         if create_response.status_code != 200:
             pytest.skip("Could not create test driver")
         
-        driver_id = create_response.json()["driver"]["id"]
+        driver_id = create_response.json()["id"]
         print(f"Created test driver: {driver_id}")
         
         try:
@@ -286,16 +309,27 @@ class TestDriverPINAuthentication:
         if not token:
             pytest.skip("Could not get auth token")
         
+        # First get a branch_id
+        branches_response = self.session.get(
+            f"{BASE_URL}/api/branches",
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        if branches_response.status_code != 200 or not branches_response.json():
+            pytest.skip("Could not get branches")
+        
+        branch_id = branches_response.json()[0]["id"]
+        
         # Create inactive driver
         test_phone = f"079{uuid.uuid4().hex[:8]}"
         test_pin = "3333"
         
         create_response = self.session.post(
             f"{BASE_URL}/api/drivers",
-            params={
+            json={
                 "name": "TEST_Inactive_Driver",
                 "phone": test_phone,
-                "pin": test_pin
+                "pin": test_pin,
+                "branch_id": branch_id
             },
             headers={"Authorization": f"Bearer {token}"}
         )
@@ -303,7 +337,7 @@ class TestDriverPINAuthentication:
         if create_response.status_code != 200:
             pytest.skip("Could not create test driver")
         
-        driver_id = create_response.json()["driver"]["id"]
+        driver_id = create_response.json()["id"]
         
         try:
             # Deactivate driver
