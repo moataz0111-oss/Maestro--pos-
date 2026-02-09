@@ -113,9 +113,9 @@ function LocationPicker({ position, setPosition, onClose }) {
           zoom={14}
           className="h-full w-full"
         >
-          {/* خريطة داكنة وبسيطة مثل Waze */}
+          {/* خريطة داكنة مع أسماء الشوارع واضحة */}
           <TileLayer
-            url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+            url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
             attribution='&copy; CARTO'
           />
           <MapClickHandler />
