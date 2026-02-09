@@ -499,13 +499,24 @@ export default function Delivery() {
             </select>
 
             {hasRole(['admin', 'manager']) && (
-              <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-                <DialogTrigger asChild>
-                  <Button className="bg-primary text-primary-foreground" data-testid="add-driver-btn">
-                    <Plus className="h-4 w-4 ml-2" />
-                    إضافة سائق
-                  </Button>
-                </DialogTrigger>
+              <div className="flex gap-2">
+                {/* رابط تطبيق السائقين */}
+                <Button 
+                  variant="outline"
+                  onClick={() => window.open('/driver-app', '_blank')}
+                  className="bg-blue-500/10 border-blue-500 text-blue-500 hover:bg-blue-500 hover:text-white"
+                >
+                  <ExternalLink className="h-4 w-4 ml-2" />
+                  فتح تطبيق السائقين
+                </Button>
+                
+                <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+                  <DialogTrigger asChild>
+                    <Button className="bg-primary text-primary-foreground" data-testid="add-driver-btn">
+                      <Plus className="h-4 w-4 ml-2" />
+                      إضافة سائق
+                    </Button>
+                  </DialogTrigger>
                 <DialogContent>
                   <DialogHeader>
                     <DialogTitle className="text-foreground">إضافة سائق جديد</DialogTitle>
