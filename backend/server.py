@@ -12555,32 +12555,40 @@ async def get_customer_order_history(
 
 # ==================== الطلبات المفضلة للزبائن ====================
 
+class FavoriteItem(BaseModel):
+    product_id: str
+    product_name: str
+    quantity: int
+    price: float
+    notes: str = ""
+
+class AddFavoriteRequest(BaseModel):
+    tenant_id: str = None
+    phone: str
+    name: str = None
+    items: List[FavoriteItem]
+
 @api_router.post("/customer/favorites/add")
-async def add_to_favorites(
-    tenant_id: str = None,
-    phone: str = None,
-    name: str = None,
-    items: list = None
-):
+async def add_to_favorites(request: AddFavoriteRequest):
     """إضافة طلب للمفضلة"""
-    if not phone or not items:
+    if not request.phone or not request.items:
         raise HTTPException(status_code=400, detail="رقم الهاتف والمنتجات مطلوبة")
     
     # التحقق من وجود المستأجر
     tenant = None
-    if tenant_id:
-        tenant = await db.tenants.find_one({"menu_slug": tenant_id})
+    if request.tenant_id:
+        tenant = await db.tenants.find_one({"menu_slug": request.tenant_id})
         if not tenant:
-            tenant = await db.tenants.find_one({"id": tenant_id})
+            tenant = await db.tenants.find_one({"id": request.tenant_id})
     
-    actual_tenant_id = tenant.get("id") if tenant else tenant_id
+    actual_tenant_id = tenant.get("id") if tenant else request.tenant_id
     
     favorite = {
         "id": str(uuid.uuid4()),
         "tenant_id": actual_tenant_id,
-        "phone": phone,
-        "name": name or f"طلبي المفضل #{datetime.now().strftime('%d/%m')}",
-        "items": items,
+        "phone": request.phone,
+        "name": request.name or f"طلبي المفضل #{datetime.now().strftime('%d/%m')}",
+        "items": [item.dict() for item in request.items],
         "created_at": datetime.now(timezone.utc).isoformat()
     }
     
