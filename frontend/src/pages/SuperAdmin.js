@@ -96,7 +96,10 @@ import {
   Bell,
   Sparkles,
   QrCode,
-  Save
+  Save,
+  Coins,
+  Banknote,
+  ArrowUpDown
 } from 'lucide-react';
 import { toast, Toaster } from 'sonner';
 import ImageCropper from '../components/ImageCropper';
