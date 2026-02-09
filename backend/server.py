@@ -12381,6 +12381,7 @@ async def create_customer_order(
         
         order_items.append({
             "product_id": item.product_id,
+            "product_name": product.get("name"),
             "name": product.get("name"),
             "name_en": product.get("name_en"),
             "price": product.get("price", 0),
