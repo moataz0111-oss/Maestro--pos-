@@ -2087,36 +2087,6 @@ export default function Dashboard() {
           </div>
         </DialogContent>
       </Dialog>
-                      ctx.fillStyle = '#ffffff';
-                      ctx.fillRect(0, 0, canvas.width, canvas.height);
-                      // رسم QR Code في المنتصف
-                      ctx.drawImage(img, 35, 35, 180, 180);
-                      
-                      // تنزيل الصورة
-                      const link = document.createElement('a');
-                      link.download = 'maestro-qr-code.png';
-                      link.href = canvas.toDataURL('image/png');
-                      link.click();
-                      toast.success('تم حفظ QR Code!');
-                    };
-                    
-                    img.src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgData)));
-                  }
-                }}
-              >
-                <Download className="h-4 w-4" />
-                حفظ QR Code
-              </Button>
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setShowMenuLinkDialog(false)}>
-              إغلاق
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
