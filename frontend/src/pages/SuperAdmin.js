@@ -2028,6 +2028,170 @@ export default function SuperAdmin() {
           </Card>
         )}
 
+        {/* Currency Reports Card - تقارير العملات */}
+        <Card className="bg-gray-800/50 border-gray-700">
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Coins className="h-5 w-5 text-yellow-400" />
+              تقارير العملات والمبيعات
+            </CardTitle>
+            <div className="flex items-center gap-3">
+              <Select 
+                value={currencySettings.preferred_currency} 
+                onValueChange={(value) => {
+                  setCurrencySettings({...currencySettings, preferred_currency: value});
+                  fetchSalesSummary(value);
+                }}
+              >
+                <SelectTrigger className="w-40 bg-gray-700/50 border-gray-600">
+                  <SelectValue placeholder="اختر العملة" />
+                </SelectTrigger>
+                <SelectContent className="bg-gray-800 border-gray-700">
+                  <SelectItem value="USD">🇺🇸 دولار أمريكي</SelectItem>
+                  <SelectItem value="IQD">🇮🇶 دينار عراقي</SelectItem>
+                  <SelectItem value="SAR">🇸🇦 ريال سعودي</SelectItem>
+                  <SelectItem value="AED">🇦🇪 درهم إماراتي</SelectItem>
+                  <SelectItem value="EGP">🇪🇬 جنيه مصري</SelectItem>
+                  <SelectItem value="EUR">🇪🇺 يورو</SelectItem>
+                  <SelectItem value="JOD">🇯🇴 دينار أردني</SelectItem>
+                  <SelectItem value="KWD">🇰🇼 دينار كويتي</SelectItem>
+                </SelectContent>
+              </Select>
+              <Button 
+                onClick={fetchLiveRates} 
+                variant="outline" 
+                size="sm" 
+                className="border-gray-600 gap-2"
+                disabled={loadingLiveRates}
+              >
+                {loadingLiveRates ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowUpDown className="h-4 w-4" />}
+                أسعار حية
+              </Button>
+              <Button 
+                onClick={() => setShowCurrencySettingsModal(true)} 
+                variant="outline" 
+                size="icon" 
+                className="border-gray-600"
+              >
+                <Settings className="h-4 w-4" />
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {loadingSalesSummary ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="h-8 w-8 animate-spin text-purple-500" />
+                <span className="mr-3 text-gray-400">جاري تحميل البيانات...</span>
+              </div>
+            ) : salesSummary ? (
+              <div className="space-y-6">
+                {/* ملخص المبيعات الإجمالي */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="bg-gradient-to-br from-green-500/20 to-green-600/10 rounded-xl p-4 border border-green-500/20">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-green-500/20 rounded-lg">
+                        <DollarSign className="h-5 w-5 text-green-400" />
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-400">إجمالي المبيعات</p>
+                        <p className="text-2xl font-bold text-green-400">
+                          {new Intl.NumberFormat('ar-IQ', {maximumFractionDigits: 2}).format(salesSummary.total_sales_converted || 0)} {salesSummary.display_currency_symbol || '$'}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="bg-gradient-to-br from-blue-500/20 to-blue-600/10 rounded-xl p-4 border border-blue-500/20">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-blue-500/20 rounded-lg">
+                        <ShoppingCart className="h-5 w-5 text-blue-400" />
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-400">إجمالي الطلبات</p>
+                        <p className="text-2xl font-bold text-blue-400">
+                          {new Intl.NumberFormat('ar-IQ').format(salesSummary.total_orders || 0)}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="bg-gradient-to-br from-purple-500/20 to-purple-600/10 rounded-xl p-4 border border-purple-500/20">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-purple-500/20 rounded-lg">
+                        <Building2 className="h-5 w-5 text-purple-400" />
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-400">العملاء النشطين</p>
+                        <p className="text-2xl font-bold text-purple-400">
+                          {salesSummary.active_tenants || 0}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* تفاصيل المبيعات حسب العميل */}
+                {salesSummary.tenant_sales && salesSummary.tenant_sales.length > 0 && (
+                  <div className="bg-gray-700/30 rounded-xl p-4">
+                    <h3 className="font-bold mb-4 flex items-center gap-2">
+                      <BarChart3 className="h-5 w-5 text-blue-400" />
+                      المبيعات حسب العميل (بـ {currencySettings.preferred_currency})
+                    </h3>
+                    <div className="space-y-2">
+                      {salesSummary.tenant_sales.map((tenant, idx) => (
+                        <div key={idx} className="flex items-center justify-between bg-gray-800/50 rounded-lg p-3">
+                          <div className="flex items-center gap-3">
+                            <span className="text-gray-400">{idx + 1}.</span>
+                            <span className="font-medium">{tenant.name}</span>
+                          </div>
+                          <div className="text-left">
+                            <p className="font-bold text-green-400">
+                              {new Intl.NumberFormat('ar-IQ', {maximumFractionDigits: 2}).format(tenant.converted_sales || 0)} {salesSummary.display_currency_symbol}
+                            </p>
+                            <p className="text-xs text-gray-500">
+                              {tenant.original_currency}: {new Intl.NumberFormat('ar-IQ').format(tenant.original_sales || 0)}
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* أسعار الصرف الحية */}
+                {liveRates && liveRates.rates && (
+                  <div className="bg-gray-700/30 rounded-xl p-4">
+                    <h3 className="font-bold mb-4 flex items-center gap-2">
+                      <ArrowUpDown className="h-5 w-5 text-yellow-400" />
+                      أسعار الصرف {liveRates.success ? '(حية)' : '(ثابتة)'}
+                      {liveRates.fetched_at && (
+                        <span className="text-xs text-gray-500 mr-2">
+                          آخر تحديث: {new Date(liveRates.fetched_at).toLocaleTimeString('ar-IQ')}
+                        </span>
+                      )}
+                    </h3>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                      {Object.entries(liveRates.rates).map(([code, rates]) => (
+                        <div key={code} className="bg-gray-800/50 rounded-lg p-3 text-center">
+                          <p className="text-lg font-bold">{code}</p>
+                          <p className="text-sm text-gray-400">
+                            1 USD = {rates.rate_from_usd?.toFixed(code === 'IQD' ? 0 : 4) || '-'}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="text-center py-8 text-gray-400">
+                <Coins className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                <p>اختر عملة لعرض تقارير المبيعات المحولة</p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
         {/* Tenants List */}
         <Card className="bg-gray-800/50 border-gray-700">
           <CardHeader className="flex flex-row items-center justify-between">
