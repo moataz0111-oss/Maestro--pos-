@@ -100,7 +100,8 @@ import {
   Coins,
   Banknote,
   ArrowUpDown,
-  Languages
+  Languages,
+  AlertCircle
 } from 'lucide-react';
 import { toast, Toaster } from 'sonner';
 import ImageCropper from '../components/ImageCropper';
