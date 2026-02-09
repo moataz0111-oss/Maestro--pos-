@@ -370,7 +370,7 @@ export default function CustomerMenu() {
     setSavingFavorite(true);
     try {
       const items = cart.map(item => ({
-        product_id: item.id,
+        product_id: item.product_id || item.id,
         product_name: item.name,
         quantity: item.quantity,
         price: item.price,
