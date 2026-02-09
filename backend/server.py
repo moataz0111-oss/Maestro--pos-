@@ -13139,12 +13139,12 @@ async def track_customer_order(tenant_id: str, order_id: str):
     if not order:
         raise HTTPException(status_code=404, detail="الطلب غير موجود")
     
-    # جلب معلومات السائق
+    # جلب معلومات السائق مع الموقع
     driver_info = None
     if order.get("driver_id"):
         driver = await db.drivers.find_one(
             {"id": order["driver_id"]},
-            {"_id": 0, "name": 1, "phone": 1, "photo": 1}
+            {"_id": 0, "id": 1, "name": 1, "phone": 1, "photo": 1, "current_location": 1, "last_location_update": 1}
         )
         if driver:
             driver_info = driver
