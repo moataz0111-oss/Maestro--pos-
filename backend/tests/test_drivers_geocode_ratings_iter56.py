@@ -114,11 +114,11 @@ class TestDriversAPI:
         assert create_response.status_code == 200
         driver_id = create_response.json()["id"]
         
-        # Update the driver - using query params as per API definition
+        # Update the driver - requires full body with name, phone, branch_id
         update_response = requests.put(
             f"{BASE_URL}/api/drivers/{driver_id}",
             headers=headers,
-            params={"name": "TEST_سائق_محدث", "is_available": "false"}
+            json={"name": "TEST_سائق_محدث", "phone": "07901234568", "branch_id": branch_id}
         )
         assert update_response.status_code == 200, f"Failed to update driver: {update_response.text}"
         print(f"✓ PUT /api/drivers/{driver_id} - Driver updated successfully")
