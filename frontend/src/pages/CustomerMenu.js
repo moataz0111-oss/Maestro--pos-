@@ -164,6 +164,16 @@ export default function CustomerMenu() {
   const [favoriteName, setFavoriteName] = useState('');
   const [showSaveFavoriteDialog, setShowSaveFavoriteDialog] = useState(false);
   
+  // التقييمات
+  const [showRatingDialog, setShowRatingDialog] = useState(false);
+  const [ratingOrder, setRatingOrder] = useState(null);
+  const [rating, setRating] = useState(5);
+  const [ratingComment, setRatingComment] = useState('');
+  const [foodRating, setFoodRating] = useState(5);
+  const [deliveryRating, setDeliveryRating] = useState(5);
+  const [serviceRating, setServiceRating] = useState(5);
+  const [submittingRating, setSubmittingRating] = useState(false);
+  
   // PWA
   const [deferredPrompt, setDeferredPrompt] = useState(null);
   const [showInstallBanner, setShowInstallBanner] = useState(false);
