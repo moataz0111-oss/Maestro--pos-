@@ -95,7 +95,8 @@ import {
   Printer,
   Bell,
   Sparkles,
-  QrCode
+  QrCode,
+  Save
 } from 'lucide-react';
 import { toast, Toaster } from 'sonner';
 import ImageCropper from '../components/ImageCropper';
