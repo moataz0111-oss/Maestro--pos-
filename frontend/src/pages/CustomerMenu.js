@@ -326,6 +326,109 @@ export default function CustomerMenu() {
     }
   };
 
+  // جلب الطلبات المفضلة
+  const fetchFavorites = async () => {
+    const savedCustomer = localStorage.getItem(`customer_${tenantId}`);
+    if (!savedCustomer) return;
+    
+    const customerData = JSON.parse(savedCustomer);
+    if (!customerData.phone) return;
+    
+    try {
+      const res = await axios.get(`${API}/customer/favorites`, {
+        params: {
+          tenant_id: tenantId,
+          phone: customerData.phone
+        }
+      });
+      setFavorites(res.data || []);
+    } catch (error) {
+      console.log('Could not fetch favorites:', error.message);
+    }
+  };
+
+  // حفظ الطلب الحالي كمفضل
+  const saveToFavorites = async () => {
+    if (cart.length === 0) {
+      toast.error('السلة فارغة');
+      return;
+    }
+    
+    const savedCustomer = localStorage.getItem(`customer_${tenantId}`);
+    if (!savedCustomer) {
+      toast.error('يرجى إدخال رقم هاتفك أولاً');
+      return;
+    }
+    
+    const customerData = JSON.parse(savedCustomer);
+    if (!customerData.phone) {
+      toast.error('يرجى إدخال رقم هاتفك أولاً');
+      return;
+    }
+
+    setSavingFavorite(true);
+    try {
+      const items = cart.map(item => ({
+        product_id: item.id,
+        product_name: item.name,
+        quantity: item.quantity,
+        price: item.price,
+        notes: item.notes || ''
+      }));
+
+      await axios.post(`${API}/customer/favorites/add`, null, {
+        params: {
+          tenant_id: tenantId,
+          phone: customerData.phone,
+          name: favoriteName || `طلبي المفضل`
+        },
+        data: items
+      });
+
+      toast.success('تم حفظ الطلب في المفضلة ⭐');
+      setShowSaveFavoriteDialog(false);
+      setFavoriteName('');
+      fetchFavorites();
+    } catch (error) {
+      toast.error('فشل في حفظ الطلب');
+    } finally {
+      setSavingFavorite(false);
+    }
+  };
+
+  // حذف طلب من المفضلة
+  const removeFromFavorites = async (favoriteId) => {
+    const savedCustomer = localStorage.getItem(`customer_${tenantId}`);
+    if (!savedCustomer) return;
+    
+    const customerData = JSON.parse(savedCustomer);
+    
+    try {
+      await axios.delete(`${API}/customer/favorites/${favoriteId}`, {
+        params: { phone: customerData.phone }
+      });
+      toast.success('تم الحذف من المفضلة');
+      fetchFavorites();
+    } catch (error) {
+      toast.error('فشل في الحذف');
+    }
+  };
+
+  // إضافة طلب مفضل للسلة
+  const addFavoriteToCart = (favorite) => {
+    const newCartItems = favorite.items.map(item => ({
+      id: item.product_id,
+      name: item.product_name,
+      price: item.price,
+      quantity: item.quantity,
+      notes: item.notes || ''
+    }));
+    
+    setCart(newCartItems);
+    setShowFavoritesDialog(false);
+    toast.success('تمت إضافة الطلب المفضل للسلة 🛒');
+  };
+
   const loadSavedData = () => {
     // Load cart
     const savedCart = localStorage.getItem(`cart_${tenantId}`);
