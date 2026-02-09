@@ -97,8 +97,15 @@ async def get_drivers(branch_id: Optional[str] = None, include_orders: bool = Fa
                     }
     return drivers
 
+class DriverUpdate(BaseModel):
+    name: Optional[str] = None
+    phone: Optional[str] = None
+    pin: Optional[str] = None
+    is_active: Optional[bool] = None
+    user_id: Optional[str] = None
+
 @router.put("/{driver_id}")
-async def update_driver(driver_id: str, driver: DriverCreate, current_user: dict = Depends(get_current_user)):
+async def update_driver(driver_id: str, driver: DriverUpdate, current_user: dict = Depends(get_current_user)):
     """تعديل بيانات السائق"""
     db = get_database()
     query = build_tenant_query(current_user, {"id": driver_id})
@@ -106,7 +113,15 @@ async def update_driver(driver_id: str, driver: DriverCreate, current_user: dict
     if not existing:
         raise HTTPException(status_code=404, detail="السائق غير موجود")
     
-    update_data = {"name": driver.name, "phone": driver.phone}
+    update_data = {"updated_at": datetime.now(timezone.utc).isoformat()}
+    if driver.name:
+        update_data["name"] = driver.name
+    if driver.phone:
+        update_data["phone"] = driver.phone
+    if driver.pin:
+        update_data["pin"] = driver.pin  # تحديث الرمز السري
+    if driver.is_active is not None:
+        update_data["is_active"] = driver.is_active
     if driver.user_id:
         update_data["user_id"] = driver.user_id
     
