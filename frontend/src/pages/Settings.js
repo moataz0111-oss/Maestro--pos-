@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
-import { formatPrice } from '../utils/currency';
+import { formatPrice, setCurrency } from '../utils/currency';
 import { 
   playClick, 
   playSuccess, 
