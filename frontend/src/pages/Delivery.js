@@ -518,53 +518,54 @@ export default function Delivery() {
                       إضافة سائق
                     </Button>
                   </DialogTrigger>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle className="text-foreground">إضافة سائق جديد</DialogTitle>
-                  </DialogHeader>
-                  <form onSubmit={handleCreateDriver} className="space-y-4">
-                    <div>
-                      <Label className="text-foreground">اسم السائق</Label>
-                      <Input
-                        value={formData.name}
-                        onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                        required
-                        className="mt-1"
-                      />
-                    </div>
-                    <div>
-                      <Label className="text-foreground">رقم الهاتف</Label>
-                      <Input
-                        value={formData.phone}
-                        onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                        required
-                        className="mt-1"
-                      />
-                    </div>
-                    <div>
-                      <Label className="text-foreground">الرمز السري (PIN)</Label>
-                      <Input
-                        type="password"
-                        value={formData.pin}
-                        onChange={(e) => setFormData({ ...formData, pin: e.target.value })}
-                        required
-                        maxLength={6}
-                        placeholder="4-6 أرقام"
-                        className="mt-1"
-                      />
-                      <p className="text-xs text-muted-foreground mt-1">يستخدم السائق هذا الرمز لتسجيل الدخول</p>
-                    </div>
-                    <div className="flex gap-2 pt-4">
-                      <Button type="button" variant="outline" onClick={() => setDialogOpen(false)} className="flex-1">
-                        إلغاء
-                      </Button>
-                      <Button type="submit" className="flex-1 bg-primary text-primary-foreground">
-                        إضافة
-                      </Button>
-                    </div>
-                  </form>
-                </DialogContent>
-              </Dialog>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle className="text-foreground">إضافة سائق جديد</DialogTitle>
+                    </DialogHeader>
+                    <form onSubmit={handleCreateDriver} className="space-y-4">
+                      <div>
+                        <Label className="text-foreground">اسم السائق</Label>
+                        <Input
+                          value={formData.name}
+                          onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                          required
+                          className="mt-1"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-foreground">رقم الهاتف</Label>
+                        <Input
+                          value={formData.phone}
+                          onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                          required
+                          className="mt-1"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-foreground">الرمز السري (PIN)</Label>
+                        <Input
+                          type="password"
+                          value={formData.pin}
+                          onChange={(e) => setFormData({ ...formData, pin: e.target.value })}
+                          required
+                          maxLength={6}
+                          placeholder="4-6 أرقام"
+                          className="mt-1"
+                        />
+                        <p className="text-xs text-muted-foreground mt-1">يستخدم السائق هذا الرمز لتسجيل الدخول</p>
+                      </div>
+                      <div className="flex gap-2 pt-4">
+                        <Button type="button" variant="outline" onClick={() => setDialogOpen(false)} className="flex-1">
+                          إلغاء
+                        </Button>
+                        <Button type="submit" className="flex-1 bg-primary text-primary-foreground">
+                          إضافة
+                        </Button>
+                      </div>
+                    </form>
+                  </DialogContent>
+                </Dialog>
+              </div>
             )}
           </div>
         </div>
