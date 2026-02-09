@@ -98,7 +98,7 @@
   },
   
   "test_credentials": {
-    "api_url": "https://restupos.preview.emergentagent.com",
+    "api_url": "https://resto-master-8.preview.emergentagent.com",
     "admin_email": "admin@maestroegp.com",
     "admin_password": "admin123"
   },

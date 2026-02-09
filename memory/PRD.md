@@ -80,7 +80,7 @@
 
 #### خطوات تثبيت التطبيق للزبائن:
 1. حذف التطبيق القديم (إن وُجد)
-2. فتح الرابط: `https://restupos.preview.emergentagent.com/customer-app/`
+2. فتح الرابط: `https://resto-master-8.preview.emergentagent.com/customer-app/`
 3. في Safari: النقر على زر المشاركة → "إضافة للشاشة الرئيسية"
 4. التطبيق سيفتح على قائمة الطعام
 
