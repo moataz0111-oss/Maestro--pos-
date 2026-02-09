@@ -4554,6 +4554,142 @@ export default function SuperAdmin() {
         maxHeight={cropperType === 'background' ? 1080 : 512}
         quality={0.9}
       />
+
+      {/* Modal: إعدادات العملات */}
+      <Dialog open={showCurrencySettingsModal} onOpenChange={setShowCurrencySettingsModal}>
+        <DialogContent className="bg-gray-800 border-gray-700 text-white max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="text-xl flex items-center gap-2">
+              <Coins className="h-5 w-5 text-yellow-400" />
+              إعدادات تحويل العملات
+            </DialogTitle>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            {/* العملة المفضلة */}
+            <div className="space-y-2">
+              <Label className="text-gray-300">العملة المفضلة للعرض</Label>
+              <Select 
+                value={currencySettings.preferred_currency} 
+                onValueChange={(value) => setCurrencySettings({...currencySettings, preferred_currency: value})}
+              >
+                <SelectTrigger className="bg-gray-700/50 border-gray-600">
+                  <SelectValue placeholder="اختر العملة" />
+                </SelectTrigger>
+                <SelectContent className="bg-gray-800 border-gray-700">
+                  <SelectItem value="USD">🇺🇸 دولار أمريكي (USD)</SelectItem>
+                  <SelectItem value="IQD">🇮🇶 دينار عراقي (IQD)</SelectItem>
+                  <SelectItem value="SAR">🇸🇦 ريال سعودي (SAR)</SelectItem>
+                  <SelectItem value="AED">🇦🇪 درهم إماراتي (AED)</SelectItem>
+                  <SelectItem value="EGP">🇪🇬 جنيه مصري (EGP)</SelectItem>
+                  <SelectItem value="EUR">🇪🇺 يورو (EUR)</SelectItem>
+                  <SelectItem value="JOD">🇯🇴 دينار أردني (JOD)</SelectItem>
+                  <SelectItem value="KWD">🇰🇼 دينار كويتي (KWD)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* نوع أسعار الصرف */}
+            <div className="space-y-2">
+              <Label className="text-gray-300">مصدر أسعار الصرف</Label>
+              <div className="flex gap-4">
+                <Button
+                  type="button"
+                  variant={!currencySettings.use_live_rates ? "default" : "outline"}
+                  className={`flex-1 ${!currencySettings.use_live_rates ? 'bg-blue-600' : 'border-gray-600'}`}
+                  onClick={() => setCurrencySettings({...currencySettings, use_live_rates: false})}
+                >
+                  <Banknote className="h-4 w-4 ml-2" />
+                  أسعار ثابتة
+                </Button>
+                <Button
+                  type="button"
+                  variant={currencySettings.use_live_rates ? "default" : "outline"}
+                  className={`flex-1 ${currencySettings.use_live_rates ? 'bg-green-600' : 'border-gray-600'}`}
+                  onClick={() => setCurrencySettings({...currencySettings, use_live_rates: true})}
+                >
+                  <ArrowUpDown className="h-4 w-4 ml-2" />
+                  أسعار حية
+                </Button>
+              </div>
+            </div>
+
+            {/* أسعار الصرف المخصصة (فقط إذا اختار أسعار ثابتة) */}
+            {!currencySettings.use_live_rates && (
+              <div className="space-y-3 bg-gray-700/30 rounded-lg p-4">
+                <Label className="text-gray-300">تعديل أسعار الصرف (مقابل الدولار)</Label>
+                <p className="text-xs text-gray-500">أدخل كم وحدة من كل عملة تساوي 1 دولار</p>
+                
+                <div className="grid grid-cols-2 gap-3">
+                  {[
+                    { code: 'IQD', name: 'دينار عراقي', defaultRate: 1460 },
+                    { code: 'SAR', name: 'ريال سعودي', defaultRate: 3.75 },
+                    { code: 'AED', name: 'درهم إماراتي', defaultRate: 3.67 },
+                    { code: 'EGP', name: 'جنيه مصري', defaultRate: 48 },
+                  ].map(({ code, name, defaultRate }) => (
+                    <div key={code} className="space-y-1">
+                      <Label className="text-xs text-gray-400">{name}</Label>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        value={currencySettings.custom_rates?.[`${code}_USD`] || defaultRate}
+                        onChange={(e) => setCurrencySettings({
+                          ...currencySettings,
+                          custom_rates: {
+                            ...currencySettings.custom_rates,
+                            [`${code}_USD`]: parseFloat(e.target.value) || defaultRate
+                          }
+                        })}
+                        className="bg-gray-700/50 border-gray-600"
+                        placeholder={defaultRate.toString()}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {currencySettings.use_live_rates && (
+              <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-4">
+                <p className="text-sm text-green-400 flex items-center gap-2">
+                  <Check className="h-4 w-4" />
+                  سيتم جلب أسعار الصرف تلقائياً من الإنترنت
+                </p>
+                <p className="text-xs text-gray-500 mt-1">
+                  يتم تحديث الأسعار كل مرة تفتح فيها التقارير
+                </p>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button 
+              variant="outline" 
+              onClick={() => setShowCurrencySettingsModal(false)} 
+              className="border-gray-600"
+            >
+              إلغاء
+            </Button>
+            <Button 
+              onClick={saveCurrencySettings}
+              disabled={savingCurrencySettings}
+              className="bg-purple-600 hover:bg-purple-700"
+            >
+              {savingCurrencySettings ? (
+                <>
+                  <Loader2 className="h-4 w-4 ml-2 animate-spin" />
+                  جاري الحفظ...
+                </>
+              ) : (
+                <>
+                  <Save className="h-4 w-4 ml-2" />
+                  حفظ الإعدادات
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
