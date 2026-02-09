@@ -159,14 +159,16 @@ export default function DriverApp() {
   // تسليم الطلب
   const deliverOrder = async (orderId) => {
     try {
-      await axios.put(`${API}/orders/${orderId}/status`, null, {
-        params: { status: 'delivered' }
+      // استخدام API السائق بدون JWT
+      await axios.put(`${API}/driver/orders/${orderId}/status`, null, {
+        params: { status: 'delivered', driver_id: driver.id }
       });
       toast.success('تم تسليم الطلب بنجاح!');
       fetchOrders();
       setSelectedOrder(null);
     } catch (error) {
-      toast.error('فشل في تحديث حالة الطلب');
+      const message = error.response?.data?.detail || 'فشل في تحديث حالة الطلب';
+      toast.error(message);
     }
   };
 
