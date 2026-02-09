@@ -13414,6 +13414,71 @@ async def assign_driver_to_order(
         }
     }
 
+
+# ==================== DRIVER APP ROUTES ====================
+
+@api_router.get("/driver/login")
+async def driver_login(phone: str):
+    """تسجيل دخول السائق برقم الهاتف"""
+    driver = await db.drivers.find_one({"phone": phone}, {"_id": 0})
+    
+    if not driver:
+        return {"driver": None, "message": "رقم الهاتف غير مسجل كسائق"}
+    
+    return {"driver": driver}
+
+@api_router.get("/driver/orders")
+async def get_driver_orders(driver_id: str):
+    """جلب الطلبات المسندة للسائق"""
+    orders = await db.orders.find(
+        {
+            "driver_id": driver_id,
+            "status": {"$in": ["ready", "out_for_delivery"]}
+        },
+        {"_id": 0}
+    ).sort("created_at", -1).to_list(50)
+    
+    # إضافة status_label
+    status_labels = {
+        'ready': 'جاهز للتوصيل',
+        'out_for_delivery': 'في الطريق'
+    }
+    
+    for order in orders:
+        order['status_label'] = status_labels.get(order.get('status'), order.get('status'))
+    
+    return orders
+
+@api_router.put("/orders/{order_id}/status")
+async def update_order_status(order_id: str, status: str):
+    """تحديث حالة الطلب (للسائق)"""
+    valid_statuses = ['pending', 'preparing', 'ready', 'out_for_delivery', 'delivered', 'cancelled']
+    if status not in valid_statuses:
+        raise HTTPException(status_code=400, detail="حالة غير صحيحة")
+    
+    order = await db.orders.find_one({"id": order_id})
+    if not order:
+        raise HTTPException(status_code=404, detail="الطلب غير موجود")
+    
+    update_data = {
+        "status": status,
+        "updated_at": datetime.now(timezone.utc).isoformat()
+    }
+    
+    if status == 'delivered':
+        update_data["delivered_at"] = datetime.now(timezone.utc).isoformat()
+        # تحرير السائق
+        if order.get("driver_id"):
+            await db.drivers.update_one(
+                {"id": order["driver_id"]},
+                {"$set": {"is_available": True}}
+            )
+    
+    await db.orders.update_one({"id": order_id}, {"$set": update_data})
+    
+    return {"message": "تم تحديث حالة الطلب", "status": status}
+
+
 @api_router.get("/customer/order-driver/{order_id}")
 async def get_order_driver_info(order_id: str, phone: str = None):
     """جلب معلومات سائق الطلب للزبون"""
