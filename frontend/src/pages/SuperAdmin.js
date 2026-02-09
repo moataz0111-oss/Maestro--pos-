@@ -99,7 +99,8 @@ import {
   Save,
   Coins,
   Banknote,
-  ArrowUpDown
+  ArrowUpDown,
+  Languages
 } from 'lucide-react';
 import { toast, Toaster } from 'sonner';
 import ImageCropper from '../components/ImageCropper';
