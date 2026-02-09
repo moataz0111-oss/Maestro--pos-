@@ -597,14 +597,18 @@ export default function Settings() {
     try {
       await axios.put(`${API}/tenant/regional-settings`, regionalSettings);
       
-      // حفظ العملة في localStorage لتطبيقها على كل النظام
-      localStorage.setItem('app_currency', regionalSettings.currency);
+      // تحديث العملة باستخدام setCurrency من currency.js
+      setCurrency(regionalSettings.currency);
       localStorage.setItem('app_language', regionalSettings.language);
       localStorage.setItem('app_country', regionalSettings.country);
       
-      // إعادة تحميل الصفحة لتطبيق التغييرات
-      toast.success('تم حفظ إعدادات النظام بنجاح - سيتم تحديث الصفحة');
-      setTimeout(() => window.location.reload(), 1500);
+      // إرسال حدث تغيير العملة
+      window.dispatchEvent(new CustomEvent('currencyChanged', { detail: regionalSettings.currency }));
+      
+      toast.success('تم حفظ إعدادات النظام بنجاح');
+      
+      // إعادة تحميل الصفحة لتطبيق التغييرات الكاملة
+      setTimeout(() => window.location.reload(), 1000);
     } catch (error) {
       toast.error('فشل في حفظ إعدادات النظام');
     } finally {
