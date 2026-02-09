@@ -38,7 +38,8 @@ import {
   Link,
   UserCheck,
   Maximize,
-  ArrowLeftRight
+  ArrowLeftRight,
+  ExternalLink
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
