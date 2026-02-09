@@ -207,6 +207,19 @@ export default function Settings() {
   const [restaurantLogoPreview, setRestaurantLogoPreview] = useState('');
   const [savingRestaurant, setSavingRestaurant] = useState(false);
   
+  // إعدادات المنطقة والعملة
+  const [regionalSettings, setRegionalSettings] = useState({
+    country: 'IQ',
+    currency: 'IQD',
+    language: 'ar',
+    secondary_currency: 'USD',
+    show_secondary_currency: false
+  });
+  const [savingRegionalSettings, setSavingRegionalSettings] = useState(false);
+  const [supportedCurrencies, setSupportedCurrencies] = useState({});
+  const [supportedLanguages, setSupportedLanguages] = useState({});
+  const [supportedCountries, setSupportedCountries] = useState({});
+  
   // Payment Settings States - إعدادات الدفع
   const [paymentSettings, setPaymentSettings] = useState({
     stripe_enabled: true,
