@@ -460,41 +460,89 @@ export default function DriverApp() {
 
                   {selectedOrder?.id === order.id && (
                     <div className="mt-4 pt-4 border-t space-y-3">
-                      {/* خريطة التوصيل */}
+                      {/* خريطة التوصيل - تصميم مثل Waze */}
                       {order.delivery_location && (
-                        <div className="h-48 rounded-lg overflow-hidden">
+                        <div className="h-56 rounded-xl overflow-hidden border border-gray-700 shadow-lg relative">
                           <MapContainer
                             center={[order.delivery_location.latitude, order.delivery_location.longitude]}
                             zoom={15}
                             style={{ height: '100%', width: '100%' }}
                             zoomControl={false}
                           >
-                            <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+                            <TileLayer 
+                              url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+                              attribution='&copy; CARTO'
+                            />
                             {currentLocation && (
                               <Marker 
                                 position={currentLocation}
                                 icon={L.divIcon({
                                   className: 'driver-marker',
-                                  html: '<div style="background: #3b82f6; width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 16px; border: 2px solid white;">🛵</div>',
-                                  iconSize: [30, 30],
-                                  iconAnchor: [15, 15]
+                                  html: `
+                                    <div style="
+                                      background: linear-gradient(135deg, #3b82f6, #06b6d4);
+                                      width: 40px;
+                                      height: 40px;
+                                      border-radius: 50%;
+                                      display: flex;
+                                      align-items: center;
+                                      justify-content: center;
+                                      font-size: 20px;
+                                      border: 3px solid white;
+                                      box-shadow: 0 0 15px rgba(59,130,246,0.6), 0 4px 10px rgba(0,0,0,0.4);
+                                    ">🛵</div>
+                                  `,
+                                  iconSize: [40, 40],
+                                  iconAnchor: [20, 20]
                                 })}
                               >
-                                <Popup>موقعك</Popup>
+                                <Popup>
+                                  <div className="font-bold text-center">موقعك الحالي</div>
+                                </Popup>
                               </Marker>
                             )}
                             <Marker 
                               position={[order.delivery_location.latitude, order.delivery_location.longitude]}
                               icon={L.divIcon({
                                 className: 'delivery-marker',
-                                html: '<div style="background: #ef4444; width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 16px; border: 2px solid white;">📍</div>',
-                                iconSize: [30, 30],
-                                iconAnchor: [15, 15]
+                                html: `
+                                  <div style="
+                                    background: linear-gradient(135deg, #ef4444, #f97316);
+                                    width: 40px;
+                                    height: 40px;
+                                    border-radius: 50%;
+                                    display: flex;
+                                    align-items: center;
+                                    justify-content: center;
+                                    font-size: 20px;
+                                    border: 3px solid white;
+                                    box-shadow: 0 0 15px rgba(239,68,68,0.5), 0 4px 10px rgba(0,0,0,0.4);
+                                  ">📍</div>
+                                `,
+                                iconSize: [40, 40],
+                                iconAnchor: [20, 20]
                               })}
                             >
-                              <Popup>موقع التوصيل</Popup>
+                              <Popup>
+                                <div className="text-center">
+                                  <p className="font-bold">موقع التوصيل</p>
+                                  <p className="text-sm text-gray-600">{order.delivery_address}</p>
+                                </div>
+                              </Popup>
                             </Marker>
                           </MapContainer>
+                          
+                          {/* زر فتح الملاحة */}
+                          <div className="absolute bottom-3 right-3">
+                            <Button
+                              size="sm"
+                              className="bg-blue-500 hover:bg-blue-600 shadow-lg"
+                              onClick={() => window.open(`https://www.google.com/maps/dir/?api=1&destination=${order.delivery_location?.latitude},${order.delivery_location?.longitude}`, '_blank')}
+                            >
+                              <Navigation className="h-4 w-4 ml-1" />
+                              ابدأ الملاحة
+                            </Button>
+                          </div>
                         </div>
                       )}
 
@@ -505,7 +553,7 @@ export default function DriverApp() {
                           onClick={() => window.open(`https://www.google.com/maps/dir/?api=1&destination=${order.delivery_location?.latitude},${order.delivery_location?.longitude}`, '_blank')}
                         >
                           <Navigation className="h-4 w-4 ml-2" />
-                          فتح الخريطة
+                          خرائط جوجل
                         </Button>
                         <a href={`tel:${order.customer_phone}`}>
                           <Button variant="outline" className="w-full">
