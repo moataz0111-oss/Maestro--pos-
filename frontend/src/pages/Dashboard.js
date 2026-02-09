@@ -2028,116 +2028,65 @@ export default function Dashboard() {
 
       {/* Menu Link Dialog - رابط قائمة العملاء */}
       <Dialog open={showMenuLinkDialog} onOpenChange={setShowMenuLinkDialog}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
+            <DialogTitle className="flex items-center gap-2 justify-center">
               <Share2 className="h-5 w-5 text-orange-500" />
-              مشاركة قائمة الطعام
+              رمز QR للقائمة
             </DialogTitle>
           </DialogHeader>
           
           <div className="space-y-4 py-4">
-            <p className="text-sm text-muted-foreground text-center">
-              شارك هذا الرابط مع عملائك ليتمكنوا من رؤية قائمة الطعام
-            </p>
-            
-            {/* رابط تثبيت التطبيق للزبائن */}
-            <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl p-4 border border-green-200">
-              <div className="flex items-center gap-3 mb-2">
-                <div className="w-10 h-10 bg-green-500 rounded-xl flex items-center justify-center">
-                  <Smartphone className="h-5 w-5 text-white" />
-                </div>
-                <div>
-                  <p className="font-bold text-green-800">رابط تثبيت التطبيق ⭐</p>
-                  <p className="text-xs text-green-600">للزبائن - يفتح على قائمة الطعام</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <Input 
-                  value={`${window.location.origin}/customer-app/`} 
-                  readOnly 
-                  className="text-left text-sm bg-white"
-                  style={{ direction: 'ltr' }}
-                />
-                <Button 
-                  onClick={() => {
-                    navigator.clipboard.writeText(`${window.location.origin}/customer-app/`);
-                    toast.success('تم نسخ رابط تثبيت التطبيق!');
-                  }} 
-                  variant="outline" 
-                  size="icon"
-                  className="border-green-300"
-                >
-                  <Copy className="h-4 w-4 text-green-600" />
-                </Button>
-              </div>
-            </div>
-            
-            {/* QR Code */}
-            <div className="bg-gradient-to-br from-orange-50 to-amber-50 rounded-xl p-6 text-center border border-orange-200">
-              <div id="qr-code-container" className="bg-white p-4 rounded-xl inline-block shadow-lg">
+            {/* QR Code فقط */}
+            <div className="bg-white rounded-xl p-6 text-center">
+              <div id="qr-code-container" className="bg-white p-4 rounded-xl inline-block border-4 border-orange-100">
                 <QRCodeSVG 
                   value={menuLink || 'loading'} 
-                  size={180}
+                  size={200}
                   level="H"
                   includeMargin={false}
                   bgColor="#ffffff"
                   fgColor="#000000"
                 />
               </div>
-              <p className="text-sm font-medium mt-3 text-orange-700">امسح الكود للوصول للقائمة</p>
+              <p className="text-sm font-medium mt-4 text-gray-600">امسح الكود للوصول للقائمة</p>
             </div>
             
-            {/* رابط القائمة */}
-            <div className="flex items-center gap-2">
-              <Input 
-                value={menuLink} 
-                readOnly 
-                className="text-left text-sm"
-                style={{ direction: 'ltr' }}
-              />
-              <Button onClick={copyMenuLink} variant="outline" size="icon">
-                <Copy className="h-4 w-4" />
-              </Button>
-            </div>
-            
-            {/* أزرار المشاركة والتنزيل */}
-            <div className="grid grid-cols-2 gap-3">
-              <Button 
-                className="gap-2 bg-orange-500 hover:bg-orange-600" 
-                onClick={() => {
-                  if (navigator.share) {
-                    navigator.share({
-                      title: 'Maestro EGP - قائمة الطعام',
-                      text: '🍽️ اطلع على قائمة الطعام واطلب الآن!',
-                      url: menuLink
-                    });
-                  } else {
-                    copyMenuLink();
-                  }
-                }}
-              >
-                <Share2 className="h-4 w-4" />
-                مشاركة الرابط
-              </Button>
-              <Button 
-                variant="outline"
-                className="gap-2 border-orange-300 text-orange-600 hover:bg-orange-50" 
-                onClick={() => {
-                  // تحويل QR Code SVG إلى صورة PNG وتنزيلها
-                  const svg = document.querySelector('#qr-code-container svg');
-                  if (svg) {
-                    const canvas = document.createElement('canvas');
-                    const ctx = canvas.getContext('2d');
-                    const svgData = new XMLSerializer().serializeToString(svg);
-                    const img = new window.Image();
+            {/* زر تنزيل فقط */}
+            <Button 
+              className="w-full gap-2 bg-orange-500 hover:bg-orange-600" 
+              onClick={() => {
+                const svg = document.querySelector('#qr-code-container svg');
+                if (svg) {
+                  const canvas = document.createElement('canvas');
+                  const ctx = canvas.getContext('2d');
+                  const svgData = new XMLSerializer().serializeToString(svg);
+                  const img = new window.Image();
+                  
+                  canvas.width = 300;
+                  canvas.height = 300;
+                  
+                  img.onload = () => {
+                    ctx.fillStyle = '#ffffff';
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+                    ctx.drawImage(img, 50, 50, 200, 200);
                     
-                    // إضافة padding أبيض حول الصورة
-                    canvas.width = 250;
-                    canvas.height = 250;
-                    
-                    img.onload = () => {
-                      // رسم خلفية بيضاء
+                    const link = document.createElement('a');
+                    link.download = 'menu-qr-code.png';
+                    link.href = canvas.toDataURL('image/png');
+                    link.click();
+                    toast.success('تم تنزيل QR Code!');
+                  };
+                  img.src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgData)));
+                }
+              }}
+            >
+              <Download className="h-4 w-4" />
+              تنزيل QR Code
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
                       ctx.fillStyle = '#ffffff';
                       ctx.fillRect(0, 0, canvas.width, canvas.height);
                       // رسم QR Code في المنتصف
