@@ -290,6 +290,17 @@
                     }, 2000);
                 }
             }
+            
+            // تسجيل Service Worker للـ PWA
+            if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.register('/sw-customer.js', { scope: '/menu' })
+                    .then(function(registration) {
+                        console.log('[Customer PWA] ServiceWorker registered:', registration.scope);
+                    })
+                    .catch(function(error) {
+                        console.log('[Customer PWA] ServiceWorker registration failed:', error);
+                    });
+            }
         })();
         
         function closeBanner() {
