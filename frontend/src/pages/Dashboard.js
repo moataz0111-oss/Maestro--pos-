@@ -141,7 +141,8 @@ export default function Dashboard() {
     showSmartReports: true,
     showPurchasing: true,
     showBranchOrders: true,
-    showInventoryReports: true
+    showInventoryReports: true,
+    showCustomerMenu: true
   });
   
   // حالات السحب والإفلات
