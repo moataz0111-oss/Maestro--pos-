@@ -44,7 +44,8 @@ import {
   Calendar,
   Heart,
   Star,
-  Bookmark
+  Bookmark,
+  MessageSquare
 } from 'lucide-react';
 import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
