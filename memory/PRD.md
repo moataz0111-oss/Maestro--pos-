@@ -5,6 +5,53 @@
 
 ---
 
+## آخر التحديثات (9 فبراير 2026) - الجزء 30
+
+### ✅ إصلاح نهائي ومؤكد لتطبيق الزبائن PWA
+
+#### 🎯 المشكلة الرئيسية (تم حلها)
+- **المشكلة**: عند مسح QR Code وتثبيت التطبيق على iPhone، كان يفتح على صفحة تسجيل دخول المسؤولين بدلاً من قائمة الطعام
+- **السبب**: كان يتم تحميل `manifest.json` (الخاص بالمسؤولين) بدلاً من manifest العملاء
+
+#### 🔧 الحل المُطبق
+1. **نقطة دخول HTML منفصلة**: إنشاء `/app/frontend/public/menu.html`
+   - ملف HTML مستقل تماماً عن تطبيق المسؤولين
+   - يحتوي على شاشة تحميل جميلة باللون البرتقالي
+   - يقوم بتوجيه المستخدم تلقائياً إلى `/menu` أو `/menu/{restaurant}`
+   - يحفظ معرف المطعم في `localStorage` للاستخدام المستقبلي
+
+2. **Manifest جديد**: إنشاء `/app/frontend/public/manifest-menu.json`
+   - `start_url: "/menu.html"` - يبدأ من صفحة menu.html
+   - `scope: "/menu"` - نطاق محدد لصفحات القائمة فقط
+   - منفصل تماماً عن manifest المسؤولين
+
+3. **تعديل QR Code في لوحة التحكم**
+   - الرابط الجديد: `/menu.html?r={tenant_slug}`
+   - يتضمن معرف المطعم كـ parameter
+
+#### 📱 طريقة عمل PWA الآن
+1. المسؤول يشارك QR Code من لوحة التحكم
+2. الزبون يمسح QR Code ← يفتح `/menu.html?r=demo-maestro`
+3. الصفحة توجه تلقائياً إلى `/menu/demo-maestro`
+4. عند تثبيت التطبيق (Add to Home Screen):
+   - iOS يحفظ `start_url` من manifest-menu.json
+   - عند فتح التطبيق المثبت ← يفتح `/menu.html` ← يوجه لآخر مطعم محفوظ
+
+#### ✅ نتائج الاختبار - Iteration 52
+- **Backend**: 100%
+- **Frontend**: 100%
+- جميع الاختبارات (17 اختبار) نجحت بدون مشاكل
+
+#### 📁 الملفات الجديدة/المُعدلة
+- `/app/frontend/public/menu.html` ← جديد
+- `/app/frontend/public/manifest-menu.json` ← جديد
+- `/app/frontend/public/_redirects` ← معدل
+- `/app/frontend/src/pages/Dashboard.js` ← معدل (QR Code URL)
+- `/app/frontend/src/pages/CustomerMenu.js` ← معدل (manifest link)
+- `/app/frontend/src/pages/RestaurantSelector.js` ← معدل (manifest link)
+
+---
+
 ## آخر التحديثات (9 فبراير 2026) - الجزء 29
 
 ### ✅ التحسينات المطلوبة
