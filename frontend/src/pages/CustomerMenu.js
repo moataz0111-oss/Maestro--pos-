@@ -1088,14 +1088,24 @@ export default function CustomerMenu() {
                 <span>الإجمالي</span>
                 <span className="text-orange-600">{formatPrice(grandTotal)}</span>
               </div>
-              <Button 
-                className="w-full h-12 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600"
-                onClick={() => setStep('checkout')}
-                data-testid="proceed-checkout-btn"
-              >
-                متابعة الطلب
-                <ArrowLeft className="h-5 w-5 mr-2" />
-              </Button>
+              <div className="flex gap-2">
+                <Button 
+                  variant="outline"
+                  className="flex-1 h-12 border-pink-300 text-pink-600 hover:bg-pink-50"
+                  onClick={() => setShowSaveFavoriteDialog(true)}
+                >
+                  <Heart className="h-5 w-5 ml-2" />
+                  حفظ كمفضل
+                </Button>
+                <Button 
+                  className="flex-1 h-12 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600"
+                  onClick={() => setStep('checkout')}
+                  data-testid="proceed-checkout-btn"
+                >
+                  متابعة الطلب
+                  <ArrowLeft className="h-5 w-5 mr-2" />
+                </Button>
+              </div>
             </div>
           </div>
         )}
