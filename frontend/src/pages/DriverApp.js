@@ -217,7 +217,7 @@ export default function DriverApp() {
               <Truck className="h-10 w-10 text-white" />
             </div>
             <CardTitle className="text-2xl">تطبيق السائق</CardTitle>
-            <p className="text-gray-500">سجل دخولك برقم هاتفك</p>
+            <p className="text-gray-500">سجل دخولك برقم هاتفك والرمز السري</p>
           </CardHeader>
           <CardContent className="space-y-4">
             <div>
@@ -228,6 +228,17 @@ export default function DriverApp() {
                 value={driverPhone}
                 onChange={(e) => setDriverPhone(e.target.value)}
                 className="text-lg text-center"
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium mb-2 block">الرمز السري (PIN)</label>
+              <Input
+                type="password"
+                placeholder="****"
+                maxLength={6}
+                value={driverPin}
+                onChange={(e) => setDriverPin(e.target.value)}
+                className="text-lg text-center tracking-widest"
               />
             </div>
             <Button
