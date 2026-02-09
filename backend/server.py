@@ -1256,6 +1256,7 @@ class DriverCreate(BaseModel):
     name: str
     phone: str
     branch_id: str
+    pin: str = "1234"  # رمز PIN الافتراضي - يجب تغييره
     user_id: Optional[str] = None  # ربط بحساب مستخدم
 
 class DriverResponse(BaseModel):
