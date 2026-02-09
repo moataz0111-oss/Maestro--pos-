@@ -13576,6 +13576,41 @@ async def driver_update_location(driver_id: str, location: DriverLocationUpdate)
     
     return {"message": "تم تحديث الموقع", "success": True}
 
+@api_router.put("/driver/orders/{order_id}/status")
+async def driver_update_order_status(order_id: str, status: str, driver_id: str):
+    """تحديث حالة الطلب من تطبيق السائق (بدون JWT)"""
+    valid_statuses = ['out_for_delivery', 'delivered']
+    if status not in valid_statuses:
+        raise HTTPException(status_code=400, detail="حالة غير صحيحة للسائق")
+    
+    # التحقق من أن الطلب مُسند لهذا السائق
+    order = await db.orders.find_one({"id": order_id})
+    if not order:
+        raise HTTPException(status_code=404, detail="الطلب غير موجود")
+    
+    if order.get("driver_id") != driver_id:
+        raise HTTPException(status_code=403, detail="هذا الطلب غير مُسند لك")
+    
+    update_data = {
+        "status": status,
+        "updated_at": datetime.now(timezone.utc).isoformat()
+    }
+    
+    if status == 'delivered':
+        update_data["delivered_at"] = datetime.now(timezone.utc).isoformat()
+        # تحرير السائق
+        await db.drivers.update_one(
+            {"id": driver_id},
+            {"$set": {"is_available": True, "current_order_id": None}}
+        )
+    
+    await db.orders.update_one({"id": order_id}, {"$set": update_data})
+    
+    # إرسال إشعار Push للعميل
+    await notify_order_status_change(order_id, status)
+    
+    return {"message": "تم تحديث حالة الطلب", "status": status}
+
 @api_router.get("/driver/order-driver-info/{order_id}")
 async def get_driver_info_for_customer(order_id: str):
     """جلب معلومات السائق وموقعه للزبون - بدون مصادقة"""
