@@ -5715,6 +5715,7 @@ async def get_dashboard_settings(current_user: dict = Depends(get_current_user))
         "showSmartReports": True,
         "showPurchasing": True,
         "showBranchOrders": True,
+        "showCustomerMenu": True,
         # خيارات الإعدادات
         "settingsUsers": True,
         "settingsCustomers": True,
