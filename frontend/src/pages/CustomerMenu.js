@@ -207,11 +207,11 @@ export default function CustomerMenu() {
 
   // PWA Install handling - تحديث manifest للعملاء
   useEffect(() => {
-    // تغيير manifest link لاستخدام manifest العملاء
+    // تغيير manifest link لاستخدام manifest العملاء الجديد
     const manifestLink = document.querySelector('link[rel="manifest"]');
     if (manifestLink) {
-      // إضافة timestamp لتجاوز الـ cache
-      manifestLink.href = '/manifest-customer.json?v=' + Date.now();
+      // استخدام manifest-menu.json الجديد
+      manifestLink.href = '/manifest-menu.json?v=' + Date.now();
     }
     
     // تحديث meta tags
@@ -223,19 +223,15 @@ export default function CustomerMenu() {
     // تحديث عنوان الصفحة
     document.title = (restaurant?.name || 'قائمة الطعام') + ' - اطلب الآن';
     
-    // إعادة تسجيل Service Worker لمسح الـ cache
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.getRegistrations().then(registrations => {
-        registrations.forEach(registration => {
-          registration.update();
-        });
-      });
+    // حفظ معرف المطعم للـ PWA
+    if (tenantId) {
+      localStorage.setItem('customer_restaurant', tenantId);
     }
     
     return () => {
       // لا نعيد manifest الأصلي - سيتم تحديده من index.html
     };
-  }, [restaurant]);
+  }, [restaurant, tenantId]);
 
   // PWA Install handling
   useEffect(() => {
