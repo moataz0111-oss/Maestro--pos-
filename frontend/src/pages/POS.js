@@ -325,7 +325,7 @@ export default function POS() {
       // تحويل عناصر الطلب إلى سلة
       const cartItems = order.items.map(item => ({
         product_id: item.product_id,
-        product_name: item.product_name,
+        product_name: item.product_name || item.name || 'منتج غير معروف',
         price: item.price,
         quantity: item.quantity,
         notes: item.notes || ''
