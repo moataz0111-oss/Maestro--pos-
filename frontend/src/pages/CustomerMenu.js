@@ -439,6 +439,74 @@ export default function CustomerMenu() {
     toast.success('تمت إضافة الطلب المفضل للسلة 🛒');
   };
 
+  // فتح نافذة التقييم
+  const openRatingDialog = (order) => {
+    setRatingOrder(order);
+    setRating(5);
+    setRatingComment('');
+    setFoodRating(5);
+    setDeliveryRating(5);
+    setServiceRating(5);
+    setShowRatingDialog(true);
+  };
+
+  // إرسال التقييم
+  const submitRating = async () => {
+    if (!ratingOrder) return;
+    
+    setSubmittingRating(true);
+    try {
+      await axios.post(`${API}/customer/rate-order`, {
+        order_id: ratingOrder.id,
+        tenant_id: tenantId,
+        phone: customerPhone,
+        rating: rating,
+        comment: ratingComment,
+        food_quality: foodRating,
+        delivery_speed: deliveryRating,
+        service_quality: serviceRating
+      });
+      
+      toast.success('شكراً لتقييمك! ⭐');
+      setShowRatingDialog(false);
+      setRatingOrder(null);
+      fetchOrderHistory();
+    } catch (error) {
+      if (error.response?.data?.detail === 'تم تقييم هذا الطلب مسبقاً') {
+        toast.info('تم تقييم هذا الطلب مسبقاً');
+      } else {
+        toast.error('فشل في إرسال التقييم');
+      }
+    } finally {
+      setSubmittingRating(false);
+    }
+  };
+
+  // مكون النجوم للتقييم
+  const StarRating = ({ value, onChange, size = 'md' }) => {
+    const sizeClass = size === 'lg' ? 'h-8 w-8' : 'h-5 w-5';
+    return (
+      <div className="flex gap-1">
+        {[1, 2, 3, 4, 5].map((star) => (
+          <button
+            key={star}
+            type="button"
+            onClick={() => onChange(star)}
+            className="focus:outline-none transition-transform hover:scale-110"
+          >
+            <Star
+              className={`${sizeClass} ${
+                star <= value
+                  ? 'fill-yellow-400 text-yellow-400'
+                  : 'fill-gray-200 text-gray-200'
+              }`}
+            />
+          </button>
+        ))}
+      </div>
+    );
+  };
+
   const loadSavedData = () => {
     // Load cart
     const savedCart = localStorage.getItem(`cart_${tenantId}`);
