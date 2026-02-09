@@ -3,6 +3,9 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import axios from 'axios';
 import { setCurrency as setLocalCurrency, refreshCurrencyCache, CURRENCIES } from '../utils/currency';
 
+// إعادة تصدير CURRENCIES للتوافق مع الاستيرادات القديمة
+export { CURRENCIES };
+
 // اللغات المدعومة
 export const LANGUAGES = {
   ar: { code: 'ar', name: 'العربية', dir: 'rtl' },
