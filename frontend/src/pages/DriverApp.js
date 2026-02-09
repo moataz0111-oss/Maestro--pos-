@@ -172,6 +172,20 @@ export default function DriverApp() {
     }
   };
 
+  // بدء التوصيل (في الطريق)
+  const startDelivery = async (orderId) => {
+    try {
+      await axios.put(`${API}/driver/orders/${orderId}/status`, null, {
+        params: { status: 'out_for_delivery', driver_id: driver.id }
+      });
+      toast.success('تم تحديث الحالة - أنت الآن في الطريق');
+      fetchOrders();
+    } catch (error) {
+      const message = error.response?.data?.detail || 'فشل في تحديث حالة الطلب';
+      toast.error(message);
+    }
+  };
+
   // تسجيل الخروج
   const logout = () => {
     stopTracking();
