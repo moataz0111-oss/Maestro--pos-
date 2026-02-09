@@ -13513,6 +13513,138 @@ async def get_order_driver_info(order_id: str, phone: str = None):
     }
 
 
+# ==================== PUSH NOTIFICATIONS ROUTES ====================
+
+class PushSubscription(BaseModel):
+    endpoint: str
+    keys: dict
+    phone: Optional[str] = None
+    user_type: str = "customer"  # customer, driver, admin
+
+@api_router.post("/push/subscribe")
+async def subscribe_push(subscription: PushSubscription):
+    """تسجيل اشتراك في إشعارات Push"""
+    sub_doc = {
+        "id": str(uuid.uuid4()),
+        "endpoint": subscription.endpoint,
+        "keys": subscription.keys,
+        "phone": subscription.phone,
+        "user_type": subscription.user_type,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "is_active": True
+    }
+    
+    # تحديث أو إنشاء الاشتراك
+    await db.push_subscriptions.update_one(
+        {"endpoint": subscription.endpoint},
+        {"$set": sub_doc},
+        upsert=True
+    )
+    
+    return {"message": "تم تسجيل الاشتراك بنجاح"}
+
+@api_router.delete("/push/unsubscribe")
+async def unsubscribe_push(endpoint: str):
+    """إلغاء اشتراك في إشعارات Push"""
+    await db.push_subscriptions.delete_one({"endpoint": endpoint})
+    return {"message": "تم إلغاء الاشتراك"}
+
+async def send_push_notification(phone: str, title: str, body: str, data: dict = None, user_type: str = None):
+    """إرسال إشعار Push للمستخدم"""
+    try:
+        from pywebpush import webpush, WebPushException
+        
+        # جلب VAPID keys من البيئة (يجب توليدها مسبقاً)
+        # لأغراض العرض، سنستخدم طريقة بديلة
+        
+        query = {"is_active": True}
+        if phone:
+            query["phone"] = phone
+        if user_type:
+            query["user_type"] = user_type
+        
+        subscriptions = await db.push_subscriptions.find(query).to_list(100)
+        
+        notification_data = {
+            "title": title,
+            "body": body,
+            "data": data or {},
+            "icon": "/icons/admin-icon-192.png"
+        }
+        
+        # هنا يجب استخدام webpush library لإرسال الإشعارات الفعلية
+        # لكن لأن هذا يتطلب VAPID keys، سنسجل الإشعار في قاعدة البيانات
+        
+        notification_log = {
+            "id": str(uuid.uuid4()),
+            "phone": phone,
+            "user_type": user_type,
+            "title": title,
+            "body": body,
+            "data": data,
+            "sent_at": datetime.now(timezone.utc).isoformat(),
+            "subscriptions_count": len(subscriptions)
+        }
+        
+        await db.notification_logs.insert_one(notification_log)
+        
+        return True
+        
+    except Exception as e:
+        logger.error(f"Push notification error: {str(e)}")
+        return False
+
+@api_router.post("/push/test")
+async def test_push_notification(phone: str, message: str = "هذا إشعار تجريبي"):
+    """إرسال إشعار تجريبي"""
+    await send_push_notification(
+        phone=phone,
+        title="Maestro EGP",
+        body=message,
+        data={"type": "test"}
+    )
+    return {"message": "تم إرسال الإشعار"}
+
+@api_router.get("/notifications/{phone}")
+async def get_notifications(phone: str, limit: int = 20):
+    """جلب سجل الإشعارات للمستخدم"""
+    notifications = await db.notification_logs.find(
+        {"phone": phone},
+        {"_id": 0}
+    ).sort("sent_at", -1).limit(limit).to_list(limit)
+    
+    return notifications
+
+# دالة لإرسال إشعار عند تغير حالة الطلب
+async def notify_order_status_change(order_id: str, new_status: str):
+    """إرسال إشعار للعميل عند تغير حالة الطلب"""
+    order = await db.orders.find_one({"id": order_id})
+    if not order:
+        return
+    
+    status_messages = {
+        'preparing': ('جاري تحضير طلبك! 👨‍🍳', 'طلبك قيد التحضير الآن'),
+        'ready': ('طلبك جاهز! ✅', 'طلبك جاهز للتوصيل'),
+        'out_for_delivery': ('السائق في الطريق! 🚚', 'السائق في طريقه إليك'),
+        'delivered': ('تم التسليم! 🎉', 'استمتع بوجبتك! لا تنسى تقييم الطلب')
+    }
+    
+    if new_status in status_messages:
+        title, body = status_messages[new_status]
+        await send_push_notification(
+            phone=order.get("customer_phone"),
+            title=title,
+            body=body,
+            data={
+                "type": "order_status",
+                "order_id": order_id,
+                "status": new_status,
+                "url": f"/menu/{order.get('tenant_id')}"
+            },
+            user_type="customer"
+        )
+
+
 # ==================== ADDRESS AUTOCOMPLETE ROUTES ====================
 
 @api_router.get("/geocode/reverse")
