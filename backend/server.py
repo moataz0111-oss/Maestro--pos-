@@ -7534,6 +7534,38 @@ async def reset_tenant_admin_password(tenant_id: str, new_password: str, current
     
     return {"message": "تم إعادة تعيين كلمة المرور", "email": admin["email"]}
 
+# إعدادات المالك
+@api_router.get("/super-admin/owner-settings")
+async def get_owner_settings(current_user: dict = Depends(verify_super_admin)):
+    """جلب إعدادات المالك"""
+    owner = await db.users.find_one({"role": "super_admin"}, {"_id": 0, "email": 1, "username": 1})
+    return owner or {}
+
+@api_router.put("/super-admin/owner-settings")
+async def update_owner_settings(
+    settings: dict,
+    current_user: dict = Depends(verify_super_admin)
+):
+    """تحديث إعدادات المالك (كلمة المرور والمفتاح السري)"""
+    update_data = {}
+    
+    if settings.get("password"):
+        hashed_password = bcrypt.hashpw(settings["password"].encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+        update_data["password"] = hashed_password
+    
+    if settings.get("secret_key"):
+        update_data["secret_key"] = settings["secret_key"]
+    
+    if not update_data:
+        raise HTTPException(status_code=400, detail="لم يتم تقديم أي بيانات للتحديث")
+    
+    await db.users.update_one(
+        {"role": "super_admin"},
+        {"$set": update_data}
+    )
+    
+    return {"message": "تم تحديث إعدادات المالك بنجاح"}
+
 @api_router.get("/super-admin/stats")
 async def get_super_admin_stats(current_user: dict = Depends(verify_super_admin)):
     """إحصائيات شاملة للـ Super Admin"""
