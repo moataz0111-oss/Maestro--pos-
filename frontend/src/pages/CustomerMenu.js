@@ -289,6 +289,68 @@ export default function CustomerMenu() {
     }
   };
 
+  // تسجيل إشعارات Push
+  const registerPushNotifications = async () => {
+    try {
+      if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+        console.log('Push notifications not supported');
+        return;
+      }
+
+      // تسجيل Service Worker
+      const registration = await navigator.serviceWorker.register('/sw-push.js');
+      console.log('Service Worker registered');
+
+      // طلب إذن الإشعارات
+      const permission = await Notification.requestPermission();
+      if (permission !== 'granted') {
+        console.log('Notification permission denied');
+        return;
+      }
+
+      // الاشتراك في Push
+      const subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(
+          // VAPID public key (يجب توليدها)
+          'BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFgDzkrxZJjSgSnfckjBJuBkr3qBUYIHBQFLXYp5Nksh8U'
+        )
+      });
+
+      // حفظ الاشتراك
+      const savedCustomer = localStorage.getItem(`customer_${tenantId}`);
+      const customerData = savedCustomer ? JSON.parse(savedCustomer) : {};
+
+      await axios.post(`${API}/push/subscribe`, {
+        endpoint: subscription.endpoint,
+        keys: {
+          p256dh: btoa(String.fromCharCode.apply(null, new Uint8Array(subscription.getKey('p256dh')))),
+          auth: btoa(String.fromCharCode.apply(null, new Uint8Array(subscription.getKey('auth'))))
+        },
+        phone: customerData.phone,
+        user_type: 'customer'
+      });
+
+      console.log('Push subscription saved');
+    } catch (error) {
+      console.log('Push registration error:', error);
+    }
+  };
+
+  // تحويل VAPID key
+  const urlBase64ToUint8Array = (base64String) => {
+    const padding = '='.repeat((4 - base64String.length % 4) % 4);
+    const base64 = (base64String + padding)
+      .replace(/-/g, '+')
+      .replace(/_/g, '/');
+    const rawData = window.atob(base64);
+    const outputArray = new Uint8Array(rawData.length);
+    for (let i = 0; i < rawData.length; ++i) {
+      outputArray[i] = rawData.charCodeAt(i);
+    }
+    return outputArray;
+  };
+
   useEffect(() => {
     fetchMenu();
     loadSavedData();
@@ -296,6 +358,8 @@ export default function CustomerMenu() {
     fetchFavorites();
     // تحديد الموقع تلقائياً عند فتح التطبيق
     autoDetectLocation();
+    // تسجيل إشعارات Push
+    registerPushNotifications();
   }, [tenantId]);
 
   // تحديد الموقع تلقائياً
