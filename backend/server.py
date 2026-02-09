@@ -13253,12 +13253,15 @@ async def get_drivers(current_user: dict = Depends(get_current_user)):
     
     return drivers
 
+class DriverCreateRequest(BaseModel):
+    name: str
+    phone: str
+    branch_id: Optional[str] = None
+    pin: str = "1234"
+
 @api_router.post("/drivers")
 async def create_driver(
-    name: str,
-    phone: str,
-    branch_id: Optional[str] = None,
-    pin: str = "1234",
+    driver_data: DriverCreateRequest,
     current_user: dict = Depends(get_current_user)
 ):
     """إنشاء سائق جديد"""
@@ -13270,10 +13273,10 @@ async def create_driver(
     driver = {
         "id": str(uuid.uuid4()),
         "tenant_id": tenant_id,
-        "branch_id": branch_id,
-        "name": name,
-        "phone": phone,
-        "pin": pin,  # الرمز السري للسائق
+        "branch_id": driver_data.branch_id,
+        "name": driver_data.name,
+        "phone": driver_data.phone,
+        "pin": driver_data.pin,  # الرمز السري للسائق
         "is_active": True,
         "is_available": True,
         "current_location": None,
@@ -13287,15 +13290,18 @@ async def create_driver(
     
     return {"message": "تم إضافة السائق", "driver": driver}
 
+class DriverUpdateRequest(BaseModel):
+    name: Optional[str] = None
+    phone: Optional[str] = None
+    pin: Optional[str] = None
+    is_active: Optional[bool] = None
+    is_available: Optional[bool] = None
+    branch_id: Optional[str] = None
+
 @api_router.put("/drivers/{driver_id}")
 async def update_driver(
     driver_id: str,
-    name: Optional[str] = None,
-    phone: Optional[str] = None,
-    pin: Optional[str] = None,
-    is_active: Optional[bool] = None,
-    is_available: Optional[bool] = None,
-    branch_id: Optional[str] = None,
+    driver_data: DriverUpdateRequest,
     current_user: dict = Depends(get_current_user)
 ):
     """تحديث بيانات سائق"""
@@ -13305,12 +13311,12 @@ async def update_driver(
     tenant_id = get_user_tenant_id(current_user)
     
     update_data = {"updated_at": datetime.now(timezone.utc).isoformat()}
-    if name: update_data["name"] = name
-    if phone: update_data["phone"] = phone
-    if pin: update_data["pin"] = pin  # تحديث الرمز السري
-    if is_active is not None: update_data["is_active"] = is_active
-    if is_available is not None: update_data["is_available"] = is_available
-    if branch_id: update_data["branch_id"] = branch_id
+    if driver_data.name: update_data["name"] = driver_data.name
+    if driver_data.phone: update_data["phone"] = driver_data.phone
+    if driver_data.pin: update_data["pin"] = driver_data.pin  # تحديث الرمز السري
+    if driver_data.is_active is not None: update_data["is_active"] = driver_data.is_active
+    if driver_data.is_available is not None: update_data["is_available"] = driver_data.is_available
+    if driver_data.branch_id: update_data["branch_id"] = driver_data.branch_id
     
     result = await db.drivers.update_one(
         {"id": driver_id, "tenant_id": tenant_id},
