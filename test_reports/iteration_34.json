@@ -132,7 +132,7 @@
   },
   
   "test_credentials": {
-    "api_url": "https://resto-master-8.preview.emergentagent.com",
+    "api_url": "https://chef-track.preview.emergentagent.com",
     "owner": {
       "email": "owner@maestroegp.com",
       "password": "owner123",
