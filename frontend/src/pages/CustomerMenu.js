@@ -107,21 +107,53 @@ function LocationPicker({ position, setPosition, onClose }) {
           موقعي الحالي
         </Button>
       </div>
-      <div className="h-[300px] rounded-lg overflow-hidden border">
+      <div className="h-[350px] rounded-xl overflow-hidden border-2 border-gray-200 shadow-lg">
         <MapContainer
           center={position || [33.3152, 44.3661]} // Baghdad default
-          zoom={13}
+          zoom={14}
           className="h-full w-full"
         >
+          {/* خريطة داكنة وبسيطة مثل Waze */}
           <TileLayer
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-            attribution='&copy; OpenStreetMap'
+            url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+            attribution='&copy; CARTO'
           />
           <MapClickHandler />
-          {position && <Marker position={position} />}
+          {position && (
+            <Marker 
+              position={position}
+              icon={L.divIcon({
+                className: 'location-marker',
+                html: `
+                  <div style="
+                    background: linear-gradient(135deg, #ef4444, #f97316);
+                    width: 50px;
+                    height: 50px;
+                    border-radius: 50%;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    font-size: 26px;
+                    border: 4px solid white;
+                    box-shadow: 0 0 20px rgba(239,68,68,0.5), 0 6px 20px rgba(0,0,0,0.4);
+                    animation: bounce 1s ease-in-out;
+                  ">📍</div>
+                  <style>
+                    @keyframes bounce {
+                      0%, 100% { transform: translateY(0); }
+                      50% { transform: translateY(-10px); }
+                    }
+                  </style>
+                `,
+                iconSize: [50, 50],
+                iconAnchor: [25, 50]
+              })}
+            />
+          )}
         </MapContainer>
       </div>
-      <p className="text-xs text-muted-foreground text-center">
+      <p className="text-sm text-center text-gray-600 mt-2 flex items-center justify-center gap-2">
+        <span className="text-lg">👆</span>
         انقر على الخريطة لتحديد موقع التوصيل
       </p>
     </div>
