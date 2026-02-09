@@ -150,6 +150,9 @@ export default function CustomerMenu() {
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
   const [deliveryAddress, setDeliveryAddress] = useState('');
+  const [addressSuggestions, setAddressSuggestions] = useState([]);
+  const [searchingAddress, setSearchingAddress] = useState(false);
+  const [showAddressSuggestions, setShowAddressSuggestions] = useState(false);
   const [deliveryNotes, setDeliveryNotes] = useState('');
   const [deliveryLocation, setDeliveryLocation] = useState(null);
   const [paymentMethod, setPaymentMethod] = useState('cash');
