@@ -2041,11 +2041,11 @@ export default function Dashboard() {
           </DialogHeader>
           
           <div className="space-y-4 py-4">
-            {/* QR Code للقائمة */}
+            {/* QR Code للقائمة - يوجه للرابط الجديد menu.html */}
             <div className="bg-white rounded-xl p-6 text-center">
               <div id="qr-code-container" className="bg-white p-4 rounded-xl inline-block border-4 border-orange-100">
                 <QRCodeSVG 
-                  value={menuLink || `${window.location.origin}/menu`} 
+                  value={`${window.location.origin}/menu.html${menuLink ? '?r=' + menuLink.split('/').pop() : ''}`} 
                   size={200}
                   level="H"
                   includeMargin={false}
@@ -2054,6 +2054,9 @@ export default function Dashboard() {
                 />
               </div>
               <p className="text-sm font-medium mt-4 text-gray-600">امسح الكود للوصول للقائمة</p>
+              <p className="text-xs text-orange-500 mt-2">
+                💡 يمكن للزبائن تثبيت التطبيق من هذا الرابط
+              </p>
             </div>
             
             {/* زر تنزيل فقط */}
