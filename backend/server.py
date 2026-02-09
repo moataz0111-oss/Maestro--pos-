@@ -6213,6 +6213,235 @@ async def update_tenant_invoice_settings(settings: TenantInvoiceSettings, curren
     
     return {"message": "تم تحديث إعدادات الفاتورة", "settings": settings.model_dump()}
 
+# ==================== Currency & Language Settings ====================
+
+# العملات المدعومة مع أسعار الصرف التقريبية
+SUPPORTED_CURRENCIES = {
+    "IQD": {"name": "دينار عراقي", "name_en": "Iraqi Dinar", "symbol": "د.ع", "rate_to_usd": 0.00076, "decimal_places": 0},
+    "USD": {"name": "دولار أمريكي", "name_en": "US Dollar", "symbol": "$", "rate_to_usd": 1, "decimal_places": 2},
+    "SAR": {"name": "ريال سعودي", "name_en": "Saudi Riyal", "symbol": "ر.س", "rate_to_usd": 0.27, "decimal_places": 2},
+    "AED": {"name": "درهم إماراتي", "name_en": "UAE Dirham", "symbol": "د.إ", "rate_to_usd": 0.27, "decimal_places": 2},
+    "KWD": {"name": "دينار كويتي", "name_en": "Kuwaiti Dinar", "symbol": "د.ك", "rate_to_usd": 3.25, "decimal_places": 3},
+    "EGP": {"name": "جنيه مصري", "name_en": "Egyptian Pound", "symbol": "ج.م", "rate_to_usd": 0.032, "decimal_places": 2},
+    "JOD": {"name": "دينار أردني", "name_en": "Jordanian Dinar", "symbol": "د.أ", "rate_to_usd": 1.41, "decimal_places": 3},
+    "EUR": {"name": "يورو", "name_en": "Euro", "symbol": "€", "rate_to_usd": 1.08, "decimal_places": 2},
+    "GBP": {"name": "جنيه استرليني", "name_en": "British Pound", "symbol": "£", "rate_to_usd": 1.27, "decimal_places": 2},
+    "TRY": {"name": "ليرة تركية", "name_en": "Turkish Lira", "symbol": "₺", "rate_to_usd": 0.031, "decimal_places": 2},
+}
+
+# اللغات المدعومة
+SUPPORTED_LANGUAGES = {
+    "ar": {"name": "العربية", "name_en": "Arabic", "dir": "rtl"},
+    "en": {"name": "English", "name_en": "English", "dir": "ltr"},
+    "ku": {"name": "کوردی", "name_en": "Kurdish", "dir": "rtl"},
+    "fa": {"name": "فارسی", "name_en": "Persian", "dir": "rtl"},
+    "tr": {"name": "Türkçe", "name_en": "Turkish", "dir": "ltr"},
+}
+
+# البلدان مع العملات الافتراضية
+COUNTRIES = {
+    "IQ": {"name": "العراق", "name_en": "Iraq", "currency": "IQD", "language": "ar"},
+    "SA": {"name": "السعودية", "name_en": "Saudi Arabia", "currency": "SAR", "language": "ar"},
+    "AE": {"name": "الإمارات", "name_en": "UAE", "currency": "AED", "language": "ar"},
+    "KW": {"name": "الكويت", "name_en": "Kuwait", "currency": "KWD", "language": "ar"},
+    "EG": {"name": "مصر", "name_en": "Egypt", "currency": "EGP", "language": "ar"},
+    "JO": {"name": "الأردن", "name_en": "Jordan", "currency": "JOD", "language": "ar"},
+    "US": {"name": "أمريكا", "name_en": "United States", "currency": "USD", "language": "en"},
+    "GB": {"name": "بريطانيا", "name_en": "United Kingdom", "currency": "GBP", "language": "en"},
+    "TR": {"name": "تركيا", "name_en": "Turkey", "currency": "TRY", "language": "tr"},
+}
+
+class TenantRegionalSettings(BaseModel):
+    """إعدادات المنطقة والعملة للعميل"""
+    country: str = "IQ"
+    currency: str = "IQD"
+    language: str = "ar"
+    secondary_currency: Optional[str] = "USD"  # عملة ثانوية للعرض
+    show_secondary_currency: bool = False  # عرض السعر بالعملة الثانوية
+    custom_exchange_rate: Optional[float] = None  # سعر صرف مخصص
+
+@api_router.get("/system/currencies")
+async def get_supported_currencies():
+    """جلب قائمة العملات المدعومة"""
+    return {"currencies": SUPPORTED_CURRENCIES}
+
+@api_router.get("/system/languages")
+async def get_supported_languages():
+    """جلب قائمة اللغات المدعومة"""
+    return {"languages": SUPPORTED_LANGUAGES}
+
+@api_router.get("/system/countries")
+async def get_supported_countries():
+    """جلب قائمة البلدان المدعومة"""
+    return {"countries": COUNTRIES}
+
+@api_router.get("/tenant/regional-settings")
+async def get_tenant_regional_settings(current_user: dict = Depends(get_current_user)):
+    """جلب إعدادات المنطقة والعملة للعميل"""
+    tenant_id = get_user_tenant_id(current_user)
+    
+    settings = await db.tenant_regional_settings.find_one({"tenant_id": tenant_id}, {"_id": 0})
+    
+    default_settings = {
+        "country": "IQ",
+        "currency": "IQD",
+        "language": "ar",
+        "secondary_currency": "USD",
+        "show_secondary_currency": False,
+        "custom_exchange_rate": None
+    }
+    
+    if settings:
+        return {**default_settings, **settings}
+    return default_settings
+
+@api_router.put("/tenant/regional-settings")
+async def update_tenant_regional_settings(settings: TenantRegionalSettings, current_user: dict = Depends(get_current_user)):
+    """تحديث إعدادات المنطقة والعملة للعميل"""
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.MANAGER]:
+        raise HTTPException(status_code=403, detail="غير مصرح")
+    
+    tenant_id = get_user_tenant_id(current_user)
+    
+    await db.tenant_regional_settings.update_one(
+        {"tenant_id": tenant_id},
+        {"$set": {**settings.model_dump(), "tenant_id": tenant_id, "updated_at": datetime.now(timezone.utc).isoformat()}},
+        upsert=True
+    )
+    
+    return {"message": "تم تحديث إعدادات المنطقة", "settings": settings.model_dump()}
+
+@api_router.get("/customer/regional-settings/{tenant_id}")
+async def get_customer_regional_settings(tenant_id: str):
+    """جلب إعدادات المنطقة للزبون (بدون تسجيل دخول)"""
+    # البحث بـ menu_slug أو tenant_id
+    tenant = await db.tenants.find_one({"menu_slug": tenant_id})
+    if not tenant:
+        tenant = await db.tenants.find_one({"id": tenant_id})
+    
+    if not tenant:
+        raise HTTPException(status_code=404, detail="المطعم غير موجود")
+    
+    actual_tenant_id = tenant.get("id")
+    settings = await db.tenant_regional_settings.find_one({"tenant_id": actual_tenant_id}, {"_id": 0})
+    
+    default_settings = {
+        "country": "IQ",
+        "currency": "IQD",
+        "language": "ar",
+        "secondary_currency": "USD",
+        "show_secondary_currency": False
+    }
+    
+    result = {**default_settings}
+    if settings:
+        result.update(settings)
+    
+    # إضافة معلومات العملة
+    currency_code = result.get("currency", "IQD")
+    if currency_code in SUPPORTED_CURRENCIES:
+        result["currency_info"] = SUPPORTED_CURRENCIES[currency_code]
+    
+    return result
+
+@api_router.post("/convert-currency")
+async def convert_currency(
+    amount: float,
+    from_currency: str = "IQD",
+    to_currency: str = "USD"
+):
+    """تحويل المبلغ بين العملات"""
+    if from_currency not in SUPPORTED_CURRENCIES or to_currency not in SUPPORTED_CURRENCIES:
+        raise HTTPException(status_code=400, detail="عملة غير مدعومة")
+    
+    # التحويل عبر الدولار كوسيط
+    from_rate = SUPPORTED_CURRENCIES[from_currency]["rate_to_usd"]
+    to_rate = SUPPORTED_CURRENCIES[to_currency]["rate_to_usd"]
+    
+    # المبلغ بالدولار
+    usd_amount = amount * from_rate
+    # المبلغ بالعملة المستهدفة
+    converted_amount = usd_amount / to_rate
+    
+    decimal_places = SUPPORTED_CURRENCIES[to_currency]["decimal_places"]
+    converted_amount = round(converted_amount, decimal_places)
+    
+    return {
+        "original_amount": amount,
+        "original_currency": from_currency,
+        "converted_amount": converted_amount,
+        "target_currency": to_currency,
+        "exchange_rate": from_rate / to_rate
+    }
+
+# ==================== Super Admin Currency Dashboard ====================
+
+@api_router.get("/super-admin/sales-summary")
+async def get_super_admin_sales_summary(
+    display_currency: str = "IQD",
+    current_user: dict = Depends(verify_super_admin)
+):
+    """جلب ملخص المبيعات لجميع العملاء مع تحويل العملات"""
+    
+    # جلب جميع العملاء
+    tenants = await db.tenants.find({}, {"_id": 0, "id": 1, "name": 1}).to_list(100)
+    
+    total_sales_usd = 0
+    tenant_sales = []
+    
+    for tenant in tenants:
+        tenant_id = tenant.get("id")
+        
+        # جلب إعدادات العملة للعميل
+        regional = await db.tenant_regional_settings.find_one({"tenant_id": tenant_id}, {"_id": 0})
+        tenant_currency = regional.get("currency", "IQD") if regional else "IQD"
+        
+        # جلب إجمالي المبيعات
+        pipeline = [
+            {"$match": {"tenant_id": tenant_id, "status": {"$in": ["completed", "delivered"]}}},
+            {"$group": {"_id": None, "total": {"$sum": "$total"}, "count": {"$sum": 1}}}
+        ]
+        result = await db.orders.aggregate(pipeline).to_list(1)
+        
+        if result:
+            sales_in_tenant_currency = result[0].get("total", 0)
+            orders_count = result[0].get("count", 0)
+            
+            # تحويل للدولار
+            if tenant_currency in SUPPORTED_CURRENCIES:
+                rate = SUPPORTED_CURRENCIES[tenant_currency]["rate_to_usd"]
+                sales_in_usd = sales_in_tenant_currency * rate
+            else:
+                sales_in_usd = sales_in_tenant_currency
+            
+            total_sales_usd += sales_in_usd
+            
+            tenant_sales.append({
+                "tenant_id": tenant_id,
+                "tenant_name": tenant.get("name"),
+                "orders_count": orders_count,
+                "sales_original": sales_in_tenant_currency,
+                "currency": tenant_currency,
+                "sales_in_usd": round(sales_in_usd, 2)
+            })
+    
+    # تحويل الإجمالي للعملة المطلوبة
+    if display_currency in SUPPORTED_CURRENCIES:
+        rate = SUPPORTED_CURRENCIES[display_currency]["rate_to_usd"]
+        total_in_display = total_sales_usd / rate
+        decimal_places = SUPPORTED_CURRENCIES[display_currency]["decimal_places"]
+        total_in_display = round(total_in_display, decimal_places)
+    else:
+        total_in_display = total_sales_usd
+    
+    return {
+        "total_sales": total_in_display,
+        "display_currency": display_currency,
+        "currency_symbol": SUPPORTED_CURRENCIES.get(display_currency, {}).get("symbol", "$"),
+        "total_sales_usd": round(total_sales_usd, 2),
+        "tenants": tenant_sales
+    }
+
 # ==================== Login Page Settings ====================
 
 @api_router.get("/system/login-page-settings")
