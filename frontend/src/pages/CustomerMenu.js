@@ -2220,9 +2220,9 @@ export default function CustomerMenu() {
                   style={{ height: '100%', width: '100%' }}
                   zoomControl={false}
                 >
-                  {/* خريطة داكنة مثل Waze */}
+                  {/* خريطة واضحة مع أسماء الشوارع */}
                   <TileLayer 
-                    url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+                    url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
                     attribution='&copy; <a href="https://carto.com/">CARTO</a>'
                   />
                   
