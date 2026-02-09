@@ -851,6 +851,7 @@ class TenantFeatures(BaseModel):
     showRecipes: bool = True
     showReservations: bool = True
     showReviews: bool = True
+    showRatings: bool = True
     showSmartReports: bool = True
 
 class TenantResponse(BaseModel):
