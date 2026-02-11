@@ -867,35 +867,35 @@ export default function Dashboard() {
   
   const periodLabels = {
     today: 'اليوم',
-    week: t('this_week'),
-    month: t('this_month'),
-    all_time: t('total')
+    week: t('هذا الأسبوع'),
+    month: t('هذا الشهر'),
+    all_time: t('الإجمالي')
   };
 
   const statCards = [
     { 
-      label: t('total_sales'), 
+      label: t('إجمالي المبيعات'), 
       value: formatPriceCompact(periodStats?.total_sales || 0), 
       icon: DollarSign,
       color: 'text-green-500',
       bg: 'bg-green-500/10'
     },
     { 
-      label: t('orders_count'), 
+      label: t('عدد الطلبات'), 
       value: periodStats?.total_orders || 0, 
       icon: ShoppingCart,
       color: 'text-blue-500',
       bg: 'bg-blue-500/10'
     },
     { 
-      label: t('average_order'), 
+      label: t('متوسط الطلب'), 
       value: formatPrice(periodStats?.average_order_value || 0), 
       icon: TrendingUp,
       color: 'text-primary',
       bg: 'bg-primary/10'
     },
     { 
-      label: t('net_profit'), 
+      label: t('صافي الربح'), 
       value: formatPriceCompact(periodStats?.total_profit || 0), 
       icon: Wallet,
       color: 'text-purple-500',
