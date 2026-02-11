@@ -1602,7 +1602,7 @@ export default function Settings() {
                     </div>
                     
                     <div>
-                      <Label className="text-foreground">اسم المطعم (إنجليزي)</Label>
+                      <Label className="text-foreground">{t('اسم المطعم (إنجليزي)')}</Label>
                       <Input
                         value={restaurantSettings.name || ''}
                         onChange={(e) => setRestaurantSettings({...restaurantSettings, name: e.target.value})}
@@ -1615,7 +1615,7 @@ export default function Settings() {
 
                   {/* شعار المطعم */}
                   <div className="space-y-3">
-                    <Label className="text-foreground">شعار المطعم</Label>
+                    <Label className="text-foreground">{t('شعار المطعم')}</Label>
                     <div className="flex items-start gap-4">
                       <div className="w-24 h-24 rounded-xl bg-gradient-to-br from-amber-400 to-yellow-500 flex items-center justify-center overflow-hidden border-2 border-border/50">
                         {(restaurantLogoPreview || restaurantSettings.logo_url) ? (
@@ -1626,7 +1626,7 @@ export default function Settings() {
                                 : restaurantSettings.logo_url?.startsWith('/api') 
                                   ? `${API}${restaurantSettings.logo_url.replace('/api', '')}` 
                                   : `${API}/uploads/logos/${restaurantSettings.logo_url}`)} 
-                            alt="شعار المطعم" 
+                            alt={t('شعار المطعم')} 
                             className="w-full h-full object-cover"
                             onError={(e) => {
                               console.error('Logo load error:', e.target.src);
@@ -1651,7 +1651,7 @@ export default function Settings() {
                           className="cursor-pointer"
                         />
                         <p className="text-xs text-muted-foreground">
-                          يفضل صورة مربعة بحجم 512×512 بكسل. PNG أو JPG
+                          {t('يفضل صورة مربعة بحجم 512×512 بكسل')}
                         </p>
                       </div>
                     </div>
@@ -1698,10 +1698,10 @@ export default function Settings() {
                         }
                         
                         setRestaurantLogoFile(null);
-                        toast.success('تم حفظ إعدادات المطعم بنجاح');
+                        toast.success(t('تم حفظ إعدادات المطعم بنجاح'));
                       } catch (error) {
                         console.error('Save restaurant settings error:', error);
-                        toast.error('فشل في حفظ الإعدادات: ' + (error.response?.data?.detail || error.message));
+                        toast.error(t('فشل في حفظ الإعدادات'));
                       } finally {
                         setSavingRestaurant(false);
                       }
@@ -1709,7 +1709,7 @@ export default function Settings() {
                     disabled={savingRestaurant}
                     className="w-full"
                   >
-                    {savingRestaurant ? 'جارِ الحفظ...' : 'حفظ إعدادات المطعم'}
+                    {savingRestaurant ? t('جارِ الحفظ...') : t('حفظ إعدادات المطعم')}
                   </Button>
                 </CardContent>
               </Card>
@@ -1723,12 +1723,12 @@ export default function Settings() {
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-foreground">
                     <LayoutGrid className="h-5 w-5" />
-                    إعدادات الصفحة الرئيسية
+                    {t('إعدادات الصفحة الرئيسية')}
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-6">
                   <p className="text-sm text-muted-foreground">
-                    تحكم في الصفحات والأقسام التي تظهر في الصفحة الرئيسية للمستخدمين (19 أيقونة)
+                    {t('تحكم في الصفحات والأقسام التي تظهر في الصفحة الرئيسية')}
                   </p>
                   
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
@@ -1738,7 +1738,7 @@ export default function Settings() {
                         <div className="w-8 h-8 bg-orange-500/10 rounded-lg flex items-center justify-center">
                           <ShoppingCart className="h-4 w-4 text-orange-500" />
                         </div>
-                        <span className="text-sm font-medium text-foreground">نقاط البيع</span>
+                        <span className="text-sm font-medium text-foreground">{t('نقاط البيع')}</span>
                       </div>
                       <Switch
                         checked={dashboardSettings.showPOS !== false}
