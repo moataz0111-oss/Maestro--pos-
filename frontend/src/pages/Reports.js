@@ -20,8 +20,6 @@ import {
   ShoppingCart,
   Package,
   Truck,
-  Calendar,
-  Download,
   RefreshCw,
   PieChart,
   FileText,
@@ -29,7 +27,6 @@ import {
   Percent,
   CreditCard,
   Clock,
-  FileSpreadsheet,
   Search
 } from 'lucide-react';
 import { toast } from 'sonner';
