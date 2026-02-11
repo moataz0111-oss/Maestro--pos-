@@ -334,7 +334,7 @@ export default function POS() {
       }));
       setCart(cartItems);
       
-      toast.info(t('تم تحميل الطلب') + '  #${order.order_number} للتعديل`);
+      toast.info(`${t('تم تحميل الطلب')} #${order.order_number} ${t('للتعديل')}`);
     } catch (error) {
       console.error('Failed to load order:', error);
       toast.error(t('فشل في تحميل الطلب'));
