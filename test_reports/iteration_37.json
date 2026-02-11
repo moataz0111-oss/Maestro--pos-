@@ -103,7 +103,7 @@
   },
   
   "test_credentials": {
-    "api_url": "https://menumasters-11.preview.emergentagent.com",
+    "api_url": "https://menumaster-123.preview.emergentagent.com",
     "owner": {
       "email": "owner@maestroegp.com",
       "password": "owner123",
