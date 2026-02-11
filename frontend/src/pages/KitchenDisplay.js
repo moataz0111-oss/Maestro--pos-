@@ -5,7 +5,7 @@ import { Card, CardContent } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
 import { formatPrice } from '../utils/currency';
-import { t, getCurrentLanguage } from '../utils/translations';
+import { useTranslation } from '../hooks/useTranslation';
 import { 
   ChefHat, 
   Clock, 
