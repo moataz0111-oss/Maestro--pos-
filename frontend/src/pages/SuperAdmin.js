@@ -3,6 +3,7 @@ import { API_URL, BACKEND_URL } from '../utils/api';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { formatPrice } from '../utils/currency';
+import { useTranslation } from '../hooks/useTranslation';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
