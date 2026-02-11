@@ -487,6 +487,8 @@ const translationMap = {
   'إغلاق الصندوق': { en: 'Close Register', ku: 'داخستنی سندوق' },
   'قائمة العملاء': { en: 'Customer Menu', ku: 'مینیوی کڕیار' },
   'الخلفيات': { en: 'Backgrounds', ku: 'پاشبنەمەکان' },
+  'تثبيت التطبيق': { en: 'Install App', ku: 'دامەزراندنی ئەپ' },
+  'التطبيق مثبت': { en: 'App Installed', ku: 'ئەپ دامەزراوە' },
   'طباعة': { en: 'Print', ku: 'چاپکردن' },
 };
 
