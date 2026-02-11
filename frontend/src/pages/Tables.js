@@ -144,7 +144,7 @@ export default function Tables() {
       setTableToDelete(null);
       fetchData();
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'فشل في حذف الطاولة');
+      toast.error(error.response?.data?.detail || t('فشل في حذف الطاولة'));
     }
   };
 
