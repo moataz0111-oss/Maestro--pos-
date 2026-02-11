@@ -813,7 +813,7 @@ export default function Delivery() {
                           عرض التفاصيل
                         </Button>
                         
-                        {/* أزرار التعديل والحذف وربط المستخدم */}
+                        {/* أزرار التعديل والحذف */}
                         <div className="flex gap-2 mt-2">
                           <Button 
                             variant="outline" 
@@ -827,15 +827,6 @@ export default function Delivery() {
                           <Button 
                             variant="outline" 
                             size="sm"
-                            className={`flex-1 ${driver.user_id ? 'text-green-500' : 'text-blue-500'}`}
-                            onClick={(e) => { e.stopPropagation(); openLinkUserDialog(driver); }}
-                          >
-                            {driver.user_id ? <UserCheck className="h-4 w-4 ml-1" /> : <Link className="h-4 w-4 ml-1" />}
-                            {driver.user_id ? 'مربوط' : 'ربط'}
-                          </Button>
-                          <Button 
-                            variant="outline" 
-                            size="sm"
                             className="text-red-500 hover:text-red-600 hover:bg-red-500/10"
                             onClick={(e) => { e.stopPropagation(); handleDeleteDriver(driver.id, driver.name); }}
                           >
@@ -843,14 +834,24 @@ export default function Delivery() {
                           </Button>
                         </div>
                         
-                        {/* رابط السائق للهاتف */}
+                        {/* معلومات الفرع */}
+                        {driver.branch_id && (
+                          <div className="mt-2 p-2 bg-green-500/10 rounded-lg">
+                            <p className="text-xs text-green-400">
+                              <Building className="h-3 w-3 inline ml-1" />
+                              الفرع: {branches.find(b => b.id === driver.branch_id)?.name || 'غير محدد'}
+                            </p>
+                          </div>
+                        )}
+                        
+                        {/* رابط تطبيق السائق */}
                         <div className="mt-2 p-2 bg-blue-500/10 rounded-lg">
                           <p className="text-xs text-blue-400 mb-1">رابط للسائق:</p>
                           <button
                             className="text-xs text-blue-300 hover:text-blue-200 break-all text-right"
                             onClick={(e) => {
                               e.stopPropagation();
-                              const url = `${window.location.origin}/driver?id=${driver.id}`;
+                              const url = `${window.location.origin}/driver-app`;
                               navigator.clipboard.writeText(url);
                               toast.success('تم نسخ الرابط!');
                             }}
