@@ -4,6 +4,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import { useBranch } from '../context/BranchContext';
+import { useTranslation } from '../hooks/useTranslation';
 import { formatPrice } from '../utils/currency';
 import { playClick, playSuccess } from '../utils/sound';
 import { QRCodeSVG } from 'qrcode.react';
@@ -71,6 +72,7 @@ const API = API_URL;
 export default function POS() {
   const { user } = useAuth();
   const { selectedBranchId, branches, getBranchIdForApi } = useBranch();
+  const { t, isRTL } = useTranslation();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   
