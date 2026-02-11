@@ -1405,66 +1405,6 @@ export default function Delivery() {
         </DialogContent>
       </Dialog>
 
-      {/* نافذة ربط السائق بمستخدم */}
-      <Dialog open={linkUserDialogOpen} onOpenChange={setLinkUserDialogOpen}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle className="text-foreground flex items-center gap-2">
-              <Link className="h-5 w-5 text-blue-500" />
-              ربط السائق بحساب مستخدم
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="p-3 bg-muted/50 rounded-lg">
-              <p className="text-sm text-muted-foreground">السائق:</p>
-              <p className="font-bold text-foreground">{selectedDriverForLink?.name}</p>
-            </div>
-            
-            <div>
-              <Label className="text-foreground">اختر حساب المستخدم (دور: سائق توصيل)</Label>
-              <select
-                className="w-full mt-2 p-2 rounded-lg border border-border bg-background text-foreground"
-                value={selectedUserId}
-                onChange={(e) => setSelectedUserId(e.target.value)}
-              >
-                <option value="">-- اختر مستخدم --</option>
-                {deliveryUsers.map(user => (
-                  <option key={user.id} value={user.id}>
-                    {user.full_name} ({user.email})
-                  </option>
-                ))}
-              </select>
-            </div>
-            
-            {deliveryUsers.length === 0 && (
-              <div className="p-3 bg-yellow-500/10 rounded-lg text-yellow-500 text-sm">
-                <AlertCircle className="h-4 w-4 inline ml-1" />
-                لا يوجد مستخدمين بدور سائق توصيل. أنشئ مستخدم جديد من الإعدادات أولاً.
-              </div>
-            )}
-            
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={() => setLinkUserDialogOpen(false)} className="flex-1">
-                إلغاء
-              </Button>
-              <Button 
-                onClick={handleLinkUser} 
-                className="flex-1 bg-blue-500 hover:bg-blue-600 text-white"
-                disabled={!selectedUserId}
-              >
-                <Link className="h-4 w-4 ml-1" />
-                ربط
-              </Button>
-            </div>
-            
-            <p className="text-xs text-muted-foreground text-center">
-              بعد الربط، يمكن للسائق تسجيل الدخول من الرابط:<br/>
-              <span className="text-primary">/driver</span>
-            </p>
-          </div>
-        </DialogContent>
-      </Dialog>
-
       {/* نافذة تحويل الطلب لسائق آخر */}
       <Dialog open={transferDriverDialogOpen} onOpenChange={setTransferDriverDialogOpen}>
         <DialogContent className="max-w-md">
