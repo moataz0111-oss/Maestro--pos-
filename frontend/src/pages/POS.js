@@ -1923,14 +1923,14 @@ export default function POS() {
                     </html>
                   `);
                   printWindow.document.close();
-                  toast.success('تم فتح نافذة الطباعة');
+                  toast.success(t('تم فتح نافذة الطباعة'));
                 } else {
-                  toast.error('فشل في تحميل الفاتورة');
+                  toast.error(t('فشل في تحميل الفاتورة'));
                 }
               }}
             >
               <Printer className="h-4 w-4 ml-2" />
-              طباعة
+              {t('طباعة')}
             </Button>
           </div>
         </DialogContent>
@@ -1942,7 +1942,7 @@ export default function POS() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-foreground">
               <History className="h-5 w-5 text-primary" />
-              سجل العميل
+              {t('سجل العميل')}
             </DialogTitle>
           </DialogHeader>
           
@@ -1961,11 +1961,11 @@ export default function POS() {
                 
                 <div className="grid grid-cols-2 gap-3 text-sm">
                   <div className="bg-background p-2 rounded">
-                    <p className="text-muted-foreground">إجمالي الطلبات</p>
+                    <p className="text-muted-foreground">{t('إجمالي الطلبات')}</p>
                     <p className="font-bold text-foreground">{customerData.total_orders}</p>
                   </div>
                   <div className="bg-background p-2 rounded">
-                    <p className="text-muted-foreground">إجمالي المصروف</p>
+                    <p className="text-muted-foreground">{t('إجمالي المصروف')}</p>
                     <p className="font-bold text-primary">{formatPrice(customerData.total_spent)}</p>
                   </div>
                 </div>
@@ -1979,14 +1979,14 @@ export default function POS() {
                 
                 {customerData.notes && (
                   <div className="mt-2 p-2 bg-amber-500/10 rounded text-sm text-amber-600">
-                    ملاحظات: {customerData.notes}
+                    {t('ملاحظات')}: {customerData.notes}
                   </div>
                 )}
               </div>
               
               {customerHistory.length > 0 && (
                 <div>
-                  <h4 className="font-medium text-foreground mb-2">آخر الطلبات:</h4>
+                  <h4 className="font-medium text-foreground mb-2">{t('آخر الطلبات')}:</h4>
                   <ScrollArea className="h-40">
                     <div className="space-y-2">
                       {customerHistory.map((order, i) => (
@@ -2013,17 +2013,17 @@ export default function POS() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-foreground">
               <RefreshCw className="h-5 w-5 text-orange-500" />
-              إرجاع طلب
+              {t('إرجاع طلب')}
             </DialogTitle>
           </DialogHeader>
           
           <div className="space-y-4 pt-4">
             {/* البحث برقم الفاتورة */}
             <div className="space-y-2">
-              <label className="text-sm font-medium text-foreground">رقم الفاتورة</label>
+              <label className="text-sm font-medium text-foreground">{t('رقم الفاتورة')}</label>
               <div className="flex gap-2">
                 <Input
-                  placeholder="أدخل رقم الفاتورة..."
+                  placeholder={t('أدخل رقم الفاتورة...')}
                   value={refundOrderId}
                   onChange={(e) => setRefundOrderId(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && searchOrderForRefund()}
@@ -2044,34 +2044,34 @@ export default function POS() {
             {refundOrderInfo && (
               <div className={`p-4 rounded-lg border ${refundOrderInfo.can_refund ? 'bg-green-500/10 border-green-500/30' : 'bg-red-500/10 border-red-500/30'}`}>
                 <div className="flex items-center justify-between mb-2">
-                  <span className="font-bold text-lg">فاتورة #{refundOrderInfo.order_number}</span>
+                  <span className="font-bold text-lg">{t('فاتورة')} #{refundOrderInfo.order_number}</span>
                   {refundOrderInfo.is_refunded ? (
-                    <span className="px-2 py-1 bg-red-500/20 text-red-400 text-xs rounded-full">تم إرجاعه</span>
+                    <span className="px-2 py-1 bg-red-500/20 text-red-400 text-xs rounded-full">{t('تم إرجاعه')}</span>
                   ) : refundOrderInfo.can_refund ? (
-                    <span className="px-2 py-1 bg-green-500/20 text-green-400 text-xs rounded-full">قابل للإرجاع</span>
+                    <span className="px-2 py-1 bg-green-500/20 text-green-400 text-xs rounded-full">{t('قابل للإرجاع')}</span>
                   ) : !refundOrderInfo.is_today ? (
-                    <span className="px-2 py-1 bg-orange-500/20 text-orange-400 text-xs rounded-full">طلب قديم</span>
+                    <span className="px-2 py-1 bg-orange-500/20 text-orange-400 text-xs rounded-full">{t('طلب قديم')}</span>
                   ) : (
-                    <span className="px-2 py-1 bg-yellow-500/20 text-yellow-400 text-xs rounded-full">غير مدفوع</span>
+                    <span className="px-2 py-1 bg-yellow-500/20 text-yellow-400 text-xs rounded-full">{t('غير مدفوع')}</span>
                   )}
                 </div>
                 
                 {/* تفاصيل الطلب */}
                 <div className="grid grid-cols-2 gap-2 text-sm mt-3">
-                  <div className="text-muted-foreground">نوع الطلب:</div>
+                  <div className="text-muted-foreground">{t('نوع الطلب')}:</div>
                   <div className="font-medium">
-                    {refundOrderInfo.order_type === 'dine_in' ? 'داخل المطعم' : 
-                     refundOrderInfo.order_type === 'takeaway' ? 'سفري' : 'توصيل'}
+                    {refundOrderInfo.order_type === 'dine_in' ? t('داخل المطعم') : 
+                     refundOrderInfo.order_type === 'takeaway' ? t('سفري') : t('توصيل')}
                   </div>
-                  <div className="text-muted-foreground">المبلغ:</div>
+                  <div className="text-muted-foreground">{t('المبلغ')}:</div>
                   <div className="font-medium text-primary">{(refundOrderInfo.total || 0).toLocaleString()} د.ع</div>
-                  <div className="text-muted-foreground">تاريخ الطلب:</div>
+                  <div className="text-muted-foreground">{t('تاريخ الطلب')}:</div>
                   <div className={`font-medium ${refundOrderInfo.is_today ? 'text-green-500' : 'text-orange-500'}`}>
-                    {refundOrderInfo.order_date} {refundOrderInfo.is_today ? '(اليوم)' : '(يوم سابق)'}
+                    {refundOrderInfo.order_date} {refundOrderInfo.is_today ? `(${t('اليوم')})` : `(${t('يوم سابق')})`}
                   </div>
                   {refundOrderInfo.customer_name && (
                     <>
-                      <div className="text-muted-foreground">العميل:</div>
+                      <div className="text-muted-foreground">{t('العميل')}:</div>
                       <div className="font-medium">{refundOrderInfo.customer_name}</div>
                     </>
                   )}
@@ -2086,8 +2086,8 @@ export default function POS() {
                 
                 {refundOrderInfo.refunds && refundOrderInfo.refunds.length > 0 && (
                   <div className="text-sm text-muted-foreground mt-3 pt-3 border-t border-border">
-                    <p>تم إرجاعه بتاريخ: {new Date(refundOrderInfo.refunds[0].created_at).toLocaleString('ar-IQ')}</p>
-                    <p>السبب: {refundOrderInfo.refunds[0].reason}</p>
+                    <p>{t('تم إرجاعه بتاريخ')}: {new Date(refundOrderInfo.refunds[0].created_at).toLocaleString('ar-IQ')}</p>
+                    <p>{t('السبب')}: {refundOrderInfo.refunds[0].reason}</p>
                   </div>
                 )}
               </div>
@@ -2097,17 +2097,17 @@ export default function POS() {
             {refundOrderInfo && refundOrderInfo.can_refund && (
               <div className="space-y-2">
                 <label className="text-sm font-medium text-foreground">
-                  سبب الإرجاع <span className="text-red-500">*</span>
+                  {t('سبب الإرجاع')} <span className="text-red-500">*</span>
                 </label>
                 <Input
-                  placeholder="أدخل سبب الإرجاع (مطلوب)..."
+                  placeholder={t('أدخل سبب الإرجاع (مطلوب)...')}
                   value={refundReason}
                   onChange={(e) => setRefundReason(e.target.value)}
                   className="w-full"
                   data-testid="refund-reason-input"
                 />
                 <p className="text-xs text-muted-foreground">
-                  يجب إدخال سبب الإرجاع (3 أحرف على الأقل)
+                  {t('يجب إدخال سبب الإرجاع (3 أحرف على الأقل)')}
                 </p>
               </div>
             )}
@@ -2119,7 +2119,7 @@ export default function POS() {
                 onClick={closeRefundDialog}
                 className="flex-1"
               >
-                إلغاء
+                {t('إلغاء')}
               </Button>
               
               {refundOrderInfo && refundOrderInfo.can_refund && (
@@ -2132,12 +2132,12 @@ export default function POS() {
                   {refundLoading ? (
                     <>
                       <RefreshCw className="h-4 w-4 ml-2 animate-spin" />
-                      جاري الإرجاع...
+                      {t('جاري الإرجاع...')}
                     </>
                   ) : (
                     <>
                       <Check className="h-4 w-4 ml-2" />
-                      تأكيد الإرجاع
+                      {t('تأكيد الإرجاع')}
                     </>
                   )}
                 </Button>
