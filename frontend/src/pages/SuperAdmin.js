@@ -431,7 +431,7 @@ export default function SuperAdmin() {
       setStats(statsRes.data);
     } catch (error) {
       console.error('Failed to fetch data:', error);
-      toast.error('فشل في جلب البيانات');
+      toast.error(t('فشل في جلب البيانات'));
     }
   };
 
