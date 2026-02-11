@@ -260,16 +260,22 @@ export default function KitchenDisplay() {
     }
   };
 
-  // Update order status
-  const handleStatusChange = async (orderId, newStatus) => {
+  // Update order kitchen status
+  const handleStatusChange = async (orderId, newKitchenStatus) => {
     try {
       const token = localStorage.getItem('token');
-      await axios.put(`${API}/orders/${orderId}/status?status=${newStatus}`, 
+      await axios.put(`${API}/orders/${orderId}/kitchen-status?kitchen_status=${newKitchenStatus}`, 
         {},
         { headers: { Authorization: `Bearer ${token}` }}
       );
       
-      toast.success(newStatus === 'ready' ? 'تم تجهيز الطلب!' : 'تم تحديث الحالة');
+      if (newKitchenStatus === 'ready_kitchen') {
+        toast.success('تم تجهيز الطلب! ✅');
+      } else if (newKitchenStatus === 'completed_kitchen') {
+        toast.success('تم إتمام الطلب من المطبخ');
+      } else {
+        toast.success('تم تحديث الحالة');
+      }
       fetchOrders();
     } catch (error) {
       console.error('Error updating status:', error);
