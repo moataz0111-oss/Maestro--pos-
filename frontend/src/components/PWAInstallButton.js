@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Button } from './ui/button';
 import { Download, Check, Smartphone, Monitor, X } from 'lucide-react';
+import { useTranslation } from '../hooks/useTranslation';
 import {
   Dialog,
   DialogContent,
@@ -9,6 +10,7 @@ import {
 } from './ui/dialog';
 
 export default function PWAInstallButton({ variant = 'default', className = '' }) {
+  const { t, isRTL } = useTranslation();
   const [deferredPrompt, setDeferredPrompt] = useState(null);
   const [isInstallable, setIsInstallable] = useState(false);
   const [isInstalled, setIsInstalled] = useState(false);
@@ -84,7 +86,7 @@ export default function PWAInstallButton({ variant = 'default', className = '' }
         data-testid="pwa-installed-btn"
       >
         <Check className="h-4 w-4 text-green-500" />
-        <span>التطبيق مثبت</span>
+        <span>{t('التطبيق مثبت')}</span>
       </Button>
     );
   }
@@ -103,7 +105,7 @@ export default function PWAInstallButton({ variant = 'default', className = '' }
           <Monitor className="h-4 w-4" />
         )}
         <Download className="h-4 w-4" />
-        <span>تثبيت التطبيق</span>
+        <span>{t('تثبيت التطبيق')}</span>
       </Button>
 
       {/* تعليمات التثبيت */}
