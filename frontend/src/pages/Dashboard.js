@@ -699,8 +699,9 @@ export default function Dashboard() {
   
   // فلترة الأزرار حسب الإعدادات والصلاحيات
   const filteredActions = allQuickActions.filter(action => {
-    // التحقق من إعدادات الصفحة الرئيسية
-    if (!dashboardSettings[action.key]) return false;
+    // التحقق من إعدادات الصفحة الرئيسية (إذا كان القيمة undefined أو true، نعرض الأيقونة)
+    // فقط نخفيها إذا كانت القيمة === false بشكل صريح
+    if (dashboardSettings[action.key] === false) return false;
     
     // المدير (admin) يرى كل شيء
     if (user?.role === 'admin' || user?.role === 'super_admin') return true;
@@ -716,6 +717,7 @@ export default function Dashboard() {
       'showKitchen': 'kitchen',
       'showReports': 'reports',
       'showSmartReports': 'reports',
+      'showRatings': 'reports',
       'showExpenses': 'expenses',
       'showPurchasing': 'inventory',
       'showWarehouse': 'inventory',
@@ -732,15 +734,23 @@ export default function Dashboard() {
     
     const requiredPermission = permissionMap[action.key];
     
-    // إذا كان لديه صلاحيات محددة
-    if (user?.permissions && user.permissions.length > 0) {
+    // إذا كان لديه صلاحيات محددة - استخدمها
+    if (user?.permissions && Array.isArray(user.permissions) && user.permissions.length > 0) {
+      // إذا كانت الصلاحية المطلوبة موجودة في قائمة صلاحيات المستخدم
       return user.permissions.includes(requiredPermission);
     }
     
-    // الكاشير يرى فقط: نقاط البيع، الطاولات، إدارة الطلبات، المصاريف، التوصيل (افتراضياً)
-    if (user?.role === 'cashier') {
-      const allowedForCashier = ['showPOS', 'showTables', 'showOrders', 'showExpenses', 'showDelivery'];
-      return allowedForCashier.includes(action.key);
+    // الصلاحيات الافتراضية حسب الدور
+    const defaultPermissionsByRole = {
+      'cashier': ['pos', 'tables', 'orders'],
+      'supervisor': ['pos', 'tables', 'orders', 'kitchen', 'reports', 'expenses', 'delivery'],
+      'waiter': ['tables', 'orders'],
+      'kitchen': ['kitchen', 'orders']
+    };
+    
+    const rolePermissions = defaultPermissionsByRole[user?.role];
+    if (rolePermissions) {
+      return rolePermissions.includes(requiredPermission);
     }
     
     return true;
