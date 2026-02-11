@@ -379,8 +379,6 @@ function AppRoutes() {
           </ProtectedRoute>
         } 
       />
-      {/* صفحة السائق - بدون حماية للوصول من الهاتف */}
-      <Route path="/driver" element={<DriverPortal />} />
       {/* صفحة Super Admin - لوحة تحكم المالك */}
       <Route path="/super-admin" element={<SuperAdmin />} />
       {/* صفحة إدارة النظام */}
