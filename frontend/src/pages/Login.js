@@ -558,9 +558,9 @@ export default function Login() {
             )}
 
             <div className="space-y-2">
-              <Label htmlFor="email" className="text-gray-200">البريد الإلكتروني</Label>
+              <Label htmlFor="email" className="text-gray-200">{t('البريد الإلكتروني')}</Label>
               <div className="relative">
-                <Mail className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+                <Mail className={`absolute ${isRTL ? 'right-3' : 'left-3'} top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400`} />
                 <Input
                   id="email"
                   type="email"
@@ -572,7 +572,7 @@ export default function Login() {
                     const ownerEmails = ['owner@maestroegp.com', 'hanialdujaili@gmail.com'];
                     setIsOwnerLogin(ownerEmails.includes(e.target.value.toLowerCase()));
                   }}
-                  className="pr-10 h-12 bg-white/5 border-white/10 text-white placeholder:text-gray-500 focus:border-primary focus:ring-primary/20"
+                  className={`${isRTL ? 'pr-10' : 'pl-10'} h-12 bg-white/5 border-white/10 text-white placeholder:text-gray-500 focus:border-primary focus:ring-primary/20`}
                   required
                   data-testid="login-email"
                 />
@@ -580,23 +580,23 @@ export default function Login() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="password" className="text-gray-200">كلمة المرور</Label>
+              <Label htmlFor="password" className="text-gray-200">{t('كلمة المرور')}</Label>
               <div className="relative">
-                <Lock className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+                <Lock className={`absolute ${isRTL ? 'right-3' : 'left-3'} top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400`} />
                 <Input
                   id="password"
                   type={showPassword ? 'text' : 'password'}
                   placeholder="••••••••"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="pr-10 pl-10 h-12 bg-white/5 border-white/10 text-white placeholder:text-gray-500 focus:border-primary focus:ring-primary/20"
+                  className={`${isRTL ? 'pr-10 pl-10' : 'pl-10 pr-10'} h-12 bg-white/5 border-white/10 text-white placeholder:text-gray-500 focus:border-primary focus:ring-primary/20`}
                   required
                   data-testid="login-password"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white transition-colors"
+                  className={`absolute ${isRTL ? 'left-3' : 'right-3'} top-1/2 -translate-y-1/2 text-gray-400 hover:text-white transition-colors`}
                 >
                   {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
                 </button>
@@ -608,12 +608,12 @@ export default function Login() {
               <div className="space-y-2 animate-fadeIn">
                 <Label htmlFor="secretKey" className="text-gray-200 flex items-center gap-2">
                   <Key className="h-4 w-4 text-amber-400" />
-                  المفتاح السري
+                  {t('المفتاح السري')}
                 </Label>
                 <Input
                   id="secretKey"
                   type="password"
-                  placeholder="أدخل المفتاح السري للمالك"
+                  placeholder={t('أدخل المفتاح السري للمالك')}
                   value={ownerSecretKey}
                   onChange={(e) => setOwnerSecretKey(e.target.value)}
                   className="h-12 bg-white/10 border-white/20 text-white placeholder:text-gray-400 focus:border-amber-500 focus:ring-amber-500/30"
@@ -621,7 +621,7 @@ export default function Login() {
                   data-testid="owner-secret-key"
                 />
                 <p className="text-xs text-amber-400/70">
-                  هذا الحقل مطلوب للدخول كمالك النظام
+                  {t('هذا الحقل مطلوب للدخول كمالك النظام')}
                 </p>
               </div>
             )}
@@ -638,10 +638,10 @@ export default function Login() {
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                   </svg>
-                  جاري التسجيل...
+                  {t('جاري التسجيل...')}
                 </span>
               ) : (
-                'تسجيل الدخول'
+                t('تسجيل الدخول')
               )}
             </Button>
 
@@ -649,10 +649,10 @@ export default function Login() {
             <div className="text-center pt-4 space-y-3">
               <button 
                 type="button"
-                onClick={() => alert('يرجى التواصل مع مدير النظام لإعادة تعيين كلمة المرور')}
+                onClick={() => alert(t('يرجى التواصل مع مدير النظام'))}
                 className="text-sm text-gray-400 hover:text-primary transition-colors block w-full"
               >
-                نسيت كلمة المرور؟
+                {t('نسيت كلمة المرور؟')}
               </button>
               
               {/* زر تطبيق السائق */}
@@ -661,7 +661,7 @@ export default function Login() {
                 className="flex items-center justify-center gap-2 text-sm text-amber-400 hover:text-amber-300 transition-colors py-2 px-4 rounded-lg border border-amber-500/30 hover:border-amber-500/50 hover:bg-amber-500/10 mx-auto"
               >
                 <Truck className="h-4 w-4" />
-                تطبيق السائق
+                {t('تطبيق السائق')}
               </a>
               
               {/* Direct database init button - always visible */}
@@ -671,7 +671,7 @@ export default function Login() {
                 className="text-xs text-gray-600 hover:text-amber-400 transition-colors block w-full mt-4"
                 data-testid="show-db-init-link"
               >
-                أول استخدام؟ تهيئة قاعدة البيانات
+                {t('أول استخدام؟')} {t('تهيئة قاعدة البيانات')}
               </button>
             </div>
           </form>
