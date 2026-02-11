@@ -1723,15 +1723,16 @@ export default function Settings() {
                       />
                     </div>
                     
-                    <div className="flex items-center justify-between p-4 bg-muted/30 rounded-lg">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-green-500/10 rounded-lg flex items-center justify-center">
-                          <LayoutGrid className="h-5 w-5 text-green-500" />
+                    {/* الطاولات */}
+                    <div className="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 bg-blue-500/10 rounded-lg flex items-center justify-center">
+                          <LayoutGrid className="h-4 w-4 text-blue-500" />
                         </div>
-                        <span className="font-medium text-foreground">الطاولات</span>
+                        <span className="text-sm font-medium text-foreground">الطاولات</span>
                       </div>
                       <Switch
-                        checked={dashboardSettings.showTables}
+                        checked={dashboardSettings.showTables !== false}
                         onCheckedChange={(checked) => setDashboardSettings({...dashboardSettings, showTables: checked})}
                       />
                     </div>
