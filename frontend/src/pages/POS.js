@@ -615,7 +615,7 @@ export default function POS() {
           delivery_address: orderType === 'delivery' ? deliveryAddress : null,
           buzzer_number: orderType === 'takeaway' ? buzzerNumber : null,
           items: cart,
-          branch_id: activeBranchId || (await axios.get(`${API}/branches`)).data[0]?.id,
+          branch_id: currentBranchId || (await axios.get(`${API}/branches`)).data[0]?.id,
           payment_method: 'pending',
           discount: discount,
           delivery_app: orderType === 'delivery' ? deliveryApp : null,
@@ -642,7 +642,7 @@ export default function POS() {
       
       // تحديث الطاولات إذا كان طلب داخلي
       if (orderType === 'dine_in') {
-        const tablesParams = activeBranchId ? { branch_id: activeBranchId } : {};
+        const tablesParams = currentBranchId ? { branch_id: currentBranchId } : {};
         const tablesRes = await axios.get(`${API}/tables`, { params: tablesParams });
         setTables(tablesRes.data);
       }
