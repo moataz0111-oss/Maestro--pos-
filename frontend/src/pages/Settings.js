@@ -628,17 +628,17 @@ export default function Settings() {
       // تغيير اللغة باستخدام changeLanguage من useTranslation
       // هذا سيحدث localStorage ويعيد تحميل الصفحة تلقائياً
       if (regionalSettings.language !== lang) {
-        toast.success(t('saved_successfully') + ' - ' + t('loading'));
+        toast.success(t('تم الحفظ بنجاح') + ' - ' + t('جاري التحميل...'));
         setTimeout(() => {
           changeLanguage(regionalSettings.language);
         }, 1000);
       } else {
-        toast.success(t('saved_successfully'));
+        toast.success(t('تم الحفظ بنجاح'));
         // إعادة تحميل الصفحة لتطبيق تغييرات العملة
         setTimeout(() => window.location.reload(), 1500);
       }
     } catch (error) {
-      toast.error(t('error'));
+      toast.error(t('حدث خطأ'));
     } finally {
       setSavingRegionalSettings(false);
     }
