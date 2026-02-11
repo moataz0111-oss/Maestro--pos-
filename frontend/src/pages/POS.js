@@ -297,7 +297,7 @@ export default function POS() {
       // إشعار صوتي للطلبات الجديدة
       if (prevOrdersCount.current > 0 && allOrders.length > prevOrdersCount.current) {
         playSuccess();
-        toast.success('طلب جديد!', { duration: 5000 });
+        toast.success(t('طلب جديد!'), { duration: 5000 });
       }
       prevOrdersCount.current = allOrders.length;
       
@@ -334,10 +334,10 @@ export default function POS() {
       }));
       setCart(cartItems);
       
-      toast.info(`تم تحميل الطلب #${order.order_number} للتعديل`);
+      toast.info(t('تم تحميل الطلب') + '  #${order.order_number} للتعديل`);
     } catch (error) {
       console.error('Failed to load order:', error);
-      toast.error('فشل في تحميل الطلب');
+      toast.error(t('فشل في تحميل الطلب'));
     }
   };
 
@@ -354,7 +354,7 @@ export default function POS() {
   // البحث عن طلب للإرجاع
   const searchOrderForRefund = async () => {
     if (!refundOrderId.trim()) {
-      toast.error('أدخل رقم الفاتورة');
+      toast.error(t('أدخل رقم الفاتورة'));
       return;
     }
     
@@ -364,9 +364,9 @@ export default function POS() {
       setRefundOrderInfo(res.data);
       
       if (res.data.is_refunded) {
-        toast.warning('هذا الطلب تم إرجاعه مسبقاً');
+        toast.warning(t('هذا الطلب تم إرجاعه مسبقاً'));
       } else if (!res.data.can_refund) {
-        toast.warning('لا يمكن إرجاع هذا الطلب (غير مدفوع)');
+        toast.warning(t('لا يمكن إرجاع هذا الطلب'));
       }
     } catch (error) {
       console.error('Failed to search order:', error);
@@ -381,12 +381,12 @@ export default function POS() {
   const processRefund = async () => {
     // التحقق من كتابة السبب (شرط إلزامي)
     if (!refundReason.trim()) {
-      toast.error('يجب كتابة سبب الإرجاع أولاً');
+      toast.error(t('يجب كتابة سبب الإرجاع'));
       return;
     }
     
     if (refundReason.trim().length < 3) {
-      toast.error('سبب الإرجاع يجب أن يكون 3 أحرف على الأقل');
+      toast.error(t('سبب الإرجاع قصير جداً'));
       return;
     }
     
