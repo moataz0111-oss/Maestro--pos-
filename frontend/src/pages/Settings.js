@@ -1737,123 +1737,241 @@ export default function Settings() {
                       />
                     </div>
                     
-                    <div className="flex items-center justify-between p-4 bg-muted/30 rounded-lg">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-purple-500/10 rounded-lg flex items-center justify-center">
-                          <Package className="h-5 w-5 text-purple-500" />
+                    {/* إدارة الطلبات */}
+                    <div className="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 bg-amber-500/10 rounded-lg flex items-center justify-center">
+                          <Package className="h-4 w-4 text-amber-500" />
                         </div>
-                        <span className="font-medium text-foreground">الطلبات</span>
+                        <span className="text-sm font-medium text-foreground">إدارة الطلبات</span>
                       </div>
                       <Switch
-                        checked={dashboardSettings.showOrders}
+                        checked={dashboardSettings.showOrders !== false}
                         onCheckedChange={(checked) => setDashboardSettings({...dashboardSettings, showOrders: checked})}
                       />
                     </div>
                     
-                    <div className="flex items-center justify-between p-4 bg-muted/30 rounded-lg">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-red-500/10 rounded-lg flex items-center justify-center">
-                          <DollarSign className="h-5 w-5 text-red-500" />
+                    {/* شاشة المطبخ */}
+                    <div className="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 bg-yellow-500/10 rounded-lg flex items-center justify-center">
+                          <ChefHat className="h-4 w-4 text-yellow-500" />
                         </div>
-                        <span className="font-medium text-foreground">المصاريف</span>
+                        <span className="text-sm font-medium text-foreground">شاشة المطبخ</span>
                       </div>
                       <Switch
-                        checked={dashboardSettings.showExpenses}
-                        onCheckedChange={(checked) => setDashboardSettings({...dashboardSettings, showExpenses: checked})}
+                        checked={dashboardSettings.showKitchen !== false}
+                        onCheckedChange={(checked) => setDashboardSettings({...dashboardSettings, showKitchen: checked})}
                       />
                     </div>
                     
-                    <div className="flex items-center justify-between p-4 bg-muted/30 rounded-lg">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-amber-500/10 rounded-lg flex items-center justify-center">
-                          <Package className="h-5 w-5 text-amber-500" />
+                    {/* التقارير */}
+                    <div className="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 bg-amber-500/10 rounded-lg flex items-center justify-center">
+                          <BarChart className="h-4 w-4 text-amber-500" />
                         </div>
-                        <span className="font-medium text-foreground">المخزون</span>
+                        <span className="text-sm font-medium text-foreground">التقارير</span>
                       </div>
                       <Switch
-                        checked={dashboardSettings.showInventory}
-                        onCheckedChange={(checked) => setDashboardSettings({...dashboardSettings, showInventory: checked})}
-                      />
-                    </div>
-                    
-                    <div className="flex items-center justify-between p-4 bg-muted/30 rounded-lg">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-cyan-500/10 rounded-lg flex items-center justify-center">
-                          <Truck className="h-5 w-5 text-cyan-500" />
-                        </div>
-                        <span className="font-medium text-foreground">التوصيل</span>
-                      </div>
-                      <Switch
-                        checked={dashboardSettings.showDelivery}
-                        onCheckedChange={(checked) => setDashboardSettings({...dashboardSettings, showDelivery: checked})}
-                      />
-                    </div>
-                    
-                    <div className="flex items-center justify-between p-4 bg-muted/30 rounded-lg">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-indigo-500/10 rounded-lg flex items-center justify-center">
-                          <BarChart className="h-5 w-5 text-indigo-500" />
-                        </div>
-                        <span className="font-medium text-foreground">التقارير</span>
-                      </div>
-                      <Switch
-                        checked={dashboardSettings.showReports}
+                        checked={dashboardSettings.showReports !== false}
                         onCheckedChange={(checked) => setDashboardSettings({...dashboardSettings, showReports: checked})}
                       />
                     </div>
                     
-                    <div className="flex items-center justify-between p-4 bg-muted/30 rounded-lg">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-gray-500/10 rounded-lg flex items-center justify-center">
-                          <SettingsIcon className="h-5 w-5 text-gray-500" />
+                    {/* التقارير الذكية */}
+                    <div className="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 bg-emerald-500/10 rounded-lg flex items-center justify-center">
+                          <PieChart className="h-4 w-4 text-emerald-500" />
                         </div>
-                        <span className="font-medium text-foreground">الإعدادات</span>
+                        <span className="text-sm font-medium text-foreground">التقارير الذكية</span>
                       </div>
                       <Switch
-                        checked={dashboardSettings.showSettings}
-                        onCheckedChange={(checked) => setDashboardSettings({...dashboardSettings, showSettings: checked})}
+                        checked={dashboardSettings.showSmartReports !== false}
+                        onCheckedChange={(checked) => setDashboardSettings({...dashboardSettings, showSmartReports: checked})}
                       />
                     </div>
                     
-                    {/* HR */}
-                    <div className="flex items-center justify-between p-4 bg-muted/30 rounded-xl">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-green-500/10 rounded-lg flex items-center justify-center">
-                          <Users className="h-5 w-5 text-green-500" />
+                    {/* التقييمات */}
+                    <div className="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 bg-yellow-500/10 rounded-lg flex items-center justify-center">
+                          <Star className="h-4 w-4 text-yellow-500" />
                         </div>
-                        <span className="font-medium text-foreground">الموارد البشرية</span>
+                        <span className="text-sm font-medium text-foreground">التقييمات</span>
                       </div>
                       <Switch
-                        checked={dashboardSettings.showHR}
-                        onCheckedChange={(checked) => setDashboardSettings({...dashboardSettings, showHR: checked})}
+                        checked={dashboardSettings.showRatings !== false}
+                        onCheckedChange={(checked) => setDashboardSettings({...dashboardSettings, showRatings: checked})}
                       />
                     </div>
                     
-                    {/* Warehouse */}
-                    <div className="flex items-center justify-between p-4 bg-muted/30 rounded-xl">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-indigo-500/10 rounded-lg flex items-center justify-center">
-                          <Package className="h-5 w-5 text-indigo-500" />
+                    {/* المصاريف */}
+                    <div className="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 bg-red-500/10 rounded-lg flex items-center justify-center">
+                          <DollarSign className="h-4 w-4 text-red-500" />
                         </div>
-                        <span className="font-medium text-foreground">التحويلات</span>
+                        <span className="text-sm font-medium text-foreground">المصاريف</span>
                       </div>
                       <Switch
-                        checked={dashboardSettings.showWarehouse}
+                        checked={dashboardSettings.showExpenses !== false}
+                        onCheckedChange={(checked) => setDashboardSettings({...dashboardSettings, showExpenses: checked})}
+                      />
+                    </div>
+                    
+                    {/* المشتريات */}
+                    <div className="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 bg-blue-600/10 rounded-lg flex items-center justify-center">
+                          <ShoppingBag className="h-4 w-4 text-blue-600" />
+                        </div>
+                        <span className="text-sm font-medium text-foreground">المشتريات</span>
+                      </div>
+                      <Switch
+                        checked={dashboardSettings.showPurchasing !== false}
+                        onCheckedChange={(checked) => setDashboardSettings({...dashboardSettings, showPurchasing: checked})}
+                      />
+                    </div>
+                    
+                    {/* المخزن والتصنيع */}
+                    <div className="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 bg-indigo-500/10 rounded-lg flex items-center justify-center">
+                          <Warehouse className="h-4 w-4 text-indigo-500" />
+                        </div>
+                        <span className="text-sm font-medium text-foreground">المخزن والتصنيع</span>
+                      </div>
+                      <Switch
+                        checked={dashboardSettings.showWarehouse !== false}
                         onCheckedChange={(checked) => setDashboardSettings({...dashboardSettings, showWarehouse: checked})}
                       />
                     </div>
                     
-                    {/* Call Logs */}
-                    <div className="flex items-center justify-between p-4 bg-muted/30 rounded-xl">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-cyan-500/10 rounded-lg flex items-center justify-center">
-                          <Phone className="h-5 w-5 text-cyan-500" />
+                    {/* طلبات الفروع */}
+                    <div className="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 bg-lime-500/10 rounded-lg flex items-center justify-center">
+                          <Truck className="h-4 w-4 text-lime-500" />
                         </div>
-                        <span className="font-medium text-foreground">سجل المكالمات</span>
+                        <span className="text-sm font-medium text-foreground">طلبات الفروع</span>
                       </div>
                       <Switch
-                        checked={dashboardSettings.showCallLogs}
+                        checked={dashboardSettings.showBranchOrders !== false}
+                        onCheckedChange={(checked) => setDashboardSettings({...dashboardSettings, showBranchOrders: checked})}
+                      />
+                    </div>
+                    
+                    {/* تقارير المخزون */}
+                    <div className="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 bg-purple-500/10 rounded-lg flex items-center justify-center">
+                          <Package className="h-4 w-4 text-purple-500" />
+                        </div>
+                        <span className="text-sm font-medium text-foreground">تقارير المخزون</span>
+                      </div>
+                      <Switch
+                        checked={dashboardSettings.showInventoryReports !== false}
+                        onCheckedChange={(checked) => setDashboardSettings({...dashboardSettings, showInventoryReports: checked})}
+                      />
+                    </div>
+                    
+                    {/* التوصيل */}
+                    <div className="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 bg-orange-600/10 rounded-lg flex items-center justify-center">
+                          <Truck className="h-4 w-4 text-orange-600" />
+                        </div>
+                        <span className="text-sm font-medium text-foreground">التوصيل</span>
+                      </div>
+                      <Switch
+                        checked={dashboardSettings.showDelivery !== false}
+                        onCheckedChange={(checked) => setDashboardSettings({...dashboardSettings, showDelivery: checked})}
+                      />
+                    </div>
+                    
+                    {/* الحجوزات */}
+                    <div className="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 bg-rose-500/10 rounded-lg flex items-center justify-center">
+                          <Calendar className="h-4 w-4 text-rose-500" />
+                        </div>
+                        <span className="text-sm font-medium text-foreground">الحجوزات</span>
+                      </div>
+                      <Switch
+                        checked={dashboardSettings.showReservations !== false}
+                        onCheckedChange={(checked) => setDashboardSettings({...dashboardSettings, showReservations: checked})}
+                      />
+                    </div>
+                    
+                    {/* الموارد البشرية */}
+                    <div className="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 bg-green-500/10 rounded-lg flex items-center justify-center">
+                          <Users className="h-4 w-4 text-green-500" />
+                        </div>
+                        <span className="text-sm font-medium text-foreground">الموارد البشرية</span>
+                      </div>
+                      <Switch
+                        checked={dashboardSettings.showHR !== false}
+                        onCheckedChange={(checked) => setDashboardSettings({...dashboardSettings, showHR: checked})}
+                      />
+                    </div>
+                    
+                    {/* سجل المكالمات */}
+                    <div className="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 bg-cyan-500/10 rounded-lg flex items-center justify-center">
+                          <Phone className="h-4 w-4 text-cyan-500" />
+                        </div>
+                        <span className="text-sm font-medium text-foreground">سجل المكالمات</span>
+                      </div>
+                      <Switch
+                        checked={dashboardSettings.showCallLogs !== false}
                         onCheckedChange={(checked) => setDashboardSettings({...dashboardSettings, showCallLogs: checked})}
+                      />
+                    </div>
+                    
+                    {/* برنامج الولاء */}
+                    <div className="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 bg-pink-500/10 rounded-lg flex items-center justify-center">
+                          <Gift className="h-4 w-4 text-pink-500" />
+                        </div>
+                        <span className="text-sm font-medium text-foreground">برنامج الولاء</span>
+                      </div>
+                      <Switch
+                        checked={dashboardSettings.showLoyalty !== false}
+                        onCheckedChange={(checked) => setDashboardSettings({...dashboardSettings, showLoyalty: checked})}
+                      />
+                    </div>
+                    
+                    {/* الكوبونات */}
+                    <div className="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 bg-violet-500/10 rounded-lg flex items-center justify-center">
+                          <Ticket className="h-4 w-4 text-violet-500" />
+                        </div>
+                        <span className="text-sm font-medium text-foreground">الكوبونات</span>
+                      </div>
+                      <Switch
+                        checked={dashboardSettings.showCoupons !== false}
+                        onCheckedChange={(checked) => setDashboardSettings({...dashboardSettings, showCoupons: checked})}
+                      />
+                    </div>
+                    
+                    {/* الإعدادات */}
+                    <div className="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 bg-gray-500/10 rounded-lg flex items-center justify-center">
+                          <SettingsIcon className="h-4 w-4 text-gray-500" />
+                        </div>
+                        <span className="text-sm font-medium text-foreground">الإعدادات</span>
+                      </div>
+                      <Switch
+                        checked={dashboardSettings.showSettings !== false}
+                        onCheckedChange={(checked) => setDashboardSettings({...dashboardSettings, showSettings: checked})}
                       />
                     </div>
                   </div>
