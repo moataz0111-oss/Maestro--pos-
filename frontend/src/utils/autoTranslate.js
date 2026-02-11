@@ -1303,6 +1303,7 @@ const translationMap = {
   '📄 الصفحات الرئيسية': { en: '📄 Main Pages', ku: '' },
   '🔐 تغيير كلمة المرور': { en: '🔐 Change Password', ku: '' },
   'عرض السعر بعملة ثانوية': { en: 'Show price in secondary currency', ku: '' },
+  'حفظ إعدادات المخزون': { en: 'Save Inventory Settings', ku: '' },
 };
 
 // الحصول على اللغة الحالية
