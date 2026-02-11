@@ -1,4 +1,5 @@
 
+import { useTranslation } from '../hooks/useTranslation';
 import React, { useState, useEffect } from 'react';
 import { API_URL, BACKEND_URL } from '../utils/api';
 import axios from 'axios';
