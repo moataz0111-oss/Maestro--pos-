@@ -692,7 +692,7 @@ export default function Dashboard() {
     { label: 'التقييمات', icon: Star, path: '/ratings', color: 'bg-gradient-to-br from-yellow-400 to-yellow-500', key: 'showRatings', id: 'ratings' },
     { label: t('expenses'), icon: Receipt, path: '/expenses', color: 'bg-gradient-to-br from-red-400 to-red-600', key: 'showExpenses', id: 'expenses' },
     { label: t('purchases'), icon: ShoppingBag, path: '/purchases-new', color: 'bg-gradient-to-br from-blue-500 to-blue-700', key: 'showPurchasing', id: 'purchasing' },
-    { label: t('inventory'), + ' والتصنيع', icon: Warehouse, path: '/warehouse-manufacturing', color: 'bg-gradient-to-br from-indigo-500 to-indigo-700', key: 'showWarehouse', id: 'warehouse-manufacturing' },
+    { label: t('inventory') + ' والتصنيع', icon: Warehouse, path: '/warehouse-manufacturing', color: 'bg-gradient-to-br from-indigo-500 to-indigo-700', key: 'showWarehouse', id: 'warehouse-manufacturing' },
     { label: t('branch') + ' ' + t('orders'), icon: Truck, path: '/branch-orders', color: 'bg-gradient-to-br from-lime-400 to-lime-600', key: 'showBranchOrders', id: 'branch-orders' },
     { label: t('inventory_report'), icon: Package, path: '/inventory-reports', color: 'bg-gradient-to-br from-purple-500 to-purple-700', key: 'showInventoryReports', id: 'inventory-reports' },
     { label: t('delivery'), icon: Truck, path: '/delivery', color: 'bg-gradient-to-br from-orange-500 to-orange-700', key: 'showDelivery', id: 'delivery' },
