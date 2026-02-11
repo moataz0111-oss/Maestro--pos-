@@ -82,7 +82,13 @@ import {
   Factory,
   Warehouse,
   Loader2,
-  AlertCircle
+  AlertCircle,
+  PieChart,
+  Star,
+  ShoppingBag,
+  Calendar,
+  Gift,
+  Ticket
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
