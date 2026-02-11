@@ -556,9 +556,9 @@ export default function Settings() {
     setSavingInventorySettings(true);
     try {
       await axios.put(`${API}/inventory-settings`, inventorySettings);
-      toast.success('تم حفظ إعدادات المخزون');
+      toast.success(t('تم الحفظ بنجاح'));
     } catch (error) {
-      toast.error('فشل في حفظ إعدادات المخزون');
+      toast.error(t('فشل في حفظ الإعدادات'));
     } finally {
       setSavingInventorySettings(false);
     }
@@ -579,9 +579,9 @@ export default function Settings() {
     setSavingInvoiceSettings(true);
     try {
       await axios.put(`${API}/tenant/invoice-settings`, invoiceSettings);
-      toast.success('تم حفظ إعدادات الفاتورة بنجاح');
+      toast.success(t('تم الحفظ بنجاح'));
     } catch (error) {
-      toast.error('فشل في حفظ إعدادات الفاتورة');
+      toast.error(t('فشل في حفظ الإعدادات'));
     } finally {
       setSavingInvoiceSettings(false);
     }
@@ -678,9 +678,9 @@ export default function Settings() {
         stripe_currency: paymentSettings.stripe_currency,
         stripe_mode: paymentSettings.stripe_mode
       });
-      toast.success('تم حفظ إعدادات Stripe بنجاح');
+      toast.success(t('تم الحفظ بنجاح'));
     } catch (error) {
-      toast.error('فشل في حفظ إعدادات Stripe');
+      toast.error(t('فشل في حفظ الإعدادات'));
     } finally {
       setPaymentSaving(false);
     }
@@ -695,9 +695,9 @@ export default function Settings() {
         zaincash_phone: paymentSettings.zaincash_phone,
         zaincash_name: paymentSettings.zaincash_name
       });
-      toast.success('تم حفظ إعدادات زين كاش بنجاح');
+      toast.success(t('تم الحفظ بنجاح'));
     } catch (error) {
-      toast.error('فشل في حفظ إعدادات زين كاش');
+      toast.error(t('فشل في حفظ الإعدادات'));
     } finally {
       setPaymentSaving(false);
     }
@@ -711,9 +711,9 @@ export default function Settings() {
         delivery_fee: paymentSettings.delivery_fee,
         min_order_amount: paymentSettings.min_order_amount
       });
-      toast.success('تم حفظ رسوم التوصيل بنجاح');
+      toast.success(t('تم الحفظ بنجاح'));
     } catch (error) {
-      toast.error('فشل في حفظ رسوم التوصيل');
+      toast.error(t('فشل في حفظ الإعدادات'));
     } finally {
       setPaymentSaving(false);
     }
@@ -732,7 +732,7 @@ export default function Settings() {
         }
       });
       setPaymentSettings(prev => ({ ...prev, zaincash_qr_image: res.data.image_url }));
-      toast.success('تم رفع صورة QR بنجاح');
+      toast.success(t('تم الحفظ بنجاح'));
     } catch (error) {
       console.error('Upload ZainCash QR error:', error);
       toast.error('فشل في رفع الصورة: ' + (error.response?.data?.detail || error.message));
@@ -760,7 +760,7 @@ export default function Settings() {
     e.preventDefault();
     try {
       await axios.post(`${API}/staff`, staffForm);
-      toast.success('تم إنشاء الموظف بنجاح');
+      toast.success(t('تم الحفظ بنجاح'));
       setStaffDialogOpen(false);
       setStaffForm({ full_name: '', email: '', phone: '', password: '', role: 'cashier', branch_id: branches[0]?.id || '', job_title: '', permissions: [] });
       fetchStaffData();
@@ -782,7 +782,7 @@ export default function Settings() {
         is_active: editStaffForm.is_active,
         permissions: editStaffForm.permissions || []
       });
-      toast.success('تم تحديث بيانات الموظف');
+      toast.success(t('تم التحديث بنجاح'));
       setEditStaffDialogOpen(false);
       setEditStaffForm(null);
       fetchStaffData();
@@ -795,7 +795,7 @@ export default function Settings() {
     if (!window.confirm('هل أنت متأكد من تعطيل هذا الموظف؟')) return;
     try {
       await axios.delete(`${API}/staff/${staffId}`);
-      toast.success('تم تعطيل الموظف');
+      toast.success(t('تم الحفظ بنجاح'));
       fetchStaffData();
     } catch (error) {
       toast.error(error.response?.data?.detail || 'فشل في تعطيل الموظف');
@@ -815,7 +815,7 @@ export default function Settings() {
     if (!newPassword) return;
     try {
       await axios.post(`${API}/staff/${staffId}/reset-password`, { new_password: newPassword });
-      toast.success('تم تغيير كلمة المرور');
+      toast.success(t('تم الحفظ بنجاح'));
     } catch (error) {
       toast.error(error.response?.data?.detail || 'فشل في تغيير كلمة المرور');
     }
@@ -834,7 +834,7 @@ export default function Settings() {
     try {
       // استخدام endpoint جديد يضيف tenant_id تلقائياً
       await axios.post(`${API}/users`, userForm);
-      toast.success('تم إنشاء المستخدم');
+      toast.success(t('تم الحفظ بنجاح'));
       setUserDialogOpen(false);
       setUserForm({ username: '', email: '', password: '', full_name: '', role: 'cashier', branch_id: '', permissions: [] });
       fetchData();
@@ -847,7 +847,7 @@ export default function Settings() {
     e.preventDefault();
     try {
       await axios.post(`${API}/branches`, branchForm);
-      toast.success('تم إنشاء الفرع');
+      toast.success(t('تم الحفظ بنجاح'));
       setBranchDialogOpen(false);
       setBranchForm({ name: '', address: '', phone: '', email: '' });
       fetchData();
@@ -877,7 +877,7 @@ export default function Settings() {
         phone: editBranchForm.phone,
         email: editBranchForm.email || null
       });
-      toast.success('تم تحديث الفرع');
+      toast.success(t('تم التحديث بنجاح'));
       setEditBranchDialogOpen(false);
       setEditBranchForm(null);
       fetchData();
@@ -890,7 +890,7 @@ export default function Settings() {
     if (!confirm('هل أنت متأكد من حذف هذا الفرع؟')) return;
     try {
       await axios.delete(`${API}/branches/${branchId}`);
-      toast.success('تم تعطيل الفرع');
+      toast.success(t('تم الحفظ بنجاح'));
       fetchData();
     } catch (error) {
       toast.error(error.response?.data?.detail || 'فشل في حذف الفرع');
