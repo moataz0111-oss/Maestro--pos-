@@ -474,9 +474,9 @@ export default function Login() {
               <div className="flex items-start gap-3">
                 <Database className="h-5 w-5 text-amber-400 flex-shrink-0 mt-0.5" />
                 <div className="flex-1">
-                  <h3 className="text-amber-400 font-bold text-sm mb-2">تهيئة قاعدة البيانات (للمالك فقط)</h3>
+                  <h3 className="text-amber-400 font-bold text-sm mb-2">{t('تهيئة قاعدة البيانات')} ({t('للمالك فقط')})</h3>
                   <p className="text-gray-300 text-xs mb-3">
-                    أدخل مفتاح التهيئة السري لإنشاء الحسابات الأساسية. تواصل مع مزود الخدمة للحصول على المفتاح.
+                    {t('أدخل مفتاح التهيئة السري لإنشاء الحسابات الأساسية')}
                   </p>
                   
                   {dbInitResult?.success ? (
@@ -496,7 +496,7 @@ export default function Login() {
                   <div className="mb-3">
                     <Input
                       type="password"
-                      placeholder="مفتاح التهيئة السري"
+                      placeholder={t('مفتاح التهيئة السري')}
                       value={initSecretKey}
                       onChange={(e) => setInitSecretKey(e.target.value)}
                       className="h-10 bg-white/5 border-white/10 text-white placeholder:text-gray-500 text-sm"
@@ -515,17 +515,17 @@ export default function Login() {
                       {dbInitLoading ? (
                         <span className="flex items-center gap-2">
                           <Loader2 className="h-4 w-4 animate-spin" />
-                          جاري التهيئة...
+                          {t('جاري التهيئة...')}
                         </span>
                       ) : dbInitResult?.success ? (
                         <span className="flex items-center gap-2">
                           <CheckCircle className="h-4 w-4" />
-                          تم بنجاح
+                          {t('تم بنجاح')}
                         </span>
                       ) : (
                         <span className="flex items-center gap-2">
                           <Database className="h-4 w-4" />
-                          تهيئة
+                          {t('تهيئة')}
                         </span>
                       )}
                     </Button>
@@ -538,7 +538,7 @@ export default function Login() {
                       }}
                       className="h-10 px-4 text-sm bg-gray-600 text-white hover:bg-gray-500"
                     >
-                      إلغاء
+                      {t('إلغاء')}
                     </Button>
                   </div>
                 </div>
