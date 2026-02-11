@@ -31,7 +31,7 @@ const API = API_URL;
 
 // Order type icons and colors
 const orderTypeConfig = {
-  dine_in: { icon: Utensils, color: 'bg-blue-500', label: 'محلي', bgColor: 'bg-blue-500/20' },
+  dine_in: { icon: Utensils, color: 'bg-blue-500', label: 'داخل المطعم', bgColor: 'bg-blue-500/20' },
   takeaway: { icon: Coffee, color: 'bg-purple-500', label: 'سفري', bgColor: 'bg-purple-500/20' },
   delivery: { icon: Truck, color: 'bg-orange-500', label: 'توصيل', bgColor: 'bg-orange-500/20' }
 };
