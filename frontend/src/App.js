@@ -82,7 +82,7 @@ const ProtectedRoute = ({ children }) => {
     // تسجيل الخروج من النظام الرئيسي وتوجيه للسائق
     localStorage.removeItem('token');
     localStorage.removeItem('user');
-    window.location.href = '/driver';
+    window.location.href = '/driver-app';
     return null;
   }
   
