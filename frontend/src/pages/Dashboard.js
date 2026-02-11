@@ -999,7 +999,7 @@ export default function Dashboard() {
                 data-testid="super-admin-btn"
               >
                 <Crown className="h-4 w-4" />
-                لوحة تحكم المالك
+                {t('لوحة تحكم المالك')}
               </Button>
             )}
 
@@ -1012,7 +1012,7 @@ export default function Dashboard() {
               data-testid="close-register-btn"
             >
               <Calculator className="h-4 w-4" />
-              إغلاق الصندوق
+              {t('إغلاق الصندوق')}
             </Button>
 
             {/* Share Menu Link Button */}
@@ -1026,7 +1026,7 @@ export default function Dashboard() {
                 data-testid="share-menu-btn"
               >
                 <Share2 className="h-4 w-4" />
-                قائمة العملاء
+                {t('قائمة العملاء')}
               </Button>
             )}
 
