@@ -1,143 +1,109 @@
-# Maestro EGP - نظام إدارة المطاعم
+# Maestro EGP - Restaurant Management System PRD
 
-## المشكلة الأصلية
-نظام إدارة مطاعم متكامل يدعم اللغة العربية، مع ميزات متقدمة للتوصيل وإدارة العملات والموظفين.
+## Original Problem Statement
+نظام إدارة مطاعم متكامل يدعم لغات متعددة (عربي، إنجليزي، كردي). يشمل:
+- نقطة البيع (POS)
+- إدارة المخزون
+- شاشة المطبخ
+- إدارة التوصيل والسائقين
+- إدارة الموظفين والرواتب
+- التقارير الذكية
+- قائمة الزبائن الرقمية
 
-## ✅ جميع المتطلبات مكتملة ومختبرة
+## Core Features Implemented
 
-### 1. نظام أمان السائقين (PIN) ✅
-- تسجيل دخول السائقين باستخدام رقم الهاتف + رمز PIN سري
-- تم تنفيذه في `DriverApp.js` و Backend
+### ✅ Completed Features
+1. **نظام الترجمة الشامل** (Completed: Feb 2025)
+   - `useTranslation` hook with centralized dictionary
+   - Supports Arabic (ar), English (en), Kurdish (ku)
+   - Applied to: Login, Dashboard, Orders, DriverApp, Tables, POS, Settings
+   - Direction-aware (RTL/LTR) based on language
+   - 400+ translations in `/app/frontend/src/utils/autoTranslate.js`
 
-### 2. إدارة مجمعة للسائقين ✅
-- تحديد متعدد للسائقين
-- حذف مجمع للسائقين المحددين
-- تم في `Delivery.js`
+2. **شاشة المطبخ المحسّنة** (Completed: Feb 2025)
+   - Decoupled `kitchen_status` from main order status
+   - Orders persist until marked "ready" by kitchen staff
+   - Sound notification for new orders
+   - Branch name display on each order
 
-### 3. إعدادات النظام العامة ✅
-- تبويب "إعدادات النظام" في صفحة الإعدادات
-- إعدادات البلد/العملة/اللغة تؤثر على كل النظام
-- تم في `Settings.js`
+3. **نقطة البيع (POS)** (Completed)
+   - Table filtering by branch
+   - Changed "محلي" to "داخل المطعم"
+   - Full translation support
 
-### 4. نظام العملة الديناميكي ✅
-- العملة تُحمّل من الخادم بعد تسجيل الدخول
-- تغيير العملة ينعكس فوراً على كل الأسعار
-- مصر → جنيه مصري (ج.م)
-- العراق → دينار عراقي (د.ع)
+4. **تطبيق السائق** (Completed)
+   - Removed old DriverPortal.js
+   - Unified routing to DriverApp.js
+   - Full translation support
 
-### 5. تقارير العملات للمالك ✅
-- Card "تقارير العملات والمبيعات" في لوحة SuperAdmin
-- اختيار العملة المفضلة (USD/IQD/SAR/AED/EGP)
-- خيار أسعار ثابتة أو حية من الإنترنت
-- عرض المبيعات المحولة لكل عميل
+5. **Authentication System** (Completed)
+   - JWT-based authentication
+   - Role-based access (super_admin, admin, cashier, driver)
+   - Secret key for owner login
 
-### 6. تطبيق السائقين المحدث ✅
-- إشعارات صوتية للطلبات الجديدة
-- تبويبات: الطلبات | الخريطة | السجل
-- إحصائيات السائق
-- تثبيت PWA
-- ملاحة Google Maps
-- حالة الاتصال بالإنترنت
+### 🔄 In Progress
+- None currently
 
-### 7. فصل السائقين عن المستخدمين ✅
-- إنشاء السائقين فقط من قسم التوصيل
-- السائقين ليسوا ضمن قائمة الموظفين
+### 📋 Backlog (P1)
+1. **Code Refactoring**
+   - `server.py` (~14,600 lines) - needs splitting into routes
+   - `Settings.js` (~5,700 lines)
+   - `POS.js` (~2,800 lines)
+   - `CustomerMenu.js` (~2,000 lines)
 
-### 8. تحسين الخرائط ✅
-- CARTO Voyager لعرض أسماء الشوارع
+### 📋 Future Tasks (P2-P3)
+1. SendGrid email integration (waiting for API key)
+2. Map design verification with user
+3. PWA installation testing guidance
 
-### 9. شاشة المطبخ المستقلة ✅
-- الطلبات تظل مرئية حتى يقوم موظف المطبخ بتمييزها "جاهزة"
-- لا تتأثر بحالة الطلب في نقطة البيع (POS)
-- حالة المطبخ منفصلة عن حالة الطلب (`kitchen_status` vs `status`)
-- API جديد: `PUT /api/orders/{id}/kitchen-status`
-- API جديد: `GET /api/kitchen/orders`
+## Technical Architecture
 
-## نتائج الاختبار النهائي (100% نجاح)
-
-| الميزة | الحالة |
-|--------|--------|
-| تسجيل دخول المستخدم | ✅ |
-| العملة بالجنيه المصري | ✅ |
-| إعدادات النظام | ✅ |
-| لوحة تحكم المالك | ✅ |
-| تقارير العملات | ✅ |
-| تطبيق السائق | ✅ |
-| صفحة التوصيل | ✅ |
-| نقطة البيع | ✅ |
-
-## بيانات الاختبار
-- **Demo User**: demo@maestroegp.com / demo123
-- **Owner**: owner@maestroegp.com / owner123 / secret: 271018
-- **Driver**: 07901234567 / PIN: 1234
-
-## الهيكل التقني
-
-### Frontend (React)
 ```
-/app/frontend/src/
-├── context/
-│   ├── AuthContext.js (يرسل userLoggedIn event)
-│   └── CurrencyContext.js (يستمع لتغييرات تسجيل الدخول)
-├── pages/
-│   ├── DriverApp.js (تطبيق السائق المحدث)
-│   ├── Delivery.js (إدارة التوصيل)
-│   ├── Settings.js (إعدادات النظام)
-│   └── SuperAdmin.js (لوحة المالك + تقارير العملات)
-└── utils/
-    └── currency.js (تنسيق الأسعار بالعملة المختارة)
+/app
+├── backend/
+│   └── server.py          # FastAPI (needs refactoring)
+└── frontend/
+    └── src/
+        ├── components/
+        │   └── PWAInstallButton.js  # Translated
+        ├── context/
+        │   ├── LanguageContext.js   # Language state management
+        │   └── AuthContext.js
+        ├── hooks/
+        │   └── useTranslation.js    # Translation hook
+        ├── pages/
+        │   ├── Dashboard.js         # Fully translated
+        │   ├── Login.js             # Fully translated
+        │   ├── Orders.js            # Fully translated
+        │   ├── DriverApp.js         # Fully translated
+        │   ├── Tables.js            # Fully translated
+        │   ├── POS.js               # Translation hook added
+        │   └── [30+ more pages]     # Translation hook added
+        └── utils/
+            └── autoTranslate.js     # Translation dictionary
 ```
 
-### Backend (FastAPI)
-```
-/app/backend/
-├── server.py
-│   ├── /api/super-admin/currency-settings
-│   ├── /api/super-admin/live-exchange-rates
-│   ├── /api/super-admin/sales-summary
-│   └── /api/tenant/regional-settings
-└── routes/
-    └── drivers_routes.py
-```
+## Key API Endpoints
+- `PUT /api/orders/{order_id}/kitchen-status`
+- `GET /api/kitchen-orders` (includes branch_name)
+- `GET /api/tables?branch_id=xxx`
 
-## المهام المستقبلية (اختيارية)
+## Database Schema Updates
+- `orders` collection: Added `kitchen_status: str` field
+- `tables` collection: Proper branch_id filtering
 
-### P1 - إعادة هيكلة الكود
-- [ ] تقسيم `server.py` (14600+ سطر) إلى:
-  - `routes/auth_routes.py` - مسارات المصادقة
-  - `routes/orders_routes.py` - مسارات الطلبات
-  - `routes/kitchen_routes.py` - مسارات المطبخ
-  - `routes/inventory_routes.py` - مسارات المخزون
-  - `routes/hr_routes.py` - مسارات الموارد البشرية
-  - `models/` - نماذج البيانات
-- [ ] تقسيم `CustomerMenu.js` (2000+ سطر) إلى مكونات فرعية
+## 3rd Party Integrations
+- OpenStreetMap Nominatim (address search)
+- CARTO (map tiles)
+- Leaflet & react-leaflet
+- SendGrid (installed, not configured)
 
-### P2 - تحسينات
-- [x] حذف `DriverPortal.js` (تم استبداله بـ DriverApp) ✅
-- [x] نظام ترجمة أساسي (i18n) ✅
-- [ ] تكامل SendGrid للإشعارات البريدية
-- [ ] تقارير أداء السائقين
+## Test Credentials
+- **Super Admin**: owner@maestroegp.com / owner123
+- **Demo Client**: demo@maestroegp.com / demo123
+- **Cashier**: Hani@maestroegp.com / test123
 
----
-**آخر تحديث**: 2026-02-11
-**حالة النظام**: ✅ جاهز للنشر
-
-### التحديثات الأخيرة (11 فبراير 2026)
-1. ✅ **شاشة المطبخ**: تم إصلاح منطق عرض الطلبات - الطلبات تبقى حتى يضغط موظف المطبخ على "جاهز"
-2. ✅ **إصلاح أسماء المنتجات**: أسماء المنتجات تظهر الآن بشكل صحيح في شاشة المطبخ
-3. ✅ **تنظيف الكود**: حذف `DriverPortal.js` وتحديث التوجيهات
-4. ✅ **إشعار صوتي**: إضافة صوت تنبيه يتكرر 3 مرات + إشعار مرئي للطلبات الجديدة
-5. ✅ **اسم الفرع**: يظهر الآن اسم الفرع على كل طلب في شاشة المطبخ
-6. ✅ **تغيير "محلي"**: أصبحت "داخل المطعم" في كل النظام
-7. ✅ **إصلاح الطاولات**: فلترة الطاولات حسب الفرع الحالي لمنع التكرار
-8. ✅ **نظام الترجمة الكامل**: 
-   - إنشاء `/app/frontend/src/hooks/useTranslation.js` - Hook للترجمة مع ~300 مفتاح
-   - دعم 3 لغات: العربية، الإنجليزية، الكردية
-   - **Dashboard مترجم بالكامل**: الأيقونات السريعة، الإحصائيات، الفلاتر
-   - **KitchenDisplay مترجم بالكامل**: العنوان، التبويبات، الأزرار، الإشعارات
-   - **SuperAdmin يدعم الترجمة**: لوحة تحكم المالك
-   - تغيير اللغة من الإعدادات يعمل فوراً مع إعادة تحميل
-
-### ملاحظات الترجمة:
-- الترجمة مُفعّلة في: Dashboard, KitchenDisplay, SuperAdmin
-- الصفحات التالية تحتاج ترجمة: Settings, POS, Orders, Reports, Delivery, HR, Inventory, Tables
+## Notes
+- Translation system uses Arabic text as lookup key
+- Language stored in localStorage as 'app_language'
+- Document direction changes automatically based on language
