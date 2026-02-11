@@ -446,19 +446,19 @@ export default function Reports() {
               <div className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <StatCard
-                    title="إجمالي المشتريات"
+                    title={t('إجمالي المشتريات')}
                     value={formatPrice(purchasesReport.total_purchases)}
                     icon={Package}
                     color="purple-500"
                   />
                   <StatCard
-                    title="عدد الفواتير"
+                    title={t('عدد الفواتير')}
                     value={purchasesReport.total_transactions}
                     icon={FileText}
                     color="blue-500"
                   />
                   <StatCard
-                    title="مستحقات غير مدفوعة"
+                    title={t('مستحقات غير مدفوعة')}
                     value={formatPrice(purchasesReport.by_payment_status?.pending || 0)}
                     icon={DollarSign}
                     color="orange-500"
@@ -467,7 +467,7 @@ export default function Reports() {
 
                 <Card className="border-border/50 bg-card">
                   <CardHeader>
-                    <CardTitle className="text-lg text-foreground">حسب المورد</CardTitle>
+                    <CardTitle className="text-lg text-foreground">{t('حسب المورد')}</CardTitle>
                   </CardHeader>
                   <CardContent>
                     <div className="space-y-2">
@@ -480,6 +480,12 @@ export default function Reports() {
                     </div>
                   </CardContent>
                 </Card>
+                <div className="flex justify-end gap-2 mt-4">
+                  <Button variant="outline" onClick={() => window.print()}>
+                    <FileText className="h-4 w-4 ml-2" />
+                    {t('طباعة')}
+                  </Button>
+                </div>
               </div>
             )}
           </TabsContent>
@@ -490,13 +496,13 @@ export default function Reports() {
               <div className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <StatCard
-                    title="إجمالي المصاريف"
+                    title={t('إجمالي المصاريف')}
                     value={formatPrice(expensesReport.total_expenses)}
                     icon={TrendingDown}
                     color="red-500"
                   />
                   <StatCard
-                    title="عدد المعاملات"
+                    title={t('عدد المعاملات')}
                     value={expensesReport.total_transactions}
                     icon={FileText}
                     color="blue-500"
@@ -505,20 +511,20 @@ export default function Reports() {
 
                 <Card className="border-border/50 bg-card">
                   <CardHeader>
-                    <CardTitle className="text-lg text-foreground">حسب التصنيف</CardTitle>
+                    <CardTitle className="text-lg text-foreground">{t('حسب التصنيف')}</CardTitle>
                   </CardHeader>
                   <CardContent>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                       {Object.entries(expensesReport.by_category || {}).map(([cat, amount]) => {
                         const catNames = {
-                          rent: 'إيجار',
-                          utilities: 'كهرباء وماء',
-                          salaries: 'رواتب',
-                          maintenance: 'صيانة',
-                          supplies: 'مستلزمات',
-                          marketing: 'تسويق',
-                          transport: 'نقل',
-                          other: 'أخرى'
+                          rent: t('إيجار'),
+                          utilities: t('كهرباء وماء'),
+                          salaries: t('رواتب'),
+                          maintenance: t('صيانة'),
+                          supplies: t('مستلزمات'),
+                          marketing: t('تسويق'),
+                          transport: t('نقل'),
+                          other: t('أخرى')
                         };
                         return (
                           <div key={cat} className="p-4 bg-muted/30 rounded-lg text-center">
@@ -532,13 +538,9 @@ export default function Reports() {
                 </Card>
 
                 <div className="flex justify-end gap-2 mt-4">
-                  <Button variant="outline" onClick={() => exportToExcel('expenses')}>
-                    <FileSpreadsheet className="h-4 w-4 ml-2" />
-                    تصدير Excel
-                  </Button>
-                  <Button variant="outline" onClick={() => exportToPDF('expenses')}>
+                  <Button variant="outline" onClick={() => window.print()}>
                     <FileText className="h-4 w-4 ml-2" />
-                    تصدير PDF
+                    {t('طباعة')}
                   </Button>
                 </div>
               </div>
@@ -551,40 +553,40 @@ export default function Reports() {
               <div className="space-y-6">
                 <Card className="border-border/50 bg-card">
                   <CardHeader>
-                    <CardTitle className="text-lg text-foreground">تقرير الأرباح والخسائر</CardTitle>
+                    <CardTitle className="text-lg text-foreground">{t('تقرير الأرباح والخسائر')}</CardTitle>
                   </CardHeader>
                   <CardContent>
                     <div className="space-y-4">
                       {/* Revenue */}
                       <div className="p-4 bg-green-500/10 rounded-lg">
                         <div className="flex justify-between items-center">
-                          <span className="text-green-600 font-medium">الإيرادات</span>
+                          <span className="text-green-600 font-medium">{t('الإيرادات')}</span>
                           <span className="text-2xl font-bold text-green-600 tabular-nums">
                             {formatPrice(profitLossReport.revenue?.total_sales || 0)}
                           </span>
                         </div>
                         <p className="text-sm text-muted-foreground mt-1">
-                          {profitLossReport.revenue?.order_count || 0} طلب
+                          {profitLossReport.revenue?.order_count || 0} {t('طلب')}
                         </p>
                       </div>
 
                       {/* Cost of Goods */}
                       <div className="p-4 bg-red-500/10 rounded-lg">
                         <div className="flex justify-between items-center">
-                          <span className="text-red-600 font-medium">تكلفة البضاعة المباعة</span>
+                          <span className="text-red-600 font-medium">{t('تكلفة البضاعة المباعة')}</span>
                           <span className="text-xl font-bold text-red-600 tabular-nums">
                             -{formatPrice(profitLossReport.cost_of_goods_sold?.total || 0)}
                           </span>
                         </div>
                         <p className="text-sm text-muted-foreground mt-1">
-                          {profitLossReport.cost_of_goods_sold?.percentage?.toFixed(1)}% من الإيرادات
+                          {profitLossReport.cost_of_goods_sold?.percentage?.toFixed(1)}% {t('من الإيرادات')}
                         </p>
                       </div>
 
                       {/* Delivery Commissions */}
                       <div className="p-4 bg-orange-500/10 rounded-lg">
                         <div className="flex justify-between items-center">
-                          <span className="text-orange-600 font-medium">عمولات التوصيل</span>
+                          <span className="text-orange-600 font-medium">{t('عمولات التوصيل')}</span>
                           <span className="text-lg font-bold text-orange-600 tabular-nums">
                             -{formatPrice(profitLossReport.delivery_commissions || 0)}
                           </span>
@@ -594,7 +596,7 @@ export default function Reports() {
                       {/* Gross Profit */}
                       <div className="p-4 bg-blue-500/10 rounded-lg border-2 border-blue-500/30">
                         <div className="flex justify-between items-center">
-                          <span className="text-blue-600 font-bold">الربح الإجمالي</span>
+                          <span className="text-blue-600 font-bold">{t('الربح الإجمالي')}</span>
                           <span className="text-2xl font-bold text-blue-600 tabular-nums">
                             {formatPrice(profitLossReport.gross_profit?.amount || 0)}
                           </span>
