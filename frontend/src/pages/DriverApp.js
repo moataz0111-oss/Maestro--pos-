@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { Badge } from '../components/ui/badge';
 import { Input } from '../components/ui/input';
 import { formatPrice } from '../utils/currency';
+import { useTranslation } from '../hooks/useTranslation';
 import {
   Truck,
   MapPin,
@@ -69,6 +70,7 @@ const MapUpdater = ({ center }) => {
 };
 
 export default function DriverApp() {
+  const { t, isRTL } = useTranslation();
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [driverPhone, setDriverPhone] = useState('');
   const [driverPin, setDriverPin] = useState('');
