@@ -401,14 +401,22 @@ export default function Settings() {
     showPOS: true,
     showTables: true,
     showOrders: true,
-    showExpenses: true,
-    showInventory: true,
-    showDelivery: true,
+    showKitchen: true,
     showReports: true,
-    showSettings: true,
-    showHR: true,
+    showSmartReports: true,
+    showRatings: true,
+    showExpenses: true,
+    showPurchasing: true,
     showWarehouse: true,
-    showCallLogs: true
+    showBranchOrders: true,
+    showInventoryReports: true,
+    showDelivery: true,
+    showReservations: true,
+    showHR: true,
+    showCallLogs: true,
+    showLoyalty: true,
+    showCoupons: true,
+    showSettings: true
   });
 
   useEffect(() => {
