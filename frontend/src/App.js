@@ -5,15 +5,17 @@ import { AuthProvider, useAuth } from "./context/AuthContext";
 import { ThemeProvider } from "./context/ThemeContext";
 import { BranchProvider } from "./context/BranchContext";
 import { CurrencyProvider } from "./context/CurrencyContext";
+import { LanguageProvider } from "./context/LanguageContext";
 import ErrorBoundary from "./components/ErrorBoundary";
 import React, { Suspense, lazy } from "react";
+import { t } from "./utils/translations";
 
 // Loading Component
 const PageLoader = () => (
   <div className="flex items-center justify-center min-h-screen bg-background">
     <div className="flex flex-col items-center gap-4">
       <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
-      <p className="text-muted-foreground">جاري التحميل...</p>
+      <p className="text-muted-foreground">{t('loading')}</p>
     </div>
   </div>
 );
