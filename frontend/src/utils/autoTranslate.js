@@ -259,6 +259,8 @@ const translationMap = {
   'قائمة العملاء': { en: 'Customer Menu', ku: 'لیستی کڕیار' },
   'التنبيهات': { en: 'Notifications', ku: 'ئاگادارکردنەوە' },
   'طباعة الفاتورة': { en: 'Print Invoice', ku: 'چاپکردنی پسوولە' },
+  'اضغط مطولاً لإعادة ترتيب': { en: 'Press & hold to reorder', ku: 'پەنجە درێژ بکە بۆ ڕێکخستنەوە' },
+  'الإجمالي': { en: 'Total', ku: 'کۆ' },
   
   // ===== SuperAdmin =====
   'لوحة تحكم المالك': { en: 'Owner Dashboard', ku: 'داشبۆردی خاوەن' },
