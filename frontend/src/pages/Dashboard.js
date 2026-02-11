@@ -867,14 +867,14 @@ export default function Dashboard() {
   
   const periodLabels = {
     today: 'اليوم',
-    week: 'الأسبوع',
-    month: 'الشهر',
-    all_time: 'الإجمالي'
+    week: t('this_week'),
+    month: t('this_month'),
+    all_time: t('total')
   };
 
   const statCards = [
     { 
-      label: `مبيعات ${periodLabels[statsPeriod]}`, 
+      label: t('total_sales'), 
       value: formatPriceCompact(periodStats?.total_sales || 0), 
       icon: DollarSign,
       color: 'text-green-500',
