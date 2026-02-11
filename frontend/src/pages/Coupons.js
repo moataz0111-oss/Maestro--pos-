@@ -144,7 +144,7 @@ export default function Coupons() {
       toast.success('تم الحذف');
       fetchData();
     } catch (error) {
-      toast.error('فشل في الحذف');
+      toast.error(t('فشل في الحذف'));
     }
   };
   const handleSavePromotion = async (e) => {
@@ -189,7 +189,7 @@ export default function Coupons() {
       toast.success('تم الحذف');
       fetchData();
     } catch (error) {
-      toast.error('فشل في الحذف');
+      toast.error(t('فشل في الحذف'));
     }
   };
   const resetCouponForm = () => {

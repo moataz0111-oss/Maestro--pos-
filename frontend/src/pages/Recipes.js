@@ -142,7 +142,7 @@ export default function Recipes() {
       toast.success('تم الحذف');
       fetchData();
     } catch (error) {
-      toast.error('فشل في الحذف');
+      toast.error(t('فشل في الحذف'));
     }
   };
   const handleSaveRecipe = async (e) => {
@@ -177,7 +177,7 @@ export default function Recipes() {
       toast.success('تم الحذف');
       fetchData();
     } catch (error) {
-      toast.error('فشل في الحذف');
+      toast.error(t('فشل في الحذف'));
     }
   };
   const resetMaterialForm = () => {

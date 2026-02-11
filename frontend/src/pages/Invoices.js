@@ -133,7 +133,7 @@ export default function Invoices() {
       toast.success('تم الحذف');
       fetchData();
     } catch (error) {
-      toast.error('فشل في الحذف');
+      toast.error(t('فشل في الحذف'));
     }
   };
   const handleSavePrinter = async (e) => {
@@ -168,7 +168,7 @@ export default function Invoices() {
       toast.success('تم الحذف');
       fetchData();
     } catch (error) {
-      toast.error('فشل في الحذف');
+      toast.error(t('فشل في الحذف'));
     }
   };
   const resetTemplateForm = () => {

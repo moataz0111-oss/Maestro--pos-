@@ -553,7 +553,7 @@ export default function CustomerMenu() {
       toast.success('تم الحذف من المفضلة');
       fetchFavorites();
     } catch (error) {
-      toast.error('فشل في الحذف');
+      toast.error(t('فشل في الحذف'));
     }
   };
   // إضافة طلب مفضل للسلة

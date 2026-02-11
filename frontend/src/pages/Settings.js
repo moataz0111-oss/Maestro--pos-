@@ -1279,7 +1279,7 @@ export default function Settings() {
       toast.success('تم تحديث قسم المطبخ للفئة');
       fetchData();
     } catch (error) {
-      toast.error('فشل في التحديث');
+      toast.error(t('فشل في التحديث'));
     }
   };
 
@@ -1298,7 +1298,7 @@ export default function Settings() {
       toast.success('تم تحديث نسبة العمولة');
       fetchData();
     } catch (error) {
-      toast.error('فشل في التحديث');
+      toast.error(t('فشل في التحديث'));
     }
   };
 
@@ -1359,7 +1359,7 @@ export default function Settings() {
       toast.success(app.is_active ? 'تم تعطيل الشركة' : 'تم تفعيل الشركة');
       fetchData();
     } catch (error) {
-      toast.error('فشل في التحديث');
+      toast.error(t('فشل في التحديث'));
     }
   };
 
