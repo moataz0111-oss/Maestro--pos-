@@ -4827,7 +4827,7 @@ export default function Settings() {
                       disabled={savingInventorySettings}
                     >
                       {savingInventorySettings ? <RefreshCw className="h-4 w-4 ml-2 animate-spin" /> : <Save className="h-4 w-4 ml-2" />}
-                      حفظ إعدادات المخزون
+                      {t('حفظ إعدادات المخزون')}
                     </Button>
                   </CardContent>
                 </Card>
