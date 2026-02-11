@@ -327,7 +327,7 @@ export default function POS() {
       // تحويل عناصر الطلب إلى سلة
       const cartItems = order.items.map(item => ({
         product_id: item.product_id,
-        product_name: item.product_name || item.name || 'منتج غير معروف',
+        product_name: item.product_name || item.name || t('منتج غير معروف'),
         price: item.price,
         quantity: item.quantity,
         notes: item.notes || ''
@@ -581,12 +581,12 @@ export default function POS() {
     }
 
     if (orderType === 'dine_in' && !selectedTable) {
-      toast.error('يرجى اختيار طاولة');
+      toast.error(t('يرجى اختيار طاولة'));
       return;
     }
 
     if (orderType === 'delivery' && !deliveryAddress) {
-      toast.error('يرجى إدخال عنوان التوصيل');
+      toast.error(t('يرجى إدخال عنوان التوصيل'));
       return;
     }
 
@@ -664,12 +664,12 @@ export default function POS() {
     }
 
     if (orderType === 'dine_in' && !selectedTable && !editingOrder) {
-      toast.error('يرجى اختيار طاولة');
+      toast.error(t('يرجى اختيار طاولة'));
       return;
     }
 
     if (orderType === 'delivery' && !deliveryAddress) {
-      toast.error('يرجى إدخال عنوان التوصيل');
+      toast.error(t('يرجى إدخال عنوان التوصيل'));
       return;
     }
 
