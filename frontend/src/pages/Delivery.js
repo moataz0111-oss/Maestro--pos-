@@ -35,11 +35,10 @@ import {
   Locate,
   Edit,
   Trash2,
-  Link,
-  UserCheck,
   Maximize,
   ArrowLeftRight,
-  ExternalLink
+  ExternalLink,
+  Building
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
