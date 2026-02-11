@@ -167,6 +167,7 @@ const PERMISSION_GROUPS = [...new Set(AVAILABLE_PERMISSIONS.map(p => p.group))];
 export default function Settings() {
   const { user, hasRole, logout, hasPermission } = useAuth();
   const { theme, setTheme } = useTheme();
+  const { t, lang, changeLanguage, isRTL } = useTranslation();
   const navigate = useNavigate();
   
   // دالة للتحقق من صلاحيات الإعدادات
