@@ -413,9 +413,9 @@ export default function KitchenDisplay() {
         {/* Filter Tabs */}
         <div className="flex gap-2 mt-4">
           {[
-            { value: 'all', label: 'الكل', count: orders.length },
-            { value: 'pending', label: 'جديد', count: pendingOrders.length, color: 'yellow' },
-            { value: 'preparing', label: 'قيد التحضير', count: preparingOrders.length, color: 'blue' }
+            { value: 'all', label: t('all'), count: orders.length },
+            { value: 'pending', label: t('new_orders'), count: pendingOrders.length, color: 'yellow' },
+            { value: 'preparing', label: t('in_progress'), count: preparingOrders.length, color: 'blue' }
           ].map(tab => (
             <Button
               key={tab.value}
@@ -445,8 +445,8 @@ export default function KitchenDisplay() {
         {filteredOrders.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-[60vh] text-gray-400">
             <ChefHat className="h-24 w-24 mb-6 opacity-30" />
-            <h2 className="text-2xl font-bold mb-2">لا توجد طلبات</h2>
-            <p className="text-gray-500">الطلبات الجديدة ستظهر هنا تلقائياً</p>
+            <h2 className="text-2xl font-bold mb-2">{t('no_orders')}</h2>
+            <p className="text-gray-500">{t('orders_appear_here')}</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
