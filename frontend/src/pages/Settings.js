@@ -5,6 +5,7 @@ import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { formatPrice, setCurrency } from '../utils/currency';
+import { useTranslation } from '../hooks/useTranslation';
 import { 
   playClick, 
   playSuccess, 
