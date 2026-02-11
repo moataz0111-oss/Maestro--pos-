@@ -4548,6 +4548,16 @@ async def get_kitchen_orders(current_user: dict = Depends(get_current_user)):
     
     unique_orders.sort(key=lambda x: x.get("created_at", ""))
     
+    # إضافة اسم الفرع لكل طلب
+    branch_ids = list(set(o.get("branch_id") for o in unique_orders if o.get("branch_id")))
+    branches = {}
+    if branch_ids:
+        branches_list = await db.branches.find({"id": {"$in": branch_ids}}, {"_id": 0, "id": 1, "name": 1}).to_list(100)
+        branches = {b["id"]: b["name"] for b in branches_list}
+    
+    for order in unique_orders:
+        order["branch_name"] = branches.get(order.get("branch_id"), "")
+    
     return unique_orders
 
 @api_router.put("/orders/{order_id}/payment")
