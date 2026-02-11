@@ -735,7 +735,7 @@ export default function Settings() {
       toast.success(t('تم الحفظ بنجاح'));
     } catch (error) {
       console.error('Upload ZainCash QR error:', error);
-      toast.error('فشل في رفع الصورة: ' + (error.response?.data?.detail || error.message));
+      toast.error(t('فشل في رفع الصورة') + ': ' +  + (error.response?.data?.detail || error.message));
     }
   };
 
@@ -765,7 +765,7 @@ export default function Settings() {
       setStaffForm({ full_name: '', email: '', phone: '', password: '', role: 'cashier', branch_id: branches[0]?.id || '', job_title: '', permissions: [] });
       fetchStaffData();
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'فشل في إنشاء الموظف');
+      toast.error(error.response?.data?.detail || t('فشل في حفظ البيانات'));
     }
   };
 
@@ -787,7 +787,7 @@ export default function Settings() {
       setEditStaffForm(null);
       fetchStaffData();
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'فشل في تحديث الموظف');
+      toast.error(error.response?.data?.detail || t('فشل في حفظ البيانات'));
     }
   };
 
@@ -798,7 +798,7 @@ export default function Settings() {
       toast.success(t('تم الحفظ بنجاح'));
       fetchStaffData();
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'فشل في تعطيل الموظف');
+      toast.error(error.response?.data?.detail || t('فشل في حفظ البيانات'));
     }
   };
 
@@ -817,7 +817,7 @@ export default function Settings() {
       await axios.post(`${API}/staff/${staffId}/reset-password`, { new_password: newPassword });
       toast.success(t('تم الحفظ بنجاح'));
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'فشل في تغيير كلمة المرور');
+      toast.error(error.response?.data?.detail || t('فشل في حفظ البيانات'));
     }
   };
 
@@ -839,7 +839,7 @@ export default function Settings() {
       setUserForm({ username: '', email: '', password: '', full_name: '', role: 'cashier', branch_id: '', permissions: [] });
       fetchData();
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'فشل في إنشاء المستخدم');
+      toast.error(error.response?.data?.detail || t('فشل في حفظ البيانات'));
     }
   };
 
@@ -852,7 +852,7 @@ export default function Settings() {
       setBranchForm({ name: '', address: '', phone: '', email: '' });
       fetchData();
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'فشل في إنشاء الفرع');
+      toast.error(error.response?.data?.detail || t('فشل في حفظ البيانات'));
     }
   };
 
@@ -882,7 +882,7 @@ export default function Settings() {
       setEditBranchForm(null);
       fetchData();
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'فشل في تحديث الفرع');
+      toast.error(error.response?.data?.detail || t('فشل في حفظ البيانات'));
     }
   };
 
@@ -910,7 +910,7 @@ export default function Settings() {
       await axios.put(`${API}/users/${u.id}/reset-password`, { new_password: newPassword });
       toast.success(`تم تغيير كلمة المرور للمستخدم ${u.full_name}`);
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'فشل في تغيير كلمة المرور');
+      toast.error(error.response?.data?.detail || t('فشل في حفظ البيانات'));
     }
   };
 
