@@ -331,7 +331,7 @@ export default function Orders() {
             <Card className="border-border/50 bg-card">
               <CardContent className="py-12 text-center">
                 <Package className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                <p className="text-muted-foreground">لا توجد طلبات</p>
+                <p className="text-muted-foreground">{t('لا توجد طلبات')}</p>
               </CardContent>
             </Card>
           ) : (
@@ -351,7 +351,7 @@ export default function Orders() {
                         </div>
                         <div>
                           <div className="flex items-center gap-2 mb-1">
-                            <h3 className="font-bold text-foreground">{order.customer_name || 'زبون'}</h3>
+                            <h3 className="font-bold text-foreground">{order.customer_name || t('زبون')}</h3>
                             <span className={`text-xs px-2 py-0.5 rounded-full border ${getStatusColor(order.status)}`}>
                               {getStatusText(order.status)}
                             </span>
@@ -360,15 +360,15 @@ export default function Orders() {
                             </span>
                           </div>
                           <p className="text-sm text-muted-foreground">
-                            {order.items.length} عناصر • {new Date(order.created_at).toLocaleTimeString('ar-IQ', { hour: '2-digit', minute: '2-digit' })}
+                            {order.items.length} {t('عناصر')} • {new Date(order.created_at).toLocaleTimeString('ar-IQ', { hour: '2-digit', minute: '2-digit' })}
                           </p>
                           {order.delivery_app && (
-                            <p className="text-xs text-primary mt-1">عبر: {order.delivery_app}</p>
+                            <p className="text-xs text-primary mt-1">{t('عبر')}: {order.delivery_app}</p>
                           )}
                         </div>
                       </div>
 
-                      <div className="text-left">
+                      <div className={isRTL ? 'text-left' : 'text-right'}>
                         <p className="text-xl font-bold text-primary tabular-nums">{formatPrice(order.total)}</p>
                         <div className="flex gap-2 mt-2">
                           <Button
@@ -386,8 +386,8 @@ export default function Orders() {
                               className="bg-blue-500 hover:bg-blue-600 text-white"
                               onClick={() => updateOrderStatus(order.id, 'preparing')}
                             >
-                              <ChefHat className="h-4 w-4 ml-1" />
-                              تحضير
+                              <ChefHat className={`h-4 w-4 ${isRTL ? 'ml-1' : 'mr-1'}`} />
+                              {t('تحضير')}
                             </Button>
                           )}
                           
@@ -397,8 +397,8 @@ export default function Orders() {
                               className="bg-green-500 hover:bg-green-600 text-white"
                               onClick={() => updateOrderStatus(order.id, 'ready')}
                             >
-                              <Check className="h-4 w-4 ml-1" />
-                              جاهز
+                              <Check className={`h-4 w-4 ${isRTL ? 'ml-1' : 'mr-1'}`} />
+                              {t('جاهز')}
                             </Button>
                           )}
                           
@@ -408,8 +408,8 @@ export default function Orders() {
                               className="bg-primary hover:bg-primary/90 text-primary-foreground"
                               onClick={() => updateOrderStatus(order.id, 'delivered')}
                             >
-                              <Truck className="h-4 w-4 ml-1" />
-                              تسليم
+                              <Truck className={`h-4 w-4 ${isRTL ? 'ml-1' : 'mr-1'}`} />
+                              {t('تسليم')}
                             </Button>
                           )}
                           
@@ -437,44 +437,44 @@ export default function Orders() {
       <Dialog open={!!selectedOrder} onOpenChange={() => setSelectedOrder(null)}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle className="text-foreground">تفاصيل الطلب #{selectedOrder?.order_number}</DialogTitle>
+            <DialogTitle className="text-foreground">{t('تفاصيل الطلب')} #{selectedOrder?.order_number}</DialogTitle>
           </DialogHeader>
           {selectedOrder && (
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div>
-                  <p className="text-muted-foreground">الزبون</p>
+                  <p className="text-muted-foreground">{t('الزبون')}</p>
                   <p className="font-medium text-foreground">{selectedOrder.customer_name || '-'}</p>
                 </div>
                 <div>
-                  <p className="text-muted-foreground">الهاتف</p>
+                  <p className="text-muted-foreground">{t('الهاتف')}</p>
                   <p className="font-medium text-foreground">{selectedOrder.customer_phone || '-'}</p>
                 </div>
                 <div>
-                  <p className="text-muted-foreground">نوع الطلب</p>
+                  <p className="text-muted-foreground">{t('نوع الطلب')}</p>
                   <p className="font-medium text-foreground">{getOrderTypeText(selectedOrder.order_type)}</p>
                 </div>
                 <div>
-                  <p className="text-muted-foreground">طريقة الدفع</p>
+                  <p className="text-muted-foreground">{t('طريقة الدفع')}</p>
                   <p className="font-medium text-foreground">
-                    {selectedOrder.payment_method === 'cash' ? 'نقدي' : selectedOrder.payment_method === 'card' ? 'بطاقة' : 'آجل'}
+                    {selectedOrder.payment_method === 'cash' ? t('نقدي') : selectedOrder.payment_method === 'card' ? t('بطاقة') : t('آجل')}
                   </p>
                 </div>
               </div>
 
               {selectedOrder.delivery_address && (
                 <div>
-                  <p className="text-muted-foreground text-sm">عنوان التوصيل</p>
+                  <p className="text-muted-foreground text-sm">{t('عنوان التوصيل')}</p>
                   <p className="font-medium text-foreground">{selectedOrder.delivery_address}</p>
                 </div>
               )}
 
               <div className="border-t border-border pt-4">
-                <p className="text-sm text-muted-foreground mb-2">العناصر</p>
+                <p className="text-sm text-muted-foreground mb-2">{t('العناصر')}</p>
                 <div className="space-y-2">
                   {selectedOrder.items.map((item, idx) => (
                     <div key={idx} className="flex justify-between text-sm">
-                      <span className="text-foreground">{item.product_name || item.name || 'منتج'} x{item.quantity}</span>
+                      <span className="text-foreground">{item.product_name || item.name || t('منتج')} x{item.quantity}</span>
                       <span className="font-medium tabular-nums text-foreground">{formatPrice(item.price * item.quantity)}</span>
                     </div>
                   ))}
@@ -483,17 +483,17 @@ export default function Orders() {
 
               <div className="border-t border-border pt-4 space-y-1">
                 <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">المجموع الفرعي</span>
+                  <span className="text-muted-foreground">{t('المجموع الفرعي')}</span>
                   <span className="text-foreground">{formatPrice(selectedOrder.subtotal)}</span>
                 </div>
                 {selectedOrder.discount > 0 && (
                   <div className="flex justify-between text-sm text-destructive">
-                    <span>الخصم</span>
+                    <span>{t('الخصم')}</span>
                     <span>-{formatPrice(selectedOrder.discount)}</span>
                   </div>
                 )}
                 <div className="flex justify-between text-lg font-bold pt-2">
-                  <span className="text-foreground">الإجمالي</span>
+                  <span className="text-foreground">{t('الإجمالي')}</span>
                   <span className="text-primary">{formatPrice(selectedOrder.total)}</span>
                 </div>
               </div>
