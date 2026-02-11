@@ -1269,6 +1269,7 @@ export default function POS() {
                     }`}
                   >
                     {t('بدون')}
+                  </button>
                   {deliveryApps.map(app => (
                     <button
                       key={app.id}
