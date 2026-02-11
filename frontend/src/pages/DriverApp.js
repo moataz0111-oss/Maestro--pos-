@@ -368,11 +368,11 @@ export default function DriverApp() {
 
   const getStatusBadge = (status) => {
     const statusMap = {
-      'assigned': { label: 'مُسند', class: 'bg-blue-500' },
-      'ready': { label: 'جاهز', class: 'bg-yellow-500' },
-      'out_for_delivery': { label: 'في الطريق', class: 'bg-orange-500' },
-      'delivered': { label: 'تم التسليم', class: 'bg-green-500' },
-      'cancelled': { label: 'ملغي', class: 'bg-red-500' }
+      'assigned': { label: t('مُسند'), class: 'bg-blue-500' },
+      'ready': { label: t('جاهز'), class: 'bg-yellow-500' },
+      'out_for_delivery': { label: t('في الطريق'), class: 'bg-orange-500' },
+      'delivered': { label: t('تم التسليم'), class: 'bg-green-500' },
+      'cancelled': { label: t('ملغي'), class: 'bg-red-500' }
     };
     return statusMap[status] || { label: status, class: 'bg-gray-500' };
   };
@@ -380,25 +380,25 @@ export default function DriverApp() {
   // صفحة تسجيل الدخول
   if (!isLoggedIn) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-500 to-green-500 flex items-center justify-center p-4" dir="rtl">
+      <div className="min-h-screen bg-gradient-to-br from-blue-500 to-green-500 flex items-center justify-center p-4" dir={isRTL ? 'rtl' : 'ltr'}>
         <Toaster position="top-center" richColors />
         <Card className="w-full max-w-md shadow-2xl">
           <CardHeader className="text-center">
             <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-gradient-to-br from-blue-500 to-green-500 flex items-center justify-center shadow-lg">
               <Truck className="h-10 w-10 text-white" />
             </div>
-            <CardTitle className="text-2xl">تطبيق السائق</CardTitle>
-            <p className="text-gray-500">سجل دخولك برقم هاتفك والرمز السري</p>
+            <CardTitle className="text-2xl">{t('تطبيق السائق')}</CardTitle>
+            <p className="text-gray-500">{t('سجل دخولك برقم هاتفك والرمز السري')}</p>
           </CardHeader>
           <CardContent className="space-y-4">
             {/* حالة الاتصال */}
             <div className={`flex items-center justify-center gap-2 py-2 px-4 rounded-lg ${isOnline ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
               {isOnline ? <Wifi className="h-4 w-4" /> : <WifiOff className="h-4 w-4" />}
-              <span className="text-sm">{isOnline ? 'متصل بالإنترنت' : 'غير متصل'}</span>
+              <span className="text-sm">{isOnline ? t('متصل بالإنترنت') : t('غير متصل')}</span>
             </div>
 
             <div>
-              <label className="text-sm font-medium mb-2 block">رقم الهاتف</label>
+              <label className="text-sm font-medium mb-2 block">{t('رقم الهاتف')}</label>
               <Input
                 type="tel"
                 placeholder="07xxxxxxxxx"
@@ -409,7 +409,7 @@ export default function DriverApp() {
               />
             </div>
             <div>
-              <label className="text-sm font-medium mb-2 block">الرمز السري (PIN)</label>
+              <label className="text-sm font-medium mb-2 block">{t('الرمز السري')} (PIN)</label>
               <Input
                 type="password"
                 placeholder="****"
@@ -429,13 +429,13 @@ export default function DriverApp() {
             >
               {loading ? (
                 <>
-                  <Loader2 className="h-5 w-5 animate-spin ml-2" />
-                  جاري التحقق...
+                  <Loader2 className={`h-5 w-5 animate-spin ${isRTL ? 'ml-2' : 'mr-2'}`} />
+                  {t('جاري التحقق...')}
                 </>
               ) : (
                 <>
-                  <LogIn className="h-5 w-5 ml-2" />
-                  تسجيل الدخول
+                  <LogIn className={`h-5 w-5 ${isRTL ? 'ml-2' : 'mr-2'}`} />
+                  {t('تسجيل الدخول')}
                 </>
               )}
             </Button>
@@ -447,8 +447,8 @@ export default function DriverApp() {
                 variant="outline"
                 className="w-full h-12 border-2 border-blue-500 text-blue-600"
               >
-                <Download className="h-5 w-5 ml-2" />
-                تثبيت التطبيق على جهازك
+                <Download className={`h-5 w-5 ${isRTL ? 'ml-2' : 'mr-2'}`} />
+                {t('تثبيت التطبيق على جهازك')}
               </Button>
             )}
           </CardContent>
