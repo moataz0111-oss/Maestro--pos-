@@ -13,7 +13,7 @@ import requests
 import os
 import uuid
 
-BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://restomate-6.preview.emergentagent.com').rstrip('/')
+BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://menumasters-11.preview.emergentagent.com').rstrip('/')
 
 class TestBranchOrdersRecipeSystem:
     """Tests for Branch Orders with Recipe System"""

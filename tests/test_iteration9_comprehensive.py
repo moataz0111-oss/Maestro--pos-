@@ -11,7 +11,7 @@ import os
 import uuid
 from datetime import datetime
 
-BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://restomate-6.preview.emergentagent.com').rstrip('/')
+BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://menumasters-11.preview.emergentagent.com').rstrip('/')
 
 # Test credentials from review request
 SUPER_ADMIN = {"email": "owner@maestroegp.com", "password": "owner123", "secret_key": "271018"}
