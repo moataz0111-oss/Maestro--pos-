@@ -885,7 +885,7 @@ export default function POS() {
             <Button variant="ghost" size="icon" onClick={() => navigate('/dashboard')}>
               <ArrowRight className="h-5 w-5" />
             </Button>
-            <h1 className="text-xl font-bold font-cairo text-foreground">نقاط البيع</h1>
+            <h1 className="text-xl font-bold font-cairo text-foreground">{t('نقطة البيع')}</h1>
             
             {/* اختيار الفرع */}
             <div className="flex items-center gap-2">
