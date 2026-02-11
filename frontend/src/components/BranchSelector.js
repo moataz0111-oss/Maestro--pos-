@@ -1,6 +1,7 @@
 import React from 'react';
 import { useBranch } from '../context/BranchContext';
 import { useAuth } from '../context/AuthContext';
+import { useTranslation } from '../hooks/useTranslation';
 import {
   Select,
   SelectContent,
@@ -12,6 +13,7 @@ import { Building2 } from 'lucide-react';
 
 export default function BranchSelector({ className = '', showLabel = false, showPendingCount = true }) {
   const { user, hasRole } = useAuth();
+  const { t } = useTranslation();
   const { 
     branches, 
     selectedBranchId, 
@@ -45,7 +47,7 @@ export default function BranchSelector({ className = '', showLabel = false, show
           className="w-[180px] h-9 bg-card/50 border-border/50 text-sm relative"
           data-testid="branch-selector"
         >
-          <SelectValue placeholder="اختر الفرع" />
+          <SelectValue placeholder={t('اختر الفرع')} />
           {/* عرض عدد الطلبات المعلقة للفرع المحدد */}
           {showPendingCount && selectedBranchId === 'all' && totalPendingOrders > 0 && (
             <span className="absolute -top-2 -left-2 min-w-[20px] h-5 px-1.5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center font-bold">
@@ -62,7 +64,7 @@ export default function BranchSelector({ className = '', showLabel = false, show
           {canSelectAllBranches() && (
             <SelectItem value="all" data-testid="branch-option-all">
               <div className="flex items-center justify-between w-full gap-3">
-                <span>جميع الفروع</span>
+                <span>{t('جميع الفروع')}</span>
                 {showPendingCount && totalPendingOrders > 0 && (
                   <span className="min-w-[20px] h-5 px-1.5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center font-bold">
                     {totalPendingOrders}
