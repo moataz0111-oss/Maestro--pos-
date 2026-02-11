@@ -1379,7 +1379,7 @@ export default function Settings() {
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="text-center">
           <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-          <p className="text-muted-foreground">جاري التحميل...</p>
+          <p className="text-muted-foreground">{t('جاري التحميل...')}</p>
         </div>
       </div>
     );
@@ -1752,7 +1752,7 @@ export default function Settings() {
                         <div className="w-8 h-8 bg-blue-500/10 rounded-lg flex items-center justify-center">
                           <LayoutGrid className="h-4 w-4 text-blue-500" />
                         </div>
-                        <span className="text-sm font-medium text-foreground">الطاولات</span>
+                        <span className="text-sm font-medium text-foreground">{t('الطاولات')}</span>
                       </div>
                       <Switch
                         checked={dashboardSettings.showTables !== false}
@@ -1766,7 +1766,7 @@ export default function Settings() {
                         <div className="w-8 h-8 bg-amber-500/10 rounded-lg flex items-center justify-center">
                           <Package className="h-4 w-4 text-amber-500" />
                         </div>
-                        <span className="text-sm font-medium text-foreground">إدارة الطلبات</span>
+                        <span className="text-sm font-medium text-foreground">{t('إدارة الطلبات')}</span>
                       </div>
                       <Switch
                         checked={dashboardSettings.showOrders !== false}
@@ -1780,7 +1780,7 @@ export default function Settings() {
                         <div className="w-8 h-8 bg-yellow-500/10 rounded-lg flex items-center justify-center">
                           <ChefHat className="h-4 w-4 text-yellow-500" />
                         </div>
-                        <span className="text-sm font-medium text-foreground">شاشة المطبخ</span>
+                        <span className="text-sm font-medium text-foreground">{t('شاشة المطبخ')}</span>
                       </div>
                       <Switch
                         checked={dashboardSettings.showKitchen !== false}
@@ -1794,7 +1794,7 @@ export default function Settings() {
                         <div className="w-8 h-8 bg-amber-500/10 rounded-lg flex items-center justify-center">
                           <BarChart className="h-4 w-4 text-amber-500" />
                         </div>
-                        <span className="text-sm font-medium text-foreground">التقارير</span>
+                        <span className="text-sm font-medium text-foreground">{t('التقارير')}</span>
                       </div>
                       <Switch
                         checked={dashboardSettings.showReports !== false}
@@ -1808,7 +1808,7 @@ export default function Settings() {
                         <div className="w-8 h-8 bg-emerald-500/10 rounded-lg flex items-center justify-center">
                           <PieChart className="h-4 w-4 text-emerald-500" />
                         </div>
-                        <span className="text-sm font-medium text-foreground">التقارير الذكية</span>
+                        <span className="text-sm font-medium text-foreground">{t('التقارير الذكية')}</span>
                       </div>
                       <Switch
                         checked={dashboardSettings.showSmartReports !== false}
@@ -1822,7 +1822,7 @@ export default function Settings() {
                         <div className="w-8 h-8 bg-yellow-500/10 rounded-lg flex items-center justify-center">
                           <Star className="h-4 w-4 text-yellow-500" />
                         </div>
-                        <span className="text-sm font-medium text-foreground">التقييمات</span>
+                        <span className="text-sm font-medium text-foreground">{t('التقييمات')}</span>
                       </div>
                       <Switch
                         checked={dashboardSettings.showRatings !== false}
@@ -1836,7 +1836,7 @@ export default function Settings() {
                         <div className="w-8 h-8 bg-red-500/10 rounded-lg flex items-center justify-center">
                           <DollarSign className="h-4 w-4 text-red-500" />
                         </div>
-                        <span className="text-sm font-medium text-foreground">المصاريف</span>
+                        <span className="text-sm font-medium text-foreground">{t('المصاريف')}</span>
                       </div>
                       <Switch
                         checked={dashboardSettings.showExpenses !== false}
@@ -1850,7 +1850,7 @@ export default function Settings() {
                         <div className="w-8 h-8 bg-blue-600/10 rounded-lg flex items-center justify-center">
                           <ShoppingBag className="h-4 w-4 text-blue-600" />
                         </div>
-                        <span className="text-sm font-medium text-foreground">المشتريات</span>
+                        <span className="text-sm font-medium text-foreground">{t('المشتريات')}</span>
                       </div>
                       <Switch
                         checked={dashboardSettings.showPurchasing !== false}
@@ -1864,7 +1864,7 @@ export default function Settings() {
                         <div className="w-8 h-8 bg-indigo-500/10 rounded-lg flex items-center justify-center">
                           <Warehouse className="h-4 w-4 text-indigo-500" />
                         </div>
-                        <span className="text-sm font-medium text-foreground">المخزن والتصنيع</span>
+                        <span className="text-sm font-medium text-foreground">{t('المخزن والتصنيع')}</span>
                       </div>
                       <Switch
                         checked={dashboardSettings.showWarehouse !== false}
@@ -1878,7 +1878,7 @@ export default function Settings() {
                         <div className="w-8 h-8 bg-lime-500/10 rounded-lg flex items-center justify-center">
                           <Truck className="h-4 w-4 text-lime-500" />
                         </div>
-                        <span className="text-sm font-medium text-foreground">طلبات الفروع</span>
+                        <span className="text-sm font-medium text-foreground">{t('طلبات الفروع')}</span>
                       </div>
                       <Switch
                         checked={dashboardSettings.showBranchOrders !== false}
@@ -1892,7 +1892,7 @@ export default function Settings() {
                         <div className="w-8 h-8 bg-purple-500/10 rounded-lg flex items-center justify-center">
                           <Package className="h-4 w-4 text-purple-500" />
                         </div>
-                        <span className="text-sm font-medium text-foreground">تقارير المخزون</span>
+                        <span className="text-sm font-medium text-foreground">{t('تقارير المخزون')}</span>
                       </div>
                       <Switch
                         checked={dashboardSettings.showInventoryReports !== false}
@@ -1906,7 +1906,7 @@ export default function Settings() {
                         <div className="w-8 h-8 bg-orange-600/10 rounded-lg flex items-center justify-center">
                           <Truck className="h-4 w-4 text-orange-600" />
                         </div>
-                        <span className="text-sm font-medium text-foreground">التوصيل</span>
+                        <span className="text-sm font-medium text-foreground">{t('التوصيل')}</span>
                       </div>
                       <Switch
                         checked={dashboardSettings.showDelivery !== false}
@@ -1920,7 +1920,7 @@ export default function Settings() {
                         <div className="w-8 h-8 bg-rose-500/10 rounded-lg flex items-center justify-center">
                           <Calendar className="h-4 w-4 text-rose-500" />
                         </div>
-                        <span className="text-sm font-medium text-foreground">الحجوزات</span>
+                        <span className="text-sm font-medium text-foreground">{t('الحجوزات')}</span>
                       </div>
                       <Switch
                         checked={dashboardSettings.showReservations !== false}
@@ -1934,7 +1934,7 @@ export default function Settings() {
                         <div className="w-8 h-8 bg-green-500/10 rounded-lg flex items-center justify-center">
                           <Users className="h-4 w-4 text-green-500" />
                         </div>
-                        <span className="text-sm font-medium text-foreground">الموارد البشرية</span>
+                        <span className="text-sm font-medium text-foreground">{t('الموارد البشرية')}</span>
                       </div>
                       <Switch
                         checked={dashboardSettings.showHR !== false}
@@ -1948,7 +1948,7 @@ export default function Settings() {
                         <div className="w-8 h-8 bg-cyan-500/10 rounded-lg flex items-center justify-center">
                           <Phone className="h-4 w-4 text-cyan-500" />
                         </div>
-                        <span className="text-sm font-medium text-foreground">سجل المكالمات</span>
+                        <span className="text-sm font-medium text-foreground">{t('سجل المكالمات')}</span>
                       </div>
                       <Switch
                         checked={dashboardSettings.showCallLogs !== false}
@@ -1962,7 +1962,7 @@ export default function Settings() {
                         <div className="w-8 h-8 bg-pink-500/10 rounded-lg flex items-center justify-center">
                           <Gift className="h-4 w-4 text-pink-500" />
                         </div>
-                        <span className="text-sm font-medium text-foreground">برنامج الولاء</span>
+                        <span className="text-sm font-medium text-foreground">{t('برنامج الولاء')}</span>
                       </div>
                       <Switch
                         checked={dashboardSettings.showLoyalty !== false}
@@ -1976,7 +1976,7 @@ export default function Settings() {
                         <div className="w-8 h-8 bg-violet-500/10 rounded-lg flex items-center justify-center">
                           <Ticket className="h-4 w-4 text-violet-500" />
                         </div>
-                        <span className="text-sm font-medium text-foreground">الكوبونات</span>
+                        <span className="text-sm font-medium text-foreground">{t('الكوبونات')}</span>
                       </div>
                       <Switch
                         checked={dashboardSettings.showCoupons !== false}
@@ -1990,7 +1990,7 @@ export default function Settings() {
                         <div className="w-8 h-8 bg-gray-500/10 rounded-lg flex items-center justify-center">
                           <SettingsIcon className="h-4 w-4 text-gray-500" />
                         </div>
-                        <span className="text-sm font-medium text-foreground">الإعدادات</span>
+                        <span className="text-sm font-medium text-foreground">{t('الإعدادات')}</span>
                       </div>
                       <Switch
                         checked={dashboardSettings.showSettings !== false}
@@ -2003,9 +2003,7 @@ export default function Settings() {
                     onClick={handleSaveDashboardSettings}
                     className="w-full bg-primary text-primary-foreground"
                   >
-                    <Save className="h-4 w-4 ml-2" />
-                    حفظ الإعدادات
-                  </Button>
+                    <Save className="h-4 w-4 ml-2" />{t('حفظ الإعدادات')}</Button>
                 </CardContent>
               </Card>
             </TabsContent>
@@ -2018,43 +2016,35 @@ export default function Settings() {
               <Card className="border-border/50 bg-card">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-foreground">
-                    <Users className="h-5 w-5" />
-                    إدارة المستخدمين والموظفين
-                  </CardTitle>
+                    <Users className="h-5 w-5" />{t('إدارة المستخدمين والموظفين')}</CardTitle>
                 </CardHeader>
                 <CardContent>
                   {/* تبويبات فرعية */}
                   <Tabs defaultValue="system_users" className="w-full">
                     <TabsList className="grid w-full grid-cols-2 mb-4">
                       <TabsTrigger value="system_users">
-                        <Shield className="h-4 w-4 ml-2" />
-                        مستخدمي النظام
-                      </TabsTrigger>
+                        <Shield className="h-4 w-4 ml-2" />{t('مستخدمي النظام')}</TabsTrigger>
                       <TabsTrigger value="employees">
-                        <UserCog className="h-4 w-4 ml-2" />
-                        الموظفين
-                      </TabsTrigger>
+                        <UserCog className="h-4 w-4 ml-2" />{t('الموظفين')}</TabsTrigger>
                     </TabsList>
                     
                     {/* قسم مستخدمي النظام */}
                     <TabsContent value="system_users" className="space-y-4">
                       <div className="flex justify-between items-center">
-                        <p className="text-sm text-muted-foreground">إدارة حسابات الدخول للنظام وصلاحياتهم</p>
+                        <p className="text-sm text-muted-foreground">{t('إدارة حسابات الدخول للنظام وصلاحياتهم')}</p>
                         <Dialog open={userDialogOpen} onOpenChange={setUserDialogOpen}>
                           <DialogTrigger asChild>
                             <Button className="bg-primary text-primary-foreground">
-                              <Plus className="h-4 w-4 ml-2" />
-                              إضافة مستخدم
-                            </Button>
+                              <Plus className="h-4 w-4 ml-2" />{t('إضافة مستخدم')}</Button>
                           </DialogTrigger>
                           <DialogContent>
                             <DialogHeader>
-                              <DialogTitle className="text-foreground">إضافة مستخدم جديد</DialogTitle>
+                              <DialogTitle className="text-foreground">{t('إضافة مستخدم جديد')}</DialogTitle>
                             </DialogHeader>
                             <form onSubmit={handleCreateUser} className="space-y-4">
                               <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                  <Label className="text-foreground">اسم المستخدم</Label>
+                                  <Label className="text-foreground">{t('اسم المستخدم')}</Label>
                                   <Input
                                     value={userForm.username}
                                     onChange={(e) => setUserForm({ ...userForm, username: e.target.value })}
@@ -2063,7 +2053,7 @@ export default function Settings() {
                                   />
                                 </div>
                                 <div>
-                                  <Label className="text-foreground">الاسم الكامل</Label>
+                                  <Label className="text-foreground">{t('الاسم الكامل')}</Label>
                                   <Input
                                     value={userForm.full_name}
                                     onChange={(e) => setUserForm({ ...userForm, full_name: e.target.value })}
@@ -2073,7 +2063,7 @@ export default function Settings() {
                                 </div>
                               </div>
                               <div>
-                                <Label className="text-foreground">البريد الإلكتروني</Label>
+                                <Label className="text-foreground">{t('البريد الإلكتروني')}</Label>
                                 <Input
                                   type="email"
                                   value={userForm.email}
@@ -2083,7 +2073,7 @@ export default function Settings() {
                                 />
                               </div>
                               <div>
-                                <Label className="text-foreground">كلمة المرور</Label>
+                                <Label className="text-foreground">{t('كلمة المرور')}</Label>
                                 <Input
                                   type="password"
                                   value={userForm.password}
@@ -2094,25 +2084,25 @@ export default function Settings() {
                               </div>
                               <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                  <Label className="text-foreground">الصلاحية</Label>
+                                  <Label className="text-foreground">{t('الصلاحية')}</Label>
                                   <Select value={userForm.role} onValueChange={(v) => setUserForm({ ...userForm, role: v })}>
                                     <SelectTrigger className="mt-1">
                                       <SelectValue />
                                     </SelectTrigger>
                                     <SelectContent>
-                                      <SelectItem value="cashier">كاشير</SelectItem>
-                                      <SelectItem value="waiter">ويتر</SelectItem>
-                                      <SelectItem value="kitchen">مطبخ</SelectItem>
-                                      <SelectItem value="manager">مدير</SelectItem>
-                                      <SelectItem value="admin">مدير عام</SelectItem>
+                                      <SelectItem value="cashier">{t('كاشير')}</SelectItem>
+                                      <SelectItem value="waiter">{t('ويتر')}</SelectItem>
+                                      <SelectItem value="kitchen">{t('مطبخ')}</SelectItem>
+                                      <SelectItem value="manager">{t('مدير')}</SelectItem>
+                                      <SelectItem value="admin">{t('مدير عام')}</SelectItem>
                                     </SelectContent>
                                   </Select>
                                 </div>
                                 <div>
-                                  <Label className="text-foreground">الفرع</Label>
+                                  <Label className="text-foreground">{t('الفرع')}</Label>
                                   <Select value={userForm.branch_id} onValueChange={(v) => setUserForm({ ...userForm, branch_id: v })}>
                                     <SelectTrigger className="mt-1">
-                                      <SelectValue placeholder="اختر الفرع" />
+                                      <SelectValue placeholder={t('اختر الفرع')} />
                                     </SelectTrigger>
                                     <SelectContent>
                                       {branches.map(branch => (
@@ -2122,9 +2112,7 @@ export default function Settings() {
                                   </Select>
                                 </div>
                               </div>
-                              <Button type="submit" className="w-full bg-primary text-primary-foreground">
-                                إنشاء المستخدم
-                              </Button>
+                              <Button type="submit" className="w-full bg-primary text-primary-foreground">{t('إنشاء المستخدم')}</Button>
                             </form>
                           </DialogContent>
                         </Dialog>
@@ -2135,11 +2123,11 @@ export default function Settings() {
                         <Table>
                           <TableHeader>
                             <TableRow className="bg-muted/50">
-                              <TableHead className="text-right">المستخدم</TableHead>
-                              <TableHead className="text-right">البريد</TableHead>
-                              <TableHead className="text-right">الصلاحية</TableHead>
-                              <TableHead className="text-right">الفرع</TableHead>
-                              <TableHead className="text-right">الإجراءات</TableHead>
+                              <TableHead className="text-right">{t('المستخدم')}</TableHead>
+                              <TableHead className="text-right">{t('البريد')}</TableHead>
+                              <TableHead className="text-right">{t('الصلاحية')}</TableHead>
+                              <TableHead className="text-right">{t('الفرع')}</TableHead>
+                              <TableHead className="text-right">{t('الإجراءات')}</TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
@@ -2192,10 +2180,10 @@ export default function Settings() {
                           {/* فلترة بالفرع */}
                           <Select value={staffFilter.branch_id} onValueChange={(val) => setStaffFilter({...staffFilter, branch_id: val === 'all' ? '' : val})}>
                             <SelectTrigger className="w-[180px]">
-                              <SelectValue placeholder="جميع الفروع" />
+                              <SelectValue placeholder={t('جميع الفروع')} />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="all">جميع الفروع</SelectItem>
+                              <SelectItem value="all">{t('جميع الفروع')}</SelectItem>
                               {branches.map(branch => (
                                 <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>
                               ))}
@@ -2204,10 +2192,10 @@ export default function Settings() {
                           {/* فلترة بالدور */}
                           <Select value={staffFilter.role} onValueChange={(val) => setStaffFilter({...staffFilter, role: val === 'all' ? '' : val})}>
                             <SelectTrigger className="w-[150px]">
-                              <SelectValue placeholder="جميع الأدوار" />
+                              <SelectValue placeholder={t('جميع الأدوار')} />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="all">جميع الأدوار</SelectItem>
+                              <SelectItem value="all">{t('جميع الأدوار')}</SelectItem>
                               {Object.entries(staffRoles).map(([key, name]) => (
                                 <SelectItem key={key} value={key}>{name}</SelectItem>
                               ))}
@@ -2217,17 +2205,15 @@ export default function Settings() {
                         <Dialog open={staffDialogOpen} onOpenChange={setStaffDialogOpen}>
                           <DialogTrigger asChild>
                             <Button className="bg-primary text-primary-foreground">
-                              <Plus className="h-4 w-4 ml-2" />
-                              إضافة موظف
-                            </Button>
+                              <Plus className="h-4 w-4 ml-2" />{t('إضافة موظف')}</Button>
                           </DialogTrigger>
                           <DialogContent className="max-w-md">
                             <DialogHeader>
-                              <DialogTitle className="text-foreground">إضافة موظف جديد</DialogTitle>
+                              <DialogTitle className="text-foreground">{t('إضافة موظف جديد')}</DialogTitle>
                             </DialogHeader>
                             <form onSubmit={handleCreateStaff} className="space-y-4">
                               <div>
-                                <Label className="text-foreground">الاسم الكامل *</Label>
+                                <Label className="text-foreground">{t('الاسم الكامل *')}</Label>
                                 <Input
                                   value={staffForm.full_name}
                                   onChange={(e) => setStaffForm({ ...staffForm, full_name: e.target.value })}
@@ -2236,7 +2222,7 @@ export default function Settings() {
                                 />
                               </div>
                               <div>
-                                <Label className="text-foreground">البريد الإلكتروني *</Label>
+                                <Label className="text-foreground">{t('البريد الإلكتروني *')}</Label>
                                 <Input
                                   type="email"
                                   value={staffForm.email}
@@ -2246,7 +2232,7 @@ export default function Settings() {
                                 />
                               </div>
                               <div>
-                                <Label className="text-foreground">رقم الهاتف</Label>
+                                <Label className="text-foreground">{t('رقم الهاتف')}</Label>
                                 <Input
                                   value={staffForm.phone}
                               onChange={(e) => setStaffForm({ ...staffForm, phone: e.target.value })}
@@ -2254,7 +2240,7 @@ export default function Settings() {
                             />
                           </div>
                           <div>
-                            <Label className="text-foreground">كلمة المرور *</Label>
+                            <Label className="text-foreground">{t('كلمة المرور *')}</Label>
                             <Input
                               type="password"
                               value={staffForm.password}
@@ -2264,7 +2250,7 @@ export default function Settings() {
                             />
                           </div>
                           <div>
-                            <Label className="text-foreground">الدور الوظيفي *</Label>
+                            <Label className="text-foreground">{t('الدور الوظيفي *')}</Label>
                             <Select value={staffForm.role} onValueChange={(val) => setStaffForm({...staffForm, role: val})}>
                               <SelectTrigger className="bg-background border-input">
                                 <SelectValue />
@@ -2277,10 +2263,10 @@ export default function Settings() {
                             </Select>
                           </div>
                           <div>
-                            <Label className="text-foreground">الفرع *</Label>
+                            <Label className="text-foreground">{t('الفرع *')}</Label>
                             <Select value={staffForm.branch_id} onValueChange={(val) => setStaffForm({...staffForm, branch_id: val})}>
                               <SelectTrigger className="bg-background border-input">
-                                <SelectValue placeholder="اختر الفرع" />
+                                <SelectValue placeholder={t('اختر الفرع')} />
                               </SelectTrigger>
                               <SelectContent>
                                 {branches.map(branch => (
@@ -2288,14 +2274,14 @@ export default function Settings() {
                                 ))}
                               </SelectContent>
                             </Select>
-                            <p className="text-xs text-muted-foreground mt-1">الموظف سيرى فقط بيانات هذا الفرع</p>
+                            <p className="text-xs text-muted-foreground mt-1">{t('الموظف سيرى فقط بيانات هذا الفرع')}</p>
                           </div>
                           <div>
-                            <Label className="text-foreground">المسمى الوظيفي (اختياري)</Label>
+                            <Label className="text-foreground">{t('المسمى الوظيفي (اختياري)')}</Label>
                             <Input
                               value={staffForm.job_title}
                               onChange={(e) => setStaffForm({ ...staffForm, job_title: e.target.value })}
-                              placeholder="مثال: كاشير الوردية الصباحية"
+                              placeholder={t('مثال: كاشير الوردية الصباحية')}
                               className="bg-background border-input"
                             />
                           </div>
@@ -2303,11 +2289,11 @@ export default function Settings() {
                           {/* صلاحيات الموظف - تظهر فقط للأدوار التي تحتاجها */}
                           {['cashier', 'supervisor', 'manager', 'admin'].includes(staffForm.role) && (
                             <div>
-                              <Label className="text-foreground mb-2 block">الصلاحيات</Label>
+                              <Label className="text-foreground mb-2 block">{t('الصلاحيات')}</Label>
                               <div className="border rounded-lg p-3 max-h-64 overflow-y-auto bg-muted/30 space-y-4">
                                 {/* صلاحيات الصفحات */}
                                 <div>
-                                  <h4 className="text-sm font-medium text-foreground mb-2 border-b pb-1">📄 الصفحات الرئيسية</h4>
+                                  <h4 className="text-sm font-medium text-foreground mb-2 border-b pb-1">{t('📄 الصفحات الرئيسية')}</h4>
                                   <div className="grid grid-cols-2 gap-2">
                                     {STAFF_PERMISSIONS.filter(p => p.group === 'pages').map(perm => (
                                       <div key={perm.id} className="flex items-center gap-2">
@@ -2327,7 +2313,7 @@ export default function Settings() {
                                 </div>
                                 {/* صلاحيات الإعدادات */}
                                 <div>
-                                  <h4 className="text-sm font-medium text-foreground mb-2 border-b pb-1">⚙️ الإعدادات</h4>
+                                  <h4 className="text-sm font-medium text-foreground mb-2 border-b pb-1">{t('⚙️ الإعدادات')}</h4>
                                   <div className="grid grid-cols-2 gap-2">
                                     {STAFF_PERMISSIONS.filter(p => p.group === 'settings').map(perm => (
                                       <div key={perm.id} className="flex items-center gap-2">
@@ -2346,7 +2332,7 @@ export default function Settings() {
                                   </div>
                                 </div>
                               </div>
-                              <p className="text-xs text-muted-foreground mt-1">حدد الصفحات والإعدادات التي يمكن للموظف رؤيتها</p>
+                              <p className="text-xs text-muted-foreground mt-1">{t('حدد الصفحات والإعدادات التي يمكن للموظف رؤيتها')}</p>
                             </div>
                           )}
                           
@@ -2354,9 +2340,7 @@ export default function Settings() {
                           {['delivery', 'waiter', 'kitchen'].includes(staffForm.role) && (
                             <div className="p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg">
                               <p className="text-sm text-blue-500 flex items-center gap-2">
-                                <AlertCircle className="h-4 w-4" />
-                                هذا الدور له صلاحيات محددة مسبقاً ولا يحتاج تخصيص إضافي
-                              </p>
+                                <AlertCircle className="h-4 w-4" />{t('هذا الدور له صلاحيات محددة مسبقاً ولا يحتاج تخصيص إضافي')}</p>
                               <p className="text-xs text-muted-foreground mt-1">
                                 {staffForm.role === 'delivery' && 'سائق التوصيل يرى فقط الطلبات المسندة إليه من تطبيق السائق'}
                                 {staffForm.role === 'waiter' && 'الويتر يرى فقط الطاولات والطلبات'}
@@ -2366,12 +2350,8 @@ export default function Settings() {
                           )}
                           
                           <div className="flex gap-2 pt-4">
-                            <Button type="button" variant="outline" onClick={() => setStaffDialogOpen(false)} className="flex-1">
-                              إلغاء
-                            </Button>
-                            <Button type="submit" className="flex-1 bg-primary text-primary-foreground">
-                              إضافة الموظف
-                            </Button>
+                            <Button type="button" variant="outline" onClick={() => setStaffDialogOpen(false)} className="flex-1">{t('إلغاء')}</Button>
+                            <Button type="submit" className="flex-1 bg-primary text-primary-foreground">{t('إضافة الموظف')}</Button>
                           </div>
                         </form>
                       </DialogContent>
@@ -2383,12 +2363,12 @@ export default function Settings() {
                         <Table>
                           <TableHeader>
                             <TableRow className="bg-muted/50">
-                              <TableHead className="text-right">الاسم</TableHead>
-                              <TableHead className="text-right">البريد</TableHead>
-                              <TableHead className="text-right">الدور</TableHead>
-                              <TableHead className="text-right">الفرع</TableHead>
-                              <TableHead className="text-right">الحالة</TableHead>
-                              <TableHead className="text-right">الإجراءات</TableHead>
+                              <TableHead className="text-right">{t('الاسم')}</TableHead>
+                              <TableHead className="text-right">{t('البريد')}</TableHead>
+                              <TableHead className="text-right">{t('الدور')}</TableHead>
+                              <TableHead className="text-right">{t('الفرع')}</TableHead>
+                              <TableHead className="text-right">{t('الحالة')}</TableHead>
+                              <TableHead className="text-right">{t('الإجراءات')}</TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
@@ -2436,13 +2416,13 @@ export default function Settings() {
               <Dialog open={editUserDialogOpen} onOpenChange={setEditUserDialogOpen}>
                 <DialogContent className="max-w-2xl">
                   <DialogHeader>
-                    <DialogTitle className="text-foreground">تعديل المستخدم</DialogTitle>
+                    <DialogTitle className="text-foreground">{t('تعديل المستخدم')}</DialogTitle>
                   </DialogHeader>
                   {editUserForm && (
                     <form onSubmit={handleUpdateUser} className="space-y-4">
                       <div className="grid grid-cols-2 gap-4">
                         <div>
-                          <Label className="text-foreground">اسم المستخدم</Label>
+                          <Label className="text-foreground">{t('اسم المستخدم')}</Label>
                           <Input
                             value={editUserForm.username}
                             onChange={(e) => setEditUserForm({ ...editUserForm, username: e.target.value })}
@@ -2452,7 +2432,7 @@ export default function Settings() {
                           />
                         </div>
                         <div>
-                          <Label className="text-foreground">البريد الإلكتروني</Label>
+                          <Label className="text-foreground">{t('البريد الإلكتروني')}</Label>
                           <Input
                             type="email"
                             value={editUserForm.email}
@@ -2465,7 +2445,7 @@ export default function Settings() {
                       </div>
                       <div className="grid grid-cols-2 gap-4">
                         <div>
-                          <Label className="text-foreground">الاسم الكامل</Label>
+                          <Label className="text-foreground">{t('الاسم الكامل')}</Label>
                           <Input
                             value={editUserForm.full_name}
                             onChange={(e) => setEditUserForm({ ...editUserForm, full_name: e.target.value })}
@@ -2474,28 +2454,28 @@ export default function Settings() {
                           />
                         </div>
                         <div>
-                          <Label className="text-foreground">الصلاحية</Label>
+                          <Label className="text-foreground">{t('الصلاحية')}</Label>
                           <Select value={editUserForm.role} onValueChange={(v) => setEditUserForm({ ...editUserForm, role: v })}>
                             <SelectTrigger className="mt-1">
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="admin">مدير النظام</SelectItem>
-                              <SelectItem value="manager">مدير</SelectItem>
-                              <SelectItem value="cashier">كاشير</SelectItem>
+                              <SelectItem value="admin">{t('مدير النظام')}</SelectItem>
+                              <SelectItem value="manager">{t('مدير')}</SelectItem>
+                              <SelectItem value="cashier">{t('كاشير')}</SelectItem>
                             </SelectContent>
                           </Select>
                         </div>
                       </div>
                       <div className="grid grid-cols-2 gap-4">
                         <div>
-                          <Label className="text-foreground">الفرع</Label>
+                          <Label className="text-foreground">{t('الفرع')}</Label>
                           <Select value={editUserForm.branch_id || 'none'} onValueChange={(v) => setEditUserForm({ ...editUserForm, branch_id: v === 'none' ? '' : v })}>
                             <SelectTrigger className="mt-1">
-                              <SelectValue placeholder="اختر فرع" />
+                              <SelectValue placeholder={t('اختر فرع')} />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="none">بدون فرع</SelectItem>
+                              <SelectItem value="none">{t('بدون فرع')}</SelectItem>
                               {branches.map(branch => (
                                 <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>
                               ))}
@@ -2507,19 +2487,17 @@ export default function Settings() {
                             checked={editUserForm.is_active}
                             onCheckedChange={(checked) => setEditUserForm({ ...editUserForm, is_active: checked })}
                           />
-                          <Label className="text-foreground">الحساب مفعل</Label>
+                          <Label className="text-foreground">{t('الحساب مفعل')}</Label>
                         </div>
                       </div>
                       
                       {/* تغيير كلمة المرور */}
                       <div className="p-4 border rounded-lg bg-amber-500/10 border-amber-500/30">
-                        <Label className="text-foreground font-bold mb-2 flex items-center gap-2">
-                          🔐 تغيير كلمة المرور
-                        </Label>
-                        <p className="text-xs text-muted-foreground mb-3">اتركه فارغاً إذا لم تريد تغيير كلمة المرور</p>
+                        <Label className="text-foreground font-bold mb-2 flex items-center gap-2">{t('🔐 تغيير كلمة المرور')}</Label>
+                        <p className="text-xs text-muted-foreground mb-3">{t('اتركه فارغاً إذا لم تريد تغيير كلمة المرور')}</p>
                         <Input
                           type="password"
-                          placeholder="كلمة المرور الجديدة"
+                          placeholder={t('كلمة المرور الجديدة')}
                           value={editUserForm.new_password || ''}
                           onChange={(e) => setEditUserForm({ ...editUserForm, new_password: e.target.value })}
                           className="bg-background"
@@ -2528,7 +2506,7 @@ export default function Settings() {
                       
                       {/* Permissions */}
                       <div>
-                        <Label className="text-foreground mb-3 block">الصلاحيات المخصصة</Label>
+                        <Label className="text-foreground mb-3 block">{t('الصلاحيات المخصصة')}</Label>
                         <div className="max-h-[300px] overflow-y-auto space-y-4 pr-2 border rounded-lg p-3 bg-muted/30">
                           {PERMISSION_GROUPS.map(group => (
                             <div key={group}>
@@ -2555,12 +2533,8 @@ export default function Settings() {
                       </div>
                       
                       <div className="flex gap-2 pt-4">
-                        <Button type="button" variant="outline" onClick={() => setEditUserDialogOpen(false)} className="flex-1">
-                          إلغاء
-                        </Button>
-                        <Button type="submit" className="flex-1 bg-primary text-primary-foreground">
-                          حفظ التعديلات
-                        </Button>
+                        <Button type="button" variant="outline" onClick={() => setEditUserDialogOpen(false)} className="flex-1">{t('إلغاء')}</Button>
+                        <Button type="submit" className="flex-1 bg-primary text-primary-foreground">{t('حفظ التعديلات')}</Button>
                       </div>
                     </form>
                   )}
@@ -2571,12 +2545,12 @@ export default function Settings() {
               <Dialog open={editStaffDialogOpen} onOpenChange={setEditStaffDialogOpen}>
                 <DialogContent className="max-w-md">
                   <DialogHeader>
-                    <DialogTitle className="text-foreground">تعديل بيانات الموظف</DialogTitle>
+                    <DialogTitle className="text-foreground">{t('تعديل بيانات الموظف')}</DialogTitle>
                   </DialogHeader>
                   {editStaffForm && (
                     <form onSubmit={handleUpdateStaff} className="space-y-4">
                       <div>
-                        <Label className="text-foreground">الاسم الكامل</Label>
+                        <Label className="text-foreground">{t('الاسم الكامل')}</Label>
                         <Input
                           value={editStaffForm.full_name}
                           onChange={(e) => setEditStaffForm({ ...editStaffForm, full_name: e.target.value })}
@@ -2584,7 +2558,7 @@ export default function Settings() {
                         />
                       </div>
                       <div>
-                        <Label className="text-foreground">البريد الإلكتروني</Label>
+                        <Label className="text-foreground">{t('البريد الإلكتروني')}</Label>
                         <Input
                           type="email"
                           value={editStaffForm.email}
@@ -2593,7 +2567,7 @@ export default function Settings() {
                         />
                       </div>
                       <div>
-                        <Label className="text-foreground">الدور</Label>
+                        <Label className="text-foreground">{t('الدور')}</Label>
                         <Select value={editStaffForm.role} onValueChange={(val) => setEditStaffForm({...editStaffForm, role: val})}>
                           <SelectTrigger>
                             <SelectValue />
@@ -2606,7 +2580,7 @@ export default function Settings() {
                         </Select>
                       </div>
                       <div>
-                        <Label className="text-foreground">الفرع</Label>
+                        <Label className="text-foreground">{t('الفرع')}</Label>
                         <Select value={editStaffForm.branch_id} onValueChange={(val) => setEditStaffForm({...editStaffForm, branch_id: val})}>
                           <SelectTrigger>
                             <SelectValue />
@@ -2623,15 +2597,11 @@ export default function Settings() {
                           checked={editStaffForm.is_active !== false}
                           onCheckedChange={(checked) => setEditStaffForm({ ...editStaffForm, is_active: checked })}
                         />
-                        <Label className="text-foreground">الحساب نشط</Label>
+                        <Label className="text-foreground">{t('الحساب نشط')}</Label>
                       </div>
                       <div className="flex gap-2 pt-4">
-                        <Button type="button" variant="outline" onClick={() => setEditStaffDialogOpen(false)} className="flex-1">
-                          إلغاء
-                        </Button>
-                        <Button type="submit" className="flex-1 bg-primary text-primary-foreground">
-                          حفظ التعديلات
-                        </Button>
+                        <Button type="button" variant="outline" onClick={() => setEditStaffDialogOpen(false)} className="flex-1">{t('إلغاء')}</Button>
+                        <Button type="submit" className="flex-1 bg-primary text-primary-foreground">{t('حفظ التعديلات')}</Button>
                       </div>
                     </form>
                   )}
@@ -2646,23 +2616,19 @@ export default function Settings() {
               <Card className="border-border/50 bg-card">
                 <CardHeader className="flex flex-row items-center justify-between">
                   <CardTitle className="flex items-center gap-2 text-foreground">
-                    <Store className="h-5 w-5" />
-                    إدارة الفروع
-                  </CardTitle>
+                    <Store className="h-5 w-5" />{t('إدارة الفروع')}</CardTitle>
                   <Dialog open={branchDialogOpen} onOpenChange={setBranchDialogOpen}>
                     <DialogTrigger asChild>
                       <Button className="bg-primary text-primary-foreground">
-                        <Plus className="h-4 w-4 ml-2" />
-                        إضافة فرع
-                      </Button>
+                        <Plus className="h-4 w-4 ml-2" />{t('إضافة فرع')}</Button>
                     </DialogTrigger>
                     <DialogContent>
                       <DialogHeader>
-                        <DialogTitle className="text-foreground">إضافة فرع جديد</DialogTitle>
+                        <DialogTitle className="text-foreground">{t('إضافة فرع جديد')}</DialogTitle>
                       </DialogHeader>
                       <form onSubmit={handleCreateBranch} className="space-y-4">
                         <div>
-                          <Label className="text-foreground">اسم الفرع</Label>
+                          <Label className="text-foreground">{t('اسم الفرع')}</Label>
                           <Input
                             value={branchForm.name}
                             onChange={(e) => setBranchForm({ ...branchForm, name: e.target.value })}
@@ -2671,7 +2637,7 @@ export default function Settings() {
                           />
                         </div>
                         <div>
-                          <Label className="text-foreground">العنوان</Label>
+                          <Label className="text-foreground">{t('العنوان')}</Label>
                           <Input
                             value={branchForm.address}
                             onChange={(e) => setBranchForm({ ...branchForm, address: e.target.value })}
@@ -2681,7 +2647,7 @@ export default function Settings() {
                         </div>
                         <div className="grid grid-cols-2 gap-4">
                           <div>
-                            <Label className="text-foreground">الهاتف</Label>
+                            <Label className="text-foreground">{t('الهاتف')}</Label>
                             <Input
                               value={branchForm.phone}
                               onChange={(e) => setBranchForm({ ...branchForm, phone: e.target.value })}
@@ -2690,7 +2656,7 @@ export default function Settings() {
                             />
                           </div>
                           <div>
-                            <Label className="text-foreground">البريد الإلكتروني</Label>
+                            <Label className="text-foreground">{t('البريد الإلكتروني')}</Label>
                             <Input
                               type="email"
                               value={branchForm.email}
@@ -2700,12 +2666,8 @@ export default function Settings() {
                           </div>
                         </div>
                         <div className="flex gap-2 pt-4">
-                          <Button type="button" variant="outline" onClick={() => setBranchDialogOpen(false)} className="flex-1">
-                            إلغاء
-                          </Button>
-                          <Button type="submit" className="flex-1 bg-primary text-primary-foreground">
-                            إنشاء
-                          </Button>
+                          <Button type="button" variant="outline" onClick={() => setBranchDialogOpen(false)} className="flex-1">{t('إلغاء')}</Button>
+                          <Button type="submit" className="flex-1 bg-primary text-primary-foreground">{t('إنشاء')}</Button>
                         </div>
                       </form>
                     </DialogContent>
@@ -2753,12 +2715,12 @@ export default function Settings() {
               <Dialog open={editBranchDialogOpen} onOpenChange={setEditBranchDialogOpen}>
                 <DialogContent>
                   <DialogHeader>
-                    <DialogTitle className="text-foreground">تعديل الفرع</DialogTitle>
+                    <DialogTitle className="text-foreground">{t('تعديل الفرع')}</DialogTitle>
                   </DialogHeader>
                   {editBranchForm && (
                     <form onSubmit={handleUpdateBranch} className="space-y-4">
                       <div>
-                        <Label className="text-foreground">اسم الفرع</Label>
+                        <Label className="text-foreground">{t('اسم الفرع')}</Label>
                         <Input
                           value={editBranchForm.name}
                           onChange={(e) => setEditBranchForm({ ...editBranchForm, name: e.target.value })}
@@ -2767,7 +2729,7 @@ export default function Settings() {
                         />
                       </div>
                       <div>
-                        <Label className="text-foreground">العنوان</Label>
+                        <Label className="text-foreground">{t('العنوان')}</Label>
                         <Input
                           value={editBranchForm.address}
                           onChange={(e) => setEditBranchForm({ ...editBranchForm, address: e.target.value })}
@@ -2777,7 +2739,7 @@ export default function Settings() {
                       </div>
                       <div className="grid grid-cols-2 gap-4">
                         <div>
-                          <Label className="text-foreground">الهاتف</Label>
+                          <Label className="text-foreground">{t('الهاتف')}</Label>
                           <Input
                             value={editBranchForm.phone}
                             onChange={(e) => setEditBranchForm({ ...editBranchForm, phone: e.target.value })}
@@ -2786,7 +2748,7 @@ export default function Settings() {
                           />
                         </div>
                         <div>
-                          <Label className="text-foreground">البريد الإلكتروني</Label>
+                          <Label className="text-foreground">{t('البريد الإلكتروني')}</Label>
                           <Input
                             type="email"
                             value={editBranchForm.email}
@@ -2796,12 +2758,8 @@ export default function Settings() {
                         </div>
                       </div>
                       <div className="flex gap-2 pt-4">
-                        <Button type="button" variant="outline" onClick={() => setEditBranchDialogOpen(false)} className="flex-1">
-                          إلغاء
-                        </Button>
-                        <Button type="submit" className="flex-1 bg-primary text-primary-foreground">
-                          حفظ التعديلات
-                        </Button>
+                        <Button type="button" variant="outline" onClick={() => setEditBranchDialogOpen(false)} className="flex-1">{t('إلغاء')}</Button>
+                        <Button type="submit" className="flex-1 bg-primary text-primary-foreground">{t('حفظ التعديلات')}</Button>
                       </div>
                     </form>
                   )}
@@ -2816,34 +2774,30 @@ export default function Settings() {
               <Card className="border-border/50 bg-card">
                 <CardHeader className="flex flex-row items-center justify-between">
                   <CardTitle className="flex items-center gap-2 text-foreground">
-                    <Tag className="h-5 w-5" />
-                    إدارة الفئات
-                  </CardTitle>
+                    <Tag className="h-5 w-5" />{t('إدارة الفئات')}</CardTitle>
                   <Dialog open={categoryDialogOpen} onOpenChange={setCategoryDialogOpen}>
                     <DialogTrigger asChild>
                       <Button className="bg-primary text-primary-foreground">
-                        <Plus className="h-4 w-4 ml-2" />
-                        إضافة فئة
-                      </Button>
+                        <Plus className="h-4 w-4 ml-2" />{t('إضافة فئة')}</Button>
                     </DialogTrigger>
                     <DialogContent>
                       <DialogHeader>
-                        <DialogTitle className="text-foreground">إضافة فئة جديدة</DialogTitle>
+                        <DialogTitle className="text-foreground">{t('إضافة فئة جديدة')}</DialogTitle>
                       </DialogHeader>
                       <form onSubmit={handleCreateCategory} className="space-y-4">
                         <div className="grid grid-cols-2 gap-4">
                           <div>
-                            <Label className="text-foreground">اسم الفئة (عربي)</Label>
+                            <Label className="text-foreground">{t('اسم الفئة (عربي)')}</Label>
                             <Input
                               value={categoryForm.name}
                               onChange={(e) => setCategoryForm({ ...categoryForm, name: e.target.value })}
-                              placeholder="مشروبات ساخنة"
+                              placeholder={t('مشروبات ساخنة')}
                               required
                               className="mt-1"
                             />
                           </div>
                           <div>
-                            <Label className="text-foreground">اسم الفئة (إنجليزي)</Label>
+                            <Label className="text-foreground">{t('اسم الفئة (إنجليزي)')}</Label>
                             <Input
                               value={categoryForm.name_en}
                               onChange={(e) => setCategoryForm({ ...categoryForm, name_en: e.target.value })}
@@ -2863,7 +2817,7 @@ export default function Settings() {
                         </div>
                         <div className="grid grid-cols-3 gap-4">
                           <div>
-                            <Label className="text-foreground">الأيقونة</Label>
+                            <Label className="text-foreground">{t('الأيقونة')}</Label>
                             <Input
                               value={categoryForm.icon}
                               onChange={(e) => setCategoryForm({ ...categoryForm, icon: e.target.value })}
@@ -2872,7 +2826,7 @@ export default function Settings() {
                             />
                           </div>
                           <div>
-                            <Label className="text-foreground">اللون</Label>
+                            <Label className="text-foreground">{t('اللون')}</Label>
                             <Input
                               type="color"
                               value={categoryForm.color}
@@ -2881,7 +2835,7 @@ export default function Settings() {
                             />
                           </div>
                           <div>
-                            <Label className="text-foreground">الترتيب</Label>
+                            <Label className="text-foreground">{t('الترتيب')}</Label>
                             <Input
                               type="number"
                               value={categoryForm.sort_order}
@@ -2891,12 +2845,8 @@ export default function Settings() {
                           </div>
                         </div>
                         <div className="flex gap-2 pt-4">
-                          <Button type="button" variant="outline" onClick={() => setCategoryDialogOpen(false)} className="flex-1">
-                            إلغاء
-                          </Button>
-                          <Button type="submit" className="flex-1 bg-primary text-primary-foreground">
-                            إنشاء
-                          </Button>
+                          <Button type="button" variant="outline" onClick={() => setCategoryDialogOpen(false)} className="flex-1">{t('إلغاء')}</Button>
+                          <Button type="submit" className="flex-1 bg-primary text-primary-foreground">{t('إنشاء')}</Button>
                         </div>
                       </form>
                     </DialogContent>
@@ -2904,7 +2854,7 @@ export default function Settings() {
                 </CardHeader>
                 <CardContent>
                   {categories.length === 0 ? (
-                    <p className="text-center text-muted-foreground py-8">لا توجد فئات. قم بإضافة فئة جديدة</p>
+                    <p className="text-center text-muted-foreground py-8">{t('لا توجد فئات. قم بإضافة فئة جديدة')}</p>
                   ) : (
                     <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                       {categories.map(cat => (
@@ -2968,13 +2918,13 @@ export default function Settings() {
               <Dialog open={editCategoryDialogOpen} onOpenChange={setEditCategoryDialogOpen}>
                 <DialogContent>
                   <DialogHeader>
-                    <DialogTitle className="text-foreground">تعديل الفئة</DialogTitle>
+                    <DialogTitle className="text-foreground">{t('تعديل الفئة')}</DialogTitle>
                   </DialogHeader>
                   {editCategoryForm && (
                     <form onSubmit={handleUpdateCategory} className="space-y-4">
                       <div className="grid grid-cols-2 gap-4">
                         <div>
-                          <Label className="text-foreground">اسم الفئة (عربي)</Label>
+                          <Label className="text-foreground">{t('اسم الفئة (عربي)')}</Label>
                           <Input
                             value={editCategoryForm.name}
                             onChange={(e) => setEditCategoryForm({ ...editCategoryForm, name: e.target.value })}
@@ -2983,7 +2933,7 @@ export default function Settings() {
                           />
                         </div>
                         <div>
-                          <Label className="text-foreground">اسم الفئة (إنجليزي)</Label>
+                          <Label className="text-foreground">{t('اسم الفئة (إنجليزي)')}</Label>
                           <Input
                             value={editCategoryForm.name_en}
                             onChange={(e) => setEditCategoryForm({ ...editCategoryForm, name_en: e.target.value })}
@@ -3002,7 +2952,7 @@ export default function Settings() {
                       </div>
                       <div className="grid grid-cols-3 gap-4">
                         <div>
-                          <Label className="text-foreground">الأيقونة</Label>
+                          <Label className="text-foreground">{t('الأيقونة')}</Label>
                           <Input
                             value={editCategoryForm.icon}
                             onChange={(e) => setEditCategoryForm({ ...editCategoryForm, icon: e.target.value })}
@@ -3011,7 +2961,7 @@ export default function Settings() {
                           />
                         </div>
                         <div>
-                          <Label className="text-foreground">اللون</Label>
+                          <Label className="text-foreground">{t('اللون')}</Label>
                           <Input
                             type="color"
                             value={editCategoryForm.color}
@@ -3020,7 +2970,7 @@ export default function Settings() {
                           />
                         </div>
                         <div>
-                          <Label className="text-foreground">الترتيب</Label>
+                          <Label className="text-foreground">{t('الترتيب')}</Label>
                           <Input
                             type="number"
                             value={editCategoryForm.sort_order}
@@ -3030,12 +2980,8 @@ export default function Settings() {
                         </div>
                       </div>
                       <div className="flex gap-2 pt-4">
-                        <Button type="button" variant="outline" onClick={() => setEditCategoryDialogOpen(false)} className="flex-1">
-                          إلغاء
-                        </Button>
-                        <Button type="submit" className="flex-1 bg-primary text-primary-foreground">
-                          حفظ التغييرات
-                        </Button>
+                        <Button type="button" variant="outline" onClick={() => setEditCategoryDialogOpen(false)} className="flex-1">{t('إلغاء')}</Button>
+                        <Button type="submit" className="flex-1 bg-primary text-primary-foreground">{t('حفظ التغييرات')}</Button>
                       </div>
                     </form>
                   )}
@@ -3050,34 +2996,30 @@ export default function Settings() {
               <Card className="border-border/50 bg-card">
                 <CardHeader className="flex flex-row items-center justify-between">
                   <CardTitle className="flex items-center gap-2 text-foreground">
-                    <Package className="h-5 w-5" />
-                    إدارة المنتجات
-                  </CardTitle>
+                    <Package className="h-5 w-5" />{t('إدارة المنتجات')}</CardTitle>
                   <Dialog open={productDialogOpen} onOpenChange={setProductDialogOpen}>
                     <DialogTrigger asChild>
                       <Button className="bg-primary text-primary-foreground">
-                        <Plus className="h-4 w-4 ml-2" />
-                        إضافة منتج
-                      </Button>
+                        <Plus className="h-4 w-4 ml-2" />{t('إضافة منتج')}</Button>
                     </DialogTrigger>
                     <DialogContent className="max-w-2xl">
                       <DialogHeader>
-                        <DialogTitle className="text-foreground">إضافة منتج جديد</DialogTitle>
+                        <DialogTitle className="text-foreground">{t('إضافة منتج جديد')}</DialogTitle>
                       </DialogHeader>
                       <form onSubmit={handleCreateProduct} className="space-y-4">
                         <div className="grid grid-cols-2 gap-4">
                           <div>
-                            <Label className="text-foreground">اسم المنتج (عربي)</Label>
+                            <Label className="text-foreground">{t('اسم المنتج (عربي)')}</Label>
                             <Input
                               value={productForm.name}
                               onChange={(e) => setProductForm({ ...productForm, name: e.target.value })}
-                              placeholder="قهوة أمريكية"
+                              placeholder={t('قهوة أمريكية')}
                               required
                               className="mt-1"
                             />
                           </div>
                           <div>
-                            <Label className="text-foreground">اسم المنتج (إنجليزي)</Label>
+                            <Label className="text-foreground">{t('اسم المنتج (إنجليزي)')}</Label>
                             <Input
                               value={productForm.name_en}
                               onChange={(e) => setProductForm({ ...productForm, name_en: e.target.value })}
@@ -3088,10 +3030,10 @@ export default function Settings() {
                         </div>
                         <div className="grid grid-cols-2 gap-4">
                           <div>
-                            <Label className="text-foreground">الفئة</Label>
+                            <Label className="text-foreground">{t('الفئة')}</Label>
                             <Select value={productForm.category_id} onValueChange={(v) => setProductForm({ ...productForm, category_id: v })}>
                               <SelectTrigger className="mt-1">
-                                <SelectValue placeholder="اختر فئة" />
+                                <SelectValue placeholder={t('اختر فئة')} />
                               </SelectTrigger>
                               <SelectContent>
                                 {categories.map(cat => (
@@ -3101,18 +3043,18 @@ export default function Settings() {
                             </Select>
                           </div>
                           <div>
-                            <Label className="text-foreground">الباركود</Label>
+                            <Label className="text-foreground">{t('الباركود')}</Label>
                             <Input
                               value={productForm.barcode}
                               onChange={(e) => setProductForm({ ...productForm, barcode: e.target.value })}
-                              placeholder="اختياري"
+                              placeholder={t('اختياري')}
                               className="mt-1"
                             />
                           </div>
                         </div>
                         <div className="grid grid-cols-3 gap-4">
                           <div>
-                            <Label className="text-foreground">سعر البيع (د.ع)</Label>
+                            <Label className="text-foreground">{t('سعر البيع (د.ع)')}</Label>
                             <Input
                               type="number"
                               value={productForm.price}
@@ -3123,7 +3065,7 @@ export default function Settings() {
                             />
                           </div>
                           <div>
-                            <Label className="text-foreground">تكلفة المواد الخام</Label>
+                            <Label className="text-foreground">{t('تكلفة المواد الخام')}</Label>
                             <Input
                               type="number"
                               value={productForm.cost}
@@ -3133,7 +3075,7 @@ export default function Settings() {
                             />
                           </div>
                           <div>
-                            <Label className="text-foreground">التكلفة التشغيلية</Label>
+                            <Label className="text-foreground">{t('التكلفة التشغيلية')}</Label>
                             <Input
                               type="number"
                               value={productForm.operating_cost}
@@ -3143,7 +3085,7 @@ export default function Settings() {
                             />
                           </div>
                           <div>
-                            <Label className="text-foreground">تكلفة التغليف (للسفري/التوصيل)</Label>
+                            <Label className="text-foreground">{t('تكلفة التغليف (للسفري/التوصيل)')}</Label>
                             <Input
                               type="number"
                               value={productForm.packaging_cost}
@@ -3158,18 +3100,16 @@ export default function Settings() {
                         {manufacturedProducts.length > 0 && (
                           <div className="p-3 bg-purple-500/10 border border-purple-500/30 rounded-lg">
                             <Label className="text-foreground font-medium mb-2 flex items-center gap-2">
-                              <Factory className="h-4 w-4 text-purple-500" />
-                              ربط بمنتج مصنع (للخصم التلقائي)
-                            </Label>
+                              <Factory className="h-4 w-4 text-purple-500" />{t('ربط بمنتج مصنع (للخصم التلقائي)')}</Label>
                             <Select 
                               value={productForm.manufactured_product_id || 'none'} 
                               onValueChange={(v) => setProductForm({ ...productForm, manufactured_product_id: v === 'none' ? null : v })}
                             >
                               <SelectTrigger className="mt-2">
-                                <SelectValue placeholder="اختر المنتج المصنع (اختياري)" />
+                                <SelectValue placeholder={t('اختر المنتج المصنع (اختياري)')} />
                               </SelectTrigger>
                               <SelectContent>
-                                <SelectItem value="none">بدون ربط</SelectItem>
+                                <SelectItem value="none">{t('بدون ربط')}</SelectItem>
                                 {manufacturedProducts.map(mp => (
                                   <SelectItem key={mp.id} value={mp.id}>
                                     {mp.name} ({mp.quantity} {mp.unit})
@@ -3177,9 +3117,7 @@ export default function Settings() {
                                 ))}
                               </SelectContent>
                             </Select>
-                            <p className="text-xs text-muted-foreground mt-2">
-                              عند ربط المنتج، سيتم خصم الكمية تلقائياً من مخزون الفرع عند البيع
-                            </p>
+                            <p className="text-xs text-muted-foreground mt-2">{t('عند ربط المنتج، سيتم خصم الكمية تلقائياً من مخزون الفرع عند البيع')}</p>
                           </div>
                         )}
                         
@@ -3193,11 +3131,11 @@ export default function Settings() {
                           />
                         </div>
                         <div>
-                          <Label className="text-foreground">الوصف</Label>
+                          <Label className="text-foreground">{t('الوصف')}</Label>
                           <Textarea
                             value={productForm.description}
                             onChange={(e) => setProductForm({ ...productForm, description: e.target.value })}
-                            placeholder="وصف المنتج..."
+                            placeholder={t('وصف المنتج...')}
                             className="mt-1"
                             rows={2}
                           />
@@ -3206,7 +3144,7 @@ export default function Settings() {
                         {/* اختيار الطابعات للمنتج الجديد */}
                         {printers.length > 0 && (
                           <div className="space-y-2">
-                            <Label className="text-foreground">وجهة الطباعة (الطابعات)</Label>
+                            <Label className="text-foreground">{t('وجهة الطباعة (الطابعات)')}</Label>
                             <div className="flex flex-wrap gap-2">
                               {printers.map(printer => {
                                 const isSelected = (productForm.printer_ids || []).includes(printer.id);
@@ -3236,7 +3174,7 @@ export default function Settings() {
                             </div>
                             {(productForm.printer_ids || []).length > 0 && (
                               <div className="flex flex-wrap gap-1 mt-2">
-                                <span className="text-xs text-muted-foreground">الطابعات المحددة:</span>
+                                <span className="text-xs text-muted-foreground">{t('الطابعات المحددة:')}</span>
                                 {(productForm.printer_ids || []).map(printerId => {
                                   const printer = printers.find(p => p.id === printerId);
                                   return printer ? (
@@ -3247,7 +3185,7 @@ export default function Settings() {
                                 })}
                               </div>
                             )}
-                            <p className="text-xs text-muted-foreground">اختر الطابعات التي سيُرسل إليها هذا المنتج عند الطلب</p>
+                            <p className="text-xs text-muted-foreground">{t('اختر الطابعات التي سيُرسل إليها هذا المنتج عند الطلب')}</p>
                           </div>
                         )}
                         
@@ -3259,12 +3197,8 @@ export default function Settings() {
                           </div>
                         )}
                         <div className="flex gap-2 pt-4">
-                          <Button type="button" variant="outline" onClick={() => setProductDialogOpen(false)} className="flex-1">
-                            إلغاء
-                          </Button>
-                          <Button type="submit" className="flex-1 bg-primary text-primary-foreground">
-                            إنشاء
-                          </Button>
+                          <Button type="button" variant="outline" onClick={() => setProductDialogOpen(false)} className="flex-1">{t('إلغاء')}</Button>
+                          <Button type="submit" className="flex-1 bg-primary text-primary-foreground">{t('إنشاء')}</Button>
                         </div>
                       </form>
                     </DialogContent>
@@ -3272,7 +3206,7 @@ export default function Settings() {
                 </CardHeader>
                 <CardContent>
                   {products.length === 0 ? (
-                    <p className="text-center text-muted-foreground py-8">لا توجد منتجات. قم بإضافة منتج جديد</p>
+                    <p className="text-center text-muted-foreground py-8">{t('لا توجد منتجات. قم بإضافة منتج جديد')}</p>
                   ) : (
                     <div className="space-y-3">
                       {products.map(p => (
@@ -3327,13 +3261,13 @@ export default function Settings() {
               <Dialog open={editProductDialogOpen} onOpenChange={setEditProductDialogOpen}>
                 <DialogContent className="max-w-2xl">
                   <DialogHeader>
-                    <DialogTitle className="text-foreground">تعديل المنتج</DialogTitle>
+                    <DialogTitle className="text-foreground">{t('تعديل المنتج')}</DialogTitle>
                   </DialogHeader>
                   {editProductForm && (
                     <form onSubmit={handleUpdateProduct} className="space-y-4">
                       <div className="grid grid-cols-2 gap-4">
                         <div>
-                          <Label className="text-foreground">اسم المنتج (عربي)</Label>
+                          <Label className="text-foreground">{t('اسم المنتج (عربي)')}</Label>
                           <Input
                             value={editProductForm.name}
                             onChange={(e) => setEditProductForm({ ...editProductForm, name: e.target.value })}
@@ -3342,7 +3276,7 @@ export default function Settings() {
                           />
                         </div>
                         <div>
-                          <Label className="text-foreground">اسم المنتج (إنجليزي)</Label>
+                          <Label className="text-foreground">{t('اسم المنتج (إنجليزي)')}</Label>
                           <Input
                             value={editProductForm.name_en}
                             onChange={(e) => setEditProductForm({ ...editProductForm, name_en: e.target.value })}
@@ -3352,10 +3286,10 @@ export default function Settings() {
                       </div>
                       <div className="grid grid-cols-2 gap-4">
                         <div>
-                          <Label className="text-foreground">الفئة</Label>
+                          <Label className="text-foreground">{t('الفئة')}</Label>
                           <Select value={editProductForm.category_id} onValueChange={(v) => setEditProductForm({ ...editProductForm, category_id: v })}>
                             <SelectTrigger className="mt-1">
-                              <SelectValue placeholder="اختر فئة" />
+                              <SelectValue placeholder={t('اختر فئة')} />
                             </SelectTrigger>
                             <SelectContent>
                               {categories.map(cat => (
@@ -3365,7 +3299,7 @@ export default function Settings() {
                           </Select>
                         </div>
                         <div>
-                          <Label className="text-foreground">الباركود</Label>
+                          <Label className="text-foreground">{t('الباركود')}</Label>
                           <Input
                             value={editProductForm.barcode}
                             onChange={(e) => setEditProductForm({ ...editProductForm, barcode: e.target.value })}
@@ -3375,7 +3309,7 @@ export default function Settings() {
                       </div>
                       <div className="grid grid-cols-3 gap-4">
                         <div>
-                          <Label className="text-foreground">سعر البيع (د.ع)</Label>
+                          <Label className="text-foreground">{t('سعر البيع (د.ع)')}</Label>
                           <Input
                             type="number"
                             value={editProductForm.price}
@@ -3385,7 +3319,7 @@ export default function Settings() {
                           />
                         </div>
                         <div>
-                          <Label className="text-foreground">تكلفة المواد الخام</Label>
+                          <Label className="text-foreground">{t('تكلفة المواد الخام')}</Label>
                           <Input
                             type="number"
                             value={editProductForm.cost}
@@ -3394,7 +3328,7 @@ export default function Settings() {
                           />
                         </div>
                         <div>
-                          <Label className="text-foreground">التكلفة التشغيلية</Label>
+                          <Label className="text-foreground">{t('التكلفة التشغيلية')}</Label>
                           <Input
                             type="number"
                             value={editProductForm.operating_cost}
@@ -3403,13 +3337,13 @@ export default function Settings() {
                           />
                         </div>
                         <div>
-                          <Label className="text-foreground">تكلفة التغليف (للسفري/التوصيل)</Label>
+                          <Label className="text-foreground">{t('تكلفة التغليف (للسفري/التوصيل)')}</Label>
                           <Input
                             type="number"
                             value={editProductForm.packaging_cost}
                             onChange={(e) => setEditProductForm({ ...editProductForm, packaging_cost: e.target.value })}
                             className="mt-1"
-                            placeholder="تُحسب فقط للطلبات السفرية والتوصيل"
+                            placeholder={t('تُحسب فقط للطلبات السفرية والتوصيل')}
                           />
                         </div>
                       </div>
@@ -3425,18 +3359,16 @@ export default function Settings() {
                       {manufacturedProducts.length > 0 && (
                         <div>
                           <Label className="text-foreground font-medium mb-2 flex items-center gap-2">
-                            <Factory className="h-4 w-4 text-purple-500" />
-                            ربط بمنتج مصنع (للخصم التلقائي)
-                          </Label>
+                            <Factory className="h-4 w-4 text-purple-500" />{t('ربط بمنتج مصنع (للخصم التلقائي)')}</Label>
                           <Select 
                             value={editProductForm.manufactured_product_id || 'none'} 
                             onValueChange={(v) => setEditProductForm({ ...editProductForm, manufactured_product_id: v === 'none' ? null : v })}
                           >
                             <SelectTrigger className="mt-2">
-                              <SelectValue placeholder="اختر المنتج المصنع (اختياري)" />
+                              <SelectValue placeholder={t('اختر المنتج المصنع (اختياري)')} />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="none">بدون ربط</SelectItem>
+                              <SelectItem value="none">{t('بدون ربط')}</SelectItem>
                               {manufacturedProducts.map(mp => (
                                 <SelectItem key={mp.id} value={mp.id}>
                                   {mp.name} ({mp.quantity} {mp.unit})
@@ -3444,13 +3376,11 @@ export default function Settings() {
                               ))}
                             </SelectContent>
                           </Select>
-                          <p className="text-xs text-muted-foreground mt-2">
-                            عند ربط المنتج، سيتم خصم المكونات تلقائياً من المخزون عند البيع
-                          </p>
+                          <p className="text-xs text-muted-foreground mt-2">{t('عند ربط المنتج، سيتم خصم المكونات تلقائياً من المخزون عند البيع')}</p>
                         </div>
                       )}
                       <div>
-                        <Label className="text-foreground">الوصف</Label>
+                        <Label className="text-foreground">{t('الوصف')}</Label>
                         <Textarea
                           value={editProductForm.description}
                           onChange={(e) => setEditProductForm({ ...editProductForm, description: e.target.value })}
@@ -3461,7 +3391,7 @@ export default function Settings() {
                       
                       {/* اختيار الطابعات */}
                       <div className="space-y-2">
-                        <Label className="text-foreground">وجهة الطباعة (الطابعات)</Label>
+                        <Label className="text-foreground">{t('وجهة الطباعة (الطابعات)')}</Label>
                         <div className="flex flex-wrap gap-2">
                           {printers.map(printer => {
                             const isSelected = (editProductForm.printer_ids || []).includes(printer.id);
@@ -3491,7 +3421,7 @@ export default function Settings() {
                         </div>
                         {(editProductForm.printer_ids || []).length > 0 && (
                           <div className="flex flex-wrap gap-1 mt-2">
-                            <span className="text-xs text-muted-foreground">الطابعات المحددة:</span>
+                            <span className="text-xs text-muted-foreground">{t('الطابعات المحددة:')}</span>
                             {(editProductForm.printer_ids || []).map(printerId => {
                               const printer = printers.find(p => p.id === printerId);
                               return printer ? (
@@ -3502,7 +3432,7 @@ export default function Settings() {
                             })}
                           </div>
                         )}
-                        <p className="text-xs text-muted-foreground">اختر الطابعات التي سيُرسل إليها هذا المنتج عند الطلب</p>
+                        <p className="text-xs text-muted-foreground">{t('اختر الطابعات التي سيُرسل إليها هذا المنتج عند الطلب')}</p>
                       </div>
                       
                       <div className="flex items-center gap-3">
@@ -3510,15 +3440,11 @@ export default function Settings() {
                           checked={editProductForm.is_available !== false}
                           onCheckedChange={(checked) => setEditProductForm({ ...editProductForm, is_available: checked })}
                         />
-                        <Label className="text-foreground">متاح للبيع</Label>
+                        <Label className="text-foreground">{t('متاح للبيع')}</Label>
                       </div>
                       <div className="flex gap-2 pt-4">
-                        <Button type="button" variant="outline" onClick={() => setEditProductDialogOpen(false)} className="flex-1">
-                          إلغاء
-                        </Button>
-                        <Button type="submit" className="flex-1 bg-primary text-primary-foreground">
-                          حفظ التعديلات
-                        </Button>
+                        <Button type="button" variant="outline" onClick={() => setEditProductDialogOpen(false)} className="flex-1">{t('إلغاء')}</Button>
+                        <Button type="submit" className="flex-1 bg-primary text-primary-foreground">{t('حفظ التعديلات')}</Button>
                       </div>
                     </form>
                   )}
@@ -3533,23 +3459,19 @@ export default function Settings() {
               <Card className="border-border/50 bg-card">
                 <CardHeader className="flex flex-row items-center justify-between">
                   <CardTitle className="flex items-center gap-2 text-foreground">
-                    <Printer className="h-5 w-5" />
-                    إدارة الطابعات
-                  </CardTitle>
+                    <Printer className="h-5 w-5" />{t('إدارة الطابعات')}</CardTitle>
                   <Dialog open={printerDialogOpen} onOpenChange={setPrinterDialogOpen}>
                     <DialogTrigger asChild>
                       <Button className="bg-primary text-primary-foreground">
-                        <Plus className="h-4 w-4 ml-2" />
-                        إضافة طابعة
-                      </Button>
+                        <Plus className="h-4 w-4 ml-2" />{t('إضافة طابعة')}</Button>
                     </DialogTrigger>
                     <DialogContent>
                       <DialogHeader>
-                        <DialogTitle className="text-foreground">إضافة طابعة جديدة</DialogTitle>
+                        <DialogTitle className="text-foreground">{t('إضافة طابعة جديدة')}</DialogTitle>
                       </DialogHeader>
                       <form onSubmit={handleCreatePrinter} className="space-y-4">
                         <div>
-                          <Label className="text-foreground">اسم الطابعة</Label>
+                          <Label className="text-foreground">{t('اسم الطابعة')}</Label>
                           <Input
                             value={printerForm.name}
                             onChange={(e) => setPrinterForm({ ...printerForm, name: e.target.value })}
@@ -3559,7 +3481,7 @@ export default function Settings() {
                         </div>
                         <div className="grid grid-cols-2 gap-4">
                           <div>
-                            <Label className="text-foreground">عنوان IP</Label>
+                            <Label className="text-foreground">{t('عنوان IP')}</Label>
                             <Input
                               value={printerForm.ip_address}
                               onChange={(e) => setPrinterForm({ ...printerForm, ip_address: e.target.value })}
@@ -3569,7 +3491,7 @@ export default function Settings() {
                             />
                           </div>
                           <div>
-                            <Label className="text-foreground">المنفذ</Label>
+                            <Label className="text-foreground">{t('المنفذ')}</Label>
                             <Input
                               type="number"
                               value={printerForm.port}
@@ -3580,10 +3502,10 @@ export default function Settings() {
                         </div>
                         <div className="grid grid-cols-2 gap-4">
                           <div>
-                            <Label className="text-foreground">الفرع</Label>
+                            <Label className="text-foreground">{t('الفرع')}</Label>
                             <Select value={printerForm.branch_id} onValueChange={(v) => setPrinterForm({ ...printerForm, branch_id: v })}>
                               <SelectTrigger className="mt-1">
-                                <SelectValue placeholder="اختر فرع" />
+                                <SelectValue placeholder={t('اختر فرع')} />
                               </SelectTrigger>
                               <SelectContent>
                                 {branches.map(branch => (
@@ -3593,37 +3515,37 @@ export default function Settings() {
                             </Select>
                           </div>
                           <div>
-                            <Label className="text-foreground">نوع/قسم الطابعة</Label>
+                            <Label className="text-foreground">{t('نوع/قسم الطابعة')}</Label>
                             <Input
                               value={printerForm.printer_type}
                               onChange={(e) => setPrinterForm({ ...printerForm, printer_type: e.target.value })}
-                              placeholder="مثال: مطبخ، بار، تغليف، كاشير..."
+                              placeholder={t('مثال: مطبخ، بار، تغليف، كاشير...')}
                               className="mt-1"
                             />
-                            <p className="text-xs text-muted-foreground mt-1">اكتب اسم القسم أو نوع الطابعة حسب احتياجك</p>
+                            <p className="text-xs text-muted-foreground mt-1">{t('اكتب اسم القسم أو نوع الطابعة حسب احتياجك')}</p>
                           </div>
                         </div>
                         
                         {/* صلاحيات الطباعة */}
                         <div className="space-y-3 p-3 bg-muted/30 rounded-lg">
-                          <Label className="text-foreground font-medium">صلاحيات الطباعة</Label>
+                          <Label className="text-foreground font-medium">{t('صلاحيات الطباعة')}</Label>
                           
                           <div>
-                            <Label className="text-sm text-muted-foreground">وضع الطباعة</Label>
+                            <Label className="text-sm text-muted-foreground">{t('وضع الطباعة')}</Label>
                             <Select value={printerForm.print_mode} onValueChange={(v) => setPrinterForm({ ...printerForm, print_mode: v })}>
                               <SelectTrigger className="mt-1">
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent>
-                                <SelectItem value="full_receipt">فاتورة كاملة (مع الأسعار)</SelectItem>
-                                <SelectItem value="orders_only">طلبات فقط (بدون أسعار)</SelectItem>
-                                <SelectItem value="selected_products">المنتجات المحددة فقط</SelectItem>
+                                <SelectItem value="full_receipt">{t('فاتورة كاملة (مع الأسعار)')}</SelectItem>
+                                <SelectItem value="orders_only">{t('طلبات فقط (بدون أسعار)')}</SelectItem>
+                                <SelectItem value="selected_products">{t('المنتجات المحددة فقط')}</SelectItem>
                               </SelectContent>
                             </Select>
                           </div>
                           
                           <div className="flex items-center justify-between">
-                            <Label className="text-sm">عرض الأسعار</Label>
+                            <Label className="text-sm">{t('عرض الأسعار')}</Label>
                             <Switch 
                               checked={printerForm.show_prices} 
                               onCheckedChange={(v) => setPrinterForm({ ...printerForm, show_prices: v })}
@@ -3632,8 +3554,8 @@ export default function Settings() {
                           
                           <div className="flex items-center justify-between">
                             <div>
-                              <Label className="text-sm">طباعة جميع الطلبات</Label>
-                              <p className="text-xs text-muted-foreground">لمتابعة جميع الأصناف مع الأقسام</p>
+                              <Label className="text-sm">{t('طباعة جميع الطلبات')}</Label>
+                              <p className="text-xs text-muted-foreground">{t('لمتابعة جميع الأصناف مع الأقسام')}</p>
                             </div>
                             <Switch 
                               checked={printerForm.print_individual_items} 
@@ -3642,7 +3564,7 @@ export default function Settings() {
                           </div>
                           
                           <div className="flex items-center justify-between">
-                            <Label className="text-sm">طباعة تلقائية عند الطلب</Label>
+                            <Label className="text-sm">{t('طباعة تلقائية عند الطلب')}</Label>
                             <Switch 
                               checked={printerForm.auto_print_on_order} 
                               onCheckedChange={(v) => setPrinterForm({ ...printerForm, auto_print_on_order: v })}
@@ -3651,12 +3573,8 @@ export default function Settings() {
                         </div>
                         
                         <div className="flex gap-2 pt-4">
-                          <Button type="button" variant="outline" onClick={() => setPrinterDialogOpen(false)} className="flex-1">
-                            إلغاء
-                          </Button>
-                          <Button type="submit" className="flex-1 bg-primary text-primary-foreground">
-                            إضافة
-                          </Button>
+                          <Button type="button" variant="outline" onClick={() => setPrinterDialogOpen(false)} className="flex-1">{t('إلغاء')}</Button>
+                          <Button type="submit" className="flex-1 bg-primary text-primary-foreground">{t('إضافة')}</Button>
                         </div>
                       </form>
                     </DialogContent>
@@ -3664,7 +3582,7 @@ export default function Settings() {
                 </CardHeader>
                 <CardContent>
                   {printers.length === 0 ? (
-                    <p className="text-center text-muted-foreground py-8">لا توجد طابعات مضافة</p>
+                    <p className="text-center text-muted-foreground py-8">{t('لا توجد طابعات مضافة')}</p>
                   ) : (
                     <div className="space-y-3">
                       {printers.map(printer => (
@@ -3674,9 +3592,9 @@ export default function Settings() {
                               <Printer className="h-8 w-8 text-muted-foreground" />
                               {/* حالة الاتصال */}
                               {printerTestStatus[printer.id] === 'online' || printer.is_online ? (
-                                <span className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full border-2 border-background" title="متصلة"></span>
+                                <span className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full border-2 border-background" title={t('متصلة')}></span>
                               ) : printerTestStatus[printer.id] === 'offline' || printer.is_online === false ? (
-                                <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full border-2 border-background" title="غير متصلة"></span>
+                                <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full border-2 border-background" title={t('غير متصلة')}></span>
                               ) : null}
                             </div>
                             <div>
@@ -3689,8 +3607,8 @@ export default function Settings() {
                                    printer.print_mode === 'orders_only' ? '📋 طلبات فقط' : 
                                    printer.print_mode === 'selected_products' ? '🎯 منتجات محددة' : '📄 فاتورة'}
                                 </span>
-                                {!printer.show_prices && <span className="text-xs text-orange-400">• بدون أسعار</span>}
-                                {printer.print_individual_items && <span className="text-xs text-purple-400">• جميع الطلبات</span>}
+                                {!printer.show_prices && <span className="text-xs text-orange-400">{t('• بدون أسعار')}</span>}
+                                {printer.print_individual_items && <span className="text-xs text-purple-400">{t('• جميع الطلبات')}</span>}
                               </div>
                             </div>
                           </div>
@@ -3698,13 +3616,11 @@ export default function Settings() {
                             {/* حالة الاتصال النصية */}
                             {printerTestStatus[printer.id] === 'testing' ? (
                               <span className="text-xs px-2 py-1 rounded-full bg-yellow-500/10 text-yellow-500 flex items-center gap-1">
-                                <Loader2 className="h-3 w-3 animate-spin" />
-                                جاري الاختبار
-                              </span>
+                                <Loader2 className="h-3 w-3 animate-spin" />{t('جاري الاختبار')}</span>
                             ) : printerTestStatus[printer.id] === 'online' ? (
-                              <span className="text-xs px-2 py-1 rounded-full bg-green-500/10 text-green-500">متصلة ✓</span>
+                              <span className="text-xs px-2 py-1 rounded-full bg-green-500/10 text-green-500">{t('متصلة ✓')}</span>
                             ) : printerTestStatus[printer.id] === 'offline' ? (
-                              <span className="text-xs px-2 py-1 rounded-full bg-red-500/10 text-red-500">غير متصلة</span>
+                              <span className="text-xs px-2 py-1 rounded-full bg-red-500/10 text-red-500">{t('غير متصلة')}</span>
                             ) : null}
                             
                             <span className="text-xs px-2 py-1 rounded-full bg-primary/10 text-primary">
@@ -3718,7 +3634,7 @@ export default function Settings() {
                               className="text-green-500 hover:bg-green-500/10"
                               onClick={() => handleTestPrinter(printer.id)}
                               disabled={printerTestStatus[printer.id] === 'testing'}
-                              title="اختبار الاتصال"
+                              title={t('اختبار الاتصال')}
                             >
                               <RefreshCw className={`h-4 w-4 ${printerTestStatus[printer.id] === 'testing' ? 'animate-spin' : ''}`} />
                             </Button>
@@ -3753,12 +3669,12 @@ export default function Settings() {
               <Dialog open={editPrinterDialogOpen} onOpenChange={setEditPrinterDialogOpen}>
                 <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
                   <DialogHeader>
-                    <DialogTitle className="text-foreground">تعديل الطابعة</DialogTitle>
+                    <DialogTitle className="text-foreground">{t('تعديل الطابعة')}</DialogTitle>
                   </DialogHeader>
                   {editPrinterForm && (
                     <form onSubmit={handleUpdatePrinter} className="space-y-4">
                       <div>
-                        <Label className="text-foreground">اسم الطابعة</Label>
+                        <Label className="text-foreground">{t('اسم الطابعة')}</Label>
                         <Input
                           value={editPrinterForm.name}
                           onChange={(e) => setEditPrinterForm({ ...editPrinterForm, name: e.target.value })}
@@ -3768,7 +3684,7 @@ export default function Settings() {
                       </div>
                       <div className="grid grid-cols-2 gap-4">
                         <div>
-                          <Label className="text-foreground">عنوان IP</Label>
+                          <Label className="text-foreground">{t('عنوان IP')}</Label>
                           <Input
                             value={editPrinterForm.ip_address}
                             onChange={(e) => setEditPrinterForm({ ...editPrinterForm, ip_address: e.target.value })}
@@ -3778,7 +3694,7 @@ export default function Settings() {
                           />
                         </div>
                         <div>
-                          <Label className="text-foreground">المنفذ</Label>
+                          <Label className="text-foreground">{t('المنفذ')}</Label>
                           <Input
                             type="number"
                             value={editPrinterForm.port}
@@ -3788,10 +3704,10 @@ export default function Settings() {
                         </div>
                       </div>
                       <div>
-                        <Label className="text-foreground">الفرع</Label>
+                        <Label className="text-foreground">{t('الفرع')}</Label>
                         <Select value={editPrinterForm.branch_id} onValueChange={(v) => setEditPrinterForm({ ...editPrinterForm, branch_id: v })}>
                           <SelectTrigger className="mt-1">
-                            <SelectValue placeholder="اختر الفرع" />
+                            <SelectValue placeholder={t('اختر الفرع')} />
                           </SelectTrigger>
                           <SelectContent>
                             {branches.map(b => (
@@ -3801,36 +3717,36 @@ export default function Settings() {
                         </Select>
                       </div>
                       <div>
-                        <Label className="text-foreground">نوع/قسم الطابعة</Label>
+                        <Label className="text-foreground">{t('نوع/قسم الطابعة')}</Label>
                         <Input
                           value={editPrinterForm.printer_type}
                           onChange={(e) => setEditPrinterForm({ ...editPrinterForm, printer_type: e.target.value })}
-                          placeholder="مثال: مطبخ، بار، تغليف، كاشير..."
+                          placeholder={t('مثال: مطبخ، بار، تغليف، كاشير...')}
                           className="mt-1"
                         />
-                        <p className="text-xs text-muted-foreground mt-1">اكتب اسم القسم أو نوع الطابعة حسب احتياجك</p>
+                        <p className="text-xs text-muted-foreground mt-1">{t('اكتب اسم القسم أو نوع الطابعة حسب احتياجك')}</p>
                       </div>
                       
                       {/* صلاحيات الطباعة */}
                       <div className="space-y-3 p-3 bg-muted/30 rounded-lg">
-                        <Label className="text-foreground font-medium">صلاحيات الطباعة</Label>
+                        <Label className="text-foreground font-medium">{t('صلاحيات الطباعة')}</Label>
                         
                         <div>
-                          <Label className="text-sm text-muted-foreground">وضع الطباعة</Label>
+                          <Label className="text-sm text-muted-foreground">{t('وضع الطباعة')}</Label>
                           <Select value={editPrinterForm.print_mode || 'full_receipt'} onValueChange={(v) => setEditPrinterForm({ ...editPrinterForm, print_mode: v })}>
                             <SelectTrigger className="mt-1">
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="full_receipt">فاتورة كاملة (مع الأسعار)</SelectItem>
-                              <SelectItem value="orders_only">طلبات فقط (بدون أسعار)</SelectItem>
-                              <SelectItem value="selected_products">المنتجات المحددة فقط</SelectItem>
+                              <SelectItem value="full_receipt">{t('فاتورة كاملة (مع الأسعار)')}</SelectItem>
+                              <SelectItem value="orders_only">{t('طلبات فقط (بدون أسعار)')}</SelectItem>
+                              <SelectItem value="selected_products">{t('المنتجات المحددة فقط')}</SelectItem>
                             </SelectContent>
                           </Select>
                         </div>
                         
                         <div className="flex items-center justify-between">
-                          <Label className="text-sm">عرض الأسعار</Label>
+                          <Label className="text-sm">{t('عرض الأسعار')}</Label>
                           <Switch 
                             checked={editPrinterForm.show_prices !== false} 
                             onCheckedChange={(v) => setEditPrinterForm({ ...editPrinterForm, show_prices: v })}
@@ -3839,8 +3755,8 @@ export default function Settings() {
                         
                         <div className="flex items-center justify-between">
                           <div>
-                            <Label className="text-sm">طباعة جميع الطلبات</Label>
-                            <p className="text-xs text-muted-foreground">لمتابعة جميع الأصناف مع الأقسام</p>
+                            <Label className="text-sm">{t('طباعة جميع الطلبات')}</Label>
+                            <p className="text-xs text-muted-foreground">{t('لمتابعة جميع الأصناف مع الأقسام')}</p>
                           </div>
                           <Switch 
                             checked={editPrinterForm.print_individual_items || false} 
@@ -3849,7 +3765,7 @@ export default function Settings() {
                         </div>
                         
                         <div className="flex items-center justify-between">
-                          <Label className="text-sm">طباعة تلقائية عند الطلب</Label>
+                          <Label className="text-sm">{t('طباعة تلقائية عند الطلب')}</Label>
                           <Switch 
                             checked={editPrinterForm.auto_print_on_order !== false} 
                             onCheckedChange={(v) => setEditPrinterForm({ ...editPrinterForm, auto_print_on_order: v })}
@@ -3858,12 +3774,8 @@ export default function Settings() {
                       </div>
                       
                       <div className="flex gap-2 pt-4">
-                        <Button type="button" variant="outline" onClick={() => setEditPrinterDialogOpen(false)} className="flex-1">
-                          إلغاء
-                        </Button>
-                        <Button type="submit" className="flex-1 bg-primary text-primary-foreground">
-                          تحديث
-                        </Button>
+                        <Button type="button" variant="outline" onClick={() => setEditPrinterDialogOpen(false)} className="flex-1">{t('إلغاء')}</Button>
+                        <Button type="submit" className="flex-1 bg-primary text-primary-foreground">{t('تحديث')}</Button>
                       </div>
                     </form>
                   )}
@@ -3878,42 +3790,34 @@ export default function Settings() {
               <Card className="border-border/50 bg-card">
                 <CardHeader className="flex flex-row items-center justify-between">
                   <CardTitle className="flex items-center gap-2 text-foreground">
-                    <Truck className="h-5 w-5" />
-                    إعدادات شركات التوصيل
-                  </CardTitle>
+                    <Truck className="h-5 w-5" />{t('إعدادات شركات التوصيل')}</CardTitle>
                   <Button 
                     onClick={() => setShowAddDeliveryApp(true)}
                     className="gap-2"
                     data-testid="add-delivery-app-btn"
                   >
-                    <Plus className="h-4 w-4" />
-                    إضافة شركة
-                  </Button>
+                    <Plus className="h-4 w-4" />{t('إضافة شركة')}</Button>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-sm text-muted-foreground mb-4">
-                    تحكم في نسب الاستقطاع لكل شركة توصيل
-                  </p>
+                  <p className="text-sm text-muted-foreground mb-4">{t('تحكم في نسب الاستقطاع لكل شركة توصيل')}</p>
                   
                   {/* نموذج إضافة شركة جديدة */}
                   {showAddDeliveryApp && (
                     <div className="mb-6 p-4 bg-primary/5 border border-primary/20 rounded-lg">
                       <h4 className="font-medium text-foreground mb-4 flex items-center gap-2">
-                        <Plus className="h-4 w-4" />
-                        إضافة شركة توصيل جديدة
-                      </h4>
+                        <Plus className="h-4 w-4" />{t('إضافة شركة توصيل جديدة')}</h4>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
-                          <Label className="text-foreground">اسم الشركة (عربي)</Label>
+                          <Label className="text-foreground">{t('اسم الشركة (عربي)')}</Label>
                           <Input
                             value={newDeliveryApp.name}
                             onChange={(e) => setNewDeliveryApp({...newDeliveryApp, name: e.target.value})}
-                            placeholder="مثال: طلبات"
+                            placeholder={t('مثال: طلبات')}
                             className="mt-1"
                           />
                         </div>
                         <div>
-                          <Label className="text-foreground">اسم الشركة (إنجليزي)</Label>
+                          <Label className="text-foreground">{t('اسم الشركة (إنجليزي)')}</Label>
                           <Input
                             value={newDeliveryApp.name_en}
                             onChange={(e) => setNewDeliveryApp({...newDeliveryApp, name_en: e.target.value})}
@@ -3922,7 +3826,7 @@ export default function Settings() {
                           />
                         </div>
                         <div>
-                          <Label className="text-foreground">نسبة العمولة (%)</Label>
+                          <Label className="text-foreground">{t('نسبة العمولة (%)')}</Label>
                           <Input
                             type="number"
                             value={newDeliveryApp.commission_rate}
@@ -3943,7 +3847,7 @@ export default function Settings() {
                               onChange={(e) => setNewDeliveryApp({...newDeliveryApp, is_active: e.target.checked})}
                               className="w-4 h-4"
                             />
-                            <Label htmlFor="delivery-app-active" className="text-foreground">تفعيل الشركة</Label>
+                            <Label htmlFor="delivery-app-active" className="text-foreground">{t('تفعيل الشركة')}</Label>
                           </div>
                         </div>
                       </div>
@@ -3962,9 +3866,7 @@ export default function Settings() {
                             setShowAddDeliveryApp(false);
                             setNewDeliveryApp({ name: '', name_en: '', commission_rate: 0, is_active: true });
                           }}
-                        >
-                          إلغاء
-                        </Button>
+                        >{t('إلغاء')}</Button>
                       </div>
                     </div>
                   )}
@@ -3973,8 +3875,8 @@ export default function Settings() {
                     {deliveryApps.length === 0 ? (
                       <div className="text-center py-8 text-muted-foreground">
                         <Truck className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                        <p>لا توجد شركات توصيل</p>
-                        <p className="text-sm">اضغط على &quot;إضافة شركة&quot; لإضافة شركة جديدة</p>
+                        <p>{t('لا توجد شركات توصيل')}</p>
+                        <p className="text-sm">{t('اضغط على &quot;إضافة شركة&quot; لإضافة شركة جديدة')}</p>
                       </div>
                     ) : (
                       deliveryApps.map(app => (
@@ -4009,7 +3911,7 @@ export default function Settings() {
                             </div>
                           </div>
                           <div className="flex items-center gap-3">
-                            <Label className="text-sm text-muted-foreground whitespace-nowrap">نسبة العمولة:</Label>
+                            <Label className="text-sm text-muted-foreground whitespace-nowrap">{t('نسبة العمولة:')}</Label>
                             <div className="flex items-center gap-2 flex-1">
                               <Input
                                 type="number"
@@ -4043,16 +3945,14 @@ export default function Settings() {
                 <Card className="border-border/50 bg-card">
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2 text-foreground">
-                      <Headphones className="h-5 w-5" />
-                      إعدادات الكول سنتر (Caller ID)
-                    </CardTitle>
+                      <Headphones className="h-5 w-5" />{t('إعدادات الكول سنتر (Caller ID)')}</CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-6">
                     {/* تفعيل الكول سنتر */}
                     <div className="flex items-center justify-between p-4 bg-muted/30 rounded-lg">
                       <div>
-                        <h4 className="font-medium text-foreground">تفعيل نظام الكول سنتر</h4>
-                        <p className="text-sm text-muted-foreground">عند التفعيل، سيظهر رقم المتصل تلقائياً عند ورود مكالمة</p>
+                        <h4 className="font-medium text-foreground">{t('تفعيل نظام الكول سنتر')}</h4>
+                        <p className="text-sm text-muted-foreground">{t('عند التفعيل، سيظهر رقم المتصل تلقائياً عند ورود مكالمة')}</p>
                       </div>
                       <Switch 
                         checked={callCenterConfig.enabled}
@@ -4062,13 +3962,13 @@ export default function Settings() {
 
                     {/* اختيار المزود */}
                     <div className="space-y-2">
-                      <Label>مزود الخدمة</Label>
+                      <Label>{t('مزود الخدمة')}</Label>
                       <Select 
                         value={callCenterConfig.provider} 
                         onValueChange={(value) => setCallCenterConfig(prev => ({...prev, provider: value}))}
                       >
                         <SelectTrigger>
-                          <SelectValue placeholder="اختر نظام الكول سنتر" />
+                          <SelectValue placeholder={t('اختر نظام الكول سنتر')} />
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="3cx">3CX</SelectItem>
@@ -4078,7 +3978,7 @@ export default function Settings() {
                           <SelectItem value="freshdesk">Freshdesk Contact Center</SelectItem>
                           <SelectItem value="asterisk">Asterisk / FreePBX</SelectItem>
                           <SelectItem value="twilio">Twilio</SelectItem>
-                          <SelectItem value="custom">نظام مخصص (Custom API)</SelectItem>
+                          <SelectItem value="custom">{t('نظام مخصص (Custom API)')}</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -4087,7 +3987,7 @@ export default function Settings() {
                     {callCenterConfig.provider && (
                       <div className="grid grid-cols-2 gap-4 p-4 border border-border rounded-lg">
                         <div className="col-span-2">
-                          <Label>رابط API</Label>
+                          <Label>{t('رابط API')}</Label>
                           <Input 
                             value={callCenterConfig.api_url}
                             onChange={(e) => setCallCenterConfig(prev => ({...prev, api_url: e.target.value}))}
@@ -4123,14 +4023,10 @@ export default function Settings() {
                 <Card className="border-border/50 bg-card">
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2 text-foreground">
-                      <Globe className="h-5 w-5" />
-                      إعداد Webhook
-                    </CardTitle>
+                      <Globe className="h-5 w-5" />{t('إعداد Webhook')}</CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-4">
-                    <p className="text-sm text-muted-foreground">
-                      قم بإضافة هذا الرابط في إعدادات نظام الكول سنتر الخاص بك لاستقبال المكالمات الواردة
-                    </p>
+                    <p className="text-sm text-muted-foreground">{t('قم بإضافة هذا الرابط في إعدادات نظام الكول سنتر الخاص بك لاستقبال المكالمات الواردة')}</p>
                     
                     <div className="flex gap-2">
                       <Input 
@@ -4151,11 +4047,11 @@ export default function Settings() {
                     </div>
 
                     <div className="space-y-2">
-                      <Label>Webhook Secret (اختياري)</Label>
+                      <Label>{t('Webhook Secret (اختياري)')}</Label>
                       <Input 
                         value={callCenterConfig.webhook_secret}
                         onChange={(e) => setCallCenterConfig(prev => ({...prev, webhook_secret: e.target.value}))}
-                        placeholder="للتحقق من صحة الطلبات"
+                        placeholder={t('للتحقق من صحة الطلبات')}
                         dir="ltr"
                       />
                     </div>
@@ -4166,15 +4062,13 @@ export default function Settings() {
                 <Card className="border-border/50 bg-card">
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2 text-foreground">
-                      <SettingsIcon className="h-5 w-5" />
-                      خيارات العرض
-                    </CardTitle>
+                      <SettingsIcon className="h-5 w-5" />{t('خيارات العرض')}</CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-4">
                     <div className="flex items-center justify-between">
                       <div>
-                        <h4 className="font-medium text-foreground">نافذة منبثقة تلقائية</h4>
-                        <p className="text-sm text-muted-foreground">عرض نافذة المتصل تلقائياً عند ورود مكالمة</p>
+                        <h4 className="font-medium text-foreground">{t('نافذة منبثقة تلقائية')}</h4>
+                        <p className="text-sm text-muted-foreground">{t('عرض نافذة المتصل تلقائياً عند ورود مكالمة')}</p>
                       </div>
                       <Switch 
                         checked={callCenterConfig.auto_popup}
@@ -4184,8 +4078,8 @@ export default function Settings() {
                     
                     <div className="flex items-center justify-between">
                       <div>
-                        <h4 className="font-medium text-foreground">حفظ الأرقام الجديدة تلقائياً</h4>
-                        <p className="text-sm text-muted-foreground">حفظ أرقام المتصلين الجدد في قاعدة العملاء</p>
+                        <h4 className="font-medium text-foreground">{t('حفظ الأرقام الجديدة تلقائياً')}</h4>
+                        <p className="text-sm text-muted-foreground">{t('حفظ أرقام المتصلين الجدد في قاعدة العملاء')}</p>
                       </div>
                       <Switch 
                         checked={callCenterConfig.auto_save_new_callers}
@@ -4195,8 +4089,8 @@ export default function Settings() {
                     
                     <div className="flex items-center justify-between">
                       <div>
-                        <h4 className="font-medium text-foreground">صوت التنبيه</h4>
-                        <p className="text-sm text-muted-foreground">تشغيل صوت عند ورود مكالمة جديدة</p>
+                        <h4 className="font-medium text-foreground">{t('صوت التنبيه')}</h4>
+                        <p className="text-sm text-muted-foreground">{t('تشغيل صوت عند ورود مكالمة جديدة')}</p>
                       </div>
                       <Switch 
                         checked={callCenterConfig.play_sound}
@@ -4210,9 +4104,7 @@ export default function Settings() {
                 <Card className="border-border/50 bg-card">
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2 text-foreground">
-                      <TestTube className="h-5 w-5" />
-                      اختبار الاتصال
-                    </CardTitle>
+                      <TestTube className="h-5 w-5" />{t('اختبار الاتصال')}</CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-4">
                     <div className="flex gap-2">
@@ -4252,21 +4144,15 @@ export default function Settings() {
                         }}
                         className="gap-2"
                       >
-                        <PhoneIncoming className="h-4 w-4" />
-                        محاكاة مكالمة واردة
-                      </Button>
+                        <PhoneIncoming className="h-4 w-4" />{t('محاكاة مكالمة واردة')}</Button>
                       
                       {callCenterTestStatus === 'success' && (
                         <span className="flex items-center gap-1 text-green-500">
-                          <Check className="h-4 w-4" />
-                          متصل
-                        </span>
+                          <Check className="h-4 w-4" />{t('متصل')}</span>
                       )}
                       {callCenterTestStatus === 'failed' && (
                         <span className="flex items-center gap-1 text-red-500">
-                          <X className="h-4 w-4" />
-                          فشل الاتصال
-                        </span>
+                          <X className="h-4 w-4" />{t('فشل الاتصال')}</span>
                       )}
                     </div>
                     
@@ -4282,9 +4168,7 @@ export default function Settings() {
                         }}
                         className="gap-2 bg-primary"
                       >
-                        <Save className="h-4 w-4" />
-                        حفظ الإعدادات
-                      </Button>
+                        <Save className="h-4 w-4" />{t('حفظ الإعدادات')}</Button>
                     </div>
                   </CardContent>
                 </Card>
@@ -4293,36 +4177,34 @@ export default function Settings() {
                 <Card className="border-border/50 bg-card">
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2 text-foreground">
-                      <BarChart className="h-5 w-5" />
-                      دليل الإعداد السريع
-                    </CardTitle>
+                      <BarChart className="h-5 w-5" />{t('دليل الإعداد السريع')}</CardTitle>
                   </CardHeader>
                   <CardContent>
                     <div className="space-y-4 text-sm">
                       <div className="p-3 bg-blue-500/10 rounded-lg border border-blue-500/20">
                         <h5 className="font-medium text-blue-400 mb-2">3CX</h5>
                         <ol className="list-decimal list-inside space-y-1 text-muted-foreground">
-                          <li>اذهب إلى Settings → Integrations → CRM</li>
-                          <li>اختر &quot;Custom CRM&quot; وأضف رابط Webhook</li>
-                          <li>انسخ API Key من إعدادات 3CX</li>
+                          <li>{t('اذهب إلى Settings → Integrations → CRM')}</li>
+                          <li>{t('اختر &quot;Custom CRM&quot; وأضف رابط Webhook')}</li>
+                          <li>{t('انسخ API Key من إعدادات 3CX')}</li>
                         </ol>
                       </div>
                       
                       <div className="p-3 bg-purple-500/10 rounded-lg border border-purple-500/20">
                         <h5 className="font-medium text-purple-400 mb-2">RingCentral</h5>
                         <ol className="list-decimal list-inside space-y-1 text-muted-foreground">
-                          <li>اذهب إلى Developer Console</li>
-                          <li>أنشئ تطبيق جديد واحصل على Client ID و Secret</li>
-                          <li>أضف Webhook URL في إعدادات التطبيق</li>
+                          <li>{t('اذهب إلى Developer Console')}</li>
+                          <li>{t('أنشئ تطبيق جديد واحصل على Client ID و Secret')}</li>
+                          <li>{t('أضف Webhook URL في إعدادات التطبيق')}</li>
                         </ol>
                       </div>
                       
                       <div className="p-3 bg-green-500/10 rounded-lg border border-green-500/20">
                         <h5 className="font-medium text-green-400 mb-2">Asterisk / FreePBX</h5>
                         <ol className="list-decimal list-inside space-y-1 text-muted-foreground">
-                          <li>قم بتثبيت AGI Script للاتصال بالنظام</li>
-                          <li>أضف الـ Script في extensions.conf</li>
-                          <li>استخدم AMI للاتصال بـ API</li>
+                          <li>{t('قم بتثبيت AGI Script للاتصال بالنظام')}</li>
+                          <li>{t('أضف الـ Script في extensions.conf')}</li>
+                          <li>{t('استخدم AMI للاتصال بـ API')}</li>
                         </ol>
                       </div>
                     </div>
@@ -4338,27 +4220,21 @@ export default function Settings() {
               <Card className="border-border/50 bg-card">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-foreground">
-                    <Mail className="h-5 w-5" />
-                    إشعارات البريد الإلكتروني
-                  </CardTitle>
+                    <Mail className="h-5 w-5" />{t('إشعارات البريد الإلكتروني')}</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <p className="text-sm text-muted-foreground">
-                    يتم إرسال تقارير إغلاق الصندوق تلقائياً لهذه العناوين
-                  </p>
+                  <p className="text-sm text-muted-foreground">{t('يتم إرسال تقارير إغلاق الصندوق تلقائياً لهذه العناوين')}</p>
                   
                   <div className="flex gap-2">
                     <Input
                       type="email"
                       value={newEmail}
                       onChange={(e) => setNewEmail(e.target.value)}
-                      placeholder="أدخل بريد إلكتروني"
+                      placeholder={t('أدخل بريد إلكتروني')}
                       className="flex-1"
                     />
                     <Button onClick={handleAddEmail} className="bg-primary text-primary-foreground">
-                      <Plus className="h-4 w-4 ml-2" />
-                      إضافة
-                    </Button>
+                      <Plus className="h-4 w-4 ml-2" />{t('إضافة')}</Button>
                   </div>
 
                   <div className="space-y-2">
@@ -4376,7 +4252,7 @@ export default function Settings() {
                       </div>
                     ))}
                     {emailRecipients.length === 0 && (
-                      <p className="text-center text-muted-foreground py-4">لم يتم إضافة عناوين بريد</p>
+                      <p className="text-center text-muted-foreground py-4">{t('لم يتم إضافة عناوين بريد')}</p>
                     )}
                   </div>
                 </CardContent>
@@ -4386,9 +4262,7 @@ export default function Settings() {
               <Card className="border-border/50 bg-card mt-6">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-foreground">
-                    <Volume2 className="h-5 w-5" />
-                    إعدادات الأصوات والتنبيهات
-                  </CardTitle>
+                    <Volume2 className="h-5 w-5" />{t('إعدادات الأصوات والتنبيهات')}</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-6">
                   {/* التحكم الرئيسي */}
@@ -4400,8 +4274,8 @@ export default function Settings() {
                         <VolumeX className="h-6 w-6 text-muted-foreground" />
                       )}
                       <div>
-                        <h4 className="font-medium text-foreground">تفعيل الأصوات</h4>
-                        <p className="text-sm text-muted-foreground">تشغيل/إيقاف جميع الأصوات في التطبيق</p>
+                        <h4 className="font-medium text-foreground">{t('تفعيل الأصوات')}</h4>
+                        <p className="text-sm text-muted-foreground">{t('تشغيل/إيقاف جميع الأصوات في التطبيق')}</p>
                       </div>
                     </div>
                     <Switch
@@ -4418,7 +4292,7 @@ export default function Settings() {
                   {/* مستوى الصوت */}
                   <div className="p-4 bg-muted/20 rounded-lg">
                     <div className="flex items-center justify-between mb-3">
-                      <Label className="text-foreground">مستوى الصوت</Label>
+                      <Label className="text-foreground">{t('مستوى الصوت')}</Label>
                       <span className="text-sm text-muted-foreground">{Math.round(soundSettings.volume * 100)}%</span>
                     </div>
                     <input
@@ -4439,7 +4313,7 @@ export default function Settings() {
                   
                   {/* أنواع الأصوات */}
                   <div className="grid gap-4">
-                    <h4 className="font-medium text-foreground border-b border-border pb-2">أنواع التنبيهات</h4>
+                    <h4 className="font-medium text-foreground border-b border-border pb-2">{t('أنواع التنبيهات')}</h4>
                     
                     {/* أصوات الأزرار */}
                     <div className="flex items-center justify-between p-3 rounded-lg hover:bg-muted/20 transition-colors">
@@ -4448,8 +4322,8 @@ export default function Settings() {
                           <Bell className="h-4 w-4 text-blue-400" />
                         </div>
                         <div>
-                          <h5 className="font-medium text-foreground">أصوات الأزرار</h5>
-                          <p className="text-xs text-muted-foreground">صوت عند الضغط على الأزرار والعناصر</p>
+                          <h5 className="font-medium text-foreground">{t('أصوات الأزرار')}</h5>
+                          <p className="text-xs text-muted-foreground">{t('صوت عند الضغط على الأزرار والعناصر')}</p>
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
@@ -4459,9 +4333,7 @@ export default function Settings() {
                           onClick={() => playClick()}
                           disabled={!soundSettings.enabled || !soundSettings.buttonSounds}
                           className="text-xs"
-                        >
-                          تجربة
-                        </Button>
+                        >{t('تجربة')}</Button>
                         <Switch
                           checked={soundSettings.buttonSounds}
                           disabled={!soundSettings.enabled}
@@ -4481,8 +4353,8 @@ export default function Settings() {
                           <ShoppingCart className="h-4 w-4 text-green-400" />
                         </div>
                         <div>
-                          <h5 className="font-medium text-foreground">إشعارات الطلبات الجديدة</h5>
-                          <p className="text-xs text-muted-foreground">صوت عند ورود طلب جديد</p>
+                          <h5 className="font-medium text-foreground">{t('إشعارات الطلبات الجديدة')}</h5>
+                          <p className="text-xs text-muted-foreground">{t('صوت عند ورود طلب جديد')}</p>
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
@@ -4492,9 +4364,7 @@ export default function Settings() {
                           onClick={() => playNewOrderNotification()}
                           disabled={!soundSettings.enabled || !soundSettings.orderNotifications}
                           className="text-xs"
-                        >
-                          تجربة
-                        </Button>
+                        >{t('تجربة')}</Button>
                         <Switch
                           checked={soundSettings.orderNotifications}
                           disabled={!soundSettings.enabled}
@@ -4514,8 +4384,8 @@ export default function Settings() {
                           <PhoneIncoming className="h-4 w-4 text-yellow-400" />
                         </div>
                         <div>
-                          <h5 className="font-medium text-foreground">رنين المكالمات الواردة</h5>
-                          <p className="text-xs text-muted-foreground">صوت رنين عند ورود مكالمة من الكول سنتر</p>
+                          <h5 className="font-medium text-foreground">{t('رنين المكالمات الواردة')}</h5>
+                          <p className="text-xs text-muted-foreground">{t('صوت رنين عند ورود مكالمة من الكول سنتر')}</p>
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
@@ -4525,9 +4395,7 @@ export default function Settings() {
                           onClick={() => playIncomingCall()}
                           disabled={!soundSettings.enabled || !soundSettings.callRingtone}
                           className="text-xs"
-                        >
-                          تجربة
-                        </Button>
+                        >{t('تجربة')}</Button>
                         <Switch
                           checked={soundSettings.callRingtone}
                           disabled={!soundSettings.enabled}
@@ -4547,8 +4415,8 @@ export default function Settings() {
                           <Truck className="h-4 w-4 text-purple-400" />
                         </div>
                         <div>
-                          <h5 className="font-medium text-foreground">إشعارات السائقين</h5>
-                          <p className="text-xs text-muted-foreground">صوت عند تعيين طلب للسائق</p>
+                          <h5 className="font-medium text-foreground">{t('إشعارات السائقين')}</h5>
+                          <p className="text-xs text-muted-foreground">{t('صوت عند تعيين طلب للسائق')}</p>
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
@@ -4558,9 +4426,7 @@ export default function Settings() {
                           onClick={() => playSuccess()}
                           disabled={!soundSettings.enabled || !soundSettings.driverNotifications}
                           className="text-xs"
-                        >
-                          تجربة
-                        </Button>
+                        >{t('تجربة')}</Button>
                         <Switch
                           checked={soundSettings.driverNotifications}
                           disabled={!soundSettings.enabled}
@@ -4585,12 +4451,8 @@ export default function Settings() {
                 <Card className="border-border/50 bg-card">
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2 text-foreground">
-                      <CreditCard className="h-5 w-5" />
-                      إعدادات الدفع الإلكتروني
-                    </CardTitle>
-                    <p className="text-sm text-muted-foreground">
-                      إعداد بوابات الدفع لاستقبال المدفوعات من العملاء
-                    </p>
+                      <CreditCard className="h-5 w-5" />{t('إعدادات الدفع الإلكتروني')}</CardTitle>
+                    <p className="text-sm text-muted-foreground">{t('إعداد بوابات الدفع لاستقبال المدفوعات من العملاء')}</p>
                   </CardHeader>
                   <CardContent className="space-y-6">
                     {/* Stripe Settings */}
@@ -4600,8 +4462,8 @@ export default function Settings() {
                           <CreditCard className="h-5 w-5 text-purple-400" />
                         </div>
                         <div className="flex-1">
-                          <h4 className="font-bold text-foreground">Stripe - بطاقات الائتمان</h4>
-                          <p className="text-xs text-muted-foreground">قبول بطاقات Visa, Mastercard والمزيد</p>
+                          <h4 className="font-bold text-foreground">{t('Stripe - بطاقات الائتمان')}</h4>
+                          <p className="text-xs text-muted-foreground">{t('قبول بطاقات Visa, Mastercard والمزيد')}</p>
                         </div>
                         <Switch 
                           checked={paymentSettings.stripe_enabled}
@@ -4611,7 +4473,7 @@ export default function Settings() {
                       
                       <div className="space-y-4">
                         <div>
-                          <Label className="text-foreground mb-2 block">المفتاح العام (Publishable Key)</Label>
+                          <Label className="text-foreground mb-2 block">{t('المفتاح العام (Publishable Key)')}</Label>
                           <Input 
                             placeholder="pk_live_xxxxxxxxxxxx"
                             className="bg-muted/30 font-mono text-sm"
@@ -4621,7 +4483,7 @@ export default function Settings() {
                         </div>
                         
                         <div>
-                          <Label className="text-foreground mb-2 block">المفتاح السري (Secret Key)</Label>
+                          <Label className="text-foreground mb-2 block">{t('المفتاح السري (Secret Key)')}</Label>
                           <Input 
                             type="password"
                             placeholder={paymentSettings.stripe_secret_key_set ? "••••••••••••••••" : "sk_live_xxxxxxxxxxxx"}
@@ -4629,32 +4491,31 @@ export default function Settings() {
                             value={paymentSettings.stripe_secret_key}
                             onChange={(e) => setPaymentSettings(prev => ({...prev, stripe_secret_key: e.target.value}))}
                           />
-                          <p className="text-xs text-muted-foreground mt-1">
-                            يمكنك الحصول على المفاتيح من <a href="https://dashboard.stripe.com/apikeys" target="_blank" rel="noreferrer" className="text-blue-400 hover:underline">لوحة تحكم Stripe</a>
+                          <p className="text-xs text-muted-foreground mt-1">{t('يمكنك الحصول على المفاتيح من')}<a href="https://dashboard.stripe.com/apikeys" target="_blank" rel="noreferrer" className="text-blue-400 hover:underline">{t('لوحة تحكم Stripe')}</a>
                           </p>
                         </div>
                         
                         <div className="grid grid-cols-2 gap-4">
                           <div className="p-3 bg-muted/30 rounded-lg">
-                            <p className="text-xs text-muted-foreground">العملة</p>
+                            <p className="text-xs text-muted-foreground">{t('العملة')}</p>
                             <select 
                               className="w-full bg-transparent text-foreground font-bold mt-1"
                               value={paymentSettings.stripe_currency}
                               onChange={(e) => setPaymentSettings(prev => ({...prev, stripe_currency: e.target.value}))}
                             >
-                              <option value="USD">USD (دولار أمريكي)</option>
-                              <option value="IQD">IQD (دينار عراقي)</option>
+                              <option value="USD">{t('USD (دولار أمريكي)')}</option>
+                              <option value="IQD">{t('IQD (دينار عراقي)')}</option>
                             </select>
                           </div>
                           <div className="p-3 bg-muted/30 rounded-lg">
-                            <p className="text-xs text-muted-foreground">الوضع</p>
+                            <p className="text-xs text-muted-foreground">{t('الوضع')}</p>
                             <select 
                               className="w-full bg-transparent text-foreground font-bold mt-1"
                               value={paymentSettings.stripe_mode}
                               onChange={(e) => setPaymentSettings(prev => ({...prev, stripe_mode: e.target.value}))}
                             >
-                              <option value="test">وضع الاختبار</option>
-                              <option value="live">وضع الإنتاج</option>
+                              <option value="test">{t('وضع الاختبار')}</option>
+                              <option value="live">{t('وضع الإنتاج')}</option>
                             </select>
                           </div>
                         </div>
@@ -4677,8 +4538,8 @@ export default function Settings() {
                           <Smartphone className="h-5 w-5 text-pink-400" />
                         </div>
                         <div className="flex-1">
-                          <h4 className="font-bold text-foreground">زين كاش - Zain Cash</h4>
-                          <p className="text-xs text-muted-foreground">المحفظة الإلكترونية الأكثر انتشاراً في العراق</p>
+                          <h4 className="font-bold text-foreground">{t('زين كاش - Zain Cash')}</h4>
+                          <p className="text-xs text-muted-foreground">{t('المحفظة الإلكترونية الأكثر انتشاراً في العراق')}</p>
                         </div>
                         <Switch 
                           checked={paymentSettings.zaincash_enabled}
@@ -4688,7 +4549,7 @@ export default function Settings() {
                       
                       <div className="space-y-4">
                         <div>
-                          <Label className="text-foreground mb-2 block">رقم محفظة زين كاش</Label>
+                          <Label className="text-foreground mb-2 block">{t('رقم محفظة زين كاش')}</Label>
                           <Input 
                             placeholder="07xx xxx xxxx"
                             type="tel"
@@ -4699,9 +4560,9 @@ export default function Settings() {
                         </div>
                         
                         <div>
-                          <Label className="text-foreground mb-2 block">اسم صاحب المحفظة</Label>
+                          <Label className="text-foreground mb-2 block">{t('اسم صاحب المحفظة')}</Label>
                           <Input 
-                            placeholder="مثال: أحمد محمد"
+                            placeholder={t('مثال: أحمد محمد')}
                             className="bg-muted/30"
                             value={paymentSettings.zaincash_name}
                             onChange={(e) => setPaymentSettings(prev => ({...prev, zaincash_name: e.target.value}))}
@@ -4709,7 +4570,7 @@ export default function Settings() {
                         </div>
                         
                         <div>
-                          <Label className="text-foreground mb-2 block">رمز QR الخاص بمحفظتك (اختياري)</Label>
+                          <Label className="text-foreground mb-2 block">{t('رمز QR الخاص بمحفظتك (اختياري)')}</Label>
                           <div className="border-2 border-dashed border-muted-foreground/30 rounded-lg p-6 text-center">
                             {paymentSettings.zaincash_qr_image ? (
                               <div className="relative">
@@ -4724,17 +4585,15 @@ export default function Settings() {
                                   className="mt-2"
                                   onClick={() => setPaymentSettings(prev => ({...prev, zaincash_qr_image: ''}))}
                                 >
-                                  <Trash2 className="h-4 w-4 ml-1" />
-                                  حذف
-                                </Button>
+                                  <Trash2 className="h-4 w-4 ml-1" />{t('حذف')}</Button>
                               </div>
                             ) : (
                               <>
                                 <Upload className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
-                                <p className="text-sm text-muted-foreground">اسحب صورة QR Code هنا أو</p>
+                                <p className="text-sm text-muted-foreground">{t('اسحب صورة QR Code هنا أو')}</p>
                                 <label className="cursor-pointer">
                                   <Button variant="outline" size="sm" className="mt-2" asChild>
-                                    <span>اختر صورة</span>
+                                    <span>{t('اختر صورة')}</span>
                                   </Button>
                                   <input 
                                     type="file" 
@@ -4754,8 +4613,7 @@ export default function Settings() {
                         
                         <div className="p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
                           <p className="text-sm text-yellow-400">
-                            ⚠️ <strong>تنبيه:</strong> سيظهر رقم محفظتك ورمز QR للعملاء عند اختيار الدفع بزين كاش
-                          </p>
+                            ⚠️ <strong>{t('تنبيه:')}</strong>{t('سيظهر رقم محفظتك ورمز QR للعملاء عند اختيار الدفع بزين كاش')}</p>
                         </div>
 
                         <Button 
@@ -4776,14 +4634,14 @@ export default function Settings() {
                           <Truck className="h-5 w-5 text-orange-400" />
                         </div>
                         <div>
-                          <h4 className="font-bold text-foreground">رسوم التوصيل</h4>
-                          <p className="text-xs text-muted-foreground">تحديد رسوم التوصيل للطلبات</p>
+                          <h4 className="font-bold text-foreground">{t('رسوم التوصيل')}</h4>
+                          <p className="text-xs text-muted-foreground">{t('تحديد رسوم التوصيل للطلبات')}</p>
                         </div>
                       </div>
                       
                       <div className="grid grid-cols-2 gap-4">
                         <div>
-                          <Label className="text-foreground mb-2 block">رسوم التوصيل (د.ع)</Label>
+                          <Label className="text-foreground mb-2 block">{t('رسوم التوصيل (د.ع)')}</Label>
                           <Input 
                             type="number" 
                             placeholder="0"
@@ -4793,7 +4651,7 @@ export default function Settings() {
                           />
                         </div>
                         <div>
-                          <Label className="text-foreground mb-2 block">الحد الأدنى للطلب (د.ع)</Label>
+                          <Label className="text-foreground mb-2 block">{t('الحد الأدنى للطلب (د.ع)')}</Label>
                           <Input 
                             type="number" 
                             placeholder="0"
@@ -4817,33 +4675,31 @@ export default function Settings() {
                     {/* Payment Methods Summary */}
                     <div className="p-4 border rounded-lg bg-muted/20">
                       <h4 className="font-bold text-foreground mb-4 flex items-center gap-2">
-                        <Wallet className="h-5 w-5" />
-                        ملخص طرق الدفع المتاحة للعملاء
-                      </h4>
+                        <Wallet className="h-5 w-5" />{t('ملخص طرق الدفع المتاحة للعملاء')}</h4>
                       
                       <div className="space-y-3">
                         <div className="flex items-center justify-between p-3 bg-green-500/10 rounded-lg border border-green-500/30">
                           <div className="flex items-center gap-3">
                             <Banknote className="h-5 w-5 text-green-400" />
-                            <span className="text-foreground">الدفع نقداً عند الاستلام</span>
+                            <span className="text-foreground">{t('الدفع نقداً عند الاستلام')}</span>
                           </div>
-                          <Badge className="bg-green-500/20 text-green-400">مُفعّل</Badge>
+                          <Badge className="bg-green-500/20 text-green-400">{t('مُفعّل')}</Badge>
                         </div>
                         
                         <div className="flex items-center justify-between p-3 bg-blue-500/10 rounded-lg border border-blue-500/30">
                           <div className="flex items-center gap-3">
                             <CreditCard className="h-5 w-5 text-blue-400" />
-                            <span className="text-foreground">بطاقة ائتمان (Stripe)</span>
+                            <span className="text-foreground">{t('بطاقة ائتمان (Stripe)')}</span>
                           </div>
-                          <Badge className="bg-blue-500/20 text-blue-400">مُفعّل</Badge>
+                          <Badge className="bg-blue-500/20 text-blue-400">{t('مُفعّل')}</Badge>
                         </div>
                         
                         <div className="flex items-center justify-between p-3 bg-purple-500/10 rounded-lg border border-purple-500/30">
                           <div className="flex items-center gap-3">
                             <Smartphone className="h-5 w-5 text-purple-400" />
-                            <span className="text-foreground">زين كاش</span>
+                            <span className="text-foreground">{t('زين كاش')}</span>
                           </div>
-                          <Badge className="bg-purple-500/20 text-purple-400">مُفعّل</Badge>
+                          <Badge className="bg-purple-500/20 text-purple-400">{t('مُفعّل')}</Badge>
                         </div>
                       </div>
                     </div>
@@ -4854,15 +4710,13 @@ export default function Settings() {
                 <Card className="border-border/50 bg-card">
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2 text-foreground">
-                      <Receipt className="h-5 w-5" />
-                      آخر المعاملات المالية
-                    </CardTitle>
+                      <Receipt className="h-5 w-5" />{t('آخر المعاملات المالية')}</CardTitle>
                   </CardHeader>
                   <CardContent>
                     <div className="text-center py-8 text-muted-foreground">
                       <CreditCard className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                      <p>لا توجد معاملات مالية بعد</p>
-                      <p className="text-xs mt-1">ستظهر هنا المعاملات عند استلام مدفوعات من العملاء</p>
+                      <p>{t('لا توجد معاملات مالية بعد')}</p>
+                      <p className="text-xs mt-1">{t('ستظهر هنا المعاملات عند استلام مدفوعات من العملاء')}</p>
                     </div>
                   </CardContent>
                 </Card>
@@ -4877,20 +4731,14 @@ export default function Settings() {
                 <Card className="border-border/50 bg-card">
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2 text-foreground">
-                      <Package className="h-5 w-5" />
-                      إعدادات نظام المخزون
-                    </CardTitle>
-                    <p className="text-sm text-muted-foreground">
-                      التحكم في طريقة عمل المخزون والخصم التلقائي
-                    </p>
+                      <Package className="h-5 w-5" />{t('إعدادات نظام المخزون')}</CardTitle>
+                    <p className="text-sm text-muted-foreground">{t('التحكم في طريقة عمل المخزون والخصم التلقائي')}</p>
                   </CardHeader>
                   <CardContent className="space-y-6">
                     {/* نوع المخزون */}
                     <div className="p-4 border rounded-lg bg-blue-500/10">
                       <Label className="text-foreground font-bold mb-4 flex items-center gap-2">
-                        <Store className="h-5 w-5 text-blue-500" />
-                        نوع المخزون
-                      </Label>
+                        <Store className="h-5 w-5 text-blue-500" />{t('نوع المخزون')}</Label>
                       <div className="grid grid-cols-2 gap-4 mt-4">
                         <div 
                           className={`p-4 border-2 rounded-lg cursor-pointer transition-all ${
@@ -4910,11 +4758,9 @@ export default function Settings() {
                                 <Check className="h-3 w-3 text-white" />
                               )}
                             </div>
-                            <span className="font-bold">مخزون مركزي</span>
+                            <span className="font-bold">{t('مخزون مركزي')}</span>
                           </div>
-                          <p className="text-sm text-muted-foreground">
-                            مخزون واحد مركزي يوزع على جميع الفروع. الخصم يتم من المخزون المركزي عند البيع.
-                          </p>
+                          <p className="text-sm text-muted-foreground">{t('مخزون واحد مركزي يوزع على جميع الفروع. الخصم يتم من المخزون المركزي عند البيع.')}</p>
                         </div>
                         <div 
                           className={`p-4 border-2 rounded-lg cursor-pointer transition-all ${
@@ -4934,25 +4780,23 @@ export default function Settings() {
                                 <Check className="h-3 w-3 text-white" />
                               )}
                             </div>
-                            <span className="font-bold">مخزون منفصل لكل فرع</span>
+                            <span className="font-bold">{t('مخزون منفصل لكل فرع')}</span>
                           </div>
-                          <p className="text-sm text-muted-foreground">
-                            كل فرع له مخزونه الخاص. الخصم يتم من مخزون الفرع المحدد عند البيع.
-                          </p>
+                          <p className="text-sm text-muted-foreground">{t('كل فرع له مخزونه الخاص. الخصم يتم من مخزون الفرع المحدد عند البيع.')}</p>
                         </div>
                       </div>
                     </div>
 
                     {/* خيارات إضافية */}
                     <div className="p-4 border rounded-lg">
-                      <Label className="text-foreground font-bold mb-4 block">خيارات إضافية</Label>
+                      <Label className="text-foreground font-bold mb-4 block">{t('خيارات إضافية')}</Label>
                       <div className="space-y-4">
                         <div className="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
                           <div className="flex items-center gap-3">
                             <ShoppingCart className="h-5 w-5 text-green-500" />
                             <div>
-                              <p className="font-medium">الخصم التلقائي عند البيع</p>
-                              <p className="text-xs text-muted-foreground">خصم الكميات تلقائياً من المخزون عند إتمام البيع</p>
+                              <p className="font-medium">{t('الخصم التلقائي عند البيع')}</p>
+                              <p className="text-xs text-muted-foreground">{t('خصم الكميات تلقائياً من المخزون عند إتمام البيع')}</p>
                             </div>
                           </div>
                           <Switch 
@@ -4965,8 +4809,8 @@ export default function Settings() {
                           <div className="flex items-center gap-3">
                             <Bell className="h-5 w-5 text-yellow-500" />
                             <div>
-                              <p className="font-medium">تنبيهات نقص المخزون</p>
-                              <p className="text-xs text-muted-foreground">إرسال تنبيه عند وصول المخزون للحد الأدنى</p>
+                              <p className="font-medium">{t('تنبيهات نقص المخزون')}</p>
+                              <p className="text-xs text-muted-foreground">{t('إرسال تنبيه عند وصول المخزون للحد الأدنى')}</p>
                             </div>
                           </div>
                           <Switch 
@@ -4999,20 +4843,14 @@ export default function Settings() {
                 <Card className="border-border/50 bg-card">
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2 text-foreground">
-                      <Globe className="h-5 w-5" />
-                      إعدادات النظام العامة
-                    </CardTitle>
-                    <p className="text-sm text-muted-foreground">
-                      اختر البلد والعملة واللغة للنظام بالكامل
-                    </p>
+                      <Globe className="h-5 w-5" />{t('إعدادات النظام العامة')}</CardTitle>
+                    <p className="text-sm text-muted-foreground">{t('اختر البلد والعملة واللغة للنظام بالكامل')}</p>
                   </CardHeader>
                   <CardContent className="space-y-6">
                     {/* البلد */}
                     <div className="p-4 border rounded-lg bg-blue-500/10">
                       <Label className="text-foreground font-bold mb-4 flex items-center gap-2">
-                        <Globe className="h-5 w-5 text-blue-500" />
-                        بلد النظام
-                      </Label>
+                        <Globe className="h-5 w-5 text-blue-500" />{t('بلد النظام')}</Label>
                       <select
                         value={regionalSettings.country}
                         onChange={(e) => handleCountryChange(e.target.value)}
@@ -5024,17 +4862,13 @@ export default function Settings() {
                           </option>
                         ))}
                       </select>
-                      <p className="text-xs text-muted-foreground mt-2">
-                        * تغيير البلد سيعدل العملة واللغة تلقائياً للنظام بالكامل
-                      </p>
+                      <p className="text-xs text-muted-foreground mt-2">{t('* تغيير البلد سيعدل العملة واللغة تلقائياً للنظام بالكامل')}</p>
                     </div>
 
                     {/* العملة */}
                     <div className="p-4 border rounded-lg bg-green-500/10">
                       <Label className="text-foreground font-bold mb-4 flex items-center gap-2">
-                        <Banknote className="h-5 w-5 text-green-500" />
-                        عملة النظام الرئيسية
-                      </Label>
+                        <Banknote className="h-5 w-5 text-green-500" />{t('عملة النظام الرئيسية')}</Label>
                       <select
                         value={regionalSettings.currency}
                         onChange={(e) => setRegionalSettings(prev => ({...prev, currency: e.target.value}))}
@@ -5049,9 +4883,7 @@ export default function Settings() {
                       
                       {/* العملة الثانوية */}
                       <div className="mt-4 flex items-center justify-between">
-                        <Label className="text-sm text-muted-foreground">
-                          عرض السعر بعملة ثانوية
-                        </Label>
+                        <Label className="text-sm text-muted-foreground">{t('عرض السعر بعملة ثانوية')}</Label>
                         <Switch
                           checked={regionalSettings.show_secondary_currency}
                           onCheckedChange={(checked) => setRegionalSettings(prev => ({...prev, show_secondary_currency: checked}))}
@@ -5060,7 +4892,7 @@ export default function Settings() {
                       
                       {regionalSettings.show_secondary_currency && (
                         <div className="mt-3">
-                          <Label className="text-xs text-muted-foreground">العملة الثانوية</Label>
+                          <Label className="text-xs text-muted-foreground">{t('العملة الثانوية')}</Label>
                           <select
                             value={regionalSettings.secondary_currency}
                             onChange={(e) => setRegionalSettings(prev => ({...prev, secondary_currency: e.target.value}))}
@@ -5106,14 +4938,10 @@ export default function Settings() {
                     >
                       {savingRegionalSettings ? (
                         <>
-                          <Loader2 className="h-4 w-4 animate-spin ml-2" />
-                          جاري الحفظ...
-                        </>
+                          <Loader2 className="h-4 w-4 animate-spin ml-2" />{t('جاري الحفظ...')}</>
                       ) : (
                         <>
-                          <Save className="h-4 w-4 ml-2" />
-                          حفظ إعدادات النظام
-                        </>
+                          <Save className="h-4 w-4 ml-2" />{t('حفظ إعدادات النظام')}</>
                       )}
                     </Button>
                   </CardContent>
@@ -5123,25 +4951,21 @@ export default function Settings() {
                 <Card className="border-border/50 bg-card">
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2 text-foreground">
-                      <Bell className="h-5 w-5" />
-                      إشعارات النظام
-                    </CardTitle>
-                    <p className="text-sm text-muted-foreground">
-                      إعدادات الإشعارات والتنبيهات العامة
-                    </p>
+                      <Bell className="h-5 w-5" />{t('إشعارات النظام')}</CardTitle>
+                    <p className="text-sm text-muted-foreground">{t('إعدادات الإشعارات والتنبيهات العامة')}</p>
                   </CardHeader>
                   <CardContent className="space-y-4">
                     <div className="flex items-center justify-between p-3 border rounded-lg">
                       <div>
-                        <p className="font-medium text-foreground">إشعارات الطلبات الجديدة</p>
-                        <p className="text-xs text-muted-foreground">إشعار صوتي عند وصول طلب جديد</p>
+                        <p className="font-medium text-foreground">{t('إشعارات الطلبات الجديدة')}</p>
+                        <p className="text-xs text-muted-foreground">{t('إشعار صوتي عند وصول طلب جديد')}</p>
                       </div>
                       <Switch defaultChecked />
                     </div>
                     <div className="flex items-center justify-between p-3 border rounded-lg">
                       <div>
-                        <p className="font-medium text-foreground">إشعارات المخزون المنخفض</p>
-                        <p className="text-xs text-muted-foreground">تنبيه عند انخفاض المخزون عن الحد الأدنى</p>
+                        <p className="font-medium text-foreground">{t('إشعارات المخزون المنخفض')}</p>
+                        <p className="text-xs text-muted-foreground">{t('تنبيه عند انخفاض المخزون عن الحد الأدنى')}</p>
                       </div>
                       <Switch defaultChecked />
                     </div>
@@ -5159,12 +4983,8 @@ export default function Settings() {
                 <Card className="border-border/50 bg-card">
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2 text-foreground">
-                      <Receipt className="h-5 w-5" />
-                      إعدادات الفاتورة
-                    </CardTitle>
-                    <p className="text-sm text-muted-foreground">
-                      تخصيص معلومات المطعم التي تظهر على الفواتير المطبوعة
-                    </p>
+                      <Receipt className="h-5 w-5" />{t('إعدادات الفاتورة')}</CardTitle>
+                    <p className="text-sm text-muted-foreground">{t('تخصيص معلومات المطعم التي تظهر على الفواتير المطبوعة')}</p>
                   </CardHeader>
                   <CardContent className="space-y-6">
                     {/* ملاحظة عن الشعار */}
@@ -5172,10 +4992,8 @@ export default function Settings() {
                       <div className="flex items-center gap-3">
                         <ImageIcon className="h-6 w-6 text-blue-500" />
                         <div>
-                          <p className="font-medium text-foreground">شعار النظام</p>
-                          <p className="text-xs text-muted-foreground">
-                            يتم التحكم في شعار النظام من قبل المالك ويظهر تلقائياً في جميع الفواتير
-                          </p>
+                          <p className="font-medium text-foreground">{t('شعار النظام')}</p>
+                          <p className="text-xs text-muted-foreground">{t('يتم التحكم في شعار النظام من قبل المالك ويظهر تلقائياً في جميع الفواتير')}</p>
                         </div>
                       </div>
                     </div>
@@ -5183,26 +5001,24 @@ export default function Settings() {
                     {/* معلومات الاتصال */}
                     <div className="p-4 border rounded-lg bg-green-500/10">
                       <Label className="text-foreground font-bold mb-4 flex items-center gap-2">
-                        <Phone className="h-5 w-5 text-green-500" />
-                        معلومات الاتصال
-                      </Label>
+                        <Phone className="h-5 w-5 text-green-500" />{t('معلومات الاتصال')}</Label>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
                         <div>
-                          <Label className="text-sm text-muted-foreground">رقم الهاتف الأول</Label>
+                          <Label className="text-sm text-muted-foreground">{t('رقم الهاتف الأول')}</Label>
                           <Input
                             value={invoiceSettings.phone}
                             onChange={(e) => setInvoiceSettings(prev => ({...prev, phone: e.target.value}))}
-                            placeholder="مثال: 07701234567"
+                            placeholder={t('مثال: 07701234567')}
                             className="mt-1"
                             dir="ltr"
                           />
                         </div>
                         <div>
-                          <Label className="text-sm text-muted-foreground">رقم الهاتف الثاني (اختياري)</Label>
+                          <Label className="text-sm text-muted-foreground">{t('رقم الهاتف الثاني (اختياري)')}</Label>
                           <Input
                             value={invoiceSettings.phone2}
                             onChange={(e) => setInvoiceSettings(prev => ({...prev, phone2: e.target.value}))}
-                            placeholder="مثال: 07809876543"
+                            placeholder={t('مثال: 07809876543')}
                             className="mt-1"
                             dir="ltr"
                           />
@@ -5213,15 +5029,13 @@ export default function Settings() {
                     {/* العنوان */}
                     <div className="p-4 border rounded-lg bg-blue-500/10">
                       <Label className="text-foreground font-bold mb-4 flex items-center gap-2">
-                        <MapPin className="h-5 w-5 text-blue-500" />
-                        العنوان
-                      </Label>
+                        <MapPin className="h-5 w-5 text-blue-500" />{t('العنوان')}</Label>
                       <div className="mt-4">
-                        <Label className="text-sm text-muted-foreground">عنوان المطعم</Label>
+                        <Label className="text-sm text-muted-foreground">{t('عنوان المطعم')}</Label>
                         <Input
                           value={invoiceSettings.address}
                           onChange={(e) => setInvoiceSettings(prev => ({...prev, address: e.target.value}))}
-                          placeholder="مثال: بغداد - الكرادة - شارع الريحان"
+                          placeholder={t('مثال: بغداد - الكرادة - شارع الريحان')}
                           className="mt-1"
                         />
                       </div>
@@ -5230,15 +5044,13 @@ export default function Settings() {
                     {/* الرقم الضريبي */}
                     <div className="p-4 border rounded-lg bg-yellow-500/10">
                       <Label className="text-foreground font-bold mb-4 flex items-center gap-2">
-                        <CreditCard className="h-5 w-5 text-yellow-500" />
-                        المعلومات الضريبية
-                      </Label>
+                        <CreditCard className="h-5 w-5 text-yellow-500" />{t('المعلومات الضريبية')}</Label>
                       <div className="mt-4">
-                        <Label className="text-sm text-muted-foreground">الرقم الضريبي (اختياري)</Label>
+                        <Label className="text-sm text-muted-foreground">{t('الرقم الضريبي (اختياري)')}</Label>
                         <Input
                           value={invoiceSettings.tax_number}
                           onChange={(e) => setInvoiceSettings(prev => ({...prev, tax_number: e.target.value}))}
-                          placeholder="مثال: 123456789"
+                          placeholder={t('مثال: 123456789')}
                           className="mt-1"
                           dir="ltr"
                         />
@@ -5248,7 +5060,7 @@ export default function Settings() {
                             checked={invoiceSettings.show_tax !== false}
                             onCheckedChange={(checked) => setInvoiceSettings(prev => ({...prev, show_tax: checked}))}
                           />
-                          <span className="text-sm text-muted-foreground">إظهار الرقم الضريبي في الفاتورة</span>
+                          <span className="text-sm text-muted-foreground">{t('إظهار الرقم الضريبي في الفاتورة')}</span>
                         </div>
                       </div>
                     </div>
@@ -5256,26 +5068,24 @@ export default function Settings() {
                     {/* نصوص مخصصة */}
                     <div className="p-4 border rounded-lg bg-purple-500/10">
                       <Label className="text-foreground font-bold mb-4 flex items-center gap-2">
-                        <Edit className="h-5 w-5 text-purple-500" />
-                        نصوص مخصصة
-                      </Label>
+                        <Edit className="h-5 w-5 text-purple-500" />{t('نصوص مخصصة')}</Label>
                       <div className="space-y-4 mt-4">
                         <div>
-                          <Label className="text-sm text-muted-foreground">نص أعلى الفاتورة (اختياري)</Label>
+                          <Label className="text-sm text-muted-foreground">{t('نص أعلى الفاتورة (اختياري)')}</Label>
                           <Textarea
                             value={invoiceSettings.custom_header}
                             onChange={(e) => setInvoiceSettings(prev => ({...prev, custom_header: e.target.value}))}
-                            placeholder="مثال: أهلاً بكم في مطعمنا"
+                            placeholder={t('مثال: أهلاً بكم في مطعمنا')}
                             className="mt-1"
                             rows={2}
                           />
                         </div>
                         <div>
-                          <Label className="text-sm text-muted-foreground">نص أسفل الفاتورة (اختياري)</Label>
+                          <Label className="text-sm text-muted-foreground">{t('نص أسفل الفاتورة (اختياري)')}</Label>
                           <Textarea
                             value={invoiceSettings.custom_footer}
                             onChange={(e) => setInvoiceSettings(prev => ({...prev, custom_footer: e.target.value}))}
-                            placeholder="مثال: نتمنى لكم وجبة شهية!"
+                            placeholder={t('مثال: نتمنى لكم وجبة شهية!')}
                             className="mt-1"
                             rows={2}
                           />
@@ -5295,9 +5105,7 @@ export default function Settings() {
                     {/* معاينة الفاتورة */}
                     <div className="mt-6 p-4 border-2 border-dashed border-primary/50 rounded-lg">
                       <Label className="text-foreground font-bold mb-4 flex items-center gap-2">
-                        <Eye className="h-5 w-5 text-primary" />
-                        معاينة الفاتورة
-                      </Label>
+                        <Eye className="h-5 w-5 text-primary" />{t('معاينة الفاتورة')}</Label>
                       <div className="mt-4 bg-white text-black p-6 rounded-lg shadow-lg max-w-sm mx-auto" style={{fontFamily: 'monospace'}}>
                         {/* أعلى الفاتورة - معلومات المطعم */}
                         <div className="text-center border-b border-dashed border-gray-400 pb-3 mb-3">
@@ -5327,11 +5135,11 @@ export default function Settings() {
                         {/* معلومات الفاتورة */}
                         <div className="py-2 mb-2 text-xs">
                           <div className="flex justify-between">
-                            <span>رقم الفاتورة:</span>
+                            <span>{t('رقم الفاتورة:')}</span>
                             <span>#001234</span>
                           </div>
                           <div className="flex justify-between">
-                            <span>التاريخ:</span>
+                            <span>{t('التاريخ:')}</span>
                             <span>{new Date().toLocaleDateString('ar-IQ')}</span>
                           </div>
                         </div>
@@ -5339,15 +5147,15 @@ export default function Settings() {
                         {/* الأصناف */}
                         <div className="mb-2 text-xs border-t border-b border-dashed py-2">
                           <div className="flex justify-between font-bold border-b pb-1 mb-1">
-                            <span>الصنف</span>
-                            <span>المبلغ</span>
+                            <span>{t('الصنف')}</span>
+                            <span>{t('المبلغ')}</span>
                           </div>
                           <div className="flex justify-between py-0.5">
-                            <span>برجر لحم x2</span>
+                            <span>{t('برجر لحم x2')}</span>
                             <span>30,000</span>
                           </div>
                           <div className="flex justify-between py-0.5">
-                            <span>بطاطس x1</span>
+                            <span>{t('بطاطس x1')}</span>
                             <span>5,000</span>
                           </div>
                         </div>
@@ -5355,12 +5163,12 @@ export default function Settings() {
                         {/* الإجمالي */}
                         <div className="mb-3">
                           <div className="flex justify-between text-xs">
-                            <span>المجموع:</span>
+                            <span>{t('المجموع:')}</span>
                             <span>35,000</span>
                           </div>
                           <div className="flex justify-between font-bold text-sm mt-1">
-                            <span>الإجمالي:</span>
-                            <span>35,000 د.ع</span>
+                            <span>{t('الإجمالي:')}</span>
+                            <span>{t('35,000 د.ع')}</span>
                           </div>
                         </div>
                         
@@ -5373,16 +5181,12 @@ export default function Settings() {
                         
                         {/* معلومات النظام - أسفل الفاتورة */}
                         <div className="text-center border-t-2 border-gray-400 pt-3 mt-3">
-                          <div className="text-xs text-gray-600 mb-1">
-                            [شعار النظام]
-                          </div>
-                          <p className="text-xs font-bold">شكراً لزيارتكم ❤️</p>
-                          <p className="text-xs text-gray-500 mt-1">[أرقام التواصل مع النظام]</p>
+                          <div className="text-xs text-gray-600 mb-1">{t('[شعار النظام]')}</div>
+                          <p className="text-xs font-bold">{t('شكراً لزيارتكم ❤️')}</p>
+                          <p className="text-xs text-gray-500 mt-1">{t('[أرقام التواصل مع النظام]')}</p>
                         </div>
                       </div>
-                      <p className="text-center text-xs text-muted-foreground mt-3">
-                        هذه معاينة تقريبية لشكل الفاتورة المطبوعة
-                      </p>
+                      <p className="text-center text-xs text-muted-foreground mt-3">{t('هذه معاينة تقريبية لشكل الفاتورة المطبوعة')}</p>
                     </div>
                   </CardContent>
                 </Card>
@@ -5396,14 +5200,12 @@ export default function Settings() {
               <Card className="border-border/50 bg-card">
                 <CardHeader className="flex flex-row items-center justify-between">
                   <CardTitle className="flex items-center gap-2 text-foreground">
-                    <UserCheck className="h-5 w-5" />
-                    إدارة العملاء
-                  </CardTitle>
+                    <UserCheck className="h-5 w-5" />{t('إدارة العملاء')}</CardTitle>
                   <div className="flex items-center gap-2">
                     <div className="relative">
                       <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                       <Input
-                        placeholder="بحث بالاسم أو الهاتف..."
+                        placeholder={t('بحث بالاسم أو الهاتف...')}
                         value={customerSearchQuery}
                         onChange={(e) => setCustomerSearchQuery(e.target.value)}
                         className="w-48 pr-9"
@@ -5412,12 +5214,10 @@ export default function Settings() {
                     </div>
                     <Dialog open={customerDialogOpen} onOpenChange={setCustomerDialogOpen}>
                       <Button className="bg-primary text-primary-foreground" onClick={() => setCustomerDialogOpen(true)}>
-                        <Plus className="h-4 w-4 ml-2" />
-                        إضافة عميل
-                      </Button>
+                        <Plus className="h-4 w-4 ml-2" />{t('إضافة عميل')}</Button>
                       <DialogContent className="max-w-lg">
                         <DialogHeader>
-                          <DialogTitle className="text-foreground">إضافة عميل جديد</DialogTitle>
+                          <DialogTitle className="text-foreground">{t('إضافة عميل جديد')}</DialogTitle>
                         </DialogHeader>
                         <form onSubmit={async (e) => {
                           e.preventDefault();
@@ -5433,17 +5233,17 @@ export default function Settings() {
                         }} className="space-y-4">
                           <div className="grid grid-cols-2 gap-4">
                             <div>
-                              <Label className="text-foreground">اسم العميل *</Label>
+                              <Label className="text-foreground">{t('اسم العميل *')}</Label>
                               <Input
                                 value={customerForm.name}
                                 onChange={(e) => setCustomerForm({ ...customerForm, name: e.target.value })}
-                                placeholder="أحمد محمد"
+                                placeholder={t('أحمد محمد')}
                                 required
                                 className="mt-1"
                               />
                             </div>
                             <div>
-                              <Label className="text-foreground">رقم الهاتف *</Label>
+                              <Label className="text-foreground">{t('رقم الهاتف *')}</Label>
                               <Input
                                 value={customerForm.phone}
                                 onChange={(e) => setCustomerForm({ ...customerForm, phone: e.target.value })}
@@ -5455,50 +5255,46 @@ export default function Settings() {
                           </div>
                           <div className="grid grid-cols-2 gap-4">
                             <div>
-                              <Label className="text-foreground">رقم هاتف إضافي</Label>
+                              <Label className="text-foreground">{t('رقم هاتف إضافي')}</Label>
                               <Input
                                 value={customerForm.phone2}
                                 onChange={(e) => setCustomerForm({ ...customerForm, phone2: e.target.value })}
-                                placeholder="اختياري"
+                                placeholder={t('اختياري')}
                                 className="mt-1"
                               />
                             </div>
                             <div>
-                              <Label className="text-foreground">المنطقة</Label>
+                              <Label className="text-foreground">{t('المنطقة')}</Label>
                               <Input
                                 value={customerForm.area}
                                 onChange={(e) => setCustomerForm({ ...customerForm, area: e.target.value })}
-                                placeholder="المنصور، الكرادة..."
+                                placeholder={t('المنصور، الكرادة...')}
                                 className="mt-1"
                               />
                             </div>
                           </div>
                           <div>
-                            <Label className="text-foreground">العنوان الكامل</Label>
+                            <Label className="text-foreground">{t('العنوان الكامل')}</Label>
                             <Input
                               value={customerForm.address}
                               onChange={(e) => setCustomerForm({ ...customerForm, address: e.target.value })}
-                              placeholder="العنوان بالتفصيل..."
+                              placeholder={t('العنوان بالتفصيل...')}
                               className="mt-1"
                             />
                           </div>
                           <div>
-                            <Label className="text-foreground">ملاحظات</Label>
+                            <Label className="text-foreground">{t('ملاحظات')}</Label>
                             <Textarea
                               value={customerForm.notes}
                               onChange={(e) => setCustomerForm({ ...customerForm, notes: e.target.value })}
-                              placeholder="ملاحظات خاصة بالعميل..."
+                              placeholder={t('ملاحظات خاصة بالعميل...')}
                               className="mt-1"
                               rows={2}
                             />
                           </div>
                           <div className="flex gap-2 pt-4">
-                            <Button type="button" variant="outline" onClick={() => setCustomerDialogOpen(false)} className="flex-1">
-                              إلغاء
-                            </Button>
-                            <Button type="submit" className="flex-1 bg-primary text-primary-foreground">
-                              إضافة
-                            </Button>
+                            <Button type="button" variant="outline" onClick={() => setCustomerDialogOpen(false)} className="flex-1">{t('إلغاء')}</Button>
+                            <Button type="submit" className="flex-1 bg-primary text-primary-foreground">{t('إضافة')}</Button>
                           </div>
                         </form>
                       </DialogContent>
@@ -5509,8 +5305,8 @@ export default function Settings() {
                   {customers.length === 0 ? (
                     <div className="text-center py-12 text-muted-foreground">
                       <UserCheck className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                      <p>لا يوجد عملاء مسجلين</p>
-                      <p className="text-sm">يتم إضافة العملاء تلقائياً عند إنشاء الطلبات</p>
+                      <p>{t('لا يوجد عملاء مسجلين')}</p>
+                      <p className="text-sm">{t('يتم إضافة العملاء تلقائياً عند إنشاء الطلبات')}</p>
                     </div>
                   ) : (
                     <div className="space-y-3">
@@ -5535,7 +5331,7 @@ export default function Settings() {
                               <div className="flex items-center gap-2">
                                 <p className="font-medium text-foreground">{customer.name}</p>
                                 {customer.is_blocked && (
-                                  <span className="text-xs px-2 py-0.5 bg-red-500/20 text-red-500 rounded">محظور</span>
+                                  <span className="text-xs px-2 py-0.5 bg-red-500/20 text-red-500 rounded">{t('محظور')}</span>
                                 )}
                               </div>
                               <div className="flex items-center gap-3 text-sm text-muted-foreground">
@@ -5607,7 +5403,7 @@ export default function Settings() {
               <Dialog open={editCustomerDialogOpen} onOpenChange={setEditCustomerDialogOpen}>
                 <DialogContent className="max-w-lg">
                   <DialogHeader>
-                    <DialogTitle className="text-foreground">تعديل بيانات العميل</DialogTitle>
+                    <DialogTitle className="text-foreground">{t('تعديل بيانات العميل')}</DialogTitle>
                   </DialogHeader>
                   {editCustomerForm && (
                     <form onSubmit={async (e) => {
@@ -5632,7 +5428,7 @@ export default function Settings() {
                     }} className="space-y-4">
                       <div className="grid grid-cols-2 gap-4">
                         <div>
-                          <Label className="text-foreground">اسم العميل *</Label>
+                          <Label className="text-foreground">{t('اسم العميل *')}</Label>
                           <Input
                             value={editCustomerForm.name}
                             onChange={(e) => setEditCustomerForm({ ...editCustomerForm, name: e.target.value })}
@@ -5641,7 +5437,7 @@ export default function Settings() {
                           />
                         </div>
                         <div>
-                          <Label className="text-foreground">رقم الهاتف *</Label>
+                          <Label className="text-foreground">{t('رقم الهاتف *')}</Label>
                           <Input
                             value={editCustomerForm.phone}
                             onChange={(e) => setEditCustomerForm({ ...editCustomerForm, phone: e.target.value })}
@@ -5652,7 +5448,7 @@ export default function Settings() {
                       </div>
                       <div className="grid grid-cols-2 gap-4">
                         <div>
-                          <Label className="text-foreground">رقم هاتف إضافي</Label>
+                          <Label className="text-foreground">{t('رقم هاتف إضافي')}</Label>
                           <Input
                             value={editCustomerForm.phone2}
                             onChange={(e) => setEditCustomerForm({ ...editCustomerForm, phone2: e.target.value })}
@@ -5660,7 +5456,7 @@ export default function Settings() {
                           />
                         </div>
                         <div>
-                          <Label className="text-foreground">المنطقة</Label>
+                          <Label className="text-foreground">{t('المنطقة')}</Label>
                           <Input
                             value={editCustomerForm.area}
                             onChange={(e) => setEditCustomerForm({ ...editCustomerForm, area: e.target.value })}
@@ -5669,7 +5465,7 @@ export default function Settings() {
                         </div>
                       </div>
                       <div>
-                        <Label className="text-foreground">العنوان الكامل</Label>
+                        <Label className="text-foreground">{t('العنوان الكامل')}</Label>
                         <Input
                           value={editCustomerForm.address}
                           onChange={(e) => setEditCustomerForm({ ...editCustomerForm, address: e.target.value })}
@@ -5677,7 +5473,7 @@ export default function Settings() {
                         />
                       </div>
                       <div>
-                        <Label className="text-foreground">ملاحظات</Label>
+                        <Label className="text-foreground">{t('ملاحظات')}</Label>
                         <Textarea
                           value={editCustomerForm.notes}
                           onChange={(e) => setEditCustomerForm({ ...editCustomerForm, notes: e.target.value })}
@@ -5687,8 +5483,8 @@ export default function Settings() {
                       </div>
                       <div className="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
                         <div>
-                          <Label className="text-foreground">حظر العميل</Label>
-                          <p className="text-xs text-muted-foreground">منع العميل من الطلب</p>
+                          <Label className="text-foreground">{t('حظر العميل')}</Label>
+                          <p className="text-xs text-muted-foreground">{t('منع العميل من الطلب')}</p>
                         </div>
                         <Switch
                           checked={editCustomerForm.is_blocked}
@@ -5696,12 +5492,8 @@ export default function Settings() {
                         />
                       </div>
                       <div className="flex gap-2 pt-4">
-                        <Button type="button" variant="outline" onClick={() => setEditCustomerDialogOpen(false)} className="flex-1">
-                          إلغاء
-                        </Button>
-                        <Button type="submit" className="flex-1 bg-primary text-primary-foreground">
-                          حفظ التغييرات
-                        </Button>
+                        <Button type="button" variant="outline" onClick={() => setEditCustomerDialogOpen(false)} className="flex-1">{t('إلغاء')}</Button>
+                        <Button type="submit" className="flex-1 bg-primary text-primary-foreground">{t('حفظ التغييرات')}</Button>
                       </div>
                     </form>
                   )}
