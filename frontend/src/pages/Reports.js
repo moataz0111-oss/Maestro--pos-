@@ -1117,7 +1117,7 @@ export default function Reports() {
                   <CardHeader>
                     <CardTitle className="text-lg text-foreground flex items-center gap-2">
                       <CreditCard className="h-5 w-5 text-blue-500" />
-                      الطلبات الآجلة
+                      {t('الطلبات الآجلة')}
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
@@ -1126,11 +1126,11 @@ export default function Reports() {
                         <thead>
                           <tr className="border-b border-border">
                             <th className="text-right p-3 text-muted-foreground">#</th>
-                            <th className="text-right p-3 text-muted-foreground">التاريخ</th>
-                            <th className="text-right p-3 text-muted-foreground">العميل</th>
-                            <th className="text-right p-3 text-muted-foreground">الهاتف</th>
-                            <th className="text-right p-3 text-muted-foreground">المبلغ</th>
-                            <th className="text-right p-3 text-muted-foreground">الحالة</th>
+                            <th className="text-right p-3 text-muted-foreground">{t('التاريخ')}</th>
+                            <th className="text-right p-3 text-muted-foreground">{t('العميل')}</th>
+                            <th className="text-right p-3 text-muted-foreground">{t('الهاتف')}</th>
+                            <th className="text-right p-3 text-muted-foreground">{t('المبلغ')}</th>
+                            <th className="text-right p-3 text-muted-foreground">{t('الحالة')}</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -1147,7 +1147,7 @@ export default function Reports() {
                                 <span className={`px-2 py-1 rounded-full text-xs ${
                                   order.credit_collected ? 'bg-green-500/10 text-green-500' : 'bg-red-500/10 text-red-500'
                                 }`}>
-                                  {order.credit_collected ? 'تم التحصيل' : 'لم يحصل'}
+                                  {order.credit_collected ? t('تم التحصيل') : t('لم يحصل')}
                                 </span>
                               </td>
                             </tr>
@@ -1157,12 +1157,18 @@ export default function Reports() {
                       {(!creditReport.orders || creditReport.orders.length === 0) && (
                         <div className="text-center py-8 text-muted-foreground">
                           <CreditCard className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                          <p>لا توجد طلبات آجلة في هذه الفترة</p>
+                          <p>{t('لا توجد طلبات آجلة في هذه الفترة')}</p>
                         </div>
                       )}
                     </div>
                   </CardContent>
                 </Card>
+                <div className="flex justify-end gap-2 mt-4">
+                  <Button variant="outline" onClick={() => window.print()}>
+                    <FileText className="h-4 w-4 ml-2" />
+                    {t('طباعة')}
+                  </Button>
+                </div>
               </div>
             )}
           </TabsContent>
