@@ -3,6 +3,7 @@ import { API_URL, BACKEND_URL } from '../utils/api';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
+import { useTranslation } from '../hooks/useTranslation';
 import { formatPrice } from '../utils/currency';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
@@ -51,6 +52,7 @@ const API = API_URL;
 
 export default function Inventory() {
   const { user, hasRole } = useAuth();
+  const { t, isRTL } = useTranslation();
   const navigate = useNavigate();
   
   const [items, setItems] = useState([]);

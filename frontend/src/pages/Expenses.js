@@ -3,6 +3,7 @@ import { API_URL, BACKEND_URL } from '../utils/api';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
+import { useTranslation } from '../hooks/useTranslation';
 import { formatPrice } from '../utils/currency';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
@@ -50,6 +51,7 @@ const DEFAULT_EXPENSE_CATEGORIES = [
 
 export default function Expenses() {
   const { user, hasRole } = useAuth();
+  const { t, isRTL } = useTranslation();
   const navigate = useNavigate();
   
   const [expenses, setExpenses] = useState([]);

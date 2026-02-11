@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import { useBranch } from '../context/BranchContext';
+import { useTranslation } from '../hooks/useTranslation';
 import { formatPrice, formatPriceCompact } from '../utils/currency';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
@@ -51,6 +52,7 @@ const API = API_URL;
 export default function Reports() {
   const { user, hasRole } = useAuth();
   const { selectedBranchId, branches, getBranchIdForApi, canSelectAllBranches } = useBranch();
+  const { t, isRTL } = useTranslation();
   const navigate = useNavigate();
   
   const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
