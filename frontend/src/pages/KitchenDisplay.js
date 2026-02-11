@@ -80,8 +80,9 @@ const getUrgencyLevel = (createdAt, orderType) => {
 };
 
 // Order Card Component
-const KitchenOrderCard = ({ order, onStatusChange, onItemComplete }) => {
+const KitchenOrderCard = ({ order, onStatusChange, onItemComplete, t }) => {
   const [isUpdating, setIsUpdating] = useState(false);
+  const orderTypeConfig = getOrderTypeConfig(t);
   const typeConfig = orderTypeConfig[order.order_type] || orderTypeConfig.dine_in;
   const TypeIcon = typeConfig.icon;
   const urgency = getUrgencyLevel(order.created_at, order.order_type);
