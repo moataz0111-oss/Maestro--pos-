@@ -1395,8 +1395,8 @@ export default function Settings() {
               <ArrowRight className="h-5 w-5" />
             </Button>
             <div>
-              <h1 className="text-xl font-bold font-cairo text-foreground">الإعدادات</h1>
-              <p className="text-sm text-muted-foreground">إدارة النظام والمستخدمين</p>
+              <h1 className="text-xl font-bold font-cairo text-foreground">{t('الإعدادات')}</h1>
+              <p className="text-sm text-muted-foreground">{t('إدارة النظام والمستخدمين')}</p>
             </div>
           </div>
         </div>
