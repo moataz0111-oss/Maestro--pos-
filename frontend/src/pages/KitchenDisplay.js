@@ -219,16 +219,13 @@ export default function KitchenDisplay() {
         return;
       }
       
-      const res = await axios.get(`${API}/orders`, {
-        headers: { Authorization: `Bearer ${token}` },
-        params: { 
-          status: 'pending,preparing',
-          limit: 100
-        }
+      // استخدام API المطبخ الجديد
+      const res = await axios.get(`${API}/kitchen/orders`, {
+        headers: { Authorization: `Bearer ${token}` }
       });
       
       const kitchenOrders = res.data
-        .filter(o => o.status === 'pending' || o.status === 'preparing')
+        .filter(o => o.kitchen_status !== 'completed_kitchen')
         .sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
       
       // Play sound for new orders
