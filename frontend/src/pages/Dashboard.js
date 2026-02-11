@@ -1105,7 +1105,7 @@ export default function Dashboard() {
           
           <div className={`relative z-10 ${selectedBackground ? 'p-4 md:p-6' : ''}`}>
             <div className="flex items-center justify-between mb-3">
-              <h2 className="text-base md:text-lg font-bold font-cairo text-foreground">{t('quick_stats')}</h2>
+              <h2 className="text-base md:text-lg font-bold font-cairo text-foreground">{t('الإجراءات السريعة')}</h2>
               {isReordering && (
                 <Button
                   variant="outline"
@@ -1114,7 +1114,7 @@ export default function Dashboard() {
                   className="gap-2 text-green-500 border-green-500 hover:bg-green-500/10"
                 >
                   <Check className="h-4 w-4" />
-                  {t('save')}
+                  {t('تم')}
                 </Button>
               )}
             </div>
@@ -1122,7 +1122,7 @@ export default function Dashboard() {
             {/* تعليمات إعادة الترتيب */}
             <p className="text-xs text-muted-foreground mb-3 flex items-center gap-2">
               <Move className="h-3 w-3" />
-              اضغط مطولاً لإعادة ترتيب
+              {t('اضغط مطولاً لإعادة ترتيب')}
             </p>
 
             <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2 md:gap-3">
