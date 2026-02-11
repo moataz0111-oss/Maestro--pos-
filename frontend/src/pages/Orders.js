@@ -3,6 +3,7 @@ import { API_URL, BACKEND_URL } from '../utils/api';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
+import { useTranslation } from '../hooks/useTranslation';
 import { formatPrice } from '../utils/currency';
 import { playNewOrderNotification, playKitchenBell } from '../utils/sound';
 import { Button } from '../components/ui/button';
@@ -47,6 +48,7 @@ const API = API_URL;
 
 export default function Orders() {
   const { user } = useAuth();
+  const { t, isRTL } = useTranslation();
   const navigate = useNavigate();
   
   const [orders, setOrders] = useState([]);
@@ -143,7 +145,7 @@ export default function Orders() {
 
   const testNotificationSound = () => {
     playNewOrderNotification();
-    toast.info('🔔 اختبار صوت الإشعار');
+    toast.info(`🔔 ${t('اختبار صوت الإشعار')}`);
   };
 
   const getStatusColor = (status) => {
@@ -159,11 +161,11 @@ export default function Orders() {
 
   const getStatusText = (status) => {
     const texts = {
-      pending: 'قيد الانتظار',
-      preparing: 'قيد التحضير',
-      ready: 'جاهز',
-      delivered: 'تم التوصيل',
-      cancelled: 'ملغي',
+      pending: t('معلق'),
+      preparing: t('قيد التحضير'),
+      ready: t('جاهز'),
+      delivered: t('تم التسليم'),
+      cancelled: t('ملغي'),
     };
     return texts[status] || status;
   };
@@ -181,9 +183,9 @@ export default function Orders() {
 
   const getOrderTypeText = (type) => {
     const texts = {
-      dine_in: 'داخلي',
-      takeaway: 'سفري',
-      delivery: 'توصيل',
+      dine_in: t('داخل المطعم'),
+      takeaway: t('سفري'),
+      delivery: t('توصيل'),
     };
     return texts[type] || type;
   };
@@ -205,14 +207,14 @@ export default function Orders() {
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="text-center">
           <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-          <p className="text-muted-foreground">جاري التحميل...</p>
+          <p className="text-muted-foreground">{t('جاري التحميل...')}</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-background" data-testid="orders-page">
+    <div className="min-h-screen bg-background" dir={isRTL ? 'rtl' : 'ltr'} data-testid="orders-page">
       {/* Header */}
       <header className="sticky top-0 z-50 glass border-b border-border/50 px-6 py-4">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
@@ -221,8 +223,8 @@ export default function Orders() {
               <ArrowRight className="h-5 w-5" />
             </Button>
             <div>
-              <h1 className="text-xl font-bold font-cairo text-foreground">إدارة الطلبات</h1>
-              <p className="text-sm text-muted-foreground">طلبات اليوم: {orders.length}</p>
+              <h1 className="text-xl font-bold font-cairo text-foreground">{t('إدارة الطلبات')}</h1>
+              <p className="text-sm text-muted-foreground">{t('طلبات اليوم')}: {orders.length}</p>
             </div>
           </div>
 
@@ -244,7 +246,7 @@ export default function Orders() {
                 className="h-8 w-8 text-muted-foreground hover:text-primary"
                 onClick={testNotificationSound}
                 data-testid="test-sound-btn"
-                title="اختبار الصوت"
+                title={t('اختبار الصوت')}
               >
                 <Bell className="h-4 w-4" />
               </Button>
@@ -270,26 +272,26 @@ export default function Orders() {
       <div className="max-w-7xl mx-auto px-6 py-4">
         <div className="flex flex-wrap gap-4 mb-6">
           <div className="flex-1 min-w-[200px] relative">
-            <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Search className={`absolute ${isRTL ? 'right-3' : 'left-3'} top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground`} />
             <Input
-              placeholder="بحث برقم الطلب أو اسم الزبون..."
+              placeholder={t('بحث برقم الطلب أو اسم الزبون...')}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pr-10"
+              className={isRTL ? 'pr-10' : 'pl-10'}
               data-testid="search-input"
             />
           </div>
           <Select value={statusFilter} onValueChange={setStatusFilter}>
             <SelectTrigger className="w-[180px]">
-              <SelectValue placeholder="حالة الطلب" />
+              <SelectValue placeholder={t('حالة الطلب')} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">جميع الحالات</SelectItem>
-              <SelectItem value="pending">قيد الانتظار</SelectItem>
-              <SelectItem value="preparing">قيد التحضير</SelectItem>
-              <SelectItem value="ready">جاهز</SelectItem>
-              <SelectItem value="delivered">تم التوصيل</SelectItem>
-              <SelectItem value="cancelled">ملغي</SelectItem>
+              <SelectItem value="all">{t('جميع الحالات')}</SelectItem>
+              <SelectItem value="pending">{t('معلق')}</SelectItem>
+              <SelectItem value="preparing">{t('قيد التحضير')}</SelectItem>
+              <SelectItem value="ready">{t('جاهز')}</SelectItem>
+              <SelectItem value="delivered">{t('تم التسليم')}</SelectItem>
+              <SelectItem value="cancelled">{t('ملغي')}</SelectItem>
             </SelectContent>
           </Select>
         </div>
