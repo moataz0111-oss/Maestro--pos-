@@ -610,10 +610,15 @@ export default function Settings() {
       // إرسال حدث تغيير العملة
       window.dispatchEvent(new CustomEvent('currencyChanged', { detail: regionalSettings.currency }));
       
-      toast.success('تم حفظ إعدادات النظام بنجاح');
+      // تحديث اتجاه الصفحة بناءً على اللغة
+      const isRTL = ['ar', 'ku', 'fa', 'he'].includes(regionalSettings.language);
+      document.documentElement.dir = isRTL ? 'rtl' : 'ltr';
+      document.documentElement.lang = regionalSettings.language;
+      
+      toast.success('تم حفظ إعدادات النظام بنجاح - جاري إعادة التحميل...');
       
       // إعادة تحميل الصفحة لتطبيق التغييرات الكاملة
-      setTimeout(() => window.location.reload(), 1000);
+      setTimeout(() => window.location.reload(), 1500);
     } catch (error) {
       toast.error('فشل في حفظ إعدادات النظام');
     } finally {
