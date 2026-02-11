@@ -236,9 +236,15 @@ export default function KitchenDisplay() {
         .filter(o => o.kitchen_status !== 'completed_kitchen')
         .sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
       
-      // Play sound for new orders
+      // Play sound and show notification for new orders
       if (kitchenOrders.length > lastOrderCountRef.current && soundEnabled) {
         playNewOrderSound();
+        // إشعار مرئي
+        const newOrdersCount = kitchenOrders.length - lastOrderCountRef.current;
+        toast.info(`🔔 طلب جديد! (${newOrdersCount})`, {
+          duration: 5000,
+          style: { fontSize: '18px', fontWeight: 'bold' }
+        });
       }
       lastOrderCountRef.current = kitchenOrders.length;
       
