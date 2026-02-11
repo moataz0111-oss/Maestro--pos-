@@ -641,7 +641,8 @@ export default function POS() {
       
       // تحديث الطاولات إذا كان طلب داخلي
       if (orderType === 'dine_in') {
-        const tablesRes = await axios.get(`${API}/tables`);
+        const tablesParams = activeBranchId ? { branch_id: activeBranchId } : {};
+        const tablesRes = await axios.get(`${API}/tables`, { params: tablesParams });
         setTables(tablesRes.data);
       }
     } catch (error) {
