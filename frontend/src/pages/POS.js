@@ -1589,45 +1589,45 @@ export default function POS() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-foreground">
               <ChefHat className="h-5 w-5 text-orange-500" />
-              {editingOrder ? 'تحديث الطلب وإرسال للمطبخ' : 'حفظ وإرسال للمطبخ'}
+              {editingOrder ? t('تحديث الطلب وإرسال للمطبخ') : t('حفظ وإرسال للمطبخ')}
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <div className="bg-muted/50 p-4 rounded-lg">
               <div className="flex justify-between mb-2">
-                <span className="text-muted-foreground">عدد العناصر:</span>
+                <span className="text-muted-foreground">{t('عدد العناصر')}:</span>
                 <span className="font-bold text-foreground">{cart.reduce((sum, item) => sum + item.quantity, 0)}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-muted-foreground">الإجمالي:</span>
+                <span className="text-muted-foreground">{t('الإجمالي')}:</span>
                 <span className="font-bold text-primary">{formatPrice(totalBeforeCommission)}</span>
               </div>
               {commissionAmount > 0 && (
                 <div className="flex justify-between text-amber-500">
-                  <span>عمولة التوصيل:</span>
+                  <span>{t('عمولة التوصيل')}:</span>
                   <span className="font-bold">-{formatPrice(commissionAmount)}</span>
                 </div>
               )}
             </div>
 
             <div>
-              <label className="text-sm text-muted-foreground mb-2 block">ملاحظات للمطبخ:</label>
+              <label className="text-sm text-muted-foreground mb-2 block">{t('ملاحظات للمطبخ')}:</label>
               <Input
                 value={orderNotes}
                 onChange={(e) => setOrderNotes(e.target.value)}
-                placeholder="ملاحظات خاصة..."
+                placeholder={t('ملاحظات خاصة...')}
                 className="h-12"
               />
             </div>
 
             <div className="bg-orange-500/10 p-3 rounded-lg text-sm text-orange-600">
-              <p>سيتم حفظ الطلب وإرساله للمطبخ للتحضير</p>
-              <p>الدفع سيتم لاحقاً عند التسليم</p>
+              <p>{t('سيتم حفظ الطلب وإرساله للمطبخ للتحضير')}</p>
+              <p>{t('الدفع سيتم لاحقاً عند التسليم')}</p>
             </div>
 
             <div className="flex gap-2 pt-2">
               <Button variant="outline" onClick={() => setKitchenDialogOpen(false)} className="flex-1">
-                إلغاء
+                {t('إلغاء')}
               </Button>
               <Button
                 onClick={handleSaveAndSendToKitchen}
@@ -1642,7 +1642,7 @@ export default function POS() {
                 ) : (
                   <>
                     <Send className="h-4 w-4 ml-2" />
-                    حفظ وإرسال
+                    {t('حفظ وإرسال')}
                   </>
                 )}
               </Button>
@@ -1657,7 +1657,7 @@ export default function POS() {
           <DialogHeader className="no-print">
             <DialogTitle className="flex items-center gap-2 text-foreground">
               <Receipt className="h-5 w-5 text-blue-500" />
-              معاينة الفاتورة
+              {t('معاينة الفاتورة')}
             </DialogTitle>
           </DialogHeader>
           
