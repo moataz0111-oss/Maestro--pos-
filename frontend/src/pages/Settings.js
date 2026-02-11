@@ -1532,7 +1532,7 @@ export default function Settings() {
                   value="invoice-settings"
                   className="flex-shrink-0 px-4 py-2.5 text-sm font-medium rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
                 >
-                  🧾 إعدادات الفاتورة
+                  {t('إعدادات الفاتورة')}
                 </TabsTrigger>
               )}
             </TabsList>
@@ -1544,17 +1544,17 @@ export default function Settings() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-foreground">
                   <Sun className="h-5 w-5" />
-                  المظهر والسمة
+                  {t('المظهر والسمة')}
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-6">
                 <div>
-                  <Label className="text-foreground mb-3 block">وضع العرض</Label>
+                  <Label className="text-foreground mb-3 block">{t('وضع العرض')}</Label>
                   <div className="grid grid-cols-3 gap-3">
                     {[
-                      { value: 'light', label: 'فاتح', icon: Sun },
-                      { value: 'dark', label: 'داكن', icon: Moon },
-                      { value: 'system', label: 'تلقائي', icon: Monitor },
+                      { value: 'light', label: t('فاتح'), icon: Sun },
+                      { value: 'dark', label: t('داكن'), icon: Moon },
+                      { value: 'system', label: t('تلقائي'), icon: Monitor },
                     ].map(option => (
                       <Button
                         key={option.value}
@@ -1568,7 +1568,7 @@ export default function Settings() {
                     ))}
                   </div>
                   <p className="text-sm text-muted-foreground mt-2">
-                    الوضع التلقائي يتبدل بين الفاتح (6 صباحاً - 6 مساءً) والداكن
+                    {t('الوضع التلقائي يتبدل بين الفاتح والداكن')}
                   </p>
                 </div>
               </CardContent>
@@ -1582,21 +1582,21 @@ export default function Settings() {
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-foreground">
                     <Store className="h-5 w-5" />
-                    إعدادات المطعم
+                    {t('إعدادات المطعم')}
                   </CardTitle>
                   <p className="text-sm text-muted-foreground">
-                    تظهر هذه البيانات في تطبيق العملاء (قائمة الطعام)
+                    {t('تظهر هذه البيانات في تطبيق العملاء')}
                   </p>
                 </CardHeader>
                 <CardContent className="space-y-6">
                   {/* اسم المطعم */}
                   <div className="space-y-4">
                     <div>
-                      <Label className="text-foreground">اسم المطعم (عربي)</Label>
+                      <Label className="text-foreground">{t('اسم المطعم (عربي)')}</Label>
                       <Input
                         value={restaurantSettings.name_ar || restaurantSettings.name || ''}
                         onChange={(e) => setRestaurantSettings({...restaurantSettings, name_ar: e.target.value, name: e.target.value})}
-                        placeholder="مثال: مطعم الشام"
+                        placeholder={t('مثال: مطعم الشام')}
                         className="mt-1"
                       />
                     </div>
