@@ -588,6 +588,9 @@ export default function POS() {
       return;
     }
 
+    // تحديد الفرع النشط في بداية الدالة
+    const currentBranchId = getBranchIdForApi() || user?.branch_id;
+
     setSubmitting(true);
     try {
       // إذا كنا نعدل طلب موجود - إضافة العناصر الجديدة فقط
@@ -604,8 +607,6 @@ export default function POS() {
       } else {
         // طلب جديد - معلق للسفري والطاولات، جاهز للتوصيل
         const isDeliveryOrder = orderType === 'delivery';
-        // تحديد الفرع النشط
-        const activeBranchId = getBranchIdForApi() || user?.branch_id;
         const orderData = {
           order_type: orderType,
           table_id: orderType === 'dine_in' ? selectedTable : null,
