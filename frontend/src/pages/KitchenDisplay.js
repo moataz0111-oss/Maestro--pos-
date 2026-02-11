@@ -93,7 +93,7 @@ const KitchenOrderCard = ({ order, onStatusChange, onItemComplete }) => {
   const handleComplete = async () => {
     setIsUpdating(true);
     try {
-      await onStatusChange(order.id, 'ready');
+      await onStatusChange(order.id, 'completed_kitchen');
     } finally {
       setIsUpdating(false);
     }
