@@ -887,28 +887,28 @@ export default function Settings() {
   };
 
   const handleDeleteBranch = async (branchId) => {
-    if (!confirm('هل أنت متأكد من حذف هذا الفرع؟')) return;
+    if (!confirm(t('هل أنت متأكد؟'))) return;
     try {
       await axios.delete(`${API}/branches/${branchId}`);
       toast.success(t('تم الحفظ بنجاح'));
       fetchData();
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'فشل في حذف الفرع');
+      toast.error(error.response?.data?.detail || t('فشل في حذف الفرع'));
     }
   };
 
   const handleResetPassword = async (u) => {
-    const newPassword = prompt(`أدخل كلمة المرور الجديدة للمستخدم "${u.full_name}":`, '');
+    const newPassword = prompt(t('أدخل كلمة المرور الجديدة للمستخدم') + ` "${u.full_name}":`, '');
     if (!newPassword) return;
     
     if (newPassword.length < 4) {
-      toast.error('كلمة المرور يجب أن تكون 4 أحرف على الأقل');
+      toast.error(t('كلمة المرور يجب أن تكون 4 أحرف على الأقل'));
       return;
     }
     
     try {
       await axios.put(`${API}/users/${u.id}/reset-password`, { new_password: newPassword });
-      toast.success(`تم تغيير كلمة المرور للمستخدم ${u.full_name}`);
+      toast.success(t('تم تغيير كلمة المرور للمستخدم') + ` ${u.full_name}`);
     } catch (error) {
       toast.error(error.response?.data?.detail || t('فشل في حفظ البيانات'));
     }
@@ -918,7 +918,7 @@ export default function Settings() {
     e.preventDefault();
     try {
       await axios.post(`${API}/printers`, printerForm);
-      toast.success('تم إضافة الطابعة');
+      toast.success(t('تم إضافة الطابعة'));
       setPrinterDialogOpen(false);
       setPrinterForm({ 
         name: '', ip_address: '', port: 9100, branch_id: '', printer_type: 'receipt',
@@ -926,7 +926,7 @@ export default function Settings() {
       });
       fetchData();
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'فشل في إضافة الطابعة');
+      toast.error(error.response?.data?.detail || t('فشل في إضافة الطابعة'));
     }
   };
 
