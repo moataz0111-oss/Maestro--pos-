@@ -1923,13 +1923,16 @@ export default function SuperAdmin() {
                     <div className="p-3 border-t border-gray-700">
                       <Button size="sm" variant="ghost" onClick={clearAllNotifications} className="w-full text-red-400 hover:text-red-300">
                         <Trash2 className="h-4 w-4 ml-2" />
-                        حذف جميع الإشعارات
+                        {t('حذف جميع الإشعارات')}
                       </Button>
                     </div>
                   )}
                 </div>
               )}
             </div>
+            
+            {/* Language Switcher */}
+            <LanguageSwitcher />
             
             <Button 
               variant="outline" 
@@ -1938,7 +1941,7 @@ export default function SuperAdmin() {
               className="border-gray-600 text-gray-300 hover:bg-gray-700"
             >
               <Palette className="h-4 w-4 ml-2" />
-              الهوية البصرية
+              {t('الهوية البصرية')}
             </Button>
             <span className="text-sm text-gray-400">{user?.full_name}</span>
             <Button variant="ghost" size="icon" onClick={logout} className="text-gray-400 hover:text-white">
