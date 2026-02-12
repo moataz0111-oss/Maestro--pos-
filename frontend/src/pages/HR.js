@@ -1315,7 +1315,7 @@ export default function HR() {
                         <Textarea value={deductionForm.reason} onChange={(e) => setDeductionForm({...deductionForm, reason: e.target.value})} required />
                       </div>
                       <div className="flex justify-end gap-2">
-                        <Button type="button" variant="outline" onClick={() =>{t('setDeductionDialogOpen(false)}>إلغاء')}</Button>
+                        <Button type="button" variant="outline" onClick={() => setDeductionDialogOpen(false)}>{t('إلغاء')}</Button>
                         <Button type="submit" variant="destructive">{t('تسجيل الخصم')}</Button>
                       </div>
                     </form>
