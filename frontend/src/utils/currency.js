@@ -6,14 +6,14 @@
 // USD/EUR/SAR/AED/EGP: فاصلتان عشريتان (1.00 = واحد دولار)
 // JOD/KWD: 3 فواصل عشرية (0.001 = فلس)
 export const CURRENCIES = {
-  IQD: { code: 'IQD', name: 'دينار عراقي', symbol: 'د.ع', rate: 1, decimals: 0, minUnit: 250 },
-  USD: { code: 'USD', name: 'دولار أمريكي', symbol: '$', rate: 1460, decimals: 2, minUnit: 0.01 },
-  SAR: { code: 'SAR', name: 'ريال سعودي', symbol: 'ر.س', rate: 389, decimals: 2, minUnit: 0.01 },
-  AED: { code: 'AED', name: 'درهم إماراتي', symbol: 'د.إ', rate: 398, decimals: 2, minUnit: 0.01 },
-  EGP: { code: 'EGP', name: 'جنيه مصري', symbol: 'ج.م', rate: 30, decimals: 2, minUnit: 0.01 },
-  JOD: { code: 'JOD', name: 'دينار أردني', symbol: 'د.أ', rate: 2060, decimals: 3, minUnit: 0.001 },
-  KWD: { code: 'KWD', name: 'دينار كويتي', symbol: 'د.ك', rate: 4750, decimals: 3, minUnit: 0.001 },
-  EUR: { code: 'EUR', name: 'يورو', symbol: '€', rate: 1580, decimals: 2, minUnit: 0.01 },
+  IQD: { code: 'IQD', name: 'Iraqi Dinar', symbol: 'IQD', rate: 1, decimals: 0, minUnit: 250 },
+  USD: { code: 'USD', name: 'US Dollar', symbol: 'USD', rate: 1460, decimals: 2, minUnit: 0.01 },
+  SAR: { code: 'SAR', name: 'Saudi Riyal', symbol: 'SAR', rate: 389, decimals: 2, minUnit: 0.01 },
+  AED: { code: 'AED', name: 'UAE Dirham', symbol: 'AED', rate: 398, decimals: 2, minUnit: 0.01 },
+  EGP: { code: 'EGP', name: 'Egyptian Pound', symbol: 'EGP', rate: 30, decimals: 2, minUnit: 0.01 },
+  JOD: { code: 'JOD', name: 'Jordanian Dinar', symbol: 'JOD', rate: 2060, decimals: 3, minUnit: 0.001 },
+  KWD: { code: 'KWD', name: 'Kuwaiti Dinar', symbol: 'KWD', rate: 4750, decimals: 3, minUnit: 0.001 },
+  EUR: { code: 'EUR', name: 'Euro', symbol: 'EUR', rate: 1580, decimals: 2, minUnit: 0.01 },
 };
 
 // متغير لتخزين العملة الحالية
