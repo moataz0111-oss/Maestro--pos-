@@ -4668,7 +4668,7 @@ export default function SuperAdmin() {
           <DialogFooter>
             <Button 
               variant="outline" 
-              onClick={() =>{t('setShowCurrencySettingsModal(false)} 
+              onClick={() => setShowCurrencySettingsModal(false)} 
               className="border-gray-600"
             >
               {t('إلغاء')}</Button>
