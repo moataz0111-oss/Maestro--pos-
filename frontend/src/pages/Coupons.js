@@ -472,9 +472,9 @@ export default function Coupons() {
                   </div>
                   <div className="flex items-center justify-between text-sm">
                     <Badge className={promo.is_active ? 'bg-green-500/10 text-green-500' : 'bg-gray-500/10 text-gray-500'}>
-                      {promo.is_active ? 'نشط' : 'معطل'}
+                      {promo.is_active ? t('نشط') : t('معطل')}
                     </Badge>
-                    <span className="text-muted-foreground">{t('حتى {new Date(promo.valid_until).toLocaleDateString('ar-IQ')}')}</span>
+                    <span className="text-muted-foreground">{t('حتى')} {new Date(promo.valid_until).toLocaleDateString('en-US')}</span>
                   </div>
                 </CardContent>
               </Card>
