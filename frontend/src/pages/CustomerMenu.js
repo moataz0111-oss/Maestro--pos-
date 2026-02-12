@@ -1891,14 +1891,14 @@ export default function CustomerMenu() {
               onClose={() => setShowMap(false)}
             />
             <DialogFooter>
-              <Button variant="outline" onClick={() => setShowMap(false)}>إلغاء</Button>
+              <Button variant="outline" onClick={() => setShowMap(false)}>{t('إلغاء')}</Button>
               <Button onClick={() => {
                 if (deliveryLocation) {
-                  toast.success('تم تحديد الموقع');
+                  toast.success(t('تم تحديد الموقع'));
                 }
                 setShowMap(false);
               }}>
-                تأكيد الموقع
+                {t('تأكيد الموقع')}
               </Button>
             </DialogFooter>
           </DialogContent>
