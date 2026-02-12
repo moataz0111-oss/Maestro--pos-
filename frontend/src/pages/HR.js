@@ -1214,7 +1214,7 @@ export default function HR() {
                         <Textarea value={advanceForm.reason} onChange={(e) => setAdvanceForm({...advanceForm, reason: e.target.value})} />
                       </div>
                       <div className="flex justify-end gap-2">
-                        <Button type="button" variant="outline" onClick={() => setAdvanceDialogOpen(false)}>{t('{t('إلغاء')}</Button>
+                        <Button type="button" variant="outline" onClick={() => setAdvanceDialogOpen(false)}>{t('إلغاء')}</Button>
                         <Button type="submit">{t('تسجيل')}</Button>
                       </div>
                     </form>
