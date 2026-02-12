@@ -1925,8 +1925,8 @@ export default function CustomerMenu() {
                 <ArrowRight className="h-5 w-5" />
               </button>
               <div className="flex-1">
-                <h1 className="text-xl font-bold">طلباتي السابقة</h1>
-                <p className="text-sm text-blue-100">{orderHistory.length} طلب</p>
+                <h1 className="text-xl font-bold">{t('طلباتي السابقة')}</h1>
+                <p className="text-sm text-blue-100">{orderHistory.length} {t('طلب')}</p>
               </div>
               <History className="h-8 w-8 opacity-50" />
             </div>
@@ -1936,9 +1936,9 @@ export default function CustomerMenu() {
           {orderHistory.length === 0 ? (
             <div className="text-center py-12">
               <Package className="h-16 w-16 text-gray-300 mx-auto mb-4" />
-              <p className="text-gray-500">لا توجد طلبات سابقة</p>
+              <p className="text-gray-500">{t('لا توجد طلبات سابقة')}</p>
               <Button onClick={() => setStep('menu')} className="mt-4">
-                اطلب الآن
+                {t('اطلب الآن')}
               </Button>
             </div>
           ) : (
@@ -1947,10 +1947,10 @@ export default function CustomerMenu() {
                 <CardContent className="p-4">
                   <div className="flex items-start justify-between mb-3">
                     <div>
-                      <p className="font-bold text-lg">طلب #{order.order_number}</p>
+                      <p className="font-bold text-lg">{t('طلب')} #{order.order_number}</p>
                       <p className="text-sm text-gray-500 flex items-center gap-1">
                         <Calendar className="h-3 w-3" />
-                        {new Date(order.created_at).toLocaleDateString('ar-IQ', {
+                        {new Date(order.created_at).toLocaleDateString('en-US', {
                           year: 'numeric',
                           month: 'short',
                           day: 'numeric',
@@ -1973,10 +1973,10 @@ export default function CustomerMenu() {
                   <div className="flex items-center justify-between border-t pt-3">
                     <div className="flex items-center gap-2 text-sm text-gray-600">
                       <Package className="h-4 w-4" />
-                      <span>{order.items_count} منتج</span>
+                      <span>{order.items_count} {t('منتج')}</span>
                     </div>
                     <p className="font-bold text-lg text-orange-500">
-                      {order.total?.toLocaleString()} د.ع
+                      {order.total?.toLocaleString('en-US')} IQD
                     </p>
                   </div>
                   
@@ -2015,7 +2015,7 @@ export default function CustomerMenu() {
                         size="sm"
                       >
                         <Star className="h-4 w-4 ml-2" />
-                        قيّم الطلب
+                        {t('قيّم الطلب')}
                       </Button>
                     )}
                   </div>
@@ -2033,11 +2033,11 @@ export default function CustomerMenu() {
   // ==================== TRACKING VIEW ====================
   if (step === 'tracking' && currentOrder) {
     const statusSteps = [
-      { status: 'pending', label: 'قيد الانتظار', icon: Clock },
-      { status: 'preparing', label: 'قيد التحضير', icon: ChefHat },
-      { status: 'ready', label: 'جاهز للتوصيل', icon: CheckCircle },
-      { status: 'out_for_delivery', label: 'السائق في الطريق', icon: Truck },
-      { status: 'delivered', label: 'تم التسليم', icon: CheckCircle }
+      { status: 'pending', label: t('قيد الانتظار'), icon: Clock },
+      { status: 'preparing', label: t('قيد التحضير'), icon: ChefHat },
+      { status: 'ready', label: t('جاهز للتوصيل'), icon: CheckCircle },
+      { status: 'out_for_delivery', label: t('السائق في الطريق'), icon: Truck },
+      { status: 'delivered', label: t('تم التسليم'), icon: CheckCircle }
     ];
     
     const statusOrder = ['pending', 'preparing', 'ready', 'out_for_delivery', 'delivered'];
