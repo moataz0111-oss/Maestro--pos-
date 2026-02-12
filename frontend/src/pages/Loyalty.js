@@ -463,7 +463,7 @@ export default function Loyalty() {
             </div>
             <div className="flex gap-2 pt-4">
               <Button type="button" variant="outline" onClick={() =>{t('setAddMemberOpen(false)} className="flex-1">
-                إلغاء')}</Button>
+                {t('إلغاء')}</Button>
               <Button type="submit" className="flex-1">{t('إضافة العضو')}</Button>
             </div>
           </form>

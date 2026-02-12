@@ -514,7 +514,7 @@ export default function Invoices() {
             </div>
             <div className="flex gap-2 pt-4">
               <Button type="button" variant="outline" onClick={() =>{t('setTemplateDialogOpen(false)} className="flex-1">
-                إلغاء')}</Button>
+                {t('إلغاء')}</Button>
               <Button type="submit" className="flex-1">
                 <Save className="h-4 w-4 ml-2" />
                 {editingTemplate ? 'تحديث' : 'إنشاء'}
@@ -627,7 +627,7 @@ export default function Invoices() {
             </div>
             <div className="flex gap-2 pt-4">
               <Button type="button" variant="outline" onClick={() =>{t('setPrinterDialogOpen(false)} className="flex-1">
-                إلغاء')}</Button>
+                {t('إلغاء')}</Button>
               <Button type="submit" className="flex-1">{t('إضافة')}</Button>
             </div>
           </form>

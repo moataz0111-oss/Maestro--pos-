@@ -620,7 +620,7 @@ export default function BranchOrders() {
           
           <DialogFooter>
             <Button variant="outline" onClick={() =>{t('setShowAddDialog(false)}>
-              إلغاء')}</Button>
+              {t('إلغاء')}</Button>
             <Button 
               onClick={handleSubmitOrder}
               disabled={!form.to_branch_id || form.items.length === 0 || submitting}

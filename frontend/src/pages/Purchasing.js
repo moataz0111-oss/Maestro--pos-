@@ -498,7 +498,7 @@ export default function Purchasing() {
                               onClick={() =>{t('updateStatus(order.id, 'cancelled')}
                               className="text-red-500 hover:bg-red-500/10"
                             >
-                              إلغاء')}</Button>
+                              {t('إلغاء')}</Button>
                           </>
                         )}
                         {order.status === 'approved' && (
@@ -670,7 +670,7 @@ export default function Purchasing() {
           
           <DialogFooter>
             <Button variant="outline" onClick={() =>{t('setShowAddDialog(false)}>
-              إلغاء')}</Button>
+              {t('إلغاء')}</Button>
             <Button onClick={handleSubmit} className="bg-emerald-500 hover:bg-emerald-600">{t('إنشاء الأمر')}</Button>
           </DialogFooter>
         </DialogContent>
@@ -725,7 +725,7 @@ export default function Purchasing() {
           
           <DialogFooter>
             <Button variant="outline" onClick={() =>{t('setShowSupplierDialog(false)}>
-              إلغاء')}</Button>
+              {t('إلغاء')}</Button>
             <Button onClick={handleAddSupplier} className="bg-blue-500 hover:bg-blue-600">{t('إضافة')}</Button>
           </DialogFooter>
         </DialogContent>

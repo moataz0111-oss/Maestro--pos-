@@ -4095,7 +4095,7 @@ export default function SuperAdmin() {
 
           <DialogFooter className="mt-4">
             <Button variant="outline" onClick={() =>{t('setShowInvoiceSettings(false)} className="border-gray-600">
-              إلغاء')}</Button>
+              {t('إلغاء')}</Button>
             <Button onClick={async () => { 
               await saveInvoiceSettings(); 
               try {
@@ -4201,7 +4201,7 @@ export default function SuperAdmin() {
 
           <DialogFooter>
             <Button variant="outline" onClick={() =>{t('setShowNotificationSettings(false)} className="border-gray-600">
-              إلغاء')}</Button>
+              {t('إلغاء')}</Button>
             <Button onClick={saveNotificationSettings} className="bg-purple-600 hover:bg-purple-700">
               <Check className="h-4 w-4 ml-2" />
               حفظ الإعدادات
@@ -4353,7 +4353,7 @@ export default function SuperAdmin() {
 
           <DialogFooter>
             <Button variant="outline" onClick={() =>{t('setShowPricesModal(false)} className="border-gray-600">
-              إلغاء')}</Button>
+              {t('إلغاء')}</Button>
             <Button 
               onClick={saveSubscriptionPrices} 
               disabled={savingPrices}
@@ -4671,7 +4671,7 @@ export default function SuperAdmin() {
               onClick={() =>{t('setShowCurrencySettingsModal(false)} 
               className="border-gray-600"
             >
-              إلغاء')}</Button>
+              {t('إلغاء')}</Button>
             <Button 
               onClick={saveCurrencySettings}
               disabled={savingCurrencySettings}

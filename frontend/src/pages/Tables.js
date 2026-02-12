@@ -538,7 +538,7 @@ export default function Tables() {
               onClick={() =>{t('setTransferDialogOpen(false)}
               className="flex-1"
             >
-              إلغاء')}</Button>
+              {t('إلغاء')}</Button>
             <Button 
               onClick={handleTransferTable}
               disabled={!targetTableId}

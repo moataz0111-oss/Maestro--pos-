@@ -338,7 +338,7 @@ export default function Expenses() {
                     </div>
                     <div className="flex gap-2 pt-4">
                       <Button type="button" variant="outline" onClick={() =>{t('setDialogOpen(false)} className="flex-1">
-                        إلغاء')}</Button>
+                        {t('إلغاء')}</Button>
                       <Button type="submit" className="flex-1 bg-primary text-primary-foreground">{t('حفظ')}</Button>
                     </div>
                   </form>

@@ -1009,7 +1009,7 @@ export default function WarehouseManufacturing() {
             
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() =>{t('setShowAddRawMaterial(false)}>
-                إلغاء')}</Button>
+                {t('إلغاء')}</Button>
               <Button type="submit" disabled={submitting}>
                 {submitting ? <RefreshCw className="h-4 w-4 animate-spin ml-2" /> : <Plus className="h-4 w-4 ml-2" />}
                 إضافة
@@ -1085,7 +1085,7 @@ export default function WarehouseManufacturing() {
           
           <DialogFooter>
             <Button variant="outline" onClick={() =>{t('setShowTransferDialog(false)}>
-              إلغاء')}</Button>
+              {t('إلغاء')}</Button>
             <Button 
               onClick={handleTransferToManufacturing}
               disabled={transferForm.items.length === 0 || submitting}
@@ -1239,7 +1239,7 @@ export default function WarehouseManufacturing() {
             
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() =>{t('setShowAddProductDialog(false)}>
-                إلغاء')}</Button>
+                {t('إلغاء')}</Button>
               <Button type="submit" disabled={productForm.recipe.length === 0 || submitting}>
                 {submitting ? <RefreshCw className="h-4 w-4 animate-spin ml-2" /> : <Plus className="h-4 w-4 ml-2" />}
                 إضافة المنتج
@@ -1301,7 +1301,7 @@ export default function WarehouseManufacturing() {
           
           <DialogFooter>
             <Button variant="outline" onClick={() =>{t('setShowProduceDialog(null)}>
-              إلغاء')}</Button>
+              {t('إلغاء')}</Button>
             <Button 
               onClick={handleProduce}
               disabled={submitting}
@@ -1414,7 +1414,7 @@ export default function WarehouseManufacturing() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() =>{t('setShowBranchTransferDialog(false)}>
-              إلغاء')}</Button>
+              {t('إلغاء')}</Button>
             <Button 
               onClick={handleTransferToBranch}
               disabled={submitting || branchTransferForm.items.length === 0 || !branchTransferForm.to_branch_id}

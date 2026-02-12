@@ -518,7 +518,7 @@ export default function Reservations() {
           
           <DialogFooter>
             <Button variant="outline" onClick={() =>{t('setShowAddDialog(false)}>
-              إلغاء')}</Button>
+              {t('إلغاء')}</Button>
             <Button onClick={handleSubmit} className="bg-rose-500 hover:bg-rose-600">{t('إنشاء الحجز')}</Button>
           </DialogFooter>
         </DialogContent>

@@ -466,7 +466,7 @@ export default function WarehouseTransfers() {
                         />
                       </div>
                       <div className="flex justify-end gap-2">
-                        <Button type="button" variant="outline" onClick={() =>{t('setTransferDialogOpen(false)}>إلغاء')}</Button>
+                        <Button type="button" variant="outline" onClick={() =>{t('setTransferDialogOpen(false)}>{t('إلغاء')}</Button>
                         <Button type="submit" disabled={selectedItems.length === 0}>{t('إنشاء التحويل')}</Button>
                       </div>
                     </form>
@@ -620,7 +620,7 @@ export default function WarehouseTransfers() {
                         />
                       </div>
                       <div className="flex justify-end gap-2">
-                        <Button type="button" variant="outline" onClick={() =>{t('setRequestDialogOpen(false)}>إلغاء')}</Button>
+                        <Button type="button" variant="outline" onClick={() =>{t('setRequestDialogOpen(false)}>{t('إلغاء')}</Button>
                         <Button type="submit">{t('إنشاء الطلب')}</Button>
                       </div>
                     </form>

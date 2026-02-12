@@ -2350,7 +2350,7 @@ export default function Settings() {
                           )}
                           
                           <div className="flex gap-2 pt-4">
-                            <Button type="button" variant="outline" onClick={() => setStaffDialogOpen(false)} className="flex-1">{t('إلغاء')}</Button>
+                            <Button type="button" variant="outline" onClick={() => setStaffDialogOpen(false)} className="flex-1">{t('{t('إلغاء')}</Button>
                             <Button type="submit" className="flex-1 bg-primary text-primary-foreground">{t('إضافة الموظف')}</Button>
                           </div>
                         </form>
@@ -2533,7 +2533,7 @@ export default function Settings() {
                       </div>
                       
                       <div className="flex gap-2 pt-4">
-                        <Button type="button" variant="outline" onClick={() => setEditUserDialogOpen(false)} className="flex-1">{t('إلغاء')}</Button>
+                        <Button type="button" variant="outline" onClick={() => setEditUserDialogOpen(false)} className="flex-1">{t('{t('إلغاء')}</Button>
                         <Button type="submit" className="flex-1 bg-primary text-primary-foreground">{t('حفظ التعديلات')}</Button>
                       </div>
                     </form>
@@ -2600,7 +2600,7 @@ export default function Settings() {
                         <Label className="text-foreground">{t('الحساب نشط')}</Label>
                       </div>
                       <div className="flex gap-2 pt-4">
-                        <Button type="button" variant="outline" onClick={() => setEditStaffDialogOpen(false)} className="flex-1">{t('إلغاء')}</Button>
+                        <Button type="button" variant="outline" onClick={() => setEditStaffDialogOpen(false)} className="flex-1">{t('{t('إلغاء')}</Button>
                         <Button type="submit" className="flex-1 bg-primary text-primary-foreground">{t('حفظ التعديلات')}</Button>
                       </div>
                     </form>
@@ -2666,7 +2666,7 @@ export default function Settings() {
                           </div>
                         </div>
                         <div className="flex gap-2 pt-4">
-                          <Button type="button" variant="outline" onClick={() => setBranchDialogOpen(false)} className="flex-1">{t('إلغاء')}</Button>
+                          <Button type="button" variant="outline" onClick={() => setBranchDialogOpen(false)} className="flex-1">{t('{t('إلغاء')}</Button>
                           <Button type="submit" className="flex-1 bg-primary text-primary-foreground">{t('إنشاء')}</Button>
                         </div>
                       </form>
@@ -2758,7 +2758,7 @@ export default function Settings() {
                         </div>
                       </div>
                       <div className="flex gap-2 pt-4">
-                        <Button type="button" variant="outline" onClick={() => setEditBranchDialogOpen(false)} className="flex-1">{t('إلغاء')}</Button>
+                        <Button type="button" variant="outline" onClick={() => setEditBranchDialogOpen(false)} className="flex-1">{t('{t('إلغاء')}</Button>
                         <Button type="submit" className="flex-1 bg-primary text-primary-foreground">{t('حفظ التعديلات')}</Button>
                       </div>
                     </form>
@@ -2845,7 +2845,7 @@ export default function Settings() {
                           </div>
                         </div>
                         <div className="flex gap-2 pt-4">
-                          <Button type="button" variant="outline" onClick={() => setCategoryDialogOpen(false)} className="flex-1">{t('إلغاء')}</Button>
+                          <Button type="button" variant="outline" onClick={() => setCategoryDialogOpen(false)} className="flex-1">{t('{t('إلغاء')}</Button>
                           <Button type="submit" className="flex-1 bg-primary text-primary-foreground">{t('إنشاء')}</Button>
                         </div>
                       </form>
@@ -2980,7 +2980,7 @@ export default function Settings() {
                         </div>
                       </div>
                       <div className="flex gap-2 pt-4">
-                        <Button type="button" variant="outline" onClick={() => setEditCategoryDialogOpen(false)} className="flex-1">{t('إلغاء')}</Button>
+                        <Button type="button" variant="outline" onClick={() => setEditCategoryDialogOpen(false)} className="flex-1">{t('{t('إلغاء')}</Button>
                         <Button type="submit" className="flex-1 bg-primary text-primary-foreground">{t('حفظ التغييرات')}</Button>
                       </div>
                     </form>
@@ -3195,7 +3195,7 @@ export default function Settings() {
                           </div>
                         )}
                         <div className="flex gap-2 pt-4">
-                          <Button type="button" variant="outline" onClick={() => setProductDialogOpen(false)} className="flex-1">{t('إلغاء')}</Button>
+                          <Button type="button" variant="outline" onClick={() => setProductDialogOpen(false)} className="flex-1">{t('{t('إلغاء')}</Button>
                           <Button type="submit" className="flex-1 bg-primary text-primary-foreground">{t('إنشاء')}</Button>
                         </div>
                       </form>
@@ -3441,7 +3441,7 @@ export default function Settings() {
                         <Label className="text-foreground">{t('متاح للبيع')}</Label>
                       </div>
                       <div className="flex gap-2 pt-4">
-                        <Button type="button" variant="outline" onClick={() => setEditProductDialogOpen(false)} className="flex-1">{t('إلغاء')}</Button>
+                        <Button type="button" variant="outline" onClick={() => setEditProductDialogOpen(false)} className="flex-1">{t('{t('إلغاء')}</Button>
                         <Button type="submit" className="flex-1 bg-primary text-primary-foreground">{t('حفظ التعديلات')}</Button>
                       </div>
                     </form>
@@ -3571,7 +3571,7 @@ export default function Settings() {
                         </div>
                         
                         <div className="flex gap-2 pt-4">
-                          <Button type="button" variant="outline" onClick={() => setPrinterDialogOpen(false)} className="flex-1">{t('إلغاء')}</Button>
+                          <Button type="button" variant="outline" onClick={() => setPrinterDialogOpen(false)} className="flex-1">{t('{t('إلغاء')}</Button>
                           <Button type="submit" className="flex-1 bg-primary text-primary-foreground">{t('إضافة')}</Button>
                         </div>
                       </form>
@@ -3772,7 +3772,7 @@ export default function Settings() {
                       </div>
                       
                       <div className="flex gap-2 pt-4">
-                        <Button type="button" variant="outline" onClick={() => setEditPrinterDialogOpen(false)} className="flex-1">{t('إلغاء')}</Button>
+                        <Button type="button" variant="outline" onClick={() => setEditPrinterDialogOpen(false)} className="flex-1">{t('{t('إلغاء')}</Button>
                         <Button type="submit" className="flex-1 bg-primary text-primary-foreground">{t('تحديث')}</Button>
                       </div>
                     </form>
@@ -3864,7 +3864,7 @@ export default function Settings() {
                             setShowAddDeliveryApp(false);
                             setNewDeliveryApp({ name: '', name_en: '', commission_rate: 0, is_active: true });
                           }}
-                        >{t('إلغاء')}</Button>
+                        >{t('{t('إلغاء')}</Button>
                       </div>
                     </div>
                   )}
@@ -5289,7 +5289,7 @@ export default function Settings() {
                             />
                           </div>
                           <div className="flex gap-2 pt-4">
-                            <Button type="button" variant="outline" onClick={() => setCustomerDialogOpen(false)} className="flex-1">{t('إلغاء')}</Button>
+                            <Button type="button" variant="outline" onClick={() => setCustomerDialogOpen(false)} className="flex-1">{t('{t('إلغاء')}</Button>
                             <Button type="submit" className="flex-1 bg-primary text-primary-foreground">{t('إضافة')}</Button>
                           </div>
                         </form>
@@ -5488,7 +5488,7 @@ export default function Settings() {
                         />
                       </div>
                       <div className="flex gap-2 pt-4">
-                        <Button type="button" variant="outline" onClick={() => setEditCustomerDialogOpen(false)} className="flex-1">{t('إلغاء')}</Button>
+                        <Button type="button" variant="outline" onClick={() => setEditCustomerDialogOpen(false)} className="flex-1">{t('{t('إلغاء')}</Button>
                         <Button type="submit" className="flex-1 bg-primary text-primary-foreground">{t('حفظ التغييرات')}</Button>
                       </div>
                     </form>

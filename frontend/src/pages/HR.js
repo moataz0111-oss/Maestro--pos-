@@ -897,7 +897,7 @@ export default function HR() {
                           </div>
                         </div>
                         <div className="flex justify-end gap-2">
-                          <Button type="button" variant="outline" onClick={() => setEmployeeDialogOpen(false)}>{t('إلغاء')}</Button>
+                          <Button type="button" variant="outline" onClick={() => setEmployeeDialogOpen(false)}>{t('{t('إلغاء')}</Button>
                           <Button type="submit">{editingEmployee ? t('تحديث') : t('إضافة')}</Button>
                         </div>
                       </form>
@@ -1140,7 +1140,7 @@ export default function HR() {
                         <Textarea value={attendanceForm.notes} onChange={(e) => setAttendanceForm({...attendanceForm, notes: e.target.value})} />
                       </div>
                       <div className="flex justify-end gap-2">
-                        <Button type="button" variant="outline" onClick={() => setAttendanceDialogOpen(false)}>{t('إلغاء')}</Button>
+                        <Button type="button" variant="outline" onClick={() => setAttendanceDialogOpen(false)}>{t('{t('إلغاء')}</Button>
                         <Button type="submit">{t('تسجيل')}</Button>
                       </div>
                     </form>
@@ -1214,7 +1214,7 @@ export default function HR() {
                         <Textarea value={advanceForm.reason} onChange={(e) => setAdvanceForm({...advanceForm, reason: e.target.value})} />
                       </div>
                       <div className="flex justify-end gap-2">
-                        <Button type="button" variant="outline" onClick={() => setAdvanceDialogOpen(false)}>{t('إلغاء')}</Button>
+                        <Button type="button" variant="outline" onClick={() => setAdvanceDialogOpen(false)}>{t('{t('إلغاء')}</Button>
                         <Button type="submit">{t('تسجيل')}</Button>
                       </div>
                     </form>
@@ -1315,7 +1315,7 @@ export default function HR() {
                         <Textarea value={deductionForm.reason} onChange={(e) => setDeductionForm({...deductionForm, reason: e.target.value})} required />
                       </div>
                       <div className="flex justify-end gap-2">
-                        <Button type="button" variant="outline" onClick={() => setDeductionDialogOpen(false)}>{t('إلغاء')}</Button>
+                        <Button type="button" variant="outline" onClick={() => setDeductionDialogOpen(false)}>{t('{t('إلغاء')}</Button>
                         <Button type="submit" variant="destructive">{t('تسجيل الخصم')}</Button>
                       </div>
                     </form>
@@ -1425,7 +1425,7 @@ export default function HR() {
                         <Textarea value={bonusForm.reason} onChange={(e) => setBonusForm({...bonusForm, reason: e.target.value})} required />
                       </div>
                       <div className="flex justify-end gap-2">
-                        <Button type="button" variant="outline" onClick={() => setBonusDialogOpen(false)}>{t('إلغاء')}</Button>
+                        <Button type="button" variant="outline" onClick={() => setBonusDialogOpen(false)}>{t('{t('إلغاء')}</Button>
                         <Button type="submit" className="bg-green-600 hover:bg-green-700">{t('تسجيل المكافأة')}</Button>
                       </div>
                     </form>
@@ -1810,7 +1810,7 @@ export default function HR() {
                 </div>
                 
                 <div className="flex justify-end gap-2">
-                  <Button variant="outline" onClick={() => setPayrollDialogOpen(false)}>{t('إلغاء')}</Button>
+                  <Button variant="outline" onClick={() => setPayrollDialogOpen(false)}>{t('{t('إلغاء')}</Button>
                   <Button onClick={createPayroll}>{t('إنشاء كشف الراتب')}</Button>
                 </div>
               </div>
