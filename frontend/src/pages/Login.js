@@ -664,6 +664,43 @@ export default function Login() {
                 {t('تطبيق السائق')}
               </a>
               
+              {/* زر تغيير اللغة */}
+              <div className="flex justify-center gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setLanguage('ar')}
+                  className={`px-3 py-1.5 text-sm rounded-lg transition-all ${
+                    lang === 'ar' 
+                      ? 'bg-primary text-black font-bold' 
+                      : 'text-gray-400 hover:text-white hover:bg-white/10'
+                  }`}
+                >
+                  العربية
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLanguage('en')}
+                  className={`px-3 py-1.5 text-sm rounded-lg transition-all ${
+                    lang === 'en' 
+                      ? 'bg-primary text-black font-bold' 
+                      : 'text-gray-400 hover:text-white hover:bg-white/10'
+                  }`}
+                >
+                  English
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLanguage('ku')}
+                  className={`px-3 py-1.5 text-sm rounded-lg transition-all ${
+                    lang === 'ku' 
+                      ? 'bg-primary text-black font-bold' 
+                      : 'text-gray-400 hover:text-white hover:bg-white/10'
+                  }`}
+                >
+                  کوردی
+                </button>
+              </div>
+              
               {/* Direct database init button - always visible */}
               <button 
                 type="button"
