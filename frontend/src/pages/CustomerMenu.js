@@ -1883,13 +1883,14 @@ export default function CustomerMenu() {
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <MapPin className="h-5 w-5 text-orange-500" />
-                تحديد موقع التوصيل
+                {t('تحديد موقع التوصيل')}
               </DialogTitle>
             </DialogHeader>
             <LocationPicker 
               position={deliveryLocation} 
               setPosition={setDeliveryLocation}
               onClose={() => setShowMap(false)}
+              t={t}
             />
             <DialogFooter>
               <Button variant="outline" onClick={() => setShowMap(false)}>{t('إلغاء')}</Button>
