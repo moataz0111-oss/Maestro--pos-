@@ -4035,7 +4035,7 @@ export default function Settings() {
                         variant="outline"
                         onClick={() => {
                           navigator.clipboard.writeText(`${API}/callcenter/webhook`);
-                          toast.success('تم نسخ الرابط');
+                          toast.success(t('تم نسخ الرابط'));
                         }}
                       >
                         <Copy className="h-4 w-4" />
@@ -4111,10 +4111,10 @@ export default function Settings() {
                             setCallCenterTestStatus('testing');
                             const res = await axios.post(`${API}/callcenter/test`, callCenterConfig);
                             setCallCenterTestStatus(res.data.success ? 'success' : 'failed');
-                            toast.success('تم الاتصال بنجاح!');
+                            toast.success(t('تم الاتصال بنجاح!'));
                           } catch (error) {
                             setCallCenterTestStatus('failed');
-                            toast.error('فشل الاتصال: ' + (error.response?.data?.detail || 'خطأ غير معروف'));
+                            toast.error(t('فشل الاتصال') + ': ' + (error.response?.data?.detail || t('خطأ غير معروف')));
                           }
                         }}
                         disabled={!callCenterConfig.provider || callCenterTestStatus === 'testing'}
@@ -4125,7 +4125,7 @@ export default function Settings() {
                         ) : (
                           <TestTube className="h-4 w-4" />
                         )}
-                        اختبار الاتصال
+                        {t('اختبار الاتصال')}
                       </Button>
                       
                       <Button 
@@ -4133,9 +4133,9 @@ export default function Settings() {
                         onClick={async () => {
                           try {
                             await axios.post(`${API}/callcenter/simulate`, { phone: '07801234567' });
-                            toast.success('تم إرسال مكالمة تجريبية!');
+                            toast.success(t('تم إرسال مكالمة تجريبية!'));
                           } catch (error) {
-                            toast.error('فشل إرسال المكالمة التجريبية');
+                            toast.error(t('فشل إرسال المكالمة التجريبية'));
                           }
                         }}
                         className="gap-2"
@@ -4157,9 +4157,9 @@ export default function Settings() {
                         onClick={async () => {
                           try {
                             await axios.post(`${API}/callcenter/config`, callCenterConfig);
-                            toast.success('تم حفظ الإعدادات');
+                            toast.success(t('تم حفظ الإعدادات'));
                           } catch (error) {
-                            toast.error('فشل حفظ الإعدادات');
+                            toast.error(t('فشل حفظ الإعدادات'));
                           }
                         }}
                         className="gap-2 bg-primary"
