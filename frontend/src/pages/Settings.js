@@ -4280,7 +4280,7 @@ export default function Settings() {
                         const newSettings = {...soundSettings, enabled: checked};
                         setSoundSettings(newSettings);
                         saveSoundSettings(newSettings);
-                        toast.success(checked ? 'تم تفعيل الأصوات' : 'تم إيقاف الأصوات');
+                        toast.success(checked ? t('تم تفعيل الأصوات') : t('تم إيقاف الأصوات'));
                       }}
                     />
                   </div>
