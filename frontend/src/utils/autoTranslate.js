@@ -2842,6 +2842,48 @@ const translationMap = {
   'فشل في إضافة المخزون': { en: 'Failed to add inventory', ku: '' },
   'تم التحويل بنجاح': { en: 'Transfer successful', ku: '' },
   'فشل في التحويل': { en: 'Transfer failed', ku: '' },
+  
+  // ===== SmartReports Additional =====
+  'برجر كلاسيك': { en: 'Classic Burger', ku: '' },
+  'بيتزا مارغريتا': { en: 'Margherita Pizza', ku: '' },
+  'قهوة لاتيه': { en: 'Latte Coffee', ku: '' },
+  'سلطة سيزر': { en: 'Caesar Salad', ku: '' },
+  'المبيعات أعلى بـ 12.5% مقارنة بالأمس': { en: 'Sales are 12.5% higher than yesterday', ku: '' },
+  'قهوة لاتيه تشهد نمواً ملحوظاً (+22%)': { en: 'Latte coffee is growing significantly (+22%)', ku: '' },
+  'شاورما لحم تراجعت مبيعاتها (-5%)': { en: 'Beef shawarma sales declined (-5%)', ku: '' },
+  'ساعة الذروة: 7 مساءً (2,100 ل.س)': { en: 'Peak hour: 7 PM (2,100 IQD)', ku: '' },
+  'رؤى ذكية': { en: 'Smart Insights', ku: '' },
+  'المبيعات حسب الساعة': { en: 'Sales by Hour', ku: '' },
+  'المنتجات الأكثر مبيعاً': { en: 'Best Selling Products', ku: '' },
+  'توزيع أنواع الطلبات': { en: 'Order Types Distribution', ku: '' },
+  'مقارنات الأداء': { en: 'Performance Comparisons', ku: '' },
+  'مقارنة بالأمس': { en: 'Compared to Yesterday', ku: '' },
+  'مقارنة بالأسبوع الماضي': { en: 'Compared to Last Week', ku: '' },
+  'طباعة التقرير': { en: 'Print Report', ku: '' },
+  
+  // ===== Dashboard Closing Report =====
+  'جرد الصندوق': { en: 'Cash Count', ku: '' },
+  'الرصيد الافتتاحي': { en: 'Opening Balance', ku: '' },
+  'المبيعات النقدية': { en: 'Cash Sales', ku: '' },
+  'المتوقع في الصندوق': { en: 'Expected Cash', ku: '' },
+  'الجرد الفعلي': { en: 'Actual Count', ku: '' },
+  'الفرق': { en: 'Difference', ku: '' },
+  'زيادة': { en: 'Surplus', ku: '' },
+  'نقص': { en: 'Shortage', ku: '' },
+  'مبالغ غير نقدية': { en: 'Non-Cash Amounts', ku: '' },
+  'خارج الصندوق': { en: 'Outside Cash Box', ku: '' },
+  'هذه المبالغ لا تحتسب في جرد الصندوق لأنها ليست نقداً': { en: 'These amounts are not counted in cash as they are not cash', ku: '' },
+  'بطاقات': { en: 'Cards', ku: '' },
+  'إجمالي غير نقدي': { en: 'Total Non-Cash', ku: '' },
+  'صافي الربح': { en: 'Net Profit', ku: '' },
+  'عناصر': { en: 'items', ku: '' },
+  'زبون': { en: 'Customer', ku: '' },
+  
+  // ===== Purchasing =====
+  'تنبيهات انخفاض المخزون': { en: 'Low Stock Alerts', ku: '' },
+  'أمر شراء جديد': { en: 'New Purchase Order', ku: '' },
+  'إضافة مورد جديد': { en: 'Add New Supplier', ku: '' },
+  'أمر شراء': { en: 'Purchase Order', ku: '' },
 };
 
 // الحصول على اللغة الحالية
