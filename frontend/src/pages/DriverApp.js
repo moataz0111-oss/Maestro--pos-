@@ -451,6 +451,43 @@ export default function DriverApp() {
                 {t('تثبيت التطبيق على جهازك')}
               </Button>
             )}
+            
+            {/* زر تغيير اللغة */}
+            <div className="flex justify-center gap-2 pt-2 border-t mt-4">
+              <button
+                type="button"
+                onClick={() => setLanguage('ar')}
+                className={`px-4 py-2 text-sm rounded-lg transition-all ${
+                  lang === 'ar' 
+                    ? 'bg-blue-500 text-white font-bold' 
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                العربية
+              </button>
+              <button
+                type="button"
+                onClick={() => setLanguage('en')}
+                className={`px-4 py-2 text-sm rounded-lg transition-all ${
+                  lang === 'en' 
+                    ? 'bg-blue-500 text-white font-bold' 
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                English
+              </button>
+              <button
+                type="button"
+                onClick={() => setLanguage('ku')}
+                className={`px-4 py-2 text-sm rounded-lg transition-all ${
+                  lang === 'ku' 
+                    ? 'bg-blue-500 text-white font-bold' 
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                کوردی
+              </button>
+            </div>
           </CardContent>
         </Card>
       </div>
