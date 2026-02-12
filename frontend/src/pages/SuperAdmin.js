@@ -4100,13 +4100,13 @@ export default function SuperAdmin() {
               await saveInvoiceSettings(); 
               try {
                 await axios.put(`${API}/login-backgrounds`, backgroundSettings);
-                toast.success('تم حفظ إعدادات الخلفيات');
+                toast.success(t('تم حفظ إعدادات الخلفيات'));
               } catch (error) {
-                toast.error('فشل في حفظ إعدادات الخلفيات');
+                toast.error(t('فشل في حفظ إعدادات الخلفيات'));
               }
             }} className="bg-green-600 hover:bg-green-700">
               <Check className="h-4 w-4 ml-2" />
-              حفظ جميع الإعدادات
+              {t('حفظ جميع الإعدادات')}
             </Button>
           </DialogFooter>
         </DialogContent>
