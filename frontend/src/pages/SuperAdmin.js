@@ -3051,7 +3051,7 @@ export default function SuperAdmin() {
             </Button>
             <Button onClick={resetTenantSales} className="bg-orange-600 hover:bg-orange-700">
               <RotateCcw className="h-4 w-4 ml-2" />
-              تصفير المبيعات
+              {t('تصفير المبيعات')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -3061,23 +3061,23 @@ export default function SuperAdmin() {
       <Dialog open={showResetInventoryConfirm} onOpenChange={setShowResetInventoryConfirm}>
         <DialogContent className="bg-gray-800 border-gray-700 text-white">
           <DialogHeader>
-            <DialogTitle className="text-xl text-purple-400">تأكيد تصفير المخزون</DialogTitle>
+            <DialogTitle className="text-xl text-purple-400">{t('تأكيد تصفير المخزون')}</DialogTitle>
           </DialogHeader>
           <div className="py-4">
             <p className="text-gray-300">
-              هل أنت متأكد من تصفير مخزون <span className="font-bold text-white">{selectedTenant?.name}</span>؟
+              {t('هل أنت متأكد من تصفير مخزون')} <span className="font-bold text-white">{selectedTenant?.name}</span>؟
             </p>
             <p className="text-purple-400 text-sm mt-2">
-              ⚠️ سيتم حذف جميع بيانات المخزون والمشتريات. هذا الإجراء لا يمكن التراجع عنه.
+              {t('سيتم حذف جميع بيانات المخزون والمشتريات. هذا الإجراء لا يمكن التراجع عنه.')}
             </p>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowResetInventoryConfirm(false)} className="border-gray-600">
-              إلغاء
+              {t('إلغاء')}
             </Button>
             <Button onClick={resetTenantInventory} className="bg-purple-600 hover:bg-purple-700">
               <Package className="h-4 w-4 ml-2" />
-              تصفير المخزون
+              {t('تصفير المخزون')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -3089,7 +3089,7 @@ export default function SuperAdmin() {
           <DialogHeader>
             <DialogTitle className="text-xl flex items-center gap-2">
               <Building2 className="h-5 w-5 text-purple-400" />
-              تفاصيل العميل - {selectedTenant?.name}
+              {t('تفاصيل العميل')} - {selectedTenant?.name}
             </DialogTitle>
           </DialogHeader>
           <div className="py-4 space-y-6">
@@ -3100,33 +3100,33 @@ export default function SuperAdmin() {
                   <div className="space-y-4">
                     <h3 className="font-bold text-green-400 flex items-center gap-2 border-b border-gray-700 pb-2">
                       <Building2 className="h-4 w-4" />
-                      معلومات المطعم
+                      {t('معلومات المطعم')}
                     </h3>
                     <div className="space-y-3">
                       <div className="flex justify-between items-center p-2 bg-gray-700/30 rounded">
-                        <span className="text-gray-400">اسم المطعم</span>
+                        <span className="text-gray-400">{t('اسم المطعم')}</span>
                         <span className="font-medium">{tenantDetails.tenant?.name || selectedTenant?.name || '-'}</span>
                       </div>
                       <div className="flex justify-between items-center p-2 bg-gray-700/30 rounded">
-                        <span className="text-gray-400">المعرف (Slug)</span>
+                        <span className="text-gray-400">{t('المعرف (Slug)')}</span>
                         <span className="font-medium text-blue-400" dir="ltr">/{tenantDetails.tenant?.slug || selectedTenant?.slug || '-'}</span>
                       </div>
                       <div className="flex justify-between items-center p-2 bg-gray-700/30 rounded">
-                        <span className="text-gray-400">نوع الاشتراك</span>
+                        <span className="text-gray-400">{t('نوع الاشتراك')}</span>
                         <Badge className={
                           (tenantDetails.tenant?.subscription_type || selectedTenant?.subscription_type) === 'premium' ? 'bg-purple-500/20 text-purple-400' :
                           (tenantDetails.tenant?.subscription_type || selectedTenant?.subscription_type) === 'basic' ? 'bg-blue-500/20 text-blue-400' :
                           'bg-yellow-500/20 text-yellow-400'
                         }>
-                          {(tenantDetails.tenant?.subscription_type || selectedTenant?.subscription_type) === 'premium' ? 'مميز' : 
-                           (tenantDetails.tenant?.subscription_type || selectedTenant?.subscription_type) === 'basic' ? 'أساسي' : 
-                           (tenantDetails.tenant?.subscription_type || selectedTenant?.subscription_type) === 'demo' ? 'تجريبي' : 'فترة تجريبية'}
+                          {(tenantDetails.tenant?.subscription_type || selectedTenant?.subscription_type) === 'premium' ? t('مميز') : 
+                           (tenantDetails.tenant?.subscription_type || selectedTenant?.subscription_type) === 'basic' ? t('أساسي') : 
+                           (tenantDetails.tenant?.subscription_type || selectedTenant?.subscription_type) === 'demo' ? t('تجريبي') : t('فترة تجريبية')}
                         </Badge>
                       </div>
                       <div className="flex justify-between items-center p-2 bg-gray-700/30 rounded">
-                        <span className="text-gray-400">الحالة</span>
+                        <span className="text-gray-400">{t('الحالة')}</span>
                         <Badge className={(tenantDetails.tenant?.is_active !== false && selectedTenant?.is_active !== false) ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}>
-                          {(tenantDetails.tenant?.is_active !== false && selectedTenant?.is_active !== false) ? 'نشط' : 'معطل'}
+                          {(tenantDetails.tenant?.is_active !== false && selectedTenant?.is_active !== false) ? t('نشط') : t('معطل')}
                         </Badge>
                       </div>
                     </div>
@@ -3135,26 +3135,26 @@ export default function SuperAdmin() {
                   <div className="space-y-4">
                     <h3 className="font-bold text-blue-400 flex items-center gap-2 border-b border-gray-700 pb-2">
                       <User className="h-4 w-4" />
-                      معلومات المالك
+                      {t('معلومات المالك')}
                     </h3>
                     <div className="space-y-3">
                       <div className="flex justify-between items-center p-2 bg-gray-700/30 rounded">
-                        <span className="text-gray-400">اسم المالك</span>
+                        <span className="text-gray-400">{t('اسم المالك')}</span>
                         <span className="font-medium">{tenantDetails.tenant?.owner_name || selectedTenant?.owner_name || '-'}</span>
                       </div>
                       <div className="flex justify-between items-center p-2 bg-gray-700/30 rounded">
-                        <span className="text-gray-400">البريد الإلكتروني</span>
+                        <span className="text-gray-400">{t('البريد الإلكتروني')}</span>
                         <span className="font-medium text-blue-400" dir="ltr">{tenantDetails.tenant?.owner_email || selectedTenant?.owner_email || '-'}</span>
                       </div>
                       <div className="flex justify-between items-center p-2 bg-gray-700/30 rounded">
-                        <span className="text-gray-400">رقم الهاتف</span>
+                        <span className="text-gray-400">{t('رقم الهاتف')}</span>
                         <span className="font-medium" dir="ltr">{tenantDetails.tenant?.owner_phone || selectedTenant?.owner_phone || '-'}</span>
                       </div>
                       <div className="flex justify-between items-center p-2 bg-gray-700/30 rounded">
-                        <span className="text-gray-400">تاريخ الإنشاء</span>
+                        <span className="text-gray-400">{t('تاريخ الإنشاء')}</span>
                         <span className="font-medium">
                           {(tenantDetails.tenant?.created_at || selectedTenant?.created_at) 
-                            ? new Date(tenantDetails.tenant?.created_at || selectedTenant?.created_at).toLocaleDateString('ar-EG') 
+                            ? new Date(tenantDetails.tenant?.created_at || selectedTenant?.created_at).toLocaleDateString('en-US') 
                             : '-'}
                         </span>
                       </div>
@@ -3166,26 +3166,26 @@ export default function SuperAdmin() {
                 <div className="space-y-4">
                   <h3 className="font-bold text-yellow-400 flex items-center gap-2 border-b border-gray-700 pb-2">
                     <BarChart3 className="h-4 w-4" />
-                    الحدود والإحصائيات
+                    {t('الحدود والإحصائيات')}
                   </h3>
                   <div className="grid grid-cols-4 gap-4">
                     <div className="text-center p-4 bg-gray-700/30 rounded-lg">
                       <p className="text-2xl font-bold text-blue-400">{tenantDetails.stats?.branches_count || tenantDetails.branches?.length || 0}</p>
-                      <p className="text-sm text-gray-400">الفروع</p>
-                      <p className="text-xs text-gray-500 mt-1">الحد: {tenantDetails.tenant?.max_branches || selectedTenant?.max_branches || '-'}</p>
+                      <p className="text-sm text-gray-400">{t('الفروع')}</p>
+                      <p className="text-xs text-gray-500 mt-1">{t('الحد')}: {tenantDetails.tenant?.max_branches || selectedTenant?.max_branches || '-'}</p>
                     </div>
                     <div className="text-center p-4 bg-gray-700/30 rounded-lg">
                       <p className="text-2xl font-bold text-green-400">{tenantDetails.stats?.users_count || tenantDetails.users?.length || 0}</p>
-                      <p className="text-sm text-gray-400">المستخدمين</p>
-                      <p className="text-xs text-gray-500 mt-1">الحد: {tenantDetails.tenant?.max_users || selectedTenant?.max_users || '-'}</p>
+                      <p className="text-sm text-gray-400">{t('المستخدمين')}</p>
+                      <p className="text-xs text-gray-500 mt-1">{t('الحد')}: {tenantDetails.tenant?.max_users || selectedTenant?.max_users || '-'}</p>
                     </div>
                     <div className="text-center p-4 bg-gray-700/30 rounded-lg">
                       <p className="text-2xl font-bold text-purple-400">{tenantDetails.stats?.orders_today || 0}</p>
-                      <p className="text-sm text-gray-400">طلبات اليوم</p>
+                      <p className="text-sm text-gray-400">{t('طلبات اليوم')}</p>
                     </div>
                     <div className="text-center p-4 bg-gray-700/30 rounded-lg">
                       <p className="text-2xl font-bold text-yellow-400">{formatPrice(tenantDetails.stats?.total_sales || 0)}</p>
-                      <p className="text-sm text-gray-400">إجمالي المبيعات</p>
+                      <p className="text-sm text-gray-400">{t('إجمالي المبيعات')}</p>
                     </div>
                   </div>
                 </div>
@@ -3195,7 +3195,7 @@ export default function SuperAdmin() {
                   <div className="space-y-4">
                     <h3 className="font-bold text-purple-400 flex items-center gap-2 border-b border-gray-700 pb-2">
                       <Users className="h-4 w-4" />
-                      المستخدمين ({tenantDetails.users.length})
+                      {t('المستخدمين')} ({tenantDetails.users.length})
                     </h3>
                     <div className="max-h-40 overflow-y-auto space-y-2">
                       {tenantDetails.users.map((user, idx) => (
