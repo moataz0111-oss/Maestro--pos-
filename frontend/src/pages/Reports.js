@@ -138,7 +138,7 @@ export default function Reports() {
       }
     } catch (error) {
       console.error('Failed to fetch reports:', error);
-      toast.error('فشل في تحميل التقرير');
+      toast.error(t('فشل في تحميل التقرير'));
     } finally {
       setLoading(false);
     }
