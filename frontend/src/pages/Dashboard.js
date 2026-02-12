@@ -1230,8 +1230,8 @@ export default function Dashboard() {
             <div className="mb-3 p-3 bg-orange-500/10 border border-orange-500/30 rounded-lg flex items-center gap-3">
               <AlertCircle className="h-5 w-5 text-orange-500 flex-shrink-0" />
               <div className="flex-1">
-                <p className="text-sm font-medium text-orange-600">تنبيه: مر أكثر من 24 ساعة على فتح الوردية</p>
-                <p className="text-xs text-muted-foreground">يُنصح بإغلاق اليوم وترحيل البيانات لبدء يوم جديد</p>
+                <p className="text-sm font-medium text-orange-600">{t('تنبيه')}: {t('مر أكثر من 24 ساعة على فتح الوردية')}</p>
+                <p className="text-xs text-muted-foreground">{t('يُنصح بإغلاق اليوم وترحيل البيانات لبدء يوم جديد')}</p>
               </div>
               <Button 
                 size="sm" 
@@ -1239,7 +1239,7 @@ export default function Dashboard() {
                 className="border-orange-500 text-orange-500 hover:bg-orange-500 hover:text-white"
                 onClick={() => setShowDayCloseDialog(true)}
               >
-                إغلاق الآن
+                {t('إغلاق الآن')}
               </Button>
             </div>
           )}
@@ -1266,26 +1266,26 @@ export default function Dashboard() {
                   delayedStats.critical_count > 0 ? 'text-red-600' : 
                   delayedStats.high_count > 0 ? 'text-orange-600' : 'text-yellow-600'
                 }`}>
-                  ⏰ {delayedStats.total_delayed} طلب متأخر
+                  ⏰ {delayedStats.total_delayed} {t('طلب متأخر')}
                   {delayedStats.critical_count > 0 && (
                     <span className="mr-2 px-2 py-0.5 bg-red-500 text-white text-xs rounded-full">
-                      {delayedStats.critical_count} حرج
+                      {delayedStats.critical_count} {t('حرج')}
                     </span>
                   )}
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  أقصى تأخير: {delayedStats.max_delay_minutes} دقيقة | متوسط: {delayedStats.avg_delay_minutes} دقيقة
+                  {t('أقصى تأخير')}: {delayedStats.max_delay_minutes} {t('دقيقة')} | {t('متوسط')}: {delayedStats.avg_delay_minutes} {t('دقيقة')}
                 </p>
               </div>
               <div className="flex gap-2">
                 {delayedStats.critical_count > 0 && (
                   <Badge variant="destructive" className="text-xs">
-                    {delayedStats.critical_count} حرج (+45د)
+                    {delayedStats.critical_count} {t('حرج')} (+45{t('د')})
                   </Badge>
                 )}
                 {delayedStats.high_count > 0 && (
                   <Badge variant="outline" className="text-xs border-orange-500 text-orange-500">
-                    {delayedStats.high_count} عالي (+30د)
+                    {delayedStats.high_count} {t('عالي')} (+30{t('د')})
                   </Badge>
                 )}
               </div>
@@ -1302,7 +1302,7 @@ export default function Dashboard() {
                   navigate('/orders');
                 }}
               >
-                عرض الطلبات
+                {t('عرض الطلبات')}
               </Button>
             </div>
           )}
