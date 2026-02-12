@@ -691,7 +691,7 @@ export default function Inventory() {
           <Card className="border-border/50 bg-card">
             <CardContent className="py-12 text-center">
               <Package className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <p className="text-muted-foreground">لا توجد أصناف</p>
+              <p className="text-muted-foreground">{t('لا توجد أصناف')}</p>
             </CardContent>
           </Card>
         )}
@@ -702,12 +702,12 @@ export default function Inventory() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle className="text-foreground">
-              {transactionDialog?.type === 'in' ? 'إضافة كمية' : 'سحب كمية'} - {transactionDialog?.name}
+              {transactionDialog?.type === 'in' ? t('إضافة كمية') : t('سحب كمية')} - {transactionDialog?.name}
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <Label className="text-foreground">الكمية الحالية</Label>
+              <Label className="text-foreground">{t('الكمية الحالية')}</Label>
               <p className="text-lg font-bold text-foreground">{transactionDialog?.quantity} {transactionDialog?.unit}</p>
             </div>
             <div>
