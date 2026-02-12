@@ -884,8 +884,8 @@ export default function CustomerMenu() {
           {favorites.length === 0 ? (
             <div className="text-center py-8">
               <Heart className="h-12 w-12 mx-auto text-gray-300 mb-3" />
-              <p className="text-gray-500">لا توجد طلبات مفضلة</p>
-              <p className="text-sm text-gray-400 mt-1">أضف طلبك للمفضلة من صفحة السلة</p>
+              <p className="text-gray-500">{t('لا توجد طلبات مفضلة')}</p>
+              <p className="text-sm text-gray-400 mt-1">{t('أضف طلبك للمفضلة من صفحة السلة')}</p>
             </div>
           ) : (
             <div className="space-y-3">
@@ -929,7 +929,7 @@ export default function CustomerMenu() {
                         className="bg-pink-500 hover:bg-pink-600"
                       >
                         <ShoppingCart className="h-4 w-4 ml-2" />
-                        إضافة للسلة
+                        {t('إضافة للسلة')}
                       </Button>
                     </div>
                   </CardContent>
@@ -940,7 +940,7 @@ export default function CustomerMenu() {
           
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowFavoritesDialog(false)}>
-              إغلاق
+              {t('إغلاق')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -951,15 +951,15 @@ export default function CustomerMenu() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Bookmark className="h-5 w-5 text-pink-500" />
-              حفظ الطلب كمفضل
+              {t('حفظ الطلب كمفضل')}
             </DialogTitle>
           </DialogHeader>
           
           <div className="space-y-4">
             <div>
-              <label className="text-sm font-medium mb-2 block">اسم الطلب المفضل</label>
+              <label className="text-sm font-medium mb-2 block">{t('اسم الطلب المفضل')}</label>
               <Input
-                placeholder="مثال: طلبي المعتاد"
+                placeholder={t('مثال: طلبي المعتاد')}
                 value={favoriteName}
                 onChange={(e) => setFavoriteName(e.target.value)}
                 className="w-full"
@@ -967,7 +967,7 @@ export default function CustomerMenu() {
             </div>
             
             <div className="bg-gray-50 rounded-lg p-3">
-              <p className="text-sm font-medium mb-2">محتويات الطلب:</p>
+              <p className="text-sm font-medium mb-2">{t('محتويات الطلب')}:</p>
               <div className="space-y-1">
                 {cart.map((item, idx) => (
                   <div key={idx} className="flex justify-between text-sm">
@@ -978,7 +978,7 @@ export default function CustomerMenu() {
               </div>
               <div className="border-t pt-2 mt-2">
                 <div className="flex justify-between font-bold">
-                  <span>الإجمالي</span>
+                  <span>{t('الإجمالي')}</span>
                   <span className="text-orange-600">{formatPrice(cartTotal)}</span>
                 </div>
               </div>
@@ -987,7 +987,7 @@ export default function CustomerMenu() {
           
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowSaveFavoriteDialog(false)}>
-              إلغاء
+              {t('إلغاء')}
             </Button>
             <Button 
               onClick={saveToFavorites}
