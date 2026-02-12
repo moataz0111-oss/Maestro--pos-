@@ -4352,7 +4352,7 @@ export default function SuperAdmin() {
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() =>{t('setShowPricesModal(false)} className="border-gray-600">
+            <Button variant="outline" onClick={() => setShowPricesModal(false)} className="border-gray-600">
               {t('إلغاء')}</Button>
             <Button 
               onClick={saveSubscriptionPrices} 
