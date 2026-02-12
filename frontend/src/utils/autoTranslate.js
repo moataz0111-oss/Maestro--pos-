@@ -2076,6 +2076,28 @@ const translationMap = {
   'تعليم الكل كمقروء': { en: 'Mark All as Read', ku: '' },
   'حذف الكل': { en: 'Delete All', ku: '' },
   'لا توجد إشعارات': { en: 'No notifications', ku: '' },
+  
+  // ===== SuperAdmin Login Page =====
+  'إنشاء حساب المالك': { en: 'Create Owner Account', ku: '' },
+  'مفتاح السر': { en: 'Secret Key', ku: '' },
+  'جاري الدخول...': { en: 'Logging in...', ku: '' },
+  'ليس لديك حساب؟': { en: 'Don\'t have an account?', ku: '' },
+  'إنشاء حساب': { en: 'Create Account', ku: '' },
+  'الاسم الكامل': { en: 'Full Name', ku: '' },
+  'مفتاح السر للتسجيل': { en: 'Secret Key for Registration', ku: '' },
+  'جاري الإنشاء...': { en: 'Creating...', ku: '' },
+  'إنشاء الحساب': { en: 'Create Account', ku: '' },
+  'لديك حساب؟': { en: 'Have an account?', ku: '' },
+  'بدون اسم': { en: 'No Name', ku: '' },
+  'المستخدمين': { en: 'Users', ku: '' },
+  'تعديل الصورة': { en: 'Edit Image', ku: '' },
+  'تم إضافة الخلفية': { en: 'Background added', ku: '' },
+  'تم حذف الشعار': { en: 'Logo deleted', ku: '' },
+  'فشل في حذف الشعار': { en: 'Failed to delete logo', ku: '' },
+  'تم حذف الخلفية': { en: 'Background deleted', ku: '' },
+  'فشل في حذف الخلفية': { en: 'Failed to delete background', ku: '' },
+  'فشل في إضافة الخلفية': { en: 'Failed to add background', ku: '' },
+  'تم رفع شعار صفحة تسجيل الدخول بنجاح': { en: 'Login page logo uploaded successfully', ku: '' },
 };
 
 // الحصول على اللغة الحالية
