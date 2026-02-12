@@ -110,7 +110,7 @@ export default function Recipes() {
     e.preventDefault();
     
     if (!materialForm.name || !materialForm.unit) {
-      toast.error('الاسم والوحدة مطلوبان');
+      toast.error(t('الاسم والوحدة مطلوبان'));
       return;
     }
     try {
@@ -119,28 +119,28 @@ export default function Recipes() {
       
       if (editingMaterial) {
         await axios.put(`${API}/recipes/materials/${editingMaterial.id}`, materialForm, { headers });
-        toast.success('تم تحديث المادة');
+        toast.success(t('تم تحديث المادة'));
       } else {
         await axios.post(`${API}/recipes/materials`, materialForm, { headers });
-        toast.success('تم إضافة المادة');
+        toast.success(t('تم إضافة المادة'));
       }
       
       setMaterialDialogOpen(false);
       resetMaterialForm();
       fetchData();
     } catch (error) {
-      toast.error('فشل في حفظ المادة');
+      toast.error(t('فشل في حفظ المادة'));
     }
   };
   const handleDeleteMaterial = async (id) => {
-    if (!window.confirm('هل أنت متأكد من حذف هذه المادة؟')) return;
+    if (!window.confirm(t('هل أنت متأكد؟'))) return;
     
     try {
       const token = localStorage.getItem('token');
       await axios.delete(`${API}/recipes/materials/${id}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      toast.success('تم الحذف');
+      toast.success(t('تم الحذف'));
       fetchData();
     } catch (error) {
       toast.error(t('فشل في الحذف'));
@@ -150,7 +150,7 @@ export default function Recipes() {
     e.preventDefault();
     
     if (!recipeForm.product_id || recipeForm.ingredients.length === 0) {
-      toast.error('اختر المنتج وأضف المكونات');
+      toast.error(t('اختر المنتج وأضف المكونات'));
       return;
     }
     try {
@@ -159,23 +159,23 @@ export default function Recipes() {
         headers: { Authorization: `Bearer ${token}` }
       });
       
-      toast.success('تم إنشاء الوصفة');
+      toast.success(t('تم إنشاء الوصفة'));
       setRecipeDialogOpen(false);
       resetRecipeForm();
       fetchData();
     } catch (error) {
-      toast.error('فشل في إنشاء الوصفة');
+      toast.error(t('فشل في إنشاء الوصفة'));
     }
   };
   const handleDeleteRecipe = async (id) => {
-    if (!window.confirm('هل أنت متأكد من حذف هذه الوصفة؟')) return;
+    if (!window.confirm(t('هل أنت متأكد؟'))) return;
     
     try {
       const token = localStorage.getItem('token');
       await axios.delete(`${API}/recipes/${id}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      toast.success('تم الحذف');
+      toast.success(t('تم الحذف'));
       fetchData();
     } catch (error) {
       toast.error(t('فشل في الحذف'));
