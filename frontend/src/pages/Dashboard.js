@@ -1599,24 +1599,24 @@ export default function Dashboard() {
                   {/* المبالغ غير النقدية - للتوضيح */}
                   {(closingResult.card_sales > 0 || closingResult.credit_sales > 0) && (
                     <div className="section mb-4 p-4 bg-gray-500/10 rounded-lg">
-                      <div className="section-title font-bold mb-2 text-gray-600">مبالغ غير نقدية (خارج الصندوق)</div>
-                      <p className="text-xs text-muted-foreground mb-2">هذه المبالغ لا تحتسب في جرد الصندوق لأنها ليست نقداً</p>
+                      <div className="section-title font-bold mb-2 text-gray-600">{t('مبالغ غير نقدية')} ({t('خارج الصندوق')})</div>
+                      <p className="text-xs text-muted-foreground mb-2">{t('هذه المبالغ لا تحتسب في جرد الصندوق لأنها ليست نقداً')}</p>
                       <div className="space-y-1">
                         {closingResult.card_sales > 0 && (
                           <div className="flex justify-between text-sm">
-                            <span>💳 بطاقات:</span>
+                            <span>💳 {t('بطاقات')}:</span>
                             <span className="text-blue-600">{formatPrice(closingResult.card_sales)}</span>
                           </div>
                         )}
                         {closingResult.credit_sales > 0 && (
                           <div className="flex justify-between text-sm">
-                            <span>📝 آجل:</span>
+                            <span>📝 {t('آجل')}:</span>
                             <span className="text-orange-600">{formatPrice(closingResult.credit_sales)}</span>
                           </div>
                         )}
                         <Separator className="my-2" />
                         <div className="flex justify-between font-medium">
-                          <span>إجمالي غير نقدي:</span>
+                          <span>{t('إجمالي غير نقدي')}:</span>
                           <span>{formatPrice((closingResult.card_sales || 0) + (closingResult.credit_sales || 0))}</span>
                         </div>
                       </div>
@@ -1626,7 +1626,7 @@ export default function Dashboard() {
                   {/* صافي الربح */}
                   <div className="section p-4 bg-primary/10 rounded-lg">
                     <div className="flex justify-between items-center">
-                      <span className="text-lg font-bold">صافي الربح:</span>
+                      <span className="text-lg font-bold">{t('صافي الربح')}:</span>
                       <span className={`text-2xl font-bold ${closingResult.net_profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                         {formatPrice(closingResult.net_profit)}
                       </span>
@@ -1636,7 +1636,7 @@ export default function Dashboard() {
                   {/* ملاحظات */}
                   {closingResult.notes && (
                     <div className="section mt-4 p-4 bg-muted/30 rounded-lg">
-                      <div className="section-title font-bold mb-2">ملاحظات</div>
+                      <div className="section-title font-bold mb-2">{t('ملاحظات')}</div>
                       <p className="text-sm">{closingResult.notes}</p>
                     </div>
                   )}
@@ -1646,7 +1646,7 @@ export default function Dashboard() {
                 <div className="flex gap-3 mt-6">
                   <Button onClick={handlePrintReport} className="flex-1 gap-2">
                     <Printer className="h-4 w-4" />
-                    طباعة التقرير
+                    {t('طباعة التقرير')}
                   </Button>
                   <Button variant="destructive" onClick={handleCloseAndLogout} className="flex-1 gap-2">
                     <LogOut className="h-4 w-4" />
