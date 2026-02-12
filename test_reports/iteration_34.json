@@ -132,7 +132,7 @@
   },
   
   "test_credentials": {
-    "api_url": "https://arabigo-menu.preview.emergentagent.com",
+    "api_url": "https://arabeng-resto.preview.emergentagent.com",
     "owner": {
       "email": "owner@maestroegp.com",
       "password": "owner123",

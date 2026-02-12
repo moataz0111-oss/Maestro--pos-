@@ -103,7 +103,7 @@
   },
   
   "test_credentials": {
-    "api_url": "https://arabigo-menu.preview.emergentagent.com",
+    "api_url": "https://arabeng-resto.preview.emergentagent.com",
     "customer_menu_url": "/menu/default"
   },
   
