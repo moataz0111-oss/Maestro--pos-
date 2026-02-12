@@ -1179,7 +1179,7 @@ export default function SuperAdmin() {
     setBackgroundsLoading(true);
     try {
       await axios.put(`${API}/login-backgrounds`, backgroundSettings);
-      toast.success('تم حفظ إعدادات الخلفيات');
+      toast.success(t('تم حفظ إعدادات الخلفيات'));
     } catch (error) {
       toast.error(t('فشل في حفظ الإعدادات'));
     } finally {
@@ -1218,10 +1218,10 @@ export default function SuperAdmin() {
       setNewBackgroundAnimation('fade');
       setSelectedBackgroundFile(null);
       setBackgroundPreviewUrl('');
-      toast.success('تم رفع الخلفية بنجاح');
+      toast.success(t('تم رفع الخلفية بنجاح'));
     } catch (error) {
       console.error('Upload background error:', error);
-      toast.error(error.response?.data?.detail || 'فشل في رفع الخلفية');
+      toast.error(error.response?.data?.detail || t('فشل في رفع الخلفية'));
     } finally {
       setBackgroundsLoading(false);
     }
@@ -1229,7 +1229,7 @@ export default function SuperAdmin() {
 
   const addNewBackground = async () => {
     if (!newBackgroundUrl) {
-      toast.error('الرجاء إدخال رابط الصورة');
+      toast.error(t('الرجاء إدخال رابط الصورة'));
       return;
     }
     
