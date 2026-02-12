@@ -520,12 +520,12 @@ export default function Dashboard() {
       
       // إظهار تنبيه إذا مر أكثر من 24 ساعة
       if (res.data.should_close && res.data.open_shifts_count > 0) {
-        toast.warning('تنبيه: مر أكثر من 24 ساعة على فتح الوردية. يُنصح بإغلاق اليوم وترحيل البيانات.');
+        toast.warning(t('تنبيه: مر أكثر من 24 ساعة على فتح الوردية'));
       }
       
       // تنبيه الطلبات المعلقة
       if (res.data.pending_orders_count > 0 && res.data.oldest_shift_hours >= 20) {
-        toast.info(`يوجد ${res.data.pending_orders_count} طلب معلق. يجب إغلاقها قبل ترحيل اليوم.`);
+        toast.info(t('يوجد طلبات معلقة يجب إغلاقها'));
       }
     } catch (error) {
       console.log('Day status not available');
@@ -545,16 +545,16 @@ export default function Dashboard() {
       const res = await axios.post(`${API}/day-management/close`, { force }, { params });
       
       if (res.data.success) {
-        toast.success(res.data.message);
+        toast.success(t('تم إغلاق اليوم بنجاح'));
         setShowDayCloseDialog(false);
         fetchData();
         fetchDayStatus();
         autoOpenShift(); // فتح وردية جديدة تلقائياً
       } else {
-        toast.error(res.data.message);
+        toast.error(t('فشل في إغلاق اليوم'));
       }
     } catch (error) {
-      toast.error('فشل في إغلاق اليوم');
+      toast.error(t('فشل في إغلاق اليوم'));
     } finally {
       setClosingDay(false);
     }
@@ -577,10 +577,10 @@ export default function Dashboard() {
       setCloseNotes('');
     } catch (error) {
       if (error.response?.status === 404) {
-        toast.error('لا يوجد وردية مفتوحة لك. يرجى فتح وردية أولاً من الإعدادات.');
+        toast.error(t('لا يوجد وردية مفتوحة'));
         setCashRegisterOpen(false);
       } else {
-        toast.error('فشل في جلب بيانات الصندوق');
+        toast.error(t('فشل في جلب بيانات الصندوق'));
       }
     } finally {
       setLoadingSummary(false);
@@ -605,7 +605,7 @@ export default function Dashboard() {
     const countedCash = calculateCountedCash();
     
     if (countedCash === 0) {
-      toast.error('يرجى إدخال جرد الصندوق');
+      toast.error(t('يرجى إدخال جرد الصندوق'));
       return;
     }
     
@@ -619,13 +619,13 @@ export default function Dashboard() {
       
       setClosingResult(res.data);
       setShowReport(true);
-      toast.success('تم إغلاق الصندوق والوردية بنجاح!');
+      toast.success(t('تم إغلاق الصندوق والوردية بنجاح!'));
       
       // تحديث حالة اليوم
       fetchDayStatus();
       
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'فشل في إغلاق الصندوق');
+      toast.error(error.response?.data?.detail || t('فشل في إغلاق الصندوق'));
     } finally {
       setIsClosing(false);
     }
