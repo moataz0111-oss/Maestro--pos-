@@ -303,22 +303,22 @@ export default function WarehouseManufacturing() {
   // تحويل للفرع
   const handleTransferToBranch = async () => {
     if (!branchTransferForm.to_branch_id) {
-      toast.error('الرجاء اختيار الفرع');
+      toast.error(t('الرجاء اختيار الفرع'));
       return;
     }
     if (branchTransferForm.items.length === 0) {
-      toast.error('الرجاء إضافة منتجات للتحويل');
+      toast.error(t('الرجاء إضافة منتجات للتحويل'));
       return;
     }
     
     // التحقق من الكميات
     for (const item of branchTransferForm.items) {
       if (item.quantity <= 0) {
-        toast.error(`الكمية يجب أن تكون أكبر من صفر للمنتج: ${item.product_name}`);
+        toast.error(t('الكمية يجب أن تكون أكبر من صفر'));
         return;
       }
       if (item.quantity > item.available) {
-        toast.error(`الكمية المطلوبة أكبر من المتاح للمنتج: ${item.product_name}`);
+        toast.error(t('الكمية المطلوبة أكبر من المتاح'));
         return;
       }
     }
@@ -335,12 +335,12 @@ export default function WarehouseManufacturing() {
         notes: branchTransferForm.notes
       }, { headers });
       
-      toast.success('تم التحويل للفرع بنجاح');
+      toast.success(t('تم التحويل للفرع بنجاح'));
       setShowBranchTransferDialog(false);
       setBranchTransferForm({ to_branch_id: '', items: [], notes: '' });
       fetchData();
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'فشل في التحويل');
+      toast.error(error.response?.data?.detail || t('فشل في التحويل'));
     } finally {
       setSubmitting(false);
     }
@@ -348,20 +348,20 @@ export default function WarehouseManufacturing() {
   // إضافة مكون للوصفة
   const addIngredientToRecipe = () => {
     if (!newIngredient.raw_material_id || newIngredient.quantity <= 0) {
-      toast.error('اختر مادة خام وحدد الكمية');
+      toast.error(t('اختر مادة خام وحدد الكمية'));
       return;
     }
     
     // البحث في مخزون التصنيع
     const material = manufacturingInventory.find(m => m.raw_material_id === newIngredient.raw_material_id);
     if (!material) {
-      toast.error('المادة غير موجودة في مخزون التصنيع');
+      toast.error(t('المادة غير موجودة في مخزون التصنيع'));
       return;
     }
     
     const exists = productForm.recipe.find(r => r.raw_material_id === newIngredient.raw_material_id);
     if (exists) {
-      toast.error('هذه المادة موجودة بالفعل في الوصفة');
+      toast.error(t('هذه المادة موجودة بالفعل في الوصفة'));
       return;
     }
     
@@ -393,14 +393,14 @@ export default function WarehouseManufacturing() {
   const handleAddProduct = async (e) => {
     e.preventDefault();
     if (!productForm.name || productForm.recipe.length === 0) {
-      toast.error('الرجاء إدخال اسم المنتج وإضافة الوصفة');
+      toast.error(t('الرجاء إدخال اسم المنتج وإضافة الوصفة'));
       return;
     }
     
     setSubmitting(true);
     try {
       await axios.post(`${API}/manufactured-products`, productForm, { headers });
-      toast.success('تم إضافة المنتج المصنع');
+      toast.success(t('تم إضافة المنتج المصنع'));
       setShowAddProductDialog(false);
       setProductForm({
         name: '',
@@ -414,7 +414,7 @@ export default function WarehouseManufacturing() {
       });
       fetchData();
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'فشل في إضافة المنتج');
+      toast.error(error.response?.data?.detail || t('فشل في إضافة المنتج'));
     } finally {
       setSubmitting(false);
     }
@@ -426,16 +426,16 @@ export default function WarehouseManufacturing() {
     setSubmitting(true);
     try {
       await axios.post(`${API}/manufactured-products/${showProduceDialog.id}/produce?quantity=${produceQuantity}`, {}, { headers });
-      toast.success(`تم تصنيع ${produceQuantity} ${showProduceDialog.unit} من ${showProduceDialog.name}`);
+      toast.success(t('تم التصنيع بنجاح'));
       setShowProduceDialog(null);
       setProduceQuantity(1);
       fetchData();
     } catch (error) {
       const detail = error.response?.data?.detail;
       if (typeof detail === 'object' && detail.insufficient_materials) {
-        toast.error(`مواد غير كافية: ${detail.insufficient_materials.map(m => `${m.name} (متوفر: ${m.available})`).join(', ')}`);
+        toast.error(t('مواد غير كافية'));
       } else {
-        toast.error(detail || 'فشل في التصنيع');
+        toast.error(detail || t('فشل في التصنيع'));
       }
     } finally {
       setSubmitting(false);
