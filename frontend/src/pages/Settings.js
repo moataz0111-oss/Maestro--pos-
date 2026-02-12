@@ -1162,12 +1162,12 @@ export default function Settings() {
         packaging_cost: parseFloat(productForm.packaging_cost) || 0,
         manufactured_product_id: productForm.manufactured_product_id || null
       });
-      toast.success('تم إنشاء المنتج');
+      toast.success(t('تم إنشاء المنتج'));
       setProductDialogOpen(false);
       setProductForm({ name: '', name_en: '', category_id: '', price: '', cost: '', operating_cost: '', packaging_cost: '', image: '', description: '', barcode: '', manufactured_product_id: '', printer_ids: [] });
       fetchData();
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'فشل في إنشاء المنتج');
+      toast.error(error.response?.data?.detail || t('فشل في إنشاء المنتج'));
     }
   };
 
@@ -1201,12 +1201,12 @@ export default function Settings() {
         packaging_cost: parseFloat(editProductForm.packaging_cost) || 0,
         manufactured_product_id: editProductForm.manufactured_product_id || null
       });
-      toast.success('تم تحديث المنتج');
+      toast.success(t('تم تحديث المنتج'));
       setEditProductDialogOpen(false);
       setEditProductForm(null);
       fetchData();
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'فشل في تحديث المنتج');
+      toast.error(error.response?.data?.detail || t('فشل في تحديث المنتج'));
     }
   };
 
