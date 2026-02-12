@@ -2272,7 +2272,7 @@ export default function SuperAdmin() {
                 {loadingDashboard ? (
                   <div className="flex items-center justify-center py-12">
                     <Loader2 className="h-8 w-8 animate-spin text-purple-500" />
-                    <span className="mr-3 text-gray-400">جاري تحميل البيانات...</span>
+                    <span className="mr-3 text-gray-400">{t('جاري تحميل البيانات...')}</span>
                   </div>
                 ) : subscriptionsDashboard ? (
                   <div className="space-y-6">
@@ -2285,7 +2285,7 @@ export default function SuperAdmin() {
                           </div>
                           <div>
                             <p className="text-2xl font-bold text-green-400">{subscriptionsDashboard.summary.active_subscriptions}</p>
-                            <p className="text-xs text-gray-400">اشتراك نشط</p>
+                            <p className="text-xs text-gray-400">{t('اشتراك نشط')}</p>
                           </div>
                         </div>
                       </div>
@@ -2297,7 +2297,7 @@ export default function SuperAdmin() {
                           </div>
                           <div>
                             <p className="text-2xl font-bold text-orange-400">{subscriptionsDashboard.summary.expiring_soon}</p>
-                            <p className="text-xs text-gray-400">قارب على الانتهاء</p>
+                            <p className="text-xs text-gray-400">{t('قارب على الانتهاء')}</p>
                           </div>
                         </div>
                       </div>
@@ -2309,7 +2309,7 @@ export default function SuperAdmin() {
                           </div>
                           <div>
                             <p className="text-2xl font-bold text-red-400">{subscriptionsDashboard.summary.already_expired}</p>
-                            <p className="text-xs text-gray-400">اشتراك منتهي</p>
+                            <p className="text-xs text-gray-400">{t('اشتراك منتهي')}</p>
                           </div>
                         </div>
                       </div>
@@ -2321,9 +2321,9 @@ export default function SuperAdmin() {
                           </div>
                           <div>
                             <p className="text-2xl font-bold text-purple-400">
-                              ${(subscriptionsDashboard.expected_revenue.total_monthly || 0).toLocaleString()}
+                              ${(subscriptionsDashboard.expected_revenue.total_monthly || 0).toLocaleString('en-US')}
                             </p>
-                            <p className="text-xs text-gray-400">إيراد شهري متوقع</p>
+                            <p className="text-xs text-gray-400">{t('إيراد شهري متوقع')}</p>
                           </div>
                         </div>
                       </div>
@@ -2334,14 +2334,14 @@ export default function SuperAdmin() {
                       <div className="bg-gray-700/30 rounded-xl p-4">
                         <div className="flex items-center gap-2 mb-4">
                           <Clock className="h-5 w-5 text-orange-400" />
-                          <h3 className="font-bold">قريبة من الانتهاء</h3>
+                          <h3 className="font-bold">{t('قريبة من الانتهاء')}</h3>
                           <span className="text-xs text-gray-400">
-                            (خلال {subscriptionsDashboard.summary.days_before_alert} أيام)
+                            ({t('خلال')} {subscriptionsDashboard.summary.days_before_alert} {t('أيام')})
                           </span>
                         </div>
                         
                         {subscriptionsDashboard.expiring_soon_list.length === 0 ? (
-                          <p className="text-center text-gray-500 py-6">لا توجد اشتراكات قريبة من الانتهاء 🎉</p>
+                          <p className="text-center text-gray-500 py-6">{t('لا توجد اشتراكات قريبة من الانتهاء')}</p>
                         ) : (
                           <div className="space-y-2">
                             {subscriptionsDashboard.expiring_soon_list.map((tenant) => (
@@ -2354,7 +2354,7 @@ export default function SuperAdmin() {
                                   <span className={`text-sm px-2 py-1 rounded ${
                                     tenant.days_left <= 3 ? 'bg-red-500/20 text-red-400' : 'bg-orange-500/20 text-orange-400'
                                   }`}>
-                                    {tenant.days_left === 0 ? 'ينتهي اليوم!' : `${tenant.days_left} يوم`}
+                                    {tenant.days_left === 0 ? t('ينتهي اليوم!') : `${tenant.days_left} ${t('يوم')}`}
                                   </span>
                                 </div>
                               </div>
@@ -2367,11 +2367,11 @@ export default function SuperAdmin() {
                       <div className="bg-gray-700/30 rounded-xl p-4">
                         <div className="flex items-center gap-2 mb-4">
                           <AlertTriangle className="h-5 w-5 text-red-400" />
-                          <h3 className="font-bold">اشتراكات منتهية</h3>
+                          <h3 className="font-bold">{t('اشتراكات منتهية')}</h3>
                         </div>
                         
                         {subscriptionsDashboard.expired_list.length === 0 ? (
-                          <p className="text-center text-gray-500 py-6">لا توجد اشتراكات منتهية 🎉</p>
+                          <p className="text-center text-gray-500 py-6">{t('لا توجد اشتراكات منتهية')}</p>
                         ) : (
                           <div className="space-y-2">
                             {subscriptionsDashboard.expired_list.map((tenant) => (
@@ -2382,7 +2382,7 @@ export default function SuperAdmin() {
                                 </div>
                                 <div className="text-left">
                                   <span className="text-sm px-2 py-1 rounded bg-red-500/20 text-red-400">
-                                    منذ {tenant.days_expired} يوم
+                                    {t('منذ')} {tenant.days_expired} {t('يوم')}
                                   </span>
                                 </div>
                               </div>
@@ -2397,9 +2397,9 @@ export default function SuperAdmin() {
                       <div className="bg-gradient-to-br from-green-500/10 to-purple-500/10 rounded-xl p-4 border border-green-500/20">
                         <div className="flex items-center gap-2 mb-4">
                           <TrendingUp className="h-5 w-5 text-green-400" />
-                          <h3 className="font-bold">الإيرادات المتوقعة من التجديدات</h3>
+                          <h3 className="font-bold">{t('الإيرادات المتوقعة من التجديدات')}</h3>
                           <span className="mr-auto text-xl font-bold text-green-400">
-                            ${subscriptionsDashboard.expected_revenue.from_expiring.toLocaleString()}
+                            ${subscriptionsDashboard.expected_revenue.from_expiring.toLocaleString('en-US')}
                           </span>
                         </div>
                         
@@ -2409,11 +2409,11 @@ export default function SuperAdmin() {
                               <div>
                                 <p className="font-medium">{item.tenant_name}</p>
                                 <p className="text-xs text-gray-400">
-                                  {item.subscription_type === 'basic' ? 'أساسي' : 'مميز'} - {item.duration_months} شهر
+                                  {item.subscription_type === 'basic' ? t('أساسي') : t('مميز')} - {item.duration_months} {t('شهر')}
                                 </p>
                               </div>
                               <span className="text-green-400 font-medium">
-                                ${item.expected_amount.toLocaleString()}
+                                ${item.expected_amount.toLocaleString('en-US')}
                               </span>
                             </div>
                           ))}
@@ -2426,7 +2426,7 @@ export default function SuperAdmin() {
                       <div className="flex items-center justify-between mb-4">
                         <div className="flex items-center gap-2">
                           <BarChart3 className="h-5 w-5 text-blue-400" />
-                          <h3 className="font-bold">توزيع أنواع الاشتراكات</h3>
+                          <h3 className="font-bold">{t('توزيع أنواع الاشتراكات')}</h3>
                         </div>
                         <Button 
                           size="sm" 
@@ -2435,7 +2435,7 @@ export default function SuperAdmin() {
                           className="border-purple-500 text-purple-400 hover:bg-purple-500/20"
                         >
                           <DollarSign className="h-4 w-4 ml-1" />
-                          تعديل الأسعار
+                          {t('تعديل الأسعار')}
                         </Button>
                       </div>
                       
@@ -2447,7 +2447,7 @@ export default function SuperAdmin() {
                               {subscriptionsDashboard.subscription_prices[type]?.name || type}
                             </p>
                             <p className="text-sm text-purple-400 mt-1">
-                              ${subscriptionsDashboard.subscription_prices[type]?.monthly || 0}/شهر
+                              ${subscriptionsDashboard.subscription_prices[type]?.monthly || 0}/{t('شهر')}
                             </p>
                             <div className="flex justify-center gap-2 mt-2 text-xs">
                               <span className="text-green-400">{data.active} نشط</span>
