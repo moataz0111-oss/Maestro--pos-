@@ -101,8 +101,8 @@ export default function Orders() {
         if (pendingOrders.length > previousPending) {
           // New order arrived!
           playNewOrderNotification();
-          toast.success('🔔 طلب جديد!', {
-            description: `تم استلام ${pendingOrders.length - previousPending} طلب جديد`,
+          toast.success(`🔔 ${t('طلب جديد!')}`, {
+            description: `${t('تم استلام')} ${pendingOrders.length - previousPending} ${t('طلب جديد')}`,
             duration: 5000,
           });
         }
@@ -130,7 +130,7 @@ export default function Orders() {
   const updateOrderStatus = async (orderId, status) => {
     try {
       await axios.put(`${API}/orders/${orderId}/status?status=${status}`);
-      toast.success('تم تحديث حالة الطلب');
+      toast.success(t('تم تحديث حالة الطلب'));
       
       // Play kitchen bell when order is ready
       if (status === 'ready' && soundEnabled) {
@@ -139,7 +139,7 @@ export default function Orders() {
       
       fetchData();
     } catch (error) {
-      toast.error('فشل في تحديث الحالة');
+      toast.error(t('فشل في تحديث الحالة'));
     }
   };
 
