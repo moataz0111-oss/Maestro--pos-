@@ -1993,19 +1993,19 @@ export default function Dashboard() {
                   }, { params });
                   
                   if (res.data.success) {
-                    toast.success('تم إرسال التقرير إلى بريدك الإلكتروني');
+                    toast.success(t('تم إرسال التقرير إلى بريدك الإلكتروني'));
                   } else {
-                    toast.info('تم إنشاء التقرير - خدمة البريد غير متاحة حالياً');
+                    toast.info(t('تم إنشاء التقرير - خدمة البريد غير متاحة'));
                   }
                 } catch (error) {
-                  toast.error('فشل في إرسال التقرير');
+                  toast.error(t('فشل في إرسال التقرير'));
                 }
               }}
               className="gap-1"
               data-testid="send-report-email-btn"
             >
               <Mail className="h-4 w-4" />
-              إرسال تقرير بالبريد
+              {t('إرسال تقرير بالبريد')}
             </Button>
             
             {dayStatus?.pending_orders_count > 0 ? (
