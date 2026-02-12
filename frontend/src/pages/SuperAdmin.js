@@ -554,9 +554,9 @@ export default function SuperAdmin() {
     try {
       await axios.put(`${API}/super-admin/notifications/read-all`);
       fetchNotifications();
-      toast.success('تم تعليم جميع الإشعارات كمقروءة');
+      toast.success(t('تم تعليم جميع الإشعارات كمقروءة'));
     } catch (error) {
-      toast.error('فشل في تعليم الإشعارات');
+      toast.error(t('فشل في تعليم الإشعارات'));
     }
   };
 
@@ -573,9 +573,9 @@ export default function SuperAdmin() {
     try {
       await axios.delete(`${API}/super-admin/notifications`);
       fetchNotifications();
-      toast.success('تم حذف جميع الإشعارات');
+      toast.success(t('تم حذف جميع الإشعارات'));
     } catch (error) {
-      toast.error('فشل في حذف الإشعارات');
+      toast.error(t('فشل في حذف الإشعارات'));
     }
   };
 
@@ -593,7 +593,7 @@ export default function SuperAdmin() {
       fetchNotifications();
       fetchSubscriptionsDashboard();
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'حدث خطأ');
+      toast.error(error.response?.data?.detail || t('حدث خطأ'));
     }
   };
 
@@ -623,11 +623,11 @@ export default function SuperAdmin() {
     setSavingPrices(true);
     try {
       await axios.put(`${API}/super-admin/subscription-prices`, subscriptionPrices);
-      toast.success('تم حفظ أسعار الاشتراكات');
+      toast.success(t('تم حفظ أسعار الاشتراكات'));
       setShowPricesModal(false);
       fetchSubscriptionsDashboard();
     } catch (error) {
-      toast.error('فشل في حفظ الأسعار');
+      toast.error(t('فشل في حفظ الأسعار'));
     } finally {
       setSavingPrices(false);
     }
@@ -655,7 +655,7 @@ export default function SuperAdmin() {
       setSalesSummary(res.data);
     } catch (error) {
       console.error('Error fetching sales summary:', error);
-      toast.error('فشل في جلب ملخص المبيعات');
+      toast.error(t('فشل في جلب ملخص المبيعات'));
     } finally {
       setLoadingSalesSummary(false);
     }
@@ -668,13 +668,13 @@ export default function SuperAdmin() {
       const res = await axios.get(`${API}/super-admin/live-exchange-rates`);
       setLiveRates(res.data);
       if (res.data.success) {
-        toast.success('تم جلب أسعار الصرف الحية');
+        toast.success(t('تم جلب أسعار الصرف الحية'));
       } else {
-        toast.info(res.data.message || 'يتم استخدام الأسعار الثابتة');
+        toast.info(res.data.message || t('يتم استخدام الأسعار الثابتة'));
       }
     } catch (error) {
       console.error('Error fetching live rates:', error);
-      toast.error('فشل في جلب أسعار الصرف');
+      toast.error(t('فشل في جلب أسعار الصرف'));
     } finally {
       setLoadingLiveRates(false);
     }
@@ -685,12 +685,12 @@ export default function SuperAdmin() {
     setSavingCurrencySettings(true);
     try {
       await axios.put(`${API}/super-admin/currency-settings`, currencySettings);
-      toast.success('تم حفظ إعدادات العملة');
+      toast.success(t('تم حفظ إعدادات العملة'));
       setShowCurrencySettingsModal(false);
       // تحديث ملخص المبيعات بالعملة الجديدة
       fetchSalesSummary(currencySettings.preferred_currency);
     } catch (error) {
-      toast.error('فشل في حفظ إعدادات العملة');
+      toast.error(t('فشل في حفظ إعدادات العملة'));
     } finally {
       setSavingCurrencySettings(false);
     }
@@ -702,10 +702,10 @@ export default function SuperAdmin() {
       await axios.put(`${API}/super-admin/custom-exchange-rate`, null, {
         params: { from_currency: fromCurrency, to_currency: toCurrency, rate }
       });
-      toast.success(`تم تحديث سعر صرف ${fromCurrency}`);
+      toast.success(t('تم تحديث سعر صرف') + ` ${fromCurrency}`);
       fetchCurrencySettings();
     } catch (error) {
-      toast.error('فشل في تحديث سعر الصرف');
+      toast.error(t('فشل في تحديث سعر الصرف'));
     }
   };
 
@@ -719,7 +719,7 @@ export default function SuperAdmin() {
         ...newTenantForm,
         is_demo: newTenantForm.is_demo
       });
-      toast.success('تم إنشاء العميل بنجاح');
+      toast.success(t('تم إنشاء العميل بنجاح'));
       
       setCopiedCredentials(res.data.admin_credentials);
       fetchData();
@@ -740,7 +740,7 @@ export default function SuperAdmin() {
         is_demo: false
       });
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'فشل إنشاء العميل');
+      toast.error(error.response?.data?.detail || t('فشل إنشاء العميل'));
     } finally {
       setLoading(false);
     }
@@ -754,7 +754,7 @@ export default function SuperAdmin() {
       const res = await axios.get(`${API}/super-admin/tenants/${tenant.id}`);
       setTenantDetails(res.data);
     } catch (error) {
-      toast.error('فشل في جلب التفاصيل');
+      toast.error(t('فشل في جلب التفاصيل'));
     }
   };
 
@@ -774,30 +774,30 @@ export default function SuperAdmin() {
       // استخدام token العميل
       localStorage.setItem('token', res.data.token);
       
-      toast.success(`جاري الدخول كـ ${tenant.name}...`);
+      toast.success(t('جاري الدخول كـ') + ` ${tenant.name}...`);
       
       // إعادة التوجيه للصفحة الرئيسية
       window.location.href = '/';
     } catch (error) {
-      toast.error('فشل الدخول كعميل');
+      toast.error(t('فشل الدخول كعميل'));
     }
   };
 
   const deleteTenant = async () => {
     try {
       await axios.delete(`${API}/super-admin/tenants/${selectedTenant.id}?permanent=true`);
-      toast.success('تم حذف العميل نهائياً');
+      toast.success(t('تم حذف العميل نهائياً'));
       setShowDeleteConfirm(false);
       setSelectedTenant(null);
       fetchData();
     } catch (error) {
-      toast.error('فشل في حذف العميل');
+      toast.error(t('فشل في حذف العميل'));
     }
   };
 
   const resetPassword = async () => {
     if (!newPassword || newPassword.length < 6) {
-      toast.error('كلمة المرور يجب أن تكون 6 أحرف على الأقل');
+      toast.error(t('كلمة المرور يجب أن تكون 6 أحرف على الأقل'));
       return;
     }
     
