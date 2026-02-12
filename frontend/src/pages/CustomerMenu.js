@@ -1567,14 +1567,14 @@ export default function CustomerMenu() {
               <CardContent className="p-4 space-y-4">
                 <h2 className="font-bold flex items-center gap-2">
                   <MapPin className="h-5 w-5 text-orange-500" />
-                  عنوان التوصيل
+                  {t('عنوان التوصيل')}
                 </h2>
                 
                 <div className="relative">
-                  <label className="text-sm font-medium mb-1 block">العنوان التفصيلي *</label>
+                  <label className="text-sm font-medium mb-1 block">{t('العنوان التفصيلي')} *</label>
                   <div className="relative">
                     <Textarea
-                      placeholder="ابحث عن عنوانك أو اكتبه يدوياً..."
+                      placeholder={t('ابحث عن عنوانك أو اكتبه يدوياً')}
                       value={deliveryAddress}
                       onChange={(e) => {
                         setDeliveryAddress(e.target.value);
@@ -1642,14 +1642,14 @@ export default function CustomerMenu() {
                     data-testid="get-location-btn"
                   >
                     <Navigation className="h-4 w-4 ml-2" />
-                    📍 موقعي الحالي
+                    📍 {t('موقعي الحالي')}
                   </Button>
                   <Button 
                     variant="outline" 
                     onClick={() => setShowMap(true)}
                   >
                     <MapPin className="h-4 w-4 ml-2" />
-                    اختر من الخريطة
+                    {t('اختر من الخريطة')}
                   </Button>
                 </div>
                 {/* عرض حالة الموقع */}
@@ -1658,13 +1658,13 @@ export default function CustomerMenu() {
                     <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center">
                       <MapPin className="h-4 w-4 text-white" />
                     </div>
-                    <span className="text-sm text-green-700 font-medium">✓ تم تحديد موقعك على الخريطة</span>
+                    <span className="text-sm text-green-700 font-medium">✓ {t('تم تحديد موقعك على الخريطة')}</span>
                   </div>
                 )}
                 <div>
-                  <label className="text-sm font-medium mb-1 block">ملاحظات للسائق (اختياري)</label>
+                  <label className="text-sm font-medium mb-1 block">{t('ملاحظات للسائق')} ({t('اختياري')})</label>
                   <Input
-                    placeholder="ملاحظات إضافية..."
+                    placeholder={t('ملاحظات إضافية')}
                     value={deliveryNotes}
                     onChange={(e) => setDeliveryNotes(e.target.value)}
                   />
@@ -1676,7 +1676,7 @@ export default function CustomerMenu() {
               <CardContent className="p-4 space-y-4">
                 <h2 className="font-bold flex items-center gap-2">
                   <Wallet className="h-5 w-5 text-orange-500" />
-                  طريقة الدفع
+                  {t('طريقة الدفع')}
                 </h2>
                 
                 <div className="grid grid-cols-3 gap-2">
@@ -1687,7 +1687,7 @@ export default function CustomerMenu() {
                     data-testid="payment-cash-btn"
                   >
                     <Banknote className="h-6 w-6" />
-                    <span className="text-xs font-bold">نقداً</span>
+                    <span className="text-xs font-bold">{t('نقداً')}</span>
                   </Button>
                   <Button
                     variant={paymentMethod === 'card' ? 'default' : 'outline'}
@@ -1696,7 +1696,7 @@ export default function CustomerMenu() {
                     data-testid="payment-card-btn"
                   >
                     <CreditCard className="h-6 w-6" />
-                    <span className="text-xs font-bold">بطاقة</span>
+                    <span className="text-xs font-bold">{t('بطاقة')}</span>
                   </Button>
                   <Button
                     variant={paymentMethod === 'zain_cash' ? 'default' : 'outline'}
