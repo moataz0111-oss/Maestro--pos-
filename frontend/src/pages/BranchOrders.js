@@ -107,7 +107,7 @@ export default function BranchOrders() {
   };
   const addProductToOrder = () => {
     if (!selectedProduct || quantity <= 0) {
-      toast.error('اختر منتج وحدد الكمية');
+      toast.error(t('اختر منتج وحدد الكمية'));
       return;
     }
     
@@ -115,13 +115,13 @@ export default function BranchOrders() {
     if (!product) return;
     
     if (product.quantity < quantity) {
-      toast.error(`الكمية غير كافية. متوفر: ${product.quantity} ${product.unit}`);
+      toast.error(`${t('الكمية غير كافية. متوفر:')} ${product.quantity} ${product.unit}`);
       return;
     }
     
     const existing = form.items.find(i => i.product_id === selectedProduct);
     if (existing) {
-      toast.error('هذا المنتج موجود بالفعل');
+      toast.error(t('هذا المنتج موجود بالفعل'));
       return;
     }
     
@@ -139,7 +139,7 @@ export default function BranchOrders() {
     
     setSelectedProduct('');
     setQuantity(1);
-    toast.success(`تمت إضافة ${product.name}`);
+    toast.success(`${t('تمت إضافة')} ${product.name}`);
   };
   const removeProductFromOrder = (index) => {
     setForm(prev => ({
@@ -152,7 +152,7 @@ export default function BranchOrders() {
   };
   const handleSubmitOrder = async () => {
     if (!form.to_branch_id || form.items.length === 0) {
-      toast.error('اختر الفرع وأضف منتجات');
+      toast.error(t('اختر الفرع وأضف منتجات'));
       return;
     }
     
@@ -168,7 +168,7 @@ export default function BranchOrders() {
         notes: form.notes
       }, { headers });
       
-      toast.success('تم إنشاء الطلب بنجاح');
+      toast.success(t('تم إنشاء الطلب بنجاح'));
       setShowAddDialog(false);
       setForm({
         to_branch_id: '',
@@ -180,9 +180,9 @@ export default function BranchOrders() {
     } catch (error) {
       const detail = error.response?.data?.detail;
       if (typeof detail === 'object' && detail.insufficient_products) {
-        toast.error(`منتجات غير كافية: ${detail.insufficient_products.map(p => p.name).join(', ')}`);
+        toast.error(`${t('منتجات غير كافية:')} ${detail.insufficient_products.map(p => p.name).join(', ')}`);
       } else {
-        toast.error(detail || 'فشل في إنشاء الطلب');
+        toast.error(detail || t('فشل في إنشاء الطلب'));
       }
     } finally {
       setSubmitting(false);
@@ -191,10 +191,10 @@ export default function BranchOrders() {
   const handleUpdateStatus = async (orderId, status) => {
     try {
       await axios.patch(`${API}/branch-orders-new/${orderId}/status?status=${status}`, {}, { headers });
-      toast.success('تم تحديث الحالة');
+      toast.success(t('تم تحديث الحالة'));
       fetchData();
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'فشل في تحديث الحالة');
+      toast.error(error.response?.data?.detail || t('فشل في تحديث الحالة'));
     }
   };
   const getStatusColor = (status) => {
