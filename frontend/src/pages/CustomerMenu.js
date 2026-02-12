@@ -788,15 +788,15 @@ export default function CustomerMenu() {
   };
   const handleSubmitOrder = async () => {
     if (!customerName || !customerPhone) {
-      toast.error('يرجى إدخال الاسم ورقم الهاتف');
+      toast.error(t('يرجى إدخال الاسم ورقم الهاتف'));
       return;
     }
     if (!deliveryAddress && !deliveryLocation) {
-      toast.error('يرجى إدخال عنوان التوصيل أو تحديده على الخريطة');
+      toast.error(t('يرجى إدخال عنوان التوصيل أو تحديده على الخريطة'));
       return;
     }
     if (cart.length === 0) {
-      toast.error('السلة فارغة');
+      toast.error(t('السلة فارغة'));
       return;
     }
     setSubmitting(true);
@@ -843,7 +843,7 @@ export default function CustomerMenu() {
               return;
             }
           } catch (payError) {
-            toast.error('فشل في إنشاء جلسة الدفع');
+            toast.error(t('فشل في إنشاء جلسة الدفع'));
             setProcessingPayment(false);
             return;
           }
@@ -856,7 +856,7 @@ export default function CustomerMenu() {
         localStorage.removeItem(`cart_${tenantId}`);
       }
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'فشل في إرسال الطلب');
+      toast.error(error.response?.data?.detail || t('فشل في إرسال الطلب'));
     } finally {
       setSubmitting(false);
     }
