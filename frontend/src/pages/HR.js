@@ -1425,7 +1425,7 @@ export default function HR() {
                         <Textarea value={bonusForm.reason} onChange={(e) => setBonusForm({...bonusForm, reason: e.target.value})} required />
                       </div>
                       <div className="flex justify-end gap-2">
-                        <Button type="button" variant="outline" onClick={() =>{t('setBonusDialogOpen(false)}>إلغاء')}</Button>
+                        <Button type="button" variant="outline" onClick={() => setBonusDialogOpen(false)}>{t('إلغاء')}</Button>
                         <Button type="submit" className="bg-green-600 hover:bg-green-700">{t('تسجيل المكافأة')}</Button>
                       </div>
                     </form>
