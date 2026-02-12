@@ -370,7 +370,7 @@ export default function POS() {
       }
     } catch (error) {
       console.error('Failed to search order:', error);
-      toast.error(error.response?.data?.detail || 'الطلب غير موجود');
+      toast.error(error.response?.data?.detail || t('الطلب غير موجود'));
       setRefundOrderInfo(null);
     } finally {
       setRefundLoading(false);
@@ -391,7 +391,7 @@ export default function POS() {
     }
     
     if (!refundOrderInfo || !refundOrderInfo.can_refund) {
-      toast.error(refundOrderInfo?.refund_message || 'لا يمكن إرجاع هذا الطلب');
+      toast.error(refundOrderInfo?.refund_message || t('لا يمكن إرجاع هذا الطلب'));
       return;
     }
     
@@ -404,7 +404,7 @@ export default function POS() {
       });
       
       playSuccess();
-      toast.success(`✅ تم إرجاع الفاتورة #${refundOrderInfo.order_number} بنجاح`);
+      toast.success(`✅ ${t('تم إرجاع الفاتورة')} #${refundOrderInfo.order_number} ${t('بنجاح')}`);
       
       // إعادة تعيين الحالة وإغلاق الحوار
       setRefundDialogOpen(false);
@@ -416,7 +416,7 @@ export default function POS() {
       await fetchPendingOrders();
     } catch (error) {
       console.error('Failed to process refund:', error);
-      toast.error(error.response?.data?.detail || 'فشل في إرجاع الطلب');
+      toast.error(error.response?.data?.detail || t('فشل في إرجاع الطلب'));
     } finally {
       setRefundLoading(false);
     }
@@ -425,7 +425,7 @@ export default function POS() {
   // فتح حوار الإرجاع
   const openRefundDialog = () => {
     if (!canRefund()) {
-      toast.error('ليس لديك صلاحية إرجاع الطلبات');
+      toast.error(t('ليس لديك صلاحية إرجاع الطلبات'));
       return;
     }
     setRefundDialogOpen(true);
