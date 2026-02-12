@@ -250,7 +250,7 @@ export default function SmartReports() {
             </Button>
             <div className="flex items-center gap-2">
               <PieChart className="h-6 w-6 text-emerald-500" />
-              <h1 className="text-xl font-bold font-cairo">التقارير الذكية</h1>
+              <h1 className="text-xl font-bold font-cairo">{t('التقارير الذكية')}</h1>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -260,10 +260,10 @@ export default function SmartReports() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="today">اليوم</SelectItem>
-                <SelectItem value="yesterday">أمس</SelectItem>
-                <SelectItem value="week">هذا الأسبوع</SelectItem>
-                <SelectItem value="month">هذا الشهر</SelectItem>
+                <SelectItem value="today">{t('اليوم')}</SelectItem>
+                <SelectItem value="yesterday">{t('أمس')}</SelectItem>
+                <SelectItem value="week">{t('هذا الأسبوع')}</SelectItem>
+                <SelectItem value="month">{t('هذا الشهر')}</SelectItem>
               </SelectContent>
             </Select>
             
@@ -296,7 +296,7 @@ export default function SmartReports() {
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-muted-foreground">إجمالي المبيعات</p>
+                  <p className="text-sm text-muted-foreground">{t('إجمالي المبيعات')}</p>
                   <p className="text-2xl font-bold text-emerald-600">{formatCurrency(data.summary?.total_sales || 0)}</p>
                   <GrowthIndicator value={data.summary?.growth_sales || 0} />
                 </div>
@@ -310,7 +310,7 @@ export default function SmartReports() {
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-muted-foreground">عدد الطلبات</p>
+                  <p className="text-sm text-muted-foreground">{t('عدد الطلبات')}</p>
                   <p className="text-2xl font-bold text-blue-600">{data.summary?.total_orders || 0}</p>
                   <GrowthIndicator value={data.summary?.growth_orders || 0} />
                 </div>
@@ -324,7 +324,7 @@ export default function SmartReports() {
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-muted-foreground">متوسط الطلب</p>
+                  <p className="text-sm text-muted-foreground">{t('متوسط الطلب')}</p>
                   <p className="text-2xl font-bold text-amber-600">{formatCurrency(data.summary?.average_order || 0)}</p>
                 </div>
                 <div className="w-12 h-12 rounded-xl bg-amber-500/20 flex items-center justify-center">
@@ -337,7 +337,7 @@ export default function SmartReports() {
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-muted-foreground">العملاء</p>
+                  <p className="text-sm text-muted-foreground">{t('العملاء')}</p>
                   <p className="text-2xl font-bold text-purple-600">{data.summary?.total_customers || 0}</p>
                 </div>
                 <div className="w-12 h-12 rounded-xl bg-purple-500/20 flex items-center justify-center">
@@ -353,7 +353,7 @@ export default function SmartReports() {
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium flex items-center gap-2">
                 <TrendingUp className="h-4 w-4 text-emerald-500" />
-                رؤى ذكية
+                {t('رؤى ذكية')}
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -383,7 +383,7 @@ export default function SmartReports() {
             <CardHeader>
               <CardTitle className="text-sm font-medium flex items-center gap-2">
                 <Clock className="h-4 w-4 text-blue-500" />
-                المبيعات حسب الساعة
+                {t('المبيعات حسب الساعة')}
               </CardTitle>
             </CardHeader>
             <CardContent>
