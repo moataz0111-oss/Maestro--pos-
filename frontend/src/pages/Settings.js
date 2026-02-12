@@ -5414,12 +5414,12 @@ export default function Settings() {
                           notes: editCustomerForm.notes || null,
                           is_blocked: editCustomerForm.is_blocked
                         });
-                        toast.success('تم تحديث بيانات العميل');
+                        toast.success(t('تم تحديث بيانات العميل'));
                         setEditCustomerDialogOpen(false);
                         setEditCustomerForm(null);
                         fetchData();
                       } catch (error) {
-                        toast.error(error.response?.data?.detail || 'فشل في تحديث العميل');
+                        toast.error(error.response?.data?.detail || t('فشل في تحديث العميل'));
                       }
                     }} className="space-y-4">
                       <div className="grid grid-cols-2 gap-4">
