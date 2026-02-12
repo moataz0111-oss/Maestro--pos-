@@ -411,7 +411,7 @@ export default function SmartReports() {
             <CardHeader>
               <CardTitle className="text-sm font-medium flex items-center gap-2">
                 <Utensils className="h-4 w-4 text-amber-500" />
-                المنتجات الأكثر مبيعاً
+                {t('المنتجات الأكثر مبيعاً')}
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -428,7 +428,7 @@ export default function SmartReports() {
                     </div>
                     <div className="flex-1">
                       <p className="font-medium">{product.name}</p>
-                      <p className="text-xs text-muted-foreground">{product.quantity} وحدة</p>
+                      <p className="text-xs text-muted-foreground">{product.quantity} {t('وحدة')}</p>
                     </div>
                     <div className="text-left">
                       <p className="font-medium">{formatCurrency(product.revenue)}</p>
@@ -444,7 +444,7 @@ export default function SmartReports() {
             <CardHeader>
               <CardTitle className="text-sm font-medium flex items-center gap-2">
                 <Package className="h-4 w-4 text-purple-500" />
-                توزيع أنواع الطلبات
+                {t('توزيع أنواع الطلبات')}
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -502,41 +502,41 @@ export default function SmartReports() {
             <CardHeader>
               <CardTitle className="text-sm font-medium flex items-center gap-2">
                 <TrendingUp className="h-4 w-4 text-green-500" />
-                مقارنات الأداء
+                {t('مقارنات الأداء')}
               </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
                 <div className="p-4 bg-muted/50 rounded-lg">
-                  <p className="text-sm text-muted-foreground mb-2">مقارنة بالأمس</p>
+                  <p className="text-sm text-muted-foreground mb-2">{t('مقارنة بالأمس')}</p>
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <DollarSign className="h-4 w-4 text-green-500" />
-                      <span>المبيعات</span>
+                      <span>{t('المبيعات')}</span>
                     </div>
                     <GrowthIndicator value={data.comparisons?.vs_yesterday?.sales || 0} />
                   </div>
                   <div className="flex items-center justify-between mt-2">
                     <div className="flex items-center gap-2">
                       <ShoppingCart className="h-4 w-4 text-blue-500" />
-                      <span>الطلبات</span>
+                      <span>{t('الطلبات')}</span>
                     </div>
                     <GrowthIndicator value={data.comparisons?.vs_yesterday?.orders || 0} />
                   </div>
                 </div>
                 <div className="p-4 bg-muted/50 rounded-lg">
-                  <p className="text-sm text-muted-foreground mb-2">مقارنة بالأسبوع الماضي</p>
+                  <p className="text-sm text-muted-foreground mb-2">{t('مقارنة بالأسبوع الماضي')}</p>
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <DollarSign className="h-4 w-4 text-green-500" />
-                      <span>المبيعات</span>
+                      <span>{t('المبيعات')}</span>
                     </div>
                     <GrowthIndicator value={data.comparisons?.vs_last_week?.sales || 0} />
                   </div>
                   <div className="flex items-center justify-between mt-2">
                     <div className="flex items-center gap-2">
                       <ShoppingCart className="h-4 w-4 text-blue-500" />
-                      <span>الطلبات</span>
+                      <span>{t('الطلبات')}</span>
                     </div>
                     <GrowthIndicator value={data.comparisons?.vs_last_week?.orders || 0} />
                   </div>
@@ -547,9 +547,9 @@ export default function SmartReports() {
         </div>
         {/* Export Button */}
         <div className="flex justify-center">
-          <Button variant="outline" className="gap-2">
-            <Download className="h-4 w-4" />
-            تصدير التقرير
+          <Button variant="outline" className="gap-2" onClick={() => window.print()}>
+            <Printer className="h-4 w-4" />
+            {t('طباعة التقرير')}
           </Button>
         </div>
       </main>
