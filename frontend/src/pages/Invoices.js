@@ -101,7 +101,7 @@ export default function Invoices() {
     e.preventDefault();
     
     if (!templateForm.name || !templateForm.business_name) {
-      toast.error('الاسم واسم المنشأة مطلوبان');
+      toast.error(t('الاسم واسم المنشأة مطلوبان'));
       return;
     }
     try {
@@ -110,28 +110,28 @@ export default function Invoices() {
       
       if (editingTemplate) {
         await axios.put(`${API}/invoices/templates/${editingTemplate.id}`, templateForm, { headers });
-        toast.success('تم تحديث القالب');
+        toast.success(t('تم تحديث القالب'));
       } else {
         await axios.post(`${API}/invoices/templates`, templateForm, { headers });
-        toast.success('تم إنشاء القالب');
+        toast.success(t('تم إنشاء القالب'));
       }
       
       setTemplateDialogOpen(false);
       resetTemplateForm();
       fetchData();
     } catch (error) {
-      toast.error('فشل في حفظ القالب');
+      toast.error(t('فشل في حفظ القالب'));
     }
   };
   const handleDeleteTemplate = async (id) => {
-    if (!window.confirm('هل أنت متأكد من حذف هذا القالب؟')) return;
+    if (!window.confirm(t('هل أنت متأكد؟'))) return;
     
     try {
       const token = localStorage.getItem('token');
       await axios.delete(`${API}/invoices/templates/${id}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      toast.success('تم الحذف');
+      toast.success(t('تم الحذف'));
       fetchData();
     } catch (error) {
       toast.error(t('فشل في الحذف'));
@@ -141,7 +141,7 @@ export default function Invoices() {
     e.preventDefault();
     
     if (!printerForm.name || !printerForm.branch_id) {
-      toast.error('الاسم والفرع مطلوبان');
+      toast.error(t('الاسم والفرع مطلوبان'));
       return;
     }
     try {
@@ -150,23 +150,23 @@ export default function Invoices() {
         headers: { Authorization: `Bearer ${token}` }
       });
       
-      toast.success('تم إضافة الطابعة');
+      toast.success(t('تم إضافة الطابعة'));
       setPrinterDialogOpen(false);
       resetPrinterForm();
       fetchData();
     } catch (error) {
-      toast.error('فشل في إضافة الطابعة');
+      toast.error(t('فشل في إضافة الطابعة'));
     }
   };
   const handleDeletePrinter = async (id) => {
-    if (!window.confirm('هل أنت متأكد من حذف هذه الطابعة؟')) return;
+    if (!window.confirm(t('هل أنت متأكد؟'))) return;
     
     try {
       const token = localStorage.getItem('token');
       await axios.delete(`${API}/invoices/printers/${id}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      toast.success('تم الحذف');
+      toast.success(t('تم الحذف'));
       fetchData();
     } catch (error) {
       toast.error(t('فشل في الحذف'));
