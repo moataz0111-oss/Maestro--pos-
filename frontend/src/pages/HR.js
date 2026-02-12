@@ -437,12 +437,12 @@ export default function HR() {
         amount: bonusForm.amount ? parseFloat(bonusForm.amount) : null,
         hours: bonusForm.hours ? parseFloat(bonusForm.hours) : null
       }, { headers: { Authorization: `Bearer ${token}` } });
-      toast.success('تم تسجيل المكافأة');
+      toast.success(t('تم تسجيل المكافأة'));
       setBonusDialogOpen(false);
       setBonusForm({ employee_id: '', bonus_type: 'performance', amount: '', hours: '', reason: '', date: new Date().toISOString().slice(0, 10) });
       fetchData();
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'فشل في تسجيل المكافأة');
+      toast.error(error.response?.data?.detail || t('فشل في تسجيل المكافأة'));
     }
   };
 
@@ -454,7 +454,7 @@ export default function HR() {
       setPayrollPreview(res.data);
       setPayrollDialogOpen(true);
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'فشل في حساب الراتب');
+      toast.error(error.response?.data?.detail || t('فشل في حساب الراتب'));
     }
   };
 
@@ -471,31 +471,31 @@ export default function HR() {
         advance_deduction: payrollPreview.advance_deduction,
         net_salary: payrollPreview.net_salary
       }, { headers: { Authorization: `Bearer ${token}` } });
-      toast.success('تم إنشاء كشف الراتب');
+      toast.success(t('تم إنشاء كشف الراتب'));
       setPayrollDialogOpen(false);
       setPayrollPreview(null);
       fetchData();
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'فشل في إنشاء كشف الراتب');
+      toast.error(error.response?.data?.detail || t('فشل في إنشاء كشف الراتب'));
     }
   };
 
   const payPayroll = async (payrollId) => {
-    if (!window.confirm('هل أنت متأكد من صرف هذا الراتب؟')) return;
+    if (!window.confirm(t('هل أنت متأكد من صرف هذا الراتب؟'))) return;
     try {
       const token = localStorage.getItem('token');
       await axios.put(`${API}/payroll/${payrollId}/pay`, {}, { headers: { Authorization: `Bearer ${token}` } });
-      toast.success('تم صرف الراتب');
+      toast.success(t('تم صرف الراتب'));
       fetchData();
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'فشل في صرف الراتب');
+      toast.error(error.response?.data?.detail || t('فشل في صرف الراتب'));
     }
   };
 
   // تصدير تقرير الرواتب الشامل
   const exportPayrollReport = async (format = 'excel') => {
     try {
-      toast.loading('جاري تحضير الملف...');
+      toast.loading(t('جاري تحضير الملف...'));
       const token = localStorage.getItem('token');
       const branchId = getBranchIdForApi();
       
@@ -517,10 +517,10 @@ export default function HR() {
       window.URL.revokeObjectURL(url);
       
       toast.dismiss();
-      toast.success('تم تحميل الملف بنجاح');
+      toast.success(t('تم تحميل الملف بنجاح'));
     } catch (error) {
       toast.dismiss();
-      toast.error('فشل في تصدير الملف');
+      toast.error(t('فشل في تصدير الملف'));
     }
   };
 
