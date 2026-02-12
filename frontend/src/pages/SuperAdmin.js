@@ -1681,23 +1681,23 @@ export default function SuperAdmin() {
                     value={registerForm.secret_key}
                     onChange={(e) => setRegisterForm({...registerForm, secret_key: e.target.value})}
                     className="bg-gray-700/50 border-gray-600 text-white"
-                    placeholder="مفتاح السر للتسجيل"
+                    placeholder={t('مفتاح السر للتسجيل')}
                     required
                   />
                 </div>
                 
                 <Button type="submit" className="w-full bg-purple-600 hover:bg-purple-700" disabled={loading}>
-                  {loading ? 'جاري الإنشاء...' : 'إنشاء الحساب'}
+                  {loading ? t('جاري الإنشاء...') : t('إنشاء الحساب')}
                 </Button>
                 
                 <p className="text-center text-sm text-gray-400">
-                  لديك حساب؟{' '}
+                  {t('لديك حساب؟')}{' '}
                   <button 
                     type="button"
                     onClick={() => setShowRegister(false)}
                     className="text-purple-400 hover:underline"
                   >
-                    تسجيل الدخول
+                    {t('تسجيل الدخول')}
                   </button>
                 </p>
               </form>
@@ -1719,10 +1719,10 @@ export default function SuperAdmin() {
         <div className={`w-3 h-3 rounded-full ${tenant.is_active ? 'bg-green-500' : 'bg-red-500'}`} />
         <div>
           <div className="flex items-center gap-2">
-            <h3 className="font-bold">{tenant.name || tenant.slug || 'بدون اسم'}</h3>
+            <h3 className="font-bold">{tenant.name || tenant.slug || t('بدون اسم')}</h3>
             {isDemo && (
               <Badge className="bg-yellow-500/20 text-yellow-400 text-xs">
-                تجريبي
+                {t('تجريبي')}
               </Badge>
             )}
           </div>
@@ -1741,11 +1741,11 @@ export default function SuperAdmin() {
       
       <div className="flex items-center gap-4">
         <div className="text-center">
-          <p className="text-sm text-gray-400">المستخدمين</p>
+          <p className="text-sm text-gray-400">{t('المستخدمين')}</p>
           <p className="font-bold">{tenant.users_count || 0}</p>
         </div>
         <div className="text-center">
-          <p className="text-sm text-gray-400">الفروع</p>
+          <p className="text-sm text-gray-400">{t('الفروع')}</p>
           <p className="font-bold">{tenant.branches_count || 0}</p>
         </div>
         <div className="text-center">
