@@ -378,7 +378,7 @@ export default function Reservations() {
                             <Users className="h-3 w-3" />
                             {reservation.guests} أشخاص
                           </span>
-                          <span className="flex items-center gap-1">{t('طاولة #{reservation.table_number}')}</span>
+                          <span className="flex items-center gap-1">{t('طاولة')} #{reservation.table_number}</span>
                         </div>
                         {reservation.notes && (
                           <p className="mt-2 text-sm text-muted-foreground bg-muted/50 p-2 rounded">
@@ -499,7 +499,7 @@ export default function Reservations() {
                   </SelectTrigger>
                   <SelectContent>
                     {tables.map(table => (
-                      <SelectItem key={table.id} value={table.id}>{t('طاولة #{table.number} ({table.capacity} أشخاص)')}</SelectItem>
+                      <SelectItem key={table.id} value={table.id}>{t('طاولة')} #{table.number} ({table.capacity} {t('أشخاص')})</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -517,7 +517,7 @@ export default function Reservations() {
           </div>
           
           <DialogFooter>
-            <Button variant="outline" onClick={() =>{t('setShowAddDialog(false)}>
+            <Button variant="outline" onClick={() => setShowAddDialog(false)}>
               {t('إلغاء')}</Button>
             <Button onClick={handleSubmit} className="bg-rose-500 hover:bg-rose-600">{t('إنشاء الحجز')}</Button>
           </DialogFooter>

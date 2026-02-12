@@ -510,7 +510,7 @@ export default function Recipes() {
               </div>
             </div>
             <div className="flex gap-2 pt-4">
-              <Button type="button" variant="outline" onClick={() =>{t('setMaterialDialogOpen(false)} className="flex-1">
+              <Button type="button" variant="outline" onClick={() => setMaterialDialogOpen(false)} className="flex-1">
                 {t('إلغاء')}</Button>
               <Button type="submit" className="flex-1">
                 {editingMaterial ? 'تحديث' : 'إضافة'}
