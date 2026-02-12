@@ -38,6 +38,7 @@ import {
 const API = BACKEND_URL + '/api';
 export default function SmartReports() {
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const [loading, setLoading] = useState(true);
   const [period, setPeriod] = useState('today');
   const [data, setData] = useState({
@@ -152,9 +153,9 @@ export default function SmartReports() {
           { hour: '22:00', sales: 850 }
         ],
         orderTypes: [
-          { type: 'داخل المطعم', count: salesData.by_type?.dine_in || 0, percentage: 40 },
-          { type: 'سفري', count: salesData.by_type?.takeaway || 0, percentage: 32 },
-          { type: 'توصيل', count: salesData.by_type?.delivery || 0, percentage: 28 }
+          { type: t('داخل المطعم'), count: salesData.by_type?.dine_in || 0, percentage: 40 },
+          { type: t('سفري'), count: salesData.by_type?.takeaway || 0, percentage: 32 },
+          { type: t('توصيل'), count: salesData.by_type?.delivery || 0, percentage: 28 }
         ],
         comparisons: {
           vs_yesterday: { sales: 0, orders: 0 },
@@ -175,11 +176,11 @@ export default function SmartReports() {
           growth_orders: 8.3
         },
         topProducts: [
-          { name: 'برجر كلاسيك', quantity: 45, revenue: 4500, growth: 15 },
-          { name: 'بيتزا مارغريتا', quantity: 38, revenue: 3800, growth: 8 },
-          { name: 'شاورما لحم', quantity: 32, revenue: 2560, growth: -5 },
-          { name: 'قهوة لاتيه', quantity: 28, revenue: 840, growth: 22 },
-          { name: 'سلطة سيزر', quantity: 25, revenue: 1250, growth: 10 }
+          { name: t('برجر كلاسيك'), quantity: 45, revenue: 4500, growth: 15 },
+          { name: t('بيتزا مارغريتا'), quantity: 38, revenue: 3800, growth: 8 },
+          { name: t('شاورما لحم'), quantity: 32, revenue: 2560, growth: -5 },
+          { name: t('قهوة لاتيه'), quantity: 28, revenue: 840, growth: 22 },
+          { name: t('سلطة سيزر'), quantity: 25, revenue: 1250, growth: 10 }
         ],
         salesByHour: [
           { hour: '10:00', sales: 450 },
@@ -197,9 +198,9 @@ export default function SmartReports() {
           { hour: '22:00', sales: 850 }
         ],
         orderTypes: [
-          { type: 'داخل المطعم', count: 35, percentage: 40 },
-          { type: 'سفري', count: 28, percentage: 32 },
-          { type: 'توصيل', count: 24, percentage: 28 }
+          { type: t('داخل المطعم'), count: 35, percentage: 40 },
+          { type: t('سفري'), count: 28, percentage: 32 },
+          { type: t('توصيل'), count: 24, percentage: 28 }
         ],
         comparisons: {
           vs_yesterday: { sales: 12.5, orders: 8.3 },
@@ -207,10 +208,10 @@ export default function SmartReports() {
           vs_last_month: { sales: 25.4, orders: 22.8 }
         },
         insights: [
-          { type: 'positive', text: 'المبيعات أعلى بـ 12.5% مقارنة بالأمس' },
-          { type: 'positive', text: 'قهوة لاتيه تشهد نمواً ملحوظاً (+22%)' },
-          { type: 'warning', text: 'شاورما لحم تراجعت مبيعاتها (-5%)' },
-          { type: 'info', text: 'ساعة الذروة: 7 مساءً (2,100 ل.س)' }
+          { type: 'positive', text: t('المبيعات أعلى بـ 12.5% مقارنة بالأمس') },
+          { type: 'positive', text: t('قهوة لاتيه تشهد نمواً ملحوظاً (+22%)') },
+          { type: 'warning', text: t('شاورما لحم تراجعت مبيعاتها (-5%)') },
+          { type: 'info', text: t('ساعة الذروة: 7 مساءً (2,100 ل.س)') }
         ]
       });
     } finally {
@@ -221,7 +222,7 @@ export default function SmartReports() {
     return new Intl.NumberFormat('ar-SY', {
       style: 'decimal',
       maximumFractionDigits: 0
-    }).format(value) + ' ل.س';
+    }).format(value) + ' IQD';
   };
   const GrowthIndicator = ({ value }) => {
     const isPositive = value >= 0;
