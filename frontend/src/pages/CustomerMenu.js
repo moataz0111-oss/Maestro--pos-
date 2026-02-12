@@ -1481,15 +1481,15 @@ export default function CustomerMenu() {
           <div className="fixed bottom-0 left-0 right-0 bg-white border-t shadow-lg p-4">
             <div className="max-w-lg mx-auto space-y-3">
               <div className="flex justify-between text-sm">
-                <span>المجموع الفرعي</span>
+                <span>{t('المجموع الفرعي')}</span>
                 <span>{formatPrice(cartTotal)}</span>
               </div>
               <div className="flex justify-between text-sm">
-                <span>رسوم التوصيل</span>
+                <span>{t('رسوم التوصيل')}</span>
                 <span>{formatPrice(deliveryFee)}</span>
               </div>
               <div className="flex justify-between font-bold text-lg pt-2 border-t">
-                <span>الإجمالي</span>
+                <span>{t('الإجمالي')}</span>
                 <span className="text-orange-600">{formatPrice(grandTotal)}</span>
               </div>
               <div className="flex gap-2">
@@ -1499,14 +1499,14 @@ export default function CustomerMenu() {
                   onClick={() => setShowSaveFavoriteDialog(true)}
                 >
                   <Heart className="h-5 w-5 ml-2" />
-                  حفظ كمفضل
+                  {t('حفظ كمفضل')}
                 </Button>
                 <Button 
                   className="flex-1 h-12 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600"
                   onClick={() => setStep('checkout')}
                   data-testid="proceed-checkout-btn"
                 >
-                  متابعة الطلب
+                  {t('متابعة الطلب')}
                   <ArrowLeft className="h-5 w-5 mr-2" />
                 </Button>
               </div>
@@ -1528,7 +1528,7 @@ export default function CustomerMenu() {
             <Button variant="ghost" size="icon" onClick={() => setStep('cart')}>
               <ArrowRight className="h-5 w-5" />
             </Button>
-            <h1 className="text-xl font-bold">إتمام الطلب</h1>
+            <h1 className="text-xl font-bold">{t('إتمام الطلب')}</h1>
           </div>
         </header>
         <main className="max-w-lg mx-auto px-4 py-4 pb-32">
@@ -1538,20 +1538,20 @@ export default function CustomerMenu() {
               <CardContent className="p-4 space-y-4">
                 <h2 className="font-bold flex items-center gap-2">
                   <User className="h-5 w-5 text-orange-500" />
-                  معلومات العميل
+                  {t('معلومات العميل')}
                 </h2>
                 
                 <div>
-                  <label className="text-sm font-medium mb-1 block">الاسم الكامل *</label>
+                  <label className="text-sm font-medium mb-1 block">{t('الاسم الكامل')} *</label>
                   <Input
-                    placeholder="أدخل اسمك"
+                    placeholder={t('أدخل اسمك')}
                     value={customerName}
                     onChange={(e) => setCustomerName(e.target.value)}
                     data-testid="customer-name-input"
                   />
                 </div>
                 <div>
-                  <label className="text-sm font-medium mb-1 block">رقم الهاتف *</label>
+                  <label className="text-sm font-medium mb-1 block">{t('رقم الهاتف')} *</label>
                   <Input
                     placeholder="07xxxxxxxxx"
                     value={customerPhone}
