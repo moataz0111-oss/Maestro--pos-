@@ -1613,7 +1613,7 @@ export default function CustomerMenu() {
                     className="bg-green-500 hover:bg-green-600"
                     onClick={async () => {
                       if (navigator.geolocation) {
-                        toast.info('جاري تحديد موقعك...');
+                        toast.info(t('جاري تحديد موقعك...'));
                         navigator.geolocation.getCurrentPosition(
                           async (pos) => {
                             setDeliveryLocation([pos.coords.latitude, pos.coords.longitude]);
@@ -1624,19 +1624,19 @@ export default function CustomerMenu() {
                             
                             // تحويل الإحداثيات لعنوان
                             await reverseGeocode(pos.coords.latitude, pos.coords.longitude);
-                            toast.success('تم تحديد موقعك بنجاح!');
+                            toast.success(t('تم تحديد موقعك بنجاح!'));
                           },
                           (error) => {
                             if (error.code === error.PERMISSION_DENIED) {
-                              toast.error('يرجى السماح بالوصول للموقع من إعدادات المتصفح');
+                              toast.error(t('يرجى السماح بالوصول للموقع من إعدادات المتصفح'));
                             } else {
-                              toast.error('فشل في تحديد الموقع، حاول مرة أخرى');
+                              toast.error(t('فشل في تحديد الموقع، حاول مرة أخرى'));
                             }
                           },
                           { enableHighAccuracy: true, timeout: 15000 }
                         );
                       } else {
-                        toast.error('المتصفح لا يدعم تحديد الموقع');
+                        toast.error(t('المتصفح لا يدعم تحديد الموقع'));
                       }
                     }}
                     data-testid="get-location-btn"
