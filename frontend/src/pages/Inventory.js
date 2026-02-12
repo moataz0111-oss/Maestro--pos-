@@ -149,14 +149,14 @@ export default function Inventory() {
       });
       fetchData();
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'فشل في إضافة الصنف');
+      toast.error(error.response?.data?.detail || t('فشل في إضافة الصنف'));
     }
   };
 
   // إضافة مكون للوصفة
   const addIngredientToRecipe = () => {
     if (!recipeIngredient.raw_material_id || recipeIngredient.quantity <= 0) {
-      toast.error('اختر مادة خام وحدد الكمية');
+      toast.error(t('اختر مادة خام وحدد الكمية'));
       return;
     }
 
@@ -166,7 +166,7 @@ export default function Inventory() {
     // التحقق من عدم التكرار
     const exists = formData.recipe.find(r => r.raw_material_id === recipeIngredient.raw_material_id);
     if (exists) {
-      toast.error('هذه المادة موجودة بالفعل في الوصفة');
+      toast.error(t('هذه المادة موجودة بالفعل في الوصفة'));
       return;
     }
 
@@ -184,7 +184,7 @@ export default function Inventory() {
     }));
 
     setRecipeIngredient({ raw_material_id: '', quantity: 0 });
-    toast.success(`تمت إضافة ${material.name}`);
+    toast.success(`${t('تمت إضافة')} ${material.name}`);
   };
 
   // حذف مكون من الوصفة
@@ -208,12 +208,12 @@ export default function Inventory() {
         quantity: transactionData.quantity,
         notes: transactionData.notes
       });
-      toast.success(type === 'in' ? 'تم إضافة الكمية' : 'تم سحب الكمية');
+      toast.success(type === 'in' ? t('تم إضافة الكمية') : t('تم سحب الكمية'));
       setTransactionDialog(null);
       setTransactionData({ quantity: 0, notes: '' });
       fetchData();
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'فشل في تنفيذ العملية');
+      toast.error(error.response?.data?.detail || t('فشل في تنفيذ العملية'));
     }
   };
 
@@ -233,7 +233,7 @@ export default function Inventory() {
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="text-center">
           <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-          <p className="text-muted-foreground">جاري التحميل...</p>
+          <p className="text-muted-foreground">{t('جاري التحميل...')}</p>
         </div>
       </div>
     );
@@ -249,9 +249,9 @@ export default function Inventory() {
               <ArrowRight className="h-5 w-5" />
             </Button>
             <div>
-              <h1 className="text-xl font-bold font-cairo text-foreground">إدارة المخزون</h1>
+              <h1 className="text-xl font-bold font-cairo text-foreground">{t('إدارة المخزون')}</h1>
               <p className="text-sm text-muted-foreground">
-                {itemType === 'raw' ? 'المواد الخام' : 'المنتجات النهائية'}
+                {itemType === 'raw' ? t('المواد الخام') : t('المنتجات النهائية')}
               </p>
             </div>
           </div>
@@ -272,17 +272,17 @@ export default function Inventory() {
                 <DialogTrigger asChild>
                   <Button className="bg-primary text-primary-foreground" data-testid="add-item-btn">
                     <Plus className="h-4 w-4 ml-2" />
-                    إضافة صنف
+                    {t('إضافة صنف')}
                   </Button>
                 </DialogTrigger>
                 <DialogContent>
                   <DialogHeader>
-                    <DialogTitle className="text-foreground">إضافة صنف جديد</DialogTitle>
+                    <DialogTitle className="text-foreground">{t('إضافة صنف جديد')}</DialogTitle>
                   </DialogHeader>
                   <form onSubmit={handleSubmit} className="space-y-4">
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <Label className="text-foreground">الاسم</Label>
+                        <Label className="text-foreground">{t('الاسم')}</Label>
                         <Input
                           value={formData.name}
                           onChange={(e) => setFormData({ ...formData, name: e.target.value })}
@@ -291,7 +291,7 @@ export default function Inventory() {
                         />
                       </div>
                       <div>
-                        <Label className="text-foreground">الاسم بالإنجليزية</Label>
+                        <Label className="text-foreground">{t('الاسم بالإنجليزية')}</Label>
                         <Input
                           value={formData.name_en}
                           onChange={(e) => setFormData({ ...formData, name_en: e.target.value })}
