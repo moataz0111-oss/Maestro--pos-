@@ -127,7 +127,7 @@ export default function PurchasesPage() {
       console.error('Error fetching data:', error);
       // إذا كان خطأ 404، هذا يعني أن الـ API لم يتم تحميله بعد
       if (error.response?.status !== 404) {
-        toast.error('فشل في تحميل البيانات');
+        toast.error(t('فشل في تحميل البيانات'));
       }
     } finally {
       setLoading(false);
@@ -137,19 +137,19 @@ export default function PurchasesPage() {
   const handleAddSupplier = async (e) => {
     e.preventDefault();
     if (!supplierForm.name) {
-      toast.error('الرجاء إدخال اسم المورد');
+      toast.error(t('الرجاء إدخال اسم المورد'));
       return;
     }
     
     setSubmitting(true);
     try {
       await axios.post(`${API}/suppliers`, supplierForm, { headers });
-      toast.success('تم إضافة المورد بنجاح');
+      toast.success(t('تم إضافة المورد بنجاح'));
       setShowSupplierDialog(false);
       setSupplierForm({ name: '', phone: '', email: '', address: '', company_name: '', notes: '' });
       fetchData();
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'فشل في إضافة المورد');
+      toast.error(error.response?.data?.detail || t('فشل في إضافة المورد'));
     } finally {
       setSubmitting(false);
     }
@@ -157,7 +157,7 @@ export default function PurchasesPage() {
   // إضافة صنف للفاتورة
   const addItemToPurchase = () => {
     if (!newItem.name || newItem.quantity <= 0 || newItem.cost_per_unit <= 0) {
-      toast.error('الرجاء إدخال بيانات الصنف كاملة');
+      toast.error(t('الرجاء إدخال بيانات الصنف كاملة'));
       return;
     }
     
@@ -173,7 +173,7 @@ export default function PurchasesPage() {
     }));
     
     setNewItem({ name: '', quantity: 1, unit: 'كغم', cost_per_unit: 0 });
-    toast.success(`تمت إضافة ${item.name}`);
+    toast.success(t('تمت الإضافة'));
   };
   // حذف صنف من الفاتورة
   const removeItemFromPurchase = (index) => {
@@ -189,14 +189,14 @@ export default function PurchasesPage() {
   // إنشاء فاتورة شراء
   const handleCreatePurchase = async () => {
     if (!purchaseForm.supplier_id || purchaseForm.items.length === 0) {
-      toast.error('الرجاء اختيار المورد وإضافة أصناف');
+      toast.error(t('الرجاء اختيار المورد وإضافة أصناف'));
       return;
     }
     
     setSubmitting(true);
     try {
       await axios.post(`${API}/purchases-new`, purchaseForm, { headers });
-      toast.success('تم إنشاء فاتورة الشراء بنجاح');
+      toast.success(t('تم إنشاء فاتورة الشراء بنجاح'));
       setShowPurchaseDialog(false);
       setPurchaseForm({
         supplier_id: '',
@@ -209,7 +209,7 @@ export default function PurchasesPage() {
       });
       fetchData();
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'فشل في إنشاء الفاتورة');
+      toast.error(error.response?.data?.detail || t('فشل في إنشاء الفاتورة'));
     } finally {
       setSubmitting(false);
     }
@@ -217,7 +217,7 @@ export default function PurchasesPage() {
   // رفع صورة الفاتورة
   const handleUploadInvoice = async (purchaseId) => {
     if (!uploadFile) {
-      toast.error('الرجاء اختيار صورة');
+      toast.error(t('الرجاء اختيار صورة'));
       return;
     }
     
@@ -233,12 +233,12 @@ export default function PurchasesPage() {
         }
       });
       
-      toast.success('تم رفع صورة الفاتورة بنجاح');
+      toast.success(t('تم رفع صورة الفاتورة بنجاح'));
       setShowUploadDialog(null);
       setUploadFile(null);
       fetchData();
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'فشل في رفع الصورة');
+      toast.error(error.response?.data?.detail || t('فشل في رفع الصورة'));
     } finally {
       setSubmitting(false);
     }
@@ -247,10 +247,10 @@ export default function PurchasesPage() {
   const handleSendToWarehouse = async (purchaseId) => {
     try {
       await axios.post(`${API}/purchases-new/${purchaseId}/send-to-warehouse`, {}, { headers });
-      toast.success('تم إرسال المشتريات للمخزن بنجاح');
+      toast.success(t('تم إرسال المشتريات للمخزن بنجاح'));
       fetchData();
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'فشل في الإرسال للمخزن');
+      toast.error(error.response?.data?.detail || t('فشل في الإرسال للمخزن'));
     }
   };
   const getStatusColor = (status) => {
