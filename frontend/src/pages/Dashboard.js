@@ -1660,19 +1660,19 @@ export default function Dashboard() {
                 {/* ملخص المبيعات */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                   <div className="p-3 bg-green-500/10 rounded-lg text-center">
-                    <p className="text-xs text-muted-foreground">إجمالي المبيعات</p>
+                    <p className="text-xs text-muted-foreground">{t('إجمالي المبيعات')}</p>
                     <p className="text-lg font-bold text-green-600">{formatPrice(cashSummary.total_sales)}</p>
                   </div>
                   <div className="p-3 bg-blue-500/10 rounded-lg text-center">
-                    <p className="text-xs text-muted-foreground">نقدي</p>
+                    <p className="text-xs text-muted-foreground">{t('نقدي')}</p>
                     <p className="text-lg font-bold text-blue-600">{formatPrice(cashSummary.cash_sales)}</p>
                   </div>
                   <div className="p-3 bg-yellow-500/10 rounded-lg text-center">
-                    <p className="text-xs text-muted-foreground">المصاريف</p>
+                    <p className="text-xs text-muted-foreground">{t('المصاريف')}</p>
                     <p className="text-lg font-bold text-yellow-600">{formatPrice(cashSummary.total_expenses)}</p>
                   </div>
                   <div className="p-3 bg-purple-500/10 rounded-lg text-center">
-                    <p className="text-xs text-muted-foreground">المتوقع</p>
+                    <p className="text-xs text-muted-foreground">{t('المتوقع')}</p>
                     <p className="text-lg font-bold text-purple-600">{formatPrice(cashSummary.expected_cash)}</p>
                   </div>
                 </div>
@@ -1681,7 +1681,7 @@ export default function Dashboard() {
                 <div className="space-y-3">
                   <h3 className="font-bold flex items-center gap-2">
                     <Banknote className="h-5 w-5 text-green-500" />
-                    جرد الصندوق (فئات النقود)
+                    {t('جرد الصندوق')} ({t('فئات النقود')})
                   </h3>
                   
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -1708,7 +1708,7 @@ export default function Dashboard() {
 
                   {/* إجمالي الجرد */}
                   <div className="flex items-center justify-between p-4 bg-primary/10 rounded-lg">
-                    <span className="font-bold">إجمالي الجرد:</span>
+                    <span className="font-bold">{t('إجمالي الجرد')}:</span>
                     <span className="text-2xl font-bold text-primary">{formatPrice(calculateCountedCash())}</span>
                   </div>
 
@@ -1719,7 +1719,7 @@ export default function Dashboard() {
                         ? 'bg-green-500/10' 
                         : 'bg-red-500/10'
                     }`}>
-                      <span className="font-bold">الفرق:</span>
+                      <span className="font-bold">{t('الفرق')}:</span>
                       <span className={`text-xl font-bold flex items-center gap-2 ${
                         calculateCountedCash() - cashSummary.expected_cash >= 0 
                           ? 'text-green-600' 
@@ -1738,11 +1738,11 @@ export default function Dashboard() {
 
                 {/* ملاحظات */}
                 <div className="space-y-2">
-                  <Label>ملاحظات (اختياري)</Label>
+                  <Label>{t('ملاحظات')} ({t('اختياري')})</Label>
                   <Input
                     value={closeNotes}
                     onChange={(e) => setCloseNotes(e.target.value)}
-                    placeholder="أضف ملاحظات إن وجدت..."
+                    placeholder={t('أضف ملاحظات إن وجدت')}
                     data-testid="close-notes"
                   />
                 </div>
