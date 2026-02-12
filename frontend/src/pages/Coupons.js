@@ -105,7 +105,7 @@ export default function Coupons() {
     e.preventDefault();
     
     if (!couponForm.code || !couponForm.name) {
-      toast.error('الكود والاسم مطلوبان');
+      toast.error(t('الكود والاسم مطلوبان'));
       return;
     }
     try {
@@ -121,28 +121,28 @@ export default function Coupons() {
       
       if (editingCoupon) {
         await axios.put(`${API}/coupons/${editingCoupon.id}`, data, { headers });
-        toast.success('تم تحديث الكوبون');
+        toast.success(t('تم تحديث الكوبون'));
       } else {
         await axios.post(`${API}/coupons`, data, { headers });
-        toast.success('تم إنشاء الكوبون');
+        toast.success(t('تم إنشاء الكوبون'));
       }
       
       setCouponDialogOpen(false);
       resetCouponForm();
       fetchData();
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'فشل في حفظ الكوبون');
+      toast.error(error.response?.data?.detail || t('فشل في حفظ الكوبون'));
     }
   };
   const handleDeleteCoupon = async (id) => {
-    if (!window.confirm('هل أنت متأكد من حذف هذا الكوبون؟')) return;
+    if (!window.confirm(t('هل أنت متأكد؟'))) return;
     
     try {
       const token = localStorage.getItem('token');
       await axios.delete(`${API}/coupons/${id}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      toast.success('تم الحذف');
+      toast.success(t('تم الحذف'));
       fetchData();
     } catch (error) {
       toast.error(t('فشل في الحذف'));
@@ -152,7 +152,7 @@ export default function Coupons() {
     e.preventDefault();
     
     if (!promotionForm.name) {
-      toast.error('اسم العرض مطلوب');
+      toast.error(t('اسم العرض مطلوب'));
       return;
     }
     try {
@@ -166,28 +166,28 @@ export default function Coupons() {
       
       if (editingPromotion) {
         await axios.put(`${API}/promotions/${editingPromotion.id}`, data, { headers });
-        toast.success('تم تحديث العرض');
+        toast.success(t('تم تحديث العرض'));
       } else {
         await axios.post(`${API}/promotions`, data, { headers });
-        toast.success('تم إنشاء العرض');
+        toast.success(t('تم إنشاء العرض'));
       }
       
       setPromotionDialogOpen(false);
       resetPromotionForm();
       fetchData();
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'فشل في حفظ العرض');
+      toast.error(error.response?.data?.detail || t('فشل في حفظ العرض'));
     }
   };
   const handleDeletePromotion = async (id) => {
-    if (!window.confirm('هل أنت متأكد من حذف هذا العرض؟')) return;
+    if (!window.confirm(t('هل أنت متأكد؟'))) return;
     
     try {
       const token = localStorage.getItem('token');
       await axios.delete(`${API}/promotions/${id}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      toast.success('تم الحذف');
+      toast.success(t('تم الحذف'));
       fetchData();
     } catch (error) {
       toast.error(t('فشل في الحذف'));
