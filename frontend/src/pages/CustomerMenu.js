@@ -719,11 +719,11 @@ export default function CustomerMenu() {
       
       // رسالة خطأ أوضح
       if (error.response?.status === 404) {
-        toast.error('المطعم غير موجود');
+        toast.error(t('المطعم غير موجود'));
       } else if (error.code === 'ERR_NETWORK') {
-        toast.error('خطأ في الاتصال بالخادم');
+        toast.error(t('خطأ في الاتصال بالخادم'));
       } else {
-        toast.error('فشل في تحميل القائمة');
+        toast.error(t('فشل في تحميل القائمة'));
       }
     } finally {
       setLoading(false);
@@ -759,7 +759,7 @@ export default function CustomerMenu() {
         image: product.image
       }]);
     }
-    toast.success('تمت الإضافة للسلة');
+    toast.success(t('تمت الإضافة للسلة'));
   };
   const updateQuantity = (productId, delta) => {
     setCart(cart.map(item => {
