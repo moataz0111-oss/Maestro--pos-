@@ -189,12 +189,12 @@ export default function Delivery() {
         ...formData,
         branch_id: selectedBranch
       });
-      toast.success('تم إضافة السائق');
+      toast.success(t('تم إضافة السائق'));
       setDialogOpen(false);
       setFormData({ name: '', phone: '', pin: '1234' });
       fetchData();
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'فشل في إضافة السائق');
+      toast.error(error.response?.data?.detail || t('فشل في إضافة السائق'));
     }
   };
 
