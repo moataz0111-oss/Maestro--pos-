@@ -1468,16 +1468,17 @@ export default function Delivery() {
           <div className="flex gap-2">
             <Button 
               variant="outline" 
-              onClick={() =>{t('setDeleteConfirmOpen(false)}
+              onClick={() => setDeleteConfirmOpen(false)}
               className="flex-1"
             >
-              إلغاء')}</Button>
+              {t('إلغاء')}
+            </Button>
             <Button 
               onClick={handleDeleteSelectedDrivers}
               className="flex-1 bg-red-500 text-white hover:bg-red-600"
             >
               <Trash2 className="h-4 w-4 ml-2" />
-              حذف نهائي
+              {t('حذف نهائي')}
             </Button>
           </div>
         </DialogContent>
