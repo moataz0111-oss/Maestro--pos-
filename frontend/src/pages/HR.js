@@ -852,53 +852,53 @@ export default function HR() {
                             <Input type="email" value={employeeForm.email} onChange={(e) => setEmployeeForm({...employeeForm, email: e.target.value})} />
                           </div>
                           <div>
-                            <Label>رقم الهوية</Label>
+                            <Label>{t('رقم الهوية')}</Label>
                             <Input value={employeeForm.national_id} onChange={(e) => setEmployeeForm({...employeeForm, national_id: e.target.value})} />
                           </div>
                           <div>
-                            <Label>المسمى الوظيفي *</Label>
+                            <Label>{t('المسمى الوظيفي')} *</Label>
                             <Input value={employeeForm.position} onChange={(e) => setEmployeeForm({...employeeForm, position: e.target.value})} required />
                           </div>
                           <div>
-                            <Label>القسم</Label>
+                            <Label>{t('القسم')}</Label>
                             <Input value={employeeForm.department} onChange={(e) => setEmployeeForm({...employeeForm, department: e.target.value})} />
                           </div>
                           <div>
-                            <Label>الفرع *</Label>
+                            <Label>{t('الفرع')} *</Label>
                             <Select value={employeeForm.branch_id} onValueChange={(v) => setEmployeeForm({...employeeForm, branch_id: v})}>
-                              <SelectTrigger><SelectValue placeholder="اختر الفرع" /></SelectTrigger>
+                              <SelectTrigger><SelectValue placeholder={t('اختر الفرع')} /></SelectTrigger>
                               <SelectContent>
                                 {branches.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
                               </SelectContent>
                             </Select>
                           </div>
                           <div>
-                            <Label>تاريخ التعيين *</Label>
+                            <Label>{t('تاريخ التعيين')} *</Label>
                             <Input type="date" value={employeeForm.hire_date} onChange={(e) => setEmployeeForm({...employeeForm, hire_date: e.target.value})} required />
                           </div>
                           <div>
-                            <Label>الراتب الأساسي *</Label>
+                            <Label>{t('الراتب الأساسي')} *</Label>
                             <Input type="number" value={employeeForm.salary} onChange={(e) => setEmployeeForm({...employeeForm, salary: e.target.value})} required />
                           </div>
                           <div>
-                            <Label>نوع الراتب</Label>
+                            <Label>{t('نوع الراتب')}</Label>
                             <Select value={employeeForm.salary_type} onValueChange={(v) => setEmployeeForm({...employeeForm, salary_type: v})}>
                               <SelectTrigger><SelectValue /></SelectTrigger>
                               <SelectContent>
-                                <SelectItem value="monthly">شهري</SelectItem>
-                                <SelectItem value="daily">يومي</SelectItem>
-                                <SelectItem value="hourly">بالساعة</SelectItem>
+                                <SelectItem value="monthly">{t('شهري')}</SelectItem>
+                                <SelectItem value="daily">{t('يومي')}</SelectItem>
+                                <SelectItem value="hourly">{t('بالساعة')}</SelectItem>
                               </SelectContent>
                             </Select>
                           </div>
                           <div>
-                            <Label>ساعات العمل اليومية</Label>
+                            <Label>{t('ساعات العمل اليومية')}</Label>
                             <Input type="number" value={employeeForm.work_hours_per_day} onChange={(e) => setEmployeeForm({...employeeForm, work_hours_per_day: e.target.value})} />
                           </div>
                         </div>
                         <div className="flex justify-end gap-2">
-                          <Button type="button" variant="outline" onClick={() => setEmployeeDialogOpen(false)}>إلغاء</Button>
-                          <Button type="submit">{editingEmployee ? 'تحديث' : 'إضافة'}</Button>
+                          <Button type="button" variant="outline" onClick={() => setEmployeeDialogOpen(false)}>{t('إلغاء')}</Button>
+                          <Button type="submit">{editingEmployee ? t('تحديث') : t('إضافة')}</Button>
                         </div>
                       </form>
                     </DialogContent>
@@ -910,13 +910,13 @@ export default function HR() {
                   <table className="w-full">
                     <thead>
                       <tr className="border-b">
-                        <th className="text-right p-3">الاسم</th>
-                        <th className="text-right p-3">الهاتف</th>
-                        <th className="text-right p-3">المسمى</th>
-                        <th className="text-right p-3">الفرع</th>
-                        <th className="text-right p-3">الراتب</th>
-                        <th className="text-right p-3">الحالة</th>
-                        <th className="text-right p-3">الإجراءات</th>
+                        <th className="text-right p-3">{t('الاسم')}</th>
+                        <th className="text-right p-3">{t('الهاتف')}</th>
+                        <th className="text-right p-3">{t('المسمى')}</th>
+                        <th className="text-right p-3">{t('الفرع')}</th>
+                        <th className="text-right p-3">{t('الراتب')}</th>
+                        <th className="text-right p-3">{t('الحالة')}</th>
+                        <th className="text-right p-3">{t('الإجراءات')}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -929,15 +929,15 @@ export default function HR() {
                           <td className="p-3">{formatPrice(emp.salary)}</td>
                           <td className="p-3">
                             <Badge className={emp.is_active ? 'bg-green-500' : 'bg-red-500'}>
-                              {emp.is_active ? 'نشط' : 'معطل'}
+                              {emp.is_active ? t('نشط') : t('معطل')}
                             </Badge>
                           </td>
                           <td className="p-3">
                             <div className="flex items-center gap-2">
-                              <Button size="sm" variant="outline" onClick={() => exportEmployeeSalarySlip(emp.id, emp.name, 'excel')} title="تصدير مفردات المرتب">
+                              <Button size="sm" variant="outline" onClick={() => exportEmployeeSalarySlip(emp.id, emp.name, 'excel')} title={t('تصدير مفردات المرتب')}>
                                 <FileSpreadsheet className="h-4 w-4" />
                               </Button>
-                              <Button size="sm" variant="outline" onClick={() => calculatePayroll(emp.id)} title="إنشاء كشف راتب">
+                              <Button size="sm" variant="outline" onClick={() => calculatePayroll(emp.id)} title={t('إنشاء كشف راتب')}>
                                 <FileText className="h-4 w-4" />
                               </Button>
                               <Button size="sm" variant="outline" onClick={() => {
