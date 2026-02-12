@@ -5219,12 +5219,12 @@ export default function Settings() {
                           e.preventDefault();
                           try {
                             await axios.post(`${API}/customers`, customerForm);
-                            toast.success('تم إضافة العميل');
+                            toast.success(t('تم إضافة العميل'));
                             setCustomerDialogOpen(false);
                             setCustomerForm({ name: '', phone: '', phone2: '', address: '', area: '', notes: '', is_blocked: false });
                             fetchData();
                           } catch (error) {
-                            toast.error(error.response?.data?.detail || 'فشل في إضافة العميل');
+                            toast.error(error.response?.data?.detail || t('فشل في إضافة العميل'));
                           }
                         }} className="space-y-4">
                           <div className="grid grid-cols-2 gap-4">
