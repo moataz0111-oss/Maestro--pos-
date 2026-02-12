@@ -1381,7 +1381,7 @@ export default function Dashboard() {
           {/* Sales by Payment Method */}
           <Card className="border-border/50 bg-card">
             <CardHeader>
-              <CardTitle className="text-lg font-cairo text-foreground">المبيعات حسب طريقة الدفع</CardTitle>
+              <CardTitle className="text-lg font-cairo text-foreground">{t('المبيعات حسب طريقة الدفع')}</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
@@ -1389,7 +1389,7 @@ export default function Dashboard() {
                   <div key={method} className="space-y-2">
                     <div className="flex justify-between text-sm">
                       <span className="text-muted-foreground">
-                        {method === 'cash' ? 'نقدي' : method === 'card' ? 'بطاقة' : 'آجل'}
+                        {method === 'cash' ? t('نقدي') : method === 'card' ? t('بطاقة') : t('آجل')}
                       </span>
                       <span className="font-medium text-foreground">{formatPrice(amount)}</span>
                     </div>
@@ -1402,7 +1402,7 @@ export default function Dashboard() {
                   </div>
                 ))}
                 {(!periodStats?.by_payment_method || Object.keys(periodStats.by_payment_method).length === 0) && (
-                  <p className="text-center text-muted-foreground py-8">لا توجد مبيعات في هذه الفترة</p>
+                  <p className="text-center text-muted-foreground py-8">{t('لا توجد مبيعات في هذه الفترة')}</p>
                 )}
               </div>
             </CardContent>
@@ -1413,7 +1413,7 @@ export default function Dashboard() {
         {periodStats?.by_delivery_app && Object.keys(periodStats.by_delivery_app).length > 0 && (
           <Card className="border-border/50 bg-card">
             <CardHeader>
-              <CardTitle className="text-lg font-cairo text-foreground">مبيعات تطبيقات التوصيل</CardTitle>
+              <CardTitle className="text-lg font-cairo text-foreground">{t('مبيعات تطبيقات التوصيل')}</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
