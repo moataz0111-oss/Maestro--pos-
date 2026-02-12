@@ -738,8 +738,8 @@ export default function WarehouseManufacturing() {
                   <div className="text-center py-8 text-muted-foreground">
                     <Factory className="h-12 w-12 mx-auto mb-4 opacity-50" />
                     <p>{t('لا توجد منتجات مصنعة')}</p>
-                    <Button variant="link" onClick={() =>{t('setShowAddProductDialog(true)}>
-                      إضافة منتج جديد')}</Button>
+                    <Button variant="link" onClick={() => setShowAddProductDialog(true)}>
+                      {t('إضافة منتج جديد')}</Button>
                   </div>
                 ) : (
                   <div className="space-y-4">
