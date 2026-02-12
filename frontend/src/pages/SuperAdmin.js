@@ -1436,10 +1436,10 @@ export default function SuperAdmin() {
     setFeaturesLoading(true);
     try {
       await axios.put(`${API}/super-admin/tenants/${selectedTenant.id}/features`, tenantFeatures);
-      toast.success('تم حفظ صلاحيات العميل');
+      toast.success(t('تم حفظ صلاحيات العميل'));
       setShowFeaturesModal(false);
     } catch (error) {
-      toast.error('فشل في حفظ الصلاحيات');
+      toast.error(t('فشل في حفظ الصلاحيات'));
     } finally {
       setFeaturesLoading(false);
     }
