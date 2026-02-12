@@ -735,11 +735,11 @@ export default function POS() {
       
       // رسالة مناسبة حسب نوع الطلب
       if (orderType === 'dine_in') {
-        toast.success(`✅ تم إتمام الطلب #${orderNumber} وإغلاق الطاولة`);
+        toast.success(`✅ ${t('تم إتمام الطلب')} #${orderNumber} ${t('وإغلاق الطاولة')}`);
       } else if (orderType === 'takeaway') {
-        toast.success(`✅ تم إتمام الطلب السفري #${orderNumber}`);
+        toast.success(`✅ ${t('تم إتمام الطلب السفري')} #${orderNumber}`);
       } else {
-        toast.success(`✅ تم إتمام طلب التوصيل #${orderNumber}`);
+        toast.success(`✅ ${t('تم إتمام طلب التوصيل')} #${orderNumber}`);
       }
       
       // تنظيف وتحديث
@@ -752,7 +752,7 @@ export default function POS() {
       setTables(tablesRes.data);
     } catch (error) {
       console.error('Failed to submit order:', error);
-      toast.error(error.response?.data?.detail || 'فشل في إرسال الطلب');
+      toast.error(error.response?.data?.detail || t('فشل في إرسال الطلب'));
     } finally {
       setSubmitting(false);
     }
@@ -766,7 +766,7 @@ export default function POS() {
   // طباعة الفاتورة (معاينة)
   const handlePrintBill = () => {
     if (cart.length === 0) {
-      toast.error('السلة فارغة');
+      toast.error(t('السلة فارغة'));
       return;
     }
     setPrintDialogOpen(true);
@@ -782,7 +782,7 @@ export default function POS() {
   const handleCancelOrder = async () => {
     if (!editingOrder) return;
     
-    if (!confirm('هل أنت متأكد من إلغاء هذا الطلب؟')) return;
+    if (!confirm(t('هل أنت متأكد؟'))) return;
     
     // تحديد الفرع النشط
     const currentBranchId = getBranchIdForApi() || user?.branch_id;
@@ -792,8 +792,8 @@ export default function POS() {
       const res = await axios.put(`${API}/orders/${editingOrder.id}/cancel`);
       playSuccess();
       toast.success(res.data.was_quick_cancel 
-        ? 'تم إلغاء الطلب (إلغاء سريع)' 
-        : 'تم إلغاء الطلب'
+        ? t('تم إلغاء الطلب (إلغاء سريع)') 
+        : t('تم إلغاء الطلب')
       );
       clearCart();
       await fetchPendingOrders();
@@ -804,7 +804,7 @@ export default function POS() {
       setTables(tablesRes.data);
     } catch (error) {
       console.error('Failed to cancel order:', error);
-      toast.error(error.response?.data?.detail || 'فشل في إلغاء الطلب');
+      toast.error(error.response?.data?.detail || t('فشل في إلغاء الطلب'));
     } finally {
       setSubmitting(false);
     }
