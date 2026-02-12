@@ -278,11 +278,11 @@ export default function Purchasing() {
   };
   const getStatusLabel = (status) => {
     switch (status) {
-      case 'pending': return 'قيد الانتظار';
-      case 'approved': return 'موافق عليه';
-      case 'ordered': return 'تم الطلب';
-      case 'delivered': return 'تم الاستلام';
-      case 'cancelled': return 'ملغي';
+      case 'pending': return t('قيد الانتظار');
+      case 'approved': return t('موافق عليه');
+      case 'ordered': return t('تم الطلب');
+      case 'delivered': return t('تم الاستلام');
+      case 'cancelled': return t('ملغي');
       default: return status;
     }
   };
@@ -321,14 +321,14 @@ export default function Purchasing() {
               className="gap-2"
             >
               <Plus className="h-4 w-4" />
-              مورد جديد
+              {t('مورد جديد')}
             </Button>
             <Button
               onClick={() => setShowAddDialog(true)}
               className="gap-2 bg-emerald-500 hover:bg-emerald-600"
             >
               <Plus className="h-4 w-4" />
-              أمر شراء
+              {t('أمر شراء')}
             </Button>
           </div>
         </div>
@@ -387,7 +387,7 @@ export default function Purchasing() {
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium flex items-center gap-2 text-red-500">
                 <AlertCircle className="h-4 w-4" />
-                تنبيهات انخفاض المخزون
+                {t('تنبيهات انخفاض المخزون')}
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -555,7 +555,7 @@ export default function Purchasing() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <ShoppingCart className="h-5 w-5 text-emerald-500" />
-              أمر شراء جديد
+              {t('أمر شراء جديد')}
             </DialogTitle>
           </DialogHeader>
           
@@ -621,7 +621,7 @@ export default function Purchasing() {
               </div>
               <Button onClick={addItemToOrder} size="sm" className="w-full">
                 <Plus className="h-4 w-4 ml-2" />
-                إضافة
+                {t('إضافة')}
               </Button>
             </div>
             {/* Items List */}
@@ -682,7 +682,7 @@ export default function Purchasing() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Building2 className="h-5 w-5 text-blue-500" />
-              إضافة مورد جديد
+              {t('إضافة مورد جديد')}
             </DialogTitle>
           </DialogHeader>
           
