@@ -25,7 +25,8 @@ import {
   Package,
   Star,
   FileSpreadsheet,
-  FileText
+  FileText,
+  Printer
 } from 'lucide-react';
 import {
   Select,
