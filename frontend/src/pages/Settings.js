@@ -5374,13 +5374,13 @@ export default function Settings() {
                               size="icon"
                               className="text-destructive hover:bg-destructive/10"
                               onClick={async () => {
-                                if (!confirm('هل أنت متأكد من حذف هذا العميل؟')) return;
+                                if (!confirm(t('هل أنت متأكد؟'))) return;
                                 try {
                                   await axios.delete(`${API}/customers/${customer.id}`);
-                                  toast.success('تم حذف العميل');
+                                  toast.success(t('تم حذف العميل'));
                                   fetchData();
                                 } catch (error) {
-                                  toast.error('فشل في حذف العميل');
+                                  toast.error(t('فشل في حذف العميل'));
                                 }
                               }}
                               data-testid={`delete-customer-${customer.id}`}
