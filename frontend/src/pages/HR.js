@@ -972,14 +972,11 @@ export default function HR() {
               <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle className="flex items-center gap-2">
                   <BarChart3 className="h-5 w-5" />
-                  تقرير الرواتب الشامل - {selectedMonth}
+                  {t('تقرير الرواتب الشامل')} - {selectedMonth}
                 </CardTitle>
                 <div className="flex gap-2">
-                  <Button onClick={() => exportPayrollReport('excel')}>
-                    <FileSpreadsheet className="h-4 w-4 ml-2" /> Excel
-                  </Button>
-                  <Button variant="outline" onClick={() => exportPayrollPDF()}>
-                    <FileText className="h-4 w-4 ml-2" /> PDF
+                  <Button onClick={() => window.print()}>
+                    <Printer className="h-4 w-4 ml-2" /> {t('طباعة')}
                   </Button>
                 </div>
               </CardHeader>
