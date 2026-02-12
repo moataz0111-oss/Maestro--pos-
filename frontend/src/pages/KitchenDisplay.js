@@ -142,7 +142,7 @@ const KitchenOrderCard = ({ order, onStatusChange, onItemComplete, t }) => {
             <div className="mt-3 pt-3 border-t border-white/20 flex items-center gap-4">
               {order.table_number && (
                 <Badge className="bg-white/20 text-white">
-                  طاولة {order.table_number}
+                  {t('طاولة')} {order.table_number}
                 </Badge>
               )}
               {order.customer_name && (
@@ -303,16 +303,16 @@ export default function KitchenDisplay() {
       );
       
       if (newKitchenStatus === 'ready_kitchen') {
-        toast.success('تم تجهيز الطلب! ✅');
+        toast.success(t('تم تجهيز الطلب') + '! ✅');
       } else if (newKitchenStatus === 'completed_kitchen') {
-        toast.success('تم إتمام الطلب من المطبخ');
+        toast.success(t('تم إتمام الطلب من المطبخ'));
       } else {
-        toast.success('تم تحديث الحالة');
+        toast.success(t('تم تحديث الحالة'));
       }
       fetchOrders();
     } catch (error) {
       console.error('Error updating status:', error);
-      toast.error('فشل في تحديث الحالة');
+      toast.error(t('فشل في تحديث الحالة'));
     }
   };
 
