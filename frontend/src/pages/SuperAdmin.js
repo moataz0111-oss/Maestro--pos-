@@ -935,7 +935,7 @@ export default function SuperAdmin() {
       toast.success(t('تم حفظ إعدادات الفاتورة بنجاح'));
       setShowInvoiceSettings(false);
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'فشل في حفظ الإعدادات');
+      toast.error(error.response?.data?.detail || t('فشل في حفظ الإعدادات'));
     } finally {
       setLoading(false);
     }
@@ -1059,7 +1059,7 @@ export default function SuperAdmin() {
       await axios.put(`${API}/system/login-page-settings`, loginPageSettings);
       toast.success(t('تم حفظ إعدادات صفحة الدخول بنجاح'));
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'فشل في حفظ الإعدادات');
+      toast.error(error.response?.data?.detail || t('فشل في حفظ الإعدادات'));
     } finally {
       setLoading(false);
     }
