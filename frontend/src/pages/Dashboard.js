@@ -819,7 +819,7 @@ export default function Dashboard() {
     // حفظ الترتيب الجديد
     if (actionsOrder.length > 0) {
       localStorage.setItem(`dashboard_order_${user?.id}`, JSON.stringify(actionsOrder));
-      toast.success('تم حفظ الترتيب الجديد');
+      toast.success(t('تم حفظ الترتيب الجديد'));
     }
   };
 
@@ -847,7 +847,7 @@ export default function Dashboard() {
     handleLongPressEnd();
     if (isReordering && actionsOrder.length > 0) {
       localStorage.setItem(`dashboard_order_${user?.id}`, JSON.stringify(actionsOrder));
-      toast.success('تم حفظ الترتيب الجديد');
+      toast.success(t('تم حفظ الترتيب الجديد'));
     }
     setDraggedItem(null);
   };
