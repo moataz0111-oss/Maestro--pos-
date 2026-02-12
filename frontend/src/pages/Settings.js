@@ -3191,9 +3191,7 @@ export default function Settings() {
                         
                         {productForm.price && productForm.cost && (
                           <div className="p-3 bg-green-500/10 rounded-lg">
-                            <p className="text-sm text-green-600">
-                              الربح المتوقع: {formatPrice((parseFloat(productForm.price) || 0) - (parseFloat(productForm.cost) || 0) - (parseFloat(productForm.operating_cost) || 0))} لكل وحدة
-                            </p>
+                            <p className="text-sm text-green-600">{t('الربح المتوقع: {formatPrice((parseFloat(productForm.price) || 0) - (parseFloat(productForm.cost) || 0) - (parseFloat(productForm.operating_cost) || 0))} لكل وحدة')}</p>
                           </div>
                         )}
                         <div className="flex gap-2 pt-4">
@@ -3229,7 +3227,7 @@ export default function Settings() {
                           <div className="flex items-center gap-4">
                             <div className="text-left">
                               <p className="font-bold text-foreground tabular-nums">{formatPrice(p.price)}</p>
-                              <p className="text-xs text-green-500">ربح: {formatPrice(p.profit || (p.price - p.cost - (p.operating_cost || 0)))}</p>
+                              <p className="text-xs text-green-500">{t('ربح: {formatPrice(p.profit || (p.price - p.cost - (p.operating_cost || 0)))}')}</p>
                             </div>
                             <div className="flex items-center gap-1">
                               <Button
@@ -3924,9 +3922,7 @@ export default function Settings() {
                               />
                               <Percent className="h-4 w-4 text-muted-foreground" />
                             </div>
-                            <p className="text-sm text-muted-foreground">
-                              (حالياً: {app.commission_rate || 0}%)
-                            </p>
+                            <p className="text-sm text-muted-foreground">{t('(حالياً: {app.commission_rate || 0}%)')}</p>
                           </div>
                         </div>
                       ))
@@ -5121,7 +5117,7 @@ export default function Settings() {
                             </div>
                           )}
                           {invoiceSettings.tax_number && invoiceSettings.show_tax !== false && (
-                            <p className="text-xs text-gray-500 mt-1">الرقم الضريبي: {invoiceSettings.tax_number}</p>
+                            <p className="text-xs text-gray-500 mt-1">{t('الرقم الضريبي: {invoiceSettings.tax_number}')}</p>
                           )}
                         </div>
                         

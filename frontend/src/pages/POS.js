@@ -1705,7 +1705,7 @@ export default function POS() {
               
               {/* الرقم الضريبي - إذا كان المستخدم يريد إظهاره */}
               {invoiceSettings.tax_number && invoiceSettings.show_tax !== false && (
-                <p className="text-xs text-gray-500 mt-1">الرقم الضريبي: {invoiceSettings.tax_number}</p>
+                <p className="text-xs text-gray-500 mt-1">{t('الرقم الضريبي: {invoiceSettings.tax_number}')}</p>
               )}
             </div>
             
@@ -1715,9 +1715,7 @@ export default function POS() {
                 {new Date().toLocaleDateString('ar-IQ')} - {new Date().toLocaleTimeString('ar-IQ', {hour: '2-digit', minute: '2-digit'})}
               </p>
               {(editingOrder || lastOrderNumber) && (
-                <p className="text-sm font-bold mt-1 bg-gray-100 py-1 rounded">
-                  فاتورة رقم: #{editingOrder?.order_number || lastOrderNumber}
-                </p>
+                <p className="text-sm font-bold mt-1 bg-gray-100 py-1 rounded">{t('فاتورة رقم: #{editingOrder?.order_number || lastOrderNumber}')}</p>
               )}
             </div>
             
@@ -1731,14 +1729,14 @@ export default function POS() {
             {/* معلومات الطلب */}
             <div className="border-t border-dashed border-gray-300 pt-2 mb-2 text-xs">
               {orderType === 'dine_in' && selectedTable && (
-                <p>طاولة: {tables.find(t => t.id === selectedTable)?.number}</p>
+                <p>{t('طاولة: {tables.find(t => t.id === selectedTable)?.number}')}</p>
               )}
-              {orderType === 'takeaway' && <p>🥡 طلب سفري</p>}
-              {orderType === 'delivery' && <p>🚗 طلب توصيل</p>}
-              {customerName && <p>العميل: {customerName}</p>}
-              {customerPhone && <p>الهاتف: {customerPhone}</p>}
-              {buzzerNumber && <p>رقم التنبيه: {buzzerNumber}</p>}
-              {deliveryAddress && <p>العنوان: {deliveryAddress}</p>}
+              {orderType === 'takeaway' && <p>{t('🥡 طلب سفري')}</p>}
+              {orderType === 'delivery' && <p>{t('🚗 طلب توصيل')}</p>}
+              {customerName && <p>{t('العميل: {customerName}')}</p>}
+              {customerPhone && <p>{t('الهاتف: {customerPhone}')}</p>}
+              {buzzerNumber && <p>{t('رقم التنبيه: {buzzerNumber}')}</p>}
+              {deliveryAddress && <p>{t('العنوان: {deliveryAddress}')}</p>}
             </div>
             
             {/* ========== الأصناف ========== */}
@@ -1746,9 +1744,9 @@ export default function POS() {
               <table className="w-full text-xs">
                 <thead>
                   <tr className="border-b border-gray-300">
-                    <th className="text-right py-1">الصنف</th>
-                    <th className="text-center py-1">الكمية</th>
-                    <th className="text-left py-1">السعر</th>
+                    <th className="text-right py-1">{t('الصنف')}</th>
+                    <th className="text-center py-1">{t('الكمية')}</th>
+                    <th className="text-left py-1">{t('السعر')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1766,16 +1764,16 @@ export default function POS() {
             {/* ========== المجاميع ========== */}
             <div className="border-t border-dashed border-gray-300 pt-2 space-y-1">
               <div className="flex justify-between text-xs">
-                <span>المجموع الفرعي:</span>
+                <span>{t('المجموع الفرعي:')}</span>
                 <span className="tabular-nums">{formatPrice(subtotal)}</span>
               </div>
               {/* حقل الخصم - يظهر دائماً */}
               <div className={`flex justify-between text-xs p-1 rounded ${discount > 0 ? 'text-red-600 bg-red-50' : 'text-gray-500'}`}>
-                <span>🏷️ الخصم:</span>
+                <span>{t('🏷️ الخصم:')}</span>
                 <span className="tabular-nums font-bold">{discount > 0 ? `-${formatPrice(discount)}` : '0'}</span>
               </div>
               <div className="flex justify-between font-bold text-sm border-t-2 border-gray-400 pt-2 mt-2">
-                <span>الإجمالي النهائي:</span>
+                <span>{t('الإجمالي النهائي:')}</span>
                 <span className="tabular-nums">{formatPrice(totalBeforeCommission)}</span>
               </div>
             </div>

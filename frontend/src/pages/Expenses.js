@@ -205,7 +205,7 @@ export default function Expenses() {
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="text-center">
           <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-          <p className="text-muted-foreground">جاري التحميل...</p>
+          <p className="text-muted-foreground">{t('جاري التحميل...')}</p>
         </div>
       </div>
     );
@@ -221,8 +221,8 @@ export default function Expenses() {
               <ArrowRight className="h-5 w-5" />
             </Button>
             <div>
-              <h1 className="text-xl font-bold font-cairo text-foreground">المصاريف اليومية</h1>
-              <p className="text-sm text-muted-foreground">تسجيل ومتابعة المصاريف</p>
+              <h1 className="text-xl font-bold font-cairo text-foreground">{t('المصاريف اليومية')}</h1>
+              <p className="text-sm text-muted-foreground">{t('تسجيل ومتابعة المصاريف')}</p>
             </div>
           </div>
 
@@ -247,11 +247,11 @@ export default function Expenses() {
                 </DialogTrigger>
                 <DialogContent>
                   <DialogHeader>
-                    <DialogTitle className="text-foreground">إضافة مصروف جديد</DialogTitle>
+                    <DialogTitle className="text-foreground">{t('إضافة مصروف جديد')}</DialogTitle>
                   </DialogHeader>
                   <form onSubmit={handleSubmit} className="space-y-4">
                     <div>
-                      <Label className="text-foreground">التصنيف</Label>
+                      <Label className="text-foreground">{t('التصنيف')}</Label>
                       <Select value={formData.category} onValueChange={(v) => setFormData({ ...formData, category: v })}>
                         <SelectTrigger className="mt-1">
                           <SelectValue />
@@ -269,32 +269,30 @@ export default function Expenses() {
                     {/* حقل التصنيف المخصص - يظهر عند اختيار "أخرى" */}
                     {formData.category === 'other' && (
                       <div>
-                        <Label className="text-foreground">اسم التصنيف الجديد (اختياري)</Label>
+                        <Label className="text-foreground">{t('اسم التصنيف الجديد (اختياري)')}</Label>
                         <Input
                           value={formData.custom_category_name}
                           onChange={(e) => setFormData({ ...formData, custom_category_name: e.target.value })}
-                          placeholder="مثال: إنترنت، هاتف، تأمين..."
+                          placeholder={t('مثال: إنترنت، هاتف، تأمين...')}
                           className="mt-1"
                         />
-                        <p className="text-xs text-muted-foreground mt-1">
-                          اكتب اسم تصنيف جديد وسيُحفظ تلقائياً للاستخدام المستقبلي
-                        </p>
+                        <p className="text-xs text-muted-foreground mt-1">{t('اكتب اسم تصنيف جديد وسيُحفظ تلقائياً للاستخدام المستقبلي')}</p>
                       </div>
                     )}
                     
                     <div>
-                      <Label className="text-foreground">الوصف</Label>
+                      <Label className="text-foreground">{t('الوصف')}</Label>
                       <Input
                         value={formData.description}
                         onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                        placeholder="وصف المصروف..."
+                        placeholder={t('وصف المصروف...')}
                         required
                         className="mt-1"
                       />
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <Label className="text-foreground">المبلغ</Label>
+                        <Label className="text-foreground">{t('المبلغ')}</Label>
                         <Input
                           type="number"
                           value={formData.amount}
@@ -305,7 +303,7 @@ export default function Expenses() {
                         />
                       </div>
                       <div>
-                        <Label className="text-foreground">التاريخ</Label>
+                        <Label className="text-foreground">{t('التاريخ')}</Label>
                         <Input
                           type="date"
                           value={formData.date}
@@ -316,35 +314,32 @@ export default function Expenses() {
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <Label className="text-foreground">طريقة الدفع</Label>
+                        <Label className="text-foreground">{t('طريقة الدفع')}</Label>
                         <Select value={formData.payment_method} onValueChange={(v) => setFormData({ ...formData, payment_method: v })}>
                           <SelectTrigger className="mt-1">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="cash">نقدي</SelectItem>
-                            <SelectItem value="card">بطاقة</SelectItem>
-                            <SelectItem value="transfer">تحويل</SelectItem>
+                            <SelectItem value="cash">{t('نقدي')}</SelectItem>
+                            <SelectItem value="card">{t('بطاقة')}</SelectItem>
+                            <SelectItem value="transfer">{t('تحويل')}</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
                       <div>
-                        <Label className="text-foreground">رقم المرجع (اختياري)</Label>
+                        <Label className="text-foreground">{t('رقم المرجع (اختياري)')}</Label>
                         <Input
                           value={formData.reference_number}
                           onChange={(e) => setFormData({ ...formData, reference_number: e.target.value })}
-                          placeholder="رقم الفاتورة..."
+                          placeholder={t('رقم الفاتورة...')}
                           className="mt-1"
                         />
                       </div>
                     </div>
                     <div className="flex gap-2 pt-4">
-                      <Button type="button" variant="outline" onClick={() => setDialogOpen(false)} className="flex-1">
-                        إلغاء
-                      </Button>
-                      <Button type="submit" className="flex-1 bg-primary text-primary-foreground">
-                        حفظ
-                      </Button>
+                      <Button type="button" variant="outline" onClick={() =>{t('setDialogOpen(false)} className="flex-1">
+                        إلغاء')}</Button>
+                      <Button type="submit" className="flex-1 bg-primary text-primary-foreground">{t('حفظ')}</Button>
                     </div>
                   </form>
                 </DialogContent>
@@ -375,10 +370,10 @@ export default function Expenses() {
           </div>
           <Select value={selectedCategory} onValueChange={setSelectedCategory}>
             <SelectTrigger className="w-[150px]">
-              <SelectValue placeholder="التصنيف" />
+              <SelectValue placeholder={t('التصنيف')} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">جميع التصنيفات</SelectItem>
+              <SelectItem value="all">{t('جميع التصنيفات')}</SelectItem>
               {expenseCategories.map(cat => (
                 <SelectItem key={cat.id} value={cat.id}>{cat.icon} {cat.name}</SelectItem>
               ))}
@@ -396,20 +391,20 @@ export default function Expenses() {
                 <DollarSign className="h-7 w-7 text-red-500" />
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">إجمالي المصاريف</p>
+                <p className="text-sm text-muted-foreground">{t('إجمالي المصاريف')}</p>
                 <p className="text-3xl font-bold text-foreground tabular-nums">{formatPrice(totalExpenses)}</p>
               </div>
             </CardContent>
           </Card>
           <Card className="border-border/50 bg-card">
             <CardContent className="p-4">
-              <p className="text-sm text-muted-foreground">عدد المعاملات</p>
+              <p className="text-sm text-muted-foreground">{t('عدد المعاملات')}</p>
               <p className="text-2xl font-bold text-foreground">{expenses.length}</p>
             </CardContent>
           </Card>
           <Card className="border-border/50 bg-card">
             <CardContent className="p-4">
-              <p className="text-sm text-muted-foreground">المتوسط</p>
+              <p className="text-sm text-muted-foreground">{t('المتوسط')}</p>
               <p className="text-2xl font-bold text-foreground tabular-nums">
                 {formatPrice(expenses.length > 0 ? totalExpenses / expenses.length : 0)}
               </p>
@@ -420,7 +415,7 @@ export default function Expenses() {
         {/* By Category */}
         <Card className="border-border/50 bg-card">
           <CardHeader>
-            <CardTitle className="text-lg text-foreground">حسب التصنيف</CardTitle>
+            <CardTitle className="text-lg text-foreground">{t('حسب التصنيف')}</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -438,13 +433,13 @@ export default function Expenses() {
         {/* Expenses List */}
         <Card className="border-border/50 bg-card">
           <CardHeader>
-            <CardTitle className="text-lg text-foreground">سجل المصاريف</CardTitle>
+            <CardTitle className="text-lg text-foreground">{t('سجل المصاريف')}</CardTitle>
           </CardHeader>
           <CardContent>
             {expenses.length === 0 ? (
               <div className="text-center py-8">
                 <Receipt className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                <p className="text-muted-foreground">لا توجد مصاريف في هذه الفترة</p>
+                <p className="text-muted-foreground">{t('لا توجد مصاريف في هذه الفترة')}</p>
               </div>
             ) : (
               <div className="space-y-2">

@@ -218,7 +218,7 @@ export default function Invoices() {
               <FileText className="h-6 w-6 text-primary" />
               الفواتير والطباعة
             </h1>
-            <p className="text-sm text-muted-foreground">تخصيص الفواتير وإدارة الطابعات</p>
+            <p className="text-sm text-muted-foreground">{t('تخصيص الفواتير وإدارة الطابعات')}</p>
           </div>
         </div>
       </div>
@@ -281,8 +281,8 @@ export default function Invoices() {
               <Card className="col-span-full border-border/50">
                 <CardContent className="py-12 text-center">
                   <FileText className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
-                  <p className="text-lg text-muted-foreground">لا توجد قوالب</p>
-                  <p className="text-sm text-muted-foreground">أنشئ قالباً لتخصيص فواتيرك</p>
+                  <p className="text-lg text-muted-foreground">{t('لا توجد قوالب')}</p>
+                  <p className="text-sm text-muted-foreground">{t('أنشئ قالباً لتخصيص فواتيرك')}</p>
                 </CardContent>
               </Card>
             )}
@@ -315,14 +315,14 @@ export default function Invoices() {
                   </div>
                   <div className="space-y-2 text-sm">
                     <div className="flex items-center justify-between">
-                      <span className="text-muted-foreground">النوع:</span>
+                      <span className="text-muted-foreground">{t('النوع:')}</span>
                       <span className="text-foreground">
                         {printer.printer_type === 'thermal' ? 'حرارية' : 
                          printer.printer_type === 'laser' ? 'ليزر' : 'حبر'}
                       </span>
                     </div>
                     <div className="flex items-center justify-between">
-                      <span className="text-muted-foreground">العرض:</span>
+                      <span className="text-muted-foreground">{t('العرض:')}</span>
                       <span className="text-foreground">{printer.paper_width}mm</span>
                     </div>
                     {printer.ip_address && (
@@ -351,8 +351,8 @@ export default function Invoices() {
               <Card className="col-span-full border-border/50">
                 <CardContent className="py-12 text-center">
                   <Printer className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
-                  <p className="text-lg text-muted-foreground">لا توجد طابعات</p>
-                  <p className="text-sm text-muted-foreground">أضف طابعة للبدء بالطباعة</p>
+                  <p className="text-lg text-muted-foreground">{t('لا توجد طابعات')}</p>
+                  <p className="text-sm text-muted-foreground">{t('أضف طابعة للبدء بالطباعة')}</p>
                 </CardContent>
               </Card>
             )}
@@ -370,7 +370,7 @@ export default function Invoices() {
           <form onSubmit={handleSaveTemplate} className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <Label>اسم القالب *</Label>
+                <Label>{t('اسم القالب *')}</Label>
                 <Input
                   value={templateForm.name}
                   onChange={(e) => setTemplateForm({ ...templateForm, name: e.target.value })}
@@ -378,22 +378,22 @@ export default function Invoices() {
                 />
               </div>
               <div>
-                <Label>نوع القالب</Label>
+                <Label>{t('نوع القالب')}</Label>
                 <Select
                   value={templateForm.template_type}
                   onValueChange={(v) => setTemplateForm({ ...templateForm, template_type: v })}
                 >
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="receipt">فاتورة عميل</SelectItem>
-                    <SelectItem value="kitchen">تذكرة مطبخ</SelectItem>
-                    <SelectItem value="delivery">فاتورة توصيل</SelectItem>
+                    <SelectItem value="receipt">{t('فاتورة عميل')}</SelectItem>
+                    <SelectItem value="kitchen">{t('تذكرة مطبخ')}</SelectItem>
+                    <SelectItem value="delivery">{t('فاتورة توصيل')}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
             </div>
             <div>
-              <Label>اسم المنشأة (عربي) *</Label>
+              <Label>{t('اسم المنشأة (عربي) *')}</Label>
               <Input
                 value={templateForm.business_name}
                 onChange={(e) => setTemplateForm({ ...templateForm, business_name: e.target.value })}
@@ -401,7 +401,7 @@ export default function Invoices() {
               />
             </div>
             <div>
-              <Label>اسم المنشأة (إنجليزي)</Label>
+              <Label>{t('اسم المنشأة (إنجليزي)')}</Label>
               <Input
                 value={templateForm.business_name_en}
                 onChange={(e) => setTemplateForm({ ...templateForm, business_name_en: e.target.value })}
@@ -409,7 +409,7 @@ export default function Invoices() {
               />
             </div>
             <div>
-              <Label>العنوان</Label>
+              <Label>{t('العنوان')}</Label>
               <Input
                 value={templateForm.address}
                 onChange={(e) => setTemplateForm({ ...templateForm, address: e.target.value })}
@@ -417,7 +417,7 @@ export default function Invoices() {
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <Label>رقم الهاتف</Label>
+                <Label>{t('رقم الهاتف')}</Label>
                 <Input
                   value={templateForm.phone}
                   onChange={(e) => setTemplateForm({ ...templateForm, phone: e.target.value })}
@@ -425,7 +425,7 @@ export default function Invoices() {
                 />
               </div>
               <div>
-                <Label>الرقم الضريبي</Label>
+                <Label>{t('الرقم الضريبي')}</Label>
                 <Input
                   value={templateForm.tax_number}
                   onChange={(e) => setTemplateForm({ ...templateForm, tax_number: e.target.value })}
@@ -434,7 +434,7 @@ export default function Invoices() {
               </div>
             </div>
             <div>
-              <Label>رابط الشعار</Label>
+              <Label>{t('رابط الشعار')}</Label>
               <Input
                 value={templateForm.logo_url}
                 onChange={(e) => setTemplateForm({ ...templateForm, logo_url: e.target.value })}
@@ -443,7 +443,7 @@ export default function Invoices() {
               />
             </div>
             <div>
-              <Label>نص التذييل (عربي)</Label>
+              <Label>{t('نص التذييل (عربي)')}</Label>
               <Textarea
                 value={templateForm.footer_text}
                 onChange={(e) => setTemplateForm({ ...templateForm, footer_text: e.target.value })}
@@ -451,7 +451,7 @@ export default function Invoices() {
               />
             </div>
             <div>
-              <Label>نص التذييل (إنجليزي)</Label>
+              <Label>{t('نص التذييل (إنجليزي)')}</Label>
               <Textarea
                 value={templateForm.footer_text_en}
                 onChange={(e) => setTemplateForm({ ...templateForm, footer_text_en: e.target.value })}
@@ -461,7 +461,7 @@ export default function Invoices() {
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <Label>عرض الورق</Label>
+                <Label>{t('عرض الورق')}</Label>
                 <Select
                   value={templateForm.paper_width.toString()}
                   onValueChange={(v) => setTemplateForm({ ...templateForm, paper_width: parseInt(v) })}
@@ -474,14 +474,14 @@ export default function Invoices() {
                 </Select>
               </div>
               <div>
-                <Label>الفرع</Label>
+                <Label>{t('الفرع')}</Label>
                 <Select
                   value={templateForm.branch_id}
                   onValueChange={(v) => setTemplateForm({ ...templateForm, branch_id: v })}
                 >
-                  <SelectTrigger><SelectValue placeholder="الكل" /></SelectTrigger>
+                  <SelectTrigger><SelectValue placeholder={t('الكل')} /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">الكل</SelectItem>
+                    <SelectItem value="all">{t('الكل')}</SelectItem>
                     {branches.map(b => (
                       <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
                     ))}
@@ -495,27 +495,26 @@ export default function Invoices() {
                   checked={templateForm.show_logo}
                   onCheckedChange={(v) => setTemplateForm({ ...templateForm, show_logo: v })}
                 />
-                <Label>إظهار الشعار</Label>
+                <Label>{t('إظهار الشعار')}</Label>
               </div>
               <div className="flex items-center gap-2">
                 <Switch
                   checked={templateForm.show_qr_code}
                   onCheckedChange={(v) => setTemplateForm({ ...templateForm, show_qr_code: v })}
                 />
-                <Label>إظهار QR Code</Label>
+                <Label>{t('إظهار QR Code')}</Label>
               </div>
               <div className="flex items-center gap-2">
                 <Switch
                   checked={templateForm.is_default}
                   onCheckedChange={(v) => setTemplateForm({ ...templateForm, is_default: v })}
                 />
-                <Label>افتراضي</Label>
+                <Label>{t('افتراضي')}</Label>
               </div>
             </div>
             <div className="flex gap-2 pt-4">
-              <Button type="button" variant="outline" onClick={() => setTemplateDialogOpen(false)} className="flex-1">
-                إلغاء
-              </Button>
+              <Button type="button" variant="outline" onClick={() =>{t('setTemplateDialogOpen(false)} className="flex-1">
+                إلغاء')}</Button>
               <Button type="submit" className="flex-1">
                 <Save className="h-4 w-4 ml-2" />
                 {editingTemplate ? 'تحديث' : 'إنشاء'}
@@ -528,35 +527,35 @@ export default function Invoices() {
       <Dialog open={printerDialogOpen} onOpenChange={setPrinterDialogOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle className="text-foreground">إضافة طابعة</DialogTitle>
+            <DialogTitle className="text-foreground">{t('إضافة طابعة')}</DialogTitle>
           </DialogHeader>
           <form onSubmit={handleSavePrinter} className="space-y-4">
             <div>
-              <Label>اسم الطابعة *</Label>
+              <Label>{t('اسم الطابعة *')}</Label>
               <Input
                 value={printerForm.name}
                 onChange={(e) => setPrinterForm({ ...printerForm, name: e.target.value })}
-                placeholder="طابعة الكاشير"
+                placeholder={t('طابعة الكاشير')}
                 required
               />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <Label>نوع الطابعة</Label>
+                <Label>{t('نوع الطابعة')}</Label>
                 <Select
                   value={printerForm.printer_type}
                   onValueChange={(v) => setPrinterForm({ ...printerForm, printer_type: v })}
                 >
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="thermal">حرارية</SelectItem>
-                    <SelectItem value="laser">ليزر</SelectItem>
-                    <SelectItem value="inkjet">حبر</SelectItem>
+                    <SelectItem value="thermal">{t('حرارية')}</SelectItem>
+                    <SelectItem value="laser">{t('ليزر')}</SelectItem>
+                    <SelectItem value="inkjet">{t('حبر')}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <div>
-                <Label>عرض الورق</Label>
+                <Label>{t('عرض الورق')}</Label>
                 <Select
                   value={printerForm.paper_width.toString()}
                   onValueChange={(v) => setPrinterForm({ ...printerForm, paper_width: parseInt(v) })}
@@ -570,14 +569,14 @@ export default function Invoices() {
               </div>
             </div>
             <div>
-              <Label>طريقة الاتصال</Label>
+              <Label>{t('طريقة الاتصال')}</Label>
               <Select
                 value={printerForm.connection_type}
                 onValueChange={(v) => setPrinterForm({ ...printerForm, connection_type: v })}
               >
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="network">شبكة (Network)</SelectItem>
+                  <SelectItem value="network">{t('شبكة (Network)')}</SelectItem>
                   <SelectItem value="usb">USB</SelectItem>
                   <SelectItem value="bluetooth">Bluetooth</SelectItem>
                 </SelectContent>
@@ -586,7 +585,7 @@ export default function Invoices() {
             {printerForm.connection_type === 'network' && (
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label>عنوان IP</Label>
+                  <Label>{t('عنوان IP')}</Label>
                   <Input
                     value={printerForm.ip_address}
                     onChange={(e) => setPrinterForm({ ...printerForm, ip_address: e.target.value })}
@@ -595,7 +594,7 @@ export default function Invoices() {
                   />
                 </div>
                 <div>
-                  <Label>المنفذ</Label>
+                  <Label>{t('المنفذ')}</Label>
                   <Input
                     type="number"
                     value={printerForm.port}
@@ -606,12 +605,12 @@ export default function Invoices() {
               </div>
             )}
             <div>
-              <Label>الفرع *</Label>
+              <Label>{t('الفرع *')}</Label>
               <Select
                 value={printerForm.branch_id}
                 onValueChange={(v) => setPrinterForm({ ...printerForm, branch_id: v })}
               >
-                <SelectTrigger><SelectValue placeholder="اختر الفرع" /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder={t('اختر الفرع')} /></SelectTrigger>
                 <SelectContent>
                   {branches.map(b => (
                     <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
@@ -624,15 +623,12 @@ export default function Invoices() {
                 checked={printerForm.is_default}
                 onCheckedChange={(v) => setPrinterForm({ ...printerForm, is_default: v })}
               />
-              <Label>طابعة افتراضية</Label>
+              <Label>{t('طابعة افتراضية')}</Label>
             </div>
             <div className="flex gap-2 pt-4">
-              <Button type="button" variant="outline" onClick={() => setPrinterDialogOpen(false)} className="flex-1">
-                إلغاء
-              </Button>
-              <Button type="submit" className="flex-1">
-                إضافة
-              </Button>
+              <Button type="button" variant="outline" onClick={() =>{t('setPrinterDialogOpen(false)} className="flex-1">
+                إلغاء')}</Button>
+              <Button type="submit" className="flex-1">{t('إضافة')}</Button>
             </div>
           </form>
         </DialogContent>
@@ -641,7 +637,7 @@ export default function Invoices() {
       <Dialog open={previewDialogOpen} onOpenChange={setPreviewDialogOpen}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle className="text-foreground">معاينة الفاتورة</DialogTitle>
+            <DialogTitle className="text-foreground">{t('معاينة الفاتورة')}</DialogTitle>
           </DialogHeader>
           {editingTemplate && (
             <div className="bg-white text-black p-4 rounded-lg text-center font-mono text-sm" style={{ direction: 'rtl' }}>
@@ -653,29 +649,29 @@ export default function Invoices() {
                 <p className="text-xs">{editingTemplate.business_name_en}</p>
               )}
               {editingTemplate.address && <p className="text-xs mt-1">{editingTemplate.address}</p>}
-              {editingTemplate.phone && <p className="text-xs">هاتف: {editingTemplate.phone}</p>}
-              {editingTemplate.tax_number && <p className="text-xs">الرقم الضريبي: {editingTemplate.tax_number}</p>}
+              {editingTemplate.phone && <p className="text-xs">{t('هاتف: {editingTemplate.phone}')}</p>}
+              {editingTemplate.tax_number && <p className="text-xs">{t('الرقم الضريبي: {editingTemplate.tax_number}')}</p>}
               
               <div className="border-t border-dashed border-gray-400 my-3"></div>
               
               <div className="text-right">
-                <p>رقم الطلب: #12345</p>
-                <p>التاريخ: {new Date().toLocaleDateString('ar-IQ')}</p>
+                <p>{t('رقم الطلب: #12345')}</p>
+                <p>{t('التاريخ: {new Date().toLocaleDateString('ar-IQ')}')}</p>
               </div>
               
               <div className="border-t border-dashed border-gray-400 my-3"></div>
               
               <div className="text-right space-y-1">
                 <div className="flex justify-between">
-                  <span>2x برجر كلاسيك</span>
+                  <span>{t('2x برجر كلاسيك')}</span>
                   <span>10,000</span>
                 </div>
                 <div className="flex justify-between">
-                  <span>1x بطاطس كبير</span>
+                  <span>{t('1x بطاطس كبير')}</span>
                   <span>3,000</span>
                 </div>
                 <div className="flex justify-between">
-                  <span>2x بيبسي</span>
+                  <span>{t('2x بيبسي')}</span>
                   <span>2,000</span>
                 </div>
               </div>
@@ -683,8 +679,8 @@ export default function Invoices() {
               <div className="border-t border-dashed border-gray-400 my-3"></div>
               
               <div className="flex justify-between font-bold">
-                <span>الإجمالي:</span>
-                <span>15,000 د.ع</span>
+                <span>{t('الإجمالي:')}</span>
+                <span>{t('15,000 د.ع')}</span>
               </div>
               
               <div className="border-t border-dashed border-gray-400 my-3"></div>

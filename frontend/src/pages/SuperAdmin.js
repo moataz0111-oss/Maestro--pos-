@@ -1750,7 +1750,7 @@ export default function SuperAdmin() {
           <p className="font-bold">{tenant.branches_count || 0}</p>
         </div>
         <div className="text-center">
-          <p className="text-sm text-gray-400">الطلبات</p>
+          <p className="text-sm text-gray-400">{t('الطلبات')}</p>
           <p className="font-bold">{tenant.orders_count || 0}</p>
         </div>
         
@@ -1758,27 +1758,27 @@ export default function SuperAdmin() {
         
         <div className="flex items-center gap-1">
           {/* عرض مباشر */}
-          <Button variant="ghost" size="icon" onClick={() => openLiveView(tenant)} className="hover:bg-gray-600" title="عرض مباشر">
+          <Button variant="ghost" size="icon" onClick={() => openLiveView(tenant)} className="hover:bg-gray-600" title={t('عرض مباشر')}>
             <Activity className="h-4 w-4 text-green-400" />
           </Button>
           {/* الدخول كعميل */}
-          <Button variant="ghost" size="icon" onClick={() => impersonateTenant(tenant)} className="hover:bg-gray-600" title="الدخول كعميل">
+          <Button variant="ghost" size="icon" onClick={() => impersonateTenant(tenant)} className="hover:bg-gray-600" title={t('الدخول كعميل')}>
             <ExternalLink className="h-4 w-4 text-blue-400" />
           </Button>
           {/* تعديل */}
-          <Button variant="ghost" size="icon" onClick={() => openEditTenant(tenant)} className="hover:bg-gray-600" title="تعديل">
+          <Button variant="ghost" size="icon" onClick={() => openEditTenant(tenant)} className="hover:bg-gray-600" title={t('تعديل')}>
             <Edit className="h-4 w-4 text-yellow-400" />
           </Button>
           {/* الميزات والصلاحيات */}
-          <Button variant="ghost" size="icon" onClick={() => openFeaturesModal(tenant)} className="hover:bg-gray-600" title="الميزات والصلاحيات">
+          <Button variant="ghost" size="icon" onClick={() => openFeaturesModal(tenant)} className="hover:bg-gray-600" title={t('الميزات والصلاحيات')}>
             <Settings className="h-4 w-4 text-purple-400" />
           </Button>
           {/* التفاصيل */}
-          <Button variant="ghost" size="icon" onClick={() => viewTenantDetails(tenant)} className="hover:bg-gray-600" title="التفاصيل">
+          <Button variant="ghost" size="icon" onClick={() => viewTenantDetails(tenant)} className="hover:bg-gray-600" title={t('التفاصيل')}>
             <Eye className="h-4 w-4 text-gray-400" />
           </Button>
           {/* كلمة المرور */}
-          <Button variant="ghost" size="icon" onClick={() => { setSelectedTenant(tenant); setShowResetPassword(true); }} className="hover:bg-gray-600" title="كلمة المرور">
+          <Button variant="ghost" size="icon" onClick={() => { setSelectedTenant(tenant); setShowResetPassword(true); }} className="hover:bg-gray-600" title={t('كلمة المرور')}>
             <Key className="h-4 w-4 text-gray-400" />
           </Button>
           {/* تفعيل/تعطيل */}
@@ -1786,15 +1786,15 @@ export default function SuperAdmin() {
             {tenant.is_active ? <Power className="h-4 w-4 text-green-400" /> : <PowerOff className="h-4 w-4 text-red-400" />}
           </Button>
           {/* تصفير المبيعات */}
-          <Button variant="ghost" size="icon" onClick={() => { setSelectedTenant(tenant); setShowResetSalesConfirm(true); }} className="hover:bg-gray-600" title="تصفير المبيعات">
+          <Button variant="ghost" size="icon" onClick={() => { setSelectedTenant(tenant); setShowResetSalesConfirm(true); }} className="hover:bg-gray-600" title={t('تصفير المبيعات')}>
             <RotateCcw className="h-4 w-4 text-orange-400" />
           </Button>
           {/* تصفير المخزون */}
-          <Button variant="ghost" size="icon" onClick={() => { setSelectedTenant(tenant); setShowResetInventoryConfirm(true); }} className="hover:bg-gray-600" title="تصفير المخزون">
+          <Button variant="ghost" size="icon" onClick={() => { setSelectedTenant(tenant); setShowResetInventoryConfirm(true); }} className="hover:bg-gray-600" title={t('تصفير المخزون')}>
             <Package className="h-4 w-4 text-purple-400" />
           </Button>
           {/* حذف */}
-          <Button variant="ghost" size="icon" onClick={() => { setSelectedTenant(tenant); setShowDeleteConfirm(true); }} className="hover:bg-red-600" title="حذف">
+          <Button variant="ghost" size="icon" onClick={() => { setSelectedTenant(tenant); setShowDeleteConfirm(true); }} className="hover:bg-red-600" title={t('حذف')}>
             <Trash2 className="h-4 w-4 text-red-400" />
           </Button>
         </div>
@@ -3371,14 +3371,14 @@ export default function SuperAdmin() {
                       ) : (
                         <div className="text-center">
                           <ImageIcon className="h-10 w-10 text-gray-500 mx-auto" />
-                          <p className="text-xs text-gray-500 mt-1">لا يوجد شعار</p>
+                          <p className="text-xs text-gray-500 mt-1">{t('لا يوجد شعار')}</p>
                         </div>
                       )}
                     </div>
                     <div className="flex-1 space-y-3">
                       <Input
                         type="text"
-                        placeholder="رابط الشعار (URL)"
+                        placeholder={t('رابط الشعار (URL)')}
                         value={invoiceSettings.system_logo_url || ''}
                         onChange={(e) => setInvoiceSettings({...invoiceSettings, system_logo_url: e.target.value})}
                         className="bg-gray-700/50 border-gray-600 text-white"
@@ -3426,7 +3426,7 @@ export default function SuperAdmin() {
                           </Button>
                         </div>
                       </div>
-                      <p className="text-xs text-gray-500">أدخل رابط صورة الشعار أو قم برفع/قص صورة جديدة</p>
+                      <p className="text-xs text-gray-500">{t('أدخل رابط صورة الشعار أو قم برفع/قص صورة جديدة')}</p>
                     </div>
                   </div>
                 </div>
@@ -3440,11 +3440,11 @@ export default function SuperAdmin() {
                   <User className="h-4 w-4" />
                   بيانات المالك (Super Admin)
                 </h3>
-                <p className="text-sm text-gray-400">تغيير بيانات تسجيل الدخول للمالك</p>
+                <p className="text-sm text-gray-400">{t('تغيير بيانات تسجيل الدخول للمالك')}</p>
                 
                 <div className="grid grid-cols-1 gap-4">
                   <div className="space-y-2">
-                    <Label className="text-gray-300">البريد الإلكتروني الحالي</Label>
+                    <Label className="text-gray-300">{t('البريد الإلكتروني الحالي')}</Label>
                     <Input
                       type="email"
                       value={ownerSettings?.email || ''}
@@ -3452,14 +3452,14 @@ export default function SuperAdmin() {
                       className="bg-gray-700/30 border-gray-600 text-gray-400"
                       dir="ltr"
                     />
-                    <p className="text-xs text-gray-500">لا يمكن تغيير البريد الإلكتروني</p>
+                    <p className="text-xs text-gray-500">{t('لا يمكن تغيير البريد الإلكتروني')}</p>
                   </div>
                   
                   <div className="space-y-2">
-                    <Label className="text-gray-300">كلمة المرور الجديدة</Label>
+                    <Label className="text-gray-300">{t('كلمة المرور الجديدة')}</Label>
                     <Input
                       type="password"
-                      placeholder="اترك فارغاً إذا لم ترغب بالتغيير"
+                      placeholder={t('اترك فارغاً إذا لم ترغب بالتغيير')}
                       value={newOwnerPassword}
                       onChange={(e) => setNewOwnerPassword(e.target.value)}
                       className="bg-gray-700/50 border-gray-600 text-white"
@@ -3468,10 +3468,10 @@ export default function SuperAdmin() {
                   </div>
                   
                   <div className="space-y-2">
-                    <Label className="text-gray-300">تأكيد كلمة المرور الجديدة</Label>
+                    <Label className="text-gray-300">{t('تأكيد كلمة المرور الجديدة')}</Label>
                     <Input
                       type="password"
-                      placeholder="أعد كتابة كلمة المرور"
+                      placeholder={t('أعد كتابة كلمة المرور')}
                       value={confirmOwnerPassword}
                       onChange={(e) => setConfirmOwnerPassword(e.target.value)}
                       className="bg-gray-700/50 border-gray-600 text-white"
@@ -3480,16 +3480,16 @@ export default function SuperAdmin() {
                   </div>
                   
                   <div className="space-y-2">
-                    <Label className="text-gray-300">المفتاح السري الجديد</Label>
+                    <Label className="text-gray-300">{t('المفتاح السري الجديد')}</Label>
                     <Input
                       type="text"
-                      placeholder="اترك فارغاً إذا لم ترغب بالتغيير"
+                      placeholder={t('اترك فارغاً إذا لم ترغب بالتغيير')}
                       value={newOwnerSecretKey}
                       onChange={(e) => setNewOwnerSecretKey(e.target.value)}
                       className="bg-gray-700/50 border-gray-600 text-white"
                       dir="ltr"
                     />
-                    <p className="text-xs text-gray-500">المفتاح السري يُستخدم لتسجيل الدخول كمالك</p>
+                    <p className="text-xs text-gray-500">{t('المفتاح السري يُستخدم لتسجيل الدخول كمالك')}</p>
                   </div>
                 </div>
                 
@@ -3518,7 +3518,7 @@ export default function SuperAdmin() {
                   <DollarSign className="h-4 w-4" />
                   إعدادات عرض المبيعات
                 </h3>
-                <p className="text-sm text-gray-400">تحديد العملة التي تريد عرض المبيعات بها (سيتم تحويل جميع العملات تلقائياً)</p>
+                <p className="text-sm text-gray-400">{t('تحديد العملة التي تريد عرض المبيعات بها (سيتم تحويل جميع العملات تلقائياً)')}</p>
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="p-4 bg-gray-800/50 rounded-lg border border-gray-700">
@@ -3540,7 +3540,7 @@ export default function SuperAdmin() {
                       <option value="AED">🇦🇪 درهم إماراتي (د.إ)</option>
                       <option value="EGP">🇪🇬 جنيه مصري (ج.م)</option>
                     </select>
-                    <p className="text-xs text-gray-500 mt-2">جميع المبيعات ستُعرض بهذه العملة</p>
+                    <p className="text-xs text-gray-500 mt-2">{t('جميع المبيعات ستُعرض بهذه العملة')}</p>
                   </div>
                   
                   <div className="p-4 bg-gray-800/50 rounded-lg border border-gray-700">
@@ -3561,7 +3561,7 @@ export default function SuperAdmin() {
                       <option value="en">English</option>
                       <option value="ku">کوردی</option>
                     </select>
-                    <p className="text-xs text-gray-500 mt-2">لغة واجهة لوحة التحكم</p>
+                    <p className="text-xs text-gray-500 mt-2">{t('لغة واجهة لوحة التحكم')}</p>
                   </div>
                 </div>
 
@@ -3637,7 +3637,7 @@ export default function SuperAdmin() {
                         قص وتعديل
                       </Button>
                     </div>
-                    <p className="text-xs text-gray-500">سيظهر هذا الشعار في جميع فواتير العملاء</p>
+                    <p className="text-xs text-gray-500">{t('سيظهر هذا الشعار في جميع فواتير العملاء')}</p>
                   </div>
                 </div>
               </div>
@@ -3650,7 +3650,7 @@ export default function SuperAdmin() {
                 </h3>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label className="text-gray-300">هاتف النظام 1</Label>
+                    <Label className="text-gray-300">{t('هاتف النظام 1')}</Label>
                     <Input
                       type="text"
                       placeholder="01234567890"
@@ -3661,7 +3661,7 @@ export default function SuperAdmin() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label className="text-gray-300">هاتف النظام 2</Label>
+                    <Label className="text-gray-300">{t('هاتف النظام 2')}</Label>
                     <Input
                       type="text"
                       placeholder="01234567890"
@@ -3672,7 +3672,7 @@ export default function SuperAdmin() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label className="text-gray-300">البريد الإلكتروني</Label>
+                    <Label className="text-gray-300">{t('البريد الإلكتروني')}</Label>
                     <Input
                       type="email"
                       placeholder="info@example.com"
@@ -3683,7 +3683,7 @@ export default function SuperAdmin() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label className="text-gray-300">الموقع الإلكتروني</Label>
+                    <Label className="text-gray-300">{t('الموقع الإلكتروني')}</Label>
                     <Input
                       type="url"
                       placeholder="https://example.com"
@@ -3704,20 +3704,20 @@ export default function SuperAdmin() {
                 </h3>
                 <div className="space-y-4">
                   <div className="space-y-2">
-                    <Label className="text-gray-300">رسالة الشكر (أسفل الفاتورة)</Label>
+                    <Label className="text-gray-300">{t('رسالة الشكر (أسفل الفاتورة)')}</Label>
                     <Input
                       type="text"
-                      placeholder="شكراً لزيارتكم"
+                      placeholder={t('شكراً لزيارتكم')}
                       value={invoiceSettings.thank_you_message || ''}
                       onChange={(e) => setInvoiceSettings({...invoiceSettings, thank_you_message: e.target.value})}
                       className="bg-gray-700/50 border-gray-600 text-white"
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label className="text-gray-300">نص إضافي في التذييل</Label>
+                    <Label className="text-gray-300">{t('نص إضافي في التذييل')}</Label>
                     <Input
                       type="text"
-                      placeholder="مثال: تابعونا على مواقع التواصل"
+                      placeholder={t('مثال: تابعونا على مواقع التواصل')}
                       value={invoiceSettings.footer_text || ''}
                       onChange={(e) => setInvoiceSettings({...invoiceSettings, footer_text: e.target.value})}
                       className="bg-gray-700/50 border-gray-600 text-white"
@@ -3729,8 +3729,8 @@ export default function SuperAdmin() {
               {/* خيارات العرض */}
               <div className="flex items-center justify-between p-3 bg-gray-700/30 rounded-lg">
                 <div>
-                  <p className="font-medium">إظهار شعار وبيانات النظام في الفواتير</p>
-                  <p className="text-sm text-gray-400">سيظهر الشعار وبيانات الاتصال في جميع فواتير العملاء</p>
+                  <p className="font-medium">{t('إظهار شعار وبيانات النظام في الفواتير')}</p>
+                  <p className="text-sm text-gray-400">{t('سيظهر الشعار وبيانات الاتصال في جميع فواتير العملاء')}</p>
                 </div>
                 <Switch
                   checked={invoiceSettings.show_system_branding}
@@ -3754,12 +3754,12 @@ export default function SuperAdmin() {
                       className="h-12 mx-auto mb-2"
                     />
                   )}
-                  <p className="font-bold text-lg">[ اسم المطعم ]</p>
-                  <p className="text-xs text-gray-600">[ عنوان المطعم ]</p>
+                  <p className="font-bold text-lg">{t('[ اسم المطعم ]')}</p>
+                  <p className="text-xs text-gray-600">{t('[ عنوان المطعم ]')}</p>
                   <hr className="my-2" />
-                  <p className="text-xs text-gray-500">... الأصناف والأسعار ...</p>
+                  <p className="text-xs text-gray-500">{t('... الأصناف والأسعار ...')}</p>
                   <hr className="my-2" />
-                  <p className="text-xs text-gray-500">... المجموع الإجمالي ...</p>
+                  <p className="text-xs text-gray-500">{t('... المجموع الإجمالي ...')}</p>
                   <hr className="my-2" />
                   <p className="text-sm font-medium">{invoiceSettings.thank_you_message || 'شكراً لزيارتكم'}</p>
                   {invoiceSettings.footer_text && (
@@ -3776,14 +3776,14 @@ export default function SuperAdmin() {
                   <Palette className="h-4 w-4" />
                   خلفيات صفحة الدخول
                 </h3>
-                <p className="text-sm text-gray-400">التحكم في مظهر صفحة تسجيل الدخول</p>
+                <p className="text-sm text-gray-400">{t('التحكم في مظهر صفحة تسجيل الدخول')}</p>
 
                 {/* خيارات الحركة */}
                 <div className="grid grid-cols-2 gap-4">
                   <div className="flex items-center justify-between p-3 bg-gray-700/30 rounded-lg">
                     <div>
-                      <p className="font-medium">تفعيل الحركة</p>
-                      <p className="text-xs text-gray-400">تفعيل حركة الخلفيات</p>
+                      <p className="font-medium">{t('تفعيل الحركة')}</p>
+                      <p className="text-xs text-gray-400">{t('تفعيل حركة الخلفيات')}</p>
                     </div>
                     <Switch
                       checked={backgroundSettings.animation_enabled}
@@ -3792,8 +3792,8 @@ export default function SuperAdmin() {
                   </div>
                   <div className="flex items-center justify-between p-3 bg-gray-700/30 rounded-lg">
                     <div>
-                      <p className="font-medium">تبديل تلقائي</p>
-                      <p className="text-xs text-gray-400">تبديل الخلفيات تلقائياً</p>
+                      <p className="font-medium">{t('تبديل تلقائي')}</p>
+                      <p className="text-xs text-gray-400">{t('تبديل الخلفيات تلقائياً')}</p>
                     </div>
                     <Switch
                       checked={backgroundSettings.auto_play}
@@ -3804,57 +3804,57 @@ export default function SuperAdmin() {
 
                 <div className="grid grid-cols-3 gap-4">
                   <div className="space-y-2">
-                    <Label className="text-gray-300">نوع الانتقال</Label>
+                    <Label className="text-gray-300">{t('نوع الانتقال')}</Label>
                     <Select 
                       value={backgroundSettings.transition_type} 
                       onValueChange={(value) => setBackgroundSettings({...backgroundSettings, transition_type: value})}
                     >
                       <SelectTrigger className="bg-gray-700/50 border-gray-600">
-                        <SelectValue placeholder="اختر نوع الانتقال" />
+                        <SelectValue placeholder={t('اختر نوع الانتقال')} />
                       </SelectTrigger>
                       <SelectContent className="bg-gray-800 border-gray-700">
-                        <SelectItem value="fade">Fade (تلاشي)</SelectItem>
-                        <SelectItem value="slide">Slide (انزلاق)</SelectItem>
-                        <SelectItem value="zoom">Zoom (تكبير)</SelectItem>
+                        <SelectItem value="fade">{t('Fade (تلاشي)')}</SelectItem>
+                        <SelectItem value="slide">{t('Slide (انزلاق)')}</SelectItem>
+                        <SelectItem value="zoom">{t('Zoom (تكبير)')}</SelectItem>
                         <SelectItem value="kenburns">Ken Burns</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
                   <div className="space-y-2">
-                    <Label className="text-gray-300">مدة الانتقال (ثواني)</Label>
+                    <Label className="text-gray-300">{t('مدة الانتقال (ثواني)')}</Label>
                     <Select 
                       value={String(backgroundSettings.transition_duration || 1.5)} 
                       onValueChange={(value) => setBackgroundSettings({...backgroundSettings, transition_duration: parseFloat(value)})}
                     >
                       <SelectTrigger className="bg-gray-700/50 border-gray-600">
-                        <SelectValue placeholder="اختر مدة الانتقال" />
+                        <SelectValue placeholder={t('اختر مدة الانتقال')} />
                       </SelectTrigger>
                       <SelectContent className="bg-gray-800 border-gray-700">
-                        <SelectItem value="0.5">0.5 ثانية</SelectItem>
-                        <SelectItem value="1">1 ثانية</SelectItem>
-                        <SelectItem value="1.5">1.5 ثانية</SelectItem>
-                        <SelectItem value="2">2 ثواني</SelectItem>
-                        <SelectItem value="2.5">2.5 ثانية</SelectItem>
-                        <SelectItem value="3">3 ثواني</SelectItem>
-                        <SelectItem value="4">4 ثواني</SelectItem>
-                        <SelectItem value="5">5 ثواني</SelectItem>
+                        <SelectItem value="0.5">{t('0.5 ثانية')}</SelectItem>
+                        <SelectItem value="1">{t('1 ثانية')}</SelectItem>
+                        <SelectItem value="1.5">{t('1.5 ثانية')}</SelectItem>
+                        <SelectItem value="2">{t('2 ثواني')}</SelectItem>
+                        <SelectItem value="2.5">{t('2.5 ثانية')}</SelectItem>
+                        <SelectItem value="3">{t('3 ثواني')}</SelectItem>
+                        <SelectItem value="4">{t('4 ثواني')}</SelectItem>
+                        <SelectItem value="5">{t('5 ثواني')}</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
                   <div className="space-y-2">
-                    <Label className="text-gray-300">حركة الشعار</Label>
+                    <Label className="text-gray-300">{t('حركة الشعار')}</Label>
                     <Select 
                       value={backgroundSettings.logo_animation} 
                       onValueChange={(value) => setBackgroundSettings({...backgroundSettings, logo_animation: value})}
                     >
                       <SelectTrigger className="bg-gray-700/50 border-gray-600">
-                        <SelectValue placeholder="اختر حركة الشعار" />
+                        <SelectValue placeholder={t('اختر حركة الشعار')} />
                       </SelectTrigger>
                       <SelectContent className="bg-gray-800 border-gray-700">
-                        <SelectItem value="none">بدون حركة</SelectItem>
-                        <SelectItem value="pulse">Pulse (نبض)</SelectItem>
-                        <SelectItem value="bounce">Bounce (ارتداد)</SelectItem>
-                        <SelectItem value="fade">Fade (تلاشي)</SelectItem>
+                        <SelectItem value="none">{t('بدون حركة')}</SelectItem>
+                        <SelectItem value="pulse">{t('Pulse (نبض)')}</SelectItem>
+                        <SelectItem value="bounce">{t('Bounce (ارتداد)')}</SelectItem>
+                        <SelectItem value="fade">{t('Fade (تلاشي)')}</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -3869,8 +3869,8 @@ export default function SuperAdmin() {
                 </h3>
                 <div className="flex items-center justify-between p-3 bg-gray-700/30 rounded-lg">
                   <div>
-                    <p className="font-medium">تفعيل شعار صفحة الدخول</p>
-                    <p className="text-xs text-gray-400">إظهار شعار مخصص في صفحة تسجيل الدخول</p>
+                    <p className="font-medium">{t('تفعيل شعار صفحة الدخول')}</p>
+                    <p className="text-xs text-gray-400">{t('إظهار شعار مخصص في صفحة تسجيل الدخول')}</p>
                   </div>
                   <Switch
                     checked={backgroundSettings.show_logo}
@@ -3896,7 +3896,7 @@ export default function SuperAdmin() {
                     <div className="flex-1 space-y-2">
                       <Input
                         type="text"
-                        placeholder="رابط خارجي للشعار"
+                        placeholder={t('رابط خارجي للشعار')}
                         value={backgroundSettings.logo_url || ''}
                         onChange={(e) => setBackgroundSettings({...backgroundSettings, logo_url: e.target.value})}
                         className="bg-gray-700/50 border-gray-600 text-white"
@@ -3960,7 +3960,7 @@ export default function SuperAdmin() {
                 </h3>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label className="text-gray-300">لون الغطاء (Overlay Color)</Label>
+                    <Label className="text-gray-300">{t('لون الغطاء (Overlay Color)')}</Label>
                     <div className="flex items-center gap-3">
                       <Input
                         type="color"
@@ -3985,7 +3985,7 @@ export default function SuperAdmin() {
                     </div>
                   </div>
                   <div className="space-y-2">
-                    <Label className="text-gray-300">لون النص</Label>
+                    <Label className="text-gray-300">{t('لون النص')}</Label>
                     <div className="flex items-center gap-3">
                       <Input
                         type="color"
@@ -4086,7 +4086,7 @@ export default function SuperAdmin() {
                     onClick={() => setShowAddBackground(true)}
                   >
                     <Plus className="h-10 w-10 text-gray-500 mb-2" />
-                    <p className="text-sm text-gray-400">إضافة خلفية</p>
+                    <p className="text-sm text-gray-400">{t('إضافة خلفية')}</p>
                   </div>
                 </div>
               </div>
@@ -4094,9 +4094,8 @@ export default function SuperAdmin() {
           </Tabs>
 
           <DialogFooter className="mt-4">
-            <Button variant="outline" onClick={() => setShowInvoiceSettings(false)} className="border-gray-600">
-              إلغاء
-            </Button>
+            <Button variant="outline" onClick={() =>{t('setShowInvoiceSettings(false)} className="border-gray-600">
+              إلغاء')}</Button>
             <Button onClick={async () => { 
               await saveInvoiceSettings(); 
               try {
@@ -4126,7 +4125,7 @@ export default function SuperAdmin() {
           <div className="space-y-6 py-4">
             {/* التنبيه قبل انتهاء الاشتراك */}
             <div className="space-y-3">
-              <Label className="text-gray-300">التنبيه قبل انتهاء الاشتراك</Label>
+              <Label className="text-gray-300">{t('التنبيه قبل انتهاء الاشتراك')}</Label>
               <Select 
                 value={String(notificationSettings.days_before_expiry)} 
                 onValueChange={(v) => setNotificationSettings({...notificationSettings, days_before_expiry: parseInt(v)})}
@@ -4135,23 +4134,23 @@ export default function SuperAdmin() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent className="bg-gray-800 border-gray-700">
-                  <SelectItem value="3">قبل 3 أيام</SelectItem>
-                  <SelectItem value="7">قبل أسبوع</SelectItem>
-                  <SelectItem value="15">قبل 15 يوم</SelectItem>
-                  <SelectItem value="30">قبل شهر</SelectItem>
+                  <SelectItem value="3">{t('قبل 3 أيام')}</SelectItem>
+                  <SelectItem value="7">{t('قبل أسبوع')}</SelectItem>
+                  <SelectItem value="15">{t('قبل 15 يوم')}</SelectItem>
+                  <SelectItem value="30">{t('قبل شهر')}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
             {/* أنواع الإشعارات */}
             <div className="space-y-4">
-              <Label className="text-gray-300">أنواع الإشعارات</Label>
+              <Label className="text-gray-300">{t('أنواع الإشعارات')}</Label>
               
               <div className="flex items-center justify-between p-3 bg-gray-700/30 rounded-lg opacity-50">
                 <div className="flex items-center gap-2">
                   <Mail className="h-4 w-4 text-blue-400" />
-                  <span className="text-sm">إشعارات البريد الإلكتروني</span>
-                  <span className="text-xs text-gray-500">(غير مفعل)</span>
+                  <span className="text-sm">{t('إشعارات البريد الإلكتروني')}</span>
+                  <span className="text-xs text-gray-500">{t('(غير مفعل)')}</span>
                 </div>
                 <Switch 
                   checked={notificationSettings.email_notifications}
@@ -4163,7 +4162,7 @@ export default function SuperAdmin() {
               <div className="flex items-center justify-between p-3 bg-gray-700/30 rounded-lg">
                 <div className="flex items-center gap-2">
                   <Bell className="h-4 w-4 text-purple-400" />
-                  <span className="text-sm">إشعارات المتصفح (Push)</span>
+                  <span className="text-sm">{t('إشعارات المتصفح (Push)')}</span>
                 </div>
                 <Switch 
                   checked={notificationSettings.push_notifications}
@@ -4174,12 +4173,12 @@ export default function SuperAdmin() {
 
             {/* أحداث الإشعارات */}
             <div className="space-y-4">
-              <Label className="text-gray-300">أحداث الإشعارات</Label>
+              <Label className="text-gray-300">{t('أحداث الإشعارات')}</Label>
               
               <div className="flex items-center justify-between p-3 bg-gray-700/30 rounded-lg">
                 <div className="flex items-center gap-2">
                   <Plus className="h-4 w-4 text-green-400" />
-                  <span className="text-sm">إشعار عند إضافة عميل جديد</span>
+                  <span className="text-sm">{t('إشعار عند إضافة عميل جديد')}</span>
                 </div>
                 <Switch 
                   checked={notificationSettings.notify_new_tenant}
@@ -4190,7 +4189,7 @@ export default function SuperAdmin() {
               <div className="flex items-center justify-between p-3 bg-gray-700/30 rounded-lg">
                 <div className="flex items-center gap-2">
                   <Power className="h-4 w-4 text-orange-400" />
-                  <span className="text-sm">إشعار عند تفعيل/تعطيل عميل</span>
+                  <span className="text-sm">{t('إشعار عند تفعيل/تعطيل عميل')}</span>
                 </div>
                 <Switch 
                   checked={notificationSettings.notify_tenant_status}
@@ -4201,9 +4200,8 @@ export default function SuperAdmin() {
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowNotificationSettings(false)} className="border-gray-600">
-              إلغاء
-            </Button>
+            <Button variant="outline" onClick={() =>{t('setShowNotificationSettings(false)} className="border-gray-600">
+              إلغاء')}</Button>
             <Button onClick={saveNotificationSettings} className="bg-purple-600 hover:bg-purple-700">
               <Check className="h-4 w-4 ml-2" />
               حفظ الإعدادات
@@ -4229,7 +4227,7 @@ export default function SuperAdmin() {
               <div className="space-y-2 p-3 bg-amber-900/20 rounded-lg border border-amber-700/30">
                 <div className="flex items-center gap-2">
                   <div className="w-3 h-3 rounded-full bg-amber-600"></div>
-                  <Label className="text-amber-400 text-sm font-bold">برونزية</Label>
+                  <Label className="text-amber-400 text-sm font-bold">{t('برونزية')}</Label>
                 </div>
                 <div className="relative">
                   <span className="absolute right-2 top-1/2 -translate-y-1/2 text-green-400 text-sm">$</span>
@@ -4242,14 +4240,14 @@ export default function SuperAdmin() {
                     className="bg-gray-700/50 border-gray-600 text-white pr-6 text-center"
                   />
                 </div>
-                <p className="text-xs text-gray-500 text-center">/شهر</p>
+                <p className="text-xs text-gray-500 text-center">{t('/شهر')}</p>
               </div>
 
               {/* باقة فضية */}
               <div className="space-y-2 p-3 bg-gray-500/20 rounded-lg border border-gray-500/30">
                 <div className="flex items-center gap-2">
                   <div className="w-3 h-3 rounded-full bg-gray-400"></div>
-                  <Label className="text-gray-300 text-sm font-bold">فضية</Label>
+                  <Label className="text-gray-300 text-sm font-bold">{t('فضية')}</Label>
                 </div>
                 <div className="relative">
                   <span className="absolute right-2 top-1/2 -translate-y-1/2 text-green-400 text-sm">$</span>
@@ -4262,14 +4260,14 @@ export default function SuperAdmin() {
                     className="bg-gray-700/50 border-gray-600 text-white pr-6 text-center"
                   />
                 </div>
-                <p className="text-xs text-gray-500 text-center">/شهر</p>
+                <p className="text-xs text-gray-500 text-center">{t('/شهر')}</p>
               </div>
 
               {/* باقة ذهبية */}
               <div className="space-y-2 p-3 bg-yellow-900/20 rounded-lg border border-yellow-600/30">
                 <div className="flex items-center gap-2">
                   <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
-                  <Label className="text-yellow-400 text-sm font-bold">ذهبية</Label>
+                  <Label className="text-yellow-400 text-sm font-bold">{t('ذهبية')}</Label>
                 </div>
                 <div className="relative">
                   <span className="absolute right-2 top-1/2 -translate-y-1/2 text-green-400 text-sm">$</span>
@@ -4282,18 +4280,18 @@ export default function SuperAdmin() {
                     className="bg-gray-700/50 border-gray-600 text-white pr-6 text-center"
                   />
                 </div>
-                <p className="text-xs text-gray-500 text-center">/شهر</p>
+                <p className="text-xs text-gray-500 text-center">{t('/شهر')}</p>
               </div>
             </div>
 
             <div className="border-t border-gray-700 pt-4">
-              <p className="text-xs text-gray-500 mb-3">الباقات القديمة (للتوافق)</p>
+              <p className="text-xs text-gray-500 mb-3">{t('الباقات القديمة (للتوافق)')}</p>
               <div className="grid grid-cols-2 gap-3">
                 {/* سعر الاشتراك الأساسي */}
                 <div className="space-y-2">
                   <div className="flex items-center gap-2">
                     <div className="w-2 h-2 rounded-full bg-blue-500"></div>
-                    <Label className="text-gray-400 text-xs">أساسي</Label>
+                    <Label className="text-gray-400 text-xs">{t('أساسي')}</Label>
                   </div>
                   <div className="relative">
                     <span className="absolute right-2 top-1/2 -translate-y-1/2 text-green-400 text-sm">$</span>
@@ -4312,7 +4310,7 @@ export default function SuperAdmin() {
                 <div className="space-y-2">
                   <div className="flex items-center gap-2">
                     <div className="w-2 h-2 rounded-full bg-purple-500"></div>
-                    <Label className="text-gray-400 text-xs">مميز</Label>
+                    <Label className="text-gray-400 text-xs">{t('مميز')}</Label>
                   </div>
                   <div className="relative">
                     <span className="absolute right-2 top-1/2 -translate-y-1/2 text-green-400 text-sm">$</span>
@@ -4331,32 +4329,31 @@ export default function SuperAdmin() {
 
             {/* ملخص الأسعار */}
             <div className="bg-gray-700/30 rounded-lg p-4">
-              <p className="text-sm text-gray-400 mb-3">ملخص الأسعار السنوية:</p>
+              <p className="text-sm text-gray-400 mb-3">{t('ملخص الأسعار السنوية:')}</p>
               <div className="grid grid-cols-2 gap-2 text-xs">
                 <div className="flex justify-between">
-                  <span className="text-amber-400">برونزية</span>
-                  <span className="text-green-400">${(subscriptionPrices.bronze * 12).toFixed(0)}/سنة</span>
+                  <span className="text-amber-400">{t('برونزية')}</span>
+                  <span className="text-green-400">{t('${(subscriptionPrices.bronze * 12).toFixed(0)}/سنة')}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-300">فضية</span>
-                  <span className="text-green-400">${(subscriptionPrices.silver * 12).toFixed(0)}/سنة</span>
+                  <span className="text-gray-300">{t('فضية')}</span>
+                  <span className="text-green-400">{t('${(subscriptionPrices.silver * 12).toFixed(0)}/سنة')}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-yellow-400">ذهبية</span>
-                  <span className="text-green-400">${(subscriptionPrices.gold * 12).toFixed(0)}/سنة</span>
+                  <span className="text-yellow-400">{t('ذهبية')}</span>
+                  <span className="text-green-400">{t('${(subscriptionPrices.gold * 12).toFixed(0)}/سنة')}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-blue-400">أساسي</span>
-                  <span className="text-green-400">${(subscriptionPrices.basic * 12).toFixed(0)}/سنة</span>
+                  <span className="text-blue-400">{t('أساسي')}</span>
+                  <span className="text-green-400">{t('${(subscriptionPrices.basic * 12).toFixed(0)}/سنة')}</span>
                 </div>
               </div>
             </div>
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowPricesModal(false)} className="border-gray-600">
-              إلغاء
-            </Button>
+            <Button variant="outline" onClick={() =>{t('setShowPricesModal(false)} className="border-gray-600">
+              إلغاء')}</Button>
             <Button 
               onClick={saveSubscriptionPrices} 
               disabled={savingPrices}
@@ -4416,7 +4413,7 @@ export default function SuperAdmin() {
             {/* إدخال URL */}
             {backgroundUploadMode === 'url' && (
               <div className="space-y-2">
-                <Label className="text-gray-300">رابط الصورة</Label>
+                <Label className="text-gray-300">{t('رابط الصورة')}</Label>
                 <Input
                   value={newBackgroundUrl}
                   onChange={(e) => setNewBackgroundUrl(e.target.value)}
@@ -4429,7 +4426,7 @@ export default function SuperAdmin() {
             {/* رفع من الجهاز */}
             {backgroundUploadMode === 'device' && (
               <div className="space-y-3">
-                <Label className="text-gray-300">اختر صورة</Label>
+                <Label className="text-gray-300">{t('اختر صورة')}</Label>
                 <div 
                   className="border-2 border-dashed border-gray-600 rounded-lg p-6 text-center cursor-pointer hover:border-purple-500 transition-colors"
                   onClick={() => document.getElementById('background-file-input').click()}
@@ -4446,8 +4443,8 @@ export default function SuperAdmin() {
                   ) : (
                     <div className="space-y-2">
                       <Upload className="h-10 w-10 text-gray-500 mx-auto" />
-                      <p className="text-gray-400">اضغط لاختيار صورة</p>
-                      <p className="text-xs text-gray-500">PNG, JPG, WEBP, GIF (حتى 5MB)</p>
+                      <p className="text-gray-400">{t('اضغط لاختيار صورة')}</p>
+                      <p className="text-xs text-gray-500">{t('PNG, JPG, WEBP, GIF (حتى 5MB)')}</p>
                     </div>
                   )}
                 </div>
@@ -4473,33 +4470,33 @@ export default function SuperAdmin() {
                   <Crop className="h-4 w-4 ml-2" />
                   قص وتعديل صورة
                 </Button>
-                <p className="text-xs text-gray-500 text-center">استخدم أداة القص للحصول على أبعاد مثالية للخلفية</p>
+                <p className="text-xs text-gray-500 text-center">{t('استخدم أداة القص للحصول على أبعاد مثالية للخلفية')}</p>
               </div>
             )}
 
             {/* عنوان الخلفية */}
             <div className="space-y-2">
-              <Label className="text-gray-300">عنوان الخلفية (اختياري)</Label>
+              <Label className="text-gray-300">{t('عنوان الخلفية (اختياري)')}</Label>
               <Input
                 value={newBackgroundTitle}
                 onChange={(e) => setNewBackgroundTitle(e.target.value)}
-                placeholder="مثال: خلفية المطعم"
+                placeholder={t('مثال: خلفية المطعم')}
                 className="bg-gray-700/50 border-gray-600 text-white"
               />
             </div>
 
             {/* نوع الحركة */}
             <div className="space-y-2">
-              <Label className="text-gray-300">نوع الحركة</Label>
+              <Label className="text-gray-300">{t('نوع الحركة')}</Label>
               <Select value={newBackgroundAnimation} onValueChange={setNewBackgroundAnimation}>
                 <SelectTrigger className="bg-gray-700/50 border-gray-600 text-white">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent className="bg-gray-800 border-gray-700">
-                  <SelectItem value="fade">تلاشي (Fade)</SelectItem>
-                  <SelectItem value="zoom">تكبير (Zoom)</SelectItem>
-                  <SelectItem value="kenburns">كين بيرنز (Ken Burns)</SelectItem>
-                  <SelectItem value="slide">انزلاق (Slide)</SelectItem>
+                  <SelectItem value="fade">{t('تلاشي (Fade)')}</SelectItem>
+                  <SelectItem value="zoom">{t('تكبير (Zoom)')}</SelectItem>
+                  <SelectItem value="kenburns">{t('كين بيرنز (Ken Burns)')}</SelectItem>
+                  <SelectItem value="slide">{t('انزلاق (Slide)')}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -4576,30 +4573,30 @@ export default function SuperAdmin() {
           <div className="space-y-4 py-4">
             {/* العملة المفضلة */}
             <div className="space-y-2">
-              <Label className="text-gray-300">العملة المفضلة للعرض</Label>
+              <Label className="text-gray-300">{t('العملة المفضلة للعرض')}</Label>
               <Select 
                 value={currencySettings.preferred_currency} 
                 onValueChange={(value) => setCurrencySettings({...currencySettings, preferred_currency: value})}
               >
                 <SelectTrigger className="bg-gray-700/50 border-gray-600">
-                  <SelectValue placeholder="اختر العملة" />
+                  <SelectValue placeholder={t('اختر العملة')} />
                 </SelectTrigger>
                 <SelectContent className="bg-gray-800 border-gray-700">
-                  <SelectItem value="USD">🇺🇸 دولار أمريكي (USD)</SelectItem>
-                  <SelectItem value="IQD">🇮🇶 دينار عراقي (IQD)</SelectItem>
-                  <SelectItem value="SAR">🇸🇦 ريال سعودي (SAR)</SelectItem>
-                  <SelectItem value="AED">🇦🇪 درهم إماراتي (AED)</SelectItem>
-                  <SelectItem value="EGP">🇪🇬 جنيه مصري (EGP)</SelectItem>
-                  <SelectItem value="EUR">🇪🇺 يورو (EUR)</SelectItem>
-                  <SelectItem value="JOD">🇯🇴 دينار أردني (JOD)</SelectItem>
-                  <SelectItem value="KWD">🇰🇼 دينار كويتي (KWD)</SelectItem>
+                  <SelectItem value="USD">{t('🇺🇸 دولار أمريكي (USD)')}</SelectItem>
+                  <SelectItem value="IQD">{t('🇮🇶 دينار عراقي (IQD)')}</SelectItem>
+                  <SelectItem value="SAR">{t('🇸🇦 ريال سعودي (SAR)')}</SelectItem>
+                  <SelectItem value="AED">{t('🇦🇪 درهم إماراتي (AED)')}</SelectItem>
+                  <SelectItem value="EGP">{t('🇪🇬 جنيه مصري (EGP)')}</SelectItem>
+                  <SelectItem value="EUR">{t('🇪🇺 يورو (EUR)')}</SelectItem>
+                  <SelectItem value="JOD">{t('🇯🇴 دينار أردني (JOD)')}</SelectItem>
+                  <SelectItem value="KWD">{t('🇰🇼 دينار كويتي (KWD)')}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
             {/* نوع أسعار الصرف */}
             <div className="space-y-2">
-              <Label className="text-gray-300">مصدر أسعار الصرف</Label>
+              <Label className="text-gray-300">{t('مصدر أسعار الصرف')}</Label>
               <div className="flex gap-4">
                 <Button
                   type="button"
@@ -4625,8 +4622,8 @@ export default function SuperAdmin() {
             {/* أسعار الصرف المخصصة (فقط إذا اختار أسعار ثابتة) */}
             {!currencySettings.use_live_rates && (
               <div className="space-y-3 bg-gray-700/30 rounded-lg p-4">
-                <Label className="text-gray-300">تعديل أسعار الصرف (مقابل الدولار)</Label>
-                <p className="text-xs text-gray-500">أدخل كم وحدة من كل عملة تساوي 1 دولار</p>
+                <Label className="text-gray-300">{t('تعديل أسعار الصرف (مقابل الدولار)')}</Label>
+                <p className="text-xs text-gray-500">{t('أدخل كم وحدة من كل عملة تساوي 1 دولار')}</p>
                 
                 <div className="grid grid-cols-2 gap-3">
                   {[
@@ -4663,9 +4660,7 @@ export default function SuperAdmin() {
                   <Check className="h-4 w-4" />
                   سيتم جلب أسعار الصرف تلقائياً من الإنترنت
                 </p>
-                <p className="text-xs text-gray-500 mt-1">
-                  يتم تحديث الأسعار كل مرة تفتح فيها التقارير
-                </p>
+                <p className="text-xs text-gray-500 mt-1">{t('يتم تحديث الأسعار كل مرة تفتح فيها التقارير')}</p>
               </div>
             )}
           </div>
@@ -4673,11 +4668,10 @@ export default function SuperAdmin() {
           <DialogFooter>
             <Button 
               variant="outline" 
-              onClick={() => setShowCurrencySettingsModal(false)} 
+              onClick={() =>{t('setShowCurrencySettingsModal(false)} 
               className="border-gray-600"
             >
-              إلغاء
-            </Button>
+              إلغاء')}</Button>
             <Button 
               onClick={saveCurrencySettings}
               disabled={savingCurrencySettings}

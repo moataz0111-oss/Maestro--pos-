@@ -297,7 +297,7 @@ export default function PurchasesPage() {
                 <ShoppingCart className="h-5 w-5 text-primary" />
                 إدارة المشتريات
               </h1>
-              <p className="text-xs text-muted-foreground">الشراء من الموردين وإرسال للمخزن</p>
+              <p className="text-xs text-muted-foreground">{t('الشراء من الموردين وإرسال للمخزن')}</p>
             </div>
           </div>
           
@@ -344,12 +344,12 @@ export default function PurchasesPage() {
             <div className="flex gap-2 items-center">
               <Select value={filterStatus} onValueChange={setFilterStatus}>
                 <SelectTrigger className="w-48">
-                  <SelectValue placeholder="الحالة" />
+                  <SelectValue placeholder={t('الحالة')} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">جميع الفواتير</SelectItem>
-                  <SelectItem value="pending">في انتظار الإرسال</SelectItem>
-                  <SelectItem value="sent_to_warehouse">تم الإرسال</SelectItem>
+                  <SelectItem value="all">{t('جميع الفواتير')}</SelectItem>
+                  <SelectItem value="pending">{t('في انتظار الإرسال')}</SelectItem>
+                  <SelectItem value="sent_to_warehouse">{t('تم الإرسال')}</SelectItem>
                 </SelectContent>
               </Select>
               <Button variant="outline" size="icon" onClick={fetchData}>
@@ -362,14 +362,13 @@ export default function PurchasesPage() {
                 <Card>
                   <CardContent className="py-12 text-center text-muted-foreground">
                     <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                    <p>لا توجد فواتير شراء</p>
+                    <p>{t('لا توجد فواتير شراء')}</p>
                     <Button 
                       variant="link" 
                       className="mt-2"
-                      onClick={() => setShowPurchaseDialog(true)}
+                      onClick={() =>{t('setShowPurchaseDialog(true)}
                     >
-                      إنشاء فاتورة جديدة
-                    </Button>
+                      إنشاء فاتورة جديدة')}</Button>
                   </CardContent>
                 </Card>
               ) : (
@@ -381,7 +380,7 @@ export default function PurchasesPage() {
                         <div className="flex items-start justify-between gap-4">
                           <div className="flex-1">
                             <div className="flex items-center gap-2 mb-2 flex-wrap">
-                              <span className="font-bold text-lg">فاتورة #{purchase.purchase_number}</span>
+                              <span className="font-bold text-lg">{t('فاتورة #{purchase.purchase_number}')}</span>
                               <Badge className={getStatusColor(purchase.status)}>
                                 {getStatusLabel(purchase.status)}
                               </Badge>
@@ -404,21 +403,19 @@ export default function PurchasesPage() {
                             </div>
                             
                             <div className="flex items-center gap-4 text-sm">
-                              <span>عدد الأصناف: {purchase.items?.length || 0}</span>
-                              <span className="font-bold text-primary">
-                                الإجمالي: {formatPrice(purchase.total_amount)}
-                              </span>
+                              <span>{t('عدد الأصناف: {purchase.items?.length || 0}')}</span>
+                              <span className="font-bold text-primary">{t('الإجمالي: {formatPrice(purchase.total_amount)}')}</span>
                             </div>
                             
                             {purchase.invoice_image_url ? (
                               <div className="flex items-center gap-2 mt-2 text-green-500 text-sm">
                                 <CheckCircle className="h-4 w-4" />
-                                <span>صورة الفاتورة مرفقة</span>
+                                <span>{t('صورة الفاتورة مرفقة')}</span>
                               </div>
                             ) : (
                               <div className="flex items-center gap-2 mt-2 text-yellow-500 text-sm">
                                 <AlertCircle className="h-4 w-4" />
-                                <span>لم يتم رفع صورة الفاتورة</span>
+                                <span>{t('لم يتم رفع صورة الفاتورة')}</span>
                               </div>
                             )}
                           </div>
@@ -487,7 +484,7 @@ export default function PurchasesPage() {
                     </div>
                     
                     <div className="mt-3 pt-3 border-t flex justify-between items-center">
-                      <span className="text-sm text-muted-foreground">إجمالي المشتريات:</span>
+                      <span className="text-sm text-muted-foreground">{t('إجمالي المشتريات:')}</span>
                       <span className="font-bold text-primary">{formatPrice(supplier.total_purchases || 0)}</span>
                     </div>
                   </CardContent>
@@ -498,14 +495,13 @@ export default function PurchasesPage() {
                 <Card className="col-span-full">
                   <CardContent className="py-12 text-center text-muted-foreground">
                     <Building2 className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                    <p>لا يوجد موردين</p>
+                    <p>{t('لا يوجد موردين')}</p>
                     <Button 
                       variant="link" 
                       className="mt-2"
-                      onClick={() => setShowSupplierDialog(true)}
+                      onClick={() =>{t('setShowSupplierDialog(true)}
                     >
-                      إضافة مورد جديد
-                    </Button>
+                      إضافة مورد جديد')}</Button>
                   </CardContent>
                 </Card>
               )}
@@ -524,7 +520,7 @@ export default function PurchasesPage() {
                 {purchaseRequests.length === 0 ? (
                   <div className="text-center py-8 text-muted-foreground">
                     <Package className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                    <p>لا توجد طلبات شراء من المخزن</p>
+                    <p>{t('لا توجد طلبات شراء من المخزن')}</p>
                   </div>
                 ) : (
                   <div className="space-y-3">
@@ -534,7 +530,7 @@ export default function PurchasesPage() {
                         className="p-4 border rounded-lg hover:bg-muted/50 transition-colors"
                       >
                         <div className="flex items-center justify-between mb-2">
-                          <span className="font-bold">طلب #{request.request_number}</span>
+                          <span className="font-bold">{t('طلب #{request.request_number}')}</span>
                           <Badge className={
                             request.status === 'pending' ? 'bg-yellow-500/20 text-yellow-500' :
                             request.status === 'approved' ? 'bg-blue-500/20 text-blue-500' :
@@ -575,16 +571,16 @@ export default function PurchasesPage() {
           <form onSubmit={handleAddSupplier} className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="col-span-2">
-                <Label>اسم المورد *</Label>
+                <Label>{t('اسم المورد *')}</Label>
                 <Input
                   value={supplierForm.name}
                   onChange={(e) => setSupplierForm(prev => ({ ...prev, name: e.target.value }))}
-                  placeholder="اسم المورد أو الشركة"
+                  placeholder={t('اسم المورد أو الشركة')}
                   required
                 />
               </div>
               <div>
-                <Label>رقم الهاتف</Label>
+                <Label>{t('رقم الهاتف')}</Label>
                 <Input
                   value={supplierForm.phone}
                   onChange={(e) => setSupplierForm(prev => ({ ...prev, phone: e.target.value }))}
@@ -592,7 +588,7 @@ export default function PurchasesPage() {
                 />
               </div>
               <div>
-                <Label>البريد الإلكتروني</Label>
+                <Label>{t('البريد الإلكتروني')}</Label>
                 <Input
                   type="email"
                   value={supplierForm.email}
@@ -601,36 +597,35 @@ export default function PurchasesPage() {
                 />
               </div>
               <div className="col-span-2">
-                <Label>اسم الشركة</Label>
+                <Label>{t('اسم الشركة')}</Label>
                 <Input
                   value={supplierForm.company_name}
                   onChange={(e) => setSupplierForm(prev => ({ ...prev, company_name: e.target.value }))}
-                  placeholder="اسم الشركة (اختياري)"
+                  placeholder={t('اسم الشركة (اختياري)')}
                 />
               </div>
               <div className="col-span-2">
-                <Label>العنوان</Label>
+                <Label>{t('العنوان')}</Label>
                 <Input
                   value={supplierForm.address}
                   onChange={(e) => setSupplierForm(prev => ({ ...prev, address: e.target.value }))}
-                  placeholder="العنوان الكامل"
+                  placeholder={t('العنوان الكامل')}
                 />
               </div>
               <div className="col-span-2">
-                <Label>ملاحظات</Label>
+                <Label>{t('ملاحظات')}</Label>
                 <Textarea
                   value={supplierForm.notes}
                   onChange={(e) => setSupplierForm(prev => ({ ...prev, notes: e.target.value }))}
-                  placeholder="ملاحظات إضافية..."
+                  placeholder={t('ملاحظات إضافية...')}
                   rows={2}
                 />
               </div>
             </div>
             
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setShowSupplierDialog(false)}>
-                إلغاء
-              </Button>
+              <Button type="button" variant="outline" onClick={() =>{t('setShowSupplierDialog(false)}>
+                إلغاء')}</Button>
               <Button type="submit" disabled={submitting}>
                 {submitting ? <RefreshCw className="h-4 w-4 animate-spin ml-2" /> : <Plus className="h-4 w-4 ml-2" />}
                 إضافة المورد
@@ -653,13 +648,13 @@ export default function PurchasesPage() {
             {/* اختيار المورد */}
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <Label>المورد *</Label>
+                <Label>{t('المورد *')}</Label>
                 <Select 
                   value={purchaseForm.supplier_id} 
                   onValueChange={(v) => setPurchaseForm(prev => ({ ...prev, supplier_id: v }))}
                 >
                   <SelectTrigger data-testid="select-supplier">
-                    <SelectValue placeholder="اختر المورد" />
+                    <SelectValue placeholder={t('اختر المورد')} />
                   </SelectTrigger>
                   <SelectContent>
                     {suppliers.filter(s => s.is_active !== false).map(supplier => (
@@ -671,7 +666,7 @@ export default function PurchasesPage() {
                 </Select>
               </div>
               <div>
-                <Label>رقم الفاتورة</Label>
+                <Label>{t('رقم الفاتورة')}</Label>
                 <Input
                   value={purchaseForm.invoice_number}
                   onChange={(e) => setPurchaseForm(prev => ({ ...prev, invoice_number: e.target.value }))}
@@ -683,7 +678,7 @@ export default function PurchasesPage() {
             {/* طريقة الدفع */}
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <Label>طريقة الدفع</Label>
+                <Label>{t('طريقة الدفع')}</Label>
                 <Select 
                   value={purchaseForm.payment_method} 
                   onValueChange={(v) => setPurchaseForm(prev => ({ ...prev, payment_method: v }))}
@@ -692,14 +687,14 @@ export default function PurchasesPage() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="cash">نقدي</SelectItem>
-                    <SelectItem value="credit">آجل</SelectItem>
-                    <SelectItem value="transfer">تحويل بنكي</SelectItem>
+                    <SelectItem value="cash">{t('نقدي')}</SelectItem>
+                    <SelectItem value="credit">{t('آجل')}</SelectItem>
+                    <SelectItem value="transfer">{t('تحويل بنكي')}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <div>
-                <Label>حالة الدفع</Label>
+                <Label>{t('حالة الدفع')}</Label>
                 <Select 
                   value={purchaseForm.payment_status} 
                   onValueChange={(v) => setPurchaseForm(prev => ({ ...prev, payment_status: v }))}
@@ -708,9 +703,9 @@ export default function PurchasesPage() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="paid">مدفوع</SelectItem>
-                    <SelectItem value="pending">غير مدفوع</SelectItem>
-                    <SelectItem value="partial">دفع جزئي</SelectItem>
+                    <SelectItem value="paid">{t('مدفوع')}</SelectItem>
+                    <SelectItem value="pending">{t('غير مدفوع')}</SelectItem>
+                    <SelectItem value="partial">{t('دفع جزئي')}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -718,18 +713,18 @@ export default function PurchasesPage() {
             
             {/* إضافة أصناف */}
             <div className="p-4 bg-muted/30 border rounded-lg space-y-3">
-              <Label className="font-bold">إضافة صنف</Label>
+              <Label className="font-bold">{t('إضافة صنف')}</Label>
               <div className="grid grid-cols-12 gap-2">
                 <Input
                   className="col-span-4"
-                  placeholder="اسم الصنف"
+                  placeholder={t('اسم الصنف')}
                   value={newItem.name}
                   onChange={(e) => setNewItem(prev => ({ ...prev, name: e.target.value }))}
                 />
                 <Input
                   className="col-span-2"
                   type="number"
-                  placeholder="الكمية"
+                  placeholder={t('الكمية')}
                   value={newItem.quantity}
                   onChange={(e) => setNewItem(prev => ({ ...prev, quantity: parseFloat(e.target.value) || 0 }))}
                 />
@@ -741,18 +736,18 @@ export default function PurchasesPage() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="كغم">كغم</SelectItem>
-                    <SelectItem value="غرام">غرام</SelectItem>
-                    <SelectItem value="لتر">لتر</SelectItem>
-                    <SelectItem value="قطعة">قطعة</SelectItem>
-                    <SelectItem value="علبة">علبة</SelectItem>
-                    <SelectItem value="كرتون">كرتون</SelectItem>
+                    <SelectItem value="كغم">{t('كغم')}</SelectItem>
+                    <SelectItem value="غرام">{t('غرام')}</SelectItem>
+                    <SelectItem value="لتر">{t('لتر')}</SelectItem>
+                    <SelectItem value="قطعة">{t('قطعة')}</SelectItem>
+                    <SelectItem value="علبة">{t('علبة')}</SelectItem>
+                    <SelectItem value="كرتون">{t('كرتون')}</SelectItem>
                   </SelectContent>
                 </Select>
                 <Input
                   className="col-span-3"
                   type="number"
-                  placeholder="السعر/وحدة"
+                  placeholder={t('السعر/وحدة')}
                   value={newItem.cost_per_unit}
                   onChange={(e) => setNewItem(prev => ({ ...prev, cost_per_unit: parseFloat(e.target.value) || 0 }))}
                 />
@@ -797,7 +792,7 @@ export default function PurchasesPage() {
                   ))}
                 </div>
                 <div className="bg-primary/10 px-3 py-2 flex justify-between items-center">
-                  <span className="font-medium">الإجمالي:</span>
+                  <span className="font-medium">{t('الإجمالي:')}</span>
                   <span className="font-bold text-lg text-primary">{formatPrice(purchaseForm.total_amount)}</span>
                 </div>
               </div>
@@ -805,20 +800,19 @@ export default function PurchasesPage() {
             
             {/* ملاحظات */}
             <div>
-              <Label>ملاحظات</Label>
+              <Label>{t('ملاحظات')}</Label>
               <Textarea
                 value={purchaseForm.notes}
                 onChange={(e) => setPurchaseForm(prev => ({ ...prev, notes: e.target.value }))}
-                placeholder="ملاحظات إضافية..."
+                placeholder={t('ملاحظات إضافية...')}
                 rows={2}
               />
             </div>
           </div>
           
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowPurchaseDialog(false)}>
-              إلغاء
-            </Button>
+            <Button variant="outline" onClick={() =>{t('setShowPurchaseDialog(false)}>
+              إلغاء')}</Button>
             <Button 
               onClick={handleCreatePurchase}
               disabled={!purchaseForm.supplier_id || purchaseForm.items.length === 0 || submitting}
@@ -854,13 +848,13 @@ export default function PurchasesPage() {
                   <div className="space-y-2">
                     <CheckCircle className="h-12 w-12 mx-auto text-green-500" />
                     <p className="font-medium">{uploadFile.name}</p>
-                    <p className="text-sm text-muted-foreground">انقر لتغيير الصورة</p>
+                    <p className="text-sm text-muted-foreground">{t('انقر لتغيير الصورة')}</p>
                   </div>
                 ) : (
                   <div className="space-y-2">
                     <Upload className="h-12 w-12 mx-auto text-muted-foreground" />
-                    <p className="text-muted-foreground">انقر لاختيار صورة الفاتورة</p>
-                    <p className="text-xs text-muted-foreground">JPG, PNG - حد أقصى 5MB</p>
+                    <p className="text-muted-foreground">{t('انقر لاختيار صورة الفاتورة')}</p>
+                    <p className="text-xs text-muted-foreground">{t('JPG, PNG - حد أقصى 5MB')}</p>
                   </div>
                 )}
               </label>
@@ -901,21 +895,21 @@ export default function PurchasesPage() {
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div>
-                  <span className="text-muted-foreground">المورد:</span>
+                  <span className="text-muted-foreground">{t('المورد:')}</span>
                   <span className="font-medium mr-2">{showDetailsDialog.supplier_name}</span>
                 </div>
                 <div>
-                  <span className="text-muted-foreground">رقم الفاتورة:</span>
+                  <span className="text-muted-foreground">{t('رقم الفاتورة:')}</span>
                   <span className="font-medium mr-2">{showDetailsDialog.invoice_number || '-'}</span>
                 </div>
                 <div>
-                  <span className="text-muted-foreground">الحالة:</span>
+                  <span className="text-muted-foreground">{t('الحالة:')}</span>
                   <Badge className={`mr-2 ${getStatusColor(showDetailsDialog.status)}`}>
                     {getStatusLabel(showDetailsDialog.status)}
                   </Badge>
                 </div>
                 <div>
-                  <span className="text-muted-foreground">الدفع:</span>
+                  <span className="text-muted-foreground">{t('الدفع:')}</span>
                   <Badge className={`mr-2 ${getPaymentStatusColor(showDetailsDialog.payment_status)}`}>
                     {showDetailsDialog.payment_status === 'paid' ? 'مدفوع' : 'غير مدفوع'}
                   </Badge>
@@ -942,7 +936,7 @@ export default function PurchasesPage() {
               </div>
               
               <div className="bg-primary/10 p-3 rounded-lg flex justify-between items-center">
-                <span className="font-medium">الإجمالي:</span>
+                <span className="font-medium">{t('الإجمالي:')}</span>
                 <span className="font-bold text-lg text-primary">{formatPrice(showDetailsDialog.total_amount)}</span>
               </div>
               
@@ -962,7 +956,7 @@ export default function PurchasesPage() {
               
               {showDetailsDialog.notes && (
                 <div className="bg-muted/50 p-3 rounded-lg">
-                  <span className="text-sm text-muted-foreground">ملاحظات:</span>
+                  <span className="text-sm text-muted-foreground">{t('ملاحظات:')}</span>
                   <p className="mt-1">{showDetailsDialog.notes}</p>
                 </div>
               )}

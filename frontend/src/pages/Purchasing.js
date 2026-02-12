@@ -310,7 +310,7 @@ export default function Purchasing() {
             </Button>
             <div className="flex items-center gap-2">
               <ShoppingCart className="h-6 w-6 text-emerald-500" />
-              <h1 className="text-xl font-bold font-cairo">المشتريات</h1>
+              <h1 className="text-xl font-bold font-cairo">{t('المشتريات')}</h1>
             </div>
           </div>
           <div className="flex gap-2">
@@ -339,7 +339,7 @@ export default function Purchasing() {
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-muted-foreground">أوامر الشراء</p>
+                  <p className="text-sm text-muted-foreground">{t('أوامر الشراء')}</p>
                   <p className="text-2xl font-bold">{stats.totalOrders}</p>
                 </div>
                 <FileText className="h-8 w-8 text-blue-500 opacity-50" />
@@ -350,7 +350,7 @@ export default function Purchasing() {
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-muted-foreground">قيد الانتظار</p>
+                  <p className="text-sm text-muted-foreground">{t('قيد الانتظار')}</p>
                   <p className="text-2xl font-bold text-yellow-500">{stats.pending}</p>
                 </div>
                 <Clock className="h-8 w-8 text-yellow-500 opacity-50" />
@@ -361,7 +361,7 @@ export default function Purchasing() {
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-muted-foreground">إجمالي القيمة</p>
+                  <p className="text-sm text-muted-foreground">{t('إجمالي القيمة')}</p>
                   <p className="text-lg font-bold text-emerald-500">{formatCurrency(stats.totalValue)}</p>
                 </div>
                 <DollarSign className="h-8 w-8 text-emerald-500 opacity-50" />
@@ -372,7 +372,7 @@ export default function Purchasing() {
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-muted-foreground">تنبيهات المخزون</p>
+                  <p className="text-sm text-muted-foreground">{t('تنبيهات المخزون')}</p>
                   <p className={`text-2xl font-bold ${stats.alerts > 0 ? 'text-red-500' : ''}`}>{stats.alerts}</p>
                 </div>
                 <Bell className={`h-8 w-8 opacity-50 ${stats.alerts > 0 ? 'text-red-500 animate-pulse' : 'text-gray-500'}`} />
@@ -405,10 +405,9 @@ export default function Purchasing() {
                       size="sm"
                       variant="ghost"
                       className="h-6 px-2 text-emerald-500 hover:bg-emerald-500/10"
-                      onClick={() => createOrderFromAlert(alert)}
+                      onClick={() =>{t('createOrderFromAlert(alert)}
                     >
-                      طلب شراء
-                    </Button>
+                      طلب شراء')}</Button>
                   </div>
                 ))}
               </div>
@@ -419,21 +418,21 @@ export default function Purchasing() {
         <Tabs value={selectedTab} onValueChange={setSelectedTab}>
           <div className="flex items-center justify-between">
             <TabsList className="bg-muted">
-              <TabsTrigger value="orders">أوامر الشراء</TabsTrigger>
-              <TabsTrigger value="suppliers">الموردين</TabsTrigger>
+              <TabsTrigger value="orders">{t('أوامر الشراء')}</TabsTrigger>
+              <TabsTrigger value="suppliers">{t('الموردين')}</TabsTrigger>
             </TabsList>
             {selectedTab === 'orders' && (
               <Select value={filterStatus} onValueChange={setFilterStatus}>
                 <SelectTrigger className="w-40">
                   <Filter className="h-4 w-4 ml-2" />
-                  <SelectValue placeholder="الحالة" />
+                  <SelectValue placeholder={t('الحالة')} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">الكل</SelectItem>
-                  <SelectItem value="pending">قيد الانتظار</SelectItem>
-                  <SelectItem value="approved">موافق عليه</SelectItem>
-                  <SelectItem value="ordered">تم الطلب</SelectItem>
-                  <SelectItem value="delivered">تم الاستلام</SelectItem>
+                  <SelectItem value="all">{t('الكل')}</SelectItem>
+                  <SelectItem value="pending">{t('قيد الانتظار')}</SelectItem>
+                  <SelectItem value="approved">{t('موافق عليه')}</SelectItem>
+                  <SelectItem value="ordered">{t('تم الطلب')}</SelectItem>
+                  <SelectItem value="delivered">{t('تم الاستلام')}</SelectItem>
                 </SelectContent>
               </Select>
             )}
@@ -447,7 +446,7 @@ export default function Purchasing() {
               <Card className="bg-card border-border/50">
                 <CardContent className="p-12 text-center">
                   <ShoppingCart className="h-16 w-16 mx-auto text-muted-foreground/50 mb-4" />
-                  <p className="text-lg text-muted-foreground">لا توجد أوامر شراء</p>
+                  <p className="text-lg text-muted-foreground">{t('لا توجد أوامر شراء')}</p>
                 </CardContent>
               </Card>
             ) : (
@@ -489,40 +488,36 @@ export default function Purchasing() {
                             <Button
                               variant="ghost"
                               size="sm"
-                              onClick={() => updateStatus(order.id, 'approved')}
+                              onClick={() =>{t('updateStatus(order.id, 'approved')}
                               className="text-blue-500 hover:bg-blue-500/10"
                             >
-                              موافقة
-                            </Button>
+                              موافقة')}</Button>
                             <Button
                               variant="ghost"
                               size="sm"
-                              onClick={() => updateStatus(order.id, 'cancelled')}
+                              onClick={() =>{t('updateStatus(order.id, 'cancelled')}
                               className="text-red-500 hover:bg-red-500/10"
                             >
-                              إلغاء
-                            </Button>
+                              إلغاء')}</Button>
                           </>
                         )}
                         {order.status === 'approved' && (
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => updateStatus(order.id, 'ordered')}
+                            onClick={() =>{t('updateStatus(order.id, 'ordered')}
                             className="text-purple-500 hover:bg-purple-500/10"
                           >
-                            تم الطلب
-                          </Button>
+                            تم الطلب')}</Button>
                         )}
                         {order.status === 'ordered' && (
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => updateStatus(order.id, 'delivered')}
+                            onClick={() =>{t('updateStatus(order.id, 'delivered')}
                             className="text-green-500 hover:bg-green-500/10"
                           >
-                            تم الاستلام
-                          </Button>
+                            تم الاستلام')}</Button>
                         )}
                       </div>
                     </div>
@@ -566,13 +561,13 @@ export default function Purchasing() {
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>المورد *</Label>
+                <Label>{t('المورد *')}</Label>
                 <Select 
                   value={form.supplier_id} 
                   onValueChange={(v) => setForm({...form, supplier_id: v})}
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="اختر المورد" />
+                    <SelectValue placeholder={t('اختر المورد')} />
                   </SelectTrigger>
                   <SelectContent>
                     {suppliers.map(supplier => (
@@ -584,7 +579,7 @@ export default function Purchasing() {
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label>تاريخ التسليم المتوقع</Label>
+                <Label>{t('تاريخ التسليم المتوقع')}</Label>
                 <Input
                   type="date"
                   value={form.expected_delivery}
@@ -594,11 +589,11 @@ export default function Purchasing() {
             </div>
             {/* Add Item */}
             <div className="p-4 bg-muted/50 rounded-lg space-y-3">
-              <Label>إضافة مادة</Label>
+              <Label>{t('إضافة مادة')}</Label>
               <div className="grid grid-cols-4 gap-2">
                 <Select value={selectedMaterial} onValueChange={setSelectedMaterial} className="col-span-2">
                   <SelectTrigger>
-                    <SelectValue placeholder="المادة" />
+                    <SelectValue placeholder={t('المادة')} />
                   </SelectTrigger>
                   <SelectContent>
                     {rawMaterials.map(material => (
@@ -613,14 +608,14 @@ export default function Purchasing() {
                   min="1"
                   value={quantity}
                   onChange={(e) => setQuantity(parseInt(e.target.value) || 1)}
-                  placeholder="الكمية"
+                  placeholder={t('الكمية')}
                 />
                 <Input
                   type="number"
                   min="0"
                   value={unitPrice}
                   onChange={(e) => setUnitPrice(parseInt(e.target.value) || 0)}
-                  placeholder="السعر"
+                  placeholder={t('السعر')}
                 />
               </div>
               <Button onClick={addItemToOrder} size="sm" className="w-full">
@@ -631,7 +626,7 @@ export default function Purchasing() {
             {/* Items List */}
             {form.items.length > 0 && (
               <div className="space-y-2">
-                <Label>المواد المطلوبة</Label>
+                <Label>{t('المواد المطلوبة')}</Label>
                 <div className="border rounded-lg divide-y">
                   {form.items.map((item, idx) => (
                     <div key={idx} className="p-2 flex items-center justify-between">
@@ -657,16 +652,16 @@ export default function Purchasing() {
                     </div>
                   ))}
                   <div className="p-2 bg-muted/50 flex justify-between font-bold">
-                    <span>الإجمالي</span>
+                    <span>{t('الإجمالي')}</span>
                     <span className="text-emerald-500">{formatCurrency(getTotalAmount())}</span>
                   </div>
                 </div>
               </div>
             )}
             <div className="space-y-2">
-              <Label>ملاحظات</Label>
+              <Label>{t('ملاحظات')}</Label>
               <Input
-                placeholder="ملاحظات إضافية (اختياري)"
+                placeholder={t('ملاحظات إضافية (اختياري)')}
                 value={form.notes}
                 onChange={(e) => setForm({...form, notes: e.target.value})}
               />
@@ -674,12 +669,9 @@ export default function Purchasing() {
           </div>
           
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowAddDialog(false)}>
-              إلغاء
-            </Button>
-            <Button onClick={handleSubmit} className="bg-emerald-500 hover:bg-emerald-600">
-              إنشاء الأمر
-            </Button>
+            <Button variant="outline" onClick={() =>{t('setShowAddDialog(false)}>
+              إلغاء')}</Button>
+            <Button onClick={handleSubmit} className="bg-emerald-500 hover:bg-emerald-600">{t('إنشاء الأمر')}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -695,16 +687,16 @@ export default function Purchasing() {
           
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label>اسم المورد *</Label>
+              <Label>{t('اسم المورد *')}</Label>
               <Input
-                placeholder="اسم الشركة أو المورد"
+                placeholder={t('اسم الشركة أو المورد')}
                 value={supplierForm.name}
                 onChange={(e) => setSupplierForm({...supplierForm, name: e.target.value})}
               />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>رقم الهاتف *</Label>
+                <Label>{t('رقم الهاتف *')}</Label>
                 <Input
                   placeholder="05xxxxxxxx"
                   value={supplierForm.phone}
@@ -712,7 +704,7 @@ export default function Purchasing() {
                 />
               </div>
               <div className="space-y-2">
-                <Label>البريد الإلكتروني</Label>
+                <Label>{t('البريد الإلكتروني')}</Label>
                 <Input
                   type="email"
                   placeholder="email@example.com"
@@ -722,9 +714,9 @@ export default function Purchasing() {
               </div>
             </div>
             <div className="space-y-2">
-              <Label>العنوان</Label>
+              <Label>{t('العنوان')}</Label>
               <Input
-                placeholder="عنوان المورد"
+                placeholder={t('عنوان المورد')}
                 value={supplierForm.address}
                 onChange={(e) => setSupplierForm({...supplierForm, address: e.target.value})}
               />
@@ -732,12 +724,9 @@ export default function Purchasing() {
           </div>
           
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowSupplierDialog(false)}>
-              إلغاء
-            </Button>
-            <Button onClick={handleAddSupplier} className="bg-blue-500 hover:bg-blue-600">
-              إضافة
-            </Button>
+            <Button variant="outline" onClick={() =>{t('setShowSupplierDialog(false)}>
+              إلغاء')}</Button>
+            <Button onClick={handleAddSupplier} className="bg-blue-500 hover:bg-blue-600">{t('إضافة')}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

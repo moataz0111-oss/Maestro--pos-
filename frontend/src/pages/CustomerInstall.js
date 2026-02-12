@@ -66,22 +66,22 @@ const CustomerInstall = () => {
         <span className="text-orange-500 text-5xl font-bold">M</span>
       </div>
 
-      <h1 className="text-3xl font-bold mb-2">قائمة الطعام</h1>
-      <p className="text-orange-100 mb-8 text-center">اطلب طعامك المفضل بسهولة</p>
+      <h1 className="text-3xl font-bold mb-2">{t('قائمة الطعام')}</h1>
+      <p className="text-orange-100 mb-8 text-center">{t('اطلب طعامك المفضل بسهولة')}</p>
 
       {/* تعليمات التثبيت */}
       <div className="bg-white/10 backdrop-blur-lg rounded-2xl p-6 w-full max-w-sm">
         {isIOS ? (
           // تعليمات iOS
           <div className="space-y-4">
-            <h2 className="text-xl font-bold text-center mb-4">خطوات التثبيت على iOS</h2>
+            <h2 className="text-xl font-bold text-center mb-4">{t('خطوات التثبيت على iOS')}</h2>
             
             <div className="flex items-center gap-3 bg-white/10 rounded-xl p-3">
               <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center">
                 <span className="text-lg font-bold">1</span>
               </div>
               <div className="flex-1">
-                <p className="font-medium">اضغط على زر المشاركة</p>
+                <p className="font-medium">{t('اضغط على زر المشاركة')}</p>
                 <Share className="h-5 w-5 mt-1 text-orange-200" />
               </div>
             </div>
@@ -91,7 +91,7 @@ const CustomerInstall = () => {
                 <span className="text-lg font-bold">2</span>
               </div>
               <div className="flex-1">
-                <p className="font-medium">اختر "إضافة للشاشة الرئيسية"</p>
+                <p className="font-medium">{t('اختر "إضافة للشاشة الرئيسية"')}</p>
                 <div className="flex items-center gap-1 mt-1 text-orange-200 text-sm">
                   <Plus className="h-4 w-4" />
                   Add to Home Screen
@@ -104,7 +104,7 @@ const CustomerInstall = () => {
                 <span className="text-lg font-bold">3</span>
               </div>
               <div className="flex-1">
-                <p className="font-medium">اضغط "إضافة"</p>
+                <p className="font-medium">{t('اضغط "إضافة"')}</p>
               </div>
             </div>
           </div>
@@ -118,14 +118,12 @@ const CustomerInstall = () => {
               <Download className="h-6 w-6" />
               تثبيت التطبيق
             </button>
-            <p className="text-orange-100 text-sm mt-3">
-              التطبيق مجاني ولا يحتاج مساحة كبيرة
-            </p>
+            <p className="text-orange-100 text-sm mt-3">{t('التطبيق مجاني ولا يحتاج مساحة كبيرة')}</p>
           </div>
         ) : (
           // تعليمات عامة
           <div className="text-center">
-            <p className="mb-4">افتح هذه الصفحة من متصفح Chrome أو Safari</p>
+            <p className="mb-4">{t('افتح هذه الصفحة من متصفح Chrome أو Safari')}</p>
             <button
               onClick={() => window.location.href = '/menu/default'}
               className="w-full bg-white text-orange-600 font-bold py-4 px-6 rounded-xl flex items-center justify-center gap-2"

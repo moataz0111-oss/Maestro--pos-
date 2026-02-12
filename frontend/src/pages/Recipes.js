@@ -240,7 +240,7 @@ export default function Recipes() {
               <ChefHat className="h-6 w-6 text-primary" />
               الوصفات والمواد الخام
             </h1>
-            <p className="text-sm text-muted-foreground">إدارة المواد الخام ووصفات المنتجات</p>
+            <p className="text-sm text-muted-foreground">{t('إدارة المواد الخام ووصفات المنتجات')}</p>
           </div>
         </div>
       </div>
@@ -251,7 +251,7 @@ export default function Recipes() {
             <div className="flex items-center gap-3">
               <AlertTriangle className="h-5 w-5 text-red-500" />
               <div>
-                <p className="font-bold text-red-500">تنبيهات المخزون ({alerts.length})</p>
+                <p className="font-bold text-red-500">{t('تنبيهات المخزون ({alerts.length})')}</p>
                 <div className="flex flex-wrap gap-2 mt-2">
                   {alerts.slice(0, 5).map((alert, i) => (
                     <Badge key={i} variant="destructive" className="text-xs">
@@ -279,7 +279,7 @@ export default function Recipes() {
             <div className="relative flex-1">
               <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="بحث..."
+                placeholder={t('بحث...')}
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="pr-10"
@@ -287,10 +287,10 @@ export default function Recipes() {
             </div>
             <Select value={categoryFilter} onValueChange={setCategoryFilter}>
               <SelectTrigger className="w-48">
-                <SelectValue placeholder="التصنيف" />
+                <SelectValue placeholder={t('التصنيف')} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">الكل</SelectItem>
+                <SelectItem value="all">{t('الكل')}</SelectItem>
                 {CATEGORIES.map(cat => (
                   <SelectItem key={cat.id} value={cat.id}>
                     {cat.icon} {cat.name}
@@ -329,24 +329,24 @@ export default function Recipes() {
                     </div>
                     <div className="space-y-2 text-sm">
                       <div className="flex justify-between">
-                        <span className="text-muted-foreground">المخزون الحالي:</span>
+                        <span className="text-muted-foreground">{t('المخزون الحالي:')}</span>
                         <span className={`font-bold ${isLowStock ? 'text-red-500' : 'text-foreground'}`}>
                           {material.current_stock} {getUnitSymbol(material.unit)}
                         </span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-muted-foreground">سعر الوحدة:</span>
+                        <span className="text-muted-foreground">{t('سعر الوحدة:')}</span>
                         <span className="text-foreground">{material.unit_cost} د.ع</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-muted-foreground">الحد الأدنى:</span>
+                        <span className="text-muted-foreground">{t('الحد الأدنى:')}</span>
                         <span className="text-foreground">{material.min_stock} {getUnitSymbol(material.unit)}</span>
                       </div>
                     </div>
                     {isLowStock && (
                       <div className="mt-3 p-2 bg-red-500/10 rounded-lg flex items-center gap-2">
                         <AlertCircle className="h-4 w-4 text-red-500" />
-                        <span className="text-xs text-red-500">المخزون منخفض!</span>
+                        <span className="text-xs text-red-500">{t('المخزون منخفض!')}</span>
                       </div>
                     )}
                   </CardContent>
@@ -378,28 +378,28 @@ export default function Recipes() {
                   <div className="grid grid-cols-3 gap-3 mb-3">
                     <div className="bg-muted/30 rounded-lg p-2 text-center">
                       <DollarSign className="h-4 w-4 text-muted-foreground mx-auto mb-1" />
-                      <p className="text-xs text-muted-foreground">التكلفة</p>
+                      <p className="text-xs text-muted-foreground">{t('التكلفة')}</p>
                       <p className="font-bold text-foreground">{recipe.final_cost?.toFixed(0)}</p>
                     </div>
                     <div className="bg-muted/30 rounded-lg p-2 text-center">
                       <TrendingUp className="h-4 w-4 text-green-500 mx-auto mb-1" />
-                      <p className="text-xs text-muted-foreground">السعر</p>
+                      <p className="text-xs text-muted-foreground">{t('السعر')}</p>
                       <p className="font-bold text-foreground">{recipe.selling_price?.toFixed(0)}</p>
                     </div>
                     <div className="bg-muted/30 rounded-lg p-2 text-center">
                       <Percent className="h-4 w-4 text-primary mx-auto mb-1" />
-                      <p className="text-xs text-muted-foreground">الربح</p>
+                      <p className="text-xs text-muted-foreground">{t('الربح')}</p>
                       <p className="font-bold text-green-500">{recipe.profit_margin?.toFixed(0)}%</p>
                     </div>
                   </div>
                   {recipe.preparation_time > 0 && (
                     <div className="flex items-center gap-2 text-sm text-muted-foreground">
                       <Clock className="h-4 w-4" />
-                      <span>وقت التحضير: {recipe.preparation_time} دقيقة</span>
+                      <span>{t('وقت التحضير: {recipe.preparation_time} دقيقة')}</span>
                     </div>
                   )}
                   <div className="mt-3 pt-3 border-t border-border/50">
-                    <p className="text-xs text-muted-foreground mb-2">المكونات:</p>
+                    <p className="text-xs text-muted-foreground mb-2">{t('المكونات:')}</p>
                     <div className="flex flex-wrap gap-1">
                       {recipe.ingredients?.slice(0, 5).map((ing, i) => (
                         <Badge key={i} variant="outline" className="text-xs">
@@ -421,8 +421,8 @@ export default function Recipes() {
             <Card className="border-border/50">
               <CardContent className="py-12 text-center">
                 <ChefHat className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
-                <p className="text-lg text-muted-foreground">لا توجد وصفات</p>
-                <p className="text-sm text-muted-foreground">أنشئ وصفة لحساب تكاليف منتجاتك</p>
+                <p className="text-lg text-muted-foreground">{t('لا توجد وصفات')}</p>
+                <p className="text-sm text-muted-foreground">{t('أنشئ وصفة لحساب تكاليف منتجاتك')}</p>
               </CardContent>
             </Card>
           )}
@@ -438,7 +438,7 @@ export default function Recipes() {
           </DialogHeader>
           <form onSubmit={handleSaveMaterial} className="space-y-4">
             <div>
-              <Label>اسم المادة *</Label>
+              <Label>{t('اسم المادة *')}</Label>
               <Input
                 value={materialForm.name}
                 onChange={(e) => setMaterialForm({ ...materialForm, name: e.target.value })}
@@ -447,7 +447,7 @@ export default function Recipes() {
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <Label>الوحدة *</Label>
+                <Label>{t('الوحدة *')}</Label>
                 <Select
                   value={materialForm.unit}
                   onValueChange={(v) => setMaterialForm({ ...materialForm, unit: v })}
@@ -461,7 +461,7 @@ export default function Recipes() {
                 </Select>
               </div>
               <div>
-                <Label>التصنيف</Label>
+                <Label>{t('التصنيف')}</Label>
                 <Select
                   value={materialForm.category}
                   onValueChange={(v) => setMaterialForm({ ...materialForm, category: v })}
@@ -476,7 +476,7 @@ export default function Recipes() {
               </div>
             </div>
             <div>
-              <Label>سعر الوحدة (د.ع)</Label>
+              <Label>{t('سعر الوحدة (د.ع)')}</Label>
               <Input
                 type="number"
                 value={materialForm.unit_cost}
@@ -485,7 +485,7 @@ export default function Recipes() {
             </div>
             <div className="grid grid-cols-3 gap-4">
               <div>
-                <Label>المخزون الحالي</Label>
+                <Label>{t('المخزون الحالي')}</Label>
                 <Input
                   type="number"
                   value={materialForm.current_stock}
@@ -493,7 +493,7 @@ export default function Recipes() {
                 />
               </div>
               <div>
-                <Label>الحد الأدنى</Label>
+                <Label>{t('الحد الأدنى')}</Label>
                 <Input
                   type="number"
                   value={materialForm.min_stock}
@@ -501,7 +501,7 @@ export default function Recipes() {
                 />
               </div>
               <div>
-                <Label>الحد الأقصى</Label>
+                <Label>{t('الحد الأقصى')}</Label>
                 <Input
                   type="number"
                   value={materialForm.max_stock}
@@ -510,9 +510,8 @@ export default function Recipes() {
               </div>
             </div>
             <div className="flex gap-2 pt-4">
-              <Button type="button" variant="outline" onClick={() => setMaterialDialogOpen(false)} className="flex-1">
-                إلغاء
-              </Button>
+              <Button type="button" variant="outline" onClick={() =>{t('setMaterialDialogOpen(false)} className="flex-1">
+                إلغاء')}</Button>
               <Button type="submit" className="flex-1">
                 {editingMaterial ? 'تحديث' : 'إضافة'}
               </Button>
@@ -524,16 +523,16 @@ export default function Recipes() {
       <Dialog open={recipeDialogOpen} onOpenChange={setRecipeDialogOpen}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle className="text-foreground">إنشاء وصفة جديدة</DialogTitle>
+            <DialogTitle className="text-foreground">{t('إنشاء وصفة جديدة')}</DialogTitle>
           </DialogHeader>
           <form onSubmit={handleSaveRecipe} className="space-y-4">
             <div>
-              <Label>المنتج *</Label>
+              <Label>{t('المنتج *')}</Label>
               <Select
                 value={recipeForm.product_id}
                 onValueChange={(v) => setRecipeForm({ ...recipeForm, product_id: v })}
               >
-                <SelectTrigger><SelectValue placeholder="اختر المنتج" /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder={t('اختر المنتج')} /></SelectTrigger>
                 <SelectContent>
                   {products.map(p => (
                     <SelectItem key={p.id} value={p.id}>{p.name} - {p.price} د.ع</SelectItem>
@@ -543,7 +542,7 @@ export default function Recipes() {
             </div>
             <div>
               <div className="flex items-center justify-between mb-2">
-                <Label>المكونات *</Label>
+                <Label>{t('المكونات *')}</Label>
                 <Button type="button" variant="outline" size="sm" onClick={addIngredient}>
                   <Plus className="h-4 w-4" />
                 </Button>
@@ -555,7 +554,7 @@ export default function Recipes() {
                       value={ing.material_id}
                       onValueChange={(v) => updateIngredient(index, 'material_id', v)}
                     >
-                      <SelectTrigger className="flex-1"><SelectValue placeholder="المادة" /></SelectTrigger>
+                      <SelectTrigger className="flex-1"><SelectValue placeholder={t('المادة')} /></SelectTrigger>
                       <SelectContent>
                         {materials.map(m => (
                           <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
@@ -564,7 +563,7 @@ export default function Recipes() {
                     </Select>
                     <Input
                       type="number"
-                      placeholder="الكمية"
+                      placeholder={t('الكمية')}
                       value={ing.quantity}
                       onChange={(e) => updateIngredient(index, 'quantity', parseFloat(e.target.value) || 0)}
                       className="w-24"
@@ -575,13 +574,13 @@ export default function Recipes() {
                   </div>
                 ))}
                 {recipeForm.ingredients.length === 0 && (
-                  <p className="text-center text-muted-foreground py-4">أضف المكونات</p>
+                  <p className="text-center text-muted-foreground py-4">{t('أضف المكونات')}</p>
                 )}
               </ScrollArea>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <Label>تكلفة العمالة</Label>
+                <Label>{t('تكلفة العمالة')}</Label>
                 <Input
                   type="number"
                   value={recipeForm.labor_cost}
@@ -589,7 +588,7 @@ export default function Recipes() {
                 />
               </div>
               <div>
-                <Label>تكاليف إضافية</Label>
+                <Label>{t('تكاليف إضافية')}</Label>
                 <Input
                   type="number"
                   value={recipeForm.overhead_cost}
@@ -599,7 +598,7 @@ export default function Recipes() {
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <Label>عدد الحصص</Label>
+                <Label>{t('عدد الحصص')}</Label>
                 <Input
                   type="number"
                   value={recipeForm.portions}
@@ -607,7 +606,7 @@ export default function Recipes() {
                 />
               </div>
               <div>
-                <Label>وقت التحضير (دقيقة)</Label>
+                <Label>{t('وقت التحضير (دقيقة)')}</Label>
                 <Input
                   type="number"
                   value={recipeForm.preparation_time}
@@ -616,7 +615,7 @@ export default function Recipes() {
               </div>
             </div>
             <div>
-              <Label>تعليمات التحضير</Label>
+              <Label>{t('تعليمات التحضير')}</Label>
               <Textarea
                 value={recipeForm.instructions}
                 onChange={(e) => setRecipeForm({ ...recipeForm, instructions: e.target.value })}
@@ -624,12 +623,9 @@ export default function Recipes() {
               />
             </div>
             <div className="flex gap-2 pt-4">
-              <Button type="button" variant="outline" onClick={() => setRecipeDialogOpen(false)} className="flex-1">
-                إلغاء
-              </Button>
-              <Button type="submit" className="flex-1">
-                إنشاء الوصفة
-              </Button>
+              <Button type="button" variant="outline" onClick={() =>{t('setRecipeDialogOpen(false)} className="flex-1">
+                إلغاء')}</Button>
+              <Button type="submit" className="flex-1">{t('إنشاء الوصفة')}</Button>
             </div>
           </form>
         </DialogContent>
