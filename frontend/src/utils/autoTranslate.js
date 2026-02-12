@@ -2253,6 +2253,9 @@ const translationMap = {
   'شركات التوصيل': { en: 'Delivery Companies', ku: '' },
   'المطبوعات': { en: 'Prints', ku: '' },
   'الإشعارات': { en: 'Notifications', ku: '' },
+  'الهوية البصرية': { en: 'Visual Identity', ku: '' },
+  'حذف جميع الإشعارات': { en: 'Delete All Notifications', ku: '' },
+  'لوحة تحكم المالك': { en: 'Owner Dashboard', ku: '' },
 };
 
 // الحصول على اللغة الحالية
