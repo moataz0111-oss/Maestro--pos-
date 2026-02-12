@@ -220,20 +220,20 @@ export default function CustomerMenu() {
     if (sessionId && paymentSuccess) {
       pollPaymentStatus(sessionId);
     } else if (paymentCancelled) {
-      toast.error('تم إلغاء عملية الدفع');
+      toast.error(t('تم إلغاء عملية الدفع'));
     }
   }, [searchParams]);
   const pollPaymentStatus = async (sessionId, attempts = 0) => {
     const maxAttempts = 10;
     if (attempts >= maxAttempts) {
-      toast.error('انتهت مهلة التحقق من الدفع');
+      toast.error(t('انتهت مهلة التحقق من الدفع'));
       return;
     }
     
     try {
       const res = await axios.get(`${API}/payments/status/${sessionId}`);
       if (res.data.payment_status === 'paid') {
-        toast.success('تم الدفع بنجاح! ');
+        toast.success(t('تم الدفع بنجاح!'));
         // جلب تفاصيل الطلب
         if (res.data.order_id) {
           const orderRes = await axios.get(`${API}/customer/order/${tenantId}/${res.data.order_id}`);
@@ -243,7 +243,7 @@ export default function CustomerMenu() {
           localStorage.removeItem(`cart_${tenantId}`);
         }
       } else if (res.data.status === 'expired') {
-        toast.error('انتهت صلاحية جلسة الدفع');
+        toast.error(t('انتهت صلاحية جلسة الدفع'));
       } else {
         // Continue polling
         setTimeout(() => pollPaymentStatus(sessionId, attempts + 1), 2000);
