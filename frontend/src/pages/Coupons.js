@@ -38,6 +38,7 @@ import { useNavigate } from 'react-router-dom';
 const API = API_URL;
 export default function Coupons() {
   const navigate = useNavigate();
+  const { t, isRTL } = useTranslation();
   const [activeTab, setActiveTab] = useState('coupons');
   const [coupons, setCoupons] = useState([]);
   const [promotions, setPromotions] = useState([]);

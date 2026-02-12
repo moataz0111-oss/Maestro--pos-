@@ -48,6 +48,7 @@ const TIER_COLORS = {
 };
 export default function Loyalty() {
   const navigate = useNavigate();
+  const { t, isRTL } = useTranslation();
   const [members, setMembers] = useState([]);
   const [settings, setSettings] = useState(null);
   const [loading, setLoading] = useState(true);

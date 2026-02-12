@@ -37,6 +37,7 @@ const API = API_URL;
 export default function CallLogs() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const { t, isRTL } = useTranslation();
   
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(true);
