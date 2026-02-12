@@ -1800,12 +1800,12 @@ export default function Dashboard() {
                   {uploadingBg ? (
                     <div className="flex items-center justify-center gap-2 text-muted-foreground">
                       <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-                      جاري الرفع...
+                      {t('جاري الرفع')}...
                     </div>
                   ) : (
                     <div className="space-y-2">
                       <Plus className="h-8 w-8 mx-auto text-muted-foreground" />
-                      <p className="text-sm text-muted-foreground">اضغط لرفع صورة جديدة</p>
+                      <p className="text-sm text-muted-foreground">{t('اضغط لرفع صورة جديدة')}</p>
                     </div>
                   )}
                 </label>
@@ -1819,7 +1819,7 @@ export default function Dashboard() {
                   onClick={handleRemoveBackground}
                 >
                   <X className="h-4 w-4" />
-                  إزالة الخلفية الحالية
+                  {t('إزالة الخلفية الحالية')}
                 </Button>
               )}
 
@@ -1852,8 +1852,8 @@ export default function Dashboard() {
               {dashboardBackgrounds.length === 0 && (
                 <div className="text-center py-8 text-muted-foreground">
                   <Image className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                  <p>لا توجد خلفيات متاحة</p>
-                  <p className="text-sm">قم برفع صورة جديدة</p>
+                  <p>{t('لا توجد خلفيات متاحة')}</p>
+                  <p className="text-sm">{t('قم برفع صورة جديدة')}</p>
                 </div>
               )}
             </div>
@@ -1861,7 +1861,7 @@ export default function Dashboard() {
 
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowBackgroundDialog(false)}>
-              إغلاق
+              {t('إغلاق')}
             </Button>
           </DialogFooter>
         </DialogContent>
