@@ -1211,13 +1211,13 @@ export default function Settings() {
   };
 
   const handleDeleteProduct = async (productId) => {
-    if (!confirm('هل أنت متأكد من حذف هذا المنتج؟')) return;
+    if (!confirm(t('هل أنت متأكد؟'))) return;
     try {
       await axios.delete(`${API}/products/${productId}`);
-      toast.success('تم حذف المنتج');
+      toast.success(t('تم حذف المنتج'));
       fetchData();
     } catch (error) {
-      toast.error('فشل في حذف المنتج');
+      toast.error(t('فشل في حذف المنتج'));
     }
   };
 
@@ -1226,12 +1226,12 @@ export default function Settings() {
     e.preventDefault();
     try {
       await axios.post(`${API}/kitchen-sections`, kitchenSectionForm);
-      toast.success('تم إنشاء قسم المطبخ');
+      toast.success(t('تم إنشاء قسم المطبخ'));
       setKitchenSectionDialogOpen(false);
       setKitchenSectionForm({ name: '', name_en: '', color: '#D4AF37', icon: '🍳', printer_id: '', branch_id: '', sort_order: 0 });
       fetchData();
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'فشل في إنشاء قسم المطبخ');
+      toast.error(error.response?.data?.detail || t('فشل في إنشاء قسم المطبخ'));
     }
   };
 
@@ -1253,30 +1253,30 @@ export default function Settings() {
     e.preventDefault();
     try {
       await axios.put(`${API}/kitchen-sections/${editKitchenSectionForm.id}`, editKitchenSectionForm);
-      toast.success('تم تحديث قسم المطبخ');
+      toast.success(t('تم تحديث قسم المطبخ'));
       setEditKitchenSectionDialogOpen(false);
       setEditKitchenSectionForm(null);
       fetchData();
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'فشل في تحديث قسم المطبخ');
+      toast.error(error.response?.data?.detail || t('فشل في تحديث قسم المطبخ'));
     }
   };
 
   const handleDeleteKitchenSection = async (sectionId) => {
-    if (!confirm('هل أنت متأكد من حذف هذا القسم؟')) return;
+    if (!confirm(t('هل أنت متأكد؟'))) return;
     try {
       await axios.delete(`${API}/kitchen-sections/${sectionId}`);
-      toast.success('تم حذف قسم المطبخ');
+      toast.success(t('تم حذف قسم المطبخ'));
       fetchData();
     } catch (error) {
-      toast.error('فشل في حذف قسم المطبخ');
+      toast.error(t('فشل في حذف قسم المطبخ'));
     }
   };
 
   const handleAssignCategoryToSection = async (categoryId, sectionId) => {
     try {
       await axios.put(`${API}/categories/${categoryId}/kitchen-section`, { kitchen_section_id: sectionId });
-      toast.success('تم تحديث قسم المطبخ للفئة');
+      toast.success(t('تم تحديث قسم المطبخ للفئة'));
       fetchData();
     } catch (error) {
       toast.error(t('فشل في التحديث'));
@@ -1295,7 +1295,7 @@ export default function Settings() {
         is_active: app.is_active !== false,
         payment_terms: 'weekly'
       });
-      toast.success('تم تحديث نسبة العمولة');
+      toast.success(t('تم تحديث نسبة العمولة'));
       fetchData();
     } catch (error) {
       toast.error(t('فشل في التحديث'));
@@ -1305,7 +1305,7 @@ export default function Settings() {
   // إضافة شركة توصيل جديدة
   const handleAddDeliveryApp = async () => {
     if (!newDeliveryApp.name) {
-      toast.error('يرجى إدخال اسم الشركة');
+      toast.error(t('يرجى إدخال اسم الشركة'));
       return;
     }
     
@@ -1320,12 +1320,12 @@ export default function Settings() {
         is_active: newDeliveryApp.is_active,
         payment_terms: 'weekly'
       });
-      toast.success('تم إضافة شركة التوصيل بنجاح');
+      toast.success(t('تم إضافة شركة التوصيل بنجاح'));
       setShowAddDeliveryApp(false);
       setNewDeliveryApp({ name: '', name_en: '', commission_rate: 0, is_active: true });
       fetchData();
     } catch (error) {
-      toast.error('فشل في إضافة شركة التوصيل');
+      toast.error(t('فشل في إضافة شركة التوصيل'));
     } finally {
       setSavingDeliveryApp(false);
     }
@@ -1333,14 +1333,14 @@ export default function Settings() {
 
   // حذف شركة توصيل
   const handleDeleteDeliveryApp = async (appId) => {
-    if (!window.confirm('هل أنت متأكد من حذف هذه الشركة؟')) return;
+    if (!window.confirm(t('هل أنت متأكد؟'))) return;
     
     try {
       await axios.delete(`${API}/delivery-app-settings/${appId}`);
-      toast.success('تم حذف شركة التوصيل');
+      toast.success(t('تم حذف شركة التوصيل'));
       fetchData();
     } catch (error) {
-      toast.error('فشل في حذف شركة التوصيل');
+      toast.error(t('فشل في حذف شركة التوصيل'));
     }
   };
 
