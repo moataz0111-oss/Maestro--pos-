@@ -866,7 +866,7 @@ export default function Dashboard() {
   const periodStats = getCurrentPeriodStats();
   
   const periodLabels = {
-    today: 'اليوم',
+    today: t('اليوم'),
     week: t('هذا الأسبوع'),
     month: t('هذا الشهر'),
     all_time: t('الإجمالي')
@@ -916,11 +916,11 @@ export default function Dashboard() {
 
   const getOrderStatusText = (status) => {
     const texts = {
-      pending: 'قيد الانتظار',
-      preparing: 'قيد التحضير',
-      ready: 'جاهز',
-      delivered: 'تم التوصيل',
-      cancelled: 'ملغي',
+      pending: t('قيد الانتظار'),
+      preparing: t('قيد التحضير'),
+      ready: t('جاهز'),
+      delivered: t('تم التوصيل'),
+      cancelled: t('ملغي'),
     };
     return texts[status] || status;
   };
