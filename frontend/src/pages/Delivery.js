@@ -880,7 +880,7 @@ export default function Delivery() {
                       </p>
                       {driver.current_order && (
                         <div className="mt-2 pt-2 border-t border-border text-xs">
-                          <span className="text-orange-500">{t('طلب #{driver.current_order.order_number}')}</span>
+                          <span className="text-orange-500">{t('طلب')} #{driver.current_order.order_number}</span>
                           {driver.current_order.delivery_address && (
                             <p className="text-muted-foreground truncate">
                               {driver.current_order.delivery_address}
