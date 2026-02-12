@@ -158,7 +158,7 @@ function LocationPicker({ position, setPosition, onClose, t }) {
 export default function CustomerMenu() {
   const { tenantId } = useParams();
   const [searchParams] = useSearchParams();
-  const { t, lang, isRTL, setLanguage } = useTranslation();
+  const { t, lang, isRTL, changeLanguage } = useTranslation();
   
   // App States
   const [step, setStep] = useState('branches'); // branches, menu, cart, checkout, tracking, history
@@ -1268,7 +1268,7 @@ export default function CustomerMenu() {
               {/* زر تغيير اللغة */}
               <div className="flex items-center gap-1 bg-white/20 rounded-full p-1">
                 <button
-                  onClick={() => setLanguage('ar')}
+                  onClick={() => changeLanguage('ar')}
                   className={`px-2 py-1 text-xs rounded-full transition-all ${
                     lang === 'ar' ? 'bg-white text-orange-600 font-bold' : 'text-white/80 hover:text-white'
                   }`}
@@ -1276,7 +1276,7 @@ export default function CustomerMenu() {
                   عر
                 </button>
                 <button
-                  onClick={() => setLanguage('en')}
+                  onClick={() => changeLanguage('en')}
                   className={`px-2 py-1 text-xs rounded-full transition-all ${
                     lang === 'en' ? 'bg-white text-orange-600 font-bold' : 'text-white/80 hover:text-white'
                   }`}

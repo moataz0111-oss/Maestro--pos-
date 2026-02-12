@@ -88,7 +88,7 @@ const animationStyles = {
 };
 
 export default function Login() {
-  const { t, isRTL, lang, setLanguage } = useTranslation();
+  const { t, isRTL, lang, changeLanguage } = useTranslation();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -668,7 +668,7 @@ export default function Login() {
               <div className="flex justify-center gap-2 pt-2">
                 <button
                   type="button"
-                  onClick={() => setLanguage('ar')}
+                  onClick={() => changeLanguage('ar')}
                   className={`px-3 py-1.5 text-sm rounded-lg transition-all ${
                     lang === 'ar' 
                       ? 'bg-primary text-black font-bold' 
@@ -679,7 +679,7 @@ export default function Login() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setLanguage('en')}
+                  onClick={() => changeLanguage('en')}
                   className={`px-3 py-1.5 text-sm rounded-lg transition-all ${
                     lang === 'en' 
                       ? 'bg-primary text-black font-bold' 
@@ -690,7 +690,7 @@ export default function Login() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setLanguage('ku')}
+                  onClick={() => changeLanguage('ku')}
                   className={`px-3 py-1.5 text-sm rounded-lg transition-all ${
                     lang === 'ku' 
                       ? 'bg-primary text-black font-bold' 

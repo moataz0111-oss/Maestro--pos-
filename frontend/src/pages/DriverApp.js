@@ -70,7 +70,7 @@ const MapUpdater = ({ center }) => {
 };
 
 export default function DriverApp() {
-  const { t, isRTL, lang, setLanguage } = useTranslation();
+  const { t, isRTL, lang, changeLanguage } = useTranslation();
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [driverPhone, setDriverPhone] = useState('');
   const [driverPin, setDriverPin] = useState('');
@@ -456,7 +456,7 @@ export default function DriverApp() {
             <div className="flex justify-center gap-2 pt-2 border-t mt-4">
               <button
                 type="button"
-                onClick={() => setLanguage('ar')}
+                onClick={() => changeLanguage('ar')}
                 className={`px-4 py-2 text-sm rounded-lg transition-all ${
                   lang === 'ar' 
                     ? 'bg-blue-500 text-white font-bold' 
@@ -467,7 +467,7 @@ export default function DriverApp() {
               </button>
               <button
                 type="button"
-                onClick={() => setLanguage('en')}
+                onClick={() => changeLanguage('en')}
                 className={`px-4 py-2 text-sm rounded-lg transition-all ${
                   lang === 'en' 
                     ? 'bg-blue-500 text-white font-bold' 
@@ -478,7 +478,7 @@ export default function DriverApp() {
               </button>
               <button
                 type="button"
-                onClick={() => setLanguage('ku')}
+                onClick={() => changeLanguage('ku')}
                 className={`px-4 py-2 text-sm rounded-lg transition-all ${
                   lang === 'ku' 
                     ? 'bg-blue-500 text-white font-bold' 
