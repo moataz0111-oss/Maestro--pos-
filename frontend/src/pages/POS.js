@@ -452,14 +452,14 @@ export default function POS() {
         setDeliveryAddress(customer.address || '');
         setCustomerHistory(res.data.orders || []);
         setShowCustomerInfo(true);
-        toast.success(`عميل موجود: ${customer.name}`, {
-          description: customer.address ? `العنوان: ${customer.address}` : 'لا يوجد عنوان محفوظ'
+        toast.success(`${t('عميل موجود')}: ${customer.name}`, {
+          description: customer.address ? `${t('العنوان')}: ${customer.address}` : t('لا يوجد عنوان محفوظ')
         });
       } else {
         // عميل جديد
         setCustomerData(null);
         setShowCustomerInfo(false);
-        toast.info('عميل جديد - يمكنك إضافة بياناته');
+        toast.info(t('عميل جديد - يمكنك إضافة بياناته'));
       }
     } catch (error) {
       console.error('Error searching customer:', error);
@@ -471,7 +471,7 @@ export default function POS() {
   // البحث عن عميل بالهاتف (يدوي)
   const handleSearchCustomer = async () => {
     if (!customerSearchPhone || customerSearchPhone.length < 4) {
-      toast.error('أدخل رقم هاتف صحيح');
+      toast.error(t('أدخل رقم هاتف صحيح'));
       return;
     }
     
@@ -485,16 +485,16 @@ export default function POS() {
         setDeliveryAddress(customer.address || '');
         setCustomerHistory(res.data.orders || []);
         setShowCustomerInfo(true);
-        toast.success(`تم العثور على العميل: ${customer.name}`);
+        toast.success(`${t('تم العثور على العميل')}: ${customer.name}`);
       } else {
-        toast.info('عميل جديد - يمكنك إضافة بياناته');
+        toast.info(t('عميل جديد - يمكنك إضافة بياناته'));
         setCustomerPhone(customerSearchPhone);
         setCustomerData(null);
         setShowCustomerInfo(false);
       }
     } catch (error) {
       console.error('Error searching customer:', error);
-      toast.error('فشل في البحث عن العميل');
+      toast.error(t('فشل في البحث عن العميل'));
       setCustomerPhone(customerSearchPhone);
       setCustomerData(null);
     }
