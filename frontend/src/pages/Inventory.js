@@ -485,7 +485,7 @@ export default function Inventory() {
                 <Package className="h-6 w-6 text-primary" />
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">إجمالي الأصناف</p>
+                <p className="text-sm text-muted-foreground">{t('إجمالي الأصناف')}</p>
                 <p className="text-2xl font-bold text-foreground">{items.length}</p>
               </div>
             </CardContent>
@@ -496,7 +496,7 @@ export default function Inventory() {
                 <AlertTriangle className="h-6 w-6 text-destructive" />
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">نقص المخزون</p>
+                <p className="text-sm text-muted-foreground">{t('نقص المخزون')}</p>
                 <p className="text-2xl font-bold text-foreground">{lowStockItems.length}</p>
               </div>
             </CardContent>
@@ -507,7 +507,7 @@ export default function Inventory() {
                 <span className="text-lg font-bold text-green-500">د.ع</span>
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">قيمة المخزون</p>
+                <p className="text-sm text-muted-foreground">{t('قيمة المخزون')}</p>
                 <p className="text-2xl font-bold text-foreground tabular-nums">{formatPrice(totalValue, false)}</p>
               </div>
             </CardContent>
@@ -518,14 +518,14 @@ export default function Inventory() {
         <div className="flex flex-wrap items-center gap-4 mb-6">
           <Tabs value={itemType} onValueChange={setItemType} className="flex-1">
             <TabsList>
-              <TabsTrigger value="raw">المواد الخام</TabsTrigger>
-              <TabsTrigger value="finished">المنتجات النهائية</TabsTrigger>
+              <TabsTrigger value="raw">{t('المواد الخام')}</TabsTrigger>
+              <TabsTrigger value="finished">{t('المنتجات النهائية')}</TabsTrigger>
             </TabsList>
           </Tabs>
           <div className="relative w-64">
             <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="بحث..."
+              placeholder={t('بحث...')}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="pr-10"
@@ -540,7 +540,7 @@ export default function Inventory() {
             <CardContent className="p-4">
               <div className="flex items-center gap-2 text-destructive mb-2">
                 <AlertTriangle className="h-5 w-5" />
-                <span className="font-bold">تنبيه نقص المخزون</span>
+                <span className="font-bold">{t('تنبيه نقص المخزون')}</span>
               </div>
               <div className="flex flex-wrap gap-2">
                 {lowStockItems.map(item => (
@@ -572,7 +572,7 @@ export default function Inventory() {
                       ? 'bg-destructive/10 text-destructive' 
                       : 'bg-green-500/10 text-green-500'
                   }`}>
-                    {item.quantity <= item.min_quantity ? 'نقص' : 'متوفر'}
+                    {item.quantity <= item.min_quantity ? t('نقص') : t('متوفر')}
                   </span>
                 </div>
 
