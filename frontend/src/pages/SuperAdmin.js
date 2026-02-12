@@ -805,35 +805,35 @@ export default function SuperAdmin() {
       await axios.post(`${API}/super-admin/tenants/${selectedTenant.id}/reset-password`, null, {
         params: { new_password: newPassword }
       });
-      toast.success('تم إعادة تعيين كلمة المرور');
+      toast.success(t('تم إعادة تعيين كلمة المرور'));
       setShowResetPassword(false);
       setNewPassword('');
     } catch (error) {
-      toast.error('فشل في إعادة تعيين كلمة المرور');
+      toast.error(t('فشل في إعادة تعيين كلمة المرور'));
     }
   };
 
   const resetTenantSales = async () => {
     try {
       await axios.post(`${API}/super-admin/tenants/${selectedTenant.id}/reset-sales?confirm=true`);
-      toast.success('تم تصفير المبيعات بنجاح');
+      toast.success(t('تم تصفير المبيعات بنجاح'));
       setShowResetSalesConfirm(false);
       setSelectedTenant(null);
       fetchData();
     } catch (error) {
-      toast.error('فشل في تصفير المبيعات');
+      toast.error(t('فشل في تصفير المبيعات'));
     }
   };
 
   const resetTenantInventory = async () => {
     try {
       await axios.post(`${API}/super-admin/tenants/${selectedTenant.id}/reset-inventory?confirm=true`);
-      toast.success('تم تصفير بيانات المخزون بنجاح');
+      toast.success(t('تم تصفير بيانات المخزون بنجاح'));
       setShowResetInventoryConfirm(false);
       setSelectedTenant(null);
       fetchData();
     } catch (error) {
-      toast.error('فشل في تصفير المخزون: ' + (error.response?.data?.detail || error.message));
+      toast.error(t('فشل في تصفير المخزون') + ': ' + (error.response?.data?.detail || error.message));
     }
   };
 
@@ -895,9 +895,9 @@ export default function SuperAdmin() {
       await axios.put(`${API}/super-admin/tenants/${selectedTenant.id}`, updateData);
       
       if (editTenantForm.send_welcome_email) {
-        toast.success('تم تحديث البيانات وإرسال البريد الإلكتروني');
+        toast.success(t('تم تحديث البيانات وإرسال البريد الإلكتروني'));
       } else {
-        toast.success('تم تحديث بيانات العميل بنجاح');
+        toast.success(t('تم تحديث بيانات العميل بنجاح'));
       }
       
       setShowEditTenant(false);
@@ -905,7 +905,7 @@ export default function SuperAdmin() {
       setLogoPreviewUrl('');
       fetchData();
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'فشل في تحديث البيانات');
+      toast.error(error.response?.data?.detail || t('فشل في تحديث البيانات'));
     } finally {
       setLoading(false);
     }
@@ -913,7 +913,7 @@ export default function SuperAdmin() {
 
   const copyToClipboard = (text) => {
     navigator.clipboard.writeText(text);
-    toast.success('تم النسخ');
+    toast.success(t('تم النسخ'));
   };
 
   // ==================== Invoice Settings Functions ====================
@@ -931,7 +931,7 @@ export default function SuperAdmin() {
     setLoading(true);
     try {
       await axios.put(`${API}/system/invoice-settings`, invoiceSettings);
-      toast.success('تم حفظ إعدادات الفاتورة بنجاح');
+      toast.success(t('تم حفظ إعدادات الفاتورة بنجاح'));
       setShowInvoiceSettings(false);
     } catch (error) {
       toast.error(error.response?.data?.detail || 'فشل في حفظ الإعدادات');
@@ -986,10 +986,10 @@ export default function SuperAdmin() {
           setNewBackgroundAnimation('fade');
           setSelectedBackgroundFile(null);
           setBackgroundPreviewUrl('');
-          toast.success('تم رفع الخلفية بنجاح');
+          toast.success(t('تم رفع الخلفية بنجاح'));
         } catch (error) {
           console.error('Upload background error:', error);
-          toast.error(error.response?.data?.detail || 'فشل في رفع الخلفية');
+          toast.error(error.response?.data?.detail || t('فشل في رفع الخلفية'));
         } finally {
           setBackgroundsLoading(false);
         }
@@ -999,7 +999,7 @@ export default function SuperAdmin() {
           const logoUrl = await uploadTenantLogo(file, selectedTenant.id);
           if (logoUrl) {
             setSelectedTenant({...selectedTenant, logo_url: logoUrl});
-            toast.success('تم رفع شعار العميل بنجاح');
+            toast.success(t('تم رفع شعار العميل بنجاح'));
           }
         }
         break;
@@ -1032,10 +1032,10 @@ export default function SuperAdmin() {
       setSystemBranding({...systemBranding, logo_url: logoUrl});
       setSystemLogoPreview('');
       setSystemLogoFile(null);
-      toast.success('تم رفع الشعار بنجاح');
+      toast.success(t('تم رفع الشعار بنجاح'));
     } catch (error) {
       console.error('Upload error:', error);
-      toast.error('فشل في رفع الشعار: ' + (error.response?.data?.detail || error.message));
+      toast.error(t('فشل في رفع الشعار') + ': ' + (error.response?.data?.detail || error.message));
     } finally {
       setUploadingSystemLogo(false);
     }
@@ -1056,7 +1056,7 @@ export default function SuperAdmin() {
     setLoading(true);
     try {
       await axios.put(`${API}/system/login-page-settings`, loginPageSettings);
-      toast.success('تم حفظ إعدادات صفحة الدخول بنجاح');
+      toast.success(t('تم حفظ إعدادات صفحة الدخول بنجاح'));
     } catch (error) {
       toast.error(error.response?.data?.detail || 'فشل في حفظ الإعدادات');
     } finally {
@@ -1098,7 +1098,7 @@ export default function SuperAdmin() {
   // تحديث إعدادات المالك
   const updateOwnerSettings = async () => {
     if (newOwnerPassword && newOwnerPassword !== confirmOwnerPassword) {
-      toast.error('كلمات المرور غير متطابقة');
+      toast.error(t('كلمات المرور غير متطابقة'));
       return;
     }
     
@@ -1113,7 +1113,7 @@ export default function SuperAdmin() {
       }
       
       if (Object.keys(updateData).length === 0) {
-        toast.info('لم يتم إجراء أي تغييرات');
+        toast.info(t('لم يتم إجراء أي تغييرات'));
         setSavingOwnerSettings(false);
         return;
       }
@@ -1122,13 +1122,13 @@ export default function SuperAdmin() {
         headers: { Authorization: `Bearer ${token}` }
       });
       
-      toast.success('تم تحديث إعدادات المالك بنجاح');
+      toast.success(t('تم تحديث إعدادات المالك بنجاح'));
       setNewOwnerPassword('');
       setConfirmOwnerPassword('');
       setNewOwnerSecretKey('');
     } catch (error) {
       console.error('Error updating owner settings:', error);
-      const errorMsg = error.response?.data?.detail || 'فشل في تحديث إعدادات المالك';
+      const errorMsg = error.response?.data?.detail || t('فشل في تحديث إعدادات المالك');
       toast.error(errorMsg);
     } finally {
       setSavingOwnerSettings(false);
@@ -1155,9 +1155,9 @@ export default function SuperAdmin() {
       
       setSystemBranding(prev => ({ ...prev, logo_url: logoUrl }));
       setSystemLogoFile(null);
-      toast.success('تم حفظ هوية النظام بنجاح');
+      toast.success(t('تم حفظ هوية النظام بنجاح'));
     } catch (error) {
-      toast.error('فشل في حفظ هوية النظام');
+      toast.error(t('فشل في حفظ هوية النظام'));
     } finally {
       setBrandingLoading(false);
     }
@@ -1180,7 +1180,7 @@ export default function SuperAdmin() {
       await axios.put(`${API}/login-backgrounds`, backgroundSettings);
       toast.success('تم حفظ إعدادات الخلفيات');
     } catch (error) {
-      toast.error('فشل في حفظ الإعدادات');
+      toast.error(t('فشل في حفظ الإعدادات'));
     } finally {
       setBackgroundsLoading(false);
     }
