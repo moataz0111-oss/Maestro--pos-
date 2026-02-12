@@ -707,15 +707,15 @@ export default function HR() {
               />
               <BranchSelector />
               
-              {/* زر تصدير التقرير */}
+              {/* زر طباعة التقرير */}
               <Button
                 variant="outline"
-                onClick={() => exportPayrollReport('excel')}
+                onClick={() => window.print()}
                 className="h-10"
-                title={t('تصدير تقرير الرواتب')}
+                title={t('طباعة تقرير الرواتب')}
               >
-                <FileSpreadsheet className="h-5 w-5 ml-2" />
-                {t('تصدير Excel')}
+                <Printer className="h-5 w-5 ml-2" />
+                {t('طباعة')}
               </Button>
               
               {/* زر الصفحة الرئيسية */}
