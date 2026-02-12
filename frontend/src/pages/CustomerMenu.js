@@ -454,7 +454,7 @@ export default function CustomerMenu() {
     customerData.address = suggestion.address;
     localStorage.setItem(`customer_${tenantId}`, JSON.stringify(customerData));
     
-    toast.success('تم اختيار العنوان');
+    toast.success(t('تم اختيار العنوان'));
   };
   // جلب سجل الطلبات السابقة
   const fetchOrderHistory = async () => {
