@@ -116,7 +116,7 @@
   },
   
   "test_credentials": {
-    "api_url": "https://restolingo.preview.emergentagent.com",
+    "api_url": "https://bilingual-resto-1.preview.emergentagent.com",
     "owner": {
       "email": "owner@maestroegp.com",
       "password": "owner123",

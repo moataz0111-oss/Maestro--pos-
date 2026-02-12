@@ -115,7 +115,7 @@
   },
   
   "test_credentials": {
-    "api_url": "https://restolingo.preview.emergentagent.com",
+    "api_url": "https://bilingual-resto-1.preview.emergentagent.com",
     "customer_admin_email": "ahmed@albait.com",
     "customer_admin_password": "123456",
     "super_admin_email": "owner@maestroegp.com",
