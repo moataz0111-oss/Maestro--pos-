@@ -1582,7 +1582,7 @@ export default function SuperAdmin() {
             </div>
             <CardTitle className="text-2xl text-white">Maestro EGP</CardTitle>
             <CardDescription className="text-gray-400">
-              {showRegister ? 'إنشاء حساب المالك' : 'لوحة تحكم المالك'}
+              {showRegister ? t('إنشاء حساب المالك') : t('لوحة تحكم المالك')}
             </CardDescription>
           </CardHeader>
           
@@ -1590,7 +1590,7 @@ export default function SuperAdmin() {
             {!showRegister ? (
               <form onSubmit={handleLogin} className="space-y-4">
                 <div className="space-y-2">
-                  <Label className="text-gray-300">البريد الإلكتروني</Label>
+                  <Label className="text-gray-300">{t('البريد الإلكتروني')}</Label>
                   <Input
                     type="email"
                     value={loginForm.email}
@@ -1602,7 +1602,7 @@ export default function SuperAdmin() {
                 </div>
                 
                 <div className="space-y-2">
-                  <Label className="text-gray-300">كلمة المرور</Label>
+                  <Label className="text-gray-300">{t('كلمة المرور')}</Label>
                   <Input
                     type="password"
                     value={loginForm.password}
@@ -1613,7 +1613,7 @@ export default function SuperAdmin() {
                 </div>
                 
                 <div className="space-y-2">
-                  <Label className="text-gray-300">مفتاح السر</Label>
+                  <Label className="text-gray-300">{t('مفتاح السر')}</Label>
                   <Input
                     type="password"
                     value={loginForm.secret_key}
@@ -1625,24 +1625,24 @@ export default function SuperAdmin() {
                 </div>
                 
                 <Button type="submit" className="w-full bg-purple-600 hover:bg-purple-700" disabled={loading}>
-                  {loading ? 'جاري الدخول...' : 'تسجيل الدخول'}
+                  {loading ? t('جاري الدخول...') : t('تسجيل الدخول')}
                 </Button>
                 
                 <p className="text-center text-sm text-gray-400">
-                  ليس لديك حساب؟{' '}
+                  {t('ليس لديك حساب؟')}{' '}
                   <button 
                     type="button"
                     onClick={() => setShowRegister(true)}
                     className="text-purple-400 hover:underline"
                   >
-                    إنشاء حساب
+                    {t('إنشاء حساب')}
                   </button>
                 </p>
               </form>
             ) : (
               <form onSubmit={handleRegister} className="space-y-4">
                 <div className="space-y-2">
-                  <Label className="text-gray-300">الاسم الكامل</Label>
+                  <Label className="text-gray-300">{t('الاسم الكامل')}</Label>
                   <Input
                     type="text"
                     value={registerForm.full_name}
@@ -1653,7 +1653,7 @@ export default function SuperAdmin() {
                 </div>
                 
                 <div className="space-y-2">
-                  <Label className="text-gray-300">البريد الإلكتروني</Label>
+                  <Label className="text-gray-300">{t('البريد الإلكتروني')}</Label>
                   <Input
                     type="email"
                     value={registerForm.email}
@@ -1664,7 +1664,7 @@ export default function SuperAdmin() {
                 </div>
                 
                 <div className="space-y-2">
-                  <Label className="text-gray-300">كلمة المرور</Label>
+                  <Label className="text-gray-300">{t('كلمة المرور')}</Label>
                   <Input
                     type="password"
                     value={registerForm.password}
@@ -1675,7 +1675,7 @@ export default function SuperAdmin() {
                 </div>
                 
                 <div className="space-y-2">
-                  <Label className="text-gray-300">مفتاح السر</Label>
+                  <Label className="text-gray-300">{t('مفتاح السر')}</Label>
                   <Input
                     type="password"
                     value={registerForm.secret_key}
