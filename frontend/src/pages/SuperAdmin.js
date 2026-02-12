@@ -2748,7 +2748,7 @@ export default function SuperAdmin() {
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>اسم المالك</Label>
+                <Label>{t('اسم المالك')}</Label>
                 <Input
                   value={editTenantForm.owner_name}
                   onChange={(e) => setEditTenantForm({...editTenantForm, owner_name: e.target.value})}
@@ -2756,7 +2756,7 @@ export default function SuperAdmin() {
                 />
               </div>
               <div className="space-y-2">
-                <Label>البريد الإلكتروني</Label>
+                <Label>{t('البريد الإلكتروني')}</Label>
                 <Input
                   value={editTenantForm.owner_email}
                   onChange={(e) => setEditTenantForm({...editTenantForm, owner_email: e.target.value})}
@@ -2767,7 +2767,7 @@ export default function SuperAdmin() {
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>رقم الهاتف</Label>
+                <Label>{t('رقم الهاتف')}</Label>
                 <Input
                   value={editTenantForm.owner_phone}
                   onChange={(e) => setEditTenantForm({...editTenantForm, owner_phone: e.target.value})}
@@ -2776,7 +2776,7 @@ export default function SuperAdmin() {
                 />
               </div>
               <div className="space-y-2">
-                <Label>الحد الأقصى للفروع</Label>
+                <Label>{t('الحد الأقصى للفروع')}</Label>
                 <Input
                   type="number"
                   value={editTenantForm.max_branches}
@@ -2788,11 +2788,11 @@ export default function SuperAdmin() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowEditTenant(false)} className="border-gray-600">
-              إلغاء
+              {t('إلغاء')}
             </Button>
             <Button onClick={updateTenant} className="bg-blue-600 hover:bg-blue-700">
               <Check className="h-4 w-4 ml-2" />
-              حفظ التعديلات
+              {t('حفظ التعديلات')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -2804,7 +2804,7 @@ export default function SuperAdmin() {
           <DialogHeader>
             <DialogTitle className="text-xl flex items-center gap-2">
               <Activity className="h-5 w-5 text-green-400" />
-              العرض المباشر - {selectedTenant?.name}
+              {t('العرض المباشر')} - {selectedTenant?.name}
             </DialogTitle>
           </DialogHeader>
           <div className="py-4 space-y-4">
@@ -2812,36 +2812,36 @@ export default function SuperAdmin() {
               <Card className="bg-gray-700/50 border-gray-600">
                 <CardContent className="p-4 text-center">
                   <p className="text-2xl font-bold text-green-400">{liveStats?.orders_today || 0}</p>
-                  <p className="text-sm text-gray-400">طلبات اليوم</p>
+                  <p className="text-sm text-gray-400">{t('طلبات اليوم')}</p>
                 </CardContent>
               </Card>
               <Card className="bg-gray-700/50 border-gray-600">
                 <CardContent className="p-4 text-center">
                   <p className="text-2xl font-bold text-blue-400">{liveStats?.sales_today?.toFixed(2) || '0.00'}</p>
-                  <p className="text-sm text-gray-400">مبيعات اليوم</p>
+                  <p className="text-sm text-gray-400">{t('مبيعات اليوم')}</p>
                 </CardContent>
               </Card>
               <Card className="bg-gray-700/50 border-gray-600">
                 <CardContent className="p-4 text-center">
                   <p className="text-2xl font-bold text-yellow-400">{liveStats?.active_orders || 0}</p>
-                  <p className="text-sm text-gray-400">طلبات نشطة</p>
+                  <p className="text-sm text-gray-400">{t('طلبات نشطة')}</p>
                 </CardContent>
               </Card>
               <Card className="bg-gray-700/50 border-gray-600">
                 <CardContent className="p-4 text-center">
                   <p className="text-2xl font-bold text-purple-400">{liveStats?.users_count || 0}</p>
-                  <p className="text-sm text-gray-400">المستخدمين</p>
+                  <p className="text-sm text-gray-400">{t('المستخدمين')}</p>
                 </CardContent>
               </Card>
             </div>
             <div className="text-center text-gray-400 text-sm">
               <RefreshCw className="inline h-4 w-4 ml-1 animate-spin" />
-              يتم التحديث تلقائياً كل 30 ثانية
+              {t('يتم التحديث تلقائياً كل 30 ثانية')}
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowLiveView(false)} className="border-gray-600">
-              إغلاق
+              {t('إغلاق')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -2854,7 +2854,7 @@ export default function SuperAdmin() {
             <div className="flex items-center justify-between">
               <DialogTitle className="text-xl flex items-center gap-2">
                 <Settings className="h-5 w-5 text-purple-400" />
-                صلاحيات الميزات - {selectedTenant?.name}
+                {t('صلاحيات الميزات')} - {selectedTenant?.name}
               </DialogTitle>
               <div className="flex items-center gap-2">
                 <Button 
@@ -2867,7 +2867,7 @@ export default function SuperAdmin() {
                   }}
                 >
                   <Check className="h-4 w-4" />
-                  تفعيل الكل
+                  {t('تفعيل الكل')}
                 </Button>
                 <Button 
                   size="sm" 
@@ -2880,7 +2880,7 @@ export default function SuperAdmin() {
                   }}
                 >
                   <X className="h-4 w-4" />
-                  تعطيل الكل
+                  {t('تعطيل الكل')}
                 </Button>
               </div>
             </div>
