@@ -354,7 +354,7 @@ export default function Delivery() {
       await axios.post(`${API}/orders/${orderToTransfer.id}/transfer-driver`, {
         new_driver_id: targetDriverId
       });
-      toast.success('تم تحويل الطلب للسائق الجديد');
+      toast.success(t('تم تحويل الطلب للسائق الجديد'));
       setTransferDriverDialogOpen(false);
       setOrderToTransfer(null);
       setTargetDriverId('');
@@ -363,7 +363,7 @@ export default function Delivery() {
         fetchDriverOrders(selectedDriver.id);
       }
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'فشل في تحويل الطلب');
+      toast.error(error.response?.data?.detail || t('فشل في تحويل الطلب'));
     }
   };
 
