@@ -4200,7 +4200,7 @@ export default function SuperAdmin() {
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() =>{t('setShowNotificationSettings(false)} className="border-gray-600">
+            <Button variant="outline" onClick={() => setShowNotificationSettings(false)} className="border-gray-600">
               {t('إلغاء')}</Button>
             <Button onClick={saveNotificationSettings} className="bg-purple-600 hover:bg-purple-700">
               <Check className="h-4 w-4 ml-2" />
