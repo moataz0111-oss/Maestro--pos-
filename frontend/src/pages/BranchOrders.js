@@ -302,8 +302,8 @@ export default function BranchOrders() {
                   <CardContent className="py-12 text-center text-muted-foreground">
                     <Truck className="h-12 w-12 mx-auto mb-4 opacity-50" />
                     <p>{t('لا توجد طلبات')}</p>
-                    <Button variant="link" onClick={() =>{t('setShowAddDialog(true)}>
-                      إنشاء طلب جديد')}</Button>
+                    <Button variant="link" onClick={() => setShowAddDialog(true)}>
+                      {t('إنشاء طلب جديد')}</Button>
                   </CardContent>
                 </Card>
               ) : (
@@ -313,7 +313,7 @@ export default function BranchOrders() {
                       <div className="flex items-start justify-between gap-4">
                         <div className="flex-1">
                           <div className="flex items-center gap-2 mb-2 flex-wrap">
-                            <span className="font-bold text-lg">{t('طلب #{order.order_number}')}</span>
+                            <span className="font-bold text-lg">{t('طلب')} #{order.order_number}</span>
                             <Badge className={getStatusColor(order.status)}>
                               {getStatusIcon(order.status)}
                               <span className="mr-1">{getStatusLabel(order.status)}</span>

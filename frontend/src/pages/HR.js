@@ -897,7 +897,7 @@ export default function HR() {
                           </div>
                         </div>
                         <div className="flex justify-end gap-2">
-                          <Button type="button" variant="outline" onClick={() => setEmployeeDialogOpen(false)}>{t('{t('إلغاء')}</Button>
+                          <Button type="button" variant="outline" onClick={() => setEmployeeDialogOpen(false)}>{t('إلغاء')}</Button>
                           <Button type="submit">{editingEmployee ? t('تحديث') : t('إضافة')}</Button>
                         </div>
                       </form>
