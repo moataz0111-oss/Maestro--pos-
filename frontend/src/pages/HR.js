@@ -257,12 +257,12 @@ export default function HR() {
         amount: parseFloat(advanceForm.amount),
         deduction_months: parseInt(advanceForm.deduction_months)
       }, { headers: { Authorization: `Bearer ${token}` } });
-      toast.success('تم تسجيل السلفة');
+      toast.success(t('تم تسجيل السلفة'));
       setAdvanceDialogOpen(false);
       setAdvanceForm({ employee_id: '', amount: '', reason: '', deduction_months: 1 });
       fetchData();
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'فشل في تسجيل السلفة');
+      toast.error(error.response?.data?.detail || t('فشل في تسجيل السلفة'));
     }
   };
 
@@ -277,12 +277,12 @@ export default function HR() {
         hours: deductionForm.hours ? parseFloat(deductionForm.hours) : null,
         days: deductionForm.days ? parseFloat(deductionForm.days) : null
       }, { headers: { Authorization: `Bearer ${token}` } });
-      toast.success('تم تسجيل الخصم');
+      toast.success(t('تم تسجيل الخصم'));
       setDeductionDialogOpen(false);
       setDeductionForm({ employee_id: '', deduction_type: 'absence', amount: '', hours: '', days: '', reason: '', date: new Date().toISOString().slice(0, 10) });
       fetchData();
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'فشل في تسجيل الخصم');
+      toast.error(error.response?.data?.detail || t('فشل في تسجيل الخصم'));
     }
   };
 
