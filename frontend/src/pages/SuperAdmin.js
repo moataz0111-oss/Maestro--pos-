@@ -3205,9 +3205,9 @@ export default function SuperAdmin() {
                             <span>{user.full_name || user.username}</span>
                           </div>
                           <Badge className="text-xs">
-                            {user.role === 'admin' ? 'مدير' : 
-                             user.role === 'manager' ? 'مشرف' : 
-                             user.role === 'cashier' ? 'كاشير' : user.role}
+                            {user.role === 'admin' ? t('مدير') : 
+                             user.role === 'manager' ? t('مشرف') : 
+                             user.role === 'cashier' ? t('كاشير') : user.role}
                           </Badge>
                         </div>
                       ))}
@@ -3220,7 +3220,7 @@ export default function SuperAdmin() {
                   <div className="space-y-4">
                     <h3 className="font-bold text-green-400 flex items-center gap-2 border-b border-gray-700 pb-2">
                       <Building2 className="h-4 w-4" />
-                      الفروع ({tenantDetails.branches.length})
+                      {t('الفروع')} ({tenantDetails.branches.length})
                     </h3>
                     <div className="grid grid-cols-2 gap-2">
                       {tenantDetails.branches.map((branch, idx) => (
@@ -3238,7 +3238,7 @@ export default function SuperAdmin() {
                   <div className="space-y-4">
                     <h3 className="font-bold text-purple-400 flex items-center gap-2 border-b border-gray-700 pb-2">
                       <ImageIcon className="h-4 w-4" />
-                      شعار المطعم
+                      {t('شعار المطعم')}
                     </h3>
                     <div className="flex justify-center">
                       <img 
@@ -3255,17 +3255,17 @@ export default function SuperAdmin() {
             ) : (
               <div className="text-center py-8">
                 <RefreshCw className="h-8 w-8 animate-spin mx-auto text-gray-400" />
-                <p className="text-gray-400 mt-2">جاري تحميل البيانات...</p>
+                <p className="text-gray-400 mt-2">{t('جاري تحميل البيانات...')}</p>
               </div>
             )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowTenantDetails(false)} className="border-gray-600">
-              إغلاق
+              {t('إغلاق')}
             </Button>
             <Button onClick={() => { setShowTenantDetails(false); openEditTenant(selectedTenant); }} className="bg-blue-600 hover:bg-blue-700">
               <Edit className="h-4 w-4 ml-2" />
-              تعديل البيانات
+              {t('تعديل البيانات')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -3277,10 +3277,10 @@ export default function SuperAdmin() {
           <DialogHeader>
             <DialogTitle className="text-xl flex items-center gap-2">
               <Settings className="h-5 w-5 text-purple-400" />
-              إعدادات النظام الرئيسي
+              {t('إعدادات النظام الرئيسي')}
             </DialogTitle>
             <DialogDescription className="text-gray-400">
-              تخصيص هوية النظام، إعدادات الفواتير، وصفحة الدخول
+              {t('تخصيص هوية النظام، إعدادات الفواتير، وصفحة الدخول')}
             </DialogDescription>
           </DialogHeader>
           
@@ -3288,19 +3288,19 @@ export default function SuperAdmin() {
             <TabsList className="grid w-full grid-cols-4 bg-gray-700/50">
               <TabsTrigger value="identity" className="data-[state=active]:bg-purple-600">
                 <Crown className="h-4 w-4 ml-2" />
-                هوية النظام
+                {t('هوية النظام')}
               </TabsTrigger>
               <TabsTrigger value="owner" className="data-[state=active]:bg-purple-600">
                 <User className="h-4 w-4 ml-2" />
-                إعدادات المالك
+                {t('إعدادات المالك')}
               </TabsTrigger>
               <TabsTrigger value="invoice" className="data-[state=active]:bg-purple-600">
                 <Receipt className="h-4 w-4 ml-2" />
-                إعدادات الفواتير
+                {t('إعدادات الفواتير')}
               </TabsTrigger>
               <TabsTrigger value="login" className="data-[state=active]:bg-purple-600">
                 <Palette className="h-4 w-4 ml-2" />
-                صفحة الدخول
+                {t('صفحة الدخول')}
               </TabsTrigger>
             </TabsList>
 
@@ -3309,13 +3309,13 @@ export default function SuperAdmin() {
               <div className="space-y-4">
                 <h3 className="font-bold text-purple-400 flex items-center gap-2 border-b border-gray-700 pb-2">
                   <Crown className="h-4 w-4" />
-                  هوية النظام الرئيسي
+                  {t('هوية النظام الرئيسي')}
                 </h3>
-                <p className="text-sm text-gray-400">التحكم في اسم النظام وهوية لوحة التحكم</p>
+                <p className="text-sm text-gray-400">{t('التحكم في اسم النظام وهوية لوحة التحكم')}</p>
                 
                 <div className="grid grid-cols-1 gap-4">
                   <div className="space-y-2">
-                    <Label className="text-gray-300">اسم النظام (يظهر في Dashboard)</Label>
+                    <Label className="text-gray-300">{t('اسم النظام (يظهر في Dashboard)')}</Label>
                     <Input
                       type="text"
                       placeholder="Maestro EGP"
@@ -3326,17 +3326,17 @@ export default function SuperAdmin() {
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label className="text-gray-300">الاسم بالعربي (اختياري)</Label>
+                      <Label className="text-gray-300">{t('الاسم بالعربي (اختياري)')}</Label>
                       <Input
                         type="text"
-                        placeholder="نظام إدارة المطاعم"
+                        placeholder={t('نظام إدارة المطاعم')}
                         value={invoiceSettings.system_name_ar || ''}
                         onChange={(e) => setInvoiceSettings({...invoiceSettings, system_name_ar: e.target.value})}
                         className="bg-gray-700/50 border-gray-600 text-white"
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label className="text-gray-300">الاسم بالإنجليزي (اختياري)</Label>
+                      <Label className="text-gray-300">{t('الاسم بالإنجليزي (اختياري)')}</Label>
                       <Input
                         type="text"
                         placeholder="Restaurant Management System"
