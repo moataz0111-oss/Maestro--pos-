@@ -585,10 +585,10 @@ export default function SuperAdmin() {
     try {
       if (tenant.is_active) {
         await axios.put(`${API}/super-admin/tenants/${tenant.id}/deactivate`);
-        toast.success('تم تعطيل العميل');
+        toast.success(t('تم تعطيل العميل'));
       } else {
         await axios.put(`${API}/super-admin/tenants/${tenant.id}/reactivate`);
-        toast.success('تم تفعيل العميل');
+        toast.success(t('تم تفعيل العميل'));
       }
       fetchData();
       fetchNotifications();
