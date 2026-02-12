@@ -454,14 +454,16 @@ export default function Coupons() {
                   </div>
                   <div className="bg-muted/30 rounded-lg p-3 mb-3">
                     {promo.promotion_type === 'buy_x_get_y' && (
-                      <p className="text-center font-medium text-foreground">{t('اشترِ {promo.buy_quantity} واحصل على {promo.get_quantity} 
-                        {promo.discount_percent === 100 ? ' مجاناً' : ` بخصم ${promo.discount_percent}%`}')}</p>
+                      <p className="text-center font-medium text-foreground">
+                        {t('اشترِ')} {promo.buy_quantity} {t('واحصل على')} {promo.get_quantity} 
+                        {promo.discount_percent === 100 ? t(' مجاناً') : ` ${t('بخصم')} ${promo.discount_percent}%`}
+                      </p>
                     )}
                     {promo.promotion_type === 'happy_hour' && (
                       <p className="text-center font-medium text-foreground">
-                        ساعة السعادة: {promo.start_time} - {promo.end_time}
+                        {t('ساعة السعادة')}: {promo.start_time} - {promo.end_time}
                         <br />
-                        خصم {promo.discount_percent}%
+                        {t('خصم')} {promo.discount_percent}%
                       </p>
                     )}
                     {promo.promotion_type === 'bundle' && (
