@@ -387,7 +387,7 @@ export default function CustomerMenu() {
           
           // تحويل الإحداثيات لعنوان تلقائياً
           await reverseGeocode(pos.coords.latitude, pos.coords.longitude);
-          toast.success('تم تحديد موقعك تلقائياً');
+          toast.success(t('تم تحديد موقعك تلقائياً'));
         },
         (error) => {
           console.log('Could not auto-detect location:', error.message);
