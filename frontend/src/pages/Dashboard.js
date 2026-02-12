@@ -1332,20 +1332,20 @@ export default function Dashboard() {
           {/* Recent Orders */}
           <Card className="border-border/50 bg-card">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-lg font-cairo text-foreground">آخر الطلبات</CardTitle>
+              <CardTitle className="text-lg font-cairo text-foreground">{t('آخر الطلبات')}</CardTitle>
               <Button 
                 variant="ghost" 
                 size="sm" 
                 onClick={() => navigate('/orders')}
                 className="text-primary"
               >
-                عرض الكل
+                {t('عرض الكل')}
                 <ChevronLeft className="h-4 w-4 mr-1" />
               </Button>
             </CardHeader>
             <CardContent>
               {recentOrders.length === 0 ? (
-                <p className="text-center text-muted-foreground py-8">لا توجد طلبات اليوم</p>
+                <p className="text-center text-muted-foreground py-8">{t('لا توجد طلبات اليوم')}</p>
               ) : (
                 <div className="space-y-3">
                   {recentOrders.map((order) => (
