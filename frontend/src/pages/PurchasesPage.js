@@ -499,9 +499,9 @@ export default function PurchasesPage() {
                     <Button 
                       variant="link" 
                       className="mt-2"
-                      onClick={() =>{t('setShowSupplierDialog(true)}
+                      onClick={() => setShowSupplierDialog(true)}
                     >
-                      إضافة مورد جديد')}</Button>
+                      {t('إضافة مورد جديد')}</Button>
                   </CardContent>
                 </Card>
               )}
@@ -530,7 +530,7 @@ export default function PurchasesPage() {
                         className="p-4 border rounded-lg hover:bg-muted/50 transition-colors"
                       >
                         <div className="flex items-center justify-between mb-2">
-                          <span className="font-bold">{t('طلب #{request.request_number}')}</span>
+                          <span className="font-bold">{t('طلب')} #{request.request_number}</span>
                           <Badge className={
                             request.status === 'pending' ? 'bg-yellow-500/20 text-yellow-500' :
                             request.status === 'approved' ? 'bg-blue-500/20 text-blue-500' :
