@@ -1084,7 +1084,7 @@ export default function WarehouseManufacturing() {
           </div>
           
           <DialogFooter>
-            <Button variant="outline" onClick={() =>{t('setShowTransferDialog(false)}>
+            <Button variant="outline" onClick={() => setShowTransferDialog(false)}>
               {t('إلغاء')}</Button>
             <Button 
               onClick={handleTransferToManufacturing}
