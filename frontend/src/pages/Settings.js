@@ -3896,7 +3896,7 @@ export default function Settings() {
                                 onClick={() => handleToggleDeliveryApp(app)}
                                 className={app.is_active !== false ? 'text-green-500' : 'text-red-500'}
                               >
-                                {app.is_active !== false ? 'مفعل' : 'معطل'}
+                                {app.is_active !== false ? t('مفعل') : t('معطل')}
                               </Button>
                               <Button
                                 variant="ghost"
