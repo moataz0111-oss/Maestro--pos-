@@ -5105,7 +5105,7 @@ export default function Settings() {
                       <div className="mt-4 bg-white text-black p-6 rounded-lg shadow-lg max-w-sm mx-auto" style={{fontFamily: 'monospace'}}>
                         {/* أعلى الفاتورة - معلومات المطعم */}
                         <div className="text-center border-b border-dashed border-gray-400 pb-3 mb-3">
-                          <h2 className="text-lg font-bold">{restaurantSettings.name || restaurantSettings.name_ar || 'اسم المطعم'}</h2>
+                          <h2 className="text-lg font-bold">{restaurantSettings.name || restaurantSettings.name_ar || t('اسم المطعم')}</h2>
                           {invoiceSettings.address && (
                             <p className="text-xs text-gray-600">{invoiceSettings.address}</p>
                           )}
