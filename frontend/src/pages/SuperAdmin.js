@@ -1541,13 +1541,13 @@ export default function SuperAdmin() {
       premium: 'bg-purple-500/20 text-purple-400'
     };
     const labels = { 
-      trial: 'تجريبي', 
-      demo: 'عرض',
-      bronze: '🥉 برونزية', 
-      silver: '🥈 فضية', 
-      gold: '🥇 ذهبية',
-      basic: 'أساسي', 
-      premium: 'مميز' 
+      trial: t('تجريبي'), 
+      demo: t('عرض'),
+      bronze: '🥉 ' + t('برونزية'), 
+      silver: '🥈 ' + t('فضية'), 
+      gold: '🥇 ' + t('ذهبية'),
+      basic: t('أساسي'), 
+      premium: t('مميز') 
     };
     return <Badge className={styles[type] || 'bg-gray-500/20 text-gray-400'}>{labels[type] || type}</Badge>;
   };
@@ -1561,11 +1561,11 @@ export default function SuperAdmin() {
       cancelled: 'bg-red-500/20 text-red-400'
     };
     const labels = {
-      pending: 'قيد الانتظار',
-      preparing: 'قيد التحضير',
-      ready: 'جاهز',
-      delivered: 'تم التسليم',
-      cancelled: 'ملغي'
+      pending: t('قيد الانتظار'),
+      preparing: t('قيد التحضير'),
+      ready: t('جاهز'),
+      delivered: t('تم التسليم'),
+      cancelled: t('ملغي')
     };
     return <Badge className={styles[status]}>{labels[status] || status}</Badge>;
   };
