@@ -2686,7 +2686,7 @@ export default function Settings() {
                           <span className={`text-xs px-2 py-1 rounded-full ${
                             branch.is_active !== false ? 'bg-green-500/10 text-green-500' : 'bg-red-500/10 text-red-500'
                           }`}>
-                            {branch.is_active !== false ? 'نشط' : 'معطل'}
+                            {branch.is_active !== false ? t('نشط') : t('معطل')}
                           </span>
                           <Button
                             variant="ghost"
