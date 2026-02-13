@@ -1782,7 +1782,7 @@ export default function SuperAdmin() {
             <Key className="h-4 w-4 text-gray-400" />
           </Button>
           {/* تفعيل/تعطيل */}
-          <Button variant="ghost" size="icon" onClick={() => toggleTenantStatus(tenant)} className="hover:bg-gray-600" title={tenant.is_active ? 'تعطيل' : 'تفعيل'}>
+          <Button variant="ghost" size="icon" onClick={() => toggleTenantStatus(tenant)} className="hover:bg-gray-600" title={tenant.is_active ? t('تعطيل') : t('تفعيل')}>
             {tenant.is_active ? <Power className="h-4 w-4 text-green-400" /> : <PowerOff className="h-4 w-4 text-red-400" />}
           </Button>
           {/* تصفير المبيعات */}
