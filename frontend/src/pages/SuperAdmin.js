@@ -4204,7 +4204,7 @@ export default function SuperAdmin() {
               {t('إلغاء')}</Button>
             <Button onClick={saveNotificationSettings} className="bg-purple-600 hover:bg-purple-700">
               <Check className="h-4 w-4 ml-2" />
-              حفظ الإعدادات
+              {t('حفظ الإعدادات')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -4216,7 +4216,7 @@ export default function SuperAdmin() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <DollarSign className="h-5 w-5 text-green-400" />
-              أسعار الاشتراكات (بالدولار)
+              {t('أسعار الاشتراكات')} ({t('بالدولار')})
             </DialogTitle>
           </DialogHeader>
           
