@@ -3501,12 +3501,12 @@ export default function SuperAdmin() {
                   {savingOwnerSettings ? (
                     <>
                       <Loader2 className="h-4 w-4 ml-2 animate-spin" />
-                      جاري الحفظ...
+                      {t('جاري الحفظ')}...
                     </>
                   ) : (
                     <>
                       <Save className="h-4 w-4 ml-2" />
-                      حفظ إعدادات المالك
+                      {t('حفظ إعدادات المالك')}
                     </>
                   )}
                 </Button>
@@ -3516,7 +3516,7 @@ export default function SuperAdmin() {
               <div className="space-y-4 mt-6 pt-6 border-t border-gray-700">
                 <h3 className="font-bold text-green-400 flex items-center gap-2 border-b border-gray-700 pb-2">
                   <DollarSign className="h-4 w-4" />
-                  إعدادات عرض المبيعات
+                  {t('إعدادات عرض المبيعات')}
                 </h3>
                 <p className="text-sm text-gray-400">{t('تحديد العملة التي تريد عرض المبيعات بها (سيتم تحويل جميع العملات تلقائياً)')}</p>
                 
@@ -3534,11 +3534,11 @@ export default function SuperAdmin() {
                       }}
                       className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white"
                     >
-                      <option value="IQD">🇮🇶 دينار عراقي (د.ع)</option>
-                      <option value="USD">🇺🇸 دولار أمريكي ($)</option>
-                      <option value="SAR">🇸🇦 ريال سعودي (ر.س)</option>
-                      <option value="AED">🇦🇪 درهم إماراتي (د.إ)</option>
-                      <option value="EGP">🇪🇬 جنيه مصري (ج.م)</option>
+                      <option value="IQD">🇮🇶 {t('دينار عراقي')} (IQD)</option>
+                      <option value="USD">🇺🇸 {t('دولار أمريكي')} ($)</option>
+                      <option value="SAR">🇸🇦 {t('ريال سعودي')} (SAR)</option>
+                      <option value="AED">🇦🇪 {t('درهم إماراتي')} (AED)</option>
+                      <option value="EGP">🇪🇬 {t('جنيه مصري')} (EGP)</option>
                     </select>
                     <p className="text-xs text-gray-500 mt-2">{t('جميع المبيعات ستُعرض بهذه العملة')}</p>
                   </div>
