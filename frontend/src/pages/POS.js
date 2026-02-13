@@ -2063,7 +2063,7 @@ export default function POS() {
                      refundOrderInfo.order_type === 'takeaway' ? t('سفري') : t('توصيل')}
                   </div>
                   <div className="text-muted-foreground">{t('المبلغ')}:</div>
-                  <div className="font-medium text-primary">{(refundOrderInfo.total || 0).toLocaleString()} د.ع</div>
+                  <div className="font-medium text-primary">{(refundOrderInfo.total || 0).toLocaleString('en-US')} IQD</div>
                   <div className="text-muted-foreground">{t('تاريخ الطلب')}:</div>
                   <div className={`font-medium ${refundOrderInfo.is_today ? 'text-green-500' : 'text-orange-500'}`}>
                     {refundOrderInfo.order_date} {refundOrderInfo.is_today ? `(${t('اليوم')})` : `(${t('يوم سابق')})`}
