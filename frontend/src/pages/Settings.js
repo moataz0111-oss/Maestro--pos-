@@ -2152,7 +2152,7 @@ export default function Settings() {
                                     u.role === 'cashier' ? 'bg-green-500/20 text-green-400' :
                                     'bg-gray-500/20 text-gray-400'
                                   }`}>
-                                    {u.role === 'admin' ? 'مدير عام' : u.role === 'manager' ? 'مدير' : u.role === 'cashier' ? 'كاشير' : u.role === 'waiter' ? 'ويتر' : u.role === 'kitchen' ? 'مطبخ' : u.role}
+                                    {u.role === 'admin' ? t('مدير عام') : u.role === 'manager' ? t('مدير') : u.role === 'cashier' ? t('كاشير') : u.role === 'waiter' ? t('ويتر') : u.role === 'kitchen' ? t('مطبخ') : u.role}
                                   </span>
                                 </TableCell>
                                 <TableCell>{branches.find(b => b.id === u.branch_id)?.name || '-'}</TableCell>
