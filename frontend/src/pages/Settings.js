@@ -2389,7 +2389,7 @@ export default function Settings() {
                                 <TableCell>{branches.find(b => b.id === staff.branch_id)?.name || '-'}</TableCell>
                                 <TableCell>
                                   <span className={`px-2 py-1 rounded-full text-xs ${staff.is_active !== false ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
-                                    {staff.is_active !== false ? 'نشط' : 'معطل'}
+                                    {staff.is_active !== false ? t('نشط') : t('معطل')}
                                   </span>
                                 </TableCell>
                                 <TableCell>
