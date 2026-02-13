@@ -3601,9 +3601,9 @@ export default function Settings() {
                               {/* عرض صلاحيات الطباعة */}
                               <div className="flex flex-wrap gap-1 mt-1">
                                 <span className="text-xs text-muted-foreground">
-                                  {printer.print_mode === 'full_receipt' ? '📄 فاتورة كاملة' : 
-                                   printer.print_mode === 'orders_only' ? '📋 طلبات فقط' : 
-                                   printer.print_mode === 'selected_products' ? '🎯 منتجات محددة' : '📄 فاتورة'}
+                                  {printer.print_mode === 'full_receipt' ? `📄 ${t('فاتورة كاملة')}` : 
+                                   printer.print_mode === 'orders_only' ? `📋 ${t('طلبات فقط')}` : 
+                                   printer.print_mode === 'selected_products' ? `🎯 ${t('منتجات محددة')}` : `📄 ${t('فاتورة')}`}
                                 </span>
                                 {!printer.show_prices && <span className="text-xs text-orange-400">{t('• بدون أسعار')}</span>}
                                 {printer.print_individual_items && <span className="text-xs text-purple-400">{t('• جميع الطلبات')}</span>}
