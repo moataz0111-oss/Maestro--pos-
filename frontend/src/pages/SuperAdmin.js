@@ -3356,7 +3356,7 @@ export default function SuperAdmin() {
                 <div className="space-y-4 mt-6">
                   <h4 className="font-medium text-green-400 flex items-center gap-2">
                     <ImageIcon className="h-4 w-4" />
-                    شعار النظام
+                    {t('شعار النظام')}
                   </h4>
                   <div className="flex items-center gap-4">
                     <div className="w-32 h-32 bg-gray-700/50 rounded-lg flex items-center justify-center border-2 border-dashed border-gray-600">
@@ -3407,22 +3407,22 @@ export default function SuperAdmin() {
                             {uploadingSystemLogo ? (
                               <>
                                 <Loader2 className="h-4 w-4 ml-2 animate-spin" />
-                                جاري الرفع...
+                                {t('جاري الرفع')}...
                               </>
                             ) : (
                               <>
                                 <Upload className="h-4 w-4 ml-2" />
-                                رفع مباشر
+                                {t('رفع مباشر')}
                               </>
                             )}
                           </Button>
                           <Button 
                             variant="default" 
                             className="bg-blue-600 hover:bg-blue-700"
-                            onClick={() => openImageCropper('system', 1, 'قص شعار النظام')}
+                            onClick={() => openImageCropper('system', 1, t('قص شعار النظام'))}
                           >
                             <Crop className="h-4 w-4 ml-2" />
-                            قص وتعديل
+                            {t('قص وتعديل')}
                           </Button>
                         </div>
                       </div>
@@ -3438,7 +3438,7 @@ export default function SuperAdmin() {
               <div className="space-y-4">
                 <h3 className="font-bold text-blue-400 flex items-center gap-2 border-b border-gray-700 pb-2">
                   <User className="h-4 w-4" />
-                  بيانات المالك (Super Admin)
+                  {t('بيانات المالك')} (Super Admin)
                 </h3>
                 <p className="text-sm text-gray-400">{t('تغيير بيانات تسجيل الدخول للمالك')}</p>
                 
