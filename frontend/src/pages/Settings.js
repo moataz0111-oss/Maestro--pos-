@@ -605,7 +605,8 @@ export default function Settings() {
       
       // حفظ في localStorage للاستخدام في كل النظام
       if (settings.currency) localStorage.setItem('app_currency', settings.currency);
-      if (settings.language) localStorage.setItem('app_language', settings.language);
+      // لا نكتب فوق اختيار اللغة من localStorage - المستخدم يختار اللغة بنفسه
+      // if (settings.language) localStorage.setItem('app_language', settings.language);
       if (settings.country) localStorage.setItem('app_country', settings.country);
     } catch (error) {
       console.error('Failed to fetch regional settings:', error);
