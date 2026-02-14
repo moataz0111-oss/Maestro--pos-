@@ -103,7 +103,7 @@
   },
   
   "test_credentials": {
-    "api_url": "https://language-pos.preview.emergentagent.com",
+    "api_url": "https://trilingual-pos.preview.emergentagent.com",
     "customer_menu_url": "/menu/default"
   },
   

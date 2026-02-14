@@ -132,7 +132,7 @@
   },
   
   "test_credentials": {
-    "api_url": "https://language-pos.preview.emergentagent.com",
+    "api_url": "https://trilingual-pos.preview.emergentagent.com",
     "owner": {
       "email": "owner@maestroegp.com",
       "password": "owner123",
