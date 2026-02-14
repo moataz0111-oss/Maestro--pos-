@@ -41,7 +41,6 @@ import {
 
 const API = API_URL;
 
-// أقسام الطاولات الافتراضية
 const DEFAULT_SECTIONS = [
   'داخلي',
   'خارجي',
@@ -201,9 +200,9 @@ export default function Tables() {
 
   const getStatusText = (status) => {
     const texts = {
-      available: 'متاحة',
-      occupied: 'مشغولة',
-      reserved: 'محجوزة',
+      available: t('متاحة'),
+      occupied: t('مشغولة'),
+      reserved: t('محجوزة'),
     };
     return texts[status] || status;
   };
@@ -258,12 +257,12 @@ export default function Tables() {
                 <DialogTrigger asChild>
                   <Button className="bg-primary text-primary-foreground" data-testid="add-table-btn">
                     <Plus className="h-4 w-4 ml-2" />
-                    إضافة طاولة
+                    {t('إضافة طاولة')}
                   </Button>
                 </DialogTrigger>
                 <DialogContent>
                   <DialogHeader>
-                    <DialogTitle className="text-foreground">{editingTable ? 'تعديل الطاولة' : 'إضافة طاولة جديدة'}</DialogTitle>
+                    <DialogTitle className="text-foreground">{editingTable ? t('تعديل الطاولة') : t('إضافة طاولة جديدة')}</DialogTitle>
                   </DialogHeader>
                   <form onSubmit={handleSubmit} className="space-y-4">
                     <div>
@@ -388,7 +387,7 @@ export default function Tables() {
                     <h3 className="text-2xl font-bold font-cairo text-foreground">{table.number}</h3>
                     <p className="text-sm text-muted-foreground mb-2">
                       <Users className="h-4 w-4 inline ml-1" />
-                      {table.capacity} أشخاص
+                      {table.capacity} {t('أشخاص')}
                     </p>
                     <span className={`text-xs px-2 py-1 rounded-full ${
                       table.status === 'available' ? 'bg-green-500/10 text-green-500' :
@@ -404,7 +403,7 @@ export default function Tables() {
                         className="w-full mt-3 bg-primary text-primary-foreground"
                         onClick={(e) => { e.stopPropagation(); navigate(`/pos?table=${table.id}`); }}
                       >
-                        فتح طلب
+                        {t('فتح طلب')}
                       </Button>
                     )}
                     
@@ -424,7 +423,7 @@ export default function Tables() {
                           }}
                           data-testid={`continue-order-${table.id}`}
                         >
-                          متابعة الطلب
+                          {t('متابعة الطلب')}
                         </Button>
                         <Button
                           size="sm"
@@ -434,7 +433,7 @@ export default function Tables() {
                           data-testid={`transfer-table-${table.id}`}
                         >
                           <ArrowLeftRight className="h-4 w-4 ml-1" />
-                          تحويل الطلب
+                          {t('تحويل الطلب')}
                         </Button>
                         <Button
                           size="sm"
@@ -443,7 +442,7 @@ export default function Tables() {
                           onClick={(e) => { e.stopPropagation(); updateTableStatus(table.id, 'available'); }}
                           data-testid={`free-table-${table.id}`}
                         >
-                          تحرير الطاولة
+                          {t('تحرير الطاولة')}
                         </Button>
                       </div>
                     )}
@@ -455,7 +454,7 @@ export default function Tables() {
                         className="w-full mt-3"
                         onClick={(e) => { e.stopPropagation(); updateTableStatus(table.id, 'available'); }}
                       >
-                        إلغاء الحجز
+                        {t('إلغاء الحجز')}
                       </Button>
                     )}
                     
@@ -469,7 +468,7 @@ export default function Tables() {
                         data-testid={`delete-table-${table.id}`}
                       >
                         <Trash2 className="h-4 w-4 ml-1" />
-                        حذف
+                        {t('حذف')}
                       </Button>
                     )}
                   </CardContent>
@@ -487,7 +486,7 @@ export default function Tables() {
               {(hasRole(['admin', 'manager']) || hasPermission('tables')) && (
                 <Button className="mt-4 bg-primary text-primary-foreground" onClick={() => setDialogOpen(true)}>
                   <Plus className="h-4 w-4 ml-2" />
-                  إضافة طاولة
+                  {t('إضافة طاولة')}
                 </Button>
               )}
             </CardContent>
@@ -501,7 +500,7 @@ export default function Tables() {
           <DialogHeader>
             <DialogTitle className="text-foreground flex items-center gap-2">
               <ArrowLeftRight className="h-5 w-5" />
-              تحويل الطلب إلى طاولة أخرى
+              {t('تحويل الطلب إلى طاولة أخرى')}
             </DialogTitle>
           </DialogHeader>
           
@@ -509,7 +508,7 @@ export default function Tables() {
             {selectedTableForTransfer && (
               <div className="bg-muted/50 p-3 rounded-lg">
                 <p className="text-sm text-muted-foreground">{t('من الطاولة:')}</p>
-                <p className="font-bold text-lg text-foreground">{t('طاولة رقم {selectedTableForTransfer.number}')}</p>
+                <p className="font-bold text-lg text-foreground">{t('طاولة رقم')} {selectedTableForTransfer.number}</p>
               </div>
             )}
             
@@ -546,7 +545,7 @@ export default function Tables() {
               className="flex-1 bg-amber-500 text-white hover:bg-amber-600"
             >
               <MoveRight className="h-4 w-4 ml-2" />
-              تحويل
+              {t('تحويل')}
             </Button>
           </div>
         </DialogContent>
@@ -558,15 +557,15 @@ export default function Tables() {
           <DialogHeader>
             <DialogTitle className="text-foreground flex items-center gap-2 text-red-500">
               <Trash2 className="h-5 w-5" />
-              تأكيد حذف الطاولة
+              {t('تأكيد حذف الطاولة')}
             </DialogTitle>
           </DialogHeader>
           
           <div className="py-4">
             {tableToDelete && (
               <div className="bg-red-500/10 p-4 rounded-lg text-center">
-                <p className="text-lg font-bold text-foreground">{t('طاولة رقم {tableToDelete.number}')}</p>
-                <p className="text-sm text-muted-foreground">{tableToDelete.section || 'عام'} - {tableToDelete.capacity} أشخاص</p>
+                <p className="text-lg font-bold text-foreground">{t('طاولة رقم')} {tableToDelete.number}</p>
+                <p className="text-sm text-muted-foreground">{tableToDelete.section || t('عام')} - {tableToDelete.capacity} {t('أشخاص')}</p>
                 <p className="text-sm text-red-500 mt-3">{t('⚠️ سيتم حذف هذه الطاولة نهائياً')}</p>
               </div>
             )}
@@ -578,14 +577,14 @@ export default function Tables() {
               onClick={() => { setDeleteConfirmOpen(false); setTableToDelete(null); }}
               className="flex-1"
             >
-              إلغاء
+              {t('إلغاء')}
             </Button>
             <Button 
               onClick={handleDeleteTable}
               className="flex-1 bg-red-500 text-white hover:bg-red-600"
             >
               <Trash2 className="h-4 w-4 ml-2" />
-              حذف نهائياً
+              {t('حذف نهائياً')}
             </Button>
           </div>
         </DialogContent>
