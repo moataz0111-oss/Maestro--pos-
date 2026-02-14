@@ -239,20 +239,20 @@ export default function BiometricDevices({ branches = [] }) {
 
                 <div className="space-y-2 text-sm mb-4">
                   <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground">الفرع:</span>
+                    <span className="text-muted-foreground">{t('الفرع')}:</span>
                     <span className="text-foreground">{getBranchName(device.branch_id)}</span>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground">نوع الجهاز:</span>
+                    <span className="text-muted-foreground">{t('نوع الجهاز')}:</span>
                     <span className="text-foreground">
-                      {device.device_type === 'fingerprint' ? 'بصمة' : 
-                       device.device_type === 'face' ? 'وجه' : 'بطاقة'}
+                      {device.device_type === 'fingerprint' ? t('بصمة') : 
+                       device.device_type === 'face' ? t('وجه') : t('بطاقة')}
                     </span>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground">آخر مزامنة:</span>
+                    <span className="text-muted-foreground">{t('آخر مزامنة')}:</span>
                     <span className="text-foreground">
-                      {device.last_sync ? new Date(device.last_sync).toLocaleDateString('ar-IQ') : 'لم تتم'}
+                      {device.last_sync ? new Date(device.last_sync).toLocaleDateString('en-US') : t('لم تتم')}
                     </span>
                   </div>
                 </div>
