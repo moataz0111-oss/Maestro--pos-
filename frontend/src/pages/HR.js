@@ -1260,7 +1260,7 @@ export default function HR() {
           <TabsContent value="deductions">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between">
-                <CardTitle>{t('الخصومات - {selectedMonth}')}</CardTitle>
+                <CardTitle>{t('الخصومات')} - {selectedMonth}</CardTitle>
                 <Dialog open={deductionDialogOpen} onOpenChange={setDeductionDialogOpen}>
                   <DialogTrigger asChild>
                     <Button variant="destructive"><Plus className="h-4 w-4 ml-2" /> {t('خصم جديد')}</Button>
