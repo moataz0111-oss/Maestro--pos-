@@ -261,7 +261,7 @@ export default function IncomingCallPopup() {
                   </div>
                   <div>
                     <h3 className="text-lg font-bold text-white">
-                      {call.status === 'ringing' ? '📞 مكالمة واردة...' : '🔊 مكالمة نشطة'}
+                      {call.status === 'ringing' ? `📞 ${t('مكالمة واردة')}...` : `🔊 ${t('مكالمة نشطة')}`}
                     </h3>
                     <p className="text-sm text-gray-200 font-mono" dir="ltr">
                       {call.phone}
@@ -274,7 +274,7 @@ export default function IncomingCallPopup() {
                   size="icon"
                   onClick={() => handleDismiss(call.call_id)}
                   className="text-gray-300 hover:text-white hover:bg-white/10"
-                  title="إخفاء"
+                  title={t('إخفاء')}
                   disabled={isLoading[call.call_id]}
                 >
                   <X className="h-5 w-5" />
