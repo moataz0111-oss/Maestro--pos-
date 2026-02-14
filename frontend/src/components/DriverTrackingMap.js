@@ -449,14 +449,14 @@ export default function DriverTrackingMap({
             \${callText}
           </button>
           <button 
-            onclick="window.focusDriver && window.focusDriver('${driver.id}')"
+            onclick="window.focusDriver && window.focusDriver('\${driver.id}')"
             style="flex: 1; padding: 10px; background: #3b82f6; color: white; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px;"
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <circle cx="12" cy="12" r="10"/>
               <circle cx="12" cy="12" r="3"/>
             </svg>
-            تتبع
+            \${trackText}
           </button>
         </div>
       </div>
