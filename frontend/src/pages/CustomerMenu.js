@@ -863,7 +863,7 @@ export default function CustomerMenu() {
     }
   };
   const formatPrice = (price) => {
-    return new Intl.NumberFormat('ar-IQ').format(price) + ' د.ع';
+    return new Intl.NumberFormat('en-US').format(price) + ' د.ع';
   };
   const getSelectedBranchName = () => {
     const branch = branches.find(b => b.id === selectedBranch);
@@ -898,7 +898,7 @@ export default function CustomerMenu() {
                         <h3 className="font-bold text-lg">{favorite.name}</h3>
                         <p className="text-sm text-gray-500 flex items-center gap-1">
                           <Calendar className="h-3 w-3" />
-                          {new Date(favorite.created_at).toLocaleDateString('ar-IQ')}
+                          {new Date(favorite.created_at).toLocaleDateString('en-US')}
                         </p>
                       </div>
                       <Button
@@ -2112,7 +2112,7 @@ export default function CustomerMenu() {
               <p className="text-sm text-gray-500">السائق المخصص لطلبك</p>
               {driver.last_location_update && (
                 <p className="text-xs text-green-600">
-                  آخر تحديث: {new Date(driver.last_location_update).toLocaleTimeString('ar-IQ')}
+                  آخر تحديث: {new Date(driver.last_location_update).toLocaleTimeString('en-US')}
                 </p>
               )}
             </div>
