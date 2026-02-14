@@ -267,7 +267,7 @@ export default function Coupons() {
           <div>
             <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
               <Ticket className="h-6 w-6 text-primary" />
-              الكوبونات والعروض
+              {t('الكوبونات والعروض')}
             </h1>
             <p className="text-sm text-muted-foreground">{t('إدارة أكواد الخصم والعروض الترويجية')}</p>
           </div>
