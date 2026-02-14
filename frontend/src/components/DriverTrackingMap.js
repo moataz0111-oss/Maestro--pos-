@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import axios from 'axios';
 import { toast } from 'sonner';
+import { useTranslation } from '../hooks/useTranslation';
 
 import { API_URL } from '../utils/api';
 const API = API_URL;
@@ -39,6 +40,7 @@ export default function DriverTrackingMap({
   autoRefresh = true,
   refreshInterval = 15000
 }) {
+  const { t, isRTL } = useTranslation();
   const mapContainerRef = useRef(null);
   const mapRef = useRef(null);
   const markersRef = useRef({});
