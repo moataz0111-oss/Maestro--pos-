@@ -271,7 +271,7 @@ export default function BiometricDevices({ branches = [] }) {
                     ) : (
                       <Wifi className="h-4 w-4 ml-1" />
                     )}
-                    اختبار
+                    {t('اختبار')}
                   </Button>
                   <Button
                     variant="outline"
@@ -285,7 +285,7 @@ export default function BiometricDevices({ branches = [] }) {
                     ) : (
                       <Download className="h-4 w-4 ml-1" />
                     )}
-                    مزامنة
+                    {t('مزامنة')}
                   </Button>
                   <Button
                     variant="outline"
