@@ -172,13 +172,13 @@ export default function BiometricDevices({ branches = [] }) {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="text-lg font-bold text-foreground">أجهزة البصمة</h3>
-          <p className="text-sm text-muted-foreground">إدارة أجهزة تسجيل الحضور والانصراف</p>
+          <h3 className="text-lg font-bold text-foreground">{t('أجهزة البصمة')}</h3>
+          <p className="text-sm text-muted-foreground">{t('إدارة أجهزة تسجيل الحضور والانصراف')}</p>
         </div>
         
         <Button onClick={() => setAddDialogOpen(true)} className="gap-2" data-testid="add-biometric-device-btn">
           <Plus className="h-4 w-4" />
-          إضافة جهاز
+          {t('إضافة جهاز')}
         </Button>
       </div>
 
