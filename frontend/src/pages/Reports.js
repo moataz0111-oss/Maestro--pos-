@@ -773,7 +773,7 @@ export default function Reports() {
                             <tr key={order.id} className="border-b border-border/50 hover:bg-red-500/5">
                               <td className="p-3 font-medium text-foreground">#{order.order_number}</td>
                               <td className="p-3 text-muted-foreground">
-                                {new Date(order.cancelled_at || order.created_at).toLocaleDateString('ar-IQ')}
+                                {new Date(order.cancelled_at || order.created_at).toLocaleDateString('en-US')}
                               </td>
                               <td className="p-3">
                                 <span className={`px-2 py-1 rounded-full text-xs ${
@@ -867,7 +867,7 @@ export default function Reports() {
                             <tr key={order.id} className="border-b border-border/50 hover:bg-orange-500/5">
                               <td className="p-3 font-medium text-foreground">#{order.order_number}</td>
                               <td className="p-3 text-muted-foreground">
-                                {new Date(order.created_at).toLocaleDateString('ar-IQ')}
+                                {new Date(order.created_at).toLocaleDateString('en-US')}
                               </td>
                               <td className="p-3 text-foreground">{order.customer_name || '-'}</td>
                               <td className="p-3 tabular-nums text-foreground">{formatPrice(order.subtotal)}</td>
@@ -971,7 +971,7 @@ export default function Reports() {
                                 <td className="py-3 px-4 text-foreground max-w-xs truncate" title={refund.reason}>{refund.reason}</td>
                                 <td className="py-3 px-4 text-muted-foreground">{refund.refunded_by_name}</td>
                                 <td className="py-3 px-4 text-muted-foreground text-sm">
-                                  {new Date(refund.created_at).toLocaleString('ar-IQ')}
+                                  {new Date(refund.created_at).toLocaleString('en-US')}
                                 </td>
                               </tr>
                             ))
@@ -1057,7 +1057,7 @@ export default function Reports() {
                             <tr key={order.id} className="border-b border-border/50 hover:bg-blue-500/5">
                               <td className="p-3 font-medium text-foreground">#{order.order_number}</td>
                               <td className="p-3 text-muted-foreground">
-                                {new Date(order.created_at).toLocaleDateString('ar-IQ')}
+                                {new Date(order.created_at).toLocaleDateString('en-US')}
                               </td>
                               <td className="p-3 text-foreground">{order.customer_name || '-'}</td>
                               <td className="p-3 text-muted-foreground">{order.customer_phone || '-'}</td>
