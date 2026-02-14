@@ -2592,6 +2592,15 @@ const translationMap = {
   'الالتزام بالمواعيد: 30 نقطة': { en: 'Punctuality: 30 points', ku: 'پابەندی بە کات: 30 خاڵ' },
   'عدم وجود خصومات: 20 نقطة': { en: 'No deductions: 20 points', ku: 'بێ داشکاندن: 20 خاڵ' },
   'المكافآت: 10 نقاط إضافية': { en: 'Bonuses: 10 extra points', ku: 'پاداشتەکان: 10 خاڵی زیادە' },
+  
+  // ===== ترجمات صفحة المخزون =====
+  'إدارة المواد الخام والمنتجات المصنعة': { en: 'Manage Raw Materials and Manufactured Products', ku: 'بەڕێوەبردنی مادە خاوەکان و بەرهەمە دروستکراوەکان' },
+  'المنتجات المصنعة': { en: 'Manufactured Products', ku: 'بەرهەمە دروستکراوەکان' },
+  'مخزون التصنيع': { en: 'Manufacturing Stock', ku: 'کۆگای دروستکردن' },
+  'المادة غير موجودة في مخزون التصنيع': { en: 'Material not found in manufacturing stock', ku: 'مادە نەدۆزرایەوە لە کۆگای دروستکردن' },
+  'المنتجات المصنعة (الوصفات)': { en: 'Manufactured Products (Recipes)', ku: 'بەرهەمە دروستکراوەکان (ڕێچەتەکان)' },
+  'المنتجات المصنعة المتاحة': { en: 'Available Manufactured Products', ku: 'بەرهەمە دروستکراوە بەردەستەکان' },
+  'أصناف تحتاج إعادة تعبئة': { en: 'Items need restocking', ku: 'بڕگەکان پێویستیان بە پڕکردنەوە هەیە' },
 };
 
 // الحصول على اللغة الحالية
