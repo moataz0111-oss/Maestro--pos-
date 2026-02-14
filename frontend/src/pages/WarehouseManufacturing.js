@@ -846,7 +846,7 @@ export default function WarehouseManufacturing() {
                             )}
                           </div>
                           <span className="text-sm text-muted-foreground">
-                            {new Date(transaction.created_at).toLocaleDateString('ar-IQ')}
+                            {new Date(transaction.created_at).toLocaleDateString('en-US')}
                           </span>
                         </div>
                         
@@ -907,7 +907,7 @@ export default function WarehouseManufacturing() {
                             </Badge>
                           </div>
                           <span className="text-sm text-muted-foreground">
-                            {new Date(transfer.created_at).toLocaleDateString('ar-IQ')}
+                            {new Date(transfer.created_at).toLocaleDateString('en-US')}
                           </span>
                         </div>
                         
