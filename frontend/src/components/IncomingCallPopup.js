@@ -287,11 +287,11 @@ export default function IncomingCallPopup() {
               <div className="flex items-center gap-3 text-white">
                 <User className="h-5 w-5 text-gray-400" />
                 <span className="font-medium text-lg">
-                  {call.caller_name || (call.is_new_customer ? 'عميل جديد' : 'غير معروف')}
+                  {call.caller_name || (call.is_new_customer ? t('عميل جديد') : t('غير معروف'))}
                 </span>
                 {call.is_new_customer && (
                   <span className="px-2 py-0.5 text-xs bg-yellow-500/30 text-yellow-300 rounded-full border border-yellow-500/50">
-                    ✨ جديد
+                    ✨ {t('جديد')}
                   </span>
                 )}
               </div>
