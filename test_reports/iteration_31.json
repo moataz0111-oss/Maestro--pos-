@@ -94,7 +94,7 @@
   },
   
   "test_credentials": {
-    "api_url": "https://trilingual-pos.preview.emergentagent.com",
+    "api_url": "https://menusync-5.preview.emergentagent.com",
     "owner": {
       "email": "owner@maestroegp.com",
       "password": "owner123",
