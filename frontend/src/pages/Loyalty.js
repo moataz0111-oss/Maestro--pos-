@@ -514,7 +514,7 @@ export default function Loyalty() {
               <div>
                 <h4 className="font-bold text-foreground mb-2 flex items-center gap-2">
                   <History className="h-4 w-4" />
-                  سجل المعاملات
+                  {t('سجل المعاملات')}
                 </h4>
                 <ScrollArea className="h-[200px]">
                   {selectedMember.transactions?.length > 0 ? (
