@@ -52,11 +52,11 @@ const getElapsedTime = (createdAt) => {
   const created = new Date(createdAt);
   const diff = Math.floor((now - created) / 1000 / 60); // minutes
   
-  if (diff < 1) return 'الآن';
-  if (diff < 60) return `${diff} د`;
+  if (diff < 1) return 'Now';
+  if (diff < 60) return `${diff}m`;
   const hours = Math.floor(diff / 60);
   const mins = diff % 60;
-  return `${hours}س ${mins}د`;
+  return `${hours}h ${mins}m`;
 };
 
 // Get urgency level based on elapsed time
