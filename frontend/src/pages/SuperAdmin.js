@@ -4066,16 +4066,16 @@ export default function SuperAdmin() {
                           </div>
                           {/* علامات الحالة */}
                           {isEnabled && (
-                            <Badge className="absolute top-2 right-2 bg-green-500/90 text-white text-xs">مفعّل</Badge>
+                            <Badge className="absolute top-2 right-2 bg-green-500/90 text-white text-xs">{t('مفعّل')}</Badge>
                           )}
                           {!isEnabled && (
-                            <Badge className="absolute top-2 right-2 bg-red-500/90 text-white text-xs">معطّل</Badge>
+                            <Badge className="absolute top-2 right-2 bg-red-500/90 text-white text-xs">{t('معطّل')}</Badge>
                           )}
                           <Badge className="absolute top-2 left-2 bg-blue-500/90 text-white text-xs">{animType}</Badge>
                         </div>
                         {/* معلومات الخلفية */}
                         <div className="p-3 bg-gray-800/80">
-                          <p className="text-sm font-medium text-white truncate">{bg.title || bg.name || 'خلفية'}</p>
+                          <p className="text-sm font-medium text-white truncate">{bg.title || bg.name || t('خلفية')}</p>
                         </div>
                       </div>
                     );
