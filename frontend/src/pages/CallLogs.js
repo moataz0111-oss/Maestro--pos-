@@ -22,7 +22,7 @@ import {
   ShoppingCart,
   MapPin,
   RefreshCw,
-  Download,
+  Printer,
   Headphones
 } from 'lucide-react';
 import { toast } from 'sonner';
