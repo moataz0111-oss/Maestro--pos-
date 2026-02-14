@@ -377,7 +377,7 @@ export default function Reservations() {
                           </span>
                           <span className="flex items-center gap-1">
                             <Users className="h-3 w-3" />
-                            {reservation.guests} أشخاص
+                            {reservation.guests} {t('أشخاص')}
                           </span>
                           <span className="flex items-center gap-1">{t('طاولة')} #{reservation.table_number}</span>
                         </div>
