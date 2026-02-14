@@ -3320,6 +3320,36 @@ const translationMap = {
   'سفري': { en: 'Takeaway', ku: '' },
   'توصيل': { en: 'Delivery', ku: '' },
   'غير معروف': { en: 'Unknown', ku: '' },
+  
+  // ===== Expense Categories =====
+  'إيجار': { en: 'Rent', ku: '' },
+  'كهرباء وماء': { en: 'Utilities', ku: '' },
+  'غاز': { en: 'Gas', ku: '' },
+  'رواتب': { en: 'Salaries', ku: '' },
+  'صيانة': { en: 'Maintenance', ku: '' },
+  'مستلزمات': { en: 'Supplies', ku: '' },
+  'تسويق': { en: 'Marketing', ku: '' },
+  'نقل': { en: 'Transport', ku: '' },
+  'أخرى': { en: 'Other', ku: '' },
+  
+  // ===== Product Categories =====
+  'المشروبات': { en: 'Beverages', ku: '' },
+  'الوجبات الرئيسية': { en: 'Main Dishes', ku: '' },
+  'المقبلات': { en: 'Appetizers', ku: '' },
+  'الحلويات': { en: 'Desserts', ku: '' },
+  'السلطات': { en: 'Salads', ku: '' },
+  'الشوربات': { en: 'Soups', ku: '' },
+  'المشاوي': { en: 'Grills', ku: '' },
+  'السندويشات': { en: 'Sandwiches', ku: '' },
+  'البيتزا': { en: 'Pizza', ku: '' },
+  'المعجنات': { en: 'Pastries', ku: '' },
+  'الأطباق الجانبية': { en: 'Side Dishes', ku: '' },
+  'المأكولات البحرية': { en: 'Seafood', ku: '' },
+  'الإضافات': { en: 'Extras', ku: '' },
+  'عروض خاصة': { en: 'Special Offers', ku: '' },
+  'الفطور': { en: 'Breakfast', ku: '' },
+  'الغداء': { en: 'Lunch', ku: '' },
+  'العشاء': { en: 'Dinner', ku: '' },
 };
 
 // الحصول على اللغة الحالية
