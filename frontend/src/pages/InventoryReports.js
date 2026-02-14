@@ -52,6 +52,7 @@ const API = API_URL;
 export default function InventoryReports() {
   const navigate = useNavigate();
   const { user, hasRole } = useAuth();
+  const { t, isRTL } = useTranslation();
   
   const [activeTab, setActiveTab] = useState('overview');
   const [loading, setLoading] = useState(true);
