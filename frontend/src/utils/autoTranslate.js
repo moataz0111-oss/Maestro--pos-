@@ -2793,7 +2793,6 @@ const translationMap = {
   'ساعة السعادة': { en: 'Happy Hour', ku: 'کاتژمێری خۆشی' },
   'باقة بسعر ثابت': { en: 'Fixed price bundle', ku: 'پاکێجی نرخی جێگیر' },
   'اشترِ': { en: 'Buy', ku: 'بکڕە' },
-  'واحصل على': { en: 'Get', ku: 'وەربگرە' },
   'خصم %': { en: 'Discount %', ku: 'داشکان %' },
   'من الساعة': { en: 'From time', ku: 'لە کاتی' },
   'إلى الساعة': { en: 'To time', ku: 'تا کاتی' },
