@@ -454,25 +454,25 @@ export default function InventoryReports() {
                   </div>
                 ) : (
                   <div className="space-y-2 max-h-64 overflow-y-auto">
-                    {warehouseTransactions.slice(0, 10).map((t, idx) => (
+                    {warehouseTransactions.slice(0, 10).map((txn, idx) => (
                       <div key={idx} className="flex items-center justify-between p-3 border rounded-lg">
                         <div className="flex items-center gap-3">
-                          {t.type === 'incoming' ? (
+                          {txn.type === 'incoming' ? (
                             <ArrowDownCircle className="h-5 w-5 text-green-500" />
                           ) : (
                             <ArrowUpCircle className="h-5 w-5 text-red-500" />
                           )}
                           <div>
-                            <p className="font-medium">{t.type === 'incoming' ? t('وارد') : t('صادر')}</p>
+                            <p className="font-medium">{txn.type === 'incoming' ? t('وارد') : t('صادر')}</p>
                             <p className="text-xs text-muted-foreground">
-                              {t.supplier_name || t.source || t('غير محدد')}
+                              {txn.supplier_name || txn.source || t('غير محدد')}
                             </p>
                           </div>
                         </div>
                         <div className="text-left">
-                          <p className="font-bold">{formatPrice(t.total_amount || 0)}</p>
+                          <p className="font-bold">{formatPrice(txn.total_amount || 0)}</p>
                           <p className="text-xs text-muted-foreground">
-                            {new Date(t.created_at).toLocaleDateString('ar-IQ')}
+                            {new Date(txn.created_at).toLocaleDateString('ar-IQ')}
                           </p>
                         </div>
                       </div>
