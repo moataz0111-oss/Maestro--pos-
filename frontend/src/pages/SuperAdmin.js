@@ -3580,7 +3580,7 @@ export default function SuperAdmin() {
               <div className="space-y-4">
                 <h3 className="font-bold text-green-400 flex items-center gap-2 border-b border-gray-700 pb-2">
                   <ImageIcon className="h-4 w-4" />
-                  شعار النظام (يظهر في جميع الفواتير)
+                  {t('شعار النظام (يظهر في جميع الفواتير)')}
                 </h3>
                 <div className="flex items-center gap-4">
                   <div className="w-24 h-24 bg-gray-700/50 rounded-lg flex items-center justify-center border-2 border-dashed border-gray-600">
@@ -3619,22 +3619,22 @@ export default function SuperAdmin() {
                         {uploadingSystemLogo ? (
                           <>
                             <Loader2 className="h-4 w-4 ml-2 animate-spin" />
-                            جاري الرفع...
+                            {t('جاري الرفع...')}
                           </>
                         ) : (
                           <>
                             <Upload className="h-4 w-4 ml-2" />
-                            رفع مباشر
+                            {t('رفع مباشر')}
                           </>
                         )}
                       </Button>
                       <Button 
                         variant="default" 
                         className="bg-blue-600 hover:bg-blue-700"
-                        onClick={() => openImageCropper('system', 1, 'قص شعار الفواتير')}
+                        onClick={() => openImageCropper('system', 1, t('قص شعار الفواتير'))}
                       >
                         <Crop className="h-4 w-4 ml-2" />
-                        قص وتعديل
+                        {t('قص وتعديل')}
                       </Button>
                     </div>
                     <p className="text-xs text-gray-500">{t('سيظهر هذا الشعار في جميع فواتير العملاء')}</p>
@@ -3646,7 +3646,7 @@ export default function SuperAdmin() {
               <div className="space-y-4">
                 <h3 className="font-bold text-blue-400 flex items-center gap-2 border-b border-gray-700 pb-2">
                   <Phone className="h-4 w-4" />
-                  بيانات الاتصال
+                  {t('بيانات الاتصال')}
                 </h3>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
@@ -3700,7 +3700,7 @@ export default function SuperAdmin() {
               <div className="space-y-4">
                 <h3 className="font-bold text-yellow-400 flex items-center gap-2 border-b border-gray-700 pb-2">
                   <FileText className="h-4 w-4" />
-                  محتوى الفاتورة
+                  {t('محتوى الفاتورة')}
                 </h3>
                 <div className="space-y-4">
                   <div className="space-y-2">
@@ -3742,7 +3742,7 @@ export default function SuperAdmin() {
               <div className="space-y-4">
                 <h3 className="font-bold text-green-400 flex items-center gap-2 border-b border-gray-700 pb-2">
                   <Eye className="h-4 w-4" />
-                  معاينة الفاتورة
+                  {t('معاينة الفاتورة')}
                 </h3>
                 <div className="bg-white text-black p-4 rounded-lg text-center max-w-xs mx-auto" dir="rtl">
                   {invoiceSettings.show_system_branding && invoiceSettings.system_logo_url && (
@@ -3774,7 +3774,7 @@ export default function SuperAdmin() {
               <div className="space-y-4">
                 <h3 className="font-bold text-blue-400 flex items-center gap-2 border-b border-gray-700 pb-2">
                   <Palette className="h-4 w-4" />
-                  خلفيات صفحة الدخول
+                  {t('خلفيات صفحة الدخول')}
                 </h3>
                 <p className="text-sm text-gray-400">{t('التحكم في مظهر صفحة تسجيل الدخول')}</p>
 
@@ -3865,7 +3865,7 @@ export default function SuperAdmin() {
               <div className="space-y-4">
                 <h3 className="font-bold text-green-400 flex items-center gap-2 border-b border-gray-700 pb-2">
                   <ImageIcon className="h-4 w-4" />
-                  شعار صفحة تسجيل الدخول
+                  {t('شعار صفحة تسجيل الدخول')}
                 </h3>
                 <div className="flex items-center justify-between p-3 bg-gray-700/30 rounded-lg">
                   <div>
@@ -3919,22 +3919,22 @@ export default function SuperAdmin() {
                           {loginLogoUploading ? (
                             <>
                               <Loader2 className="h-4 w-4 ml-2 animate-spin" />
-                              جاري الرفع...
+                              {t('جاري الرفع...')}
                             </>
                           ) : (
                             <>
                               <Upload className="h-4 w-4 ml-2" />
-                              رفع مباشر
+                              {t('رفع مباشر')}
                             </>
                           )}
                         </Button>
                         <Button 
                           variant="default" 
                           className="bg-blue-600 hover:bg-blue-700"
-                          onClick={() => openImageCropper('login', 1, 'قص شعار صفحة الدخول')}
+                          onClick={() => openImageCropper('login', 1, t('قص شعار صفحة الدخول'))}
                         >
                           <Crop className="h-4 w-4 ml-2" />
-                          قص وتعديل
+                          {t('قص وتعديل')}
                         </Button>
                       </div>
                       {loginLogoFile && (
@@ -3944,7 +3944,7 @@ export default function SuperAdmin() {
                           onClick={() => uploadLoginLogo(loginLogoFile)}
                           disabled={loginLogoUploading}
                         >
-                          تأكيد الرفع
+                          {t('تأكيد الرفع')}
                         </Button>
                       )}
                     </div>
@@ -3956,7 +3956,7 @@ export default function SuperAdmin() {
               <div className="space-y-4">
                 <h3 className="font-bold text-purple-400 flex items-center gap-2 border-b border-gray-700 pb-2">
                   <Palette className="h-4 w-4" />
-                  ألوان صفحة الدخول
+                  {t('ألوان صفحة الدخول')}
                 </h3>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
