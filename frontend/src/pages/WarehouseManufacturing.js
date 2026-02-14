@@ -466,7 +466,7 @@ export default function WarehouseManufacturing() {
             <div>
               <h1 className="text-xl font-bold flex items-center gap-2">
                 <Warehouse className="h-5 w-5 text-primary" />
-                المخزن والتصنيع
+                {t('المخزن والتصنيع')}
               </h1>
               <p className="text-xs text-muted-foreground">{t('إدارة المواد الخام والمنتجات المصنعة')}</p>
             </div>
@@ -481,7 +481,7 @@ export default function WarehouseManufacturing() {
                   data-testid="transfer-btn"
                 >
                   <Send className="h-4 w-4 ml-2" />
-                  تحويل للتصنيع
+                  {t('تحويل للتصنيع')}
                 </Button>
                 <Button 
                   variant="outline"
@@ -490,7 +490,7 @@ export default function WarehouseManufacturing() {
                   data-testid="purchase-request-btn"
                 >
                   <Truck className="h-4 w-4 ml-2" />
-                  طلب من المشتريات
+                  {t('طلب من المشتريات')}
                 </Button>
                 <Button 
                   onClick={() => setShowAddRawMaterial(true)}
@@ -498,7 +498,7 @@ export default function WarehouseManufacturing() {
                   data-testid="add-material-btn"
                 >
                   <Plus className="h-4 w-4 ml-2" />
-                  مادة خام
+                  {t('مادة خام')}
                 </Button>
               </>
             )}
@@ -511,7 +511,7 @@ export default function WarehouseManufacturing() {
                   data-testid="branch-transfer-btn"
                 >
                   <Building2 className="h-4 w-4 ml-2" />
-                  تحويل للفرع
+                  {t('تحويل للفرع')}
                 </Button>
                 <Button 
                   onClick={() => setShowAddProductDialog(true)}
@@ -519,7 +519,7 @@ export default function WarehouseManufacturing() {
                   data-testid="add-product-btn"
                 >
                   <Plus className="h-4 w-4 ml-2" />
-                  منتج مصنع
+                  {t('منتج مصنع')}
                 </Button>
               </>
             )}
@@ -590,19 +590,19 @@ export default function WarehouseManufacturing() {
           <TabsList className="grid grid-cols-4 w-full max-w-2xl">
             <TabsTrigger value="warehouse" className="gap-2" data-testid="tab-warehouse">
               <Warehouse className="h-4 w-4" />
-              المخزن
+              {t('المخزن')}
             </TabsTrigger>
             <TabsTrigger value="manufacturing" className="gap-2" data-testid="tab-manufacturing">
               <Factory className="h-4 w-4" />
-              التصنيع
+              {t('التصنيع')}
             </TabsTrigger>
             <TabsTrigger value="transactions" className="gap-2" data-testid="tab-transactions">
               <ArrowUpCircle className="h-4 w-4" />
-              الحركات
+              {t('الحركات')}
             </TabsTrigger>
             <TabsTrigger value="transfers" className="gap-2" data-testid="tab-transfers">
               <Send className="h-4 w-4" />
-              التحويلات
+              {t('التحويلات')}
             </TabsTrigger>
           </TabsList>
           {/* المخزن (المواد الخام) */}
@@ -650,7 +650,7 @@ export default function WarehouseManufacturing() {
                         {material.name_en && <p className="text-sm text-muted-foreground">{material.name_en}</p>}
                       </div>
                       <Badge className={material.quantity <= material.min_quantity ? 'bg-red-500/20 text-red-500' : 'bg-green-500/20 text-green-500'}>
-                        {material.quantity <= material.min_quantity ? 'نقص' : 'متوفر'}
+                        {material.quantity <= material.min_quantity ? t('نقص') : t('متوفر')}
                       </Badge>
                     </div>
                     
@@ -680,7 +680,7 @@ export default function WarehouseManufacturing() {
                       onClick={() => addItemToTransfer(material)}
                     >
                       <Send className="h-4 w-4 ml-2" />
-                      إضافة للتحويل
+                      {t('إضافة للتحويل')}
                     </Button>
                   </CardContent>
                 </Card>
@@ -703,7 +703,7 @@ export default function WarehouseManufacturing() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Beaker className="h-5 w-5 text-purple-500" />
-                  المواد الخام في قسم التصنيع
+                  {t('المواد الخام في قسم التصنيع')}
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -731,7 +731,7 @@ export default function WarehouseManufacturing() {
               <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle className="flex items-center gap-2">
                   <Factory className="h-5 w-5 text-green-500" />
-                  المنتجات المصنعة (الوصفات)
+                  {t('المنتجات المصنعة (الوصفات)')}
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -801,7 +801,7 @@ export default function WarehouseManufacturing() {
                               className="bg-green-500 hover:bg-green-600"
                             >
                               <Factory className="h-4 w-4 ml-2" />
-                              تصنيع
+                              {t('تصنيع')}
                             </Button>
                           </div>
                         </CardContent>
@@ -818,7 +818,7 @@ export default function WarehouseManufacturing() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <ArrowUpCircle className="h-5 w-5 text-primary" />
-                  حركات المخزن (واردات/صادرات)
+                  {t('حركات المخزن (واردات/صادرات)')}
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -839,7 +839,7 @@ export default function WarehouseManufacturing() {
                               <ArrowUpCircle className="h-5 w-5 text-red-500" />
                             )}
                             <span className="font-bold">
-                              {transaction.type === 'incoming' ? 'وارد' : 'صادر'}
+                              {transaction.type === 'incoming' ? t('وارد') : t('صادر')}
                             </span>
                             {transaction.source && (
                               <Badge variant="outline">{transaction.source}</Badge>
@@ -881,7 +881,7 @@ export default function WarehouseManufacturing() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Send className="h-5 w-5 text-primary" />
-                  تحويلات المخزن
+                  {t('تحويلات المخزن')}
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -902,8 +902,8 @@ export default function WarehouseManufacturing() {
                               transfer.status === 'received' ? 'bg-green-500/20 text-green-500' :
                               'bg-blue-500/20 text-blue-500'
                             }>
-                              {transfer.status === 'pending' ? 'قيد الانتظار' :
-                               transfer.status === 'received' ? 'تم الاستلام' : transfer.status}
+                              {transfer.status === 'pending' ? t('قيد الانتظار') :
+                               transfer.status === 'received' ? t('تم الاستلام') : transfer.status}
                             </Badge>
                           </div>
                           <span className="text-sm text-muted-foreground">
@@ -912,7 +912,7 @@ export default function WarehouseManufacturing() {
                         </div>
                         
                         <p className="text-sm text-muted-foreground mb-2">
-                          {transfer.transfer_type === 'warehouse_to_manufacturing' ? 'من المخزن إلى التصنيع' : transfer.transfer_type}
+                          {transfer.transfer_type === 'warehouse_to_manufacturing' ? t('من المخزن إلى التصنيع') : transfer.transfer_type}
                         </p>
                         
                         <div className="flex flex-wrap gap-2">
@@ -941,7 +941,7 @@ export default function WarehouseManufacturing() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Package className="h-5 w-5 text-primary" />
-              إضافة مادة خام جديدة
+              {t('إضافة مادة خام جديدة')}
             </DialogTitle>
           </DialogHeader>
           
@@ -1013,7 +1013,7 @@ export default function WarehouseManufacturing() {
                 {t('إلغاء')}</Button>
               <Button type="submit" disabled={submitting}>
                 {submitting ? <RefreshCw className="h-4 w-4 animate-spin ml-2" /> : <Plus className="h-4 w-4 ml-2" />}
-                إضافة
+                {t('إضافة')}
               </Button>
             </DialogFooter>
           </form>
@@ -1025,7 +1025,7 @@ export default function WarehouseManufacturing() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Send className="h-5 w-5 text-primary" />
-              تحويل مواد لقسم التصنيع
+              {t('تحويل مواد لقسم التصنيع')}
             </DialogTitle>
           </DialogHeader>
           
@@ -1039,7 +1039,7 @@ export default function WarehouseManufacturing() {
             ) : (
               <div className="border rounded-lg overflow-hidden">
                 <div className="bg-muted/50 px-3 py-2 font-medium text-sm">
-                  المواد المختارة ({transferForm.items.length})
+                  {t('المواد المختارة')} ({transferForm.items.length})
                 </div>
                 <div className="divide-y max-h-64 overflow-y-auto">
                   {transferForm.items.map((item, index) => (
@@ -1093,7 +1093,7 @@ export default function WarehouseManufacturing() {
               className="bg-primary"
             >
               {submitting ? <RefreshCw className="h-4 w-4 animate-spin ml-2" /> : <Send className="h-4 w-4 ml-2" />}
-              تحويل للتصنيع
+              {t('تحويل للتصنيع')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1104,7 +1104,7 @@ export default function WarehouseManufacturing() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Factory className="h-5 w-5 text-green-500" />
-              إضافة منتج مصنع (وصفة)
+              {t('إضافة منتج مصنع (وصفة)')}
             </DialogTitle>
           </DialogHeader>
           
@@ -1243,7 +1243,7 @@ export default function WarehouseManufacturing() {
                 {t('إلغاء')}</Button>
               <Button type="submit" disabled={productForm.recipe.length === 0 || submitting}>
                 {submitting ? <RefreshCw className="h-4 w-4 animate-spin ml-2" /> : <Plus className="h-4 w-4 ml-2" />}
-                إضافة المنتج
+                {t('إضافة المنتج')}
               </Button>
             </DialogFooter>
           </form>
@@ -1255,7 +1255,7 @@ export default function WarehouseManufacturing() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Factory className="h-5 w-5 text-green-500" />
-              تصنيع: {showProduceDialog?.name}
+              {t('تصنيع:')} {showProduceDialog?.name}
             </DialogTitle>
           </DialogHeader>
           
@@ -1309,7 +1309,7 @@ export default function WarehouseManufacturing() {
               className="bg-green-500 hover:bg-green-600"
             >
               {submitting ? <RefreshCw className="h-4 w-4 animate-spin ml-2" /> : <Factory className="h-4 w-4 ml-2" />}
-              تصنيع
+              {t('تصنيع')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1320,7 +1320,7 @@ export default function WarehouseManufacturing() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Building2 className="h-5 w-5 text-green-500" />
-              تحويل منتجات للفرع
+              {t('تحويل منتجات للفرع')}
             </DialogTitle>
           </DialogHeader>
           
@@ -1422,7 +1422,7 @@ export default function WarehouseManufacturing() {
               className="bg-green-500 hover:bg-green-600"
             >
               {submitting ? <RefreshCw className="h-4 w-4 animate-spin ml-2" /> : <Send className="h-4 w-4 ml-2" />}
-              تحويل للفرع
+              {t('تحويل للفرع')}
             </Button>
           </DialogFooter>
         </DialogContent>
