@@ -253,7 +253,7 @@ export default function PayrollPrint() {
               </div>
             </div>
             <p className="text-center text-xs text-gray-400 mt-6">
-              تاريخ الطباعة: {new Date().toLocaleDateString('ar-IQ')} - {new Date().toLocaleTimeString('ar-IQ')}
+              تاريخ الطباعة: {new Date().toLocaleDateString('en-US')} - {new Date().toLocaleTimeString('en-US')}
             </p>
           </div>
         </div>
