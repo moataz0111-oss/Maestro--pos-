@@ -1118,7 +1118,7 @@ export default function Delivery() {
                                 <span className="text-xs text-muted-foreground">{index + 1}.</span>
                                 <div>
                                   <p className="text-sm font-medium text-foreground">#{order.order_number}</p>
-                                  <p className="text-xs text-muted-foreground">{order.driver_name || 'سائق'}</p>
+                                  <p className="text-xs text-muted-foreground">{order.driver_name || t('سائق')}</p>
                                 </div>
                               </div>
                               <div className="text-left">
