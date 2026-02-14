@@ -657,7 +657,7 @@ export default function Coupons() {
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle className="text-foreground">
-              {editingPromotion ? 'تعديل عرض' : 'إنشاء عرض جديد'}
+              {editingPromotion ? t('تعديل عرض') : t('إنشاء عرض جديد')}
             </DialogTitle>
           </DialogHeader>
           <form onSubmit={handleSavePromotion} className="space-y-4">
