@@ -375,7 +375,13 @@ export default function DriverTrackingMap({
     };
     
     const status = driver.current_order ? 'busy' : (driver.is_active ? 'available' : 'offline');
-    const statusText = driver.current_order ? 'في مهمة توصيل' : (driver.is_active ? 'متاح' : 'غير متصل');
+    const statusText = driver.current_order ? t('في مهمة توصيل') : (driver.is_active ? t('متاح') : t('غير متصل'));
+    const orderText = t('طلب');
+    const addressNotSet = t('عنوان التوصيل غير محدد');
+    const todayOrdersText = t('طلبات اليوم');
+    const lastUpdateText = t('آخر تحديث');
+    const callText = t('اتصال');
+    const trackText = t('تتبع');
     
     return `
       <div style="direction: rtl; font-family: 'Cairo', sans-serif;">
