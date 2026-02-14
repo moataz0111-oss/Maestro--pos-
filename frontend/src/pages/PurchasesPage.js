@@ -448,7 +448,7 @@ export default function PurchasesPage() {
                                 className="bg-green-500 hover:bg-green-600"
                               >
                                 <Send className="h-4 w-4 ml-1" />
-                                إرسال
+                                {t('إرسال')}
                               </Button>
                             )}
                           </div>
