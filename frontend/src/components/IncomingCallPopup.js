@@ -365,7 +365,7 @@ export default function IncomingCallPopup() {
                     className="flex-1 h-12 border-red-500 text-red-400 hover:bg-red-500/20 gap-2 text-base font-medium disabled:opacity-50"
                   >
                     <PhoneOff className="h-5 w-5" />
-                    {isLoading[call.call_id] ? '...' : 'إنهاء'}
+                    {isLoading[call.call_id] ? '...' : t('إنهاء')}
                   </Button>
                   <Button
                     onClick={() => handleCreateOrder(call)}
@@ -373,7 +373,7 @@ export default function IncomingCallPopup() {
                     className="flex-1 h-12 bg-primary hover:bg-primary/90 text-white gap-2 text-base font-medium disabled:opacity-50"
                   >
                     <ShoppingCart className="h-5 w-5" />
-                    {isLoading[call.call_id] ? '...' : 'إنشاء طلب'}
+                    {isLoading[call.call_id] ? '...' : t('إنشاء طلب')}
                   </Button>
                 </>
               )}
