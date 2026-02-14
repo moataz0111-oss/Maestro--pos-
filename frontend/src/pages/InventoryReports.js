@@ -400,7 +400,7 @@ export default function InventoryReports() {
                   {metrics.topProducts.length === 0 ? (
                     <div className="text-center py-8 text-muted-foreground">
                       <Factory className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                      <p>لا توجد منتجات مصنعة بعد</p>
+                      <p>{t('لا توجد منتجات مصنعة بعد')}</p>
                     </div>
                   ) : (
                     <div className="space-y-3">
@@ -418,7 +418,7 @@ export default function InventoryReports() {
                             <div>
                               <p className="font-medium">{product.name}</p>
                               <p className="text-xs text-muted-foreground">
-                                تكلفة: {formatPrice(product.raw_material_cost)} | بيع: {formatPrice(product.selling_price)}
+                                {t('تكلفة')}: {formatPrice(product.raw_material_cost)} | {t('بيع')}: {formatPrice(product.selling_price)}
                               </p>
                             </div>
                           </div>
@@ -426,7 +426,7 @@ export default function InventoryReports() {
                             <p className="font-bold text-green-500">{formatPrice(product.profit_margin)}</p>
                             <p className="text-xs text-muted-foreground">
                               {product.selling_price > 0 
-                                ? `${((product.profit_margin / product.selling_price) * 100).toFixed(0)}% هامش`
+                                ? `${((product.profit_margin / product.selling_price) * 100).toFixed(0)}% ${t('هامش')}`
                                 : '0%'
                               }
                             </p>
@@ -443,14 +443,14 @@ export default function InventoryReports() {
               <CardHeader className="pb-3">
                 <CardTitle className="flex items-center gap-2">
                   <ArrowUpCircle className="h-5 w-5 text-primary" />
-                  آخر حركات المخزون
+                  {t('آخر حركات المخزون')}
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 {warehouseTransactions.length === 0 ? (
                   <div className="text-center py-8 text-muted-foreground">
                     <Clock className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                    <p>لا توجد حركات بعد</p>
+                    <p>{t('لا توجد حركات بعد')}</p>
                   </div>
                 ) : (
                   <div className="space-y-2 max-h-64 overflow-y-auto">
