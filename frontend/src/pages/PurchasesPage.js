@@ -393,12 +393,12 @@ export default function PurchasesPage() {
                             <div className="flex items-center gap-4 text-sm text-muted-foreground mb-2">
                               <span className="flex items-center gap-1">
                                 <Building2 className="h-4 w-4" />
-                                {purchase.supplier_name || 'مورد غير معروف'}
+                                {purchase.supplier_name || t('مورد غير معروف')}
                               </span>
                               {purchase.invoice_number && (
                                 <span className="flex items-center gap-1">
                                   <FileText className="h-4 w-4" />
-                                  رقم الفاتورة: {purchase.invoice_number}
+                                  {t('رقم الفاتورة')}: {purchase.invoice_number}
                                 </span>
                               )}
                             </div>

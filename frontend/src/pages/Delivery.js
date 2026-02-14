@@ -909,7 +909,7 @@ export default function Delivery() {
                 <div className="mt-4 p-3 bg-blue-500/10 rounded-lg">
                   <p className="text-sm text-blue-400 flex items-center gap-2">
                     <AlertCircle className="h-4 w-4" />
-                    لتتبع السائقين: يجب على كل سائق فتح تطبيقه والسماح بالوصول للموقع
+                    {t('لتتبع السائقين: يجب على كل سائق فتح تطبيقه والسماح بالوصول للموقع')}
                   </p>
                 </div>
               </CardContent>

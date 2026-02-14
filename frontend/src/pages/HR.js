@@ -1737,7 +1737,7 @@ export default function HR() {
                     <div className="mt-6 p-4 bg-muted/30 rounded-lg">
                       <h4 className="font-bold mb-3 flex items-center gap-2">
                         <FileSpreadsheet className="h-4 w-4" />
-                        معايير التقييم التلقائي
+                        {t('معايير التقييم التلقائي')}
                       </h4>
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                         <div className="flex items-center gap-2">

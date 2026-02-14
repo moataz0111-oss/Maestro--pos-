@@ -293,7 +293,7 @@ export default function CallLogs() {
                     <div>
                       <div className="flex items-center gap-2">
                         <span className="font-medium text-foreground">
-                          {log.caller_name || 'غير معروف'}
+                          {log.caller_name || t('غير معروف')}
                         </span>
                         {log.is_new_customer && (
                           <span className="px-2 py-0.5 text-xs bg-yellow-500/20 text-yellow-500 rounded-full">{t('جديد')}</span>
