@@ -681,7 +681,7 @@ export default function DriverTrackingMap({
               {drivers.length === 0 && (
                 <div className="text-center py-8 text-gray-400">
                   <Truck className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                  <p>لا يوجد سائقين</p>
+                  <p>{t('لا يوجد سائقين')}</p>
                 </div>
               )}
             </div>
