@@ -2056,7 +2056,7 @@ export default function Dashboard() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 justify-center">
               <Share2 className="h-5 w-5 text-orange-500" />
-              رمز QR للقائمة
+              {t('رمز QR للقائمة')}
             </DialogTitle>
           </DialogHeader>
           
