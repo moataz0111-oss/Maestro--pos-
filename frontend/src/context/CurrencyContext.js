@@ -69,14 +69,16 @@ export const CurrencyProvider = ({ children }) => {
           setSettings(prev => ({
             ...prev,
             currency: newCurrency,
-            language: res.data.language || 'ar',
+            // لا نغير اللغة من API - نحتفظ باختيار المستخدم
+            // language: res.data.language || 'ar',
             country: res.data.country || 'IQ',
             showSecondary: res.data.show_secondary_currency || false,
             secondaryCurrency: res.data.secondary_currency || 'USD',
           }));
           // تحديث localStorage و cache في currency.js
           setLocalCurrency(newCurrency);
-          localStorage.setItem('app_language', res.data.language || 'ar');
+          // لا نكتب فوق اختيار اللغة - المستخدم يختار اللغة بنفسه
+          // localStorage.setItem('app_language', res.data.language || 'ar');
           localStorage.setItem('app_country', res.data.country || 'IQ');
         }
       }
