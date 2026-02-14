@@ -411,7 +411,7 @@ export default function Loyalty() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-foreground">
               <Plus className="h-5 w-5 text-primary" />
-              إضافة عضو جديد
+              {t('إضافة عضو جديد')}
             </DialogTitle>
           </DialogHeader>
           <form onSubmit={handleAddMember} className="space-y-4">
