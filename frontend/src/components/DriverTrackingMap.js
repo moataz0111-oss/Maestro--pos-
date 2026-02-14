@@ -696,7 +696,7 @@ export default function DriverTrackingMap({
           className="absolute right-4 top-4 z-20 bg-gray-900/90 hover:bg-gray-800"
         >
           <ChevronLeft className="h-5 w-5 ml-2" />
-          السائقين ({driversWithLocation.length})
+          {t('السائقين')} ({driversWithLocation.length})
         </Button>
       )}
       
