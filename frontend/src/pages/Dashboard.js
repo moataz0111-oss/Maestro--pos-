@@ -663,7 +663,7 @@ export default function Dashboard() {
       <body>
         ${printContent.innerHTML}
         <div class="footer">
-          <p>Maestro EGP - ${new Date().toLocaleString('ar-IQ')}</p>
+          <p>Maestro EGP - ${new Date().toLocaleString('en-US')}</p>
         </div>
       </body>
       </html>
@@ -1452,7 +1452,7 @@ export default function Dashboard() {
                     <h1 className="text-2xl font-bold">{t('تقرير إغلاق الصندوق')}</h1>
                     <p className="text-muted-foreground">{closingResult.branch_name}</p>
                     <p className="text-sm text-muted-foreground">
-                      {new Date(closingResult.ended_at).toLocaleString('ar-IQ')}
+                      {new Date(closingResult.ended_at).toLocaleString('en-US')}
                     </p>
                   </div>
 
@@ -1462,8 +1462,8 @@ export default function Dashboard() {
                     <div className="grid grid-cols-2 gap-2 text-sm">
                       <div>{t('الكاشير')}: <strong>{closingResult.cashier_name}</strong></div>
                       <div>{t('الفرع')}: <strong>{closingResult.branch_name}</strong></div>
-                      <div>{t('وقت الدخول')}: <strong>{new Date(closingResult.started_at).toLocaleString('ar-IQ')}</strong></div>
-                      <div>{t('وقت الإغلاق')}: <strong>{new Date(closingResult.ended_at).toLocaleString('ar-IQ')}</strong></div>
+                      <div>{t('وقت الدخول')}: <strong>{new Date(closingResult.started_at).toLocaleString('en-US')}</strong></div>
+                      <div>{t('وقت الإغلاق')}: <strong>{new Date(closingResult.ended_at).toLocaleString('en-US')}</strong></div>
                     </div>
                   </div>
 
