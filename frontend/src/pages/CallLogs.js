@@ -258,7 +258,7 @@ export default function CallLogs() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Phone className="h-5 w-5" />
-            سجل المكالمات ({filteredLogs.length})
+            {t('سجل المكالمات')} ({filteredLogs.length})
           </CardTitle>
         </CardHeader>
         <CardContent>
