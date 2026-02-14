@@ -657,7 +657,7 @@ export default function Invoices() {
               
               <div className="text-right">
                 <p>{t('رقم الطلب: #12345')}</p>
-                <p>{t('التاريخ: {new Date().toLocaleDateString('ar-IQ')}')}</p>
+                <p>{t('التاريخ: {new Date().toLocaleDateString('en-US')}')}</p>
               </div>
               
               <div className="border-t border-dashed border-gray-400 my-3"></div>
