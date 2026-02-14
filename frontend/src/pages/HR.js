@@ -1471,7 +1471,7 @@ export default function HR() {
           <TabsContent value="payroll">
             <Card>
               <CardHeader>
-                <CardTitle>{t('كشوفات الرواتب - {selectedMonth}')}</CardTitle>
+                <CardTitle>{t('كشوفات الرواتب')} - {selectedMonth}</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="overflow-x-auto">
