@@ -3077,6 +3077,59 @@ const translationMap = {
   'كلمة المرور غير صحيحة': { en: 'Incorrect password', ku: '' },
   'البريد الإلكتروني أو كلمة المرور غير صحيحة': { en: 'Invalid email or password', ku: '' },
   'مالك النظام': { en: 'System Owner', ku: '' },
+  
+  // ===== Owner Settings =====
+  'تغيير بيانات تسجيل الدخول للمالك': { en: 'Change login details for the owner', ku: '' },
+  'البريد الإلكتروني الحالي': { en: 'Current Email', ku: '' },
+  'لا يمكن تغيير البريد الإلكتروني': { en: 'Email cannot be changed', ku: '' },
+  'اترك فارغاً إذا لم ترغب بالتغيير': { en: 'Leave blank if you do not wish to change', ku: '' },
+  'تأكيد كلمة المرور الجديدة': { en: 'Confirm New Password', ku: '' },
+  'أعد كتابة كلمة المرور': { en: 'Re-enter password', ku: '' },
+  'المفتاح السري الجديد': { en: 'New Secret Key', ku: '' },
+  'المفتاح السري تستخدم لتسجيل الدخول كمالك': { en: 'Secret key is used for logging in as owner', ku: '' },
+  
+  // ===== Sales Display Settings =====
+  'تحديد العملة التي تريد عرض المبيعات بها (سيتم تحويل جميع العملات تلقائياً)': { en: 'Set the currency to display sales (all currencies will be converted automatically)', ku: '' },
+  'عملة العرض الرئيسية': { en: 'Main Display Currency', ku: '' },
+  'جميع المبيعات ستُعرض بهذه العملة': { en: 'All sales will be displayed in this currency', ku: '' },
+  'لغة لوحة التحكم': { en: 'Control Panel Language', ku: '' },
+  'لغة واجهة لوحة التحكم': { en: 'Control panel interface language', ku: '' },
+  'عند استخدام عملاء بعملات مختلفة، سيتم تحويل جميع فواتيرك تلقائياً إلى العملة المحددة أعلاه': { en: 'When using clients with different currencies, all your invoices will be automatically converted to the currency selected above', ku: '' },
+  
+  // ===== Invoice Settings =====
+  'شعار النظام (يظهر في جميع الفواتير)': { en: 'System Logo (appears on all invoices)', ku: '' },
+  'سيظهر هذا الشعار في جميع فواتير العملاء': { en: 'This logo will appear on all customer invoices', ku: '' },
+  'بيانات الاتصال': { en: 'Contact Information', ku: '' },
+  'هاتف النظام 1': { en: 'System Phone 1', ku: '' },
+  'هاتف النظام 2': { en: 'System Phone 2', ku: '' },
+  'الموقع الإلكتروني': { en: 'Website', ku: '' },
+  'محتوى الفاتورة': { en: 'Invoice Content', ku: '' },
+  'رسالة الشكر (أسفل الفاتورة)': { en: 'Thank You Message (at the bottom of the invoice)', ku: '' },
+  'نص إضافي في التذييل': { en: 'Additional Text in Footer', ku: '' },
+  'مثال: تابعونا على مواقع التواصل': { en: 'Example: Follow us on social media', ku: '' },
+  'إظهار شعار وبيانات النظام في الفواتير': { en: 'Show system logo and data in invoices', ku: '' },
+  'سيظهر الشعار وبيانات الاتصال في جميع فواتير العملاء': { en: 'The logo and contact details will appear on all customer invoices', ku: '' },
+  'معاينة الفاتورة': { en: 'Invoice Preview', ku: '' },
+  
+  // ===== Login Page Settings =====
+  'خلفيات صفحة الدخول': { en: 'Login Page Backgrounds', ku: '' },
+  'التحكم في مظهر صفحة تسجيل الدخول': { en: 'Control the appearance of the login page', ku: '' },
+  'تفعيل الحركة': { en: 'Enable Animation', ku: '' },
+  'تفعيل الخلفيات تلقائياً': { en: 'Enable Backgrounds Automatically', ku: '' },
+  'نوع الانتقال': { en: 'Transition Type', ku: '' },
+  'مدة الانتقال (ثواني)': { en: 'Transition Duration (seconds)', ku: '' },
+  'حركة الشعار': { en: 'Logo Animation', ku: '' },
+  'شعار صفحة تسجيل الدخول': { en: 'Login Page Logo', ku: '' },
+  'تفعيل شعار صفحة الدخول': { en: 'Enable Login Page Logo', ku: '' },
+  'إظهار شعار مختصر في صفحة تسجيل الدخول': { en: 'Show a short logo on the login page', ku: '' },
+  'ألوان صفحة الدخول': { en: 'Login Page Colors', ku: '' },
+  'لون الغطاء': { en: 'Overlay Color', ku: '' },
+  'لون النص': { en: 'Text Color', ku: '' },
+  'الخلفيات': { en: 'Backgrounds', ku: '' },
+  'إضافة خلفية': { en: 'Add Background', ku: '' },
+  'ثانية': { en: 'Second', ku: '' },
+  'نبض': { en: 'Pulse', ku: '' },
+  'ثلاثي': { en: 'Triple', ku: '' },
 };
 
 // الحصول على اللغة الحالية
