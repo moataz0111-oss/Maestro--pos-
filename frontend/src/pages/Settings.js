@@ -5096,7 +5096,7 @@ export default function Settings() {
                       disabled={savingInvoiceSettings}
                     >
                       {savingInvoiceSettings ? <RefreshCw className="h-4 w-4 ml-2 animate-spin" /> : <Save className="h-4 w-4 ml-2" />}
-                      حفظ إعدادات الفاتورة
+                      {t('حفظ إعدادات الفاتورة')}
                     </Button>
 
                     {/* معاينة الفاتورة */}
