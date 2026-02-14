@@ -197,10 +197,10 @@ export default function Reservations() {
   };
   const getStatusLabel = (status) => {
     switch (status) {
-      case 'confirmed': return 'مؤكد';
-      case 'pending': return 'قيد الانتظار';
-      case 'cancelled': return 'ملغي';
-      case 'completed': return 'مكتمل';
+      case 'confirmed': return t('مؤكد');
+      case 'pending': return t('قيد الانتظار');
+      case 'cancelled': return t('ملغي');
+      case 'completed': return t('مكتمل');
       default: return status;
     }
   };
