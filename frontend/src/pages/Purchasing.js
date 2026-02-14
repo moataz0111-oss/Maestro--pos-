@@ -264,7 +264,7 @@ export default function Purchasing() {
     }
   };
   const formatCurrency = (value) => {
-    return new Intl.NumberFormat('ar-IQ').format(value) + ' د.ع';
+    return new Intl.NumberFormat('en-US').format(value) + ' د.ع';
   };
   const getStatusColor = (status) => {
     switch (status) {
@@ -479,7 +479,7 @@ export default function Purchasing() {
                           </span>
                           <span className="text-muted-foreground">
                             <Clock className="h-3 w-3 inline ml-1" />
-                            {new Date(order.created_at).toLocaleDateString('ar-IQ')}
+                            {new Date(order.created_at).toLocaleDateString('en-US')}
                           </span>
                         </div>
                       </div>
