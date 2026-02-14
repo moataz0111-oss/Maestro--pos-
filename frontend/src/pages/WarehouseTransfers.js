@@ -194,12 +194,12 @@ export default function WarehouseTransfers() {
   };
   const getStatusBadge = (status) => {
     const statusConfig = {
-      pending: { label: 'قيد الانتظار', color: 'bg-yellow-500', icon: Clock },
-      approved: { label: 'تمت الموافقة', color: 'bg-blue-500', icon: CheckCircle },
-      shipped: { label: 'تم الشحن', color: 'bg-purple-500', icon: Truck },
-      received: { label: 'تم الاستلام', color: 'bg-green-500', icon: CheckCircle },
-      ordered: { label: 'تم الطلب', color: 'bg-indigo-500', icon: ClipboardList },
-      cancelled: { label: 'ملغي', color: 'bg-red-500', icon: XCircle }
+      pending: { label: t('قيد الانتظار'), color: 'bg-yellow-500', icon: Clock },
+      approved: { label: t('تمت الموافقة'), color: 'bg-blue-500', icon: CheckCircle },
+      shipped: { label: t('تم الشحن'), color: 'bg-purple-500', icon: Truck },
+      received: { label: t('تم الاستلام'), color: 'bg-green-500', icon: CheckCircle },
+      ordered: { label: t('تم الطلب'), color: 'bg-indigo-500', icon: ClipboardList },
+      cancelled: { label: t('ملغي'), color: 'bg-red-500', icon: XCircle }
     };
     const config = statusConfig[status] || { label: status, color: 'bg-gray-500', icon: AlertCircle };
     const Icon = config.icon;
@@ -211,10 +211,10 @@ export default function WarehouseTransfers() {
   };
   const getPriorityBadge = (priority) => {
     const priorityConfig = {
-      urgent: { label: 'عاجل', color: 'bg-red-500' },
-      high: { label: 'مرتفع', color: 'bg-orange-500' },
-      normal: { label: 'عادي', color: 'bg-blue-500' },
-      low: { label: 'منخفض', color: 'bg-gray-500' }
+      urgent: { label: t('عاجل'), color: 'bg-red-500' },
+      high: { label: t('مرتفع'), color: 'bg-orange-500' },
+      normal: { label: t('عادي'), color: 'bg-blue-500' },
+      low: { label: t('منخفض'), color: 'bg-gray-500' }
     };
     const config = priorityConfig[priority] || { label: priority, color: 'bg-gray-500' };
     return <Badge className={`${config.color} text-white`}>{config.label}</Badge>;
