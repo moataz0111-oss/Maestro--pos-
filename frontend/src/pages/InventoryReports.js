@@ -338,15 +338,15 @@ export default function InventoryReports() {
             </TabsTrigger>
             <TabsTrigger value="materials" className="gap-2" data-testid="tab-materials">
               <Package className="h-4 w-4" />
-              المواد الخام
+              {t('المواد الخام')}
             </TabsTrigger>
             <TabsTrigger value="products" className="gap-2" data-testid="tab-products">
               <Factory className="h-4 w-4" />
-              المنتجات
+              {t('المنتجات')}
             </TabsTrigger>
             <TabsTrigger value="branches" className="gap-2" data-testid="tab-branches">
               <Building2 className="h-4 w-4" />
-              الفروع
+              {t('الفروع')}
             </TabsTrigger>
           </TabsList>
           {/* نظرة عامة */}
@@ -357,14 +357,14 @@ export default function InventoryReports() {
                 <CardHeader className="pb-3">
                   <CardTitle className="flex items-center gap-2 text-red-500">
                     <AlertTriangle className="h-5 w-5" />
-                    تنبيهات نقص المخزون ({metrics.lowStockItems.length})
+                    {t('تنبيهات نقص المخزون')} ({metrics.lowStockItems.length})
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
                   {metrics.lowStockItems.length === 0 ? (
                     <div className="text-center py-8 text-muted-foreground">
                       <CheckCircle className="h-12 w-12 mx-auto mb-4 text-green-500" />
-                      <p>جميع الأصناف متوفرة بكميات كافية</p>
+                      <p>{t('جميع الأصناف متوفرة بكميات كافية')}</p>
                     </div>
                   ) : (
                     <div className="space-y-2 max-h-64 overflow-y-auto">
@@ -393,7 +393,7 @@ export default function InventoryReports() {
                 <CardHeader className="pb-3">
                   <CardTitle className="flex items-center gap-2 text-green-500">
                     <TrendingUp className="h-5 w-5" />
-                    أكثر المنتجات ربحية
+                    {t('أكثر المنتجات ربحية')}
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
