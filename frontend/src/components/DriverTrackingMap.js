@@ -405,7 +405,7 @@ export default function DriverTrackingMap({
         </div>
         
         <div class="custom-popup-body">
-          ${driver.current_order ? `
+          \${driver.current_order ? \`
             <div style="background: #fef3c7; border-radius: 12px; padding: 12px; margin-bottom: 12px;">
               <div style="display: flex; align-items: center; gap: 8px; color: #92400e; font-weight: 600; margin-bottom: 8px;">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -414,24 +414,24 @@ export default function DriverTrackingMap({
                   <circle cx="5.5" cy="18.5" r="2.5"/>
                   <circle cx="18.5" cy="18.5" r="2.5"/>
                 </svg>
-                طلب #${driver.current_order.order_number}
+                \${orderText} #\${driver.current_order.order_number}
               </div>
               <p style="margin: 0; font-size: 13px; color: #78350f;">
-                ${driver.current_order.delivery_address || 'عنوان التوصيل غير محدد'}
+                \${driver.current_order.delivery_address || addressNotSet}
               </p>
             </div>
-          ` : ''}
+          \` : ''}
           
           <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
             <div style="background: #f3f4f6; border-radius: 8px; padding: 10px; text-align: center;">
-              <p style="margin: 0; font-size: 11px; color: #6b7280;">طلبات اليوم</p>
-              <p style="margin: 4px 0 0; font-size: 20px; font-weight: 700; color: #111827;">${driver.today_orders || 0}</p>
+              <p style="margin: 0; font-size: 11px; color: #6b7280;">\${todayOrdersText}</p>
+              <p style="margin: 4px 0 0; font-size: 20px; font-weight: 700; color: #111827;">\${driver.today_orders || 0}</p>
             </div>
             <div style="background: #f3f4f6; border-radius: 8px; padding: 10px; text-align: center;">
-              <p style="margin: 0; font-size: 11px; color: #6b7280;">آخر تحديث</p>
+              <p style="margin: 0; font-size: 11px; color: #6b7280;">\${lastUpdateText}</p>
               <p style="margin: 4px 0 0; font-size: 12px; font-weight: 600; color: #111827;">
-                ${driver.location_updated_at 
-                  ? new Date(driver.location_updated_at).toLocaleTimeString('ar-IQ', { hour: '2-digit', minute: '2-digit' })
+                \${driver.location_updated_at 
+                  ? new Date(driver.location_updated_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
                   : '--:--'}
               </p>
             </div>
@@ -440,13 +440,13 @@ export default function DriverTrackingMap({
         
         <div class="custom-popup-footer" style="display: flex; gap: 8px;">
           <button 
-            onclick="window.callDriver && window.callDriver('${driver.phone}')"
+            onclick="window.callDriver && window.callDriver('\${driver.phone}')"
             style="flex: 1; padding: 10px; background: #22c55e; color: white; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px;"
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72"/>
             </svg>
-            اتصال
+            \${callText}
           </button>
           <button 
             onclick="window.focusDriver && window.focusDriver('${driver.id}')"
