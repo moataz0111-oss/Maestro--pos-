@@ -241,7 +241,7 @@ export default function Reservations() {
             data-testid="add-reservation-btn"
           >
             <Plus className="h-4 w-4" />
-            حجز جديد
+            {t('حجز جديد')}
           </Button>
         </div>
       </header>
