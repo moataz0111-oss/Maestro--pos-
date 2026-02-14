@@ -296,7 +296,7 @@ export default function Tables() {
                         </SelectTrigger>
                         <SelectContent>
                           {DEFAULT_SECTIONS.map(section => (
-                            <SelectItem key={section} value={section}>{section}</SelectItem>
+                            <SelectItem key={section} value={section}>{t(section)}</SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
@@ -364,7 +364,7 @@ export default function Tables() {
       <main className="max-w-7xl mx-auto px-6 pb-8">
         {Object.entries(tablesBySection).map(([section, sectionTables]) => (
           <div key={section} className="mb-8">
-            <h2 className="text-lg font-bold font-cairo mb-4 text-foreground">{section}</h2>
+            <h2 className="text-lg font-bold font-cairo mb-4 text-foreground">{t(section)}</h2>
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
               {sectionTables.sort((a, b) => a.number - b.number).map(table => (
                 <Card 
