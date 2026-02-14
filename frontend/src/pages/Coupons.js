@@ -333,10 +333,10 @@ export default function Coupons() {
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="mb-6">
           <TabsTrigger value="coupons" className="gap-2">
-            <Ticket className="h-4 w-4" /> الكوبونات
+            <Ticket className="h-4 w-4" /> {t('الكوبونات')}
           </TabsTrigger>
           <TabsTrigger value="promotions" className="gap-2">
-            <Sparkles className="h-4 w-4" /> العروض
+            <Sparkles className="h-4 w-4" /> {t('العروض')}
           </TabsTrigger>
         </TabsList>
         {/* Coupons Tab */}
