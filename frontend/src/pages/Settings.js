@@ -5137,7 +5137,7 @@ export default function Settings() {
                           </div>
                           <div className="flex justify-between">
                             <span>{t('التاريخ:')}</span>
-                            <span>{new Date().toLocaleDateString('ar-IQ')}</span>
+                            <span>{new Date().toLocaleDateString('en-US')}</span>
                           </div>
                         </div>
                         
