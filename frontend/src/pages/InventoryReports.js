@@ -621,14 +621,14 @@ export default function InventoryReports() {
               <CardHeader className="pb-3">
                 <CardTitle className="flex items-center gap-2">
                   <Building2 className="h-5 w-5 text-indigo-500" />
-                  مقارنة استهلاك الفروع
+                  {t('مقارنة استهلاك الفروع')}
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 {metrics.branchComparison.length === 0 ? (
                   <div className="text-center py-8 text-muted-foreground">
                     <Building2 className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                    <p>لا توجد بيانات للفروع</p>
+                    <p>{t('لا توجد بيانات للفروع')}</p>
                   </div>
                 ) : (
                   <div className="space-y-4">
@@ -659,8 +659,8 @@ export default function InventoryReports() {
                           </div>
                           
                           <div className="flex items-center justify-between text-sm text-muted-foreground">
-                            <span>{branch.ordersCount} طلب</span>
-                            <span>{branch.deliveredCount} تم تسليمه</span>
+                            <span>{branch.ordersCount} {t('طلب')}</span>
+                            <span>{branch.deliveredCount} {t('تم تسليمه')}</span>
                           </div>
                         </div>
                       );
@@ -674,7 +674,7 @@ export default function InventoryReports() {
               <CardHeader className="pb-3">
                 <CardTitle className="flex items-center gap-2">
                   <Truck className="h-5 w-5 text-lime-500" />
-                  إحصائيات طلبات الفروع
+                  {t('إحصائيات طلبات الفروع')}
                 </CardTitle>
               </CardHeader>
               <CardContent>
