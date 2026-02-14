@@ -330,7 +330,7 @@ export default function CallLogs() {
                         className="gap-1 text-muted-foreground hover:text-foreground"
                       >
                         <User className="h-4 w-4" />
-                        عرض العميل
+                        {t('عرض العميل')}
                       </Button>
                     )}
                     <Button
@@ -340,7 +340,7 @@ export default function CallLogs() {
                       className="gap-1"
                     >
                       <ShoppingCart className="h-4 w-4" />
-                      إنشاء طلب
+                      {t('إنشاء طلب')}
                     </Button>
                   </div>
                 </div>
