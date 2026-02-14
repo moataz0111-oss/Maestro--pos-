@@ -1943,7 +1943,7 @@ export default function SuperAdmin() {
               <Palette className="h-4 w-4 ml-2" />
               {t('الهوية البصرية')}
             </Button>
-            <span className="text-sm text-gray-400">{user?.full_name}</span>
+            <span className="text-sm text-gray-400">{t(user?.full_name) || user?.full_name}</span>
             <Button variant="ghost" size="icon" onClick={logout} className="text-gray-400 hover:text-white">
               <LogOut className="h-5 w-5" />
             </Button>
