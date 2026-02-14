@@ -912,14 +912,14 @@ export default function PurchasesPage() {
                 <div>
                   <span className="text-muted-foreground">{t('الدفع:')}</span>
                   <Badge className={`mr-2 ${getPaymentStatusColor(showDetailsDialog.payment_status)}`}>
-                    {showDetailsDialog.payment_status === 'paid' ? 'مدفوع' : 'غير مدفوع'}
+                    {showDetailsDialog.payment_status === 'paid' ? t('مدفوع') : t('غير مدفوع')}
                   </Badge>
                 </div>
               </div>
               
               <div className="border rounded-lg">
                 <div className="bg-muted/50 px-3 py-2 font-medium text-sm">
-                  الأصناف ({showDetailsDialog.items?.length || 0})
+                  {t('الأصناف')} ({showDetailsDialog.items?.length || 0})
                 </div>
                 <div className="divide-y">
                   {showDetailsDialog.items?.map((item, idx) => (
