@@ -2867,6 +2867,7 @@ const translationMap = {
   'حفظ إعدادات Stripe': { en: 'Save Stripe Settings', ku: 'پاشەکەوتکردنی ڕێکخستنەکانی Stripe' },
   'حفظ إعدادات زين كاش': { en: 'Save Zain Cash Settings', ku: 'پاشەکەوتکردنی ڕێکخستنەکانی زین کاش' },
   'حفظ إعدادات الفاتورة': { en: 'Save Invoice Settings', ku: 'پاشەکەوتکردنی ڕێکخستنەکانی فاکتورە' },
+  'حفظ رسوم التوصيل': { en: 'Save Delivery Fee', ku: 'پاشەکەوتکردنی کرێی گەیاندن' },
   'طابعة الكاشير': { en: 'Cashier Printer', ku: 'چاپەری کاشیێر' },
   'طابعة المطبخ': { en: 'Kitchen Printer', ku: 'چاپەری چێشتخانە' },
   'طابعة البار': { en: 'Bar Printer', ku: 'چاپەری بار' },
