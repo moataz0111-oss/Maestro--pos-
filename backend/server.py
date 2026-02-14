@@ -5149,7 +5149,7 @@ async def export_sales_to_excel(
             if order.get("status") == "cancelled":
                 continue
             for item in order.get("items", []):
-                name = item.get("name", "غير معروف")
+                name = item.get("name", "Unknown")
                 if name not in products:
                     products[name] = {"quantity": 0, "revenue": 0}
                 products[name]["quantity"] += item.get("quantity", 1)
@@ -7901,7 +7901,7 @@ async def reactivate_tenant(tenant_id: str, current_user: dict = Depends(verify_
         "id": str(uuid.uuid4()),
         "type": "tenant_activated",
         "title": "تم تفعيل عميل ✅",
-        "message": f"تم إعادة تفعيل العميل: {tenant.get('name', 'غير معروف')}",
+        "message": f"تم إعادة تفعيل العميل: {tenant.get('name', 'Unknown')}",
         "tenant_id": tenant_id,
         "data": {
             "tenant_name": tenant.get("name"),
@@ -7931,7 +7931,7 @@ async def deactivate_tenant(tenant_id: str, current_user: dict = Depends(verify_
         "id": str(uuid.uuid4()),
         "type": "tenant_deactivated",
         "title": "تم تعطيل عميل ⚠️",
-        "message": f"تم تعطيل العميل: {tenant.get('name', 'غير معروف')}",
+        "message": f"تم تعطيل العميل: {tenant.get('name', 'Unknown')}",
         "tenant_id": tenant_id,
         "data": {
             "tenant_name": tenant.get("name"),
@@ -8521,7 +8521,7 @@ async def get_tenant_live_stats(tenant_id: str, current_user: dict = Depends(ver
     for order in today_orders:
         if order.get("status") != "cancelled":
             for item in order.get("items", []):
-                name = item.get("name", "غير معروف")
+                name = item.get("name", "Unknown")
                 if name not in product_sales:
                     product_sales[name] = {"quantity": 0, "total": 0}
                 product_sales[name]["quantity"] += item.get("quantity", 0)
@@ -9268,7 +9268,7 @@ async def manufacture_finished_product(
         
         if not raw_material:
             insufficient_materials.append({
-                "name": ingredient.get("raw_material_name", "مادة غير معروفة"),
+                "name": ingredient.get("raw_material_name", "مادة Unknownة"),
                 "required": ingredient["quantity"] * quantity_to_manufacture,
                 "available": 0
             })
@@ -10015,7 +10015,7 @@ async def get_products_report(
     for order in orders:
         for item in order.get("items", []):
             product_id = item.get("product_id", item.get("name", "unknown"))
-            product_name = item.get("name", "غير معروف")
+            product_name = item.get("name", "Unknown")
             quantity = item.get("quantity", 1)
             total = item.get("total", 0)
             
@@ -10196,7 +10196,7 @@ async def export_smart_report_excel(
         for order in orders:
             for item in order.get("items", []):
                 pid = item.get("product_id")
-                name = item.get("name", "غير معروف")
+                name = item.get("name", "Unknown")
                 if pid not in product_sales:
                     product_sales[pid] = {"name": name, "qty": 0, "revenue": 0}
                 product_sales[pid]["qty"] += item.get("quantity", 0)
@@ -10379,7 +10379,7 @@ async def export_smart_report_pdf(
         for order in orders:
             for item in order.get("items", []):
                 pid = item.get("product_id")
-                name = item.get("name", "غير معروف")
+                name = item.get("name", "Unknown")
                 if pid not in product_sales:
                     product_sales[pid] = {"name": name, "qty": 0, "revenue": 0}
                 product_sales[pid]["qty"] += item.get("quantity", 0)
@@ -13306,7 +13306,7 @@ async def get_super_admin_ratings_overview(current_user: dict = Depends(verify_s
         tenant = await db.tenants.find_one({"id": tr["_id"]}, {"_id": 0, "name": 1})
         result.append({
             "tenant_id": tr["_id"],
-            "tenant_name": tenant.get("name") if tenant else "غير معروف",
+            "tenant_name": tenant.get("name") if tenant else "Unknown",
             "avg_rating": round(tr.get("avg_rating", 0), 1),
             "total_ratings": tr.get("total_ratings", 0)
         })
