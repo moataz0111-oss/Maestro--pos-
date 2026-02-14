@@ -514,7 +514,7 @@ export default function PurchasesPage() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Package className="h-5 w-5 text-primary" />
-                  طلبات الشراء من المخزن
+                  {t('طلبات الشراء من المخزن')}
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -538,9 +538,9 @@ export default function PurchasesPage() {
                             request.status === 'purchased' ? 'bg-green-500/20 text-green-500' :
                             'bg-gray-500/20 text-gray-500'
                           }>
-                            {request.status === 'pending' ? 'قيد الانتظار' :
-                             request.status === 'approved' ? 'تمت الموافقة' :
-                             request.status === 'purchased' ? 'تم الشراء' : request.status}
+                            {request.status === 'pending' ? t('قيد الانتظار') :
+                             request.status === 'approved' ? t('تمت الموافقة') :
+                             request.status === 'purchased' ? t('تم الشراء') : request.status}
                           </Badge>
                         </div>
                         <div className="text-sm text-muted-foreground">
