@@ -201,7 +201,7 @@ export default function Login() {
     if (ownerEmails.includes(email.toLowerCase())) {
       // التحقق من وجود المفتاح السري
       if (!ownerSecretKey) {
-        setError('يرجى إدخال المفتاح السري');
+        setError(t('يرجى إدخال المفتاح السري'));
         setLoading(false);
         return;
       }
@@ -219,10 +219,10 @@ export default function Login() {
           localStorage.setItem('super_admin_user', JSON.stringify(response.data.user));
           navigate('/super-admin');
         } else {
-          setError('فشل تسجيل الدخول');
+          setError(t('فشل تسجيل الدخول'));
         }
       } catch (err) {
-        setError(err.response?.data?.detail || 'فشل تسجيل الدخول');
+        setError(t(err.response?.data?.detail || 'فشل تسجيل الدخول'));
       }
       setLoading(false);
       return;
@@ -235,9 +235,9 @@ export default function Login() {
     } else if (result.redirectToSuperAdmin) {
       // تحويل مالك النظام إلى بوابة المالك
       setIsOwnerLogin(true);
-      setError('يرجى إدخال المفتاح السري');
+      setError(t('يرجى إدخال المفتاح السري'));
     } else {
-      setError(result.error);
+      setError(t(result.error));
       // After 2 failed login attempts, show database initialization option
       const newFailCount = loginFailCount + 1;
       setLoginFailCount(newFailCount);
