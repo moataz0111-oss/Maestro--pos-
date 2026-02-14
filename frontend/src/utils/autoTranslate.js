@@ -1598,7 +1598,7 @@ const translationMap = {
   'العملاء النشطون': { en: 'Active Clients', ku: '' },
   'إجمالي المستخدمين': { en: 'Total Users', ku: '' },
   'أساسي': { en: 'Basic', ku: '' },
-  'مميز': { en: 'Premium', ku: '' },
+  'مميز': { en: 'Premium', ku: 'تایبەت' },
   'تقارير العملات والمبيعات': { en: 'Currency & Sales Reports', ku: '' },
   'اختر العملة': { en: 'Select Currency', ku: '' },
   'ريال سعودي': { en: 'Saudi Riyal', ku: '' },
