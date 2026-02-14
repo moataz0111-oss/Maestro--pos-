@@ -1,0 +1,95 @@
+{
+  "summary": "Iteration 76 - Testing trilingual translation (Arabic/English/Kurdish) across multiple pages. Found critical issues with Kurdish translations and language persistence after login.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "Login Page - Kurdish Translation",
+        "issue": "Form labels (البريد الإلكتروني, كلمة المرور, تسجيل الدخول) not translating to Kurdish. Shows Arabic instead of Kurdish (ئیمەیل, وشەی نهێنی, چوونەژوورەوە)",
+        "selector": "Login form labels",
+        "priority": "HIGH",
+        "root_cause": "Duplicate entries in autoTranslate.js - later entries with empty Kurdish values overwrite earlier correct translations"
+      }
+    ],
+    "integration_issues": [
+      {
+        "flow": "Language persistence after login",
+        "issue": "User's language selection is overwritten by tenant's regional settings from API (/api/tenant/regional-settings). When user selects Arabic on login page, after login the language resets to English (tenant's default).",
+        "affected_selectors": ["Language dropdown in header"],
+        "root_cause": "CurrencyContext.js fetches regional settings and overwrites localStorage app_language with API response value"
+      }
+    ],
+    "design_issues": []
+  },
+  "test_results": {
+    "login_page_translation": {
+      "arabic": {
+        "status": "PASS",
+        "texts_verified": ["البريد الإلكتروني", "كلمة المرور", "تسجيل الدخول", "نسيت كلمة المرور"]
+      },
+      "english": {
+        "status": "PASS",
+        "texts_verified": ["Email", "Password", "Login", "Forgot Password"]
+      },
+      "kurdish": {
+        "status": "FAIL",
+        "issue": "Form labels show Arabic instead of Kurdish",
+        "expected": ["ئیمەیل", "وشەی نهێنی", "چوونەژوورەوە"],
+        "actual": ["البريد الإلكتروني", "كلمة المرور", "تسجيل الدخول"]
+      }
+    },
+    "dashboard_translation": {
+      "status": "FAIL",
+      "issue": "Dashboard always shows English regardless of language selection",
+      "root_cause": "Tenant regional settings API returns language: 'en' which overwrites user's selection"
+    },
+    "delivery_page_translation": {
+      "status": "NOT_TESTED_PROPERLY",
+      "reason": "Language resets to English after login due to API override"
+    }
+  },
+  "test_report_links": [
+    "/app/test_reports/iteration_76.json"
+  ],
+  "action_items": [
+    "CRITICAL: Remove duplicate entries in /app/frontend/src/utils/autoTranslate.js - Keep only entries with Kurdish translations, remove entries with empty ku values",
+    "CRITICAL: Fix language persistence - User's language selection should NOT be overwritten by tenant's regional settings. Consider: (1) Only use tenant settings as default for new users, (2) Allow user preference to override tenant settings",
+    "Verify Kurdish translations exist for all texts mentioned in requirements: 'لتتبع السائقين', 'محصل/غير محصل', 'مدفوع/غير مدفوع', 'غير معين', 'غير معروف', 'مورد غير معروف', 'رقم الفاتورة', 'الأصناف', 'معايير التقييم التلقائي', 'وارد', 'صادر', 'غير محدد', 'سليم', 'مشكلة', 'سعة النظام'"
+  ],
+  "critical_code_review_comments": [
+    "autoTranslate.js has 3600+ lines with many duplicate entries - needs cleanup",
+    "Duplicate keys in JavaScript objects cause last value to win, breaking translations",
+    "Language management is split between useTranslation hook, LanguageContext, and CurrencyContext - needs consolidation",
+    "CurrencyContext.js line 79 overwrites user's language preference with API response"
+  ],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "N/A - Frontend only testing",
+    "frontend": "33% (Arabic works, English works, Kurdish fails)"
+  },
+  "test_credentials": {
+    "super_admin": "email: owner@maestroegp.com, password: owner123, secret_key: 271018",
+    "tenant_admin": "email: demo@maestroegp.com, password: demo123"
+  },
+  "seed_data_creation": "None",
+  "retest_needed": true,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Kurdish translations are broken due to duplicate entries in autoTranslate.js. Language selection doesn't persist after login because CurrencyContext overwrites it with tenant settings. Main agent needs to: 1) Clean up duplicate entries in autoTranslate.js, 2) Fix language persistence logic in CurrencyContext.js",
+  "rca_of_the_issue": {
+    "kurdish_translation_bug": {
+      "symptom": "Kurdish translations not showing on Login page",
+      "root_cause": "Duplicate entries in autoTranslate.js with empty Kurdish values overwrite correct translations",
+      "evidence": "node -e shows البريد الإلكتروني has ku:'' instead of ku:'ئیمەیل'",
+      "fix": "Remove duplicate entries, keep only first occurrence with Kurdish translations"
+    },
+    "language_persistence_bug": {
+      "symptom": "Language resets to English after login",
+      "root_cause": "CurrencyContext.js fetches /api/tenant/regional-settings and overwrites localStorage app_language",
+      "evidence": "API returns language:'en', localStorage shows 'en' after login even when user selected Arabic",
+      "fix": "Don't overwrite user's language preference, or use tenant settings only as default"
+    }
+  }
+}
