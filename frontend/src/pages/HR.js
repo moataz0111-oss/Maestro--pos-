@@ -1375,7 +1375,7 @@ export default function HR() {
           <TabsContent value="bonuses">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between">
-                <CardTitle>{t('المكافآت - {selectedMonth}')}</CardTitle>
+                <CardTitle>{t('المكافآت')} - {selectedMonth}</CardTitle>
                 <Dialog open={bonusDialogOpen} onOpenChange={setBonusDialogOpen}>
                   <DialogTrigger asChild>
                     <Button className="bg-green-600 hover:bg-green-700"><Plus className="h-4 w-4 ml-2" /> {t('مكافأة جديدة')}</Button>
