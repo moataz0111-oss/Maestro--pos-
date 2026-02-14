@@ -207,11 +207,11 @@ export default function BiometricDevices({ branches = [] }) {
         <Card className="border-border/50 bg-card">
           <CardContent className="py-12 text-center">
             <Fingerprint className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
-            <p className="text-lg font-medium text-muted-foreground">لا توجد أجهزة بصمة</p>
-            <p className="text-sm text-muted-foreground mt-1">أضف جهاز بصمة لبدء تسجيل الحضور</p>
+            <p className="text-lg font-medium text-muted-foreground">{t('لا توجد أجهزة بصمة')}</p>
+            <p className="text-sm text-muted-foreground mt-1">{t('أضف جهاز بصمة لبدء تسجيل الحضور')}</p>
             <Button className="mt-4" onClick={() => setAddDialogOpen(true)}>
               <Plus className="h-4 w-4 ml-2" />
-              إضافة جهاز
+              {t('إضافة جهاز')}
             </Button>
           </CardContent>
         </Card>
