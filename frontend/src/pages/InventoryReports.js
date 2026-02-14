@@ -281,9 +281,9 @@ export default function InventoryReports() {
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-muted-foreground">قيمة المواد الخام</p>
+                  <p className="text-sm text-muted-foreground">{t('قيمة المواد الخام')}</p>
                   <p className="text-2xl font-bold text-blue-500">{formatPrice(metrics.totalRawMaterialValue)}</p>
-                  <p className="text-xs text-muted-foreground">{rawMaterials.length} صنف</p>
+                  <p className="text-xs text-muted-foreground">{rawMaterials.length} {t('صنف')}</p>
                 </div>
                 <Package className="h-10 w-10 text-blue-500 opacity-50" />
               </div>
@@ -294,9 +294,9 @@ export default function InventoryReports() {
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-muted-foreground">قيمة المنتجات المصنعة</p>
+                  <p className="text-sm text-muted-foreground">{t('قيمة المنتجات المصنعة')}</p>
                   <p className="text-2xl font-bold text-green-500">{formatPrice(metrics.totalManufacturedValue)}</p>
-                  <p className="text-xs text-muted-foreground">{manufacturedProducts.length} منتج</p>
+                  <p className="text-xs text-muted-foreground">{manufacturedProducts.length} {t('منتج')}</p>
                 </div>
                 <Factory className="h-10 w-10 text-green-500 opacity-50" />
               </div>
@@ -307,9 +307,9 @@ export default function InventoryReports() {
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-muted-foreground">إجمالي المشتريات</p>
+                  <p className="text-sm text-muted-foreground">{t('إجمالي المشتريات')}</p>
                   <p className="text-2xl font-bold text-purple-500">{formatPrice(metrics.totalPurchasesAmount)}</p>
-                  <p className="text-xs text-muted-foreground">{purchases.length} فاتورة</p>
+                  <p className="text-xs text-muted-foreground">{purchases.length} {t('فاتورة')}</p>
                 </div>
                 <DollarSign className="h-10 w-10 text-purple-500 opacity-50" />
               </div>
@@ -320,9 +320,9 @@ export default function InventoryReports() {
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-muted-foreground">متوسط هامش الربح</p>
+                  <p className="text-sm text-muted-foreground">{t('متوسط هامش الربح')}</p>
                   <p className="text-2xl font-bold text-amber-500">{metrics.avgProfitMargin.toFixed(1)}%</p>
-                  <p className="text-xs text-muted-foreground">للمنتجات المصنعة</p>
+                  <p className="text-xs text-muted-foreground">{t('للمنتجات المصنعة')}</p>
                 </div>
                 <TrendingUp className="h-10 w-10 text-amber-500 opacity-50" />
               </div>
@@ -334,7 +334,7 @@ export default function InventoryReports() {
           <TabsList className="grid grid-cols-4 w-full max-w-2xl">
             <TabsTrigger value="overview" className="gap-2" data-testid="tab-overview">
               <PieChart className="h-4 w-4" />
-              نظرة عامة
+              {t('نظرة عامة')}
             </TabsTrigger>
             <TabsTrigger value="materials" className="gap-2" data-testid="tab-materials">
               <Package className="h-4 w-4" />
