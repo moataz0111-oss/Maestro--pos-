@@ -1366,11 +1366,11 @@ export default function Settings() {
 
   const getRoleText = (role) => {
     const roles = {
-      admin: 'مدير النظام',
-      manager: 'مدير',
-      supervisor: 'مشرف',
-      cashier: 'كاشير',
-      delivery: 'سائق توصيل'
+      admin: t('مدير النظام'),
+      manager: t('مدير'),
+      supervisor: t('مشرف'),
+      cashier: t('كاشير'),
+      delivery: t('سائق توصيل')
     };
     return roles[role] || role;
   };
