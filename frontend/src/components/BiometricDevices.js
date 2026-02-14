@@ -156,7 +156,7 @@ export default function BiometricDevices({ branches = [] }) {
 
   const getBranchName = (branchId) => {
     const branch = branches.find(b => b.id === branchId);
-    return branch?.name || 'غير محدد';
+    return branch?.name || t('غير محدد');
   };
 
   if (loading) {
