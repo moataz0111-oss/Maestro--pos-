@@ -33,6 +33,7 @@ const API = API_URL;
 export default function Ratings() {
   const navigate = useNavigate();
   const { token } = useAuth();
+  const { t } = useTranslation();
   const [loading, setLoading] = useState(true);
   const [summary, setSummary] = useState(null);
   const [recentRatings, setRecentRatings] = useState([]);
@@ -64,7 +65,7 @@ export default function Ratings() {
       }
     } catch (error) {
       console.error('Error fetching ratings:', error);
-      toast.error('فشل في جلب التقييمات');
+      toast.error(t('فشل في جلب التقييمات'));
     } finally {
       setLoading(false);
     }
@@ -112,7 +113,7 @@ export default function Ratings() {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div className="w-16 h-16 border-4 border-yellow-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-          <p className="text-gray-600">جاري تحميل التقييمات...</p>
+          <p className="text-gray-600">{t('جاري تحميل التقييمات...')}</p>
         </div>
       </div>
     );
@@ -134,10 +135,10 @@ export default function Ratings() {
             <div className="flex-1">
               <h1 className="text-2xl font-bold flex items-center gap-2">
                 <Star className="h-6 w-6" />
-                تقييمات العملاء
+                {t('تقييمات العملاء')}
               </h1>
               <p className="text-yellow-100 text-sm">
-                {summary?.total_ratings || 0} تقييم
+                {summary?.total_ratings || 0} {t('تقييم')}
               </p>
             </div>
             <Button
@@ -164,7 +165,7 @@ export default function Ratings() {
                 <StarDisplay rating={Math.round(summary?.avg_rating || 0)} size="lg" />
               </div>
               <p className="text-gray-600">
-                من {summary?.total_ratings || 0} تقييم
+                {t('من')} {summary?.total_ratings || 0} {t('تقييم')}
               </p>
             </CardContent>
           </Card>
@@ -173,7 +174,7 @@ export default function Ratings() {
             <CardContent className="p-6">
               <h3 className="font-bold mb-4 flex items-center gap-2">
                 <TrendingUp className="h-5 w-5 text-green-500" />
-                توزيع التقييمات
+                {t('توزيع التقييمات')}
               </h3>
               <div className="space-y-2">
                 {[5, 4, 3, 2, 1].map((stars) => (
@@ -190,12 +191,12 @@ export default function Ratings() {
           {/* التقييمات التفصيلية */}
           <Card>
             <CardContent className="p-6">
-              <h3 className="font-bold mb-4">التقييمات التفصيلية</h3>
+              <h3 className="font-bold mb-4">{t('التقييمات التفصيلية')}</h3>
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2 text-gray-600">
                     <ChefHat className="h-5 w-5 text-orange-500" />
-                    <span>جودة الطعام</span>
+                    <span>{t('جودة الطعام')}</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="font-bold">{summary?.categories?.food || 0}</span>
@@ -205,7 +206,7 @@ export default function Ratings() {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2 text-gray-600">
                     <Truck className="h-5 w-5 text-blue-500" />
-                    <span>سرعة التوصيل</span>
+                    <span>{t('سرعة التوصيل')}</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="font-bold">{summary?.categories?.delivery || 0}</span>
@@ -215,7 +216,7 @@ export default function Ratings() {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2 text-gray-600">
                     <HeartHandshake className="h-5 w-5 text-pink-500" />
-                    <span>جودة الخدمة</span>
+                    <span>{t('جودة الخدمة')}</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="font-bold">{summary?.categories?.service || 0}</span>
@@ -235,7 +236,7 @@ export default function Ratings() {
                 <SelectValue placeholder="اختر الفرع" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">جميع الفروع</SelectItem>
+                <SelectItem value="all">{t('جميع الفروع')}</SelectItem>
                 {branches.map((branch) => (
                   <SelectItem key={branch.id} value={branch.id}>
                     {branch.name}
@@ -250,16 +251,16 @@ export default function Ratings() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <MessageSquare className="h-5 w-5" />
-              آخر التقييمات
+              {t('آخر التقييمات')}
             </CardTitle>
           </CardHeader>
           <CardContent>
             {recentRatings.length === 0 ? (
               <div className="text-center py-12">
                 <Star className="h-16 w-16 text-gray-300 mx-auto mb-4" />
-                <p className="text-gray-500">لا توجد تقييمات حتى الآن</p>
+                <p className="text-gray-500">{t('لا توجد تقييمات حتى الآن')}</p>
                 <p className="text-sm text-gray-400 mt-1">
-                  التقييمات ستظهر هنا عندما يقيّم العملاء طلباتهم
+                  {t('التقييمات ستظهر هنا عندما يقيّم العملاء طلباتهم')}
                 </p>
               </div>
             ) : (
@@ -281,7 +282,7 @@ export default function Ratings() {
                           <User className="h-5 w-5 text-gray-500" />
                         </div>
                         <div>
-                          <p className="font-medium">{rating.customer_name || 'زبون'}</p>
+                          <p className="font-medium">{rating.customer_name || t('زبون')}</p>
                           <p className="text-sm text-gray-500 flex items-center gap-1">
                             <Calendar className="h-3 w-3" />
                             {new Date(rating.created_at).toLocaleDateString('ar-IQ', {
@@ -305,14 +306,14 @@ export default function Ratings() {
                           }`}
                         >
                           {rating.rating === 5
-                            ? 'ممتاز'
+                            ? t('ممتاز')
                             : rating.rating === 4
-                            ? 'جيد جداً'
+                            ? t('جيد جداً')
                             : rating.rating === 3
-                            ? 'جيد'
+                            ? t('جيد')
                             : rating.rating === 2
-                            ? 'مقبول'
-                            : 'سيء'}
+                            ? t('مقبول')
+                            : t('سيء')}
                         </Badge>
                       </div>
                     </div>
@@ -321,19 +322,19 @@ export default function Ratings() {
                       {rating.food_quality && (
                         <span className="flex items-center gap-1">
                           <ChefHat className="h-4 w-4 text-orange-500" />
-                          الطعام: {rating.food_quality}
+                          {t('الطعام')}: {rating.food_quality}
                         </span>
                       )}
                       {rating.delivery_speed && (
                         <span className="flex items-center gap-1">
                           <Truck className="h-4 w-4 text-blue-500" />
-                          التوصيل: {rating.delivery_speed}
+                          {t('التوصيل')}: {rating.delivery_speed}
                         </span>
                       )}
                       {rating.service_quality && (
                         <span className="flex items-center gap-1">
                           <HeartHandshake className="h-4 w-4 text-pink-500" />
-                          الخدمة: {rating.service_quality}
+                          {t('الخدمة')}: {rating.service_quality}
                         </span>
                       )}
                     </div>
