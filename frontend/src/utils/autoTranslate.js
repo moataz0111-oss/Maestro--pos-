@@ -3070,6 +3070,12 @@ const translationMap = {
   'حفظ الإعدادات': { en: 'Save Settings', ku: '' },
   'يرجى استخدام بوابة مالك النظام للدخول': { en: 'Please use the system owner portal to login', ku: '' },
   'مالك النظام': { en: 'System Owner', ku: '' },
+  'يرجى إدخال المفتاح السري': { en: 'Please enter the secret key', ku: '' },
+  'فشل تسجيل الدخول': { en: 'Login failed', ku: '' },
+  'المفتاح السري غير صحيح': { en: 'Invalid secret key', ku: '' },
+  'المستخدم غير موجود': { en: 'User not found', ku: '' },
+  'كلمة المرور غير صحيحة': { en: 'Incorrect password', ku: '' },
+  'البريد الإلكتروني أو كلمة المرور غير صحيحة': { en: 'Invalid email or password', ku: '' },
 };
 
 // الحصول على اللغة الحالية
