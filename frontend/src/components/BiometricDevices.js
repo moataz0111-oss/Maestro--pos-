@@ -101,16 +101,16 @@ export default function BiometricDevices({ branches = [] }) {
       if (res.data.success) {
         toast.success(
           <div>
-            <p className="font-bold">تم الاتصال بنجاح!</p>
-            <p className="text-sm">الرقم التسلسلي: {res.data.device_info?.serial_number}</p>
-            <p className="text-sm">المستخدمين: {res.data.device_info?.users_count}</p>
+            <p className="font-bold">{t('تم الاتصال بنجاح!')}</p>
+            <p className="text-sm">{t('الرقم التسلسلي')}: {res.data.device_info?.serial_number}</p>
+            <p className="text-sm">{t('المستخدمين')}: {res.data.device_info?.users_count}</p>
           </div>
         );
       } else {
-        toast.error(res.data.message || 'فشل الاتصال بالجهاز');
+        toast.error(res.data.message || t('فشل الاتصال بالجهاز'));
       }
     } catch (error) {
-      toast.error('فشل في اختبار الاتصال');
+      toast.error(t('فشل في اختبار الاتصال'));
     } finally {
       setTestingDevice(null);
     }
