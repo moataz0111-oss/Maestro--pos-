@@ -351,7 +351,7 @@ export default function Reservations() {
                   onClick={() => setShowAddDialog(true)}
                 >
                   <Plus className="h-4 w-4" />
-                  إنشاء حجز جديد
+                  {t('إنشاء حجز جديد')}
                 </Button>
               </CardContent>
             </Card>
