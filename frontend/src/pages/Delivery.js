@@ -654,7 +654,7 @@ export default function Delivery() {
                     className="bg-red-500 hover:bg-red-600"
                   >
                     <Trash2 className="h-4 w-4 ml-2" />
-                    حذف المحدد ({selectedDrivers.length})
+                    {t('حذف المحدد')} ({selectedDrivers.length})
                   </Button>
                 )}
               </div>
@@ -871,11 +871,11 @@ export default function Delivery() {
                           <>
                             <Locate className="h-3 w-3 inline ml-1" />
                             {driver.location_updated_at ? (
-                              `آخر تحديث: ${new Date(driver.location_updated_at).toLocaleTimeString('ar-IQ', { hour: '2-digit', minute: '2-digit' })}`
+                              `${t('آخر تحديث')}: ${new Date(driver.location_updated_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}`
                             ) : t('موقع متاح')}
                           </>
                         ) : (
-                          'لا يوجد موقع'
+                          t('لا يوجد موقع')
                         )}
                       </p>
                       {driver.current_order && (
@@ -1019,7 +1019,7 @@ export default function Delivery() {
                 <CardHeader className="pb-3">
                   <CardTitle className="text-base flex items-center gap-2 text-orange-500">
                     <Truck className="h-5 w-5" />
-                    في حيازة السائق
+                    {t('في حيازة السائق')}
                     <span className="bg-orange-500/20 text-orange-500 px-2 py-0.5 rounded-full text-xs mr-auto">
                       {drivers.filter(d => d.current_order_id).length}
                     </span>
