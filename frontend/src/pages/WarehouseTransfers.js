@@ -496,7 +496,7 @@ export default function WarehouseTransfers() {
                           <td className="p-3">{transfer.to_branch_name || '-'}</td>
                           <td className="p-3">{transfer.items?.length || 0} صنف</td>
                           <td className="p-3">{getStatusBadge(transfer.status)}</td>
-                          <td className="p-3">{new Date(transfer.created_at).toLocaleDateString('ar-IQ')}</td>
+                          <td className="p-3">{new Date(transfer.created_at).toLocaleDateString('en-US')}</td>
                           <td className="p-3">
                             <div className="flex items-center gap-2">
                               {transfer.status === 'pending' && (
@@ -657,7 +657,7 @@ export default function WarehouseTransfers() {
                           </td>
                           <td className="p-3">{getPriorityBadge(request.priority)}</td>
                           <td className="p-3">{getStatusBadge(request.status)}</td>
-                          <td className="p-3">{new Date(request.created_at).toLocaleDateString('ar-IQ')}</td>
+                          <td className="p-3">{new Date(request.created_at).toLocaleDateString('en-US')}</td>
                           <td className="p-3">
                             <div className="flex items-center gap-2">
                               {request.status === 'pending' && (
