@@ -266,9 +266,9 @@ export default function Loyalty() {
           <Card key={tier.name_en} className="border-border/50">
             <CardContent className="p-3 text-center">
               <span className="text-2xl">{TIER_ICONS[tier.name_en?.toLowerCase()]}</span>
-              <p className="font-bold text-foreground mt-1">{tier.name}</p>
-              <p className="text-xs text-muted-foreground">{tier.min_points}+ نقطة</p>
-              <Badge className="mt-2" variant="outline">{tier.discount_percent}% خصم</Badge>
+              <p className="font-bold text-foreground mt-1">{t(tier.name)}</p>
+              <p className="text-xs text-muted-foreground">{tier.min_points}+ {t('نقطة')}</p>
+              <Badge className="mt-2" variant="outline">{tier.discount_percent}% {t('خصم')}</Badge>
             </CardContent>
           </Card>
         ))}
