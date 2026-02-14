@@ -2510,7 +2510,7 @@ export default function Settings() {
                         <div className="max-h-[300px] overflow-y-auto space-y-4 pr-2 border rounded-lg p-3 bg-muted/30">
                           {PERMISSION_GROUPS.map(group => (
                             <div key={group}>
-                              <p className="text-sm font-medium text-muted-foreground mb-2 border-b pb-1">{group}</p>
+                              <p className="text-sm font-medium text-muted-foreground mb-2 border-b pb-1">{t(group)}</p>
                               <div className="grid grid-cols-2 gap-2">
                                 {AVAILABLE_PERMISSIONS.filter(p => p.group === group).map(perm => (
                                   <div key={perm.id} className="flex items-center gap-2">
@@ -2523,7 +2523,7 @@ export default function Settings() {
                                         setEditUserForm({ ...editUserForm, permissions: newPerms });
                                       }}
                                     />
-                                    <span className="text-sm text-foreground">{perm.name}</span>
+                                    <span className="text-sm text-foreground">{t(perm.name)}</span>
                                   </div>
                                 ))}
                               </div>
