@@ -436,7 +436,7 @@ export default function Reservations() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <CalendarDays className="h-5 w-5 text-rose-500" />
-              حجز جديد
+              {t('حجز جديد')}
             </DialogTitle>
           </DialogHeader>
           
