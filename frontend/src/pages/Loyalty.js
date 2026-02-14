@@ -278,11 +278,11 @@ export default function Loyalty() {
         <TabsList className="grid w-full grid-cols-2 mb-4">
           <TabsTrigger value="members" className="flex items-center gap-2">
             <Users className="h-4 w-4" />
-            الأعضاء
+            {t('الأعضاء')}
           </TabsTrigger>
           <TabsTrigger value="reviews" className="flex items-center gap-2">
             <Star className="h-4 w-4" />
-            تقييمات العملاء
+            {t('تقييمات العملاء')}
           </TabsTrigger>
         </TabsList>
         {/* تبويب الأعضاء */}
