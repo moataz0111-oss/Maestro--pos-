@@ -190,12 +190,12 @@ export default function BiometricDevices({ branches = [] }) {
               <AlertCircle className="h-5 w-5 text-blue-500" />
             </div>
             <div className="flex-1">
-              <h4 className="font-medium text-foreground">تعليمات الربط</h4>
+              <h4 className="font-medium text-foreground">{t('تعليمات الربط')}</h4>
               <ul className="text-sm text-muted-foreground mt-2 space-y-1 list-disc list-inside">
-                <li>تأكد من أن جهاز البصمة متصل بنفس الشبكة</li>
-                <li>استخدم عنوان IP الخاص بالجهاز (مثال: 192.168.1.100)</li>
-                <li>المنفذ الافتراضي لأجهزة ZKTeco هو 4370</li>
-                <li>بعد إضافة الجهاز، اختبر الاتصال ثم قم بالمزامنة</li>
+                <li>{t('تأكد من أن جهاز البصمة متصل بنفس الشبكة')}</li>
+                <li>{t('استخدم عنوان IP الخاص بالجهاز')} ({t('مثال')}: 192.168.1.100)</li>
+                <li>{t('المنفذ الافتراضي لأجهزة ZKTeco هو 4370')}</li>
+                <li>{t('بعد إضافة الجهاز، اختبر الاتصال ثم قم بالمزامنة')}</li>
               </ul>
             </div>
           </div>
