@@ -23,7 +23,7 @@ import {
   PieChart,
   Calendar,
   RefreshCw,
-  Download,
+  Printer,
   Filter,
   Building2,
   ArrowUpCircle,
