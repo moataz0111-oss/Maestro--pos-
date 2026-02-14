@@ -1597,7 +1597,7 @@ export default function HR() {
                           <CardContent className="p-4 text-center">
                             <AlertTriangle className="h-6 w-6 mx-auto mb-2 text-red-600" />
                             <p className="text-2xl font-bold text-red-700">{employeeRatings.summary.poor_count || 0}</p>
-                            <p className="text-xs text-red-600">{t('ضعيف (&lt;50)')}</p>
+                            <p className="text-xs text-red-600">{t('ضعيف (<50)')}</p>
                           </CardContent>
                         </Card>
                       </div>
