@@ -2920,6 +2920,11 @@ const translationMap = {
   'إنشاء طلب جديد': { en: 'Create New Order', ku: 'دروستکردنی داواکاری نوێ' },
   'إنهاء': { en: 'End', ku: 'کۆتایی' },
   'إنشاء طلب': { en: 'Create Order', ku: 'دروستکردنی داواکاری' },
+
+  // ===== ترجمات QR Code =====
+  'رمز QR للقائمة': { en: 'Menu QR Code', ku: 'کۆدی QR ی لیست' },
+  'تنزيل QR Code': { en: 'Download QR Code', ku: 'داگرتنی کۆدی QR' },
+  'تم تنزيل QR Code!': { en: 'QR Code downloaded!', ku: 'کۆدی QR داگیرا!' },
 };
 
 // الحصول على اللغة الحالية
