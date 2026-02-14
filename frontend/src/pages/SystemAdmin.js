@@ -197,7 +197,7 @@ export default function SystemAdmin() {
           <CardHeader className="pb-2">
             <CardTitle className="text-base flex items-center gap-2">
               <Server className="h-5 w-5 text-purple-500" />
-              سعة النظام
+              {t('سعة النظام')}
             </CardTitle>
           </CardHeader>
           <CardContent>
