@@ -209,11 +209,11 @@ export default function BranchOrders() {
   };
   const getStatusLabel = (status) => {
     switch (status) {
-      case 'pending': return 'قيد الانتظار';
-      case 'approved': return 'تمت الموافقة';
-      case 'shipped': return 'تم الشحن';
-      case 'delivered': return 'تم التسليم';
-      case 'cancelled': return 'ملغي';
+      case 'pending': return t('قيد الانتظار');
+      case 'approved': return t('تمت الموافقة');
+      case 'shipped': return t('تم الشحن');
+      case 'delivered': return t('تم التسليم');
+      case 'cancelled': return t('ملغي');
       default: return status;
     }
   };
@@ -247,7 +247,7 @@ export default function BranchOrders() {
             <div>
               <h1 className="text-xl font-bold flex items-center gap-2">
                 <Truck className="h-5 w-5 text-primary" />
-                طلبات الفروع
+                {t('طلبات الفروع')}
               </h1>
               <p className="text-xs text-muted-foreground">{t('طلب المنتجات من قسم التصنيع')}</p>
             </div>
@@ -259,7 +259,7 @@ export default function BranchOrders() {
             data-testid="new-order-btn"
           >
             <Plus className="h-4 w-4 ml-2" />
-            طلب جديد
+            {t('طلب جديد')}
           </Button>
         </div>
       </header>
@@ -269,11 +269,11 @@ export default function BranchOrders() {
           <TabsList className="grid grid-cols-2 w-full max-w-md">
             <TabsTrigger value="orders" className="gap-2" data-testid="tab-orders">
               <Truck className="h-4 w-4" />
-              الطلبات
+              {t('الطلبات')}
             </TabsTrigger>
             <TabsTrigger value="inventory" className="gap-2" data-testid="tab-inventory">
               <Box className="h-4 w-4" />
-              مخزون الفروع
+              {t('مخزون الفروع')}
             </TabsTrigger>
           </TabsList>
           {/* الطلبات */}
