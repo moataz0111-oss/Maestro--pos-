@@ -285,7 +285,7 @@ export default function Ratings() {
                           <p className="font-medium">{rating.customer_name || t('زبون')}</p>
                           <p className="text-sm text-gray-500 flex items-center gap-1">
                             <Calendar className="h-3 w-3" />
-                            {new Date(rating.created_at).toLocaleDateString('ar-IQ', {
+                            {new Date(rating.created_at).toLocaleDateString('en-US', {
                               year: 'numeric',
                               month: 'short',
                               day: 'numeric'
