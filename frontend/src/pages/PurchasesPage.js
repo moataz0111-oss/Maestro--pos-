@@ -296,7 +296,7 @@ export default function PurchasesPage() {
             <div>
               <h1 className="text-xl font-bold flex items-center gap-2">
                 <ShoppingCart className="h-5 w-5 text-primary" />
-                إدارة المشتريات
+                {t('إدارة المشتريات')}
               </h1>
               <p className="text-xs text-muted-foreground">{t('الشراء من الموردين وإرسال للمخزن')}</p>
             </div>
@@ -309,7 +309,7 @@ export default function PurchasesPage() {
               data-testid="add-supplier-btn"
             >
               <Building2 className="h-4 w-4 ml-2" />
-              مورد جديد
+              {t('مورد جديد')}
             </Button>
             <Button 
               onClick={() => setShowPurchaseDialog(true)} 
@@ -317,7 +317,7 @@ export default function PurchasesPage() {
               data-testid="new-purchase-btn"
             >
               <Plus className="h-4 w-4 ml-2" />
-              فاتورة شراء
+              {t('فاتورة شراء')}
             </Button>
           </div>
         </div>
@@ -328,15 +328,15 @@ export default function PurchasesPage() {
           <TabsList className="grid grid-cols-3 w-full max-w-lg">
             <TabsTrigger value="purchases" className="gap-2" data-testid="tab-purchases">
               <FileText className="h-4 w-4" />
-              الفواتير
+              {t('الفواتير')}
             </TabsTrigger>
             <TabsTrigger value="suppliers" className="gap-2" data-testid="tab-suppliers">
               <Building2 className="h-4 w-4" />
-              الموردين
+              {t('الموردين')}
             </TabsTrigger>
             <TabsTrigger value="requests" className="gap-2" data-testid="tab-requests">
               <Package className="h-4 w-4" />
-              طلبات المخزن
+              {t('طلبات المخزن')}
             </TabsTrigger>
           </TabsList>
           {/* الفواتير */}
