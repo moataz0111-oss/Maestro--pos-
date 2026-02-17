@@ -3317,7 +3317,7 @@ export default function Settings() {
                           <div className="flex items-center gap-4">
                             <div className="text-left">
                               <p className="font-bold text-foreground tabular-nums">{formatPrice(p.price)}</p>
-                              <p className="text-xs text-green-500">{t('ربح')}: {formatPrice(p.profit || (p.price - p.cost - (p.operating_cost || 0)))}</p>
+                              <p className="text-xs text-green-500">{t('ربح المواد')}: {formatPrice(p.price - (p.cost || 0))}</p>
                             </div>
                             <div className="flex items-center gap-1">
                               <Button
