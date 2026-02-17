@@ -9943,6 +9943,321 @@ async def get_reviews_stats(current_user: dict = Depends(get_current_user)):
         "pending_response": len([r for r in reviews if not r.get("response")])
     }
 
+# ==================== BREAK-EVEN REPORT - تقرير نقطة التعادل ====================
+
+@api_router.get("/break-even/daily")
+async def get_daily_break_even(
+    branch_id: Optional[str] = None,
+    date: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    حساب نقطة التعادل اليومية
+    - التكاليف الثابتة الشهرية (إيجار، ماء، كهرباء، مولدة) / 30 يوم
+    - إجمالي رواتب الموظفين في الفرع / 30 يوم
+    - مقارنة الأرباح اليومية بالهدف
+    - بعد تغطية التكاليف، كل ربح إضافي = ربح صافي 100%
+    """
+    tenant_id = get_user_tenant_id(current_user)
+    
+    # تحديد التاريخ
+    if date:
+        target_date = datetime.fromisoformat(date).replace(tzinfo=timezone.utc)
+    else:
+        target_date = datetime.now(timezone.utc)
+    
+    start_of_day = target_date.replace(hour=0, minute=0, second=0, microsecond=0)
+    end_of_day = target_date.replace(hour=23, minute=59, second=59, microsecond=999999)
+    
+    # جلب الفرع أو جميع الفروع
+    branches_query = {"tenant_id": tenant_id, "is_active": {"$ne": False}}
+    if branch_id:
+        branches_query["id"] = branch_id
+    
+    branches = await db.branches.find(branches_query, {"_id": 0}).to_list(100)
+    
+    if not branches:
+        return {
+            "date": target_date.strftime("%Y-%m-%d"),
+            "branches": [],
+            "total_daily_target": 0,
+            "total_daily_profit": 0,
+            "total_coverage_percentage": 0,
+            "is_break_even_reached": False,
+            "net_profit_after_break_even": 0
+        }
+    
+    result_branches = []
+    total_daily_target = 0
+    total_daily_profit = 0
+    
+    for branch in branches:
+        branch_id_val = branch.get("id")
+        
+        # حساب التكاليف الثابتة اليومية للفرع
+        rent_cost = branch.get("rent_cost", 0) / 30
+        water_cost = branch.get("water_cost", 0) / 30
+        electricity_cost = branch.get("electricity_cost", 0) / 30
+        generator_cost = branch.get("generator_cost", 0) / 30
+        fixed_costs_daily = rent_cost + water_cost + electricity_cost + generator_cost
+        
+        # حساب رواتب الموظفين في الفرع (شهرياً / 30)
+        employees = await db.employees.find({
+            "tenant_id": tenant_id,
+            "branch_id": branch_id_val,
+            "is_active": {"$ne": False}
+        }, {"_id": 0, "salary": 1}).to_list(1000)
+        
+        total_monthly_salaries = sum(emp.get("salary", 0) for emp in employees)
+        daily_salaries = total_monthly_salaries / 30
+        
+        # الهدف اليومي = التكاليف الثابتة + الرواتب
+        daily_target = fixed_costs_daily + daily_salaries
+        
+        # جلب الطلبات المكتملة لهذا اليوم في هذا الفرع
+        orders_query = {
+            "tenant_id": tenant_id,
+            "branch_id": branch_id_val,
+            "status": {"$in": ["delivered", "ready"]},
+            "created_at": {
+                "$gte": start_of_day.isoformat(),
+                "$lte": end_of_day.isoformat()
+            }
+        }
+        
+        orders = await db.orders.find(orders_query, {"_id": 0, "total": 1, "total_cost": 1, "profit": 1}).to_list(10000)
+        
+        # حساب الربح الإجمالي (من المواد الخام فقط)
+        daily_gross_profit = sum(o.get("profit", 0) for o in orders)
+        daily_sales = sum(o.get("total", 0) for o in orders)
+        daily_material_cost = sum(o.get("total_cost", 0) for o in orders)
+        
+        # نسبة التغطية
+        coverage_percentage = (daily_gross_profit / daily_target * 100) if daily_target > 0 else 0
+        
+        # هل تم الوصول لنقطة التعادل؟
+        is_break_even_reached = daily_gross_profit >= daily_target
+        
+        # الربح الصافي بعد نقطة التعادل
+        net_profit = max(0, daily_gross_profit - daily_target)
+        
+        # المتبقي من كل تكلفة
+        remaining_to_cover = max(0, daily_target - daily_gross_profit)
+        
+        # توزيع المتبقي على التكاليف (بنسب متساوية أو حسب الأولوية)
+        if remaining_to_cover > 0 and daily_target > 0:
+            ratio = remaining_to_cover / daily_target
+            remaining_rent = rent_cost * ratio
+            remaining_water = water_cost * ratio
+            remaining_electricity = electricity_cost * ratio
+            remaining_generator = generator_cost * ratio
+            remaining_salaries = daily_salaries * ratio
+        else:
+            remaining_rent = 0
+            remaining_water = 0
+            remaining_electricity = 0
+            remaining_generator = 0
+            remaining_salaries = 0
+        
+        # المبالغ المغطاة من كل تكلفة
+        covered_amount = min(daily_gross_profit, daily_target)
+        if daily_target > 0:
+            covered_ratio = covered_amount / daily_target
+            covered_rent = rent_cost * covered_ratio
+            covered_water = water_cost * covered_ratio
+            covered_electricity = electricity_cost * covered_ratio
+            covered_generator = generator_cost * covered_ratio
+            covered_salaries = daily_salaries * covered_ratio
+        else:
+            covered_rent = 0
+            covered_water = 0
+            covered_electricity = 0
+            covered_generator = 0
+            covered_salaries = 0
+        
+        branch_result = {
+            "branch_id": branch_id_val,
+            "branch_name": branch.get("name"),
+            "date": target_date.strftime("%Y-%m-%d"),
+            
+            # التكاليف الثابتة اليومية
+            "fixed_costs": {
+                "rent": {"monthly": branch.get("rent_cost", 0), "daily": rent_cost, "covered": covered_rent, "remaining": remaining_rent},
+                "water": {"monthly": branch.get("water_cost", 0), "daily": water_cost, "covered": covered_water, "remaining": remaining_water},
+                "electricity": {"monthly": branch.get("electricity_cost", 0), "daily": electricity_cost, "covered": covered_electricity, "remaining": remaining_electricity},
+                "generator": {"monthly": branch.get("generator_cost", 0), "daily": generator_cost, "covered": covered_generator, "remaining": remaining_generator},
+                "total_daily": fixed_costs_daily
+            },
+            
+            # الرواتب
+            "salaries": {
+                "monthly_total": total_monthly_salaries,
+                "daily": daily_salaries,
+                "covered": covered_salaries,
+                "remaining": remaining_salaries,
+                "employees_count": len(employees)
+            },
+            
+            # الهدف والإنجاز
+            "daily_target": daily_target,
+            "daily_sales": daily_sales,
+            "daily_material_cost": daily_material_cost,
+            "daily_gross_profit": daily_gross_profit,
+            "coverage_percentage": round(coverage_percentage, 1),
+            "is_break_even_reached": is_break_even_reached,
+            "remaining_to_break_even": max(0, daily_target - daily_gross_profit),
+            "net_profit_after_break_even": net_profit,
+            "orders_count": len(orders)
+        }
+        
+        result_branches.append(branch_result)
+        total_daily_target += daily_target
+        total_daily_profit += daily_gross_profit
+    
+    # الإجمالي لجميع الفروع
+    total_coverage = (total_daily_profit / total_daily_target * 100) if total_daily_target > 0 else 0
+    
+    return {
+        "date": target_date.strftime("%Y-%m-%d"),
+        "branches": result_branches,
+        "total_daily_target": total_daily_target,
+        "total_daily_profit": total_daily_profit,
+        "total_coverage_percentage": round(total_coverage, 1),
+        "is_break_even_reached": total_daily_profit >= total_daily_target,
+        "net_profit_after_break_even": max(0, total_daily_profit - total_daily_target)
+    }
+
+
+@api_router.get("/break-even/monthly-summary")
+async def get_monthly_break_even_summary(
+    branch_id: Optional[str] = None,
+    month: Optional[str] = None,  # YYYY-MM
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    ملخص نقطة التعادل الشهرية
+    - إجمالي التكاليف الثابتة والرواتب للشهر
+    - إجمالي الأرباح الشهرية
+    - عدد الأيام التي تم فيها تحقيق نقطة التعادل
+    """
+    tenant_id = get_user_tenant_id(current_user)
+    
+    # تحديد الشهر
+    if month:
+        year, m = map(int, month.split("-"))
+        start_date = datetime(year, m, 1, tzinfo=timezone.utc)
+    else:
+        now = datetime.now(timezone.utc)
+        start_date = datetime(now.year, now.month, 1, tzinfo=timezone.utc)
+    
+    # نهاية الشهر
+    if start_date.month == 12:
+        end_date = datetime(start_date.year + 1, 1, 1, tzinfo=timezone.utc) - timedelta(seconds=1)
+    else:
+        end_date = datetime(start_date.year, start_date.month + 1, 1, tzinfo=timezone.utc) - timedelta(seconds=1)
+    
+    days_in_month = (end_date - start_date).days + 1
+    
+    # جلب الفرع أو جميع الفروع
+    branches_query = {"tenant_id": tenant_id, "is_active": {"$ne": False}}
+    if branch_id:
+        branches_query["id"] = branch_id
+    
+    branches = await db.branches.find(branches_query, {"_id": 0}).to_list(100)
+    
+    result_branches = []
+    total_monthly_target = 0
+    total_monthly_profit = 0
+    
+    for branch in branches:
+        branch_id_val = branch.get("id")
+        
+        # التكاليف الثابتة الشهرية
+        rent_cost = branch.get("rent_cost", 0)
+        water_cost = branch.get("water_cost", 0)
+        electricity_cost = branch.get("electricity_cost", 0)
+        generator_cost = branch.get("generator_cost", 0)
+        total_fixed_costs = rent_cost + water_cost + electricity_cost + generator_cost
+        
+        # رواتب الموظفين
+        employees = await db.employees.find({
+            "tenant_id": tenant_id,
+            "branch_id": branch_id_val,
+            "is_active": {"$ne": False}
+        }, {"_id": 0, "salary": 1, "name": 1}).to_list(1000)
+        
+        total_salaries = sum(emp.get("salary", 0) for emp in employees)
+        
+        # الهدف الشهري
+        monthly_target = total_fixed_costs + total_salaries
+        
+        # جلب الطلبات المكتملة لهذا الشهر
+        orders_query = {
+            "tenant_id": tenant_id,
+            "branch_id": branch_id_val,
+            "status": {"$in": ["delivered", "ready"]},
+            "created_at": {
+                "$gte": start_date.isoformat(),
+                "$lte": end_date.isoformat()
+            }
+        }
+        
+        orders = await db.orders.find(orders_query, {"_id": 0}).to_list(100000)
+        
+        monthly_sales = sum(o.get("total", 0) for o in orders)
+        monthly_material_cost = sum(o.get("total_cost", 0) for o in orders)
+        monthly_gross_profit = sum(o.get("profit", 0) for o in orders)
+        
+        # نسبة التغطية
+        coverage_percentage = (monthly_gross_profit / monthly_target * 100) if monthly_target > 0 else 0
+        
+        branch_result = {
+            "branch_id": branch_id_val,
+            "branch_name": branch.get("name"),
+            "month": start_date.strftime("%Y-%m"),
+            
+            "fixed_costs": {
+                "rent": rent_cost,
+                "water": water_cost,
+                "electricity": electricity_cost,
+                "generator": generator_cost,
+                "total": total_fixed_costs
+            },
+            
+            "salaries": {
+                "total": total_salaries,
+                "employees_count": len(employees),
+                "employees": [{"name": e.get("name"), "salary": e.get("salary")} for e in employees]
+            },
+            
+            "monthly_target": monthly_target,
+            "monthly_sales": monthly_sales,
+            "monthly_material_cost": monthly_material_cost,
+            "monthly_gross_profit": monthly_gross_profit,
+            "coverage_percentage": round(coverage_percentage, 1),
+            "is_break_even_reached": monthly_gross_profit >= monthly_target,
+            "remaining_to_break_even": max(0, monthly_target - monthly_gross_profit),
+            "net_profit_after_costs": max(0, monthly_gross_profit - monthly_target),
+            "orders_count": len(orders)
+        }
+        
+        result_branches.append(branch_result)
+        total_monthly_target += monthly_target
+        total_monthly_profit += monthly_gross_profit
+    
+    total_coverage = (total_monthly_profit / total_monthly_target * 100) if total_monthly_target > 0 else 0
+    
+    return {
+        "month": start_date.strftime("%Y-%m"),
+        "days_in_month": days_in_month,
+        "branches": result_branches,
+        "total_monthly_target": total_monthly_target,
+        "total_monthly_profit": total_monthly_profit,
+        "total_coverage_percentage": round(total_coverage, 1),
+        "is_break_even_reached": total_monthly_profit >= total_monthly_target,
+        "net_profit_after_costs": max(0, total_monthly_profit - total_monthly_target)
+    }
+
 # ==================== SMART REPORTS - التقارير الذكية ====================
 
 @api_router.get("/smart-reports/sales")
