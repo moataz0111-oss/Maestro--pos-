@@ -864,7 +864,12 @@ export default function Settings() {
       address: b.address,
       phone: b.phone,
       email: b.email || '',
-      is_active: b.is_active !== false
+      is_active: b.is_active !== false,
+      // التكاليف الثابتة الشهرية
+      rent_cost: b.rent_cost || 0,
+      water_cost: b.water_cost || 0,
+      electricity_cost: b.electricity_cost || 0,
+      generator_cost: b.generator_cost || 0
     });
     setEditBranchDialogOpen(true);
   };
@@ -876,7 +881,12 @@ export default function Settings() {
         name: editBranchForm.name,
         address: editBranchForm.address,
         phone: editBranchForm.phone,
-        email: editBranchForm.email || null
+        email: editBranchForm.email || null,
+        // التكاليف الثابتة الشهرية
+        rent_cost: parseFloat(editBranchForm.rent_cost) || 0,
+        water_cost: parseFloat(editBranchForm.water_cost) || 0,
+        electricity_cost: parseFloat(editBranchForm.electricity_cost) || 0,
+        generator_cost: parseFloat(editBranchForm.generator_cost) || 0
       });
       toast.success(t('تم التحديث بنجاح'));
       setEditBranchDialogOpen(false);
