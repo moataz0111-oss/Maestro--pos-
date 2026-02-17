@@ -666,7 +666,7 @@ export default function POS() {
       }
     } catch (error) {
       console.error('Failed to save order:', error);
-      toast.error(error.response?.data?.detail || t('فشل في حفظ الطلب'));
+      toast.error(getErrorMessage(error, t('فشل في حفظ الطلب')));
     } finally {
       setSubmitting(false);
     }
