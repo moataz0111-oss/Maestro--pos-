@@ -2724,7 +2724,7 @@ export default function Settings() {
 
               {/* Edit Branch Dialog */}
               <Dialog open={editBranchDialogOpen} onOpenChange={setEditBranchDialogOpen}>
-                <DialogContent>
+                <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
                   <DialogHeader>
                     <DialogTitle className="text-foreground">{t('تعديل الفرع')}</DialogTitle>
                   </DialogHeader>
@@ -2768,6 +2768,90 @@ export default function Settings() {
                           />
                         </div>
                       </div>
+                      
+                      {/* التكاليف الثابتة الشهرية */}
+                      <div className="pt-4 border-t border-border">
+                        <h3 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
+                          <DollarSign className="h-5 w-5 text-primary" />
+                          {t('التكاليف الثابتة الشهرية')}
+                        </h3>
+                        <p className="text-sm text-muted-foreground mb-4">
+                          {t('أدخل التكاليف الثابتة الشهرية للفرع لحساب نقطة التعادل اليومية')}
+                        </p>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <Label className="text-foreground">{t('الإيجار الشهري')}</Label>
+                            <Input
+                              type="number"
+                              value={editBranchForm.rent_cost || 0}
+                              onChange={(e) => setEditBranchForm({ ...editBranchForm, rent_cost: e.target.value })}
+                              className="mt-1"
+                              min="0"
+                              placeholder="0"
+                            />
+                          </div>
+                          <div>
+                            <Label className="text-foreground">{t('فاتورة الكهرباء الشهرية')}</Label>
+                            <Input
+                              type="number"
+                              value={editBranchForm.electricity_cost || 0}
+                              onChange={(e) => setEditBranchForm({ ...editBranchForm, electricity_cost: e.target.value })}
+                              className="mt-1"
+                              min="0"
+                              placeholder="0"
+                            />
+                          </div>
+                          <div>
+                            <Label className="text-foreground">{t('فاتورة الماء الشهرية')}</Label>
+                            <Input
+                              type="number"
+                              value={editBranchForm.water_cost || 0}
+                              onChange={(e) => setEditBranchForm({ ...editBranchForm, water_cost: e.target.value })}
+                              className="mt-1"
+                              min="0"
+                              placeholder="0"
+                            />
+                          </div>
+                          <div>
+                            <Label className="text-foreground">{t('تكلفة المولدة الشهرية')}</Label>
+                            <Input
+                              type="number"
+                              value={editBranchForm.generator_cost || 0}
+                              onChange={(e) => setEditBranchForm({ ...editBranchForm, generator_cost: e.target.value })}
+                              className="mt-1"
+                              min="0"
+                              placeholder="0"
+                            />
+                          </div>
+                        </div>
+                        
+                        {/* ملخص التكاليف */}
+                        <div className="mt-4 p-3 bg-muted/50 rounded-lg">
+                          <div className="flex justify-between items-center">
+                            <span className="text-sm text-muted-foreground">{t('إجمالي التكاليف الثابتة الشهرية')}:</span>
+                            <span className="font-bold text-primary">
+                              {formatPrice(
+                                (parseFloat(editBranchForm.rent_cost) || 0) +
+                                (parseFloat(editBranchForm.electricity_cost) || 0) +
+                                (parseFloat(editBranchForm.water_cost) || 0) +
+                                (parseFloat(editBranchForm.generator_cost) || 0)
+                              )}
+                            </span>
+                          </div>
+                          <div className="flex justify-between items-center mt-1">
+                            <span className="text-sm text-muted-foreground">{t('المعدل اليومي')}:</span>
+                            <span className="font-medium text-foreground">
+                              {formatPrice(
+                                ((parseFloat(editBranchForm.rent_cost) || 0) +
+                                (parseFloat(editBranchForm.electricity_cost) || 0) +
+                                (parseFloat(editBranchForm.water_cost) || 0) +
+                                (parseFloat(editBranchForm.generator_cost) || 0)) / 30
+                              )}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                      
                       <div className="flex gap-2 pt-4">
                         <Button type="button" variant="outline" onClick={() => setEditBranchDialogOpen(false)} className="flex-1">{t('إلغاء')}</Button>
                         <Button type="submit" className="flex-1 bg-primary text-primary-foreground">{t('حفظ التعديلات')}</Button>
