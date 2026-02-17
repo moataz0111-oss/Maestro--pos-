@@ -1198,6 +1198,88 @@ export default function Dashboard() {
         </section>
         )}
 
+        {/* تنبيهات نقطة التعادل - للمدير والأدمن فقط */}
+        {hasBreakEvenPermission && breakEvenAlerts.length > 0 && (
+          <section className="mb-4">
+            <div className="flex items-center justify-between mb-2">
+              <h2 className="text-base font-bold font-cairo text-foreground flex items-center gap-2">
+                <Bell className="h-5 w-5 text-primary" />
+                {t('تنبيهات نقطة التعادل')}
+              </h2>
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={() => navigate('/cost-analysis')}
+                className="text-xs"
+              >
+                {t('عرض التفاصيل')}
+              </Button>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+              {breakEvenAlerts.map((alert, idx) => (
+                <Card 
+                  key={idx} 
+                  className={`border-2 ${
+                    alert.type === 'success' ? 'border-green-500 bg-green-500/5' :
+                    alert.type === 'warning' ? 'border-yellow-500 bg-yellow-500/5' :
+                    alert.type === 'info' ? 'border-blue-500 bg-blue-500/5' :
+                    'border-red-500 bg-red-500/5'
+                  }`}
+                >
+                  <CardContent className="p-3">
+                    <div className="flex items-start gap-3">
+                      <div className={`p-2 rounded-full ${
+                        alert.type === 'success' ? 'bg-green-500/20' :
+                        alert.type === 'warning' ? 'bg-yellow-500/20' :
+                        alert.type === 'info' ? 'bg-blue-500/20' :
+                        'bg-red-500/20'
+                      }`}>
+                        {alert.type === 'success' ? (
+                          <CheckCircle className="h-5 w-5 text-green-500" />
+                        ) : alert.type === 'warning' ? (
+                          <AlertTriangle className="h-5 w-5 text-yellow-500" />
+                        ) : alert.type === 'info' ? (
+                          <TrendingUp className="h-5 w-5 text-blue-500" />
+                        ) : (
+                          <AlertCircle className="h-5 w-5 text-red-500" />
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className={`font-bold text-sm ${
+                          alert.type === 'success' ? 'text-green-600' :
+                          alert.type === 'warning' ? 'text-yellow-600' :
+                          alert.type === 'info' ? 'text-blue-600' :
+                          'text-red-600'
+                        }`}>
+                          {t(alert.title)}
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {alert.branch_name}
+                        </p>
+                        <div className="flex items-center justify-between mt-2">
+                          <span className="text-xs text-muted-foreground">
+                            {t('نسبة التغطية')}: {alert.coverage}%
+                          </span>
+                          {alert.net_profit !== undefined && alert.net_profit > 0 && (
+                            <span className="text-xs font-bold text-green-600">
+                              +{formatPriceCompact(alert.net_profit)}
+                            </span>
+                          )}
+                          {alert.remaining !== undefined && alert.remaining > 0 && (
+                            <span className="text-xs font-bold text-orange-600">
+                              -{formatPriceCompact(alert.remaining)}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </section>
+        )}
+
         {/* Stats Cards - يظهر فقط لمن لديه صلاحية */}
         {hasDashboardPermission('dashboard_statistics') && (
         <section>
