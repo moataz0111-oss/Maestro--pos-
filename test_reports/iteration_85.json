@@ -1,0 +1,72 @@
+{
+  "summary": "Completed testing of Profit/Loss Report operating costs, Dashboard net profit, and Cost Analysis Report features. All 14 backend tests passed. Frontend verification confirmed all 3 requested features are working correctly.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_profit_loss_iter85.py",
+    "/app/test_reports/pytest/pytest_results_iter85.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [
+    "/app/backend/tests/test_profit_loss_iter85.py"
+  ],
+  "success_rate": {
+    "backend": "100%",
+    "frontend": "100%"
+  },
+  "seed_data_creation": "None - used existing demo data",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "All 3 user requests implemented and verified: 1) Profit/Loss report shows operating costs (rent, electricity, water, generator, salaries) and net profit 2) BreakEven report renamed to 'تقرير تحليل التكاليف والأرباح' with daily costs summary 3) Dashboard shows net profit after operating costs deduction. Demo account: demo@maestroegp.com / demo123",
+  "features_tested": {
+    "profit_loss_api": {
+      "status": "PASS",
+      "endpoint": "GET /api/reports/profit-loss",
+      "verified_fields": ["fixed_costs.rent", "fixed_costs.electricity", "fixed_costs.water", "fixed_costs.generator", "salaries", "total_operating_costs", "net_profit"]
+    },
+    "dashboard_stats_api": {
+      "status": "PASS",
+      "endpoint": "GET /api/dashboard/stats",
+      "verified_fields": ["today.gross_profit", "today.operating_costs", "today.total_profit (net)"],
+      "calculation_verified": "total_profit = gross_profit - operating_costs"
+    },
+    "reports_profits_tab_ui": {
+      "status": "PASS",
+      "page": "/reports -> الأرباح tab",
+      "verified_sections": ["التكاليف التشغيلية", "الإيجار", "الكهرباء", "الماء", "المولدة", "الرواتب", "إجمالي التكاليف التشغيلية", "صافي الربح"]
+    },
+    "break_even_report_ui": {
+      "status": "PASS",
+      "page": "/break-even (renamed to تقرير تحليل التكاليف والأرباح)",
+      "verified_sections": ["ملخص إجمالي التكاليف اليومية", "الإيجار", "الكهرباء", "الماء", "المولدة", "الرواتب", "الإجمالي", "صافي الربح بعد جميع التكاليف"]
+    },
+    "dashboard_net_profit_ui": {
+      "status": "PASS",
+      "page": "/dashboard",
+      "verified": "صافي الربح card shows IQD -130,333 (negative because operating costs > gross profit)"
+    }
+  },
+  "test_data_values": {
+    "branch_fixed_costs": {
+      "rent": 3000000,
+      "electricity": 500000,
+      "water": 100000,
+      "generator": 400000,
+      "total_monthly": 4000000,
+      "daily_target": 133333
+    },
+    "dashboard_today": {
+      "gross_profit": 3000,
+      "operating_costs": 133333,
+      "net_profit": -130333
+    }
+  }
+}
