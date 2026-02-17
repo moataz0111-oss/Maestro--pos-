@@ -55,6 +55,7 @@ const Ratings = lazy(() => import("./pages/Ratings"));
 const DriverApp = lazy(() => import("./pages/DriverApp"));
 const WarehouseManufacturing = lazy(() => import("./pages/WarehouseManufacturing"));
 const InventoryReports = lazy(() => import("./pages/InventoryReports"));
+const SystemContact = lazy(() => import("./pages/SystemContact"));
 
 // Components
 import IncomingCallPopup from "./components/IncomingCallPopup";
