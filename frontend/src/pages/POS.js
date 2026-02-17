@@ -1802,17 +1802,17 @@ export default function POS() {
             {/* ========== المجاميع ========== */}
             <div className="border-t border-dashed border-gray-300 pt-2 space-y-1">
               <div className="flex justify-between text-xs">
-                <span>{t('المجموع الفرعي:')}</span>
-                <span className="tabular-nums">{formatPrice(subtotal)}</span>
+                <span>{t('المجموع الفرعي')}:</span>
+                <span className="tabular-nums" dir="ltr">{formatPrice(subtotal)}</span>
               </div>
               {/* حقل الخصم - يظهر دائماً */}
               <div className={`flex justify-between text-xs p-1 rounded ${discount > 0 ? 'text-red-600 bg-red-50' : 'text-gray-500'}`}>
-                <span>{t('🏷️ الخصم:')}</span>
-                <span className="tabular-nums font-bold">{discount > 0 ? `-${formatPrice(discount)}` : '0'}</span>
+                <span>🏷️ {t('الخصم')}:</span>
+                <span className="tabular-nums font-bold" dir="ltr">{discount > 0 ? `-${formatPrice(discount)}` : '0'}</span>
               </div>
               <div className="flex justify-between font-bold text-sm border-t-2 border-gray-400 pt-2 mt-2">
-                <span>{t('الإجمالي النهائي:')}</span>
-                <span className="tabular-nums">{formatPrice(totalBeforeCommission)}</span>
+                <span>{t('الإجمالي النهائي')}:</span>
+                <span className="tabular-nums" dir="ltr">{formatPrice(totalBeforeCommission)}</span>
               </div>
             </div>
             
@@ -1827,7 +1827,7 @@ export default function POS() {
             <div className="text-center mt-4 pt-3 border-t-2 border-gray-400">
               {/* رسالة الشكر من المطعم */}
               <p className="text-xs font-bold mb-3">
-                {invoiceSettings.thank_you_message || 'شكراً لزيارتكم ❤️'}
+                {invoiceSettings.thank_you_message || t('شكراً لزيارتكم') + ' ❤️'}
               </p>
               
               {/* خط فاصل */}
@@ -1848,7 +1848,7 @@ export default function POS() {
                       }
                       return logoUrl;
                     })()}
-                    alt="شعار النظام" 
+                    alt={t('شعار النظام')} 
                     className="h-10 w-10 object-contain rounded-full mb-1"
                     onError={(e) => e.target.style.display = 'none'}
                   />
