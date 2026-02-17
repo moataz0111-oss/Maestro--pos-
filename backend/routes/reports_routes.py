@@ -310,6 +310,7 @@ async def get_profit_loss_report(
     delivery_commissions = sum(o.get("delivery_commission", 0) for o in orders)
     gross_profit = total_revenue - total_cost_of_goods - delivery_commissions
     
+    # جلب المصاريف
     expense_query = {}
     if tenant_id:
         expense_query["tenant_id"] = tenant_id
@@ -329,7 +330,59 @@ async def get_profit_loss_report(
     expenses = await db.expenses.find(expense_query, {"_id": 0}).to_list(1000)
     total_expenses = sum(e["amount"] for e in expenses)
     
-    net_profit = gross_profit - total_expenses
+    # ==================== حساب التكاليف التشغيلية ====================
+    # جلب الفروع للحصول على التكاليف الثابتة
+    branches_query = {"tenant_id": tenant_id, "is_active": {"$ne": False}}
+    if branch_id:
+        branches_query["id"] = branch_id
+    elif user_branch_id and user_role not in [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.MANAGER]:
+        branches_query["id"] = user_branch_id
+    
+    branches = await db.branches.find(branches_query, {"_id": 0}).to_list(100)
+    
+    # حساب التكاليف الثابتة الشهرية
+    total_rent = sum(b.get("rent_cost", 0) for b in branches)
+    total_electricity = sum(b.get("electricity_cost", 0) for b in branches)
+    total_water = sum(b.get("water_cost", 0) for b in branches)
+    total_generator = sum(b.get("generator_cost", 0) for b in branches)
+    total_fixed_costs = total_rent + total_electricity + total_water + total_generator
+    
+    # حساب الرواتب (لجميع الموظفين في الفروع المحددة)
+    employees_query = {"tenant_id": tenant_id, "is_active": {"$ne": False}}
+    if branch_id:
+        employees_query["branch_id"] = branch_id
+    elif user_branch_id and user_role not in [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.MANAGER]:
+        employees_query["branch_id"] = user_branch_id
+    
+    employees = await db.employees.find(employees_query, {"_id": 0, "salary": 1}).to_list(1000)
+    total_salaries = sum(e.get("salary", 0) for e in employees)
+    
+    # حساب عدد الأيام في الفترة
+    from datetime import datetime, timezone
+    if start_date and end_date:
+        try:
+            start_dt = datetime.fromisoformat(start_date)
+            end_dt = datetime.fromisoformat(end_date)
+            days_in_period = (end_dt - start_dt).days + 1
+        except:
+            days_in_period = 30
+    else:
+        days_in_period = 30
+    
+    # حساب التكاليف التشغيلية حسب الفترة
+    if days_in_period > 0:
+        daily_fixed_costs = total_fixed_costs / 30
+        daily_salaries = total_salaries / 30
+        period_fixed_costs = daily_fixed_costs * days_in_period
+        period_salaries = daily_salaries * days_in_period
+    else:
+        period_fixed_costs = total_fixed_costs
+        period_salaries = total_salaries
+    
+    total_operating_costs = period_fixed_costs + period_salaries + total_expenses
+    
+    # صافي الربح بعد كل التكاليف
+    net_profit = gross_profit - total_operating_costs
     
     return {
         "revenue": {"total_sales": total_revenue, "order_count": len(orders)},
@@ -342,11 +395,34 @@ async def get_profit_loss_report(
             "amount": gross_profit,
             "margin": (gross_profit / total_revenue * 100) if total_revenue > 0 else 0
         },
-        "operating_expenses": {"total": total_expenses, "breakdown": {}},
+        "operating_expenses": {
+            "total": total_expenses,
+            "breakdown": {}
+        },
+        "fixed_costs": {
+            "rent": {"monthly": total_rent, "period": period_fixed_costs * (total_rent / total_fixed_costs) if total_fixed_costs > 0 else 0},
+            "electricity": {"monthly": total_electricity, "period": period_fixed_costs * (total_electricity / total_fixed_costs) if total_fixed_costs > 0 else 0},
+            "water": {"monthly": total_water, "period": period_fixed_costs * (total_water / total_fixed_costs) if total_fixed_costs > 0 else 0},
+            "generator": {"monthly": total_generator, "period": period_fixed_costs * (total_generator / total_fixed_costs) if total_fixed_costs > 0 else 0},
+            "total_monthly": total_fixed_costs,
+            "total_period": period_fixed_costs
+        },
+        "salaries": {
+            "total_monthly": total_salaries,
+            "total_period": period_salaries,
+            "employees_count": len(employees)
+        },
+        "total_operating_costs": {
+            "fixed_costs": period_fixed_costs,
+            "salaries": period_salaries,
+            "other_expenses": total_expenses,
+            "total": total_operating_costs
+        },
         "net_profit": {
             "amount": net_profit,
             "margin": (net_profit / total_revenue * 100) if total_revenue > 0 else 0
-        }
+        },
+        "period_days": days_in_period
     }
 
 # ==================== DELIVERY CREDITS REPORT ====================
