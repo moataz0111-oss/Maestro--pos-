@@ -10258,6 +10258,149 @@ async def get_monthly_break_even_summary(
         "net_profit_after_costs": max(0, total_monthly_profit - total_monthly_target)
     }
 
+
+@api_router.get("/break-even/alerts")
+async def get_break_even_alerts(
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    تنبيهات نقطة التعادل
+    - تظهر فقط للمدير أو الأدمن أو صلاحية محددة
+    - تنبيه عند الاقتراب من نقطة التعادل (80%+)
+    - تنبيه عند تجاوز نقطة التعادل
+    - تنبيه عند الخسارة الكبيرة
+    """
+    tenant_id = get_user_tenant_id(current_user)
+    user_role = current_user.get("role")
+    
+    # التحقق من الصلاحية - المدير والأدمن فقط يرون التنبيهات
+    if user_role not in [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.MANAGER]:
+        return {"alerts": [], "has_permission": False}
+    
+    # تحديد التاريخ الحالي
+    target_date = datetime.now(timezone.utc)
+    start_of_day = target_date.replace(hour=0, minute=0, second=0, microsecond=0)
+    end_of_day = target_date.replace(hour=23, minute=59, second=59, microsecond=999999)
+    
+    # جلب جميع الفروع
+    branches = await db.branches.find(
+        {"tenant_id": tenant_id, "is_active": {"$ne": False}}, 
+        {"_id": 0}
+    ).to_list(100)
+    
+    alerts = []
+    
+    for branch in branches:
+        branch_id = branch.get("id")
+        branch_name = branch.get("name")
+        
+        # حساب التكاليف الثابتة اليومية
+        rent_cost = branch.get("rent_cost", 0) / 30
+        water_cost = branch.get("water_cost", 0) / 30
+        electricity_cost = branch.get("electricity_cost", 0) / 30
+        generator_cost = branch.get("generator_cost", 0) / 30
+        fixed_costs_daily = rent_cost + water_cost + electricity_cost + generator_cost
+        
+        # حساب رواتب الموظفين اليومية
+        employees = await db.employees.find({
+            "tenant_id": tenant_id,
+            "branch_id": branch_id,
+            "is_active": {"$ne": False}
+        }, {"_id": 0, "salary": 1}).to_list(1000)
+        
+        daily_salaries = sum(emp.get("salary", 0) for emp in employees) / 30
+        
+        # الهدف اليومي
+        daily_target = fixed_costs_daily + daily_salaries
+        
+        # إذا لم يكن هناك تكاليف مُعدّة، تخطي هذا الفرع
+        if daily_target <= 0:
+            continue
+        
+        # جلب أرباح اليوم
+        orders = await db.orders.find({
+            "tenant_id": tenant_id,
+            "branch_id": branch_id,
+            "status": {"$in": ["delivered", "ready"]},
+            "created_at": {
+                "$gte": start_of_day.isoformat(),
+                "$lte": end_of_day.isoformat()
+            }
+        }, {"_id": 0, "profit": 1}).to_list(10000)
+        
+        daily_profit = sum(o.get("profit", 0) for o in orders)
+        coverage_percentage = (daily_profit / daily_target * 100) if daily_target > 0 else 0
+        
+        # إنشاء التنبيهات
+        if coverage_percentage >= 100:
+            # تم تجاوز نقطة التعادل! 🎉
+            net_profit = daily_profit - daily_target
+            alerts.append({
+                "type": "success",
+                "branch_id": branch_id,
+                "branch_name": branch_name,
+                "title": "تم تحقيق نقطة التعادل",
+                "message": f"فرع {branch_name} حقق نقطة التعادل! صافي الربح: {net_profit:,.0f}",
+                "coverage": round(coverage_percentage, 1),
+                "daily_target": daily_target,
+                "daily_profit": daily_profit,
+                "net_profit": net_profit,
+                "icon": "check-circle"
+            })
+        elif coverage_percentage >= 80:
+            # اقتراب من نقطة التعادل
+            remaining = daily_target - daily_profit
+            alerts.append({
+                "type": "warning",
+                "branch_id": branch_id,
+                "branch_name": branch_name,
+                "title": "اقتراب من نقطة التعادل",
+                "message": f"فرع {branch_name} على وشك تحقيق نقطة التعادل! المتبقي: {remaining:,.0f}",
+                "coverage": round(coverage_percentage, 1),
+                "daily_target": daily_target,
+                "daily_profit": daily_profit,
+                "remaining": remaining,
+                "icon": "alert-triangle"
+            })
+        elif coverage_percentage >= 50:
+            # في المسار الصحيح
+            remaining = daily_target - daily_profit
+            alerts.append({
+                "type": "info",
+                "branch_id": branch_id,
+                "branch_name": branch_name,
+                "title": "تقدم جيد",
+                "message": f"فرع {branch_name} حقق {coverage_percentage:.0f}% من الهدف اليومي",
+                "coverage": round(coverage_percentage, 1),
+                "daily_target": daily_target,
+                "daily_profit": daily_profit,
+                "remaining": remaining,
+                "icon": "trending-up"
+            })
+        elif coverage_percentage > 0:
+            # بداية بطيئة
+            remaining = daily_target - daily_profit
+            alerts.append({
+                "type": "low",
+                "branch_id": branch_id,
+                "branch_name": branch_name,
+                "title": "تغطية منخفضة",
+                "message": f"فرع {branch_name} حقق {coverage_percentage:.0f}% فقط من الهدف اليومي",
+                "coverage": round(coverage_percentage, 1),
+                "daily_target": daily_target,
+                "daily_profit": daily_profit,
+                "remaining": remaining,
+                "icon": "alert-circle"
+            })
+    
+    return {
+        "alerts": alerts,
+        "has_permission": True,
+        "date": target_date.strftime("%Y-%m-%d"),
+        "total_branches": len(branches),
+        "branches_with_costs": len([b for b in branches if (b.get("rent_cost", 0) + b.get("electricity_cost", 0) + b.get("water_cost", 0) + b.get("generator_cost", 0)) > 0])
+    }
+
 # ==================== SMART REPORTS - التقارير الذكية ====================
 
 @api_router.get("/smart-reports/sales")
