@@ -601,7 +601,8 @@ export default function POS() {
       return;
     }
 
-    if (orderType === 'delivery' && !deliveryAddress) {
+    // العنوان مطلوب فقط إذا تم اختيار سائق (وليس شركة توصيل)
+    if (orderType === 'delivery' && selectedDriver && !deliveryAddress) {
       toast.error(t('يرجى إدخال عنوان التوصيل'));
       return;
     }
