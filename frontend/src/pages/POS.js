@@ -817,8 +817,8 @@ export default function POS() {
           product_name: item.product_name || item.name,
           price: item.price,
           quantity: item.quantity,
-          notes: item.notes || '',
-          addons: item.addons || []
+          cost: item.cost || 0,
+          notes: item.notes || ''
         })),
         order_type: orderType,
         table_id: orderType === 'dine_in' ? selectedTable : null,
@@ -830,6 +830,7 @@ export default function POS() {
         delivery_app: orderType === 'delivery' && deliveryApp ? deliveryApp : null,
         discount: discount || 0,
         branch_id: currentBranchId,
+        payment_method: 'pending',
         auto_ready: true
       };
       
