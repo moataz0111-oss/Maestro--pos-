@@ -951,6 +951,11 @@ class BranchCreate(BaseModel):
     address: str
     phone: str
     email: Optional[str] = None
+    # التكاليف الثابتة الشهرية
+    rent_cost: float = 0.0  # الإيجار الشهري
+    water_cost: float = 0.0  # تكلفة الماء الشهرية
+    electricity_cost: float = 0.0  # تكلفة الكهرباء الشهرية
+    generator_cost: float = 0.0  # تكلفة المولدة الشهرية
 
 class BranchResponse(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -961,6 +966,11 @@ class BranchResponse(BaseModel):
     email: Optional[str] = None
     is_active: bool = True
     created_at: str
+    # التكاليف الثابتة الشهرية
+    rent_cost: float = 0.0
+    water_cost: float = 0.0
+    electricity_cost: float = 0.0
+    generator_cost: float = 0.0
 
 # Category Models
 class CategoryCreate(BaseModel):
