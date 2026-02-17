@@ -1107,7 +1107,7 @@ export default function POS() {
           {orderType === 'dine_in' && (
             <div className="space-y-2">
               {/* تحقق من اختيار فرع */}
-              {!selectedBranchId ? (
+              {(!selectedBranchId || selectedBranchId === 'all') ? (
                 <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-4 text-center">
                   <AlertCircle className="h-8 w-8 mx-auto text-amber-500 mb-2" />
                   <p className="text-amber-600 font-medium">{t('اختر فرع أولاً')}</p>
