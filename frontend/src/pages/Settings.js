@@ -5150,6 +5150,15 @@ export default function Settings() {
                             rows={2}
                           />
                         </div>
+                        <div>
+                          <Label className="text-sm text-muted-foreground">{t('رسالة الشكر (تظهر في نهاية الفاتورة)')}</Label>
+                          <Input
+                            value={invoiceSettings.thank_you_message || ''}
+                            onChange={(e) => setInvoiceSettings(prev => ({...prev, thank_you_message: e.target.value}))}
+                            placeholder={t('مثال: شكراً لزيارتكم ❤️')}
+                            className="mt-1"
+                          />
+                        </div>
                       </div>
                     </div>
 
