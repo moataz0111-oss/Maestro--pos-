@@ -3170,16 +3170,6 @@ export default function Settings() {
                             />
                           </div>
                           <div>
-                            <Label className="text-foreground">{t('التكلفة التشغيلية')}</Label>
-                            <Input
-                              type="number"
-                              value={productForm.operating_cost}
-                              onChange={(e) => setProductForm({ ...productForm, operating_cost: e.target.value })}
-                              placeholder="500"
-                              className="mt-1"
-                            />
-                          </div>
-                          <div>
                             <Label className="text-foreground">{t('تكلفة التغليف (للسفري/التوصيل)')}</Label>
                             <Input
                               type="number"
