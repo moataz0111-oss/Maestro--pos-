@@ -1678,7 +1678,7 @@ export default function POS() {
             </DialogTitle>
           </DialogHeader>
           
-          <div className="print-receipt bg-white text-black p-4 rounded-lg font-mono text-sm" dir="rtl" id="receipt-to-print">
+          <div className="print-receipt bg-white text-black p-4 rounded-lg font-mono text-sm" dir={isRTL ? 'rtl' : 'ltr'} id="receipt-to-print">
             {/* ========== أعلى الفاتورة - شعار المطعم واسمه ========== */}
             <div className="text-center mb-3 border-b border-dashed border-gray-400 pb-3">
               {/* شعار المطعم (الخاص بالعميل) */}
@@ -1695,7 +1695,7 @@ export default function POS() {
                       }
                       return logoUrl;
                     })()}
-                    alt="شعار المطعم" 
+                    alt={t('شعار المطعم')} 
                     className="h-16 w-16 mx-auto object-contain"
                     onError={(e) => e.target.style.display = 'none'}
                   />
@@ -1703,7 +1703,7 @@ export default function POS() {
               )}
               
               {/* اسم المطعم */}
-              <h2 className="text-lg font-bold">{restaurantSettings.name || restaurantSettings.name_ar || 'اسم المطعم'}</h2>
+              <h2 className="text-lg font-bold">{restaurantSettings.name || restaurantSettings.name_ar || t('اسم المطعم')}</h2>
               
               {/* عنوان المطعم */}
               {invoiceSettings.address && (
@@ -1712,7 +1712,7 @@ export default function POS() {
               
               {/* أرقام هاتف المطعم */}
               {(invoiceSettings.phone || invoiceSettings.phone2) && (
-                <div className="text-xs mt-1">
+                <div className="text-xs mt-1" dir="ltr">
                   {invoiceSettings.phone && <span>📞 {invoiceSettings.phone}</span>}
                   {invoiceSettings.phone && invoiceSettings.phone2 && <span> - </span>}
                   {invoiceSettings.phone2 && <span>{invoiceSettings.phone2}</span>}
@@ -1721,18 +1721,53 @@ export default function POS() {
               
               {/* الرقم الضريبي - إذا كان المستخدم يريد إظهاره */}
               {invoiceSettings.tax_number && invoiceSettings.show_tax !== false && (
-                <p className="text-xs text-gray-500 mt-1">{t('الرقم الضريبي: {invoiceSettings.tax_number}')}</p>
+                <p className="text-xs text-gray-500 mt-1">{t('الرقم الضريبي')}: <span dir="ltr">{invoiceSettings.tax_number}</span></p>
               )}
             </div>
             
-            {/* معلومات الفاتورة */}
+            {/* معلومات الفاتورة - التاريخ والوقت ورقم الفاتورة */}
             <div className="text-center mb-2">
-              <p className="text-xs text-gray-500">
-                {new Date().toLocaleDateString('ar-IQ')} - {new Date().toLocaleTimeString('ar-IQ', {hour: '2-digit', minute: '2-digit'})}
+              <p className="text-xs text-gray-500" dir="ltr">
+                {new Date().toLocaleDateString('en-US')} - {new Date().toLocaleTimeString('en-US', {hour: '2-digit', minute: '2-digit', hour12: true})}
               </p>
               {(editingOrder || lastOrderNumber) && (
-                <p className="text-sm font-bold mt-1 bg-gray-100 py-1 rounded">{t('فاتورة رقم: #{editingOrder?.order_number || lastOrderNumber}')}</p>
+                <p className="text-sm font-bold mt-1 bg-gray-100 py-1 rounded">
+                  {t('فاتورة رقم')}: <span dir="ltr">#{editingOrder?.order_number || lastOrderNumber}</span>
+                </p>
               )}
+            </div>
+            
+            {/* معلومات الطلب - الطاولة/الفرع/الموظف */}
+            <div className="border-t border-dashed border-gray-300 pt-2 mb-2 text-xs">
+              {/* الطاولة */}
+              {orderType === 'dine_in' && selectedTable && (
+                <p>
+                  <span className="font-medium">{t('طاولة')}:</span> {tables.find(t => t.id === selectedTable)?.number || selectedTable}
+                </p>
+              )}
+              {orderType === 'takeaway' && <p className="font-medium">🥡 {t('طلب سفري')}</p>}
+              {orderType === 'delivery' && <p className="font-medium">🚗 {t('طلب توصيل')}</p>}
+              
+              {/* اسم الفرع */}
+              {getBranchIdForApi() && branches.length > 0 && (
+                <p>
+                  <span className="font-medium">{t('الفرع')}:</span> {branches.find(b => b.id === getBranchIdForApi())?.name || t('الفرع الرئيسي')}
+                </p>
+              )}
+              
+              {/* اسم الموظف وصفته */}
+              {user && (
+                <p>
+                  <span className="font-medium">{t('الكاشير')}:</span> {user.full_name || user.username} 
+                  {user.role && <span className="text-gray-500"> ({t(user.role === 'admin' ? 'مدير' : user.role === 'cashier' ? 'كاشير' : user.role === 'waiter' ? 'نادل' : user.role)})</span>}
+                </p>
+              )}
+              
+              {/* معلومات العميل */}
+              {customerName && <p><span className="font-medium">{t('العميل')}:</span> {customerName}</p>}
+              {customerPhone && <p><span className="font-medium">{t('الهاتف')}:</span> <span dir="ltr">{customerPhone}</span></p>}
+              {buzzerNumber && <p><span className="font-medium">{t('رقم التنبيه')}:</span> <span dir="ltr">{buzzerNumber}</span></p>}
+              {deliveryAddress && <p><span className="font-medium">{t('العنوان')}:</span> {deliveryAddress}</p>}
             </div>
             
             {/* نص أعلى الفاتورة المخصص */}
@@ -1742,35 +1777,22 @@ export default function POS() {
               </div>
             )}
             
-            {/* معلومات الطلب */}
-            <div className="border-t border-dashed border-gray-300 pt-2 mb-2 text-xs">
-              {orderType === 'dine_in' && selectedTable && (
-                <p>{t('طاولة: {tables.find(t => t.id === selectedTable)?.number}')}</p>
-              )}
-              {orderType === 'takeaway' && <p>{t('🥡 طلب سفري')}</p>}
-              {orderType === 'delivery' && <p>{t('🚗 طلب توصيل')}</p>}
-              {customerName && <p>{t('العميل: {customerName}')}</p>}
-              {customerPhone && <p>{t('الهاتف: {customerPhone}')}</p>}
-              {buzzerNumber && <p>{t('رقم التنبيه: {buzzerNumber}')}</p>}
-              {deliveryAddress && <p>{t('العنوان: {deliveryAddress}')}</p>}
-            </div>
-            
             {/* ========== الأصناف ========== */}
             <div className="border-t border-dashed border-gray-300 py-2">
               <table className="w-full text-xs">
                 <thead>
                   <tr className="border-b border-gray-300">
-                    <th className="text-right py-1">{t('الصنف')}</th>
+                    <th className={`py-1 ${isRTL ? 'text-right' : 'text-left'}`}>{t('الصنف')}</th>
                     <th className="text-center py-1">{t('الكمية')}</th>
-                    <th className="text-left py-1">{t('السعر')}</th>
+                    <th className={`py-1 ${isRTL ? 'text-left' : 'text-right'}`}>{t('السعر')}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {cart.map((item, i) => (
                     <tr key={i}>
-                      <td className="py-1">{item.product_name || item.name || 'منتج'}</td>
-                      <td className="text-center">{item.quantity}</td>
-                      <td className="text-left tabular-nums">{formatPrice(item.price * item.quantity)}</td>
+                      <td className="py-1">{item.product_name || item.name || t('منتج')}</td>
+                      <td className="text-center" dir="ltr">{item.quantity}</td>
+                      <td className={`tabular-nums ${isRTL ? 'text-left' : 'text-right'}`} dir="ltr">{formatPrice(item.price * item.quantity)}</td>
                     </tr>
                   ))}
                 </tbody>
