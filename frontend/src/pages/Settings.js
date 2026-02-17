@@ -4984,13 +4984,76 @@ export default function Settings() {
                     <p className="text-sm text-muted-foreground">{t('تخصيص معلومات المطعم التي تظهر على الفواتير المطبوعة')}</p>
                   </CardHeader>
                   <CardContent className="space-y-6">
-                    {/* ملاحظة عن الشعار */}
+                    {/* شعار المطعم للفاتورة */}
+                    <div className="p-4 border rounded-lg bg-amber-500/10 border-amber-500/30">
+                      <Label className="text-foreground font-bold mb-4 flex items-center gap-2">
+                        <ImageIcon className="h-5 w-5 text-amber-500" />{t('شعار المطعم (يظهر أعلى الفاتورة)')}
+                      </Label>
+                      <div className="flex items-start gap-4 mt-4">
+                        <div className="w-20 h-20 rounded-xl bg-gradient-to-br from-amber-400 to-yellow-500 flex items-center justify-center overflow-hidden border-2 border-border/50">
+                          {invoiceSettings.invoice_logo ? (
+                            <img 
+                              src={invoiceSettings.invoice_logo?.startsWith('/api') 
+                                ? `${API}${invoiceSettings.invoice_logo.replace('/api', '')}` 
+                                : invoiceSettings.invoice_logo?.startsWith('/uploads')
+                                  ? `${API}${invoiceSettings.invoice_logo}`
+                                  : invoiceSettings.invoice_logo}
+                              alt={t('شعار المطعم')} 
+                              className="w-full h-full object-cover"
+                              onError={(e) => {
+                                e.target.style.display = 'none';
+                              }}
+                            />
+                          ) : (
+                            <Store className="h-8 w-8 text-black/50" />
+                          )}
+                        </div>
+                        <div className="flex-1 space-y-2">
+                          <Input
+                            type="file"
+                            accept="image/*"
+                            onChange={async (e) => {
+                              const file = e.target.files[0];
+                              if (file) {
+                                const formData = new FormData();
+                                formData.append('file', file);
+                                try {
+                                  const res = await axios.post(`${API}/upload/restaurant-logo`, formData, {
+                                    headers: { 'Content-Type': 'multipart/form-data' }
+                                  });
+                                  setInvoiceSettings(prev => ({...prev, invoice_logo: res.data.url || res.data.logo_url}));
+                                  toast.success(t('تم رفع الشعار بنجاح'));
+                                } catch (err) {
+                                  toast.error(t('فشل في رفع الشعار'));
+                                }
+                              }
+                            }}
+                            className="cursor-pointer"
+                          />
+                          <p className="text-xs text-muted-foreground">
+                            {t('يفضل صورة مربعة بحجم 200×200 بكسل')}
+                          </p>
+                          {invoiceSettings.invoice_logo && (
+                            <Button 
+                              variant="outline" 
+                              size="sm"
+                              className="text-red-500 border-red-500/50"
+                              onClick={() => setInvoiceSettings(prev => ({...prev, invoice_logo: null}))}
+                            >
+                              <Trash2 className="h-4 w-4 ml-1" />{t('إزالة الشعار')}
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* ملاحظة عن شعار النظام */}
                     <div className="p-4 border rounded-lg bg-blue-500/10 border-blue-500/30">
                       <div className="flex items-center gap-3">
                         <ImageIcon className="h-6 w-6 text-blue-500" />
                         <div>
                           <p className="font-medium text-foreground">{t('شعار النظام')}</p>
-                          <p className="text-xs text-muted-foreground">{t('يتم التحكم في شعار النظام من قبل المالك ويظهر تلقائياً في جميع الفواتير')}</p>
+                          <p className="text-xs text-muted-foreground">{t('يظهر شعار النظام ومعلومات التواصل تلقائياً في أسفل الفاتورة مع QR Code')}</p>
                         </div>
                       </div>
                     </div>
