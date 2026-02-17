@@ -84,13 +84,26 @@ export default function SystemContact() {
   const phone2 = settings.system_phone2;
   const email = settings.system_email;
   const website = settings.system_website;
-  const promoText = settings.promo_text || 'نظام إدارة متكامل للمطاعم والكافيهات';
-  const ctaText = settings.cta_text || 'للحصول على نسختك تواصل معنا';
+  const promoText = settings.promo_text || t('نظام إدارة متكامل للمطاعم والكافيهات');
+  const ctaText = settings.cta_text || t('للحصول على نسختك تواصل معنا');
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-amber-50 via-orange-50 to-yellow-50" dir={isRTL ? 'rtl' : 'ltr'}>
+      {/* زر تغيير اللغة */}
+      <div className="absolute top-4 left-4 z-10">
+        <Button 
+          variant="outline" 
+          size="sm"
+          onClick={toggleLanguage}
+          className="bg-white/90 hover:bg-white shadow-md border-amber-300"
+        >
+          <Languages className="h-4 w-4 ml-1" />
+          {getLanguageName()}
+        </Button>
+      </div>
+
       {/* Header */}
-      <div className="bg-gradient-to-r from-amber-500 to-orange-500 text-white py-8 px-4 text-center shadow-lg">
+      <div className="bg-gradient-to-r from-amber-500 to-orange-500 text-white py-8 px-4 text-center shadow-lg relative">
         {settings.system_logo_url && (
           <img 
             src={settings.system_logo_url?.startsWith('/api') 
