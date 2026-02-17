@@ -178,6 +178,10 @@ export default function Dashboard() {
   const [pendingCustomerOrders, setPendingCustomerOrders] = useState([]);
   const [showNewOrderAlert, setShowNewOrderAlert] = useState(false);
   const [lastCheckTime, setLastCheckTime] = useState(null);
+  
+  // تنبيهات نقطة التعادل
+  const [breakEvenAlerts, setBreakEvenAlerts] = useState([]);
+  const [hasBreakEvenPermission, setHasBreakEvenPermission] = useState(false);
   const notificationAudioRef = useRef(null);
   
   // إشعارات الطلبات المتأخرة
