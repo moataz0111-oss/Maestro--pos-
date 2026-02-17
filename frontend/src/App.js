@@ -392,6 +392,8 @@ function AppRoutes() {
       <Route path="/install-app" element={<CustomerInstall />} />
       {/* تطبيق السائق - بدون حماية */}
       <Route path="/driver-app" element={<DriverApp />} />
+      {/* صفحة التواصل للنظام - بدون حماية */}
+      <Route path="/contact" element={<SystemContact />} />
       <Route path="*" element={<Navigate to="/" />} />
       </Routes>
     </Suspense>
