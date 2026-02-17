@@ -6231,6 +6231,7 @@ class TenantInvoiceSettings(BaseModel):
     show_tax: bool = True  # إظهار الرقم الضريبي
     custom_header: Optional[str] = None  # نص إضافي في الترويسة
     custom_footer: Optional[str] = None  # نص إضافي في التذييل
+    thank_you_message: Optional[str] = None  # رسالة الشكر
 
 @api_router.get("/system/invoice-settings")
 async def get_system_invoice_settings():
