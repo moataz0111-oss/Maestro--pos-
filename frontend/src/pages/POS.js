@@ -2103,6 +2103,12 @@ export default function POS() {
                   `);
                   printWindow.document.close();
                   toast.success(t('تم فتح نافذة الطباعة'));
+                  // إغلاق نافذة المعاينة وتنظيف السلة
+                  setPrintDialogOpen(false);
+                  if (lastOrderNumber && !editingOrder) {
+                    clearCart();
+                    setLastOrderNumber(null);
+                  }
                 } else {
                   toast.error(t('فشل في تحميل الفاتورة'));
                 }
