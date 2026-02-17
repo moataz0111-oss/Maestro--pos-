@@ -1725,30 +1725,63 @@ export default function POS() {
               )}
             </div>
             
-            {/* معلومات الفاتورة - التاريخ والوقت ورقم الفاتورة */}
+            {/* معلومات الفاتورة - رقم الفاتورة ثم التاريخ والوقت */}
             <div className="text-center mb-2">
-              <p className="text-xs text-gray-500" dir="ltr">
-                {new Date().toLocaleDateString('en-US')} - {new Date().toLocaleTimeString('en-US', {hour: '2-digit', minute: '2-digit', hour12: true})}
-              </p>
+              {/* رقم الفاتورة أولاً */}
               {(editingOrder || lastOrderNumber) && (
-                <p className="text-sm font-bold mt-1 bg-gray-100 py-1 rounded">
+                <p className="text-sm font-bold bg-gray-100 py-1 rounded mb-1">
                   {t('فاتورة رقم')}: <span dir="ltr">#{editingOrder?.order_number || lastOrderNumber}</span>
                 </p>
               )}
+              {/* التاريخ والوقت */}
+              <p className="text-xs text-gray-500" dir="ltr">
+                {new Date().toLocaleDateString('en-US')} - {new Date().toLocaleTimeString('en-US', {hour: '2-digit', minute: '2-digit', hour12: true})}
+              </p>
             </div>
             
-            {/* معلومات الطلب - الطاولة/الفرع/الموظف */}
+            {/* معلومات الطلب - متغيرة حسب نوع الطلب */}
             <div className="border-t border-dashed border-gray-300 pt-2 mb-2 text-xs">
-              {/* الطاولة */}
-              {orderType === 'dine_in' && selectedTable && (
-                <p>
-                  <span className="font-medium">{t('طاولة')}:</span> {tables.find(t => t.id === selectedTable)?.number || selectedTable}
-                </p>
+              {/* === طلب داخلي - الطاولة === */}
+              {orderType === 'dine_in' && (
+                <>
+                  {selectedTable && (
+                    <p className="font-medium">
+                      🍽️ {t('طاولة')}: <span className="font-bold">{tables.find(t => t.id === selectedTable)?.number || selectedTable}</span>
+                    </p>
+                  )}
+                </>
               )}
-              {orderType === 'takeaway' && <p className="font-medium">🥡 {t('طلب سفري')}</p>}
-              {orderType === 'delivery' && <p className="font-medium">🚗 {t('طلب توصيل')}</p>}
               
-              {/* اسم الفرع */}
+              {/* === طلب سفري - رقم الجهاز === */}
+              {orderType === 'takeaway' && (
+                <>
+                  <p className="font-medium">🥡 {t('طلب سفري')}</p>
+                  {buzzerNumber && (
+                    <p>
+                      <span className="font-medium">{t('رقم الجهاز')}:</span> <span dir="ltr" className="font-bold">{buzzerNumber}</span>
+                    </p>
+                  )}
+                </>
+              )}
+              
+              {/* === طلب توصيل - معلومات العميل والسائق/الشركة === */}
+              {orderType === 'delivery' && (
+                <>
+                  <p className="font-medium">🚗 {t('طلب توصيل')}</p>
+                  {customerName && <p><span className="font-medium">{t('العميل')}:</span> {customerName}</p>}
+                  {customerPhone && <p><span className="font-medium">{t('الهاتف')}:</span> <span dir="ltr">{customerPhone}</span></p>}
+                  {deliveryAddress && <p><span className="font-medium">{t('العنوان')}:</span> {deliveryAddress}</p>}
+                  {/* السائق أو شركة التوصيل */}
+                  {selectedDriver && drivers.length > 0 && (
+                    <p><span className="font-medium">{t('السائق')}:</span> {drivers.find(d => d.id === selectedDriver)?.name || selectedDriver}</p>
+                  )}
+                  {deliveryApp && deliveryApps.length > 0 && (
+                    <p><span className="font-medium">{t('شركة التوصيل')}:</span> {deliveryApps.find(a => a.id === deliveryApp)?.name || deliveryApp}</p>
+                  )}
+                </>
+              )}
+              
+              {/* اسم الفرع - يظهر لجميع أنواع الطلبات */}
               {getBranchIdForApi() && branches.length > 0 && (
                 <p>
                   <span className="font-medium">{t('الفرع')}:</span> {branches.find(b => b.id === getBranchIdForApi())?.name || t('الفرع الرئيسي')}
@@ -1762,12 +1795,6 @@ export default function POS() {
                   {user.role && <span className="text-gray-500"> ({t(user.role === 'admin' ? 'مدير' : user.role === 'cashier' ? 'كاشير' : user.role === 'waiter' ? 'نادل' : user.role)})</span>}
                 </p>
               )}
-              
-              {/* معلومات العميل */}
-              {customerName && <p><span className="font-medium">{t('العميل')}:</span> {customerName}</p>}
-              {customerPhone && <p><span className="font-medium">{t('الهاتف')}:</span> <span dir="ltr">{customerPhone}</span></p>}
-              {buzzerNumber && <p><span className="font-medium">{t('رقم التنبيه')}:</span> <span dir="ltr">{buzzerNumber}</span></p>}
-              {deliveryAddress && <p><span className="font-medium">{t('العنوان')}:</span> {deliveryAddress}</p>}
             </div>
             
             {/* نص أعلى الفاتورة المخصص */}
