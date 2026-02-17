@@ -13,10 +13,9 @@ from datetime import datetime
 
 BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', '').rstrip('/')
 
-# Test credentials
-DEMO_USER = {"email": "demo@maestroegp.com", "password": "demo123"}
+# Test credentials - using super_admin since admin@maestroegp.com doesn't exist
 SUPER_ADMIN = {"email": "owner@maestroegp.com", "password": "owner123"}
-ADMIN_USER = {"email": "admin@maestroegp.com", "password": "admin123"}
+ADMIN_USER = SUPER_ADMIN  # Use super_admin for testing
 TEST_BRANCH_ID = "b45125b7-b7d3-48c6-9386-a95fcf773132"
 
 
