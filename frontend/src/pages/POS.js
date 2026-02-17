@@ -830,8 +830,6 @@ export default function POS() {
         delivery_app: orderType === 'delivery' && deliveryApp ? deliveryApp : null,
         discount: discount || 0,
         branch_id: currentBranchId,
-        status: 'completed',
-        payment_status: 'paid',
         auto_ready: true
       };
       
