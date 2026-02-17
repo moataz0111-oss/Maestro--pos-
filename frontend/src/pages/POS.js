@@ -768,7 +768,7 @@ export default function POS() {
       setTables(tablesRes.data);
     } catch (error) {
       console.error('Failed to submit order:', error);
-      toast.error(error.response?.data?.detail || t('فشل في إرسال الطلب'));
+      toast.error(getErrorMessage(error, t('فشل في إرسال الطلب')));
     } finally {
       setSubmitting(false);
     }
