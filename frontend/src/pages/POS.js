@@ -813,6 +813,8 @@ export default function POS() {
       const orderData = {
         items: cart.map(item => ({
           product_id: item.product_id || item.id,
+          product_name: item.product_name || item.name,
+          price: item.price,
           quantity: item.quantity,
           notes: item.notes || '',
           addons: item.addons || []
