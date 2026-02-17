@@ -493,6 +493,17 @@ export default function Dashboard() {
       
       setStats(statsRes.data);
       setRecentOrders(statsRes.data.recent_orders || []);
+      
+      // جلب تنبيهات نقطة التعادل (للمدير والأدمن فقط)
+      try {
+        const alertsRes = await axios.get(`${API}/break-even/alerts`);
+        if (alertsRes.data.has_permission) {
+          setBreakEvenAlerts(alertsRes.data.alerts || []);
+          setHasBreakEvenPermission(true);
+        }
+      } catch (alertErr) {
+        console.log('Break-even alerts not available');
+      }
     } catch (error) {
       console.error('Failed to fetch data:', error);
       // Fallback للطريقة القديمة
