@@ -3015,6 +3015,18 @@ const translationMap = {
   'المجموع = الهدف اليومي الذي يجب تحقيقه من الأرباح': { en: 'Total = Daily target that must be achieved from profits', ku: 'کۆ = ئامانجی ڕۆژانە کە دەبێت لە قازانج بەدەست بهێنرێت' },
   'بعد تغطية الهدف، كل ربح إضافي يُحسب كربح صافي 100%': { en: 'After covering target, all additional profit counts as 100% net profit', ku: 'دوای داپۆشینی ئامانج، هەموو قازانجێکی زیادە وەک ١٠٠٪ قازانجی پاک دادەنرێت' },
   'موظف': { en: 'employee', ku: 'کارمەند' },
+  
+  // ===== ترجمات تقرير تحليل التكاليف =====
+  'تقرير تحليل التكاليف والأرباح': { en: 'Cost Analysis & Profit Report', ku: 'راپۆرتی شیکاری خەرجی و قازانج' },
+  'تقرير تحليل التكاليف المفصل': { en: 'Detailed Cost Analysis Report', ku: 'راپۆرتی شیکاری خەرجی بە وردی' },
+  'تحليل شامل للتكاليف التشغيلية وصافي الأرباح': { en: 'Comprehensive analysis of operating costs and net profit', ku: 'شیکاری گشتگیر بۆ خەرجی کارپێکردن و قازانجی پاک' },
+  'ملخص إجمالي التكاليف': { en: 'Total Costs Summary', ku: 'پوختەی کۆی خەرجییەکان' },
+  'صافي الربح بعد جميع التكاليف': { en: 'Net Profit After All Costs', ku: 'قازانجی پاک دوای هەموو خەرجییەکان' },
+  'فترة التقرير': { en: 'Report Period', ku: 'ماوەی راپۆرت' },
+  'مصاريف أخرى': { en: 'Other Expenses', ku: 'خەرجی تر' },
+  'إجمالي التكاليف التشغيلية': { en: 'Total Operating Costs', ku: 'کۆی خەرجی کارپێکردن' },
+  'اليومية': { en: 'Daily', ku: 'ڕۆژانە' },
+  'الشهرية': { en: 'Monthly', ku: 'مانگانە' },
 };
 
 // الحصول على اللغة الحالية
