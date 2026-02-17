@@ -1790,7 +1790,7 @@ export default function POS() {
           <div className="print-receipt bg-white text-black p-4 rounded-lg font-mono text-sm" dir={isRTL ? 'rtl' : 'ltr'} id="receipt-to-print">
             {/* ========== أعلى الفاتورة - شعار المطعم واسمه ========== */}
             <div className="text-center mb-3 border-b border-dashed border-gray-400 pb-3">
-              {/* شعار المطعم (الخاص بالعميل) */}
+              {/* شعار المطعم (الخاص بالعميل) - دائري */}
               {invoiceSettings.invoice_logo && (
                 <div className="mb-2">
                   <img 
@@ -1805,7 +1805,7 @@ export default function POS() {
                       return logoUrl;
                     })()}
                     alt={t('شعار المطعم')} 
-                    className="h-16 w-16 mx-auto object-contain"
+                    className="h-16 w-16 mx-auto object-cover rounded-full border-2 border-gray-300"
                     onError={(e) => e.target.style.display = 'none'}
                   />
                 </div>
