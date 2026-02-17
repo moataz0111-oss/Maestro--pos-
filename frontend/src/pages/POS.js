@@ -1162,7 +1162,10 @@ export default function POS() {
                             // فتح الطلب المرتبط بالطاولة المشغولة
                             await loadOrderForEditing(table.current_order_id);
                             toast.success(t('تم فتح طلب الطاولة') + ` ${table.number}`);
-                          } else if (isAvailable || isSelected) {
+                          } else if (isSelected) {
+                            // إلغاء التحديد بالنقر مرة أخرى
+                            setSelectedTable(null);
+                          } else if (isAvailable) {
                             setSelectedTable(table.id);
                           }
                         }}
