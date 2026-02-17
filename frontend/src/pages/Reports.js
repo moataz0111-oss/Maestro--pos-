@@ -27,7 +27,8 @@ import {
   Percent,
   CreditCard,
   Clock,
-  Search
+  Search,
+  Target
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
