@@ -1663,14 +1663,14 @@ export default function POS() {
           </DialogHeader>
           
           <div className="print-receipt bg-white text-black p-4 rounded-lg font-mono text-sm" dir="rtl" id="receipt-to-print">
-            {/* ========== أعلى الفاتورة - الشعار واسم المطعم ========== */}
+            {/* ========== أعلى الفاتورة - شعار المطعم واسمه ========== */}
             <div className="text-center mb-3 border-b border-dashed border-gray-400 pb-3">
-              {/* شعار النظام (الدائري) */}
-              {systemInvoiceSettings.system_logo_url && (
+              {/* شعار المطعم (الخاص بالعميل) */}
+              {invoiceSettings.invoice_logo && (
                 <div className="mb-2">
                   <img 
                     src={(() => {
-                      const logoUrl = systemInvoiceSettings.system_logo_url;
+                      const logoUrl = invoiceSettings.invoice_logo;
                       if (logoUrl?.startsWith('/api')) {
                         return `${API}${logoUrl.replace('/api', '')}`;
                       }
@@ -1679,8 +1679,8 @@ export default function POS() {
                       }
                       return logoUrl;
                     })()}
-                    alt="شعار النظام" 
-                    className="h-12 w-12 mx-auto object-contain rounded-full"
+                    alt="شعار المطعم" 
+                    className="h-16 w-16 mx-auto object-contain"
                     onError={(e) => e.target.style.display = 'none'}
                   />
                 </div>
