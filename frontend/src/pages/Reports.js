@@ -351,7 +351,8 @@ export default function Reports() {
       {/* Report Tabs */}
       <main className="max-w-7xl mx-auto px-6 py-6">
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid grid-cols-5 md:grid-cols-10 mb-6">
+          <TabsList className="grid grid-cols-5 md:grid-cols-11 mb-6">
+            <TabsTrigger value="comprehensive" className="text-green-500 font-bold">{t('التقرير الشامل')}</TabsTrigger>
             <TabsTrigger value="sales">{t('المبيعات')}</TabsTrigger>
             <TabsTrigger value="purchases">{t('المشتريات')}</TabsTrigger>
             <TabsTrigger value="expenses">{t('المصاريف')}</TabsTrigger>
@@ -363,6 +364,28 @@ export default function Reports() {
             <TabsTrigger value="refunds" className="text-purple-500">{t('الإرجاعات')}</TabsTrigger>
             <TabsTrigger value="credit" className="text-blue-500">{t('الآجل')}</TabsTrigger>
           </TabsList>
+
+          {/* Comprehensive Report - التقرير الشامل */}
+          <TabsContent value="comprehensive">
+            <ComprehensiveReportTab 
+              salesReport={salesReport}
+              purchasesReport={purchasesReport}
+              expensesReport={expensesReport}
+              profitLossReport={profitLossReport}
+              productsReport={productsReport}
+              deliveryCreditsReport={deliveryCreditsReport}
+              cancellationsReport={cancellationsReport}
+              discountsReport={discountsReport}
+              creditReport={creditReport}
+              refundsReport={refundsReport}
+              branchName={getSelectedBranchName()}
+              dateRange={{ start: startDate, end: endDate }}
+              t={t}
+              formatPrice={formatPrice}
+              loading={loading}
+              fetchAllReports={fetchAllReportsForComprehensive}
+            />
+          </TabsContent>
 
           {/* Sales Report */}
           <TabsContent value="sales">
