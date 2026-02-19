@@ -591,7 +591,10 @@ export default function Dashboard() {
     setShowReport(false);
     
     try {
-      const res = await axios.get(`${API}/cash-register/summary`);
+      // إرسال branch_id المحدد للحصول على بيانات الفرع الصحيح
+      const branchId = getBranchIdForApi();
+      const params = branchId ? { branch_id: branchId } : {};
+      const res = await axios.get(`${API}/cash-register/summary`, { params });
       setCashSummary(res.data);
       // إعادة تعيين الجرد
       setDenominations({
