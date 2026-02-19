@@ -76,14 +76,24 @@ class MonthlyRevenueReport(BaseModel):
 
 # ==================== DEPENDENCY ====================
 
-# نستورد التبعيات من server.py
-from server import db, get_current_user, get_user_tenant_id, build_tenant_query, UserRole
+# نستورد التبعيات من shared.py
+from .shared import get_database, get_current_user, get_user_tenant_id, build_tenant_query, UserRole
+
+# الحصول على قاعدة البيانات
+db = None
+
+def get_db():
+    global db
+    if db is None:
+        db = get_database()
+    return db
 
 # ==================== API ROUTES ====================
 
 @router.post("/register", response_model=SoldBranchResponse)
 async def register_sold_branch(data: SoldBranchCreate, current_user: dict = Depends(get_current_user)):
     """تسجيل فرع كفرع مباع"""
+    db = get_db()
     if current_user["role"] not in [UserRole.ADMIN, UserRole.SUPER_ADMIN]:
         raise HTTPException(status_code=403, detail="غير مصرح")
     
