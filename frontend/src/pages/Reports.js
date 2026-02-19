@@ -315,7 +315,7 @@ export default function Reports() {
             />
           </div>
           {/* زر البحث */}
-          <div className="flex items-end">
+          <div className="flex items-end gap-2">
             <Button 
               onClick={fetchReports} 
               disabled={loading}
@@ -328,6 +328,21 @@ export default function Reports() {
                 <Search className="h-4 w-4" />
               )}
               {t('بحث')}
+            </Button>
+            {/* زر التقرير الشامل */}
+            <Button 
+              onClick={fetchAndPrintComprehensiveReport} 
+              disabled={loadingComprehensive}
+              variant="outline"
+              className="gap-2 border-green-500 text-green-600 hover:bg-green-50"
+              data-testid="comprehensive-report-btn"
+            >
+              {loadingComprehensive ? (
+                <RefreshCw className="h-4 w-4 animate-spin" />
+              ) : (
+                <FileSpreadsheet className="h-4 w-4" />
+              )}
+              {t('التقرير الشامل')}
             </Button>
           </div>
         </div>
