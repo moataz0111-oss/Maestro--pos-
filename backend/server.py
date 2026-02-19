@@ -5591,6 +5591,86 @@ async def export_employee_salary_slip_pdf(
 # Note: The main cash register close endpoint is defined above at /api/cash-register/close 
 # with the complete functionality including shift management
 
+@api_router.get("/cash-register/summary")
+async def get_cash_register_summary(current_user: dict = Depends(get_current_user)):
+    """جلب ملخص الصندوق للوردية الحالية"""
+    tenant_id = get_user_tenant_id(current_user)
+    branch_id = current_user.get("branch_id")
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    
+    # التحقق من وجود وردية مفتوحة
+    shift_query = {
+        "status": "open"
+    }
+    if tenant_id:
+        shift_query["tenant_id"] = tenant_id
+    if branch_id:
+        shift_query["branch_id"] = branch_id
+    
+    open_shift = await db.shifts.find_one(shift_query, {"_id": 0})
+    
+    if not open_shift:
+        raise HTTPException(status_code=404, detail="لا يوجد وردية مفتوحة")
+    
+    # جلب الطلبات منذ بدء الوردية
+    shift_start = open_shift.get("opened_at", today)
+    
+    # مبيعات النقدية
+    sales_query = {
+        "payment_method": "cash",
+        "status": {"$ne": "cancelled"},
+        "created_at": {"$gte": shift_start}
+    }
+    if tenant_id:
+        sales_query["tenant_id"] = tenant_id
+    if branch_id:
+        sales_query["branch_id"] = branch_id
+    
+    cash_orders = await db.orders.find(sales_query, {"_id": 0, "total": 1}).to_list(1000)
+    total_cash_sales = sum(o.get("total", 0) for o in cash_orders)
+    
+    # مبيعات البطاقة
+    card_query = sales_query.copy()
+    card_query["payment_method"] = "card"
+    card_orders = await db.orders.find(card_query, {"_id": 0, "total": 1}).to_list(1000)
+    total_card_sales = sum(o.get("total", 0) for o in card_orders)
+    
+    # مبيعات الآجل
+    credit_query = sales_query.copy()
+    credit_query["payment_method"] = "credit"
+    credit_orders = await db.orders.find(credit_query, {"_id": 0, "total": 1}).to_list(1000)
+    total_credit = sum(o.get("total", 0) for o in credit_orders)
+    
+    # المصاريف
+    expenses_query = {"date": today}
+    if tenant_id:
+        expenses_query["tenant_id"] = tenant_id
+    if branch_id:
+        expenses_query["branch_id"] = branch_id
+    
+    expenses = await db.expenses.find(expenses_query, {"_id": 0}).to_list(100)
+    total_expenses = sum(e.get("amount", 0) for e in expenses)
+    
+    # رصيد الافتتاح
+    opening_balance = open_shift.get("opening_balance", 0)
+    
+    return {
+        "date": today,
+        "shift_id": open_shift.get("id"),
+        "shift_start": shift_start,
+        "opening_balance": opening_balance,
+        "cash_sales": total_cash_sales,
+        "card_sales": total_card_sales,
+        "credit_sales": total_credit,
+        "total_sales": total_cash_sales + total_card_sales + total_credit,
+        "orders_count": len(cash_orders) + len(card_orders) + len(credit_orders),
+        "expenses": expenses,
+        "total_expenses": total_expenses,
+        "expected_cash": opening_balance + total_cash_sales - total_expenses,
+        "branch_id": branch_id,
+        "cashier_name": open_shift.get("cashier_name", current_user.get("full_name", ""))
+    }
+
 @api_router.get("/cash-register/today")
 async def get_today_cash_register(current_user: dict = Depends(get_current_user)):
     """جلب بيانات صندوق اليوم"""
