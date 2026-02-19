@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="2" skipped="0" tests="5" time="3.017" timestamp="2026-02-19T18:06:32.274139+00:00" hostname="agent-env-a809bb95-d0c6-4e78-8c6c-8ef3df3df5e3"><testcase classname="backend.tests.test_cash_register_summary.TestCashRegisterSummary" name="test_cash_register_summary_returns_expected_cash" time="0.817" /><testcase classname="backend.tests.test_cash_register_summary.TestCashRegisterSummary" name="test_cash_register_summary_includes_all_required_fields" time="0.496" /><testcase classname="backend.tests.test_cash_register_summary.TestCashRegisterSummary" name="test_current_shift_exists" time="0.532" /><testcase classname="backend.tests.test_cash_register_summary.TestCashRegisterClose" name="test_cash_register_close_requires_auth" time="0.535"><failure message="AssertionError: Should require authentication&#10;assert 403 == 401&#10; +  where 403 = &lt;Response [403]&gt;.status_code">backend/tests/test_cash_register_summary.py:130: in test_cash_register_close_requires_auth
+    assert response.status_code == 401, "Should require authentication"
+E   AssertionError: Should require authentication
+E   assert 403 == 401
+E    +  where 403 = &lt;Response [403]&gt;.status_code</failure></testcase><testcase classname="backend.tests.test_cash_register_summary.TestCashRegisterClose" name="test_cash_register_summary_requires_auth" time="0.522"><failure message="AssertionError: Should require authentication&#10;assert 403 == 401&#10; +  where 403 = &lt;Response [403]&gt;.status_code">backend/tests/test_cash_register_summary.py:136: in test_cash_register_summary_requires_auth
+    assert response.status_code == 401, "Should require authentication"
+E   AssertionError: Should require authentication
+E   assert 403 == 401
+E    +  where 403 = &lt;Response [403]&gt;.status_code</failure></testcase></testsuite></testsuites>
