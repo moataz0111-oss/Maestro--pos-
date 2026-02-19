@@ -2844,6 +2844,111 @@ export default function Settings() {
                         </div>
                       </div>
                       
+                      {/* قسم الفرع المباع */}
+                      <div className="pt-4 border-t border-border">
+                        <h3 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
+                          <Store className="h-5 w-5 text-blue-500" />
+                          {t('إعدادات الفرع الخارجي')}
+                        </h3>
+                        <p className="text-sm text-muted-foreground mb-4">
+                          {t('إذا كان هذا الفرع مباعاً لمستفيد آخر، يمكنك تفعيل هذا الخيار وتحديد النسبة الشهرية')}
+                        </p>
+                        
+                        <div className="flex items-center justify-between p-4 bg-blue-50 dark:bg-blue-950/30 rounded-lg mb-4">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 bg-blue-500/20 rounded-full flex items-center justify-center">
+                              <Store className="h-5 w-5 text-blue-600" />
+                            </div>
+                            <div>
+                              <p className="font-medium">{t('فرع مباع')}</p>
+                              <p className="text-xs text-muted-foreground">{t('تفعيل هذا الخيار يجعل الفرع يظهر في إدارة الفروع الخارجية')}</p>
+                            </div>
+                          </div>
+                          <Switch
+                            checked={editBranchForm.is_sold_branch || false}
+                            onCheckedChange={(checked) => setEditBranchForm({ 
+                              ...editBranchForm, 
+                              is_sold_branch: checked,
+                              owner_percentage: checked ? (editBranchForm.owner_percentage || 0) : 0
+                            })}
+                          />
+                        </div>
+                        
+                        {editBranchForm.is_sold_branch && (
+                          <div className="space-y-4 animate-in slide-in-from-top-2">
+                            <div className="grid grid-cols-2 gap-4">
+                              <div>
+                                <Label className="text-foreground">{t('اسم المشتري/المستفيد')}</Label>
+                                <Input
+                                  type="text"
+                                  value={editBranchForm.buyer_name || ''}
+                                  onChange={(e) => setEditBranchForm({ ...editBranchForm, buyer_name: e.target.value })}
+                                  className="mt-1"
+                                  placeholder={t('اسم صاحب الفرع الجديد')}
+                                />
+                              </div>
+                              <div>
+                                <Label className="text-foreground">{t('هاتف المشتري')}</Label>
+                                <Input
+                                  type="text"
+                                  value={editBranchForm.buyer_phone || ''}
+                                  onChange={(e) => setEditBranchForm({ ...editBranchForm, buyer_phone: e.target.value })}
+                                  className="mt-1"
+                                  placeholder="07XX..."
+                                />
+                              </div>
+                            </div>
+                            
+                            <div>
+                              <Label className="text-foreground">{t('نسبتك من المبيعات')} (%)</Label>
+                              <div className="flex items-center gap-4 mt-1">
+                                <Input
+                                  type="number"
+                                  min="0"
+                                  max="100"
+                                  step="0.5"
+                                  value={editBranchForm.owner_percentage || 0}
+                                  onChange={(e) => setEditBranchForm({ ...editBranchForm, owner_percentage: parseFloat(e.target.value) || 0 })}
+                                  className="flex-1"
+                                  placeholder="0"
+                                />
+                                <span className="text-2xl font-bold text-blue-600">%</span>
+                              </div>
+                              <p className="text-xs text-muted-foreground mt-1">
+                                {t('هذه النسبة ستُحسب تلقائياً من مبيعات الفرع الشهرية')}
+                              </p>
+                            </div>
+                            
+                            <div>
+                              <Label className="text-foreground">{t('رسوم شهرية ثابتة')} ({t('اختياري')})</Label>
+                              <Input
+                                type="number"
+                                min="0"
+                                value={editBranchForm.monthly_fee || 0}
+                                onChange={(e) => setEditBranchForm({ ...editBranchForm, monthly_fee: parseFloat(e.target.value) || 0 })}
+                                className="mt-1"
+                                placeholder="0"
+                              />
+                              <p className="text-xs text-muted-foreground mt-1">
+                                {t('رسوم إضافية ثابتة كل شهر (مثل رسوم العلامة التجارية)')}
+                              </p>
+                            </div>
+                            
+                            <div className="p-3 bg-blue-100 dark:bg-blue-950/50 rounded-lg">
+                              <p className="text-sm text-blue-800 dark:text-blue-200 flex items-center gap-2">
+                                <AlertCircle className="h-4 w-4" />
+                                {t('سيتم حساب المستحقات تلقائياً من:')}
+                              </p>
+                              <ul className="text-xs text-blue-700 dark:text-blue-300 mt-2 mr-6 space-y-1 list-disc">
+                                <li>{t('نسبة المبيعات الشهرية')}</li>
+                                <li>{t('قيمة المواد المسحوبة من المخازن')}</li>
+                                <li>{t('الرسوم الشهرية الثابتة')}</li>
+                              </ul>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                      
                       <div className="flex gap-2 pt-4">
                         <Button type="button" variant="outline" onClick={() => setEditBranchDialogOpen(false)} className="flex-1">{t('إلغاء')}</Button>
                         <Button type="submit" className="flex-1 bg-primary text-primary-foreground">{t('حفظ التعديلات')}</Button>
