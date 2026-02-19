@@ -60,6 +60,7 @@ export default function Reports() {
   const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('sales');
+  const [loadingComprehensive, setLoadingComprehensive] = useState(false);
   
   // Report Data
   const [salesReport, setSalesReport] = useState(null);
@@ -73,6 +74,13 @@ export default function Reports() {
   const [discountsReport, setDiscountsReport] = useState(null);
   const [creditReport, setCreditReport] = useState(null);
   const [refundsReport, setRefundsReport] = useState(null);
+
+  // الحصول على اسم الفرع المحدد
+  const getSelectedBranchName = () => {
+    if (!selectedBranchId || selectedBranchId === 'all') return t('جميع الفروع');
+    const branch = branches?.find(b => b.id === selectedBranchId);
+    return branch?.name || t('جميع الفروع');
+  };
 
   useEffect(() => {
     fetchReports();
