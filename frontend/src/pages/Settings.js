@@ -418,7 +418,9 @@ export default function Settings() {
     showCallLogs: true,
     showLoyalty: true,
     showCoupons: true,
-    showSettings: true
+    showSettings: true,
+    showOwnerWallet: true,
+    showExternalBranches: true
   });
 
   useEffect(() => {
