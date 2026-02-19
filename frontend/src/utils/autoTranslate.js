@@ -3151,6 +3151,22 @@ const translationMap = {
   'تم إلغاء التسجيل': { en: 'Registration cancelled', ku: 'تۆمارکردن هەڵوەشایەوە' },
   'فشل في الإلغاء': { en: 'Failed to cancel', ku: 'سەرکەوتن نەبوو لە هەڵوەشاندنەوە' },
   'الفروع الخارجية': { en: 'External Branches', ku: 'لقە دەرەکییەکان' },
+  'تعديل الفروع': { en: 'Edit Branches', ku: 'دەستکاریکردنی لقەکان' },
+  'الذهاب للإعدادات': { en: 'Go to Settings', ku: 'بڕۆ بۆ ڕێکخستنەکان' },
+  'لإضافة فرع مباع، قم بتعديل الفرع من الإعدادات وتفعيل خيار "فرع مباع"': { en: 'To add a sold branch, edit the branch from settings and enable "Sold Branch"', ku: 'بۆ زیادکردنی لقی فرۆشراو، لقەکە لە ڕێکخستنەکان دەستکاری بکە و "لقی فرۆشراو" چالاک بکە' },
+  'لإضافة فرع مباع، قم بتعديل الفرع من الإعدادات وتفعيل خيار "فرع مباع" مع تحديد النسبة': { en: 'To add a sold branch, edit the branch from settings and enable "Sold Branch" with percentage', ku: 'بۆ زیادکردنی لقی فرۆشراو، لەڕێکخستنەکان "لقی فرۆشراو" چالاک بکە لەگەڵ ڕێژەکە' },
+  'إعدادات الفرع الخارجي': { en: 'External Branch Settings', ku: 'ڕێکخستنەکانی لقی دەرەکی' },
+  'إذا كان هذا الفرع مباعاً لمستفيد آخر، يمكنك تفعيل هذا الخيار وتحديد النسبة الشهرية': { en: 'If this branch is sold to another owner, you can enable this option and set the monthly percentage', ku: 'ئەگەر ئەم لقە فرۆشراوە بە کەسێکی تر، دەتوانیت ئەم هەڵبژاردنە چالاک بکەیت و ڕێژەی مانگانە دیاری بکەیت' },
+  'فرع مباع': { en: 'Sold Branch', ku: 'لقی فرۆشراو' },
+  'تفعيل هذا الخيار يجعل الفرع يظهر في إدارة الفروع الخارجية': { en: 'Enabling this makes the branch appear in External Branches Management', ku: 'چالاککردنی ئەمە وا دەکات لقەکە لە بەڕێوەبردنی لقە دەرەکییەکان دەربکەوێت' },
+  'اسم المشتري/المستفيد': { en: 'Buyer/Beneficiary Name', ku: 'ناوی کڕیار/سوودمەند' },
+  'هذه النسبة ستُحسب تلقائياً من مبيعات الفرع الشهرية': { en: 'This percentage will be calculated automatically from monthly branch sales', ku: 'ئەم ڕێژەیە خۆکارانە لە فرۆشتنی مانگانەی لق دەژمێردرێت' },
+  'رسوم إضافية ثابتة كل شهر (مثل رسوم العلامة التجارية)': { en: 'Additional fixed monthly fees (like brand fees)', ku: 'کرێی زیادەی جێگیری مانگانە (وەک کرێی براند)' },
+  'سيتم حساب المستحقات تلقائياً من:': { en: 'Dues will be calculated automatically from:', ku: 'پارەی سەر خۆکارانە دەژمێردرێت لە:' },
+  'نسبة المبيعات الشهرية': { en: 'Monthly sales percentage', ku: 'ڕێژەی فرۆشتنی مانگانە' },
+  'قيمة المواد المسحوبة من المخازن': { en: 'Value of materials withdrawn from warehouses', ku: 'بەهای مادەکانی دەرکراو لە کۆگاکان' },
+  'الرسوم الشهرية الثابتة': { en: 'Fixed monthly fees', ku: 'کرێی جێگیری مانگانە' },
+  'المصدر': { en: 'Source', ku: 'سەرچاوە' },
 };
 
 // الحصول على اللغة الحالية
