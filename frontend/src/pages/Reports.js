@@ -1074,7 +1074,9 @@ export default function Reports() {
             <TabsTrigger value="discounts" className="text-orange-500">{t('الخصومات')}</TabsTrigger>
             <TabsTrigger value="refunds" className="text-purple-500">{t('الإرجاعات')}</TabsTrigger>
             <TabsTrigger value="credit" className="text-blue-500">{t('الآجل')}</TabsTrigger>
-            <TabsTrigger value="smart" className="text-emerald-500">{t('التقرير الذكي')}</TabsTrigger>
+            {dashboardSettings.showSmartReports !== false && (
+              <TabsTrigger value="smart" className="text-emerald-500">{t('التقرير الذكي')}</TabsTrigger>
+            )}
           </TabsList>
 
           {/* Comprehensive Report - التقرير الشامل */}
