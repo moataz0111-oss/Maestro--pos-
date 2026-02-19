@@ -765,6 +765,8 @@ export default function Dashboard() {
       'showLoyalty': 'loyalty',
       'showCoupons': 'coupons',
       'showSettings': 'settings',
+      'showOwnerWallet': 'owner_wallet',
+      'showExternalBranches': 'external_branches',
     };
     
     const requiredPermission = permissionMap[action.key];
