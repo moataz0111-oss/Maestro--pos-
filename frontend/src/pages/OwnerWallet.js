@@ -583,7 +583,7 @@ export default function OwnerWallet() {
             <Card className="bg-gradient-to-br from-amber-50 to-amber-100 dark:from-amber-950 dark:to-amber-900 border-amber-200">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-amber-800 dark:text-amber-200">
-                  <PiggyBank className="h-6 w-6" />
+                  <Vault className="h-6 w-6" />
                   {t('الخزينة الشخصية')}
                 </CardTitle>
               </CardHeader>
