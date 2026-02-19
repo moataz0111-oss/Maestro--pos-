@@ -183,8 +183,13 @@ async def get_external_branches_stats(
     
     tenant_id = get_user_tenant_id(current_user)
     
-    # عدد الفروع المباعة
-    sold_count = await db.sold_branches.count_documents({"tenant_id": tenant_id, "is_active": True})
+    # جلب الفروع المعلمة كمباعة من جدول الفروع
+    sold_branches = await db.branches.find(
+        {"tenant_id": tenant_id, "is_sold_branch": True, "is_active": True}, 
+        {"_id": 0, "id": 1, "owner_percentage": 1, "monthly_fee": 1}
+    ).to_list(100)
+    
+    sold_count = len(sold_branches)
     
     # الشهر الحالي
     now = datetime.now(timezone.utc)
@@ -194,21 +199,18 @@ async def get_external_branches_stats(
     else:
         end_date = datetime(now.year, now.month + 1, 1, tzinfo=timezone.utc)
     
-    # جلب الفروع المباعة
-    sold_branches = await db.sold_branches.find(
-        {"tenant_id": tenant_id, "is_active": True}, 
-        {"_id": 0, "branch_id": 1, "owner_percentage": 1, "monthly_fee": 1}
-    ).to_list(100)
-    
     total_revenue = 0
     total_materials = 0
     
     for sb in sold_branches:
+        branch_id = sb["id"]
+        owner_percentage = sb.get("owner_percentage", 0)
+        
         # المبيعات
         sales_pipeline = [
             {
                 "$match": {
-                    "branch_id": sb["branch_id"],
+                    "branch_id": branch_id,
                     "status": {"$nin": ["cancelled"]},
                     "created_at": {"$gte": start_date.isoformat(), "$lt": end_date.isoformat()}
                 }
@@ -217,17 +219,30 @@ async def get_external_branches_stats(
         ]
         sales_result = await db.orders.aggregate(sales_pipeline).to_list(1)
         branch_sales = sales_result[0]["total"] if sales_result else 0
-        total_revenue += branch_sales * (sb["owner_percentage"] / 100) + sb.get("monthly_fee", 0)
+        total_revenue += branch_sales * (owner_percentage / 100) + sb.get("monthly_fee", 0)
         
         # المواد
         materials_pipeline = [
             {
                 "$match": {
-                    "to_branch_id": sb["branch_id"],
+                    "to_branch_id": branch_id,
                     "status": "received",
                     "received_at": {"$gte": start_date.isoformat(), "$lt": end_date.isoformat()}
                 }
             },
+            {"$unwind": "$items"},
+            {"$group": {"_id": None, "total": {"$sum": {"$multiply": ["$items.quantity", {"$ifNull": ["$items.cost_per_unit", 0]}]}}}}
+        ]
+        materials_result = await db.inventory_transfers.aggregate(materials_pipeline).to_list(1)
+        total_materials += materials_result[0]["total"] if materials_result else 0
+    
+    return {
+        "sold_branches_count": sold_count,
+        "current_month": f"{now.year}-{now.month:02d}",
+        "monthly_revenue": total_revenue,
+        "monthly_materials": total_materials,
+        "total_monthly_due": total_revenue + total_materials
+    }
             {"$unwind": "$items"},
             {"$group": {"_id": None, "total": {"$sum": {"$multiply": ["$items.quantity", {"$ifNull": ["$items.cost_per_unit", 0]}]}}}}
         ]
