@@ -227,6 +227,75 @@ export default function Reports() {
     }
   };
 
+  // جلب كل التقارير للتقرير الشامل (للعرض في التبويب)
+  const fetchAllReportsForComprehensive = async () => {
+    setLoadingComprehensive(true);
+    const branchId = getBranchIdForApi();
+    const params = {
+      start_date: startDate,
+      end_date: endDate,
+      ...(branchId && { branch_id: branchId })
+    };
+
+    try {
+      const [
+        salesRes,
+        purchasesRes,
+        productsRes,
+        expensesRes,
+        profitRes,
+        deliveryRes,
+        cancelRes,
+        discountRes,
+        creditRes
+      ] = await Promise.all([
+        axios.get(`${API}/reports/sales`, { params }),
+        axios.get(`${API}/reports/purchases`, { params }),
+        axios.get(`${API}/reports/products`, { params }),
+        axios.get(`${API}/reports/expenses`, { params }),
+        axios.get(`${API}/reports/profit-loss`, { params }),
+        axios.get(`${API}/reports/delivery-credits`, { params }),
+        axios.get(`${API}/reports/cancellations`, { params }),
+        axios.get(`${API}/reports/discounts`, { params }),
+        axios.get(`${API}/reports/credit`, { params })
+      ]);
+
+      // جلب الإرجاعات والسلف
+      const [refundsRes, advancesRes] = await Promise.all([
+        axios.get(`${API}/refunds`, { 
+          params: { date_from: startDate, date_to: endDate, ...(branchId && { branch_id: branchId }) } 
+        }),
+        axios.get(`${API}/hr/advances`, { 
+          params: { ...(branchId && { branch_id: branchId }) } 
+        }).catch(() => ({ data: [] }))
+      ]);
+
+      // تحديث جميع البيانات
+      setSalesReport(salesRes.data);
+      setPurchasesReport(purchasesRes.data);
+      setProductsReport(productsRes.data);
+      setExpensesReport(expensesRes.data);
+      setProfitLossReport(profitRes.data);
+      setDeliveryCreditsReport(deliveryRes.data);
+      setCancellationsReport(cancelRes.data);
+      setDiscountsReport(discountRes.data);
+      setCreditReport(creditRes.data);
+      setRefundsReport({
+        refunds: refundsRes.data,
+        total_count: refundsRes.data.length,
+        total_amount: refundsRes.data.reduce((sum, r) => sum + (r.refund_amount || 0), 0),
+        orders_affected: new Set(refundsRes.data.map(r => r.order_id)).size
+      });
+
+      toast.success(t('تم تحديث جميع التقارير'));
+    } catch (error) {
+      console.error('Failed to fetch all reports:', error);
+      toast.error(t('فشل في جلب التقارير'));
+    } finally {
+      setLoadingComprehensive(false);
+    }
+  };
+
   // طباعة تقرير المبيعات
   const handlePrintSalesReport = () => {
     if (salesReport) {
