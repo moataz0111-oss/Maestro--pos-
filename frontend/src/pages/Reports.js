@@ -1275,7 +1275,7 @@ export default function Reports() {
                   </CardContent>
                 </Card>
                 <div className="flex justify-end gap-2 mt-4">
-                  <Button variant="outline" onClick={() => window.print()}>
+                  <Button variant="outline" onClick={handlePrintProductsReport} className="gap-2">
                     <FileText className="h-4 w-4 ml-2" />
                     {t('طباعة')}
                   </Button>
@@ -1373,7 +1373,7 @@ export default function Reports() {
                   </CardContent>
                 </Card>
                 <div className="flex justify-end gap-2 mt-4">
-                  <Button variant="outline" onClick={() => window.print()}>
+                  <Button variant="outline" onClick={handlePrintProductsReport} className="gap-2">
                     <FileText className="h-4 w-4 ml-2" />
                     {t('طباعة')}
                   </Button>
@@ -1466,7 +1466,7 @@ export default function Reports() {
                   </CardContent>
                 </Card>
                 <div className="flex justify-end gap-2 mt-4">
-                  <Button variant="outline" onClick={() => window.print()}>
+                  <Button variant="outline" onClick={handlePrintProductsReport} className="gap-2">
                     <FileText className="h-4 w-4 ml-2" />
                     {t('طباعة')}
                   </Button>
@@ -1553,7 +1553,7 @@ export default function Reports() {
                   </CardContent>
                 </Card>
                 <div className="flex justify-end gap-2 mt-4">
-                  <Button variant="outline" onClick={() => window.print()}>
+                  <Button variant="outline" onClick={handlePrintProductsReport} className="gap-2">
                     <FileText className="h-4 w-4 ml-2" />
                     {t('طباعة')}
                   </Button>
@@ -1653,7 +1653,7 @@ export default function Reports() {
                   </CardContent>
                 </Card>
                 <div className="flex justify-end gap-2 mt-4">
-                  <Button variant="outline" onClick={() => window.print()}>
+                  <Button variant="outline" onClick={handlePrintProductsReport} className="gap-2">
                     <FileText className="h-4 w-4 ml-2" />
                     {t('طباعة')}
                   </Button>
@@ -1748,7 +1748,7 @@ export default function Reports() {
                   </CardContent>
                 </Card>
                 <div className="flex justify-end gap-2 mt-4">
-                  <Button variant="outline" onClick={() => window.print()}>
+                  <Button variant="outline" onClick={handlePrintProductsReport} className="gap-2">
                     <FileText className="h-4 w-4 ml-2" />
                     {t('طباعة')}
                   </Button>
