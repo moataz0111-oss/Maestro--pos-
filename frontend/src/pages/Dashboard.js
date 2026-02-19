@@ -728,6 +728,7 @@ export default function Dashboard() {
     { label: t('برنامج الولاء'), icon: Gift, path: '/loyalty', color: 'bg-gradient-to-br from-pink-400 to-pink-600', key: 'showLoyalty', id: 'loyalty' },
     { label: t('الكوبونات'), icon: Gift, path: '/coupons', color: 'bg-gradient-to-br from-violet-400 to-violet-600', key: 'showCoupons', id: 'coupons' },
     { label: t('خزينة المالك'), icon: Wallet, path: '/owner-wallet', color: 'bg-gradient-to-br from-amber-400 to-amber-600', key: 'showOwnerWallet', id: 'owner-wallet' },
+    { label: t('الفروع الخارجية'), icon: Store, path: '/external-branches', color: 'bg-gradient-to-br from-blue-400 to-blue-600', key: 'showExternalBranches', id: 'external-branches' },
     { label: t('الإعدادات'), icon: Settings, path: '/settings', color: 'bg-gradient-to-br from-gray-400 to-gray-600', key: 'showSettings', id: 'settings' },
   ];
   
