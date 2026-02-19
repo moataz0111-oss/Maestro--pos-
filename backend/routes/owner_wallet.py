@@ -17,6 +17,8 @@ class DepositCreate(BaseModel):
     date: str  # YYYY-MM-DD
     description: Optional[str] = None
     source: str = "cash_sales"  # cash_sales, card_sales, other
+    branch_id: Optional[str] = None  # معرف الفرع
+    branch_name: Optional[str] = None  # اسم الفرع
 
 class WithdrawalCreate(BaseModel):
     amount: float
