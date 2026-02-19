@@ -266,7 +266,7 @@ async def create_deduction(deduction: DeductionCreate, current_user: dict = Depe
         "amount": amount,
         "employee_name": employee.get("name"),
         "tenant_id": get_user_tenant_id(current_user),
-        "created_by": current_user["full_name"],
+        "created_by": current_user.get("full_name", current_user.get("username", "")),
         "created_at": datetime.now(timezone.utc).isoformat()
     }
     await db.deductions.insert_one(deduction_doc)
