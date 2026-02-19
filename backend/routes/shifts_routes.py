@@ -428,9 +428,26 @@ async def close_cash_register(close_data: CashRegisterClose, current_user: dict 
     db = get_database()
     tenant_id = get_user_tenant_id(current_user)
     
-    shift_query = {"cashier_id": current_user["id"], "status": "open"}
+    # استخدام branch_id المرسل أو الافتراضي للمستخدم
+    target_branch_id = close_data.branch_id or current_user.get("branch_id")
+    
+    # للمدراء: السماح بإغلاق أي وردية مفتوحة للفرع المحدد
+    # للكاشير: البحث عن ورديته فقط
+    user_role = current_user.get("role", "")
+    is_manager = user_role in ["admin", "super_admin", "manager", "branch_manager"]
+    
+    shift_query = {"status": "open"}
     if tenant_id:
         shift_query["tenant_id"] = tenant_id
+    
+    if is_manager and target_branch_id:
+        # المدير يمكنه إغلاق أي وردية للفرع
+        shift_query["branch_id"] = target_branch_id
+    else:
+        # الكاشير يغلق ورديته فقط
+        shift_query["cashier_id"] = current_user["id"]
+        if target_branch_id:
+            shift_query["branch_id"] = target_branch_id
     
     shift = await db.shifts.find_one(shift_query)
     
