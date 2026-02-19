@@ -2690,8 +2690,18 @@ export default function Settings() {
                           <p className="font-medium text-foreground">{branch.name}</p>
                           <p className="text-sm text-muted-foreground">{branch.address}</p>
                           <p className="text-sm text-muted-foreground">{branch.phone}</p>
+                          {branch.is_sold_branch && branch.buyer_name && (
+                            <p className="text-sm text-blue-600 mt-1">
+                              👤 {t('المشتري')}: {branch.buyer_name}
+                            </p>
+                          )}
                         </div>
                         <div className="flex items-center gap-3">
+                          {branch.is_sold_branch && branch.owner_percentage > 0 && (
+                            <span className="text-xs px-2 py-1 rounded-full bg-blue-500/10 text-blue-600 font-medium">
+                              {branch.owner_percentage}%
+                            </span>
+                          )}
                           <span className={`text-xs px-2 py-1 rounded-full ${
                             branch.is_active !== false ? 'bg-green-500/10 text-green-500' : 'bg-red-500/10 text-red-500'
                           }`}>
