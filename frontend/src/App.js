@@ -412,6 +412,15 @@ function AppRoutes() {
           </ProtectedRoute>
         } 
       />
+      {/* إدارة الفروع الخارجية/المباعة */}
+      <Route 
+        path="/external-branches" 
+        element={
+          <ProtectedRoute>
+            <ExternalBranchesManagement />
+          </ProtectedRoute>
+        } 
+      />
       {/* صفحة Super Admin - لوحة تحكم المالك */}
       <Route path="/super-admin" element={<SuperAdmin />} />
       {/* صفحة إدارة النظام */}
