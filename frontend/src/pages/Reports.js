@@ -58,7 +58,19 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../components/ui/select';
-import { printComprehensiveReport, printSalesReport, printProfitLossReport, printAllReports } from '../utils/printReport';
+import { 
+  printComprehensiveReport, 
+  printSalesReport, 
+  printProfitLossReport,
+  printPurchasesReport,
+  printExpensesReport,
+  printProductsReport,
+  printDeliveryReport,
+  printCancellationsReport,
+  printDiscountsReport,
+  printRefundsReport,
+  printCreditReport
+} from '../utils/printReport';
 
 const API = API_URL;
 
