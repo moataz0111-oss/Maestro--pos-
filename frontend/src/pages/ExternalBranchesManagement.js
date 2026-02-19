@@ -248,76 +248,15 @@ export default function ExternalBranchesManagement() {
               <Button onClick={fetchData} variant="outline" size="sm">
                 <RefreshCw className="h-4 w-4" />
               </Button>
-              <Dialog open={registerDialogOpen} onOpenChange={setRegisterDialogOpen}>
-                <DialogTrigger asChild>
-                  <Button className="bg-blue-600 hover:bg-blue-700 gap-2">
-                    <Plus className="h-4 w-4" />
-                    {t('تسجيل فرع مباع')}
-                  </Button>
-                </DialogTrigger>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>{t('تسجيل فرع كمباع')}</DialogTitle>
-                  </DialogHeader>
-                  <div className="space-y-4">
-                    <div>
-                      <Label>{t('اختر الفرع')}</Label>
-                      <Select 
-                        value={newSoldBranch.branch_id} 
-                        onValueChange={(v) => setNewSoldBranch({...newSoldBranch, branch_id: v})}
-                      >
-                        <SelectTrigger><SelectValue placeholder={t('اختر الفرع')} /></SelectTrigger>
-                        <SelectContent>
-                          {availableBranches.map(branch => (
-                            <SelectItem key={branch.id} value={branch.id}>
-                              {branch.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div>
-                      <Label>{t('اسم المشتري')}</Label>
-                      <Input
-                        value={newSoldBranch.buyer_name}
-                        onChange={(e) => setNewSoldBranch({...newSoldBranch, buyer_name: e.target.value})}
-                        placeholder={t('اسم صاحب الفرع الجديد')}
-                      />
-                    </div>
-                    <div>
-                      <Label>{t('هاتف المشتري')}</Label>
-                      <Input
-                        value={newSoldBranch.buyer_phone}
-                        onChange={(e) => setNewSoldBranch({...newSoldBranch, buyer_phone: e.target.value})}
-                        placeholder="07XX..."
-                      />
-                    </div>
-                    <div>
-                      <Label>{t('نسبتك من المبيعات')} (%)</Label>
-                      <Input
-                        type="number"
-                        min="0"
-                        max="100"
-                        value={newSoldBranch.owner_percentage}
-                        onChange={(e) => setNewSoldBranch({...newSoldBranch, owner_percentage: parseFloat(e.target.value) || 0})}
-                        placeholder="0"
-                      />
-                      <p className="text-xs text-muted-foreground mt-1">{t('النسبة الشهرية من مبيعات الفرع')}</p>
-                    </div>
-                    <div>
-                      <Label>{t('رسوم شهرية ثابتة')} ({t('اختياري')})</Label>
-                      <Input
-                        type="number"
-                        value={newSoldBranch.monthly_fee}
-                        onChange={(e) => setNewSoldBranch({...newSoldBranch, monthly_fee: parseFloat(e.target.value) || 0})}
-                        placeholder="0"
-                      />
-                    </div>
-                    <div>
-                      <Label>{t('ملاحظات')}</Label>
-                      <Textarea
-                        value={newSoldBranch.notes}
-                        onChange={(e) => setNewSoldBranch({...newSoldBranch, notes: e.target.value})}
+              <Button 
+                variant="outline" 
+                className="gap-2"
+                onClick={() => navigate('/settings?tab=branches')}
+              >
+                <Edit className="h-4 w-4" />
+                {t('تعديل الفروع')}
+              </Button>
+            </div>}
                         placeholder={t('ملاحظات اختيارية')}
                       />
                     </div>
