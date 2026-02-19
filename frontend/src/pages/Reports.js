@@ -156,6 +156,91 @@ export default function Reports() {
     }
   };
 
+  // جلب وطباعة التقرير الشامل
+  const fetchAndPrintComprehensiveReport = async () => {
+    setLoadingComprehensive(true);
+    const branchId = getBranchIdForApi();
+    const params = {
+      start_date: startDate,
+      end_date: endDate,
+      ...(branchId && { branch_id: branchId })
+    };
+
+    try {
+      // جلب جميع التقارير بالتوازي
+      const [
+        salesRes,
+        productsRes,
+        expensesRes,
+        profitRes,
+        deliveryRes,
+        cancelRes,
+        discountRes,
+        creditRes
+      ] = await Promise.all([
+        axios.get(`${API}/reports/sales`, { params }),
+        axios.get(`${API}/reports/products`, { params }),
+        axios.get(`${API}/reports/expenses`, { params }),
+        axios.get(`${API}/reports/profit-loss`, { params }),
+        axios.get(`${API}/reports/delivery-credits`, { params }),
+        axios.get(`${API}/reports/cancellations`, { params }),
+        axios.get(`${API}/reports/discounts`, { params }),
+        axios.get(`${API}/reports/credit`, { params })
+      ]);
+
+      // جلب الإرجاعات
+      const refundsRes = await axios.get(`${API}/refunds`, { 
+        params: { date_from: startDate, date_to: endDate, ...(branchId && { branch_id: branchId }) } 
+      });
+
+      const allData = {
+        salesReport: salesRes.data,
+        productsReport: productsRes.data,
+        expensesReport: expensesRes.data,
+        profitLossReport: profitRes.data,
+        deliveryCreditsReport: deliveryRes.data,
+        cancellationsReport: cancelRes.data,
+        discountsReport: discountRes.data,
+        creditReport: creditRes.data,
+        refundsReport: {
+          refunds: refundsRes.data,
+          total_count: refundsRes.data.length,
+          total_amount: refundsRes.data.reduce((sum, r) => sum + (r.refund_amount || 0), 0),
+          orders_affected: new Set(refundsRes.data.map(r => r.order_id)).size
+        }
+      };
+
+      // طباعة التقرير الشامل
+      printComprehensiveReport(
+        allData,
+        getSelectedBranchName(),
+        { start: startDate, end: endDate },
+        t
+      );
+
+      toast.success(t('تم فتح نافذة الطباعة'));
+    } catch (error) {
+      console.error('Failed to fetch comprehensive report:', error);
+      toast.error(t('فشل في جلب التقرير الشامل'));
+    } finally {
+      setLoadingComprehensive(false);
+    }
+  };
+
+  // طباعة تقرير المبيعات
+  const handlePrintSalesReport = () => {
+    if (salesReport) {
+      printSalesReport(salesReport, getSelectedBranchName(), { start: startDate, end: endDate });
+    }
+  };
+
+  // طباعة تقرير الأرباح والخسائر
+  const handlePrintProfitLossReport = () => {
+    if (profitLossReport) {
+      printProfitLossReport(profitLossReport, getSelectedBranchName(), { start: startDate, end: endDate });
+    }
+  };
+
   const StatCard = ({ title, value, subtitle, icon: Icon, color = 'primary', trend }) => (
     <Card className="border-border/50 bg-card">
       <CardContent className="p-4">
