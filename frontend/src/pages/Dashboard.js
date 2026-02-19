@@ -1544,6 +1544,12 @@ export default function Dashboard() {
             <DialogTitle className="text-xl font-bold flex items-center gap-2">
               <Calculator className="h-6 w-6 text-orange-500" />
               {t('إغلاق الصندوق')}
+              {cashSummary?.branch_name && (
+                <Badge variant="outline" className="mr-2 text-sm bg-primary/10">
+                  <Building2 className="h-4 w-4 ml-1" />
+                  {cashSummary.branch_name}
+                </Badge>
+              )}
             </DialogTitle>
           </DialogHeader>
 
