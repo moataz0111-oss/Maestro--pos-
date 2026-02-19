@@ -256,22 +256,22 @@ export default function ExternalBranchesManagement() {
                 <Edit className="h-4 w-4" />
                 {t('تعديل الفروع')}
               </Button>
-            </div>}
-                        placeholder={t('ملاحظات اختيارية')}
-                      />
-                    </div>
-                    <Button onClick={handleRegisterBranch} className="w-full bg-blue-600">
-                      {t('تسجيل الفرع')}
-                    </Button>
-                  </div>
-                </DialogContent>
-              </Dialog>
             </div>
           </div>
         </div>
       </header>
 
       <main className="max-w-7xl mx-auto px-6 py-6 space-y-6">
+        {/* رسالة توضيحية */}
+        <Card className="bg-blue-50 dark:bg-blue-950/30 border-blue-200">
+          <CardContent className="p-4 flex items-center gap-3">
+            <AlertCircle className="h-5 w-5 text-blue-600" />
+            <p className="text-sm text-blue-800 dark:text-blue-200">
+              {t('لإضافة فرع مباع، قم بتعديل الفرع من الإعدادات وتفعيل خيار "فرع مباع" مع تحديد النسبة')}
+            </p>
+          </CardContent>
+        </Card>
+        
         {/* Stats Cards */}
         {dashboardStats && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
