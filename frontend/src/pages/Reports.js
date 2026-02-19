@@ -1757,6 +1757,16 @@ export default function Reports() {
               </div>
             )}
           </TabsContent>
+        {/* Smart Report (التقرير الذكي) */}
+          <TabsContent value="smart">
+            <SmartReportTab 
+              t={t} 
+              formatPrice={formatPrice}
+              selectedBranchId={selectedBranchId}
+              branches={branches}
+              getBranchIdForApi={getBranchIdForApi}
+            />
+          </TabsContent>
         </Tabs>
       </main>
     </div>
