@@ -243,7 +243,7 @@ async def close_shift(shift_id: str, close_data: ShiftClose, current_user: dict 
     return updated_shift
 
 @router.get("/shifts", response_model=List[ShiftResponse])
-async def get_shifts(branch_id: Optional[str] = None, date: Optional[str] = None, current_user: dict = Depends(get_current_user)):
+async def get_shifts(branch_id: Optional[str] = None, date: Optional[str] = None, status: Optional[str] = None, current_user: dict = Depends(get_current_user)):
     """جلب قائمة الورديات"""
     db = get_database()
     query = {}
@@ -251,8 +251,16 @@ async def get_shifts(branch_id: Optional[str] = None, date: Optional[str] = None
         query["branch_id"] = branch_id
     if date:
         query["started_at"] = {"$regex": f"^{date}"}
+    if status:
+        query["status"] = status
     
     shifts = await db.shifts.find(query, {"_id": 0}).sort("started_at", -1).to_list(100)
+    
+    # معالجة القيم الفارغة
+    for shift in shifts:
+        if shift.get("cashier_name") is None:
+            shift["cashier_name"] = ""
+    
     return shifts
 
 # ==================== CASH REGISTER ====================
