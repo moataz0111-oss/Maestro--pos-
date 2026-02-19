@@ -54,6 +54,7 @@
 - iteration_85.json - 100% ✅
 - iteration_86.json - 100% ✅ (التنبيهات + إزالة الحقل + الشعار الدائري)
 - iteration_87.json - 100% ✅ (إصلاح منطق إغلاق الصندوق)
+- iteration_88.json - 100% ✅ (اسم الفرع + التقرير الشامل + الطباعة الورقية)
 
 ## بيانات الاختبار
 - **Super Admin:** `owner@maestroegp.com` / `owner123` (271018)
