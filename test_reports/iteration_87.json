@@ -1,0 +1,61 @@
+{
+  "summary": "Verified fix for cash register 'expected_cash' showing zero issue. The fix in shifts_routes.py correctly calculates expected_cash (674,000 IQD) based on all sales since last closed shift.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_cash_register_summary.py",
+    "/app/test_reports/pytest/pytest_results_iter87.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [
+    "/app/backend/tests/test_cash_register_summary.py"
+  ],
+  "success_rate": {
+    "backend": "100%",
+    "frontend": "100%"
+  },
+  "seed_data_creation": "",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Cash register expected_cash fix verified. API /api/cash-register/summary now returns correct expected_cash value (674,000 IQD) instead of 0. The fix involved: 1) Correcting field name from 'closed_at' to 'ended_at' when searching for last closed shift 2) Expanding expense calculation to use same time range as sales. Frontend dialog correctly displays the expected_cash value in the 'المتوقع' (Expected) field.",
+  "features_tested": {
+    "cash_register_summary_api": {
+      "status": "PASS",
+      "endpoint": "GET /api/cash-register/summary",
+      "expected_cash_value": "674,000 IQD (non-zero, correct)",
+      "calculation": "opening_cash (0) + cash_sales (674,000) - expenses (0) = 674,000"
+    },
+    "cash_register_dialog_ui": {
+      "status": "PASS",
+      "page": "/dashboard",
+      "button": "إغلاق الصندوق (Close Cash Register)",
+      "verified_values": {
+        "إجمالي المبيعات": "674,000 IQD",
+        "نقدي": "674,000 IQD",
+        "المصاريف": "0 IQD",
+        "المتوقع": "674,000 IQD"
+      }
+    },
+    "close_register_button": {
+      "status": "PASS",
+      "selector": "[data-testid='close-register-btn']",
+      "opens_dialog": true
+    }
+  },
+  "test_credentials": {
+    "demo_user": "demo@maestroegp.com / demo123"
+  },
+  "rca_of_the_issue": {
+    "root_cause": "In shifts_routes.py get_cash_register_summary function, the query to find the last closed shift was using 'closed_at' field which doesn't exist. The correct field name is 'ended_at'.",
+    "fix_applied": "Changed field name from 'closed_at' to 'ended_at' in the MongoDB query at line 285-293",
+    "verification": "API now returns expected_cash=674000 instead of 0, and UI displays this value correctly"
+  }
+}
