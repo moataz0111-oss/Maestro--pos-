@@ -94,7 +94,7 @@
   },
   
   "test_credentials": {
-    "api_url": "https://restoledger.preview.emergentagent.com",
+    "api_url": "https://restaurant-profit-1.preview.emergentagent.com",
     "owner": {
       "email": "owner@maestroegp.com",
       "password": "owner123",

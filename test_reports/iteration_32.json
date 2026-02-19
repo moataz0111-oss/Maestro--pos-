@@ -82,7 +82,7 @@
   },
   
   "test_credentials": {
-    "api_url": "https://restoledger.preview.emergentagent.com",
+    "api_url": "https://restaurant-profit-1.preview.emergentagent.com",
     "client_graffiti": {
       "email": "hanialdujaili@gmail.com",
       "password": "graffiti123",
