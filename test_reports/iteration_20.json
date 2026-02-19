@@ -83,7 +83,7 @@
   },
   
   "test_credentials": {
-    "api_url": "https://restaurant-profit-1.preview.emergentagent.com",
+    "api_url": "https://pos-analytics-7.preview.emergentagent.com",
     "admin_email": "admin@maestroegp.com",
     "admin_password": "admin123"
   },
