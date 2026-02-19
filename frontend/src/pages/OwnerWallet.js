@@ -656,7 +656,7 @@ export default function OwnerWallet() {
                           }`}>
                             {transaction.type === 'deposit' ? <ArrowDownCircle className="h-4 w-4 text-emerald-600" /> :
                              transaction.type === 'withdrawal' ? <ArrowUpCircle className="h-4 w-4 text-rose-600" /> :
-                             <PiggyBank className="h-4 w-4 text-amber-600" />}
+                             <Lock className="h-4 w-4 text-amber-600" />}
                           </div>
                           <div>
                             <p className="font-medium">{formatPrice(transaction.amount)}</p>
