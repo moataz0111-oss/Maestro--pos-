@@ -731,9 +731,9 @@ export default function Reports() {
                     <Target className="h-4 w-4 ml-2" />
                     {t('تقرير تحليل التكاليف المفصل')}
                   </Button>
-                  <Button variant="outline" onClick={() => window.print()}>
-                    <FileText className="h-4 w-4 ml-2" />
-                    {t('طباعة')}
+                  <Button variant="outline" onClick={handlePrintProfitLossReport} className="gap-2">
+                    <Printer className="h-4 w-4" />
+                    {t('طباعة التقرير')}
                   </Button>
                 </div>
               </div>
