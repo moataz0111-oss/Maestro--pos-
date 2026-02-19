@@ -355,10 +355,15 @@ async def get_cash_register_summary(current_user: dict = Depends(get_current_use
         cancelled_by[cancelled_by_id]["count"] += 1
         cancelled_by[cancelled_by_id]["total"] += o["total"]
     
-    expenses = await db.expenses.find({
+    # جلب المصروفات منذ آخر إغلاق (نفس نطاق المبيعات)
+    expense_query = {
         "branch_id": shift["branch_id"],
-        "created_at": {"$gte": shift["started_at"]}
-    }).to_list(100)
+        "created_at": {"$gte": start_from}
+    }
+    if tenant_id:
+        expense_query["tenant_id"] = tenant_id
+    
+    expenses = await db.expenses.find(expense_query).to_list(100)
     total_expenses = sum(e["amount"] for e in expenses)
     
     net_profit = gross_profit - total_expenses
