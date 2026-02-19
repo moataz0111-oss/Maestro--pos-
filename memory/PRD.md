@@ -45,6 +45,12 @@
 ## تقارير الاختبار
 - iteration_91.json - 100% ✅ (أيقونات القفل + إدارة الفروع الخارجية)
 - iteration_92.json - 100% ✅ (تنسيق التاريخ + الملاحظات + الفرع المباع في الإعدادات)
+- iteration_93.json - 80% → 100% ✅ (تم إصلاح تبويب التحكم بالميزات)
+
+## الملفات المعدلة الرئيسية
+- `/app/frontend/src/pages/Settings.js` - تبويب التحكم بالميزات + حفظ بيانات الفرع المباع + عرض النسبة
+- `/app/frontend/src/pages/ExternalBranchesManagement.js` - إزالة الزر العلوي
+- `/app/backend/server.py` - API cash-register/summary مع branch_id
 
 ## بيانات الاختبار
 - **Super Admin:** `owner@maestroegp.com` / `owner123` (271018)
