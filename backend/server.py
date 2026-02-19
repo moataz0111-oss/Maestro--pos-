@@ -15182,6 +15182,10 @@ app.include_router(shifts_router, prefix="/api")
 from routes.owner_wallet import router as owner_wallet_router
 app.include_router(owner_wallet_router, prefix="/api")
 
+# External/Sold branches routes
+from routes.external_branches import router as external_branches_router
+app.include_router(external_branches_router, prefix="/api")
+
 # Include router and middleware
 app.include_router(api_router)
 
