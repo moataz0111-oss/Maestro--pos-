@@ -7,7 +7,7 @@ from typing import Optional, List
 from datetime import datetime, timezone
 import uuid
 
-from server import get_database, get_current_user, get_user_tenant_id
+from .shared import get_database, get_current_user, get_user_tenant_id
 
 router = APIRouter(prefix="/owner-wallet", tags=["owner-wallet"])
 
