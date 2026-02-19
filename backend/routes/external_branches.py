@@ -283,7 +283,7 @@ async def get_sold_branch_summary(
     
     owner_percentage = sold_branch.get("owner_percentage", 0)
     
-    # حساب المبيعات
+    # حساب المبيعات وتكلفة المواد من الطلبات
     sales_pipeline = [
         {
             "$match": {
@@ -292,29 +292,15 @@ async def get_sold_branch_summary(
                 "created_at": {"$gte": start_date.isoformat(), "$lt": end_date.isoformat()}
             }
         },
-        {"$group": {"_id": None, "total": {"$sum": "$total"}, "count": {"$sum": 1}}}
+        {"$group": {"_id": None, "total_sales": {"$sum": "$total"}, "total_cost": {"$sum": {"$ifNull": ["$total_cost", 0]}}, "count": {"$sum": 1}}}
     ]
     sales_result = await db.orders.aggregate(sales_pipeline).to_list(1)
-    total_sales = sales_result[0]["total"] if sales_result else 0
+    total_sales = sales_result[0]["total_sales"] if sales_result else 0
+    materials_withdrawn = sales_result[0]["total_cost"] if sales_result else 0
     orders_count = sales_result[0]["count"] if sales_result else 0
     
     # حساب العائد من النسبة
     revenue_from_percentage = total_sales * (owner_percentage / 100)
-    
-    # حساب المواد المسحوبة
-    materials_pipeline = [
-        {
-            "$match": {
-                "to_branch_id": branch_id,
-                "status": "received",
-                "received_at": {"$gte": start_date.isoformat(), "$lt": end_date.isoformat()}
-            }
-        },
-        {"$unwind": "$items"},
-        {"$group": {"_id": None, "total": {"$sum": {"$multiply": ["$items.quantity", {"$ifNull": ["$items.cost_per_unit", 0]}]}}}}
-    ]
-    materials_result = await db.inventory_transfers.aggregate(materials_pipeline).to_list(1)
-    materials_withdrawn = materials_result[0]["total"] if materials_result else 0
     
     # المبالغ المدفوعة
     payments_pipeline = [
