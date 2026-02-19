@@ -956,6 +956,12 @@ class BranchCreate(BaseModel):
     water_cost: float = 0.0  # تكلفة الماء الشهرية
     electricity_cost: float = 0.0  # تكلفة الكهرباء الشهرية
     generator_cost: float = 0.0  # تكلفة المولدة الشهرية
+    # إعدادات الفرع الخارجي/المباع
+    is_sold_branch: bool = False  # هل الفرع مباع؟
+    buyer_name: Optional[str] = None  # اسم المشتري
+    buyer_phone: Optional[str] = None  # هاتف المشتري
+    owner_percentage: float = 0.0  # نسبة المالك من المبيعات
+    monthly_fee: float = 0.0  # رسوم شهرية ثابتة
 
 class BranchResponse(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -971,6 +977,12 @@ class BranchResponse(BaseModel):
     water_cost: float = 0.0
     electricity_cost: float = 0.0
     generator_cost: float = 0.0
+    # إعدادات الفرع الخارجي/المباع
+    is_sold_branch: bool = False
+    buyer_name: Optional[str] = None
+    buyer_phone: Optional[str] = None
+    owner_percentage: float = 0.0
+    monthly_fee: float = 0.0
 
 # Category Models
 class CategoryCreate(BaseModel):
