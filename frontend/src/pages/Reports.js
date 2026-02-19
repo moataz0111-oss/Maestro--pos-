@@ -28,7 +28,9 @@ import {
   CreditCard,
   Clock,
   Search,
-  Target
+  Target,
+  Printer,
+  FileSpreadsheet
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -44,6 +46,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../components/ui/select';
+import { printComprehensiveReport, printSalesReport, printProfitLossReport } from '../utils/printReport';
 
 const API = API_URL;
 
