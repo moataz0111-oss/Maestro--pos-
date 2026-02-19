@@ -112,45 +112,65 @@ async def get_sold_branches(
     current_user: dict = Depends(get_current_user),
     include_inactive: bool = False
 ):
-    """جلب قائمة الفروع المباعة"""
+    """جلب قائمة الفروع المباعة - تلقائياً من الفروع المعلمة كمباعة"""
     db = get_database()
     if current_user["role"] not in [UserRole.ADMIN, UserRole.SUPER_ADMIN]:
         raise HTTPException(status_code=403, detail="غير مصرح")
     
     tenant_id = get_user_tenant_id(current_user)
-    query = {"tenant_id": tenant_id}
     
+    # جلب الفروع المعلمة كمباعة مباشرة من جدول الفروع
+    branch_query = {"tenant_id": tenant_id, "is_sold_branch": True}
     if not include_inactive:
-        query["is_active"] = True
+        branch_query["is_active"] = True
     
-    sold_branches = await db.sold_branches.find(query, {"_id": 0}).to_list(100)
+    sold_branches_from_branches = await db.branches.find(branch_query, {"_id": 0}).to_list(100)
     
-    # إضافة الإحصائيات لكل فرع
-    for sb in sold_branches:
+    result = []
+    for branch in sold_branches_from_branches:
         # حساب المبيعات الإجمالية
         sales_pipeline = [
-            {"$match": {"branch_id": sb["branch_id"], "status": {"$nin": ["cancelled"]}}},
+            {"$match": {"branch_id": branch["id"], "status": {"$nin": ["cancelled"]}}},
             {"$group": {"_id": None, "total": {"$sum": "$total"}}}
         ]
         sales_result = await db.orders.aggregate(sales_pipeline).to_list(1)
-        sb["total_sales"] = sales_result[0]["total"] if sales_result else 0
+        total_sales = sales_result[0]["total"] if sales_result else 0
         
         # حساب العوائد للمالك
-        sb["total_revenue"] = sb["total_sales"] * (sb["owner_percentage"] / 100)
+        owner_percentage = branch.get("owner_percentage", 0)
+        total_revenue = total_sales * (owner_percentage / 100)
         
         # حساب قيمة المواد المسحوبة (من تحويلات المخزون)
         materials_pipeline = [
-            {"$match": {"to_branch_id": sb["branch_id"], "status": "received"}},
+            {"$match": {"to_branch_id": branch["id"], "status": "received"}},
             {"$unwind": "$items"},
             {"$group": {"_id": None, "total": {"$sum": {"$multiply": ["$items.quantity", {"$ifNull": ["$items.cost_per_unit", 0]}]}}}}
         ]
         materials_result = await db.inventory_transfers.aggregate(materials_pipeline).to_list(1)
-        sb["total_materials_withdrawn"] = materials_result[0]["total"] if materials_result else 0
+        total_materials_withdrawn = materials_result[0]["total"] if materials_result else 0
         
         # المبلغ المستحق
-        sb["pending_amount"] = sb["total_revenue"] + sb["total_materials_withdrawn"]
+        pending_amount = total_revenue + total_materials_withdrawn + branch.get("monthly_fee", 0)
+        
+        result.append({
+            "id": branch["id"],
+            "branch_id": branch["id"],
+            "branch_name": branch["name"],
+            "buyer_name": branch.get("buyer_name", ""),
+            "buyer_phone": branch.get("buyer_phone"),
+            "owner_percentage": owner_percentage,
+            "monthly_fee": branch.get("monthly_fee", 0),
+            "contract_start_date": branch.get("created_at", "")[:10],
+            "notes": None,
+            "is_active": branch.get("is_active", True),
+            "created_at": branch.get("created_at", ""),
+            "total_sales": total_sales,
+            "total_revenue": total_revenue,
+            "total_materials_withdrawn": total_materials_withdrawn,
+            "pending_amount": pending_amount
+        })
     
-    return sold_branches
+    return result
 
 @router.get("/dashboard/stats")
 async def get_external_branches_stats(
