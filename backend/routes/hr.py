@@ -316,7 +316,7 @@ async def create_bonus(bonus: BonusCreate, current_user: dict = Depends(get_curr
         "amount": amount,
         "employee_name": employee.get("name"),
         "tenant_id": get_user_tenant_id(current_user),
-        "approved_by": current_user["full_name"],
+        "approved_by": current_user.get("full_name", current_user.get("username", "")),
         "created_at": datetime.now(timezone.utc).isoformat()
     }
     await db.bonuses.insert_one(bonus_doc)
