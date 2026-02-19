@@ -886,7 +886,13 @@ export default function Settings() {
         rent_cost: parseFloat(editBranchForm.rent_cost) || 0,
         water_cost: parseFloat(editBranchForm.water_cost) || 0,
         electricity_cost: parseFloat(editBranchForm.electricity_cost) || 0,
-        generator_cost: parseFloat(editBranchForm.generator_cost) || 0
+        generator_cost: parseFloat(editBranchForm.generator_cost) || 0,
+        // إعدادات الفرع المباع
+        is_sold_branch: editBranchForm.is_sold_branch || false,
+        buyer_name: editBranchForm.buyer_name || null,
+        buyer_phone: editBranchForm.buyer_phone || null,
+        owner_percentage: parseFloat(editBranchForm.owner_percentage) || 0,
+        monthly_fee: parseFloat(editBranchForm.monthly_fee) || 0
       });
       toast.success(t('تم التحديث بنجاح'));
       setEditBranchDialogOpen(false);
