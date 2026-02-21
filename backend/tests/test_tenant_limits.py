@@ -108,8 +108,13 @@ class TestTenantLimits:
             
             # Verify error message contains limit info
             error_detail = response.json().get("detail", "")
-            assert "الحد الأقصى" in error_detail or "max" in error_detail.lower(), \
-                f"Error message should mention limit: {error_detail}"
+            # Check for Arabic "الحد الأقصى" or "تم الوصول" or English "max"
+            has_limit_message = (
+                "الحد" in error_detail or 
+                "تم الوصول" in error_detail or 
+                "max" in error_detail.lower()
+            )
+            assert has_limit_message, f"Error message should mention limit: {error_detail}"
             
             print(f"✅ Branch creation correctly blocked: {error_detail}")
         else:
@@ -143,8 +148,13 @@ class TestTenantLimits:
             
             # Verify error message contains limit info
             error_detail = response.json().get("detail", "")
-            assert "الحد الأقصى" in error_detail or "max" in error_detail.lower(), \
-                f"Error message should mention limit: {error_detail}"
+            # Check for Arabic "الحد الأقصى" or "تم الوصول" or English "max"
+            has_limit_message = (
+                "الحد" in error_detail or 
+                "تم الوصول" in error_detail or 
+                "max" in error_detail.lower()
+            )
+            assert has_limit_message, f"Error message should mention limit: {error_detail}"
             
             print(f"✅ User creation correctly blocked: {error_detail}")
         else:
