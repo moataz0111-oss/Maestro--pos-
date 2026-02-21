@@ -7915,6 +7915,8 @@ async def update_tenant_features(tenant_id: str, features: dict, current_user: d
         "showLoyalty", "showCoupons", "showRecipes", "showReservations",
         "showReviews", "showSmartReports", "showPurchasing", "showBranchOrders",
         "showCustomerMenu",
+        # الميزات الجديدة
+        "showOwnerWallet", "showExternalBranches", "showComprehensiveReport",
         # خيارات الإعدادات
         "settingsUsers", "settingsCustomers", "settingsBranches", 
         "settingsCategories", "settingsProducts", "settingsPrinters",
