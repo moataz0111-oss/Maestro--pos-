@@ -35,6 +35,7 @@ import {
   ShoppingCart,
   DollarSign,
   Plus,
+  Minus,
   Search,
   Eye,
   EyeOff,
