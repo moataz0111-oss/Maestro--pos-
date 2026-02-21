@@ -154,7 +154,11 @@ export default function Dashboard() {
     showPurchasing: true,
     showBranchOrders: true,
     showInventoryReports: true,
-    showCustomerMenu: true
+    showCustomerMenu: true,
+    // الميزات الجديدة
+    showOwnerWallet: true,
+    showExternalBranches: true,
+    showComprehensiveReport: true
   });
   
   // حالات السحب والإفلات
