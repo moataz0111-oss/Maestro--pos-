@@ -153,7 +153,7 @@ export default function SmartReports() {
           quantity: p.quantity,
           revenue: p.revenue
         })),
-        categoryAnalysis: productsData.category_analysis || [],
+        categoryAnalysis: Array.isArray(productsData.category_analysis) ? productsData.category_analysis : [],
         salesByHour: salesByHour.length > 0 ? salesByHour : generateDemoHourlyData(),
         orderTypes: [
           { type: t('داخل المطعم'), count: salesData.by_type?.dine_in || 0, percentage: 40 },
