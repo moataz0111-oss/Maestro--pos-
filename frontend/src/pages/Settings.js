@@ -2805,6 +2805,7 @@ export default function Settings() {
                       </form>
                     </DialogContent>
                   </Dialog>
+                  </div>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-3">
