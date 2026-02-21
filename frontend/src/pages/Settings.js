@@ -2755,7 +2755,7 @@ export default function Settings() {
                         >
                           <Plus className="h-4 w-4 ml-2" />{t('إضافة فرع')}</Button>
                       </DialogTrigger>
-                    <DialogContent>
+                      <DialogContent>
                       <DialogHeader>
                         <DialogTitle className="text-foreground">{t('إضافة فرع جديد')}</DialogTitle>
                       </DialogHeader>
