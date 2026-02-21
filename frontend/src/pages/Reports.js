@@ -721,6 +721,13 @@ export default function Reports() {
   const [loadingComprehensive, setLoadingComprehensive] = useState(false);
   const [dashboardSettings, setDashboardSettings] = useState({ showSmartReports: true, showComprehensiveReport: true });
   
+  // تغيير التبويب الافتراضي إذا كان التقرير الشامل معطلاً
+  useEffect(() => {
+    if (dashboardSettings.showComprehensiveReport === false && activeTab === 'comprehensive') {
+      setActiveTab('sales');
+    }
+  }, [dashboardSettings.showComprehensiveReport]);
+  
   // Report Data
   const [salesReport, setSalesReport] = useState(null);
   const [purchasesReport, setPurchasesReport] = useState(null);
