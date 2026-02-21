@@ -2233,6 +2233,170 @@ export default function Settings() {
                         </Table>
                       </div>
                     </div>
+                    
+                    {/* نافذة تعديل المستخدم */}
+                    <Dialog open={editUserDialogOpen} onOpenChange={setEditUserDialogOpen}>
+                      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+                        <DialogHeader>
+                          <DialogTitle className="text-foreground">{t('تعديل بيانات المستخدم')}</DialogTitle>
+                        </DialogHeader>
+                        {editUserForm && (
+                          <form onSubmit={handleUpdateUser} className="space-y-4">
+                            <div className="grid grid-cols-2 gap-4">
+                              <div>
+                                <Label className="text-foreground">{t('اسم المستخدم')}</Label>
+                                <Input
+                                  value={editUserForm.username}
+                                  onChange={(e) => setEditUserForm({ ...editUserForm, username: e.target.value })}
+                                  className="bg-background border-input"
+                                />
+                              </div>
+                              <div>
+                                <Label className="text-foreground">{t('الاسم الكامل')}</Label>
+                                <Input
+                                  value={editUserForm.full_name}
+                                  onChange={(e) => setEditUserForm({ ...editUserForm, full_name: e.target.value })}
+                                  className="bg-background border-input"
+                                />
+                              </div>
+                            </div>
+                            <div>
+                              <Label className="text-foreground">{t('البريد الإلكتروني')}</Label>
+                              <Input
+                                type="email"
+                                value={editUserForm.email}
+                                onChange={(e) => setEditUserForm({ ...editUserForm, email: e.target.value })}
+                                className="bg-background border-input"
+                              />
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                              <div>
+                                <Label className="text-foreground">{t('الدور')}</Label>
+                                <Select value={editUserForm.role} onValueChange={(val) => setEditUserForm({...editUserForm, role: val})}>
+                                  <SelectTrigger className="bg-background border-input">
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="admin">{t('مدير عام')}</SelectItem>
+                                    <SelectItem value="manager">{t('مدير')}</SelectItem>
+                                    <SelectItem value="cashier">{t('كاشير')}</SelectItem>
+                                    <SelectItem value="waiter">{t('ويتر')}</SelectItem>
+                                    <SelectItem value="kitchen">{t('مطبخ')}</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                              <div>
+                                <Label className="text-foreground">{t('الفرع')}</Label>
+                                <Select value={editUserForm.branch_id || 'all'} onValueChange={(val) => setEditUserForm({...editUserForm, branch_id: val === 'all' ? '' : val})}>
+                                  <SelectTrigger className="bg-background border-input">
+                                    <SelectValue placeholder={t('جميع الفروع')} />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="all">{t('جميع الفروع')}</SelectItem>
+                                    {branches.map(branch => (
+                                      <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                            </div>
+                            <div>
+                              <Label className="text-foreground">{t('كلمة المرور الجديدة (اختياري)')}</Label>
+                              <Input
+                                type="password"
+                                placeholder={t('اتركها فارغة للإبقاء على كلمة المرور الحالية')}
+                                value={editUserForm.new_password || ''}
+                                onChange={(e) => setEditUserForm({ ...editUserForm, new_password: e.target.value })}
+                                className="bg-background border-input"
+                              />
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Switch
+                                checked={editUserForm.is_active !== false}
+                                onCheckedChange={(checked) => setEditUserForm({ ...editUserForm, is_active: checked })}
+                              />
+                              <Label className="text-foreground">{t('الحساب نشط')}</Label>
+                            </div>
+                            
+                            {/* الصلاحيات المخصصة */}
+                            <div>
+                              <Label className="text-foreground mb-3 block">{t('الصلاحيات المخصصة')}</Label>
+                              <div className="max-h-[200px] overflow-y-auto space-y-4 pr-2 border rounded-lg p-3 bg-muted/30">
+                                {PERMISSION_GROUPS.map(group => (
+                                  <div key={group}>
+                                    <p className="text-sm font-medium text-muted-foreground mb-2 border-b pb-1">{t(group)}</p>
+                                    <div className="grid grid-cols-2 gap-2">
+                                      {AVAILABLE_PERMISSIONS.filter(p => p.group === group).map(perm => (
+                                        <div key={perm.id} className="flex items-center gap-2">
+                                          <Switch
+                                            checked={editUserForm.permissions?.includes(perm.id)}
+                                            onCheckedChange={(checked) => {
+                                              const newPerms = checked 
+                                                ? [...(editUserForm.permissions || []), perm.id]
+                                                : (editUserForm.permissions || []).filter(p => p !== perm.id);
+                                              setEditUserForm({ ...editUserForm, permissions: newPerms });
+                                            }}
+                                          />
+                                          <span className="text-sm text-foreground">{t(perm.name)}</span>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                            
+                            {/* صلاحيات الميزات الخاصة */}
+                            <div className="p-4 border rounded-lg bg-purple-500/10 border-purple-500/30">
+                              <Label className="text-foreground font-bold mb-3 flex items-center gap-2">
+                                <Shield className="h-5 w-5 text-purple-500" />
+                                {t('التحكم بالميزات الخاصة')}
+                              </Label>
+                              <p className="text-xs text-muted-foreground mb-4">{t('الوصول إلى الميزات الخاصة بالمالك')}</p>
+                              <div className="grid grid-cols-2 gap-3">
+                                {/* خزينة المالك */}
+                                <div className="flex items-center justify-between p-3 bg-background/50 rounded-lg">
+                                  <div className="flex items-center gap-2">
+                                    <Wallet className="h-4 w-4 text-amber-500" />
+                                    <span className="text-sm text-foreground">{t('خزينة المالك')}</span>
+                                  </div>
+                                  <Switch
+                                    checked={editUserForm.permissions?.includes('owner_wallet')}
+                                    onCheckedChange={(checked) => {
+                                      const newPerms = checked 
+                                        ? [...(editUserForm.permissions || []), 'owner_wallet']
+                                        : (editUserForm.permissions || []).filter(p => p !== 'owner_wallet');
+                                      setEditUserForm({ ...editUserForm, permissions: newPerms });
+                                    }}
+                                  />
+                                </div>
+                                {/* الفروع الخارجية */}
+                                <div className="flex items-center justify-between p-3 bg-background/50 rounded-lg">
+                                  <div className="flex items-center gap-2">
+                                    <Store className="h-4 w-4 text-blue-500" />
+                                    <span className="text-sm text-foreground">{t('الفروع الخارجية')}</span>
+                                  </div>
+                                  <Switch
+                                    checked={editUserForm.permissions?.includes('external_branches')}
+                                    onCheckedChange={(checked) => {
+                                      const newPerms = checked 
+                                        ? [...(editUserForm.permissions || []), 'external_branches']
+                                        : (editUserForm.permissions || []).filter(p => p !== 'external_branches');
+                                      setEditUserForm({ ...editUserForm, permissions: newPerms });
+                                    }}
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                            
+                            <div className="flex gap-2 pt-4">
+                              <Button type="button" variant="outline" onClick={() => setEditUserDialogOpen(false)} className="flex-1">{t('إلغاء')}</Button>
+                              <Button type="submit" className="flex-1 bg-primary text-primary-foreground">{t('حفظ التعديلات')}</Button>
+                            </div>
+                          </form>
+                        )}
+                      </DialogContent>
+                    </Dialog>
                 </CardContent>
               </Card>
             </TabsContent>
