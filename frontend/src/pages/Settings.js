@@ -90,7 +90,8 @@ import {
   ShoppingBag,
   Calendar,
   Gift,
-  Ticket
+  Ticket,
+  Filter
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
