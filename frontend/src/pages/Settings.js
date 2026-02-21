@@ -2067,20 +2067,11 @@ export default function Settings() {
               <Card className="border-border/50 bg-card">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-foreground">
-                    <Users className="h-5 w-5" />{t('إدارة المستخدمين والموظفين')}</CardTitle>
+                    <Users className="h-5 w-5" />{t('إدارة المستخدمين')}</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  {/* تبويبات فرعية */}
-                  <Tabs defaultValue="system_users" className="w-full">
-                    <TabsList className="grid w-full grid-cols-2 mb-4">
-                      <TabsTrigger value="system_users">
-                        <Shield className="h-4 w-4 ml-2" />{t('مستخدمي النظام')}</TabsTrigger>
-                      <TabsTrigger value="employees">
-                        <UserCog className="h-4 w-4 ml-2" />{t('الموظفين')}</TabsTrigger>
-                    </TabsList>
-                    
-                    {/* قسم مستخدمي النظام */}
-                    <TabsContent value="system_users" className="space-y-4">
+                  {/* قسم مستخدمي النظام */}
+                  <div className="space-y-4">
                       {/* تنبيه الحد الأقصى للمستخدمين */}
                       {tenantLimits && tenantLimits.users_remaining <= 0 && (
                         <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-lg flex items-center gap-3">
