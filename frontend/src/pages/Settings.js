@@ -162,8 +162,7 @@ const AVAILABLE_PERMISSIONS = [
   { id: 'dashboard_statistics', name: 'الإحصائيات', description: 'إظهار بطاقات الإحصائيات', group: 'لوحة التحكم' },
 ];
 
-// تجميع الصلاحيات حسب المجموعة
-const PERMISSION_GROUPS = [...new Set(AVAILABLE_PERMISSIONS.map(p => p.group))];
+// PERMISSION_GROUPS is now defined above with the new permissions structure
 
 export default function Settings() {
   const { user, hasRole, logout, hasPermission } = useAuth();
