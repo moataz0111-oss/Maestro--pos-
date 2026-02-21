@@ -1357,7 +1357,9 @@ export default function Dashboard() {
               )}
               
               {/* زر إدارة اليوم - يظهر فقط لمن لديه صلاحية */}
-              {hasDashboardPermission('dashboard_day_management') && dayStatus && (
+              {(hasDashboardPermission('dashboard_day_management') || 
+                (user?.permissions && user.permissions.includes('pos_day_management')) ||
+                ['admin', 'manager', 'owner'].includes(user?.role)) && dayStatus && (
                 <Button
                   variant="outline"
                   size="sm"
