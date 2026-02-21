@@ -1301,15 +1301,23 @@ export default function Dashboard() {
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-base md:text-lg font-bold font-cairo text-foreground">{t('الإحصائيات')}</h2>
             <div className="flex items-center gap-2">
-              {/* فلتر الفترة الزمنية - يظهر فقط لمن لديه صلاحية */}
+              {/* فلتر الفترة الزمنية - يظهر فقط الأزرار التي لدى المستخدم صلاحية لعرضها */}
               {hasDashboardPermission('dashboard_stats_filters') && (
                 <div className="flex bg-muted rounded-lg p-1 gap-1">
                   {[
-                    { key: 'today', label: t('اليوم') },
-                    { key: 'week', label: t('الأسبوع') },
-                    { key: 'month', label: t('الشهر') },
-                    { key: 'all_time', label: t('الكل') }
-                  ].map(period => (
+                    { key: 'today', label: t('اليوم'), permission: 'sales_view_today' },
+                    { key: 'week', label: t('الأسبوع'), permission: 'sales_view_week' },
+                    { key: 'month', label: t('الشهر'), permission: 'sales_view_month' },
+                    { key: 'all_time', label: t('الكل'), permission: 'sales_view_all' }
+                  ].filter(period => {
+                    // المدير والأدمن يرى كل الأزرار
+                    if (['admin', 'manager', 'owner'].includes(user?.role)) return true;
+                    // باقي المستخدمين يتم فحص صلاحياتهم
+                    if (user?.permissions && Array.isArray(user.permissions)) {
+                      return user.permissions.includes(period.permission);
+                    }
+                    return true;
+                  }).map(period => (
                     <Button
                       key={period.key}
                       variant={statsPeriod === period.key ? 'default' : 'ghost'}
