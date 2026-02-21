@@ -2781,12 +2781,65 @@ export default function SuperAdmin() {
               </div>
               <div className="space-y-2">
                 <Label>{t('الحد الأقصى للفروع')}</Label>
-                <Input
-                  type="number"
-                  value={editTenantForm.max_branches}
-                  onChange={(e) => setEditTenantForm({...editTenantForm, max_branches: parseInt(e.target.value) || 1})}
-                  className="bg-gray-700/50 border-gray-600"
-                />
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="h-10 w-10 border-gray-600 hover:bg-red-500/20"
+                    onClick={() => setEditTenantForm({...editTenantForm, max_branches: Math.max(1, (editTenantForm.max_branches || 1) - 1)})}
+                  >
+                    <Minus className="h-4 w-4" />
+                  </Button>
+                  <Input
+                    type="number"
+                    value={editTenantForm.max_branches}
+                    onChange={(e) => setEditTenantForm({...editTenantForm, max_branches: parseInt(e.target.value) || 1})}
+                    className="bg-gray-700/50 border-gray-600 text-center"
+                    min="1"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="h-10 w-10 border-gray-600 hover:bg-green-500/20"
+                    onClick={() => setEditTenantForm({...editTenantForm, max_branches: (editTenantForm.max_branches || 1) + 1})}
+                  >
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>{t('الحد الأقصى للمستخدمين')}</Label>
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="h-10 w-10 border-gray-600 hover:bg-red-500/20"
+                    onClick={() => setEditTenantForm({...editTenantForm, max_users: Math.max(1, (editTenantForm.max_users || 5) - 1)})}
+                  >
+                    <Minus className="h-4 w-4" />
+                  </Button>
+                  <Input
+                    type="number"
+                    value={editTenantForm.max_users}
+                    onChange={(e) => setEditTenantForm({...editTenantForm, max_users: parseInt(e.target.value) || 1})}
+                    className="bg-gray-700/50 border-gray-600 text-center"
+                    min="1"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="h-10 w-10 border-gray-600 hover:bg-green-500/20"
+                    onClick={() => setEditTenantForm({...editTenantForm, max_users: (editTenantForm.max_users || 5) + 1})}
+                  >
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                </div>
               </div>
             </div>
           </div>
