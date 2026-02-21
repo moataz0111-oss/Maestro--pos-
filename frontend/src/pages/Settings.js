@@ -125,42 +125,7 @@ import ImageUploader from '../components/ImageUploader';
 
 const API = API_URL;
 
-// قائمة الصلاحيات المتاحة - موسعة
-const AVAILABLE_PERMISSIONS = [
-  { id: 'pos', name: 'نقاط البيع', description: 'إنشاء وإدارة الطلبات', group: 'المبيعات' },
-  { id: 'pos_discount', name: 'إعطاء خصومات', description: 'السماح بإعطاء خصومات على الطلبات', group: 'المبيعات' },
-  { id: 'pos_cancel', name: 'إلغاء الطلبات', description: 'إلغاء الطلبات المعلقة', group: 'المبيعات' },
-  { id: 'can_refund', name: 'إرجاع الطلبات', description: 'إرجاع الطلبات المدفوعة واسترداد المبالغ', group: 'المبيعات' },
-  { id: 'orders', name: 'الطلبات', description: 'عرض وتعديل الطلبات', group: 'المبيعات' },
-  { id: 'orders_edit', name: 'تعديل الطلبات', description: 'تعديل الطلبات بعد الإنشاء', group: 'المبيعات' },
-  { id: 'tables', name: 'الطاولات', description: 'إدارة الطاولات', group: 'المبيعات' },
-  { id: 'kitchen', name: 'شاشة المطبخ', description: 'عرض وإدارة طلبات المطبخ', group: 'المطبخ' },
-  { id: 'inventory', name: 'المخزون', description: 'عرض المخزون', group: 'المخزون' },
-  { id: 'inventory_edit', name: 'تعديل المخزون', description: 'إضافة وتعديل المخزون', group: 'المخزون' },
-  { id: 'inventory_transfer', name: 'نقل المخزون', description: 'نقل بين الفروع', group: 'المخزون' },
-  { id: 'reports', name: 'التقارير', description: 'عرض التقارير الأساسية', group: 'التقارير' },
-  { id: 'reports_financial', name: 'التقارير المالية', description: 'عرض التقارير المالية التفصيلية', group: 'التقارير' },
-  { id: 'reports_export', name: 'تصدير التقارير', description: 'تصدير التقارير', group: 'التقارير' },
-  { id: 'expenses', name: 'المصاريف', description: 'عرض المصاريف', group: 'المالية' },
-  { id: 'expenses_add', name: 'إضافة مصاريف', description: 'إضافة مصاريف جديدة', group: 'المالية' },
-  { id: 'purchases', name: 'المشتريات', description: 'إدارة المشتريات', group: 'المالية' },
-  { id: 'delivery', name: 'التوصيل', description: 'إدارة التوصيل', group: 'التوصيل' },
-  { id: 'drivers', name: 'السائقين', description: 'إدارة السائقين', group: 'التوصيل' },
-  { id: 'products', name: 'المنتجات', description: 'عرض المنتجات', group: 'الإعدادات' },
-  { id: 'products_edit', name: 'تعديل المنتجات', description: 'إضافة وتعديل المنتجات', group: 'الإعدادات' },
-  { id: 'products_prices', name: 'تعديل الأسعار', description: 'تعديل أسعار المنتجات', group: 'الإعدادات' },
-  { id: 'categories', name: 'الفئات', description: 'إدارة الفئات', group: 'الإعدادات' },
-  { id: 'users', name: 'المستخدمين', description: 'إدارة المستخدمين', group: 'الإدارة' },
-  { id: 'branches', name: 'الفروع', description: 'إدارة الفروع', group: 'الإدارة' },
-  { id: 'settings', name: 'الإعدادات', description: 'الوصول للإعدادات', group: 'الإدارة' },
-  { id: 'shifts', name: 'الورديات', description: 'إدارة الورديات', group: 'الإدارة' },
-  { id: 'shifts_close', name: 'إغلاق الصندوق', description: 'إغلاق صندوق الوردية', group: 'الإدارة' },
-  // صلاحيات لوحة التحكم
-  { id: 'dashboard_stats_filters', name: 'فلاتر الإحصائيات', description: 'إظهار أزرار (اليوم، الأسبوع، الشهر، الكل)', group: 'لوحة التحكم' },
-  { id: 'dashboard_day_management', name: 'إدارة اليوم', description: 'إظهار زر إدارة اليوم وترحيل البيانات', group: 'لوحة التحكم' },
-  { id: 'dashboard_quick_actions', name: 'الأزرار السريعة', description: 'إظهار أزرار الإجراءات السريعة', group: 'لوحة التحكم' },
-  { id: 'dashboard_statistics', name: 'الإحصائيات', description: 'إظهار بطاقات الإحصائيات', group: 'لوحة التحكم' },
-];
+// Permissions are now defined below in the component with the new comprehensive structure
 
 // PERMISSION_GROUPS is now defined above with the new permissions structure
 
