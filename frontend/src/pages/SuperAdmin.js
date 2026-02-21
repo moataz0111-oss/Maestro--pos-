@@ -249,6 +249,10 @@ export default function SuperAdmin() {
     showPurchasing: false,
     showBranchOrders: false,
     showCustomerMenu: true,
+    // الميزات الجديدة
+    showOwnerWallet: true,
+    showExternalBranches: true,
+    showComprehensiveReport: true,
     // خيارات الإعدادات
     settingsUsers: true,
     settingsCustomers: true,
