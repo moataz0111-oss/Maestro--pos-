@@ -185,6 +185,7 @@ export default function Settings() {
   
   const [users, setUsers] = useState([]);
   const [branches, setBranches] = useState([]);
+  const [tenantLimits, setTenantLimits] = useState(null);
   const [printers, setPrinters] = useState([]);
   const [emailRecipients, setEmailRecipients] = useState([]);
   const [deliveryApps, setDeliveryApps] = useState([]);
