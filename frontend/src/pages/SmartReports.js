@@ -160,7 +160,7 @@ export default function SmartReports() {
           { type: t('سفري'), count: salesData.by_type?.takeaway || 0, percentage: 32 },
           { type: t('توصيل'), count: salesData.by_type?.delivery || 0, percentage: 28 }
         ],
-        paymentMethods: salesData.by_payment || [
+        paymentMethods: Array.isArray(salesData.by_payment) ? salesData.by_payment : [
           { method: t('نقدي'), amount: totalSales * 0.6, percentage: 60 },
           { method: t('بطاقة'), amount: totalSales * 0.3, percentage: 30 },
           { method: t('آجل'), amount: totalSales * 0.1, percentage: 10 }
