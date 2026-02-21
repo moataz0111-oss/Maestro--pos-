@@ -7964,6 +7964,10 @@ async def get_tenant_features(tenant_id: str, current_user: dict = Depends(verif
         "showPurchasing": False,
         "showBranchOrders": False,
         "showCustomerMenu": True,
+        # الميزات الجديدة
+        "showOwnerWallet": True,
+        "showExternalBranches": True,
+        "showComprehensiveReport": True,
         # خيارات الإعدادات
         "settingsUsers": True,
         "settingsCustomers": True,
