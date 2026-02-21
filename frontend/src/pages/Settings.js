@@ -2080,11 +2080,30 @@ export default function Settings() {
                     
                     {/* قسم مستخدمي النظام */}
                     <TabsContent value="system_users" className="space-y-4">
+                      {/* تنبيه الحد الأقصى للمستخدمين */}
+                      {tenantLimits && tenantLimits.users_remaining <= 0 && (
+                        <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-lg flex items-center gap-3">
+                          <AlertTriangle className="h-5 w-5 text-red-500 flex-shrink-0" />
+                          <div>
+                            <p className="text-sm font-medium text-red-500">{t('تم الوصول للحد الأقصى من المستخدمين')}</p>
+                            <p className="text-xs text-muted-foreground">{t('يرجى مراجعة مسؤول النظام لرفع الحد لتتمكن من إضافة مستخدمين جدد')}</p>
+                          </div>
+                        </div>
+                      )}
+                      {tenantLimits && tenantLimits.users_remaining > 0 && tenantLimits.users_remaining <= 2 && (
+                        <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg flex items-center gap-3">
+                          <AlertTriangle className="h-4 w-4 text-amber-500 flex-shrink-0" />
+                          <p className="text-xs text-amber-600">{t('تبقى لديك')} {tenantLimits.users_remaining} {t('مستخدمين من الحد الأقصى المسموح')} ({tenantLimits.max_users})</p>
+                        </div>
+                      )}
                       <div className="flex justify-between items-center">
                         <p className="text-sm text-muted-foreground">{t('إدارة حسابات الدخول للنظام وصلاحياتهم')}</p>
                         <Dialog open={userDialogOpen} onOpenChange={setUserDialogOpen}>
                           <DialogTrigger asChild>
-                            <Button className="bg-primary text-primary-foreground">
+                            <Button 
+                              className="bg-primary text-primary-foreground"
+                              disabled={tenantLimits && tenantLimits.users_remaining <= 0}
+                            >
                               <Plus className="h-4 w-4 ml-2" />{t('إضافة مستخدم')}</Button>
                           </DialogTrigger>
                           <DialogContent>
