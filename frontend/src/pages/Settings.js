@@ -3930,6 +3930,17 @@ export default function Settings() {
                               <Button
                                 variant="ghost"
                                 size="sm"
+                                onClick={() => {
+                                  setEditDeliveryApp({...app});
+                                  setEditDeliveryAppDialogOpen(true);
+                                }}
+                                className="text-blue-500 hover:text-blue-600 hover:bg-blue-500/10"
+                              >
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
                                 onClick={() => handleDeleteDeliveryApp(app.id)}
                                 className="text-red-500 hover:text-red-600 hover:bg-red-500/10"
                               >
