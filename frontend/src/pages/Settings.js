@@ -3970,6 +3970,68 @@ export default function Settings() {
                   </div>
                 </CardContent>
               </Card>
+              
+              {/* نافذة تعديل شركة التوصيل */}
+              <Dialog open={editDeliveryAppDialogOpen} onOpenChange={setEditDeliveryAppDialogOpen}>
+                <DialogContent className="max-w-md">
+                  <DialogHeader>
+                    <DialogTitle>{t('تعديل بيانات شركة التوصيل')}</DialogTitle>
+                  </DialogHeader>
+                  {editDeliveryApp && (
+                    <div className="space-y-4">
+                      <div>
+                        <Label>{t('اسم الشركة (عربي)')}</Label>
+                        <Input
+                          value={editDeliveryApp.name || ''}
+                          onChange={(e) => setEditDeliveryApp({...editDeliveryApp, name: e.target.value})}
+                          placeholder={t('مثال: طلبات')}
+                          className="mt-1"
+                        />
+                      </div>
+                      <div>
+                        <Label>{t('اسم الشركة (إنجليزي)')}</Label>
+                        <Input
+                          value={editDeliveryApp.name_en || ''}
+                          onChange={(e) => setEditDeliveryApp({...editDeliveryApp, name_en: e.target.value})}
+                          placeholder="Example: Talabat"
+                          className="mt-1"
+                        />
+                      </div>
+                      <div>
+                        <Label>{t('نسبة العمولة (%)')}</Label>
+                        <Input
+                          type="number"
+                          value={editDeliveryApp.commission_rate || 0}
+                          onChange={(e) => setEditDeliveryApp({...editDeliveryApp, commission_rate: parseFloat(e.target.value) || 0})}
+                          min="0"
+                          max="100"
+                          step="0.5"
+                          className="mt-1"
+                        />
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          id="edit-delivery-app-active"
+                          checked={editDeliveryApp.is_active !== false}
+                          onChange={(e) => setEditDeliveryApp({...editDeliveryApp, is_active: e.target.checked})}
+                          className="w-4 h-4"
+                        />
+                        <Label htmlFor="edit-delivery-app-active">{t('تفعيل الشركة')}</Label>
+                      </div>
+                      <div className="flex gap-2 justify-end pt-4">
+                        <Button variant="outline" onClick={() => setEditDeliveryAppDialogOpen(false)}>
+                          {t('إلغاء')}
+                        </Button>
+                        <Button onClick={handleEditDeliveryAppName}>
+                          <Save className="h-4 w-4 mr-2" />
+                          {t('حفظ التغييرات')}
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </DialogContent>
+              </Dialog>
             </TabsContent>
           )}
 
