@@ -505,9 +505,18 @@ export default function OwnerWallet() {
 
           <Dialog open={profitDialogOpen} onOpenChange={setProfitDialogOpen}>
             <DialogTrigger asChild>
-              <Button className="bg-amber-600 hover:bg-amber-700 gap-2">
+              <Button 
+                className="bg-amber-600 hover:bg-amber-700 gap-2"
+                disabled={!summary.can_transfer}
+                title={!summary.can_transfer ? t('يجب إضافة عملية إيداع جديدة أولاً') : ''}
+              >
                 <LockOpen className="h-4 w-4" />
                 {t('تحويل للخزينة')}
+                {summary.remaining_transfers > 0 && (
+                  <Badge variant="secondary" className="mr-1 bg-white text-amber-700">
+                    {summary.remaining_transfers}
+                  </Badge>
+                )}
               </Button>
             </DialogTrigger>
             <DialogContent>
@@ -517,6 +526,9 @@ export default function OwnerWallet() {
               <div className="space-y-4">
                 <div className="p-4 bg-amber-50 dark:bg-amber-950 rounded-lg text-amber-800 dark:text-amber-200 text-sm">
                   {t('هذا المبلغ سيُضاف لخزينتك الشخصية كأرباح صافية بعد سداد جميع الالتزامات')}
+                  <div className="mt-2 font-medium">
+                    {t('التحويلات المتبقية')}: {summary.remaining_transfers} {t('من')} {summary.deposits_count}
+                  </div>
                 </div>
                 <div>
                   <Label>{t('المبلغ')}</Label>
