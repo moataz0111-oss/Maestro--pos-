@@ -293,7 +293,7 @@ export default function ExternalBranchesManagement() {
                   <div>
                     <p className="text-sm opacity-90">{t('عوائد النسبة')}</p>
                     <p className="text-2xl font-bold mt-1">{formatPrice(dashboardStats.monthly_revenue)}</p>
-                    <p className="text-xs mt-1 opacity-80">{formatMonth(selectedDate.slice(0, 7))}</p>
+                    <p className="text-xs mt-1 opacity-80">{formatDate(selectedDate)}</p>
                   </div>
                   <Percent className="h-10 w-10 opacity-40" />
                 </div>
