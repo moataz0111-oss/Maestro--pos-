@@ -524,9 +524,9 @@ export default function OwnerWallet() {
                   />
                 </div>
                 <div>
-                  <Label>{t('الشهر')}</Label>
+                  <Label>{t('التاريخ')}</Label>
                   <Input
-                    type="month"
+                    type="date"
                     value={newProfitTransfer.month}
                     onChange={(e) => setNewProfitTransfer({...newProfitTransfer, month: e.target.value})}
                   />
