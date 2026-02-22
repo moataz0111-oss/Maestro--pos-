@@ -754,7 +754,7 @@ export default function OwnerWallet() {
                                 {item.opType === 'withdrawal' ? '-' : '+'}{formatPrice(item.amount)}
                               </p>
                               <p className="text-sm text-muted-foreground">
-                                {item.opType === 'transfer' ? formatDate(item.month + '-01') : formatDate(item.date)}
+                                {item.opType === 'transfer' ? formatDate(item.month) : formatDate(item.date)}
                               </p>
                               {item.description && <p className="text-xs text-muted-foreground">📝 {item.description}</p>}
                               {item.reason && <p className="text-xs text-muted-foreground">📝 {item.reason}</p>}
