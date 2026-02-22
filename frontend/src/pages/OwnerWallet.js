@@ -656,6 +656,19 @@ export default function OwnerWallet() {
                   <p className="text-sm text-amber-600 dark:text-amber-400 mt-2">{t('صافي الأرباح المحولة')}</p>
                 </div>
                 
+                {/* إشعار الحد الأدنى */}
+                {summary.safe_balance <= SAFE_MIN_BALANCE && summary.safe_balance > 0 && (
+                  <div className="mb-4 p-3 bg-orange-100 dark:bg-orange-950/50 border border-orange-300 dark:border-orange-700 rounded-lg">
+                    <div className="flex items-center gap-2 text-orange-700 dark:text-orange-300">
+                      <AlertCircle className="h-5 w-5" />
+                      <span className="font-medium">{t('تنبيه: الخزينة وصلت للحد الأدنى')}</span>
+                    </div>
+                    <p className="text-sm text-orange-600 dark:text-orange-400 mt-1">
+                      {t('الرصيد الحالي')}: {formatPrice(summary.safe_balance)} | {t('الحد الأدنى')}: {formatPrice(SAFE_MIN_BALANCE)}
+                    </p>
+                  </div>
+                )}
+                
                 {/* نموذج سحب الأرباح */}
                 {summary.safe_balance > 0 && (
                   <div className="mt-6 p-4 bg-amber-100/50 dark:bg-amber-900/50 rounded-lg border border-amber-300/50">
