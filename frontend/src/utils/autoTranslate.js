@@ -3267,6 +3267,12 @@ const translationMap = {
   'فشل في تحديث بيانات الشركة': { en: 'Failed to update company data', ku: 'سەرکەوتن نەبوو لە نوێکردنەوەی زانیاری کۆمپانیا' },
   'Shift Start': { en: 'Shift Start', ku: 'دەستپێکردنی شیفت' },
   'بداية الوردية': { en: 'Shift Start', ku: 'دەستپێکردنی شیفت' },
+  'تحويل ربح': { en: 'Profit Transfer', ku: 'گواستنەوەی قازانج' },
+  'إيداع': { en: 'Deposit', ku: 'دانان' },
+  'مصاريف': { en: 'Expenses', ku: 'خەرجی' },
+  'سحب شخصي': { en: 'Personal Withdrawal', ku: 'دەرهێنانی کەسی' },
+  'رواتب': { en: 'Salaries', ku: 'مووچە' },
+  'إيداع من فرع': { en: 'Branch Deposit', ku: 'دانان لە لق' },
 };
 
 // الحصول على اللغة الحالية
