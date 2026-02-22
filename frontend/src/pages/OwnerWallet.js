@@ -104,12 +104,12 @@ export default function OwnerWallet() {
   // بيانات النماذج
   const [newDeposit, setNewDeposit] = useState({ amount: '', date: new Date().toISOString().split('T')[0], description: '', source: 'cash_sales' });
   const [newWithdrawal, setNewWithdrawal] = useState({ amount: '', date: new Date().toISOString().split('T')[0], beneficiary: '', description: '', category: 'transfer' });
-  const [newProfitTransfer, setNewProfitTransfer] = useState({ amount: '', month: selectedMonth, description: '' });
-  const [newClosing, setNewClosing] = useState({ month: selectedMonth, total_sales: '', total_expenses: '', net_profit: '', notes: '' });
+  const [newProfitTransfer, setNewProfitTransfer] = useState({ amount: '', month: selectedDate, description: '' });
+  const [newClosing, setNewClosing] = useState({ month: selectedDate, total_sales: '', total_expenses: '', net_profit: '', notes: '' });
 
   useEffect(() => {
     fetchData();
-  }, [selectedMonth]);
+  }, [selectedDate]);
 
   const fetchData = async () => {
     setLoading(true);
