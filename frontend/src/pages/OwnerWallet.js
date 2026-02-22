@@ -61,6 +61,25 @@ import { useNavigate } from 'react-router-dom';
 
 const API = API_URL;
 
+// دالة لتنسيق الشهر من YYYY-MM إلى اسم الشهر والسنة
+const formatMonth = (monthStr) => {
+  if (!monthStr) return '';
+  const [year, month] = monthStr.split('-');
+  const months = {
+    '01': 'January', '02': 'February', '03': 'March', '04': 'April',
+    '05': 'May', '06': 'June', '07': 'July', '08': 'August',
+    '09': 'September', '10': 'October', '11': 'November', '12': 'December'
+  };
+  return `${months[month] || month} ${year}`;
+};
+
+// دالة لتنسيق التاريخ الكامل
+const formatDate = (dateStr) => {
+  if (!dateStr) return '';
+  const date = new Date(dateStr);
+  return date.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
+};
+
 export default function OwnerWallet() {
   const { user, hasRole } = useAuth();
   const { t } = useTranslation();
