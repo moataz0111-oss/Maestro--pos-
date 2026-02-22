@@ -1945,12 +1945,12 @@ export default function Dashboard() {
                   ) : (
                     <>
                       <Check className="h-5 w-5" />
-                      تأكيد إغلاق الصندوق والوردية
+                      {t('تأكيد إغلاق الصندوق والوردية')}
                     </>
                   )}
                 </Button>
                 <p className="text-xs text-center text-muted-foreground mt-2">
-                  * سيتم إغلاق الوردية الحالية تلقائياً عند إغلاق الصندوق
+                  * {t('سيتم إغلاق الوردية الحالية تلقائياً عند إغلاق الصندوق')}
                 </p>
               </div>
             ) : null}
