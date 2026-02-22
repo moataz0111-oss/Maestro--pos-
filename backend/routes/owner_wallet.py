@@ -252,6 +252,56 @@ async def create_profit_transfer(
     new_transfer.pop("_id", None)
     return new_transfer
 
+@router.post("/profit-withdrawals")
+async def create_profit_withdrawal(
+    withdrawal: ProfitWithdrawalCreate,
+    current_user: dict = Depends(get_current_user)
+):
+    """سحب أرباح من الخزينة الشخصية"""
+    db = get_database()
+    tenant_id = get_user_tenant_id(current_user)
+    
+    # حساب رصيد الخزينة الحالي
+    query = {"tenant_id": tenant_id} if tenant_id else {}
+    
+    # إجمالي الأرباح المحولة
+    profit_transfers = await db.owner_profit_transfers.find(query, {"_id": 0}).to_list(1000)
+    total_transferred = sum(p.get("amount", 0) for p in profit_transfers)
+    
+    # إجمالي الأرباح المسحوبة
+    profit_withdrawals = await db.owner_profit_withdrawals.find(query, {"_id": 0}).to_list(1000)
+    total_withdrawn = sum(w.get("amount", 0) for w in profit_withdrawals)
+    
+    # الرصيد المتاح
+    available_balance = total_transferred - total_withdrawn
+    
+    if withdrawal.amount > available_balance:
+        raise HTTPException(status_code=400, detail="المبلغ أكبر من الرصيد المتاح في الخزينة")
+    
+    new_withdrawal = {
+        "id": str(uuid.uuid4()),
+        "tenant_id": tenant_id,
+        "amount": withdrawal.amount,
+        "reason": withdrawal.reason,
+        "date": datetime.now(timezone.utc).strftime('%Y-%m-%d'),
+        "created_by": current_user.get("username") or current_user.get("full_name"),
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    
+    await db.owner_profit_withdrawals.insert_one(new_withdrawal)
+    new_withdrawal.pop("_id", None)
+    return new_withdrawal
+
+@router.get("/profit-withdrawals")
+async def get_profit_withdrawals(current_user: dict = Depends(get_current_user)):
+    """جلب سجل سحوبات الأرباح من الخزينة"""
+    db = get_database()
+    tenant_id = get_user_tenant_id(current_user)
+    
+    query = {"tenant_id": tenant_id} if tenant_id else {}
+    withdrawals = await db.owner_profit_withdrawals.find(query, {"_id": 0}).sort("created_at", -1).to_list(100)
+    return withdrawals
+
 @router.get("/monthly-closings")
 async def get_monthly_closings(current_user: dict = Depends(get_current_user)):
     """جلب إغلاقات الأشهر"""
