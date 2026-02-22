@@ -1834,7 +1834,7 @@ export default function Dashboard() {
                     <div className="text-left">
                       <p className="text-xs text-muted-foreground">{t('بداية الوردية')}</p>
                       <p className="text-sm font-medium">
-                        {cashSummary.started_at ? new Date(cashSummary.started_at).toLocaleString('ar-IQ') : '-'}
+                        {cashSummary.started_at ? new Date(cashSummary.started_at).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '-'}
                       </p>
                     </div>
                   </div>
