@@ -67,11 +67,11 @@ async def get_wallet_summary(current_user: dict = Depends(get_current_user)):
     # آخر 5 معاملات
     all_transactions = []
     for d in deposits[-5:]:
-        all_transactions.append({**d, "type": "deposit", "display_type": "إيداع"})
+        all_transactions.append({**d, "type": "deposit"})
     for w in withdrawals[-5:]:
-        all_transactions.append({**w, "type": "withdrawal", "display_type": "سحب"})
+        all_transactions.append({**w, "type": "withdrawal"})
     for p in profit_transfers[-5:]:
-        all_transactions.append({**p, "type": "profit_transfer", "display_type": "تحويل ربح"})
+        all_transactions.append({**p, "type": "profit_transfer"})
     
     # ترتيب حسب التاريخ
     all_transactions.sort(key=lambda x: x.get("created_at", ""), reverse=True)
