@@ -61,11 +61,12 @@ import { useNavigate } from 'react-router-dom';
 
 const API = API_URL;
 
-// دالة لتنسيق الشهر من YYYY-MM إلى MM/YYYY (أرقام فقط)
+// دالة لتنسيق الشهر من YYYY-MM إلى DD/MM/YYYY (اليوم الحالي + الشهر + السنة)
 const formatMonth = (monthStr) => {
   if (!monthStr) return '';
   const [year, month] = monthStr.split('-');
-  return `${month}/${year}`;
+  const today = new Date().getDate().toString().padStart(2, '0');
+  return `${today}/${month}/${year}`;
 };
 
 // دالة لتنسيق التاريخ الكامل
