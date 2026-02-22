@@ -8889,6 +8889,9 @@ async def reset_tenant_sales(tenant_id: str, confirm: bool = False, current_user
         profit_transfers_result = await db.owner_profit_transfers.delete_many({
             "$or": [{"tenant_id": {"$exists": False}}, {"tenant_id": None}]
         })
+        profit_withdrawals_result = await db.owner_profit_withdrawals.delete_many({
+            "$or": [{"tenant_id": {"$exists": False}}, {"tenant_id": None}]
+        })
         
         return {
             "message": "تم تصفير مبيعات النظام الرئيسي بنجاح",
