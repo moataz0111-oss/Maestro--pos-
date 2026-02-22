@@ -29,7 +29,7 @@ class WithdrawalCreate(BaseModel):
 
 class ProfitTransferCreate(BaseModel):
     amount: float
-    month: str  # YYYY-MM
+    month: str  # YYYY-MM-DD (full date)
     description: Optional[str] = None
 
 class ProfitWithdrawalCreate(BaseModel):
