@@ -224,6 +224,13 @@ export default function OwnerWallet() {
     other: t('أخرى')
   };
 
+  // ترجمة أنواع المعاملات
+  const transactionTypeLabels = {
+    deposit: t('إيداع'),
+    withdrawal: t('سحب'),
+    profit_transfer: t('تحويل ربح')
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
