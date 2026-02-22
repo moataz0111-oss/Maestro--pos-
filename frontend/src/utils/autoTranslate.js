@@ -3246,6 +3246,20 @@ const translationMap = {
   'التكاليف التشغيلية': { en: 'Operating Costs', ku: 'تێچووی کارکردن' },
   'Target اليومي': { en: 'Daily Target', ku: 'ئامانجی ڕۆژانە' },
   'اليومي': { en: 'Daily', ku: 'ڕۆژانە' },
+  
+  // ===== ترجمات إدارة اليوم وإغلاق الصندوق =====
+  'إغلاق اليوم وترحيل': { en: 'Close Day & Transfer', ku: 'داخستنی ڕۆژ و گواستنەوە' },
+  'إرسال تقرير بالبريد': { en: 'Send Report by Email', ku: 'ناردنی راپۆرت بە ئیمەیڵ' },
+  'تأكيد إغلاق الصندوق والوردية': { en: 'Confirm Close Register & Shift', ku: 'دڵنیاکردنەوەی داخستنی سندوق و شیفت' },
+  'سيتم إغلاق الوردية الحالية تلقائياً عند إغلاق الصندوق': { en: 'Current shift will be closed automatically when register is closed', ku: 'شیفتی ئێستا بە خۆکار دادەخرێت کاتێک سندوق دادەخرێت' },
+  'حالياً': { en: 'Currently', ku: 'ئێستا' },
+  'توترز': { en: 'Toters', ku: 'توتەرز' },
+  'طلبات': { en: 'Talabat', ku: 'تەڵەبات' },
+  'بالي': { en: 'Baly', ku: 'بالی' },
+  'عالسريع': { en: 'Al-Sari3', ku: 'عالسەریع' },
+  'طلباتي': { en: 'Talabati', ku: 'تەڵەباتی' },
+  'Shift Start': { en: 'Shift Start', ku: 'دەستپێکردنی شیفت' },
+  'بداية الوردية': { en: 'Shift Start', ku: 'دەستپێکردنی شیفت' },
 };
 
 // الحصول على اللغة الحالية
