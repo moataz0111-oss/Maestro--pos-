@@ -3273,6 +3273,14 @@ const translationMap = {
   'سحب شخصي': { en: 'Personal Withdrawal', ku: 'دەرهێنانی کەسی' },
   'رواتب': { en: 'Salaries', ku: 'مووچە' },
   'إيداع من فرع': { en: 'Branch Deposit', ku: 'دانان لە لق' },
+  'إيداع فرع جادرية': { en: 'Jadriya branch deposit', ku: 'دانانی لقی جادریە' },
+  'إيداع فرع الجادرية': { en: 'Jadriya branch deposit', ku: 'دانانی لقی جادریە' },
+  'مبيعات نقدية': { en: 'Cash Sales', ku: 'فرۆشتنی نەقد' },
+  'مبيعات بطاقة': { en: 'Card Sales', ku: 'فرۆشتنی کارت' },
+  'تحويل بنكي': { en: 'Bank Transfer', ku: 'گواستنەوەی بانکی' },
+  'سداد دين': { en: 'Debt Payment', ku: 'دانەوەی قەرز' },
+  'دفع مورد': { en: 'Supplier Payment', ku: 'پارەدان بە دابینکەر' },
+  'أخرى': { en: 'Other', ku: 'تر' },
 };
 
 // الحصول على اللغة الحالية
