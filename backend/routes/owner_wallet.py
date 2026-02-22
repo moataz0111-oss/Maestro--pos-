@@ -89,6 +89,10 @@ async def get_wallet_summary(current_user: dict = Depends(get_current_user)):
     # ترتيب حسب التاريخ
     all_transactions.sort(key=lambda x: x.get("created_at", ""), reverse=True)
     
+    # عدد التحويلات المتبقية
+    remaining_transfers = len(deposits) - len(profit_transfers)
+    can_transfer = remaining_transfers > 0
+    
     return {
         "total_deposits": total_deposits,
         "total_withdrawals": total_withdrawals,
@@ -98,6 +102,9 @@ async def get_wallet_summary(current_user: dict = Depends(get_current_user)):
         "total_profit_withdrawn": total_profit_withdrawn,
         "deposits_count": len(deposits),
         "withdrawals_count": len(withdrawals),
+        "transfers_count": len(profit_transfers),
+        "remaining_transfers": remaining_transfers,  # عدد التحويلات المتبقية
+        "can_transfer": can_transfer,  # هل يمكن التحويل
         "recent_transactions": all_transactions[:10]
     }
 
