@@ -701,8 +701,8 @@ export default function HR() {
             <div className="flex items-center gap-3">
               <Input
                 type="month"
-                value={selectedMonth}
-                onChange={(e) => setSelectedMonth(e.target.value)}
+                value={selectedDate}
+                onChange={(e) => setSelectedDate(e.target.value)}
                 className="w-40"
               />
               <BranchSelector />
