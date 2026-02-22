@@ -192,6 +192,34 @@ export default function OwnerWallet() {
     }
   };
 
+  // سحب الأرباح من الخزينة الشخصية
+  const handleWithdrawProfit = async () => {
+    if (!profitWithdrawAmount || parseFloat(profitWithdrawAmount) <= 0) {
+      toast.error(t('يرجى إدخال مبلغ صحيح'));
+      return;
+    }
+    if (parseFloat(profitWithdrawAmount) > summary.safe_balance) {
+      toast.error(t('المبلغ أكبر من الرصيد المتاح في الخزينة'));
+      return;
+    }
+    
+    setIsWithdrawingProfit(true);
+    try {
+      await axios.post(`${API}/owner-wallet/profit-withdrawals`, {
+        amount: parseFloat(profitWithdrawAmount),
+        reason: profitWithdrawReason || ''
+      });
+      toast.success(t('تم سحب الأرباح بنجاح'));
+      setProfitWithdrawAmount('');
+      setProfitWithdrawReason('');
+      fetchData();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || t('فشل في سحب الأرباح'));
+    } finally {
+      setIsWithdrawingProfit(false);
+    }
+  };
+
   const handleDeleteDeposit = async (id) => {
     if (!window.confirm(t('هل تريد حذف هذا الإيداع؟'))) return;
     try {
