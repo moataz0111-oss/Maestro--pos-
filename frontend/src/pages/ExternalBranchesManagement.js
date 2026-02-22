@@ -112,11 +112,12 @@ export default function ExternalBranchesManagement() {
 
   useEffect(() => {
     fetchData();
-  }, [selectedMonth]);
+  }, [selectedDate]);
 
   const fetchData = async () => {
     setLoading(true);
     try {
+      const selectedMonth = selectedDate.slice(0, 7); // استخراج YYYY-MM من التاريخ
       const [soldRes, branchesRes, statsRes, reportRes] = await Promise.all([
         axios.get(`${API}/external-branches/`),
         axios.get(`${API}/branches?include_inactive=false`),
