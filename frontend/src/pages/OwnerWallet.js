@@ -61,19 +61,14 @@ import { useNavigate } from 'react-router-dom';
 
 const API = API_URL;
 
-// دالة لتنسيق الشهر من YYYY-MM إلى DD/MM/YYYY (اليوم الحالي + الشهر + السنة)
-const formatMonth = (monthStr) => {
-  if (!monthStr) return '';
-  const [year, month] = monthStr.split('-');
-  const today = new Date().getDate().toString().padStart(2, '0');
-  return `${today}/${month}/${year}`;
-};
-
-// دالة لتنسيق التاريخ الكامل
+// دالة لتنسيق التاريخ DD/MM/YYYY
 const formatDate = (dateStr) => {
   if (!dateStr) return '';
   const date = new Date(dateStr);
-  return date.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  const day = date.getDate().toString().padStart(2, '0');
+  const month = (date.getMonth() + 1).toString().padStart(2, '0');
+  const year = date.getFullYear();
+  return `${day}/${month}/${year}`;
 };
 
 export default function OwnerWallet() {
