@@ -2135,7 +2135,7 @@ export default function Dashboard() {
             {dayStatus?.last_day_close && (
               <div className="p-3 bg-muted/30 rounded-lg text-sm">
                 <p className="text-muted-foreground">
-                  {t('آخر إغلاق')}: {new Date(dayStatus.last_day_close.closed_at).toLocaleDateString('en-US')} - 
+                  {t('آخر إغلاق')}: {new Date(dayStatus.last_day_close.closed_at).toLocaleDateString('en-GB')} - 
                   {t('بواسطة')}: {dayStatus.last_day_close.closed_by}
                 </p>
               </div>
