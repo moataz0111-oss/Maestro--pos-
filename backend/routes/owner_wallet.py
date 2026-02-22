@@ -32,6 +32,10 @@ class ProfitTransferCreate(BaseModel):
     month: str  # YYYY-MM
     description: Optional[str] = None
 
+class ProfitWithdrawalCreate(BaseModel):
+    amount: float
+    reason: Optional[str] = None
+
 class MonthlyClosingCreate(BaseModel):
     month: str  # YYYY-MM
     total_sales: float
