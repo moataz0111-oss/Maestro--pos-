@@ -183,7 +183,7 @@ export default function OwnerWallet() {
 
   const handleCreateProfitTransfer = async () => {
     if (!newProfitTransfer.amount || !newProfitTransfer.month) {
-      toast.error(t('يرجى إدخال المبلغ والشهر'));
+      toast.error(t('يرجى إدخال المبلغ والتاريخ'));
       return;
     }
     try {
