@@ -3220,6 +3220,7 @@ const translationMap = {
   'المشتري': { en: 'Buyer', ku: 'کڕیار' },
   'إيداع فرع': { en: 'Branch deposit', ku: 'دانانی لق' },
   'جادرية': { en: 'Jadriya', ku: 'جادریە' },
+  'أحمد': { en: 'Ahmed', ku: 'ئەحمەد' },
   'سجل المدفوعات': { en: 'Payments History', ku: 'مێژووی پارەدانەکان' },
   'تسجيل دفعة جديدة': { en: 'Record New Payment', ku: 'تۆمارکردنی پارەدانی نوێ' },
   'ملاحظات': { en: 'Notes', ku: 'تێبینی' },
