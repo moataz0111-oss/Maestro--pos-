@@ -101,6 +101,11 @@ export default function OwnerWallet() {
   const [newWithdrawal, setNewWithdrawal] = useState({ amount: '', date: new Date().toISOString().split('T')[0], beneficiary: '', description: '', category: 'transfer' });
   const [newProfitTransfer, setNewProfitTransfer] = useState({ amount: '', month: selectedDate, description: '' });
   const [newClosing, setNewClosing] = useState({ month: selectedDate, total_sales: '', total_expenses: '', net_profit: '', notes: '' });
+  
+  // سحب الأرباح من الخزينة
+  const [profitWithdrawAmount, setProfitWithdrawAmount] = useState('');
+  const [profitWithdrawReason, setProfitWithdrawReason] = useState('');
+  const [isWithdrawingProfit, setIsWithdrawingProfit] = useState(false);
 
   useEffect(() => {
     fetchData();
