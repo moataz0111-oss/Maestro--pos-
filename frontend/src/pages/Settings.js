@@ -1430,7 +1430,6 @@ export default function Settings() {
       toast.error(t('فشل في تحديث بيانات الشركة'));
     }
   };
-  };
 
   const getRoleText = (role) => {
     const roles = {
