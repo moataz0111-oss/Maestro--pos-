@@ -3218,6 +3218,8 @@ const translationMap = {
   'اسم المطعم (بالعربية)': { en: 'Restaurant Name (Arabic)', ku: 'ناوی چێشتخانە (بە عەرەبی)' },
   'اسم المطعم (بالإنجليزية)': { en: 'Restaurant Name (English)', ku: 'ناوی چێشتخانە (بە ئینگلیزی)' },
   'المشتري': { en: 'Buyer', ku: 'کڕیار' },
+  'إيداع فرع': { en: 'Branch deposit', ku: 'دانانی لق' },
+  'جادرية': { en: 'Jadriya', ku: 'جادریە' },
   'سجل المدفوعات': { en: 'Payments History', ku: 'مێژووی پارەدانەکان' },
   'تسجيل دفعة جديدة': { en: 'Record New Payment', ku: 'تۆمارکردنی پارەدانی نوێ' },
   'ملاحظات': { en: 'Notes', ku: 'تێبینی' },
