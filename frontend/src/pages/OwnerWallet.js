@@ -635,7 +635,7 @@ export default function OwnerWallet() {
                           </div>
                           <div>
                             <p className="font-bold text-amber-700 dark:text-amber-400">{formatPrice(transfer.amount)}</p>
-                            <p className="text-sm text-muted-foreground">{t('شهر')} {transfer.month}</p>
+                            <p className="text-sm text-muted-foreground">{formatDate(transfer.month + '-01')}</p>
                             {transfer.description && <p className="text-xs text-muted-foreground">{transfer.description}</p>}
                           </div>
                         </div>
