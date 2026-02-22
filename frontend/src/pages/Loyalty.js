@@ -365,7 +365,7 @@ export default function Loyalty() {
                         </div>
                         <div>
                           <h4 className="font-bold text-foreground">{review.customer_name || 'عميل'}</h4>
-                          <p className="text-xs text-muted-foreground">{t('طلب')} #{review.order_number} • {new Date(review.created_at).toLocaleDateString('en-US')}</p>
+                          <p className="text-xs text-muted-foreground">{t('طلب')} #{review.order_number} • {new Date(review.created_at).toLocaleDateString('en-GB')}</p>
                         </div>
                       </div>
                       <div className="flex items-center gap-1">
@@ -530,7 +530,7 @@ export default function Loyalty() {
                             <div>
                               <p className="text-sm text-foreground">{trans.description}</p>
                               <p className="text-xs text-muted-foreground">
-                                {new Date(trans.created_at).toLocaleDateString('en-US')}
+                                {new Date(trans.created_at).toLocaleDateString('en-GB')}
                               </p>
                             </div>
                           </div>

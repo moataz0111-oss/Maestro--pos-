@@ -472,7 +472,7 @@ export default function InventoryReports() {
                         <div className="text-left">
                           <p className="font-bold">{formatPrice(txn.total_amount || 0)}</p>
                           <p className="text-xs text-muted-foreground">
-                            {new Date(txn.created_at).toLocaleDateString('en-US')}
+                            {new Date(txn.created_at).toLocaleDateString('en-GB')}
                           </p>
                         </div>
                       </div>

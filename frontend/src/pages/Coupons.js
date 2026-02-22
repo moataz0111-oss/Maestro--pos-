@@ -407,7 +407,7 @@ export default function Coupons() {
                     
                     <div className="flex items-center justify-between text-xs text-muted-foreground">
                       <span>{t('استخدم')} {coupon.used_count || 0} {t('مرة')}</span>
-                      <span>{t('حتى')} {new Date(coupon.valid_until).toLocaleDateString('en-US')}</span>
+                      <span>{t('حتى')} {new Date(coupon.valid_until).toLocaleDateString('en-GB')}</span>
                     </div>
                   </div>
                   <Badge className={isActive(coupon) ? 'bg-green-500/10 text-green-500' : 'bg-red-500/10 text-red-500'}>
@@ -475,7 +475,7 @@ export default function Coupons() {
                     <Badge className={promo.is_active ? 'bg-green-500/10 text-green-500' : 'bg-gray-500/10 text-gray-500'}>
                       {promo.is_active ? t('نشط') : t('معطل')}
                     </Badge>
-                    <span className="text-muted-foreground">{t('حتى')} {new Date(promo.valid_until).toLocaleDateString('en-US')}</span>
+                    <span className="text-muted-foreground">{t('حتى')} {new Date(promo.valid_until).toLocaleDateString('en-GB')}</span>
                   </div>
                 </CardContent>
               </Card>

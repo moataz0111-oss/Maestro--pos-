@@ -1233,7 +1233,7 @@ export default function Delivery() {
                                   </span>
                                 </div>
                                 <p className="text-xs text-muted-foreground">
-                                  {order.customer_name} - {new Date(order.created_at).toLocaleDateString('en-US')}
+                                  {order.customer_name} - {new Date(order.created_at).toLocaleDateString('en-GB')}
                                 </p>
                               </div>
                             </div>

@@ -898,7 +898,7 @@ export default function CustomerMenu() {
                         <h3 className="font-bold text-lg">{favorite.name}</h3>
                         <p className="text-sm text-gray-500 flex items-center gap-1">
                           <Calendar className="h-3 w-3" />
-                          {new Date(favorite.created_at).toLocaleDateString('en-US')}
+                          {new Date(favorite.created_at).toLocaleDateString('en-GB')}
                         </p>
                       </div>
                       <Button

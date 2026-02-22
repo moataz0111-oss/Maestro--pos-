@@ -663,7 +663,7 @@ export default function BranchOrders() {
                 <div>
                   <span className="text-muted-foreground">{t('التاريخ:')}</span>
                   <span className="font-medium mr-2">
-                    {new Date(showOrderDetails.created_at).toLocaleDateString('en-US')}
+                    {new Date(showOrderDetails.created_at).toLocaleDateString('en-GB')}
                   </span>
                 </div>
               </div>
