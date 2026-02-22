@@ -645,6 +645,53 @@ export default function OwnerWallet() {
                   <p className="text-4xl font-bold text-amber-700 dark:text-amber-300">{formatPrice(summary.safe_balance)}</p>
                   <p className="text-sm text-amber-600 dark:text-amber-400 mt-2">{t('صافي الأرباح المحولة')}</p>
                 </div>
+                
+                {/* نموذج سحب الأرباح */}
+                {summary.safe_balance > 0 && (
+                  <div className="mt-6 p-4 bg-amber-100/50 dark:bg-amber-900/50 rounded-lg border border-amber-300/50">
+                    <h4 className="font-semibold text-amber-800 dark:text-amber-200 mb-3 flex items-center gap-2">
+                      <ArrowUpCircle className="h-4 w-4" />
+                      {t('سحب الأرباح')}
+                    </h4>
+                    <div className="space-y-3">
+                      <div>
+                        <Label className="text-amber-700 dark:text-amber-300">{t('المبلغ')}</Label>
+                        <Input
+                          type="number"
+                          value={profitWithdrawAmount}
+                          onChange={(e) => setProfitWithdrawAmount(e.target.value)}
+                          placeholder={t('أدخل المبلغ')}
+                          max={summary.safe_balance}
+                          className="bg-white dark:bg-amber-950"
+                          data-testid="profit-withdraw-amount"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-amber-700 dark:text-amber-300">{t('سبب السحب')}</Label>
+                        <Input
+                          value={profitWithdrawReason}
+                          onChange={(e) => setProfitWithdrawReason(e.target.value)}
+                          placeholder={t('اختياري - سبب السحب')}
+                          className="bg-white dark:bg-amber-950"
+                          data-testid="profit-withdraw-reason"
+                        />
+                      </div>
+                      <Button 
+                        onClick={handleWithdrawProfit}
+                        disabled={isWithdrawingProfit || !profitWithdrawAmount}
+                        className="w-full bg-amber-600 hover:bg-amber-700 gap-2"
+                        data-testid="profit-withdraw-btn"
+                      >
+                        {isWithdrawingProfit ? (
+                          <RefreshCw className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <ArrowUpCircle className="h-4 w-4" />
+                        )}
+                        {t('سحب الأرباح')}
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
 
