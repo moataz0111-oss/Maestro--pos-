@@ -181,8 +181,8 @@ export default function BreakEvenReport() {
             ) : (
               <Input
                 type="month"
-                value={selectedMonth}
-                onChange={(e) => setSelectedMonth(e.target.value)}
+                value={selectedDate}
+                onChange={(e) => setSelectedDate(e.target.value)}
                 className="w-40"
               />
             )}
