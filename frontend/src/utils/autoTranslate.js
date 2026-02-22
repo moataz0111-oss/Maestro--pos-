@@ -3122,6 +3122,7 @@ const translationMap = {
   'قم بتسجيل فرع مباع للبدء في تتبع العوائد': { en: 'Register a sold branch to start tracking revenue', ku: 'لقێکی فرۆشراو تۆمار بکە بۆ دەستپێکردنی چاودێریکردنی داهات' },
   'فرع نشط': { en: 'Active Branch', ku: 'لقی چالاک' },
   'عوائد النسبة الشهرية': { en: 'Monthly Percentage Revenue', ku: 'داهاتی ڕێژەی مانگانە' },
+  'عوائد النسبة': { en: 'Percentage Revenue', ku: 'داهاتی ڕێژە' },
   'قيمة المواد المسحوبة': { en: 'Withdrawn Materials Value', ku: 'بەهای مادە دەرکراوەکان' },
   'إجمالي المستحق': { en: 'Total Due', ku: 'کۆی پارە لەسەر' },
   'عوائدك': { en: 'Your Revenue', ku: 'داهاتی تۆ' },
