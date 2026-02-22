@@ -93,7 +93,7 @@ export default function OwnerWallet() {
   const [withdrawals, setWithdrawals] = useState([]);
   const [profitTransfers, setProfitTransfers] = useState([]);
   const [monthlyClosings, setMonthlyClosings] = useState([]);
-  const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7));
+  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().slice(0, 10));
   
   // نماذج
   const [depositDialogOpen, setDepositDialogOpen] = useState(false);
