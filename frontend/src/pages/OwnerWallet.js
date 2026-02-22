@@ -61,16 +61,11 @@ import { useNavigate } from 'react-router-dom';
 
 const API = API_URL;
 
-// دالة لتنسيق الشهر من YYYY-MM إلى اسم الشهر والسنة
+// دالة لتنسيق الشهر من YYYY-MM إلى MM/YYYY (أرقام فقط)
 const formatMonth = (monthStr) => {
   if (!monthStr) return '';
   const [year, month] = monthStr.split('-');
-  const months = {
-    '01': 'January', '02': 'February', '03': 'March', '04': 'April',
-    '05': 'May', '06': 'June', '07': 'July', '08': 'August',
-    '09': 'September', '10': 'October', '11': 'November', '12': 'December'
-  };
-  return `${months[month] || month} ${year}`;
+  return `${month}/${year}`;
 };
 
 // دالة لتنسيق التاريخ الكامل
