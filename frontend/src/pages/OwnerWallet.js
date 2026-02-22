@@ -519,7 +519,7 @@ export default function OwnerWallet() {
                 <CardHeader className="flex flex-row items-center justify-between">
                   <CardTitle className="text-base flex items-center gap-2">
                     <ArrowDownCircle className="h-5 w-5 text-emerald-500" />
-                    {t('الإيداعات')} ({formatMonth(selectedMonth)})
+                    {t('الإيداعات')} ({formatDate(selectedDate)})
                   </CardTitle>
                   <Badge variant="secondary">{formatPrice(deposits.reduce((s, d) => s + d.amount, 0))}</Badge>
                 </CardHeader>
