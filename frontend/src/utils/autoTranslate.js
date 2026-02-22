@@ -3201,6 +3201,8 @@ const translationMap = {
   'تبقى لديك': { en: 'You have remaining', ku: 'ماوەت هەیە' },
   'مستخدمين من الحد الأقصى المسموح': { en: 'users from the maximum allowed', ku: 'بەکارهێنەر لە زۆرترین ڕێگەپێدراو' },
   'اتركها فارغة إذا لا تريد تغيير كلمة المرور': { en: 'Leave empty if you do not want to change password', ku: 'بەتاڵ بهێڵەرەوە ئەگەر ناتەوێت وشەی نهێنی بگۆڕیت' },
+  'اتركها فارغة للإبقاء على كلمة المرور الحالية': { en: 'Leave empty to keep current password', ku: 'بەتاڵ بهێڵەرەوە بۆ هێشتنەوەی وشەی نهێنی ئێستا' },
+  'يتم عرض الصلاحيات المفعلة للعميل فقط': { en: 'Only enabled permissions for the client are shown', ku: 'تەنها مافە چالاکەکانی کڕیار دەنیشێندرێن' },
   'حفظ التغييرات': { en: 'Save Changes', ku: 'پاشەکەوتکردنی گۆڕانکارییەکان' },
   'الاسم الكامل': { en: 'Full Name', ku: 'ناوی تەواو' },
   'البريد الإلكتروني': { en: 'Email', ku: 'ئیمەیڵ' },
