@@ -415,7 +415,7 @@ export default function HR() {
         
         <div class="footer">
           <p>{t('تم إنشاء هذا الإيصال من نظام Maestro EGP')}</p>
-          <p>${new Date().toLocaleString('en-US')}</p>
+          <p>${new Date().toLocaleString('en-GB')}</p>
         </div>
         
         <script>
