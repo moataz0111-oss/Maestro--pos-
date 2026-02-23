@@ -197,78 +197,75 @@ export default function BreakEvenReport() {
       
       <main className="max-w-7xl mx-auto px-6 py-6 space-y-6">
         {/* ملخص إجمالي */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
           <Card className={`border-2 ${data?.is_break_even_reached ? 'border-green-500 bg-green-500/5' : 'border-orange-500 bg-orange-500/5'}`}>
-            <CardContent className="pt-6">
+            <CardContent className="pt-4 pb-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-muted-foreground">{t('الهدف')} {viewMode === 'daily' ? t('اليومي') : t('الشهري')}</p>
-                  <p className="text-2xl font-bold text-foreground">
+                  <p className="text-xs text-muted-foreground">{t('الهدف')} {viewMode === 'daily' ? t('اليومي') : t('الشهري')}</p>
+                  <p className="text-lg font-bold text-foreground">
                     {formatPrice(viewMode === 'daily' ? data?.total_daily_target : data?.total_monthly_target)}
                   </p>
                 </div>
-                <Target className="h-10 w-10 text-primary opacity-80" />
+                <Target className="h-8 w-8 text-primary opacity-80" />
               </div>
             </CardContent>
           </Card>
           
           <Card>
-            <CardContent className="pt-6">
+            <CardContent className="pt-4 pb-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-muted-foreground">{t('الربح الإجمالي')}</p>
-                  <p className="text-2xl font-bold text-foreground">
+                  <p className="text-xs text-muted-foreground">{t('الربح الإجمالي')}</p>
+                  <p className="text-lg font-bold text-foreground">
                     {formatPrice(viewMode === 'daily' ? data?.total_daily_profit : data?.total_monthly_profit)}
                   </p>
                 </div>
-                <TrendingUp className="h-10 w-10 text-green-500 opacity-80" />
+                <TrendingUp className="h-8 w-8 text-green-500 opacity-80" />
               </div>
             </CardContent>
           </Card>
           
           <Card>
-            <CardContent className="pt-6">
+            <CardContent className="pt-4 pb-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-muted-foreground">{t('نسبة التغطية')}</p>
-                  <p className={`text-2xl font-bold ${getCoverageTextColor(data?.total_coverage_percentage)}`}>
+                  <p className="text-xs text-muted-foreground">{t('نسبة التغطية')}</p>
+                  <p className={`text-lg font-bold ${getCoverageTextColor(data?.total_coverage_percentage)}`}>
                     {data?.total_coverage_percentage}%
                   </p>
                 </div>
-                <Percent className="h-10 w-10 text-blue-500 opacity-80" />
+                <Percent className="h-8 w-8 text-blue-500 opacity-80" />
               </div>
               <Progress 
                 value={Math.min(data?.total_coverage_percentage || 0, 100)} 
-                className="mt-3 h-2"
+                className="mt-2 h-1.5"
               />
             </CardContent>
           </Card>
           
           <Card className="bg-blue-500/10 border-blue-200">
-            <CardContent className="pt-6">
+            <CardContent className="pt-4 pb-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-muted-foreground">{t('إجمالي التحصيل')}</p>
-                  <p className="text-2xl font-bold text-blue-600">
+                  <p className="text-xs text-muted-foreground">{t('إجمالي التحصيل')}</p>
+                  <p className="text-lg font-bold text-blue-600">
                     {formatPrice(viewMode === 'daily' ? data?.total_daily_profit : data?.total_monthly_profit)}
                   </p>
                 </div>
-                <Wallet className="h-10 w-10 text-blue-500 opacity-80" />
+                <Wallet className="h-8 w-8 text-blue-500 opacity-80" />
               </div>
-              <p className="text-xs text-muted-foreground mt-2">
-                {t('مجموع المبيعات المحصّلة')} {viewMode === 'daily' ? t('لهذا اليوم') : t('لهذا الشهر')}
-              </p>
             </CardContent>
           </Card>
           
           <Card className={data?.is_break_even_reached ? 'bg-green-500/10' : 'bg-red-500/10'}>
-            <CardContent className="pt-6">
+            <CardContent className="pt-4 pb-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-xs text-muted-foreground">
                     {data?.is_break_even_reached ? t('الربح الصافي') : t('المتبقي للتغطية')}
                   </p>
-                  <p className={`text-2xl font-bold ${data?.is_break_even_reached ? 'text-green-600' : 'text-red-600'}`}>
+                  <p className={`text-lg font-bold ${data?.is_break_even_reached ? 'text-green-600' : 'text-red-600'}`}>
                     {formatPrice(data?.is_break_even_reached 
                       ? (viewMode === 'daily' ? data?.net_profit_after_break_even : data?.net_profit_after_costs)
                       : Math.abs((viewMode === 'daily' ? data?.total_daily_target : data?.total_monthly_target) - (viewMode === 'daily' ? data?.total_daily_profit : data?.total_monthly_profit))
@@ -276,14 +273,11 @@ export default function BreakEvenReport() {
                   </p>
                 </div>
                 {data?.is_break_even_reached ? (
-                  <CheckCircle className="h-10 w-10 text-green-500" />
+                  <CheckCircle className="h-8 w-8 text-green-500" />
                 ) : (
-                  <AlertTriangle className="h-10 w-10 text-red-500" />
+                  <AlertTriangle className="h-8 w-8 text-red-500" />
                 )}
               </div>
-              {data?.is_break_even_reached && (
-                <Badge className="mt-2 bg-green-500">{t('تم الوصول لنقطة التعادل')} ✓</Badge>
-              )}
             </CardContent>
           </Card>
         </div>
