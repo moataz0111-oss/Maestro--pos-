@@ -32,7 +32,8 @@ import {
   Percent,
   AlertTriangle,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  Wallet
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
