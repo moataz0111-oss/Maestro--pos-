@@ -45,7 +45,7 @@ import {
 const API = API_URL;
 
 export default function BreakEvenReport() {
-  const { user } = useAuth();
+  const { user, token } = useAuth();
   const { selectedBranchId, getBranchIdForApi } = useBranch();
   const { t, isRTL } = useTranslation();
   const navigate = useNavigate();
@@ -58,10 +58,37 @@ export default function BreakEvenReport() {
   const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7));
   const [expandedBranches, setExpandedBranches] = useState({});
   const [viewMode, setViewMode] = useState('daily'); // daily or monthly
+  const [hasAccess, setHasAccess] = useState(true);
+  const [showDetails, setShowDetails] = useState(true); // لإظهار/إخفاء تفاصيل الأرباح
+  
+  // التحقق من صلاحية الوصول
+  useEffect(() => {
+    const checkAccess = async () => {
+      try {
+        const res = await axios.get(`${API}/settings/dashboard`);
+        if (res.data.showBreakEvenReport === false) {
+          setHasAccess(false);
+          setShowDetails(false);
+          toast.error(t('ليس لديك صلاحية للوصول لهذه الصفحة'));
+          navigate('/dashboard');
+        } else {
+          // إذا كانت الصلاحية موجودة لكن بدون تفاصيل
+          setShowDetails(res.data.showBreakEvenReport !== false);
+        }
+      } catch (error) {
+        console.error('Error checking access:', error);
+      }
+    };
+    if (token) {
+      checkAccess();
+    }
+  }, [token, navigate, t]);
   
   useEffect(() => {
-    fetchData();
-  }, [selectedBranchId, dateFrom, dateTo, selectedMonth, viewMode]);
+    if (hasAccess) {
+      fetchData();
+    }
+  }, [selectedBranchId, dateFrom, dateTo, selectedMonth, viewMode, hasAccess]);
   
   const fetchData = async () => {
     setLoading(true);
