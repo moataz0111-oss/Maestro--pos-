@@ -1467,7 +1467,8 @@ export default function Settings() {
       supervisor: t('مشرف'),
       cashier: t('كاشير'),
       captain: t('كابتن'),
-      delivery: t('سائق توصيل')
+      delivery: t('سائق توصيل'),
+      call_center: t('كول سنتر')
     };
     return roles[role] || role;
   };
