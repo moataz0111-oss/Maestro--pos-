@@ -812,11 +812,11 @@ export default function Dashboard() {
     
     // الصلاحيات الافتراضية حسب الدور
     const defaultPermissionsByRole = {
-      'cashier': ['pos', 'tables', 'orders'],
-      'supervisor': ['pos', 'tables', 'orders', 'kitchen', 'reports', 'expenses', 'delivery'],
-      'captain': ['tables', 'orders'],
+      'cashier': ['pos', 'tables', 'orders', 'view_statistics'],
+      'supervisor': ['pos', 'tables', 'orders', 'kitchen', 'reports', 'expenses', 'delivery', 'view_statistics'],
+      'captain': ['pos', 'tables', 'orders'],  // كابتن: نقاط البيع (طاولات + سفري فقط)
       'kitchen': ['kitchen', 'orders'],
-      'call_center': ['pos', 'delivery', 'call_logs']  // كول سنتر: نقاط البيع (توصيل فقط)، التوصيل، سجل المكالمات
+      'call_center': ['pos', 'delivery', 'call_logs', 'receive_calls']  // كول سنتر: نقاط البيع (توصيل فقط)، التوصيل، سجل المكالمات، استلام المكالمات
     };
     
     const rolePermissions = defaultPermissionsByRole[user?.role];
