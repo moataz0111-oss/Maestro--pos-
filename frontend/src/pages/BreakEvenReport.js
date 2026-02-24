@@ -69,10 +69,9 @@ export default function BreakEvenReport() {
         if (res.data.showBreakEvenReport === false) {
           setHasAccess(false);
           setShowDetails(false);
-          toast.error(t('ليس لديك صلاحية للوصول لهذه الصفحة'));
+          // توجيه صامت للـ Dashboard بدون رسالة خطأ
           navigate('/dashboard');
         } else {
-          // إذا كانت الصلاحية موجودة لكن بدون تفاصيل
           setShowDetails(res.data.showBreakEvenReport !== false);
         }
       } catch (error) {
@@ -82,7 +81,7 @@ export default function BreakEvenReport() {
     if (token) {
       checkAccess();
     }
-  }, [token, navigate, t]);
+  }, [token, navigate]);
   
   useEffect(() => {
     if (hasAccess) {
