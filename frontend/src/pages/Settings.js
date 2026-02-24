@@ -2381,6 +2381,7 @@ export default function Settings() {
                                     <SelectItem value="cashier">{t('كاشير')}</SelectItem>
                                     <SelectItem value="captain">{t('كابتن')}</SelectItem>
                                     <SelectItem value="kitchen">{t('مطبخ')}</SelectItem>
+                                    <SelectItem value="call_center">{t('كول سنتر')}</SelectItem>
                                   </SelectContent>
                                 </Select>
                               </div>
