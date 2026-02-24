@@ -7923,20 +7923,23 @@ async def update_tenant_features(tenant_id: str, features: dict, current_user: d
     
     # قائمة الميزات المسموح بها
     allowed_features = [
-        "showPOS", "showTables", "showOrders", "showExpenses",
-        "showInventory", "showDelivery", "showReports", "showSettings",
-        "showHR", "showWarehouse", "showCallLogs", "showCallCenter", "showKitchen",
-        "showLoyalty", "showCoupons", "showRecipes", "showReservations",
-        "showReviews", "showSmartReports", "showPurchasing", "showBranchOrders",
-        "showCustomerMenu", "showInventoryReports",
-        # الميزات الجديدة
-        "showOwnerWallet", "showExternalBranches", "showComprehensiveReport", "showBreakEvenReport",
+        # الميزات الأساسية (جميع الإجراءات السريعة)
+        "showPOS", "showTables", "showOrders", "showKitchen",
+        "showReports", "showRatings", "showDelivery", "showInventoryReports",
+        "showBranchOrders", "showWarehouse", "showPurchasing", "showExpenses",
+        "showOwnerWallet", "showCoupons", "showLoyalty", "showCallLogs",
+        "showHR", "showReservations", "showSettings", "showExternalBranches",
+        # ميزات إضافية
+        "showInventory", "showCallCenter", "showRecipes", "showReviews",
+        "showSmartReports", "showComprehensiveReport", "showBreakEvenReport",
+        "showCustomerMenu",
         # خيارات الإعدادات
-        "settingsUsers", "settingsCustomers", "settingsBranches", 
-        "settingsCategories", "settingsProducts", "settingsPrinters",
-        "settingsDeliveryCompanies", "settingsCallCenter", "settingsNotifications",
-        "settingsRestaurant", "settingsAppearance", "settingsInvoice",
-        "settingsSystem", "settingsInventory", "settingsPayment", "settingsKitchenSections"
+        "settingsAppearance", "settingsRestaurant", "settingsUsers",
+        "settingsCustomers", "settingsBranches", "settingsCategories",
+        "settingsProducts", "settingsPrinters", "settingsDeliveryCompanies",
+        "settingsCallCenter", "settingsNotifications", "settingsInvoice",
+        "settingsSystem", "settingsInventory", "settingsPayment",
+        "settingsKitchenSections"
     ]
     
     # فلترة الميزات المرسلة
