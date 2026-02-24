@@ -795,6 +795,7 @@ class UserRole:
     SUPERVISOR = "supervisor"
     CASHIER = "cashier"
     DELIVERY = "delivery"  # دور جديد للسائقين
+    CALL_CENTER = "call_center"  # دور كول سنتر - يرى المكالمات والتوصيل فقط
 
 class OrderType:
     DINE_IN = "dine_in"
