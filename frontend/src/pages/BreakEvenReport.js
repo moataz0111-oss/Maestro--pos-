@@ -53,14 +53,15 @@ export default function BreakEvenReport() {
   const [loading, setLoading] = useState(true);
   const [dailyData, setDailyData] = useState(null);
   const [monthlyData, setMonthlyData] = useState(null);
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [dateFrom, setDateFrom] = useState(new Date().toISOString().split('T')[0]);
+  const [dateTo, setDateTo] = useState(new Date().toISOString().split('T')[0]);
   const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7));
   const [expandedBranches, setExpandedBranches] = useState({});
   const [viewMode, setViewMode] = useState('daily'); // daily or monthly
   
   useEffect(() => {
     fetchData();
-  }, [selectedBranchId, selectedDate, selectedMonth, viewMode]);
+  }, [selectedBranchId, dateFrom, dateTo, selectedMonth, viewMode]);
   
   const fetchData = async () => {
     setLoading(true);
@@ -68,10 +69,11 @@ export default function BreakEvenReport() {
       const branchId = getBranchIdForApi();
       
       if (viewMode === 'daily') {
-        const res = await axios.get(`${API}/break-even/daily`, {
+        const res = await axios.get(`${API}/break-even/daily-range`, {
           params: {
             branch_id: branchId || undefined,
-            date: selectedDate
+            date_from: dateFrom,
+            date_to: dateTo
           }
         });
         setDailyData(res.data);
