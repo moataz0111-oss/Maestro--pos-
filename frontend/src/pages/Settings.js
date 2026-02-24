@@ -2318,9 +2318,10 @@ export default function Settings() {
                                     u.role === 'admin' ? 'bg-red-500/20 text-red-400' :
                                     u.role === 'manager' ? 'bg-blue-500/20 text-blue-400' :
                                     u.role === 'cashier' ? 'bg-green-500/20 text-green-400' :
+                                    u.role === 'call_center' ? 'bg-cyan-500/20 text-cyan-400' :
                                     'bg-gray-500/20 text-gray-400'
                                   }`}>
-                                    {u.role === 'admin' ? t('مدير عام') : u.role === 'manager' ? t('مدير') : u.role === 'cashier' ? t('كاشير') : u.role === 'captain' ? t('كابتن') : u.role === 'kitchen' ? t('مطبخ') : u.role}
+                                    {u.role === 'admin' ? t('مدير عام') : u.role === 'manager' ? t('مدير') : u.role === 'cashier' ? t('كاشير') : u.role === 'captain' ? t('كابتن') : u.role === 'kitchen' ? t('مطبخ') : u.role === 'call_center' ? t('كول سنتر') : u.role}
                                   </span>
                                 </TableCell>
                                 <TableCell>{branches.find(b => b.id === u.branch_id)?.name || '-'}</TableCell>
