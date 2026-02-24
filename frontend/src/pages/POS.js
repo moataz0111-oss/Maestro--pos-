@@ -1126,10 +1126,16 @@ export default function POS() {
         <div className="p-3 border-b border-border">
           <div className="flex gap-1">
             {[
-              { id: 'dine_in', label: t('داخل'), icon: UtensilsCrossed, hideForCallCenter: true },
-              { id: 'takeaway', label: t('سفري'), icon: Package, hideForCallCenter: true },
-              { id: 'delivery', label: t('توصيل'), icon: Truck, hideForCallCenter: false },
-            ].filter(type => !isCallCenter || !type.hideForCallCenter).map(type => (
+              { id: 'dine_in', label: t('داخل'), icon: UtensilsCrossed, hideForCallCenter: true, hideForCaptain: false },
+              { id: 'takeaway', label: t('سفري'), icon: Package, hideForCallCenter: true, hideForCaptain: false },
+              { id: 'delivery', label: t('توصيل'), icon: Truck, hideForCallCenter: false, hideForCaptain: true },
+            ].filter(type => {
+              // كول سنتر يرى فقط التوصيل
+              if (isCallCenter && type.hideForCallCenter) return false;
+              // كابتن يرى فقط داخل وسفري (بدون توصيل)
+              if (isCaptain && type.hideForCaptain) return false;
+              return true;
+            }).map(type => (
               <Button
                 key={type.id}
                 variant={orderType === type.id ? 'default' : 'ghost'}
