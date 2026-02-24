@@ -10357,7 +10357,157 @@ async def get_daily_break_even(
         "total_daily_profit": total_daily_profit,
         "total_coverage_percentage": round(total_coverage, 1),
         "is_break_even_reached": total_daily_profit >= total_daily_target,
-        "net_profit_after_break_even": max(0, total_daily_profit - total_daily_target)
+        "net_profit_after_break_even": max(0, total_daily_profit - total_daily_target),
+        "total_collected_towards_target": min(total_daily_profit, total_daily_target)
+    }
+
+
+@api_router.get("/break-even/daily-range")
+async def get_daily_break_even_range(
+    branch_id: Optional[str] = None,
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    حساب نقطة التعادل لنطاق تاريخ (من - إلى)
+    - تجميع كل الأيام في النطاق المحدد
+    - حساب إجمالي المستقطع من الأرباح لتغطية الأهداف
+    """
+    tenant_id = get_user_tenant_id(current_user)
+    
+    # تحديد التواريخ
+    if date_from:
+        start_date = datetime.fromisoformat(date_from).replace(tzinfo=timezone.utc, hour=0, minute=0, second=0, microsecond=0)
+    else:
+        start_date = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    
+    if date_to:
+        end_date = datetime.fromisoformat(date_to).replace(tzinfo=timezone.utc, hour=23, minute=59, second=59, microsecond=999999)
+    else:
+        end_date = datetime.now(timezone.utc).replace(hour=23, minute=59, second=59, microsecond=999999)
+    
+    # حساب عدد الأيام في النطاق
+    days_count = (end_date.date() - start_date.date()).days + 1
+    
+    # جلب الفرع أو جميع الفروع
+    branches_query = {"tenant_id": tenant_id, "is_active": {"$ne": False}}
+    if branch_id:
+        branches_query["id"] = branch_id
+    
+    branches = await db.branches.find(branches_query, {"_id": 0}).to_list(100)
+    
+    if not branches:
+        return {
+            "date_from": start_date.strftime("%Y-%m-%d"),
+            "date_to": end_date.strftime("%Y-%m-%d"),
+            "days_count": days_count,
+            "branches": [],
+            "total_daily_target": 0,
+            "total_daily_profit": 0,
+            "total_coverage_percentage": 0,
+            "is_break_even_reached": False,
+            "net_profit_after_break_even": 0,
+            "total_collected_towards_target": 0
+        }
+    
+    result_branches = []
+    total_target = 0
+    total_profit = 0
+    total_collected = 0
+    
+    for branch in branches:
+        branch_id_val = branch.get("id")
+        
+        # حساب التكاليف الثابتة اليومية للفرع * عدد الأيام
+        rent_cost = (branch.get("rent_cost", 0) / 30) * days_count
+        water_cost = (branch.get("water_cost", 0) / 30) * days_count
+        electricity_cost = (branch.get("electricity_cost", 0) / 30) * days_count
+        generator_cost = (branch.get("generator_cost", 0) / 30) * days_count
+        fixed_costs = rent_cost + water_cost + electricity_cost + generator_cost
+        
+        # حساب رواتب الموظفين * عدد الأيام
+        employees = await db.employees.find({
+            "tenant_id": tenant_id,
+            "branch_id": branch_id_val,
+            "is_active": {"$ne": False}
+        }, {"_id": 0, "salary": 1}).to_list(1000)
+        
+        total_monthly_salaries = sum(emp.get("salary", 0) for emp in employees)
+        salaries = (total_monthly_salaries / 30) * days_count
+        
+        # الهدف الإجمالي للفترة
+        branch_target = fixed_costs + salaries
+        
+        # جلب الطلبات المكتملة في النطاق لهذا الفرع
+        orders_query = {
+            "tenant_id": tenant_id,
+            "branch_id": branch_id_val,
+            "status": {"$in": ["delivered", "ready"]},
+            "created_at": {
+                "$gte": start_date.isoformat(),
+                "$lte": end_date.isoformat()
+            }
+        }
+        
+        orders = await db.orders.find(orders_query, {"_id": 0, "total": 1, "total_cost": 1, "profit": 1}).to_list(10000)
+        
+        # حساب الربح الإجمالي
+        branch_profit = sum(o.get("profit", 0) for o in orders)
+        branch_sales = sum(o.get("total", 0) for o in orders)
+        
+        # المستقطع من الربح لتغطية الهدف (الحد الأدنى بين الربح والهدف)
+        branch_collected = min(branch_profit, branch_target)
+        
+        # نسبة التغطية
+        coverage_percentage = (branch_profit / branch_target * 100) if branch_target > 0 else 0
+        
+        # هل تم الوصول لنقطة التعادل؟
+        is_break_even_reached = branch_profit >= branch_target
+        
+        # الربح الصافي بعد نقطة التعادل
+        net_profit = max(0, branch_profit - branch_target)
+        
+        branch_result = {
+            "id": branch_id_val,
+            "name": branch.get("name", "فرع غير مسمى"),
+            "target": branch_target,
+            "profit": branch_profit,
+            "sales": branch_sales,
+            "collected_towards_target": branch_collected,
+            "coverage_percentage": round(coverage_percentage, 1),
+            "is_break_even_reached": is_break_even_reached,
+            "net_profit_after_break_even": net_profit,
+            "orders_count": len(orders),
+            "fixed_costs": {
+                "rent": rent_cost,
+                "water": water_cost,
+                "electricity": electricity_cost,
+                "generator": generator_cost,
+                "total": fixed_costs
+            },
+            "salaries": salaries
+        }
+        
+        result_branches.append(branch_result)
+        total_target += branch_target
+        total_profit += branch_profit
+        total_collected += branch_collected
+    
+    # الإجمالي لجميع الفروع
+    total_coverage = (total_profit / total_target * 100) if total_target > 0 else 0
+    
+    return {
+        "date_from": start_date.strftime("%Y-%m-%d"),
+        "date_to": end_date.strftime("%Y-%m-%d"),
+        "days_count": days_count,
+        "branches": result_branches,
+        "total_daily_target": total_target,
+        "total_daily_profit": total_profit,
+        "total_coverage_percentage": round(total_coverage, 1),
+        "is_break_even_reached": total_profit >= total_target,
+        "net_profit_after_break_even": max(0, total_profit - total_target),
+        "total_collected_towards_target": total_collected
     }
 
 
