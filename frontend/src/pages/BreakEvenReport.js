@@ -175,17 +175,31 @@ export default function BreakEvenReport() {
             
             {/* اختيار التاريخ */}
             {viewMode === 'daily' ? (
-              <Input
-                type="date"
-                value={selectedDate}
-                onChange={(e) => setSelectedDate(e.target.value)}
-                className="w-40"
-              />
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1">
+                  <span className="text-sm text-muted-foreground">{t('من')}</span>
+                  <Input
+                    type="date"
+                    value={dateFrom}
+                    onChange={(e) => setDateFrom(e.target.value)}
+                    className="w-36"
+                  />
+                </div>
+                <div className="flex items-center gap-1">
+                  <span className="text-sm text-muted-foreground">{t('إلى')}</span>
+                  <Input
+                    type="date"
+                    value={dateTo}
+                    onChange={(e) => setDateTo(e.target.value)}
+                    className="w-36"
+                  />
+                </div>
+              </div>
             ) : (
               <Input
                 type="month"
-                value={selectedDate}
-                onChange={(e) => setSelectedDate(e.target.value)}
+                value={selectedMonth}
+                onChange={(e) => setSelectedMonth(e.target.value)}
                 className="w-40"
               />
             )}
