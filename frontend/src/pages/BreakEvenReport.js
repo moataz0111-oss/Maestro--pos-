@@ -260,16 +260,22 @@ export default function BreakEvenReport() {
             </CardContent>
           </Card>
           
-          <Card className="bg-blue-500/10 border-blue-200">
+          <Card className={`border-2 ${data?.is_break_even_reached ? 'bg-green-500/10 border-green-500/30' : 'bg-red-500/10 border-red-500/30'}`}>
             <CardContent className="pt-4 pb-4">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-xs text-muted-foreground">{t('إجمالي المستقطع')}</p>
-                  <p className="text-lg font-bold text-blue-600">
-                    {formatPrice(data?.total_collected_towards_target || 0)}
+                  <p className={`text-lg font-bold ${data?.is_break_even_reached ? 'text-green-600' : 'text-red-600'}`}>
+                    {!data?.is_break_even_reached && <span className="text-red-600">-</span>}
+                    {formatPrice(viewMode === 'daily' ? data?.total_daily_profit : data?.total_monthly_profit)}
                   </p>
+                  {!data?.is_break_even_reached && (
+                    <p className="text-xs text-red-500 mt-1">
+                      {t('نقص')}: {formatPrice((viewMode === 'daily' ? data?.total_daily_target : data?.total_monthly_target) - (viewMode === 'daily' ? data?.total_daily_profit : data?.total_monthly_profit))}
+                    </p>
+                  )}
                 </div>
-                <Wallet className="h-8 w-8 text-blue-500 opacity-80" />
+                <Wallet className={`h-8 w-8 ${data?.is_break_even_reached ? 'text-green-500' : 'text-red-500'} opacity-80`} />
               </div>
             </CardContent>
           </Card>
