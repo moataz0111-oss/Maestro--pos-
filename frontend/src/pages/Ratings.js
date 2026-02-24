@@ -232,7 +232,7 @@ export default function Ratings() {
           <div className="flex items-center gap-3">
             <Filter className="h-5 w-5 text-gray-500" />
             <Select value={selectedBranch} onValueChange={setSelectedBranch}>
-              <SelectTrigger className="w-48">
+              <SelectTrigger className="w-48 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300">
                 <SelectValue placeholder="اختر الفرع" />
               </SelectTrigger>
               <SelectContent>
