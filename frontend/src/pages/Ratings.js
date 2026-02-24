@@ -48,7 +48,7 @@ export default function Ratings() {
         const res = await axios.get(`${API}/settings/dashboard`);
         if (res.data.showRatings === false) {
           setHasAccess(false);
-          toast.error(t('ليس لديك صلاحية للوصول لهذه الصفحة'));
+          // توجيه صامت للـ Dashboard بدون رسالة خطأ
           navigate('/dashboard');
         }
       } catch (error) {
@@ -59,7 +59,7 @@ export default function Ratings() {
       axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
       checkAccess();
     }
-  }, [token, navigate, t]);
+  }, [token, navigate]);
   
   // جلب البيانات
   const fetchData = async () => {
