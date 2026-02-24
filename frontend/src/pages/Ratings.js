@@ -32,21 +32,38 @@ import {
 const API = API_URL;
 export default function Ratings() {
   const navigate = useNavigate();
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const { t } = useTranslation();
   const [loading, setLoading] = useState(true);
   const [summary, setSummary] = useState(null);
   const [recentRatings, setRecentRatings] = useState([]);
   const [branches, setBranches] = useState([]);
   const [selectedBranch, setSelectedBranch] = useState('all');
-  // إعداد axios
+  const [hasAccess, setHasAccess] = useState(true);
+  
+  // التحقق من صلاحية الوصول
   useEffect(() => {
+    const checkAccess = async () => {
+      try {
+        const res = await axios.get(`${API}/settings/dashboard`);
+        if (res.data.showRatings === false) {
+          setHasAccess(false);
+          toast.error(t('ليس لديك صلاحية للوصول لهذه الصفحة'));
+          navigate('/dashboard');
+        }
+      } catch (error) {
+        console.error('Error checking access:', error);
+      }
+    };
     if (token) {
       axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+      checkAccess();
     }
-  }, [token]);
+  }, [token, navigate, t]);
+  
   // جلب البيانات
   const fetchData = async () => {
+    if (!hasAccess) return;
     setLoading(true);
     try {
       // جلب ملخص التقييمات
