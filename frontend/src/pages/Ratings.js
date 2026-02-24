@@ -88,8 +88,10 @@ export default function Ratings() {
     }
   };
   useEffect(() => {
-    fetchData();
-  }, [selectedBranch]);
+    if (hasAccess) {
+      fetchData();
+    }
+  }, [selectedBranch, hasAccess]);
   // مكون عرض النجوم
   const StarDisplay = ({ rating, size = 'sm' }) => {
     const sizeClass = size === 'lg' ? 'h-6 w-6' : 'h-4 w-4';
