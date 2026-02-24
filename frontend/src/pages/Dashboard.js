@@ -108,9 +108,22 @@ export default function Dashboard() {
     // مدير الفرع لديه معظم الصلاحيات
     if (user?.role === 'branch_manager') return true;
     
-    // الإجراءات السريعة والإحصائيات تُعرض لجميع المستخدمين المسجلين
-    // (سيتم تصفية الأيقونات حسب صلاحيات كل مستخدم)
-    if (permissionId === 'dashboard_quick_actions' || permissionId === 'dashboard_statistics') {
+    // الإجراءات السريعة تُعرض لجميع المستخدمين المسجلين
+    if (permissionId === 'dashboard_quick_actions') {
+      return true;
+    }
+    
+    // الإحصائيات: تتحقق من صلاحية view_statistics
+    if (permissionId === 'dashboard_statistics') {
+      // الكول سنتر والكابتن لا يرون الإحصائيات افتراضياً
+      if (user?.role === 'call_center' || user?.role === 'captain') {
+        // إلا إذا كانت مضافة في صلاحياتهم
+        return user?.permissions?.includes('view_statistics') || false;
+      }
+      // باقي المستخدمين: تحقق من الصلاحية أو اسمح افتراضياً
+      if (user?.permissions && user.permissions.length > 0) {
+        return user.permissions.includes('view_statistics');
+      }
       return true;
     }
     
