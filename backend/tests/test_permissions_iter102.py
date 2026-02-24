@@ -87,7 +87,9 @@ class TestTenantFeatures:
         if get_response.status_code == 404:
             pytest.skip(f"Tenant {TENANT_ID} not found")
         
-        current_features = get_response.json()
+        response_data = get_response.json()
+        # Features are nested inside 'features' key
+        current_features = response_data.get("features", response_data)
         
         # Update features - disable showRatings
         updated_features = {**current_features, "showRatings": False}
@@ -102,7 +104,8 @@ class TestTenantFeatures:
         # Verify the change
         verify_response = requests.get(f"{BASE_URL}/api/super-admin/tenants/{TENANT_ID}/features", headers=headers)
         assert verify_response.status_code == 200
-        verified_features = verify_response.json()
+        verified_data = verify_response.json()
+        verified_features = verified_data.get("features", verified_data)
         assert verified_features.get("showRatings") == False, "showRatings should be False"
         
         # Re-enable for other tests
@@ -120,7 +123,9 @@ class TestTenantFeatures:
         if get_response.status_code == 404:
             pytest.skip(f"Tenant {TENANT_ID} not found")
         
-        current_features = get_response.json()
+        response_data = get_response.json()
+        # Features are nested inside 'features' key
+        current_features = response_data.get("features", response_data)
         
         # Update features - disable showBreakEvenReport
         updated_features = {**current_features, "showBreakEvenReport": False}
@@ -135,7 +140,8 @@ class TestTenantFeatures:
         # Verify the change
         verify_response = requests.get(f"{BASE_URL}/api/super-admin/tenants/{TENANT_ID}/features", headers=headers)
         assert verify_response.status_code == 200
-        verified_features = verify_response.json()
+        verified_data = verify_response.json()
+        verified_features = verified_data.get("features", verified_data)
         assert verified_features.get("showBreakEvenReport") == False, "showBreakEvenReport should be False"
         
         # Re-enable for other tests
