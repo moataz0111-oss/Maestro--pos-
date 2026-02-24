@@ -2950,6 +2950,9 @@ export default function SuperAdmin() {
                 </Button>
               </div>
             </div>
+            <DialogDescription className="sr-only">
+              {t('إدارة صلاحيات الميزات المتاحة لهذا العميل')}
+            </DialogDescription>
           </DialogHeader>
           <div className="py-4 space-y-6 overflow-y-auto max-h-[60vh] pr-2">
             {featuresLoading ? (
