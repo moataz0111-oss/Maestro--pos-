@@ -3029,6 +3029,8 @@ export default function SuperAdmin() {
                     {[
                       { key: 'showSmartReports', label: t('التقارير الذكية'), icon: BrainCircuit },
                       { key: 'showComprehensiveReport', label: t('التقرير الشامل'), icon: FileText },
+                      { key: 'showBreakEvenReport', label: t('تقرير تحليل الكلف المفصل'), icon: TrendingUp },
+                      { key: 'showInventoryReports', label: t('تقارير المخزون'), icon: BarChart3 },
                       { key: 'showOwnerWallet', label: t('خزينة المالك'), icon: Wallet },
                       { key: 'showExternalBranches', label: t('إدارة الفروع الخارجية'), icon: Building2 },
                       { key: 'showBranchOrders', label: t('طلبات الفروع'), icon: GitBranch },
@@ -3064,9 +3066,16 @@ export default function SuperAdmin() {
                       { key: 'settingsProducts', label: t('المنتجات'), icon: Package },
                       { key: 'settingsDeliveryCompanies', label: t('شركات التوصيل'), icon: Truck },
                       { key: 'settingsBranches', label: t('الفروع'), icon: Building2 },
-                      { key: 'settingsPrinters', label: t('المطبوعات'), icon: Printer },
+                      { key: 'settingsPrinters', label: t('الطابعات'), icon: Printer },
                       { key: 'settingsNotifications', label: t('الإشعارات'), icon: Bell },
                       { key: 'settingsCallCenter', label: t('كول سنتر'), icon: Headphones },
+                      { key: 'settingsRestaurant', label: t('المطعم'), icon: Store },
+                      { key: 'settingsAppearance', label: t('المظهر'), icon: Palette },
+                      { key: 'settingsInvoice', label: t('إعدادات الفاتورة'), icon: Receipt },
+                      { key: 'settingsSystem', label: t('إعدادات النظام'), icon: Cog },
+                      { key: 'settingsInventory', label: t('إعدادات المخزون'), icon: Boxes },
+                      { key: 'settingsPayment', label: t('الدفع الإلكتروني'), icon: CreditCard },
+                      { key: 'settingsKitchenSections', label: t('أقسام المطبخ'), icon: ChefHat },
                     ].map(item => (
                       <label key={item.key} className="flex items-center justify-between p-2.5 bg-gray-700/30 rounded-lg hover:bg-gray-700/50 cursor-pointer">
                         <div className="flex items-center gap-2">
