@@ -64,7 +64,8 @@ import {
   ClipboardList,
   Target,
   AlertTriangle,
-  Bell
+  Bell,
+  Phone
 } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 import { toast } from 'sonner';
