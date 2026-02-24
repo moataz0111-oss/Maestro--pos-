@@ -1476,13 +1476,15 @@ export default function Reports() {
                   </CardContent>
                 </Card>
                 <div className="flex justify-between items-center gap-2 mt-4">
-                  <Button 
-                    onClick={() => navigate('/cost-analysis')} 
-                    className="bg-primary text-primary-foreground"
-                  >
-                    <Target className="h-4 w-4 ml-2" />
-                    {t('تقرير تحليل التكاليف المفصل')}
-                  </Button>
+                  {dashboardSettings.showBreakEvenReport !== false && (
+                    <Button 
+                      onClick={() => navigate('/cost-analysis')} 
+                      className="bg-primary text-primary-foreground"
+                    >
+                      <Target className="h-4 w-4 ml-2" />
+                      {t('تقرير تحليل التكاليف المفصل')}
+                    </Button>
+                  )}
                   <Button variant="outline" onClick={handlePrintProfitLossReport} className="gap-2">
                     <Printer className="h-4 w-4" />
                     {t('طباعة التقرير')}
