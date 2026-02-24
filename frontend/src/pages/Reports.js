@@ -719,7 +719,11 @@ export default function Reports() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('sales');
   const [loadingComprehensive, setLoadingComprehensive] = useState(false);
-  const [dashboardSettings, setDashboardSettings] = useState({ showSmartReports: true, showComprehensiveReport: true });
+  const [dashboardSettings, setDashboardSettings] = useState({ 
+    showSmartReports: true, 
+    showComprehensiveReport: true,
+    showBreakEvenReport: true
+  });
   
   // تغيير التبويب الافتراضي إذا كان التقرير الشامل معطلاً
   useEffect(() => {
