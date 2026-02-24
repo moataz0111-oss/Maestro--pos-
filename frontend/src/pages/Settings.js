@@ -421,27 +421,49 @@ export default function Settings() {
   });
   const [editCustomerForm, setEditCustomerForm] = useState(null);
   const [dashboardSettings, setDashboardSettings] = useState({
+    // الإجراءات السريعة
     showPOS: true,
     showTables: true,
     showOrders: true,
     showKitchen: true,
     showReports: true,
-    showSmartReports: true,
-    showRatings: true,
+    showReviews: true,
     showExpenses: true,
     showPurchasing: true,
     showWarehouse: true,
+    showInventory: true,
     showBranchOrders: true,
     showInventoryReports: true,
     showDelivery: true,
-    showReservations: true,
-    showHR: true,
-    showCallLogs: true,
-    showLoyalty: true,
-    showCoupons: true,
-    showSettings: true,
     showOwnerWallet: true,
-    showExternalBranches: true
+    showCoupons: true,
+    showLoyalty: true,
+    showCallLogs: true,
+    showHR: true,
+    showReservations: true,
+    showSettings: true,
+    showExternalBranches: true,
+    // التقارير
+    showSmartReports: true,
+    showComprehensiveReport: true,
+    showBreakEvenReport: true,
+    // الإعدادات
+    settingsNotifications: true,
+    settingsCallCenter: true,
+    settingsDeliveryCompanies: true,
+    settingsPrinters: true,
+    settingsProducts: true,
+    settingsCategories: true,
+    settingsBranches: true,
+    settingsCustomers: true,
+    settingsUsers: true,
+    settingsRestaurant: true,
+    settingsAppearance: true,
+    settingsInvoice: true,
+    settingsSystem: true,
+    settingsInventory: true,
+    settingsPayment: true,
+    settingsKitchenSections: true,
   });
 
   useEffect(() => {
