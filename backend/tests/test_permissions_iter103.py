@@ -31,7 +31,9 @@ class TestPermissionsIter103:
             "password": password
         })
         if response.status_code == 200:
-            return response.json().get("access_token")
+            data = response.json()
+            # Try both token and access_token
+            return data.get("token") or data.get("access_token")
         return None
     
     def test_01_demo_login(self):
@@ -63,7 +65,7 @@ class TestPermissionsIter103:
         # First get branches
         branches_res = self.session.get(f"{BASE_URL}/api/branches")
         branches = branches_res.json()
-        branch_id = branches[0]['id'] if branches else None
+        branch_id = branches[0]['id'] if branches and len(branches) > 0 else None
         
         # Create captain user
         captain_data = {
@@ -98,7 +100,7 @@ class TestPermissionsIter103:
         # First get branches
         branches_res = self.session.get(f"{BASE_URL}/api/branches")
         branches = branches_res.json()
-        branch_id = branches[0]['id'] if branches else None
+        branch_id = branches[0]['id'] if branches and len(branches) > 0 else None
         
         # Create call center user
         call_center_data = {
