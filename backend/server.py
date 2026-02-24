@@ -6002,7 +6002,17 @@ async def get_dashboard_settings(current_user: dict = Depends(get_current_user))
         "settingsPrinters": True,
         "settingsDeliveryCompanies": True,
         "settingsCallCenter": True,
-        "settingsNotifications": True
+        "settingsNotifications": True,
+        "settingsRestaurant": True,
+        "settingsAppearance": True,
+        "settingsInvoice": True,
+        "settingsSystem": True,
+        "settingsInventory": True,
+        "settingsPayment": True,
+        "settingsKitchenSections": True,
+        # التقارير
+        "showBreakEvenReport": True,
+        "showInventoryReports": True
     }
     
     # جلب إعدادات لوحة القيادة المحفوظة
@@ -7985,7 +7995,17 @@ async def get_tenant_features(tenant_id: str, current_user: dict = Depends(verif
         "settingsPrinters": True,
         "settingsDeliveryCompanies": True,
         "settingsCallCenter": True,
-        "settingsNotifications": True
+        "settingsNotifications": True,
+        "settingsRestaurant": True,
+        "settingsAppearance": True,
+        "settingsInvoice": True,
+        "settingsSystem": True,
+        "settingsInventory": True,
+        "settingsPayment": True,
+        "settingsKitchenSections": True,
+        # التقارير
+        "showBreakEvenReport": True,
+        "showInventoryReports": True
     }
     
     # دمج الميزات المحفوظة مع الافتراضية
