@@ -7918,13 +7918,15 @@ async def update_tenant_features(tenant_id: str, features: dict, current_user: d
         "showHR", "showWarehouse", "showCallLogs", "showCallCenter", "showKitchen",
         "showLoyalty", "showCoupons", "showRecipes", "showReservations",
         "showReviews", "showSmartReports", "showPurchasing", "showBranchOrders",
-        "showCustomerMenu",
+        "showCustomerMenu", "showInventoryReports",
         # الميزات الجديدة
-        "showOwnerWallet", "showExternalBranches", "showComprehensiveReport",
+        "showOwnerWallet", "showExternalBranches", "showComprehensiveReport", "showBreakEvenReport",
         # خيارات الإعدادات
         "settingsUsers", "settingsCustomers", "settingsBranches", 
         "settingsCategories", "settingsProducts", "settingsPrinters",
-        "settingsDeliveryCompanies", "settingsCallCenter", "settingsNotifications"
+        "settingsDeliveryCompanies", "settingsCallCenter", "settingsNotifications",
+        "settingsRestaurant", "settingsAppearance", "settingsInvoice",
+        "settingsSystem", "settingsInventory", "settingsPayment", "settingsKitchenSections"
     ]
     
     # فلترة الميزات المرسلة
