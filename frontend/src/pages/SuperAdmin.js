@@ -2958,94 +2958,39 @@ export default function SuperAdmin() {
               </div>
             ) : (
               <>
-                {/* الميزات الأساسية والمتقدمة */}
-                <div className="grid grid-cols-2 gap-6">
-                  {/* الميزات الأساسية */}
-                  <div className="space-y-3">
-                    <h3 className="font-bold text-green-400 flex items-center gap-2 border-b border-gray-700 pb-2">
-                      <Layers className="h-4 w-4" />
-                      {t('الميزات الأساسية')}
-                    </h3>
-                    <div className="space-y-2">
-                      {[
-                        { key: 'showPOS', label: t('نقاط البيع'), icon: Monitor },
-                        { key: 'showTables', label: t('الطاولات'), icon: LayoutGrid },
-                        { key: 'showOrders', label: t('الطلبات'), icon: FileText },
-                        { key: 'showReports', label: t('التقارير'), icon: BarChart3 },
-                        { key: 'showExpenses', label: t('المصاريف'), icon: Wallet },
-                        { key: 'showInventory', label: t('المخزون'), icon: Package },
-                        { key: 'showDelivery', label: t('التوصيل'), icon: Truck },
-                        { key: 'showKitchen', label: t('شاشة المطبخ'), icon: ChefHat },
-                      ].map(item => (
-                        <label key={item.key} className="flex items-center justify-between p-2.5 bg-gray-700/30 rounded-lg hover:bg-gray-700/50 cursor-pointer">
-                          <div className="flex items-center gap-2">
-                            <item.icon className="h-4 w-4 text-gray-400" />
-                            <span className="text-sm">{item.label}</span>
-                          </div>
-                          <Switch
-                            checked={tenantFeatures[item.key] || false}
-                            onCheckedChange={(checked) => setTenantFeatures({...tenantFeatures, [item.key]: checked})}
-                          />
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* الميزات المتقدمة */}
-                  <div className="space-y-3">
-                    <h3 className="font-bold text-purple-400 flex items-center gap-2 border-b border-gray-700 pb-2">
-                      <Star className="h-4 w-4" />
-                      {t('الميزات المتقدمة')}
-                    </h3>
-                    <div className="space-y-2">
-                      {[
-                        { key: 'showHR', label: t('الموارد البشرية'), icon: Users },
-                        { key: 'showWarehouse', label: t('التحويلات (المخازن)'), icon: ArrowLeftRight },
-                        { key: 'showCallCenter', label: t('كول سنتر'), icon: Headphones },
-                        { key: 'showCallLogs', label: t('سجل المكالمات'), icon: Phone },
-                        { key: 'showLoyalty', label: t('برامج الولاء'), icon: Gift },
-                        { key: 'showCoupons', label: t('الكوبونات والعروض'), icon: Tag },
-                        { key: 'showRecipes', label: t('الوصفات'), icon: UtensilsCrossed },
-                        { key: 'showReservations', label: t('حجوزات الطاولات'), icon: CalendarDays },
-                      ].map(item => (
-                        <label key={item.key} className="flex items-center justify-between p-2.5 bg-gray-700/30 rounded-lg hover:bg-gray-700/50 cursor-pointer">
-                          <div className="flex items-center gap-2">
-                            <item.icon className="h-4 w-4 text-gray-400" />
-                            <span className="text-sm">{item.label}</span>
-                          </div>
-                          <Switch
-                            checked={tenantFeatures[item.key] || false}
-                            onCheckedChange={(checked) => setTenantFeatures({...tenantFeatures, [item.key]: checked})}
-                          />
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-
-                {/* ميزات إضافية */}
+                {/* الميزات الأساسية - جميع أيقونات الإجراءات السريعة */}
                 <div className="space-y-3">
-                  <h3 className="font-bold text-yellow-400 flex items-center gap-2 border-b border-gray-700 pb-2">
-                    <Sparkles className="h-4 w-4" />
-                    {t('ميزات إضافية')}
+                  <h3 className="font-bold text-green-400 flex items-center gap-2 border-b border-gray-700 pb-2">
+                    <Layers className="h-4 w-4" />
+                    {t('الميزات الأساسية')}
                   </h3>
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-4 gap-2">
                     {[
-                      { key: 'showSmartReports', label: t('التقارير الذكية'), icon: BrainCircuit },
-                      { key: 'showComprehensiveReport', label: t('التقرير الشامل'), icon: FileText },
-                      { key: 'showBreakEvenReport', label: t('تقرير تحليل الكلف المفصل'), icon: TrendingUp },
-                      { key: 'showInventoryReports', label: t('تقارير المخزون'), icon: BarChart3 },
-                      { key: 'showOwnerWallet', label: t('خزينة المالك'), icon: Wallet },
-                      { key: 'showExternalBranches', label: t('إدارة الفروع الخارجية'), icon: Building2 },
+                      { key: 'showPOS', label: t('نقطة البيع'), icon: Monitor },
+                      { key: 'showTables', label: t('الطاولات'), icon: LayoutGrid },
+                      { key: 'showOrders', label: t('الطلبات'), icon: FileText },
+                      { key: 'showKitchen', label: t('شاشة المطبخ'), icon: ChefHat },
+                      { key: 'showReports', label: t('التقارير'), icon: BarChart3 },
+                      { key: 'showRatings', label: t('التقييمات'), icon: Star },
+                      { key: 'showDelivery', label: t('التوصيل'), icon: Truck },
+                      { key: 'showInventoryReports', label: t('تقارير المخزون'), icon: Package },
                       { key: 'showBranchOrders', label: t('طلبات الفروع'), icon: GitBranch },
+                      { key: 'showWarehouse', label: t('المخزن والتصنيع'), icon: Boxes },
                       { key: 'showPurchasing', label: t('المشتريات'), icon: ShoppingCart },
-                      { key: 'showReviews', label: t('التقييمات'), icon: Star },
-                      { key: 'showCustomerMenu', label: t('قائمة الطعام للعملاء'), icon: QrCode },
+                      { key: 'showExpenses', label: t('المصاريف'), icon: Receipt },
+                      { key: 'showOwnerWallet', label: t('خزينة المالك'), icon: Wallet },
+                      { key: 'showCoupons', label: t('الكوبونات'), icon: Tag },
+                      { key: 'showLoyalty', label: t('برنامج الولاء'), icon: Gift },
+                      { key: 'showCallLogs', label: t('سجل المكالمات'), icon: Phone },
+                      { key: 'showHR', label: t('الموارد البشرية'), icon: Users },
+                      { key: 'showReservations', label: t('الحجوزات'), icon: CalendarDays },
+                      { key: 'showSettings', label: t('الإعدادات'), icon: Settings },
+                      { key: 'showExternalBranches', label: t('الفروع الخارجية'), icon: Building2 },
                     ].map(item => (
-                      <label key={item.key} className="flex items-center justify-between p-2.5 bg-gray-700/30 rounded-lg hover:bg-gray-700/50 cursor-pointer">
+                      <label key={item.key} className="flex items-center justify-between p-2 bg-gray-700/30 rounded-lg hover:bg-gray-700/50 cursor-pointer">
                         <div className="flex items-center gap-2">
                           <item.icon className="h-4 w-4 text-gray-400" />
-                          <span className="text-sm">{item.label}</span>
+                          <span className="text-xs">{item.label}</span>
                         </div>
                         <Switch
                           checked={tenantFeatures[item.key] || false}
@@ -3056,34 +3001,59 @@ export default function SuperAdmin() {
                   </div>
                 </div>
 
-                {/* خيارات الإعدادات */}
+                {/* ميزات الإعدادات - جميع تبويبات الإعدادات */}
                 <div className="space-y-3">
-                  <h3 className="font-bold text-blue-400 flex items-center gap-2 border-b border-gray-700 pb-2">
+                  <h3 className="font-bold text-yellow-400 flex items-center gap-2 border-b border-gray-700 pb-2">
                     <Settings className="h-4 w-4" />
-                    {t('خيارات الإعدادات (تحكم في ما يظهر داخل الإعدادات)')}
+                    {t('ميزات الإعدادات')}
                   </h3>
-                  <div className="grid grid-cols-3 gap-3">
+                  <div className="grid grid-cols-4 gap-2">
                     {[
+                      { key: 'settingsAppearance', label: t('المظهر'), icon: Palette },
+                      { key: 'settingsRestaurant', label: t('المطعم'), icon: Store },
                       { key: 'settingsUsers', label: t('المستخدمين'), icon: User },
                       { key: 'settingsCustomers', label: t('العملاء'), icon: Users },
+                      { key: 'settingsBranches', label: t('الفروع'), icon: Building2 },
                       { key: 'settingsCategories', label: t('الفئات'), icon: FolderTree },
                       { key: 'settingsProducts', label: t('المنتجات'), icon: Package },
-                      { key: 'settingsDeliveryCompanies', label: t('شركات التوصيل'), icon: Truck },
-                      { key: 'settingsBranches', label: t('الفروع'), icon: Building2 },
                       { key: 'settingsPrinters', label: t('الطابعات'), icon: Printer },
-                      { key: 'settingsNotifications', label: t('الإشعارات'), icon: Bell },
+                      { key: 'settingsDeliveryCompanies', label: t('شركات التوصيل'), icon: Truck },
                       { key: 'settingsCallCenter', label: t('كول سنتر'), icon: Headphones },
-                      { key: 'settingsRestaurant', label: t('المطعم'), icon: Store },
-                      { key: 'settingsAppearance', label: t('المظهر'), icon: Palette },
-                      { key: 'settingsInvoice', label: t('إعدادات الفاتورة'), icon: Receipt },
+                      { key: 'settingsNotifications', label: t('الإشعارات'), icon: Bell },
+                      { key: 'settingsInvoice', label: t('إعدادات القائمة'), icon: Receipt },
                       { key: 'settingsSystem', label: t('إعدادات النظام'), icon: Cog },
                       { key: 'settingsInventory', label: t('إعدادات المخزون'), icon: Boxes },
                       { key: 'settingsPayment', label: t('الدفع الإلكتروني'), icon: CreditCard },
-                      { key: 'settingsKitchenSections', label: t('أقسام المطبخ'), icon: ChefHat },
                     ].map(item => (
-                      <label key={item.key} className="flex items-center justify-between p-2.5 bg-gray-700/30 rounded-lg hover:bg-gray-700/50 cursor-pointer">
+                      <label key={item.key} className="flex items-center justify-between p-2 bg-gray-700/30 rounded-lg hover:bg-gray-700/50 cursor-pointer">
                         <div className="flex items-center gap-2">
                           <item.icon className="h-4 w-4 text-gray-400" />
+                          <span className="text-xs">{item.label}</span>
+                        </div>
+                        <Switch
+                          checked={tenantFeatures[item.key] || false}
+                          onCheckedChange={(checked) => setTenantFeatures({...tenantFeatures, [item.key]: checked})}
+                        />
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                {/* ميزات التقارير */}
+                <div className="space-y-3">
+                  <h3 className="font-bold text-purple-400 flex items-center gap-2 border-b border-gray-700 pb-2">
+                    <BarChart3 className="h-4 w-4" />
+                    {t('ميزات التقارير')}
+                  </h3>
+                  <div className="grid grid-cols-3 gap-3">
+                    {[
+                      { key: 'showSmartReports', label: t('التقارير الذكية'), icon: BrainCircuit },
+                      { key: 'showComprehensiveReport', label: t('التقرير الشامل'), icon: FileText },
+                      { key: 'showBreakEvenReport', label: t('تقرير تحليل التكاليف'), icon: TrendingUp },
+                    ].map(item => (
+                      <label key={item.key} className="flex items-center justify-between p-3 bg-gray-700/30 rounded-lg hover:bg-gray-700/50 cursor-pointer">
+                        <div className="flex items-center gap-2">
+                          <item.icon className="h-5 w-5 text-gray-400" />
                           <span className="text-sm">{item.label}</span>
                         </div>
                         <Switch
