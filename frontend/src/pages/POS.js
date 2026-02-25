@@ -880,6 +880,21 @@ export default function POS() {
       // تحديث رقم الطلب الأخير
       setLastOrderNumber(savedOrder.order_number);
       
+      // إرسال إشعار للكاشير والسائق
+      await sendOrderNotification({
+        id: savedOrder.id,
+        order_number: savedOrder.order_number,
+        branch_id: currentBranchId,
+        order_type: orderType,
+        customer_name: customerName || null,
+        customer_phone: customerPhone || null,
+        delivery_address: deliveryAddress || null,
+        driver_id: selectedDriver || null,
+        total_amount: savedOrder.total_amount || cart.reduce((sum, item) => sum + (item.price * item.quantity), 0),
+        items: cart,
+        notes: orderNotes || null
+      });
+      
       // تحديث حالة الطاولة إذا كان طلب داخلي
       if (orderType === 'dine_in' && selectedTable) {
         try {
