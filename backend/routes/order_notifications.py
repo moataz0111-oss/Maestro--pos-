@@ -120,6 +120,21 @@ async def create_order_notification(notification: OrderNotificationCreate):
             "created_at": now.isoformat()
         }
         await db.order_notifications.insert_one(driver_notification)
+        
+        # إرسال عبر WebSocket للسائق
+        try:
+            from services.websocket_service import notify_driver_new_order
+            await notify_driver_new_order(notification.driver_id, {
+                "order_id": notification.order_id,
+                "order_number": notification.order_number,
+                "customer_name": notification.customer_name,
+                "customer_phone": notification.customer_phone,
+                "delivery_address": notification.delivery_address,
+                "total_amount": notification.total_amount,
+                "branch_id": notification.branch_id
+            })
+        except Exception as e:
+            print(f"WebSocket driver notification failed: {e}")
     
     return {
         "success": True,
