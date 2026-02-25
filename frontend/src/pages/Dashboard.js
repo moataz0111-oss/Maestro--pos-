@@ -1293,8 +1293,8 @@ export default function Dashboard() {
         </section>
         )}
 
-        {/* تنبيهات نقطة التعادل - للمدير والأدمن فقط */}
-        {hasBreakEvenPermission && breakEvenAlerts.length > 0 && (
+        {/* تنبيهات نقطة التعادل - للمدير والأدمن فقط + يجب أن تكون صلاحية تقرير التحليل مفعلة */}
+        {hasBreakEvenPermission && breakEvenAlerts.length > 0 && dashboardSettings.showBreakEvenReport !== false && (
           <section className="mb-4">
             <div className="flex items-center justify-between mb-2">
               <h2 className="text-base font-bold font-cairo text-foreground flex items-center gap-2">
