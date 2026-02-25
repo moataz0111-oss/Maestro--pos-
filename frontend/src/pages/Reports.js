@@ -309,8 +309,8 @@ const ComprehensiveReportTab = ({
         </div>
       </div>
 
-      {/* الملخص الرئيسي - 2 أو 3 بطاقات حسب الصلاحية */}
-      <div className={`grid grid-cols-1 ${showBreakEvenReport !== false ? 'md:grid-cols-3' : 'md:grid-cols-2'} gap-4`}>
+      {/* الملخص الرئيسي - 3 بطاقات كبيرة */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card className="bg-gradient-to-br from-emerald-500 to-emerald-600 text-white border-0 shadow-lg">
           <CardContent className="p-5">
             <div className="flex items-center justify-between">
