@@ -122,7 +122,7 @@ export default function Login() {
     if (initSecretKey !== '271018') {
       setDbInitResult({
         success: false,
-        error: 'مفتاح التهيئة غير صحيح'
+        errorKey: 'مفتاح التهيئة غير صحيح'
       });
       return;
     }
