@@ -1173,12 +1173,12 @@ export default function Reports() {
                 showBreakEvenReport={dashboardSettings.showBreakEvenReport}
                 branches={branches}
                 selectedBranchId={selectedBranchId}
-                onBranchChange={(val) => {
-                  // تغيير الفرع عبر context
+                onBranchChange={async (val) => {
+                  // تغيير الفرع
                   if (val === 'all') {
-                    window.dispatchEvent(new CustomEvent('setBranch', { detail: null }));
+                    setSelectedBranchId(null);
                   } else {
-                    window.dispatchEvent(new CustomEvent('setBranch', { detail: val }));
+                    setSelectedBranchId(val);
                   }
                 }}
                 startDate={startDate}
