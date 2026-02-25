@@ -1915,6 +1915,35 @@ async def impersonate_user(user_id: str, current_user: dict = Depends(get_curren
         "message": f"تم تسجيل الدخول كـ {target_user.get('full_name') or target_user.get('username')}"
     }
 
+
+@api_router.get("/auth/impersonation-logs")
+async def get_impersonation_logs(
+    current_user: dict = Depends(get_current_user),
+    limit: int = 50,
+    skip: int = 0
+):
+    """
+    جلب سجلات انتحال الشخصية (للمدراء فقط)
+    """
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.SUPER_ADMIN]:
+        raise HTTPException(status_code=403, detail="غير مصرح")
+    
+    query = build_tenant_query(current_user)
+    
+    logs = await db.impersonation_logs.find(
+        query, 
+        {"_id": 0}
+    ).sort("created_at", -1).skip(skip).limit(limit).to_list(limit)
+    
+    total = await db.impersonation_logs.count_documents(query)
+    
+    return {
+        "logs": logs,
+        "total": total,
+        "limit": limit,
+        "skip": skip
+    }
+
 # ==================== USER ROUTES ====================
 
 @api_router.get("/users", response_model=List[UserResponse])
