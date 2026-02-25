@@ -816,6 +816,13 @@ export default function Reports() {
     fetchSettings();
   }, []);
 
+  // جلب بيانات التقرير الشامل عند تغيير التاريخ أو الفرع
+  useEffect(() => {
+    if (activeTab === 'comprehensive') {
+      fetchAllReportsForComprehensive();
+    }
+  }, [startDate, endDate, selectedBranchId]);
+
   // الحصول على اسم الفرع المحدد
   const getSelectedBranchName = () => {
     if (!selectedBranchId || selectedBranchId === 'all') return t('جميع الفروع');
