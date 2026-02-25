@@ -669,9 +669,9 @@ export default function HR() {
 
   const getPayrollStatusBadge = (status) => {
     const statusConfig = {
-      draft: { label: 'مسودة', color: 'bg-gray-500' },
-      approved: { label: 'معتمد', color: 'bg-blue-500' },
-      paid: { label: 'تم الصرف', color: 'bg-green-500' }
+      draft: { label: t('مسودة'), color: 'bg-gray-500' },
+      approved: { label: t('معتمد'), color: 'bg-blue-500' },
+      paid: { label: t('تم الصرف'), color: 'bg-green-500' }
     };
     const config = statusConfig[status] || { label: status, color: 'bg-gray-500' };
     return <Badge className={`${config.color} text-white`}>{config.label}</Badge>;
