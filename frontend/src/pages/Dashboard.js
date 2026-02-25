@@ -1014,8 +1014,46 @@ export default function Dashboard() {
     );
   }
 
+  // التحقق من وضع المعاينة (انتحال الحساب)
+  const isImpersonating = user?.impersonated === true;
+  const originalUserName = user?.original_user_name;
+  
+  // العودة للحساب الأصلي
+  const exitImpersonation = () => {
+    const originalUser = localStorage.getItem('original_user');
+    const originalToken = localStorage.getItem('original_token');
+    
+    if (originalUser && originalToken) {
+      localStorage.setItem('user', originalUser);
+      localStorage.setItem('token', originalToken);
+      localStorage.removeItem('original_user');
+      localStorage.removeItem('original_token');
+      toast.success(t('تم العودة للحساب الأصلي'));
+      window.location.href = '/settings';
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background" data-testid="dashboard">
+      {/* شريط تنبيه وضع المعاينة */}
+      {isImpersonating && (
+        <div className="bg-amber-500 text-black px-4 py-2 text-center font-medium flex items-center justify-center gap-4 sticky top-0 z-[100]">
+          <span className="flex items-center gap-2">
+            <AlertTriangle className="h-5 w-5" />
+            {t('أنت في وضع المعاينة كـ')} <strong>{user?.full_name || user?.username}</strong>
+            {originalUserName && <span className="text-sm opacity-75">({t('بواسطة')} {originalUserName})</span>}
+          </span>
+          <Button 
+            size="sm" 
+            variant="secondary" 
+            onClick={exitImpersonation}
+            className="bg-black/20 hover:bg-black/30 text-black border-0"
+          >
+            {t('العودة لحسابي')}
+          </Button>
+        </div>
+      )}
+      
       {/* Header */}
       <header className="sticky top-0 z-50 glass border-b border-border/50 px-6 py-4">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
