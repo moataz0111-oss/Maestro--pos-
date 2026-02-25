@@ -2495,6 +2495,101 @@ export default function Settings() {
                         )}
                       </DialogContent>
                     </Dialog>
+
+                    {/* نافذة معاينة المستخدم */}
+                    <Dialog open={previewUserDialogOpen} onOpenChange={setPreviewUserDialogOpen}>
+                      <DialogContent className="max-w-md">
+                        <DialogHeader>
+                          <DialogTitle className="text-foreground flex items-center gap-2">
+                            <Eye className="h-5 w-5 text-blue-500" />
+                            {t('معاينة بيانات المستخدم')}
+                          </DialogTitle>
+                        </DialogHeader>
+                        {previewUserData && (
+                          <div className="space-y-4">
+                            {/* معلومات المستخدم الأساسية */}
+                            <div className="bg-muted/30 rounded-lg p-4 space-y-3">
+                              <div className="flex items-center gap-3 pb-3 border-b border-border/30">
+                                <div className="w-12 h-12 rounded-full bg-primary/20 flex items-center justify-center">
+                                  <User className="h-6 w-6 text-primary" />
+                                </div>
+                                <div>
+                                  <h3 className="font-semibold text-foreground text-lg">{previewUserData.full_name || previewUserData.username}</h3>
+                                  <p className="text-sm text-muted-foreground">@{previewUserData.username}</p>
+                                </div>
+                              </div>
+                              
+                              <div className="grid grid-cols-2 gap-3 text-sm">
+                                <div>
+                                  <span className="text-muted-foreground">{t('البريد الإلكتروني')}:</span>
+                                  <p className="font-medium text-foreground">{previewUserData.email || '-'}</p>
+                                </div>
+                                <div>
+                                  <span className="text-muted-foreground">{t('الدور')}:</span>
+                                  <p className="font-medium text-foreground">{previewUserData.role_label}</p>
+                                </div>
+                                <div>
+                                  <span className="text-muted-foreground">{t('الفرع')}:</span>
+                                  <p className="font-medium text-foreground">{previewUserData.branch_name}</p>
+                                </div>
+                                <div>
+                                  <span className="text-muted-foreground">{t('الحالة')}:</span>
+                                  <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${previewUserData.is_active !== false ? 'bg-green-500/20 text-green-500' : 'bg-red-500/20 text-red-500'}`}>
+                                    {previewUserData.status}
+                                  </span>
+                                </div>
+                                <div>
+                                  <span className="text-muted-foreground">{t('عدد الصلاحيات')}:</span>
+                                  <p className="font-medium text-foreground">{previewUserData.permissions_count} {t('صلاحية')}</p>
+                                </div>
+                                <div>
+                                  <span className="text-muted-foreground">{t('تاريخ الإنشاء')}:</span>
+                                  <p className="font-medium text-foreground">{previewUserData.created_date}</p>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* الصلاحيات */}
+                            {previewUserData.permissions && previewUserData.permissions.length > 0 && (
+                              <div>
+                                <h4 className="text-sm font-medium text-foreground mb-2 flex items-center gap-2">
+                                  <Shield className="h-4 w-4" />
+                                  {t('الصلاحيات المفعلة')}:
+                                </h4>
+                                <div className="flex flex-wrap gap-1.5">
+                                  {previewUserData.permissions.slice(0, 10).map((perm, idx) => (
+                                    <span key={idx} className="px-2 py-1 bg-primary/10 text-primary text-xs rounded">
+                                      {t(perm.replace('show', '').replace(/([A-Z])/g, ' $1').trim()) || perm}
+                                    </span>
+                                  ))}
+                                  {previewUserData.permissions.length > 10 && (
+                                    <span className="px-2 py-1 bg-muted text-muted-foreground text-xs rounded">
+                                      +{previewUserData.permissions.length - 10} {t('أخرى')}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+
+                            <div className="flex gap-2 pt-2">
+                              <Button variant="outline" onClick={() => setPreviewUserDialogOpen(false)} className="flex-1">
+                                {t('إغلاق')}
+                              </Button>
+                              <Button 
+                                onClick={() => {
+                                  setPreviewUserDialogOpen(false);
+                                  handleEditUser(previewUserData);
+                                }} 
+                                className="flex-1 bg-primary text-primary-foreground"
+                              >
+                                <Edit className="h-4 w-4 ml-2" />
+                                {t('تعديل')}
+                              </Button>
+                            </div>
+                          </div>
+                        )}
+                      </DialogContent>
+                    </Dialog>
                 </CardContent>
               </Card>
             </TabsContent>
