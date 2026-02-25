@@ -774,6 +774,21 @@ export default function POS() {
         orderId = res.data.id;
         orderNumber = res.data.order_number;
         setLastOrderNumber(orderNumber); // حفظ رقم الفاتورة
+        
+        // إرسال إشعار للكاشير والسائق (فقط للطلبات الجديدة)
+        await sendOrderNotification({
+          id: orderId,
+          order_number: orderNumber,
+          branch_id: currentBranchId,
+          order_type: orderType,
+          customer_name: customerName || null,
+          customer_phone: customerPhone || null,
+          delivery_address: deliveryAddress || null,
+          driver_id: selectedDriver || null,
+          total_amount: res.data.total_amount || cart.reduce((sum, item) => sum + (item.price * item.quantity), 0),
+          items: cart,
+          notes: orderNotes || null
+        });
       }
       
       // تحديث طريقة الدفع وإغلاق الطلب
