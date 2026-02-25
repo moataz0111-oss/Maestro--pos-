@@ -341,23 +341,21 @@ const ComprehensiveReportTab = ({
           </CardContent>
         </Card>
 
-        {/* بطاقة صافي الربح - تظهر فقط إذا كانت صلاحية تقرير التحليل مفعلة */}
-        {showBreakEvenReport !== false && (
-          <Card className={`bg-gradient-to-br ${netProfit >= 0 ? 'from-blue-500 to-blue-600' : 'from-gray-600 to-gray-700'} text-white border-0 shadow-lg`}>
-            <CardContent className="p-5">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm opacity-90">{t('صافي الربح')}</p>
-                  <p className="text-3xl font-bold mt-1">{formatPrice(netProfit)}</p>
-                  <p className="text-xs mt-2 opacity-80">{t('هامش الربح')}: {profitMargin.toFixed(1)}%</p>
-                </div>
-                <div className="w-14 h-14 bg-white/20 rounded-full flex items-center justify-center">
-                  <Calculator className="h-7 w-7" />
-                </div>
+        {/* بطاقة إجمالي الربح - تظهر دائماً بدلاً من صافي الربح */}
+        <Card className={`bg-gradient-to-br ${totalIncome - totalOutcome >= 0 ? 'from-blue-500 to-blue-600' : 'from-gray-600 to-gray-700'} text-white border-0 shadow-lg`}>
+          <CardContent className="p-5">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm opacity-90">{t('إجمالي الربح')}</p>
+                <p className="text-3xl font-bold mt-1">{formatPrice(totalIncome - totalOutcome)}</p>
+                <p className="text-xs mt-2 opacity-80">{t('الإيرادات - المصروفات')}</p>
               </div>
-            </CardContent>
-          </Card>
-        )}
+              <div className="w-14 h-14 bg-white/20 rounded-full flex items-center justify-center">
+                <Calculator className="h-7 w-7" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       {/* الإحصائيات التفصيلية */}
