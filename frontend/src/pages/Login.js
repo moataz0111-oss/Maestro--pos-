@@ -147,7 +147,8 @@ export default function Login() {
     } catch (err) {
       setDbInitResult({
         success: false,
-        error: err.response?.data?.detail || err.message || 'فشل في تهيئة قاعدة البيانات'
+        errorKey: 'فشل في تهيئة قاعدة البيانات',
+        errorDetail: err.response?.data?.detail || err.message
       });
     } finally {
       setDbInitLoading(false);
