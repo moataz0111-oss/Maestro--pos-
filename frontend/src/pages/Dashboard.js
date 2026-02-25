@@ -975,11 +975,13 @@ export default function Dashboard() {
       bg: 'bg-primary/10'
     },
     // إظهار "إجمالي الربح" بدلاً من "صافي الربح" عند تعطيل صلاحية تقرير التحليل
+    // صافي الربح = total_profit (بعد خصم التكاليف التشغيلية)
+    // إجمالي الربح = gross_profit (الربح قبل التكاليف التشغيلية)
     { 
       label: dashboardSettings.showBreakEvenReport !== false ? t('صافي الربح') : t('إجمالي الربح'), 
       value: formatPriceCompact(dashboardSettings.showBreakEvenReport !== false 
         ? (periodStats?.total_profit || 0) 
-        : ((periodStats?.total_sales || 0) - (periodStats?.total_expenses || 0))), 
+        : (periodStats?.gross_profit || 0)), 
       icon: Wallet,
       color: 'text-purple-500',
       bg: 'bg-purple-500/10'
