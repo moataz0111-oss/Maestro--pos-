@@ -15519,6 +15519,10 @@ app.include_router(owner_wallet_router, prefix="/api")
 from routes.external_branches import router as external_branches_router
 app.include_router(external_branches_router, prefix="/api")
 
+# Order notifications routes (real-time notifications for cashier and driver)
+from routes.order_notifications import router as order_notifications_router
+app.include_router(order_notifications_router, prefix="/api")
+
 # Include router and middleware
 app.include_router(api_router)
 
