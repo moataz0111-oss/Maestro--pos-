@@ -657,11 +657,11 @@ export default function HR() {
 
   const getStatusBadge = (status) => {
     const statusConfig = {
-      present: { label: 'حاضر', color: 'bg-green-500' },
-      absent: { label: 'غائب', color: 'bg-red-500' },
-      late: { label: 'متأخر', color: 'bg-yellow-500' },
-      early_leave: { label: 'انصراف مبكر', color: 'bg-orange-500' },
-      holiday: { label: 'إجازة', color: 'bg-blue-500' }
+      present: { label: t('حاضر'), color: 'bg-green-500' },
+      absent: { label: t('غائب'), color: 'bg-red-500' },
+      late: { label: t('متأخر'), color: 'bg-yellow-500' },
+      early_leave: { label: t('انصراف مبكر'), color: 'bg-orange-500' },
+      holiday: { label: t('إجازة'), color: 'bg-blue-500' }
     };
     const config = statusConfig[status] || { label: status, color: 'bg-gray-500' };
     return <Badge className={`${config.color} text-white`}>{config.label}</Badge>;
