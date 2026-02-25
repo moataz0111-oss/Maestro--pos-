@@ -1844,7 +1844,7 @@ export default function Reports() {
                     color="purple-500"
                   />
                   <StatCard
-                    title="نسبة من المبيعات"
+                    title={t("نسبة من المبيعات")}
                     value={`${discountsReport.discount_percentage?.toFixed(1) || 0}%`}
                     icon={PieChart}
                     color="red-500"
