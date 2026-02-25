@@ -951,7 +951,8 @@ export default function Dashboard() {
     all_time: t('الإجمالي')
   };
 
-  const statCards = [
+  // بطاقات الإحصائيات - تتحدث تلقائياً عند تغيير الإعدادات
+  const statCards = React.useMemo(() => [
     { 
       label: t('إجمالي المبيعات'), 
       value: formatPriceCompact(periodStats?.total_sales || 0), 
@@ -974,20 +975,16 @@ export default function Dashboard() {
       bg: 'bg-primary/10'
     },
     // إظهار "إجمالي الربح" بدلاً من "صافي الربح" عند تعطيل صلاحية تقرير التحليل
-    dashboardSettings.showBreakEvenReport !== false ? { 
-      label: t('صافي الربح'), 
-      value: formatPriceCompact(periodStats?.total_profit || 0), 
-      icon: Wallet,
-      color: 'text-purple-500',
-      bg: 'bg-purple-500/10'
-    } : { 
-      label: t('إجمالي الربح'), 
-      value: formatPriceCompact((periodStats?.total_sales || 0) - (periodStats?.total_expenses || 0)), 
+    { 
+      label: dashboardSettings.showBreakEvenReport !== false ? t('صافي الربح') : t('إجمالي الربح'), 
+      value: formatPriceCompact(dashboardSettings.showBreakEvenReport !== false 
+        ? (periodStats?.total_profit || 0) 
+        : ((periodStats?.total_sales || 0) - (periodStats?.total_expenses || 0))), 
       icon: Wallet,
       color: 'text-purple-500',
       bg: 'bg-purple-500/10'
     },
-  ];
+  ], [periodStats, dashboardSettings.showBreakEvenReport, t, formatPriceCompact, formatPrice]);
 
   const getOrderStatusColor = (status) => {
     const colors = {
