@@ -484,12 +484,12 @@ export default function Login() {
                     <div className="bg-green-500/20 border border-green-500/30 rounded-lg p-3 mb-3">
                       <div className="flex items-center gap-2 text-green-400">
                         <CheckCircle className="h-4 w-4" />
-                        <span className="font-bold text-sm">{dbInitResult.message}</span>
+                        <span className="font-bold text-sm">{t(dbInitResult.messageKey)}</span>
                       </div>
                     </div>
                   ) : dbInitResult?.success === false ? (
                     <div className="bg-red-500/20 border border-red-500/30 rounded-lg p-3 mb-3">
-                      <p className="text-red-400 text-xs">{dbInitResult.error}</p>
+                      <p className="text-red-400 text-xs">{t(dbInitResult.errorKey)}{dbInitResult.errorDetail ? `: ${dbInitResult.errorDetail}` : ''}</p>
                     </div>
                   ) : null}
                   
