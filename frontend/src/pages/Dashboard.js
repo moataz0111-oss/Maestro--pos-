@@ -1055,7 +1055,7 @@ export default function Dashboard() {
       )}
       
       {/* Header */}
-      <header className="sticky top-0 z-50 glass border-b border-border/50 px-6 py-4">
+      <header className={`sticky ${isImpersonating ? 'top-[40px]' : 'top-0'} z-50 glass border-b border-border/50 px-6 py-4`}>
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-4">
             {/* Logo - يعرض شعار العميل إذا وجد */}
