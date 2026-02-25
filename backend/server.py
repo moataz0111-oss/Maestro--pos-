@@ -15591,6 +15591,18 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# WebSocket Integration for Real-time Notifications
+try:
+    from services.websocket_service import sio, notify_branch_new_order, notify_driver_new_order
+    
+    # Mount Socket.IO app
+    socket_app = socketio.ASGIApp(sio, other_asgi_app=app)
+    
+    logger.info("✅ WebSocket service initialized successfully")
+except Exception as e:
+    logger.warning(f"⚠️ WebSocket service not available: {e}")
+    socket_app = app  # Fallback to regular app
+
 @app.on_event("shutdown")
 async def shutdown_db_client():
     client.close()
