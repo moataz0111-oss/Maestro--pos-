@@ -984,7 +984,8 @@ export default function Dashboard() {
       color: 'text-purple-500',
       bg: 'bg-purple-500/10'
     },
-  ], [periodStats, dashboardSettings.showBreakEvenReport, t, formatPriceCompact, formatPrice]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  ], [periodStats, dashboardSettings.showBreakEvenReport, t]);
 
   const getOrderStatusColor = (status) => {
     const colors = {
