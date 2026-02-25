@@ -1888,15 +1888,18 @@ async def impersonate_user(user_id: str, current_user: dict = Depends(get_curren
     target_user["original_user_name"] = current_user.get("full_name") or current_user.get("username")
     
     # تسجيل حدث الانتحال في audit log
+    admin_name = current_user.get("full_name") or current_user.get("name") or current_user.get("username") or current_user.get("email")
+    target_name = target_user.get("full_name") or target_user.get("name") or target_user.get("username") or target_user.get("email")
+    
     audit_log = {
         "id": str(uuid.uuid4()),
         "event_type": "impersonation",
         "admin_id": current_user.get("id"),
-        "admin_name": current_user.get("full_name") or current_user.get("username"),
+        "admin_name": admin_name,
         "admin_email": current_user.get("email"),
         "admin_role": current_user.get("role"),
         "target_user_id": target_user.get("id"),
-        "target_user_name": target_user.get("full_name") or target_user.get("username"),
+        "target_user_name": target_name,
         "target_user_email": target_user.get("email"),
         "target_user_role": target_user.get("role"),
         "tenant_id": current_user.get("tenant_id"),
