@@ -46,6 +46,7 @@
 - ✅ Hook React جديد `useOrderNotifications` للاستماع للإشعارات
 - ✅ دالة `sendOrderNotification` لإرسال الإشعارات من POS
 - ✅ إمكانية الطباعة التلقائية عند وصول طلب
+- ✅ **ترقية إلى WebSocket** (python-socketio) للاستجابة الفورية
 
 ### فلاتر التقرير الشامل ✅
 - ✅ إضافة فلتر التاريخ (من - إلى) داخل التقرير الشامل
@@ -60,10 +61,23 @@
 - ✅ زر "العودة لحسابي" للرجوع للحساب الأصلي
 - ✅ حماية: لا يمكن معاينة حساب مدير عام أو super_admin
 
+### مراجعة الترجمة الشاملة ✅
+- ✅ إضافة ترجمات جديدة لميزة معاينة الحسابات (Impersonation)
+- ✅ إضافة ترجمات لإشعارات الطلبات الجديدة
+- ✅ التحقق من الترجمات الموجودة (3370+ سطر)
+
+### إعادة هيكلة server.py (جزئي) ✅
+- ✅ إنشاء `/app/backend/services/websocket_service.py` - خدمة WebSocket
+- ✅ إنشاء `/app/backend/routes/auth_routes.py` - مسارات المصادقة
+- ✅ إنشاء `/app/backend/routes/user_routes.py` - مسارات المستخدمين
+- ✅ تحديث `/app/backend/routes/order_notifications.py` - دعم WebSocket
+
 ### الملفات الجديدة/المعدلة
-- `/app/backend/routes/order_notifications.py` - API إشعارات الطلبات
-- `/app/frontend/src/utils/orderNotifications.js` - Hook ودوال الإشعارات
-- `/app/backend/server.py` - إضافة `/api/auth/impersonate/{user_id}`
+- `/app/backend/services/websocket_service.py` - خدمة WebSocket الجديدة
+- `/app/backend/routes/auth_routes.py` - مسارات المصادقة (منفصلة)
+- `/app/backend/routes/user_routes.py` - مسارات المستخدمين (منفصلة)
+- `/app/backend/routes/order_notifications.py` - دعم WebSocket
+- `/app/frontend/src/utils/autoTranslate.js` - ترجمات جديدة
 - `/app/frontend/src/pages/Settings.js` - زر معاينة المستخدم
 - `/app/frontend/src/pages/Dashboard.js` - شريط تنبيه وضع المعاينة
 
