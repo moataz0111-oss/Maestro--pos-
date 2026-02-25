@@ -149,6 +149,23 @@ export default function POS() {
   
   // إشعارات الطلبات الجديدة
   const prevOrdersCount = useRef(0);
+  
+  // نظام إشعارات الطلبات في الوقت الفعلي (للكاشير)
+  const currentBranchIdForNotifications = getBranchIdForApi() || user?.branch_id;
+  const isCashierRole = user?.role === 'cashier' || user?.role === 'admin' || user?.role === 'owner';
+  
+  // تفعيل الإشعارات للكاشير فقط
+  const { notifications: orderNotifications, unreadCount: unreadOrdersCount } = useOrderNotifications({
+    branchId: isCashierRole ? currentBranchIdForNotifications : null,
+    enabled: isCashierRole && !isCallCenter && !isCaptain,
+    pollingInterval: 5000,
+    playSound: true,
+    autoPrint: false, // يمكن تفعيلها من الإعدادات
+    onNewOrder: (notification) => {
+      // تحديث قائمة الطلبات المعلقة
+      fetchPendingOrders();
+    }
+  });
 
   // إعادة جلب البيانات عند تغيير الفرع المحدد
   useEffect(() => {
