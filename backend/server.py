@@ -883,6 +883,10 @@ class NotificationType(str, Enum):
     TENANT_ACTIVATED = "tenant_activated"  # تفعيل عميل
     TENANT_DEACTIVATED = "tenant_deactivated"  # تعطيل عميل
     SYSTEM = "system"  # إشعار نظام عام
+    # إشعارات الطلبات الجديدة
+    NEW_ORDER_CASHIER = "new_order_cashier"  # طلب جديد للكاشير
+    NEW_ORDER_DRIVER = "new_order_driver"  # طلب جديد للسائق
+    ORDER_READY = "order_ready"  # طلب جاهز للتسليم
 
 class NotificationCreate(BaseModel):
     type: str
