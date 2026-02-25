@@ -1129,6 +1129,24 @@ export default function Settings() {
     setEditUserDialogOpen(true);
   };
 
+  // معاينة بيانات المستخدم
+  const handlePreviewUser = (u) => {
+    setPreviewUserData({
+      ...u,
+      branch_name: branches.find(b => b.id === u.branch_id)?.name || '-',
+      role_label: u.role === 'admin' ? t('مدير عام') : 
+                  u.role === 'manager' ? t('مدير') : 
+                  u.role === 'cashier' ? t('كاشير') : 
+                  u.role === 'captain' ? t('كابتن') : 
+                  u.role === 'kitchen' ? t('مطبخ') : 
+                  u.role === 'call_center' ? t('كول سنتر') : u.role,
+      permissions_count: (u.permissions || []).length,
+      created_date: u.created_at ? new Date(u.created_at).toLocaleDateString('ar-IQ') : '-',
+      status: u.is_active !== false ? t('نشط') : t('غير نشط')
+    });
+    setPreviewUserDialogOpen(true);
+  };
+
   const handleUpdateUser = async (e) => {
     e.preventDefault();
     try {
