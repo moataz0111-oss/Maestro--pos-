@@ -298,12 +298,33 @@ export default function HR() {
     };
     
     const printWindow = window.open('', '_blank', 'width=400,height=600');
+    
+    // ترجمات للطباعة
+    const labels = {
+      employeeName: t('اسم الموظف:'),
+      date: t('التاريخ:'),
+      deductionType: t('نوع الخصم:'),
+      deductionAmount: t('مبلغ الخصم:'),
+      reason: t('السبب:'),
+      notSpecified: t('غير محدد'),
+      hours: t('عدد الساعات:'),
+      hour: t('ساعة'),
+      days: t('عدد الأيام:'),
+      day: t('يوم'),
+      employeeSignature: t('توقيع الموظف (علمت بالخصم):'),
+      managerSignature: t('توقيع المسؤول:'),
+      name: t('الاسم:'),
+      deductionReceipt: t('إيصال خصم'),
+      receiptNo: t('رقم:'),
+      createdFromSystem: t('تم إنشاء هذا الإيصال من نظام Maestro EGP')
+    };
+    
     printWindow.document.write(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
         <meta charset="UTF-8">
-        <title>إيصال خصم</title>
+        <title>${labels.deductionReceipt}</title>
         <style>
           * { margin: 0; padding: 0; box-sizing: border-box; }
           body { 
@@ -370,51 +391,51 @@ export default function HR() {
       <body>
         <div class="header">
           <div class="logo">Maestro EGP</div>
-          <div class="title">🔴 إيصال خصم</div>
-          <div class="receipt-no">رقم: ${deduction.id?.slice(0, 8) || 'N/A'}</div>
+          <div class="title">🔴 ${labels.deductionReceipt}</div>
+          <div class="receipt-no">${labels.receiptNo} ${deduction.id?.slice(0, 8) || 'N/A'}</div>
         </div>
         
         <div class="section">
           <div class="row">
-            <span class="label">{t('اسم الموظف:')}</span>
-            <span class="value">{t('${deduction.employee_name || employee?.name || 'غير محدد'}')}</span>
+            <span class="label">${labels.employeeName}</span>
+            <span class="value">${deduction.employee_name || employee?.name || labels.notSpecified}</span>
           </div>
           <div class="row">
-            <span class="label">{t('التاريخ:')}</span>
+            <span class="label">${labels.date}</span>
             <span class="value">${deduction.date || new Date().toLocaleDateString('en-US')}</span>
           </div>
           <div class="row">
-            <span class="label">{t('نوع الخصم:')}</span>
+            <span class="label">${labels.deductionType}</span>
             <span class="value">${deductionTypeLabels[deduction.deduction_type] || deduction.deduction_type}</span>
           </div>
         </div>
         
         <div class="amount">
-          مبلغ الخصم: ${formatPrice(deduction.amount)}
+          ${labels.deductionAmount} ${formatPrice(deduction.amount)}
         </div>
         
         <div class="reason">
-          <strong>السبب:</strong><br/>
-          ${deduction.reason || 'غير محدد'}
+          <strong>${labels.reason}</strong><br/>
+          ${deduction.reason || labels.notSpecified}
         </div>
         
-        ${deduction.hours ? `<div class="row"><span class="label">{t('عدد الساعات:')}</span><span class="value">{t('${deduction.hours} ساعة')}</span></div>` : ''}
-        ${deduction.days ? `<div class="row"><span class="label">{t('عدد الأيام:')}</span><span class="value">{t('${deduction.days} يوم')}</span></div>` : ''}
+        ${deduction.hours ? `<div class="row"><span class="label">${labels.hours}</span><span class="value">${deduction.hours} ${labels.hour}</span></div>` : ''}
+        ${deduction.days ? `<div class="row"><span class="label">${labels.days}</span><span class="value">${deduction.days} ${labels.day}</span></div>` : ''}
         
         <div class="signature">
-          <div>توقيع الموظف (علمت بالخصم):</div>
+          <div>${labels.employeeSignature}</div>
           <div class="sig-line"></div>
-          <div class="sig-label">التاريخ: _______________</div>
+          <div class="sig-label">${labels.date} _______________</div>
         </div>
         
         <div class="signature">
-          <div>توقيع المسؤول:</div>
+          <div>${labels.managerSignature}</div>
           <div class="sig-line"></div>
-          <div class="sig-label">الاسم: ${user?.full_name || '_______________'}</div>
+          <div class="sig-label">${labels.name} ${user?.full_name || '_______________'}</div>
         </div>
         
         <div class="footer">
-          <p>{t('تم إنشاء هذا الإيصال من نظام Maestro EGP')}</p>
+          <p>${labels.createdFromSystem}</p>
           <p>${new Date().toLocaleString('en-GB')}</p>
         </div>
         
