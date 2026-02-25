@@ -683,8 +683,9 @@ export default function CustomerMenu() {
       let fetchedBranches = res.data.branches || [];
       if (fetchedBranches.length > 1) {
         // إذا كان هناك أكثر من فرع، أخفِ الفرع الرئيسي
+        const mainBranchNames = [t('الفرع الرئيسي'), 'Main Branch'];
         const filteredBranches = fetchedBranches.filter(b => 
-          b.name !== 'الفرع الرئيسي' && b.name !== 'Main Branch'
+          !mainBranchNames.includes(b.name)
         );
         // استخدم الفلترة فقط إذا بقي فرع واحد على الأقل
         if (filteredBranches.length > 0) {
@@ -694,14 +695,14 @@ export default function CustomerMenu() {
       setBranches(fetchedBranches);
       
       if (res.data.restaurant?.name) {
-        document.title = res.data.restaurant.name + ' - القائمة';
+        document.title = res.data.restaurant.name + ' - ' + t('القائمة');
       }
       
       // If only one branch or no branches, skip branch selection
       // لكن فقط إذا كان الفرع الوحيد ليس "الفرع الرئيسي"
+      const mainBranchNames = [t('الفرع الرئيسي'), 'Main Branch'];
       if (fetchedBranches.length === 1 && 
-          fetchedBranches[0].name !== 'الفرع الرئيسي' && 
-          fetchedBranches[0].name !== 'Main Branch') {
+          !mainBranchNames.includes(fetchedBranches[0].name)) {
         setSelectedBranch(fetchedBranches[0].id);
         localStorage.setItem(`branch_${tenantId}`, fetchedBranches[0].id);
         setStep('menu');
