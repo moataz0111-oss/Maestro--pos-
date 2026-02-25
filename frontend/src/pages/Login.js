@@ -133,7 +133,7 @@ export default function Login() {
       const res = await axios.get(`${API}/init-db`);
       setDbInitResult({
         success: true,
-        message: res.data.status === 'already_initialized' 
+        messageKey: res.data.status === 'already_initialized' 
           ? 'قاعدة البيانات مهيأة مسبقاً' 
           : 'تم تهيئة قاعدة البيانات بنجاح'
       });
