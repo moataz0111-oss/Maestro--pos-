@@ -290,6 +290,12 @@ export default function Settings() {
   const [editDeliveryApp, setEditDeliveryApp] = useState(null);
   const [editDeliveryAppDialogOpen, setEditDeliveryAppDialogOpen] = useState(false);
   
+  // سجلات انتحال الهوية (Audit Logs)
+  const [impersonationLogs, setImpersonationLogs] = useState([]);
+  const [logsLoading, setLogsLoading] = useState(false);
+  const [logsPage, setLogsPage] = useState(1);
+  const [logsTotalPages, setLogsTotalPages] = useState(1);
+  
   // مجموعات الصلاحيات
   const PERMISSION_GROUPS = ['الصفحات الرئيسية', 'عمليات نقطة البيع', 'التقارير والتحليلات', 'الميزات الخاصة', 'عرض المبيعات', 'الإعدادات'];
   
