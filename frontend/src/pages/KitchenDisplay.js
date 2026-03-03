@@ -235,6 +235,24 @@ export default function KitchenDisplay() {
         return;
       }
       
+      // === وضع Offline ===
+      if (isOffline) {
+        try {
+          // جلب الطلبات المحلية
+          const localOrders = await offlineStorage.getTodayOrders();
+          const kitchenOrders = localOrders
+            .filter(o => o.kitchen_status !== 'completed_kitchen' && o.status !== 'delivered')
+            .sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+          
+          setOrders(kitchenOrders);
+          setLoading(false);
+          return;
+        } catch (offlineError) {
+          console.error('Error loading offline orders:', offlineError);
+        }
+      }
+      
+      // === وضع Online ===
       // استخدام API المطبخ الجديد
       const res = await axios.get(`${API}/kitchen/orders`, {
         headers: { Authorization: `Bearer ${token}` }
@@ -257,15 +275,42 @@ export default function KitchenDisplay() {
       lastOrderCountRef.current = kitchenOrders.length;
       
       setOrders(kitchenOrders);
+      
+      // حفظ الطلبات محلياً
+      try {
+        for (const order of kitchenOrders) {
+          await db.addItem(STORES.ORDERS, { ...order, is_synced: true });
+        }
+      } catch (cacheError) {
+        console.log('Could not cache kitchen orders:', cacheError);
+      }
     } catch (error) {
       console.error('Error fetching orders:', error);
+      
+      // إذا فشل الاتصال، حاول جلب من IndexedDB
+      if (!error.response) {
+        try {
+          const localOrders = await offlineStorage.getTodayOrders();
+          const kitchenOrders = localOrders
+            .filter(o => o.kitchen_status !== 'completed_kitchen' && o.status !== 'delivered')
+            .sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+          
+          if (kitchenOrders.length > 0) {
+            setOrders(kitchenOrders);
+            toast.warning(t('تم تحميل الطلبات المحلية'));
+          }
+        } catch (offlineError) {
+          console.error('Error loading offline orders:', offlineError);
+        }
+      }
+      
       if (error.response?.status === 401) {
         navigate('/login');
       }
     } finally {
       setLoading(false);
     }
-  }, [navigate, soundEnabled]);
+  }, [navigate, soundEnabled, isOffline, t]);
 
   // Initial fetch and polling
   useEffect(() => {
