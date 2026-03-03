@@ -282,7 +282,15 @@ export const addToSyncQueue = async (entityType, action, data) => {
 export const getSyncQueue = async () => {
   try {
     const items = await db.getItemsByIndex(STORES.SYNC_QUEUE, 'status', 'pending');
-    return items.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+    if (items && items.length > 0) {
+      return items.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+    }
+    
+    // إذا فشل البحث بالفهرس، ابحث في كل العناصر
+    const allItems = await db.getAllItems(STORES.SYNC_QUEUE);
+    return allItems
+      .filter(item => item.status === 'pending')
+      .sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
   } catch (error) {
     console.error('❌ خطأ في جلب طابور المزامنة:', error);
     return [];
