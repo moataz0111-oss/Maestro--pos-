@@ -58,6 +58,7 @@ const DEFAULT_SECTIONS = [
 export default function Tables() {
   const { user, hasRole, hasPermission } = useAuth();
   const { t, isRTL } = useTranslation();
+  const { isOnline, isOffline, syncStatus } = useOffline();
   const navigate = useNavigate();
   
   const [tables, setTables] = useState([]);
@@ -77,11 +78,41 @@ export default function Tables() {
 
   useEffect(() => {
     fetchData();
-  }, [selectedBranch]);
+  }, [selectedBranch, isOffline]);
 
   const fetchData = async () => {
     try {
       setLoading(true);
+      
+      // === وضع Offline ===
+      if (isOffline) {
+        try {
+          const [localTables, localBranches] = await Promise.all([
+            db.getAllItems(STORES.TABLES),
+            db.getAllItems(STORES.BRANCHES)
+          ]);
+          
+          // فلترة الطاولات حسب الفرع
+          let filteredTables = localTables;
+          if (selectedBranch) {
+            filteredTables = localTables.filter(t => t.branch_id === selectedBranch);
+          }
+          
+          setTables(filteredTables || []);
+          setBranches(localBranches || []);
+          
+          if (!selectedBranch && localBranches.length > 0) {
+            setSelectedBranch(localBranches[0].id);
+          }
+          
+          setLoading(false);
+          return;
+        } catch (offlineError) {
+          console.error('Error loading offline tables:', offlineError);
+        }
+      }
+      
+      // === وضع Online ===
       const [tablesRes, branchesRes] = await Promise.all([
         axios.get(`${API}/tables`, { params: { branch_id: selectedBranch || undefined } }),
         axios.get(`${API}/branches`)
@@ -90,12 +121,41 @@ export default function Tables() {
       setTables(tablesRes.data || []);
       setBranches(branchesRes.data || []);
       
+      // حفظ البيانات محلياً
+      try {
+        await db.addItems(STORES.TABLES, tablesRes.data || []);
+        await db.addItems(STORES.BRANCHES, branchesRes.data || []);
+      } catch (cacheError) {
+        console.log('Could not cache tables:', cacheError);
+      }
+      
       // تحديد الفرع الأول فقط إذا لم يكن محدداً وهناك فروع
       if (!selectedBranch && branchesRes.data && branchesRes.data.length > 0) {
         setSelectedBranch(branchesRes.data[0].id);
       }
     } catch (error) {
       console.error('Failed to fetch tables:', error);
+      
+      // إذا فشل الاتصال، حاول جلب من IndexedDB
+      if (!error.response) {
+        try {
+          const [localTables, localBranches] = await Promise.all([
+            db.getAllItems(STORES.TABLES),
+            db.getAllItems(STORES.BRANCHES)
+          ]);
+          
+          if (localTables.length > 0) {
+            setTables(localTables);
+            toast.warning(t('تم تحميل الطاولات المحلية'));
+          }
+          if (localBranches.length > 0) {
+            setBranches(localBranches);
+          }
+        } catch (offlineError) {
+          console.error('Error loading offline data:', offlineError);
+        }
+      }
+      
       toast.error(t('فشل في تحميل الطاولات'));
       setTables([]);
       setBranches([]);
