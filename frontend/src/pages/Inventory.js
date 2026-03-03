@@ -269,6 +269,35 @@ export default function Inventory() {
 
   const handleTransaction = async (type) => {
     try {
+      // === وضع Offline ===
+      if (isOffline) {
+        const transaction = {
+          item_id: transactionDialog.id,
+          item_name: transactionDialog.name,
+          transaction_type: type === 'in' ? 'add' : 'remove',
+          quantity: transactionData.quantity,
+          notes: transactionData.notes,
+          branch_id: selectedBranch
+        };
+        
+        await offlineStorage.saveOfflineInventoryTransaction(transaction);
+        
+        // تحديث محلي في الـ state
+        const quantityChange = type === 'in' ? transactionData.quantity : -transactionData.quantity;
+        setItems(prev => prev.map(item => 
+          item.id === transactionDialog.id 
+            ? { ...item, quantity: item.quantity + quantityChange }
+            : item
+        ));
+        
+        toast.success(type === 'in' ? t('تم إضافة الكمية') + ' (محلي)' : t('تم سحب الكمية') + ' (محلي)');
+        await updateSyncStatus();
+        setTransactionDialog(null);
+        setTransactionData({ quantity: 0, notes: '' });
+        return;
+      }
+      
+      // === وضع Online ===
       await axios.post(`${API}/inventory/transaction`, {
         inventory_id: transactionDialog.id,
         transaction_type: type,
