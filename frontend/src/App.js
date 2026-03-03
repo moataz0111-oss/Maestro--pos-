@@ -459,14 +459,17 @@ function App() {
           <AuthProvider>
             <CurrencyProvider>
               <BranchProvider>
-                <div className="App">
-                  <BrowserRouter>
-                    <AppRoutes />
-                    <Toaster position="top-center" richColors />
-                    {/* Incoming Call Popup - يظهر في جميع الصفحات */}
-                    <IncomingCallPopup />
-                  </BrowserRouter>
-                </div>
+                <OfflineProvider>
+                  <div className="App">
+                    <BrowserRouter>
+                      <OfflineBanner />
+                      <AppRoutes />
+                      <Toaster position="top-center" richColors />
+                      {/* Incoming Call Popup - يظهر في جميع الصفحات */}
+                      <IncomingCallPopup />
+                    </BrowserRouter>
+                  </div>
+                </OfflineProvider>
               </BranchProvider>
             </CurrencyProvider>
           </AuthProvider>
