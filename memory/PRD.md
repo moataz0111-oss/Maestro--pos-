@@ -49,23 +49,33 @@
 
 ## 📁 حالة إعادة هيكلة server.py
 
-### الوضع الحالي:
-- حجم الملف: **15,670 سطر**
-- عدد الـ endpoints: **359**
-- نسخة احتياطية: `/backend/server_backup.py`
-- توثيق البنية: `/backend/routes/ROUTES_INDEX.md`
+### ✅ ما تم إنجازه (3 مارس 2026):
+- **حذف 16 ملف routes مكرر** (غير مستخدمة)
+- **حذف مجلد api/** (12 ملف غير مستخدم)
+- **حذف مجلد models/** (26 ملف غير مستخدم)
+- **حذف server_backup.py**
+- **إجمالي المساحة المحررة: ~1.2 MB**
 
-### الملفات المفصولة والمستخدمة:
-✅ sync_routes.py, reports_routes.py, drivers_routes.py, payroll_routes.py
-✅ shifts_routes.py, owner_wallet.py, external_branches.py, order_notifications.py
-✅ inventory_system.py
-
-### ملفات موجودة لكن مكررة في server.py:
-📁 auth_routes.py, branch_routes.py, category_routes.py, customer_routes.py
-📁 expense_routes.py, product_routes.py, table_routes.py, user_routes.py
+### البنية الحالية:
+```
+/backend/routes/
+├── sync_routes.py        # المزامنة Offline
+├── reports_routes.py     # التقارير
+├── drivers_routes.py     # السائقين
+├── payroll_routes.py     # الرواتب
+├── shifts_routes.py      # الورديات
+├── owner_wallet.py       # محفظة المالك
+├── external_branches.py  # الفروع الخارجية
+├── order_notifications.py # إشعارات الطلبات
+├── inventory_system.py   # نظام المخزون
+├── customer_menu.py      # قائمة العملاء
+├── shared.py             # الدوال المشتركة
+└── ROUTES_INDEX.md       # التوثيق
+```
 
 ### ملاحظة:
-إعادة الهيكلة الكاملة تحتاج وقتاً واختباراً مكثفاً. النظام يعمل بشكل صحيح حالياً.
+server.py (15,670 سطر) لا يزال يحتوي على 359 endpoint.
+نقلها يحتاج وقتاً واختباراً مكثفاً - النظام مستقر حالياً.
 
 ---
 
