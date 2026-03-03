@@ -55,6 +55,7 @@ const API = API_URL;
 export default function Orders() {
   const { user } = useAuth();
   const { t, isRTL } = useTranslation();
+  const { isOnline, isOffline, syncStatus, updateSyncStatus } = useOffline();
   const navigate = useNavigate();
   
   const [orders, setOrders] = useState([]);
@@ -83,7 +84,7 @@ export default function Orders() {
     // Poll for updates every 15 seconds
     const interval = setInterval(fetchData, 15000);
     return () => clearInterval(interval);
-  }, [selectedBranch, statusFilter]);
+  }, [selectedBranch, statusFilter, isOffline]);
 
   const fetchData = async () => {
     try {
