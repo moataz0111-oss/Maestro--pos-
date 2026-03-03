@@ -6,6 +6,8 @@ import { ThemeProvider } from "./context/ThemeContext";
 import { BranchProvider } from "./context/BranchContext";
 import { CurrencyProvider } from "./context/CurrencyContext";
 import { LanguageProvider } from "./context/LanguageContext";
+import { OfflineProvider } from "./context/OfflineContext";
+import OfflineBanner from "./components/OfflineBanner";
 import ErrorBoundary from "./components/ErrorBoundary";
 import React, { Suspense, lazy } from "react";
 import { t } from "./utils/translations";
