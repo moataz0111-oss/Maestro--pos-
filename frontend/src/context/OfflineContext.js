@@ -89,18 +89,26 @@ export const OfflineProvider = ({ children }) => {
     const unsubscribe = syncService.addSyncListener((event, data) => {
       switch (event) {
         case 'start':
-          setSyncStatus(prev => ({ ...prev, isSyncing: true }));
+          setSyncStatus(prev => ({ ...prev, isSyncing: true, syncProgress: null }));
           break;
         case 'complete':
-          setSyncStatus(prev => ({ ...prev, isSyncing: false }));
+          setSyncStatus(prev => ({ ...prev, isSyncing: false, syncProgress: null }));
           updateSyncStatus();
           break;
         case 'error':
-          setSyncStatus(prev => ({ ...prev, isSyncing: false }));
+          setSyncStatus(prev => ({ ...prev, isSyncing: false, syncProgress: null }));
           toast.error('❌ فشل في المزامنة: ' + data.error);
           break;
         case 'progress':
-          // يمكن إضافة شريط تقدم هنا
+          // تحديث مؤشر التقدم
+          setSyncStatus(prev => ({
+            ...prev,
+            syncProgress: {
+              current: data.current,
+              total: data.total,
+              type: data.type
+            }
+          }));
           break;
         default:
           break;
