@@ -3105,8 +3105,69 @@ async def get_payroll_summary_report(
     
     employees = await db.employees.find(emp_query, {"_id": 0}).to_list(500)
     
+    if not employees:
+        return {
+            "month": month,
+            "employee_count": 0,
+            "employees": [],
+            "totals": {"basic_salary": 0, "total_deductions": 0, "total_bonuses": 0, "total_advances": 0, "net_payable": 0}
+        }
+    
     start_date = f"{month}-01"
     end_date = f"{month}-31"
+    
+    # === تحسين الأداء: Batch fetch بدلاً من N+1 queries ===
+    employee_ids = [emp["id"] for emp in employees]
+    branch_ids = list(set([emp.get("branch_id") for emp in employees if emp.get("branch_id")]))
+    
+    # جلب جميع الخصومات دفعة واحدة
+    all_deductions = await db.deductions.find({
+        "employee_id": {"$in": employee_ids},
+        "date": {"$gte": start_date, "$lte": end_date}
+    }, {"_id": 0}).to_list(5000)
+    
+    # جلب جميع المكافآت دفعة واحدة
+    all_bonuses = await db.bonuses.find({
+        "employee_id": {"$in": employee_ids},
+        "date": {"$gte": start_date, "$lte": end_date}
+    }, {"_id": 0}).to_list(5000)
+    
+    # جلب جميع السلف دفعة واحدة
+    all_advances = await db.advances.find({
+        "employee_id": {"$in": employee_ids},
+        "status": "approved",
+        "remaining_amount": {"$gt": 0}
+    }, {"_id": 0}).to_list(5000)
+    
+    # جلب جميع الفروع دفعة واحدة
+    all_branches = await db.branches.find(
+        {"id": {"$in": branch_ids}},
+        {"_id": 0, "id": 1, "name": 1}
+    ).to_list(100)
+    
+    # تجميع البيانات
+    deductions_by_emp = {}
+    for d in all_deductions:
+        emp_id = d.get("employee_id")
+        if emp_id not in deductions_by_emp:
+            deductions_by_emp[emp_id] = []
+        deductions_by_emp[emp_id].append(d)
+    
+    bonuses_by_emp = {}
+    for b in all_bonuses:
+        emp_id = b.get("employee_id")
+        if emp_id not in bonuses_by_emp:
+            bonuses_by_emp[emp_id] = []
+        bonuses_by_emp[emp_id].append(b)
+    
+    advances_by_emp = {}
+    for a in all_advances:
+        emp_id = a.get("employee_id")
+        if emp_id not in advances_by_emp:
+            advances_by_emp[emp_id] = []
+        advances_by_emp[emp_id].append(a)
+    
+    branches_by_id = {b["id"]: b for b in all_branches}
     
     # بناء بيانات التقرير لكل موظف
     employee_data = []
@@ -3119,41 +3180,33 @@ async def get_payroll_summary_report(
     }
     
     for emp in employees:
-        # الخصومات
-        deductions = await db.deductions.find({
-            "employee_id": emp["id"],
-            "date": {"$gte": start_date, "$lte": end_date}
-        }, {"_id": 0}).to_list(100)
+        emp_id = emp["id"]
+        
+        # الخصومات (من البيانات المجمعة)
+        deductions = deductions_by_emp.get(emp_id, [])
         emp_deductions = sum(d.get("amount", 0) for d in deductions)
         
-        # المكافآت
-        bonuses = await db.bonuses.find({
-            "employee_id": emp["id"],
-            "date": {"$gte": start_date, "$lte": end_date}
-        }, {"_id": 0}).to_list(100)
+        # المكافآت (من البيانات المجمعة)
+        bonuses = bonuses_by_emp.get(emp_id, [])
         emp_bonuses = sum(b.get("amount", 0) for b in bonuses)
         
-        # السلف المعلقة
-        advances = await db.advances.find({
-            "employee_id": emp["id"],
-            "status": "approved",
-            "remaining_amount": {"$gt": 0}
-        }, {"_id": 0}).to_list(100)
+        # السلف المعلقة (من البيانات المجمعة)
+        advances = advances_by_emp.get(emp_id, [])
         emp_advances = sum(a.get("monthly_deduction", 0) for a in advances)
         pending_advances = sum(a.get("remaining_amount", 0) for a in advances)
         
         basic_salary = emp.get("salary", 0)
         net_payable = basic_salary + emp_bonuses - emp_deductions - emp_advances
         
-        # جلب اسم الفرع
-        branch = await db.branches.find_one({"id": emp.get("branch_id")}, {"_id": 0, "name": 1})
+        # جلب اسم الفرع (من البيانات المجمعة)
+        branch = branches_by_id.get(emp.get("branch_id"), {})
         
         employee_data.append({
             "id": emp["id"],
             "name": emp.get("name"),
             "position": emp.get("position"),
             "branch_id": emp.get("branch_id"),
-            "branch_name": branch.get("name") if branch else "-",
+            "branch_name": branch.get("name", "-"),
             "basic_salary": basic_salary,
             "deductions": emp_deductions,
             "deductions_details": deductions,
