@@ -4,6 +4,9 @@ import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import { useTranslation } from '../hooks/useTranslation';
+import { useOffline } from '../context/OfflineContext';
+import offlineStorage from '../lib/offlineStorage';
+import db, { STORES } from '../lib/offlineDB';
 import { formatPrice } from '../utils/currency';
 import { playNewOrderNotification, playKitchenBell } from '../utils/sound';
 import { Button } from '../components/ui/button';
@@ -27,7 +30,10 @@ import {
   RefreshCw,
   Volume2,
   VolumeX,
-  Bell
+  Bell,
+  WifiOff,
+  Cloud,
+  CloudOff
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
