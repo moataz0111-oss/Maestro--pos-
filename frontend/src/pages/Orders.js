@@ -196,6 +196,28 @@ export default function Orders() {
 
   const updateOrderStatus = async (orderId, status) => {
     try {
+      // === وضع Offline ===
+      if (isOffline) {
+        // تحديث محلي
+        await offlineStorage.updateOfflineOrder(orderId, { 
+          status: status,
+          updated_at: new Date().toISOString()
+        });
+        
+        toast.success(t('تم تحديث حالة الطلب') + ' (محلي)');
+        
+        // Play kitchen bell when order is ready
+        if (status === 'ready' && soundEnabled) {
+          playKitchenBell();
+        }
+        
+        // تحديث حالة المزامنة
+        await updateSyncStatus();
+        fetchData();
+        return;
+      }
+      
+      // === وضع Online ===
       await axios.put(`${API}/orders/${orderId}/status?status=${status}`);
       toast.success(t('تم تحديث حالة الطلب'));
       
