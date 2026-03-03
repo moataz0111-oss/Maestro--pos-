@@ -297,6 +297,21 @@ export default function HR() {
   const handleCreateAttendance = async (e) => {
     e.preventDefault();
     try {
+      // === وضع Offline ===
+      if (isOffline) {
+        await offlineStorage.saveOfflineAttendance({
+          ...attendanceForm,
+          branch_id: getBranchIdForApi()
+        });
+        
+        toast.success(t('تم تسجيل الحضور') + ' (محلي)');
+        await updateSyncStatus();
+        setAttendanceDialogOpen(false);
+        setAttendanceForm({ employee_id: '', date: new Date().toISOString().slice(0, 10), check_in: '', check_out: '', status: 'present', notes: '' });
+        return;
+      }
+      
+      // === وضع Online ===
       const token = localStorage.getItem('token');
       await axios.post(`${API}/attendance`, attendanceForm, { headers: { Authorization: `Bearer ${token}` } });
       toast.success(t('تم تسجيل الحضور'));
