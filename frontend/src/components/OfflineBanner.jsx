@@ -4,7 +4,7 @@
  */
 
 import React from 'react';
-import { Wifi, WifiOff, RefreshCw, Cloud, CloudOff, CheckCircle } from 'lucide-react';
+import { Wifi, WifiOff, RefreshCw, Cloud, CloudOff, CheckCircle, Loader2 } from 'lucide-react';
 import { useOffline } from '../context/OfflineContext';
 import { useTranslation } from '../hooks/useTranslation';
 import { Button } from '../components/ui/button';
@@ -45,22 +45,44 @@ const OfflineBanner = () => {
     );
   }
 
-  // جاري المزامنة
+  // جاري المزامنة - مع مؤشر التقدم
   if (syncStatus.isSyncing) {
+    const progress = syncStatus.syncProgress || { current: 0, total: 0, type: '' };
+    const percentage = progress.total > 0 ? Math.round((progress.current / progress.total) * 100) : 0;
+    
     return (
-      <div className="bg-blue-500 text-white px-4 py-2 flex items-center justify-between text-sm sticky top-0 z-50 shadow-lg">
-        <div className="flex items-center gap-2">
-          <RefreshCw className="h-4 w-4 animate-spin" />
-          <span className="font-medium">
-            {t('جاري المزامنة...')}
-          </span>
+      <div className="bg-blue-500 text-white px-4 py-2 sticky top-0 z-50 shadow-lg">
+        <div className="flex items-center justify-between text-sm mb-1">
+          <div className="flex items-center gap-2">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            <span className="font-medium">
+              {t('جاري المزامنة...')}
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Cloud className="h-4 w-4" />
+            <span>
+              {progress.total > 0 
+                ? `${progress.current} / ${progress.total} ${t('عنصر')}`
+                : `${syncStatus.pendingOrders} ${t('طلب')}`
+              }
+            </span>
+            {percentage > 0 && (
+              <span className="bg-blue-600 px-2 py-0.5 rounded-full text-xs font-bold">
+                {percentage}%
+              </span>
+            )}
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          <Cloud className="h-4 w-4" />
-          <span>
-            {t('رفع')} {syncStatus.pendingOrders} {t('طلب')}
-          </span>
-        </div>
+        {/* شريط التقدم */}
+        {progress.total > 0 && (
+          <div className="w-full bg-blue-400 rounded-full h-1.5 overflow-hidden">
+            <div 
+              className="bg-white h-full rounded-full transition-all duration-300 ease-out"
+              style={{ width: `${percentage}%` }}
+            />
+          </div>
+        )}
       </div>
     );
   }
