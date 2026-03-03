@@ -346,6 +346,35 @@ export default function KitchenDisplay() {
   // Update order kitchen status
   const handleStatusChange = async (orderId, newKitchenStatus) => {
     try {
+      // === وضع Offline ===
+      if (isOffline) {
+        // تحديث محلي
+        await offlineStorage.updateOfflineOrder(orderId, { 
+          kitchen_status: newKitchenStatus,
+          updated_at: new Date().toISOString()
+        });
+        
+        // تحديث الحالة المحلية
+        setOrders(prev => prev.map(order => {
+          if (order.id === orderId) {
+            return { ...order, kitchen_status: newKitchenStatus };
+          }
+          return order;
+        }));
+        
+        if (newKitchenStatus === 'ready_kitchen') {
+          toast.success(t('تم تجهيز الطلب') + '! ✅ (محلي)');
+        } else if (newKitchenStatus === 'completed_kitchen') {
+          toast.success(t('تم إتمام الطلب من المطبخ') + ' (محلي)');
+        } else {
+          toast.success(t('تم تحديث الحالة') + ' (محلي)');
+        }
+        
+        fetchOrders();
+        return;
+      }
+      
+      // === وضع Online ===
       const token = localStorage.getItem('token');
       await axios.put(`${API}/orders/${orderId}/kitchen-status?kitchen_status=${newKitchenStatus}`, 
         {},
