@@ -1922,8 +1922,9 @@ async def impersonate_user(user_id: str, current_user: dict = Depends(get_curren
 @api_router.get("/auth/impersonation-logs")
 async def get_impersonation_logs(
     current_user: dict = Depends(get_current_user),
-    limit: int = 50,
-    skip: int = 0
+    limit: int = 20,
+    page: int = 1,
+    skip: int = None
 ):
     """
     جلب سجلات انتحال الشخصية (للمدراء فقط)
@@ -1933,18 +1934,24 @@ async def get_impersonation_logs(
     
     query = build_tenant_query(current_user)
     
+    # حساب skip من page إذا لم يتم تمريره
+    actual_skip = skip if skip is not None else (page - 1) * limit
+    
     logs = await db.impersonation_logs.find(
         query, 
         {"_id": 0}
-    ).sort("created_at", -1).skip(skip).limit(limit).to_list(limit)
+    ).sort("created_at", -1).skip(actual_skip).limit(limit).to_list(limit)
     
     total = await db.impersonation_logs.count_documents(query)
+    total_pages = (total + limit - 1) // limit  # حساب عدد الصفحات
     
     return {
         "logs": logs,
         "total": total,
+        "total_pages": total_pages,
+        "page": page,
         "limit": limit,
-        "skip": skip
+        "skip": actual_skip
     }
 
 # ==================== USER ROUTES ====================
