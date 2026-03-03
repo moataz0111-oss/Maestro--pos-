@@ -92,6 +92,7 @@ const getErrorMessage = (error, defaultMsg) => {
 export default function POS() {
   const { user } = useAuth();
   const { selectedBranchId, branches, getBranchIdForApi } = useBranch();
+  const { isOnline, isOffline, syncStatus, updateSyncStatus } = useOffline();
   const { t, isRTL } = useTranslation();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
