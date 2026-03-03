@@ -331,6 +331,21 @@ export default function Orders() {
           </div>
 
           <div className="flex items-center gap-3">
+            {/* Offline/Online Status Indicator */}
+            {isOffline ? (
+              <div className="flex items-center gap-2 px-3 py-1.5 bg-amber-500/10 border border-amber-500/30 rounded-lg">
+                <CloudOff className="h-4 w-4 text-amber-500" />
+                <span className="text-sm text-amber-500 font-medium">{t('غير متصل')}</span>
+              </div>
+            ) : syncStatus.pendingOrders > 0 ? (
+              <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+                <Cloud className="h-4 w-4 text-blue-500" />
+                <span className="text-sm text-blue-500 font-medium">
+                  {syncStatus.pendingOrders} {t('للمزامنة')}
+                </span>
+              </div>
+            ) : null}
+            
             {/* Sound Toggle */}
             <div className="flex items-center gap-2 bg-muted/50 rounded-lg px-3 py-1.5">
               <Button
