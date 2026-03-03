@@ -145,6 +145,15 @@ export const startSync = async (token) => {
 
     console.log('✅ اكتملت المزامنة:', results);
     notifySyncListeners('complete', results);
+    
+    // تشغيل صوت نجاح المزامنة
+    if (results.total > 0) {
+      try {
+        playSyncComplete();
+      } catch (soundError) {
+        console.log('Sound playback skipped');
+      }
+    }
 
     return { success: true, results };
   } catch (error) {
