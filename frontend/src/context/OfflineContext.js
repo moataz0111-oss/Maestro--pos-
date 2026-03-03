@@ -39,6 +39,8 @@ export const OfflineProvider = ({ children }) => {
         console.log('✅ تم تهيئة قاعدة البيانات المحلية');
       } catch (error) {
         console.error('❌ خطأ في تهيئة قاعدة البيانات:', error);
+        // استمر حتى لو فشلت قاعدة البيانات
+        setIsInitialized(true);
       }
     };
     initDB();
@@ -46,8 +48,12 @@ export const OfflineProvider = ({ children }) => {
 
   // تحديث حالة المزامنة
   const updateSyncStatus = useCallback(async () => {
-    const status = await syncService.getSyncStatus();
-    setSyncStatus(status);
+    try {
+      const status = await syncService.getSyncStatus();
+      setSyncStatus(status);
+    } catch (error) {
+      console.error('Error updating sync status:', error);
+    }
   }, []);
 
   // تحديث دوري لحالة المزامنة
