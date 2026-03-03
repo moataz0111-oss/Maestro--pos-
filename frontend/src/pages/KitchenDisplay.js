@@ -463,6 +463,14 @@ export default function KitchenDisplay() {
               {soundEnabled ? <Volume2 className="h-5 w-5" /> : <VolumeX className="h-5 w-5" />}
             </Button>
             
+            {/* Offline Indicator */}
+            {isOffline && (
+              <div className="flex items-center gap-2 px-3 py-2 bg-orange-500/20 border border-orange-500/30 rounded-lg">
+                <WifiOff className="h-4 w-4 text-orange-400" />
+                <span className="text-sm text-orange-400 font-medium">{t('offline_mode')}</span>
+              </div>
+            )}
+            
             {/* Refresh */}
             <Button
               variant="outline"
