@@ -189,6 +189,19 @@ export default function Tables() {
 
   const updateTableStatus = async (tableId, status) => {
     try {
+      // === وضع Offline ===
+      if (isOffline) {
+        await offlineStorage.saveOfflineTableUpdate(tableId, { status });
+        toast.success(t('تم تحديث حالة الطاولة') + ' (محلي)');
+        
+        // تحديث محلي في الـ state
+        setTables(prev => prev.map(table => 
+          table.id === tableId ? { ...table, status } : table
+        ));
+        return;
+      }
+      
+      // === وضع Online ===
       await axios.put(`${API}/tables/${tableId}/status?status=${status}`);
       toast.success(t('تم تحديث حالة الطاولة'));
       fetchData();
