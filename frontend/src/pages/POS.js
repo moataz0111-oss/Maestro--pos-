@@ -740,6 +740,68 @@ export default function POS() {
     const currentBranchId = getBranchIdForApi() || user?.branch_id;
 
     setSubmitting(true);
+    
+    // === وضع Offline ===
+    if (isOffline) {
+      try {
+        const offlineOrder = {
+          order_type: orderType,
+          table_id: orderType === 'dine_in' ? selectedTable : null,
+          customer_name: customerName,
+          customer_phone: customerPhone,
+          delivery_address: orderType === 'delivery' ? deliveryAddress : null,
+          buzzer_number: orderType === 'takeaway' ? buzzerNumber : null,
+          items: cart.map(item => ({
+            product_id: item.product_id || item.id,
+            name: item.name,
+            price: item.price,
+            quantity: item.quantity,
+            notes: item.notes || ''
+          })),
+          subtotal: cart.reduce((sum, item) => sum + (item.price * item.quantity), 0),
+          total: calculateTotal(),
+          discount: discount,
+          discount_type: discountType,
+          discount_value: discount,
+          tax: 0,
+          branch_id: currentBranchId,
+          payment_method: paymentMethod,
+          delivery_app: orderType === 'delivery' ? deliveryApp : null,
+          driver_id: selectedDriver || null,
+          notes: orderNotes,
+          status: 'delivered',
+          cashier_id: user?.id,
+          cashier_name: user?.name || user?.full_name
+        };
+
+        const savedOrder = await offlineStorage.saveOfflineOrder(offlineOrder);
+        
+        playSuccess();
+        toast.success(
+          <div>
+            <div>✅ {t('تم حفظ الطلب محلياً')}</div>
+            <div className="text-sm opacity-80">#{savedOrder.offline_id}</div>
+            <div className="text-xs opacity-60">{t('سيتم رفعه عند عودة الاتصال')}</div>
+          </div>,
+          { duration: 5000 }
+        );
+        
+        clearCart();
+        setLastOrderNumber(savedOrder.offline_id);
+        
+        // تحديث حالة المزامنة
+        await updateSyncStatus();
+        
+      } catch (error) {
+        console.error('Failed to save offline order:', error);
+        toast.error(t('فشل في حفظ الطلب محلياً'));
+      } finally {
+        setSubmitting(false);
+      }
+      return;
+    }
+    
+    // === وضع Online (الكود الأصلي) ===
     try {
       let orderNumber = '';
       let orderId = '';
