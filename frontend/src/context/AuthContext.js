@@ -187,10 +187,12 @@ export const AuthProvider = ({ children }) => {
 
   const logout = () => {
     localStorage.removeItem('token');
+    localStorage.removeItem('offline_user');
     delete axios.defaults.headers.common['Authorization'];
     setToken(null);
     setUser(null);
     setCurrentShift(null);
+    setIsOfflineLogin(false);
   };
 
   const hasPermission = (permission) => {
