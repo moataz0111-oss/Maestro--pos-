@@ -759,7 +759,7 @@ export default function POS() {
             notes: item.notes || ''
           })),
           subtotal: cart.reduce((sum, item) => sum + (item.price * item.quantity), 0),
-          total: calculateTotal(),
+          total: cart.reduce((sum, item) => sum + (item.price * item.quantity), 0) - discount,
           discount: discount,
           discount_type: discountType,
           discount_value: discount,
