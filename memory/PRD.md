@@ -38,12 +38,34 @@
 2. **مراجعة الترجمة الشاملة** - تم إنجاز ✅
 
 ### P2 - مؤجل/قيد التنفيذ
-1. **إعادة هيكلة الكود** (server.py) - مؤجل (النظام يعمل بشكل صحيح)
+1. **إعادة هيكلة الكود** (server.py) - تم التوثيق، مؤجل للمرحلة القادمة
 2. **تصدير التقارير إلى Excel**
 3. ~~**إكمال نظام Offline-First**~~ - تم الإنجاز ✅ (3 مارس 2026)
 4. ~~**واجهة سجلات انتحال الهوية**~~ - تم الإنجاز ✅ (3 مارس 2026)
 5. ~~**مراجعة شاملة للترجمة**~~ - تم التحقق ✅ (3 مارس 2026)
 6. ~~**اختبار شامل للمزامنة**~~ - تم الإنجاز ✅ (3 مارس 2026)
+
+---
+
+## 📁 حالة إعادة هيكلة server.py
+
+### الوضع الحالي:
+- حجم الملف: **15,670 سطر**
+- عدد الـ endpoints: **359**
+- نسخة احتياطية: `/backend/server_backup.py`
+- توثيق البنية: `/backend/routes/ROUTES_INDEX.md`
+
+### الملفات المفصولة والمستخدمة:
+✅ sync_routes.py, reports_routes.py, drivers_routes.py, payroll_routes.py
+✅ shifts_routes.py, owner_wallet.py, external_branches.py, order_notifications.py
+✅ inventory_system.py
+
+### ملفات موجودة لكن مكررة في server.py:
+📁 auth_routes.py, branch_routes.py, category_routes.py, customer_routes.py
+📁 expense_routes.py, product_routes.py, table_routes.py, user_routes.py
+
+### ملاحظة:
+إعادة الهيكلة الكاملة تحتاج وقتاً واختباراً مكثفاً. النظام يعمل بشكل صحيح حالياً.
 
 ---
 
