@@ -449,6 +449,40 @@ export const playIncomingCall = () => {
   }
 };
 
+/**
+ * Play sync complete sound - صوت اكتمال المزامنة
+ * صوت نجاح قصير وإيجابي عند انتهاء المزامنة
+ */
+export const playSyncComplete = () => {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    
+    const playTone = (frequency, startTime, duration, gain = 0.15) => {
+      const oscillator = ctx.createOscillator();
+      const gainNode = ctx.createGain();
+      
+      oscillator.connect(gainNode);
+      gainNode.connect(ctx.destination);
+      
+      oscillator.frequency.value = frequency;
+      oscillator.type = 'sine';
+      
+      gainNode.gain.setValueAtTime(gain, startTime);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, startTime + duration);
+      
+      oscillator.start(startTime);
+      oscillator.stop(startTime + duration);
+    };
+    
+    // نغمتين صاعدتين سريعتين (صوت إيجابي)
+    playTone(659.25, ctx.currentTime, 0.1);        // E5
+    playTone(880.00, ctx.currentTime + 0.1, 0.15); // A5
+    
+  } catch (error) {
+    console.warn('Sync complete sound failed:', error);
+  }
+};
+
 export default {
   playClick,
   playSuccess,
@@ -459,6 +493,7 @@ export default {
   playDriverNotification,
   playDeliveryComplete,
   playIncomingCall,
+  playSyncComplete,
   getSoundSettings,
   saveSoundSettings,
 };
