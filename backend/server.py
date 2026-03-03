@@ -15624,6 +15624,10 @@ app.include_router(api_router)
 from routes.inventory_system import router as inventory_router
 app.include_router(inventory_router)
 
+# Include sync routes for offline support
+from routes.sync_routes import router as sync_router
+app.include_router(sync_router)
+
 # Middleware to prevent caching of API responses
 @app.middleware("http")
 async def add_no_cache_headers(request, call_next):
