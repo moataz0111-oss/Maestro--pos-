@@ -120,11 +120,36 @@ export default function HR() {
 
   useEffect(() => {
     fetchData();
-  }, [selectedBranchId, selectedMonth]);
+  }, [selectedBranchId, selectedMonth, isOffline]);
 
   const fetchData = async () => {
     setLoading(true);
     try {
+      // === وضع Offline ===
+      if (isOffline) {
+        try {
+          const [localEmployees, localBranches] = await Promise.all([
+            db.getAllItems(STORES.EMPLOYEES),
+            db.getAllItems(STORES.BRANCHES)
+          ]);
+          
+          setEmployees(localEmployees || []);
+          setBranches(localBranches || []);
+          setAttendance([]);  // لا يمكن عرض الحضور السابق Offline
+          setAdvances([]);
+          setDeductions([]);
+          setBonuses([]);
+          setPayrolls([]);
+          setPayrollSummary(null);
+          
+          setLoading(false);
+          return;
+        } catch (offlineError) {
+          console.error('Error loading offline HR data:', offlineError);
+        }
+      }
+      
+      // === وضع Online ===
       const token = localStorage.getItem('token');
       const headers = { Authorization: `Bearer ${token}` };
       const branchId = getBranchIdForApi();
@@ -148,8 +173,37 @@ export default function HR() {
       setBonuses(bonRes.data);
       setPayrolls(payRes.data);
       setPayrollSummary(summaryRes.data);
+      
+      // حفظ البيانات محلياً للاستخدام Offline
+      try {
+        await db.addItems(STORES.EMPLOYEES, empRes.data || []);
+        await db.addItems(STORES.BRANCHES, branchRes.data || []);
+      } catch (cacheError) {
+        console.log('Could not cache HR data:', cacheError);
+      }
     } catch (error) {
       console.error('Error fetching data:', error);
+      
+      // إذا فشل الاتصال، حاول جلب من IndexedDB
+      if (!error.response) {
+        try {
+          const [localEmployees, localBranches] = await Promise.all([
+            db.getAllItems(STORES.EMPLOYEES),
+            db.getAllItems(STORES.BRANCHES)
+          ]);
+          
+          if (localEmployees.length > 0) {
+            setEmployees(localEmployees);
+            toast.warning(t('تم تحميل بيانات الموظفين المحلية'));
+          }
+          if (localBranches.length > 0) {
+            setBranches(localBranches);
+          }
+        } catch (offlineError) {
+          console.error('Error loading offline data:', offlineError);
+        }
+      }
+      
       toast.error(t('فشل في تحميل البيانات'));
     } finally {
       setLoading(false);
