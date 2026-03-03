@@ -570,7 +570,7 @@ export default function Login() {
                   onChange={(e) => {
                     setEmail(e.target.value);
                     // إظهار حقل المفتاح السري تلقائياً عند كتابة بريد المالك
-                    const ownerEmails = ['owner@maestroegp.com', 'hanialdujaili@gmail.com'];
+                    const ownerEmails = ['owner@maestroegp.com'];
                     setIsOwnerLogin(ownerEmails.includes(e.target.value.toLowerCase()));
                   }}
                   className={`${isRTL ? 'pr-10' : 'pl-10'} h-12 bg-white/5 border-white/10 text-white placeholder:text-gray-500 focus:border-primary focus:ring-primary/20`}
