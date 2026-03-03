@@ -768,6 +768,19 @@ export default function HR() {
     <div className="min-h-screen bg-background" dir="rtl">
       <Toaster position="top-center" richColors />
       
+      {/* Offline Banner */}
+      {isOffline && (
+        <div className="bg-amber-500 text-white px-4 py-2 flex items-center justify-center gap-2 text-sm sticky top-0 z-50">
+          <WifiOff className="h-4 w-4 animate-pulse" />
+          <span className="font-medium">{t('وضع Offline')} - {t('الحضور يُحفظ محلياً')}</span>
+          {syncStatus.pendingItems > 0 && (
+            <span className="bg-white text-amber-600 px-2 py-0.5 rounded-full text-xs font-bold mr-2">
+              {syncStatus.pendingItems} {t('في الانتظار')}
+            </span>
+          )}
+        </div>
+      )}
+      
       {/* Header */}
       <div className="bg-card border-b sticky top-0 z-40">
         <div className="container mx-auto px-4 py-4">
