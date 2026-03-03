@@ -6,6 +6,7 @@
 import db, { STORES } from './offlineDB';
 import offlineStorage from './offlineStorage';
 import { getOnlineStatus } from '../hooks/useOnlineStatus';
+import { playSyncComplete } from '../utils/sound';
 
 let isSyncing = false;
 let syncListeners = [];
