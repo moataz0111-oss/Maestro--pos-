@@ -22,12 +22,22 @@
 
 ### Offline-First Implementation ✅
 - [x] دعم offline لـ POS, Orders, Tables, KitchenDisplay
-- [x] دعم offline لـ Inventory, HR
-- [x] دعم offline لـ Dashboard و Expenses
+- [x] دعم offline لـ Inventory, HR, Expenses
+- [x] دعم offline لـ Dashboard (الإحصائيات)
 - [x] مؤشر تقدم المزامنة في OfflineBanner
 - [x] إشعارات صوتية عند نجاح المزامنة
 - [x] حفظ اسم المطعم والشعار للعمل offline
 - [x] حفظ الإحصائيات والطلبات المحلية
+- [x] **مزامنة تلقائية** عند عودة الاتصال (بدون زر)
+- [x] **إخفاء شريط Offline** بعد اكتمال المزامنة
+- [x] **تحميل مسبق لجميع الصفحات** للعمل offline
+- [x] **Service Worker V3** لتخزين جميع مسارات التطبيق
+
+### Push Notifications ✅ (NEW)
+- [x] تسجيل اشتراكات Push في Backend
+- [x] إرسال إشعارات عند مزامنة طلبات من أجهزة أخرى
+- [x] UI لتفعيل/إلغاء الإشعارات في صفحة الإعدادات
+- [x] إشعار تجريبي للاختبار
 
 ### Authentication & Security ✅
 - [x] نظام تسجيل دخول آمن
@@ -35,27 +45,18 @@
 - [x] إدارة الصلاحيات والأدوار
 - [x] سجل انتحال الهوية (Impersonation Logs)
 
-### Bug Fixes (March 2026) ✅
-- [x] إصلاح مشكلة تسجيل الدخول للعملاء
-- [x] إصلاح مشكلة إعادة تعيين كلمة المرور
-- [x] إصلاح عدم ظهور الإحصائيات offline
-- [x] إصلاح عدم حفظ المصاريف offline
-
-### Code Cleanup ✅
-- [x] حذف الملفات المكررة (~1.2MB)
-- [x] تنظيف مجلد backend/routes
-- [x] إنشاء ROUTES_INDEX.md
+### Testing ✅
+- [x] اختبار المزامنة على أجهزة متعددة (21/21 اختبار نجح)
+- [x] اختبار منع تكرار الطلبات
+- [x] اختبار مزامنة المصاريف والعملاء
 
 ---
 
 ## Backlog / Remaining Tasks
 
-### P0 (Critical)
-- [x] النشر (Deployment)
-
 ### P1 (High Priority)
-- [ ] اختبار شامل للمزامنة على أجهزة متعددة
-- [ ] تحسين أداء Service Worker
+- [x] ~~اختبار المزامنة على أجهزة متعددة~~ ✅
+- [x] ~~إشعارات Push للمزامنة~~ ✅
 
 ### P2 (Medium Priority)
 - [ ] إعادة هيكلة server.py (~15,000 سطر)
@@ -73,18 +74,23 @@
 ### Frontend
 - React.js with Shadcn/UI
 - IndexedDB for offline storage
-- Service Worker for caching
+- Service Worker V3 for caching
+- Push Notifications API
 
 ### Backend
 - FastAPI (Python)
 - MongoDB
 - JWT Authentication
+- Push Subscriptions
 
 ### Key Files
 - `/app/backend/server.py` - Main backend
+- `/app/backend/routes/sync_routes.py` - Sync & Push APIs
 - `/app/frontend/src/lib/offlineDB.js` - IndexedDB
 - `/app/frontend/src/lib/offlineStorage.js` - Offline helpers
 - `/app/frontend/src/lib/syncService.js` - Sync logic
+- `/app/frontend/src/lib/pushService.js` - Push notifications
+- `/app/frontend/public/sw-offline.js` - Service Worker V3
 
 ---
 
@@ -95,6 +101,18 @@
 
 ---
 
+## API Endpoints (Sync & Push)
+- `POST /api/sync/orders` - مزامنة الطلبات
+- `POST /api/sync/customers` - مزامنة العملاء
+- `POST /api/sync/batch` - مزامنة دفعية
+- `GET /api/sync/status` - حالة المزامنة
+- `POST /api/sync/push/subscribe` - تسجيل اشتراك Push
+- `POST /api/sync/push/unsubscribe` - إلغاء اشتراك Push
+- `GET /api/sync/push/subscriptions` - قائمة الأجهزة المشتركة
+
+---
+
 ## Notes
 - يجب زيارة التطبيق مرة واحدة وهو متصل لتثبيت Service Worker
 - قاعدة البيانات الإنتاجية تحتاج seed عبر `/api/utils/seed-data`
+- إشعارات Push تتطلب HTTPS في الإنتاج
