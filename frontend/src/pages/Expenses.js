@@ -206,26 +206,79 @@ export default function Expenses() {
           icon: '🏷️'
         };
         
-        // حفظ التصنيف الجديد في قاعدة البيانات
-        try {
-          await axios.post(`${API}/expense-categories`, newCategory);
-          // تحديث قائمة التصنيفات
-          fetchCategories();
-          toast.success(`${t('تم إضافة تصنيف')} "${formData.custom_category_name}" ${t('للقائمة')}`);
-        } catch (err) {
-          // التصنيف موجود بالفعل - استخدمه
-          console.log('Category may already exist');
+        // حفظ التصنيف الجديد في قاعدة البيانات (إذا online)
+        if (isOnline) {
+          try {
+            await axios.post(`${API}/expense-categories`, newCategory);
+            // تحديث قائمة التصنيفات
+            fetchCategories();
+            toast.success(`${t('تم إضافة تصنيف')} "${formData.custom_category_name}" ${t('للقائمة')}`);
+          } catch (err) {
+            // التصنيف موجود بالفعل - استخدمه
+            console.log('Category may already exist');
+          }
         }
         
         categoryToUse = newCategoryId;
       }
       
-      await axios.post(`${API}/expenses`, {
+      const expenseData = {
         ...formData,
         category: categoryToUse,
         amount: parseFloat(formData.amount),
         branch_id: selectedBranch
-      });
+      };
+      
+      // === وضع Offline - حفظ محلياً ===
+      if (isOffline) {
+        const offlineExpense = {
+          ...expenseData,
+          id: generateUUID(),
+          offline_id: generateOfflineId('EXP'),
+          is_synced: false,
+          created_at: new Date().toISOString()
+        };
+        
+        // حفظ في IndexedDB
+        await db.addItem(STORES.EXPENSES, offlineExpense);
+        
+        // إضافة لقائمة المزامنة
+        await addToSyncQueue({
+          type: 'expense',
+          action: 'create',
+          data: expenseData,
+          offline_id: offlineExpense.offline_id
+        });
+        
+        // تحديث القائمة المحلية
+        setExpenses(prev => [offlineExpense, ...prev]);
+        
+        toast.success(
+          <div>
+            <div>✅ {t('تم حفظ المصروف محلياً')}</div>
+            <div className="text-xs opacity-60">{t('سيتم رفعه عند عودة الاتصال')}</div>
+          </div>,
+          { duration: 4000 }
+        );
+        
+        // تحديث حالة المزامنة
+        await updateSyncStatus();
+        
+        setDialogOpen(false);
+        setFormData({
+          category: 'other',
+          description: '',
+          amount: '',
+          payment_method: 'cash',
+          reference_number: '',
+          date: new Date().toISOString().split('T')[0],
+          custom_category_name: ''
+        });
+        return;
+      }
+      
+      // === وضع Online ===
+      await axios.post(`${API}/expenses`, expenseData);
       toast.success(t('تم إضافة المصروف'));
       setDialogOpen(false);
       setFormData({
