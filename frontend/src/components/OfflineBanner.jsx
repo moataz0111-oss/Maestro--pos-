@@ -13,8 +13,10 @@ const OfflineBanner = () => {
   const { t } = useTranslation();
   const { isOnline, isOffline, syncStatus, startSync } = useOffline();
 
-  // لا تعرض شيء إذا كان متصل ولا توجد طلبات معلقة
-  if (isOnline && syncStatus.pendingOrders === 0 && !syncStatus.isSyncing) {
+  // لا تعرض شيء إذا:
+  // 1. كان متصل ولا توجد طلبات معلقة
+  // 2. أو تمت المزامنة بنجاح
+  if (isOnline && (syncStatus.pendingOrders === 0 || syncStatus.syncCompleted) && !syncStatus.isSyncing) {
     return null;
   }
 
