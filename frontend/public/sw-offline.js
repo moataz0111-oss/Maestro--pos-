@@ -1,10 +1,11 @@
-// Service Worker for Offline Support
-// يدعم العمل بدون إنترنت
+// Service Worker for Offline Support - V3
+// يدعم العمل بدون إنترنت لجميع الصفحات
 
-const CACHE_NAME = 'maestro-offline-v2';
-const STATIC_CACHE = 'maestro-static-v2';
+const CACHE_NAME = 'maestro-offline-v3';
+const STATIC_CACHE = 'maestro-static-v3';
+const DATA_CACHE = 'maestro-data-v3';
 
-// الملفات الأساسية التي يجب تخزينها
+// الملفات الأساسية التي يجب تخزينها عند التثبيت
 const STATIC_ASSETS = [
   '/',
   '/index.html',
@@ -13,34 +14,84 @@ const STATIC_ASSETS = [
   '/icons/admin-icon-512.png'
 ];
 
-// تثبيت Service Worker
+// جميع مسارات التطبيق (SPA routes)
+const APP_ROUTES = [
+  '/dashboard',
+  '/pos',
+  '/orders',
+  '/tables',
+  '/kitchen',
+  '/inventory',
+  '/hr',
+  '/expenses',
+  '/reports',
+  '/settings',
+  '/customers',
+  '/drivers',
+  '/reservations',
+  '/purchases',
+  '/coupons',
+  '/loyalty',
+  '/call-center',
+  '/call-logs',
+  '/branch-orders',
+  '/delivery',
+  '/inventory-reports',
+  '/ratings',
+  '/owner-wallet',
+  '/external-branches',
+  '/login'
+];
+
+// تثبيت Service Worker - تخزين جميع الملفات الأساسية
 self.addEventListener('install', (event) => {
-  console.log('[SW-Offline] Installing...');
+  console.log('[SW-Offline] Installing V3...');
   event.waitUntil(
     caches.open(STATIC_CACHE)
-      .then((cache) => {
+      .then(async (cache) => {
         console.log('[SW-Offline] Caching static assets');
-        return cache.addAll(STATIC_ASSETS);
+        
+        // تخزين الملفات الأساسية
+        await cache.addAll(STATIC_ASSETS);
+        
+        // محاولة تخزين index.html لجميع المسارات
+        const indexResponse = await fetch('/index.html');
+        if (indexResponse.ok) {
+          for (const route of APP_ROUTES) {
+            await cache.put(new Request(route), indexResponse.clone());
+          }
+        }
+        
+        console.log('[SW-Offline] All routes cached');
       })
       .then(() => self.skipWaiting())
+      .catch((error) => {
+        console.error('[SW-Offline] Install failed:', error);
+      })
   );
 });
 
-// تفعيل Service Worker
+// تفعيل Service Worker - حذف الكاش القديم
 self.addEventListener('activate', (event) => {
-  console.log('[SW-Offline] Activating...');
+  console.log('[SW-Offline] Activating V3...');
   event.waitUntil(
     caches.keys().then((cacheNames) => {
       return Promise.all(
         cacheNames
-          .filter((name) => name !== CACHE_NAME && name !== STATIC_CACHE)
-          .map((name) => caches.delete(name))
+          .filter((name) => !name.includes('v3'))
+          .map((name) => {
+            console.log('[SW-Offline] Deleting old cache:', name);
+            return caches.delete(name);
+          })
       );
-    }).then(() => self.clients.claim())
+    }).then(() => {
+      console.log('[SW-Offline] Activated and claimed');
+      return self.clients.claim();
+    })
   );
 });
 
-// استراتيجية الجلب: Network First، ثم Cache
+// استراتيجية الجلب
 self.addEventListener('fetch', (event) => {
   const { request } = event;
   const url = new URL(request.url);
@@ -60,17 +111,29 @@ self.addEventListener('fetch', (event) => {
     return;
   }
   
-  // للملفات الثابتة (JS, CSS, Images) - Cache First
+  // تجاهل طلبات socket.io
+  if (url.pathname.includes('socket.io')) {
+    return;
+  }
+  
+  // تجاهل hot reload في التطوير
+  if (url.pathname.includes('hot-update') || url.pathname.includes('sockjs-node')) {
+    return;
+  }
+  
+  // للملفات الثابتة (JS, CSS, Images, Fonts) - Cache First ثم Network
   if (request.destination === 'script' || 
       request.destination === 'style' || 
       request.destination === 'image' ||
-      request.destination === 'font') {
+      request.destination === 'font' ||
+      url.pathname.match(/\.(js|css|png|jpg|jpeg|gif|svg|woff|woff2|ttf|eot)$/)) {
     event.respondWith(
       caches.match(request).then((cachedResponse) => {
+        // إذا موجود في الكاش، أرجعه
         if (cachedResponse) {
-          // تحديث الكاش في الخلفية
+          // تحديث الكاش في الخلفية (Stale-While-Revalidate)
           fetch(request).then((networkResponse) => {
-            if (networkResponse.ok) {
+            if (networkResponse && networkResponse.ok) {
               caches.open(CACHE_NAME).then((cache) => {
                 cache.put(request, networkResponse);
               });
@@ -79,8 +142,9 @@ self.addEventListener('fetch', (event) => {
           return cachedResponse;
         }
         
+        // إذا غير موجود، جلب من الشبكة وتخزين
         return fetch(request).then((networkResponse) => {
-          if (networkResponse.ok) {
+          if (networkResponse && networkResponse.ok) {
             const responseClone = networkResponse.clone();
             caches.open(CACHE_NAME).then((cache) => {
               cache.put(request, responseClone);
@@ -88,23 +152,26 @@ self.addEventListener('fetch', (event) => {
           }
           return networkResponse;
         }).catch(() => {
-          // إذا فشل الجلب ولا يوجد cache
-          return new Response('', { status: 503 });
+          // إذا فشل ولا يوجد cache
+          console.log('[SW-Offline] Failed to fetch:', request.url);
+          return new Response('', { status: 503, statusText: 'Service Unavailable' });
         });
       })
     );
     return;
   }
   
-  // للصفحات HTML - Network First
+  // للصفحات HTML / Navigation - إرجاع index.html دائماً (SPA)
   if (request.mode === 'navigate' || request.destination === 'document') {
     event.respondWith(
       fetch(request)
         .then((networkResponse) => {
-          if (networkResponse.ok) {
+          if (networkResponse && networkResponse.ok) {
             const responseClone = networkResponse.clone();
             caches.open(CACHE_NAME).then((cache) => {
               cache.put(request, responseClone);
+              // أيضاً خزّن كـ index.html
+              cache.put(new Request('/index.html'), responseClone.clone());
             });
           }
           return networkResponse;
@@ -115,80 +182,142 @@ self.addEventListener('fetch', (event) => {
             if (cachedResponse) {
               return cachedResponse;
             }
-            // إرجاع الصفحة الرئيسية للتطبيق SPA
+            // إرجاع index.html للتطبيق SPA
             return caches.match('/index.html').then((indexResponse) => {
               if (indexResponse) {
                 return indexResponse;
               }
-              // صفحة offline بسيطة
-              return new Response(`
-                <!DOCTYPE html>
-                <html lang="ar" dir="rtl">
-                <head>
-                  <meta charset="UTF-8">
-                  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                  <title>Maestro - غير متصل</title>
-                  <style>
-                    body {
-                      font-family: 'Segoe UI', Tahoma, sans-serif;
-                      background: #1a1a2e;
-                      color: white;
-                      display: flex;
-                      flex-direction: column;
-                      align-items: center;
-                      justify-content: center;
-                      min-height: 100vh;
-                      margin: 0;
-                      text-align: center;
-                      padding: 20px;
-                    }
-                    .icon {
-                      width: 100px;
-                      height: 100px;
-                      background: white;
-                      border-radius: 20px;
-                      display: flex;
-                      align-items: center;
-                      justify-content: center;
-                      margin-bottom: 24px;
-                    }
-                    .icon img {
-                      width: 80px;
-                      height: 80px;
-                    }
-                    h1 { margin: 0 0 16px; font-size: 24px; }
-                    p { color: #888; margin: 0 0 24px; }
-                    button {
-                      background: #3b82f6;
-                      color: white;
-                      border: none;
-                      padding: 12px 32px;
-                      border-radius: 8px;
-                      font-size: 16px;
-                      cursor: pointer;
-                    }
-                    button:hover { background: #2563eb; }
-                  </style>
-                </head>
-                <body>
-                  <div class="icon">
-                    <img src="/icons/admin-icon-192.png" alt="Maestro" onerror="this.style.display='none'">
-                  </div>
-                  <h1>غير متصل بالإنترنت</h1>
-                  <p>يرجى التحقق من اتصالك بالإنترنت والمحاولة مرة أخرى</p>
-                  <button onclick="location.reload()">إعادة المحاولة</button>
-                </body>
-                </html>
-              `, {
-                headers: { 'Content-Type': 'text/html; charset=utf-8' }
-              });
+              // إرجاع صفحة offline مخصصة
+              return offlinePage();
             });
           });
         })
     );
     return;
   }
+  
+  // أي طلبات أخرى - Network First
+  event.respondWith(
+    fetch(request)
+      .then((response) => {
+        if (response && response.ok) {
+          const responseClone = response.clone();
+          caches.open(CACHE_NAME).then((cache) => {
+            cache.put(request, responseClone);
+          });
+        }
+        return response;
+      })
+      .catch(() => {
+        return caches.match(request);
+      })
+  );
 });
+
+// صفحة offline مخصصة
+function offlinePage() {
+  return new Response(`
+    <!DOCTYPE html>
+    <html lang="ar" dir="rtl">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>Maestro - غير متصل</title>
+      <style>
+        * { box-sizing: border-box; }
+        body {
+          font-family: 'Segoe UI', Tahoma, sans-serif;
+          background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+          color: white;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          min-height: 100vh;
+          margin: 0;
+          text-align: center;
+          padding: 20px;
+        }
+        .container {
+          max-width: 400px;
+          padding: 40px;
+          background: rgba(255,255,255,0.05);
+          border-radius: 20px;
+          backdrop-filter: blur(10px);
+        }
+        .icon {
+          width: 100px;
+          height: 100px;
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          border-radius: 25px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          margin: 0 auto 24px;
+          box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3);
+        }
+        .icon svg {
+          width: 50px;
+          height: 50px;
+          fill: white;
+        }
+        h1 { 
+          margin: 0 0 12px; 
+          font-size: 24px;
+          font-weight: 600;
+        }
+        p { 
+          color: rgba(255,255,255,0.7); 
+          margin: 0 0 24px;
+          line-height: 1.6;
+        }
+        button {
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          color: white;
+          border: none;
+          padding: 14px 40px;
+          border-radius: 12px;
+          font-size: 16px;
+          font-weight: 500;
+          cursor: pointer;
+          transition: transform 0.2s, box-shadow 0.2s;
+        }
+        button:hover { 
+          transform: translateY(-2px);
+          box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+        }
+        .tip {
+          margin-top: 24px;
+          padding: 16px;
+          background: rgba(255,193,7,0.1);
+          border-radius: 12px;
+          border: 1px solid rgba(255,193,7,0.3);
+        }
+        .tip p {
+          color: #ffc107;
+          margin: 0;
+          font-size: 14px;
+        }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div class="icon">
+          <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+        </div>
+        <h1>غير متصل بالإنترنت</h1>
+        <p>يبدو أنك غير متصل بالإنترنت حالياً. يرجى التحقق من اتصالك والمحاولة مرة أخرى.</p>
+        <button onclick="location.reload()">إعادة المحاولة</button>
+        <div class="tip">
+          <p>💡 نصيحة: افتح التطبيق مرة واحدة وأنت متصل لتخزين جميع الصفحات للعمل بدون إنترنت</p>
+        </div>
+      </div>
+    </body>
+    </html>
+  `, {
+    headers: { 'Content-Type': 'text/html; charset=utf-8' }
+  });
+}
 
 // استقبال رسائل من التطبيق
 self.addEventListener('message', (event) => {
@@ -199,6 +328,33 @@ self.addEventListener('message', (event) => {
   if (event.data && event.data.type === 'CLEAR_CACHE') {
     caches.keys().then((names) => {
       names.forEach((name) => caches.delete(name));
+    });
+  }
+  
+  // رسالة لتخزين ملفات إضافية
+  if (event.data && event.data.type === 'CACHE_ASSETS') {
+    const assets = event.data.assets || [];
+    caches.open(CACHE_NAME).then((cache) => {
+      assets.forEach((url) => {
+        fetch(url).then((response) => {
+          if (response.ok) {
+            cache.put(url, response);
+          }
+        }).catch(() => {});
+      });
+    });
+  }
+});
+
+// Background Sync - مزامنة في الخلفية عند عودة الاتصال
+self.addEventListener('sync', (event) => {
+  if (event.tag === 'sync-orders') {
+    console.log('[SW-Offline] Background sync triggered');
+    // إرسال رسالة للتطبيق لبدء المزامنة
+    self.clients.matchAll().then((clients) => {
+      clients.forEach((client) => {
+        client.postMessage({ type: 'SYNC_REQUESTED' });
+      });
     });
   }
 });
