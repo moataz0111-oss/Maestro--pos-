@@ -4558,6 +4558,83 @@ export default function Settings() {
                 </CardContent>
               </Card>
               
+              {/* قسم إشعارات المزامنة Push */}
+              <Card className="border-border/50 bg-card mt-6">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-foreground">
+                    <Smartphone className="h-5 w-5" />{t('إشعارات المزامنة (Push)')}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <p className="text-sm text-muted-foreground">
+                    {t('استلم إشعارات عند مزامنة طلبات من أجهزة أخرى في نفس المطعم')}
+                  </p>
+                  
+                  {!isPushSupported() ? (
+                    <div className="p-4 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
+                      <p className="text-yellow-500 text-sm">
+                        {t('متصفحك لا يدعم إشعارات Push')}
+                      </p>
+                    </div>
+                  ) : pushPermission === 'denied' ? (
+                    <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-lg">
+                      <p className="text-red-500 text-sm">
+                        {t('تم رفض إذن الإشعارات. يرجى تفعيلها من إعدادات المتصفح.')}
+                      </p>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="flex items-center justify-between p-4 bg-muted/30 rounded-lg border border-border/50">
+                        <div className="flex items-center gap-3">
+                          <Bell className={`h-6 w-6 ${pushEnabled ? 'text-primary' : 'text-muted-foreground'}`} />
+                          <div>
+                            <h4 className="font-medium text-foreground">{t('إشعارات المزامنة')}</h4>
+                            <p className="text-sm text-muted-foreground">
+                              {t('استلم إشعار عند رفع طلبات من جهاز آخر')}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {pushLoading && <Loader2 className="h-4 w-4 animate-spin" />}
+                          <Switch
+                            checked={pushEnabled}
+                            onCheckedChange={(checked) => {
+                              if (checked) {
+                                handleEnablePush();
+                              } else {
+                                handleDisablePush();
+                              }
+                            }}
+                            disabled={pushLoading}
+                          />
+                        </div>
+                      </div>
+                      
+                      {pushEnabled && (
+                        <>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={handleTestPush}
+                            className="w-full"
+                          >
+                            <Bell className="h-4 w-4 ml-2" />
+                            {t('إرسال إشعار تجريبي')}
+                          </Button>
+                          
+                          <div className="p-3 bg-green-500/10 border border-green-500/30 rounded-lg">
+                            <p className="text-green-500 text-sm flex items-center gap-2">
+                              <CheckCircle className="h-4 w-4" />
+                              {t('الإشعارات مفعّلة - ستستلم إشعارات عند مزامنة طلبات من أجهزة أخرى')}
+                            </p>
+                          </div>
+                        </>
+                      )}
+                    </>
+                  )}
+                </CardContent>
+              </Card>
+              
               {/* قسم إعدادات الأصوات */}
               <Card className="border-border/50 bg-card mt-6">
                 <CardHeader>
