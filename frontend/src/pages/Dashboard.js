@@ -101,6 +101,7 @@ export default function Dashboard() {
   const { theme, setTheme, isDark } = useTheme();
   const { selectedBranchId, branches, getBranchIdForApi } = useBranch();
   const { t, lang, isRTL } = useTranslation();
+  const { isOnline, isOffline } = useOffline();
   const navigate = useNavigate();
   const printRef = useRef();
   
