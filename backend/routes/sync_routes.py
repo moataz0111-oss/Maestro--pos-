@@ -9,6 +9,8 @@ from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import jwt
 import uuid
+import json
+import httpx
 from datetime import datetime, timezone
 
 router = APIRouter(prefix="/sync", tags=["Sync"])
@@ -19,6 +21,8 @@ client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
 
 JWT_SECRET = os.environ.get('JWT_SECRET', 'your-secret-key-here')
+VAPID_PUBLIC_KEY = os.environ.get('VAPID_PUBLIC_KEY', '')
+VAPID_PRIVATE_KEY = os.environ.get('VAPID_PRIVATE_KEY', '')
 security = HTTPBearer()
 
 # ==================== MODELS ====================
