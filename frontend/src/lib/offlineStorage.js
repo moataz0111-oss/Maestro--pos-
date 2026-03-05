@@ -520,6 +520,45 @@ export const getLocalEmployees = async () => {
   }
 };
 
+/**
+ * الحصول على بيانات المستأجر المحلية (اسم المطعم والشعار)
+ */
+export const getLocalTenantInfo = async () => {
+  try {
+    const tenant = await db.getItem(STORES.SETTINGS, 'tenant');
+    return tenant || null;
+  } catch (error) {
+    console.error('❌ خطأ في جلب بيانات المستأجر:', error);
+    return null;
+  }
+};
+
+/**
+ * الحصول على الإحصائيات المحلية
+ */
+export const getLocalStats = async () => {
+  try {
+    const stats = await db.getItem(STORES.SETTINGS, 'stats');
+    return stats || null;
+  } catch (error) {
+    console.error('❌ خطأ في جلب الإحصائيات:', error);
+    return null;
+  }
+};
+
+/**
+ * الحصول على إعدادات لوحة التحكم المحلية
+ */
+export const getLocalDashboardSettings = async () => {
+  try {
+    const settings = await db.getItem(STORES.SETTINGS, 'dashboard');
+    return settings || {};
+  } catch (error) {
+    console.error('❌ خطأ في جلب إعدادات لوحة التحكم:', error);
+    return {};
+  }
+};
+
 export default {
   generateOfflineId,
   generateUUID,
@@ -546,5 +585,8 @@ export default {
   getLocalCategories,
   getLocalBranches,
   getLocalInventory,
-  getLocalEmployees
+  getLocalEmployees,
+  getLocalTenantInfo,
+  getLocalStats,
+  getLocalDashboardSettings
 };
