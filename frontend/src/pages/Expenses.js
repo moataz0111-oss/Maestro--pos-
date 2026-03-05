@@ -112,6 +112,35 @@ export default function Expenses() {
 
   const fetchData = async () => {
     try {
+      // === وضع Offline - جلب من IndexedDB ===
+      if (isOffline) {
+        try {
+          const [localExpenses, localBranches] = await Promise.all([
+            db.getAllItems(STORES.EXPENSES),
+            db.getAllItems(STORES.BRANCHES)
+          ]);
+          
+          // تصفية المصاريف حسب التاريخ
+          const filteredExpenses = localExpenses.filter(e => {
+            const expenseDate = e.date;
+            return expenseDate >= startDate && expenseDate <= endDate;
+          });
+          
+          setExpenses(filteredExpenses);
+          setBranches(localBranches);
+          
+          if (!selectedBranch && localBranches.length > 0) {
+            setSelectedBranch(localBranches[0].id);
+          }
+          
+          setLoading(false);
+          return;
+        } catch (offlineError) {
+          console.error('Error loading offline expenses:', offlineError);
+        }
+      }
+      
+      // === وضع Online ===
       const [expensesRes, branchesRes] = await Promise.all([
         axios.get(`${API}/expenses`, {
           params: {
@@ -127,12 +156,36 @@ export default function Expenses() {
       setExpenses(expensesRes.data);
       setBranches(branchesRes.data);
 
+      // حفظ البيانات محلياً للاستخدام offline
+      try {
+        await db.addItems(STORES.EXPENSES, expensesRes.data);
+        await db.addItems(STORES.BRANCHES, branchesRes.data);
+      } catch (cacheError) {
+        console.log('Could not cache expenses locally:', cacheError);
+      }
+
       if (!selectedBranch && branchesRes.data.length > 0) {
         setSelectedBranch(branchesRes.data[0].id);
       }
     } catch (error) {
       console.error('Failed to fetch expenses:', error);
-      toast.error(t('فشل في تحميل المصاريف'));
+      
+      // محاولة جلب من IndexedDB عند الخطأ
+      if (!error.response) {
+        try {
+          const localExpenses = await db.getAllItems(STORES.EXPENSES);
+          const localBranches = await db.getAllItems(STORES.BRANCHES);
+          
+          setExpenses(localExpenses);
+          setBranches(localBranches);
+          
+          toast.warning(t('تم تحميل البيانات المحلية - لا يوجد اتصال'));
+        } catch (offlineError) {
+          toast.error(t('فشل في تحميل المصاريف'));
+        }
+      } else {
+        toast.error(t('فشل في تحميل المصاريف'));
+      }
     } finally {
       setLoading(false);
     }
