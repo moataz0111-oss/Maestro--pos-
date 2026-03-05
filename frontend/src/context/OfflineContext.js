@@ -3,7 +3,7 @@
  * سياق React للإدارة المركزية لحالة Offline
  */
 
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import useOnlineStatus from '../hooks/useOnlineStatus';
 import syncService from '../lib/syncService';
 import offlineStorage from '../lib/offlineStorage';
@@ -27,9 +27,11 @@ export const OfflineProvider = ({ children }) => {
     pendingOrders: 0,
     pendingItems: 0,
     lastSync: null,
-    syncProgress: null // { current: 0, total: 0, type: 'order' }
+    syncProgress: null,
+    syncCompleted: false // جديد: لإخفاء الشريط بعد المزامنة
   });
   const [isInitialized, setIsInitialized] = useState(false);
+  const autoSyncTriggered = useRef(false); // لمنع المزامنة المتكررة
 
   // تهيئة قاعدة البيانات المحلية
   useEffect(() => {
@@ -40,7 +42,6 @@ export const OfflineProvider = ({ children }) => {
         console.log('✅ تم تهيئة قاعدة البيانات المحلية');
       } catch (error) {
         console.error('❌ خطأ في تهيئة قاعدة البيانات:', error);
-        // استمر حتى لو فشلت قاعدة البيانات
         setIsInitialized(true);
       }
     };
@@ -51,7 +52,12 @@ export const OfflineProvider = ({ children }) => {
   const updateSyncStatus = useCallback(async () => {
     try {
       const status = await syncService.getSyncStatus();
-      setSyncStatus(status);
+      setSyncStatus(prev => ({
+        ...prev,
+        ...status,
+        // إذا لم تعد هناك طلبات معلقة، أعتبر المزامنة مكتملة
+        syncCompleted: status.pendingOrders === 0 && prev.syncCompleted
+      }));
     } catch (error) {
       console.error('Error updating sync status:', error);
     }
@@ -66,34 +72,76 @@ export const OfflineProvider = ({ children }) => {
 
   // مزامنة تلقائية عند عودة الاتصال
   useEffect(() => {
-    if (wasOffline && isOnline) {
-      const token = localStorage.getItem('token');
-      if (token && syncStatus.pendingOrders > 0) {
-        toast.info(`🔄 جاري مزامنة ${syncStatus.pendingOrders} طلب...`, {
-          duration: 3000
-        });
+    const performAutoSync = async () => {
+      // إذا عاد الاتصال وكان offline سابقاً
+      if (wasOffline && isOnline && !autoSyncTriggered.current) {
+        const token = localStorage.getItem('token');
         
-        syncService.autoSync(token).then(result => {
-          if (result.success && result.results) {
-            toast.success(`✅ تم رفع ${result.results.orders.synced} طلب بنجاح!`, {
-              duration: 5000
-            });
+        // تحقق من وجود طلبات معلقة
+        const currentStatus = await syncService.getSyncStatus();
+        
+        if (token && currentStatus.pendingOrders > 0) {
+          autoSyncTriggered.current = true; // منع المزامنة المتكررة
+          
+          toast.info(`🔄 جاري مزامنة ${currentStatus.pendingOrders} طلب تلقائياً...`, {
+            duration: 3000
+          });
+          
+          try {
+            const result = await syncService.startSync(token);
+            
+            if (result.success && result.results) {
+              const totalSynced = result.results.orders.synced + 
+                                 result.results.customers.synced + 
+                                 (result.results.expenses?.synced || 0);
+              
+              if (totalSynced > 0) {
+                toast.success(`✅ تم رفع ${totalSynced} عنصر بنجاح!`, {
+                  duration: 5000
+                });
+              }
+              
+              // تحديث الحالة بعد المزامنة
+              setSyncStatus(prev => ({
+                ...prev,
+                syncCompleted: true,
+                pendingOrders: 0
+              }));
+            }
+          } catch (error) {
+            console.error('Auto sync error:', error);
+            toast.error('❌ فشل في المزامنة التلقائية');
           }
-          updateSyncStatus();
-        });
+          
+          await updateSyncStatus();
+        }
       }
-    }
-  }, [wasOffline, isOnline, syncStatus.pendingOrders, updateSyncStatus]);
+      
+      // إعادة تعيين العلم عند قطع الاتصال
+      if (!isOnline) {
+        autoSyncTriggered.current = false;
+        setSyncStatus(prev => ({ ...prev, syncCompleted: false }));
+      }
+    };
+    
+    performAutoSync();
+  }, [wasOffline, isOnline, updateSyncStatus]);
 
   // الاستماع لأحداث المزامنة
   useEffect(() => {
     const unsubscribe = syncService.addSyncListener((event, data) => {
       switch (event) {
         case 'start':
-          setSyncStatus(prev => ({ ...prev, isSyncing: true, syncProgress: null }));
+          setSyncStatus(prev => ({ ...prev, isSyncing: true, syncProgress: null, syncCompleted: false }));
           break;
         case 'complete':
-          setSyncStatus(prev => ({ ...prev, isSyncing: false, syncProgress: null }));
+          setSyncStatus(prev => ({ 
+            ...prev, 
+            isSyncing: false, 
+            syncProgress: null,
+            syncCompleted: true,
+            pendingOrders: 0
+          }));
           updateSyncStatus();
           break;
         case 'error':
@@ -101,7 +149,6 @@ export const OfflineProvider = ({ children }) => {
           toast.error('❌ فشل في المزامنة: ' + data.error);
           break;
         case 'progress':
-          // تحديث مؤشر التقدم
           setSyncStatus(prev => ({
             ...prev,
             syncProgress: {
@@ -135,6 +182,7 @@ export const OfflineProvider = ({ children }) => {
     const result = await syncService.startSync(token);
     if (result.success) {
       toast.success('✅ تمت المزامنة بنجاح!');
+      setSyncStatus(prev => ({ ...prev, syncCompleted: true, pendingOrders: 0 }));
     }
     updateSyncStatus();
   }, [isOnline, updateSyncStatus]);
