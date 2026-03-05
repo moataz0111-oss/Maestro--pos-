@@ -597,6 +597,13 @@ export default function Dashboard() {
       setStats(statsRes.data);
       setRecentOrders(statsRes.data.recent_orders || []);
       
+      // حفظ الإحصائيات في IndexedDB للاستخدام offline
+      try {
+        await db.addItem(STORES.SETTINGS, { key: 'stats', ...statsRes.data });
+      } catch (dbErr) {
+        console.log('Could not save stats to IndexedDB');
+      }
+      
       // جلب تنبيهات نقطة التعادل (للمدير والأدمن فقط)
       try {
         const alertsRes = await axios.get(`${API}/break-even/alerts`);
