@@ -131,7 +131,54 @@ export const startSync = async (token) => {
       }
     }
 
-    // 3. تحديث البيانات من الخادم
+    // 3. مزامنة المصاريف
+    const unsyncedExpenses = await db.getItemsByIndex(STORES.EXPENSES, 'is_synced', false);
+    console.log(`📤 مزامنة ${unsyncedExpenses.length} مصروف...`);
+
+    for (const expense of unsyncedExpenses) {
+      try {
+        notifySyncListeners('progress', {
+          type: 'expense',
+          current: results.expenses.synced + results.expenses.failed + 1,
+          total: unsyncedExpenses.length,
+          item: expense
+        });
+
+        const response = await fetch(`${API}/expenses`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            category: expense.category,
+            description: expense.description,
+            amount: expense.amount,
+            payment_method: expense.payment_method,
+            reference_number: expense.reference_number,
+            date: expense.date,
+            branch_id: expense.branch_id
+          })
+        });
+
+        if (response.ok) {
+          // تحديث المصروف المحلي
+          await db.updateItem(STORES.EXPENSES, {
+            ...expense,
+            is_synced: true,
+            synced_at: new Date().toISOString()
+          });
+          results.expenses.synced++;
+          console.log(`✅ تم مزامنة المصروف: ${expense.offline_id || expense.id}`);
+        } else {
+          const error = await response.text();
+          console.error(`❌ فشل مزامنة المصروف: ${expense.offline_id}`, error);
+          results.expenses.failed++;
+        }
+      } catch (error) {
+        console.error(`❌ خطأ في مزامنة المصروف:`, error);
+        results.expenses.failed++;
+      }
+    }
+
+    // 4. تحديث البيانات من الخادم
     await offlineStorage.initializeOfflineData(token);
 
     // 4. تنظيف الطابور
