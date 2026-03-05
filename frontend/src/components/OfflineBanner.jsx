@@ -89,29 +89,21 @@ const OfflineBanner = () => {
     );
   }
 
-  // متصل مع طلبات معلقة
-  if (isOnline && syncStatus.pendingOrders > 0) {
+  // متصل مع طلبات معلقة - المزامنة تلقائية
+  if (isOnline && syncStatus.pendingOrders > 0 && !syncStatus.syncCompleted) {
     return (
       <div className="bg-green-500 text-white px-4 py-2 flex items-center justify-between text-sm sticky top-0 z-50 shadow-lg">
         <div className="flex items-center gap-2">
           <Wifi className="h-4 w-4" />
           <span className="font-medium">
-            {t('تم الاتصال!')}
+            {t('تم الاتصال!')} - {t('جاري المزامنة تلقائياً...')}
           </span>
         </div>
         <div className="flex items-center gap-4">
           <span>
             {syncStatus.pendingOrders} {t('طلب جاهز للرفع')}
           </span>
-          <Button 
-            size="sm" 
-            variant="secondary"
-            onClick={startSync}
-            className="h-7 bg-white text-green-600 hover:bg-green-50"
-          >
-            <RefreshCw className="h-3 w-3 mr-1" />
-            {t('مزامنة الآن')}
-          </Button>
+          <Loader2 className="h-4 w-4 animate-spin" />
         </div>
       </div>
     );
