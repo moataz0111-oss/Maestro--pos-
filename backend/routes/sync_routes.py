@@ -187,6 +187,30 @@ async def sync_order(order: OfflineOrder, current_user: dict = Depends(get_curre
             upsert=True
         )
         
+        # إرسال إشعار للأجهزة الأخرى
+        try:
+            cashier_name = order.cashier_name or current_user.get("name") or "كاشير"
+            order_type_ar = {
+                "dine_in": "داخلي",
+                "takeaway": "سفري", 
+                "delivery": "توصيل"
+            }.get(order.order_type, order.order_type)
+            
+            await notify_other_devices(
+                tenant_id=tenant_id,
+                current_device_endpoint="",  # سيتم تحديثه لاحقاً
+                title="🔄 طلب جديد تم مزامنته",
+                body=f"طلب #{order_number} ({order_type_ar}) - {cashier_name}",
+                data={
+                    "type": "sync_order",
+                    "order_id": new_order["id"],
+                    "order_number": order_number,
+                    "url": f"/orders?highlight={new_order['id']}"
+                }
+            )
+        except Exception as notify_err:
+            print(f"Error sending sync notification: {notify_err}")
+        
         return SyncResult(
             success=True,
             id=new_order["id"],
