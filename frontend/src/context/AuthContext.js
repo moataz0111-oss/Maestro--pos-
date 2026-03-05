@@ -129,6 +129,15 @@ export const AuthProvider = ({ children }) => {
         // تخزين جميع ملفات التطبيق للعمل Offline
         cacheAppAssets();
         
+        // تسجيل اشتراك Push للإشعارات (إذا كان المتصفح يدعمه)
+        if (isPushSupported() && getNotificationPermission() !== 'denied') {
+          setTimeout(() => {
+            subscribeToPush(newToken).catch(err => {
+              console.log('Push subscription skipped:', err.message);
+            });
+          }, 2000);
+        }
+        
         // إرسال حدث تسجيل الدخول لتحديث إعدادات العملة
         window.dispatchEvent(new CustomEvent('userLoggedIn'));
         
