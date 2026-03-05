@@ -189,7 +189,7 @@ export const startSync = async (token) => {
       }
     }
 
-    results.total = results.orders.synced + results.customers.synced;
+    results.total = results.orders.synced + results.customers.synced + results.expenses.synced;
 
     console.log('✅ اكتملت المزامنة:', results);
     notifySyncListeners('complete', results);
