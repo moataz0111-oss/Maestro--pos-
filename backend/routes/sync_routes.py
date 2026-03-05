@@ -295,7 +295,7 @@ async def sync_batch(
                 })
             else:
                 results["orders"]["failed"] += 1
-        except Exception as e:
+        except Exception:
             results["orders"]["failed"] += 1
     
     # مزامنة العملاء
@@ -309,7 +309,7 @@ async def sync_batch(
                 })
             else:
                 results["customers"]["failed"] += 1
-        except Exception as e:
+        except Exception:
             results["customers"]["failed"] += 1
     
     return results
