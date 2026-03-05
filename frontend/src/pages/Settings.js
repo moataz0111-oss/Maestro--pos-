@@ -1150,6 +1150,72 @@ export default function Settings() {
     }
   };
 
+  // ==================== Push Notifications ====================
+  
+  const handleEnablePush = async () => {
+    setPushLoading(true);
+    try {
+      const granted = await requestNotificationPermission();
+      if (granted) {
+        const token = localStorage.getItem('token');
+        const subscription = await subscribeToPush(token);
+        if (subscription) {
+          setPushEnabled(true);
+          setPushPermission('granted');
+          toast.success(t('تم تفعيل إشعارات المزامنة'));
+          // تحميل قائمة الأجهزة
+          fetchSubscribedDevices();
+        } else {
+          toast.error(t('فشل في تفعيل الإشعارات'));
+        }
+      } else {
+        setPushPermission('denied');
+        toast.error(t('تم رفض إذن الإشعارات'));
+      }
+    } catch (error) {
+      toast.error(t('حدث خطأ في تفعيل الإشعارات'));
+    } finally {
+      setPushLoading(false);
+    }
+  };
+  
+  const handleDisablePush = async () => {
+    setPushLoading(true);
+    try {
+      const token = localStorage.getItem('token');
+      await unsubscribeFromPush(token);
+      setPushEnabled(false);
+      toast.success(t('تم إلغاء إشعارات المزامنة'));
+    } catch (error) {
+      toast.error(t('فشل في إلغاء الإشعارات'));
+    } finally {
+      setPushLoading(false);
+    }
+  };
+  
+  const handleTestPush = async () => {
+    try {
+      await showLocalNotification(
+        '🔔 اختبار الإشعارات',
+        'هذا إشعار تجريبي - الإشعارات تعمل بشكل صحيح!',
+        { type: 'test' }
+      );
+      toast.success(t('تم إرسال إشعار تجريبي'));
+    } catch (error) {
+      toast.error(t('فشل في إرسال الإشعار التجريبي'));
+    }
+  };
+  
+  const fetchSubscribedDevices = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const result = await getSubscribedDevices(token);
+      setSubscribedDevices(result.devices || []);
+    } catch (error) {
+      console.error('Error fetching devices:', error);
+    }
+  };
+
   const handleDeleteUser = async (userId) => {
     if (!confirm(t('هل أنت متأكد؟'))) return;
     try {
