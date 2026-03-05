@@ -497,9 +497,9 @@ async def send_push_notification(subscription: dict, title: str, body: str, data
     إرسال إشعار Push لمشترك واحد
     """
     try:
-        # استخدام Web Push بدون مكتبة خارجية (بسيط)
-        # في الإنتاج يُفضل استخدام pywebpush
-        payload = json.dumps({
+        # تخزين الإشعار في قاعدة البيانات للاسترجاع لاحقاً
+        # في الإنتاج يُفضل استخدام pywebpush لإرسال push فعلي
+        notification_data = {
             "title": title,
             "body": body,
             "icon": "/icons/admin-icon-192.png",
@@ -507,15 +507,15 @@ async def send_push_notification(subscription: dict, title: str, body: str, data
             "data": data or {},
             "tag": "sync-notification",
             "requireInteraction": False
-        })
+        }
         
-        # تخزين الإشعار في قاعدة البيانات للاسترجاع لاحقاً
         await db.notifications.insert_one({
             "id": str(uuid.uuid4()),
             "subscription_endpoint": subscription.get("endpoint"),
             "title": title,
             "body": body,
             "data": data,
+            "notification_payload": notification_data,
             "status": "pending",
             "created_at": datetime.now(timezone.utc).isoformat()
         })
