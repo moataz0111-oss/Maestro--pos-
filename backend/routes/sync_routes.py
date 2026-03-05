@@ -589,3 +589,117 @@ async def sync_inventory_transaction(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"خطأ في المزامنة: {str(e)}")
+
+
+
+# ==================== PUSH SUBSCRIPTION ROUTES ====================
+
+@router.post("/push/subscribe")
+async def subscribe_push(subscription: PushSubscription, current_user: dict = Depends(get_current_user)):
+    """
+    تسجيل اشتراك Push لجهاز جديد
+    """
+    try:
+        tenant_id = get_user_tenant_id(current_user)
+        
+        # التحقق من عدم وجود الاشتراك مسبقاً
+        existing = await db.push_subscriptions.find_one({
+            "endpoint": subscription.endpoint,
+            "tenant_id": tenant_id
+        })
+        
+        if existing:
+            # تحديث الاشتراك الموجود
+            await db.push_subscriptions.update_one(
+                {"endpoint": subscription.endpoint},
+                {
+                    "$set": {
+                        "keys": subscription.keys,
+                        "device_name": subscription.device_name,
+                        "is_active": True,
+                        "updated_at": datetime.now(timezone.utc).isoformat()
+                    }
+                }
+            )
+            return {"success": True, "message": "تم تحديث الاشتراك"}
+        
+        # إنشاء اشتراك جديد
+        new_subscription = {
+            "id": str(uuid.uuid4()),
+            "endpoint": subscription.endpoint,
+            "keys": subscription.keys,
+            "device_name": subscription.device_name,
+            "user_id": current_user.get("id"),
+            "user_name": current_user.get("name") or current_user.get("full_name"),
+            "tenant_id": tenant_id,
+            "is_active": True,
+            "created_at": datetime.now(timezone.utc).isoformat()
+        }
+        
+        await db.push_subscriptions.insert_one(new_subscription)
+        
+        return {"success": True, "message": "تم تسجيل الاشتراك بنجاح"}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"خطأ في تسجيل الاشتراك: {str(e)}")
+
+
+@router.post("/push/unsubscribe")
+async def unsubscribe_push(subscription: PushSubscription, current_user: dict = Depends(get_current_user)):
+    """
+    إلغاء اشتراك Push
+    """
+    try:
+        tenant_id = get_user_tenant_id(current_user)
+        
+        await db.push_subscriptions.update_one(
+            {"endpoint": subscription.endpoint, "tenant_id": tenant_id},
+            {"$set": {"is_active": False, "updated_at": datetime.now(timezone.utc).isoformat()}}
+        )
+        
+        return {"success": True, "message": "تم إلغاء الاشتراك"}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"خطأ في إلغاء الاشتراك: {str(e)}")
+
+
+@router.get("/push/subscriptions")
+async def get_push_subscriptions(current_user: dict = Depends(get_current_user)):
+    """
+    الحصول على قائمة الأجهزة المشتركة
+    """
+    try:
+        tenant_id = get_user_tenant_id(current_user)
+        
+        subscriptions = await db.push_subscriptions.find(
+            {"tenant_id": tenant_id, "is_active": True},
+            {"_id": 0, "keys": 0}  # لا نرسل المفاتيح
+        ).to_list(100)
+        
+        return {
+            "count": len(subscriptions),
+            "devices": subscriptions
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"خطأ في جلب الاشتراكات: {str(e)}")
+
+
+@router.get("/push/notifications")
+async def get_pending_notifications(current_user: dict = Depends(get_current_user)):
+    """
+    الحصول على الإشعارات المعلقة للجهاز الحالي
+    """
+    try:
+        tenant_id = get_user_tenant_id(current_user)
+        
+        # جلب آخر 20 إشعار
+        notifications = await db.notifications.find(
+            {"tenant_id": tenant_id},
+            {"_id": 0}
+        ).sort("created_at", -1).limit(20).to_list(20)
+        
+        return {"notifications": notifications}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"خطأ في جلب الإشعارات: {str(e)}")
