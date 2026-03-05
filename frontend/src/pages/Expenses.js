@@ -57,6 +57,7 @@ const DEFAULT_EXPENSE_CATEGORIES = [
 export default function Expenses() {
   const { user, hasRole } = useAuth();
   const { t, isRTL } = useTranslation();
+  const { isOnline, isOffline, updateSyncStatus } = useOffline();
   const navigate = useNavigate();
   
   const [expenses, setExpenses] = useState([]);
