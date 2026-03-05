@@ -70,6 +70,17 @@ import IncomingCallPopup from "./components/IncomingCallPopup";
 const ProtectedRoute = ({ children }) => {
   const { isAuthenticated, loading, user } = useAuth();
   
+  // تحميل جميع الصفحات مسبقاً للعمل Offline
+  useEffect(() => {
+    if (isAuthenticated && user) {
+      // تأخير قصير ثم تحميل جميع الصفحات في الخلفية
+      const timer = setTimeout(() => {
+        preloadAllPages();
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [isAuthenticated, user]);
+  
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
@@ -96,6 +107,49 @@ const ProtectedRoute = ({ children }) => {
   }
   
   return children;
+};
+
+// تحميل جميع الصفحات مسبقاً للعمل Offline
+const preloadAllPages = async () => {
+  console.log('📦 جاري تحميل جميع الصفحات للعمل Offline...');
+  
+  // قائمة جميع الصفحات الـ lazy
+  const pageImports = [
+    () => import("./pages/Dashboard"),
+    () => import("./pages/POS"),
+    () => import("./pages/Tables"),
+    () => import("./pages/Orders"),
+    () => import("./pages/Inventory"),
+    () => import("./pages/Expenses"),
+    () => import("./pages/Reports"),
+    () => import("./pages/Settings"),
+    () => import("./pages/HR"),
+    () => import("./pages/KitchenDisplay"),
+    () => import("./pages/Delivery"),
+    () => import("./pages/Reservations"),
+    () => import("./pages/Coupons"),
+    () => import("./pages/Loyalty"),
+    () => import("./pages/Purchasing"),
+    () => import("./pages/BranchOrders"),
+    () => import("./pages/CallCenterDashboard"),
+    () => import("./pages/CallLogs"),
+    () => import("./pages/Ratings"),
+    () => import("./pages/InventoryReports"),
+    () => import("./pages/OwnerWallet"),
+  ];
+  
+  // تحميل كل صفحة واحدة تلو الأخرى (بدون حظر)
+  for (const importFn of pageImports) {
+    try {
+      await importFn();
+    } catch (e) {
+      // تجاهل الأخطاء - بعض الصفحات قد لا تكون متاحة
+    }
+    // تأخير قصير بين كل تحميل لعدم إثقال المتصفح
+    await new Promise(r => setTimeout(r, 100));
+  }
+  
+  console.log('✅ تم تحميل جميع الصفحات للعمل Offline');
 };
 
 // Permission Route - للتحقق من صلاحية الوصول للصفحة
