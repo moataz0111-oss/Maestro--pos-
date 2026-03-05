@@ -3,6 +3,7 @@ import axios from 'axios';
 import { API_URL, BACKEND_URL } from '../utils/api';
 import offlineStorage from '../lib/offlineStorage';
 import { getOnlineStatus } from '../hooks/useOnlineStatus';
+import { subscribeToPush, isPushSupported, getNotificationPermission } from '../lib/pushService';
 
 const AuthContext = createContext(null);
 
