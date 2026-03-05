@@ -102,6 +102,9 @@ export const AuthProvider = ({ children }) => {
         // تهيئة البيانات المحلية
         await offlineStorage.initializeOfflineData(newToken);
         
+        // تخزين جميع ملفات التطبيق للعمل Offline
+        cacheAppAssets();
+        
         // إرسال حدث تسجيل الدخول لتحديث إعدادات العملة
         window.dispatchEvent(new CustomEvent('userLoggedIn'));
         
