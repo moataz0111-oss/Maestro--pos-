@@ -413,10 +413,25 @@ export default function Dashboard() {
   // جلب معلومات العميل (الشعار والاسم)
   const fetchTenantInfo = async () => {
     try {
+      // إذا كان offline، استخدم البيانات المحلية
+      if (isOffline) {
+        const localTenant = await getLocalTenantInfo();
+        if (localTenant) {
+          setTenantInfo(localTenant);
+          return;
+        }
+      }
+      
       const res = await axios.get(`${API}/tenant/info`);
       setTenantInfo(res.data);
     } catch (error) {
-      console.log('No tenant info available');
+      // محاولة استخدام البيانات المحلية عند الخطأ
+      const localTenant = await getLocalTenantInfo();
+      if (localTenant) {
+        setTenantInfo(localTenant);
+      } else {
+        console.log('No tenant info available');
+      }
     }
   };
 
