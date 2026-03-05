@@ -8,6 +8,29 @@ const AuthContext = createContext(null);
 
 const API = API_URL;
 
+// دالة لتخزين جميع ملفات التطبيق للعمل Offline
+const cacheAppAssets = () => {
+  if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+    // جمع جميع ملفات JS و CSS من الصفحة
+    const scripts = Array.from(document.querySelectorAll('script[src]')).map(s => s.src);
+    const styles = Array.from(document.querySelectorAll('link[rel="stylesheet"]')).map(l => l.href);
+    const images = Array.from(document.querySelectorAll('img[src]')).map(i => i.src);
+    
+    const assets = [...scripts, ...styles, ...images].filter(url => {
+      // تجاهل الروابط الخارجية
+      return url.startsWith(window.location.origin) && !url.includes('/api/');
+    });
+    
+    // إرسال للـ Service Worker لتخزينها
+    navigator.serviceWorker.controller.postMessage({
+      type: 'CACHE_ASSETS',
+      assets: assets
+    });
+    
+    console.log('📦 طلب تخزين', assets.length, 'ملف للعمل Offline');
+  }
+};
+
 // دالة لتشفير كلمة المرور بسيطة (للتخزين المحلي فقط)
 const hashPassword = async (password) => {
   const encoder = new TextEncoder();
