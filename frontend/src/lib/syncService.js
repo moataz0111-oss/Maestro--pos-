@@ -44,6 +44,7 @@ export const startSync = async (token) => {
   const results = {
     orders: { synced: 0, failed: 0 },
     customers: { synced: 0, failed: 0 },
+    expenses: { synced: 0, failed: 0 },
     total: 0
   };
 
