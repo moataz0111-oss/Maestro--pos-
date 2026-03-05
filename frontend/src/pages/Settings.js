@@ -503,6 +503,12 @@ export default function Settings() {
     // تحميل إعدادات الصوت
     const savedSoundSettings = getSoundSettings();
     setSoundSettings(savedSoundSettings);
+    
+    // تحميل حالة إشعارات Push
+    if (isPushSupported()) {
+      setPushPermission(getNotificationPermission());
+      setPushEnabled(getNotificationPermission() === 'granted');
+    }
   }, []);
 
   // جلب صلاحيات الإعدادات المتاحة للعميل
