@@ -460,6 +460,71 @@ class OfflineInventoryTransaction(BaseModel):
     created_at: Optional[str] = None
 
 
+class PushSubscription(BaseModel):
+    endpoint: str
+    keys: dict
+    device_name: Optional[str] = None
+
+
+# ==================== PUSH NOTIFICATION HELPERS ====================
+
+async def send_push_notification(subscription: dict, title: str, body: str, data: dict = None):
+    """
+    إرسال إشعار Push لمشترك واحد
+    """
+    try:
+        # استخدام Web Push بدون مكتبة خارجية (بسيط)
+        # في الإنتاج يُفضل استخدام pywebpush
+        payload = json.dumps({
+            "title": title,
+            "body": body,
+            "icon": "/icons/admin-icon-192.png",
+            "badge": "/icons/admin-icon-192.png",
+            "data": data or {},
+            "tag": "sync-notification",
+            "requireInteraction": False
+        })
+        
+        # تخزين الإشعار في قاعدة البيانات للاسترجاع لاحقاً
+        await db.notifications.insert_one({
+            "id": str(uuid.uuid4()),
+            "subscription_endpoint": subscription.get("endpoint"),
+            "title": title,
+            "body": body,
+            "data": data,
+            "status": "pending",
+            "created_at": datetime.now(timezone.utc).isoformat()
+        })
+        
+        return True
+    except Exception as e:
+        print(f"Error sending push notification: {e}")
+        return False
+
+
+async def notify_other_devices(tenant_id: str, current_device_endpoint: str, title: str, body: str, data: dict = None):
+    """
+    إرسال إشعارات لجميع الأجهزة الأخرى في نفس المستأجر
+    """
+    try:
+        # جلب جميع اشتراكات المستأجر (ما عدا الجهاز الحالي)
+        subscriptions = await db.push_subscriptions.find({
+            "tenant_id": tenant_id,
+            "endpoint": {"$ne": current_device_endpoint},
+            "is_active": True
+        }).to_list(100)
+        
+        sent_count = 0
+        for sub in subscriptions:
+            if await send_push_notification(sub, title, body, data):
+                sent_count += 1
+        
+        return sent_count
+    except Exception as e:
+        print(f"Error notifying other devices: {e}")
+        return 0
+
+
 @router.post("/inventory")
 async def sync_inventory_transaction(
     transaction: OfflineInventoryTransaction,
