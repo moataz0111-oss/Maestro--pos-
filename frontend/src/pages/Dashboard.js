@@ -573,12 +573,31 @@ export default function Dashboard() {
     try {
       // إذا كان offline، استخدم البيانات المحلية
       if (isOffline) {
-        const localStats = await getLocalStats();
         const localOrders = await getTodayOrders();
+        const localStats = await getLocalStats();
         
-        if (localStats) {
-          setStats(localStats);
-        }
+        // حساب الإحصائيات من الطلبات المحلية
+        const todayTotal = localOrders.reduce((sum, order) => sum + (order.total || order.subtotal || 0), 0);
+        const todayOrdersCount = localOrders.length;
+        const avgOrderValue = todayOrdersCount > 0 ? todayTotal / todayOrdersCount : 0;
+        
+        // دمج مع الإحصائيات المحفوظة سابقاً (من الخادم)
+        const combinedStats = {
+          today: {
+            total_sales: (localStats?.today?.total_sales || 0) + todayTotal,
+            total_orders: (localStats?.today?.total_orders || 0) + todayOrdersCount,
+            average_order_value: avgOrderValue,
+            by_payment_method: localStats?.today?.by_payment_method || {}
+          },
+          weekly: localStats?.weekly || {},
+          monthly: localStats?.monthly || {},
+          recent_orders: localOrders.slice(0, 5),
+          // إضافة مؤشر أن هذه بيانات محلية
+          is_local_data: true,
+          local_orders_count: localOrders.filter(o => !o.is_synced).length
+        };
+        
+        setStats(combinedStats);
         setRecentOrders(localOrders.slice(0, 5));
         setLoading(false);
         return;
