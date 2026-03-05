@@ -36,17 +36,22 @@ export const useOnlineStatus = () => {
   const [isOnline, setIsOnline] = useState(globalOnlineStatus);
   const [lastOnline, setLastOnline] = useState(new Date());
   const [wasOffline, setWasOffline] = useState(false);
+  const [previousStatus, setPreviousStatus] = useState(globalOnlineStatus);
 
   useEffect(() => {
     const handleStatusChange = (online) => {
+      // إذا كان offline سابقاً وأصبح online الآن
+      if (!previousStatus && online) {
+        setWasOffline(true);
+        // إعادة تعيين wasOffline بعد 10 ثواني (لإعطاء وقت كافي للمزامنة)
+        setTimeout(() => setWasOffline(false), 10000);
+      }
+      
+      setPreviousStatus(online);
       setIsOnline(online);
+      
       if (online) {
         setLastOnline(new Date());
-        if (!globalOnlineStatus) {
-          setWasOffline(true);
-          // إعادة تعيين wasOffline بعد 5 ثواني
-          setTimeout(() => setWasOffline(false), 5000);
-        }
       }
     };
 
@@ -83,7 +88,7 @@ export const useOnlineStatus = () => {
       unsubscribe();
       clearInterval(interval);
     };
-  }, [isOnline]);
+  }, [isOnline, previousStatus]);
 
   return { isOnline, lastOnline, wasOffline };
 };
