@@ -3,8 +3,11 @@ import { API_URL, BACKEND_URL } from '../utils/api';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
+import { useOffline } from '../context/OfflineContext';
 import { useTranslation } from '../hooks/useTranslation';
 import { formatPrice } from '../utils/currency';
+import db, { STORES } from '../lib/offlineDB';
+import { addToSyncQueue, generateUUID, generateOfflineId } from '../lib/offlineStorage';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Input } from '../components/ui/input';
@@ -16,7 +19,9 @@ import {
   Calendar,
   DollarSign,
   Filter,
-  Trash2
+  Trash2,
+  WifiOff,
+  Cloud
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
