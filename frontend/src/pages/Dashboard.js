@@ -537,17 +537,45 @@ export default function Dashboard() {
 
   const fetchDashboardSettings = async () => {
     try {
+      // إذا كان offline، استخدم البيانات المحلية
+      if (isOffline) {
+        const localSettings = await getLocalDashboardSettings();
+        if (localSettings && Object.keys(localSettings).length > 0) {
+          setDashboardSettings(localSettings);
+          return;
+        }
+      }
+      
       const res = await axios.get(`${API}/settings/dashboard`);
       if (res.data && Object.keys(res.data).length > 0) {
         setDashboardSettings(res.data);
       }
     } catch (error) {
-      console.error('Failed to fetch dashboard settings:', error);
+      // محاولة استخدام البيانات المحلية عند الخطأ
+      const localSettings = await getLocalDashboardSettings();
+      if (localSettings && Object.keys(localSettings).length > 0) {
+        setDashboardSettings(localSettings);
+      } else {
+        console.error('Failed to fetch dashboard settings:', error);
+      }
     }
   };
 
   const fetchData = async () => {
     try {
+      // إذا كان offline، استخدم البيانات المحلية
+      if (isOffline) {
+        const localStats = await getLocalStats();
+        const localOrders = await getTodayOrders();
+        
+        if (localStats) {
+          setStats(localStats);
+        }
+        setRecentOrders(localOrders.slice(0, 5));
+        setLoading(false);
+        return;
+      }
+      
       // استخدام الفرع من Context
       const branchIdParam = getBranchIdForApi();
       const params = {};
@@ -573,6 +601,21 @@ export default function Dashboard() {
       }
     } catch (error) {
       console.error('Failed to fetch data:', error);
+      // محاولة استخدام البيانات المحلية عند الخطأ
+      try {
+        const localStats = await getLocalStats();
+        const localOrders = await getTodayOrders();
+        
+        if (localStats) {
+          setStats(localStats);
+          setRecentOrders(localOrders.slice(0, 5));
+          setLoading(false);
+          return;
+        }
+      } catch (localError) {
+        console.log('Local data not available:', localError);
+      }
+      
       // Fallback للطريقة القديمة
       try {
         const today = new Date().toISOString().split('T')[0];
