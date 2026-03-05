@@ -305,6 +305,12 @@ export default function Settings() {
   const [logsPage, setLogsPage] = useState(1);
   const [logsTotalPages, setLogsTotalPages] = useState(1);
   
+  // إشعارات Push
+  const [pushEnabled, setPushEnabled] = useState(false);
+  const [pushPermission, setPushPermission] = useState('default');
+  const [subscribedDevices, setSubscribedDevices] = useState([]);
+  const [pushLoading, setPushLoading] = useState(false);
+  
   // مجموعات الصلاحيات
   const PERMISSION_GROUPS = ['الصفحات الرئيسية', 'عمليات نقطة البيع', 'التقارير والتحليلات', 'الميزات الخاصة', 'عرض المبيعات', 'الإعدادات'];
   
