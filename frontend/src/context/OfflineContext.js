@@ -70,62 +70,75 @@ export const OfflineProvider = ({ children }) => {
     return () => clearInterval(interval);
   }, [updateSyncStatus]);
 
-  // مزامنة تلقائية عند عودة الاتصال
+  // مزامنة عند وجود طلبات معلقة وأنت متصل (عند التحميل أو عند تغير الحالة)
   useEffect(() => {
-    const performAutoSync = async () => {
-      // إذا عاد الاتصال وكان offline سابقاً
-      if (wasOffline && isOnline && !autoSyncTriggered.current) {
-        const token = localStorage.getItem('token');
-        
-        // تحقق من وجود طلبات معلقة
-        const currentStatus = await syncService.getSyncStatus();
-        
-        if (token && currentStatus.pendingOrders > 0) {
-          autoSyncTriggered.current = true; // منع المزامنة المتكررة
-          
-          toast.info(`🔄 جاري مزامنة ${currentStatus.pendingOrders} طلب تلقائياً...`, {
-            duration: 3000
-          });
-          
-          try {
-            const result = await syncService.startSync(token);
-            
-            if (result.success && result.results) {
-              const totalSynced = result.results.orders.synced + 
-                                 result.results.customers.synced + 
-                                 (result.results.expenses?.synced || 0);
-              
-              if (totalSynced > 0) {
-                toast.success(`✅ تم رفع ${totalSynced} عنصر بنجاح!`, {
-                  duration: 5000
-                });
-              }
-              
-              // تحديث الحالة بعد المزامنة
-              setSyncStatus(prev => ({
-                ...prev,
-                syncCompleted: true,
-                pendingOrders: 0
-              }));
-            }
-          } catch (error) {
-            console.error('Auto sync error:', error);
-            toast.error('❌ فشل في المزامنة التلقائية');
-          }
-          
-          await updateSyncStatus();
-        }
-      }
+    const checkAndSync = async () => {
+      if (!isOnline) return;
+      if (autoSyncTriggered.current) return;
       
-      // إعادة تعيين العلم عند قطع الاتصال
-      if (!isOnline) {
-        autoSyncTriggered.current = false;
-        setSyncStatus(prev => ({ ...prev, syncCompleted: false }));
+      const token = localStorage.getItem('token');
+      if (!token) return;
+      
+      // تحقق من وجود طلبات معلقة
+      const currentStatus = await syncService.getSyncStatus();
+      
+      if (currentStatus.pendingOrders > 0) {
+        console.log(`🔄 وجد ${currentStatus.pendingOrders} طلب معلق - بدء المزامنة...`);
+        autoSyncTriggered.current = true;
+        
+        setSyncStatus(prev => ({ ...prev, isSyncing: true }));
+        
+        try {
+          const result = await syncService.startSync(token);
+          
+          if (result.success && result.results) {
+            const totalSynced = result.results.orders.synced + 
+                               result.results.customers.synced + 
+                               (result.results.expenses?.synced || 0);
+            
+            if (totalSynced > 0) {
+              toast.success(`✅ تم رفع ${totalSynced} عنصر بنجاح!`, {
+                duration: 5000
+              });
+            }
+            
+            // تحديث الحالة بعد المزامنة
+            setSyncStatus(prev => ({
+              ...prev,
+              isSyncing: false,
+              syncCompleted: true,
+              pendingOrders: 0
+            }));
+          } else {
+            setSyncStatus(prev => ({ ...prev, isSyncing: false }));
+          }
+        } catch (error) {
+          console.error('Sync error:', error);
+          toast.error('❌ فشل في المزامنة');
+          setSyncStatus(prev => ({ ...prev, isSyncing: false }));
+        }
+        
+        // إعادة تعيين بعد 5 ثواني للسماح بمزامنة جديدة
+        setTimeout(() => {
+          autoSyncTriggered.current = false;
+        }, 5000);
+        
+        await updateSyncStatus();
       }
     };
     
-    performAutoSync();
-  }, [wasOffline, isOnline, updateSyncStatus]);
+    // تأخير قصير قبل التحقق
+    const timer = setTimeout(checkAndSync, 1000);
+    return () => clearTimeout(timer);
+  }, [isOnline, updateSyncStatus]);
+
+  // إعادة تعيين العلم عند قطع الاتصال
+  useEffect(() => {
+    if (!isOnline) {
+      autoSyncTriggered.current = false;
+      setSyncStatus(prev => ({ ...prev, syncCompleted: false }));
+    }
+  }, [isOnline]);
 
   // الاستماع لأحداث المزامنة
   useEffect(() => {
