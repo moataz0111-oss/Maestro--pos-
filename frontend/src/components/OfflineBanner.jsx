@@ -14,10 +14,12 @@ const OfflineBanner = () => {
   const { isOnline, isOffline, syncStatus, startSync } = useOffline();
 
   // لا تعرض شيء إذا:
-  // 1. كان متصل ولا توجد طلبات معلقة
+  // 1. كان متصل ولا توجد طلبات معلقة ولا يوجد مزامنة جارية
   // 2. أو تمت المزامنة بنجاح
-  if (isOnline && (syncStatus.pendingOrders === 0 || syncStatus.syncCompleted) && !syncStatus.isSyncing) {
-    return null;
+  if (isOnline && !syncStatus.isSyncing) {
+    if (syncStatus.syncCompleted || syncStatus.pendingOrders === 0) {
+      return null;
+    }
   }
 
   // وضع Offline
