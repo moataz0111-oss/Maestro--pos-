@@ -264,7 +264,14 @@ export default function POS() {
           
           if (localCategories.length > 0) setCategories(localCategories);
           if (localProducts.length > 0) setProducts(localProducts);
-          if (localTables.length > 0) setTables(localTables);
+          
+          // فلترة الطاولات حسب الفرع المحدد
+          if (localTables.length > 0) {
+            const filteredTables = activeBranchId 
+              ? localTables.filter(t => t.branch_id === activeBranchId || !t.branch_id)
+              : localTables;
+            setTables(filteredTables);
+          }
           
           if (localCategories.length > 0) {
             setSelectedCategory(localCategories[0].id);
