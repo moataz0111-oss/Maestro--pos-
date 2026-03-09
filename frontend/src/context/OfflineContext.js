@@ -148,14 +148,16 @@ export const OfflineProvider = ({ children }) => {
           setSyncStatus(prev => ({ ...prev, isSyncing: true, syncProgress: null, syncCompleted: false }));
           break;
         case 'complete':
-          setSyncStatus(prev => ({ 
-            ...prev, 
-            isSyncing: false, 
-            syncProgress: null,
-            syncCompleted: true,
-            pendingOrders: 0
-          }));
-          updateSyncStatus();
+          // تأخير قصير قبل تحديث الحالة للتأكد من اكتمال IndexedDB
+          setTimeout(() => {
+            setSyncStatus(prev => ({ 
+              ...prev, 
+              isSyncing: false, 
+              syncProgress: null,
+              syncCompleted: true,
+              pendingOrders: 0
+            }));
+          }, 500);
           break;
         case 'error':
           setSyncStatus(prev => ({ ...prev, isSyncing: false, syncProgress: null }));
@@ -177,7 +179,7 @@ export const OfflineProvider = ({ children }) => {
     });
 
     return () => unsubscribe();
-  }, [updateSyncStatus]);
+  }, []);
 
   // بدء المزامنة يدوياً
   const startSync = useCallback(async () => {
