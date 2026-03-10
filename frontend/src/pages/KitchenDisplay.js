@@ -241,7 +241,8 @@ export default function KitchenDisplay() {
           // جلب الطلبات المحلية
           const localOrders = await offlineStorage.getTodayOrders();
           const kitchenOrders = localOrders
-            .filter(o => o.kitchen_status !== 'completed_kitchen' && o.status !== 'delivered')
+            // إظهار الطلبات بناءً على kitchen_status فقط (حتى لو مدفوعة)
+            .filter(o => o.kitchen_status !== 'completed_kitchen' && o.status !== 'cancelled')
             .sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
           
           setOrders(kitchenOrders);
