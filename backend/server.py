@@ -11933,6 +11933,37 @@ async def seed_data():
     
     return {"message": "تم إنشاء البيانات الأولية بنجاح"}
 
+
+@api_router.post("/utils/fix-tenant-categories")
+async def fix_tenant_categories(current_user: dict = Depends(get_current_user)):
+    """
+    إضافة فئات افتراضية للمستأجر الحالي إذا لم يكن لديه فئات
+    """
+    tenant_id = get_user_tenant_id(current_user)
+    
+    if not tenant_id:
+        raise HTTPException(status_code=400, detail="لا يمكن تحديد المستأجر")
+    
+    # التحقق من وجود فئات
+    existing_categories = await db.categories.count_documents({"tenant_id": tenant_id})
+    
+    if existing_categories > 0:
+        return {"message": f"المستأجر لديه {existing_categories} فئة بالفعل", "fixed": False}
+    
+    # إنشاء فئات افتراضية
+    default_categories = [
+        {"id": str(uuid.uuid4()), "name": "المشروبات", "name_en": "Beverages", "icon": "☕", "color": "#8B4513", "sort_order": 1, "tenant_id": tenant_id, "is_active": True},
+        {"id": str(uuid.uuid4()), "name": "الوجبات الرئيسية", "name_en": "Main Dishes", "icon": "🥘", "color": "#D4AF37", "sort_order": 2, "tenant_id": tenant_id, "is_active": True},
+        {"id": str(uuid.uuid4()), "name": "المقبلات", "name_en": "Appetizers", "icon": "🧆", "color": "#228B22", "sort_order": 3, "tenant_id": tenant_id, "is_active": True},
+        {"id": str(uuid.uuid4()), "name": "الحلويات", "name_en": "Desserts", "icon": "🍰", "color": "#FF69B4", "sort_order": 4, "tenant_id": tenant_id, "is_active": True},
+    ]
+    
+    for cat in default_categories:
+        await db.categories.insert_one(cat)
+    
+    return {"message": "تم إضافة الفئات الافتراضية بنجاح", "fixed": True, "categories_added": len(default_categories)}
+
+
 # ==================== ROOT ====================
 
 @api_router.get("/")
