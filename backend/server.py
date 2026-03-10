@@ -4806,27 +4806,30 @@ async def update_order_kitchen_status(order_id: str, kitchen_status: str, curren
 async def get_kitchen_orders(current_user: dict = Depends(get_current_user)):
     """
     جلب الطلبات لشاشة المطبخ
-    تظهر الطلبات التي لم يتم تحديدها كـ completed_kitchen بغض النظر عن حالتها الرئيسية
+    تظهر الطلبات التي لم يتم تحديدها كـ completed_kitchen بغض النظر عن حالتها الرئيسية (حتى لو مدفوعة)
     """
     tenant_id = get_user_tenant_id(current_user)
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     
-    # جلب الطلبات التي ليست completed_kitchen وليست ملغاة
+    # جلب الطلبات التي ليست completed_kitchen وليست ملغاة (اليوم فقط)
     query = {
         "tenant_id": tenant_id,
         "kitchen_status": {"$nin": ["completed_kitchen", None]},
-        "status": {"$ne": "cancelled"}
+        "status": {"$ne": "cancelled"},
+        "created_at": {"$regex": f"^{today}"}
     }
     
-    # أيضاً جلب الطلبات الجديدة التي ليس لها kitchen_status بعد
+    # أيضاً جلب الطلبات الجديدة التي ليس لها kitchen_status بعد (بغض النظر عن حالة الدفع)
     query_new = {
         "tenant_id": tenant_id,
         "kitchen_status": {"$exists": False},
-        "status": {"$in": ["pending", "preparing", "ready"]}
+        "status": {"$nin": ["cancelled", "delivered"]},  # فقط استثناء الملغاة والمسلّمة
+        "created_at": {"$regex": f"^{today}"}
     }
     
     # دمج النتائج
-    orders_with_kitchen_status = await db.orders.find(query, {"_id": 0}).sort("created_at", 1).to_list(100)
-    orders_new = await db.orders.find(query_new, {"_id": 0}).sort("created_at", 1).to_list(100)
+    orders_with_kitchen_status = await db.orders.find(query, {"_id": 0}).sort("created_at", 1).to_list(200)
+    orders_new = await db.orders.find(query_new, {"_id": 0}).sort("created_at", 1).to_list(200)
     
     # إضافة kitchen_status الافتراضي للطلبات الجديدة
     for order in orders_new:
