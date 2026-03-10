@@ -11855,11 +11855,11 @@ async def seed_data():
     
     # Create categories
     categories = [
-        {"name": "برغر", "name_en": "Burgers", "icon": "Beef", "color": "#EF4444", "sort_order": 1},
-        {"name": "بيتزا", "name_en": "Pizza", "icon": "Pizza", "color": "#F59E0B", "sort_order": 2},
-        {"name": "مشروبات", "name_en": "Drinks", "icon": "Coffee", "color": "#8B5CF6", "sort_order": 3},
-        {"name": "حلويات", "name_en": "Desserts", "icon": "Cake", "color": "#EC4899", "sort_order": 4},
-        {"name": "سلطات", "name_en": "Salads", "icon": "Salad", "color": "#10B981", "sort_order": 5},
+        {"name": "برغر", "name_en": "Burgers", "icon": "🍔", "color": "#EF4444", "sort_order": 1},
+        {"name": "بيتزا", "name_en": "Pizza", "icon": "🍕", "color": "#F59E0B", "sort_order": 2},
+        {"name": "مشروبات", "name_en": "Drinks", "icon": "☕", "color": "#8B5CF6", "sort_order": 3},
+        {"name": "حلويات", "name_en": "Desserts", "icon": "🍰", "color": "#EC4899", "sort_order": 4},
+        {"name": "سلطات", "name_en": "Salads", "icon": "🥗", "color": "#10B981", "sort_order": 5},
     ]
     
     cat_ids = {}
