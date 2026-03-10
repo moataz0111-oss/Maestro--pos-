@@ -1,97 +1,73 @@
 /**
- * Offline Banner Component
- * شريط يعرض حالة الاتصال والمزامنة
+ * شريط حالة Offline
+ * يظهر عندما يكون المستخدم غير متصل أو لديه بيانات للمزامنة
  */
 
 import React from 'react';
-import { Wifi, WifiOff, RefreshCw, Cloud, CloudOff, CheckCircle, Loader2 } from 'lucide-react';
 import { useOffline } from '../context/OfflineContext';
 import { useTranslation } from '../hooks/useTranslation';
-import { Button } from '../components/ui/button';
+import { Wifi, WifiOff, Loader2, Cloud } from 'lucide-react';
 
 const OfflineBanner = () => {
   const { t } = useTranslation();
-  const { isOnline, isOffline, syncStatus, startSync } = useOffline();
+  const { isOnline, isOffline, syncStatus } = useOffline();
 
-  // لا تعرض شيء إذا:
-  // 1. كان متصل ولا توجد طلبات معلقة ولا يوجد مزامنة جارية
-  // 2. أو تمت المزامنة بنجاح
-  if (isOnline && !syncStatus.isSyncing) {
-    if (syncStatus.syncCompleted || syncStatus.pendingOrders === 0) {
-      return null;
-    }
+  // === حالة 1: متصل ولا يوجد شيء للعرض ===
+  // إخفاء الشريط إذا:
+  // - متصل بالإنترنت
+  // - والمزامنة ليست جارية
+  // - و(لا توجد طلبات معلقة أو المزامنة اكتملت)
+  if (isOnline && !syncStatus.isSyncing && (syncStatus.pendingOrders === 0 || syncStatus.syncCompleted)) {
+    return null;
   }
 
-  // وضع Offline
+  // === حالة 2: غير متصل ===
   if (isOffline) {
     return (
       <div className="bg-amber-500 text-white px-4 py-2 flex items-center justify-between text-sm sticky top-0 z-50 shadow-lg">
         <div className="flex items-center gap-2">
-          <WifiOff className="h-4 w-4 animate-pulse" />
+          <WifiOff className="h-4 w-4" />
           <span className="font-medium">
             {t('وضع Offline')} - {t('لا يوجد اتصال بالإنترنت')}
           </span>
         </div>
-        <div className="flex items-center gap-4">
-          {syncStatus.pendingOrders > 0 && (
-            <div className="flex items-center gap-2 bg-amber-600 px-3 py-1 rounded-full">
-              <CloudOff className="h-4 w-4" />
-              <span>
-                {syncStatus.pendingOrders} {t('طلب في الانتظار')}
-              </span>
-            </div>
-          )}
-          <span className="text-amber-100 text-xs">
-            {t('الطلبات تُحفظ محلياً وسترفع عند عودة الاتصال')}
+        <div className="flex items-center gap-2">
+          <Cloud className="h-4 w-4" />
+          <span className="text-sm">
+            {t('البيانات محفوظة محلياً')}
           </span>
         </div>
       </div>
     );
   }
 
-  // جاري المزامنة - مع مؤشر التقدم
+  // === حالة 3: جاري المزامنة ===
   if (syncStatus.isSyncing) {
-    const progress = syncStatus.syncProgress || { current: 0, total: 0, type: '' };
-    const percentage = progress.total > 0 ? Math.round((progress.current / progress.total) * 100) : 0;
-    
     return (
-      <div className="bg-blue-500 text-white px-4 py-2 sticky top-0 z-50 shadow-lg">
-        <div className="flex items-center justify-between text-sm mb-1">
-          <div className="flex items-center gap-2">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            <span className="font-medium">
-              {t('جاري المزامنة...')}
-            </span>
-          </div>
-          <div className="flex items-center gap-2">
-            <Cloud className="h-4 w-4" />
-            <span>
-              {progress.total > 0 
-                ? `${progress.current} / ${progress.total} ${t('عنصر')}`
-                : `${syncStatus.pendingOrders} ${t('طلب')}`
-              }
-            </span>
-            {percentage > 0 && (
-              <span className="bg-blue-600 px-2 py-0.5 rounded-full text-xs font-bold">
-                {percentage}%
-              </span>
-            )}
-          </div>
+      <div className="bg-green-500 text-white px-4 py-2 flex items-center justify-between text-sm sticky top-0 z-50 shadow-lg">
+        <div className="flex items-center gap-2">
+          <Wifi className="h-4 w-4" />
+          <span className="font-medium">
+            {t('تم الاتصال!')} - {t('جاري المزامنة تلقائياً...')}
+          </span>
         </div>
-        {/* شريط التقدم */}
-        {progress.total > 0 && (
-          <div className="w-full bg-blue-400 rounded-full h-1.5 overflow-hidden">
-            <div 
-              className="bg-white h-full rounded-full transition-all duration-300 ease-out"
-              style={{ width: `${percentage}%` }}
-            />
-          </div>
-        )}
+        <div className="flex items-center gap-4">
+          {syncStatus.syncProgress ? (
+            <span>
+              {t('جاري رفع')} {syncStatus.syncProgress.current}/{syncStatus.syncProgress.total}
+            </span>
+          ) : (
+            <span>
+              {syncStatus.pendingOrders} {t('طلب جاهز للرفع')}
+            </span>
+          )}
+          <Loader2 className="h-4 w-4 animate-spin" />
+        </div>
       </div>
     );
   }
 
-  // متصل مع طلبات معلقة - المزامنة تلقائية
+  // === حالة 4: متصل مع طلبات معلقة (لم تبدأ المزامنة بعد) ===
   if (isOnline && syncStatus.pendingOrders > 0 && !syncStatus.syncCompleted) {
     return (
       <div className="bg-green-500 text-white px-4 py-2 flex items-center justify-between text-sm sticky top-0 z-50 shadow-lg">
@@ -111,45 +87,8 @@ const OfflineBanner = () => {
     );
   }
 
+  // لا تعرض شيء
   return null;
-};
-
-/**
- * شريط مصغر للحالة (للعرض في أسفل الشاشة)
- */
-export const OfflineStatusBadge = () => {
-  const { t } = useTranslation();
-  const { isOnline, syncStatus } = useOffline();
-
-  return (
-    <div className={`
-      fixed bottom-4 right-4 px-3 py-2 rounded-full shadow-lg text-sm font-medium
-      flex items-center gap-2 z-40 transition-all duration-300
-      ${isOnline ? 'bg-green-500 text-white' : 'bg-amber-500 text-white'}
-    `}>
-      {isOnline ? (
-        <>
-          <CheckCircle className="h-4 w-4" />
-          <span>{t('متصل')}</span>
-          {syncStatus.pendingOrders > 0 && (
-            <span className="bg-white text-green-600 px-2 py-0.5 rounded-full text-xs">
-              {syncStatus.pendingOrders}
-            </span>
-          )}
-        </>
-      ) : (
-        <>
-          <WifiOff className="h-4 w-4 animate-pulse" />
-          <span>{t('غير متصل')}</span>
-          {syncStatus.pendingOrders > 0 && (
-            <span className="bg-white text-amber-600 px-2 py-0.5 rounded-full text-xs">
-              {syncStatus.pendingOrders}
-            </span>
-          )}
-        </>
-      )}
-    </div>
-  );
 };
 
 export default OfflineBanner;
