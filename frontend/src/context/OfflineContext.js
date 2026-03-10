@@ -96,19 +96,21 @@ export const OfflineProvider = ({ children }) => {
                                result.results.customers.synced + 
                                (result.results.expenses?.synced || 0);
             
+            // تحديث الحالة فوراً - المزامنة اكتملت
+            setSyncStatus({
+              isSyncing: false,
+              pendingOrders: 0,
+              pendingItems: 0,
+              lastSync: new Date().toISOString(),
+              syncProgress: null,
+              syncCompleted: true
+            });
+            
             if (totalSynced > 0) {
               toast.success(`✅ تم رفع ${totalSynced} عنصر بنجاح!`, {
-                duration: 5000
+                duration: 3000
               });
             }
-            
-            // تحديث الحالة بعد المزامنة
-            setSyncStatus(prev => ({
-              ...prev,
-              isSyncing: false,
-              syncCompleted: true,
-              pendingOrders: 0
-            }));
           } else {
             setSyncStatus(prev => ({ ...prev, isSyncing: false }));
           }
@@ -118,19 +120,17 @@ export const OfflineProvider = ({ children }) => {
           setSyncStatus(prev => ({ ...prev, isSyncing: false }));
         }
         
-        // إعادة تعيين بعد 5 ثواني للسماح بمزامنة جديدة
+        // إعادة تعيين بعد 3 ثواني للسماح بمزامنة جديدة
         setTimeout(() => {
           autoSyncTriggered.current = false;
-        }, 5000);
-        
-        await updateSyncStatus();
+        }, 3000);
       }
     };
     
     // تأخير قصير قبل التحقق
     const timer = setTimeout(checkAndSync, 1000);
     return () => clearTimeout(timer);
-  }, [isOnline, updateSyncStatus]);
+  }, [isOnline]);
 
   // إعادة تعيين العلم عند قطع الاتصال
   useEffect(() => {
