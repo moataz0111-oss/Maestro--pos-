@@ -3063,12 +3063,48 @@ export default function Settings() {
                         <div className="grid grid-cols-3 gap-4">
                           <div>
                             <Label className="text-foreground">{t('الأيقونة')}</Label>
-                            <Input
+                            <Select
                               value={categoryForm.icon}
-                              onChange={(e) => setCategoryForm({ ...categoryForm, icon: e.target.value })}
-                              placeholder="☕"
-                              className="mt-1"
-                            />
+                              onValueChange={(value) => setCategoryForm({ ...categoryForm, icon: value })}
+                            >
+                              <SelectTrigger className="mt-1">
+                                <SelectValue placeholder={t('اختر أيقونة')} />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="☕">{t('قهوة')} ☕</SelectItem>
+                                <SelectItem value="🥤">{t('عصائر')} 🥤</SelectItem>
+                                <SelectItem value="🍹">{t('كوكتيل')} 🍹</SelectItem>
+                                <SelectItem value="🧊">{t('مشروبات باردة')} 🧊</SelectItem>
+                                <SelectItem value="🫖">{t('شاي')} 🫖</SelectItem>
+                                <SelectItem value="🍦">{t('آيس كريم')} 🍦</SelectItem>
+                                <SelectItem value="🍕">{t('بيتزا')} 🍕</SelectItem>
+                                <SelectItem value="🍔">{t('برغر')} 🍔</SelectItem>
+                                <SelectItem value="🍟">{t('بطاطس')} 🍟</SelectItem>
+                                <SelectItem value="🌯">{t('شاورما')} 🌯</SelectItem>
+                                <SelectItem value="🥙">{t('فلافل')} 🥙</SelectItem>
+                                <SelectItem value="🍗">{t('دجاج')} 🍗</SelectItem>
+                                <SelectItem value="🥩">{t('لحوم')} 🥩</SelectItem>
+                                <SelectItem value="🍖">{t('مشويات')} 🍖</SelectItem>
+                                <SelectItem value="🐟">{t('أسماك')} 🐟</SelectItem>
+                                <SelectItem value="🦐">{t('مأكولات بحرية')} 🦐</SelectItem>
+                                <SelectItem value="🍝">{t('معكرونة')} 🍝</SelectItem>
+                                <SelectItem value="🍚">{t('أرز')} 🍚</SelectItem>
+                                <SelectItem value="🥗">{t('سلطات')} 🥗</SelectItem>
+                                <SelectItem value="🍲">{t('شوربات')} 🍲</SelectItem>
+                                <SelectItem value="🥪">{t('ساندويتش')} 🥪</SelectItem>
+                                <SelectItem value="🧆">{t('مقبلات')} 🧆</SelectItem>
+                                <SelectItem value="🍰">{t('حلويات')} 🍰</SelectItem>
+                                <SelectItem value="🧁">{t('كيك')} 🧁</SelectItem>
+                                <SelectItem value="🥐">{t('معجنات')} 🥐</SelectItem>
+                                <SelectItem value="🍩">{t('دونات')} 🍩</SelectItem>
+                                <SelectItem value="🥞">{t('فطور')} 🥞</SelectItem>
+                                <SelectItem value="🍳">{t('بيض')} 🍳</SelectItem>
+                                <SelectItem value="🥘">{t('أطباق رئيسية')} 🥘</SelectItem>
+                                <SelectItem value="🍱">{t('وجبات')} 🍱</SelectItem>
+                                <SelectItem value="🥡">{t('سفري')} 🥡</SelectItem>
+                                <SelectItem value="📦">{t('أخرى')} 📦</SelectItem>
+                              </SelectContent>
+                            </Select>
                           </div>
                           <div>
                             <Label className="text-foreground">{t('اللون')}</Label>
