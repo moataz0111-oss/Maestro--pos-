@@ -262,19 +262,30 @@ export default function POS() {
             db.getAllItems(STORES.TABLES)
           ]);
           
-          if (localCategories.length > 0) setCategories(localCategories);
+          // ترتيب الفئات حسب الترتيب الأصلي (order أو sort_order)
+          if (localCategories.length > 0) {
+            const sortedCategories = [...localCategories].sort((a, b) => {
+              const orderA = a.order ?? a.sort_order ?? 999;
+              const orderB = b.order ?? b.sort_order ?? 999;
+              return orderA - orderB;
+            });
+            setCategories(sortedCategories);
+            setSelectedCategory(sortedCategories[0].id);
+          }
+          
           if (localProducts.length > 0) setProducts(localProducts);
           
           // فلترة الطاولات حسب الفرع المحدد
           if (localTables.length > 0) {
-            const filteredTables = activeBranchId 
-              ? localTables.filter(t => t.branch_id === activeBranchId || !t.branch_id)
-              : localTables;
+            let filteredTables = localTables;
+            if (activeBranchId) {
+              filteredTables = localTables.filter(t => 
+                t.branch_id === activeBranchId || 
+                t.branch === activeBranchId ||
+                !t.branch_id
+              );
+            }
             setTables(filteredTables);
-          }
-          
-          if (localCategories.length > 0) {
-            setSelectedCategory(localCategories[0].id);
           }
           
           // جلب الطلبات المحلية
