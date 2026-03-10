@@ -12,6 +12,10 @@ import { toast } from 'sonner';
 
 const OfflineContext = createContext(null);
 
+// مفتاح التخزين المحلي لتتبع حالة المزامنة
+const SYNC_DONE_KEY = 'maestro_sync_done';
+const SYNC_SESSION_KEY = 'maestro_sync_session';
+
 export const useOffline = () => {
   const context = useContext(OfflineContext);
   if (!context) {
@@ -21,17 +25,17 @@ export const useOffline = () => {
 };
 
 export const OfflineProvider = ({ children }) => {
-  const { isOnline, wasOffline } = useOnlineStatus();
+  const { isOnline } = useOnlineStatus();
   const [syncStatus, setSyncStatus] = useState({
     isSyncing: false,
     pendingOrders: 0,
     pendingItems: 0,
     lastSync: null,
     syncProgress: null,
-    syncCompleted: false // جديد: لإخفاء الشريط بعد المزامنة
+    syncCompleted: false
   });
   const [isInitialized, setIsInitialized] = useState(false);
-  const autoSyncTriggered = useRef(false); // لمنع المزامنة المتكررة
+  const syncInProgress = useRef(false);
 
   // تهيئة قاعدة البيانات المحلية
   useEffect(() => {
@@ -48,120 +52,154 @@ export const OfflineProvider = ({ children }) => {
     initDB();
   }, []);
 
-  // تحديث حالة المزامنة
+  // تحديث حالة المزامنة (بدون تشغيل المزامنة)
   const updateSyncStatus = useCallback(async () => {
     try {
       const status = await syncService.getSyncStatus();
       setSyncStatus(prev => ({
         ...prev,
-        ...status,
-        // إذا لم تعد هناك طلبات معلقة، أعتبر المزامنة مكتملة
-        syncCompleted: status.pendingOrders === 0 && prev.syncCompleted
+        pendingOrders: status.pendingOrders,
+        pendingItems: status.pendingItems,
+        lastSync: status.lastSync
       }));
+      return status;
     } catch (error) {
       console.error('Error updating sync status:', error);
+      return { pendingOrders: 0 };
     }
   }, []);
 
-  // تحديث دوري لحالة المزامنة
-  useEffect(() => {
-    updateSyncStatus();
-    const interval = setInterval(updateSyncStatus, 10000);
-    return () => clearInterval(interval);
-  }, [updateSyncStatus]);
+  // التحقق من وجود طلبات معلقة حقيقية (غير مزامنة)
+  const hasRealPendingOrders = useCallback(async () => {
+    try {
+      const status = await syncService.getSyncStatus();
+      return status.pendingOrders > 0;
+    } catch {
+      return false;
+    }
+  }, []);
 
-  // مزامنة عند وجود طلبات معلقة وأنت متصل (عند التحميل أو عند تغير الحالة)
+  // مزامنة مرة واحدة فقط
+  const performSync = useCallback(async () => {
+    // منع المزامنة المتكررة
+    if (syncInProgress.current) {
+      console.log('⏳ مزامنة قيد التنفيذ بالفعل...');
+      return;
+    }
+
+    // التحقق من أن المزامنة لم تتم في هذه الجلسة
+    const sessionId = sessionStorage.getItem(SYNC_SESSION_KEY);
+    const currentSession = Date.now().toString();
+    
+    if (!sessionId) {
+      sessionStorage.setItem(SYNC_SESSION_KEY, currentSession);
+    }
+
+    const token = localStorage.getItem('token');
+    if (!token || !isOnline) return;
+
+    // التحقق من وجود طلبات معلقة حقيقية
+    const hasPending = await hasRealPendingOrders();
+    if (!hasPending) {
+      setSyncStatus(prev => ({ ...prev, syncCompleted: true, pendingOrders: 0 }));
+      return;
+    }
+
+    // بدء المزامنة
+    syncInProgress.current = true;
+    setSyncStatus(prev => ({ ...prev, isSyncing: true }));
+
+    try {
+      console.log('🔄 بدء المزامنة...');
+      const result = await syncService.startSync(token);
+
+      if (result.success) {
+        const totalSynced = (result.results?.orders?.synced || 0) + 
+                          (result.results?.customers?.synced || 0) + 
+                          (result.results?.expenses?.synced || 0);
+
+        // تحديث الحالة - المزامنة اكتملت
+        setSyncStatus({
+          isSyncing: false,
+          pendingOrders: 0,
+          pendingItems: 0,
+          lastSync: new Date().toISOString(),
+          syncProgress: null,
+          syncCompleted: true
+        });
+
+        // حفظ أن المزامنة تمت
+        localStorage.setItem(SYNC_DONE_KEY, Date.now().toString());
+
+        if (totalSynced > 0) {
+          toast.success(`✅ تم رفع ${totalSynced} عنصر بنجاح!`, { duration: 3000 });
+        }
+
+        console.log('✅ المزامنة اكتملت بنجاح');
+      }
+    } catch (error) {
+      console.error('❌ خطأ في المزامنة:', error);
+      setSyncStatus(prev => ({ ...prev, isSyncing: false }));
+    } finally {
+      syncInProgress.current = false;
+    }
+  }, [isOnline, hasRealPendingOrders]);
+
+  // عند تحميل التطبيق أو تغير حالة الاتصال
   useEffect(() => {
     const checkAndSync = async () => {
-      if (!isOnline) return;
-      if (autoSyncTriggered.current) return;
+      if (!isOnline) {
+        // عند قطع الاتصال - إعادة تعيين حالة المزامنة
+        localStorage.removeItem(SYNC_DONE_KEY);
+        setSyncStatus(prev => ({ ...prev, syncCompleted: false }));
+        return;
+      }
+
+      // عند الاتصال - التحقق من الطلبات المعلقة
+      const hasPending = await hasRealPendingOrders();
       
-      const token = localStorage.getItem('token');
-      if (!token) return;
-      
-      // تحقق من وجود طلبات معلقة
-      const currentStatus = await syncService.getSyncStatus();
-      
-      if (currentStatus.pendingOrders > 0) {
-        console.log(`🔄 وجد ${currentStatus.pendingOrders} طلب معلق - بدء المزامنة...`);
-        autoSyncTriggered.current = true;
+      if (hasPending) {
+        // التحقق من أن المزامنة لم تتم بالفعل
+        const syncDone = localStorage.getItem(SYNC_DONE_KEY);
+        const fiveMinutesAgo = Date.now() - (5 * 60 * 1000);
         
-        setSyncStatus(prev => ({ ...prev, isSyncing: true }));
-        
-        try {
-          const result = await syncService.startSync(token);
-          
-          if (result.success && result.results) {
-            const totalSynced = result.results.orders.synced + 
-                               result.results.customers.synced + 
-                               (result.results.expenses?.synced || 0);
-            
-            // تحديث الحالة فوراً - المزامنة اكتملت
-            setSyncStatus({
-              isSyncing: false,
-              pendingOrders: 0,
-              pendingItems: 0,
-              lastSync: new Date().toISOString(),
-              syncProgress: null,
-              syncCompleted: true
-            });
-            
-            if (totalSynced > 0) {
-              toast.success(`✅ تم رفع ${totalSynced} عنصر بنجاح!`, {
-                duration: 3000
-              });
-            }
-          } else {
-            setSyncStatus(prev => ({ ...prev, isSyncing: false }));
-          }
-        } catch (error) {
-          console.error('Sync error:', error);
-          toast.error('❌ فشل في المزامنة');
-          setSyncStatus(prev => ({ ...prev, isSyncing: false }));
+        if (!syncDone || parseInt(syncDone) < fiveMinutesAgo) {
+          // انتظار قصير ثم المزامنة
+          setTimeout(() => performSync(), 1500);
+        } else {
+          // المزامنة تمت مؤخراً - إخفاء الشريط
+          setSyncStatus(prev => ({ ...prev, syncCompleted: true, pendingOrders: 0 }));
         }
-        
-        // إعادة تعيين بعد 3 ثواني للسماح بمزامنة جديدة
-        setTimeout(() => {
-          autoSyncTriggered.current = false;
-        }, 3000);
+      } else {
+        // لا توجد طلبات معلقة
+        setSyncStatus(prev => ({ ...prev, syncCompleted: true, pendingOrders: 0 }));
       }
     };
-    
-    // تأخير قصير قبل التحقق
-    const timer = setTimeout(checkAndSync, 1000);
-    return () => clearTimeout(timer);
-  }, [isOnline]);
 
-  // إعادة تعيين العلم عند قطع الاتصال
-  useEffect(() => {
-    if (!isOnline) {
-      autoSyncTriggered.current = false;
-      setSyncStatus(prev => ({ ...prev, syncCompleted: false }));
+    if (isInitialized) {
+      checkAndSync();
     }
-  }, [isOnline]);
+  }, [isOnline, isInitialized, hasRealPendingOrders, performSync]);
 
   // الاستماع لأحداث المزامنة
   useEffect(() => {
     const unsubscribe = syncService.addSyncListener((event, data) => {
       switch (event) {
         case 'start':
-          setSyncStatus(prev => ({ ...prev, isSyncing: true, syncProgress: null, syncCompleted: false }));
+          setSyncStatus(prev => ({ ...prev, isSyncing: true, syncProgress: null }));
           break;
         case 'complete':
-          // تأخير قصير قبل تحديث الحالة للتأكد من اكتمال IndexedDB
-          setTimeout(() => {
-            setSyncStatus(prev => ({ 
-              ...prev, 
-              isSyncing: false, 
-              syncProgress: null,
-              syncCompleted: true,
-              pendingOrders: 0
-            }));
-          }, 500);
+          setSyncStatus(prev => ({ 
+            ...prev, 
+            isSyncing: false, 
+            syncProgress: null,
+            syncCompleted: true,
+            pendingOrders: 0
+          }));
+          localStorage.setItem(SYNC_DONE_KEY, Date.now().toString());
           break;
         case 'error':
           setSyncStatus(prev => ({ ...prev, isSyncing: false, syncProgress: null }));
-          toast.error('❌ فشل في المزامنة: ' + data.error);
           break;
         case 'progress':
           setSyncStatus(prev => ({
@@ -181,33 +219,17 @@ export const OfflineProvider = ({ children }) => {
     return () => unsubscribe();
   }, []);
 
-  // بدء المزامنة يدوياً
+  // بدء المزامنة يدوياً (للاستخدام من الخارج إذا لزم الأمر)
   const startSync = useCallback(async () => {
-    const token = localStorage.getItem('token');
-    if (!token) {
-      toast.error('يرجى تسجيل الدخول أولاً');
-      return;
-    }
-
-    if (!isOnline) {
-      toast.error('لا يوجد اتصال بالإنترنت');
-      return;
-    }
-
-    const result = await syncService.startSync(token);
-    if (result.success) {
-      toast.success('✅ تمت المزامنة بنجاح!');
-      setSyncStatus(prev => ({ ...prev, syncCompleted: true, pendingOrders: 0 }));
-    }
-    updateSyncStatus();
-  }, [isOnline, updateSyncStatus]);
+    localStorage.removeItem(SYNC_DONE_KEY); // إعادة تعيين
+    await performSync();
+  }, [performSync]);
 
   // تهيئة البيانات المحلية
   const initializeData = useCallback(async () => {
     const token = localStorage.getItem('token');
     if (token && isOnline) {
       await offlineStorage.initializeOfflineData(token);
-      toast.success('✅ تم تحديث البيانات المحلية');
     }
   }, [isOnline]);
 
