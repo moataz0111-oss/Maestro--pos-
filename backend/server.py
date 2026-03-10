@@ -7976,6 +7976,17 @@ async def create_tenant(tenant: TenantCreate, background_tasks: BackgroundTasks,
     
     await db.branches.insert_one(branch_doc)
     
+    # إنشاء فئات افتراضية للمستأجر الجديد
+    default_categories = [
+        {"id": str(uuid.uuid4()), "name": "المشروبات", "name_en": "Beverages", "icon": "☕", "color": "#8B4513", "sort_order": 1, "tenant_id": tenant_id, "is_active": True},
+        {"id": str(uuid.uuid4()), "name": "الوجبات الرئيسية", "name_en": "Main Dishes", "icon": "🥘", "color": "#D4AF37", "sort_order": 2, "tenant_id": tenant_id, "is_active": True},
+        {"id": str(uuid.uuid4()), "name": "المقبلات", "name_en": "Appetizers", "icon": "🧆", "color": "#228B22", "sort_order": 3, "tenant_id": tenant_id, "is_active": True},
+        {"id": str(uuid.uuid4()), "name": "الحلويات", "name_en": "Desserts", "icon": "🍰", "color": "#FF69B4", "sort_order": 4, "tenant_id": tenant_id, "is_active": True},
+    ]
+    
+    for cat in default_categories:
+        await db.categories.insert_one(cat)
+    
     del tenant_doc["_id"]
     
     # إرسال بريد ترحيبي تلقائياً
