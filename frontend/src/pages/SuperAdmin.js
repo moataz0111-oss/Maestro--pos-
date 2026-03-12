@@ -2159,7 +2159,7 @@ export default function SuperAdmin() {
                         <div key={idx} className="flex items-center justify-between bg-gray-800/50 rounded-lg p-3">
                           <div className="flex items-center gap-3">
                             <span className="text-gray-400">{idx + 1}.</span>
-                            <span className="font-medium">{tenant.name}</span>
+                            <span className="font-medium">{lang === 'en' ? (tenant.name_en || tenant.name) : (tenant.name || tenant.name_en)}</span>
                           </div>
                           <div className="text-left">
                             <p className="font-bold text-green-400">
