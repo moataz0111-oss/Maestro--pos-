@@ -1824,6 +1824,7 @@ async def register(user: UserCreate):
         "email": user.email,
         "password": hash_password(user.password),
         "full_name": user.full_name,
+        "full_name_en": user.full_name_en,  # الاسم بالإنجليزية
         "role": user.role,
         "branch_id": user.branch_id,
         "permissions": user.permissions,
