@@ -18,6 +18,8 @@ import jwt
 from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Mail
 from PIL import Image
+import pillow_heif  # دعم صور HEIC/HEIF من iPhone
+pillow_heif.register_heif_opener()  # تسجيل دعم HEIC/HEIF
 import io
 import base64
 import aiofiles
