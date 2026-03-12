@@ -423,6 +423,32 @@ export default function Dashboard() {
         }
       }
       
+      // أولاً: جلب إعدادات المطعم (الاسم والشعار من الإعدادات)
+      try {
+        const settingsRes = await axios.get(`${API}/settings/restaurant`);
+        if (settingsRes.data) {
+          const restaurantSettings = settingsRes.data;
+          // دمج إعدادات المطعم مع بيانات الـ tenant
+          const tenantData = {
+            name: restaurantSettings.name || restaurantSettings.restaurant_name,
+            name_en: restaurantSettings.name_en || restaurantSettings.restaurant_name_en,
+            logo_url: restaurantSettings.logo_url
+          };
+          setTenantInfo(tenantData);
+          
+          // حفظ في IndexedDB للاستخدام offline
+          try {
+            await db.addItem(STORES.SETTINGS, { key: 'tenant', ...tenantData });
+          } catch (dbErr) {
+            console.log('Could not save tenant info to IndexedDB');
+          }
+          return;
+        }
+      } catch (settingsErr) {
+        console.log('Could not fetch restaurant settings, trying tenant info');
+      }
+      
+      // fallback: جلب معلومات الـ tenant الأساسية
       const res = await axios.get(`${API}/tenant/info`);
       setTenantInfo(res.data);
       
