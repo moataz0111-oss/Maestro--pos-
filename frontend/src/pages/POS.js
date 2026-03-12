@@ -1338,7 +1338,7 @@ export default function POS() {
                       <Package className="h-8 w-8 text-muted-foreground" />
                     </div>
                   )}
-                  <h3 className="font-medium text-sm text-foreground line-clamp-2">{product.name}</h3>
+                  <h3 className="font-medium text-sm text-foreground line-clamp-2">{getLocalizedName(product, lang)}</h3>
                   <p className="text-primary font-bold mt-1 tabular-nums">{formatPrice(product.price)}</p>
                 </CardContent>
               </Card>
