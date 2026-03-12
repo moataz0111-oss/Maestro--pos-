@@ -1943,10 +1943,12 @@ export default function Settings() {
                         
                         // تحديث معاينة الشعار بالـ URL الصحيح
                         if (logoUrl) {
-                          if (logoUrl.startsWith('/api')) {
+                          if (logoUrl.startsWith('/')) {
                             setRestaurantLogoPreview(`${API}${logoUrl.replace('/api', '')}`);
-                          } else {
+                          } else if (logoUrl.startsWith('http')) {
                             setRestaurantLogoPreview(logoUrl);
+                          } else {
+                            setRestaurantLogoPreview(`${API}/uploads/logos/${logoUrl}`);
                           }
                         }
                         
