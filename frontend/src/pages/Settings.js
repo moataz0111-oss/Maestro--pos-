@@ -414,7 +414,7 @@ export default function Settings() {
   
   // Form data
   const [userForm, setUserForm] = useState({
-    username: '', email: '', password: '', full_name: '', role: 'cashier', branch_id: '', permissions: []
+    username: '', email: '', password: '', full_name: '', full_name_en: '', role: 'cashier', branch_id: '', permissions: []
   });
   const [editUserForm, setEditUserForm] = useState(null);
   const [branchForm, setBranchForm] = useState({
