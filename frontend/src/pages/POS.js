@@ -1336,15 +1336,18 @@ export default function POS() {
                       className="w-full h-24 object-cover rounded-lg mb-2"
                       onError={(e) => {
                         e.target.style.display = 'none';
-                        if (e.target.nextSibling) e.target.nextSibling.style.display = 'flex';
+                        const fallback = e.target.nextElementSibling;
+                        if (fallback) fallback.style.display = 'flex';
                       }}
                     />
                   ) : null}
-                  {!product.image && (
-                    <div className="w-full h-24 bg-muted rounded-lg mb-2 flex items-center justify-center">
-                      <Package className="h-8 w-8 text-muted-foreground" />
-                    </div>
-                  )}
+                  {/* خلفية بديلة - تظهر إذا لا توجد صورة أو فشل تحميلها */}
+                  <div 
+                    className="w-full h-24 bg-muted rounded-lg mb-2 flex items-center justify-center"
+                    style={{ display: product.image ? 'none' : 'flex' }}
+                  >
+                    <Package className="h-8 w-8 text-muted-foreground" />
+                  </div>
                   <h3 className="font-medium text-sm text-foreground line-clamp-2">{getLocalizedName(product, lang)}</h3>
                   <p className="text-primary font-bold mt-1 tabular-nums">{formatPrice(product.price)}</p>
                 </CardContent>
