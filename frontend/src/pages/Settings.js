@@ -3537,9 +3537,12 @@ export default function Settings() {
                               </div>
                             )}
                             <div>
-                              <p className="font-medium text-foreground">{p.name}</p>
+                              <p className="font-medium text-foreground">{lang === 'en' ? (p.name_en || p.name) : p.name}</p>
                               <p className="text-sm text-muted-foreground">
-                                {categories.find(c => c.id === p.category_id)?.name || '-'}
+                                {(() => {
+                                  const cat = categories.find(c => c.id === p.category_id);
+                                  return cat ? (lang === 'en' ? (cat.name_en || cat.name) : cat.name) : '-';
+                                })()}
                               </p>
                             </div>
                           </div>
