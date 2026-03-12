@@ -1187,7 +1187,7 @@ export default function POS() {
                     <div className="p-2 w-full">
                       <span className="text-white font-bold text-sm drop-shadow-lg flex items-center gap-1">
                         <span>{cat.icon}</span>
-                        {t(cat.name)}
+                        {getLocalizedName(cat, lang)}
                       </span>
                     </div>
                   </div>
