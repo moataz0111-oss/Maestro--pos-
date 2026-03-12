@@ -3152,8 +3152,15 @@ export default function Settings() {
                               </div>
                             )}
                             <div>
-                              <p className="font-medium text-foreground">{cat.name}</p>
-                              {cat.name_en && <p className="text-xs text-muted-foreground">{cat.name_en}</p>}
+                              <p className="font-medium text-foreground">
+                                {lang === 'en' ? (cat.name_en || cat.name) : cat.name}
+                              </p>
+                              {lang === 'ar' && cat.name_en && (
+                                <p className="text-xs text-muted-foreground">{cat.name_en}</p>
+                              )}
+                              {lang === 'en' && cat.name && cat.name !== cat.name_en && (
+                                <p className="text-xs text-muted-foreground">{cat.name}</p>
+                              )}
                             </div>
                           </div>
                           <div className="absolute top-2 left-2 flex gap-1">
