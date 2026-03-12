@@ -3122,7 +3122,8 @@ async def get_payroll_summary_report(
     elif branch_id:
         emp_query["branch_id"] = branch_id
     
-    employees = await db.employees.find(emp_query, {"_id": 0}).to_list(500)
+    # استعلام محسّن مع limit معقول
+    employees = await db.employees.find(emp_query, {"_id": 0}).limit(200).to_list(200)
     
     if not employees:
         return {
