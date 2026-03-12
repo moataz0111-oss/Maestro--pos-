@@ -15,10 +15,11 @@
 3. إدارة المخزون والمشتريات
 4. إدارة الموظفين والرواتب
 5. التقارير والإحصائيات
+6. دعم متعدد اللغات (عربي/إنجليزي/كردي)
 
 ---
 
-## Completed Features (as of March 2026)
+## Completed Features (as of December 2025)
 
 ### Offline-First Implementation ✅
 - [x] دعم offline لـ POS, Orders, Tables, KitchenDisplay
@@ -33,11 +34,18 @@
 - [x] **تحميل مسبق لجميع الصفحات** للعمل offline
 - [x] **Service Worker V3** لتخزين جميع مسارات التطبيق
 
-### Push Notifications ✅ (NEW)
+### Push Notifications ✅
 - [x] تسجيل اشتراكات Push في Backend
 - [x] إرسال إشعارات عند مزامنة طلبات من أجهزة أخرى
 - [x] UI لتفعيل/إلغاء الإشعارات في صفحة الإعدادات
 - [x] إشعار تجريبي للاختبار
+
+### Multi-Language Support ✅ (Fixed Dec 2025)
+- [x] ترجمة أسماء الفئات (name_en) في POS والإعدادات
+- [x] ترجمة أسماء المنتجات (name_en) في POS والإعدادات
+- [x] ترجمة أيقونات الفئات في dropdown الإعدادات
+- [x] دالة getLocalizedName() للحصول على الاسم المترجم
+- [x] دعم 3 لغات: العربية، الإنجليزية، الكردية
 
 ### Authentication & Security ✅
 - [x] نظام تسجيل دخول آمن
@@ -49,18 +57,17 @@
 - [x] اختبار المزامنة على أجهزة متعددة (21/21 اختبار نجح)
 - [x] اختبار منع تكرار الطلبات
 - [x] اختبار مزامنة المصاريف والعملاء
+- [x] اختبار الترجمة (100% نجاح)
 
 ---
 
 ## Backlog / Remaining Tasks
 
-### P1 (High Priority)
-- [x] ~~اختبار المزامنة على أجهزة متعددة~~ ✅
-- [x] ~~إشعارات Push للمزامنة~~ ✅
+### P0 (Immediate - Next Session)
+- [ ] **نشر التطبيق (Deployment)** - المستخدم طلب النشر بعد إصلاح الترجمة
 
 ### P2 (Medium Priority)
 - [ ] إعادة هيكلة server.py (~15,000 سطر)
-- [ ] مراجعة شاملة للترجمات
 - [ ] تصدير التقارير إلى Excel
 
 ### P3 (Low Priority)
@@ -91,6 +98,9 @@
 - `/app/frontend/src/lib/syncService.js` - Sync logic
 - `/app/frontend/src/lib/pushService.js` - Push notifications
 - `/app/frontend/public/sw-offline.js` - Service Worker V3
+- `/app/frontend/src/pages/POS.js` - Point of Sale (with getLocalizedName)
+- `/app/frontend/src/pages/Settings.js` - Settings page
+- `/app/frontend/src/utils/translations.js` - All translations including icons
 
 ---
 
@@ -116,3 +126,4 @@
 - يجب زيارة التطبيق مرة واحدة وهو متصل لتثبيت Service Worker
 - قاعدة البيانات الإنتاجية تحتاج seed عبر `/api/utils/seed-data`
 - إشعارات Push تتطلب HTTPS في الإنتاج
+- الترجمة تعتمد على حقل `name_en` في الفئات والمنتجات
