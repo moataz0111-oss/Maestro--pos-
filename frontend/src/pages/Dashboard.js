@@ -1179,7 +1179,7 @@ export default function Dashboard() {
               <h1 className="text-xl font-bold font-cairo text-foreground">
                 {lang === 'en' ? (tenantInfo?.name_en || tenantInfo?.name || 'Maestro') : (tenantInfo?.name || tenantInfo?.name_en || 'Maestro')}
               </h1>
-              <p className="text-sm text-muted-foreground">{t('مرحباً')}، {lang === 'en' ? (user?.full_name_en || user?.full_name) : (user?.full_name || user?.full_name_en)}</p>
+              <p className="text-sm text-muted-foreground">{t('مرحباً')}، {lang === 'en' ? (user?.full_name_en || user?.full_name || user?.username || user?.email?.split('@')[0]) : (user?.full_name || user?.full_name_en || user?.username || user?.email?.split('@')[0])}</p>
             </div>
           </div>
 
