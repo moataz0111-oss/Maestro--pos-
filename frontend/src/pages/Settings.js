@@ -3361,7 +3361,7 @@ export default function Settings() {
                               </SelectTrigger>
                               <SelectContent>
                                 {categories.map(cat => (
-                                  <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
+                                  <SelectItem key={cat.id} value={cat.id}>{lang === 'en' ? (cat.name_en || cat.name) : cat.name}</SelectItem>
                                 ))}
                               </SelectContent>
                             </Select>
