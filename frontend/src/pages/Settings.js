@@ -1236,6 +1236,7 @@ export default function Settings() {
       username: u.username,
       email: u.email,
       full_name: u.full_name,
+      full_name_en: u.full_name_en || '',
       role: u.role,
       branch_id: u.branch_id || '',
       permissions: u.permissions || [],
