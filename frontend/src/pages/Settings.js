@@ -946,7 +946,7 @@ export default function Settings() {
       await axios.post(`${API}/users`, userForm);
       toast.success(t('تم الحفظ بنجاح'));
       setUserDialogOpen(false);
-      setUserForm({ username: '', email: '', password: '', full_name: '', role: 'cashier', branch_id: '', permissions: [] });
+      setUserForm({ username: '', email: '', password: '', full_name: '', full_name_en: '', role: 'cashier', branch_id: '', permissions: [] });
       fetchData();
     } catch (error) {
       toast.error(error.response?.data?.detail || t('فشل في حفظ البيانات'));
