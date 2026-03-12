@@ -44,8 +44,15 @@
 - [x] ترجمة أسماء الفئات (name_en) في POS والإعدادات
 - [x] ترجمة أسماء المنتجات (name_en) في POS والإعدادات
 - [x] ترجمة أيقونات الفئات في dropdown الإعدادات
+- [x] **ترجمة قائمة اختيار الأيقونات** (Coffee, Juices, Pizza, etc.)
 - [x] دالة getLocalizedName() للحصول على الاسم المترجم
 - [x] دعم 3 لغات: العربية، الإنجليزية، الكردية
+
+### Category Icons Fix ✅ (Fixed Dec 2025)
+- [x] الأيقونة تظهر دائماً في منتصف بطاقة الفئة
+- [x] الأيقونة تظهر في الشريط السفلي مع الاسم
+- [x] الأيقونة مرئية حتى مع وجود صورة للفئة
+- [x] أيقونة افتراضية 📦 للفئات بدون أيقونة
 
 ### Authentication & Security ✅
 - [x] نظام تسجيل دخول آمن
@@ -58,13 +65,14 @@
 - [x] اختبار منع تكرار الطلبات
 - [x] اختبار مزامنة المصاريف والعملاء
 - [x] اختبار الترجمة (100% نجاح)
+- [x] اختبار قائمة الأيقونات (100% نجاح)
 
 ---
 
 ## Backlog / Remaining Tasks
 
 ### P0 (Immediate - Next Session)
-- [ ] **نشر التطبيق (Deployment)** - المستخدم طلب النشر بعد إصلاح الترجمة
+- [ ] **نشر التطبيق (Deployment)** - المستخدم طلب النشر
 
 ### P2 (Medium Priority)
 - [ ] إعادة هيكلة server.py (~15,000 سطر)
@@ -98,9 +106,10 @@
 - `/app/frontend/src/lib/syncService.js` - Sync logic
 - `/app/frontend/src/lib/pushService.js` - Push notifications
 - `/app/frontend/public/sw-offline.js` - Service Worker V3
-- `/app/frontend/src/pages/POS.js` - Point of Sale (with getLocalizedName)
+- `/app/frontend/src/pages/POS.js` - Point of Sale (with getLocalizedName and icon display)
 - `/app/frontend/src/pages/Settings.js` - Settings page
 - `/app/frontend/src/utils/translations.js` - All translations including icons
+- `/app/frontend/src/utils/autoTranslate.js` - Translation map used by t() function
 
 ---
 
@@ -127,3 +136,4 @@
 - قاعدة البيانات الإنتاجية تحتاج seed عبر `/api/utils/seed-data`
 - إشعارات Push تتطلب HTTPS في الإنتاج
 - الترجمة تعتمد على حقل `name_en` في الفئات والمنتجات
+- قائمة الأيقونات تترجم عبر `autoTranslate.js`
