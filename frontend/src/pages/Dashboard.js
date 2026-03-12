@@ -1163,8 +1163,8 @@ export default function Dashboard() {
       <header className={`sticky ${isImpersonating ? 'top-[40px]' : 'top-0'} z-50 glass border-b border-border/50 px-6 py-4`}>
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-4">
-            {/* Logo - يعرض شعار العميل إذا وجد */}
-            <div className="w-12 h-12 bg-primary rounded-xl flex items-center justify-center overflow-hidden shadow-lg">
+            {/* Logo - يعرض شعار العميل إذا وجد - دائري */}
+            <div className="w-12 h-12 bg-primary rounded-full flex items-center justify-center overflow-hidden shadow-lg">
               {tenantInfo?.logo_url ? (
                 <img 
                   src={tenantInfo.logo_url.startsWith('/') ? `${API}${tenantInfo.logo_url.replace('/api', '')}` : tenantInfo.logo_url} 
@@ -1179,7 +1179,7 @@ export default function Dashboard() {
               <h1 className="text-xl font-bold font-cairo text-foreground">
                 {lang === 'en' ? (tenantInfo?.name_en || tenantInfo?.name || 'Maestro') : (tenantInfo?.name || tenantInfo?.name_en || 'Maestro')}
               </h1>
-              <p className="text-sm text-muted-foreground">{t('مرحباً')}، {user?.full_name}</p>
+              <p className="text-sm text-muted-foreground">{t('مرحباً')}، {lang === 'en' ? (user?.full_name_en || user?.full_name) : (user?.full_name || user?.full_name_en)}</p>
             </div>
           </div>
 
