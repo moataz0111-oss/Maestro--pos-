@@ -2390,7 +2390,7 @@ export default function SuperAdmin() {
                             {subscriptionsDashboard.expired_list.map((tenant) => (
                               <div key={tenant.id} className="bg-gray-800/50 rounded-lg p-3 flex items-center justify-between">
                                 <div>
-                                  <p className="font-medium">{tenant.name}</p>
+                                  <p className="font-medium">{lang === 'en' ? (tenant.name_en || tenant.name) : (tenant.name || tenant.name_en)}</p>
                                   <p className="text-xs text-gray-400">{tenant.owner_email}</p>
                                 </div>
                                 <div className="text-left">
