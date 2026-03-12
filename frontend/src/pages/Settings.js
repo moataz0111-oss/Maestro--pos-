@@ -617,10 +617,13 @@ export default function Settings() {
       setRestaurantSettings(res.data);
       if (res.data.logo_url) {
         const logoUrl = res.data.logo_url;
-        if (logoUrl.startsWith('/api')) {
+        // إذا كان الـ URL نسبي (يبدأ بـ /)، أضف الـ API base
+        if (logoUrl.startsWith('/')) {
           setRestaurantLogoPreview(`${API}${logoUrl.replace('/api', '')}`);
-        } else {
+        } else if (logoUrl.startsWith('http')) {
           setRestaurantLogoPreview(logoUrl);
+        } else {
+          setRestaurantLogoPreview(`${API}/uploads/logos/${logoUrl}`);
         }
       }
     } catch (error) {
