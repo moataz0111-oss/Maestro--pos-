@@ -2355,7 +2355,12 @@ async def create_product(product: ProductCreate, current_user: dict = Depends(ge
     return prod_doc
 
 @api_router.get("/products", response_model=List[ProductResponse])
-async def get_products(category_id: Optional[str] = None, current_user: dict = Depends(get_current_user)):
+async def get_products(
+    category_id: Optional[str] = None,
+    skip: int = Query(0, ge=0, description="عدد العناصر للتخطي"),
+    limit: int = Query(100, ge=1, le=500, description="الحد الأقصى للعناصر"),
+    current_user: dict = Depends(get_current_user)
+):
     # Super Admin يرى المنتجات الخاصة به (tenant_id الخاص به)
     if current_user.get("role") == UserRole.SUPER_ADMIN:
         owner_tenant_id = current_user.get("tenant_id") or "default"
@@ -2364,7 +2369,7 @@ async def get_products(category_id: Optional[str] = None, current_user: dict = D
         query = build_tenant_query(current_user)  # فلترة حسب tenant_id
     if category_id:
         query["category_id"] = category_id
-    products = await db.products.find(query, {"_id": 0}).to_list(1000)
+    products = await db.products.find(query, {"_id": 0}).skip(skip).limit(limit).to_list(limit)
     # Calculate profit for each product
     for p in products:
         p["profit"] = p.get("price", 0) - p.get("cost", 0) - p.get("operating_cost", 0)
