@@ -2545,6 +2545,17 @@ export default function Settings() {
                                   value={editUserForm.full_name}
                                   onChange={(e) => setEditUserForm({ ...editUserForm, full_name: e.target.value })}
                                   className="bg-background border-input"
+                                  placeholder={t('الاسم بالعربي')}
+                                />
+                              </div>
+                              <div>
+                                <Label className="text-foreground">{t('الاسم بالإنجليزي')}</Label>
+                                <Input
+                                  value={editUserForm.full_name_en || ''}
+                                  onChange={(e) => setEditUserForm({ ...editUserForm, full_name_en: e.target.value })}
+                                  className="bg-background border-input"
+                                  placeholder="English Name"
+                                  dir="ltr"
                                 />
                               </div>
                             </div>
