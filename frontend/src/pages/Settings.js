@@ -1286,6 +1286,7 @@ export default function Settings() {
         username: editUserForm.username,
         email: editUserForm.email,
         full_name: editUserForm.full_name,
+        full_name_en: editUserForm.full_name_en,
         role: editUserForm.role,
         branch_id: editUserForm.branch_id || null,
         permissions: editUserForm.permissions,
