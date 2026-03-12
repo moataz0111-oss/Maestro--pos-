@@ -1177,7 +1177,7 @@ export default function Dashboard() {
             </div>
             <div>
               <h1 className="text-xl font-bold font-cairo text-foreground">
-                {tenantInfo?.name || tenantInfo?.name_en || 'Maestro'}
+                {lang === 'en' ? (tenantInfo?.name_en || tenantInfo?.name || 'Maestro') : (tenantInfo?.name || tenantInfo?.name_en || 'Maestro')}
               </h1>
               <p className="text-sm text-muted-foreground">{t('مرحباً')}، {user?.full_name}</p>
             </div>
