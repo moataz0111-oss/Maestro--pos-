@@ -1729,7 +1729,7 @@ export default function SuperAdmin() {
         <div className={`w-3 h-3 rounded-full ${tenant.is_active ? 'bg-green-500' : 'bg-red-500'}`} />
         <div>
           <div className="flex items-center gap-2">
-            <h3 className="font-bold">{tenant.name || tenant.slug || t('بدون اسم')}</h3>
+            <h3 className="font-bold">{lang === 'en' ? (tenant.name_en || tenant.name || tenant.slug || t('بدون اسم')) : (tenant.name || tenant.name_en || tenant.slug || t('بدون اسم'))}</h3>
             {isDemo && (
               <Badge className="bg-yellow-500/20 text-yellow-400 text-xs">
                 {t('تجريبي')}
