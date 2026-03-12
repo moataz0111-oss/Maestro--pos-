@@ -922,6 +922,7 @@ class UserCreate(BaseModel):
     email: EmailStr
     password: str
     full_name: str
+    full_name_en: Optional[str] = None  # الاسم بالإنجليزية
     role: str = UserRole.CASHIER
     branch_id: Optional[str] = None
     permissions: List[str] = []
@@ -937,6 +938,7 @@ class UserResponse(BaseModel):
     username: Optional[str] = ""
     email: str
     full_name: Optional[str] = ""
+    full_name_en: Optional[str] = None  # الاسم بالإنجليزية
     role: str
     branch_id: Optional[str] = None
     permissions: List[str] = []
@@ -948,6 +950,7 @@ class UserUpdate(BaseModel):
     username: Optional[str] = None
     email: Optional[EmailStr] = None
     full_name: Optional[str] = None
+    full_name_en: Optional[str] = None  # الاسم بالإنجليزية
     role: Optional[str] = None
     branch_id: Optional[str] = None
     permissions: Optional[List[str]] = None
