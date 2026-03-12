@@ -1324,24 +1324,22 @@ export default function POS() {
                 data-testid={`product-${product.id}`}
               >
                 <CardContent className="p-3">
-                  {product.image ? (
-                    <img
-                      src={product.image.startsWith('/') ? `${API}${product.image}` : product.image}
-                      alt={product.name}
-                      className="w-full h-24 object-cover rounded-lg mb-2"
-                      onError={(e) => {
-                        e.target.style.display = 'none';
-                        const fallback = e.target.nextElementSibling;
-                        if (fallback) fallback.style.display = 'flex';
-                      }}
-                    />
-                  ) : null}
-                  {/* خلفية بديلة - تظهر إذا لا توجد صورة أو فشل تحميلها */}
-                  <div 
-                    className="w-full h-24 bg-muted rounded-lg mb-2 flex items-center justify-center"
-                    style={{ display: product.image ? 'none' : 'flex' }}
-                  >
-                    <Package className="h-8 w-8 text-muted-foreground" />
+                  <div className="relative w-full h-24 rounded-lg mb-2 overflow-hidden">
+                    {/* خلفية بديلة - تظهر دائماً */}
+                    <div className="absolute inset-0 bg-muted flex items-center justify-center">
+                      <Package className="h-8 w-8 text-muted-foreground" />
+                    </div>
+                    {/* الصورة فوق الخلفية */}
+                    {product.image && (
+                      <img
+                        src={product.image.startsWith('/') ? `${API}${product.image}` : product.image}
+                        alt={product.name}
+                        className="absolute inset-0 w-full h-full object-cover"
+                        onError={(e) => {
+                          e.target.style.display = 'none';
+                        }}
+                      />
+                    )}
                   </div>
                   <h3 className="font-medium text-sm text-foreground line-clamp-2">{getLocalizedName(product, lang)}</h3>
                   <p className="text-primary font-bold mt-1 tabular-nums">{formatPrice(product.price)}</p>
