@@ -40,11 +40,13 @@
 - [x] UI لتفعيل/إلغاء الإشعارات في صفحة الإعدادات
 - [x] إشعار تجريبي للاختبار
 
-### Multi-Language Support ✅ (Fixed Dec 2025)
+### Multi-Language Support ✅ (Fully Fixed Dec 2025)
 - [x] ترجمة أسماء الفئات (name_en) في POS والإعدادات
 - [x] ترجمة أسماء المنتجات (name_en) في POS والإعدادات
 - [x] ترجمة أيقونات الفئات في dropdown الإعدادات
 - [x] **ترجمة قائمة اختيار الأيقونات** (Coffee, Juices, Pizza, etc.)
+- [x] **ترجمة سجلات المراقبة (Audit Logs)**
+- [x] **ترجمة أسماء العملاء** في Dashboard و SuperAdmin
 - [x] دالة getLocalizedName() للحصول على الاسم المترجم
 - [x] دعم 3 لغات: العربية، الإنجليزية، الكردية
 
@@ -53,6 +55,11 @@
 - [x] الأيقونة تظهر في الشريط السفلي مع الاسم
 - [x] الأيقونة مرئية حتى مع وجود صورة للفئة
 - [x] أيقونة افتراضية 📦 للفئات بدون أيقونة
+
+### Image Upload Fix ✅ (Fixed Dec 2025)
+- [x] دعم صيغ HEIC/HEIF من iPhone
+- [x] إصلاح عرض شعار المطعم بعد الرفع
+- [x] إصلاح معالجة URLs الصور
 
 ### Authentication & Security ✅
 - [x] نظام تسجيل دخول آمن
@@ -66,13 +73,14 @@
 - [x] اختبار مزامنة المصاريف والعملاء
 - [x] اختبار الترجمة (100% نجاح)
 - [x] اختبار قائمة الأيقونات (100% نجاح)
+- [x] اختبار سجلات المراقبة والشعار وأسماء العملاء (100% نجاح)
 
 ---
 
 ## Backlog / Remaining Tasks
 
-### P0 (Immediate - Next Session)
-- [ ] **نشر التطبيق (Deployment)** - المستخدم طلب النشر
+### P0 (Immediate - Ready for Deployment)
+- [ ] **نشر التطبيق (Deployment)** - جاهز للنشر
 
 ### P2 (Medium Priority)
 - [ ] إعادة هيكلة server.py (~15,000 سطر)
@@ -97,6 +105,7 @@
 - MongoDB
 - JWT Authentication
 - Push Subscriptions
+- pillow-heif for HEIC support
 
 ### Key Files
 - `/app/backend/server.py` - Main backend
@@ -107,9 +116,12 @@
 - `/app/frontend/src/lib/pushService.js` - Push notifications
 - `/app/frontend/public/sw-offline.js` - Service Worker V3
 - `/app/frontend/src/pages/POS.js` - Point of Sale (with getLocalizedName and icon display)
-- `/app/frontend/src/pages/Settings.js` - Settings page
+- `/app/frontend/src/pages/Settings.js` - Settings page (logo handling fixed)
+- `/app/frontend/src/pages/Dashboard.js` - Dashboard (tenant name translation)
+- `/app/frontend/src/pages/SuperAdmin.js` - Super Admin (tenant name translation)
 - `/app/frontend/src/utils/translations.js` - All translations including icons
 - `/app/frontend/src/utils/autoTranslate.js` - Translation map used by t() function
+- `/app/frontend/src/components/ImageUploader.js` - Image upload component
 
 ---
 
@@ -128,6 +140,7 @@
 - `POST /api/sync/push/subscribe` - تسجيل اشتراك Push
 - `POST /api/sync/push/unsubscribe` - إلغاء اشتراك Push
 - `GET /api/sync/push/subscriptions` - قائمة الأجهزة المشتركة
+- `POST /api/upload/restaurant-logo` - رفع شعار المطعم (يدعم HEIC)
 
 ---
 
@@ -135,5 +148,6 @@
 - يجب زيارة التطبيق مرة واحدة وهو متصل لتثبيت Service Worker
 - قاعدة البيانات الإنتاجية تحتاج seed عبر `/api/utils/seed-data`
 - إشعارات Push تتطلب HTTPS في الإنتاج
-- الترجمة تعتمد على حقل `name_en` في الفئات والمنتجات
-- قائمة الأيقونات تترجم عبر `autoTranslate.js`
+- الترجمة تعتمد على حقل `name_en` في الفئات والمنتجات والعملاء
+- قائمة الأيقونات وسجلات المراقبة تترجم عبر `autoTranslate.js`
+- دعم صيغ HEIC/HEIF من iPhone عبر مكتبة `pillow-heif`
