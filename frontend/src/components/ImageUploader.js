@@ -192,9 +192,8 @@ export default function ImageUploader({
   const getFullImageUrl = (url) => {
     if (!url) return '';
     if (url.startsWith('http')) return url;
-    // إذا كان الرابط نسبي، نضيف له الـ base URL
-    const baseUrl = window.location.origin;
-    return `${baseUrl}${url}`;
+    // إذا كان الرابط نسبي، نضيف له الـ API base URL
+    return `${API}${url}`;
   };
 
   return (
