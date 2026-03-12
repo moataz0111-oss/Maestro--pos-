@@ -73,6 +73,13 @@ import {
 
 const API = API_URL;
 
+// دالة للحصول على الاسم المترجم حسب اللغة الحالية
+const getLocalizedName = (item, lang) => {
+  if (!item) return '';
+  if (lang === 'en' && item.name_en) return item.name_en;
+  return item.name || '';
+};
+
 // دالة لاستخراج رسالة الخطأ من استجابة API
 const getErrorMessage = (error, defaultMsg) => {
   const detail = error?.response?.data?.detail;
