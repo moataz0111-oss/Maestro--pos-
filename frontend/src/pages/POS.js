@@ -677,6 +677,7 @@ export default function POS() {
       return [...prev, {
         product_id: product.id,
         product_name: product.name,
+        product_name_en: product.name_en || product.name,
         price: product.price,
         quantity: 1,
         notes: ''
