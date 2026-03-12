@@ -108,7 +108,7 @@
   },
   
   "test_credentials": {
-    "api_url": "https://resto-sync-6.preview.emergentagent.com",
+    "api_url": "https://kitchen-mgmt-app.preview.emergentagent.com",
     "owner": {
       "email": "owner@maestroegp.com",
       "password": "owner123",

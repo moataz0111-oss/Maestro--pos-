@@ -1,136 +1,146 @@
 <analysis>**original_problem_statement:**
-The user initially requested fixes for permission-related bugs, specifically a recurring issue where a Net Profit statistics card on the dashboard failed to update correctly. The scope expanded to include a full-stack translation review, refactoring the main backend file (), and adding a logging feature for user impersonation.
+The user's initial high-level goal was to deploy a stable restaurant management application with a robust Offline-First capability. Throughout the session, the user acted as a QA tester, reporting a series of bugs and requesting enhancements after each fix.
 
-During the session, the user introduced a major new requirement: **transform the entire application into an Offline-First system**. The goal is for the application to remain fully functional during internet outages, with all data created offline (e.g., new orders) being stored locally and automatically synchronized with the server upon reconnection. The user expects this system to be 100% reliable and fast.
+The key issues addressed were:
+*   **Offline Data Persistence:** Ensuring the restaurant's logo, name, and sales statistics are visible when offline and the app doesn't crash on refresh.
+*   **Offline Functionality:** Making sure that creating orders and expenses offline correctly saves the data locally and updates relevant UI elements like dashboard statistics.
+*   **Sync Logic:** Overhauling the data synchronization mechanism to be fully automatic upon reconnection, to run only once per batch of offline changes, and for its UI banner to appear and disappear reliably without getting stuck.
+*   **Full Offline Accessibility:** Caching the entire application so that all pages are accessible offline, even if they weren't visited while online.
+*   **Kitchen Workflow:** Preventing orders from disappearing from the kitchen display screen after payment, ensuring they remain visible until kitchen staff manually mark them as completed.
+*   **Category Management:** Fixing a critical bug where new clients had no product categories, and enhancing the UI to use a dropdown with icons for category creation.
+*   **Translation:** The final reported issue is that product categories and the new icon dropdown do not switch from Arabic to English when the application's language is changed.
 
 **User's preferred language**: Arabic (العربية). The next agent MUST respond and communicate with the user in Arabic only.
 
 **what currently exists?**
-The application is a full-stack restaurant management system. The agent successfully fixed the initial P0 bug related to the Net Profit card. It also implemented the backend for impersonation logging and made significant progress on a comprehensive translation review, fixing many hardcoded strings.
+The application is a full-stack restaurant management system with a heavily tested and refined offline mode. The agent has implemented numerous bug fixes and enhancements based on user feedback.
 
-Crucially, the agent has laid the foundational infrastructure for the **Offline-First** mode. This includes:
-*   **Backend:** A new synchronization endpoint () has been created in  and integrated into .
-*   **Frontend Core Services:** New library files have been created to manage offline functionality:
-    *   : An IndexedDB wrapper for local database storage.
-    *   : A service to manage storing/retrieving data locally.
-    *   : Logic to handle the queue and sync data with the backend.
-    *   : A hook to detect internet connectivity status.
-    *   : A React context to provide offline status and services throughout the app.
-    *   : A UI component to inform the user of the current connection status.
-*   **Feature Implementation:**
-    *   Offline login is now supported via modifications to .
-    *   The  page has been refactored to work offline: it fetches data from IndexedDB and queues new orders for synchronization.
-    *   Work has begun on adding offline support to  and .
+Key completed features and fixes include:
+*   A fully automatic, sync-once process for offline data that triggers on reconnection and provides clear UI feedback.
+*   A robust service worker that pre-caches the entire application, making all pages available offline without prior visits.
+*   Push notifications to alert other devices when new orders are synced.
+*   Corrected kitchen display logic where paid orders (dine-in, takeaway, delivery) remain visible until manually completed by the kitchen.
+*   Fixed a bug preventing categories from being created for new tenants and added a dropdown with icons to the category creation form.
+*   Resolved multiple UI bugs related to offline data display, including table filtering by branch and correct category sorting.
 
 **Last working item**:
-*   **Last item agent was working**: Continuing the implementation of the Offline-First feature. The agent had just added offline support to the  page (fetching orders from local DB, queuing status updates) and was beginning to refactor the  page to work similarly.
+*   **Last item agent was working**: Fixing a bug where product/category names and the icon selection dropdown do not get translated when the application language is switched to English.
 *   **Status**: IN PROGRESS
-*   **Agent Testing Done**: Y (Manual screenshot testing was performed on the  page to confirm offline order creation and UI state).
-*   **Which testing method agent to use?**: Frontend testing agent. This is a complex, multi-page feature. The agent should be instructed to test the full offline workflow: disconnect the internet, create multiple orders on the POS, verify they appear on the Kitchen and Orders pages, update their status, reconnect the internet, and confirm that all data is successfully synchronized to the backend.
+*   **Agent Testing Done**: N
+*   **Which testing method agent to use?**: Frontend testing agent or screenshot tool. The test should involve switching the language to English and verifying that:
+    1.  Product categories in the POS screen display their English names.
+    2.  In Settings -> Categories, the list of categories displays English names.
+    3.  In the Add/Edit Category modal, the Icon dropdown shows the English names for the icons.
 *   **User Testing Done**: N
 
 **All Pending/In progress Issue list**:
-There are no outstanding bugs. The work is focused on a large feature implementation.
+*   **Issue 1: Translation is not working for categories, products, and the icon dropdown (P0)**
+    *   **Description**: When the app language is set to English, category names, product names, and the options in the new icon dropdown remain in Arabic instead of showing their English translations.
+    *   **Attempted fixes**: The agent correctly identified that the frontend was not using the  fields. A fix was started in  and the agent began adding translations for the icons in . The fix is incomplete.
+    *   **Next debug checklist**:
+        1.  **Complete Translations**: Finish adding the English translations for all icon names in .
+        2.  **Fix POS Display**: Modify  to display the correct name based on the current language for both categories and products (e.g., ).
+        3.  **Verify Settings Fix**: Ensure the display logic in  is correct for category lists and forms.
+    *   **Why fix this issue and what will be achieved with the fix?**: The application needs to be fully bilingual to meet user requirements.
+    *   **Status**: IN PROGRESS
+    *   **Is recurring issue?**: N
+    *   **Should Test frontend/backend/both after fix?**: Frontend
 
 **In progress Task List**:
-*   **Task 1: Complete Offline-First Feature Implementation (P0 - HIGHEST)**
-    *   **Description**: The user has approved a large-scale project to make the entire application functional without an internet connection. The foundation is built, and the POS page is complete. The remaining modules must be converted.
-    *   **Where to resume**: The agent has refactored  and . The next step is to complete the refactoring for  and then proceed to the other critical modules as detailed in the user discussion: Inventory, HR (for attendance), Tables, and Shifts.
-    *   **What will be achieved with this?**: The application will be reliable during internet outages, preventing work stoppage. Data will be queued locally and synced automatically when the connection is restored.
-    *   **Status**: IN PROGRESS
-    *   **Should Test frontend/backend/both after fix?**: Both. This requires extensive end-to-end testing.
-    *   **Blocked on something**: No.
+*   None.
 
 **Upcoming and Future Tasks**
 *   **Upcoming Tasks:**
-    *   **(P1) Offline Support for Remaining Modules**: After , implement offline functionality for , , , , and .
-    *   **(P1) Comprehensive Offline Testing**: Once all modules are converted, conduct a thorough test of the entire sync mechanism, especially for potential data conflicts and multi-device scenarios.
+    *   **(P0) Deploy the Application**: The user has repeatedly requested deployment. After the translation bug is fixed and verified, this is the highest priority task.
 *   **Future Tasks:**
-    *   **(P2) Complete  Refactoring**: Continue moving endpoint logic from the monolithic  into the modular route files.
-    *   **(P2) Comprehensive Translation Review**: Perform a final pass on the frontend to find and replace any remaining hardcoded Arabic strings.
-    *   **(P3) Export Reports to Excel**: A pending user request.
-    *   **(P3) UI for Impersonation Logs**: Create a settings page for admins to view the impersonation event logs.
+    *   **(P1) Complete  Refactoring**: The main backend file is a 15,000+ line monolith that needs to be broken down into smaller, more manageable modules to improve maintainability.
+    *   **(P2) Export Reports to Excel**: A pending feature request from the original problem statement.
+    *   **(P3) Comprehensive Translation Review**: A full audit of all text to ensure complete and accurate translation coverage.
 
 **Completed work in this session**
--   **Bug Fix (P0)**: Correctly implemented the Net Profit vs. Total Profit card logic on , ensuring both the label and value update based on user permissions.
--   **Impersonation Event Logging**: Implemented backend support to log all impersonation events to a new  collection.
--   **Partial Translation Review**: Fixed numerous hardcoded Arabic strings across several pages and updated the  dictionary.
--   **Offline-First Foundation**: Built the entire core infrastructure for the offline mode, including IndexedDB management, sync services, and global state context.
--   **Offline Login**: Implemented a secure mechanism to allow users to log in even without an internet connection.
--   **Offline POS**: Successfully converted the Point-of-Sale page to be fully functional offline.
+- **Offline & Sync Overhaul**:
+  - Implemented automatic, one-time data synchronization on reconnection, fixing numerous bugs related to the sync banner getting stuck or re-appearing incorrectly (, ).
+  - Added offline support for the Expenses page ().
+  - Corrected Dashboard stats to include unsynced local orders when offline ().
+- **Full Offline App Access**:
+  - Created a new Service Worker () and logic in  to pre-cache all application assets and lazy-loaded pages, making the entire app available offline without prior navigation.
+- **Push Notifications**:
+  - Implemented end-to-end push notifications (backend: , frontend: , ) to alert other devices when an order is synced.
+- **Critical Bug Fixes & Features**:
+  - **Kitchen Display**: Modified logic (, ) so that all order types remain on the kitchen screen after payment until manually completed.
+  - **Category Management**:
+    - Fixed a bug where new tenants had no categories by adding default category creation to the tenant sign-up flow ().
+    - Added a utility endpoint to fix existing tenants ().
+    - Replaced the icon text input with a user-friendly icon dropdown in the category settings form ().
+  - **POS UI**: Fixed offline filtering of tables by branch and corrected category sorting ().
+- **Testing**:
+  - Successfully validated multi-device offline synchronization using the testing agent ().
 
 **Earlier issues found/mentioned but not fixed**
--   The full refactoring of  is still incomplete.
--   The comprehensive translation review is still in progress.
+*   The full refactoring of the monolithic  file remains the most significant piece of technical debt.
+*   The Export to Excel feature is still pending.
 
 **Known issue recurrence from previous fork**
--   **Issue**: UI elements not updating based on permissions.
--   **Recurrence count**: 3+
--   **Status**: RESOLVED (The specific instance of this bug on the dashboard was fixed. The larger architectural change to Offline-First has taken precedence over further preventative refactoring).
+*   None.
 
 **Code Architecture**
 
 
 **Key Technical Concepts**
--   **Offline-First Architecture**: An application design that prioritizes local functionality. It uses browser storage as the primary data source and synchronizes with a remote server in the background.
--   **IndexedDB**: A low-level browser API for client-side storage of significant amounts of structured data, used here () to store orders, products, etc., when offline.
--   **Data Synchronization Queue**: A mechanism () that queues all database operations (create, update) performed offline and sends them to the backend in batches () when the connection is restored.
--   **Offline Authentication**: Caching encrypted user credentials in local storage after a successful online login, allowing subsequent logins on the same device without a network connection.
+*   **Service Worker Pre-caching**: The application now uses a service worker () to cache all application assets and routes on the first load, enabling a full offline experience.
+*   **Stateful Sync Logic**: The sync mechanism () has been made highly stateful, using  to track completion and prevent redundant syncs, providing the sync-once behavior requested by the user.
+*   **Web Push Notifications**: The implementation uses the Web Push API, a dedicated service worker (), and a backend library () to deliver notifications between devices.
+*   **Dynamic Translation (Partially Broken)**: The app is designed to switch between  (Arabic) and  (English) fields. This is the source of the current bug that needs to be fixed.
 
 **key DB schema**
--   **impersonation_logs**:  (New collection)
+*   **push_subscriptions**:  - New collection for storing user push notification subscriptions.
 
 **changes in tech stack**
--   No new third-party libraries were added. The architectural shift relies heavily on native browser APIs (, ).
+*   **pywebpush**: Added to the backend to enable sending push notifications.
 
 **All files of reference**
--   **New Offline Core Files**:
-    -   
-    -   
-    -   
-    -   
-    -   
-    -   
-    -   
--   **Modified Key Files**:
-    -    (Primary example of offline implementation)
-    -    (For offline login)
-    -    (To wrap the app in the )
-    -   
-    -   
+*    (Needs translation fix)
+*    (Needs translation fix)
+*    (Needs completion of icon translations)
+*    (Core of the sync logic)
+*    (UI for sync logic)
+*    (Contains logic for kitchen display and category creation)
+*    (The service worker for full offline caching)
 
 **Areas that need refactoring**:
--    still contains a large amount of business logic that should be moved to the respective route files.
+*    is over 15,000 lines and is the highest priority for refactoring to improve code health and maintainability.
 
 **key api endpoints**
--   ****: (New) Receives a batch of offline-created orders to save to the database.
--   ****: (New) Retrieves a history of all impersonation events.
--   : Used by the frontend to reliably check for server connectivity.
+*   : Registers a device for push notifications.
+*   : Utility endpoint to add default categories to existing tenants.
+*   : Modified to show orders based on , ignoring payment status.
+*   : Modified to automatically create default product categories for new tenants.
 
 **Critical Info for New Agent**
--   **P0 PRIORITY**: Your main and immediate goal is to continue the **Offline-First** implementation. The user has approved this large-scale project and has high expectations for its reliability.
--   **RESUME WORK**: The foundation is already built. You need to apply the offline pattern established in  and  to the remaining application modules (, , , etc.).
--   **OFFLINE LOGIN**: The system now supports offline login. Users must log in successfully *once* while online to cache their credentials for future offline use. This was a key user requirement.
--   **LIMITATIONS**: Remember the limitations discussed with the user. Real-time reports and cross-device synchronization will not work offline. The focus is on ensuring a single device can continue to operate seamlessly.
--   **TESTING**: This feature is complex and requires thorough testing. After converting each module, you should test the offline-to-online sync process rigorously. Use the frontend testing agent after completing a significant chunk of the work.
+*   **Fix the Translation Bug First**: This is the immediate blocker. The user will not accept deployment until categories, products, and UI elements translate correctly between Arabic and English.
+*   **Deployment is Next**: The user's ultimate goal for this session is to deploy the app. Once the translation bug is fixed and confirmed, your next action should be to initiate the deployment process.
+*   **Communicate in Arabic**: All interactions with the user must be in Arabic.
+*   **Be Cautious with Sync Logic**: The sync banner and its underlying logic in  have been a recurring pain point. Avoid changing this code unless absolutely necessary.
 
 **documents and test reports created in this job**
--   /app/memory/PRD.md (Updated with Offline-First requirements)
+*    (Updated throughout the session)
+*    (Successful multi-device sync test report)
 
 **Last 10 User Messages and any pending HUMAN messages**
-1.  **LATEST:** The user gave final approval to start building the complete offline system, emphasizing the need for speed, reliability, and 100% functionality with or without an internet connection.
-2.  The user asked for clarification on how offline login would work and how order history (before and during an outage) would be displayed. The agent explained the proposed solution, which was accepted.
-3.  The user sought a detailed, feature-by-feature explanation of what would and would not work in offline mode (e.g., POS, Reports, Inventory, HR, Customer Menu).
-4.  The user asked for a risk analysis of implementing an offline-first model versus staying online-only.
-5.  The user clarified their core need: a disaster recovery or emergency mode to ensure the restaurant does not stop working if the internet goes down for a few hours.
-6.  The user agreed with the agent's proposal for an Emergency Offline Mode and asked for a detailed explanation of how it would work.
-7.  The user provided their detailed requirements for an offline system: the entire system should work, data should sync automatically, it should support multiple devices, and the agent should start from scratch.
-8.  The user requested to deploy the application.
-9.  The user provided their desired task priority, deprioritizing the initial bug fix and prioritizing the translation review and  refactoring. (This was before the offline-first request).
-10. The user initially rejected the agent's plan to fix the P0 bug first.
+1.  **LATEST**: Reports that categories/products don't translate and the icon dropdown is only in Arabic. (IN PROGRESS)
+2.  Requests an icon dropdown for categories and reports categories are not appearing for new clients. (RESOLVED)
+3.  Reports the sync banner re-appears on every page load and wants it to sync once and disappear permanently. (RESOLVED)
+4.  Requests all order types remain on the kitchen screen after payment and asks to call deployment agent. (RESOLVED)
+5.  Reports multiple offline UI bugs: incorrect table filtering, wrong category order, and a stuck sync banner. (RESOLVED)
+6.  Reports the sync banner gets stuck during the sync process. (RESOLVED)
+7.  Requests all pages be available offline without visiting them first. (RESOLVED)
+8.  Approves adding Push Notifications for sync events. (RESOLVED)
+9.  Reports that synchronization is not automatic and the banner UI is buggy. (RESOLVED)
+10. Reports that creating orders/expenses offline does not update dashboard stats. (RESOLVED)
 
 **Project Health Check:**
-*   **Broken**: No features are broken, but the application is in a major transitional state. Functionality is inconsistent as some pages are offline-ready while others are not.
+*   **Broken**:
+    *   Language translation for product categories, products, and UI components in the POS and Settings pages.
 *   **Mocked**: None.
 
 **3rd Party Integrations**
@@ -138,16 +148,19 @@ There are no outstanding bugs. The work is focused on a large feature implementa
 *   : Icon library.
 *   : Toast notification library.
 *    / : For WebSocket integration.
+*   : For password hashing.
+*   : For sending web push notifications.
 
 **Testing status**
-*   **Testing agent used after significant changes**: NO (Agent has been doing manual screenshot testing, but the complexity now warrants the testing agent).
-*   **Troubleshoot agent used after agent stuck in loop**: NO
-*   **Test files created**: No new test files were created in this session.
-*   **Known regressions**: None.
+*   **Testing agent used after significant changes**: YES (for multi-device sync).
+*   **Troubleshoot agent used after agent stuck in loop**: NO.
+*   **Test files created**: None.
+*   **Known regressions**: The sync banner's behavior was a recurring regression, but the latest fix using  appears to have resolved it.
 
 **Credentials to test flow:**
 *   **Super Admin:** Go to , password: 
 *   **Demo User:**  / 
+*   **Client User:**  / 
 
 **What agent forgot to execute**
-- The agent has correctly prioritized the user's major new request for an offline system. The previously planned tasks (completing the  refactor and translation review) have been implicitly put on hold and should be addressed after the P0 offline feature is complete. The agent did not forget to execute anything; priorities were shifted by the user.</analysis>
+*   The agent did not complete the translation fix. The logic was only partially implemented in one file (), and the required translation strings were not fully added to . The fix was not applied to  at all.</analysis>
