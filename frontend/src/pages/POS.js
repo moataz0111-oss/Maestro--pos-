@@ -1164,23 +1164,26 @@ export default function POS() {
                 data-testid={`category-${cat.id}`}
               >
                 <div className="relative h-20">
-                  {/* خلفية الأيقونة - تظهر دائماً */}
-                  <div className="absolute inset-0 bg-gradient-to-br from-primary/20 to-primary/40 flex items-center justify-center">
-                    <span className="text-3xl">{cat.icon || '📦'}</span>
-                  </div>
-                  {/* عرض الصورة فوق الأيقونة إذا موجودة */}
+                  {/* خلفية بلون أساسي */}
+                  <div className="absolute inset-0 bg-gradient-to-br from-primary/20 to-primary/40"></div>
+                  {/* عرض الصورة إذا موجودة */}
                   {cat.image && (
                     <img 
                       src={cat.image.startsWith('/') ? `${API}${cat.image}` : cat.image} 
                       alt={cat.name}
                       className="absolute inset-0 w-full h-full object-cover"
                       onError={(e) => {
-                        // إخفاء الصورة عند الفشل - الأيقونة ستظهر تلقائياً
                         e.target.style.display = 'none';
                       }}
                     />
                   )}
-                  {/* طبقة الاسم والأيقونة */}
+                  {/* الأيقونة في المنتصف - تظهر دائماً فوق كل شيء */}
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <span className="text-3xl drop-shadow-lg" style={{ textShadow: '0 2px 4px rgba(0,0,0,0.5)' }}>
+                      {cat.icon || '📦'}
+                    </span>
+                  </div>
+                  {/* طبقة الاسم السفلية */}
                   <div className={`absolute inset-0 flex items-end ${
                     selectedCategory === cat.id 
                       ? 'bg-gradient-to-t from-primary/90 to-transparent' 
