@@ -5159,9 +5159,11 @@ async def get_refunds(
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
     status: Optional[str] = None,
+    skip: int = Query(0, ge=0, description="عدد العناصر للتخطي"),
+    limit: int = Query(100, ge=1, le=500, description="الحد الأقصى للعناصر"),
     current_user: dict = Depends(get_current_user)
 ):
-    """جلب قائمة الإرجاعات"""
+    """جلب قائمة الإرجاعات مع pagination"""
     query = build_tenant_query(current_user)
     
     if branch_id:
@@ -5179,7 +5181,7 @@ async def get_refunds(
         else:
             query["created_at"] = {"$lte": date_to + "T23:59:59"}
     
-    refunds = await db.refunds.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
+    refunds = await db.refunds.find(query, {"_id": 0}).sort("created_at", -1).skip(skip).limit(limit).to_list(limit)
     return refunds
 
 @api_router.get("/refunds/{refund_id}")
