@@ -2326,6 +2326,17 @@ export default function Settings() {
                                     onChange={(e) => setUserForm({ ...userForm, full_name: e.target.value })}
                                     required
                                     className="mt-1"
+                                    placeholder={t('الاسم بالعربي')}
+                                  />
+                                </div>
+                                <div>
+                                  <Label className="text-foreground">{t('الاسم بالإنجليزي')}</Label>
+                                  <Input
+                                    value={userForm.full_name_en}
+                                    onChange={(e) => setUserForm({ ...userForm, full_name_en: e.target.value })}
+                                    className="mt-1"
+                                    placeholder="English Name"
+                                    dir="ltr"
                                   />
                                 </div>
                               </div>
