@@ -7568,10 +7568,11 @@ async def upload_restaurant_logo(
     if current_user["role"] not in [UserRole.ADMIN, UserRole.SUPER_ADMIN]:
         raise HTTPException(status_code=403, detail="غير مصرح")
     
-    # التحقق من نوع الملف
-    allowed_types = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml']
-    if file.content_type not in allowed_types:
-        raise HTTPException(status_code=400, detail="نوع الملف غير مدعوم. يرجى استخدام JPG, PNG, GIF, WebP أو SVG")
+    # التحقق من نوع الملف - دعم HEIC من iPhone
+    allowed_types = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml', 'image/heic', 'image/heif']
+    content_type = file.content_type or ''
+    if not content_type.startswith('image/'):
+        raise HTTPException(status_code=400, detail="نوع الملف غير مدعوم. يرجى استخدام JPG, PNG, GIF, WebP, HEIC أو SVG")
     
     # معالجة وحفظ الصورة
     filename = await process_and_save_image(file, LOGOS_DIR, max_size=(512, 512), quality=90)
