@@ -2415,13 +2415,19 @@ async def create_inventory_item(item: InventoryItemCreate, current_user: dict = 
     return inv_doc
 
 @api_router.get("/inventory", response_model=List[InventoryResponse])
-async def get_inventory(branch_id: Optional[str] = None, item_type: Optional[str] = None, current_user: dict = Depends(get_current_user)):
+async def get_inventory(
+    branch_id: Optional[str] = None, 
+    item_type: Optional[str] = None,
+    skip: int = Query(0, ge=0, description="عدد العناصر للتخطي"),
+    limit: int = Query(100, ge=1, le=500, description="الحد الأقصى للعناصر"),
+    current_user: dict = Depends(get_current_user)
+):
     query = build_tenant_query(current_user)  # فلترة حسب tenant_id
     if branch_id:
         query["branch_id"] = branch_id
     if item_type:
         query["item_type"] = item_type
-    items = await db.inventory.find(query, {"_id": 0}).to_list(1000)
+    items = await db.inventory.find(query, {"_id": 0}).skip(skip).limit(limit).to_list(limit)
     return items
 
 @api_router.post("/inventory/transaction")
