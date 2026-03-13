@@ -1,166 +1,162 @@
 <analysis>**original_problem_statement:**
-The user's initial high-level goal was to deploy a stable restaurant management application with a robust Offline-First capability. Throughout the session, the user acted as a QA tester, reporting a series of bugs and requesting enhancements after each fix.
+The user's primary goal is to deploy a stable restaurant management application. The development process has been iterative, with the user functioning as a QA tester, providing feedback, reporting bugs, and requesting enhancements after each development cycle.
 
-The key issues addressed were:
-*   **Offline Data Persistence:** Ensuring the restaurant's logo, name, and sales statistics are visible when offline and the app doesn't crash on refresh.
-*   **Offline Functionality:** Making sure that creating orders and expenses offline correctly saves the data locally and updates relevant UI elements like dashboard statistics.
-*   **Sync Logic:** Overhauling the data synchronization mechanism to be fully automatic upon reconnection, to run only once per batch of offline changes, and for its UI banner to appear and disappear reliably without getting stuck.
-*   **Full Offline Accessibility:** Caching the entire application so that all pages are accessible offline, even if they weren't visited while online.
-*   **Kitchen Workflow:** Preventing orders from disappearing from the kitchen display screen after payment, ensuring they remain visible until kitchen staff manually mark them as completed.
-*   **Category Management:** Fixing a critical bug where new clients had no product categories, and enhancing the UI to use a dropdown with icons for category creation.
-*   **Translation:** The final reported issue is that product categories and the new icon dropdown do not switch from Arabic to English when the application's language is changed.
+Key functionalities and fixes addressed in the overall project include:
+*   **Offline-First Capability:** Robust offline data persistence for logos, names, and sales stats, creation of offline orders/expenses, and a fully automatic, one-time synchronization mechanism upon reconnection.
+*   **Full Offline App Access:** A service worker caches the entire application, making all pages accessible offline.
+*   **Kitchen & POS Workflow:** Paid orders now correctly remain on the kitchen display until manually completed. Critical bugs related to category creation for new clients have been fixed, and the UI for category management has been improved with an icon dropdown.
+*   **Translation and UI:** A major focus has been on ensuring the application is fully bilingual (Arabic/English), fixing numerous translation bugs across different components.
+*   **Performance:** Database queries were optimized based on feedback from the deployment agent.
+
+The most recent user reports concern visual bugs related to image and logo display, which are blocking the final deployment.
 
 **User's preferred language**: Arabic (العربية). The next agent MUST respond and communicate with the user in Arabic only.
 
 **what currently exists?**
-The application is a full-stack restaurant management system with a heavily tested and refined offline mode. The agent has implemented numerous bug fixes and enhancements based on user feedback.
-
-Key completed features and fixes include:
-*   A fully automatic, sync-once process for offline data that triggers on reconnection and provides clear UI feedback.
-*   A robust service worker that pre-caches the entire application, making all pages available offline without prior visits.
-*   Push notifications to alert other devices when new orders are synced.
-*   Corrected kitchen display logic where paid orders (dine-in, takeaway, delivery) remain visible until manually completed by the kitchen.
-*   Fixed a bug preventing categories from being created for new tenants and added a dropdown with icons to the category creation form.
-*   Resolved multiple UI bugs related to offline data display, including table filtering by branch and correct category sorting.
+The application is a full-stack restaurant management system using FastAPI, React, and MongoDB. It features a well-tested offline mode, push notifications, and a bilingual interface. The previous agent successfully resolved a series of complex translation issues, fixed UI display bugs (like making the logo circular and ensuring names translate correctly), and optimized several backend database queries for performance. The application is very close to being ready for deployment, pending the resolution of two final visual bugs.
 
 **Last working item**:
-*   **Last item agent was working**: Fixing a bug where product/category names and the icon selection dropdown do not get translated when the application language is switched to English.
+*   **Last item agent was working**: Fixing two display bugs reported by the user :
+    1.  The restaurant logo does not appear in the dashboard header.
+    2.  Images uploaded for product/category cards do not appear on the POS screen.
 *   **Status**: IN PROGRESS
 *   **Agent Testing Done**: N
-*   **Which testing method agent to use?**: Frontend testing agent or screenshot tool. The test should involve switching the language to English and verifying that:
-    1.  Product categories in the POS screen display their English names.
-    2.  In Settings -> Categories, the list of categories displays English names.
-    3.  In the Add/Edit Category modal, the Icon dropdown shows the English names for the icons.
+*   **Which testing method agent to use?**: Frontend testing agent or screenshot tool. The test must be performed by logging in as . The test should:
+    1.  Verify the restaurant's custom logo appears in the top-right corner of the dashboard (not a placeholder).
+    2.  Navigate to Settings -> Categories, upload an image for a category (e.g., برغر لحم).
+    3.  Go to the POS screen and confirm the uploaded image is now visible as the background for that category card.
 *   **User Testing Done**: N
 
 **All Pending/In progress Issue list**:
-*   **Issue 1: Translation is not working for categories, products, and the icon dropdown (P0)**
-    *   **Description**: When the app language is set to English, category names, product names, and the options in the new icon dropdown remain in Arabic instead of showing their English translations.
-    *   **Attempted fixes**: The agent correctly identified that the frontend was not using the  fields. A fix was started in  and the agent began adding translations for the icons in . The fix is incomplete.
+*   **Issue 1: Logo and Category Images fail to display for a specific user. (P0)**
+    *   **Description**: When logged in as , the restaurant logo in the dashboard header and images for categories in the POS screen do not display, even after being uploaded. The issue seems to stem from how image URLs are handled on the frontend and potentially how they are saved to the database for this specific user.
+    *   **Attempted fixes**:
+        *   **Logo:** The agent attempted to fix the URL construction in  to correctly prepend the backend API URL to the relative path of the logo.
+        *   **Category Images:** The agent identified that the image URL was not being correctly saved to the database upon upload. It was being saved as an empty string () instead of the actual URL. The agent added logging to  to investigate the backend's response during upload.
     *   **Next debug checklist**:
-        1.  **Complete Translations**: Finish adding the English translations for all icon names in .
-        2.  **Fix POS Display**: Modify  to display the correct name based on the current language for both categories and products (e.g., ).
-        3.  **Verify Settings Fix**: Ensure the display logic in  is correct for category lists and forms.
-    *   **Why fix this issue and what will be achieved with the fix?**: The application needs to be fully bilingual to meet user requirements.
+        1.  **Verify Logo URL**: In , inspect the  tag for the logo (around line 1196). Ensure the  attribute correctly combines the  base URL with the  path from the  state. The logic should handle cases where  is a full or relative path.
+        2.  **Debug ImageUploader**: Open the browser's developer console while testing. Upload a new category image in the Settings page. Check the console for the ImageUploader response log message added to . This will reveal what data the backend is returning. The component expects the URL to be in .
+        3.  **Trace State on Save**: In , put a  inside the  function to inspect the  object right before the  call. Confirm that  holds the correct new image URL from the uploader and has not been cleared or overwritten.
+    *   **Why fix this issue and what will be achieved with the fix?**: This is a critical usability bug that prevents users from customizing the visual appearance of their restaurant and products. It is a blocker for the user's deployment request.
     *   **Status**: IN PROGRESS
-    *   **Is recurring issue?**: N
-    *   **Should Test frontend/backend/both after fix?**: Frontend
+    *   **Is recurring issue?**: Y
+    *   **Should Test frontend/backend/both after fix?**: Both.
 
 **In progress Task List**:
 *   None.
 
 **Upcoming and Future Tasks**
 *   **Upcoming Tasks:**
-    *   **(P0) Deploy the Application**: The user has repeatedly requested deployment. After the translation bug is fixed and verified, this is the highest priority task.
+    *   **(P0) Deploy the Application**: The user has requested deployment multiple times. This is the highest priority task immediately after the image display bugs are resolved and verified.
 *   **Future Tasks:**
-    *   **(P1) Complete  Refactoring**: The main backend file is a 15,000+ line monolith that needs to be broken down into smaller, more manageable modules to improve maintainability.
+    *   **(P1) Refactor **: The main backend file is a 15,000+ line monolith that needs to be broken down into smaller, maintainable modules.
     *   **(P2) Export Reports to Excel**: A pending feature request from the original problem statement.
     *   **(P3) Comprehensive Translation Review**: A full audit of all text to ensure complete and accurate translation coverage.
 
 **Completed work in this session**
-- **Offline & Sync Overhaul**:
-  - Implemented automatic, one-time data synchronization on reconnection, fixing numerous bugs related to the sync banner getting stuck or re-appearing incorrectly (, ).
-  - Added offline support for the Expenses page ().
-  - Corrected Dashboard stats to include unsynced local orders when offline ().
-- **Full Offline App Access**:
-  - Created a new Service Worker () and logic in  to pre-cache all application assets and lazy-loaded pages, making the entire app available offline without prior navigation.
-- **Push Notifications**:
-  - Implemented end-to-end push notifications (backend: , frontend: , ) to alert other devices when an order is synced.
-- **Critical Bug Fixes & Features**:
-  - **Kitchen Display**: Modified logic (, ) so that all order types remain on the kitchen screen after payment until manually completed.
-  - **Category Management**:
-    - Fixed a bug where new tenants had no categories by adding default category creation to the tenant sign-up flow ().
-    - Added a utility endpoint to fix existing tenants ().
-    - Replaced the icon text input with a user-friendly icon dropdown in the category settings form ().
-  - **POS UI**: Fixed offline filtering of tables by branch and corrected category sorting ().
-- **Testing**:
-  - Successfully validated multi-device offline synchronization using the testing agent ().
+- **Translation Engine Overhaul**:
+  - Fixed translation for dynamic content (category/product names) in  and  by correctly implementing logic to use  fields.
+  - Fixed translation for static content (icon dropdown list, Audit Logs tab) by adding the missing key-value pairs to .
+- **UI and Display Fixes**:
+  - Corrected the restaurant name display logic in  to fetch from restaurant settings and respect the selected language.
+  - Corrected the client's name display in  to be translatable.
+  - Changed the restaurant logo's CSS from square to circular ().
+  - Fixed an issue where an uploaded category image would completely hide the icon in the POS.
+- **Backend and Data Integrity**:
+  - Added a  field to user database models and corresponding frontend forms to support user name translation.
+  - Added backend support for HEIC/HEIF image formats by integrating the  library.
+  - Optimized four key database queries (, , , ) with pagination to improve performance, as recommended by the deployment agent.
+  - Removed the System Admin user from all databases as requested by the user.
 
 **Earlier issues found/mentioned but not fixed**
-*   The full refactoring of the monolithic  file remains the most significant piece of technical debt.
+*   The large-scale refactoring of the monolithic  file is the most significant piece of technical debt.
 *   The Export to Excel feature is still pending.
 
 **Known issue recurrence from previous fork**
 *   None.
 
 **Code Architecture**
-
+full_name_enfull_name_en
 
 **Key Technical Concepts**
-*   **Service Worker Pre-caching**: The application now uses a service worker () to cache all application assets and routes on the first load, enabling a full offline experience.
-*   **Stateful Sync Logic**: The sync mechanism () has been made highly stateful, using  to track completion and prevent redundant syncs, providing the sync-once behavior requested by the user.
-*   **Web Push Notifications**: The implementation uses the Web Push API, a dedicated service worker (), and a backend library () to deliver notifications between devices.
-*   **Dynamic Translation (Partially Broken)**: The app is designed to switch between  (Arabic) and  (English) fields. This is the source of the current bug that needs to be fixed.
+*   **Dynamic Translation**: The app checks the current language and conditionally renders  (Arabic) or  (English) fields from the database. Static UI text is handled by a  function that uses .
+*   **Image Handling**: The backend uses  to process modern image formats (like HEIC from iPhones). The frontend  component uploads the file and should receive a relative URL back, which is then stored in the database.
+*   **URL Construction**: Frontend components must prepend the  base URL to relative paths (e.g., ) returned by the backend to construct a full, valid URL for displaying images.
 
 **key DB schema**
-*   **push_subscriptions**:  - New collection for storing user push notification subscriptions.
+*   **users**: Added .
+*   **tenants**: Contains a  field.
+*   **categories**: Contains an  field.
+*   **tenant_settings**: Contains , , and  fields.
 
 **changes in tech stack**
-*   **pywebpush**: Added to the backend to enable sending push notifications.
+*   **pillow-heif**: Added to backend dependencies for HEIC/HEIF image support.
 
 **All files of reference**
-*    (Needs translation fix)
-*    (Needs translation fix)
-*    (Needs completion of icon translations)
-*    (Core of the sync logic)
-*    (UI for sync logic)
-*    (Contains logic for kitchen display and category creation)
-*    (The service worker for full offline caching)
+*   
+*   
+*   
+*   
+*   
 
 **Areas that need refactoring**:
-*    is over 15,000 lines and is the highest priority for refactoring to improve code health and maintainability.
+*    is a 15,000+ line monolithic file that is a high-priority candidate for refactoring into smaller, feature-based modules.
 
 **key api endpoints**
-*   : Registers a device for push notifications.
-*   : Utility endpoint to add default categories to existing tenants.
-*   : Modified to show orders based on , ignoring payment status.
-*   : Modified to automatically create default product categories for new tenants.
+*   : Uploads category/product images.
+*   : Uploads the restaurant logo.
+*   : Updates a category, including its image URL.
+*   : Fetches detailed restaurant settings.
+*   : Fetches basic tenant information, including the .
 
 **Critical Info for New Agent**
-*   **Fix the Translation Bug First**: This is the immediate blocker. The user will not accept deployment until categories, products, and UI elements translate correctly between Arabic and English.
-*   **Deployment is Next**: The user's ultimate goal for this session is to deploy the app. Once the translation bug is fixed and confirmed, your next action should be to initiate the deployment process.
-*   **Communicate in Arabic**: All interactions with the user must be in Arabic.
-*   **Be Cautious with Sync Logic**: The sync banner and its underlying logic in  have been a recurring pain point. Avoid changing this code unless absolutely necessary.
+*   **User-Specific Bug**: The current image/logo bugs are reported by the user , who is using a different database (). You MUST test using this user's credentials to reproduce the bug. The  user may not exhibit the same issue.
+*   **Deployment is the Goal**: The user is very eager to deploy the application. Fixing the current visual bugs is the final blocker. Once fixed and verified, the next action should be to initiate deployment.
+*   **Communicate in Arabic**: It is mandatory to communicate with the user exclusively in Arabic.
 
 **documents and test reports created in this job**
-*    (Updated throughout the session)
-*    (Successful multi-device sync test report)
+*    (Updated)
+*   
+*   
+*   
 
 **Last 10 User Messages and any pending HUMAN messages**
-1.  **LATEST**: Reports that categories/products don't translate and the icon dropdown is only in Arabic. (IN PROGRESS)
-2.  Requests an icon dropdown for categories and reports categories are not appearing for new clients. (RESOLVED)
-3.  Reports the sync banner re-appears on every page load and wants it to sync once and disappear permanently. (RESOLVED)
-4.  Requests all order types remain on the kitchen screen after payment and asks to call deployment agent. (RESOLVED)
-5.  Reports multiple offline UI bugs: incorrect table filtering, wrong category order, and a stuck sync banner. (RESOLVED)
-6.  Reports the sync banner gets stuck during the sync process. (RESOLVED)
-7.  Requests all pages be available offline without visiting them first. (RESOLVED)
-8.  Approves adding Push Notifications for sync events. (RESOLVED)
-9.  Reports that synchronization is not automatic and the banner UI is buggy. (RESOLVED)
-10. Reports that creating orders/expenses offline does not update dashboard stats. (RESOLVED)
+1.  **LATEST**: Reports that after uploading images for categories, the images do not appear on the category cards in the POS. (IN PROGRESS)
+2.  Requests calling the deployment agent again. (DONE, led to optimizations)
+3.  Asks to perform the query optimizations suggested by the deployment agent. (DONE)
+4.  Asks to delete the System Admin user. (DONE)
+5.  Reports that the restaurant name displayed is incorrect (Demo System) and should be sourced from the restaurant's settings. (DONE)
+6.  Reports that their name (هاني الدجيلي) does not translate to English and that the restaurant logo should be circular. (DONE)
+7.  Reports (via video) three issues: Audit logs not translating, restaurant logo not updating correctly, and the client's name not translating. (DONE)
+8.  Reports that uploaded images for categories and products are not appearing in the settings preview or the POS. (IN PROGRESS - Part of the latest issue)
+9.  Reports that the icon dropdown list in settings remains in Arabic even when the language is switched to English. (DONE)
+10. Reports that the category icon disappears in the POS when an image is uploaded. (DONE)
 
 **Project Health Check:**
 *   **Broken**:
-    *   Language translation for product categories, products, and UI components in the POS and Settings pages.
+    *   Image display for categories in the POS for user .
+    *   Restaurant logo display in the dashboard header for user .
 *   **Mocked**: None.
 
 **3rd Party Integrations**
-*   : Charting library.
-*   : Icon library.
-*   : Toast notification library.
-*    / : For WebSocket integration.
-*   : For password hashing.
-*   : For sending web push notifications.
+*   
+*   
+*   
+*    / 
+*   
+*   
+*   
 
 **Testing status**
-*   **Testing agent used after significant changes**: YES (for multi-device sync).
-*   **Troubleshoot agent used after agent stuck in loop**: NO.
-*   **Test files created**: None.
-*   **Known regressions**: The sync banner's behavior was a recurring regression, but the latest fix using  appears to have resolved it.
+*   **Testing agent used after significant changes**: YES
+*   **Troubleshoot agent used after agent stuck in loop**: NO
+*   **Test files created**: None
+*   **Known regressions**: None.
 
 **Credentials to test flow:**
 *   **Super Admin:** Go to , password: 
 *   **Demo User:**  / 
-*   **Client User:**  / 
+*   **Client User (for current bug):**  / 
 
 **What agent forgot to execute**
-*   The agent did not complete the translation fix. The logic was only partially implemented in one file (), and the required translation strings were not fully added to . The fix was not applied to  at all.</analysis>
+*   The agent did not fully debug and verify the fix for the image/logo display issues. While potential causes were identified and logging was added, the complete resolution and testing cycle was not finished before the session ended.</analysis>

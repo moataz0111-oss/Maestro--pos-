@@ -82,7 +82,7 @@
   },
   
   "test_credentials": {
-    "api_url": "https://kitchen-mgmt-app.preview.emergentagent.com",
+    "api_url": "https://bilingual-pos-3.preview.emergentagent.com",
     "client_graffiti": {
       "email": "hanialdujaili@gmail.com",
       "password": "graffiti123",
