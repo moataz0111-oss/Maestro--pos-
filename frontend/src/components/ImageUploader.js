@@ -4,7 +4,7 @@ import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { toast } from 'sonner';
 import axios from 'axios';
-import { API_URL } from '../utils/api';
+import { API_URL, BACKEND_URL } from '../utils/api';
 import { Upload, X, Image as ImageIcon, Link, Loader2, Minimize2 } from 'lucide-react';
 
 const API = API_URL;
