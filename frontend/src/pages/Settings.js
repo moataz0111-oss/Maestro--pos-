@@ -3171,7 +3171,11 @@ export default function Settings() {
                         <div key={cat.id} className="relative p-4 bg-muted/30 rounded-lg border border-border/50">
                           <div className="flex items-center gap-3">
                             {cat.image ? (
-                              <img src={cat.image} alt={cat.name} className="w-12 h-12 rounded-lg object-cover" />
+                              <img 
+                                src={cat.image.startsWith('http') ? cat.image : `${BACKEND_URL}${cat.image}`} 
+                                alt={cat.name} 
+                                className="w-12 h-12 rounded-lg object-cover" 
+                              />
                             ) : (
                               <div 
                                 className="w-12 h-12 rounded-lg flex items-center justify-center text-xl"
