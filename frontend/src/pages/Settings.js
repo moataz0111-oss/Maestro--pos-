@@ -3563,7 +3563,11 @@ export default function Settings() {
                         <div key={p.id} className="flex items-center justify-between p-4 bg-muted/30 rounded-lg">
                           <div className="flex items-center gap-4">
                             {p.image ? (
-                              <img src={p.image} alt={p.name} className="w-12 h-12 rounded-lg object-cover" />
+                              <img 
+                                src={p.image.startsWith('http') ? p.image : `${BACKEND_URL}${p.image}`} 
+                                alt={p.name} 
+                                className="w-12 h-12 rounded-lg object-cover" 
+                              />
                             ) : (
                               <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center">
                                 <Package className="h-6 w-6 text-primary" />
