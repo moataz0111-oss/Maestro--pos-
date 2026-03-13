@@ -84,7 +84,8 @@
 ## Backlog / Remaining Tasks
 
 ### P0 (Immediate - Ready for Deployment)
-- [ ] **نشر التطبيق (Deployment)** - جاهز للنشر
+- [x] **إصلاح عرض الشعار والصور** - تم الإصلاح والاختبار (مارس 2026)
+- [ ] **نشر التطبيق (Deployment)** - جاهز للنشر (تم فحص الجاهزية ✅)
 
 ### P2 (Medium Priority)
 - [ ] إعادة هيكلة server.py (~15,000 سطر)
