@@ -1193,7 +1193,7 @@ export default function Dashboard() {
             <div className="w-12 h-12 bg-primary rounded-full flex items-center justify-center overflow-hidden shadow-lg">
               {tenantInfo?.logo_url ? (
                 <img 
-                  src={tenantInfo.logo_url.startsWith('http') ? tenantInfo.logo_url : `${API}${tenantInfo.logo_url.startsWith('/api') ? tenantInfo.logo_url.substring(4) : tenantInfo.logo_url}`} 
+                  src={tenantInfo.logo_url.startsWith('http') ? tenantInfo.logo_url : `${BACKEND_URL}${tenantInfo.logo_url}`} 
                   alt="Logo" 
                   className="w-full h-full object-cover"
                   onError={(e) => {
