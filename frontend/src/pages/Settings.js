@@ -1878,9 +1878,7 @@ export default function Settings() {
                             src={restaurantLogoPreview || 
                               (restaurantSettings.logo_url?.startsWith('http') 
                                 ? restaurantSettings.logo_url 
-                                : restaurantSettings.logo_url?.startsWith('/api') 
-                                  ? `${API}${restaurantSettings.logo_url.replace('/api', '')}` 
-                                  : `${API}/uploads/logos/${restaurantSettings.logo_url}`)} 
+                                : `${BACKEND_URL}${restaurantSettings.logo_url}`)} 
                             alt={t('شعار المطعم')} 
                             className="w-full h-full object-cover"
                             onError={(e) => {
