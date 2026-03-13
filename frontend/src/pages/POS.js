@@ -1171,7 +1171,7 @@ export default function POS() {
                   {/* عرض الصورة إذا موجودة */}
                   {cat.image && (
                     <img 
-                      src={cat.image.startsWith('/') ? `${API}${cat.image}` : cat.image} 
+                      src={cat.image.startsWith('http') ? cat.image : `${BACKEND_URL}${cat.image}`} 
                       alt={cat.name}
                       className="absolute inset-0 w-full h-full object-cover"
                       onError={(e) => {
