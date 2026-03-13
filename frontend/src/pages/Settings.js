@@ -5486,11 +5486,9 @@ export default function Settings() {
                         <div className="w-20 h-20 rounded-xl bg-gradient-to-br from-amber-400 to-yellow-500 flex items-center justify-center overflow-hidden border-2 border-border/50">
                           {invoiceSettings.invoice_logo ? (
                             <img 
-                              src={invoiceSettings.invoice_logo?.startsWith('/api') 
-                                ? `${API}${invoiceSettings.invoice_logo.replace('/api', '')}` 
-                                : invoiceSettings.invoice_logo?.startsWith('/uploads')
-                                  ? `${API}${invoiceSettings.invoice_logo}`
-                                  : invoiceSettings.invoice_logo}
+                              src={invoiceSettings.invoice_logo?.startsWith('http') 
+                                ? invoiceSettings.invoice_logo 
+                                : `${BACKEND_URL}${invoiceSettings.invoice_logo}`}
                               alt={t('شعار المطعم')} 
                               className="w-full h-full object-cover"
                               onError={(e) => {
