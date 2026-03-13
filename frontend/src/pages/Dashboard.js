@@ -1193,13 +1193,18 @@ export default function Dashboard() {
             <div className="w-12 h-12 bg-primary rounded-full flex items-center justify-center overflow-hidden shadow-lg">
               {tenantInfo?.logo_url ? (
                 <img 
-                  src={tenantInfo.logo_url.startsWith('/') ? `${API}${tenantInfo.logo_url.replace('/api', '')}` : tenantInfo.logo_url} 
+                  src={tenantInfo.logo_url.startsWith('http') ? tenantInfo.logo_url : `${API}${tenantInfo.logo_url.startsWith('/api') ? tenantInfo.logo_url.substring(4) : tenantInfo.logo_url}`} 
                   alt="Logo" 
                   className="w-full h-full object-cover"
+                  onError={(e) => {
+                    e.target.style.display = 'none';
+                    e.target.nextElementSibling && (e.target.nextElementSibling.style.display = 'flex');
+                  }}
                 />
-              ) : (
-                <span className="text-xl font-black text-primary-foreground font-cairo">M</span>
-              )}
+              ) : null}
+              <span className={`text-xl font-black text-primary-foreground font-cairo ${tenantInfo?.logo_url ? 'hidden' : 'flex'}`}>
+                {tenantInfo?.name?.charAt(0) || 'M'}
+              </span>
             </div>
             <div>
               <h1 className="text-xl font-bold font-cairo text-foreground">
