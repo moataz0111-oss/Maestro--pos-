@@ -159,9 +159,15 @@ export default function ImageUploader({
 
       toast.dismiss();
 
-      if (response.data.image_url) {
-        onChange(response.data.image_url);
+      // التحقق من جميع الحقول الممكنة للـ URL
+      const imageUrl = response.data.image_url || response.data.url || response.data.file_url;
+      if (imageUrl) {
+        console.log('Image uploaded successfully:', imageUrl);
+        onChange(imageUrl);
         toast.success('تم رفع الصورة بنجاح');
+      } else {
+        console.error('No image URL in response:', response.data);
+        toast.error('لم يتم الحصول على رابط الصورة');
       }
     } catch (error) {
       toast.dismiss();
