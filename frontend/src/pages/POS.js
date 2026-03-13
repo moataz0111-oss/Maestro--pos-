@@ -1342,11 +1342,13 @@ export default function POS() {
               >
                 <CardContent className="p-3">
                   <div className="relative w-full h-24 rounded-lg mb-2 overflow-hidden">
-                    {/* خلفية بديلة - تظهر دائماً */}
-                    <div className="absolute inset-0 bg-muted flex items-center justify-center">
-                      <Package className="h-8 w-8 text-muted-foreground" />
-                    </div>
-                    {/* الصورة فوق الخلفية */}
+                    {/* خلفية بديلة - تظهر فقط إذا لا توجد صورة */}
+                    {!product.image && (
+                      <div className="absolute inset-0 bg-muted flex items-center justify-center">
+                        <Package className="h-8 w-8 text-muted-foreground" />
+                      </div>
+                    )}
+                    {/* الصورة */}
                     {product.image && (
                       <img
                         src={product.image.startsWith('/') ? `${API}${product.image}` : product.image}
@@ -1354,8 +1356,20 @@ export default function POS() {
                         className="absolute inset-0 w-full h-full object-cover"
                         onError={(e) => {
                           e.target.style.display = 'none';
+                          // إظهار الخلفية البديلة عند فشل تحميل الصورة
+                          const parent = e.target.parentElement;
+                          if (parent) {
+                            const fallback = parent.querySelector('.product-fallback');
+                            if (fallback) fallback.style.display = 'flex';
+                          }
                         }}
                       />
+                    )}
+                    {/* خلفية بديلة عند فشل التحميل */}
+                    {product.image && (
+                      <div className="product-fallback absolute inset-0 bg-muted items-center justify-center" style={{ display: 'none' }}>
+                        <Package className="h-8 w-8 text-muted-foreground" />
+                      </div>
                     )}
                   </div>
                   <h3 className="font-medium text-sm text-foreground line-clamp-2">{getLocalizedName(product, lang)}</h3>
