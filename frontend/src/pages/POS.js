@@ -1351,7 +1351,7 @@ export default function POS() {
                     {/* الصورة */}
                     {product.image && (
                       <img
-                        src={product.image.startsWith('/') ? `${API}${product.image}` : product.image}
+                        src={product.image.startsWith('http') ? product.image : `${BACKEND_URL}${product.image}`}
                         alt={product.name}
                         className="absolute inset-0 w-full h-full object-cover"
                         onError={(e) => {
