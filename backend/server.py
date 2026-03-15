@@ -15850,6 +15850,221 @@ async def get_payment_transactions(
     return {"transactions": transactions}
 
 
+# ==================== LICENSE MANAGEMENT - نظام الترخيص ====================
+
+class LicenseResponse(BaseModel):
+    """نموذج استجابة الترخيص"""
+    is_active: bool
+    is_expired: bool
+    tenant_id: str
+    tenant_name: str
+    expiry_date: Optional[str] = None
+    features: List[str] = []
+    max_branches: int = 1
+    max_users: int = 5
+    plan: str = "basic"
+    message: str = ""
+
+@api_router.get("/license/verify")
+async def verify_license(current_user: dict = Depends(get_current_user)):
+    """
+    التحقق من ترخيص المستخدم/العميل
+    يستخدم من تطبيق سطح المكتب للتحقق من صلاحية الترخيص
+    """
+    try:
+        tenant_id = get_user_tenant_id(current_user)
+        
+        # إذا كان Super Admin
+        if current_user.get("role") == UserRole.SUPER_ADMIN:
+            return {
+                "is_active": True,
+                "is_expired": False,
+                "tenant_id": "system",
+                "tenant_name": "System Administrator",
+                "expiry_date": None,
+                "features": ["all"],
+                "max_branches": 999,
+                "max_users": 999,
+                "plan": "enterprise",
+                "message": "مرحباً بك كمدير النظام"
+            }
+        
+        # جلب بيانات العميل
+        tenant = await db.tenants.find_one({"id": tenant_id}, {"_id": 0})
+        
+        if not tenant:
+            # إذا لم يوجد tenant، استخدم المستخدم نفسه
+            return {
+                "is_active": current_user.get("is_active", True),
+                "is_expired": False,
+                "tenant_id": tenant_id or "default",
+                "tenant_name": current_user.get("full_name", ""),
+                "expiry_date": None,
+                "features": ["pos", "orders", "tables", "expenses"],
+                "max_branches": 1,
+                "max_users": 5,
+                "plan": "basic",
+                "message": "ترخيص أساسي"
+            }
+        
+        # التحقق من حالة الاشتراك
+        is_active = tenant.get("is_active", True)
+        expires_at = tenant.get("expires_at")
+        is_expired = False
+        
+        if expires_at:
+            try:
+                expiry_date = datetime.fromisoformat(expires_at.replace('Z', '+00:00'))
+                is_expired = datetime.now(timezone.utc) > expiry_date
+            except:
+                is_expired = False
+        
+        # جلب الميزات المفعّلة
+        enabled_features = tenant.get("enabled_features", {})
+        features = [key for key, value in enabled_features.items() if value]
+        
+        # إذا لم توجد ميزات، استخدم الميزات الافتراضية
+        if not features:
+            features = ["pos", "orders", "tables", "expenses", "inventory", "reports"]
+        
+        # تحديد الخطة
+        subscription_type = tenant.get("subscription_type", "basic")
+        plan_mapping = {
+            "trial": "trial",
+            "bronze": "basic",
+            "silver": "standard",
+            "gold": "premium",
+            "basic": "basic",
+            "premium": "premium",
+            "demo": "demo"
+        }
+        plan = plan_mapping.get(subscription_type, "basic")
+        
+        # رسالة حسب الحالة
+        if not is_active:
+            message = "الحساب معطل - يرجى التواصل مع الدعم"
+        elif is_expired:
+            message = "انتهى الاشتراك - يرجى التجديد"
+        else:
+            message = "الترخيص فعّال"
+        
+        return {
+            "is_active": is_active,
+            "is_expired": is_expired,
+            "tenant_id": tenant_id,
+            "tenant_name": tenant.get("name", tenant.get("name_ar", "")),
+            "expiry_date": expires_at,
+            "features": features,
+            "max_branches": tenant.get("max_branches", 1),
+            "max_users": tenant.get("max_users", 5),
+            "plan": plan,
+            "message": message
+        }
+        
+    except Exception as e:
+        logger.error(f"❌ License verification error: {e}")
+        raise HTTPException(status_code=500, detail=f"خطأ في التحقق من الترخيص: {str(e)}")
+
+@api_router.post("/license/activate")
+async def activate_license(
+    license_key: str = Body(..., embed=True),
+    device_id: str = Body(..., embed=True),
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    تفعيل الترخيص لجهاز جديد
+    """
+    tenant_id = get_user_tenant_id(current_user)
+    
+    # جلب بيانات العميل
+    tenant = await db.tenants.find_one({"id": tenant_id}, {"_id": 0})
+    
+    if not tenant:
+        raise HTTPException(status_code=404, detail="العميل غير موجود")
+    
+    # التحقق من الترخيص (في هذا التنفيذ البسيط، نسمح بأي مفتاح)
+    # يمكن تطوير هذا لاحقاً للتحقق من مفتاح معين
+    
+    # تسجيل الجهاز
+    device_record = {
+        "device_id": device_id,
+        "tenant_id": tenant_id,
+        "activated_at": datetime.now(timezone.utc).isoformat(),
+        "activated_by": current_user.get("id"),
+        "is_active": True
+    }
+    
+    # التحقق من عدم تجاوز عدد الأجهزة المسموح بها
+    existing_devices = await db.license_devices.count_documents({
+        "tenant_id": tenant_id,
+        "is_active": True
+    })
+    
+    max_devices = tenant.get("max_devices", 5)
+    
+    if existing_devices >= max_devices:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"تم الوصول للحد الأقصى من الأجهزة ({max_devices})"
+        )
+    
+    # إضافة الجهاز
+    await db.license_devices.update_one(
+        {"device_id": device_id, "tenant_id": tenant_id},
+        {"$set": device_record},
+        upsert=True
+    )
+    
+    return {
+        "success": True,
+        "message": "تم تفعيل الترخيص بنجاح",
+        "device_id": device_id,
+        "devices_used": existing_devices + 1,
+        "max_devices": max_devices
+    }
+
+@api_router.get("/license/devices")
+async def get_licensed_devices(current_user: dict = Depends(get_current_user)):
+    """
+    جلب قائمة الأجهزة المرخصة
+    """
+    tenant_id = get_user_tenant_id(current_user)
+    
+    devices = await db.license_devices.find(
+        {"tenant_id": tenant_id, "is_active": True},
+        {"_id": 0}
+    ).to_list(100)
+    
+    tenant = await db.tenants.find_one({"id": tenant_id}, {"_id": 0, "max_devices": 1})
+    max_devices = tenant.get("max_devices", 5) if tenant else 5
+    
+    return {
+        "devices": devices,
+        "count": len(devices),
+        "max_devices": max_devices
+    }
+
+@api_router.delete("/license/devices/{device_id}")
+async def deactivate_device(
+    device_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    إلغاء ترخيص جهاز
+    """
+    tenant_id = get_user_tenant_id(current_user)
+    
+    result = await db.license_devices.update_one(
+        {"device_id": device_id, "tenant_id": tenant_id},
+        {"$set": {"is_active": False, "deactivated_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    
+    if result.modified_count == 0:
+        raise HTTPException(status_code=404, detail="الجهاز غير موجود")
+    
+    return {"success": True, "message": "تم إلغاء ترخيص الجهاز"}
+
+
 # Include reports routes (refactored) - PRIORITY over old routes
 from routes.reports_routes import router as reports_router
 app.include_router(reports_router, prefix="/api")
