@@ -85,6 +85,8 @@
 
 ### P0 (Immediate - Ready for Deployment)
 - [x] **إصلاح عرض الشعار والصور** - تم الإصلاح والاختبار (مارس 2026)
+- [x] **إصلاح عرض المتغيرات في صفحة المخزون** - تم إصلاح `{transaction.supplier_name}` وغيرها (مارس 2026)
+- [x] **إضافة endpoint لجلب حركات المخزون** - `/inventory-transactions` (مارس 2026)
 - [ ] **نشر التطبيق (Deployment)** - جاهز للنشر (تم فحص الجاهزية ✅)
 
 ### P2 (Medium Priority)
