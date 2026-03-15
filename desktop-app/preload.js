@@ -37,6 +37,28 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('sync-complete', (event, result) => callback(result));
   },
   
+  // ============ الترخيص ============
+  license: {
+    verify: () => ipcRenderer.invoke('license-verify'),
+    check: () => ipcRenderer.invoke('license-check'),
+    getData: () => ipcRenderer.invoke('license-get-data'),
+    hasFeature: (featureName) => ipcRenderer.invoke('license-has-feature', featureName),
+    getFeatures: () => ipcRenderer.invoke('license-get-features')
+  },
+  onLicenseWarning: (callback) => {
+    ipcRenderer.on('license-warning', (event, warning) => callback(warning));
+  },
+  onFeaturesUpdate: (callback) => {
+    ipcRenderer.on('features-update', (event, features) => callback(features));
+  },
+  
+  // ============ المصادقة ============
+  auth: {
+    saveToken: (token) => ipcRenderer.invoke('save-auth-token', token),
+    getToken: () => ipcRenderer.invoke('get-auth-token'),
+    clearToken: () => ipcRenderer.invoke('clear-auth-token')
+  },
+  
   // ============ التنقل ============
   onNavigate: (callback) => {
     ipcRenderer.on('navigate', (event, route) => callback(route));
@@ -44,6 +66,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   
   // ============ معلومات التطبيق ============
   getAppVersion: () => ipcRenderer.invoke('get-app-version'),
+  getAppInfo: () => ipcRenderer.invoke('get-app-info'),
   
   // ============ الإشعارات ============
   showNotification: (title, body) => {
