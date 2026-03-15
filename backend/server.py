@@ -8165,6 +8165,9 @@ async def get_tenant_details(tenant_id: str, current_user: dict = Depends(verify
     users = await db.users.find({"tenant_id": tenant_id}, {"_id": 0, "password": 0}).to_list(100)
     branches = await db.branches.find({"tenant_id": tenant_id}, {"_id": 0}).to_list(50)
     
+    # جلب الأجهزة المرخصة
+    devices = await db.license_devices.find({"tenant_id": tenant_id}, {"_id": 0}).to_list(100)
+    
     # إحصائيات المبيعات
     today = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
     orders_today = await db.orders.count_documents({
@@ -8183,11 +8186,13 @@ async def get_tenant_details(tenant_id: str, current_user: dict = Depends(verify
         "tenant": tenant,
         "users": users,
         "branches": branches,
+        "devices": devices,
         "stats": {
             "users_count": len(users),
             "branches_count": len(branches),
             "orders_today": orders_today,
-            "total_sales": total_sales
+            "total_sales": total_sales,
+            "devices_count": len([d for d in devices if d.get("is_active")])
         }
     }
 
