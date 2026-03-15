@@ -4436,15 +4436,33 @@ async def create_order(order: OrderCreate, current_user: dict = Depends(get_curr
     
     tenant_id = get_user_tenant_id(current_user)
     
-    # البحث عن الوردية المفتوحة للكاشير
+    # البحث عن الوردية المفتوحة للفرع (وليس للكاشير فقط)
     shift_query = {
-        "cashier_id": current_user["id"],
         "status": "open"
     }
     if tenant_id:
         shift_query["tenant_id"] = tenant_id
+    if order.branch_id:
+        shift_query["branch_id"] = order.branch_id
     
     current_shift = await db.shifts.find_one(shift_query, {"_id": 0, "id": 1})
+    
+    # إذا لم توجد وردية مفتوحة، نُنشئ واحدة تلقائياً
+    if not current_shift:
+        new_shift = {
+            "id": str(uuid.uuid4()),
+            "tenant_id": tenant_id,
+            "branch_id": order.branch_id,
+            "cashier_id": current_user.get("id"),
+            "cashier_name": current_user.get("full_name", ""),
+            "opened_at": datetime.now(timezone.utc).isoformat(),
+            "status": "open",
+            "opening_balance": 0,
+            "created_at": datetime.now(timezone.utc).isoformat()
+        }
+        await db.shifts.insert_one(new_shift)
+        current_shift = new_shift
+    
     shift_id = current_shift["id"] if current_shift else None
     
     subtotal = sum(item.price * item.quantity for item in order.items)
