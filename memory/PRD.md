@@ -38,6 +38,12 @@
 - [x] **قاعدة بيانات SQLite** - للعمل offline
 - [x] **Printer Manager** - طباعة الفواتير وطلبات المطبخ
 - [x] **صفحات الإعداد** - setup.html, offline.html
+- [x] **قارئ الباركود** - دعم USB HID scanners (مارس 2026)
+- [x] **لوحة تحكم الأجهزة** - إدارة الأجهزة المرخصة من Super Admin (مارس 2026)
+  - `GET /api/super-admin/tenants/{id}/devices` - جلب أجهزة عميل
+  - `PUT /api/super-admin/tenants/{id}/max-devices` - تحديث الحد الأقصى
+  - `DELETE /api/super-admin/tenants/{id}/devices/{device_id}` - إلغاء جهاز
+- [x] **ZKTeco Integration** - placeholder لدعم أجهزة البصمة (يتطلب SDK)
 
 ### Offline-First Implementation ✅
 - [x] دعم offline لـ POS, Orders, Tables, KitchenDisplay
