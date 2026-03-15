@@ -145,8 +145,8 @@ export default function WarehouseManufacturing() {
         axios.get(`${API}/raw-materials-new`, { headers }).catch(() => ({ data: [] })),
         axios.get(`${API}/manufacturing-inventory`, { headers }).catch(() => ({ data: [] })),
         axios.get(`${API}/manufactured-products`, { headers }).catch(() => ({ data: [] })),
-        axios.get(`${API}/warehouse-transfers`, { headers }).catch(() => ({ data: [] })),
-        axios.get(`${API}/warehouse-transactions`, { headers }).catch(() => ({ data: [] })),
+        axios.get(`${API}/inventory-transfers`, { headers }).catch(() => ({ data: [] })),
+        axios.get(`${API}/inventory-transactions`, { headers }).catch(() => ({ data: [] })),
         axios.get(`${API}/inventory-stats`, { headers }).catch(() => ({ data: null })),
         axios.get(`${API}/branches`, { headers }).catch(() => ({ data: [] }))
       ]);
