@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>إعداد Maestro POS</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: 'Segoe UI', Tahoma, Arial, sans-serif;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      direction: rtl;
+    }
+    
+    .setup-container {
+      background: rgba(255, 255, 255, 0.95);
+      border-radius: 20px;
+      padding: 40px;
+      width: 100%;
+      max-width: 500px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    }
+    
+    .logo {
+      text-align: center;
+      margin-bottom: 30px;
+    }
+    
+    .logo h1 {
+      font-size: 32px;
+      color: #1a1a2e;
+      margin-bottom: 10px;
+    }
+    
+    .logo p {
+      color: #666;
+      font-size: 14px;
+    }
+    
+    .form-group {
+      margin-bottom: 20px;
+    }
+    
+    .form-group label {
+      display: block;
+      margin-bottom: 8px;
+      font-weight: 600;
+      color: #333;
+    }
+    
+    .form-group input, .form-group select {
+      width: 100%;
+      padding: 14px 16px;
+      border: 2px solid #e0e0e0;
+      border-radius: 10px;
+      font-size: 16px;
+      transition: all 0.3s ease;
+      direction: ltr;
+      text-align: left;
+    }
+    
+    .form-group input:focus, .form-group select:focus {
+      outline: none;
+      border-color: #f59e0b;
+      box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.1);
+    }
+    
+    .form-group .hint {
+      font-size: 12px;
+      color: #888;
+      margin-top: 5px;
+    }
+    
+    .btn {
+      width: 100%;
+      padding: 16px;
+      border: none;
+      border-radius: 10px;
+      font-size: 18px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+    
+    .btn-primary {
+      background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+      color: white;
+    }
+    
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 20px rgba(245, 158, 11, 0.3);
+    }
+    
+    .btn-primary:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none;
+    }
+    
+    .status {
+      margin-top: 20px;
+      padding: 15px;
+      border-radius: 10px;
+      text-align: center;
+      display: none;
+    }
+    
+    .status.success {
+      background: #d4edda;
+      color: #155724;
+      display: block;
+    }
+    
+    .status.error {
+      background: #f8d7da;
+      color: #721c24;
+      display: block;
+    }
+    
+    .status.loading {
+      background: #e7f3ff;
+      color: #004085;
+      display: block;
+    }
+    
+    .divider {
+      display: flex;
+      align-items: center;
+      margin: 25px 0;
+      color: #999;
+    }
+    
+    .divider::before, .divider::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: #e0e0e0;
+    }
+    
+    .divider span {
+      padding: 0 15px;
+      font-size: 14px;
+    }
+    
+    .printer-section {
+      background: #f8f9fa;
+      padding: 20px;
+      border-radius: 10px;
+      margin-top: 20px;
+    }
+    
+    .printer-section h3 {
+      margin-bottom: 15px;
+      color: #333;
+      font-size: 16px;
+    }
+  </style>
+</head>
+<body>
+  <div class="setup-container">
+    <div class="logo">
+      <h1>🍽️ Maestro POS</h1>
+      <p>برنامج نقطة البيع - الإعداد الأولي</p>
+    </div>
+    
+    <form id="setupForm">
+      <div class="form-group">
+        <label>رابط السيرفر</label>
+        <input 
+          type="url" 
+          id="serverUrl" 
+          placeholder="https://your-app.emergentagent.com"
+          required
+        >
+        <div class="hint">أدخل رابط التطبيق المنشور على الإنترنت</div>
+      </div>
+      
+      <div class="form-group">
+        <label>البريد الإلكتروني</label>
+        <input 
+          type="email" 
+          id="email" 
+          placeholder="user@example.com"
+          required
+        >
+      </div>
+      
+      <div class="form-group">
+        <label>كلمة المرور</label>
+        <input 
+          type="password" 
+          id="password" 
+          placeholder="••••••••"
+          required
+        >
+      </div>
+      
+      <button type="submit" class="btn btn-primary" id="connectBtn">
+        اتصال بالسيرفر
+      </button>
+      
+      <div id="status" class="status"></div>
+    </form>
+    
+    <div class="printer-section" id="printerSection" style="display: none;">
+      <h3>🖨️ إعدادات الطابعات</h3>
+      
+      <div class="form-group">
+        <label>طابعة الفواتير</label>
+        <select id="receiptPrinter">
+          <option value="">-- اختر الطابعة --</option>
+        </select>
+      </div>
+      
+      <div class="form-group">
+        <label>طابعة المطبخ (اختياري)</label>
+        <select id="kitchenPrinter">
+          <option value="">-- بدون طابعة مطبخ --</option>
+        </select>
+      </div>
+      
+      <button type="button" class="btn btn-primary" id="finishBtn">
+        إنهاء الإعداد
+      </button>
+    </div>
+  </div>
+
+  <script>
+    const form = document.getElementById('setupForm');
+    const statusDiv = document.getElementById('status');
+    const printerSection = document.getElementById('printerSection');
+    const connectBtn = document.getElementById('connectBtn');
+    
+    let authToken = null;
+    
+    // عند تقديم النموذج
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      const serverUrl = document.getElementById('serverUrl').value.trim();
+      const email = document.getElementById('email').value.trim();
+      const password = document.getElementById('password').value;
+      
+      connectBtn.disabled = true;
+      showStatus('جاري الاتصال...', 'loading');
+      
+      try {
+        // اختبار الاتصال وتسجيل الدخول
+        const response = await fetch(`${serverUrl}/api/auth/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password })
+        });
+        
+        const data = await response.json();
+        
+        if (!response.ok) {
+          throw new Error(data.detail || 'فشل تسجيل الدخول');
+        }
+        
+        authToken = data.token;
+        
+        // حفظ الإعدادات
+        await window.electronAPI.saveSettings({
+          serverUrl,
+          authToken,
+          userEmail: email,
+          userName: data.user?.full_name || email,
+          branchId: data.user?.branch_id || ''
+        });
+        
+        showStatus('✅ تم الاتصال بنجاح!', 'success');
+        
+        // إظهار قسم الطابعات
+        await loadPrinters();
+        printerSection.style.display = 'block';
+        form.style.display = 'none';
+        
+      } catch (error) {
+        showStatus(`❌ ${error.message}`, 'error');
+        connectBtn.disabled = false;
+      }
+    });
+    
+    // تحميل قائمة الطابعات
+    async function loadPrinters() {
+      try {
+        const printers = await window.electronAPI.getPrinters();
+        
+        const receiptSelect = document.getElementById('receiptPrinter');
+        const kitchenSelect = document.getElementById('kitchenPrinter');
+        
+        printers.forEach(printer => {
+          const option1 = new Option(printer.displayName || printer.name, printer.name);
+          const option2 = new Option(printer.displayName || printer.name, printer.name);
+          
+          if (printer.isDefault) {
+            option1.selected = true;
+          }
+          
+          receiptSelect.add(option1);
+          kitchenSelect.add(option2);
+        });
+        
+      } catch (error) {
+        console.error('خطأ في تحميل الطابعات:', error);
+      }
+    }
+    
+    // إنهاء الإعداد
+    document.getElementById('finishBtn').addEventListener('click', async () => {
+      const receiptPrinter = document.getElementById('receiptPrinter').value;
+      const kitchenPrinter = document.getElementById('kitchenPrinter').value;
+      
+      await window.electronAPI.saveSettings({
+        printerSettings: {
+          receiptPrinter,
+          kitchenPrinter,
+          autoPrint: true
+        }
+      });
+      
+      // إعادة تحميل النافذة لتحميل التطبيق الرئيسي
+      const settings = await window.electronAPI.getSettings();
+      window.location.href = settings.serverUrl;
+    });
+    
+    // إظهار حالة
+    function showStatus(message, type) {
+      statusDiv.textContent = message;
+      statusDiv.className = `status ${type}`;
+    }
+  </script>
+</body>
+</html>
