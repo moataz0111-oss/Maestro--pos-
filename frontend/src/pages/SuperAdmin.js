@@ -1762,6 +1762,15 @@ export default function SuperAdmin() {
           <p className="text-sm text-gray-400">{t('الطلبات')}</p>
           <p className="font-bold">{tenant.orders_count || 0}</p>
         </div>
+        <div className="text-center">
+          <p className="text-sm text-gray-400">{t('الأجهزة')}</p>
+          <p className="font-bold">
+            <span className={tenant.devices_count >= (tenant.max_devices || 5) ? 'text-red-400' : 'text-green-400'}>
+              {tenant.devices_count || 0}
+            </span>
+            <span className="text-gray-500">/{tenant.max_devices || 5}</span>
+          </p>
+        </div>
         
         {getSubscriptionBadge(tenant.subscription_type)}
         
