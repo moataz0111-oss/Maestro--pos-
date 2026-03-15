@@ -377,4 +377,7 @@ app.on('before-quit', () => {
   if (syncManager) {
     syncManager.stopAutoSync();
   }
+  if (licenseManager) {
+    licenseManager.stopPeriodicCheck();
+  }
 });
