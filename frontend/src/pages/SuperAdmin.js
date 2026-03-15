@@ -5208,6 +5208,86 @@ export default function SuperAdmin() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Dialog لعرض أجهزة عميل معين */}
+      <Dialog open={showDevicesModal} onOpenChange={setShowDevicesModal}>
+        <DialogContent className="bg-gray-800 border-gray-700 text-white max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-xl flex items-center gap-2">
+              <Monitor className="h-5 w-5 text-orange-400" />
+              {t('أجهزة العميل')}: {selectedTenantForDevices?.name || selectedTenantForDevices?.name_ar || ''}
+            </DialogTitle>
+            <DialogDescription className="text-gray-400">
+              {t('قائمة الأجهزة المرخصة لهذا العميل')}
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            {/* معلومات سريعة */}
+            <div className="flex items-center justify-between p-4 bg-gray-700/30 rounded-lg">
+              <span className="text-gray-400">{t('الأجهزة المستخدمة')}</span>
+              <span className="font-bold text-lg">
+                <span className={(selectedTenantForDevices?.devices_count || 0) >= (selectedTenantForDevices?.max_devices || 5) ? 'text-red-400' : 'text-green-400'}>
+                  {selectedTenantForDevices?.devices_count || 0}
+                </span>
+                <span className="text-gray-500"> / {selectedTenantForDevices?.max_devices || 5}</span>
+              </span>
+            </div>
+            
+            {/* قائمة الأجهزة */}
+            <div className="space-y-2 max-h-80 overflow-y-auto">
+              {allDevices
+                .filter(d => d.tenant_id === selectedTenantForDevices?.id)
+                .map((device, idx) => (
+                  <div key={idx} className="flex items-center justify-between p-4 bg-gray-700/50 rounded-lg">
+                    <div className="flex items-center gap-3">
+                      <div className={`w-3 h-3 rounded-full ${device.is_active ? 'bg-green-500' : 'bg-red-500'}`} />
+                      <div>
+                        <p className="font-medium">
+                          <code className="text-sm bg-gray-800 px-2 py-1 rounded">
+                            {device.device_id?.slice(0, 30)}...
+                          </code>
+                        </p>
+                        <p className="text-xs text-gray-400 mt-1">
+                          {t('تم التفعيل')}: {device.activated_at ? new Date(device.activated_at).toLocaleDateString('ar-IQ') : '-'}
+                        </p>
+                      </div>
+                    </div>
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      className="text-red-400 hover:text-red-300 hover:bg-red-500/20"
+                      onClick={() => {
+                        deactivateDevice(device.tenant_id, device.device_id);
+                        // إغلاق Modal إذا لم يتبق أجهزة
+                        const remainingDevices = allDevices.filter(
+                          d => d.tenant_id === selectedTenantForDevices?.id && d.device_id !== device.device_id
+                        );
+                        if (remainingDevices.length === 0) {
+                          setShowDevicesModal(false);
+                        }
+                      }}
+                    >
+                      <Trash2 className="h-4 w-4 ml-2" />
+                      {t('إلغاء')}
+                    </Button>
+                  </div>
+                ))
+              }
+              
+              {allDevices.filter(d => d.tenant_id === selectedTenantForDevices?.id).length === 0 && (
+                <p className="text-center text-gray-400 py-8">{t('لا توجد أجهزة مرخصة')}</p>
+              )}
+            </div>
+          </div>
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowDevicesModal(false)} className="border-gray-600">
+              {t('إغلاق')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
