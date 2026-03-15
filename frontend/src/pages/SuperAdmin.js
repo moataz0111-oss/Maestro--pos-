@@ -2020,6 +2020,37 @@ export default function SuperAdmin() {
           </Card>
         </div>
 
+        {/* تصفير النظام الرئيسي */}
+        <Card className="bg-gray-800/50 border-gray-700 border-red-500/30">
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center gap-2 text-red-400">
+              <AlertTriangle className="h-5 w-5" />
+              {t('تصفير النظام الرئيسي')}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-gray-400 mb-4">{t('حذف جميع البيانات التي لا تنتمي لأي عميل (بيانات النظام الرئيسي)')}</p>
+            <div className="flex gap-3">
+              <Button 
+                variant="outline" 
+                className="border-orange-500 text-orange-400 hover:bg-orange-500/20"
+                onClick={() => { setSelectedTenant({ id: 'main-system', name: 'النظام الرئيسي' }); setShowResetSalesConfirm(true); }}
+              >
+                <RotateCcw className="h-4 w-4 ml-2" />
+                {t('تصفير مبيعات النظام')}
+              </Button>
+              <Button 
+                variant="outline" 
+                className="border-purple-500 text-purple-400 hover:bg-purple-500/20"
+                onClick={() => { setSelectedTenant({ id: 'main-system', name: 'النظام الرئيسي' }); setShowResetInventoryConfirm(true); }}
+              >
+                <Package className="h-4 w-4 ml-2" />
+                {t('تصفير مخزون النظام')}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
         {/* Subscription Stats */}
         {stats?.subscription_stats && Object.keys(stats.subscription_stats).length > 0 && (
           <Card className="bg-gray-800/50 border-gray-700">
