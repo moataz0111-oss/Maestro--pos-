@@ -7955,6 +7955,14 @@ async def get_all_tenants(current_user: dict = Depends(verify_super_admin)):
         tenant["users_count"] = await db.users.count_documents({"tenant_id": tenant["id"]})
         tenant["branches_count"] = await db.branches.count_documents({"tenant_id": tenant["id"]})
         tenant["orders_count"] = await db.orders.count_documents({"tenant_id": tenant["id"]})
+        # إضافة عدد الأجهزة المرخصة
+        tenant["devices_count"] = await db.license_devices.count_documents({
+            "tenant_id": tenant["id"],
+            "is_active": True
+        })
+        # التأكد من وجود max_devices
+        if "max_devices" not in tenant:
+            tenant["max_devices"] = 5
     
     # إرجاع قائمة العملاء فقط (النظام الرئيسي هو المالك ولا يظهر كعميل)
     return tenants
