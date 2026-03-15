@@ -402,6 +402,13 @@ export default function SuperAdmin() {
     }
   }, [isAuthenticated]);
 
+  // Fetch devices data when tenants are loaded
+  useEffect(() => {
+    if (isAuthenticated && tenants.length > 0) {
+      fetchAllDevices();
+    }
+  }, [isAuthenticated, tenants.length]);
+
   // Auto-refresh notifications every 30 seconds
   useEffect(() => {
     let interval;
