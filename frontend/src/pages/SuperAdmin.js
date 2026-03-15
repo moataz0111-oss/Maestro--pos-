@@ -3303,6 +3303,111 @@ export default function SuperAdmin() {
                     </div>
                   </div>
                 )}
+
+                {/* إدارة الأجهزة المرخصة */}
+                <div className="space-y-4">
+                  <div className="flex justify-between items-center border-b border-gray-700 pb-2">
+                    <h3 className="font-bold text-orange-400 flex items-center gap-2">
+                      <Monitor className="h-4 w-4" />
+                      {t('الأجهزة المرخصة')}
+                    </h3>
+                    <span className="text-sm text-gray-400">
+                      {tenantDetails.devices?.length || 0} / {tenantDetails.tenant?.max_devices || 5}
+                    </span>
+                  </div>
+                  
+                  {/* تعديل الحد الأقصى للأجهزة */}
+                  <div className="flex items-center gap-4 p-3 bg-gray-700/30 rounded-lg">
+                    <span className="text-gray-400">{t('الحد الأقصى للأجهزة')}:</span>
+                    <div className="flex items-center gap-2">
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="h-8 w-8 p-0 border-gray-600"
+                        onClick={async () => {
+                          const currentMax = tenantDetails.tenant?.max_devices || 5;
+                          if (currentMax > 1) {
+                            try {
+                              await axios.put(`${API}/super-admin/tenants/${selectedTenant.id}/max-devices`, { max_devices: currentMax - 1 });
+                              setTenantDetails(prev => ({
+                                ...prev,
+                                tenant: { ...prev.tenant, max_devices: currentMax - 1 }
+                              }));
+                              toast.success(t('تم تحديث الحد الأقصى'));
+                            } catch (err) {
+                              toast.error(t('فشل التحديث'));
+                            }
+                          }
+                        }}
+                      >
+                        <Minus className="h-4 w-4" />
+                      </Button>
+                      <span className="font-bold text-lg w-8 text-center">{tenantDetails.tenant?.max_devices || 5}</span>
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="h-8 w-8 p-0 border-gray-600"
+                        onClick={async () => {
+                          const currentMax = tenantDetails.tenant?.max_devices || 5;
+                          try {
+                            await axios.put(`${API}/super-admin/tenants/${selectedTenant.id}/max-devices`, { max_devices: currentMax + 1 });
+                            setTenantDetails(prev => ({
+                              ...prev,
+                              tenant: { ...prev.tenant, max_devices: currentMax + 1 }
+                            }));
+                            toast.success(t('تم تحديث الحد الأقصى'));
+                          } catch (err) {
+                            toast.error(t('فشل التحديث'));
+                          }
+                        }}
+                      >
+                        <Plus className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* قائمة الأجهزة */}
+                  {tenantDetails.devices && tenantDetails.devices.length > 0 ? (
+                    <div className="space-y-2 max-h-40 overflow-y-auto">
+                      {tenantDetails.devices.map((device, idx) => (
+                        <div key={idx} className="flex justify-between items-center p-3 bg-gray-700/30 rounded-lg">
+                          <div className="flex items-center gap-3">
+                            <div className={`w-3 h-3 rounded-full ${device.is_active ? 'bg-green-500' : 'bg-red-500'}`} />
+                            <div>
+                              <p className="font-medium text-sm">{device.device_id?.slice(0, 20)}...</p>
+                              <p className="text-xs text-gray-400">
+                                {t('تم التفعيل')}: {device.activated_at ? new Date(device.activated_at).toLocaleDateString('ar-IQ') : '-'}
+                              </p>
+                            </div>
+                          </div>
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="text-red-400 hover:text-red-300 hover:bg-red-500/20"
+                            onClick={async () => {
+                              if (confirm(t('هل تريد إلغاء ترخيص هذا الجهاز؟'))) {
+                                try {
+                                  await axios.delete(`${API}/super-admin/tenants/${selectedTenant.id}/devices/${device.device_id}`);
+                                  setTenantDetails(prev => ({
+                                    ...prev,
+                                    devices: prev.devices.filter(d => d.device_id !== device.device_id)
+                                  }));
+                                  toast.success(t('تم إلغاء الترخيص'));
+                                } catch (err) {
+                                  toast.error(t('فشل إلغاء الترخيص'));
+                                }
+                              }
+                            }}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-center text-gray-500 py-4">{t('لا توجد أجهزة مرخصة')}</p>
+                  )}
+                </div>
               </>
             ) : (
               <div className="text-center py-8">
