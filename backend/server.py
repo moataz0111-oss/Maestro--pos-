@@ -9297,26 +9297,21 @@ async def reset_tenant_inventory(tenant_id: str, confirm: bool = False, current_
     deleted_movements = await db.inventory_movements.delete_many(query)
     results["reset_counts"]["inventory_movements"] = deleted_movements.deleted_count
     
-    # تصفير كميات المواد الخام (دون حذف المواد نفسها)
-    updated_raw = await db.raw_materials.update_many(
-        query,
-        {"$set": {"quantity": 0}}
-    )
-    results["reset_counts"]["raw_materials_qty_reset"] = updated_raw.modified_count
+    # حذف المواد الخام بالكامل
+    deleted_raw = await db.raw_materials.delete_many(query)
+    results["reset_counts"]["raw_materials"] = deleted_raw.deleted_count
     
-    # تصفير مخزون التصنيع
-    updated_mfg_inv = await db.manufacturing_inventory.update_many(
-        query,
-        {"$set": {"quantity": 0}}
-    )
-    results["reset_counts"]["manufacturing_inventory_reset"] = updated_mfg_inv.modified_count
+    # حذف مخزون التصنيع بالكامل
+    deleted_mfg_inv = await db.manufacturing_inventory.delete_many(query)
+    results["reset_counts"]["manufacturing_inventory"] = deleted_mfg_inv.deleted_count
     
-    # تصفير كميات المنتجات المصنعة
-    updated_products = await db.manufactured_products.update_many(
-        query,
-        {"$set": {"quantity": 0}}
-    )
-    results["reset_counts"]["manufactured_products_qty_reset"] = updated_products.modified_count
+    # حذف المنتجات المصنعة بالكامل
+    deleted_products = await db.manufactured_products.delete_many(query)
+    results["reset_counts"]["manufactured_products"] = deleted_products.deleted_count
+    
+    # حذف الموردين بالكامل
+    deleted_suppliers = await db.suppliers.delete_many(query)
+    results["reset_counts"]["suppliers"] = deleted_suppliers.deleted_count
     
     # حذف مخزون الفروع
     deleted_branch_inv = await db.branch_inventory.delete_many(query)
