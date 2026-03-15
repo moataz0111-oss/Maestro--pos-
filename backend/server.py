@@ -9166,10 +9166,34 @@ async def reset_tenant_sales(tenant_id: str, confirm: bool = False, current_user
             "$or": [{"tenant_id": {"$exists": False}}, {"tenant_id": None}]
         })
         
+        # حذف المصاريف للنظام الرئيسي
+        expenses_result = await db.expenses.delete_many({
+            "$or": [{"tenant_id": {"$exists": False}}, {"tenant_id": None}]
+        })
+        
+        # حذف المرتجعات للنظام الرئيسي
+        refunds_result = await db.refunds.delete_many({
+            "$or": [{"tenant_id": {"$exists": False}}, {"tenant_id": None}]
+        })
+        
+        # حذف سجلات الصندوق للنظام الرئيسي
+        cash_drawer_result = await db.cash_drawer_logs.delete_many({
+            "$or": [{"tenant_id": {"$exists": False}}, {"tenant_id": None}]
+        })
+        
+        # حذف سجلات التدقيق للنظام الرئيسي
+        audit_logs_result = await db.audit_logs.delete_many({
+            "$or": [{"tenant_id": {"$exists": False}}, {"tenant_id": None}]
+        })
+        
         return {
             "message": "تم تصفير مبيعات النظام الرئيسي بنجاح",
             "deleted_orders": orders_result.deleted_count,
             "deleted_shifts": shifts_result.deleted_count,
+            "deleted_expenses": expenses_result.deleted_count,
+            "deleted_refunds": refunds_result.deleted_count,
+            "deleted_cash_drawer_logs": cash_drawer_result.deleted_count,
+            "deleted_audit_logs": audit_logs_result.deleted_count,
             "owner_wallet_reset": {
                 "deleted_deposits": deposits_result.deleted_count,
                 "deleted_withdrawals": withdrawals_result.deleted_count,
