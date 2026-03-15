@@ -16,10 +16,28 @@
 4. إدارة الموظفين والرواتب
 5. التقارير والإحصائيات
 6. دعم متعدد اللغات (عربي/إنجليزي/كردي)
+7. **تطبيق سطح مكتب** (Electron) يعمل بدون إنترنت
 
 ---
 
-## Completed Features (as of December 2025)
+## Completed Features (as of March 2026)
+
+### Desktop Application (Electron) ✅ NEW
+- [x] **نظام الترخيص** - Backend endpoints للتحقق من الترخيص
+  - `GET /api/license/verify` - التحقق من صلاحية الترخيص
+  - `POST /api/license/activate` - تفعيل الترخيص على جهاز جديد
+  - `GET /api/license/devices` - قائمة الأجهزة المرخصة
+  - `DELETE /api/license/devices/{device_id}` - إلغاء ترخيص جهاز
+- [x] **License Manager** - إدارة الترخيص في Electron
+  - التحقق من الترخيص عند بدء التشغيل
+  - فترة سماح (24 ساعة) للعمل offline
+  - فحص دوري للترخيص كل ساعة
+- [x] **Sync Manager** - مزامنة البيانات
+  - مزامنة الطلبات والمصاريف والورديات
+  - تحديث البيانات المحلية من السيرفر
+- [x] **قاعدة بيانات SQLite** - للعمل offline
+- [x] **Printer Manager** - طباعة الفواتير وطلبات المطبخ
+- [x] **صفحات الإعداد** - setup.html, offline.html
 
 ### Offline-First Implementation ✅
 - [x] دعم offline لـ POS, Orders, Tables, KitchenDisplay
@@ -78,20 +96,24 @@
 - [x] اختبار الترجمة (100% نجاح)
 - [x] اختبار قائمة الأيقونات (100% نجاح)
 - [x] اختبار سجلات المراقبة والشعار وأسماء العملاء (100% نجاح)
+- [x] **اختبار License APIs** (100% نجاح - مارس 2026)
 
 ---
 
 ## Backlog / Remaining Tasks
 
-### P0 (Immediate - Ready for Deployment)
-- [x] **إصلاح عرض الشعار والصور** - تم الإصلاح والاختبار (مارس 2026)
-- [x] **إصلاح عرض المتغيرات في صفحة المخزون** - تم إصلاح `{transaction.supplier_name}` وغيرها (مارس 2026)
-- [x] **إضافة endpoint لجلب حركات المخزون** - `/inventory-transactions` (مارس 2026)
-- [ ] **نشر التطبيق (Deployment)** - جاهز للنشر (تم فحص الجاهزية ✅)
+### P0 (Immediate - In Progress)
+- [x] **نظام الترخيص Backend** - تم إنشاء endpoints (مارس 2026)
+- [ ] **إكمال تطبيق Electron** - دمج الواجهة الأمامية مع Electron
+
+### P1 (Next Priority)
+- [ ] **بناء ملفات التثبيت** - `.exe` و `.dmg` installers
+- [ ] **دمج الأجهزة** - طابعات، قارئ باركود
 
 ### P2 (Medium Priority)
 - [ ] إعادة هيكلة server.py (~15,000 سطر)
 - [ ] تصدير التقارير إلى Excel
+- [ ] دمج أجهزة البصمة (يتطلب SDK)
 
 ### P3 (Low Priority)
 - [ ] تحسينات UI/UX إضافية
@@ -114,6 +136,12 @@
 - Push Subscriptions
 - pillow-heif for HEIC support
 
+### Desktop App (NEW)
+- **Electron** - Desktop shell
+- **SQLite** (better-sqlite3) - Local database
+- **electron-store** - Settings storage
+- **electron-builder** - Installers
+
 ### Key Files
 - `/app/backend/server.py` - Main backend
 - `/app/backend/routes/sync_routes.py` - Sync & Push APIs
@@ -122,24 +150,26 @@
 - `/app/frontend/src/lib/syncService.js` - Sync logic
 - `/app/frontend/src/lib/pushService.js` - Push notifications
 - `/app/frontend/public/sw-offline.js` - Service Worker V3
-- `/app/frontend/src/pages/POS.js` - Point of Sale (with getLocalizedName and icon display)
-- `/app/frontend/src/pages/Settings.js` - Settings page (logo handling fixed)
-- `/app/frontend/src/pages/Dashboard.js` - Dashboard (tenant name translation)
-- `/app/frontend/src/pages/SuperAdmin.js` - Super Admin (tenant name translation)
-- `/app/frontend/src/utils/translations.js` - All translations including icons
-- `/app/frontend/src/utils/autoTranslate.js` - Translation map used by t() function
-- `/app/frontend/src/components/ImageUploader.js` - Image upload component
+- `/app/frontend/src/pages/POS.js` - Point of Sale
+- `/app/frontend/src/pages/Settings.js` - Settings page
+- `/app/desktop-app/main.js` - Electron main process
+- `/app/desktop-app/src/license-manager.js` - License management
+- `/app/desktop-app/src/sync-manager.js` - Data synchronization
+- `/app/desktop-app/src/database.js` - SQLite database
+- `/app/desktop-app/src/printer-manager.js` - Printing
 
 ---
 
 ## Test Credentials
-- **Super Admin**: `/super-admin`, password: `superadmin`
+- **Super Admin**: `owner@maestroegp.com` / `owner123` / Secret: `271018`
 - **Demo User**: `demo@maestroegp.com` / `demo123`
 - **Client**: `hanialdujaili@gmail.com` / `Hani@2024`
 
 ---
 
-## API Endpoints (Sync & Push)
+## API Endpoints
+
+### Sync & Push
 - `POST /api/sync/orders` - مزامنة الطلبات
 - `POST /api/sync/customers` - مزامنة العملاء
 - `POST /api/sync/batch` - مزامنة دفعية
@@ -148,6 +178,12 @@
 - `POST /api/sync/push/unsubscribe` - إلغاء اشتراك Push
 - `GET /api/sync/push/subscriptions` - قائمة الأجهزة المشتركة
 - `POST /api/upload/restaurant-logo` - رفع شعار المطعم (يدعم HEIC)
+
+### License Management (NEW)
+- `GET /api/license/verify` - التحقق من صلاحية الترخيص
+- `POST /api/license/activate` - تفعيل الترخيص على جهاز
+- `GET /api/license/devices` - قائمة الأجهزة المرخصة
+- `DELETE /api/license/devices/{device_id}` - إلغاء ترخيص جهاز
 
 ---
 
@@ -158,3 +194,4 @@
 - الترجمة تعتمد على حقل `name_en` في الفئات والمنتجات والعملاء
 - قائمة الأيقونات وسجلات المراقبة تترجم عبر `autoTranslate.js`
 - دعم صيغ HEIC/HEIF من iPhone عبر مكتبة `pillow-heif`
+- **تطبيق سطح المكتب** يحتاج بناء على جهاز Windows/Mac
