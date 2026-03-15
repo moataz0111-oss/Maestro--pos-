@@ -33,8 +33,27 @@ let tray;
 let syncManager;
 let printerManager;
 let licenseManager;
+let barcodeScanner;
 let isOnline = true;
 let licenseValid = false;
+
+// التحقق من وجود ملفات الواجهة المحلية
+function getLocalFrontendPath() {
+  // المسارات المحتملة للواجهة المحلية
+  const possiblePaths = [
+    path.join(__dirname, 'frontend', 'index.html'),
+    path.join(__dirname, 'build', 'index.html'),
+    path.join(__dirname, '..', 'frontend', 'build', 'index.html'),
+    path.join(app.getPath('userData'), 'frontend', 'index.html')
+  ];
+  
+  for (const p of possiblePaths) {
+    if (fs.existsSync(p)) {
+      return p;
+    }
+  }
+  return null;
+}
 
 // إنشاء النافذة الرئيسية
 function createWindow() {
@@ -47,26 +66,48 @@ function createWindow() {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
-      preload: path.join(__dirname, 'preload.js')
+      preload: path.join(__dirname, 'preload.js'),
+      webSecurity: true
     },
     titleBarStyle: 'default',
-    title: 'Maestro POS'
+    title: 'Maestro POS',
+    show: false // إخفاء حتى يتم التحميل
+  });
+
+  // إظهار النافذة عند الجاهزية
+  mainWindow.once('ready-to-show', () => {
+    mainWindow.show();
+    mainWindow.focus();
   });
 
   // تحميل الواجهة
-  const serverUrl = store.get('serverUrl');
-  if (serverUrl) {
-    mainWindow.loadURL(serverUrl);
-  } else {
-    mainWindow.loadFile(path.join(__dirname, 'src', 'views', 'setup.html'));
-  }
+  loadMainInterface();
 
   // التعامل مع حالة الاتصال
-  mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
-    console.log('فشل التحميل:', errorDescription);
-    if (errorCode === -106 || errorCode === -105) { // لا يوجد اتصال
+  mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL) => {
+    console.log('فشل التحميل:', errorDescription, 'URL:', validatedURL);
+    
+    // أخطاء الاتصال
+    if (errorCode === -106 || errorCode === -105 || errorCode === -102 || errorCode === -118) {
       isOnline = false;
-      mainWindow.loadFile(path.join(__dirname, 'src', 'views', 'offline.html'));
+      
+      // محاولة تحميل الواجهة المحلية
+      const localPath = getLocalFrontendPath();
+      if (localPath) {
+        console.log('📱 تحميل الواجهة المحلية:', localPath);
+        mainWindow.loadFile(localPath);
+      } else {
+        mainWindow.loadFile(path.join(__dirname, 'src', 'views', 'offline.html'));
+      }
+    }
+  });
+
+  // تحديث حالة الاتصال عند نجاح التحميل
+  mainWindow.webContents.on('did-finish-load', () => {
+    const url = mainWindow.webContents.getURL();
+    if (url.startsWith('http')) {
+      isOnline = true;
+      updateTrayMenu();
     }
   });
 
@@ -80,6 +121,40 @@ function createWindow() {
     if (!app.isQuitting) {
       event.preventDefault();
       mainWindow.hide();
+    }
+  });
+
+  // فتح DevTools في وضع التطوير
+  if (process.env.NODE_ENV === 'development') {
+    mainWindow.webContents.openDevTools();
+  }
+}
+
+// تحميل الواجهة الرئيسية
+function loadMainInterface() {
+  const serverUrl = store.get('serverUrl');
+  const authToken = store.get('authToken');
+  
+  if (!serverUrl) {
+    // لا يوجد سيرفر - صفحة الإعداد
+    mainWindow.loadFile(path.join(__dirname, 'src', 'views', 'setup.html'));
+    return;
+  }
+  
+  // محاولة تحميل من السيرفر أولاً
+  console.log('🌐 محاولة الاتصال بالسيرفر:', serverUrl);
+  
+  // إضافة token للـ cookies إذا وجد
+  if (authToken) {
+    mainWindow.webContents.session.cookies.set({
+      url: serverUrl,
+      name: 'auth_token',
+      value: authToken
+    }).catch(err => console.log('Cookie error:', err));
+  }
+  
+  mainWindow.loadURL(serverUrl);
+};
     }
   });
 }
