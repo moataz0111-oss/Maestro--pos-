@@ -154,9 +154,6 @@ function loadMainInterface() {
   }
   
   mainWindow.loadURL(serverUrl);
-};
-    }
-  });
 }
 
 // إنشاء أيقونة الـ System Tray
