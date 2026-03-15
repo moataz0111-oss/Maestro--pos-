@@ -4,12 +4,14 @@ const Store = require('electron-store');
 const { initDatabase, getDatabase } = require('./src/database');
 const { SyncManager } = require('./src/sync-manager');
 const { PrinterManager } = require('./src/printer-manager');
+const { LicenseManager } = require('./src/license-manager');
 
 // تخزين الإعدادات
 const store = new Store({
   defaults: {
     serverUrl: '',
     branchId: '',
+    authToken: '',
     autoSync: true,
     syncInterval: 30000, // 30 ثانية
     language: 'ar',
@@ -17,7 +19,10 @@ const store = new Store({
       receiptPrinter: '',
       kitchenPrinter: '',
       autoPrint: true
-    }
+    },
+    // بيانات الترخيص المحفوظة
+    licenseData: null,
+    lastOnlineCheck: null
   }
 });
 
