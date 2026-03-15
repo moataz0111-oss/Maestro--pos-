@@ -59,6 +59,17 @@ contextBridge.exposeInMainWorld('electronAPI', {
     clearToken: () => ipcRenderer.invoke('clear-auth-token')
   },
   
+  // ============ الباركود ============
+  barcode: {
+    processInput: (key, timestamp) => ipcRenderer.invoke('barcode-process', key, timestamp),
+    getSettings: () => ipcRenderer.invoke('barcode-get-settings'),
+    updateSettings: (settings) => ipcRenderer.invoke('barcode-update-settings', settings),
+    findProduct: (barcode) => ipcRenderer.invoke('barcode-find-product', barcode)
+  },
+  onBarcodeScanned: (callback) => {
+    ipcRenderer.on('barcode-scanned', (event, data) => callback(data));
+  },
+  
   // ============ التنقل ============
   onNavigate: (callback) => {
     ipcRenderer.on('navigate', (event, route) => callback(route));
@@ -67,6 +78,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // ============ معلومات التطبيق ============
   getAppVersion: () => ipcRenderer.invoke('get-app-version'),
   getAppInfo: () => ipcRenderer.invoke('get-app-info'),
+  reloadApp: () => ipcRenderer.invoke('reload-app'),
+  openDevTools: () => ipcRenderer.invoke('open-dev-tools'),
   
   // ============ الإشعارات ============
   showNotification: (title, body) => {
@@ -76,3 +89,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
 // إضافة متغير للتحقق من وجود Electron
 contextBridge.exposeInMainWorld('isElectron', true);
+
+// استماع لأحداث لوحة المفاتيح للباركود
+document.addEventListener('keydown', (event) => {
+  // تجاهل المفاتيح الخاصة
+  if (event.ctrlKey || event.altKey || event.metaKey) return;
+  
+  // إرسال المفتاح لمعالج الباركود
+  ipcRenderer.invoke('barcode-process', event.key, Date.now());
+});
