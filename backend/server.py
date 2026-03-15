@@ -5942,14 +5942,16 @@ async def get_cash_register_summary(
     effective_branch_id = branch_id or current_user.get("branch_id")
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     
-    # التحقق من وجود وردية مفتوحة
+    # التحقق من وجود وردية مفتوحة - البحث بالفرع أولاً
     shift_query = {
         "status": "open"
     }
-    if tenant_id:
-        shift_query["tenant_id"] = tenant_id
+    # البحث بالفرع فقط إذا كان موجوداً (الأولوية للفرع)
     if effective_branch_id:
         shift_query["branch_id"] = effective_branch_id
+    elif tenant_id:
+        # إذا لم يكن هناك فرع محدد، ابحث بـ tenant_id
+        shift_query["tenant_id"] = tenant_id
     
     open_shift = await db.shifts.find_one(shift_query, {"_id": 0})
     
