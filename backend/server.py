@@ -16065,6 +16065,85 @@ async def deactivate_device(
     return {"success": True, "message": "تم إلغاء ترخيص الجهاز"}
 
 
+# ==================== SUPER ADMIN - DEVICE MANAGEMENT ====================
+
+@api_router.get("/super-admin/tenants/{tenant_id}/devices")
+async def get_tenant_devices(
+    tenant_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    جلب أجهزة عميل معين (Super Admin فقط)
+    """
+    if current_user.get("role") != UserRole.SUPER_ADMIN:
+        raise HTTPException(status_code=403, detail="غير مصرح لك")
+    
+    devices = await db.license_devices.find(
+        {"tenant_id": tenant_id},
+        {"_id": 0}
+    ).to_list(100)
+    
+    tenant = await db.tenants.find_one({"id": tenant_id}, {"_id": 0, "max_devices": 1})
+    max_devices = tenant.get("max_devices", 5) if tenant else 5
+    
+    return {
+        "devices": devices,
+        "count": len([d for d in devices if d.get("is_active")]),
+        "max_devices": max_devices
+    }
+
+@api_router.put("/super-admin/tenants/{tenant_id}/max-devices")
+async def update_tenant_max_devices(
+    tenant_id: str,
+    max_devices: int = Body(..., embed=True),
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    تحديث الحد الأقصى للأجهزة لعميل (Super Admin فقط)
+    """
+    if current_user.get("role") != UserRole.SUPER_ADMIN:
+        raise HTTPException(status_code=403, detail="غير مصرح لك")
+    
+    if max_devices < 1:
+        raise HTTPException(status_code=400, detail="الحد الأدنى للأجهزة هو 1")
+    
+    result = await db.tenants.update_one(
+        {"id": tenant_id},
+        {"$set": {"max_devices": max_devices}}
+    )
+    
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="العميل غير موجود")
+    
+    return {"success": True, "max_devices": max_devices}
+
+@api_router.delete("/super-admin/tenants/{tenant_id}/devices/{device_id}")
+async def deactivate_tenant_device(
+    tenant_id: str,
+    device_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    إلغاء ترخيص جهاز لعميل (Super Admin فقط)
+    """
+    if current_user.get("role") != UserRole.SUPER_ADMIN:
+        raise HTTPException(status_code=403, detail="غير مصرح لك")
+    
+    result = await db.license_devices.update_one(
+        {"device_id": device_id, "tenant_id": tenant_id},
+        {"$set": {
+            "is_active": False, 
+            "deactivated_at": datetime.now(timezone.utc).isoformat(),
+            "deactivated_by": current_user.get("id")
+        }}
+    )
+    
+    if result.modified_count == 0:
+        raise HTTPException(status_code=404, detail="الجهاز غير موجود")
+    
+    return {"success": True, "message": "تم إلغاء ترخيص الجهاز"}
+
+
 # Include reports routes (refactored) - PRIORITY over old routes
 from routes.reports_routes import router as reports_router
 app.include_router(reports_router, prefix="/api")
