@@ -9207,36 +9207,39 @@ async def reset_tenant_sales(tenant_id: str, confirm: bool = False, current_user
     if not tenant:
         raise HTTPException(status_code=404, detail="العميل غير موجود")
     
+    # البحث عن البيانات بـ tenant_id أو بدونه (للتوافق مع البيانات القديمة)
+    query = {"$or": [{"tenant_id": tenant_id}, {"tenant_id": {"$exists": False}}, {"tenant_id": None}]}
+    
     # حذف طلبات العميل
-    orders_result = await db.orders.delete_many({"tenant_id": tenant_id})
+    orders_result = await db.orders.delete_many(query)
     
     # حذف ورديات العميل
-    shifts_result = await db.shifts.delete_many({"tenant_id": tenant_id})
+    shifts_result = await db.shifts.delete_many(query)
     
     # إعادة تعيين إحصائيات عملاء هذا العميل
-    await db.customers.update_many({"tenant_id": tenant_id}, {"$set": {
+    await db.customers.update_many(query, {"$set": {
         "total_orders": 0,
         "total_spent": 0.0,
         "last_order_date": None
     }})
     
     # تصفير خزينة المالك للعميل
-    deposits_result = await db.owner_deposits.delete_many({"tenant_id": tenant_id})
-    withdrawals_result = await db.owner_withdrawals.delete_many({"tenant_id": tenant_id})
-    profit_transfers_result = await db.owner_profit_transfers.delete_many({"tenant_id": tenant_id})
-    profit_withdrawals_result = await db.owner_profit_withdrawals.delete_many({"tenant_id": tenant_id})
+    deposits_result = await db.owner_deposits.delete_many(query)
+    withdrawals_result = await db.owner_withdrawals.delete_many(query)
+    profit_transfers_result = await db.owner_profit_transfers.delete_many(query)
+    profit_withdrawals_result = await db.owner_profit_withdrawals.delete_many(query)
     
     # حذف المصاريف
-    expenses_result = await db.expenses.delete_many({"tenant_id": tenant_id})
+    expenses_result = await db.expenses.delete_many(query)
     
     # حذف المرتجعات
-    refunds_result = await db.refunds.delete_many({"tenant_id": tenant_id})
+    refunds_result = await db.refunds.delete_many(query)
     
     # حذف سجلات الصندوق
-    cash_drawer_result = await db.cash_drawer_logs.delete_many({"tenant_id": tenant_id})
+    cash_drawer_result = await db.cash_drawer_logs.delete_many(query)
     
     # حذف سجلات التدقيق (اختياري - للتنظيف الكامل)
-    audit_logs_result = await db.audit_logs.delete_many({"tenant_id": tenant_id})
+    audit_logs_result = await db.audit_logs.delete_many(query)
     
     return {
         "message": f"تم تصفير مبيعات '{tenant['name']}' بنجاح",
