@@ -837,7 +837,7 @@ export default function SuperAdmin() {
 
   const resetTenantInventory = async () => {
     try {
-      await axios.post(`${API}/super-admin/tenants/${selectedTenant.id}/reset-inventory?confirm=true`);
+      await axios.post(`${API}/super-admin/tenants/${selectedTenant.id}/reset-inventory?confirm=true&delete_all=true`);
       toast.success(t('تم تصفير بيانات المخزون بنجاح'));
       setShowResetInventoryConfirm(false);
       setSelectedTenant(null);
