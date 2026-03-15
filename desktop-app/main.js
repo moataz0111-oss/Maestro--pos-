@@ -292,6 +292,73 @@ ipcMain.handle('get-pending-count', () => {
   return syncManager.getPendingCount();
 });
 
+// ============ الترخيص ============
+ipcMain.handle('license-verify', async () => {
+  if (!licenseManager) {
+    return { valid: false, reason: 'not_initialized', message: 'مدير الترخيص غير مهيأ' };
+  }
+  return licenseManager.verifyOnStartup();
+});
+
+ipcMain.handle('license-check', async () => {
+  if (!licenseManager) {
+    return { valid: false, reason: 'not_initialized' };
+  }
+  try {
+    return await licenseManager.checkLicense();
+  } catch (error) {
+    return licenseManager.checkOfflineGrace();
+  }
+});
+
+ipcMain.handle('license-get-data', () => {
+  if (!licenseManager) return null;
+  return licenseManager.getLicenseData();
+});
+
+ipcMain.handle('license-has-feature', (event, featureName) => {
+  if (!licenseManager) return false;
+  return licenseManager.hasFeature(featureName);
+});
+
+ipcMain.handle('license-get-features', () => {
+  if (!licenseManager) return [];
+  return licenseManager.getFeatures();
+});
+
+// حفظ بيانات تسجيل الدخول
+ipcMain.handle('save-auth-token', (event, token) => {
+  store.set('authToken', token);
+  return true;
+});
+
+ipcMain.handle('get-auth-token', () => {
+  return store.get('authToken');
+});
+
+ipcMain.handle('clear-auth-token', () => {
+  store.delete('authToken');
+  store.delete('licenseData');
+  store.delete('lastOnlineCheck');
+  return true;
+});
+
+// ============ معلومات التطبيق ============
+ipcMain.handle('get-app-version', () => {
+  return app.getVersion();
+});
+
+ipcMain.handle('get-app-info', () => {
+  return {
+    version: app.getVersion(),
+    name: app.getName(),
+    platform: process.platform,
+    arch: process.arch,
+    isOnline: isOnline,
+    licenseValid: licenseValid
+  };
+});
+
 // إغلاق التطبيق
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
