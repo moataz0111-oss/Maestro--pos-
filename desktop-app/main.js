@@ -131,6 +131,35 @@ app.whenReady().then(async () => {
   // تهيئة قاعدة البيانات المحلية
   await initDatabase();
   
+  // تهيئة مدير الترخيص
+  licenseManager = new LicenseManager(store);
+  
+  // التحقق من الترخيص عند بدء التشغيل
+  const licenseResult = await licenseManager.verifyOnStartup();
+  
+  if (licenseResult.needsSetup) {
+    // التطبيق يحتاج إعداد أولي
+    licenseValid = true;
+  } else if (!licenseResult.valid) {
+    // الترخيص غير صالح
+    dialog.showMessageBoxSync({
+      type: 'error',
+      title: 'خطأ في الترخيص',
+      message: licenseResult.message || 'الترخيص غير صالح',
+      detail: 'يرجى التواصل مع الدعم الفني أو الاتصال بالإنترنت للتحقق من الترخيص.',
+      buttons: ['موافق']
+    });
+    
+    // إذا كان السبب خطير، لا نسمح بتشغيل التطبيق
+    if (['disabled', 'expired', 'grace_expired'].includes(licenseResult.reason)) {
+      app.quit();
+      return;
+    }
+  } else {
+    licenseValid = true;
+    console.log('✅ الترخيص صالح:', licenseResult.data?.tenantName || 'Unknown');
+  }
+  
   // تهيئة مدير المزامنة
   syncManager = new SyncManager(store, getDatabase());
   
@@ -144,6 +173,11 @@ app.whenReady().then(async () => {
   // بدء المزامنة التلقائية
   if (store.get('autoSync')) {
     syncManager.startAutoSync();
+  }
+  
+  // بدء الفحص الدوري للترخيص (كل ساعة)
+  if (licenseValid) {
+    licenseManager.startPeriodicCheck(60);
   }
   
   // مراقبة حالة الاتصال
