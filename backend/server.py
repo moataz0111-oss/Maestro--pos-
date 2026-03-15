@@ -3995,6 +3995,13 @@ async def get_inventory_transfers(
     transfers = await db.inventory_transfers.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
     return transfers
 
+@api_router.get("/inventory-transactions")
+async def get_inventory_transactions(current_user: dict = Depends(get_current_user)):
+    """جلب حركات المخزون (واردات/صادرات)"""
+    query = build_tenant_query(current_user)
+    transactions = await db.inventory_transactions.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
+    return transactions
+
 @api_router.put("/inventory-transfers/{transfer_id}/approve")
 async def approve_inventory_transfer(transfer_id: str, current_user: dict = Depends(get_current_user)):
     """الموافقة على التحويل"""
