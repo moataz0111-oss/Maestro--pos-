@@ -9202,10 +9202,26 @@ async def reset_tenant_sales(tenant_id: str, confirm: bool = False, current_user
     profit_transfers_result = await db.owner_profit_transfers.delete_many({"tenant_id": tenant_id})
     profit_withdrawals_result = await db.owner_profit_withdrawals.delete_many({"tenant_id": tenant_id})
     
+    # حذف المصاريف
+    expenses_result = await db.expenses.delete_many({"tenant_id": tenant_id})
+    
+    # حذف المرتجعات
+    refunds_result = await db.refunds.delete_many({"tenant_id": tenant_id})
+    
+    # حذف سجلات الصندوق
+    cash_drawer_result = await db.cash_drawer_logs.delete_many({"tenant_id": tenant_id})
+    
+    # حذف سجلات التدقيق (اختياري - للتنظيف الكامل)
+    audit_logs_result = await db.audit_logs.delete_many({"tenant_id": tenant_id})
+    
     return {
         "message": f"تم تصفير مبيعات '{tenant['name']}' بنجاح",
         "deleted_orders": orders_result.deleted_count,
         "deleted_shifts": shifts_result.deleted_count,
+        "deleted_expenses": expenses_result.deleted_count,
+        "deleted_refunds": refunds_result.deleted_count,
+        "deleted_cash_drawer_logs": cash_drawer_result.deleted_count,
+        "deleted_audit_logs": audit_logs_result.deleted_count,
         "owner_wallet_reset": {
             "deleted_deposits": deposits_result.deleted_count,
             "deleted_withdrawals": withdrawals_result.deleted_count,
