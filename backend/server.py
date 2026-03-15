@@ -9255,7 +9255,7 @@ async def reset_tenant_sales(tenant_id: str, confirm: bool = False, current_user
     }
 
 @api_router.post("/super-admin/tenants/{tenant_id}/reset-inventory")
-async def reset_tenant_inventory(tenant_id: str, confirm: bool = False, current_user: dict = Depends(verify_super_admin)):
+async def reset_tenant_inventory(tenant_id: str, confirm: bool = False, delete_all: bool = False, current_user: dict = Depends(verify_super_admin)):
     """تصفير بيانات المخزون والمشتريات لعميل معين - للمالك فقط"""
     
     if not confirm:
@@ -9266,15 +9266,20 @@ async def reset_tenant_inventory(tenant_id: str, confirm: bool = False, current_
         "tenant_name": ""
     }
     
+    # إذا كان delete_all=true، نحذف جميع البيانات بغض النظر عن tenant_id
+    if delete_all:
+        query = {}
+        results["tenant_name"] = "جميع البيانات"
     # التحقق إذا كان النظام الرئيسي
-    if tenant_id == "main-system":
+    elif tenant_id == "main-system":
         query = {"$or": [{"tenant_id": {"$exists": False}}, {"tenant_id": None}]}
         results["tenant_name"] = "النظام الرئيسي"
     else:
         tenant = await db.tenants.find_one({"id": tenant_id})
         if not tenant:
             raise HTTPException(status_code=404, detail="العميل غير موجود")
-        query = {"tenant_id": tenant_id}
+        # البحث عن البيانات بـ tenant_id أو بدونه (للتوافق مع البيانات القديمة)
+        query = {"$or": [{"tenant_id": tenant_id}, {"tenant_id": {"$exists": False}}, {"tenant_id": None}]}
         results["tenant_name"] = tenant.get("name", tenant_id)
     
     # حذف طلبات الفروع
