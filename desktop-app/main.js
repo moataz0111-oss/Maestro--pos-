@@ -240,6 +240,10 @@ app.whenReady().then(async () => {
   // تهيئة مدير الطابعات
   printerManager = new PrinterManager(store);
   
+  // تهيئة ماسح الباركود
+  barcodeScanner = new BarcodeScanner(store);
+  barcodeScanner.start();
+  
   // إنشاء النافذة
   createWindow();
   createTray();
