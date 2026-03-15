@@ -30,7 +30,9 @@ let mainWindow;
 let tray;
 let syncManager;
 let printerManager;
+let licenseManager;
 let isOnline = true;
+let licenseValid = false;
 
 // إنشاء النافذة الرئيسية
 function createWindow() {
