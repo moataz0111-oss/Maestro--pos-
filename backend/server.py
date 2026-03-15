@@ -5918,7 +5918,7 @@ async def get_cash_register_summary(
     branch_id: Optional[str] = Query(None, description="معرف الفرع"),
     current_user: dict = Depends(get_current_user)
 ):
-    """جلب ملخص الصندوق للوردية الحالية"""
+    """جلب ملخص الصندوق للوردية الحالية أو إنشاء ملخص من الطلبات"""
     tenant_id = get_user_tenant_id(current_user)
     # استخدم branch_id المرسل أو الفرع المرتبط بالمستخدم
     effective_branch_id = branch_id or current_user.get("branch_id")
@@ -5935,8 +5935,22 @@ async def get_cash_register_summary(
     
     open_shift = await db.shifts.find_one(shift_query, {"_id": 0})
     
+    # إذا لم توجد وردية مفتوحة، نُنشئ واحدة تلقائياً
     if not open_shift:
-        raise HTTPException(status_code=404, detail="لا يوجد وردية مفتوحة")
+        # إنشاء وردية جديدة تلقائياً
+        new_shift = {
+            "id": str(uuid.uuid4()),
+            "tenant_id": tenant_id,
+            "branch_id": effective_branch_id,
+            "cashier_id": current_user.get("id"),
+            "cashier_name": current_user.get("full_name", ""),
+            "opened_at": datetime.now(timezone.utc).isoformat(),
+            "status": "open",
+            "opening_balance": 0,
+            "created_at": datetime.now(timezone.utc).isoformat()
+        }
+        await db.shifts.insert_one(new_shift)
+        open_shift = new_shift
     
     # جلب الطلبات منذ بدء الوردية
     shift_start = open_shift.get("opened_at", today)
