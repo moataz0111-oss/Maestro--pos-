@@ -405,18 +405,19 @@ async def get_cash_register_summary(
     expenses = await db.expenses.find(expense_query).to_list(100)
     total_expenses = sum(e["amount"] for e in expenses)
     
+    opening_cash = shift.get("opening_cash", shift.get("opening_balance", 0))
     net_profit = gross_profit - total_expenses
-    expected_cash = shift["opening_cash"] + cash_sales - total_expenses
+    expected_cash = opening_cash + cash_sales - total_expenses
     non_cash_amount = card_sales + credit_sales
     
     return {
         "shift_id": shift["id"],
-        "branch_id": shift["branch_id"],
+        "branch_id": shift.get("branch_id", ""),
         "branch_name": branch["name"] if branch else "",
         "cashier_id": current_user["id"],
         "cashier_name": current_user.get("full_name", current_user.get("username", "")),
-        "started_at": shift["started_at"],
-        "opening_cash": shift["opening_cash"],
+        "started_at": shift.get("started_at", shift.get("opened_at", "")),
+        "opening_cash": opening_cash,
         "total_sales": total_sales,
         "total_cost": total_cost,
         "gross_profit": gross_profit,
