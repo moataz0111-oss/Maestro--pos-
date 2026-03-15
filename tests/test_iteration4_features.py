@@ -12,7 +12,7 @@ import requests
 import os
 import time
 
-BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://bilingual-pos-3.preview.emergentagent.com')
+BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://maestro-pos-2.preview.emergentagent.com')
 
 class TestAuth:
     """Authentication tests"""

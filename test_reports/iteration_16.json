@@ -103,7 +103,7 @@
   },
   
   "test_credentials": {
-    "api_url": "https://bilingual-pos-3.preview.emergentagent.com",
+    "api_url": "https://maestro-pos-2.preview.emergentagent.com",
     "customer_menu_url": "/menu/default"
   },
   
