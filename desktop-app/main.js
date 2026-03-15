@@ -1,10 +1,12 @@
-const { app, BrowserWindow, ipcMain, Menu, Tray, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, Menu, Tray, dialog, globalShortcut } = require('electron');
 const path = require('path');
+const fs = require('fs');
 const Store = require('electron-store');
 const { initDatabase, getDatabase } = require('./src/database');
 const { SyncManager } = require('./src/sync-manager');
 const { PrinterManager } = require('./src/printer-manager');
 const { LicenseManager } = require('./src/license-manager');
+const { BarcodeScanner } = require('./src/barcode-scanner');
 
 // تخزين الإعدادات
 const store = new Store({
