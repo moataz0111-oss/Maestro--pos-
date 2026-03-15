@@ -777,7 +777,7 @@ export default function WarehouseManufacturing() {
                                 className="flex items-center gap-2 text-sm text-primary hover:text-primary/80"
                               >
                                 <TreeDeciduous className="h-4 w-4" />
-                                <span>{t('الوصفة ({product.recipe?.length || 0} مكونات)')}</span>
+                                <span>{t('الوصفة')} ({product.recipe?.length || 0} {t('مكونات')})</span>
                                 {selectedRecipe === product.id ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
                               </button>
                               
@@ -851,7 +851,7 @@ export default function WarehouseManufacturing() {
                         </div>
                         
                         {transaction.supplier_name && (
-                          <p className="text-sm text-muted-foreground mb-2">{t('المورد: {transaction.supplier_name}')}</p>
+                          <p className="text-sm text-muted-foreground mb-2">{t('المورد')}: {transaction.supplier_name}</p>
                         )}
                         
                         <div className="flex flex-wrap gap-2">
@@ -861,12 +861,12 @@ export default function WarehouseManufacturing() {
                             </span>
                           ))}
                           {transaction.items?.length > 3 && (
-                            <span className="px-2 py-1 text-sm text-muted-foreground">{t('+{transaction.items.length - 3} أصناف')}</span>
+                            <span className="px-2 py-1 text-sm text-muted-foreground">+{transaction.items.length - 3} {t('أصناف')}</span>
                           )}
                         </div>
                         
                         {transaction.total_amount > 0 && (
-                          <p className="mt-2 font-bold text-primary">{t('الإجمالي: {formatPrice(transaction.total_amount)}')}</p>
+                          <p className="mt-2 font-bold text-primary">{t('الإجمالي')}: {formatPrice(transaction.total_amount)}</p>
                         )}
                       </div>
                     ))}
@@ -896,7 +896,7 @@ export default function WarehouseManufacturing() {
                       <div key={transfer.id} className="p-4 border rounded-lg">
                         <div className="flex items-center justify-between mb-2">
                           <div className="flex items-center gap-2">
-                            <span className="font-bold">{t('تحويل #{transfer.transfer_number}')}</span>
+                            <span className="font-bold">{t('تحويل')} #{transfer.transfer_number}</span>
                             <Badge className={
                               transfer.status === 'pending' ? 'bg-yellow-500/20 text-yellow-500' :
                               transfer.status === 'received' ? 'bg-green-500/20 text-green-500' :
@@ -924,7 +924,7 @@ export default function WarehouseManufacturing() {
                         </div>
                         
                         {transfer.total_cost > 0 && (
-                          <p className="mt-2 font-bold text-primary">{t('التكلفة: {formatPrice(transfer.total_cost)}')}</p>
+                          <p className="mt-2 font-bold text-primary">{t('التكلفة')}: {formatPrice(transfer.total_cost)}</p>
                         )}
                       </div>
                     ))}
