@@ -108,18 +108,22 @@
 
 ## Backlog / Remaining Tasks
 
-### P0 (Immediate - In Progress)
+### P0 (Immediate - COMPLETED ✅)
 - [x] **نظام الترخيص Backend** - تم إنشاء endpoints (مارس 2026)
-- [ ] **إكمال تطبيق Electron** - دمج الواجهة الأمامية مع Electron
+- [x] **إكمال تطبيق Electron** - دمج الواجهة الأمامية مع Electron
+- [x] **لوحة تحكم الأجهزة** - إدارة الأجهزة من Super Admin
+- [x] **دعم قارئ الباركود** - USB HID scanners
 
 ### P1 (Next Priority)
-- [ ] **بناء ملفات التثبيت** - `.exe` و `.dmg` installers
-- [ ] **دمج الأجهزة** - طابعات، قارئ باركود
+- [ ] **بناء ملفات التثبيت** - يتطلب تشغيل على Windows/Mac
+  - Windows: `build-win.bat`
+  - Mac: `build-mac.sh`
+- [x] **دمج الأجهزة** - طابعات، قارئ باركود (جاهز)
 
 ### P2 (Medium Priority)
-- [ ] إعادة هيكلة server.py (~15,000 سطر)
+- [ ] إعادة هيكلة server.py (~16,000 سطر)
 - [ ] تصدير التقارير إلى Excel
-- [ ] دمج أجهزة البصمة (يتطلب SDK)
+- [ ] دمج أجهزة البصمة ZKTeco (placeholder جاهز - يتطلب SDK)
 
 ### P3 (Low Priority)
 - [ ] تحسينات UI/UX إضافية
@@ -142,11 +146,13 @@
 - Push Subscriptions
 - pillow-heif for HEIC support
 
-### Desktop App (NEW)
+### Desktop App
 - **Electron** - Desktop shell
 - **SQLite** (better-sqlite3) - Local database
 - **electron-store** - Settings storage
 - **electron-builder** - Installers
+- **Barcode Scanner** - USB HID support
+- **ZKTeco Manager** - Fingerprint device (placeholder)
 
 ### Key Files
 - `/app/backend/server.py` - Main backend
@@ -158,6 +164,7 @@
 - `/app/frontend/public/sw-offline.js` - Service Worker V3
 - `/app/frontend/src/pages/POS.js` - Point of Sale
 - `/app/frontend/src/pages/Settings.js` - Settings page
+- `/app/frontend/src/pages/SuperAdmin.js` - Owner dashboard with devices management
 - `/app/desktop-app/main.js` - Electron main process
 - `/app/desktop-app/src/license-manager.js` - License management
 - `/app/desktop-app/src/sync-manager.js` - Data synchronization
