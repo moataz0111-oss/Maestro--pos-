@@ -297,8 +297,22 @@ async def get_cash_register_summary(
     
     shift = await db.shifts.find_one(shift_query, {"_id": 0})
     
+    # إذا لم توجد وردية مفتوحة، نُنشئ واحدة تلقائياً
     if not shift:
-        raise HTTPException(status_code=404, detail="لا يوجد وردية مفتوحة")
+        new_shift = {
+            "id": str(uuid.uuid4()),
+            "tenant_id": tenant_id,
+            "branch_id": target_branch_id,
+            "cashier_id": current_user.get("id"),
+            "cashier_name": current_user.get("full_name", ""),
+            "started_at": datetime.now(timezone.utc).isoformat(),
+            "opened_at": datetime.now(timezone.utc).isoformat(),
+            "status": "open",
+            "opening_balance": 0,
+            "created_at": datetime.now(timezone.utc).isoformat()
+        }
+        await db.shifts.insert_one(new_shift)
+        shift = new_shift
     
     branch = await db.branches.find_one({"id": shift["branch_id"]}, {"_id": 0, "name": 1})
     
