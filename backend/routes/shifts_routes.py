@@ -314,16 +314,16 @@ async def get_cash_register_summary(
         await db.shifts.insert_one(new_shift)
         shift = new_shift
     
-    branch = await db.branches.find_one({"id": shift["branch_id"]}, {"_id": 0, "name": 1})
+    branch = await db.branches.find_one({"id": shift.get("branch_id", "")}, {"_id": 0, "name": 1})
     
     # الحصول على تاريخ بدء الوردية أو بداية اليوم (أيهما أقدم)
-    shift_start = shift["started_at"]
+    shift_start = shift.get("started_at", shift.get("opened_at", datetime.now(timezone.utc).isoformat()))
     today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
     
     # البحث عن آخر وردية مغلقة لهذا الفرع
     last_closed_shift = await db.shifts.find_one(
         {
-            "branch_id": shift["branch_id"],
+            "branch_id": shift.get("branch_id", ""),
             "tenant_id": tenant_id,
             "status": "closed"
         },
