@@ -437,6 +437,49 @@ ipcMain.handle('get-app-info', () => {
   };
 });
 
+// ============ الباركود ============
+ipcMain.handle('barcode-process', (event, key, timestamp) => {
+  if (!barcodeScanner) return null;
+  const result = barcodeScanner.processInput(key, timestamp);
+  if (result) {
+    // إرسال للواجهة
+    barcodeScanner.notifyBarcodeScan(result);
+  }
+  return result;
+});
+
+ipcMain.handle('barcode-get-settings', () => {
+  if (!barcodeScanner) return null;
+  return barcodeScanner.getSettings();
+});
+
+ipcMain.handle('barcode-update-settings', (event, settings) => {
+  if (!barcodeScanner) return false;
+  barcodeScanner.updateSettings(settings);
+  return true;
+});
+
+ipcMain.handle('barcode-find-product', async (event, barcode) => {
+  if (!barcodeScanner) return null;
+  const db = getDatabase();
+  return barcodeScanner.findProductByBarcode(barcode, db);
+});
+
+// ============ إعادة تحميل التطبيق ============
+ipcMain.handle('reload-app', () => {
+  if (mainWindow) {
+    loadMainInterface();
+  }
+  return true;
+});
+
+ipcMain.handle('open-dev-tools', () => {
+  if (mainWindow) {
+    mainWindow.webContents.openDevTools();
+  }
+  return true;
+});
+
 // إغلاق التطبيق
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
