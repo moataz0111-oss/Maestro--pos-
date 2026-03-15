@@ -2435,6 +2435,214 @@ export default function SuperAdmin() {
                 </div>
               </TabsContent>
               
+              {/* إدارة الأجهزة المرخصة */}
+              <TabsContent value="devices">
+                {loadingDevices ? (
+                  <div className="flex items-center justify-center py-12">
+                    <Loader2 className="h-8 w-8 animate-spin text-orange-500" />
+                    <span className="mr-3 text-gray-400">{t('جاري تحميل بيانات الأجهزة...')}</span>
+                  </div>
+                ) : (
+                  <div className="space-y-6">
+                    {/* ملخص الأجهزة */}
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                      <div className="bg-gradient-to-br from-green-500/20 to-green-600/10 rounded-xl p-4 border border-green-500/20">
+                        <div className="flex items-center gap-3">
+                          <div className="p-2 bg-green-500/20 rounded-lg">
+                            <Monitor className="h-5 w-5 text-green-400" />
+                          </div>
+                          <div>
+                            <p className="text-2xl font-bold text-green-400">{devicesStats.activeDevices}</p>
+                            <p className="text-xs text-gray-400">{t('جهاز نشط')}</p>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div className="bg-gradient-to-br from-blue-500/20 to-blue-600/10 rounded-xl p-4 border border-blue-500/20">
+                        <div className="flex items-center gap-3">
+                          <div className="p-2 bg-blue-500/20 rounded-lg">
+                            <Layers className="h-5 w-5 text-blue-400" />
+                          </div>
+                          <div>
+                            <p className="text-2xl font-bold text-blue-400">{devicesStats.totalMaxDevices}</p>
+                            <p className="text-xs text-gray-400">{t('إجمالي الحد الأقصى')}</p>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div className="bg-gradient-to-br from-orange-500/20 to-orange-600/10 rounded-xl p-4 border border-orange-500/20">
+                        <div className="flex items-center gap-3">
+                          <div className="p-2 bg-orange-500/20 rounded-lg">
+                            <Users className="h-5 w-5 text-orange-400" />
+                          </div>
+                          <div>
+                            <p className="text-2xl font-bold text-orange-400">
+                              {tenants.filter(t => (t.devices_count || 0) > 0).length}
+                            </p>
+                            <p className="text-xs text-gray-400">{t('عميل لديه أجهزة')}</p>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div className="bg-gradient-to-br from-purple-500/20 to-purple-600/10 rounded-xl p-4 border border-purple-500/20">
+                        <div className="flex items-center gap-3">
+                          <div className="p-2 bg-purple-500/20 rounded-lg">
+                            <TrendingUp className="h-5 w-5 text-purple-400" />
+                          </div>
+                          <div>
+                            <p className="text-2xl font-bold text-purple-400">
+                              {devicesStats.totalMaxDevices > 0 
+                                ? Math.round((devicesStats.activeDevices / devicesStats.totalMaxDevices) * 100) 
+                                : 0}%
+                            </p>
+                            <p className="text-xs text-gray-400">{t('نسبة الاستخدام')}</p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* قائمة العملاء مع أجهزتهم */}
+                    <div className="bg-gray-700/30 rounded-xl p-4">
+                      <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
+                        <Monitor className="h-5 w-5 text-orange-400" />
+                        {t('إدارة أجهزة العملاء')}
+                      </h3>
+                      
+                      <div className="space-y-3">
+                        {tenants.length === 0 ? (
+                          <p className="text-center text-gray-400 py-8">{t('لا يوجد عملاء')}</p>
+                        ) : (
+                          tenants.map(tenant => (
+                            <div 
+                              key={tenant.id}
+                              className="flex items-center justify-between p-4 bg-gray-800/50 rounded-lg hover:bg-gray-700/50 transition-colors"
+                            >
+                              <div className="flex items-center gap-4">
+                                <div className={`w-3 h-3 rounded-full ${tenant.is_active ? 'bg-green-500' : 'bg-red-500'}`} />
+                                <div>
+                                  <h4 className="font-bold">{lang === 'en' ? (tenant.name_en || tenant.name) : (tenant.name || tenant.name_en)}</h4>
+                                  <p className="text-sm text-gray-400">{tenant.owner_email}</p>
+                                </div>
+                              </div>
+                              
+                              <div className="flex items-center gap-6">
+                                {/* عدد الأجهزة */}
+                                <div className="text-center">
+                                  <p className="text-sm text-gray-400">{t('الأجهزة المستخدمة')}</p>
+                                  <p className="font-bold text-lg">
+                                    <span className={(tenant.devices_count || 0) >= (tenant.max_devices || 5) ? 'text-red-400' : 'text-green-400'}>
+                                      {tenant.devices_count || 0}
+                                    </span>
+                                    <span className="text-gray-500"> / {tenant.max_devices || 5}</span>
+                                  </p>
+                                </div>
+                                
+                                {/* التحكم في الحد الأقصى */}
+                                <div className="flex items-center gap-2">
+                                  <span className="text-sm text-gray-400">{t('الحد الأقصى')}:</span>
+                                  <div className="flex items-center gap-1">
+                                    <Button 
+                                      variant="outline" 
+                                      size="sm" 
+                                      className="h-8 w-8 p-0 border-gray-600"
+                                      onClick={() => {
+                                        const current = tenant.max_devices || 5;
+                                        if (current > 1) updateMaxDevices(tenant.id, current - 1);
+                                      }}
+                                      disabled={(tenant.max_devices || 5) <= 1}
+                                    >
+                                      <Minus className="h-4 w-4" />
+                                    </Button>
+                                    <span className="font-bold text-lg w-10 text-center">{tenant.max_devices || 5}</span>
+                                    <Button 
+                                      variant="outline" 
+                                      size="sm" 
+                                      className="h-8 w-8 p-0 border-gray-600"
+                                      onClick={() => updateMaxDevices(tenant.id, (tenant.max_devices || 5) + 1)}
+                                    >
+                                      <Plus className="h-4 w-4" />
+                                    </Button>
+                                  </div>
+                                </div>
+                                
+                                {/* زر عرض الأجهزة */}
+                                <Button 
+                                  variant="outline" 
+                                  size="sm" 
+                                  className="border-orange-500/50 text-orange-400 hover:bg-orange-500/20"
+                                  onClick={() => {
+                                    setSelectedTenantForDevices(tenant);
+                                    setShowDevicesModal(true);
+                                  }}
+                                  disabled={(tenant.devices_count || 0) === 0}
+                                >
+                                  <Eye className="h-4 w-4 ml-2" />
+                                  {t('عرض الأجهزة')}
+                                </Button>
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+
+                    {/* قائمة كل الأجهزة */}
+                    {allDevices.length > 0 && (
+                      <div className="bg-gray-700/30 rounded-xl p-4">
+                        <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
+                          <Layers className="h-5 w-5 text-blue-400" />
+                          {t('جميع الأجهزة المرخصة')} ({allDevices.length})
+                        </h3>
+                        
+                        <div className="overflow-x-auto">
+                          <table className="w-full">
+                            <thead>
+                              <tr className="border-b border-gray-600">
+                                <th className="text-right py-3 px-4 text-gray-400 font-medium">{t('العميل')}</th>
+                                <th className="text-right py-3 px-4 text-gray-400 font-medium">{t('معرف الجهاز')}</th>
+                                <th className="text-right py-3 px-4 text-gray-400 font-medium">{t('تاريخ التفعيل')}</th>
+                                <th className="text-right py-3 px-4 text-gray-400 font-medium">{t('الحالة')}</th>
+                                <th className="text-center py-3 px-4 text-gray-400 font-medium">{t('إجراءات')}</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {allDevices.map((device, idx) => (
+                                <tr key={idx} className="border-b border-gray-700/50 hover:bg-gray-700/30">
+                                  <td className="py-3 px-4">{device.tenantName}</td>
+                                  <td className="py-3 px-4">
+                                    <code className="text-xs bg-gray-800 px-2 py-1 rounded">
+                                      {device.device_id?.slice(0, 25)}...
+                                    </code>
+                                  </td>
+                                  <td className="py-3 px-4 text-gray-400">
+                                    {device.activated_at ? new Date(device.activated_at).toLocaleDateString('ar-IQ') : '-'}
+                                  </td>
+                                  <td className="py-3 px-4">
+                                    <Badge className={device.is_active ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}>
+                                      {device.is_active ? t('نشط') : t('معطل')}
+                                    </Badge>
+                                  </td>
+                                  <td className="py-3 px-4 text-center">
+                                    <Button 
+                                      variant="ghost" 
+                                      size="sm" 
+                                      className="text-red-400 hover:text-red-300 hover:bg-red-500/20"
+                                      onClick={() => deactivateDevice(device.tenant_id, device.device_id)}
+                                    >
+                                      <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </TabsContent>
+              
               {/* لوحة معلومات الاشتراكات */}
               <TabsContent value="subscriptions">
                 {loadingDashboard ? (
