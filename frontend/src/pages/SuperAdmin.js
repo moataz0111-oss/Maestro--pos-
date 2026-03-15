@@ -182,6 +182,17 @@ export default function SuperAdmin() {
   const [newOwnerSecretKey, setNewOwnerSecretKey] = useState('');
   const [savingOwnerSettings, setSavingOwnerSettings] = useState(false);
 
+  // Devices management state
+  const [allDevices, setAllDevices] = useState([]);
+  const [loadingDevices, setLoadingDevices] = useState(false);
+  const [devicesStats, setDevicesStats] = useState({
+    totalDevices: 0,
+    activeDevices: 0,
+    totalMaxDevices: 0
+  });
+  const [showDevicesModal, setShowDevicesModal] = useState(false);
+  const [selectedTenantForDevices, setSelectedTenantForDevices] = useState(null);
+
   // Login page settings
   const [loginPageSettings, setLoginPageSettings] = useState({
     enable_animation: true,
