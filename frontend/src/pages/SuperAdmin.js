@@ -465,6 +465,130 @@ export default function SuperAdmin() {
     }
   };
 
+  // Fetch all devices for all tenants
+  const fetchAllDevices = async () => {
+    setLoadingDevices(true);
+    try {
+      // جلب الأجهزة لكل عميل
+      const devicesPromises = tenants.map(tenant => 
+        axios.get(`${API}/super-admin/tenants/${tenant.id}/devices`)
+          .then(res => ({ 
+            tenantId: tenant.id, 
+            tenantName: tenant.name || tenant.name_ar || tenant.slug,
+            ...res.data 
+          }))
+          .catch(() => ({ 
+            tenantId: tenant.id, 
+            tenantName: tenant.name || tenant.name_ar || tenant.slug,
+            devices: [], 
+            count: 0, 
+            max_devices: 5 
+          }))
+      );
+      
+      const allDevicesData = await Promise.all(devicesPromises);
+      
+      // تجميع كل الأجهزة
+      const devices = [];
+      let totalDevices = 0;
+      let activeDevices = 0;
+      let totalMaxDevices = 0;
+      
+      allDevicesData.forEach(data => {
+        totalMaxDevices += data.max_devices || 5;
+        if (data.devices && data.devices.length > 0) {
+          data.devices.forEach(device => {
+            devices.push({
+              ...device,
+              tenantName: data.tenantName
+            });
+            totalDevices++;
+            if (device.is_active) activeDevices++;
+          });
+        }
+      });
+      
+      setAllDevices(devices);
+      setDevicesStats({
+        totalDevices,
+        activeDevices,
+        totalMaxDevices
+      });
+      
+      // تحديث عدد الأجهزة في قائمة العملاء
+      setTenants(prev => prev.map(tenant => {
+        const tenantData = allDevicesData.find(d => d.tenantId === tenant.id);
+        return {
+          ...tenant,
+          devices_count: tenantData?.count || 0,
+          max_devices: tenantData?.max_devices || tenant.max_devices || 5
+        };
+      }));
+      
+    } catch (error) {
+      console.error('Failed to fetch devices:', error);
+      toast.error(t('فشل في جلب بيانات الأجهزة'));
+    } finally {
+      setLoadingDevices(false);
+    }
+  };
+
+  // Update max devices for a tenant
+  const updateMaxDevices = async (tenantId, newMax) => {
+    try {
+      await axios.put(`${API}/super-admin/tenants/${tenantId}/max-devices`, { max_devices: newMax });
+      
+      // تحديث البيانات محلياً
+      setTenants(prev => prev.map(t => 
+        t.id === tenantId ? { ...t, max_devices: newMax } : t
+      ));
+      
+      if (tenantDetails && selectedTenant?.id === tenantId) {
+        setTenantDetails(prev => ({
+          ...prev,
+          tenant: { ...prev.tenant, max_devices: newMax }
+        }));
+      }
+      
+      toast.success(t('تم تحديث الحد الأقصى للأجهزة'));
+    } catch (error) {
+      toast.error(t('فشل تحديث الحد الأقصى'));
+    }
+  };
+
+  // Deactivate a device
+  const deactivateDevice = async (tenantId, deviceId) => {
+    if (!confirm(t('هل تريد إلغاء ترخيص هذا الجهاز؟'))) return;
+    
+    try {
+      await axios.delete(`${API}/super-admin/tenants/${tenantId}/devices/${deviceId}`);
+      
+      // تحديث البيانات محلياً
+      setAllDevices(prev => prev.filter(d => d.device_id !== deviceId));
+      setDevicesStats(prev => ({
+        ...prev,
+        totalDevices: prev.totalDevices - 1,
+        activeDevices: prev.activeDevices - 1
+      }));
+      
+      // تحديث عدد أجهزة العميل
+      setTenants(prev => prev.map(t => 
+        t.id === tenantId ? { ...t, devices_count: (t.devices_count || 1) - 1 } : t
+      ));
+      
+      if (tenantDetails && selectedTenant?.id === tenantId) {
+        setTenantDetails(prev => ({
+          ...prev,
+          devices: prev.devices?.filter(d => d.device_id !== deviceId) || []
+        }));
+      }
+      
+      toast.success(t('تم إلغاء ترخيص الجهاز'));
+    } catch (error) {
+      toast.error(t('فشل إلغاء ترخيص الجهاز'));
+    }
+  };
+
   const handleLogin = async (e) => {
     e.preventDefault();
     setLoading(true);
