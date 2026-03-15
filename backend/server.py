@@ -9275,6 +9275,14 @@ async def reset_tenant_inventory(tenant_id: str, confirm: bool = False, current_
     deleted_branch_inv = await db.branch_inventory.delete_many(query)
     results["reset_counts"]["branch_inventory"] = deleted_branch_inv.deleted_count
     
+    # حذف حركات المخزون (واردات/صادرات)
+    deleted_transactions = await db.inventory_transactions.delete_many(query)
+    results["reset_counts"]["inventory_transactions"] = deleted_transactions.deleted_count
+    
+    # حذف تحويلات المخزن
+    deleted_transfers = await db.warehouse_transfers.delete_many(query)
+    results["reset_counts"]["warehouse_transfers"] = deleted_transfers.deleted_count
+    
     return {
         "message": f"تم تصفير بيانات المخزون لـ '{results['tenant_name']}' بنجاح",
         "success": True,
