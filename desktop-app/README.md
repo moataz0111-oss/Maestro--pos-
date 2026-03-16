@@ -1,23 +1,19 @@
 # Maestro POS - تطبيق سطح المكتب
 
 ## المتطلبات
-- Node.js v18 أو أحدث
+- Node.js v20 (LTS)
 - Yarn أو npm
 
 ## التثبيت
 
 ```bash
 cd desktop-app
-yarn install
-# أو
 npm install
 ```
 
 ## التشغيل (وضع التطوير)
 
 ```bash
-yarn start
-# أو
 npm start
 ```
 
@@ -25,21 +21,65 @@ npm start
 
 ### Windows (يتطلب تشغيل على Windows)
 ```bash
-yarn build:win
+npm run build:win
 ```
 سينتج ملف `.exe` في مجلد `dist/`
 
 ### Mac (يتطلب تشغيل على macOS)
 ```bash
-yarn build:mac
+npm run build:mac
 ```
 سينتج ملف `.dmg` في مجلد `dist/`
 
 ### Linux
 ```bash
-yarn build:linux
+npm run build:linux
 ```
 سينتج ملف `.AppImage` في مجلد `dist/`
+
+---
+
+## 🔄 التحديث التلقائي
+
+### إعداد التحديث التلقائي عبر GitHub:
+
+1. **أنشئ مستودع GitHub جديد** باسم `maestro-pos-desktop`
+
+2. **عدّل `package.json`** وغيّر:
+   ```json
+   "publish": {
+     "provider": "github",
+     "owner": "YOUR_GITHUB_USERNAME",  ← ضع اسم المستخدم هنا
+     "repo": "maestro-pos-desktop"
+   }
+   ```
+
+3. **أنشئ GitHub Token:**
+   - اذهب إلى: https://github.com/settings/tokens
+   - انقر "Generate new token (classic)"
+   - اختر صلاحيات: `repo`, `write:packages`
+   - انسخ الـ Token
+
+4. **انشر تحديث جديد:**
+   ```bash
+   # على Mac/Linux
+   export GH_TOKEN=your_github_token
+   npm run publish:mac
+   
+   # على Windows
+   set GH_TOKEN=your_github_token
+   npm run publish:win
+   ```
+
+5. **اذهب لـ GitHub Releases** وانشر الإصدار
+
+### كيف يعمل التحديث؟
+- عند تشغيل التطبيق، يفحص التحديثات تلقائياً
+- إذا وُجد تحديث، يُنبّه المستخدم
+- المستخدم يختار "تحميل" أو "لاحقاً"
+- بعد التحميل، يسأل عن إعادة التشغيل للتثبيت
+
+---
 
 ## الإعداد الأولي
 
@@ -71,6 +111,11 @@ yarn build:linux
 - فترة سماح 24 ساعة للعمل offline
 - إدارة الأجهزة من Super Admin
 
+### ✅ التحديث التلقائي
+- فحص التحديثات عند التشغيل
+- تحميل التحديثات في الخلفية
+- تثبيت سهل بضغطة زر
+
 ## هيكل الملفات
 
 ```
@@ -84,6 +129,8 @@ desktop-app/
 │   ├── printer-manager.js # إدارة الطابعات
 │   ├── license-manager.js # إدارة الترخيص
 │   ├── barcode-scanner.js # قارئ الباركود
+│   ├── auto-updater.js  # التحديث التلقائي
+│   ├── zkteco-manager.js # جهاز البصمة
 │   └── views/
 │       ├── setup.html   # صفحة الإعداد
 │       └── offline.html # صفحة عدم الاتصال
@@ -91,53 +138,17 @@ desktop-app/
     └── icon.*           # أيقونات التطبيق
 ```
 
-## ملاحظات هامة
-
-1. **الأيقونات**: 
-   - Windows يتطلب `.ico`
-   - Mac يتطلب `.icns`
-   - يمكن تحويل PNG باستخدام أدوات مثل `electron-icon-builder`
-
-2. **توقيع الكود** (اختياري للإنتاج):
-   - Windows: يتطلب شهادة Code Signing
-   - Mac: يتطلب Apple Developer Account
-
-3. **التحديثات التلقائية**:
-   - يمكن إضافة `electron-updater` لاحقاً
-
 ## استكشاف الأخطاء
 
 ### التطبيق لا يعمل
 ```bash
-# تحقق من السجلات
 electron . --enable-logging
 ```
 
-### مشاكل قاعدة البيانات
-- تأكد من تثبيت `better-sqlite3` بشكل صحيح
-- قد تحتاج إعادة البناء: `npm rebuild better-sqlite3`
-
-### مشاكل الاتصال
-- تحقق من رابط السيرفر
+### مشاكل التحديث
+- تأكد من وجود `GH_TOKEN` صحيح
+- تأكد من نشر الإصدار على GitHub Releases
 - تحقق من اتصال الإنترنت
-- تحقق من صلاحية الترخيص
-
-## دمج جهاز البصمة ZKTeco
-
-### SDK المطلوب
-1. قم بتنزيل ZKTeco SDK من الموقع الرسمي
-2. ضع ملفات DLL في مجلد التطبيق
-3. استخدم `zkemkeeper.ocx` للاتصال بالجهاز
-
-### مثال الاستخدام
-```javascript
-// سيتم إضافته بعد توفير SDK
-const zkDevice = require('./src/zkteco-manager');
-zkDevice.connect('192.168.1.100', 4370);
-zkDevice.onFingerprint((employeeId) => {
-  console.log('تم التعرف على الموظف:', employeeId);
-});
-```
 
 ## الدعم
 
