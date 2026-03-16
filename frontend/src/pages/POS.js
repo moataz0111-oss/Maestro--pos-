@@ -1173,6 +1173,24 @@ export default function POS() {
         </div>
         <ScrollArea className="flex-1">
           <div className="p-2 space-y-2">
+            {/* زر عرض الكل */}
+            <button
+              onClick={() => { setSelectedCategory(null); playClick(); }}
+              className={`w-full rounded-xl overflow-hidden transition-all ${
+                !selectedCategory 
+                  ? 'ring-2 ring-primary ring-offset-2 scale-105' 
+                  : 'hover:scale-102 hover:shadow-md'
+              }`}
+              data-testid="category-all"
+            >
+              <div className="relative h-16 bg-gradient-to-br from-blue-500/30 to-blue-600/50 flex items-center justify-center">
+                <span className="text-white font-bold text-sm flex items-center gap-2">
+                  <span className="text-2xl">🏪</span>
+                  {t('عرض الكل')} ({products.length})
+                </span>
+              </div>
+            </button>
+            
             {categories.map(cat => (
               <button
                 key={cat.id}
