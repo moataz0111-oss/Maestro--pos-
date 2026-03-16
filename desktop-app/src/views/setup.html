@@ -270,49 +270,6 @@
       }
     });
     
-    // تحميل قائمة الطابعات
-    async function loadPrinters() {
-      try {
-        const printers = await window.electronAPI.getPrinters();
-        
-        const receiptSelect = document.getElementById('receiptPrinter');
-        const kitchenSelect = document.getElementById('kitchenPrinter');
-        
-        printers.forEach(printer => {
-          const option1 = new Option(printer.displayName || printer.name, printer.name);
-          const option2 = new Option(printer.displayName || printer.name, printer.name);
-          
-          if (printer.isDefault) {
-            option1.selected = true;
-          }
-          
-          receiptSelect.add(option1);
-          kitchenSelect.add(option2);
-        });
-        
-      } catch (error) {
-        console.error('خطأ في تحميل الطابعات:', error);
-      }
-    }
-    
-    // إنهاء الإعداد
-    document.getElementById('finishBtn').addEventListener('click', async () => {
-      const receiptPrinter = document.getElementById('receiptPrinter').value;
-      const kitchenPrinter = document.getElementById('kitchenPrinter').value;
-      
-      await window.electronAPI.saveSettings({
-        printerSettings: {
-          receiptPrinter,
-          kitchenPrinter,
-          autoPrint: true
-        }
-      });
-      
-      // إعادة تحميل النافذة لتحميل التطبيق الرئيسي
-      const settings = await window.electronAPI.getSettings();
-      window.location.href = settings.serverUrl;
-    });
-    
     // إظهار حالة
     function showStatus(message, type) {
       statusDiv.textContent = message;
