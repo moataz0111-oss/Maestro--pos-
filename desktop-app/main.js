@@ -118,12 +118,15 @@ function createWindow() {
     mainWindow = null;
   });
 
-  // إخفاء للـ tray بدلاً من الإغلاق
+  // إغلاق التطبيق عند إغلاق النافذة (على Mac يمكن إخفاء للـ tray)
   mainWindow.on('close', (event) => {
-    if (!app.isQuitting) {
+    // على Mac: إذا لم يكن التطبيق يُغلق فعلياً، اخفِ النافذة
+    // على Windows/Linux: أغلق التطبيق مباشرة
+    if (process.platform === 'darwin' && !app.isQuitting) {
       event.preventDefault();
       mainWindow.hide();
     }
+    // على Windows/Linux - أغلق مباشرة
   });
 
   // فتح DevTools في وضع التطوير
