@@ -8,7 +8,10 @@
     "build:win": "electron-builder --win",
     "build:mac": "electron-builder --mac",
     "build:linux": "electron-builder --linux",
-    "build:all": "electron-builder --win --mac --linux"
+    "build:all": "electron-builder --win --mac --linux",
+    "publish:win": "electron-builder --win --publish always",
+    "publish:mac": "electron-builder --mac --publish always",
+    "publish:all": "electron-builder --win --mac --linux --publish always"
   },
   "build": {
     "appId": "com.maestro.pos",
@@ -20,6 +23,12 @@
       "**/*",
       "!dist/**"
     ],
+    "publish": {
+      "provider": "github",
+      "owner": "YOUR_GITHUB_USERNAME",
+      "repo": "maestro-pos-desktop",
+      "releaseType": "release"
+    },
     "win": {
       "target": "nsis",
       "icon": "assets/icon.ico"
@@ -42,6 +51,7 @@
   "dependencies": {
     "better-sqlite3": "^9.4.3",
     "electron-store": "^8.1.0",
+    "electron-updater": "^6.1.7",
     "axios": "^1.6.7",
     "uuid": "^9.0.0"
   },
