@@ -246,6 +246,9 @@ app.whenReady().then(async () => {
   barcodeScanner = new BarcodeScanner(store);
   barcodeScanner.start();
   
+  // تهيئة مدير التحديث التلقائي
+  autoUpdater = new AutoUpdater(store);
+  
   // إنشاء النافذة
   createWindow();
   createTray();
@@ -259,6 +262,9 @@ app.whenReady().then(async () => {
   if (licenseValid) {
     licenseManager.startPeriodicCheck(60);
   }
+  
+  // بدء فحص التحديثات (بعد 10 ثواني من بدء التشغيل)
+  autoUpdater.startPeriodicCheck(60); // فحص كل ساعة
   
   // مراقبة حالة الاتصال
   setInterval(checkConnection, 10000);
