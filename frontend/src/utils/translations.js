@@ -827,6 +827,8 @@ const translations = {
     'لا توجد أجهزة مسجلة': 'No registered devices',
     'إدارة الأجهزة المرخصة': 'Licensed Devices Management',
     'فشل في جلب بيانات الأجهزة': 'Failed to fetch devices data',
+    'لا توجد منتجات مصنعة حالياً. أضف منتجات من قسم المخزن والتصنيع أولاً': 'No manufactured products yet. Add products from Warehouse & Manufacturing section first',
+    'ربط بمنتج مصنع (للخصم التلقائي)': 'Link to Manufactured Product (Auto-deduct)',
     
     // ==================== Invoices ====================
     invoice: 'Invoice',
