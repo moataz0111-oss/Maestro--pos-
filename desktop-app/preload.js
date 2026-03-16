@@ -81,6 +81,17 @@ contextBridge.exposeInMainWorld('electronAPI', {
   reloadApp: () => ipcRenderer.invoke('reload-app'),
   openDevTools: () => ipcRenderer.invoke('open-dev-tools'),
   
+  // ============ التحديث التلقائي ============
+  update: {
+    check: () => ipcRenderer.invoke('update-check'),
+    download: () => ipcRenderer.invoke('update-download'),
+    install: () => ipcRenderer.invoke('update-install'),
+    getStatus: () => ipcRenderer.invoke('update-get-status')
+  },
+  onUpdateStatus: (callback) => {
+    ipcRenderer.on('update-status', (event, data) => callback(data));
+  },
+  
   // ============ الإشعارات ============
   showNotification: (title, body) => {
     new Notification(title, { body });
