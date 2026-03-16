@@ -35,6 +35,7 @@ let syncManager;
 let printerManager;
 let licenseManager;
 let barcodeScanner;
+let autoUpdater;
 let isOnline = true;
 let licenseValid = false;
 
