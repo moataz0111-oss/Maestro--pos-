@@ -488,6 +488,30 @@ ipcMain.handle('open-dev-tools', () => {
   return true;
 });
 
+// ============ التحديث التلقائي ============
+ipcMain.handle('update-check', () => {
+  if (!autoUpdater) return { error: 'مدير التحديث غير مهيأ' };
+  autoUpdater.checkForUpdates();
+  return { checking: true };
+});
+
+ipcMain.handle('update-download', () => {
+  if (!autoUpdater) return { error: 'مدير التحديث غير مهيأ' };
+  autoUpdater.downloadUpdate();
+  return { downloading: true };
+});
+
+ipcMain.handle('update-install', () => {
+  if (!autoUpdater) return { error: 'مدير التحديث غير مهيأ' };
+  autoUpdater.quitAndInstall();
+  return { installing: true };
+});
+
+ipcMain.handle('update-get-status', () => {
+  if (!autoUpdater) return null;
+  return autoUpdater.getStatus();
+});
+
 // إغلاق التطبيق
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
