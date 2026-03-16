@@ -1139,7 +1139,11 @@ export default function WarehouseManufacturing() {
                     <SelectItem value="حبة">{t('حبة')}</SelectItem>
                     <SelectItem value="صحن">{t('صحن')}</SelectItem>
                     <SelectItem value="كغم">{t('كغم')}</SelectItem>
+                    <SelectItem value="غرام">{t('غرام')}</SelectItem>
                     <SelectItem value="لتر">{t('لتر')}</SelectItem>
+                    <SelectItem value="مل">{t('مل')}</SelectItem>
+                    <SelectItem value="علبة">{t('علبة')}</SelectItem>
+                    <SelectItem value="كرتون">{t('كرتون')}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

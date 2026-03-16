@@ -3438,29 +3438,33 @@ export default function Settings() {
                         </div>
                         
                         {/* ربط بالمنتج المصنع */}
-                        {manufacturedProducts.length > 0 && (
-                          <div className="p-3 bg-purple-500/10 border border-purple-500/30 rounded-lg">
-                            <Label className="text-foreground font-medium mb-2 flex items-center gap-2">
-                              <Factory className="h-4 w-4 text-purple-500" />{t('ربط بمنتج مصنع (للخصم التلقائي)')}</Label>
-                            <Select 
-                              value={productForm.manufactured_product_id || 'none'} 
-                              onValueChange={(v) => setProductForm({ ...productForm, manufactured_product_id: v === 'none' ? null : v })}
-                            >
-                              <SelectTrigger className="mt-2">
-                                <SelectValue placeholder={t('اختر المنتج المصنع (اختياري)')} />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="none">{t('بدون ربط')}</SelectItem>
-                                {manufacturedProducts.map(mp => (
-                                  <SelectItem key={mp.id} value={mp.id}>
-                                    {mp.name} ({mp.quantity} {mp.unit})
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                            <p className="text-xs text-muted-foreground mt-2">{t('عند ربط المنتج، سيتم خصم الكمية تلقائياً من مخزون الفرع عند البيع')}</p>
-                          </div>
-                        )}
+                        <div className="p-3 bg-purple-500/10 border border-purple-500/30 rounded-lg">
+                          <Label className="text-foreground font-medium mb-2 flex items-center gap-2">
+                            <Factory className="h-4 w-4 text-purple-500" />{t('ربط بمنتج مصنع (للخصم التلقائي)')}</Label>
+                          {manufacturedProducts.length > 0 ? (
+                            <>
+                              <Select 
+                                value={productForm.manufactured_product_id || 'none'} 
+                                onValueChange={(v) => setProductForm({ ...productForm, manufactured_product_id: v === 'none' ? null : v })}
+                              >
+                                <SelectTrigger className="mt-2">
+                                  <SelectValue placeholder={t('اختر المنتج المصنع (اختياري)')} />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="none">{t('بدون ربط')}</SelectItem>
+                                  {manufacturedProducts.map(mp => (
+                                    <SelectItem key={mp.id} value={mp.id}>
+                                      {mp.name} ({mp.quantity} {mp.unit})
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              <p className="text-xs text-muted-foreground mt-2">{t('عند ربط المنتج، سيتم خصم الكمية تلقائياً من مخزون الفرع عند البيع')}</p>
+                            </>
+                          ) : (
+                            <p className="text-xs text-amber-600 mt-2 bg-amber-500/10 p-2 rounded">{t('لا توجد منتجات مصنعة حالياً. أضف منتجات من قسم المخزن والتصنيع أولاً')}</p>
+                          )}
+                        </div>
                         
                         <div>
                           <ImageUploader
