@@ -442,6 +442,49 @@ ipcMain.handle('clear-auth-token', () => {
   return true;
 });
 
+// ============ مسح البيانات وإعادة التحميل ============
+ipcMain.handle('clear-cache', async () => {
+  try {
+    const { session } = require('electron');
+    await session.defaultSession.clearCache();
+    await session.defaultSession.clearStorageData({
+      storages: ['appcache', 'cookies', 'filesystem', 'indexdb', 'localstorage', 'shadercache', 'websql', 'serviceworkers', 'cachestorage']
+    });
+    console.log('🧹 تم مسح جميع البيانات المؤقتة');
+    return { success: true, message: 'تم مسح البيانات بنجاح' };
+  } catch (error) {
+    console.error('❌ فشل مسح البيانات:', error);
+    return { success: false, message: error.message };
+  }
+});
+
+ipcMain.handle('reload-app', () => {
+  if (mainWindow) {
+    mainWindow.reload();
+  }
+  return true;
+});
+
+ipcMain.handle('clear-and-reload', async () => {
+  try {
+    const { session } = require('electron');
+    // مسح Cache
+    await session.defaultSession.clearCache();
+    // مسح IndexedDB و LocalStorage
+    await session.defaultSession.clearStorageData({
+      storages: ['indexdb', 'localstorage', 'cachestorage', 'serviceworkers']
+    });
+    console.log('🧹 تم مسح البيانات');
+    // إعادة تحميل الصفحة
+    if (mainWindow) {
+      mainWindow.reload();
+    }
+    return { success: true };
+  } catch (error) {
+    return { success: false, message: error.message };
+  }
+});
+
 // ============ معلومات التطبيق ============
 ipcMain.handle('get-app-version', () => {
   return app.getVersion();
