@@ -530,6 +530,7 @@ app.on('activate', () => {
 
 // تنظيف عند الإغلاق
 app.on('before-quit', () => {
+  app.isQuitting = true;
   if (syncManager) {
     syncManager.stopAutoSync();
   }
@@ -538,5 +539,19 @@ app.on('before-quit', () => {
   }
   if (autoUpdater) {
     autoUpdater.stopPeriodicCheck();
+  }
+});
+
+// على Mac: إظهار النافذة عند النقر على أيقونة Dock
+app.on('activate', () => {
+  if (mainWindow) {
+    mainWindow.show();
+  }
+});
+
+// إغلاق التطبيق عند إغلاق كل النوافذ (على Windows/Linux)
+app.on('window-all-closed', () => {
+  if (process.platform !== 'darwin') {
+    app.quit();
   }
 });
