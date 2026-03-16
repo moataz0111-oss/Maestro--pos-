@@ -181,6 +181,26 @@ function createTray() {
       label: 'مزامنة الآن', 
       click: () => syncManager.syncNow() 
     },
+    { 
+      label: '🔄 إعادة تحميل', 
+      click: () => mainWindow.reload()
+    },
+    { 
+      label: '🧹 مسح البيانات المؤقتة', 
+      click: async () => {
+        const { session } = require('electron');
+        await session.defaultSession.clearCache();
+        await session.defaultSession.clearStorageData({
+          storages: ['indexdb', 'localstorage', 'cachestorage', 'serviceworkers']
+        });
+        mainWindow.reload();
+        dialog.showMessageBox(mainWindow, {
+          type: 'info',
+          title: 'تم',
+          message: 'تم مسح البيانات المؤقتة وإعادة تحميل البرنامج'
+        });
+      }
+    },
     { type: 'separator' },
     { 
       label: 'الإعدادات', 
