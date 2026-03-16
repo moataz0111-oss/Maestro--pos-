@@ -814,6 +814,18 @@ const translations = {
     delete_customer: 'Delete Customer',
     blocked_customer: 'Blocked Customer',
     
+    // ==================== Super Admin ====================
+    العملاء: 'Clients',
+    التجريبية: 'Demo',
+    الأجهزة: 'Devices',
+    الاشتراكات: 'Subscriptions',
+    الكل: 'All',
+    'لا يوجد عملاء فعليين': 'No active clients',
+    'لا توجد حسابات تجريبية': 'No demo accounts',
+    'لا توجد أجهزة مسجلة': 'No registered devices',
+    'إدارة الأجهزة المرخصة': 'Licensed Devices Management',
+    'فشل في جلب بيانات الأجهزة': 'Failed to fetch devices data',
+    
     // ==================== Invoices ====================
     invoice: 'Invoice',
     invoice_number: 'Invoice Number',
