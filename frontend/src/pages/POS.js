@@ -656,11 +656,14 @@ export default function POS() {
   };
 
   const filteredProducts = products.filter(p => {
-    const matchesCategory = !selectedCategory || p.category_id === selectedCategory;
+    // مقارنة category_id بطريقة مرنة تتعامل مع أنواع البيانات المختلفة
+    const matchesCategory = !selectedCategory || 
+      String(p.category_id) === String(selectedCategory) || 
+      p.category_id === selectedCategory;
     const matchesSearch = !searchQuery || 
-      p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      p.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       p.name_en?.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesCategory && matchesSearch && p.is_available;
+    return matchesCategory && matchesSearch && p.is_available !== false;
   });
 
   const addToCart = useCallback((product) => {
