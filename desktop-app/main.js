@@ -69,7 +69,9 @@ function createWindow() {
       nodeIntegration: false,
       contextIsolation: true,
       preload: path.join(__dirname, 'preload.js'),
-      webSecurity: true
+      webSecurity: true,
+      // تعطيل الـ Cache لضمان تحميل أحدث نسخة
+      partition: 'persist:main'
     },
     titleBarStyle: 'default',
     title: 'Maestro POS',
