@@ -279,12 +279,12 @@
           branchId: data.user?.branch_id || ''
         });
         
-        showStatus('✅ تم الاتصال بنجاح!', 'success');
+        showStatus('✅ تم الاتصال بنجاح! جاري تحميل التطبيق...', 'success');
         
-        // إظهار قسم الطابعات
-        await loadPrinters();
-        printerSection.style.display = 'block';
-        form.style.display = 'none';
+        // الانتقال مباشرة للتطبيق الرئيسي
+        setTimeout(() => {
+          window.location.href = serverUrl;
+        }, 1500);
         
       } catch (error) {
         showStatus(`❌ ${error.message}`, 'error');
