@@ -533,4 +533,7 @@ app.on('before-quit', () => {
   if (licenseManager) {
     licenseManager.stopPeriodicCheck();
   }
+  if (autoUpdater) {
+    autoUpdater.stopPeriodicCheck();
+  }
 });
