@@ -81,6 +81,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   reloadApp: () => ipcRenderer.invoke('reload-app'),
   openDevTools: () => ipcRenderer.invoke('open-dev-tools'),
   
+  // ============ مسح البيانات ============
+  clearCache: () => ipcRenderer.invoke('clear-cache'),
+  clearAndReload: () => ipcRenderer.invoke('clear-and-reload'),
+  
   // ============ التحديث التلقائي ============
   update: {
     check: () => ipcRenderer.invoke('update-check'),
