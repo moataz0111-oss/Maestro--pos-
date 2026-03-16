@@ -53,6 +53,7 @@ const translations = {
     select_all: 'تحديد الكل',
     deselect_all: 'إلغاء تحديد الكل',
     view: 'عرض',
+    'عرض الكل': 'عرض الكل',
     details: 'التفاصيل',
     actions: 'الإجراءات',
     more: 'المزيد',
