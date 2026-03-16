@@ -1,99 +1,96 @@
-# 🔄 كيفية تحديث تطبيق Maestro POS
+# 🔄 دليل تحديث Maestro POS Desktop
 
-## الطريقة 1: التحديث التلقائي (إذا كان مُفعّل)
+## إصلاح مشكلة الشاشة البيضاء
 
-عند تشغيل التطبيق، سيفحص التحديثات تلقائياً وسيظهر لك إشعار إذا وُجد تحديث جديد.
+### الطريقة 1: من داخل التطبيق (الأسهل)
 
----
+**على Mac:**
+1. افتح التطبيق
+2. من شريط القوائم: **Maestro POS** → **🧹 مسح البيانات المؤقتة**
+3. أو اضغط: `Cmd + Shift + Delete`
 
-## الطريقة 2: التحديث اليدوي (موصى به حالياً)
+**على Windows:**
+1. افتح التطبيق
+2. من شريط القوائم: **Maestro POS** → **🧹 مسح البيانات المؤقتة**
+3. أو اضغط: `Ctrl + Shift + Delete`
 
-### على Mac:
-
-```bash
-# 1. أغلق التطبيق تماماً
-# 2. احذف الإصدار القديم
-rm -rf "/Applications/Maestro POS.app"
-
-# 3. حمّل الكود الجديد
-cd ~/Desktop
-git clone https://github.com/YOUR_USERNAME/maestro-pos-desktop.git
-# أو قم بتنزيل ملف ZIP من emergent
-
-# 4. ادخل مجلد desktop-app
-cd maestro-pos-desktop/desktop-app
-# أو
-cd /path/to/downloaded/desktop-app
-
-# 5. ابنِ التطبيق الجديد
-chmod +x build-mac.sh
-./build-mac.sh
-
-# 6. ثبّت الإصدار الجديد
-open dist/Maestro\ POS-*.dmg
-# ثم اسحب التطبيق إلى Applications
-```
-
-### على Windows:
-
-```powershell
-# 1. أغلق التطبيق تماماً
-# 2. من Control Panel > Programs > Uninstall: احذف Maestro POS
-
-# 3. حمّل الكود الجديد
-cd C:\Users\YourName\Desktop
-git clone https://github.com/YOUR_USERNAME/maestro-pos-desktop.git
-# أو قم بتنزيل ملف ZIP
-
-# 4. ادخل مجلد desktop-app
-cd maestro-pos-desktop\desktop-app
-
-# 5. ابنِ التطبيق الجديد
-build-win.bat
-
-# 6. ثبّت الإصدار الجديد
-# شغّل ملف .exe من مجلد dist
-```
+**من أيقونة System Tray:**
+1. انقر بزر الماوس الأيمن على أيقونة التطبيق في شريط المهام
+2. اختر **🧹 مسح البيانات المؤقتة**
 
 ---
 
-## الطريقة 3: مسح Cache التطبيق (لحل مشكلة الشاشة البيضاء)
+### الطريقة 2: مسح البيانات يدوياً
 
-إذا كنت تواجه مشكلة الشاشة البيضاء، جرّب مسح البيانات المحلية:
-
-### على Mac:
+**على Mac:**
 ```bash
-# 1. أغلق التطبيق
+# 1. أغلق التطبيق تماماً
+
 # 2. احذف بيانات التطبيق
 rm -rf ~/Library/Application\ Support/maestro-pos-desktop
 rm -rf ~/Library/Caches/maestro-pos-desktop
 
-# 3. أعد تشغيل التطبيق
+# 3. أعد فتح التطبيق
 ```
 
-### على Windows:
+**على Windows (PowerShell):**
 ```powershell
-# 1. أغلق التطبيق
-# 2. احذف بيانات التطبيق
-rmdir /s "%APPDATA%\maestro-pos-desktop"
-rmdir /s "%LOCALAPPDATA%\maestro-pos-desktop"
+# 1. أغلق التطبيق تماماً
 
-# 3. أعد تشغيل التطبيق
+# 2. احذف بيانات التطبيق
+Remove-Item -Recurse -Force "$env:APPDATA\maestro-pos-desktop"
+Remove-Item -Recurse -Force "$env:LOCALAPPDATA\maestro-pos-desktop"
+
+# 3. أعد فتح التطبيق
+```
+
+**على Windows (CMD):**
+```cmd
+:: 1. أغلق التطبيق تماماً
+
+:: 2. احذف بيانات التطبيق
+rmdir /s /q "%APPDATA%\maestro-pos-desktop"
+rmdir /s /q "%LOCALAPPDATA%\maestro-pos-desktop"
+
+:: 3. أعد فتح التطبيق
 ```
 
 ---
 
-## إعداد التحديث التلقائي عبر GitHub
+### الطريقة 3: تحديث التطبيق بالكامل
 
-لتفعيل التحديث التلقائي، اتبع الخطوات التالية:
+**الخطوات:**
+1. حمّل الكود الجديد من Emergent (زر Download)
+2. فك الضغط عن الملف
+3. ادخل مجلد `desktop-app`
 
-### 1. أنشئ مستودع GitHub
-- اذهب إلى https://github.com/new
+**على Mac:**
+```bash
+cd desktop-app
+chmod +x build-mac.sh
+./build-mac.sh
+```
+
+**على Windows:**
+```cmd
+cd desktop-app
+build-win.bat
+```
+
+4. ثبّت التطبيق الجديد من مجلد `dist/`
+
+---
+
+## 🚀 التحديث التلقائي عبر GitHub
+
+### إعداد لمرة واحدة:
+
+**1. أنشئ مستودع GitHub:**
+- اذهب إلى: https://github.com/new
 - اسم المستودع: `maestro-pos-desktop`
-- اجعله Public
+- اجعله **Public**
 
-### 2. عدّل package.json
-افتح الملف `/desktop-app/package.json` وغيّر:
+**2. عدّل `package.json`:**
 ```json
 "publish": {
   "provider": "github",
@@ -102,49 +99,68 @@ rmdir /s "%LOCALAPPDATA%\maestro-pos-desktop"
 }
 ```
 
-### 3. أنشئ GitHub Token
+**3. أنشئ GitHub Token:**
 - اذهب إلى: https://github.com/settings/tokens
-- انقر "Generate new token (classic)"
+- انقر **Generate new token (classic)**
 - اختر صلاحيات: `repo` و `write:packages`
-- احفظ الـ Token في مكان آمن
+- احفظ الـ Token
 
-### 4. انشر التحديث
+### نشر تحديث جديد:
+
+**على Mac/Linux:**
 ```bash
-# على Mac/Linux
 export GH_TOKEN=your_github_token_here
 npm run publish:mac
+```
 
-# على Windows (PowerShell)
+**على Windows (PowerShell):**
+```powershell
 $env:GH_TOKEN="your_github_token_here"
 npm run publish:win
 ```
 
-### 5. انشر الـ Release
-- اذهب إلى GitHub > Releases
-- سترى draft release جديد
-- انقر "Edit" ثم "Publish release"
+**بعد النشر:**
+1. اذهب إلى GitHub → Releases
+2. سترى draft release جديد
+3. انقر **Edit** ثم **Publish release**
 
-### 6. بعد النشر
-عندما يفتح المستخدمون التطبيق، سيظهر لهم إشعار بوجود تحديث جديد!
-
----
-
-## استكشاف مشكلة الشاشة البيضاء
-
-### الأسباب المحتملة:
-1. **بيانات قديمة في IndexedDB**: امسح Cache التطبيق
-2. **عدم تطابق category_id**: تم إصلاحه في الكود الجديد
-3. **منتجات بدون فئة صحيحة**: تحقق من البيانات
-
-### الحل:
-1. حدّث التطبيق بآخر نسخة من الكود
-2. امسح بيانات التطبيق المحلية
-3. سجّل الدخول من جديد
+### كيف يعمل التحديث؟
+- عند فتح التطبيق، يفحص التحديثات تلقائياً
+- إذا وُجد تحديث، يظهر إشعار للمستخدم
+- المستخدم يختار "تحميل" أو "لاحقاً"
+- بعد التحميل، يسأل عن إعادة التشغيل
 
 ---
 
-## ملاحظة مهمة
-الكود الجديد يتضمن:
-- ✅ زر "عرض الكل" لإظهار جميع المنتجات
-- ✅ مقارنة مرنة لـ category_id
-- ✅ Debug logging في Console لتشخيص المشاكل
+## ⚠️ استكشاف الأخطاء
+
+### مشكلة: الشاشة البيضاء عند اختيار الفئات
+**السبب:** بيانات قديمة في IndexedDB
+**الحل:** استخدم أي من طرق مسح البيانات أعلاه
+
+### مشكلة: التطبيق لا يفتح
+**الحل:**
+```bash
+# على Mac
+rm -rf ~/Library/Application\ Support/maestro-pos-desktop
+
+# على Windows
+rmdir /s /q "%APPDATA%\maestro-pos-desktop"
+```
+
+### مشكلة: أيقونة التطبيق غير صحيحة
+**الحل:** أعد بناء التطبيق بالكامل
+
+---
+
+## 📱 اختصارات لوحة المفاتيح
+
+| الاختصار | الوظيفة |
+|---------|---------|
+| `Cmd/Ctrl + R` | إعادة تحميل الصفحة |
+| `Cmd/Ctrl + Shift + Delete` | مسح البيانات المؤقتة |
+| `Cmd/Ctrl + Shift + I` | أدوات المطور |
+| `Cmd/Ctrl + +` | تكبير |
+| `Cmd/Ctrl + -` | تصغير |
+| `Cmd/Ctrl + 0` | حجم افتراضي |
+| `F11` / `Cmd + Ctrl + F` | ملء الشاشة |
