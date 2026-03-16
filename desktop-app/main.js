@@ -285,6 +285,7 @@ app.whenReady().then(async () => {
   // إنشاء النافذة
   createWindow();
   createTray();
+  createAppMenu();
   
   // بدء المزامنة التلقائية
   if (store.get('autoSync')) {
