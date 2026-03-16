@@ -227,6 +227,96 @@ function createTray() {
   });
 }
 
+// إنشاء القائمة الرئيسية للتطبيق
+function createAppMenu() {
+  const template = [
+    {
+      label: 'Maestro POS',
+      submenu: [
+        { label: 'حول البرنامج', role: 'about' },
+        { type: 'separator' },
+        { 
+          label: '🔄 إعادة تحميل',
+          accelerator: 'CmdOrCtrl+R',
+          click: () => mainWindow.reload()
+        },
+        { 
+          label: '🧹 مسح البيانات المؤقتة',
+          accelerator: 'CmdOrCtrl+Shift+Delete',
+          click: async () => {
+            const { session } = require('electron');
+            await session.defaultSession.clearCache();
+            await session.defaultSession.clearStorageData({
+              storages: ['indexdb', 'localstorage', 'cachestorage', 'serviceworkers']
+            });
+            mainWindow.reload();
+            dialog.showMessageBox(mainWindow, {
+              type: 'info',
+              title: 'تم',
+              message: 'تم مسح البيانات المؤقتة وإعادة تحميل البرنامج'
+            });
+          }
+        },
+        { type: 'separator' },
+        { label: 'إغلاق', role: 'quit' }
+      ]
+    },
+    {
+      label: 'تحرير',
+      submenu: [
+        { label: 'تراجع', role: 'undo' },
+        { label: 'إعادة', role: 'redo' },
+        { type: 'separator' },
+        { label: 'قص', role: 'cut' },
+        { label: 'نسخ', role: 'copy' },
+        { label: 'لصق', role: 'paste' },
+        { label: 'تحديد الكل', role: 'selectAll' }
+      ]
+    },
+    {
+      label: 'عرض',
+      submenu: [
+        { 
+          label: 'تكبير',
+          accelerator: 'CmdOrCtrl+Plus',
+          click: () => {
+            const currentZoom = mainWindow.webContents.getZoomFactor();
+            mainWindow.webContents.setZoomFactor(currentZoom + 0.1);
+          }
+        },
+        { 
+          label: 'تصغير',
+          accelerator: 'CmdOrCtrl+-',
+          click: () => {
+            const currentZoom = mainWindow.webContents.getZoomFactor();
+            mainWindow.webContents.setZoomFactor(Math.max(0.5, currentZoom - 0.1));
+          }
+        },
+        { 
+          label: 'حجم افتراضي',
+          accelerator: 'CmdOrCtrl+0',
+          click: () => mainWindow.webContents.setZoomFactor(1)
+        },
+        { type: 'separator' },
+        { label: 'ملء الشاشة', role: 'togglefullscreen' }
+      ]
+    },
+    {
+      label: 'مساعدة',
+      submenu: [
+        { 
+          label: 'أدوات المطور',
+          accelerator: 'CmdOrCtrl+Shift+I',
+          click: () => mainWindow.webContents.openDevTools()
+        }
+      ]
+    }
+  ];
+
+  const menu = Menu.buildFromTemplate(template);
+  Menu.setApplicationMenu(menu);
+}
+
 // تهيئة التطبيق
 app.whenReady().then(async () => {
   // مسح الـ Cache عند بدء التشغيل لضمان تحميل أحدث نسخة
