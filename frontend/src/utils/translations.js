@@ -843,6 +843,19 @@ const translations = {
     'لا توجد منتجات مصنعة حالياً. أضف منتجات من قسم المخزن والتصنيع أولاً': 'No manufactured products yet. Add products from Warehouse & Manufacturing section first',
     'ربط بمنتج مصنع (للخصم التلقائي)': 'Link to Manufactured Product (Auto-deduct)',
     
+    // ==================== Units of Measurement ====================
+    'كغم': 'Kg',
+    'كيلو': 'Kilo',
+    'غرام': 'Gram',
+    'لتر': 'Liter',
+    'مل': 'ml',
+    'قطعة': 'Piece',
+    'حبة': 'Item',
+    'صحن': 'Tray',
+    'علبة': 'Box',
+    'كرتون': 'Carton',
+    'الوحدة': 'Unit',
+    
     // ==================== Invoices ====================
     invoice: 'Invoice',
     invoice_number: 'Invoice Number',
