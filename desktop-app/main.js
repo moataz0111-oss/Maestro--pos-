@@ -209,6 +209,14 @@ function createTray() {
 
 // تهيئة التطبيق
 app.whenReady().then(async () => {
+  // مسح الـ Cache عند بدء التشغيل لضمان تحميل أحدث نسخة
+  const { session } = require('electron');
+  await session.defaultSession.clearCache();
+  await session.defaultSession.clearStorageData({
+    storages: ['cachestorage', 'serviceworkers']
+  });
+  console.log('🧹 تم مسح Cache التطبيق');
+  
   // تهيئة قاعدة البيانات المحلية
   await initDatabase();
   
