@@ -7,6 +7,7 @@ const { SyncManager } = require('./src/sync-manager');
 const { PrinterManager } = require('./src/printer-manager');
 const { LicenseManager } = require('./src/license-manager');
 const { BarcodeScanner } = require('./src/barcode-scanner');
+const { AutoUpdater } = require('./src/auto-updater');
 
 // تخزين الإعدادات
 const store = new Store({
