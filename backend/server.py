@@ -1852,6 +1852,32 @@ async def login(credentials: UserLogin):
     if not user.get("is_active", True):
         raise HTTPException(status_code=401, detail="الحساب معطل")
     
+    # ======== فحص ترخيص العميل (Tenant) ========
+    tenant_id = user.get("tenant_id")
+    if tenant_id and user.get("role") != UserRole.SUPER_ADMIN:
+        tenant = await db.tenants.find_one({"id": tenant_id}, {"_id": 0})
+        
+        if tenant:
+            # فحص حالة الحساب
+            if not tenant.get("is_active", True):
+                raise HTTPException(
+                    status_code=403, 
+                    detail="حساب المطعم معطل - يرجى التواصل مع الدعم الفني"
+                )
+            
+            # فحص تاريخ انتهاء الاشتراك
+            expires_at = tenant.get("expires_at")
+            if expires_at:
+                try:
+                    expiry_date = datetime.fromisoformat(expires_at.replace('Z', '+00:00'))
+                    if datetime.now(timezone.utc) > expiry_date:
+                        raise HTTPException(
+                            status_code=403, 
+                            detail="انتهى اشتراك المطعم - يرجى التجديد للاستمرار"
+                        )
+                except ValueError:
+                    pass  # تجاهل إذا كان التاريخ غير صالح
+    
     # إزالة كلمة المرور من الاستجابة
     if "password" in user:
         del user["password"]
