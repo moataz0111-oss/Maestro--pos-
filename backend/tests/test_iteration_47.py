@@ -12,7 +12,7 @@ import pytest
 import requests
 import os
 
-BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://maestro-pos-2.preview.emergentagent.com')
+BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://dine-control-12.preview.emergentagent.com')
 
 class TestCustomerMenuAPI:
     """Tests for customer menu API with menu_slug"""

@@ -115,7 +115,7 @@
   },
   
   "test_credentials": {
-    "api_url": "https://maestro-pos-2.preview.emergentagent.com",
+    "api_url": "https://dine-control-12.preview.emergentagent.com",
     "customer_admin_email": "ahmed@albait.com",
     "customer_admin_password": "123456",
     "super_admin_email": "owner@maestroegp.com",
