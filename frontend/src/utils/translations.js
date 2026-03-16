@@ -539,6 +539,7 @@ const translations = {
     select_all: 'Select All',
     deselect_all: 'Deselect All',
     view: 'View',
+    'عرض الكل': 'Show All',
     details: 'Details',
     actions: 'Actions',
     more: 'More',
