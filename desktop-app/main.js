@@ -421,7 +421,7 @@ ipcMain.handle('get-server-url', () => {
   return store.get('serverUrl', '');
 });
 
-// حفظ جميع الإعدادات (للإعداد الأولي)
+// حفظ جميع الإعدادات (للإعداد الأولي) - لا يتم تحميل الصفحة هنا
 ipcMain.handle('save-settings', (event, settings) => {
   if (settings.serverUrl) store.set('serverUrl', settings.serverUrl);
   if (settings.authToken) store.set('authToken', settings.authToken);
@@ -429,9 +429,14 @@ ipcMain.handle('save-settings', (event, settings) => {
   if (settings.userName) store.set('userName', settings.userName);
   if (settings.branchId) store.set('branchId', settings.branchId);
   
-  // تحميل رابط السيرفر
-  if (mainWindow && settings.serverUrl) {
-    mainWindow.loadURL(settings.serverUrl);
+  // لا نحمّل الصفحة هنا - سيتم ذلك من setup.html
+  return true;
+});
+
+// تحميل رابط السيرفر يدوياً
+ipcMain.handle('load-server-url', (event, url) => {
+  if (mainWindow && url) {
+    mainWindow.loadURL(url);
   }
   return true;
 });
