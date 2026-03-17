@@ -581,7 +581,15 @@ ipcMain.handle('clear-cache', async () => {
 });
 
 ipcMain.handle('reload-app', () => {
-  if (mainWindow) mainWindow.reload();
+  if (mainWindow) {
+    // جلب رابط السيرفر المحفوظ
+    const serverUrl = store.get('serverUrl');
+    if (serverUrl) {
+      mainWindow.loadURL(serverUrl);
+    } else {
+      mainWindow.loadFile(path.join(__dirname, 'src', 'views', 'setup.html'));
+    }
+  }
   return true;
 });
 
