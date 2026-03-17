@@ -137,20 +137,20 @@
         const serverUrl = await window.electronAPI.getServerUrl();
         if (serverUrl && window.electronAPI.loadServerUrl) {
           await window.electronAPI.loadServerUrl(serverUrl);
-        } else {
-          window.location.reload();
+        } else if (window.electronAPI.reloadApp) {
+          await window.electronAPI.reloadApp();
         }
-      } else {
-        window.location.reload();
       }
     }
     
     async function resetServer() {
-      if (window.electronAPI && window.electronAPI.saveServerUrl) {
-        await window.electronAPI.saveServerUrl('');
+      if (window.electronAPI && window.electronAPI.saveSettings) {
+        await window.electronAPI.saveSettings({ serverUrl: '' });
       }
-      // الانتقال لصفحة الإعداد
-      window.location.href = 'setup.html';
+      // إعادة تحميل لعرض صفحة الإعداد
+      if (window.electronAPI && window.electronAPI.reloadApp) {
+        await window.electronAPI.reloadApp();
+      }
     }
   </script>
 </body>
