@@ -343,7 +343,7 @@
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       
-      const serverUrl = document.getElementById('serverUrl').value.trim();
+      const serverUrl = document.getElementById('serverUrl').value.trim().replace(/\/$/, ''); // إزالة / من النهاية
       const email = document.getElementById('email').value.trim();
       const password = document.getElementById('password').value;
       const t = translations[currentLang];
@@ -365,7 +365,7 @@
           throw new Error(data.detail || t.loginFailed);
         }
         
-        // حفظ الإعدادات باستخدام الدالة الصحيحة
+        // حفظ الإعدادات
         if (window.electronAPI && window.electronAPI.saveSettings) {
           await window.electronAPI.saveSettings({
             serverUrl,
@@ -374,19 +374,16 @@
             userName: data.user?.full_name || email,
             branchId: data.user?.branch_id || ''
           });
-        } else if (window.electronAPI && window.electronAPI.saveServerUrl) {
-          // fallback للدالة القديمة
-          await window.electronAPI.saveServerUrl(serverUrl);
-          if (window.electronAPI.saveAuthToken) {
-            await window.electronAPI.saveAuthToken(data.token);
-          }
         }
         
         showStatus(t.success, 'success');
         
-        // الانتقال مباشرة للتطبيق الرئيسي (بدون خطوة الطابعات)
-        setTimeout(() => {
-          window.location.href = serverUrl;
+        // الانتقال للتطبيق الرئيسي بعد حفظ الإعدادات
+        setTimeout(async () => {
+          if (window.electronAPI && window.electronAPI.loadServerUrl) {
+            await window.electronAPI.loadServerUrl(serverUrl);
+          }
+        }, 1000);
         }, 1500);
         
       } catch (error) {
