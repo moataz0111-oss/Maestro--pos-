@@ -443,8 +443,20 @@ ipcMain.handle('get-settings', () => {
     authToken: store.get('authToken', ''),
     userEmail: store.get('userEmail', ''),
     userName: store.get('userName', ''),
-    branchId: store.get('branchId', '')
+    branchId: store.get('branchId', ''),
+    appLanguage: store.get('appLanguage', 'ar')
   };
+});
+
+// حفظ اللغة
+ipcMain.handle('save-language', (event, lang) => {
+  store.set('appLanguage', lang);
+  return true;
+});
+
+// جلب اللغة
+ipcMain.handle('get-language', () => {
+  return store.get('appLanguage', 'ar');
 });
 
 // ============ الطباعة ============
