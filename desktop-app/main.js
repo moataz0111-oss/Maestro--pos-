@@ -679,6 +679,125 @@ ipcMain.handle('update-get-status', () => {
   return autoUpdater.getStatus();
 });
 
+// ============ ZKTeco أجهزة البصمة ============
+let zktecoManager = null;
+
+// تهيئة مدير ZKTeco
+ipcMain.handle('zkteco-initialize', async () => {
+  const { ZKTecoManager } = require('./src/zkteco-manager');
+  zktecoManager = new ZKTecoManager(store);
+  
+  // الاستماع للأحداث
+  zktecoManager.on('device-connected', (data) => {
+    mainWindow?.webContents.send('zkteco-device-connected', data);
+  });
+  zktecoManager.on('device-disconnected', (data) => {
+    mainWindow?.webContents.send('zkteco-device-disconnected', data);
+  });
+  zktecoManager.on('attendance-captured', (data) => {
+    mainWindow?.webContents.send('zkteco-attendance-captured', data);
+  });
+  
+  return zktecoManager.initialize();
+});
+
+// الاتصال بجهاز
+ipcMain.handle('zkteco-connect', async (event, { ip, port, name }) => {
+  if (!zktecoManager) {
+    return { success: false, error: 'ZKTeco Manager غير مهيأ' };
+  }
+  return zktecoManager.connectDevice(ip, port || 4370, name || 'Device');
+});
+
+// قطع الاتصال
+ipcMain.handle('zkteco-disconnect', async (event, deviceId) => {
+  if (!zktecoManager) return { success: false };
+  return zktecoManager.disconnectDevice(deviceId);
+});
+
+// جلب المستخدمين
+ipcMain.handle('zkteco-get-users', async (event, deviceId) => {
+  if (!zktecoManager) return { success: false };
+  return zktecoManager.getUsers(deviceId);
+});
+
+// جلب سجلات الحضور
+ipcMain.handle('zkteco-get-logs', async (event, deviceId) => {
+  if (!zktecoManager) return { success: false };
+  return zktecoManager.getAttendanceLogs(deviceId);
+});
+
+// إضافة مستخدم
+ipcMain.handle('zkteco-add-user', async (event, { deviceId, userData }) => {
+  if (!zktecoManager) return { success: false };
+  return zktecoManager.addUser(deviceId, userData);
+});
+
+// حذف مستخدم
+ipcMain.handle('zkteco-delete-user', async (event, { deviceId, uid }) => {
+  if (!zktecoManager) return { success: false };
+  return zktecoManager.deleteUser(deviceId, uid);
+});
+
+// مسح السجلات
+ipcMain.handle('zkteco-clear-logs', async (event, deviceId) => {
+  if (!zktecoManager) return { success: false };
+  return zktecoManager.clearAttendanceLogs(deviceId);
+});
+
+// ضبط الوقت
+ipcMain.handle('zkteco-set-time', async (event, deviceId) => {
+  if (!zktecoManager) return { success: false };
+  return zktecoManager.setDeviceTime(deviceId);
+});
+
+// بدء الاستماع للبصمات الحية
+ipcMain.handle('zkteco-start-realtime', async (event, deviceId) => {
+  if (!zktecoManager) return { success: false };
+  return zktecoManager.startRealTimeCapture(deviceId);
+});
+
+// فحص جهاز
+ipcMain.handle('zkteco-ping', async (event, { ip, port }) => {
+  if (!zktecoManager) {
+    const { ZKTecoManager } = require('./src/zkteco-manager');
+    zktecoManager = new ZKTecoManager(store);
+    await zktecoManager.initialize();
+  }
+  return zktecoManager.pingDevice(ip, port || 4370);
+});
+
+// البحث عن أجهزة
+ipcMain.handle('zkteco-scan', async (event, { baseIp, startRange, endRange }) => {
+  if (!zktecoManager) {
+    const { ZKTecoManager } = require('./src/zkteco-manager');
+    zktecoManager = new ZKTecoManager(store);
+    await zktecoManager.initialize();
+  }
+  return zktecoManager.scanNetwork(baseIp, startRange, endRange);
+});
+
+// الأجهزة المتصلة
+ipcMain.handle('zkteco-get-devices', () => {
+  if (!zktecoManager) return [];
+  return zktecoManager.getConnectedDevices();
+});
+
+// حفظ إعدادات الأجهزة
+ipcMain.handle('zkteco-save-settings', (event, devices) => {
+  if (!zktecoManager) return false;
+  zktecoManager.saveDeviceSettings(devices);
+  return true;
+});
+
+// جلب الأجهزة المحفوظة
+ipcMain.handle('zkteco-get-saved', () => {
+  if (!zktecoManager) {
+    return store.get('zktecoDevices', []);
+  }
+  return zktecoManager.getSavedDevices();
+});
+
 // إغلاق التطبيق
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
