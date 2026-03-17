@@ -1,61 +1,31 @@
-const { app, BrowserWindow, ipcMain, Menu, Tray, dialog, globalShortcut } = require('electron');
+const { app, BrowserWindow, ipcMain, Tray, Menu, dialog, nativeImage, shell } = require('electron');
 const path = require('path');
-const fs = require('fs');
 const Store = require('electron-store');
-const { initDatabase, getDatabase } = require('./src/database');
+
+// تهيئة التخزين المحلي
+const store = new Store({
+  name: 'maestro-config',
+  encryptionKey: 'maestro-pos-2024-secret-key'
+});
+
+// المتغيرات الرئيسية
+let mainWindow = null;
+let tray = null;
+let isOnline = true;
+
+// استيراد المدراء
+const { initDatabase } = require('./src/database');
 const { SyncManager } = require('./src/sync-manager');
 const { PrinterManager } = require('./src/printer-manager');
 const { LicenseManager } = require('./src/license-manager');
 const { BarcodeScanner } = require('./src/barcode-scanner');
 const { AutoUpdater } = require('./src/auto-updater');
 
-// تخزين الإعدادات
-const store = new Store({
-  defaults: {
-    serverUrl: '',
-    branchId: '',
-    authToken: '',
-    autoSync: true,
-    syncInterval: 30000, // 30 ثانية
-    language: 'ar',
-    printerSettings: {
-      receiptPrinter: '',
-      kitchenPrinter: '',
-      autoPrint: true
-    },
-    // بيانات الترخيص المحفوظة
-    licenseData: null,
-    lastOnlineCheck: null
-  }
-});
-
-let mainWindow;
-let tray;
-let syncManager;
-let printerManager;
-let licenseManager;
-let barcodeScanner;
-let autoUpdater;
-let isOnline = true;
-let licenseValid = false;
-
-// التحقق من وجود ملفات الواجهة المحلية
-function getLocalFrontendPath() {
-  // المسارات المحتملة للواجهة المحلية
-  const possiblePaths = [
-    path.join(__dirname, 'frontend', 'index.html'),
-    path.join(__dirname, 'build', 'index.html'),
-    path.join(__dirname, '..', 'frontend', 'build', 'index.html'),
-    path.join(app.getPath('userData'), 'frontend', 'index.html')
-  ];
-  
-  for (const p of possiblePaths) {
-    if (fs.existsSync(p)) {
-      return p;
-    }
-  }
-  return null;
-}
+let syncManager = null;
+let printerManager = null;
+let licenseManager = null;
+let barcodeScanner = null;
+let autoUpdater = null;
 
 // إنشاء النافذة الرئيسية
 function createWindow() {
@@ -70,200 +40,23 @@ function createWindow() {
       contextIsolation: true,
       preload: path.join(__dirname, 'preload.js'),
       webSecurity: true,
-      // تعطيل الـ Cache لضمان تحميل أحدث نسخة
-      partition: 'persist:main'
+      // تفعيل الـ spellcheck وحفظ كلمات السر
+      spellcheck: true,
+      enableWebSQL: false,
+      // تفعيل clipboard
+      sandbox: false
     },
     titleBarStyle: 'default',
     title: 'Maestro POS',
-    show: false // إخفاء حتى يتم التحميل
+    show: false
   });
 
-  // إظهار النافذة عند الجاهزية
-  mainWindow.once('ready-to-show', () => {
-    mainWindow.show();
-    mainWindow.focus();
-  });
-
-  // تحميل الواجهة
-  loadMainInterface();
-
-  // التعامل مع حالة الاتصال
-  mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL) => {
-    console.log('فشل التحميل:', errorDescription, 'URL:', validatedURL);
+  // تفعيل قائمة النقر بزر الماوس الأيمن (Context Menu)
+  mainWindow.webContents.on('context-menu', (event, params) => {
+    const menuTemplate = [];
     
-    // أخطاء الاتصال
-    if (errorCode === -106 || errorCode === -105 || errorCode === -102 || errorCode === -118) {
-      isOnline = false;
-      
-      // محاولة تحميل الواجهة المحلية
-      const localPath = getLocalFrontendPath();
-      if (localPath) {
-        console.log('📱 تحميل الواجهة المحلية:', localPath);
-        mainWindow.loadFile(localPath);
-      } else {
-        mainWindow.loadFile(path.join(__dirname, 'src', 'views', 'offline.html'));
-      }
-    }
-  });
-
-  // تحديث حالة الاتصال عند نجاح التحميل
-  mainWindow.webContents.on('did-finish-load', () => {
-    const url = mainWindow.webContents.getURL();
-    if (url.startsWith('http')) {
-      isOnline = true;
-      updateTrayMenu();
-    }
-  });
-
-  // عند إغلاق النافذة
-  mainWindow.on('closed', () => {
-    mainWindow = null;
-  });
-
-  // إغلاق التطبيق عند إغلاق النافذة (على Mac يمكن إخفاء للـ tray)
-  mainWindow.on('close', (event) => {
-    // على Mac: إذا لم يكن التطبيق يُغلق فعلياً، اخفِ النافذة
-    // على Windows/Linux: أغلق التطبيق مباشرة
-    if (process.platform === 'darwin' && !app.isQuitting) {
-      event.preventDefault();
-      mainWindow.hide();
-    }
-    // على Windows/Linux - أغلق مباشرة
-  });
-
-  // فتح DevTools في وضع التطوير
-  if (process.env.NODE_ENV === 'development') {
-    mainWindow.webContents.openDevTools();
-  }
-}
-
-// تحميل الواجهة الرئيسية
-function loadMainInterface() {
-  const serverUrl = store.get('serverUrl');
-  const authToken = store.get('authToken');
-  
-  if (!serverUrl) {
-    // لا يوجد سيرفر - صفحة الإعداد
-    mainWindow.loadFile(path.join(__dirname, 'src', 'views', 'setup.html'));
-    return;
-  }
-  
-  // محاولة تحميل من السيرفر أولاً
-  console.log('🌐 محاولة الاتصال بالسيرفر:', serverUrl);
-  
-  // إضافة token للـ cookies إذا وجد
-  if (authToken) {
-    mainWindow.webContents.session.cookies.set({
-      url: serverUrl,
-      name: 'auth_token',
-      value: authToken
-    }).catch(err => console.log('Cookie error:', err));
-  }
-  
-  mainWindow.loadURL(serverUrl);
-}
-
-// إنشاء أيقونة الـ System Tray
-function createTray() {
-  tray = new Tray(path.join(__dirname, 'assets', 'icon.png'));
-  
-  const contextMenu = Menu.buildFromTemplate([
-    { 
-      label: 'فتح البرنامج', 
-      click: () => mainWindow.show() 
-    },
-    { 
-      label: isOnline ? '🟢 متصل' : '🔴 غير متصل',
-      enabled: false
-    },
-    { type: 'separator' },
-    { 
-      label: 'مزامنة الآن', 
-      click: () => syncManager.syncNow() 
-    },
-    { 
-      label: '🔄 إعادة تحميل', 
-      click: () => mainWindow.reload()
-    },
-    { 
-      label: '🧹 مسح البيانات المؤقتة', 
-      click: async () => {
-        const { session } = require('electron');
-        await session.defaultSession.clearCache();
-        await session.defaultSession.clearStorageData({
-          storages: ['indexdb', 'localstorage', 'cachestorage', 'serviceworkers']
-        });
-        mainWindow.reload();
-        dialog.showMessageBox(mainWindow, {
-          type: 'info',
-          title: 'تم',
-          message: 'تم مسح البيانات المؤقتة وإعادة تحميل البرنامج'
-        });
-      }
-    },
-    { type: 'separator' },
-    { 
-      label: 'الإعدادات', 
-      click: () => {
-        mainWindow.show();
-        mainWindow.webContents.send('navigate', '/settings');
-      }
-    },
-    { type: 'separator' },
-    { 
-      label: 'إغلاق البرنامج', 
-      click: () => {
-        app.isQuitting = true;
-        app.quit();
-      }
-    }
-  ]);
-  
-  tray.setToolTip('Maestro POS');
-  tray.setContextMenu(contextMenu);
-  
-  tray.on('double-click', () => {
-    mainWindow.show();
-  });
-}
-
-// إنشاء القائمة الرئيسية للتطبيق
-function createAppMenu() {
-  const template = [
-    {
-      label: 'Maestro POS',
-      submenu: [
-        { label: 'حول البرنامج', role: 'about' },
-        { type: 'separator' },
-        { 
-          label: '🔄 إعادة تحميل',
-          accelerator: 'CmdOrCtrl+R',
-          click: () => mainWindow.reload()
-        },
-        { 
-          label: '🧹 مسح البيانات المؤقتة',
-          accelerator: 'CmdOrCtrl+Shift+Delete',
-          click: async () => {
-            const { session } = require('electron');
-            await session.defaultSession.clearCache();
-            await session.defaultSession.clearStorageData({
-              storages: ['indexdb', 'localstorage', 'cachestorage', 'serviceworkers']
-            });
-            mainWindow.reload();
-            dialog.showMessageBox(mainWindow, {
-              type: 'info',
-              title: 'تم',
-              message: 'تم مسح البيانات المؤقتة وإعادة تحميل البرنامج'
-            });
-          }
-        },
-        { type: 'separator' },
-        { label: 'إغلاق', role: 'quit' }
-      ]
-    },
-    {
-      label: 'تحرير',
-      submenu: [
+    if (params.isEditable) {
+      menuTemplate.push(
         { label: 'تراجع', role: 'undo' },
         { label: 'إعادة', role: 'redo' },
         { type: 'separator' },
@@ -271,6 +64,227 @@ function createAppMenu() {
         { label: 'نسخ', role: 'copy' },
         { label: 'لصق', role: 'paste' },
         { label: 'تحديد الكل', role: 'selectAll' }
+      );
+    } else if (params.selectionText) {
+      menuTemplate.push(
+        { label: 'نسخ', role: 'copy' },
+        { label: 'تحديد الكل', role: 'selectAll' }
+      );
+    }
+    
+    if (menuTemplate.length > 0) {
+      const contextMenu = Menu.buildFromTemplate(menuTemplate);
+      contextMenu.popup();
+    }
+  });
+
+  // جلب رابط السيرفر المحفوظ
+  const serverUrl = store.get('serverUrl');
+  
+  if (serverUrl) {
+    // فتح صفحة POS مباشرة
+    mainWindow.loadURL(serverUrl);
+  } else {
+    // فتح صفحة الإعداد
+    mainWindow.loadFile(path.join(__dirname, 'src', 'views', 'setup.html'));
+  }
+
+  // إظهار النافذة عند الجاهزية
+  mainWindow.once('ready-to-show', () => {
+    mainWindow.show();
+    
+    // فحص التحديثات
+    if (autoUpdater) {
+      setTimeout(() => autoUpdater.checkForUpdates(), 3000);
+    }
+  });
+
+  // معالجة إغلاق النافذة بشكل صحيح
+  mainWindow.on('close', (event) => {
+    if (!app.isQuitting) {
+      event.preventDefault();
+      mainWindow.hide();
+    }
+    return false;
+  });
+  
+  // التأكد من إغلاق التطبيق بالكامل
+  mainWindow.on('closed', () => {
+    mainWindow = null;
+  });
+
+  // مراقبة حالة الاتصال
+  mainWindow.webContents.on('did-fail-load', () => {
+    isOnline = false;
+    updateTrayStatus();
+  });
+
+  mainWindow.webContents.on('did-finish-load', () => {
+    isOnline = true;
+    updateTrayStatus();
+  });
+}
+
+// تحديث حالة الـ Tray
+function updateTrayStatus() {
+  if (tray) {
+    const contextMenu = Menu.buildFromTemplate(getTrayMenuTemplate());
+    tray.setContextMenu(contextMenu);
+  }
+}
+
+// قالب قائمة Tray
+function getTrayMenuTemplate() {
+  return [
+    { 
+      label: 'فتح البرنامج', 
+      click: () => {
+        if (mainWindow) {
+          mainWindow.show();
+          mainWindow.focus();
+        }
+      }
+    },
+    { 
+      label: isOnline ? '🟢 متصل' : '🔴 غير متصل',
+      enabled: false
+    },
+    { type: 'separator' },
+    { 
+      label: '🔄 إعادة تحميل', 
+      click: () => {
+        if (mainWindow) mainWindow.reload();
+      }
+    },
+    { 
+      label: '🧹 مسح البيانات المؤقتة', 
+      click: async () => {
+        if (mainWindow) {
+          await mainWindow.webContents.session.clearCache();
+          await mainWindow.webContents.session.clearStorageData({
+            storages: ['indexdb', 'localstorage', 'cachestorage', 'serviceworkers']
+          });
+          mainWindow.reload();
+          dialog.showMessageBox(mainWindow, {
+            type: 'info',
+            title: 'تم',
+            message: 'تم مسح البيانات المؤقتة وإعادة تحميل البرنامج'
+          });
+        }
+      }
+    },
+    { type: 'separator' },
+    { 
+      label: '⚙️ إعادة تعيين رابط السيرفر', 
+      click: () => {
+        store.delete('serverUrl');
+        if (mainWindow) {
+          mainWindow.loadFile(path.join(__dirname, 'src', 'views', 'setup.html'));
+        }
+      }
+    },
+    { type: 'separator' },
+    { 
+      label: '❌ إغلاق البرنامج', 
+      click: () => {
+        app.isQuitting = true;
+        app.quit();
+      }
+    }
+  ];
+}
+
+// إنشاء أيقونة الـ System Tray
+function createTray() {
+  const iconPath = path.join(__dirname, 'assets', 'icon.png');
+  tray = new Tray(iconPath);
+  
+  const contextMenu = Menu.buildFromTemplate(getTrayMenuTemplate());
+  
+  tray.setToolTip('Maestro POS');
+  tray.setContextMenu(contextMenu);
+  
+  tray.on('double-click', () => {
+    if (mainWindow) {
+      mainWindow.show();
+      mainWindow.focus();
+    }
+  });
+}
+
+// إنشاء القائمة الرئيسية للتطبيق
+function createAppMenu() {
+  const isMac = process.platform === 'darwin';
+  
+  const template = [
+    ...(isMac ? [{
+      label: app.name,
+      submenu: [
+        { label: 'حول البرنامج', role: 'about' },
+        { type: 'separator' },
+        { label: 'إخفاء', role: 'hide' },
+        { label: 'إخفاء الآخرين', role: 'hideOthers' },
+        { label: 'إظهار الكل', role: 'unhide' },
+        { type: 'separator' },
+        { 
+          label: 'إغلاق',
+          accelerator: 'CmdOrCtrl+Q',
+          click: () => {
+            app.isQuitting = true;
+            app.quit();
+          }
+        }
+      ]
+    }] : []),
+    {
+      label: 'ملف',
+      submenu: [
+        { 
+          label: '🔄 إعادة تحميل',
+          accelerator: 'CmdOrCtrl+R',
+          click: () => {
+            if (mainWindow) mainWindow.reload();
+          }
+        },
+        { 
+          label: '🧹 مسح البيانات المؤقتة',
+          accelerator: 'CmdOrCtrl+Shift+Delete',
+          click: async () => {
+            if (mainWindow) {
+              await mainWindow.webContents.session.clearCache();
+              await mainWindow.webContents.session.clearStorageData({
+                storages: ['indexdb', 'localstorage', 'cachestorage', 'serviceworkers']
+              });
+              mainWindow.reload();
+              dialog.showMessageBox(mainWindow, {
+                type: 'info',
+                title: 'تم',
+                message: 'تم مسح البيانات المؤقتة'
+              });
+            }
+          }
+        },
+        { type: 'separator' },
+        ...(isMac ? [] : [{ 
+          label: 'إغلاق',
+          accelerator: 'Alt+F4',
+          click: () => {
+            app.isQuitting = true;
+            app.quit();
+          }
+        }])
+      ]
+    },
+    {
+      label: 'تحرير',
+      submenu: [
+        { label: 'تراجع', role: 'undo', accelerator: 'CmdOrCtrl+Z' },
+        { label: 'إعادة', role: 'redo', accelerator: 'CmdOrCtrl+Shift+Z' },
+        { type: 'separator' },
+        { label: 'قص', role: 'cut', accelerator: 'CmdOrCtrl+X' },
+        { label: 'نسخ', role: 'copy', accelerator: 'CmdOrCtrl+C' },
+        { label: 'لصق', role: 'paste', accelerator: 'CmdOrCtrl+V' },
+        { label: 'تحديد الكل', role: 'selectAll', accelerator: 'CmdOrCtrl+A' }
       ]
     },
     {
@@ -280,22 +294,28 @@ function createAppMenu() {
           label: 'تكبير',
           accelerator: 'CmdOrCtrl+Plus',
           click: () => {
-            const currentZoom = mainWindow.webContents.getZoomFactor();
-            mainWindow.webContents.setZoomFactor(currentZoom + 0.1);
+            if (mainWindow) {
+              const currentZoom = mainWindow.webContents.getZoomFactor();
+              mainWindow.webContents.setZoomFactor(currentZoom + 0.1);
+            }
           }
         },
         { 
           label: 'تصغير',
           accelerator: 'CmdOrCtrl+-',
           click: () => {
-            const currentZoom = mainWindow.webContents.getZoomFactor();
-            mainWindow.webContents.setZoomFactor(Math.max(0.5, currentZoom - 0.1));
+            if (mainWindow) {
+              const currentZoom = mainWindow.webContents.getZoomFactor();
+              mainWindow.webContents.setZoomFactor(Math.max(0.5, currentZoom - 0.1));
+            }
           }
         },
         { 
           label: 'حجم افتراضي',
           accelerator: 'CmdOrCtrl+0',
-          click: () => mainWindow.webContents.setZoomFactor(1)
+          click: () => {
+            if (mainWindow) mainWindow.webContents.setZoomFactor(1);
+          }
         },
         { type: 'separator' },
         { label: 'ملء الشاشة', role: 'togglefullscreen' }
@@ -307,7 +327,14 @@ function createAppMenu() {
         { 
           label: 'أدوات المطور',
           accelerator: 'CmdOrCtrl+Shift+I',
-          click: () => mainWindow.webContents.openDevTools()
+          click: () => {
+            if (mainWindow) mainWindow.webContents.openDevTools();
+          }
+        },
+        { type: 'separator' },
+        {
+          label: 'الموقع الرسمي',
+          click: () => shell.openExternal('https://maestroegp.com')
         }
       ]
     }
@@ -319,177 +346,116 @@ function createAppMenu() {
 
 // تهيئة التطبيق
 app.whenReady().then(async () => {
-  // مسح الـ Cache عند بدء التشغيل لضمان تحميل أحدث نسخة
+  // مسح الـ Cache عند بدء التشغيل
   const { session } = require('electron');
-  await session.defaultSession.clearCache();
-  await session.defaultSession.clearStorageData({
-    storages: ['cachestorage', 'serviceworkers']
-  });
-  console.log('🧹 تم مسح Cache التطبيق');
+  try {
+    await session.defaultSession.clearCache();
+    console.log('✅ تم مسح Cache');
+  } catch (e) {
+    console.log('⚠️ لم يتم مسح Cache:', e.message);
+  }
   
   // تهيئة قاعدة البيانات المحلية
   await initDatabase();
   
-  // تهيئة مدير الترخيص
-  licenseManager = new LicenseManager(store);
-  
-  // التحقق من الترخيص عند بدء التشغيل
-  const licenseResult = await licenseManager.verifyOnStartup();
-  
-  if (licenseResult.needsSetup) {
-    // التطبيق يحتاج إعداد أولي
-    licenseValid = true;
-  } else if (!licenseResult.valid) {
-    // الترخيص غير صالح
-    dialog.showMessageBoxSync({
-      type: 'error',
-      title: 'خطأ في الترخيص',
-      message: licenseResult.message || 'الترخيص غير صالح',
-      detail: 'يرجى التواصل مع الدعم الفني أو الاتصال بالإنترنت للتحقق من الترخيص.',
-      buttons: ['موافق']
-    });
-    
-    // إذا كان السبب خطير، لا نسمح بتشغيل التطبيق
-    if (['disabled', 'expired', 'grace_expired'].includes(licenseResult.reason)) {
-      app.quit();
-      return;
-    }
-  } else {
-    licenseValid = true;
-    console.log('✅ الترخيص صالح:', licenseResult.data?.tenantName || 'Unknown');
-  }
-  
-  // تهيئة مدير المزامنة
-  syncManager = new SyncManager(store, getDatabase());
-  
-  // تهيئة مدير الطابعات
+  // تهيئة المدراء
+  syncManager = new SyncManager(store);
   printerManager = new PrinterManager(store);
-  
-  // تهيئة ماسح الباركود
-  barcodeScanner = new BarcodeScanner(store);
-  barcodeScanner.start();
-  
-  // تهيئة مدير التحديث التلقائي
+  licenseManager = new LicenseManager(store);
+  barcodeScanner = new BarcodeScanner();
   autoUpdater = new AutoUpdater(store);
   
-  // إنشاء النافذة
+  // إنشاء النافذة والقوائم
   createWindow();
   createTray();
   createAppMenu();
   
   // بدء المزامنة التلقائية
-  if (store.get('autoSync')) {
-    syncManager.startAutoSync();
-  }
+  syncManager.startAutoSync();
   
-  // بدء الفحص الدوري للترخيص (كل ساعة)
-  if (licenseValid) {
-    licenseManager.startPeriodicCheck(60);
-  }
-  
-  // بدء فحص التحديثات (بعد 10 ثواني من بدء التشغيل)
-  autoUpdater.startPeriodicCheck(60); // فحص كل ساعة
-  
-  // مراقبة حالة الاتصال
-  setInterval(checkConnection, 10000);
-});
-
-// التحقق من الاتصال
-async function checkConnection() {
-  const serverUrl = store.get('serverUrl');
-  if (!serverUrl) return;
-  
-  try {
-    const response = await fetch(`${serverUrl}/api/health`, { 
-      method: 'GET',
-      timeout: 5000 
-    });
-    
-    if (response.ok && !isOnline) {
-      isOnline = true;
-      mainWindow.webContents.send('connection-status', true);
-      syncManager.syncNow(); // مزامنة فورية عند عودة الاتصال
-      updateTrayMenu();
-    }
-  } catch (error) {
-    if (isOnline) {
-      isOnline = false;
-      mainWindow.webContents.send('connection-status', false);
-      updateTrayMenu();
-    }
-  }
-}
-
-// تحديث قائمة الـ Tray
-function updateTrayMenu() {
-  if (tray) {
-    const contextMenu = Menu.buildFromTemplate([
-      { label: 'فتح البرنامج', click: () => mainWindow.show() },
-      { label: isOnline ? '🟢 متصل' : '🔴 غير متصل', enabled: false },
-      { type: 'separator' },
-      { label: 'مزامنة الآن', click: () => syncManager.syncNow(), enabled: isOnline },
-      { type: 'separator' },
-      { label: 'الإعدادات', click: () => mainWindow.show() },
-      { type: 'separator' },
-      { label: 'إغلاق البرنامج', click: () => { app.isQuitting = true; app.quit(); }}
-    ]);
-    tray.setContextMenu(contextMenu);
-  }
-}
-
-// ============ IPC Handlers ============
-
-// إعدادات السيرفر
-ipcMain.handle('get-settings', () => {
-  return store.store;
-});
-
-ipcMain.handle('save-settings', (event, settings) => {
-  Object.keys(settings).forEach(key => {
-    store.set(key, settings[key]);
+  // الاستماع لأحداث التحديث
+  autoUpdater.on('update-available', (info) => {
+    mainWindow?.webContents.send('update-status', { type: 'available', info });
   });
+  autoUpdater.on('update-downloaded', (info) => {
+    mainWindow?.webContents.send('update-status', { type: 'downloaded', info });
+  });
+  autoUpdater.on('error', (error) => {
+    mainWindow?.webContents.send('update-status', { type: 'error', error: error.message });
+  });
+  
+  // إعادة إنشاء النافذة على Mac عند النقر على الأيقونة
+  app.on('activate', () => {
+    if (BrowserWindow.getAllWindows().length === 0) {
+      createWindow();
+    } else if (mainWindow) {
+      mainWindow.show();
+      mainWindow.focus();
+    }
+  });
+});
+
+// ============ معالجات IPC ============
+
+// حفظ رابط السيرفر
+ipcMain.handle('save-server-url', (event, url) => {
+  store.set('serverUrl', url);
+  if (mainWindow) {
+    mainWindow.loadURL(url);
+  }
   return true;
 });
 
-// حالة الاتصال
-ipcMain.handle('get-connection-status', () => {
-  return isOnline;
+// جلب رابط السيرفر
+ipcMain.handle('get-server-url', () => {
+  return store.get('serverUrl', '');
 });
 
-// الطابعات
+// ============ الطباعة ============
 ipcMain.handle('get-printers', async () => {
   return printerManager.getPrinters();
 });
 
-ipcMain.handle('print-receipt', async (event, data) => {
-  return printerManager.printReceipt(data);
+ipcMain.handle('print-receipt', async (event, { content, printerName }) => {
+  return printerManager.printReceipt(content, printerName);
 });
 
-ipcMain.handle('print-kitchen', async (event, data) => {
-  return printerManager.printKitchenOrder(data);
+ipcMain.handle('print-kitchen-order', async (event, { content, printerName }) => {
+  return printerManager.printKitchenOrder(content, printerName);
 });
 
-// قاعدة البيانات المحلية
-ipcMain.handle('db-query', async (event, { action, table, data, query }) => {
-  const db = getDatabase();
-  
-  switch (action) {
-    case 'insert':
-      return db.insert(table, data);
-    case 'update':
-      return db.update(table, data, query);
-    case 'delete':
-      return db.delete(table, query);
-    case 'find':
-      return db.find(table, query);
-    case 'findOne':
-      return db.findOne(table, query);
-    default:
-      throw new Error('Unknown action');
-  }
+// ============ قاعدة البيانات المحلية ============
+ipcMain.handle('db-save-order', async (event, order) => {
+  const { saveOrder } = require('./src/database');
+  return saveOrder(order);
 });
 
-// المزامنة
+ipcMain.handle('db-get-pending-orders', async () => {
+  const { getPendingOrders } = require('./src/database');
+  return getPendingOrders();
+});
+
+ipcMain.handle('db-save-products', async (event, products) => {
+  const { saveProducts } = require('./src/database');
+  return saveProducts(products);
+});
+
+ipcMain.handle('db-get-products', async () => {
+  const { getProducts } = require('./src/database');
+  return getProducts();
+});
+
+ipcMain.handle('db-save-categories', async (event, categories) => {
+  const { saveCategories } = require('./src/database');
+  return saveCategories(categories);
+});
+
+ipcMain.handle('db-get-categories', async () => {
+  const { getCategories } = require('./src/database');
+  return getCategories();
+});
+
+// ============ المزامنة ============
 ipcMain.handle('sync-now', async () => {
   return syncManager.syncNow();
 });
@@ -498,52 +464,32 @@ ipcMain.handle('get-sync-status', () => {
   return syncManager.getStatus();
 });
 
-ipcMain.handle('get-pending-count', () => {
-  return syncManager.getPendingCount();
-});
-
 // ============ الترخيص ============
 ipcMain.handle('license-verify', async () => {
-  if (!licenseManager) {
-    return { valid: false, reason: 'not_initialized', message: 'مدير الترخيص غير مهيأ' };
-  }
-  return licenseManager.verifyOnStartup();
+  return licenseManager.verifyLicense();
 });
 
-ipcMain.handle('license-check', async () => {
-  if (!licenseManager) {
-    return { valid: false, reason: 'not_initialized' };
-  }
-  try {
-    return await licenseManager.checkLicense();
-  } catch (error) {
-    return licenseManager.checkOfflineGrace();
-  }
+ipcMain.handle('license-activate', async (event, { serverUrl, token }) => {
+  return licenseManager.activateDevice(serverUrl, token);
 });
 
-ipcMain.handle('license-get-data', () => {
-  if (!licenseManager) return null;
-  return licenseManager.getLicenseData();
+ipcMain.handle('license-get-status', () => {
+  return licenseManager.getStatus();
 });
 
-ipcMain.handle('license-has-feature', (event, featureName) => {
-  if (!licenseManager) return false;
-  return licenseManager.hasFeature(featureName);
+// ============ الباركود ============
+ipcMain.on('barcode-scanned', (event, barcode) => {
+  mainWindow?.webContents.send('barcode-detected', barcode);
 });
 
-ipcMain.handle('license-get-features', () => {
-  if (!licenseManager) return [];
-  return licenseManager.getFeatures();
-});
-
-// حفظ بيانات تسجيل الدخول
+// ============ Token المصادقة ============
 ipcMain.handle('save-auth-token', (event, token) => {
   store.set('authToken', token);
   return true;
 });
 
 ipcMain.handle('get-auth-token', () => {
-  return store.get('authToken');
+  return store.get('authToken', null);
 });
 
 ipcMain.handle('clear-auth-token', () => {
@@ -553,41 +499,33 @@ ipcMain.handle('clear-auth-token', () => {
   return true;
 });
 
-// ============ مسح البيانات وإعادة التحميل ============
+// ============ مسح البيانات ============
 ipcMain.handle('clear-cache', async () => {
   try {
-    const { session } = require('electron');
-    await session.defaultSession.clearCache();
-    await session.defaultSession.clearStorageData({
-      storages: ['appcache', 'cookies', 'filesystem', 'indexdb', 'localstorage', 'shadercache', 'websql', 'serviceworkers', 'cachestorage']
-    });
-    console.log('🧹 تم مسح جميع البيانات المؤقتة');
+    if (mainWindow) {
+      await mainWindow.webContents.session.clearCache();
+      await mainWindow.webContents.session.clearStorageData({
+        storages: ['appcache', 'cookies', 'filesystem', 'indexdb', 'localstorage', 'shadercache', 'websql', 'serviceworkers', 'cachestorage']
+      });
+    }
     return { success: true, message: 'تم مسح البيانات بنجاح' };
   } catch (error) {
-    console.error('❌ فشل مسح البيانات:', error);
     return { success: false, message: error.message };
   }
 });
 
 ipcMain.handle('reload-app', () => {
-  if (mainWindow) {
-    mainWindow.reload();
-  }
+  if (mainWindow) mainWindow.reload();
   return true;
 });
 
 ipcMain.handle('clear-and-reload', async () => {
   try {
-    const { session } = require('electron');
-    // مسح Cache
-    await session.defaultSession.clearCache();
-    // مسح IndexedDB و LocalStorage
-    await session.defaultSession.clearStorageData({
-      storages: ['indexdb', 'localstorage', 'cachestorage', 'serviceworkers']
-    });
-    console.log('🧹 تم مسح البيانات');
-    // إعادة تحميل الصفحة
     if (mainWindow) {
+      await mainWindow.webContents.session.clearCache();
+      await mainWindow.webContents.session.clearStorageData({
+        storages: ['indexdb', 'localstorage', 'cachestorage', 'serviceworkers']
+      });
       mainWindow.reload();
     }
     return { success: true };
@@ -607,71 +545,31 @@ ipcMain.handle('get-app-info', () => {
     name: app.getName(),
     platform: process.platform,
     arch: process.arch,
-    isOnline: isOnline,
-    licenseValid: licenseValid
+    electronVersion: process.versions.electron,
+    nodeVersion: process.versions.node
   };
 });
 
-// ============ الباركود ============
-ipcMain.handle('barcode-process', (event, key, timestamp) => {
-  if (!barcodeScanner) return null;
-  const result = barcodeScanner.processInput(key, timestamp);
-  if (result) {
-    // إرسال للواجهة
-    barcodeScanner.notifyBarcodeScan(result);
-  }
-  return result;
-});
-
-ipcMain.handle('barcode-get-settings', () => {
-  if (!barcodeScanner) return null;
-  return barcodeScanner.getSettings();
-});
-
-ipcMain.handle('barcode-update-settings', (event, settings) => {
-  if (!barcodeScanner) return false;
-  barcodeScanner.updateSettings(settings);
-  return true;
-});
-
-ipcMain.handle('barcode-find-product', async (event, barcode) => {
-  if (!barcodeScanner) return null;
-  const db = getDatabase();
-  return barcodeScanner.findProductByBarcode(barcode, db);
-});
-
-// ============ إعادة تحميل التطبيق ============
-ipcMain.handle('reload-app', () => {
-  if (mainWindow) {
-    loadMainInterface();
-  }
-  return true;
-});
-
 ipcMain.handle('open-dev-tools', () => {
-  if (mainWindow) {
-    mainWindow.webContents.openDevTools();
-  }
+  if (mainWindow) mainWindow.webContents.openDevTools();
   return true;
 });
 
 // ============ التحديث التلقائي ============
-ipcMain.handle('update-check', () => {
-  if (!autoUpdater) return { error: 'مدير التحديث غير مهيأ' };
-  autoUpdater.checkForUpdates();
-  return { checking: true };
+ipcMain.handle('update-check', async () => {
+  if (!autoUpdater) return { success: false };
+  return autoUpdater.checkForUpdates();
 });
 
-ipcMain.handle('update-download', () => {
-  if (!autoUpdater) return { error: 'مدير التحديث غير مهيأ' };
-  autoUpdater.downloadUpdate();
-  return { downloading: true };
+ipcMain.handle('update-download', async () => {
+  if (!autoUpdater) return { success: false };
+  return autoUpdater.downloadUpdate();
 });
 
 ipcMain.handle('update-install', () => {
-  if (!autoUpdater) return { error: 'مدير التحديث غير مهيأ' };
+  if (!autoUpdater) return { success: false };
   autoUpdater.quitAndInstall();
-  return { installing: true };
+  return { success: true };
 });
 
 ipcMain.handle('update-get-status', () => {
@@ -679,15 +577,13 @@ ipcMain.handle('update-get-status', () => {
   return autoUpdater.getStatus();
 });
 
-// ============ ZKTeco أجهزة البصمة ============
+// ============ ZKTeco ============
 let zktecoManager = null;
 
-// تهيئة مدير ZKTeco
 ipcMain.handle('zkteco-initialize', async () => {
   const { ZKTecoManager } = require('./src/zkteco-manager');
   zktecoManager = new ZKTecoManager(store);
   
-  // الاستماع للأحداث
   zktecoManager.on('device-connected', (data) => {
     mainWindow?.webContents.send('zkteco-device-connected', data);
   });
@@ -701,140 +597,45 @@ ipcMain.handle('zkteco-initialize', async () => {
   return zktecoManager.initialize();
 });
 
-// الاتصال بجهاز
 ipcMain.handle('zkteco-connect', async (event, { ip, port, name }) => {
-  if (!zktecoManager) {
-    return { success: false, error: 'ZKTeco Manager غير مهيأ' };
-  }
+  if (!zktecoManager) return { success: false, error: 'ZKTeco Manager غير مهيأ' };
   return zktecoManager.connectDevice(ip, port || 4370, name || 'Device');
 });
 
-// قطع الاتصال
 ipcMain.handle('zkteco-disconnect', async (event, deviceId) => {
   if (!zktecoManager) return { success: false };
   return zktecoManager.disconnectDevice(deviceId);
 });
 
-// جلب المستخدمين
 ipcMain.handle('zkteco-get-users', async (event, deviceId) => {
   if (!zktecoManager) return { success: false };
   return zktecoManager.getUsers(deviceId);
 });
 
-// جلب سجلات الحضور
 ipcMain.handle('zkteco-get-logs', async (event, deviceId) => {
   if (!zktecoManager) return { success: false };
   return zktecoManager.getAttendanceLogs(deviceId);
 });
 
-// إضافة مستخدم
-ipcMain.handle('zkteco-add-user', async (event, { deviceId, userData }) => {
-  if (!zktecoManager) return { success: false };
-  return zktecoManager.addUser(deviceId, userData);
-});
-
-// حذف مستخدم
-ipcMain.handle('zkteco-delete-user', async (event, { deviceId, uid }) => {
-  if (!zktecoManager) return { success: false };
-  return zktecoManager.deleteUser(deviceId, uid);
-});
-
-// مسح السجلات
-ipcMain.handle('zkteco-clear-logs', async (event, deviceId) => {
-  if (!zktecoManager) return { success: false };
-  return zktecoManager.clearAttendanceLogs(deviceId);
-});
-
-// ضبط الوقت
-ipcMain.handle('zkteco-set-time', async (event, deviceId) => {
-  if (!zktecoManager) return { success: false };
-  return zktecoManager.setDeviceTime(deviceId);
-});
-
-// بدء الاستماع للبصمات الحية
-ipcMain.handle('zkteco-start-realtime', async (event, deviceId) => {
-  if (!zktecoManager) return { success: false };
-  return zktecoManager.startRealTimeCapture(deviceId);
-});
-
-// فحص جهاز
-ipcMain.handle('zkteco-ping', async (event, { ip, port }) => {
-  if (!zktecoManager) {
-    const { ZKTecoManager } = require('./src/zkteco-manager');
-    zktecoManager = new ZKTecoManager(store);
-    await zktecoManager.initialize();
-  }
-  return zktecoManager.pingDevice(ip, port || 4370);
-});
-
-// البحث عن أجهزة
-ipcMain.handle('zkteco-scan', async (event, { baseIp, startRange, endRange }) => {
-  if (!zktecoManager) {
-    const { ZKTecoManager } = require('./src/zkteco-manager');
-    zktecoManager = new ZKTecoManager(store);
-    await zktecoManager.initialize();
-  }
-  return zktecoManager.scanNetwork(baseIp, startRange, endRange);
-});
-
-// الأجهزة المتصلة
 ipcMain.handle('zkteco-get-devices', () => {
   if (!zktecoManager) return [];
   return zktecoManager.getConnectedDevices();
 });
 
-// حفظ إعدادات الأجهزة
-ipcMain.handle('zkteco-save-settings', (event, devices) => {
-  if (!zktecoManager) return false;
-  zktecoManager.saveDeviceSettings(devices);
-  return true;
-});
-
-// جلب الأجهزة المحفوظة
-ipcMain.handle('zkteco-get-saved', () => {
-  if (!zktecoManager) {
-    return store.get('zktecoDevices', []);
-  }
-  return zktecoManager.getSavedDevices();
-});
-
-// إغلاق التطبيق
+// ============ إغلاق التطبيق ============
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit();
   }
 });
 
-app.on('activate', () => {
-  if (BrowserWindow.getAllWindows().length === 0) {
-    createWindow();
-  }
-});
-
-// تنظيف عند الإغلاق
 app.on('before-quit', () => {
   app.isQuitting = true;
-  if (syncManager) {
-    syncManager.stopAutoSync();
-  }
-  if (licenseManager) {
-    licenseManager.stopPeriodicCheck();
-  }
-  if (autoUpdater) {
-    autoUpdater.stopPeriodicCheck();
-  }
 });
 
-// على Mac: إظهار النافذة عند النقر على أيقونة Dock
-app.on('activate', () => {
-  if (mainWindow) {
-    mainWindow.show();
-  }
-});
-
-// إغلاق التطبيق عند إغلاق كل النوافذ (على Windows/Linux)
-app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
-    app.quit();
-  }
+// التأكد من إغلاق التطبيق بالكامل عند الضغط على Cmd+Q
+app.on('will-quit', () => {
+  // تنظيف الموارد
+  if (syncManager) syncManager.stop();
+  if (zktecoManager) zktecoManager.disconnectAll();
 });
