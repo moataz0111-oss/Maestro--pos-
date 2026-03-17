@@ -202,6 +202,12 @@
 
 ## Recent Updates (March 17, 2026)
 
+### Desktop App Setup Fix ✅ (Fixed - Latest)
+- [x] إصلاح خطأ `window.electronAPI.saveSettings is not a function`
+- [x] إضافة دالة `saveSettings` في `preload.js`
+- [x] إضافة معالج `save-settings` في `main.js`
+- [x] إضافة دالة `getSettings` لجلب جميع الإعدادات المحفوظة
+
 ### Manufactured Product Link Field ✅
 - [x] حقل "ربط بمنتج مصنع (للخصم التلقائي)" يظهر دائماً في نموذج إضافة/تعديل المنتج
 - [x] رسالة تنبيه "لا توجد منتجات مصنعة حالياً. أضف منتجات من قسم المخزن والتصنيع أولاً" عندما لا توجد منتجات مصنعة
