@@ -656,33 +656,19 @@ export default function POS() {
   };
 
   // Debug: طباعة معلومات الفلترة في console
-  const filteredProducts = products.filter(p => {
-    // مقارنة category_id بطريقة مرنة تتعامل مع أنواع البيانات المختلفة
-    const matchesCategory = !selectedCategory || 
-      String(p.category_id).trim() === String(selectedCategory).trim() || 
-      p.category_id === selectedCategory;
-    const matchesSearch = !searchQuery || 
-      p.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      p.name_en?.toLowerCase().includes(searchQuery.toLowerCase());
-    
-    // Debug logging
-    if (selectedCategory && !matchesCategory && p.category_id) {
-      console.log(`Product "${p.name}" category_id "${p.category_id}" !== selectedCategory "${selectedCategory}"`);
-    }
-    
-    return matchesCategory && matchesSearch && p.is_available !== false;
-  });
-  
-  // Debug: طباعة معلومات عند تغيير الفئة
-  useEffect(() => {
-    if (selectedCategory) {
-      console.log('=== Debug POS Filter ===');
-      console.log('Selected Category:', selectedCategory);
-      console.log('Total Products:', products.length);
-      console.log('Filtered Products:', filteredProducts.length);
-      console.log('Categories:', categories.map(c => ({ id: c.id, name: c.name })));
-    }
-  }, [selectedCategory, products.length, filteredProducts.length]);
+  const filteredProducts = useMemo(() => {
+    return products.filter(p => {
+      // مقارنة category_id بطريقة مرنة تتعامل مع أنواع البيانات المختلفة
+      const matchesCategory = !selectedCategory || 
+        String(p.category_id).trim() === String(selectedCategory).trim() || 
+        p.category_id === selectedCategory;
+      const matchesSearch = !searchQuery || 
+        p.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        p.name_en?.toLowerCase().includes(searchQuery.toLowerCase());
+      
+      return matchesCategory && matchesSearch && p.is_available !== false;
+    });
+  }, [products, selectedCategory, searchQuery]);
 
   const addToCart = useCallback((product) => {
     playClick();
