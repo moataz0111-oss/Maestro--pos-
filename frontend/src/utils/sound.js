@@ -25,53 +25,56 @@ const initAudio = async () => {
 /**
  * Play click sound effect
  */
-export const playClick = async () => {
-  try {
-    // Initialize on first use (browser requires user interaction)
-    if (!audioContext) {
-      await initAudio();
+export const playClick = () => {
+  // Don't block UI - fire and forget
+  setTimeout(async () => {
+    try {
+      // Initialize on first use (browser requires user interaction)
+      if (!audioContext) {
+        await initAudio();
+      }
+      
+      if (!audioContext || !clickBuffer) {
+        // Fallback: create simple beep
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const oscillator = ctx.createOscillator();
+        const gainNode = ctx.createGain();
+        
+        oscillator.connect(gainNode);
+        gainNode.connect(ctx.destination);
+        
+        oscillator.frequency.value = 800;
+        oscillator.type = 'sine';
+        
+        gainNode.gain.setValueAtTime(0.1, ctx.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.05);
+        
+        oscillator.start(ctx.currentTime);
+        oscillator.stop(ctx.currentTime + 0.05);
+        
+        return;
+      }
+      
+      // Resume context if suspended
+      if (audioContext.state === 'suspended') {
+        await audioContext.resume();
+      }
+      
+      // Play the sound
+      const source = audioContext.createBufferSource();
+      const gainNode = audioContext.createGain();
+      
+      source.buffer = clickBuffer;
+      gainNode.gain.value = 0.3;
+      
+      source.connect(gainNode);
+      gainNode.connect(audioContext.destination);
+      
+      source.start(0);
+    } catch (error) {
+      // Silent fail - don't affect UI
     }
-    
-    if (!audioContext || !clickBuffer) {
-      // Fallback: create simple beep
-      const ctx = new (window.AudioContext || window.webkitAudioContext)();
-      const oscillator = ctx.createOscillator();
-      const gainNode = ctx.createGain();
-      
-      oscillator.connect(gainNode);
-      gainNode.connect(ctx.destination);
-      
-      oscillator.frequency.value = 800;
-      oscillator.type = 'sine';
-      
-      gainNode.gain.setValueAtTime(0.1, ctx.currentTime);
-      gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.05);
-      
-      oscillator.start(ctx.currentTime);
-      oscillator.stop(ctx.currentTime + 0.05);
-      
-      return;
-    }
-    
-    // Resume context if suspended
-    if (audioContext.state === 'suspended') {
-      await audioContext.resume();
-    }
-    
-    // Play the sound
-    const source = audioContext.createBufferSource();
-    const gainNode = audioContext.createGain();
-    
-    source.buffer = clickBuffer;
-    gainNode.gain.value = 0.3;
-    
-    source.connect(gainNode);
-    gainNode.connect(audioContext.destination);
-    
-    source.start(0);
-  } catch (error) {
-    console.warn('Sound playback failed:', error);
-  }
+  }, 0);
 };
 
 /**
