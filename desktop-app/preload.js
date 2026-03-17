@@ -96,6 +96,34 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('update-status', (event, data) => callback(data));
   },
   
+  // ============ ZKTeco أجهزة البصمة ============
+  zkteco: {
+    initialize: () => ipcRenderer.invoke('zkteco-initialize'),
+    connect: (ip, port, name) => ipcRenderer.invoke('zkteco-connect', { ip, port, name }),
+    disconnect: (deviceId) => ipcRenderer.invoke('zkteco-disconnect', deviceId),
+    getUsers: (deviceId) => ipcRenderer.invoke('zkteco-get-users', deviceId),
+    getLogs: (deviceId) => ipcRenderer.invoke('zkteco-get-logs', deviceId),
+    addUser: (deviceId, userData) => ipcRenderer.invoke('zkteco-add-user', { deviceId, userData }),
+    deleteUser: (deviceId, uid) => ipcRenderer.invoke('zkteco-delete-user', { deviceId, uid }),
+    clearLogs: (deviceId) => ipcRenderer.invoke('zkteco-clear-logs', deviceId),
+    setTime: (deviceId) => ipcRenderer.invoke('zkteco-set-time', deviceId),
+    startRealtime: (deviceId) => ipcRenderer.invoke('zkteco-start-realtime', deviceId),
+    ping: (ip, port) => ipcRenderer.invoke('zkteco-ping', { ip, port }),
+    scan: (baseIp, startRange, endRange) => ipcRenderer.invoke('zkteco-scan', { baseIp, startRange, endRange }),
+    getDevices: () => ipcRenderer.invoke('zkteco-get-devices'),
+    saveSettings: (devices) => ipcRenderer.invoke('zkteco-save-settings', devices),
+    getSaved: () => ipcRenderer.invoke('zkteco-get-saved')
+  },
+  onZKTecoDeviceConnected: (callback) => {
+    ipcRenderer.on('zkteco-device-connected', (event, data) => callback(data));
+  },
+  onZKTecoDeviceDisconnected: (callback) => {
+    ipcRenderer.on('zkteco-device-disconnected', (event, data) => callback(data));
+  },
+  onZKTecoAttendance: (callback) => {
+    ipcRenderer.on('zkteco-attendance-captured', (event, data) => callback(data));
+  },
+  
   // ============ الإشعارات ============
   showNotification: (title, body) => {
     new Notification(title, { body });
