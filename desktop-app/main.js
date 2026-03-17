@@ -51,24 +51,34 @@ function createWindow() {
     show: false
   });
 
-  // تفعيل قائمة النقر بزر الماوس الأيمن (Context Menu)
+  // تفعيل قائمة النقر بزر الماوس الأيمن (Context Menu) - تدعم اللغتين
   mainWindow.webContents.on('context-menu', (event, params) => {
+    // جلب اللغة المحفوظة
+    const appLang = store.get('appLanguage', 'ar');
+    
+    // الترجمات
+    const labels = {
+      ar: { undo: 'تراجع', redo: 'إعادة', cut: 'قص', copy: 'نسخ', paste: 'لصق', selectAll: 'تحديد الكل' },
+      en: { undo: 'Undo', redo: 'Redo', cut: 'Cut', copy: 'Copy', paste: 'Paste', selectAll: 'Select All' }
+    };
+    const t = labels[appLang] || labels.ar;
+    
     const menuTemplate = [];
     
     if (params.isEditable) {
       menuTemplate.push(
-        { label: 'تراجع', role: 'undo' },
-        { label: 'إعادة', role: 'redo' },
+        { label: t.undo, role: 'undo' },
+        { label: t.redo, role: 'redo' },
         { type: 'separator' },
-        { label: 'قص', role: 'cut' },
-        { label: 'نسخ', role: 'copy' },
-        { label: 'لصق', role: 'paste' },
-        { label: 'تحديد الكل', role: 'selectAll' }
+        { label: t.cut, role: 'cut' },
+        { label: t.copy, role: 'copy' },
+        { label: t.paste, role: 'paste' },
+        { label: t.selectAll, role: 'selectAll' }
       );
     } else if (params.selectionText) {
       menuTemplate.push(
-        { label: 'نسخ', role: 'copy' },
-        { label: 'تحديد الكل', role: 'selectAll' }
+        { label: t.copy, role: 'copy' },
+        { label: t.selectAll, role: 'selectAll' }
       );
     }
     
