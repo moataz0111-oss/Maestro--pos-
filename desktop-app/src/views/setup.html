@@ -18,6 +18,14 @@
       display: flex;
       align-items: center;
       justify-content: center;
+      transition: direction 0.3s ease;
+    }
+    
+    body.en {
+      direction: ltr;
+    }
+    
+    body.ar {
       direction: rtl;
     }
     
@@ -28,11 +36,50 @@
       width: 100%;
       max-width: 500px;
       box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      position: relative;
+    }
+    
+    .lang-switcher {
+      position: absolute;
+      top: 15px;
+      left: 15px;
+      display: flex;
+      gap: 5px;
+      background: #f0f0f0;
+      padding: 5px;
+      border-radius: 25px;
+    }
+    
+    body.en .lang-switcher {
+      left: auto;
+      right: 15px;
+    }
+    
+    .lang-btn {
+      padding: 8px 16px;
+      border: none;
+      border-radius: 20px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 600;
+      transition: all 0.3s ease;
+      background: transparent;
+      color: #666;
+    }
+    
+    .lang-btn.active {
+      background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+      color: white;
+    }
+    
+    .lang-btn:hover:not(.active) {
+      background: #e0e0e0;
     }
     
     .logo {
       text-align: center;
       margin-bottom: 30px;
+      margin-top: 20px;
     }
     
     .logo h1 {
@@ -57,7 +104,7 @@
       color: #333;
     }
     
-    .form-group input, .form-group select {
+    .form-group input {
       width: 100%;
       padding: 14px 16px;
       border: 2px solid #e0e0e0;
@@ -68,7 +115,7 @@
       text-align: left;
     }
     
-    .form-group input:focus, .form-group select:focus {
+    .form-group input:focus {
       outline: none;
       border-color: #f59e0b;
       box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.1);
@@ -133,60 +180,40 @@
       display: block;
     }
     
-    .divider {
-      display: flex;
-      align-items: center;
-      margin: 25px 0;
-      color: #999;
-    }
-    
-    .divider::before, .divider::after {
-      content: '';
-      flex: 1;
-      height: 1px;
-      background: #e0e0e0;
-    }
-    
-    .divider span {
-      padding: 0 15px;
-      font-size: 14px;
-    }
-    
-    .printer-section {
-      background: #f8f9fa;
-      padding: 20px;
-      border-radius: 10px;
+    .version-info {
+      text-align: center;
       margin-top: 20px;
-    }
-    
-    .printer-section h3 {
-      margin-bottom: 15px;
-      color: #333;
-      font-size: 16px;
+      color: #999;
+      font-size: 12px;
     }
   </style>
 </head>
-<body>
+<body class="ar">
   <div class="setup-container">
+    <div class="lang-switcher">
+      <button class="lang-btn active" data-lang="ar" onclick="switchLang('ar')">عربي</button>
+      <button class="lang-btn" data-lang="en" onclick="switchLang('en')">EN</button>
+    </div>
+    
     <div class="logo">
       <h1>🍽️ Maestro POS</h1>
-      <p>برنامج نقطة البيع - الإعداد الأولي</p>
+      <p data-i18n="subtitle">برنامج نقطة البيع - الإعداد الأولي</p>
     </div>
     
     <form id="setupForm">
       <div class="form-group">
-        <label>رابط السيرفر</label>
+        <label data-i18n="serverUrl">رابط السيرفر</label>
         <input 
           type="url" 
           id="serverUrl" 
           placeholder="https://your-app.emergentagent.com"
           required
         >
-        <div class="hint">أدخل رابط التطبيق المنشور على الإنترنت</div>
+        <div class="hint" data-i18n="serverHint">أدخل رابط التطبيق المنشور على الإنترنت</div>
       </div>
       
       <div class="form-group">
-        <label>البريد الإلكتروني</label>
+        <label data-i18n="email">البريد الإلكتروني</label>
         <input 
           type="email" 
           id="email" 
@@ -196,7 +223,7 @@
       </div>
       
       <div class="form-group">
-        <label>كلمة المرور</label>
+        <label data-i18n="password">كلمة المرور</label>
         <input 
           type="password" 
           id="password" 
@@ -205,21 +232,95 @@
         >
       </div>
       
-      <button type="submit" class="btn btn-primary" id="connectBtn">
+      <button type="submit" class="btn btn-primary" id="connectBtn" data-i18n="connect">
         اتصال بالسيرفر
       </button>
       
       <div id="status" class="status"></div>
     </form>
+    
+    <div class="version-info" id="versionInfo"></div>
   </div>
 
   <script>
+    // الترجمات
+    const translations = {
+      ar: {
+        subtitle: 'برنامج نقطة البيع - الإعداد الأولي',
+        serverUrl: 'رابط السيرفر',
+        serverHint: 'أدخل رابط التطبيق المنشور على الإنترنت',
+        email: 'البريد الإلكتروني',
+        password: 'كلمة المرور',
+        connect: 'اتصال بالسيرفر',
+        connecting: 'جاري الاتصال...',
+        success: '✅ تم الاتصال بنجاح! جاري تحميل التطبيق...',
+        loginFailed: 'فشل تسجيل الدخول',
+        version: 'الإصدار'
+      },
+      en: {
+        subtitle: 'Point of Sale - Initial Setup',
+        serverUrl: 'Server URL',
+        serverHint: 'Enter your application URL',
+        email: 'Email Address',
+        password: 'Password',
+        connect: 'Connect to Server',
+        connecting: 'Connecting...',
+        success: '✅ Connected successfully! Loading application...',
+        loginFailed: 'Login failed',
+        version: 'Version'
+      }
+    };
+    
+    let currentLang = 'ar';
+    
+    // تغيير اللغة
+    function switchLang(lang) {
+      currentLang = lang;
+      document.body.className = lang;
+      document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr';
+      document.documentElement.lang = lang;
+      
+      // تحديث الأزرار
+      document.querySelectorAll('.lang-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.lang === lang);
+      });
+      
+      // تحديث النصوص
+      document.querySelectorAll('[data-i18n]').forEach(el => {
+        const key = el.dataset.i18n;
+        if (translations[lang][key]) {
+          el.textContent = translations[lang][key];
+        }
+      });
+      
+      // حفظ اللغة
+      localStorage.setItem('maestro-lang', lang);
+    }
+    
+    // تحميل اللغة المحفوظة
+    const savedLang = localStorage.getItem('maestro-lang');
+    if (savedLang) {
+      switchLang(savedLang);
+    }
+    
+    // عرض إصدار التطبيق
+    async function showVersion() {
+      try {
+        if (window.electronAPI && window.electronAPI.getAppVersion) {
+          const version = await window.electronAPI.getAppVersion();
+          const t = translations[currentLang];
+          document.getElementById('versionInfo').textContent = `${t.version}: ${version}`;
+        }
+      } catch (e) {
+        console.log('Could not get app version');
+      }
+    }
+    showVersion();
+    
+    // النموذج
     const form = document.getElementById('setupForm');
     const statusDiv = document.getElementById('status');
-    const printerSection = document.getElementById('printerSection');
     const connectBtn = document.getElementById('connectBtn');
-    
-    let authToken = null;
     
     // عند تقديم النموذج
     form.addEventListener('submit', async (e) => {
@@ -228,9 +329,10 @@
       const serverUrl = document.getElementById('serverUrl').value.trim();
       const email = document.getElementById('email').value.trim();
       const password = document.getElementById('password').value;
+      const t = translations[currentLang];
       
       connectBtn.disabled = true;
-      showStatus('جاري الاتصال...', 'loading');
+      showStatus(t.connecting, 'loading');
       
       try {
         // اختبار الاتصال وتسجيل الدخول
@@ -243,23 +345,29 @@
         const data = await response.json();
         
         if (!response.ok) {
-          throw new Error(data.detail || 'فشل تسجيل الدخول');
+          throw new Error(data.detail || t.loginFailed);
         }
         
-        authToken = data.token;
+        // حفظ الإعدادات باستخدام الدالة الصحيحة
+        if (window.electronAPI && window.electronAPI.saveSettings) {
+          await window.electronAPI.saveSettings({
+            serverUrl,
+            authToken: data.token,
+            userEmail: email,
+            userName: data.user?.full_name || email,
+            branchId: data.user?.branch_id || ''
+          });
+        } else if (window.electronAPI && window.electronAPI.saveServerUrl) {
+          // fallback للدالة القديمة
+          await window.electronAPI.saveServerUrl(serverUrl);
+          if (window.electronAPI.saveAuthToken) {
+            await window.electronAPI.saveAuthToken(data.token);
+          }
+        }
         
-        // حفظ الإعدادات
-        await window.electronAPI.saveSettings({
-          serverUrl,
-          authToken,
-          userEmail: email,
-          userName: data.user?.full_name || email,
-          branchId: data.user?.branch_id || ''
-        });
+        showStatus(t.success, 'success');
         
-        showStatus('✅ تم الاتصال بنجاح! جاري تحميل التطبيق...', 'success');
-        
-        // الانتقال مباشرة للتطبيق الرئيسي
+        // الانتقال مباشرة للتطبيق الرئيسي (بدون خطوة الطابعات)
         setTimeout(() => {
           window.location.href = serverUrl;
         }, 1500);
