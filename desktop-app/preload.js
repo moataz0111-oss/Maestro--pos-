@@ -5,6 +5,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // ============ إعداد السيرفر ============
   saveServerUrl: (url) => ipcRenderer.invoke('save-server-url', url),
   getServerUrl: () => ipcRenderer.invoke('get-server-url'),
+  saveSettings: (settings) => ipcRenderer.invoke('save-settings', settings),
+  getSettings: () => ipcRenderer.invoke('get-settings'),
   
   // ============ الطباعة ============
   getPrinters: () => ipcRenderer.invoke('get-printers'),

@@ -411,6 +411,32 @@ ipcMain.handle('get-server-url', () => {
   return store.get('serverUrl', '');
 });
 
+// حفظ جميع الإعدادات (للإعداد الأولي)
+ipcMain.handle('save-settings', (event, settings) => {
+  if (settings.serverUrl) store.set('serverUrl', settings.serverUrl);
+  if (settings.authToken) store.set('authToken', settings.authToken);
+  if (settings.userEmail) store.set('userEmail', settings.userEmail);
+  if (settings.userName) store.set('userName', settings.userName);
+  if (settings.branchId) store.set('branchId', settings.branchId);
+  
+  // تحميل رابط السيرفر
+  if (mainWindow && settings.serverUrl) {
+    mainWindow.loadURL(settings.serverUrl);
+  }
+  return true;
+});
+
+// جلب جميع الإعدادات
+ipcMain.handle('get-settings', () => {
+  return {
+    serverUrl: store.get('serverUrl', ''),
+    authToken: store.get('authToken', ''),
+    userEmail: store.get('userEmail', ''),
+    userName: store.get('userName', ''),
+    branchId: store.get('branchId', '')
+  };
+});
+
 // ============ الطباعة ============
 ipcMain.handle('get-printers', async () => {
   return printerManager.getPrinters();
