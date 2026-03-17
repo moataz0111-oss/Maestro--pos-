@@ -603,10 +603,12 @@ def read_root():
     return {"status": "Server is running successfully 🚀", "app": "Maestro EGP", "version": "2.0.0"}
 
 @app.get("/health")
+@app.head("/health")
 def health_check():
     return {"status": "ok"}
 
 @api_router.get("/health")
+@api_router.head("/health")
 def api_health_check():
     return {"status": "ok", "api": "Maestro EGP API"}
 
