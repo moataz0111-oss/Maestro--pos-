@@ -9,6 +9,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getSettings: () => ipcRenderer.invoke('get-settings'),
   saveLanguage: (lang) => ipcRenderer.invoke('save-language', lang),
   getLanguage: () => ipcRenderer.invoke('get-language'),
+  loadServerUrl: (url) => ipcRenderer.invoke('load-server-url', url),
   
   // ============ الطباعة ============
   getPrinters: () => ipcRenderer.invoke('get-printers'),
