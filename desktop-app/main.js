@@ -684,6 +684,6 @@ app.on('before-quit', () => {
 // التأكد من إغلاق التطبيق بالكامل عند الضغط على Cmd+Q
 app.on('will-quit', () => {
   // تنظيف الموارد
-  if (syncManager) syncManager.stop();
-  if (zktecoManager) zktecoManager.disconnectAll();
+  if (syncManager && syncManager.stopAutoSync) syncManager.stopAutoSync();
+  if (zktecoManager && zktecoManager.disconnectAll) zktecoManager.disconnectAll();
 });
