@@ -94,7 +94,7 @@
   },
   
   "test_credentials": {
-    "api_url": "https://dine-control-12.preview.emergentagent.com",
+    "api_url": "https://maestro-pos-3.preview.emergentagent.com",
     "owner": {
       "email": "owner@maestroegp.com",
       "password": "owner123",
