@@ -92,8 +92,13 @@ function createWindow() {
   const serverUrl = store.get('serverUrl');
   
   if (serverUrl) {
-    // فتح صفحة POS مباشرة
-    mainWindow.loadURL(serverUrl);
+    // عرض صفحة التحميل أولاً
+    mainWindow.loadFile(path.join(__dirname, 'src', 'views', 'loading.html'));
+    
+    // ثم تحميل السيرفر بعد تأخير قصير
+    setTimeout(() => {
+      mainWindow.loadURL(serverUrl);
+    }, 500);
   } else {
     // فتح صفحة الإعداد
     mainWindow.loadFile(path.join(__dirname, 'src', 'views', 'setup.html'));
@@ -106,6 +111,18 @@ function createWindow() {
     // فحص التحديثات
     if (autoUpdater) {
       setTimeout(() => autoUpdater.checkForUpdates(), 3000);
+    }
+  });
+  
+  // معالجة فشل تحميل الصفحة
+  mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL) => {
+    console.log('❌ فشل تحميل الصفحة:', errorCode, errorDescription);
+    isOnline = false;
+    updateTrayStatus();
+    
+    // إذا فشل التحميل، عرض صفحة الخطأ
+    if (errorCode !== -3) { // تجاهل إلغاء التحميل
+      mainWindow.loadFile(path.join(__dirname, 'src', 'views', 'error.html'));
     }
   });
 
@@ -124,10 +141,6 @@ function createWindow() {
   });
 
   // مراقبة حالة الاتصال
-  mainWindow.webContents.on('did-fail-load', () => {
-    isOnline = false;
-    updateTrayStatus();
-  });
 
   mainWindow.webContents.on('did-finish-load', () => {
     isOnline = true;
