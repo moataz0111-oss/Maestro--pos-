@@ -2,6 +2,12 @@ const { app, BrowserWindow, ipcMain, Tray, Menu, dialog, nativeImage, shell } = 
 const path = require('path');
 const Store = require('electron-store');
 
+// تعطيل تسارع الرسومات لحل مشكلة الشاشة البيضاء
+app.disableHardwareAcceleration();
+// تفعيل software rendering
+app.commandLine.appendSwitch('disable-gpu');
+app.commandLine.appendSwitch('disable-software-rasterizer');
+
 // تهيئة التخزين المحلي
 const store = new Store({
   name: 'maestro-config',
