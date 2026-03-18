@@ -7,6 +7,9 @@ app.disableHardwareAcceleration();
 // تفعيل software rendering
 app.commandLine.appendSwitch('disable-gpu');
 app.commandLine.appendSwitch('disable-software-rasterizer');
+app.commandLine.appendSwitch('disable-gpu-compositing');
+app.commandLine.appendSwitch('enable-features', 'VaapiVideoDecoder');
+app.commandLine.appendSwitch('ignore-gpu-blocklist');
 
 // تهيئة التخزين المحلي
 const store = new Store({
