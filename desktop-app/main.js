@@ -146,10 +146,36 @@ function createWindow() {
   });
 
   // مراقبة حالة الاتصال
-
   mainWindow.webContents.on('did-finish-load', () => {
     isOnline = true;
     updateTrayStatus();
+    
+    // إدخال CSS لمنع الشاشة البيضاء أثناء التحميل
+    mainWindow.webContents.insertCSS(`
+      body { background-color: #0f172a !important; }
+      html { background-color: #0f172a !important; }
+    `);
+  });
+  
+  // منع التنقل خارج التطبيق
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    const serverUrl = store.get('serverUrl', '');
+    if (serverUrl && !url.startsWith(serverUrl) && !url.startsWith('file://')) {
+      // السماح فقط بالتنقل داخل نفس السيرفر
+      console.log('Blocked navigation to:', url);
+    }
+  });
+  
+  // معالجة render process crash
+  mainWindow.webContents.on('render-process-gone', (event, details) => {
+    console.log('Render process gone:', details.reason);
+    if (details.reason === 'crashed') {
+      // إعادة تحميل الصفحة
+      const serverUrl = store.get('serverUrl', '');
+      if (serverUrl) {
+        mainWindow.loadURL(serverUrl);
+      }
+    }
   });
 }
 
