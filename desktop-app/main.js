@@ -44,7 +44,7 @@ function createWindow() {
     minWidth: 1024,
     minHeight: 700,
     icon: path.join(__dirname, 'assets', 'icon.png'),
-    backgroundColor: '#ffffff',
+    backgroundColor: '#0f172a',
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -57,7 +57,11 @@ function createWindow() {
       sandbox: false,
       // تحسين الأداء
       backgroundThrottling: false,
-      offscreen: false
+      offscreen: false,
+      // إضافة إعدادات للرسومات
+      enableBlinkFeatures: 'CSSColorSchemeUARendering',
+      disableBlinkFeatures: 'AutofillShowTypePredictions'
+    },
     },
     titleBarStyle: 'default',
     title: 'Maestro POS',
