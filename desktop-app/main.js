@@ -102,13 +102,8 @@ function createWindow() {
   const serverUrl = store.get('serverUrl');
   
   if (serverUrl) {
-    // عرض صفحة التحميل أولاً
-    mainWindow.loadFile(path.join(__dirname, 'src', 'views', 'loading.html'));
-    
-    // ثم تحميل السيرفر بعد تأخير قصير
-    setTimeout(() => {
-      mainWindow.loadURL(serverUrl);
-    }, 500);
+    // تحميل السيرفر مباشرة بدون صفحة تحميل
+    mainWindow.loadURL(serverUrl);
   } else {
     // فتح صفحة الإعداد
     mainWindow.loadFile(path.join(__dirname, 'src', 'views', 'setup.html'));
