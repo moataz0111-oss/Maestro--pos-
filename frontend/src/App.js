@@ -66,9 +66,14 @@ const ExternalBranchesManagement = lazy(() => import("./pages/ExternalBranchesMa
 // Components
 import IncomingCallPopup from "./components/IncomingCallPopup";
 
+// Check if initial auth check is done (stored in sessionStorage)
+const isAuthChecked = () => sessionStorage.getItem('auth_checked') === 'true';
+const setAuthChecked = () => sessionStorage.setItem('auth_checked', 'true');
+
 // Protected Route Component
 const ProtectedRoute = ({ children }) => {
   const { isAuthenticated, loading, user } = useAuth();
+  const [showLoading, setShowLoading] = useState(!isAuthChecked());
   
   // تحميل جميع الصفحات مسبقاً للعمل Offline
   useEffect(() => {
@@ -81,7 +86,21 @@ const ProtectedRoute = ({ children }) => {
     }
   }, [isAuthenticated, user]);
   
-  if (loading) {
+  useEffect(() => {
+    if (!loading) {
+      setAuthChecked();
+      setShowLoading(false);
+    }
+    // Show loading only for initial check, with a timeout
+    if (loading && !isAuthChecked()) {
+      const timer = setTimeout(() => {
+        setShowLoading(false);
+      }, 3000); // Max 3 seconds loading
+      return () => clearTimeout(timer);
+    }
+  }, [loading]);
+  
+  if (showLoading && loading && !isAuthChecked()) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="text-center">
