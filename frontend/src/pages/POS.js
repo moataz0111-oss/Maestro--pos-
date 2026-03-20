@@ -418,6 +418,29 @@ export default function POS() {
       }
     } finally {
       setLoading(false);
+      setIsInitialLoad(false);
+    }
+  };
+
+  // جلب البيانات بدون إظهار شاشة التحميل (عند تغيير الفرع)
+  const fetchDataSilently = async () => {
+    try {
+      const activeBranchId = getBranchIdForApi() || user?.branch_id;
+      
+      const [catRes, prodRes, tablesRes] = await Promise.all([
+        axios.get(`${API}/categories`),
+        axios.get(`${API}/products`),
+        axios.get(`${API}/tables`, { params: activeBranchId ? { branch_id: activeBranchId } : {} }).catch(() => ({ data: [] }))
+      ]);
+
+      setCategories(catRes.data);
+      setProducts(prodRes.data);
+      setTables(tablesRes.data);
+      
+      // جلب الطلبات المعلقة
+      await fetchPendingOrders();
+    } catch (error) {
+      console.error('Failed to fetch data silently:', error);
     }
   };
 
