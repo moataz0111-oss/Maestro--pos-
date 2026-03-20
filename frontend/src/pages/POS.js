@@ -130,6 +130,7 @@ export default function POS() {
   const [drivers, setDrivers] = useState([]);
   const [selectedDriver, setSelectedDriver] = useState('');
   const [loading, setLoading] = useState(true);
+  const [isInitialLoad, setIsInitialLoad] = useState(true); // للتحميل الأولي فقط
   const [submitting, setSubmitting] = useState(false);
   const [currentShift, setCurrentShift] = useState(null);
   const [kitchenDialogOpen, setKitchenDialogOpen] = useState(false);
