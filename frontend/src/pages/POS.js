@@ -424,6 +424,7 @@ export default function POS() {
       setLoading(false);
       setIsInitialLoad(false);
       setDataLoaded(true);
+      sessionStorage.setItem('pos_data_loaded', 'true');
     }
   };
 
