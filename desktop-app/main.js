@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, Tray, Menu, dialog, nativeImage, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, Tray, Menu, dialog, nativeImage, shell, session } = require('electron');
 const path = require('path');
 const Store = require('electron-store');
 
@@ -10,6 +10,11 @@ app.commandLine.appendSwitch('disable-software-rasterizer');
 app.commandLine.appendSwitch('disable-gpu-compositing');
 app.commandLine.appendSwitch('enable-features', 'VaapiVideoDecoder');
 app.commandLine.appendSwitch('ignore-gpu-blocklist');
+// إصلاح مشكلة الـ rendering
+app.commandLine.appendSwitch('force-color-profile', 'srgb');
+app.commandLine.appendSwitch('disable-features', 'OutOfBlinkCors');
+// تحسين الأداء
+app.commandLine.appendSwitch('js-flags', '--max-old-space-size=4096');
 
 // تهيئة التخزين المحلي
 const store = new Store({
