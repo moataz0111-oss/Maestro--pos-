@@ -22,12 +22,14 @@ const PageLoader = () => (
   </div>
 );
 
-// Lazy loaded pages - تحميل الصفحات عند الحاجة فقط
-const Login = lazy(() => import("./pages/Login"));
-const Dashboard = lazy(() => import("./pages/Dashboard"));
-const POS = lazy(() => import("./pages/POS"));
-const Tables = lazy(() => import("./pages/Tables"));
-const Orders = lazy(() => import("./pages/Orders"));
+// الصفحات الرئيسية - بدون lazy loading لتجنب شاشة التحميل
+import Login from "./pages/Login";
+import Dashboard from "./pages/Dashboard";
+import POS from "./pages/POS";
+import Tables from "./pages/Tables";
+import Orders from "./pages/Orders";
+
+// الصفحات الثانوية - مع lazy loading
 const Inventory = lazy(() => import("./pages/Inventory"));
 const Delivery = lazy(() => import("./pages/Delivery"));
 const Settings = lazy(() => import("./pages/Settings"));
