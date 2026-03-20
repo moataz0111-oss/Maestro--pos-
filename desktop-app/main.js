@@ -65,11 +65,17 @@ function createWindow() {
       offscreen: false,
       // إضافة إعدادات للرسومات
       enableBlinkFeatures: 'CSSColorSchemeUARendering',
-      disableBlinkFeatures: 'AutofillShowTypePredictions'
+      disableBlinkFeatures: 'AutofillShowTypePredictions',
+      // إصلاح مشاكل الرسم
+      webgl: false,
+      experimentalFeatures: false
     },
     titleBarStyle: 'default',
     title: 'Maestro POS',
-    show: false
+    show: false,
+    // إضافة إعدادات للنافذة
+    paintWhenInitiallyHidden: true,
+    hasShadow: true
   });
 
   // تفعيل قائمة النقر بزر الماوس الأيمن (Context Menu) - تدعم اللغتين
