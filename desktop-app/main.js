@@ -178,43 +178,11 @@ function createWindow() {
     isOnline = true;
     updateTrayStatus();
     
-    // إدخال CSS لمنع الشاشة البيضاء/السوداء أثناء التحميل
+    // إدخال CSS لمنع الشاشة البيضاء/السوداء
     mainWindow.webContents.insertCSS(`
       body { background-color: #0f172a !important; }
       html { background-color: #0f172a !important; }
-      * { -webkit-font-smoothing: antialiased !important; }
     `);
-    
-    // إصلاح مشكلة الرسم عند تغيير المحتوى
-    mainWindow.webContents.executeJavaScript(`
-      // تفعيل إعادة الرسم عند تغيير المحتوى
-      const observer = new MutationObserver(() => {
-        document.body.style.display = 'none';
-        document.body.offsetHeight;
-        document.body.style.display = '';
-      });
-      
-      // مراقبة التغييرات في الصفحة بشكل محدود
-      let timeout;
-      const debouncedObserver = new MutationObserver(() => {
-        clearTimeout(timeout);
-        timeout = setTimeout(() => {
-          window.dispatchEvent(new Event('resize'));
-        }, 100);
-      });
-      
-      debouncedObserver.observe(document.body, { 
-        childList: true, 
-        subtree: false 
-      });
-    `);
-  });
-  
-  // تفعيل إعادة الرسم عند التركيز على النافذة
-  mainWindow.on('focus', () => {
-    if (mainWindow && mainWindow.webContents) {
-      mainWindow.webContents.invalidate();
-    }
   });
   
   // منع التنقل خارج التطبيق
