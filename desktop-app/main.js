@@ -112,13 +112,24 @@ function createWindow() {
   // جلب رابط السيرفر المحفوظ
   const serverUrl = store.get('serverUrl');
   
-  if (serverUrl) {
-    // تحميل السيرفر مباشرة بدون صفحة تحميل
-    mainWindow.loadURL(serverUrl);
-  } else {
-    // فتح صفحة الإعداد
-    mainWindow.loadFile(path.join(__dirname, 'src', 'views', 'setup.html'));
-  }
+  // مسح الـ cache قبل التحميل لتجنب مشاكل الرسم
+  session.defaultSession.clearCache().then(() => {
+    if (serverUrl) {
+      // تحميل السيرفر مباشرة بدون صفحة تحميل
+      mainWindow.loadURL(serverUrl, {
+        extraHeaders: 'pragma: no-cache\n'
+      });
+    } else {
+      // فتح صفحة الإعداد
+      mainWindow.loadFile(path.join(__dirname, 'src', 'views', 'setup.html'));
+    }
+  }).catch(() => {
+    if (serverUrl) {
+      mainWindow.loadURL(serverUrl);
+    } else {
+      mainWindow.loadFile(path.join(__dirname, 'src', 'views', 'setup.html'));
+    }
+  });
 
   // إظهار النافذة عند الجاهزية
   mainWindow.once('ready-to-show', () => {
