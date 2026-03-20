@@ -9,7 +9,7 @@ import { LanguageProvider } from "./context/LanguageContext";
 import { OfflineProvider } from "./context/OfflineContext";
 import OfflineBanner from "./components/OfflineBanner";
 import ErrorBoundary from "./components/ErrorBoundary";
-import React, { Suspense, lazy, useEffect } from "react";
+import React, { Suspense, lazy, useEffect, useState } from "react";
 import { t } from "./utils/translations";
 
 // Loading Component
