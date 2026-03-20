@@ -2,19 +2,10 @@ const { app, BrowserWindow, ipcMain, Tray, Menu, dialog, nativeImage, shell, ses
 const path = require('path');
 const Store = require('electron-store');
 
-// تعطيل تسارع الرسومات لحل مشكلة الشاشة البيضاء
-app.disableHardwareAcceleration();
-// تفعيل software rendering
-app.commandLine.appendSwitch('disable-gpu');
-app.commandLine.appendSwitch('disable-software-rasterizer');
-app.commandLine.appendSwitch('disable-gpu-compositing');
+// إعدادات تحسين الأداء (بدون تعطيل GPU)
 app.commandLine.appendSwitch('enable-features', 'VaapiVideoDecoder');
-app.commandLine.appendSwitch('ignore-gpu-blocklist');
-// إصلاح مشكلة الـ rendering
-app.commandLine.appendSwitch('force-color-profile', 'srgb');
-app.commandLine.appendSwitch('disable-features', 'OutOfBlinkCors');
-// تحسين الأداء
-app.commandLine.appendSwitch('js-flags', '--max-old-space-size=4096');
+app.commandLine.appendSwitch('enable-accelerated-2d-canvas');
+app.commandLine.appendSwitch('enable-gpu-rasterization');
 
 // تهيئة التخزين المحلي
 const store = new Store({
