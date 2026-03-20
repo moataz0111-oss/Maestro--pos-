@@ -196,8 +196,23 @@ const PermissionRoute = ({ children, permission }) => {
 // Public Route (redirect to home if authenticated)
 const PublicRoute = ({ children }) => {
   const { isAuthenticated, loading, user } = useAuth();
+  const [showLoading, setShowLoading] = useState(!isAuthChecked());
   
-  if (loading) {
+  useEffect(() => {
+    if (!loading) {
+      setAuthChecked();
+      setShowLoading(false);
+    }
+    // Show loading only for initial check, with a timeout
+    if (loading && !isAuthChecked()) {
+      const timer = setTimeout(() => {
+        setShowLoading(false);
+      }, 3000); // Max 3 seconds loading
+      return () => clearTimeout(timer);
+    }
+  }, [loading]);
+  
+  if (showLoading && loading && !isAuthChecked()) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="text-center">
