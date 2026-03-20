@@ -185,6 +185,13 @@ export default function POS() {
     // تحديث الطلبات المعلقة كل 30 ثانية
     const interval = setInterval(fetchPendingOrders, 30000);
     return () => clearInterval(interval);
+  }, []); // فقط عند التحميل الأولي
+  
+  // جلب البيانات عند تغيير الفرع (بدون إعادة عرض شاشة التحميل)
+  useEffect(() => {
+    if (!isInitialLoad && selectedBranchId) {
+      fetchDataSilently();
+    }
   }, [selectedBranchId]);
 
   // قراءة الطاولة من URL
