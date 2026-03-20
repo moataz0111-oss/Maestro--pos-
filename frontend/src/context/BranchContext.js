@@ -60,7 +60,11 @@ export const BranchProvider = ({ children }) => {
 
   const fetchBranches = async () => {
     try {
-      setLoading(true);
+      // لا نعرض شاشة التحميل إذا كانت الفروع محملة مسبقاً
+      const isFirstLoad = sessionStorage.getItem('branches_loaded') !== 'true';
+      if (isFirstLoad) {
+        setLoading(true);
+      }
       const res = await axios.get(`${API}/branches`);
       const branchesData = res.data || [];
       setBranches(branchesData);
@@ -73,6 +77,9 @@ export const BranchProvider = ({ children }) => {
         setSelectedBranchId(user.branch_id);
         localStorage.setItem('selectedBranchId', user.branch_id);
       }
+      
+      // تسجيل أن الفروع تم تحميلها
+      sessionStorage.setItem('branches_loaded', 'true');
     } catch (error) {
       console.error('Failed to fetch branches:', error);
     } finally {
