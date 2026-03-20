@@ -46,27 +46,17 @@ function createWindow() {
       contextIsolation: true,
       preload: path.join(__dirname, 'preload.js'),
       webSecurity: true,
-      // تفعيل الـ spellcheck وحفظ كلمات السر
       spellcheck: true,
-      enableWebSQL: false,
-      // تفعيل clipboard
       sandbox: false,
       // تحسين الأداء
       backgroundThrottling: false,
-      offscreen: false,
-      // إضافة إعدادات للرسومات
-      enableBlinkFeatures: 'CSSColorSchemeUARendering',
-      disableBlinkFeatures: 'AutofillShowTypePredictions',
-      // إصلاح مشاكل الرسم
-      webgl: false,
-      experimentalFeatures: false
+      // تفعيل تسارع الرسومات
+      webgl: true,
+      acceleratedCanvas: true
     },
     titleBarStyle: 'default',
     title: 'Maestro POS',
-    show: false,
-    // إضافة إعدادات للنافذة
-    paintWhenInitiallyHidden: true,
-    hasShadow: true
+    show: false
   });
 
   // تفعيل قائمة النقر بزر الماوس الأيمن (Context Menu) - تدعم اللغتين
