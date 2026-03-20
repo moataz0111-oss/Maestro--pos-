@@ -11,7 +11,10 @@ export const BranchProvider = ({ children }) => {
   const { user, isAuthenticated, hasRole } = useAuth();
   const [branches, setBranches] = useState([]);
   const [selectedBranchId, setSelectedBranchId] = useState('all');
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => {
+    // تحقق إذا تم تحميل الفروع من قبل
+    return sessionStorage.getItem('branches_loaded') !== 'true';
+  });
   const [pendingOrdersCounts, setPendingOrdersCounts] = useState({}); // عدد الطلبات المعلقة لكل فرع
 
   // جلب الفروع عند تسجيل الدخول
