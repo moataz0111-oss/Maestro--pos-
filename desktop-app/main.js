@@ -62,7 +62,6 @@ function createWindow() {
       enableBlinkFeatures: 'CSSColorSchemeUARendering',
       disableBlinkFeatures: 'AutofillShowTypePredictions'
     },
-    },
     titleBarStyle: 'default',
     title: 'Maestro POS',
     show: false
