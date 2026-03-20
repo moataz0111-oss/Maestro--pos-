@@ -420,6 +420,7 @@ export default function POS() {
     } finally {
       setLoading(false);
       setIsInitialLoad(false);
+      setDataLoaded(true);
     }
   };
 
