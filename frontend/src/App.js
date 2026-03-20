@@ -212,6 +212,7 @@ const PublicRoute = ({ children }) => {
     }
   }, [loading]);
   
+  // Don't show loading for public routes after initial check
   if (showLoading && loading && !isAuthChecked()) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
