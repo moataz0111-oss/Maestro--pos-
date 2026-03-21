@@ -70,14 +70,26 @@ export const AuthProvider = ({ children }) => {
       }
     } catch (error) {
       console.error('Failed to fetch user:', error);
-      // لا نقوم بـ logout إذا كان الخطأ من الشبكة
-      if (error.response?.status === 401 || error.response?.status === 403) {
-        logout();
+      // لا نقوم بـ logout إلا إذا كان الخطأ 401 وليس من الـ network
+      // وأيضاً فقط إذا كنا في صفحة تسجيل الدخول أو التحقق الأولي
+      if (error.response?.status === 401) {
+        // تحقق إذا كان هذا تحقق أولي أو إعادة تحقق
+        const isInitialCheck = !sessionStorage.getItem('user_verified');
+        if (isInitialCheck) {
+          logout();
+        } else {
+          // إذا كان المستخدم موجود بالفعل، لا تسجل خروجه
+          console.warn('Token might be expired, but user is active - not logging out');
+        }
+      } else if (error.response?.status === 403) {
+        // 403 يعني صلاحيات - لا تسجل خروج
+        console.warn('Permission denied, but not logging out');
       } else {
         setError('فشل في الاتصال بالخادم');
       }
     } finally {
       setLoading(false);
+      sessionStorage.setItem('user_verified', 'true');
     }
   };
 
