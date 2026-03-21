@@ -113,8 +113,15 @@ const ProtectedRoute = ({ children }) => {
     );
   }
   
-  if (!isAuthenticated) {
+  // Only redirect if no token exists - prevents redirect during API calls
+  const hasToken = localStorage.getItem('token');
+  if (!isAuthenticated && !hasToken && !loading) {
     return <Navigate to="/login" />;
+  }
+  
+  // If we have a token but not authenticated yet, show nothing (prevents flash)
+  if (!isAuthenticated && hasToken) {
+    return null;
   }
   
   // توجيه مستخدمي الديليفري لبوابة السائق فقط إذا كانوا يحاولون الوصول للوحة التحكم
