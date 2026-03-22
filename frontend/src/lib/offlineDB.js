@@ -226,10 +226,29 @@ export const getItemsByIndex = async (storeName, indexName, value) => {
       }
       
       const index = store.index(indexName);
-      const request = index.getAll(value);
+      
+      // معالجة خاصة للقيم المنطقية (boolean)
+      // IndexedDB قد لا يتعامل جيداً مع false مباشرة
+      let queryValue = value;
+      if (typeof value === 'boolean') {
+        // استخدام IDBKeyRange للقيم المنطقية
+        queryValue = IDBKeyRange.only(value);
+      }
+      
+      const request = index.getAll(queryValue);
 
       request.onsuccess = () => resolve(request.result || []);
-      request.onerror = () => reject(request.error);
+      request.onerror = (event) => {
+        console.error(`Error in getAll for index '${indexName}':`, event.target.error);
+        // في حالة الفشل، نحاول جلب جميع العناصر وفلترتها يدوياً
+        const fallbackRequest = store.getAll();
+        fallbackRequest.onsuccess = () => {
+          const allItems = fallbackRequest.result || [];
+          const filtered = allItems.filter(item => item[indexName] === value);
+          resolve(filtered);
+        };
+        fallbackRequest.onerror = () => resolve([]);
+      };
     } catch (error) {
       console.error(`Error accessing index '${indexName}' in store '${storeName}':`, error);
       resolve([]);
