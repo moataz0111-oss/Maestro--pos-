@@ -98,7 +98,7 @@ const getErrorMessage = (error, defaultMsg) => {
 
 export default function POS() {
   const { user } = useAuth();
-  const { selectedBranchId, branches, getBranchIdForApi } = useBranch();
+  const { selectedBranchId, branches, getBranchIdForApi, refreshPendingCounts } = useBranch();
   const { isOnline, isOffline, syncStatus, updateSyncStatus } = useOffline();
   const { t, isRTL, lang } = useTranslation();
   const navigate = useNavigate();
@@ -1084,7 +1084,7 @@ export default function POS() {
         delivery_app: orderType === 'delivery' ? deliveryApp : null,
         driver_id: selectedDriver || null,
         notes: orderNotes,
-        status: 'delivered',
+        status: 'pending',
         cashier_id: user?.id,
         cashier_name: user?.name || user?.full_name
       };
@@ -1100,12 +1100,16 @@ export default function POS() {
             current_order_id: savedOrder.id || savedOrder.offline_id
           });
           
-          // تحديث الطاولة في الـ state المحلي
-          setTables(prevTables => prevTables.map(t => 
-            t.id === selectedTable 
-              ? { ...t, status: 'occupied', current_order_id: savedOrder.id || savedOrder.offline_id }
-              : t
-          ));
+          // تحديث الطاولة في الـ state المحلي مباشرة
+          setTables(prevTables => prevTables.map(t => {
+            const tableId = String(t.id);
+            const targetId = String(selectedTable);
+            if (tableId === targetId) {
+              console.log('🔴 تحديث الطاولة للحالة مشغولة:', t.id);
+              return { ...t, status: 'occupied', current_order_id: savedOrder.id || savedOrder.offline_id };
+            }
+            return t;
+          }));
         } catch (tableError) {
           console.error('Failed to update table status locally:', tableError);
         }
@@ -1126,6 +1130,14 @@ export default function POS() {
       
       // تحديث حالة المزامنة
       await updateSyncStatus();
+      
+      // تحديث عداد الطلبات المعلقة على الفرع
+      if (refreshPendingCounts) {
+        refreshPendingCounts();
+      }
+      
+      // تحديث الطلبات المعلقة
+      await fetchPendingOrders();
       
       return savedOrder;
     };

@@ -38,7 +38,32 @@ export const BranchProvider = ({ children }) => {
     
     try {
       const counts = {};
-      // جلب عدد الطلبات المعلقة لكل فرع
+      
+      // إذا لم يكن هناك اتصال، احسب من الطلبات المحلية
+      if (!navigator.onLine) {
+        console.log('📊 Calculating pending counts from local orders...');
+        try {
+          // استيراد offlineStorage ديناميكياً
+          const offlineStorage = await import('../lib/offlineStorage');
+          const localOrders = await offlineStorage.getTodayOrders();
+          
+          branchesList.forEach(branch => {
+            const branchOrders = localOrders.filter(o => 
+              (String(o.branch_id) === String(branch.id)) &&
+              ['pending', 'preparing', 'ready'].includes(o.status)
+            );
+            counts[branch.id] = branchOrders.length;
+          });
+          
+          console.log('📊 Local pending counts:', counts);
+          setPendingOrdersCounts(counts);
+          return;
+        } catch (localError) {
+          console.error('Failed to get local orders:', localError);
+        }
+      }
+      
+      // جلب عدد الطلبات المعلقة لكل فرع من الخادم
       await Promise.all(branchesList.map(async (branch) => {
         try {
           const res = await axios.get(`${API}/orders`, {
@@ -52,6 +77,21 @@ export const BranchProvider = ({ children }) => {
           counts[branch.id] = 0;
         }
       }));
+      
+      // إضافة الطلبات المحلية غير المتزامنة
+      try {
+        const offlineStorage = await import('../lib/offlineStorage');
+        const localOrders = await offlineStorage.getUnsyncedOrders();
+        
+        localOrders.forEach(order => {
+          if (order.branch_id && ['pending', 'preparing', 'ready'].includes(order.status)) {
+            counts[order.branch_id] = (counts[order.branch_id] || 0) + 1;
+          }
+        });
+      } catch (localError) {
+        // تجاهل خطأ الطلبات المحلية
+      }
+      
       setPendingOrdersCounts(counts);
     } catch (error) {
       console.error('Failed to fetch pending orders counts:', error);
