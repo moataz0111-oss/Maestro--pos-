@@ -310,6 +310,9 @@ export default function POS() {
           console.log('🔍 Filtered tables:', filteredTables.length);
         }
         
+        // ترتيب الطاولات حسب الرقم
+        filteredTables = filteredTables.sort((a, b) => (a.number || 0) - (b.number || 0));
+        
         // تحديث حالة الطاولات المشغولة - جلب كل الطلبات من IndexedDB
         const allStoredOrders = await db.getAllItems(STORES.ORDERS);
         console.log('📦 All stored orders for table status:', allStoredOrders.length);
@@ -332,9 +335,28 @@ export default function POS() {
         setTables(filteredTables);
       }
       
-      // الطلبات المعلقة - جلب كل الطلبات من IndexedDB
+      // الطلبات المعلقة - جلب كل الطلبات من IndexedDB مع إزالة التكرارات
       const allLocalOrders = await db.getAllItems(STORES.ORDERS);
-      let pendingLocal = allLocalOrders.filter(o => 
+      
+      // إزالة التكرارات بناءً على order_number أو table_id + total
+      const uniqueOrdersMap = new Map();
+      for (const order of allLocalOrders) {
+        // مفتاح فريد: order_number أو (table_id + total + status)
+        const uniqueKey = order.order_number 
+          ? `order_${order.order_number}` 
+          : `${order.table_id || 'no_table'}_${order.total}_${order.status}`;
+        
+        // إذا كان الطلب موجود، احتفظ بالأحدث
+        if (!uniqueOrdersMap.has(uniqueKey) || 
+            new Date(order.created_at) > new Date(uniqueOrdersMap.get(uniqueKey).created_at)) {
+          uniqueOrdersMap.set(uniqueKey, order);
+        }
+      }
+      
+      const deduplicatedOrders = Array.from(uniqueOrdersMap.values());
+      console.log('📦 Orders after deduplication:', deduplicatedOrders.length, '(was:', allLocalOrders.length, ')');
+      
+      let pendingLocal = deduplicatedOrders.filter(o => 
         ['pending', 'preparing', 'ready'].includes(o.status) || o.is_synced === false
       );
       if (activeBranchId && activeBranchId !== 'all') {
@@ -426,7 +448,10 @@ export default function POS() {
       
       console.log('🔴 Occupied table IDs from API:', occupiedTableIds);
       
-      const tablesWithStatus = tablesRes.data.map(table => {
+      // ترتيب الطاولات حسب الرقم
+      const sortedTables = [...tablesRes.data].sort((a, b) => (a.number || 0) - (b.number || 0));
+      
+      const tablesWithStatus = sortedTables.map(table => {
         if (occupiedTableIds.includes(String(table.id))) {
           const order = pendingOrdersRes.data.find(o => String(o.table_id) === String(table.id));
           console.log('🔴 Table', table.number, 'is occupied by order #', order?.order_number);
@@ -527,6 +552,9 @@ export default function POS() {
             );
             console.log('🔍 Offline filtered tables for branch', activeBranchId, ':', filteredTables.length);
           }
+          
+          // ترتيب الطاولات حسب الرقم
+          filteredTables = filteredTables.sort((a, b) => (a.number || 0) - (b.number || 0));
           
           // تحديث حالة الطاولات المشغولة - جلب كل الطلبات من IndexedDB
           const allStoredOrders = await db.getAllItems(STORES.ORDERS);
