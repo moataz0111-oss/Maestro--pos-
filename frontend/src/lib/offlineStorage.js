@@ -163,6 +163,46 @@ export const saveOfflineOrder = async (order) => {
 };
 
 /**
+ * حفظ الطلبات من API للاستخدام offline (cache للعرض فقط)
+ * هذه الطلبات تكون مزامنة بالفعل (is_synced = true)
+ */
+export const cacheApiOrders = async (orders) => {
+  try {
+    if (!orders || orders.length === 0) return;
+    
+    console.log('💾 تخزين طلبات API للاستخدام offline:', orders.length);
+    
+    for (const order of orders) {
+      // تجاهل الطلبات الملغاة أو المسلمة
+      if (order.status === 'cancelled' || order.status === 'delivered') continue;
+      
+      // تحقق إذا كان الطلب موجود مسبقاً
+      const existingOrders = await db.getAllItems(STORES.ORDERS);
+      const exists = existingOrders.some(o => 
+        o.id === order.id || 
+        (o.offline_id && o.offline_id === order.offline_id)
+      );
+      
+      if (!exists) {
+        // حفظ الطلب كـ cached (مزامن)
+        const cachedOrder = {
+          ...order,
+          is_synced: true,
+          is_cached: true, // للتمييز أنه من API وليس محلي
+          cached_at: new Date().toISOString()
+        };
+        
+        await db.addItem(STORES.ORDERS, cachedOrder);
+      }
+    }
+    
+    console.log('✅ تم تخزين طلبات API بنجاح');
+  } catch (error) {
+    console.error('❌ خطأ في تخزين طلبات API:', error);
+  }
+};
+
+/**
  * تحديث طلب
  */
 export const updateOfflineOrder = async (orderId, updates) => {
@@ -715,6 +755,7 @@ export default {
   markOrderAsSynced,
   cleanupOldData,
   cleanupSyncedOrders,
+  cacheApiOrders,
   saveOfflineInventoryTransaction,
   saveOfflineAttendance,
   saveOfflineTableUpdate,

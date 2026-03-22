@@ -554,34 +554,35 @@ export default function POS() {
       const activeBranchId = getBranchIdForApi() || user?.branch_id;
       const params = activeBranchId ? { branch_id: activeBranchId } : {};
       
-      // في وضع Offline، جلب الطلبات المحلية فقط
+      // في وضع Offline، جلب الطلبات المحلية (المخزنة من API + غير المزامنة)
       if (isOffline || !navigator.onLine) {
         console.log('📦 fetchPendingOrders in Offline mode');
         
-        // جلب كل الطلبات المحلية: اليوم + غير المتزامنة
-        const [todayOrders, unsyncedOrders] = await Promise.all([
-          offlineStorage.getTodayOrders(),
-          offlineStorage.getUnsyncedOrders()
-        ]);
+        // جلب كل الطلبات من IndexedDB
+        const allStoredOrders = await db.getAllItems(STORES.ORDERS);
+        console.log('📦 All stored orders in IndexedDB:', allStoredOrders.length);
         
         // دمج الطلبات بدون تكرار
         const ordersMap = new Map();
-        for (const order of todayOrders) {
-          ordersMap.set(order.id || order.offline_id, order);
-        }
-        for (const order of unsyncedOrders) {
-          if (!ordersMap.has(order.id) && !ordersMap.has(order.offline_id)) {
-            ordersMap.set(order.id || order.offline_id, order);
+        for (const order of allStoredOrders) {
+          const key = order.id || order.offline_id;
+          if (!ordersMap.has(key)) {
+            ordersMap.set(key, order);
           }
         }
         
         const allLocalOrders = Array.from(ordersMap.values());
-        console.log('📦 Total local orders:', allLocalOrders.length);
         
+        // فلترة الطلبات المعلقة
         const pendingLocal = allLocalOrders.filter(o => {
-          const statusMatch = ['pending', 'preparing', 'ready'].includes(o.status) || !o.is_synced;
+          // الطلبات المعلقة أو قيد التحضير أو جاهزة
+          const statusMatch = ['pending', 'preparing', 'ready'].includes(o.status);
+          // أو الطلبات غير المزامنة (محلية جديدة)
+          const unsyncedMatch = o.is_synced === false;
+          // فلترة حسب الفرع
           const branchMatch = !activeBranchId || activeBranchId === 'all' || String(o.branch_id) === String(activeBranchId);
-          return statusMatch && branchMatch;
+          
+          return (statusMatch || unsyncedMatch) && branchMatch;
         });
         
         console.log('📦 Pending local orders:', pendingLocal.length);
@@ -614,11 +615,17 @@ export default function POS() {
         }
       }
       
+      // حفظ الطلبات من API للاستخدام offline
+      const allApiOrders = [...activeRes.data, ...unpaidRes.data];
+      try {
+        await offlineStorage.cacheApiOrders(allApiOrders);
+      } catch (cacheError) {
+        console.log('Cache error:', cacheError);
+      }
+      
       // تنظيف الطلبات المزامنة من IndexedDB
       // حذف الطلبات المحلية التي تم مزامنتها بالفعل
       try {
-        const allApiOrders = [...activeRes.data, ...unpaidRes.data];
-        
         // استدعاء دالة التنظيف الشاملة
         await offlineStorage.cleanupSyncedOrders(allApiOrders);
       } catch (cleanupError) {

@@ -3,6 +3,32 @@ import ReactDOM from "react-dom/client";
 import "@/index.css";
 import App from "@/App";
 
+// تسجيل Service Worker للعمل Offline
+const registerServiceWorker = async () => {
+  if ('serviceWorker' in navigator) {
+    try {
+      const registration = await navigator.serviceWorker.register('/sw-offline.js', {
+        scope: '/'
+      });
+      console.log('✅ Service Worker registered successfully:', registration.scope);
+      
+      // تحديث تلقائي
+      registration.addEventListener('updatefound', () => {
+        const newWorker = registration.installing;
+        if (newWorker) {
+          newWorker.addEventListener('statechange', () => {
+            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+              console.log('🔄 New Service Worker available, refresh to update');
+            }
+          });
+        }
+      });
+    } catch (error) {
+      console.error('❌ Service Worker registration failed:', error);
+    }
+  }
+};
+
 // Hide initial loader when React starts
 const hideLoader = () => {
   const loader = document.getElementById('initial-loader');
@@ -57,6 +83,9 @@ try {
     </React.StrictMode>
   );
   hideLoader();
+  
+  // تسجيل Service Worker بعد تحميل التطبيق
+  registerServiceWorker();
 } catch (error) {
   console.error('Failed to render app:', error);
 }
