@@ -119,23 +119,40 @@ function createWindow() {
   
   // معالجة فشل تحميل الصفحة
   mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL) => {
-    console.log('❌ فشل تحميل الصفحة:', errorCode, errorDescription);
+    console.log('❌ فشل تحميل الصفحة:', errorCode, errorDescription, validatedURL);
+    
+    // تجاهل أخطاء الإلغاء
+    if (errorCode === -3) {
+      console.log('⏭️ تم تجاهل خطأ إلغاء التحميل');
+      return;
+    }
+    
+    // تحديث حالة الاتصال
     isOnline = false;
     updateTrayStatus();
     
-    // لا نعرض صفحة الخطأ إذا كان التطبيق محملاً بالفعل
-    // فقط نعرض صفحة الخطأ عند التحميل الأولي
-    // errorCode -3 = إلغاء التحميل
-    // errorCode -6 = فشل الاتصال
-    // errorCode -105 = الخادم غير موجود
-    const isInitialLoad = !mainWindow.webContents.getURL().includes(store.get('serverUrl', ''));
-    
-    if (errorCode !== -3 && isInitialLoad) {
-      mainWindow.loadFile(path.join(__dirname, 'src', 'views', 'error.html'));
-    } else {
-      // إذا كان التطبيق محملاً بالفعل، لا نفعل شيئاً - نترك الصفحة الحالية
-      console.log('📵 فقدان الاتصال - التطبيق سيعمل في وضع Offline');
+    // إرسال حالة Offline للتطبيق React
+    if (mainWindow && mainWindow.webContents) {
+      mainWindow.webContents.executeJavaScript(`
+        window.dispatchEvent(new CustomEvent('electron-offline'));
+        console.log('📵 Electron: وضع Offline');
+      `).catch(() => {});
     }
+    
+    // التحقق مما إذا كان التطبيق محمّلاً بالفعل
+    const currentURL = mainWindow.webContents.getURL();
+    const serverUrl = store.get('serverUrl', '');
+    const isAppLoaded = currentURL && currentURL.includes(serverUrl) && !currentURL.includes('error.html');
+    
+    // لا نفعل شيئاً إذا كان التطبيق محمّلاً - نتركه يعمل في وضع Offline
+    if (isAppLoaded) {
+      console.log('📵 التطبيق محمّل - البقاء في وضع Offline');
+      return;
+    }
+    
+    // فقط نعرض صفحة الخطأ إذا كان التحميل الأولي فشل
+    console.log('⚠️ فشل التحميل الأولي - عرض صفحة الخطأ');
+    mainWindow.loadFile(path.join(__dirname, 'src', 'views', 'error.html'));
   });
 
   // معالجة إغلاق النافذة بشكل صحيح
@@ -156,6 +173,12 @@ function createWindow() {
   mainWindow.webContents.on('did-finish-load', () => {
     isOnline = true;
     updateTrayStatus();
+    
+    // إرسال حالة Online للتطبيق React
+    mainWindow.webContents.executeJavaScript(`
+      window.dispatchEvent(new CustomEvent('electron-online'));
+      console.log('🟢 Electron: وضع Online');
+    `).catch(() => {});
     
     // إدخال CSS لمنع الشاشة البيضاء/السوداء
     mainWindow.webContents.insertCSS(`

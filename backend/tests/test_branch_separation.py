@@ -15,7 +15,7 @@ import pytest
 import requests
 import os
 
-BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://maestro-pos-3.preview.emergentagent.com')
+BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://electron-pos-system.preview.emergentagent.com')
 
 # Test credentials from review request
 GRAFFITI_EMAIL = "hanialdujaili@gmail.com"

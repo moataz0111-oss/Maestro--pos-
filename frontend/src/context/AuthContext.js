@@ -50,48 +50,93 @@ export const AuthProvider = ({ children }) => {
   const [isOfflineLogin, setIsOfflineLogin] = useState(false);
   const [userFetched, setUserFetched] = useState(false);
 
+  // تهيئة المصادقة مرة واحدة فقط عند التحميل الأولي
   useEffect(() => {
-    if (token && !userFetched) {
+    // إذا تم التحقق من المستخدم بالفعل في هذه الجلسة، لا نعيد التحقق
+    const alreadyVerified = sessionStorage.getItem('user_verified') === 'true';
+    
+    if (token && !userFetched && !alreadyVerified) {
       axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
       fetchUser();
+    } else if (token && alreadyVerified && !user) {
+      // إذا تم التحقق سابقاً ولكن المستخدم غير موجود، استعد من التخزين المحلي
+      const cachedUser = localStorage.getItem('cached_user');
+      if (cachedUser) {
+        try {
+          const userData = JSON.parse(cachedUser);
+          setUser(userData);
+          setUserFetched(true);
+          axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+        } catch (e) {
+          console.error('Failed to parse cached user:', e);
+        }
+      }
+      setLoading(false);
     } else if (!token) {
       setLoading(false);
     }
-  }, [token, userFetched]);
+  }, []);
 
   const fetchUser = async () => {
     try {
       const response = await axios.get(`${API}/auth/me`);
-      setUser(response.data);
+      const userData = response.data;
+      setUser(userData);
       setError(null);
       setUserFetched(true);
       
+      // حفظ بيانات المستخدم في التخزين المحلي للاستخدام في Electron
+      localStorage.setItem('cached_user', JSON.stringify(userData));
+      
       // فتح وردية تلقائياً للكاشير أو المدير
-      if (['cashier', 'manager', 'admin'].includes(response.data.role)) {
+      if (['cashier', 'manager', 'admin'].includes(userData.role)) {
         await autoOpenShift();
       }
     } catch (error) {
       console.error('Failed to fetch user:', error);
-      // لا نقوم بـ logout إلا إذا كان الخطأ 401 وليس من الـ network
-      // وأيضاً فقط إذا كنا في صفحة تسجيل الدخول أو التحقق الأولي
-      if (error.response?.status === 401) {
-        // تحقق إذا كان هذا تحقق أولي أو إعادة تحقق
+      
+      // في حالة خطأ الشبكة، حاول استعادة المستخدم من التخزين المحلي
+      if (!error.response) {
+        const cachedUser = localStorage.getItem('cached_user');
+        if (cachedUser) {
+          try {
+            const userData = JSON.parse(cachedUser);
+            setUser(userData);
+            setUserFetched(true);
+            setError(null);
+            console.log('✅ تم استعادة المستخدم من التخزين المحلي');
+            return;
+          } catch (e) {
+            console.error('Failed to parse cached user:', e);
+          }
+        }
+        setError('فشل في الاتصال بالخادم');
+        setUserFetched(true);
+      } else if (error.response?.status === 401) {
+        // 401 يعني token غير صالح - تسجيل خروج فقط في التحقق الأولي
         const isInitialCheck = !sessionStorage.getItem('user_verified');
         if (isInitialCheck) {
           logout();
         } else {
-          // إذا كان المستخدم موجود بالفعل، لا تسجل خروجه
-          console.warn('Token might be expired, but user is active - not logging out');
-          setUserFetched(true); // منع إعادة المحاولة
+          // حاول استعادة المستخدم من التخزين المحلي
+          const cachedUser = localStorage.getItem('cached_user');
+          if (cachedUser) {
+            try {
+              const userData = JSON.parse(cachedUser);
+              setUser(userData);
+              console.warn('Token expired but using cached user');
+            } catch (e) {
+              console.error('Failed to parse cached user:', e);
+            }
+          }
+          setUserFetched(true);
         }
       } else if (error.response?.status === 403) {
-        // 403 يعني صلاحيات - لا تسجل خروج
         console.warn('Permission denied, but not logging out');
         setUserFetched(true);
       } else {
-        // خطأ شبكة - لا تسجل خروج ولكن أشر للخطأ
         setError('فشل في الاتصال بالخادم');
-        setUserFetched(true); // منع إعادة المحاولة المتكررة
+        setUserFetched(true);
       }
     } finally {
       setLoading(false);

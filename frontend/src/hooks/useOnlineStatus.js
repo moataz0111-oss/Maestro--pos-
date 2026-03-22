@@ -27,6 +27,16 @@ const notifyListeners = (isOnline) => {
 if (typeof window !== 'undefined') {
   window.addEventListener('online', () => notifyListeners(true));
   window.addEventListener('offline', () => notifyListeners(false));
+  
+  // الاستماع لأحداث Electron الخاصة
+  window.addEventListener('electron-offline', () => {
+    console.log('📵 Received electron-offline event');
+    notifyListeners(false);
+  });
+  window.addEventListener('electron-online', () => {
+    console.log('🟢 Received electron-online event');
+    notifyListeners(true);
+  });
 }
 
 /**

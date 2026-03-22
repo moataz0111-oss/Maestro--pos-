@@ -230,7 +230,7 @@ desktop-app/
 
 عند تشغيل التطبيق لأول مرة:
 1. ستظهر صفحة الإعداد
-2. أدخل رابط السيرفر (مثل: `https://maestro-pos-3.preview.emergentagent.com`)
+2. أدخل رابط السيرفر (مثل: `https://electron-pos-system.preview.emergentagent.com`)
 3. سجل الدخول ببيانات حسابك
 4. سيتم حفظ البيانات محلياً
 
