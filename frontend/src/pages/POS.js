@@ -529,13 +529,62 @@ export default function POS() {
         }
       }
       
+      // تنظيف الطلبات المزامنة من IndexedDB
+      // إذا كان الطلب موجود في API مع offline_id، قم بحذفه من التخزين المحلي
+      try {
+        const allApiOrders = [...activeRes.data, ...unpaidRes.data];
+        const syncedOfflineIds = allApiOrders
+          .filter(o => o.offline_id)
+          .map(o => o.offline_id);
+        
+        if (syncedOfflineIds.length > 0) {
+          const localOrders = await offlineStorage.getUnsyncedOrders();
+          for (const localOrder of localOrders) {
+            if (localOrder.offline_id && syncedOfflineIds.includes(localOrder.offline_id)) {
+              // إيجاد الطلب المقابل من API للحصول على serverId
+              const apiOrder = allApiOrders.find(o => o.offline_id === localOrder.offline_id);
+              if (apiOrder) {
+                try {
+                  await offlineStorage.markOrderAsSynced(
+                    localOrder.offline_id, 
+                    apiOrder.id, 
+                    apiOrder.order_number
+                  );
+                } catch (e) {
+                  console.log('Could not mark order as synced:', localOrder.offline_id);
+                }
+              }
+            }
+          }
+        }
+      } catch (cleanupError) {
+        console.log('Cleanup error:', cleanupError);
+      }
+      
       // إضافة الطلبات المحلية غير المتزامنة
       try {
         const localOrders = await offlineStorage.getUnsyncedOrders();
+        
+        // جلب جميع offline_ids من الطلبات المزامنة
+        const syncedOfflineIds = new Set();
+        for (const [key, order] of ordersMap) {
+          if (order.offline_id) {
+            syncedOfflineIds.add(order.offline_id);
+          }
+        }
+        
         for (const order of localOrders) {
-          if (!ordersMap.has(order.id) && order.status !== 'cancelled') {
-            // فلترة حسب الفرع
-            if (!activeBranchId || activeBranchId === 'all' || order.branch_id === activeBranchId) {
+          // تجاهل الطلبات التي تم مزامنتها بالفعل (لها offline_id في API response)
+          const alreadySynced = (order.offline_id && syncedOfflineIds.has(order.offline_id)) ||
+                               ordersMap.has(order.id) || 
+                               ordersMap.has(order.offline_id);
+          
+          if (!alreadySynced && order.status !== 'cancelled') {
+            // فلترة حسب الفرع - مقارنة كـ string
+            const branchMatch = !activeBranchId || 
+                               activeBranchId === 'all' || 
+                               String(order.branch_id) === String(activeBranchId);
+            if (branchMatch) {
               ordersMap.set(order.id || order.offline_id, order);
             }
           }

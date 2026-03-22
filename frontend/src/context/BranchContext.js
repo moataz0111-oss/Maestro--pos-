@@ -39,11 +39,11 @@ export const BranchProvider = ({ children }) => {
     try {
       const counts = {};
       
-      // إذا لم يكن هناك اتصال، احسب من الطلبات المحلية
+      // إذا لم يكن هناك اتصال، احسب من الطلبات المحلية فقط
       if (!navigator.onLine) {
         try {
           const offlineStorage = await import('../lib/offlineStorage');
-          const localOrders = await offlineStorage.getTodayOrders();
+          const localOrders = await offlineStorage.default.getTodayOrders();
           
           branchesList.forEach(branch => {
             const branchOrders = localOrders.filter(o => {
@@ -61,7 +61,15 @@ export const BranchProvider = ({ children }) => {
         return;
       }
       
-      // في وضع Online، جلب من الخادم مباشرة
+      // في وضع Online، جلب من الخادم + الطلبات المحلية غير المتزامنة
+      const offlineStorage = await import('../lib/offlineStorage');
+      let localUnsyncedOrders = [];
+      try {
+        localUnsyncedOrders = await offlineStorage.default.getUnsyncedOrders();
+      } catch (e) {
+        console.log('Could not get unsynced orders');
+      }
+      
       await Promise.all(branchesList.map(async (branch) => {
         try {
           const res = await axios.get(`${API}/orders`, {
@@ -70,9 +78,30 @@ export const BranchProvider = ({ children }) => {
               status: 'pending,preparing,ready' 
             }
           });
-          counts[branch.id] = res.data?.length || 0;
+          
+          // عدد الطلبات من API
+          let apiCount = res.data?.length || 0;
+          
+          // إضافة الطلبات المحلية غير المتزامنة لهذا الفرع
+          const localBranchOrders = localUnsyncedOrders.filter(o => {
+            const branchMatch = String(o.branch_id) === String(branch.id);
+            const statusMatch = ['pending', 'preparing', 'ready'].includes(o.status);
+            // تأكد من عدم احتساب طلب موجود في API مرتين
+            const notInApi = !res.data?.some(apiOrder => 
+              apiOrder.offline_id === o.offline_id || apiOrder.id === o.id
+            );
+            return branchMatch && statusMatch && notInApi;
+          });
+          
+          counts[branch.id] = apiCount + localBranchOrders.length;
         } catch (e) {
-          counts[branch.id] = 0;
+          // في حالة فشل API، استخدم الطلبات المحلية فقط
+          const localBranchOrders = localUnsyncedOrders.filter(o => {
+            const branchMatch = String(o.branch_id) === String(branch.id);
+            const statusMatch = ['pending', 'preparing', 'ready'].includes(o.status);
+            return branchMatch && statusMatch;
+          });
+          counts[branch.id] = localBranchOrders.length;
         }
       }));
       
