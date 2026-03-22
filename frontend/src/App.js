@@ -9,6 +9,7 @@ import { LanguageProvider } from "./context/LanguageContext";
 import { OfflineProvider } from "./context/OfflineContext";
 import OfflineBanner from "./components/OfflineBanner";
 import ErrorBoundary from "./components/ErrorBoundary";
+import InstallPWA from "./components/InstallPWA";
 import React, { Suspense, lazy, useEffect, useState } from "react";
 import { t } from "./utils/translations";
 
@@ -561,6 +562,8 @@ function App() {
                       <Toaster position="top-center" richColors />
                       {/* Incoming Call Popup - يظهر في جميع الصفحات */}
                       <IncomingCallPopup />
+                      {/* PWA Install Prompt */}
+                      <InstallPWA />
                     </BrowserRouter>
                   </div>
                 </OfflineProvider>

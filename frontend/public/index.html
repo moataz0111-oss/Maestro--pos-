@@ -33,27 +33,8 @@
         <script src="https://assets.emergent.sh/scripts/emergent-main.js"></script>
         
         <script>
-            // مسح جميع الـ caches فوراً عند التحميل
+            // تبديل manifest للزبائن إذا كان المسار /menu
             (function() {
-                // مسح الـ caches
-                if ('caches' in window) {
-                    caches.keys().then(function(names) {
-                        names.forEach(function(name) {
-                            caches.delete(name);
-                        });
-                    });
-                }
-                
-                // إلغاء تسجيل Service Workers
-                if ('serviceWorker' in navigator) {
-                    navigator.serviceWorker.getRegistrations().then(function(registrations) {
-                        registrations.forEach(function(registration) {
-                            registration.unregister();
-                        });
-                    });
-                }
-                
-                // تبديل manifest للزبائن إذا كان المسار /menu
                 var isCustomerPath = window.location.pathname.startsWith('/menu');
                 if (isCustomerPath) {
                     // تحديث manifest link

@@ -1,9 +1,10 @@
-// Service Worker for Offline Support - V3
+// Service Worker for Offline Support - V4
 // يدعم العمل بدون إنترنت لجميع الصفحات
 
-const CACHE_NAME = 'maestro-offline-v3';
-const STATIC_CACHE = 'maestro-static-v3';
-const DATA_CACHE = 'maestro-data-v3';
+const CACHE_VERSION = 'v4';
+const CACHE_NAME = `maestro-offline-${CACHE_VERSION}`;
+const STATIC_CACHE = `maestro-static-${CACHE_VERSION}`;
+const DATA_CACHE = `maestro-data-${CACHE_VERSION}`;
 
 // الملفات الأساسية التي يجب تخزينها عند التثبيت
 const STATIC_ASSETS = [
@@ -73,12 +74,12 @@ self.addEventListener('install', (event) => {
 
 // تفعيل Service Worker - حذف الكاش القديم
 self.addEventListener('activate', (event) => {
-  console.log('[SW-Offline] Activating V3...');
+  console.log(`[SW-Offline] Activating ${CACHE_VERSION}...`);
   event.waitUntil(
     caches.keys().then((cacheNames) => {
       return Promise.all(
         cacheNames
-          .filter((name) => !name.includes('v3'))
+          .filter((name) => !name.includes(CACHE_VERSION))
           .map((name) => {
             console.log('[SW-Offline] Deleting old cache:', name);
             return caches.delete(name);
