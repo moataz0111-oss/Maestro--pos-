@@ -174,8 +174,28 @@ export const cacheApiOrders = async (orders) => {
     
     // جلب الطلبات الموجودة مرة واحدة
     const existingOrders = await db.getAllItems(STORES.ORDERS);
-    const existingIds = new Set(existingOrders.map(o => o.id));
-    const existingOfflineIds = new Set(existingOrders.filter(o => o.offline_id).map(o => o.offline_id));
+    
+    // حذف الطلبات المخزنة (cached) القديمة أولاً لتجنب التكرار
+    // نحتفظ فقط بالطلبات المحلية غير المزامنة
+    for (const existingOrder of existingOrders) {
+      if (existingOrder.is_cached === true) {
+        // تحقق إذا كان الطلب لا يزال في قائمة API
+        const stillExists = orders.some(o => o.id === existingOrder.id);
+        if (!stillExists) {
+          // حذف الطلب القديم
+          try {
+            await db.deleteItem(STORES.ORDERS, existingOrder.id);
+            console.log('🗑️ حذف طلب cached قديم:', existingOrder.id);
+          } catch (e) {}
+        }
+      }
+    }
+    
+    // إعادة جلب الطلبات بعد التنظيف
+    const currentOrders = await db.getAllItems(STORES.ORDERS);
+    const existingIds = new Set(currentOrders.map(o => o.id));
+    const existingOfflineIds = new Set(currentOrders.filter(o => o.offline_id).map(o => o.offline_id));
+    const existingOrderNumbers = new Set(currentOrders.filter(o => o.order_number).map(o => String(o.order_number)));
     
     let cachedCount = 0;
     
@@ -183,11 +203,12 @@ export const cacheApiOrders = async (orders) => {
       // تجاهل الطلبات الملغاة أو المسلمة
       if (order.status === 'cancelled' || order.status === 'delivered') continue;
       
-      // تحقق إذا كان الطلب موجود مسبقاً
+      // تحقق إذا كان الطلب موجود مسبقاً بأي معرّف
       const existsById = existingIds.has(order.id);
       const existsByOfflineId = order.offline_id && existingOfflineIds.has(order.offline_id);
+      const existsByOrderNumber = order.order_number && existingOrderNumbers.has(String(order.order_number));
       
-      if (!existsById && !existsByOfflineId) {
+      if (!existsById && !existsByOfflineId && !existsByOrderNumber) {
         // حفظ الطلب كـ cached (مزامن)
         const cachedOrder = {
           ...order,
@@ -200,13 +221,8 @@ export const cacheApiOrders = async (orders) => {
           await db.addItem(STORES.ORDERS, cachedOrder);
           cachedCount++;
         } catch (addError) {
-          // إذا فشل الإضافة، جرب التحديث
-          try {
-            await db.updateItem(STORES.ORDERS, cachedOrder);
-            cachedCount++;
-          } catch (updateError) {
-            console.log('Could not cache order:', order.id);
-          }
+          // إذا فشل الإضافة، تجاهل (قد يكون موجود)
+          console.log('Order already exists:', order.id);
         }
       }
     }
@@ -509,6 +525,32 @@ export const cleanupOldData = async () => {
 };
 
 /**
+ * مسح جميع الطلبات المخزنة (cached) - للاستخدام عند التنظيف اليدوي
+ */
+export const clearCachedOrders = async () => {
+  try {
+    const orders = await db.getAllItems(STORES.ORDERS);
+    let deletedCount = 0;
+    
+    for (const order of orders) {
+      // حذف فقط الطلبات المخزنة من API
+      if (order.is_cached === true || order.is_synced === true) {
+        try {
+          await db.deleteItem(STORES.ORDERS, order.id);
+          deletedCount++;
+        } catch (e) {}
+      }
+    }
+    
+    console.log(`🗑️ تم مسح ${deletedCount} طلب مخزن`);
+    return deletedCount;
+  } catch (error) {
+    console.error('❌ خطأ في مسح الطلبات المخزنة:', error);
+    return 0;
+  }
+};
+
+/**
  * تنظيف الطلبات المزامنة مسبقاً (التي لها order_number ولكن is_synced = false)
  * تُستدعى عند الاتصال بالإنترنت لإزالة الطلبات المكررة
  * ملاحظة: لا تحذف الطلبات المخزنة من API (is_cached = true)
@@ -768,6 +810,7 @@ export default {
   markOrderAsSynced,
   cleanupOldData,
   cleanupSyncedOrders,
+  clearCachedOrders,
   cacheApiOrders,
   saveOfflineInventoryTransaction,
   saveOfflineAttendance,
