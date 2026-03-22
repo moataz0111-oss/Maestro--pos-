@@ -66,18 +66,34 @@ export const BranchProvider = ({ children }) => {
       if (!navigator.onLine) {
         try {
           const offlineStorage = await import('../lib/offlineStorage');
-          const localOrders = await offlineStorage.default.getTodayOrders();
+          // جلب جميع الطلبات المخزنة (ليس فقط اليوم)
+          const localOrders = await offlineStorage.default.getAllCachedOrders();
+          const unsyncedOrders = await offlineStorage.default.getUnsyncedOrders();
+          
+          // دمج الطلبات
+          const allOrders = [...localOrders];
+          for (const unsyncedOrder of unsyncedOrders) {
+            if (!allOrders.find(o => o.id === unsyncedOrder.id || o.offline_id === unsyncedOrder.offline_id)) {
+              allOrders.push(unsyncedOrder);
+            }
+          }
+          
+          console.log('📦 إجمالي الطلبات المحلية للحساب:', allOrders.length);
           
           branchesList.forEach(branch => {
-            const branchOrders = localOrders.filter(o => {
+            const branchOrders = allOrders.filter(o => {
               const branchMatch = String(o.branch_id) === String(branch.id);
               const statusMatch = ['pending', 'preparing', 'ready'].includes(o.status);
               return branchMatch && statusMatch;
             });
             counts[branch.id] = branchOrders.length;
+            if (branchOrders.length > 0) {
+              console.log(`📊 الفرع ${branch.name}: ${branchOrders.length} طلب معلق`);
+            }
           });
           
           setPendingOrdersCounts(counts);
+          console.log('📊 إجمالي الطلبات المعلقة:', counts);
         } catch (localError) {
           console.error('Failed to get local orders:', localError);
         }

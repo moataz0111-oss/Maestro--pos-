@@ -22,41 +22,41 @@
 
 ## Completed Features (as of March 2026)
 
-### Offline Mode Bug Fix ✅ (Fixed - March 22, 2026)
-- [x] **إصلاح اختفاء الوردية عند إعادة التحميل offline**
-  - حفظ بيانات الوردية في `localStorage` عند تحميلها من API
-  - تحميل الوردية من `localStorage` عند عدم الاتصال
-- [x] **إصلاح اختفاء dropdown الفروع عند إعادة التحميل offline**
-  - حفظ قائمة الفروع في `localStorage` عند تحميلها من API
-  - تهيئة الفروع من `localStorage` عند بدء التطبيق
-- [x] **إصلاح عدم التنقل إلى صفحات أخرى في وضع offline**
-  - حفظ `cached_user` في `localStorage` عند تسجيل الدخول
-  - السماح بالتنقل بين الصفحات باستخدام بيانات المستخدم المحفوظة
+### Offline Mode Complete Fix ✅ (Fixed - March 23, 2026)
+
+#### Issue 1: Shift and Branch disappearing on offline reload
+- [x] حفظ بيانات الوردية في `localStorage` عند تحميلها من API
+- [x] تحميل الوردية من `localStorage` عند عدم الاتصال
+- [x] حفظ قائمة الفروع في `localStorage` عند تحميلها من API
+- [x] تهيئة الفروع من `localStorage` عند بدء التطبيق
+- [x] حفظ `cached_user` في `localStorage` عند تسجيل الدخول (لحل مشكلة التنقل)
+
+#### Issue 2: Pending orders count not showing on branch selector
+- [x] إضافة دالة `getAllCachedOrders()` في `offlineStorage.js`
+- [x] تعديل `fetchPendingOrdersCounts` لاستخدام جميع الطلبات المخزنة (وليس فقط طلبات اليوم)
+- [x] إضافة `useEffect` لحساب الطلبات المعلقة عند تحميل الفروع من `localStorage`
+
+#### Issue 3: "Order not found" error when opening order from pending list
+- [x] تعديل `loadOrderForEditing` لقبول الطلب كـ object مباشرة
+- [x] البحث في قائمة الطلبات المعلقة الموجودة في الـ state أولاً
+- [x] تمرير الطلب مباشرة من `pendingOrders` dialogs بدلاً من البحث عنه
+
+### Files Modified:
+- `/app/frontend/src/pages/POS.js`
+- `/app/frontend/src/context/BranchContext.js`
+- `/app/frontend/src/context/AuthContext.js`
+- `/app/frontend/src/lib/offlineStorage.js`
+
+---
 
 ### Desktop Application (Electron) ✅ REMOVED
 - تم حذف تطبيق سطح المكتب بالكامل بناءً على طلب المستخدم
 - التركيز على تطبيق الويب كـ PWA مع دعم كامل للعمل بدون إنترنت
 
-### Offline-First Implementation ✅
-- [x] دعم offline لـ POS, Orders, Tables, KitchenDisplay
-- [x] دعم offline لـ Inventory, HR, Expenses
-- [x] دعم offline لـ Dashboard (الإحصائيات)
-- [x] مؤشر تقدم المزامنة في OfflineBanner
-- [x] إشعارات صوتية عند نجاح المزامنة
-- [x] حفظ اسم المطعم والشعار للعمل offline
-- [x] حفظ الإحصائيات والطلبات المحلية
-- [x] **مزامنة تلقائية** عند عودة الاتصال (بدون زر)
-- [x] **إخفاء شريط Offline** بعد اكتمال المزامنة
-- [x] **تحميل مسبق لجميع الصفحات** للعمل offline
-- [x] **Service Worker V4** لتخزين جميع مسارات التطبيق
-
-### Edit Table Feature ✅ (Fixed - March 22, 2026)
+### Edit Table Feature ✅
 - [x] إضافة زر "تعديل" في صفحة إدارة الطاولات
-- [x] إضافة نافذة منبثقة لتعديل بيانات الطاولة (رقم، سعة، قسم)
-- [x] إضافة API endpoint جديد `PUT /api/tables/{table_id}` للتحديث
-
-### SuperAdmin UI Fix ✅ (Fixed - March 22, 2026)
-- [x] إخفاء عمود "الأجهزة" من صفحة العملاء
+- [x] إضافة نافذة منبثقة لتعديل بيانات الطاولة
+- [x] إضافة API endpoint جديد `PUT /api/tables/{table_id}`
 
 ---
 
@@ -95,7 +95,7 @@
 - `/app/frontend/src/context/AuthContext.js` - Authentication with offline support
 - `/app/frontend/src/context/BranchContext.js` - Branch management with offline support
 - `/app/frontend/src/lib/offlineDB.js` - IndexedDB
-- `/app/frontend/src/lib/offlineStorage.js` - Offline helpers
+- `/app/frontend/src/lib/offlineStorage.js` - Offline helpers (including getAllCachedOrders)
 - `/app/frontend/public/sw-offline.js` - Service Worker V4
 
 ---
@@ -106,41 +106,17 @@
 
 ---
 
-## Recent Updates (March 22, 2026)
-
-### Offline Persistence Fix ✅
-**المشكلة**: عند إعادة تحميل صفحة POS في وضع عدم الاتصال:
-1. الوردية تختفي (تظهر "لا توجد وردية مفتوحة")
-2. dropdown اختيار الفرع يختفي
-3. لا يمكن التنقل بين الصفحات
-
-**الحل**:
-1. **POS.js**: إضافة حفظ الوردية في `localStorage` عند تحميلها من API
-2. **BranchContext.js**: 
-   - إضافة حفظ الفروع في `localStorage` عند تحميلها من API
-   - تهيئة الفروع من `localStorage` عند بدء التطبيق (للعمل offline)
-3. **AuthContext.js**: 
-   - إضافة حفظ `cached_user` في `localStorage` عند تسجيل الدخول
-   - هذا يسمح للتطبيق بالتعرف على صلاحيات المستخدم في وضع offline
-
-**الملفات المعدلة**:
-- `/app/frontend/src/pages/POS.js`
-- `/app/frontend/src/context/BranchContext.js`
-- `/app/frontend/src/context/AuthContext.js`
+## Project Health Check
+- ✅ Offline persistence for Shift
+- ✅ Offline persistence for Branch selector
+- ✅ Navigation works in offline mode
+- ✅ Pending orders count shows correctly in offline mode
+- ✅ Opening orders from pending list works in offline mode
+- Mocked: ZKTeco fingerprint integration
 
 ---
 
 ## Notes
 - يجب زيارة التطبيق مرة واحدة وهو متصل لتثبيت Service Worker
 - قاعدة البيانات الإنتاجية تحتاج seed عبر `/api/utils/seed-data`
-- إشعارات Push تتطلب HTTPS في الإنتاج
-- الترجمة تعتمد على حقل `name_en` في الفئات والمنتجات والعملاء
 - **تطبيق سطح المكتب (Electron) تم حذفه** - التركيز على PWA
-
----
-
-## Project Health Check
-- ✅ Offline persistence for Shift
-- ✅ Offline persistence for Branch selector
-- ✅ Navigation works in offline mode
-- Mocked: ZKTeco fingerprint integration

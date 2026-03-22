@@ -266,6 +266,20 @@ export const getTodayOrders = async () => {
 };
 
 /**
+ * الحصول على جميع الطلبات المخزنة محلياً
+ */
+export const getAllCachedOrders = async () => {
+  try {
+    const allOrders = await db.getAllItems(STORES.ORDERS);
+    // ترتيب حسب تاريخ الإنشاء (الأحدث أولاً)
+    return allOrders.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+  } catch (error) {
+    console.error('❌ خطأ في جلب جميع الطلبات:', error);
+    return [];
+  }
+};
+
+/**
  * الحصول على الطلبات غير المتزامنة
  */
 export const getUnsyncedOrders = async () => {
@@ -787,6 +801,7 @@ export default {
   saveOfflineOrder,
   updateOfflineOrder,
   getTodayOrders,
+  getAllCachedOrders,
   getUnsyncedOrders,
   countUnsyncedOrders,
   saveOfflineCustomer,

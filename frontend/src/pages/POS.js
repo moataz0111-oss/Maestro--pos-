@@ -845,62 +845,86 @@ export default function POS() {
   };
 
   // تحميل طلب موجود للتعديل
-  const loadOrderForEditing = async (orderId) => {
+  const loadOrderForEditing = async (orderIdOrOrder) => {
     try {
       let order = null;
-      console.log('🔍 محاولة تحميل الطلب:', orderId);
       
-      // حاول جلب الطلب من التخزين المحلي أولاً (في أي وضع)
-      try {
-        // جرب جلب كل الطلبات المحلية (ليس فقط اليوم)
-        const localOrders = await offlineStorage.getTodayOrders();
-        const unsyncedOrders = await offlineStorage.getUnsyncedOrders();
-        const allLocalOrders = [...localOrders];
+      // إذا تم تمرير الطلب كـ object مباشرة، استخدمه
+      if (typeof orderIdOrOrder === 'object' && orderIdOrOrder !== null) {
+        order = orderIdOrOrder;
+        console.log('✅ تم تحميل الطلب مباشرة:', order.id || order.offline_id);
+      } else {
+        // البحث عن الطلب بالـ ID
+        const orderId = orderIdOrOrder;
+        console.log('🔍 محاولة تحميل الطلب:', orderId);
         
-        // إضافة الطلبات غير المتزامنة إذا لم تكن موجودة
-        for (const unsyncedOrder of unsyncedOrders) {
-          if (!allLocalOrders.find(o => o.id === unsyncedOrder.id || o.offline_id === unsyncedOrder.offline_id)) {
-            allLocalOrders.push(unsyncedOrder);
-          }
-        }
-        
-        console.log('📦 عدد الطلبات المحلية:', allLocalOrders.length);
-        
-        order = allLocalOrders.find(o => {
-          const orderIdStr = String(orderId);
-          const matchId = o.id === orderId || 
-            o.offline_id === orderId ||
-            String(o.id) === orderIdStr ||
-            String(o.offline_id) === orderIdStr ||
-            o.id?.toString() === orderIdStr ||
-            o.offline_id?.toString() === orderIdStr;
-          
-          if (matchId) {
-            console.log('✅ تم العثور على الطلب:', o);
-          }
-          return matchId;
-        });
+        // البحث في الطلبات المعلقة الموجودة في الـ state أولاً
+        const allPendingOrders = [...pendingDineInOrders, ...pendingTakeawayOrders, ...pendingDeliveryOrders];
+        order = allPendingOrders.find(o => 
+          o.id === orderId || 
+          o.offline_id === orderId ||
+          String(o.id) === String(orderId) ||
+          String(o.offline_id) === String(orderId)
+        );
         
         if (order) {
-          console.log('✅ تم جلب الطلب من التخزين المحلي');
+          console.log('✅ تم جلب الطلب من قائمة الطلبات المعلقة');
         }
-      } catch (localError) {
-        console.error('Failed to fetch local order:', localError);
-      }
-      
-      // إذا لم نجد الطلب محلياً وليس في وضع Offline، حاول جلبه من الخادم
-      if (!order && !isOffline) {
-        try {
-          const res = await axios.get(`${API}/orders/${orderId}`);
-          order = res.data;
-          console.log('✅ تم جلب الطلب من الخادم');
-        } catch (apiError) {
-          console.log('API failed:', apiError.message);
+        
+        // حاول جلب الطلب من التخزين المحلي إذا لم يوجد في الـ state
+        if (!order) {
+          try {
+            // جرب جلب كل الطلبات المحلية (ليس فقط اليوم)
+            const localOrders = await offlineStorage.getTodayOrders();
+            const unsyncedOrders = await offlineStorage.getUnsyncedOrders();
+            const allLocalOrders = [...localOrders];
+            
+            // إضافة الطلبات غير المتزامنة إذا لم تكن موجودة
+            for (const unsyncedOrder of unsyncedOrders) {
+              if (!allLocalOrders.find(o => o.id === unsyncedOrder.id || o.offline_id === unsyncedOrder.offline_id)) {
+                allLocalOrders.push(unsyncedOrder);
+              }
+            }
+            
+            console.log('📦 عدد الطلبات المحلية:', allLocalOrders.length);
+            
+            order = allLocalOrders.find(o => {
+              const orderIdStr = String(orderId);
+              const matchId = o.id === orderId || 
+                o.offline_id === orderId ||
+                String(o.id) === orderIdStr ||
+                String(o.offline_id) === orderIdStr ||
+                o.id?.toString() === orderIdStr ||
+                o.offline_id?.toString() === orderIdStr;
+              
+              if (matchId) {
+                console.log('✅ تم العثور على الطلب:', o);
+              }
+              return matchId;
+            });
+            
+            if (order) {
+              console.log('✅ تم جلب الطلب من التخزين المحلي');
+            }
+          } catch (localError) {
+            console.error('Failed to fetch local order:', localError);
+          }
+        }
+        
+        // إذا لم نجد الطلب محلياً وليس في وضع Offline، حاول جلبه من الخادم
+        if (!order && !isOffline) {
+          try {
+            const res = await axios.get(`${API}/orders/${orderId}`);
+            order = res.data;
+            console.log('✅ تم جلب الطلب من الخادم');
+          } catch (apiError) {
+            console.log('API failed:', apiError.message);
+          }
         }
       }
       
       if (!order) {
-        console.error('❌ الطلب غير موجود:', orderId);
+        console.error('❌ الطلب غير موجود:', orderIdOrOrder);
         toast.error(t('الطلب غير موجود'));
         return;
       }
@@ -2699,7 +2723,7 @@ export default function POS() {
                         key={order.id} 
                         order={order} 
                         onSelect={() => {
-                          loadOrderForEditing(order.id);
+                          loadOrderForEditing(order);
                           setPendingOrdersDialogOpen(false);
                         }}
                       />
@@ -2721,7 +2745,7 @@ export default function POS() {
                         key={order.id} 
                         order={order} 
                         onSelect={() => {
-                          loadOrderForEditing(order.id);
+                          loadOrderForEditing(order);
                           setPendingOrdersDialogOpen(false);
                         }}
                       />
@@ -2743,7 +2767,7 @@ export default function POS() {
                         key={order.id} 
                         order={order} 
                         onSelect={() => {
-                          loadOrderForEditing(order.id);
+                          loadOrderForEditing(order);
                           setPendingOrdersDialogOpen(false);
                         }}
                       />
