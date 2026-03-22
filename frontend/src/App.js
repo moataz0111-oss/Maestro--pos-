@@ -72,10 +72,10 @@ import IncomingCallPopup from "./components/IncomingCallPopup";
 const isAuthChecked = () => sessionStorage.getItem('auth_checked') === 'true';
 const setAuthChecked = () => sessionStorage.setItem('auth_checked', 'true');
 
-// Protected Route Component
+// Protected Route Component - مُحسّن لتجنب إعادة التوجيه غير المتوقعة
 const ProtectedRoute = ({ children }) => {
   const { isAuthenticated, loading, user } = useAuth();
-  const [showLoading, setShowLoading] = useState(false);
+  const [initialCheckDone, setInitialCheckDone] = useState(() => isAuthChecked());
   
   // تحميل جميع الصفحات مسبقاً للعمل Offline
   useEffect(() => {
@@ -88,23 +88,32 @@ const ProtectedRoute = ({ children }) => {
     }
   }, [isAuthenticated, user]);
   
+  // علّم التحقق الأولي كمكتمل بمجرد انتهاء التحميل
   useEffect(() => {
-    if (!loading) {
+    if (!loading && !initialCheckDone) {
       setAuthChecked();
-      setShowLoading(false);
+      setInitialCheckDone(true);
     }
-    // Show loading only for initial check, with a timeout
-    if (loading && !isAuthChecked()) {
-      setShowLoading(true);
-      const timer = setTimeout(() => {
-        setShowLoading(false);
-      }, 2000); // Max 2 seconds loading
-      return () => clearTimeout(timer);
-    }
-  }, [loading]);
+  }, [loading, initialCheckDone]);
   
-  // فقط نعرض شاشة التحميل إذا كان التحميل الأولي ولم يتم التحقق بعد
-  if (showLoading && loading && !isAuthChecked() && !localStorage.getItem('cached_user')) {
+  // التحقق من وجود token و cached_user - إذا موجودين، نعرض المحتوى مباشرة
+  const hasToken = localStorage.getItem('token');
+  const hasCachedUser = localStorage.getItem('cached_user');
+  
+  // إذا كان المستخدم authenticated أو لديه cached_user، نعرض المحتوى فوراً
+  if (isAuthenticated || hasCachedUser) {
+    // توجيه مستخدمي الديليفري لبوابة السائق
+    if (user?.role === 'delivery') {
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      window.location.href = '/driver-app';
+      return null;
+    }
+    return children;
+  }
+  
+  // فقط نعرض شاشة التحميل في التحميل الأولي جداً (أول مرة يفتح التطبيق)
+  if (loading && !initialCheckDone && !hasCachedUser) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="text-center">
@@ -115,27 +124,12 @@ const ProtectedRoute = ({ children }) => {
     );
   }
   
-  // Only redirect if no token exists - prevents redirect during API calls
-  const hasToken = localStorage.getItem('token');
-  if (!isAuthenticated && !hasToken && !loading) {
+  // إذا لا يوجد token على الإطلاق، توجيه لصفحة الدخول
+  if (!hasToken && !loading) {
     return <Navigate to="/login" />;
   }
   
-  // If we have a token but not authenticated yet, show nothing (prevents flash)
-  if (!isAuthenticated && hasToken && !localStorage.getItem('cached_user')) {
-    return null;
-  }
-  
-  // توجيه مستخدمي الديليفري لبوابة السائق فقط إذا كانوا يحاولون الوصول للوحة التحكم
-  // ولكن نسمح لهم بالبقاء في صفحة تسجيل الدخول العادية
-  if (user?.role === 'delivery') {
-    // تسجيل الخروج من النظام الرئيسي وتوجيه للسائق
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-    window.location.href = '/driver-app';
-    return null;
-  }
-  
+  // في أي حالة أخرى، نعرض المحتوى (لتجنب الشاشة البيضاء)
   return children;
 };
 

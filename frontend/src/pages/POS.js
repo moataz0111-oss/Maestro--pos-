@@ -1304,7 +1304,13 @@ export default function POS() {
     }
   };
 
-  if (loading && !dataLoaded) {
+  // لا نعرض شاشة التحميل أبداً إذا كان المستخدم بالفعل على الصفحة
+  // فقط نعرضها في التحميل الأولي جداً للتطبيق
+  const isFirstEverLoad = !sessionStorage.getItem('pos_ever_loaded');
+  
+  if (loading && !dataLoaded && isFirstEverLoad && categories.length === 0) {
+    // علّم أن الصفحة تم تحميلها
+    sessionStorage.setItem('pos_ever_loaded', 'true');
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center">
@@ -1313,6 +1319,11 @@ export default function POS() {
         </div>
       </div>
     );
+  }
+  
+  // علّم أن الصفحة تم تحميلها
+  if (!sessionStorage.getItem('pos_ever_loaded')) {
+    sessionStorage.setItem('pos_ever_loaded', 'true');
   }
 
   return (
