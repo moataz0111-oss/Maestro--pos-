@@ -9,10 +9,33 @@ const API = API_URL;
 
 export const BranchProvider = ({ children }) => {
   const { user, isAuthenticated, hasRole } = useAuth();
-  const [branches, setBranches] = useState([]);
-  const [selectedBranchId, setSelectedBranchId] = useState('all');
+  // تحميل الفروع من localStorage عند التهيئة (للعمل offline)
+  const [branches, setBranches] = useState(() => {
+    try {
+      const savedBranches = localStorage.getItem('branches');
+      if (savedBranches) {
+        const parsed = JSON.parse(savedBranches);
+        console.log('📦 Initialized branches from localStorage:', parsed.length);
+        return parsed;
+      }
+    } catch (e) {
+      console.log('Could not load branches from localStorage');
+    }
+    return [];
+  });
+  const [selectedBranchId, setSelectedBranchId] = useState(() => {
+    const savedBranch = localStorage.getItem('selectedBranchId');
+    return savedBranch || 'all';
+  });
   const [loading, setLoading] = useState(() => {
-    // تحقق إذا تم تحميل الفروع من قبل
+    // لا نُظهر التحميل إذا كانت الفروع محملة من localStorage
+    const savedBranches = localStorage.getItem('branches');
+    if (savedBranches) {
+      try {
+        const parsed = JSON.parse(savedBranches);
+        if (parsed.length > 0) return false;
+      } catch (e) {}
+    }
     return sessionStorage.getItem('branches_loaded') !== 'true';
   });
   const [pendingOrdersCounts, setPendingOrdersCounts] = useState({}); // عدد الطلبات المعلقة لكل فرع
@@ -23,14 +46,6 @@ export const BranchProvider = ({ children }) => {
       fetchBranches();
     }
   }, [isAuthenticated, user]);
-
-  // استعادة الفرع المحدد من localStorage
-  useEffect(() => {
-    const savedBranch = localStorage.getItem('selectedBranchId');
-    if (savedBranch) {
-      setSelectedBranchId(savedBranch);
-    }
-  }, []);
 
   // جلب عدد الطلبات المعلقة لكل فرع
   const fetchPendingOrdersCounts = useCallback(async (branchesList) => {
@@ -113,6 +128,21 @@ export const BranchProvider = ({ children }) => {
 
   const fetchBranches = async () => {
     try {
+      // في وضع Offline، حاول تحميل الفروع من localStorage
+      if (!navigator.onLine) {
+        const savedBranches = localStorage.getItem('branches');
+        if (savedBranches) {
+          const branchesData = JSON.parse(savedBranches);
+          setBranches(branchesData);
+          console.log('📦 Loaded branches from localStorage (offline):', branchesData.length);
+          
+          // جلب عدد الطلبات المعلقة محلياً
+          await fetchPendingOrdersCounts(branchesData);
+        }
+        setLoading(false);
+        return;
+      }
+      
       // لا نعرض شاشة التحميل إذا كانت الفروع محملة مسبقاً
       const isFirstLoad = sessionStorage.getItem('branches_loaded') !== 'true';
       // لا نغير حالة التحميل أبداً بعد التحميل الأول
@@ -120,6 +150,10 @@ export const BranchProvider = ({ children }) => {
       const res = await axios.get(`${API}/branches`);
       const branchesData = res.data || [];
       setBranches(branchesData);
+      
+      // حفظ الفروع في localStorage للعمل offline
+      localStorage.setItem('branches', JSON.stringify(branchesData));
+      console.log('💾 Saved branches to localStorage:', branchesData.length);
       
       // جلب عدد الطلبات المعلقة لكل فرع
       await fetchPendingOrdersCounts(branchesData);
@@ -134,6 +168,14 @@ export const BranchProvider = ({ children }) => {
       sessionStorage.setItem('branches_loaded', 'true');
     } catch (error) {
       console.error('Failed to fetch branches:', error);
+      
+      // في حالة فشل الاتصال، حاول تحميل الفروع من localStorage
+      const savedBranches = localStorage.getItem('branches');
+      if (savedBranches) {
+        const branchesData = JSON.parse(savedBranches);
+        setBranches(branchesData);
+        console.log('📦 Loaded branches from localStorage (fallback):', branchesData.length);
+      }
     } finally {
       setLoading(false);
     }

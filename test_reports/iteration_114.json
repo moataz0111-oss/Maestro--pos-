@@ -24,7 +24,7 @@
   "seed_data_creation": "Updated 'برغر لحم' category with test image URL from Unsplash",
   "retest_needed": false,
   "main_agent_can_self_test": true,
-  "context_for_next_testing_agent": "Image URL fix verified working. The fix was using BACKEND_URL instead of API when building image URLs to avoid '/api/api/uploads/...' double prefix issue. Restaurant logo URL: https://table-edit-feature.preview.emergentagent.com/api/uploads/logos/0d30ae9c-2e04-4a43-a4cf-77740e7f0aaa.jpg. Category 'برغر لحم' now has test image from Unsplash.",
+  "context_for_next_testing_agent": "Image URL fix verified working. The fix was using BACKEND_URL instead of API when building image URLs to avoid '/api/api/uploads/...' double prefix issue. Restaurant logo URL: https://offline-first-pos-3.preview.emergentagent.com/api/uploads/logos/0d30ae9c-2e04-4a43-a4cf-77740e7f0aaa.jpg. Category 'برغر لحم' now has test image from Unsplash.",
   "tests_performed": [
     {
       "test": "Login with credentials",
@@ -34,7 +34,7 @@
     {
       "test": "Restaurant logo in dashboard header",
       "status": "PASSED",
-      "details": "Logo visible at 48x48 pixels, URL: https://table-edit-feature.preview.emergentagent.com/api/uploads/logos/0d30ae9c-2e04-4a43-a4cf-77740e7f0aaa.jpg"
+      "details": "Logo visible at 48x48 pixels, URL: https://offline-first-pos-3.preview.emergentagent.com/api/uploads/logos/0d30ae9c-2e04-4a43-a4cf-77740e7f0aaa.jpg"
     },
     {
       "test": "Navigate to Settings -> Categories",

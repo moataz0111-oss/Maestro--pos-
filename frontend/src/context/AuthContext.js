@@ -196,7 +196,11 @@ export const AuthProvider = ({ children }) => {
         setUser(userData);
         setIsOfflineLogin(false);
         
-        // حفظ بيانات المستخدم للدخول Offline
+        // حفظ بيانات المستخدم في localStorage للعمل Offline
+        localStorage.setItem('cached_user', JSON.stringify(userData));
+        console.log('💾 تم حفظ بيانات المستخدم في localStorage');
+        
+        // حفظ بيانات المستخدم للدخول Offline (IndexedDB)
         const passwordHash = await hashPassword(password);
         await offlineStorage.saveUserForOfflineLogin(userData, passwordHash);
         
@@ -257,6 +261,7 @@ export const AuthProvider = ({ children }) => {
         
         localStorage.setItem('token', offlineToken);
         localStorage.setItem('offline_user', JSON.stringify(userData));
+        localStorage.setItem('cached_user', JSON.stringify(userData)); // للتوافق مع التحقق من الصلاحيات
         setToken(offlineToken);
         setUser(userData);
         setIsOfflineLogin(true);

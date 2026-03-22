@@ -83,7 +83,7 @@
   },
   
   "test_credentials": {
-    "api_url": "https://table-edit-feature.preview.emergentagent.com",
+    "api_url": "https://offline-first-pos-3.preview.emergentagent.com",
     "admin_email": "admin@maestroegp.com",
     "admin_password": "admin123"
   },

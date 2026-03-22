@@ -290,6 +290,18 @@ export default function POS() {
       
       console.log('📦 IndexedDB:', { categories: localCategories.length, products: localProducts.length, tables: localTables.length });
       
+      // جلب الوردية المحفوظة من localStorage
+      try {
+        const savedShift = localStorage.getItem('currentShift');
+        if (savedShift) {
+          const shiftData = JSON.parse(savedShift);
+          setCurrentShift(shiftData);
+          console.log('📦 Loaded shift from localStorage:', shiftData.id);
+        }
+      } catch (e) {
+        console.log('Could not load shift from localStorage');
+      }
+      
       // الفئات
       if (localCategories.length > 0) {
         const sortedCategories = [...localCategories].sort((a, b) => (a.order ?? a.sort_order ?? 999) - (b.order ?? b.sort_order ?? 999));
@@ -429,6 +441,11 @@ export default function POS() {
         try {
           const autoOpenRes = await axios.post(`${API}/shifts/auto-open`);
           setCurrentShift(autoOpenRes.data.shift);
+          // حفظ الوردية في localStorage للعمل offline
+          if (autoOpenRes.data.shift) {
+            localStorage.setItem('currentShift', JSON.stringify(autoOpenRes.data.shift));
+            console.log('💾 Saved shift to localStorage (auto-open):', autoOpenRes.data.shift.id);
+          }
           if (!autoOpenRes.data.was_existing) {
             toast.success(t('تم فتح وردية جديدة تلقائياً'));
           }
@@ -438,6 +455,9 @@ export default function POS() {
         }
       } else {
         setCurrentShift(shiftRes.data);
+        // حفظ الوردية في localStorage للعمل offline
+        localStorage.setItem('currentShift', JSON.stringify(shiftRes.data));
+        console.log('💾 Saved shift to localStorage:', shiftRes.data.id);
       }
 
       // جلب الطاولات حسب الفرع المحدد للعرض

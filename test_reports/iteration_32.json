@@ -82,7 +82,7 @@
   },
   
   "test_credentials": {
-    "api_url": "https://table-edit-feature.preview.emergentagent.com",
+    "api_url": "https://offline-first-pos-3.preview.emergentagent.com",
     "client_graffiti": {
       "email": "hanialdujaili@gmail.com",
       "password": "graffiti123",

@@ -11,7 +11,7 @@ from datetime import datetime
 from typing import Dict, List, Optional
 
 # Use the public endpoint from frontend .env
-BASE_URL = "https://table-edit-feature.preview.emergentagent.com/api"
+BASE_URL = "https://offline-first-pos-3.preview.emergentagent.com/api"
 
 class MaestroAPITester:
     def __init__(self):
