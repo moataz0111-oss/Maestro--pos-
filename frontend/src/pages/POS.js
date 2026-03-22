@@ -310,15 +310,20 @@ export default function POS() {
           console.log('🔍 Filtered tables:', filteredTables.length);
         }
         
-        // تحديث حالة الطاولات المشغولة
-        const localOrders = await offlineStorage.getTodayOrders();
-        const occupiedTableIds = localOrders
+        // تحديث حالة الطاولات المشغولة - جلب كل الطلبات من IndexedDB
+        const allStoredOrders = await db.getAllItems(STORES.ORDERS);
+        console.log('📦 All stored orders for table status:', allStoredOrders.length);
+        
+        const occupiedTableIds = allStoredOrders
           .filter(o => o.table_id && ['pending', 'preparing', 'ready'].includes(o.status))
           .map(o => String(o.table_id));
         
+        console.log('🔴 Occupied table IDs:', occupiedTableIds);
+        
         filteredTables = filteredTables.map(table => {
           if (occupiedTableIds.includes(String(table.id))) {
-            const order = localOrders.find(o => String(o.table_id) === String(table.id));
+            const order = allStoredOrders.find(o => String(o.table_id) === String(table.id) && ['pending', 'preparing', 'ready'].includes(o.status));
+            console.log('🔴 Table', table.id, 'is occupied by order:', order?.id || order?.offline_id);
             return { ...table, status: 'occupied', current_order_id: order?.id || order?.offline_id };
           }
           return table;
@@ -327,12 +332,15 @@ export default function POS() {
         setTables(filteredTables);
       }
       
-      // الطلبات المعلقة
-      const localOrders = await offlineStorage.getTodayOrders();
-      let pendingLocal = localOrders.filter(o => ['pending', 'preparing', 'ready'].includes(o.status) || !o.is_synced);
+      // الطلبات المعلقة - جلب كل الطلبات من IndexedDB
+      const allLocalOrders = await db.getAllItems(STORES.ORDERS);
+      let pendingLocal = allLocalOrders.filter(o => 
+        ['pending', 'preparing', 'ready'].includes(o.status) || o.is_synced === false
+      );
       if (activeBranchId && activeBranchId !== 'all') {
         pendingLocal = pendingLocal.filter(o => !o.branch_id || String(o.branch_id) === String(activeBranchId));
       }
+      console.log('📦 Pending orders in loadFromIndexedDB:', pendingLocal.length);
       setPendingOrders(pendingLocal);
       
       if (showToast && (localCategories.length > 0 || localProducts.length > 0)) {
@@ -498,23 +506,19 @@ export default function POS() {
             console.log('🔍 Offline filtered tables for branch', activeBranchId, ':', filteredTables.length);
           }
           
-          // تحديث حالة الطاولات المشغولة
-          const localOrders = await offlineStorage.getTodayOrders();
-          const unsyncedOrders = await offlineStorage.getUnsyncedOrders();
-          const allOrders = [...localOrders];
-          for (const o of unsyncedOrders) {
-            if (!allOrders.find(lo => lo.id === o.id || lo.offline_id === o.offline_id)) {
-              allOrders.push(o);
-            }
-          }
+          // تحديث حالة الطاولات المشغولة - جلب كل الطلبات من IndexedDB
+          const allStoredOrders = await db.getAllItems(STORES.ORDERS);
+          console.log('📦 All stored orders for table status (fetchDataSilently):', allStoredOrders.length);
           
-          const occupiedTableIds = allOrders
+          const occupiedTableIds = allStoredOrders
             .filter(o => o.table_id && ['pending', 'preparing', 'ready'].includes(o.status))
             .map(o => String(o.table_id));
           
+          console.log('🔴 Occupied table IDs:', occupiedTableIds);
+          
           filteredTables = filteredTables.map(table => {
             if (occupiedTableIds.includes(String(table.id))) {
-              const order = allOrders.find(o => String(o.table_id) === String(table.id));
+              const order = allStoredOrders.find(o => String(o.table_id) === String(table.id) && ['pending', 'preparing', 'ready'].includes(o.status));
               return { ...table, status: 'occupied', current_order_id: order?.id || order?.offline_id };
             }
             return table;
