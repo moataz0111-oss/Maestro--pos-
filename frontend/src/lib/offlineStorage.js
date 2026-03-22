@@ -163,75 +163,59 @@ export const saveOfflineOrder = async (order) => {
 };
 
 /**
- * حفظ الطلبات من API للاستخدام offline (cache للعرض فقط)
- * هذه الطلبات تكون مزامنة بالفعل (is_synced = true)
+ * حفظ الطلبات من API للاستخدام offline
+ * الحل النهائي: حذف الطلبات المخزنة القديمة وإعادة تخزين الجديدة فقط
  */
 export const cacheApiOrders = async (orders) => {
   try {
     if (!orders || orders.length === 0) return;
     
-    console.log('💾 تخزين طلبات API للاستخدام offline:', orders.length);
+    console.log('💾 cacheApiOrders: بدء التخزين -', orders.length, 'طلب');
     
-    // جلب الطلبات الموجودة مرة واحدة
+    // 1. حذف جميع الطلبات المخزنة (cached) القديمة
     const existingOrders = await db.getAllItems(STORES.ORDERS);
-    
-    // حذف الطلبات المخزنة (cached) القديمة أولاً لتجنب التكرار
-    // نحتفظ فقط بالطلبات المحلية غير المزامنة
     for (const existingOrder of existingOrders) {
+      // حذف فقط الطلبات المخزنة من API (is_cached أو is_synced)
+      // لا نحذف الطلبات المحلية الجديدة (is_synced = false بدون offline_id يبدأ بـ OFF-)
       if (existingOrder.is_cached === true) {
-        // تحقق إذا كان الطلب لا يزال في قائمة API
-        const stillExists = orders.some(o => o.id === existingOrder.id);
-        if (!stillExists) {
-          // حذف الطلب القديم
-          try {
-            await db.deleteItem(STORES.ORDERS, existingOrder.id);
-            console.log('🗑️ حذف طلب cached قديم:', existingOrder.id);
-          } catch (e) {}
-        }
+        try {
+          await db.deleteItem(STORES.ORDERS, existingOrder.id);
+        } catch (e) {}
       }
     }
     
-    // إعادة جلب الطلبات بعد التنظيف
-    const currentOrders = await db.getAllItems(STORES.ORDERS);
-    const existingIds = new Set(currentOrders.map(o => o.id));
-    const existingOfflineIds = new Set(currentOrders.filter(o => o.offline_id).map(o => o.offline_id));
-    const existingOrderNumbers = new Set(currentOrders.filter(o => o.order_number).map(o => String(o.order_number)));
+    // 2. جلب الطلبات المحلية المتبقية (غير المزامنة)
+    const remainingOrders = await db.getAllItems(STORES.ORDERS);
+    const localOfflineIds = new Set(remainingOrders.filter(o => o.offline_id).map(o => o.offline_id));
     
+    // 3. تخزين الطلبات الجديدة من API
     let cachedCount = 0;
-    
     for (const order of orders) {
-      // تجاهل الطلبات الملغاة أو المسلمة
+      // تجاهل الملغاة والمسلمة
       if (order.status === 'cancelled' || order.status === 'delivered') continue;
       
-      // تحقق إذا كان الطلب موجود مسبقاً بأي معرّف
-      const existsById = existingIds.has(order.id);
-      const existsByOfflineId = order.offline_id && existingOfflineIds.has(order.offline_id);
-      const existsByOrderNumber = order.order_number && existingOrderNumbers.has(String(order.order_number));
+      // تجاهل إذا كان الطلب مزامن من طلب محلي (offline_id موجود محلياً)
+      if (order.offline_id && localOfflineIds.has(order.offline_id)) {
+        console.log('⏭️ تجاهل طلب مزامن:', order.offline_id);
+        continue;
+      }
       
-      if (!existsById && !existsByOfflineId && !existsByOrderNumber) {
-        // حفظ الطلب كـ cached (مزامن)
-        const cachedOrder = {
+      try {
+        await db.addItem(STORES.ORDERS, {
           ...order,
           is_synced: true,
           is_cached: true,
           cached_at: new Date().toISOString()
-        };
-        
-        try {
-          await db.addItem(STORES.ORDERS, cachedOrder);
-          cachedCount++;
-        } catch (addError) {
-          // إذا فشل الإضافة، تجاهل (قد يكون موجود)
-          console.log('Order already exists:', order.id);
-        }
+        });
+        cachedCount++;
+      } catch (e) {
+        // الطلب موجود بالفعل - تجاهل
       }
     }
     
-    if (cachedCount > 0) {
-      console.log(`✅ تم تخزين ${cachedCount} طلب من API للاستخدام offline`);
-    }
+    console.log(`✅ cacheApiOrders: تم تخزين ${cachedCount} طلب`);
   } catch (error) {
-    console.error('❌ خطأ في تخزين طلبات API:', error);
+    console.error('❌ cacheApiOrders error:', error);
   }
 };
 

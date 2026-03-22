@@ -335,34 +335,42 @@ export default function POS() {
         setTables(filteredTables);
       }
       
-      // الطلبات المعلقة - جلب كل الطلبات من IndexedDB مع إزالة التكرارات
+      // الطلبات المعلقة - جلب كل الطلبات من IndexedDB
       const allLocalOrders = await db.getAllItems(STORES.ORDERS);
+      console.log('📦 All orders in IndexedDB:', allLocalOrders.length);
       
-      // إزالة التكرارات بناءً على order_number أو table_id + total
+      // إزالة التكرارات - الأولوية للطلبات ذات order_number (من الخادم)
       const uniqueOrdersMap = new Map();
+      
       for (const order of allLocalOrders) {
-        // مفتاح فريد: order_number أو (table_id + total + status)
-        const uniqueKey = order.order_number 
-          ? `order_${order.order_number}` 
-          : `${order.table_id || 'no_table'}_${order.total}_${order.status}`;
+        // المفتاح الأساسي: order_number إذا وُجد، وإلا id
+        const key = order.order_number ? `num_${order.order_number}` : `id_${order.id}`;
         
-        // إذا كان الطلب موجود، احتفظ بالأحدث
-        if (!uniqueOrdersMap.has(uniqueKey) || 
-            new Date(order.created_at) > new Date(uniqueOrdersMap.get(uniqueKey).created_at)) {
-          uniqueOrdersMap.set(uniqueKey, order);
+        // إذا الطلب موجود بالفعل
+        if (uniqueOrdersMap.has(key)) {
+          const existing = uniqueOrdersMap.get(key);
+          // احتفظ بالطلب من API (is_cached) بدلاً من المحلي
+          if (order.is_cached && !existing.is_cached) {
+            uniqueOrdersMap.set(key, order);
+          }
+        } else {
+          uniqueOrdersMap.set(key, order);
         }
       }
       
       const deduplicatedOrders = Array.from(uniqueOrdersMap.values());
-      console.log('📦 Orders after deduplication:', deduplicatedOrders.length, '(was:', allLocalOrders.length, ')');
+      console.log('📦 Orders after deduplication:', deduplicatedOrders.length);
       
+      // فلترة الطلبات المعلقة
       let pendingLocal = deduplicatedOrders.filter(o => 
-        ['pending', 'preparing', 'ready'].includes(o.status) || o.is_synced === false
+        ['pending', 'preparing', 'ready'].includes(o.status)
       );
+      
       if (activeBranchId && activeBranchId !== 'all') {
         pendingLocal = pendingLocal.filter(o => !o.branch_id || String(o.branch_id) === String(activeBranchId));
       }
-      console.log('📦 Pending orders in loadFromIndexedDB:', pendingLocal.length);
+      
+      console.log('📦 Pending orders:', pendingLocal.length);
       setPendingOrders(pendingLocal);
       
       if (showToast && (localCategories.length > 0 || localProducts.length > 0)) {
