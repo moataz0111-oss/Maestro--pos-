@@ -445,20 +445,78 @@ export default function POS() {
       // إذا فشل الاتصال، حاول جلب من IndexedDB
       if (!error.response) {
         try {
-          const [localCategories, localProducts] = await Promise.all([
+          // جلب الفرع المحدد
+          const savedBranchId = localStorage.getItem('selectedBranchId');
+          const effectiveBranchId = user?.branch_id || savedBranchId;
+          
+          const [localCategories, localProducts, localTables] = await Promise.all([
             db.getAllItems(STORES.CATEGORIES),
-            db.getAllItems(STORES.PRODUCTS)
+            db.getAllItems(STORES.PRODUCTS),
+            db.getAllItems(STORES.TABLES)
           ]);
           
-          if (localCategories.length > 0) setCategories(localCategories);
+          // الفئات
+          if (localCategories.length > 0) {
+            const sortedCategories = [...localCategories].sort((a, b) => {
+              const orderA = a.order ?? a.sort_order ?? 999;
+              const orderB = b.order ?? b.sort_order ?? 999;
+              return orderA - orderB;
+            });
+            setCategories(sortedCategories);
+            setSelectedCategory(sortedCategories[0].id);
+          }
+          
+          // المنتجات
           if (localProducts.length > 0) setProducts(localProducts);
           
-          if (localCategories.length > 0) {
-            setSelectedCategory(localCategories[0].id);
+          // الطاولات مع الفلترة حسب الفرع
+          if (localTables.length > 0) {
+            let filteredTables = localTables;
+            
+            if (effectiveBranchId && effectiveBranchId !== 'all') {
+              filteredTables = localTables.filter(t => {
+                return t.branch_id === effectiveBranchId || 
+                  t.branch === effectiveBranchId ||
+                  String(t.branch_id) === String(effectiveBranchId);
+              });
+            }
+            
+            // تحديث حالة الطاولات المشغولة
+            const localOrders = await offlineStorage.getTodayOrders();
+            const occupiedTableIds = localOrders
+              .filter(o => o.table_id && (o.status === 'pending' || o.status === 'preparing' || o.status === 'ready'))
+              .map(o => o.table_id);
+            
+            filteredTables = filteredTables.map(table => {
+              const isOccupied = occupiedTableIds.includes(table.id) || occupiedTableIds.includes(String(table.id));
+              if (isOccupied) {
+                const order = localOrders.find(o => 
+                  o.table_id === table.id || 
+                  o.table_id === String(table.id) ||
+                  String(o.table_id) === String(table.id)
+                );
+                return { 
+                  ...table, 
+                  status: 'occupied',
+                  current_order_id: order?.id || order?.offline_id
+                };
+              }
+              return table;
+            });
+            
+            setTables(filteredTables);
           }
+          
+          // الطلبات المعلقة المحلية
+          const localOrders = await offlineStorage.getTodayOrders();
+          const pendingLocal = localOrders.filter(o => 
+            o.status === 'pending' || o.status === 'preparing' || o.status === 'ready' || !o.is_synced
+          );
+          setPendingOrders(pendingLocal);
           
           toast.warning(t('تم تحميل البيانات المحلية - لا يوجد اتصال'));
         } catch (offlineError) {
+          console.error('Failed to load offline data:', offlineError);
           toast.error(t('فشل في تحميل البيانات'));
         }
       } else {
@@ -586,47 +644,48 @@ export default function POS() {
   const loadOrderForEditing = async (orderId) => {
     try {
       let order = null;
+      console.log('🔍 محاولة تحميل الطلب:', orderId);
       
-      // في وضع Offline، حاول جلب الطلب من التخزين المحلي أولاً
-      if (isOffline) {
-        try {
-          const localOrders = await offlineStorage.getTodayOrders();
-          order = localOrders.find(o => 
-            o.id === orderId || 
+      // حاول جلب الطلب من التخزين المحلي أولاً (في أي وضع)
+      try {
+        const localOrders = await offlineStorage.getTodayOrders();
+        console.log('📦 عدد الطلبات المحلية:', localOrders.length);
+        
+        order = localOrders.find(o => {
+          const matchId = o.id === orderId || 
             o.offline_id === orderId ||
-            String(o.id) === String(orderId)
-          );
+            String(o.id) === String(orderId) ||
+            String(o.offline_id) === String(orderId) ||
+            // مقارنة كـ string
+            o.id?.toString() === orderId?.toString() ||
+            o.offline_id?.toString() === orderId?.toString();
           
-          if (order) {
-            console.log('✅ تم جلب الطلب من التخزين المحلي:', order);
+          if (matchId) {
+            console.log('✅ تم العثور على الطلب:', o);
           }
-        } catch (localError) {
-          console.error('Failed to fetch local order:', localError);
+          return matchId;
+        });
+        
+        if (order) {
+          console.log('✅ تم جلب الطلب من التخزين المحلي');
         }
+      } catch (localError) {
+        console.error('Failed to fetch local order:', localError);
       }
       
-      // إذا لم نجد الطلب محلياً، حاول جلبه من الخادم
-      if (!order) {
+      // إذا لم نجد الطلب محلياً وليس في وضع Offline، حاول جلبه من الخادم
+      if (!order && !isOffline) {
         try {
           const res = await axios.get(`${API}/orders/${orderId}`);
           order = res.data;
+          console.log('✅ تم جلب الطلب من الخادم');
         } catch (apiError) {
-          // إذا فشل الـ API، حاول من التخزين المحلي
-          console.log('API failed, trying local storage...');
-          const localOrders = await offlineStorage.getTodayOrders();
-          order = localOrders.find(o => 
-            o.id === orderId || 
-            o.offline_id === orderId ||
-            String(o.id) === String(orderId)
-          );
-          
-          if (!order) {
-            throw new Error('Order not found');
-          }
+          console.log('API failed:', apiError.message);
         }
       }
       
       if (!order) {
+        console.error('❌ الطلب غير موجود:', orderId);
         toast.error(t('الطلب غير موجود'));
         return;
       }
@@ -1422,9 +1481,56 @@ export default function POS() {
     
     // تحديد الفرع النشط
     const currentBranchId = getBranchIdForApi() || user?.branch_id;
+    const savedBranchId = localStorage.getItem('selectedBranchId');
+    const effectiveBranchId = currentBranchId || savedBranchId;
     
     setSubmitting(true);
     try {
+      // في وضع Offline أو إذا كان الطلب محلي
+      const isLocalOrder = editingOrder.offline_id && !editingOrder.is_synced;
+      
+      if (isOffline || isLocalOrder) {
+        // حذف الطلب من التخزين المحلي
+        try {
+          const orderId = editingOrder.id || editingOrder.offline_id;
+          await offlineStorage.deleteOfflineOrder(orderId);
+          
+          // تحديث حالة الطاولة محلياً
+          if (editingOrder.table_id) {
+            await offlineStorage.saveOfflineTableUpdate(editingOrder.table_id, {
+              status: 'available',
+              current_order_id: null
+            });
+            
+            // تحديث الطاولة في الـ state
+            setTables(prevTables => prevTables.map(t => 
+              t.id === editingOrder.table_id || String(t.id) === String(editingOrder.table_id)
+                ? { ...t, status: 'available', current_order_id: null }
+                : t
+            ));
+          }
+          
+          playSuccess();
+          toast.success(t('تم إلغاء الطلب'));
+          clearCart();
+          
+          // تحديث الطلبات المعلقة
+          const localOrders = await offlineStorage.getTodayOrders();
+          const pendingLocal = localOrders.filter(o => 
+            (o.status === 'pending' || o.status === 'preparing' || o.status === 'ready') &&
+            o.id !== orderId && o.offline_id !== orderId
+          );
+          setPendingOrders(pendingLocal);
+          
+          return;
+        } catch (localError) {
+          console.error('Failed to delete local order:', localError);
+          toast.error(t('فشل في حذف الطلب المحلي'));
+          return;
+        }
+      }
+      
+      // وضع Online
       const res = await axios.put(`${API}/orders/${editingOrder.id}/cancel`);
       playSuccess();
       toast.success(res.data.was_quick_cancel 
@@ -1435,11 +1541,36 @@ export default function POS() {
       await fetchPendingOrders();
       
       // تحديث الطاولات
-      const tablesParams = currentBranchId ? { branch_id: currentBranchId } : {};
+      const tablesParams = effectiveBranchId ? { branch_id: effectiveBranchId } : {};
       const tablesRes = await axios.get(`${API}/tables`, { params: tablesParams });
       setTables(tablesRes.data);
     } catch (error) {
       console.error('Failed to cancel order:', error);
+      
+      // إذا فشل الـ API، حاول الحذف محلياً
+      if (!error.response) {
+        try {
+          const orderId = editingOrder.id || editingOrder.offline_id;
+          await offlineStorage.deleteOfflineOrder(orderId);
+          
+          if (editingOrder.table_id) {
+            setTables(prevTables => prevTables.map(t => 
+              t.id === editingOrder.table_id || String(t.id) === String(editingOrder.table_id)
+                ? { ...t, status: 'available', current_order_id: null }
+                : t
+            ));
+          }
+          
+          playSuccess();
+          toast.success(t('تم إلغاء الطلب محلياً'));
+          clearCart();
+          await fetchPendingOrders();
+          return;
+        } catch (localError) {
+          console.error('Failed to delete local order:', localError);
+        }
+      }
+      
       toast.error(getErrorMessage(error, t('فشل في إلغاء الطلب')));
     } finally {
       setSubmitting(false);

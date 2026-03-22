@@ -226,6 +226,39 @@ export const getUnsyncedOrders = async () => {
 };
 
 /**
+ * حذف طلب من التخزين المحلي
+ */
+export const deleteOfflineOrder = async (orderId) => {
+  try {
+    console.log('🗑️ حذف الطلب المحلي:', orderId);
+    
+    // جلب الطلب أولاً للحصول على معلوماته
+    const allOrders = await db.getAllItems(STORES.ORDERS);
+    const order = allOrders.find(o => 
+      o.id === orderId || 
+      o.offline_id === orderId ||
+      String(o.id) === String(orderId) ||
+      String(o.offline_id) === String(orderId)
+    );
+    
+    if (!order) {
+      console.warn('⚠️ الطلب غير موجود في التخزين المحلي');
+      return true; // نعتبره محذوفاً بالفعل
+    }
+    
+    // حذف الطلب
+    const actualId = order.id || order.offline_id;
+    await db.deleteItem(STORES.ORDERS, actualId);
+    
+    console.log('✅ تم حذف الطلب بنجاح');
+    return true;
+  } catch (error) {
+    console.error('❌ خطأ في حذف الطلب:', error);
+    throw error;
+  }
+};
+
+/**
  * عدد الطلبات غير المتزامنة
  */
 export const countUnsyncedOrders = async () => {
@@ -588,5 +621,6 @@ export default {
   getLocalEmployees,
   getLocalTenantInfo,
   getLocalStats,
-  getLocalDashboardSettings
+  getLocalDashboardSettings,
+  deleteOfflineOrder
 };
