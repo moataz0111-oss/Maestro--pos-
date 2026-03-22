@@ -172,31 +172,48 @@ export const cacheApiOrders = async (orders) => {
     
     console.log('💾 تخزين طلبات API للاستخدام offline:', orders.length);
     
+    // جلب الطلبات الموجودة مرة واحدة
+    const existingOrders = await db.getAllItems(STORES.ORDERS);
+    const existingIds = new Set(existingOrders.map(o => o.id));
+    const existingOfflineIds = new Set(existingOrders.filter(o => o.offline_id).map(o => o.offline_id));
+    
+    let cachedCount = 0;
+    
     for (const order of orders) {
       // تجاهل الطلبات الملغاة أو المسلمة
       if (order.status === 'cancelled' || order.status === 'delivered') continue;
       
       // تحقق إذا كان الطلب موجود مسبقاً
-      const existingOrders = await db.getAllItems(STORES.ORDERS);
-      const exists = existingOrders.some(o => 
-        o.id === order.id || 
-        (o.offline_id && o.offline_id === order.offline_id)
-      );
+      const existsById = existingIds.has(order.id);
+      const existsByOfflineId = order.offline_id && existingOfflineIds.has(order.offline_id);
       
-      if (!exists) {
+      if (!existsById && !existsByOfflineId) {
         // حفظ الطلب كـ cached (مزامن)
         const cachedOrder = {
           ...order,
           is_synced: true,
-          is_cached: true, // للتمييز أنه من API وليس محلي
+          is_cached: true,
           cached_at: new Date().toISOString()
         };
         
-        await db.addItem(STORES.ORDERS, cachedOrder);
+        try {
+          await db.addItem(STORES.ORDERS, cachedOrder);
+          cachedCount++;
+        } catch (addError) {
+          // إذا فشل الإضافة، جرب التحديث
+          try {
+            await db.updateItem(STORES.ORDERS, cachedOrder);
+            cachedCount++;
+          } catch (updateError) {
+            console.log('Could not cache order:', order.id);
+          }
+        }
       }
     }
     
-    console.log('✅ تم تخزين طلبات API بنجاح');
+    if (cachedCount > 0) {
+      console.log(`✅ تم تخزين ${cachedCount} طلب من API للاستخدام offline`);
+    }
   } catch (error) {
     console.error('❌ خطأ في تخزين طلبات API:', error);
   }
@@ -494,45 +511,41 @@ export const cleanupOldData = async () => {
 /**
  * تنظيف الطلبات المزامنة مسبقاً (التي لها order_number ولكن is_synced = false)
  * تُستدعى عند الاتصال بالإنترنت لإزالة الطلبات المكررة
+ * ملاحظة: لا تحذف الطلبات المخزنة من API (is_cached = true)
  */
 export const cleanupSyncedOrders = async (apiOrders = []) => {
   try {
     const localOrders = await db.getAllItems(STORES.ORDERS);
     
-    // جمع كل الـ offline_ids و order_numbers من API
+    // جمع كل الـ offline_ids من API
     const apiOfflineIds = new Set(apiOrders.filter(o => o.offline_id).map(o => o.offline_id));
-    const apiOrderNumbers = new Set(apiOrders.filter(o => o.order_number).map(o => String(o.order_number)));
     
     let deletedCount = 0;
     
     for (const order of localOrders) {
+      // لا تحذف الطلبات المخزنة من API (cached)
+      if (order.is_cached === true) {
+        continue;
+      }
+      
+      // لا تحذف إلا الطلبات المحلية غير المزامنة التي تم رفعها
+      if (order.is_synced !== false) {
+        continue;
+      }
+      
       let shouldDelete = false;
       
-      // 1. طلب محلي بنفس offline_id موجود في API
+      // حذف فقط إذا كان offline_id موجود في API (يعني تم رفعه بنجاح)
       if (order.offline_id && apiOfflineIds.has(order.offline_id)) {
         shouldDelete = true;
       }
       
-      // 2. طلب له order_number (يعني تم رفعه للخادم مسبقاً)
-      if (order.order_number && apiOrderNumbers.has(String(order.order_number))) {
-        shouldDelete = true;
-      }
-      
-      // 3. طلب قديم (أكثر من يوم) وله order_number
-      if (order.order_number && !order.offline_id?.startsWith('OFF-')) {
-        const orderAge = Date.now() - new Date(order.created_at).getTime();
-        const oneDay = 24 * 60 * 60 * 1000;
-        if (orderAge > oneDay) {
-          shouldDelete = true;
-        }
-      }
-      
       if (shouldDelete) {
+        console.log('🗑️ حذف طلب مزامن:', order.offline_id || order.id);
         try {
           await db.deleteItem(STORES.ORDERS, order.id);
           deletedCount++;
         } catch (e) {
-          // جرب الحذف بـ offline_id
           try {
             await db.deleteItem(STORES.ORDERS, order.offline_id);
             deletedCount++;
@@ -542,7 +555,7 @@ export const cleanupSyncedOrders = async (apiOrders = []) => {
     }
     
     if (deletedCount > 0) {
-      console.log(`🧹 تم تنظيف ${deletedCount} طلب مزامن من IndexedDB`);
+      console.log(`🧹 تم تنظيف ${deletedCount} طلب محلي مكرر من IndexedDB`);
     }
     
     return deletedCount;
