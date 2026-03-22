@@ -123,9 +123,18 @@ function createWindow() {
     isOnline = false;
     updateTrayStatus();
     
-    // إذا فشل التحميل، عرض صفحة الخطأ
-    if (errorCode !== -3) { // تجاهل إلغاء التحميل
+    // لا نعرض صفحة الخطأ إذا كان التطبيق محملاً بالفعل
+    // فقط نعرض صفحة الخطأ عند التحميل الأولي
+    // errorCode -3 = إلغاء التحميل
+    // errorCode -6 = فشل الاتصال
+    // errorCode -105 = الخادم غير موجود
+    const isInitialLoad = !mainWindow.webContents.getURL().includes(store.get('serverUrl', ''));
+    
+    if (errorCode !== -3 && isInitialLoad) {
       mainWindow.loadFile(path.join(__dirname, 'src', 'views', 'error.html'));
+    } else {
+      // إذا كان التطبيق محملاً بالفعل، لا نفعل شيئاً - نترك الصفحة الحالية
+      console.log('📵 فقدان الاتصال - التطبيق سيعمل في وضع Offline');
     }
   });
 
