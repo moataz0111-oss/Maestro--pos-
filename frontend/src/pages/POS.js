@@ -555,12 +555,36 @@ export default function POS() {
       const params = activeBranchId ? { branch_id: activeBranchId } : {};
       
       // في وضع Offline، جلب الطلبات المحلية فقط
-      if (isOffline) {
-        const localOrders = await offlineStorage.getTodayOrders();
-        const pendingLocal = localOrders.filter(o => 
-          (o.status === 'pending' || o.status === 'preparing' || o.status === 'ready' || !o.is_synced) &&
-          (!activeBranchId || activeBranchId === 'all' || o.branch_id === activeBranchId)
-        );
+      if (isOffline || !navigator.onLine) {
+        console.log('📦 fetchPendingOrders in Offline mode');
+        
+        // جلب كل الطلبات المحلية: اليوم + غير المتزامنة
+        const [todayOrders, unsyncedOrders] = await Promise.all([
+          offlineStorage.getTodayOrders(),
+          offlineStorage.getUnsyncedOrders()
+        ]);
+        
+        // دمج الطلبات بدون تكرار
+        const ordersMap = new Map();
+        for (const order of todayOrders) {
+          ordersMap.set(order.id || order.offline_id, order);
+        }
+        for (const order of unsyncedOrders) {
+          if (!ordersMap.has(order.id) && !ordersMap.has(order.offline_id)) {
+            ordersMap.set(order.id || order.offline_id, order);
+          }
+        }
+        
+        const allLocalOrders = Array.from(ordersMap.values());
+        console.log('📦 Total local orders:', allLocalOrders.length);
+        
+        const pendingLocal = allLocalOrders.filter(o => {
+          const statusMatch = ['pending', 'preparing', 'ready'].includes(o.status) || !o.is_synced;
+          const branchMatch = !activeBranchId || activeBranchId === 'all' || String(o.branch_id) === String(activeBranchId);
+          return statusMatch && branchMatch;
+        });
+        
+        console.log('📦 Pending local orders:', pendingLocal.length);
         setPendingOrders(pendingLocal);
         return;
       }
@@ -1128,6 +1152,25 @@ export default function POS() {
           
           const savedOrder = await offlineStorage.saveOfflineOrder(offlineOrder);
           
+          // تحديث حالة الطاولة محلياً إذا كان الطلب داخلي
+          if (orderType === 'dine_in' && selectedTable) {
+            try {
+              await offlineStorage.saveOfflineTableUpdate(selectedTable, {
+                status: 'occupied',
+                current_order_id: savedOrder.id || savedOrder.offline_id
+              });
+              
+              setTables(prevTables => prevTables.map(t => {
+                if (String(t.id) === String(selectedTable)) {
+                  return { ...t, status: 'occupied', current_order_id: savedOrder.id || savedOrder.offline_id };
+                }
+                return t;
+              }));
+            } catch (tableError) {
+              console.error('Failed to update table:', tableError);
+            }
+          }
+          
           playSuccess();
           toast.success(
             <div>
@@ -1141,6 +1184,20 @@ export default function POS() {
           setKitchenDialogOpen(false);
           clearCart();
           await updateSyncStatus();
+          
+          // تحديث عداد الفرع
+          const branchId = getBranchIdForApi() || user?.branch_id;
+          if (updatePendingCount && branchId) {
+            updatePendingCount(branchId, 1);
+          }
+          
+          // إضافة الطلب مباشرة للـ pendingOrders state
+          setPendingOrders(prev => {
+            const exists = prev.some(o => o.id === savedOrder.id || o.offline_id === savedOrder.offline_id);
+            if (exists) return prev;
+            return [savedOrder, ...prev];
+          });
+          
           return;
         } catch (offlineError) {
           console.error('Failed to save offline order:', offlineError);
@@ -1262,8 +1319,17 @@ export default function POS() {
         updatePendingCount(currentBranchId, 1);
       }
       
-      // تحديث الطلبات المعلقة
-      await fetchPendingOrders();
+      // إضافة الطلب مباشرة للـ pendingOrders state بدون انتظار fetchPendingOrders
+      setPendingOrders(prev => {
+        // تأكد من عدم التكرار
+        const exists = prev.some(o => o.id === savedOrder.id || o.offline_id === savedOrder.offline_id);
+        if (exists) return prev;
+        console.log('📦 إضافة الطلب للطلبات المعلقة:', savedOrder.offline_id);
+        return [savedOrder, ...prev];
+      });
+      
+      // تحديث الطلبات المعلقة (كـ backup)
+      setTimeout(() => fetchPendingOrders(), 500);
       
       return savedOrder;
     };
