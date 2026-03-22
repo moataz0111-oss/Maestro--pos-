@@ -230,27 +230,48 @@ export const getUnsyncedOrders = async () => {
  */
 export const deleteOfflineOrder = async (orderId) => {
   try {
-    console.log('🗑️ حذف الطلب المحلي:', orderId);
+    console.log('🗑️ محاولة حذف الطلب:', orderId);
     
-    // جلب الطلب أولاً للحصول على معلوماته
+    // جلب جميع الطلبات
     const allOrders = await db.getAllItems(STORES.ORDERS);
-    const order = allOrders.find(o => 
-      o.id === orderId || 
-      o.offline_id === orderId ||
-      String(o.id) === String(orderId) ||
-      String(o.offline_id) === String(orderId)
-    );
+    console.log('📦 عدد الطلبات الموجودة:', allOrders.length);
+    
+    // البحث عن الطلب بكل الطرق الممكنة
+    const order = allOrders.find(o => {
+      const idStr = String(orderId);
+      return o.id === orderId || 
+        o.offline_id === orderId ||
+        String(o.id) === idStr ||
+        String(o.offline_id) === idStr;
+    });
     
     if (!order) {
-      console.warn('⚠️ الطلب غير موجود في التخزين المحلي');
-      return true; // نعتبره محذوفاً بالفعل
+      console.warn('⚠️ الطلب غير موجود في التخزين المحلي:', orderId);
+      return true;
     }
     
-    // حذف الطلب
-    const actualId = order.id || order.offline_id;
-    await db.deleteItem(STORES.ORDERS, actualId);
+    console.log('📋 الطلب الموجود:', { id: order.id, offline_id: order.offline_id });
     
-    console.log('✅ تم حذف الطلب بنجاح');
+    // حذف الطلب باستخدام المعرف الأساسي (id)
+    // لأن keyPath في IndexedDB هو 'id'
+    await db.deleteItem(STORES.ORDERS, order.id);
+    
+    // تأكيد الحذف
+    const remainingOrders = await db.getAllItems(STORES.ORDERS);
+    const stillExists = remainingOrders.find(o => o.id === order.id);
+    
+    if (stillExists) {
+      console.error('❌ فشل في حذف الطلب - لا يزال موجوداً');
+      // محاولة ثانية
+      try {
+        await db.deleteItem(STORES.ORDERS, order.id);
+      } catch (e) {
+        console.error('❌ فشلت المحاولة الثانية:', e);
+      }
+    } else {
+      console.log('✅ تم حذف الطلب بنجاح. الطلبات المتبقية:', remainingOrders.length);
+    }
+    
     return true;
   } catch (error) {
     console.error('❌ خطأ في حذف الطلب:', error);

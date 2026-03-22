@@ -1464,13 +1464,22 @@ export default function POS() {
           toast.success(t('تم إلغاء الطلب'));
           clearCart();
           
-          // تحديث الطلبات المعلقة
+          // تحديث الطلبات المعلقة من IndexedDB مباشرة
           const localOrders = await offlineStorage.getTodayOrders();
+          console.log('📦 الطلبات المحلية بعد الحذف:', localOrders.length);
+          
           const pendingLocal = localOrders.filter(o => 
-            (o.status === 'pending' || o.status === 'preparing' || o.status === 'ready') &&
-            o.id !== orderId && o.offline_id !== orderId
+            ['pending', 'preparing', 'ready'].includes(o.status) &&
+            String(o.id) !== String(orderId) && 
+            String(o.offline_id) !== String(orderId)
           );
+          console.log('📋 الطلبات المعلقة المتبقية:', pendingLocal.length);
           setPendingOrders(pendingLocal);
+          
+          // تحديث عداد الطلبات على الفرع
+          if (refreshPendingCounts) {
+            refreshPendingCounts();
+          }
           
           return;
         } catch (localError) {
