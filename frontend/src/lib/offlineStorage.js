@@ -164,7 +164,7 @@ export const saveOfflineOrder = async (order) => {
 
 /**
  * حفظ الطلبات من API للاستخدام offline
- * الحل النهائي: حذف الطلبات المخزنة القديمة وإعادة تخزين الجديدة فقط
+ * الحل النهائي: حذف كل الطلبات المخزنة وتخزين الجديدة فقط
  */
 export const cacheApiOrders = async (orders) => {
   try {
@@ -172,31 +172,34 @@ export const cacheApiOrders = async (orders) => {
     
     console.log('💾 cacheApiOrders: بدء التخزين -', orders.length, 'طلب');
     
-    // 1. حذف جميع الطلبات المخزنة (cached) القديمة
+    // 1. حذف جميع الطلبات ما عدا الطلبات المحلية الجديدة (offline_id يبدأ بـ OFF- و is_synced = false)
     const existingOrders = await db.getAllItems(STORES.ORDERS);
+    console.log('💾 الطلبات الموجودة قبل التنظيف:', existingOrders.length);
+    
     for (const existingOrder of existingOrders) {
-      // حذف فقط الطلبات المخزنة من API (is_cached أو is_synced)
-      // لا نحذف الطلبات المحلية الجديدة (is_synced = false بدون offline_id يبدأ بـ OFF-)
-      if (existingOrder.is_cached === true) {
+      // احتفظ فقط بالطلبات المحلية الجديدة التي لم تُزامن
+      const isLocalNewOrder = existingOrder.offline_id?.startsWith('OFF-') && existingOrder.is_synced === false;
+      
+      if (!isLocalNewOrder) {
         try {
           await db.deleteItem(STORES.ORDERS, existingOrder.id);
         } catch (e) {}
       }
     }
     
-    // 2. جلب الطلبات المحلية المتبقية (غير المزامنة)
+    // 2. جلب الطلبات المحلية المتبقية
     const remainingOrders = await db.getAllItems(STORES.ORDERS);
+    console.log('💾 الطلبات المتبقية بعد التنظيف:', remainingOrders.length);
     const localOfflineIds = new Set(remainingOrders.filter(o => o.offline_id).map(o => o.offline_id));
     
-    // 3. تخزين الطلبات الجديدة من API
+    // 3. تخزين الطلبات من API
     let cachedCount = 0;
     for (const order of orders) {
       // تجاهل الملغاة والمسلمة
       if (order.status === 'cancelled' || order.status === 'delivered') continue;
       
-      // تجاهل إذا كان الطلب مزامن من طلب محلي (offline_id موجود محلياً)
+      // تجاهل إذا كان الطلب مزامن من طلب محلي
       if (order.offline_id && localOfflineIds.has(order.offline_id)) {
-        console.log('⏭️ تجاهل طلب مزامن:', order.offline_id);
         continue;
       }
       

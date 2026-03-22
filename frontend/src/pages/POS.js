@@ -2246,6 +2246,7 @@ export default function POS() {
                     <div className="grid grid-cols-5 gap-2">
                       {tables
                         .filter(table => !selectedTableSection || table.section === selectedTableSection)
+                        .sort((a, b) => (a.number || 0) - (b.number || 0))
                         .map(table => {
                         const isOccupied = table.status === 'occupied';
                         const isReserved = table.status === 'reserved';
