@@ -302,17 +302,52 @@ export default function POS() {
           // فلترة الطاولات حسب الفرع المحدد
           if (localTables.length > 0) {
             let filteredTables = localTables;
-            console.log('🔍 Offline Mode - Branch filtering:', { activeBranchId, totalTables: localTables.length });
             
-            if (activeBranchId && activeBranchId !== 'all') {
+            // جلب الفرع المحدد من localStorage مباشرة
+            const savedBranchId = localStorage.getItem('selectedBranchId');
+            const effectiveBranchId = activeBranchId || savedBranchId || user?.branch_id;
+            
+            console.log('🔍 Offline Mode - Branch filtering:', { 
+              activeBranchId, 
+              savedBranchId,
+              effectiveBranchId,
+              userBranchId: user?.branch_id,
+              totalTables: localTables.length 
+            });
+            
+            if (effectiveBranchId && effectiveBranchId !== 'all') {
               filteredTables = localTables.filter(t => {
-                const tableMatch = t.branch_id === activeBranchId || 
-                  t.branch === activeBranchId ||
-                  String(t.branch_id) === String(activeBranchId);
+                // مقارنة branch_id بكل الطرق الممكنة
+                const tableMatch = 
+                  t.branch_id === effectiveBranchId || 
+                  t.branch === effectiveBranchId ||
+                  String(t.branch_id) === String(effectiveBranchId) ||
+                  t.branch_id === String(effectiveBranchId) ||
+                  String(t.branch_id) === effectiveBranchId;
                 return tableMatch;
               });
-              console.log('🔍 Filtered tables:', filteredTables.length);
+              console.log('🔍 Filtered tables for branch', effectiveBranchId, ':', filteredTables.length);
             }
+            
+            // تحديث حالة الطاولات المشغولة من الطلبات المحلية
+            const localOrders = await offlineStorage.getTodayOrders();
+            const occupiedTableIds = localOrders
+              .filter(o => o.table_id && (o.status === 'pending' || o.status === 'preparing' || o.status === 'ready'))
+              .map(o => o.table_id);
+            
+            filteredTables = filteredTables.map(table => {
+              const isOccupied = occupiedTableIds.includes(table.id) || occupiedTableIds.includes(String(table.id));
+              if (isOccupied) {
+                const order = localOrders.find(o => o.table_id === table.id || o.table_id === String(table.id));
+                return { 
+                  ...table, 
+                  status: 'occupied',
+                  current_order_id: order?.id || order?.offline_id
+                };
+              }
+              return table;
+            });
+            
             setTables(filteredTables);
           }
           
@@ -550,8 +585,51 @@ export default function POS() {
   // تحميل طلب موجود للتعديل
   const loadOrderForEditing = async (orderId) => {
     try {
-      const res = await axios.get(`${API}/orders/${orderId}`);
-      const order = res.data;
+      let order = null;
+      
+      // في وضع Offline، حاول جلب الطلب من التخزين المحلي أولاً
+      if (isOffline) {
+        try {
+          const localOrders = await offlineStorage.getTodayOrders();
+          order = localOrders.find(o => 
+            o.id === orderId || 
+            o.offline_id === orderId ||
+            String(o.id) === String(orderId)
+          );
+          
+          if (order) {
+            console.log('✅ تم جلب الطلب من التخزين المحلي:', order);
+          }
+        } catch (localError) {
+          console.error('Failed to fetch local order:', localError);
+        }
+      }
+      
+      // إذا لم نجد الطلب محلياً، حاول جلبه من الخادم
+      if (!order) {
+        try {
+          const res = await axios.get(`${API}/orders/${orderId}`);
+          order = res.data;
+        } catch (apiError) {
+          // إذا فشل الـ API، حاول من التخزين المحلي
+          console.log('API failed, trying local storage...');
+          const localOrders = await offlineStorage.getTodayOrders();
+          order = localOrders.find(o => 
+            o.id === orderId || 
+            o.offline_id === orderId ||
+            String(o.id) === String(orderId)
+          );
+          
+          if (!order) {
+            throw new Error('Order not found');
+          }
+        }
+      }
+      
+      if (!order) {
+        toast.error(t('الطلب غير موجود'));
+        return;
+      }
       
       setEditingOrder(order);
       setOrderType(order.order_type);
@@ -565,7 +643,7 @@ export default function POS() {
       setOrderNotes(order.notes || '');
       
       // تحويل عناصر الطلب إلى سلة
-      const cartItems = order.items.map(item => ({
+      const cartItems = (order.items || []).map(item => ({
         product_id: item.product_id,
         product_name: item.product_name || item.name || t('منتج غير معروف'),
         price: item.price,
@@ -574,7 +652,8 @@ export default function POS() {
       }));
       setCart(cartItems);
       
-      toast.info(`${t('تم تحميل الطلب')} #${order.order_number} ${t('للتعديل')}`);
+      const orderNumber = order.order_number || order.offline_id || orderId;
+      toast.info(`${t('تم تحميل الطلب')} #${orderNumber} ${t('للتعديل')}`);
     } catch (error) {
       console.error('Failed to load order:', error);
       toast.error(t('فشل في تحميل الطلب'));
