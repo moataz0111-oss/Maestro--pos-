@@ -336,15 +336,18 @@ export default function POS() {
       setPendingOrders(pendingLocal);
       
       if (showToast && (localCategories.length > 0 || localProducts.length > 0)) {
-        toast.warning(t('تم تحميل البيانات المحلية - لا يوجد اتصال'));
+        // عرض الرسالة فقط إذا لم نكن متصلين
+        if (!navigator.onLine) {
+          toast.warning(t('تم تحميل البيانات المحلية - لا يوجد اتصال'));
+        }
       }
       
       return localCategories.length > 0 || localProducts.length > 0;
     };
     
     try {
-      // إذا لم يكن هناك اتصال، اذهب مباشرة لـ IndexedDB
-      if (!navigator.onLine || isOffline) {
+      // إذا لم يكن هناك اتصال حقيقي، اذهب مباشرة لـ IndexedDB
+      if (!navigator.onLine) {
         await loadFromIndexedDB();
         setLoading(false);
         return;
@@ -915,8 +918,9 @@ export default function POS() {
       return;
     }
 
-    // تحديد الفرع النشط في بداية الدالة
-    const currentBranchId = getBranchIdForApi() || user?.branch_id;
+    // تحديد الفرع النشط في بداية الدالة (مع fallback لـ localStorage)
+    const savedBranchIdForKitchen = localStorage.getItem('selectedBranchId');
+    const currentBranchId = getBranchIdForApi() || savedBranchIdForKitchen || user?.branch_id;
 
     setSubmitting(true);
     try {
@@ -1052,8 +1056,10 @@ export default function POS() {
       return;
     }
 
-    // تحديد الفرع النشط في بداية الدالة
-    const currentBranchId = getBranchIdForApi() || user?.branch_id;
+    // تحديد الفرع النشط في بداية الدالة (مع fallback لـ localStorage)
+    const savedBranchIdForSubmit = localStorage.getItem('selectedBranchId');
+    const currentBranchId = getBranchIdForApi() || savedBranchIdForSubmit || user?.branch_id;
+    console.log('📍 Branch ID for order:', currentBranchId);
 
     setSubmitting(true);
     
