@@ -103,7 +103,7 @@
   },
   
   "test_credentials": {
-    "api_url": "https://electron-pos-system.preview.emergentagent.com",
+    "api_url": "https://table-edit-feature.preview.emergentagent.com",
     "owner": {
       "email": "owner@maestroegp.com",
       "password": "owner123",

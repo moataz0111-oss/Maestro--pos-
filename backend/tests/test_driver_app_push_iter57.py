@@ -20,7 +20,7 @@ import requests
 import os
 import uuid
 
-BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://electron-pos-system.preview.emergentagent.com')
+BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://table-edit-feature.preview.emergentagent.com')
 
 class TestDriverAppLogin:
     """Test driver login functionality"""

@@ -16,7 +16,7 @@
 4. إدارة الموظفين والرواتب
 5. التقارير والإحصائيات
 6. دعم متعدد اللغات (عربي/إنجليزي/كردي)
-7. **تطبيق سطح مكتب** (Electron) يعمل بدون إنترنت
+7. **PWA (Progressive Web App)** يعمل بدون إنترنت
 
 ---
 
@@ -200,7 +200,23 @@
 
 ---
 
-## Recent Updates (March 17, 2026)
+## Recent Updates (March 22, 2026)
+
+### Edit Table Feature ✅ (Fixed - Latest)
+- [x] إضافة زر "تعديل" في صفحة إدارة الطاولات
+- [x] إضافة نافذة منبثقة لتعديل بيانات الطاولة (رقم، سعة، قسم)
+- [x] إضافة API endpoint جديد `PUT /api/tables/{table_id}` للتحديث
+- [x] التحقق من عدم تكرار رقم الطاولة في نفس الفرع
+- [x] الزر يظهر فقط للمدراء وأصحاب الصلاحيات
+
+### Desktop App Removed ✅ (User Request - March 2026)
+- [x] حذف تطبيق سطح المكتب (Electron) بالكامل بناءً على طلب المستخدم
+- [x] التركيز على تطبيق الويب كـ PWA مع دعم كامل للعمل بدون إنترنت
+- [x] إصلاح جميع مشاكل الـ Offline Mode في نقطة البيع
+
+---
+
+## Updates (March 17, 2026)
 
 ### Desktop App Setup Fix ✅ (Fixed - Latest)
 - [x] إصلاح خطأ `window.electronAPI.saveSettings is not a function`

@@ -168,7 +168,13 @@ export default function Tables() {
     e.preventDefault();
     try {
       if (editingTable) {
-        // Update logic would go here
+        // تحديث الطاولة
+        await axios.put(`${API}/tables/${editingTable.id}`, {
+          number: parseInt(formData.number),
+          capacity: parseInt(formData.capacity),
+          section: formData.section,
+          branch_id: selectedBranch
+        });
         toast.success(t('تم تحديث الطاولة'));
       } else {
         await axios.post(`${API}/tables`, {
@@ -180,11 +186,23 @@ export default function Tables() {
       }
       setDialogOpen(false);
       setEditingTable(null);
-      setFormData({ number: '', capacity: 4, section: '' });
+      setFormData({ number: '', capacity: 4, section: 'داخلي' });
       fetchData();
     } catch (error) {
       toast.error(error.response?.data?.detail || t('فشل في حفظ الطاولة'));
     }
+  };
+
+  // فتح نافذة تعديل الطاولة
+  const openEditDialog = (table, e) => {
+    e.stopPropagation();
+    setEditingTable(table);
+    setFormData({
+      number: table.number.toString(),
+      capacity: table.capacity,
+      section: table.section || 'داخلي'
+    });
+    setDialogOpen(true);
   };
 
   const updateTableStatus = async (tableId, status) => {
@@ -544,18 +562,30 @@ export default function Tables() {
                       </Button>
                     )}
                     
-                    {/* زر حذف الطاولة - للمتاحة فقط */}
+                    {/* أزرار تعديل وحذف الطاولة - للمتاحة فقط */}
                     {table.status === 'available' && (hasRole(['admin', 'manager']) || hasPermission('tables')) && (
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="w-full mt-2 text-red-500 hover:text-red-600 hover:bg-red-500/10"
-                        onClick={(e) => openDeleteConfirm(table, e)}
-                        data-testid={`delete-table-${table.id}`}
-                      >
-                        <Trash2 className="h-4 w-4 ml-1" />
-                        {t('حذف')}
-                      </Button>
+                      <div className="flex gap-2 mt-2">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="flex-1 text-blue-500 hover:text-blue-600 hover:bg-blue-500/10"
+                          onClick={(e) => openEditDialog(table, e)}
+                          data-testid={`edit-table-${table.id}`}
+                        >
+                          <Edit className="h-4 w-4 ml-1" />
+                          {t('تعديل')}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="flex-1 text-red-500 hover:text-red-600 hover:bg-red-500/10"
+                          onClick={(e) => openDeleteConfirm(table, e)}
+                          data-testid={`delete-table-${table.id}`}
+                        >
+                          <Trash2 className="h-4 w-4 ml-1" />
+                          {t('حذف')}
+                        </Button>
+                      </div>
                     )}
                   </CardContent>
                 </Card>

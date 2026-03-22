@@ -4267,6 +4267,46 @@ async def update_table_status(table_id: str, status: str, current_user: dict = D
     await db.tables.update_one(query, {"$set": {"status": status}})
     return {"message": "تم التحديث"}
 
+@api_router.put("/tables/{table_id}")
+async def update_table(table_id: str, table_data: TableCreate, current_user: dict = Depends(get_current_user)):
+    """تعديل بيانات الطاولة"""
+    # التحقق من صلاحيات المستخدم
+    if current_user.get("role") not in [UserRole.ADMIN, UserRole.MANAGER, UserRole.SUPER_ADMIN]:
+        if not current_user.get("permissions", {}).get("tables"):
+            raise HTTPException(status_code=403, detail="ليس لديك صلاحية لتعديل الطاولات")
+    
+    # التحقق من وجود الطاولة
+    query = build_tenant_query(current_user, {"id": table_id})
+    existing_table = await db.tables.find_one(query)
+    if not existing_table:
+        raise HTTPException(status_code=404, detail="الطاولة غير موجودة")
+    
+    # التحقق من تكرار رقم الطاولة في نفس الفرع
+    branch_id = table_data.branch_id or existing_table.get("branch_id")
+    duplicate_query = build_tenant_query(current_user, {
+        "number": table_data.number,
+        "branch_id": branch_id,
+        "id": {"$ne": table_id}
+    })
+    duplicate = await db.tables.find_one(duplicate_query)
+    if duplicate:
+        raise HTTPException(status_code=400, detail="رقم الطاولة موجود مسبقاً في هذا الفرع")
+    
+    # تحديث الطاولة
+    update_data = {
+        "number": table_data.number,
+        "capacity": table_data.capacity,
+        "section": table_data.section or existing_table.get("section", "داخلي"),
+        "branch_id": branch_id,
+        "updated_at": datetime.now(timezone.utc).isoformat()
+    }
+    
+    await db.tables.update_one(query, {"$set": update_data})
+    
+    # إرجاع الطاولة المحدثة
+    updated_table = await db.tables.find_one(query, {"_id": 0})
+    return updated_table
+
 @api_router.post("/tables/transfer")
 async def transfer_table_order(
     from_table_id: str = Body(...),
@@ -14768,7 +14808,7 @@ async def get_menu_link(request: Request, current_user: dict = Depends(get_curre
         base_url = f"{parsed.scheme}://{parsed.netloc}"
     else:
         # fallback للـ environment variable
-        base_url = os.environ.get('REACT_APP_BACKEND_URL', 'https://electron-pos-system.preview.emergentagent.com')
+        base_url = os.environ.get('REACT_APP_BACKEND_URL', 'https://table-edit-feature.preview.emergentagent.com')
     
     menu_url = f"{base_url}/menu/{tenant.get('menu_slug', tenant_id)}"
     
