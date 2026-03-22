@@ -273,99 +273,82 @@ export default function POS() {
   }, [searchParams, user]);
 
   const fetchData = async () => {
-    try {
-      // تحديد الفرع النشط للاستخدام في جميع الطلبات
-      const activeBranchId = getBranchIdForApi() || user?.branch_id;
+    // جلب الفرع المحدد من localStorage
+    const savedBranchId = localStorage.getItem('selectedBranchId');
+    const activeBranchId = getBranchIdForApi() || savedBranchId || user?.branch_id;
+    
+    console.log('🔄 fetchData starting - Branch:', activeBranchId, 'navigator.onLine:', navigator.onLine);
+    
+    // دالة مساعدة لجلب البيانات من IndexedDB
+    const loadFromIndexedDB = async (showToast = true) => {
+      console.log('📦 Loading from IndexedDB...');
+      const [localCategories, localProducts, localTables] = await Promise.all([
+        db.getAllItems(STORES.CATEGORIES),
+        db.getAllItems(STORES.PRODUCTS),
+        db.getAllItems(STORES.TABLES)
+      ]);
       
-      // === وضع Offline - جلب من IndexedDB ===
-      if (isOffline) {
-        try {
-          const [localCategories, localProducts, localTables] = await Promise.all([
-            db.getAllItems(STORES.CATEGORIES),
-            db.getAllItems(STORES.PRODUCTS),
-            db.getAllItems(STORES.TABLES)
-          ]);
-          
-          // ترتيب الفئات حسب الترتيب الأصلي (order أو sort_order)
-          if (localCategories.length > 0) {
-            const sortedCategories = [...localCategories].sort((a, b) => {
-              const orderA = a.order ?? a.sort_order ?? 999;
-              const orderB = b.order ?? b.sort_order ?? 999;
-              return orderA - orderB;
-            });
-            setCategories(sortedCategories);
-            setSelectedCategory(sortedCategories[0].id);
-          }
-          
-          if (localProducts.length > 0) setProducts(localProducts);
-          
-          // فلترة الطاولات حسب الفرع المحدد
-          if (localTables.length > 0) {
-            let filteredTables = localTables;
-            
-            // جلب الفرع المحدد من localStorage مباشرة
-            const savedBranchId = localStorage.getItem('selectedBranchId');
-            const effectiveBranchId = activeBranchId || savedBranchId || user?.branch_id;
-            
-            console.log('🔍 Offline Mode - Branch filtering:', { 
-              activeBranchId, 
-              savedBranchId,
-              effectiveBranchId,
-              userBranchId: user?.branch_id,
-              totalTables: localTables.length 
-            });
-            
-            if (effectiveBranchId && effectiveBranchId !== 'all') {
-              filteredTables = localTables.filter(t => {
-                // مقارنة branch_id بكل الطرق الممكنة
-                const tableMatch = 
-                  t.branch_id === effectiveBranchId || 
-                  t.branch === effectiveBranchId ||
-                  String(t.branch_id) === String(effectiveBranchId) ||
-                  t.branch_id === String(effectiveBranchId) ||
-                  String(t.branch_id) === effectiveBranchId;
-                return tableMatch;
-              });
-              console.log('🔍 Filtered tables for branch', effectiveBranchId, ':', filteredTables.length);
-            }
-            
-            // تحديث حالة الطاولات المشغولة من الطلبات المحلية
-            const localOrders = await offlineStorage.getTodayOrders();
-            const occupiedTableIds = localOrders
-              .filter(o => o.table_id && (o.status === 'pending' || o.status === 'preparing' || o.status === 'ready'))
-              .map(o => o.table_id);
-            
-            filteredTables = filteredTables.map(table => {
-              const isOccupied = occupiedTableIds.includes(table.id) || occupiedTableIds.includes(String(table.id));
-              if (isOccupied) {
-                const order = localOrders.find(o => o.table_id === table.id || o.table_id === String(table.id));
-                return { 
-                  ...table, 
-                  status: 'occupied',
-                  current_order_id: order?.id || order?.offline_id
-                };
-              }
-              return table;
-            });
-            
-            setTables(filteredTables);
-          }
-          
-          // جلب الطلبات المحلية
-          const localOrders = await offlineStorage.getTodayOrders();
-          const pendingLocal = localOrders.filter(o => 
-            o.status === 'pending' || o.status === 'preparing' || o.status === 'ready' || !o.is_synced
-          );
-          setPendingOrders(pendingLocal);
-          
-          setLoading(false);
-          return;
-        } catch (offlineError) {
-          console.error('Error loading offline data:', offlineError);
-        }
+      console.log('📦 IndexedDB:', { categories: localCategories.length, products: localProducts.length, tables: localTables.length });
+      
+      // الفئات
+      if (localCategories.length > 0) {
+        const sortedCategories = [...localCategories].sort((a, b) => (a.order ?? a.sort_order ?? 999) - (b.order ?? b.sort_order ?? 999));
+        setCategories(sortedCategories);
+        setSelectedCategory(sortedCategories[0].id);
       }
       
-      // === وضع Online ===
+      if (localProducts.length > 0) setProducts(localProducts);
+      
+      // الطاولات مع الفلترة
+      if (localTables.length > 0) {
+        let filteredTables = localTables;
+        
+        if (activeBranchId && activeBranchId !== 'all') {
+          filteredTables = localTables.filter(t => 
+            t.branch_id === activeBranchId || String(t.branch_id) === String(activeBranchId)
+          );
+          console.log('🔍 Filtered tables:', filteredTables.length);
+        }
+        
+        // تحديث حالة الطاولات المشغولة
+        const localOrders = await offlineStorage.getTodayOrders();
+        const occupiedTableIds = localOrders
+          .filter(o => o.table_id && ['pending', 'preparing', 'ready'].includes(o.status))
+          .map(o => String(o.table_id));
+        
+        filteredTables = filteredTables.map(table => {
+          if (occupiedTableIds.includes(String(table.id))) {
+            const order = localOrders.find(o => String(o.table_id) === String(table.id));
+            return { ...table, status: 'occupied', current_order_id: order?.id || order?.offline_id };
+          }
+          return table;
+        });
+        
+        setTables(filteredTables);
+      }
+      
+      // الطلبات المعلقة
+      const localOrders = await offlineStorage.getTodayOrders();
+      let pendingLocal = localOrders.filter(o => ['pending', 'preparing', 'ready'].includes(o.status) || !o.is_synced);
+      if (activeBranchId && activeBranchId !== 'all') {
+        pendingLocal = pendingLocal.filter(o => !o.branch_id || String(o.branch_id) === String(activeBranchId));
+      }
+      setPendingOrders(pendingLocal);
+      
+      if (showToast && (localCategories.length > 0 || localProducts.length > 0)) {
+        toast.warning(t('تم تحميل البيانات المحلية - لا يوجد اتصال'));
+      }
+      
+      return localCategories.length > 0 || localProducts.length > 0;
+    };
+    
+    try {
+      // إذا لم يكن هناك اتصال، اذهب مباشرة لـ IndexedDB
+      if (!navigator.onLine || isOffline) {
+        await loadFromIndexedDB();
+        setLoading(false);
+        return;
+      }
       const [catRes, prodRes, appsRes, shiftRes, invoiceRes, restaurantRes, sysInvoiceRes, loginBgRes] = await Promise.all([
         axios.get(`${API}/categories`),
         axios.get(`${API}/products`),
@@ -449,101 +432,13 @@ export default function POS() {
     } catch (error) {
       console.error('Failed to fetch data:', error);
       
-      // إذا فشل الاتصال (أي نوع من أخطاء الشبكة)، حاول جلب من IndexedDB
+      // إذا فشل الاتصال، حاول جلب من IndexedDB
       const isNetworkError = !error.response || error.code === 'ERR_NETWORK' || error.message?.includes('Network Error');
       
       if (isNetworkError) {
-        console.log('🔄 Network error detected, loading from IndexedDB...');
+        console.log('🔄 Network error, loading from IndexedDB...');
         try {
-          // جلب الفرع المحدد
-          const savedBranchId = localStorage.getItem('selectedBranchId');
-          const effectiveBranchId = user?.branch_id || savedBranchId;
-          console.log('📍 Effective branch ID:', effectiveBranchId);
-          
-          const [localCategories, localProducts, localTables] = await Promise.all([
-            db.getAllItems(STORES.CATEGORIES),
-            db.getAllItems(STORES.PRODUCTS),
-            db.getAllItems(STORES.TABLES)
-          ]);
-          
-          console.log('📦 Local data:', {
-            categories: localCategories.length,
-            products: localProducts.length,
-            tables: localTables.length
-          });
-          
-          // الفئات
-          if (localCategories.length > 0) {
-            const sortedCategories = [...localCategories].sort((a, b) => {
-              const orderA = a.order ?? a.sort_order ?? 999;
-              const orderB = b.order ?? b.sort_order ?? 999;
-              return orderA - orderB;
-            });
-            setCategories(sortedCategories);
-            setSelectedCategory(sortedCategories[0].id);
-          }
-          
-          // المنتجات
-          if (localProducts.length > 0) setProducts(localProducts);
-          
-          // الطاولات مع الفلترة حسب الفرع
-          if (localTables.length > 0) {
-            let filteredTables = localTables;
-            
-            console.log('🔍 Filtering tables for branch:', effectiveBranchId);
-            console.log('🔍 Sample table:', localTables[0]);
-            
-            if (effectiveBranchId && effectiveBranchId !== 'all') {
-              filteredTables = localTables.filter(t => {
-                const match = t.branch_id === effectiveBranchId || 
-                  t.branch === effectiveBranchId ||
-                  String(t.branch_id) === String(effectiveBranchId) ||
-                  t.branch_id?.toString() === effectiveBranchId?.toString();
-                return match;
-              });
-              console.log('🔍 Filtered to:', filteredTables.length, 'tables');
-            }
-            
-            // تحديث حالة الطاولات المشغولة
-            const localOrders = await offlineStorage.getTodayOrders();
-            const occupiedTableIds = localOrders
-              .filter(o => o.table_id && (o.status === 'pending' || o.status === 'preparing' || o.status === 'ready'))
-              .map(o => o.table_id);
-            
-            filteredTables = filteredTables.map(table => {
-              const isOccupied = occupiedTableIds.includes(table.id) || occupiedTableIds.includes(String(table.id));
-              if (isOccupied) {
-                const order = localOrders.find(o => 
-                  o.table_id === table.id || 
-                  o.table_id === String(table.id) ||
-                  String(o.table_id) === String(table.id)
-                );
-                return { 
-                  ...table, 
-                  status: 'occupied',
-                  current_order_id: order?.id || order?.offline_id
-                };
-              }
-              return table;
-            });
-            
-            setTables(filteredTables);
-          } else {
-            console.log('⚠️ No tables in IndexedDB');
-          }
-          
-          // الطلبات المعلقة المحلية
-          const localOrders = await offlineStorage.getTodayOrders();
-          const pendingLocal = localOrders.filter(o => 
-            o.status === 'pending' || o.status === 'preparing' || o.status === 'ready' || !o.is_synced
-          );
-          setPendingOrders(pendingLocal);
-          
-          if (localCategories.length > 0 || localProducts.length > 0) {
-            toast.warning(t('تم تحميل البيانات المحلية - لا يوجد اتصال'));
-          } else {
-            toast.error(t('لا توجد بيانات محلية - يرجى الاتصال بالإنترنت'));
-          }
+          await loadFromIndexedDB();
         } catch (offlineError) {
           console.error('Failed to load offline data:', offlineError);
           toast.error(t('فشل في تحميل البيانات'));
