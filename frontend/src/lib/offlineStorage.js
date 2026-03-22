@@ -452,6 +452,67 @@ export const cleanupOldData = async () => {
 };
 
 /**
+ * تنظيف الطلبات المزامنة مسبقاً (التي لها order_number ولكن is_synced = false)
+ * تُستدعى عند الاتصال بالإنترنت لإزالة الطلبات المكررة
+ */
+export const cleanupSyncedOrders = async (apiOrders = []) => {
+  try {
+    const localOrders = await db.getAllItems(STORES.ORDERS);
+    
+    // جمع كل الـ offline_ids و order_numbers من API
+    const apiOfflineIds = new Set(apiOrders.filter(o => o.offline_id).map(o => o.offline_id));
+    const apiOrderNumbers = new Set(apiOrders.filter(o => o.order_number).map(o => String(o.order_number)));
+    
+    let deletedCount = 0;
+    
+    for (const order of localOrders) {
+      let shouldDelete = false;
+      
+      // 1. طلب محلي بنفس offline_id موجود في API
+      if (order.offline_id && apiOfflineIds.has(order.offline_id)) {
+        shouldDelete = true;
+      }
+      
+      // 2. طلب له order_number (يعني تم رفعه للخادم مسبقاً)
+      if (order.order_number && apiOrderNumbers.has(String(order.order_number))) {
+        shouldDelete = true;
+      }
+      
+      // 3. طلب قديم (أكثر من يوم) وله order_number
+      if (order.order_number && !order.offline_id?.startsWith('OFF-')) {
+        const orderAge = Date.now() - new Date(order.created_at).getTime();
+        const oneDay = 24 * 60 * 60 * 1000;
+        if (orderAge > oneDay) {
+          shouldDelete = true;
+        }
+      }
+      
+      if (shouldDelete) {
+        try {
+          await db.deleteItem(STORES.ORDERS, order.id);
+          deletedCount++;
+        } catch (e) {
+          // جرب الحذف بـ offline_id
+          try {
+            await db.deleteItem(STORES.ORDERS, order.offline_id);
+            deletedCount++;
+          } catch (e2) {}
+        }
+      }
+    }
+    
+    if (deletedCount > 0) {
+      console.log(`🧹 تم تنظيف ${deletedCount} طلب مزامن من IndexedDB`);
+    }
+    
+    return deletedCount;
+  } catch (error) {
+    console.error('❌ خطأ في تنظيف الطلبات المزامنة:', error);
+    return 0;
+  }
+};
+
+/**
  * حفظ حركة مخزون Offline
  */
 export const saveOfflineInventoryTransaction = async (transaction) => {
@@ -653,6 +714,7 @@ export default {
   removeSyncQueueItem,
   markOrderAsSynced,
   cleanupOldData,
+  cleanupSyncedOrders,
   saveOfflineInventoryTransaction,
   saveOfflineAttendance,
   saveOfflineTableUpdate,

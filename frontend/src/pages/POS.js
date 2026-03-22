@@ -615,33 +615,12 @@ export default function POS() {
       }
       
       // تنظيف الطلبات المزامنة من IndexedDB
-      // إذا كان الطلب موجود في API مع offline_id، قم بحذفه من التخزين المحلي
+      // حذف الطلبات المحلية التي تم مزامنتها بالفعل
       try {
         const allApiOrders = [...activeRes.data, ...unpaidRes.data];
-        const syncedOfflineIds = allApiOrders
-          .filter(o => o.offline_id)
-          .map(o => o.offline_id);
         
-        if (syncedOfflineIds.length > 0) {
-          const localOrders = await offlineStorage.getUnsyncedOrders();
-          for (const localOrder of localOrders) {
-            if (localOrder.offline_id && syncedOfflineIds.includes(localOrder.offline_id)) {
-              // إيجاد الطلب المقابل من API للحصول على serverId
-              const apiOrder = allApiOrders.find(o => o.offline_id === localOrder.offline_id);
-              if (apiOrder) {
-                try {
-                  await offlineStorage.markOrderAsSynced(
-                    localOrder.offline_id, 
-                    apiOrder.id, 
-                    apiOrder.order_number
-                  );
-                } catch (e) {
-                  console.log('Could not mark order as synced:', localOrder.offline_id);
-                }
-              }
-            }
-          }
-        }
+        // استدعاء دالة التنظيف الشاملة
+        await offlineStorage.cleanupSyncedOrders(allApiOrders);
       } catch (cleanupError) {
         console.log('Cleanup error:', cleanupError);
       }
@@ -650,32 +629,38 @@ export default function POS() {
       try {
         const localOrders = await offlineStorage.getUnsyncedOrders();
         
-        // جلب جميع offline_ids من الطلبات المزامنة (من API)
+        // جلب جميع offline_ids و order_numbers من الطلبات في API
         const syncedOfflineIds = new Set();
         const apiOrderIds = new Set();
+        const apiOrderNumbers = new Set();
         
         for (const [key, order] of ordersMap) {
           apiOrderIds.add(order.id);
           if (order.offline_id) {
             syncedOfflineIds.add(order.offline_id);
           }
+          if (order.order_number) {
+            apiOrderNumbers.add(order.order_number);
+          }
         }
         
         console.log('🔍 API orders count:', ordersMap.size);
         console.log('🔍 Local unsynced orders:', localOrders.length);
-        console.log('🔍 Synced offline_ids:', Array.from(syncedOfflineIds));
         
         for (const order of localOrders) {
           // تجاهل الطلبات التي تم مزامنتها بالفعل
-          // التحقق من offline_id أو id
           const alreadySynced = 
             (order.offline_id && syncedOfflineIds.has(order.offline_id)) ||
             (order.id && apiOrderIds.has(order.id)) ||
+            (order.order_number && apiOrderNumbers.has(order.order_number)) ||
             ordersMap.has(order.id) || 
             ordersMap.has(order.offline_id);
           
-          if (alreadySynced) {
-            console.log('⏭️ تخطي طلب مزامن:', order.offline_id || order.id);
+          // تجاهل الطلبات التي لها order_number (رُفعت سابقاً للخادم)
+          const hasServerOrderNumber = order.order_number && !order.offline_id?.startsWith('OFF-');
+          
+          if (alreadySynced || hasServerOrderNumber) {
+            console.log('⏭️ تخطي طلب مزامن:', order.offline_id || order.id, order.order_number);
             continue;
           }
           
