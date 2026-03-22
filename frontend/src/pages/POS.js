@@ -470,6 +470,67 @@ export default function POS() {
     try {
       const activeBranchId = getBranchIdForApi() || user?.branch_id;
       
+      // في وضع Offline - جلب من IndexedDB مع فلترة الطاولات
+      if (!navigator.onLine || isOffline) {
+        console.log('📦 fetchDataSilently in Offline mode - Branch:', activeBranchId);
+        
+        const [localCategories, localProducts, localTables] = await Promise.all([
+          db.getAllItems(STORES.CATEGORIES),
+          db.getAllItems(STORES.PRODUCTS),
+          db.getAllItems(STORES.TABLES)
+        ]);
+        
+        if (localCategories.length > 0) {
+          const sortedCategories = [...localCategories].sort((a, b) => (a.order ?? a.sort_order ?? 999) - (b.order ?? b.sort_order ?? 999));
+          setCategories(sortedCategories);
+        }
+        
+        if (localProducts.length > 0) setProducts(localProducts);
+        
+        // الطاولات مع الفلترة حسب الفرع
+        if (localTables.length > 0) {
+          let filteredTables = localTables;
+          
+          if (activeBranchId && activeBranchId !== 'all') {
+            filteredTables = localTables.filter(t => 
+              String(t.branch_id) === String(activeBranchId)
+            );
+            console.log('🔍 Offline filtered tables for branch', activeBranchId, ':', filteredTables.length);
+          }
+          
+          // تحديث حالة الطاولات المشغولة
+          const localOrders = await offlineStorage.getTodayOrders();
+          const unsyncedOrders = await offlineStorage.getUnsyncedOrders();
+          const allOrders = [...localOrders];
+          for (const o of unsyncedOrders) {
+            if (!allOrders.find(lo => lo.id === o.id || lo.offline_id === o.offline_id)) {
+              allOrders.push(o);
+            }
+          }
+          
+          const occupiedTableIds = allOrders
+            .filter(o => o.table_id && ['pending', 'preparing', 'ready'].includes(o.status))
+            .map(o => String(o.table_id));
+          
+          filteredTables = filteredTables.map(table => {
+            if (occupiedTableIds.includes(String(table.id))) {
+              const order = allOrders.find(o => String(o.table_id) === String(table.id));
+              return { ...table, status: 'occupied', current_order_id: order?.id || order?.offline_id };
+            }
+            return table;
+          });
+          
+          setTables(filteredTables);
+        } else {
+          setTables([]);
+        }
+        
+        // جلب الطلبات المعلقة
+        await fetchPendingOrders();
+        return;
+      }
+      
+      // في وضع Online - جلب من API
       const [catRes, prodRes, tablesRes] = await Promise.all([
         axios.get(`${API}/categories`),
         axios.get(`${API}/products`),
@@ -632,17 +693,28 @@ export default function POS() {
       
       // حاول جلب الطلب من التخزين المحلي أولاً (في أي وضع)
       try {
+        // جرب جلب كل الطلبات المحلية (ليس فقط اليوم)
         const localOrders = await offlineStorage.getTodayOrders();
-        console.log('📦 عدد الطلبات المحلية:', localOrders.length);
+        const unsyncedOrders = await offlineStorage.getUnsyncedOrders();
+        const allLocalOrders = [...localOrders];
         
-        order = localOrders.find(o => {
+        // إضافة الطلبات غير المتزامنة إذا لم تكن موجودة
+        for (const unsyncedOrder of unsyncedOrders) {
+          if (!allLocalOrders.find(o => o.id === unsyncedOrder.id || o.offline_id === unsyncedOrder.offline_id)) {
+            allLocalOrders.push(unsyncedOrder);
+          }
+        }
+        
+        console.log('📦 عدد الطلبات المحلية:', allLocalOrders.length);
+        
+        order = allLocalOrders.find(o => {
+          const orderIdStr = String(orderId);
           const matchId = o.id === orderId || 
             o.offline_id === orderId ||
-            String(o.id) === String(orderId) ||
-            String(o.offline_id) === String(orderId) ||
-            // مقارنة كـ string
-            o.id?.toString() === orderId?.toString() ||
-            o.offline_id?.toString() === orderId?.toString();
+            String(o.id) === orderIdStr ||
+            String(o.offline_id) === orderIdStr ||
+            o.id?.toString() === orderIdStr ||
+            o.offline_id?.toString() === orderIdStr;
           
           if (matchId) {
             console.log('✅ تم العثور على الطلب:', o);
