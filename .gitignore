@@ -194,3 +194,7 @@ desktop-app/node_modules/electron/dist/electron
 *.env
 *.env.*
 frontend/node_modules/.cache/default-development/3.pack
+-e 
+# Environment files
+*.env
+*.env.*
