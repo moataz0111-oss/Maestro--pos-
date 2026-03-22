@@ -75,7 +75,7 @@ const setAuthChecked = () => sessionStorage.setItem('auth_checked', 'true');
 // Protected Route Component
 const ProtectedRoute = ({ children }) => {
   const { isAuthenticated, loading, user } = useAuth();
-  const [showLoading, setShowLoading] = useState(!isAuthChecked());
+  const [showLoading, setShowLoading] = useState(false);
   
   // تحميل جميع الصفحات مسبقاً للعمل Offline
   useEffect(() => {
@@ -95,14 +95,16 @@ const ProtectedRoute = ({ children }) => {
     }
     // Show loading only for initial check, with a timeout
     if (loading && !isAuthChecked()) {
+      setShowLoading(true);
       const timer = setTimeout(() => {
         setShowLoading(false);
-      }, 3000); // Max 3 seconds loading
+      }, 2000); // Max 2 seconds loading
       return () => clearTimeout(timer);
     }
   }, [loading]);
   
-  if (showLoading && loading && !isAuthChecked()) {
+  // فقط نعرض شاشة التحميل إذا كان التحميل الأولي ولم يتم التحقق بعد
+  if (showLoading && loading && !isAuthChecked() && !localStorage.getItem('cached_user')) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="text-center">
@@ -120,7 +122,7 @@ const ProtectedRoute = ({ children }) => {
   }
   
   // If we have a token but not authenticated yet, show nothing (prevents flash)
-  if (!isAuthenticated && hasToken) {
+  if (!isAuthenticated && hasToken && !localStorage.getItem('cached_user')) {
     return null;
   }
   

@@ -42,9 +42,25 @@ const hashPassword = async (password) => {
 };
 
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null);
+  const [user, setUser] = useState(() => {
+    // محاولة استعادة المستخدم من التخزين المحلي فوراً
+    const cachedUser = localStorage.getItem('cached_user');
+    if (cachedUser) {
+      try {
+        return JSON.parse(cachedUser);
+      } catch (e) {
+        return null;
+      }
+    }
+    return null;
+  });
   const [token, setToken] = useState(localStorage.getItem('token'));
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => {
+    // إذا كان هناك مستخدم مخزن، لا نعرض شاشة التحميل
+    const cachedUser = localStorage.getItem('cached_user');
+    const hasToken = localStorage.getItem('token');
+    return hasToken && !cachedUser;
+  });
   const [currentShift, setCurrentShift] = useState(null);
   const [error, setError] = useState(null);
   const [isOfflineLogin, setIsOfflineLogin] = useState(false);
@@ -52,27 +68,25 @@ export const AuthProvider = ({ children }) => {
 
   // تهيئة المصادقة مرة واحدة فقط عند التحميل الأولي
   useEffect(() => {
+    // إذا كان هناك مستخدم بالفعل، لا نحتاج للتحقق
+    if (user && token) {
+      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+      setLoading(false);
+      setUserFetched(true);
+      sessionStorage.setItem('user_verified', 'true');
+      return;
+    }
+    
     // إذا تم التحقق من المستخدم بالفعل في هذه الجلسة، لا نعيد التحقق
     const alreadyVerified = sessionStorage.getItem('user_verified') === 'true';
     
     if (token && !userFetched && !alreadyVerified) {
       axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
       fetchUser();
-    } else if (token && alreadyVerified && !user) {
-      // إذا تم التحقق سابقاً ولكن المستخدم غير موجود، استعد من التخزين المحلي
-      const cachedUser = localStorage.getItem('cached_user');
-      if (cachedUser) {
-        try {
-          const userData = JSON.parse(cachedUser);
-          setUser(userData);
-          setUserFetched(true);
-          axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-        } catch (e) {
-          console.error('Failed to parse cached user:', e);
-        }
-      }
-      setLoading(false);
     } else if (!token) {
+      setLoading(false);
+    } else {
+      // token موجود والتحقق تم - تأكد أن loading = false
       setLoading(false);
     }
   }, []);
