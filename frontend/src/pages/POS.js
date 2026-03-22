@@ -590,6 +590,29 @@ export default function POS() {
         });
         
         console.log('📦 Pending local orders:', pendingLocal.length);
+        
+        // تحديث حالة الطاولات المشغولة
+        const occupiedTableIds = pendingLocal
+          .filter(o => o.table_id && ['pending', 'preparing', 'ready'].includes(o.status))
+          .map(o => String(o.table_id));
+        
+        console.log('🔴 Occupied table IDs (offline):', occupiedTableIds);
+        
+        if (occupiedTableIds.length > 0) {
+          setTables(prevTables => prevTables.map(table => {
+            if (occupiedTableIds.includes(String(table.id))) {
+              const order = pendingLocal.find(o => String(o.table_id) === String(table.id) && ['pending', 'preparing', 'ready'].includes(o.status));
+              console.log('🔴 Table', table.number || table.id, 'is occupied by order:', order?.id || order?.offline_id);
+              return { ...table, status: 'occupied', current_order_id: order?.id || order?.offline_id };
+            }
+            // إذا كانت الطاولة مشغولة سابقاً ولا يوجد عليها طلب الآن
+            if (table.status === 'occupied' && !occupiedTableIds.includes(String(table.id))) {
+              return { ...table, status: 'available', current_order_id: null };
+            }
+            return table;
+          }));
+        }
+        
         setPendingOrders(pendingLocal);
         return;
       }
@@ -694,6 +717,28 @@ export default function POS() {
       
       // ترتيب حسب تاريخ الإنشاء (الأحدث أولاً)
       allOrders.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+      
+      // تحديث حالة الطاولات المشغولة
+      const occupiedTableIds = allOrders
+        .filter(o => o.table_id && ['pending', 'preparing', 'ready'].includes(o.status))
+        .map(o => String(o.table_id));
+      
+      if (occupiedTableIds.length > 0) {
+        setTables(prevTables => prevTables.map(table => {
+          if (occupiedTableIds.includes(String(table.id))) {
+            const order = allOrders.find(o => String(o.table_id) === String(table.id) && ['pending', 'preparing', 'ready'].includes(o.status));
+            if (table.status !== 'occupied') {
+              console.log('🔴 Updating table', table.number, 'to occupied');
+            }
+            return { ...table, status: 'occupied', current_order_id: order?.id || order?.offline_id };
+          }
+          // إذا كانت الطاولة مشغولة سابقاً ولا يوجد عليها طلب الآن
+          if (table.status === 'occupied' && !occupiedTableIds.includes(String(table.id))) {
+            return { ...table, status: 'available', current_order_id: null };
+          }
+          return table;
+        }));
+      }
       
       // إشعار صوتي للطلبات الجديدة
       if (prevOrdersCount.current > 0 && allOrders.length > prevOrdersCount.current) {
