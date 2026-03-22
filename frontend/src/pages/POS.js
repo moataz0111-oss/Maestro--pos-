@@ -413,7 +413,29 @@ export default function POS() {
       // جلب الطاولات حسب الفرع المحدد للعرض
       const tablesParams = activeBranchId ? { branch_id: activeBranchId } : {};
       const tablesRes = await axios.get(`${API}/tables`, { params: tablesParams });
-      setTables(tablesRes.data);
+      
+      // جلب الطلبات المعلقة لتحديث حالة الطاولات
+      const [pendingOrdersRes] = await Promise.all([
+        axios.get(`${API}/orders`, { params: { ...tablesParams, status: 'pending,preparing,ready' } })
+      ]);
+      
+      // تحديث حالة الطاولات بناءً على الطلبات
+      const occupiedTableIds = pendingOrdersRes.data
+        .filter(o => o.table_id && ['pending', 'preparing', 'ready'].includes(o.status))
+        .map(o => String(o.table_id));
+      
+      console.log('🔴 Occupied table IDs from API:', occupiedTableIds);
+      
+      const tablesWithStatus = tablesRes.data.map(table => {
+        if (occupiedTableIds.includes(String(table.id))) {
+          const order = pendingOrdersRes.data.find(o => String(o.table_id) === String(table.id));
+          console.log('🔴 Table', table.number, 'is occupied by order #', order?.order_number);
+          return { ...table, status: 'occupied', current_order_id: order?.id };
+        }
+        return table;
+      });
+      
+      setTables(tablesWithStatus);
       
       // حفظ جميع الطاولات محلياً (للعمل Offline)
       try {
