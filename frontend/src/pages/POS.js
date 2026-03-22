@@ -416,16 +416,23 @@ export default function POS() {
         setCurrentShift(shiftRes.data);
       }
 
-      // جلب الطاولات حسب الفرع المحدد
+      // جلب الطاولات حسب الفرع المحدد للعرض
       const tablesParams = activeBranchId ? { branch_id: activeBranchId } : {};
       const tablesRes = await axios.get(`${API}/tables`, { params: tablesParams });
       setTables(tablesRes.data);
       
-      // حفظ الطاولات محلياً
+      // حفظ جميع الطاولات محلياً (للعمل Offline)
       try {
-        await db.addItems(STORES.TABLES, tablesRes.data);
+        // جلب جميع الطاولات للتخزين المحلي
+        const allTablesRes = await axios.get(`${API}/tables`);
+        await db.addItems(STORES.TABLES, allTablesRes.data);
+        console.log('✅ تم حفظ', allTablesRes.data.length, 'طاولة محلياً');
       } catch (cacheError) {
         console.log('Could not cache tables:', cacheError);
+        // حاول حفظ الطاولات الحالية على الأقل
+        try {
+          await db.addItems(STORES.TABLES, tablesRes.data);
+        } catch (e) {}
       }
 
       // جلب السائقين حسب الفرع المحدد
@@ -442,18 +449,28 @@ export default function POS() {
     } catch (error) {
       console.error('Failed to fetch data:', error);
       
-      // إذا فشل الاتصال، حاول جلب من IndexedDB
-      if (!error.response) {
+      // إذا فشل الاتصال (أي نوع من أخطاء الشبكة)، حاول جلب من IndexedDB
+      const isNetworkError = !error.response || error.code === 'ERR_NETWORK' || error.message?.includes('Network Error');
+      
+      if (isNetworkError) {
+        console.log('🔄 Network error detected, loading from IndexedDB...');
         try {
           // جلب الفرع المحدد
           const savedBranchId = localStorage.getItem('selectedBranchId');
           const effectiveBranchId = user?.branch_id || savedBranchId;
+          console.log('📍 Effective branch ID:', effectiveBranchId);
           
           const [localCategories, localProducts, localTables] = await Promise.all([
             db.getAllItems(STORES.CATEGORIES),
             db.getAllItems(STORES.PRODUCTS),
             db.getAllItems(STORES.TABLES)
           ]);
+          
+          console.log('📦 Local data:', {
+            categories: localCategories.length,
+            products: localProducts.length,
+            tables: localTables.length
+          });
           
           // الفئات
           if (localCategories.length > 0) {
@@ -473,12 +490,18 @@ export default function POS() {
           if (localTables.length > 0) {
             let filteredTables = localTables;
             
+            console.log('🔍 Filtering tables for branch:', effectiveBranchId);
+            console.log('🔍 Sample table:', localTables[0]);
+            
             if (effectiveBranchId && effectiveBranchId !== 'all') {
               filteredTables = localTables.filter(t => {
-                return t.branch_id === effectiveBranchId || 
+                const match = t.branch_id === effectiveBranchId || 
                   t.branch === effectiveBranchId ||
-                  String(t.branch_id) === String(effectiveBranchId);
+                  String(t.branch_id) === String(effectiveBranchId) ||
+                  t.branch_id?.toString() === effectiveBranchId?.toString();
+                return match;
               });
+              console.log('🔍 Filtered to:', filteredTables.length, 'tables');
             }
             
             // تحديث حالة الطاولات المشغولة
@@ -505,6 +528,8 @@ export default function POS() {
             });
             
             setTables(filteredTables);
+          } else {
+            console.log('⚠️ No tables in IndexedDB');
           }
           
           // الطلبات المعلقة المحلية
@@ -514,7 +539,11 @@ export default function POS() {
           );
           setPendingOrders(pendingLocal);
           
-          toast.warning(t('تم تحميل البيانات المحلية - لا يوجد اتصال'));
+          if (localCategories.length > 0 || localProducts.length > 0) {
+            toast.warning(t('تم تحميل البيانات المحلية - لا يوجد اتصال'));
+          } else {
+            toast.error(t('لا توجد بيانات محلية - يرجى الاتصال بالإنترنت'));
+          }
         } catch (offlineError) {
           console.error('Failed to load offline data:', offlineError);
           toast.error(t('فشل في تحميل البيانات'));
