@@ -438,13 +438,27 @@ export default function POS() {
       if (isNetworkError) {
         console.log('🔄 Network error, loading from IndexedDB...');
         try {
-          await loadFromIndexedDB();
+          const loaded = await loadFromIndexedDB();
+          if (!loaded) {
+            toast.error(t('لا توجد بيانات محلية - يرجى الاتصال بالإنترنت'));
+          }
         } catch (offlineError) {
           console.error('Failed to load offline data:', offlineError);
-          toast.error(t('فشل في تحميل البيانات'));
+          toast.error(t('فشل في تحميل البيانات المحلية'));
         }
       } else {
-        toast.error(t('فشل في تحميل البيانات'));
+        // خطأ من الخادم، حاول جلب من IndexedDB كـ fallback
+        console.log('🔄 Server error, trying IndexedDB fallback...');
+        try {
+          const loaded = await loadFromIndexedDB(false);
+          if (loaded) {
+            toast.warning(t('تم تحميل البيانات المحلية'));
+          } else {
+            toast.error(t('فشل في تحميل البيانات'));
+          }
+        } catch (offlineError) {
+          toast.error(t('فشل في تحميل البيانات'));
+        }
       }
     } finally {
       setLoading(false);
