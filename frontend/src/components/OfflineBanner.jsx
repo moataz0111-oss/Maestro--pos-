@@ -6,7 +6,7 @@
 import React from 'react';
 import { useOffline } from '../context/OfflineContext';
 import { useTranslation } from '../hooks/useTranslation';
-import { Wifi, WifiOff, Loader2, Cloud } from 'lucide-react';
+import { Wifi, WifiOff, Loader2, Cloud, CloudOff } from 'lucide-react';
 
 const OfflineBanner = () => {
   const { t } = useTranslation();
@@ -26,15 +26,21 @@ const OfflineBanner = () => {
     return (
       <div className="bg-amber-500 text-white px-4 py-2 flex items-center justify-between text-sm sticky top-0 z-50 shadow-lg">
         <div className="flex items-center gap-2">
-          <WifiOff className="h-4 w-4" />
+          <WifiOff className="h-4 w-4 animate-pulse" />
           <span className="font-medium">
             {t('وضع Offline')} - {t('لا يوجد اتصال بالإنترنت')}
           </span>
         </div>
         <div className="flex items-center gap-2">
-          <Cloud className="h-4 w-4" />
+          <CloudOff className="h-4 w-4" />
           <span className="text-sm">
-            {t('البيانات محفوظة محلياً')}
+            {syncStatus.pendingOrders > 0 ? (
+              <span className="bg-white/20 px-2 py-0.5 rounded">
+                {syncStatus.pendingOrders} {t('طلب في انتظار المزامنة')}
+              </span>
+            ) : (
+              t('البيانات محفوظة محلياً')
+            )}
           </span>
         </div>
       </div>
@@ -53,11 +59,11 @@ const OfflineBanner = () => {
         </div>
         <div className="flex items-center gap-4">
           {syncStatus.syncProgress ? (
-            <span>
+            <span className="bg-white/20 px-2 py-0.5 rounded">
               {t('جاري رفع')} {syncStatus.syncProgress.current}/{syncStatus.syncProgress.total}
             </span>
           ) : (
-            <span>
+            <span className="bg-white/20 px-2 py-0.5 rounded">
               {syncStatus.pendingOrders} {t('طلب جاهز للرفع')}
             </span>
           )}
@@ -78,7 +84,7 @@ const OfflineBanner = () => {
           </span>
         </div>
         <div className="flex items-center gap-4">
-          <span>
+          <span className="bg-white/20 px-2 py-0.5 rounded">
             {syncStatus.pendingOrders} {t('طلب جاهز للرفع')}
           </span>
           <Loader2 className="h-4 w-4 animate-spin" />

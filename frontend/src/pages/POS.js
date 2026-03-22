@@ -1059,9 +1059,14 @@ export default function POS() {
     
     // دالة مساعدة لحفظ الطلب محلياً
     const saveOrderOffline = async () => {
+      // جلب رقم الطاولة من قائمة الطاولات
+      const selectedTableObj = tables.find(t => t.id === selectedTable);
+      const tableNumber = selectedTableObj?.number;
+      
       const offlineOrder = {
         order_type: orderType,
         table_id: orderType === 'dine_in' ? selectedTable : null,
+        table_number: orderType === 'dine_in' ? tableNumber : null,
         customer_name: customerName,
         customer_phone: customerPhone,
         delivery_address: orderType === 'delivery' ? deliveryAddress : null,
@@ -3092,10 +3097,18 @@ function OrderCard({ order, onSelect }) {
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <span className="font-bold text-foreground">#{order.order_number}</span>
+                <span className="font-bold text-foreground">
+                  {order.order_number ? `#${order.order_number}` : `#${order.offline_id || order.id}`}
+                </span>
                 <span className="text-xs px-2 py-0.5 bg-amber-500/10 text-amber-500 rounded">
                   {getOrderTypeLabel(order.order_type)}
                 </span>
+                {/* إظهار رقم الطاولة للطلبات الداخلية */}
+                {order.order_type === 'dine_in' && (order.table_number || order.table_id) && (
+                  <span className="text-xs px-2 py-0.5 bg-blue-500/10 text-blue-500 rounded font-medium">
+                    {t('طاولة')} #{order.table_number || order.table_id}
+                  </span>
+                )}
               </div>
               {order.customer_name && (
                 <p className="text-sm text-muted-foreground">{order.customer_name}</p>
@@ -3104,6 +3117,13 @@ function OrderCard({ order, onSelect }) {
                 <p className="text-xs text-blue-500 flex items-center gap-1">
                   <Bell className="h-3 w-3" />
                   {t('جهاز')} #{order.buzzer_number}
+                </p>
+              )}
+              {/* إظهار حالة المزامنة للطلبات المحلية */}
+              {!order.is_synced && order.offline_id && (
+                <p className="text-xs text-amber-500 flex items-center gap-1 mt-1">
+                  <Clock className="h-3 w-3" />
+                  {t('محفوظ محلياً - في انتظار المزامنة')}
                 </p>
               )}
             </div>

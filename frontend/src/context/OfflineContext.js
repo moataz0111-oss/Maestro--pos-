@@ -60,7 +60,9 @@ export const OfflineProvider = ({ children }) => {
         ...prev,
         pendingOrders: status.pendingOrders,
         pendingItems: status.pendingItems,
-        lastSync: status.lastSync
+        lastSync: status.lastSync,
+        // إذا وجدت طلبات جديدة، أعد تعيين حالة syncCompleted
+        syncCompleted: status.pendingOrders === 0 ? prev.syncCompleted : false
       }));
       return status;
     } catch (error) {
