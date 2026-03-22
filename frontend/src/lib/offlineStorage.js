@@ -389,17 +389,39 @@ export const removeSyncQueueItem = async (id) => {
  */
 export const markOrderAsSynced = async (offlineId, serverId, serverOrderNumber) => {
   try {
+    console.log('🔄 تعليم الطلب كمتزامن:', offlineId, '->', serverId);
     const orders = await db.getAllItems(STORES.ORDERS);
     const order = orders.find(o => o.offline_id === offlineId || o.id === offlineId);
     
     if (order) {
-      await db.updateItem(STORES.ORDERS, {
-        ...order,
-        id: serverId,
-        order_number: serverOrderNumber,
-        is_synced: true,
-        synced_at: new Date().toISOString()
-      });
+      // حذف الطلب المحلي القديم بدلاً من تحديثه
+      // لأن الطلب أصبح موجوداً في الخادم
+      try {
+        await db.deleteItem(STORES.ORDERS, order.id);
+        console.log('✅ تم حذف الطلب المحلي:', order.id || order.offline_id);
+      } catch (deleteError) {
+        // إذا فشل الحذف بالـ id، جرب بالـ offline_id
+        try {
+          await db.deleteItem(STORES.ORDERS, order.offline_id);
+          console.log('✅ تم حذف الطلب المحلي بـ offline_id:', order.offline_id);
+        } catch (e) {
+          console.log('⚠️ فشل حذف الطلب المحلي:', e);
+        }
+      }
+      
+      // إزالة من طابور المزامنة أيضاً
+      try {
+        const syncQueue = await db.getAllItems(STORES.SYNC_QUEUE);
+        const relatedItems = syncQueue.filter(item => 
+          item.data?.offline_id === offlineId || 
+          item.data?.id === offlineId
+        );
+        for (const item of relatedItems) {
+          await db.deleteItem(STORES.SYNC_QUEUE, item.id);
+        }
+      } catch (queueError) {
+        console.log('⚠️ فشل تنظيف طابور المزامنة:', queueError);
+      }
     }
   } catch (error) {
     console.error('❌ خطأ في تحديث حالة المزامنة:', error);

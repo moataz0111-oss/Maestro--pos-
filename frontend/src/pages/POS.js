@@ -650,27 +650,43 @@ export default function POS() {
       try {
         const localOrders = await offlineStorage.getUnsyncedOrders();
         
-        // جلب جميع offline_ids من الطلبات المزامنة
+        // جلب جميع offline_ids من الطلبات المزامنة (من API)
         const syncedOfflineIds = new Set();
+        const apiOrderIds = new Set();
+        
         for (const [key, order] of ordersMap) {
+          apiOrderIds.add(order.id);
           if (order.offline_id) {
             syncedOfflineIds.add(order.offline_id);
           }
         }
         
+        console.log('🔍 API orders count:', ordersMap.size);
+        console.log('🔍 Local unsynced orders:', localOrders.length);
+        console.log('🔍 Synced offline_ids:', Array.from(syncedOfflineIds));
+        
         for (const order of localOrders) {
-          // تجاهل الطلبات التي تم مزامنتها بالفعل (لها offline_id في API response)
-          const alreadySynced = (order.offline_id && syncedOfflineIds.has(order.offline_id)) ||
-                               ordersMap.has(order.id) || 
-                               ordersMap.has(order.offline_id);
+          // تجاهل الطلبات التي تم مزامنتها بالفعل
+          // التحقق من offline_id أو id
+          const alreadySynced = 
+            (order.offline_id && syncedOfflineIds.has(order.offline_id)) ||
+            (order.id && apiOrderIds.has(order.id)) ||
+            ordersMap.has(order.id) || 
+            ordersMap.has(order.offline_id);
           
-          if (!alreadySynced && order.status !== 'cancelled') {
+          if (alreadySynced) {
+            console.log('⏭️ تخطي طلب مزامن:', order.offline_id || order.id);
+            continue;
+          }
+          
+          if (order.status !== 'cancelled') {
             // فلترة حسب الفرع - مقارنة كـ string
             const branchMatch = !activeBranchId || 
                                activeBranchId === 'all' || 
                                String(order.branch_id) === String(activeBranchId);
             if (branchMatch) {
-              ordersMap.set(order.id || order.offline_id, order);
+              console.log('➕ إضافة طلب محلي:', order.offline_id || order.id);
+              ordersMap.set(order.offline_id || order.id, order);
             }
           }
         }
