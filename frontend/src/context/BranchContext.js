@@ -150,6 +150,16 @@ export const BranchProvider = ({ children }) => {
     return selectedBranchId;
   };
 
+  // تحديث فوري لعدد الطلبات المعلقة لفرع معين
+  const updatePendingCount = (branchId, delta) => {
+    setPendingOrdersCounts(prev => {
+      const newCounts = { ...prev };
+      const currentCount = newCounts[branchId] || 0;
+      newCounts[branchId] = Math.max(0, currentCount + delta);
+      return newCounts;
+    });
+  };
+
   return (
     <BranchContext.Provider value={{
       branches,
@@ -161,7 +171,8 @@ export const BranchProvider = ({ children }) => {
       loading,
       refreshBranches: fetchBranches,
       pendingOrdersCounts,
-      refreshPendingCounts: () => fetchPendingOrdersCounts(branches)
+      refreshPendingCounts: () => fetchPendingOrdersCounts(branches),
+      updatePendingCount
     }}>
       {children}
     </BranchContext.Provider>

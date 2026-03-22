@@ -98,7 +98,7 @@ const getErrorMessage = (error, defaultMsg) => {
 
 export default function POS() {
   const { user } = useAuth();
-  const { selectedBranchId, branches, getBranchIdForApi, refreshPendingCounts } = useBranch();
+  const { selectedBranchId, branches, getBranchIdForApi, refreshPendingCounts, updatePendingCount } = useBranch();
   const { isOnline, isOffline, syncStatus, updateSyncStatus } = useOffline();
   const { t, isRTL, lang } = useTranslation();
   const navigate = useNavigate();
@@ -1131,9 +1131,9 @@ export default function POS() {
       // تحديث حالة المزامنة
       await updateSyncStatus();
       
-      // تحديث عداد الطلبات المعلقة على الفرع
-      if (refreshPendingCounts) {
-        refreshPendingCounts();
+      // تحديث عداد الطلبات المعلقة على الفرع فوراً
+      if (updatePendingCount && currentBranchId) {
+        updatePendingCount(currentBranchId, 1);
       }
       
       // تحديث الطلبات المعلقة
@@ -1476,9 +1476,9 @@ export default function POS() {
           console.log('📋 الطلبات المعلقة المتبقية:', pendingLocal.length);
           setPendingOrders(pendingLocal);
           
-          // تحديث عداد الطلبات على الفرع
-          if (refreshPendingCounts) {
-            refreshPendingCounts();
+          // تحديث عداد الطلبات على الفرع فوراً (-1)
+          if (updatePendingCount && editingOrder.branch_id) {
+            updatePendingCount(editingOrder.branch_id, -1);
           }
           
           return;
@@ -1497,6 +1497,12 @@ export default function POS() {
         : t('تم إلغاء الطلب')
       );
       clearCart();
+      
+      // تحديث عداد الطلبات على الفرع فوراً (-1)
+      if (updatePendingCount && editingOrder.branch_id) {
+        updatePendingCount(editingOrder.branch_id, -1);
+      }
+      
       await fetchPendingOrders();
       
       // تحديث الطاولات
