@@ -302,12 +302,16 @@ export default function POS() {
           // فلترة الطاولات حسب الفرع المحدد
           if (localTables.length > 0) {
             let filteredTables = localTables;
-            if (activeBranchId) {
-              filteredTables = localTables.filter(t => 
-                t.branch_id === activeBranchId || 
-                t.branch === activeBranchId ||
-                !t.branch_id
-              );
+            console.log('🔍 Offline Mode - Branch filtering:', { activeBranchId, totalTables: localTables.length });
+            
+            if (activeBranchId && activeBranchId !== 'all') {
+              filteredTables = localTables.filter(t => {
+                const tableMatch = t.branch_id === activeBranchId || 
+                  t.branch === activeBranchId ||
+                  String(t.branch_id) === String(activeBranchId);
+                return tableMatch;
+              });
+              console.log('🔍 Filtered tables:', filteredTables.length);
             }
             setTables(filteredTables);
           }
@@ -461,6 +465,17 @@ export default function POS() {
       const activeBranchId = getBranchIdForApi() || user?.branch_id;
       const params = activeBranchId ? { branch_id: activeBranchId } : {};
       
+      // في وضع Offline، جلب الطلبات المحلية فقط
+      if (isOffline) {
+        const localOrders = await offlineStorage.getTodayOrders();
+        const pendingLocal = localOrders.filter(o => 
+          (o.status === 'pending' || o.status === 'preparing' || o.status === 'ready' || !o.is_synced) &&
+          (!activeBranchId || activeBranchId === 'all' || o.branch_id === activeBranchId)
+        );
+        setPendingOrders(pendingLocal);
+        return;
+      }
+      
       // جلب جميع الطلبات غير المكتملة:
       // 1. طلبات بحالة pending أو preparing أو ready
       // 2. طلبات غير مدفوعة (payment_status = pending) لأي نوع
@@ -486,6 +501,21 @@ export default function POS() {
         }
       }
       
+      // إضافة الطلبات المحلية غير المتزامنة
+      try {
+        const localOrders = await offlineStorage.getUnsyncedOrders();
+        for (const order of localOrders) {
+          if (!ordersMap.has(order.id) && order.status !== 'cancelled') {
+            // فلترة حسب الفرع
+            if (!activeBranchId || activeBranchId === 'all' || order.branch_id === activeBranchId) {
+              ordersMap.set(order.id || order.offline_id, order);
+            }
+          }
+        }
+      } catch (localError) {
+        console.log('Could not fetch local orders:', localError);
+      }
+      
       const allOrders = Array.from(ordersMap.values());
       
       // ترتيب حسب تاريخ الإنشاء (الأحدث أولاً)
@@ -501,6 +531,19 @@ export default function POS() {
       setPendingOrders(allOrders);
     } catch (error) {
       console.error('Failed to fetch pending orders:', error);
+      
+      // في حالة فشل الاتصال، جلب الطلبات المحلية
+      try {
+        const localOrders = await offlineStorage.getTodayOrders();
+        const activeBranchId = getBranchIdForApi() || user?.branch_id;
+        const pendingLocal = localOrders.filter(o => 
+          (o.status === 'pending' || o.status === 'preparing' || o.status === 'ready' || !o.is_synced) &&
+          (!activeBranchId || activeBranchId === 'all' || o.branch_id === activeBranchId)
+        );
+        setPendingOrders(pendingLocal);
+      } catch (localError) {
+        console.error('Failed to fetch local orders:', localError);
+      }
     }
   };
 
@@ -971,6 +1014,26 @@ export default function POS() {
       };
 
       const savedOrder = await offlineStorage.saveOfflineOrder(offlineOrder);
+      
+      // تحديث حالة الطاولة محلياً إذا كان الطلب داخلي
+      if (orderType === 'dine_in' && selectedTable) {
+        try {
+          // تحديث الطاولة في IndexedDB
+          await offlineStorage.saveOfflineTableUpdate(selectedTable, {
+            status: 'occupied',
+            current_order_id: savedOrder.id || savedOrder.offline_id
+          });
+          
+          // تحديث الطاولة في الـ state المحلي
+          setTables(prevTables => prevTables.map(t => 
+            t.id === selectedTable 
+              ? { ...t, status: 'occupied', current_order_id: savedOrder.id || savedOrder.offline_id }
+              : t
+          ));
+        } catch (tableError) {
+          console.error('Failed to update table status locally:', tableError);
+        }
+      }
       
       playSuccess();
       toast.success(
