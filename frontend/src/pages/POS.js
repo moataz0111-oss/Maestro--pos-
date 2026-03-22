@@ -450,17 +450,11 @@ export default function POS() {
           toast.error(t('فشل في تحميل البيانات المحلية'));
         }
       } else {
-        // خطأ من الخادم، حاول جلب من IndexedDB كـ fallback
-        console.log('🔄 Server error, trying IndexedDB fallback...');
-        try {
-          const loaded = await loadFromIndexedDB(false);
-          if (loaded) {
-            toast.warning(t('تم تحميل البيانات المحلية'));
-          } else {
-            toast.error(t('فشل في تحميل البيانات'));
-          }
-        } catch (offlineError) {
-          toast.error(t('فشل في تحميل البيانات'));
+        // خطأ من الخادم - لا نعرض رسالة إذا كان الخطأ بسيطاً
+        console.log('❌ Server error:', error.response?.status, error.message);
+        // فقط نعرض رسالة خطأ إذا كان الخطأ جدياً (500+)
+        if (error.response?.status >= 500) {
+          toast.error(t('خطأ في الخادم - يرجى المحاولة لاحقاً'));
         }
       }
     } finally {

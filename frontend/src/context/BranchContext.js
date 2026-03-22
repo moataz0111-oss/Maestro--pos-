@@ -39,64 +39,44 @@ export const BranchProvider = ({ children }) => {
     try {
       const counts = {};
       
-      // دائماً احسب من الطلبات المحلية أولاً
-      let localCounts = {};
-      try {
-        const offlineStorage = await import('../lib/offlineStorage');
-        const localOrders = await offlineStorage.getTodayOrders();
-        
-        console.log('📊 Local orders for counting:', localOrders.length);
-        
-        branchesList.forEach(branch => {
-          const branchOrders = localOrders.filter(o => {
-            const branchMatch = String(o.branch_id) === String(branch.id);
-            const statusMatch = ['pending', 'preparing', 'ready'].includes(o.status);
-            return branchMatch && statusMatch;
-          });
-          localCounts[branch.id] = branchOrders.length;
-        });
-        
-        console.log('📊 Local pending counts:', localCounts);
-      } catch (localError) {
-        console.error('Failed to get local orders:', localError);
-      }
-      
-      // إذا لم يكن هناك اتصال، استخدم الأعداد المحلية فقط
+      // إذا لم يكن هناك اتصال، احسب من الطلبات المحلية
       if (!navigator.onLine) {
-        setPendingOrdersCounts(localCounts);
+        try {
+          const offlineStorage = await import('../lib/offlineStorage');
+          const localOrders = await offlineStorage.getTodayOrders();
+          
+          branchesList.forEach(branch => {
+            const branchOrders = localOrders.filter(o => {
+              const branchMatch = String(o.branch_id) === String(branch.id);
+              const statusMatch = ['pending', 'preparing', 'ready'].includes(o.status);
+              return branchMatch && statusMatch;
+            });
+            counts[branch.id] = branchOrders.length;
+          });
+          
+          setPendingOrdersCounts(counts);
+        } catch (localError) {
+          console.error('Failed to get local orders:', localError);
+        }
         return;
       }
       
-      // جلب عدد الطلبات المعلقة لكل فرع من الخادم
-      try {
-        await Promise.all(branchesList.map(async (branch) => {
-          try {
-            const res = await axios.get(`${API}/orders`, {
-              params: { 
-                branch_id: branch.id, 
-                status: 'pending,preparing,ready' 
-              }
-            });
-            counts[branch.id] = res.data?.length || 0;
-          } catch (e) {
-            // في حالة فشل الـ API، استخدم العدد المحلي
-            counts[branch.id] = localCounts[branch.id] || 0;
-          }
-        }));
-        
-        // دمج مع الطلبات المحلية غير المتزامنة
-        branchesList.forEach(branch => {
-          const localCount = localCounts[branch.id] || 0;
-          const serverCount = counts[branch.id] || 0;
-          // اختر الأكبر (لأن الطلبات المحلية قد لا تكون متزامنة بعد)
-          counts[branch.id] = Math.max(localCount, serverCount);
-        });
-        
-        setPendingOrdersCounts(counts);
-      } catch (error) {
-        // في حالة فشل الاتصال، استخدم الأعداد المحلية
-        setPendingOrdersCounts(localCounts);
-      }
+      // في وضع Online، جلب من الخادم مباشرة
+      await Promise.all(branchesList.map(async (branch) => {
+        try {
+          const res = await axios.get(`${API}/orders`, {
+            params: { 
+              branch_id: branch.id, 
+              status: 'pending,preparing,ready' 
+            }
+          });
+          counts[branch.id] = res.data?.length || 0;
+        } catch (e) {
+          counts[branch.id] = 0;
+        }
+      }));
+      
+      setPendingOrdersCounts(counts);
     } catch (error) {
       console.error('Failed to fetch pending orders counts:', error);
     }
