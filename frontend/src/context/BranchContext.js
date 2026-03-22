@@ -47,6 +47,14 @@ export const BranchProvider = ({ children }) => {
     }
   }, [isAuthenticated, user]);
 
+  // حساب الطلبات المعلقة عند تحميل الفروع من localStorage (للعمل offline)
+  useEffect(() => {
+    if (branches.length > 0 && Object.keys(pendingOrdersCounts).length === 0) {
+      // حساب الطلبات المعلقة فوراً
+      fetchPendingOrdersCounts(branches);
+    }
+  }, [branches]);
+
   // جلب عدد الطلبات المعلقة لكل فرع
   const fetchPendingOrdersCounts = useCallback(async (branchesList) => {
     if (!branchesList || branchesList.length === 0) return;
