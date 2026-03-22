@@ -861,13 +861,23 @@ export default function POS() {
       setOrderNotes(order.notes || '');
       
       // تحويل عناصر الطلب إلى سلة
-      const cartItems = (order.items || []).map(item => ({
-        product_id: item.product_id,
-        product_name: item.product_name || item.name || t('منتج غير معروف'),
-        price: item.price,
-        quantity: item.quantity,
-        notes: item.notes || ''
-      }));
+      const cartItems = (order.items || []).map(item => {
+        // محاولة إيجاد اسم المنتج من قائمة المنتجات
+        let productName = item.product_name || item.name;
+        
+        if (!productName && item.product_id && products.length > 0) {
+          const product = products.find(p => p.id === item.product_id);
+          productName = product?.name || product?.product_name;
+        }
+        
+        return {
+          product_id: item.product_id,
+          name: productName || t('منتج غير معروف'),
+          price: item.price,
+          quantity: item.quantity,
+          notes: item.notes || ''
+        };
+      });
       setCart(cartItems);
       
       const orderNumber = order.order_number || order.offline_id || orderId;
