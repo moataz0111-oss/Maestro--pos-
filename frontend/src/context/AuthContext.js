@@ -64,6 +64,7 @@ export const AuthProvider = ({ children }) => {
       const response = await axios.get(`${API}/auth/me`);
       setUser(response.data);
       setError(null);
+      setUserFetched(true);
       
       // فتح وردية تلقائياً للكاشير أو المدير
       if (['cashier', 'manager', 'admin'].includes(response.data.role)) {
@@ -81,12 +82,16 @@ export const AuthProvider = ({ children }) => {
         } else {
           // إذا كان المستخدم موجود بالفعل، لا تسجل خروجه
           console.warn('Token might be expired, but user is active - not logging out');
+          setUserFetched(true); // منع إعادة المحاولة
         }
       } else if (error.response?.status === 403) {
         // 403 يعني صلاحيات - لا تسجل خروج
         console.warn('Permission denied, but not logging out');
+        setUserFetched(true);
       } else {
+        // خطأ شبكة - لا تسجل خروج ولكن أشر للخطأ
         setError('فشل في الاتصال بالخادم');
+        setUserFetched(true); // منع إعادة المحاولة المتكررة
       }
     } finally {
       setLoading(false);
