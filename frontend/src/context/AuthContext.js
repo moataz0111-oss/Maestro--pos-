@@ -48,15 +48,16 @@ export const AuthProvider = ({ children }) => {
   const [currentShift, setCurrentShift] = useState(null);
   const [error, setError] = useState(null);
   const [isOfflineLogin, setIsOfflineLogin] = useState(false);
+  const [userFetched, setUserFetched] = useState(false);
 
   useEffect(() => {
-    if (token) {
+    if (token && !userFetched) {
       axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
       fetchUser();
-    } else {
+    } else if (!token) {
       setLoading(false);
     }
-  }, [token]);
+  }, [token, userFetched]);
 
   const fetchUser = async () => {
     try {
