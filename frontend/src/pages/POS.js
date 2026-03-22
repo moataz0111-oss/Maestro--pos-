@@ -129,8 +129,13 @@ export default function POS() {
   const [deliveryApps, setDeliveryApps] = useState([]);
   const [drivers, setDrivers] = useState([]);
   const [selectedDriver, setSelectedDriver] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [isInitialLoad, setIsInitialLoad] = useState(true); // للتحميل الأولي فقط
+  // لا نعرض شاشة التحميل إذا كانت البيانات محملة سابقاً
+  const [loading, setLoading] = useState(() => {
+    return sessionStorage.getItem('pos_data_loaded') !== 'true';
+  });
+  const [isInitialLoad, setIsInitialLoad] = useState(() => {
+    return sessionStorage.getItem('pos_data_loaded') !== 'true';
+  });
   const [dataLoaded, setDataLoaded] = useState(() => {
     // تحقق إذا تم تحميل البيانات من قبل في هذه الجلسة
     return sessionStorage.getItem('pos_data_loaded') === 'true';

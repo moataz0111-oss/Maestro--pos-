@@ -62,9 +62,8 @@ export const BranchProvider = ({ children }) => {
     try {
       // لا نعرض شاشة التحميل إذا كانت الفروع محملة مسبقاً
       const isFirstLoad = sessionStorage.getItem('branches_loaded') !== 'true';
-      if (isFirstLoad) {
-        setLoading(true);
-      }
+      // لا نغير حالة التحميل أبداً بعد التحميل الأول
+      
       const res = await axios.get(`${API}/branches`);
       const branchesData = res.data || [];
       setBranches(branchesData);

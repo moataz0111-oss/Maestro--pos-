@@ -1,6 +1,6 @@
 {
   "name": "maestro-pos-desktop",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "description": "برنامج نقطة البيع - يعمل مع وبدون إنترنت",
   "main": "main.js",
   "scripts": {
