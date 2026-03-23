@@ -29,11 +29,14 @@ def seed_super_admin():
     # حذف المستخدم القديم إذا وجد
     db.users.delete_one({"email": "owner@maestroegp.com"})
     
+    # إنشاء hash واحد فقط
+    password_hashed = hash_password("owner123")
+    
     super_admin = {
         "id": generate_id(),
         "email": "owner@maestroegp.com",
-        "password_hash": hash_password("owner123"),
-        "password": hash_password("owner123"),
+        "password_hash": password_hashed,
+        "password": password_hashed,
         "name": "مالك النظام",
         "full_name": "مالك النظام",
         "role": "super_admin",
@@ -91,11 +94,14 @@ def seed_hani_tenant():
     # حذف المستخدم القديم إذا وجد
     db.users.delete_one({"email": "hanialdujaili@gmail.com"})
     
+    # إنشاء hash واحد فقط
+    password_hashed = hash_password("Hani@2024")
+    
     admin_user = {
         "id": generate_id(),
         "email": "hanialdujaili@gmail.com",
-        "password_hash": hash_password("Hani@2024"),
-        "password": hash_password("Hani@2024"),
+        "password_hash": password_hashed,
+        "password": password_hashed,
         "name": "هاني الدجيلي",
         "full_name": "هاني الدجيلي",
         "role": "admin",
@@ -168,11 +174,14 @@ def seed_demo_tenant():
     # حذف المستخدم القديم إذا وجد
     db.users.delete_one({"email": "demo@maestroegp.com"})
     
+    # إنشاء hash واحد فقط
+    password_hashed = hash_password("Demo@2024")
+    
     admin_user = {
         "id": generate_id(),
         "email": "demo@maestroegp.com",
-        "password_hash": hash_password("Demo@2024"),
-        "password": hash_password("Demo@2024"),
+        "password_hash": password_hashed,
+        "password": password_hashed,
         "name": "Demo User",
         "full_name": "Demo User",
         "role": "admin",
