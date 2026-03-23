@@ -7950,7 +7950,7 @@ async def super_admin_login(request: SuperAdminLoginRequest):
         raise HTTPException(status_code=401, detail="المستخدم غير موجود")
     
     # التحقق من المفتاح السري (من قاعدة البيانات أو القيمة الافتراضية)
-    stored_secret = user.get("secret_key") or SUPER_ADMIN_SECRET
+    stored_secret = user.get("secret_key") or user.get("super_admin_secret") or SUPER_ADMIN_SECRET
     if request.secret_key != stored_secret:
         raise HTTPException(status_code=403, detail="المفتاح السري غير صحيح")
     
