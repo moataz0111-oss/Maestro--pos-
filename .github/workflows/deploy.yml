@@ -68,17 +68,6 @@ jobs:
           # تشغيل سكريبت إدخال البيانات
           echo "📦 Running seed data script..."
           docker exec maestro-backend pip install bcrypt pymongo 2>/dev/null || true
-          
-          # حذف المستخدمين القدامى وإعادة إنشائهم
-          docker exec maestro-backend python -c "
-from pymongo import MongoClient
-import os
-client = MongoClient(os.environ.get('MONGO_URL'))
-db = client[os.environ.get('DB_NAME', 'maestro_db')]
-db.users.delete_many({'email': {'\\$in': ['owner@maestroegp.com', 'hanialdujaili@gmail.com', 'demo@maestroegp.com']}})
-print('Old users deleted')
-" || echo "No old users to delete"
-          
           docker exec maestro-backend python /app/seed_data.py || echo "Seed completed"
           
           # إعداد Backup التلقائي

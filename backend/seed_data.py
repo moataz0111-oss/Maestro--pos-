@@ -26,6 +26,9 @@ def generate_id():
 def seed_super_admin():
     """إنشاء حساب Super Admin"""
     
+    # حذف المستخدم القديم إذا وجد
+    db.users.delete_one({"email": "owner@maestroegp.com"})
+    
     super_admin = {
         "id": generate_id(),
         "email": "owner@maestroegp.com",
@@ -39,12 +42,6 @@ def seed_super_admin():
         "created_at": datetime.now(timezone.utc).isoformat(),
         "updated_at": datetime.now(timezone.utc).isoformat()
     }
-    
-    # تحقق من عدم وجود Super Admin مسبقاً
-    existing = db.users.find_one({"email": "owner@maestroegp.com"})
-    if existing:
-        print("✅ Super Admin already exists")
-        return existing["id"]
     
     db.users.insert_one(super_admin)
     print("✅ Super Admin created: owner@maestroegp.com / owner123")
@@ -91,11 +88,8 @@ def seed_hani_tenant():
         db.tenants.insert_one(tenant)
         print("✅ Hani tenant created: Graffiti Burger")
     
-    # إنشاء مستخدم Admin للعميل
-    existing_user = db.users.find_one({"email": "hanialdujaili@gmail.com"})
-    if existing_user:
-        print("✅ Hani user already exists")
-        return tenant_id
+    # حذف المستخدم القديم إذا وجد
+    db.users.delete_one({"email": "hanialdujaili@gmail.com"})
     
     admin_user = {
         "id": generate_id(),
@@ -171,10 +165,8 @@ def seed_demo_tenant():
         db.tenants.insert_one(tenant)
         print("✅ Demo tenant created")
     
-    existing_user = db.users.find_one({"email": "demo@maestroegp.com"})
-    if existing_user:
-        print("✅ Demo user already exists")
-        return tenant_id
+    # حذف المستخدم القديم إذا وجد
+    db.users.delete_one({"email": "demo@maestroegp.com"})
     
     admin_user = {
         "id": generate_id(),
