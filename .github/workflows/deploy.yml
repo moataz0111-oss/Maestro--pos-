@@ -37,12 +37,22 @@ jobs:
           
           # انتظار بدء الخدمات
           echo "⏳ Waiting for services to start..."
-          sleep 30
+          sleep 45
           
-          # تشغيل سكريبت إدخال البيانات الأساسية
+          # انتظار MongoDB
+          echo "⏳ Waiting for MongoDB..."
+          until docker exec maestro-mongodb mongosh --eval "db.adminCommand('ping')" -u maestro_admin -p "Maestro@2024Secure" --authenticationDatabase admin > /dev/null 2>&1; do
+            echo "Waiting for MongoDB..."
+            sleep 5
+          done
+          echo "✅ MongoDB is ready"
+          
+          # تثبيت المتطلبات وتشغيل سكريبت إدخال البيانات الأساسية
           echo "📦 Running seed data script..."
-          docker exec maestro-backend pip install passlib bcrypt 2>/dev/null || true
-          docker exec maestro-backend python /app/seed_data.py || echo "Seed already exists"
+          docker exec maestro-backend pip install passlib bcrypt pymongo 2>/dev/null || true
+          docker exec maestro-backend python /app/seed_data.py
+          
+          echo "✅ Seed data completed"
           
           # تنظيف الـ images القديمة
           docker image prune -f

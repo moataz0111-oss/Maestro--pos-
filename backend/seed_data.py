@@ -7,11 +7,11 @@
 import os
 from datetime import datetime, timezone
 from pymongo import MongoClient
-from passlib.context import CryptContext
+import bcrypt
 import uuid
 
-# إعدادات التشفير
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+def hash_password(password: str) -> str:
+    return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
 
 # الاتصال بقاعدة البيانات
 MONGO_URL = os.environ.get("MONGO_URL", "mongodb://maestro_admin:Maestro@2024Secure@mongodb:27017/maestro_db?authSource=admin")
@@ -19,9 +19,6 @@ DB_NAME = os.environ.get("DB_NAME", "maestro_db")
 
 client = MongoClient(MONGO_URL)
 db = client[DB_NAME]
-
-def hash_password(password: str) -> str:
-    return pwd_context.hash(password)
 
 def generate_id():
     return str(uuid.uuid4())
