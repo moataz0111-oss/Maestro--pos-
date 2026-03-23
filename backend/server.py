@@ -829,7 +829,7 @@ class TenantCreate(BaseModel):
     slug: str  # رابط فريد (مثل: my-restaurant)
     owner_name: str  # اسم المالك
     owner_email: EmailStr
-    owner_phone: str
+    owner_phone: Optional[str] = ""  # رقم الهاتف (اختياري)
     subscription_type: str = "trial"  # trial, bronze, silver, gold, basic, premium, demo
     subscription_duration: int = 1  # مدة الاشتراك بالأشهر (1, 3, 6, 12)
     max_branches: int = 1
