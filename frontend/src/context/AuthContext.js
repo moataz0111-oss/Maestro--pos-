@@ -304,13 +304,22 @@ export const AuthProvider = ({ children }) => {
   };
 
   const logout = () => {
+    // حذف جميع البيانات المخزنة
     localStorage.removeItem('token');
     localStorage.removeItem('offline_user');
+    localStorage.removeItem('cached_user');
+    localStorage.removeItem('currentShift');
+    localStorage.removeItem('selectedBranchId');
+    sessionStorage.clear();
+    
     delete axios.defaults.headers.common['Authorization'];
     setToken(null);
     setUser(null);
     setCurrentShift(null);
     setIsOfflineLogin(false);
+    
+    // التوجيه لصفحة تسجيل الدخول
+    window.location.href = '/login';
   };
 
   const hasPermission = (permission) => {
