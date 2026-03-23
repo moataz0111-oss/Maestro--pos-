@@ -1,0 +1,57 @@
+version: '3.8'
+
+services:
+  # قاعدة البيانات MongoDB
+  mongodb:
+    image: mongo:6.0
+    container_name: maestro-mongodb
+    restart: always
+    volumes:
+      - mongodb_data:/data/db
+      - ./backups:/backups
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=maestro_admin
+      - MONGO_INITDB_ROOT_PASSWORD=Maestro@2024Secure
+    networks:
+      - maestro-network
+
+  # Backend - FastAPI
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: maestro-backend
+    restart: always
+    depends_on:
+      - mongodb
+    environment:
+      - MONGO_URL=mongodb://maestro_admin:Maestro@2024Secure@mongodb:27017/maestro_db?authSource=admin
+      - DB_NAME=maestro_db
+      - JWT_SECRET=your-super-secret-jwt-key-change-this-in-production
+    ports:
+      - "8001:8001"
+    networks:
+      - maestro-network
+
+  # Frontend - React
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: maestro-frontend
+    restart: always
+    depends_on:
+      - backend
+    environment:
+      - REACT_APP_BACKEND_URL=https://maestroegp.com
+    ports:
+      - "3000:3000"
+    networks:
+      - maestro-network
+
+volumes:
+  mongodb_data:
+
+networks:
+  maestro-network:
+    driver: bridge
