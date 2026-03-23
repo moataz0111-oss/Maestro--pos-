@@ -54,6 +54,16 @@ jobs:
           echo "📊 Services status:"
           docker-compose ps
           
+          # عرض logs للتحقق من الأخطاء
+          echo "📋 Backend logs:"
+          docker-compose logs --tail=50 backend
+          
+          echo "📋 Frontend logs:"
+          docker-compose logs --tail=20 frontend
+          
+          echo "📋 Nginx logs:"
+          docker-compose logs --tail=20 nginx
+          
           # انتظار MongoDB
           echo "⏳ Waiting for MongoDB..."
           for i in {1..30}; do
