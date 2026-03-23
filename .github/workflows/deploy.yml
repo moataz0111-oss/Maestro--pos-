@@ -24,6 +24,11 @@ jobs:
         script: |
           echo "🚀 Starting deployment at $(date)"
           
+          # إيقاف Nginx القديم على Ubuntu
+          echo "🛑 Stopping old nginx..."
+          systemctl stop nginx 2>/dev/null || true
+          systemctl disable nginx 2>/dev/null || true
+          
           # الدخول لمجلد المشروع
           cd /var/www/maestro
           
@@ -31,37 +36,23 @@ jobs:
           git fetch origin
           git reset --hard origin/conflict_230326_0646
           
-          # إنشاء مجلدات SSL
-          mkdir -p certbot/conf certbot/www
+          # إنشاء مجلدات
+          mkdir -p certbot/conf certbot/www backups
           
-          # بناء الـ images الجديدة بدون إيقاف الخدمات الحالية
-          echo "🔨 Building new images..."
-          docker-compose build --no-cache
+          # إيقاف كل containers القديمة
+          docker-compose down 2>/dev/null || true
           
-          # تحديث الخدمات واحدة تلو الأخرى (Zero Downtime)
-          echo "🔄 Updating services with zero downtime..."
+          # بناء وتشغيل Docker
+          echo "🔨 Building and starting services..."
+          docker-compose up -d --build
           
-          # تحديث MongoDB أولاً (إذا لزم الأمر)
-          docker-compose up -d mongodb
-          sleep 10
+          # انتظار بدء الخدمات
+          echo "⏳ Waiting for services to start..."
+          sleep 45
           
-          # تحديث Backend
-          docker-compose up -d --no-deps backend
-          sleep 15
-          
-          # تحديث Frontend
-          docker-compose up -d --no-deps frontend
-          sleep 10
-          
-          # تحديث Nginx
-          docker-compose up -d --no-deps nginx 2>/dev/null || docker-compose up -d nginx
-          
-          # تحديث Portainer و Netdata
-          docker-compose up -d --no-deps portainer netdata 2>/dev/null || true
-          
-          # انتظار استقرار الخدمات
-          echo "⏳ Waiting for services to stabilize..."
-          sleep 30
+          # عرض حالة الخدمات
+          echo "📊 Services status:"
+          docker-compose ps
           
           # انتظار MongoDB
           echo "⏳ Waiting for MongoDB..."
@@ -74,26 +65,17 @@ jobs:
             sleep 5
           done
           
-          # تشغيل سكريبت إدخال البيانات الأساسية
+          # تشغيل سكريبت إدخال البيانات
           echo "📦 Running seed data script..."
           docker exec maestro-backend pip install bcrypt pymongo 2>/dev/null || true
-          docker exec maestro-backend python /app/seed_data.py || echo "Seed completed or already exists"
+          docker exec maestro-backend python /app/seed_data.py || echo "Seed completed"
           
-          # تنظيف الـ images القديمة
-          docker image prune -f
-          
-          # عرض حالة الخدمات
-          echo "📊 Services status:"
-          docker-compose ps
-          
-          # إعداد Backup التلقائي (Cron Job)
-          echo "⏰ Setting up automatic backup..."
-          chmod +x /var/www/maestro/scripts/backup.sh
-          chmod +x /var/www/maestro/scripts/restore.sh
-          mkdir -p /var/www/maestro/backups
-          
-          # إضافة cron job للنسخ الاحتياطي اليومي (الساعة 3 صباحاً)
+          # إعداد Backup التلقائي
+          chmod +x /var/www/maestro/scripts/backup.sh 2>/dev/null || true
           (crontab -l 2>/dev/null | grep -v "maestro.*backup"; echo "0 3 * * * /var/www/maestro/scripts/backup.sh >> /var/log/maestro-backup.log 2>&1") | crontab -
+          
+          # تنظيف
+          docker image prune -f
           
           echo "✅ Deployment completed at $(date)"
           
