@@ -1,0 +1,52 @@
+name: 🚀 Deploy Maestro POS to Production
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:  # للتشغيل اليدوي
+
+jobs:
+  deploy:
+    name: Deploy to VPS
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: 📥 Checkout code
+      uses: actions/checkout@v4
+      
+    - name: 🔑 Deploy via SSH
+      uses: appleboy/ssh-action@v1.0.3
+      with:
+        host: ${{ secrets.VPS_HOST }}
+        username: ${{ secrets.VPS_USER }}
+        key: ${{ secrets.VPS_SSH_KEY }}
+        port: ${{ secrets.VPS_PORT }}
+        script: |
+          echo "🚀 Starting deployment at $(date)"
+          
+          # الدخول لمجلد المشروع
+          cd /var/www/maestro
+          
+          # سحب أحدث الكود
+          git fetch origin main
+          git reset --hard origin/main
+          
+          # الدخول لمجلد النشر
+          cd deploy
+          
+          # إعادة بناء وتشغيل Docker
+          docker-compose pull
+          docker-compose up -d --build --remove-orphans
+          
+          # تنظيف الـ images القديمة
+          docker image prune -f
+          
+          echo "✅ Deployment completed at $(date)"
+          
+    - name: 📢 Notify Success
+      if: success()
+      run: echo "✅ Deployment successful!"
+      
+    - name: ❌ Notify Failure
+      if: failure()
+      run: echo "❌ Deployment failed!"
