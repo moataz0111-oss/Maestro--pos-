@@ -7617,9 +7617,8 @@ async def upload_background_file(
     # معالجة وحفظ الصورة
     filename = await process_and_save_image(file, BACKGROUNDS_DIR, max_size=(1920, 1080), quality=85)
     
-    # إنشاء URL للصورة
-    base_url = os.environ.get('REACT_APP_BACKEND_URL', '')
-    image_url = f"{base_url}/api/uploads/backgrounds/{filename}"
+    # إنشاء URL نسبي للصورة (سيعمل في جميع البيئات)
+    image_url = f"/api/uploads/backgrounds/{filename}"
     
     # جلب الإعدادات الحالية
     settings = await db.settings.find_one({"type": "login_backgrounds"}, {"_id": 0})
