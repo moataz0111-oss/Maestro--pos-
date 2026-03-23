@@ -229,6 +229,8 @@ export default function SuperAdmin() {
     owner_email: '',
     owner_phone: '',
     subscription_type: 'trial',
+    subscription_end: '',
+    extend_months: 0,
     max_branches: 1,
     max_users: 5,
     send_welcome_email: false,
@@ -999,6 +1001,8 @@ export default function SuperAdmin() {
       owner_email: tenant.owner_email || '',
       owner_phone: tenant.owner_phone || '',
       subscription_type: tenant.subscription_type || 'trial',
+      subscription_end: tenant.subscription_end ? tenant.subscription_end.split('T')[0] : '',
+      extend_months: 0,
       max_branches: tenant.max_branches || 1,
       max_users: tenant.max_users || 5,
       send_welcome_email: false,
@@ -1037,6 +1041,8 @@ export default function SuperAdmin() {
         owner_email: editTenantForm.owner_email,
         owner_phone: editTenantForm.owner_phone,
         subscription_type: editTenantForm.subscription_type,
+        subscription_end: editTenantForm.subscription_end || null,
+        extend_months: editTenantForm.extend_months || 0,
         max_branches: editTenantForm.max_branches,
         max_users: editTenantForm.max_users,
         send_welcome_email: editTenantForm.send_welcome_email,
@@ -3200,6 +3206,107 @@ export default function SuperAdmin() {
                     <Plus className="h-4 w-4" />
                   </Button>
                 </div>
+              </div>
+            </div>
+
+            {/* قسم إدارة الاشتراك والتجديد */}
+            <div className="border-t border-gray-700 pt-4 mt-4">
+              <h3 className="text-sm font-bold text-yellow-400 mb-3 flex items-center gap-2">
+                <Calendar className="h-4 w-4" />
+                {t('إدارة الاشتراك')}
+              </h3>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>{t('تاريخ انتهاء الاشتراك')}</Label>
+                  <Input
+                    type="date"
+                    value={editTenantForm.subscription_end}
+                    onChange={(e) => setEditTenantForm({...editTenantForm, subscription_end: e.target.value})}
+                    className="bg-gray-700/50 border-gray-600"
+                  />
+                  {editTenantForm.subscription_end && (
+                    <p className="text-xs text-gray-400">
+                      {new Date(editTenantForm.subscription_end) < new Date() 
+                        ? <span className="text-red-400">{t('منتهي')}</span>
+                        : <span className="text-green-400">{t('نشط')}</span>
+                      }
+                    </p>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <Label>{t('تمديد المدة (أشهر)')}</Label>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      className="h-10 w-10 border-gray-600 hover:bg-red-500/20"
+                      onClick={() => setEditTenantForm({...editTenantForm, extend_months: Math.max(0, (editTenantForm.extend_months || 0) - 1)})}
+                    >
+                      <Minus className="h-4 w-4" />
+                    </Button>
+                    <Input
+                      type="number"
+                      value={editTenantForm.extend_months}
+                      onChange={(e) => setEditTenantForm({...editTenantForm, extend_months: parseInt(e.target.value) || 0})}
+                      className="bg-gray-700/50 border-gray-600 text-center"
+                      min="0"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      className="h-10 w-10 border-gray-600 hover:bg-green-500/20"
+                      onClick={() => setEditTenantForm({...editTenantForm, extend_months: (editTenantForm.extend_months || 0) + 1})}
+                    >
+                      <Plus className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  {editTenantForm.extend_months > 0 && (
+                    <p className="text-xs text-green-400">
+                      {t('سيتم إضافة')} {editTenantForm.extend_months} {t('شهر للاشتراك')}
+                    </p>
+                  )}
+                </div>
+              </div>
+              {/* أزرار سريعة للتجديد */}
+              <div className="flex gap-2 mt-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="border-gray-600 hover:bg-blue-500/20"
+                  onClick={() => setEditTenantForm({...editTenantForm, extend_months: 1})}
+                >
+                  +1 {t('شهر')}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="border-gray-600 hover:bg-blue-500/20"
+                  onClick={() => setEditTenantForm({...editTenantForm, extend_months: 3})}
+                >
+                  +3 {t('أشهر')}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="border-gray-600 hover:bg-blue-500/20"
+                  onClick={() => setEditTenantForm({...editTenantForm, extend_months: 6})}
+                >
+                  +6 {t('أشهر')}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="border-gray-600 hover:bg-green-500/20"
+                  onClick={() => setEditTenantForm({...editTenantForm, extend_months: 12})}
+                >
+                  +1 {t('سنة')}
+                </Button>
               </div>
             </div>
           </div>

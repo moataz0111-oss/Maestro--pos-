@@ -8396,10 +8396,35 @@ async def update_tenant(tenant_id: str, updates: dict, background_tasks: Backgro
     # قائمة الحقول المسموح بتحديثها
     allowed_updates = [
         "name", "name_en", "name_ar", "owner_name", "owner_email", "owner_phone", 
-        "subscription_type", "max_branches", "max_users", 
+        "subscription_type", "subscription_end", "max_branches", "max_users", 
         "is_active", "expires_at", "logo_url"
     ]
     update_data = {k: v for k, v in updates.items() if k in allowed_updates}
+    
+    # معالجة تمديد الاشتراك
+    extend_months = updates.get("extend_months", 0)
+    if extend_months > 0:
+        from datetime import datetime, timedelta
+        # الحصول على تاريخ انتهاء الاشتراك الحالي أو تاريخ اليوم
+        current_end = tenant.get("subscription_end")
+        if current_end:
+            if isinstance(current_end, str):
+                try:
+                    base_date = datetime.fromisoformat(current_end.replace('Z', '+00:00'))
+                except:
+                    base_date = datetime.now()
+            else:
+                base_date = current_end
+            # إذا كان التاريخ في الماضي، نبدأ من اليوم
+            if base_date < datetime.now():
+                base_date = datetime.now()
+        else:
+            base_date = datetime.now()
+        
+        # حساب التاريخ الجديد
+        new_end = base_date + timedelta(days=extend_months * 30)
+        update_data["subscription_end"] = new_end.isoformat()
+        logger.info(f"✅ تم تمديد اشتراك {tenant.get('name')} بـ {extend_months} شهر. ينتهي في: {new_end}")
     
     # التحقق من تغيير البريد الإلكتروني
     email_changed = False
