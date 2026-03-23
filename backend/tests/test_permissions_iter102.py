@@ -10,7 +10,7 @@ import pytest
 import requests
 import os
 
-BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://maestro-prod.preview.emergentagent.com')
+BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://pos-deployment-test.preview.emergentagent.com')
 
 # Test credentials
 SUPER_ADMIN_EMAIL = "owner@maestroegp.com"

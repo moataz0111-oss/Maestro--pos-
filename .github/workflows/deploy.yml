@@ -55,14 +55,11 @@ jobs:
           docker-compose ps
           
           # عرض logs للتحقق من الأخطاء
-          echo "📋 Backend logs:"
-          docker-compose logs --tail=50 backend
+          echo "📋 Backend logs (last 100 lines):"
+          docker-compose logs --tail=100 backend || docker logs maestro-backend --tail=100
           
-          echo "📋 Frontend logs:"
-          docker-compose logs --tail=20 frontend
-          
-          echo "📋 Nginx logs:"
-          docker-compose logs --tail=20 nginx
+          echo "📋 MongoDB logs:"
+          docker-compose logs --tail=20 mongodb
           
           # انتظار MongoDB
           echo "⏳ Waiting for MongoDB..."

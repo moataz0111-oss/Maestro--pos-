@@ -55,6 +55,31 @@ class UserRole:
     KITCHEN = "kitchen"
     WAITER = "waiter"
 
+# ==================== ORDER STATUS ====================
+class OrderStatus:
+    PENDING = "pending"
+    PREPARING = "preparing"
+    READY = "ready"
+    DELIVERED = "delivered"
+    COMPLETED = "completed"
+    CANCELLED = "cancelled"
+    ON_THE_WAY = "on_the_way"
+
+# ==================== PAYMENT METHOD ====================
+class PaymentMethod:
+    CASH = "cash"
+    CARD = "card"
+    WALLET = "wallet"
+    ONLINE = "online"
+    MIXED = "mixed"
+
+# ==================== ORDER TYPE ====================
+class OrderType:
+    DINE_IN = "dine_in"
+    TAKEAWAY = "takeaway"
+    DELIVERY = "delivery"
+    CALL_CENTER = "call_center"
+
 # ==================== AUTH HELPERS ====================
 def hash_password(password: str) -> str:
     return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
