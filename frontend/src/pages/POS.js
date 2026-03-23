@@ -129,6 +129,11 @@ export default function POS() {
   const [deliveryApps, setDeliveryApps] = useState([]);
   const [drivers, setDrivers] = useState([]);
   const [selectedDriver, setSelectedDriver] = useState('');
+  // Extras modal state
+  const [extrasModalOpen, setExtrasModalOpen] = useState(false);
+  const [selectedCartItem, setSelectedCartItem] = useState(null);
+  const [tempNotes, setTempNotes] = useState('');
+  const [tempSelectedExtras, setTempSelectedExtras] = useState([]);
   // لا نعرض شاشة التحميل إذا كانت البيانات محملة سابقاً
   const [loading, setLoading] = useState(() => {
     return sessionStorage.getItem('pos_data_loaded') !== 'true';
@@ -1145,10 +1150,10 @@ export default function POS() {
   const addToCart = useCallback((product) => {
     playClick();
     setCart(prev => {
-      const existing = prev.find(item => item.product_id === product.id);
+      const existing = prev.find(item => item.product_id === product.id && !item.selectedExtras?.length);
       if (existing) {
         return prev.map(item =>
-          item.product_id === product.id
+          item.product_id === product.id && !item.selectedExtras?.length
             ? { ...item, quantity: item.quantity + 1 }
             : item
         );
@@ -1159,7 +1164,9 @@ export default function POS() {
         product_name_en: product.name_en || product.name,
         price: product.price,
         quantity: 1,
-        notes: ''
+        notes: '',
+        extras: product.extras || [],
+        selectedExtras: []
       }];
     });
   }, []);
@@ -1197,7 +1204,10 @@ export default function POS() {
     setCustomerSearchPhone('');
   }, []);
 
-  const subtotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+  const subtotal = cart.reduce((sum, item) => {
+    const extrasTotal = (item.selectedExtras || []).reduce((extSum, ext) => extSum + ext.price, 0);
+    return sum + ((item.price + extrasTotal) * item.quantity);
+  }, 0);
   
   // حساب عمولة شركة التوصيل
   const selectedDeliveryApp = deliveryApps.find(a => a.id === deliveryApp);
@@ -1304,10 +1314,11 @@ export default function POS() {
               name: item.name,
               price: item.price,
               quantity: item.quantity,
-              notes: item.notes || ''
+              notes: item.notes || '',
+              extras: item.selectedExtras || []
             })),
-            subtotal: cart.reduce((sum, item) => sum + (item.price * item.quantity), 0),
-            total: cart.reduce((sum, item) => sum + (item.price * item.quantity), 0) - discount,
+            subtotal: cart.reduce((sum, item) => sum + ((item.price + (item.selectedExtras || []).reduce((s, e) => s + e.price, 0)) * item.quantity), 0),
+            total: cart.reduce((sum, item) => sum + ((item.price + (item.selectedExtras || []).reduce((s, e) => s + e.price, 0)) * item.quantity), 0) - discount,
             discount: discount,
             branch_id: currentBranchId,
             payment_method: 'pending',
@@ -1423,10 +1434,11 @@ export default function POS() {
           name: item.name,
           price: item.price,
           quantity: item.quantity,
-          notes: item.notes || ''
+          notes: item.notes || '',
+          extras: item.selectedExtras || []
         })),
-        subtotal: cart.reduce((sum, item) => sum + (item.price * item.quantity), 0),
-        total: cart.reduce((sum, item) => sum + (item.price * item.quantity), 0) - discount,
+        subtotal: cart.reduce((sum, item) => sum + ((item.price + (item.selectedExtras || []).reduce((s, e) => s + e.price, 0)) * item.quantity), 0),
+        total: cart.reduce((sum, item) => sum + ((item.price + (item.selectedExtras || []).reduce((s, e) => s + e.price, 0)) * item.quantity), 0) - discount,
         discount: discount,
         discount_type: discountType,
         discount_value: discount,
@@ -1673,7 +1685,8 @@ export default function POS() {
           price: item.price,
           quantity: item.quantity,
           cost: item.cost || 0,
-          notes: item.notes || ''
+          notes: item.notes || '',
+          extras: item.selectedExtras || []
         })),
         order_type: orderType,
         table_id: orderType === 'dine_in' ? selectedTable : null,
@@ -1745,10 +1758,11 @@ export default function POS() {
               name: item.name,
               price: item.price,
               quantity: item.quantity,
-              notes: item.notes || ''
+              notes: item.notes || '',
+              extras: item.selectedExtras || []
             })),
-            subtotal: cart.reduce((sum, item) => sum + (item.price * item.quantity), 0),
-            total: cart.reduce((sum, item) => sum + (item.price * item.quantity), 0) - discount,
+            subtotal: cart.reduce((sum, item) => sum + ((item.price + (item.selectedExtras || []).reduce((s, e) => s + e.price, 0)) * item.quantity), 0),
+            total: cart.reduce((sum, item) => sum + ((item.price + (item.selectedExtras || []).reduce((s, e) => s + e.price, 0)) * item.quantity), 0) - discount,
             discount: discount,
             branch_id: currentBranchId,
             payment_method: 'pending',
@@ -2501,39 +2515,80 @@ export default function POS() {
               cart.map((item, index) => (
                 <div
                   key={`${item.product_id}-${index}`}
-                  className="flex items-center justify-between p-3 bg-muted/30 rounded-lg"
+                  className="p-3 bg-muted/30 rounded-lg"
                 >
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium text-sm text-foreground truncate">{lang === 'en' ? (item.product_name_en || item.product_name || item.name || t('منتج')) : (item.product_name || item.name || t('منتج'))}</p>
-                    <p className="text-primary text-sm tabular-nums">{formatPrice(item.price * item.quantity)}</p>
+                  <div className="flex items-center justify-between">
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-sm text-foreground truncate">{lang === 'en' ? (item.product_name_en || item.product_name || item.name || t('منتج')) : (item.product_name || item.name || t('منتج'))}</p>
+                      <p className="text-primary text-sm tabular-nums">{formatPrice((item.price + (item.selectedExtras || []).reduce((sum, ext) => sum + ext.price, 0)) * item.quantity)}</p>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        className="h-8 w-8"
+                        onClick={() => updateQuantity(item.product_id, -1)}
+                      >
+                        <Minus className="h-4 w-4" />
+                      </Button>
+                      <span className="w-8 text-center font-bold text-foreground">{item.quantity}</span>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        className="h-8 w-8"
+                        onClick={() => updateQuantity(item.product_id, 1)}
+                      >
+                        <Plus className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-destructive hover:bg-destructive/10"
+                        onClick={() => removeFromCart(item.product_id)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-1">
+                  {/* زر الإضافات والملاحظات */}
+                  <div className="mt-2 flex items-center gap-2">
                     <Button
                       variant="outline"
-                      size="icon"
-                      className="h-8 w-8"
-                      onClick={() => updateQuantity(item.product_id, -1)}
+                      size="sm"
+                      className="h-7 text-xs flex-1 text-orange-500 border-orange-500/50 hover:bg-orange-500/10"
+                      onClick={() => {
+                        setSelectedCartItem({ ...item, cartIndex: index });
+                        setTempNotes(item.notes || '');
+                        setTempSelectedExtras(item.selectedExtras || []);
+                        setExtrasModalOpen(true);
+                      }}
                     >
-                      <Minus className="h-4 w-4" />
-                    </Button>
-                    <span className="w-8 text-center font-bold text-foreground">{item.quantity}</span>
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      className="h-8 w-8"
-                      onClick={() => updateQuantity(item.product_id, 1)}
-                    >
-                      <Plus className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 text-destructive hover:bg-destructive/10"
-                      onClick={() => removeFromCart(item.product_id)}
-                    >
-                      <Trash2 className="h-4 w-4" />
+                      <Edit className="h-3 w-3 ml-1" />
+                      {t('ملاحظات وإضافات')}
+                      {((item.selectedExtras || []).length > 0 || item.notes) && (
+                        <span className="mr-1 bg-orange-500 text-white rounded-full px-1.5 text-xs">
+                          {(item.selectedExtras || []).length + (item.notes ? 1 : 0)}
+                        </span>
+                      )}
                     </Button>
                   </div>
+                  {/* عرض الإضافات المختارة */}
+                  {(item.selectedExtras || []).length > 0 && (
+                    <div className="mt-2 space-y-1">
+                      {item.selectedExtras.map((ext, extIdx) => (
+                        <div key={extIdx} className="flex justify-between text-xs text-green-500 bg-green-500/10 px-2 py-1 rounded">
+                          <span>+ {ext.name}</span>
+                          <span>+{formatPrice(ext.price)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {/* عرض الملاحظات */}
+                  {item.notes && (
+                    <div className="mt-1 text-xs text-muted-foreground bg-muted/50 px-2 py-1 rounded">
+                      📝 {item.notes}
+                    </div>
+                  )}
                 </div>
               ))
             )}
@@ -3405,6 +3460,129 @@ export default function POS() {
               )}
             </div>
           </div>
+        </DialogContent>
+      </Dialog>
+      
+      {/* Modal الملاحظات والإضافات */}
+      <Dialog open={extrasModalOpen} onOpenChange={setExtrasModalOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Edit className="h-5 w-5 text-orange-500" />
+              {t('ملاحظات وإضافات')}
+            </DialogTitle>
+          </DialogHeader>
+          {selectedCartItem && (
+            <div className="space-y-4">
+              {/* اسم المنتج */}
+              <div className="p-3 bg-muted/30 rounded-lg">
+                <p className="font-medium">{selectedCartItem.product_name}</p>
+                <p className="text-sm text-muted-foreground">{formatPrice(selectedCartItem.price)}</p>
+              </div>
+              
+              {/* الملاحظات */}
+              <div>
+                <label className="text-sm font-medium mb-2 block">{t('ملاحظات')}</label>
+                <Input
+                  placeholder={t('مثال: بدون بصل، حار جداً...')}
+                  value={tempNotes}
+                  onChange={(e) => setTempNotes(e.target.value)}
+                />
+              </div>
+              
+              {/* الإضافات المتاحة */}
+              {(selectedCartItem.extras || []).length > 0 && (
+                <div>
+                  <label className="text-sm font-medium mb-2 block">{t('الإضافات المتاحة')}</label>
+                  <div className="space-y-2 max-h-48 overflow-y-auto">
+                    {(selectedCartItem.extras || []).map((extra, idx) => (
+                      <div
+                        key={idx}
+                        className={`flex items-center justify-between p-3 rounded-lg border cursor-pointer transition-all ${
+                          tempSelectedExtras.find(e => e.id === extra.id)
+                            ? 'bg-green-500/20 border-green-500'
+                            : 'bg-muted/30 border-border hover:bg-muted/50'
+                        }`}
+                        onClick={() => {
+                          const isSelected = tempSelectedExtras.find(e => e.id === extra.id);
+                          if (isSelected) {
+                            setTempSelectedExtras(tempSelectedExtras.filter(e => e.id !== extra.id));
+                          } else {
+                            setTempSelectedExtras([...tempSelectedExtras, extra]);
+                          }
+                        }}
+                      >
+                        <div className="flex items-center gap-2">
+                          <div className={`w-5 h-5 rounded-full flex items-center justify-center ${
+                            tempSelectedExtras.find(e => e.id === extra.id)
+                              ? 'bg-green-500 text-white'
+                              : 'bg-muted border'
+                          }`}>
+                            {tempSelectedExtras.find(e => e.id === extra.id) && (
+                              <Check className="h-3 w-3" />
+                            )}
+                          </div>
+                          <span>{extra.name}</span>
+                        </div>
+                        <span className="text-green-500 font-medium">+{formatPrice(extra.price)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              
+              {/* ملخص السعر */}
+              <div className="p-3 bg-primary/10 rounded-lg">
+                <div className="flex justify-between text-sm">
+                  <span>{t('سعر المنتج')}</span>
+                  <span>{formatPrice(selectedCartItem.price)}</span>
+                </div>
+                {tempSelectedExtras.length > 0 && (
+                  <>
+                    {tempSelectedExtras.map((ext, idx) => (
+                      <div key={idx} className="flex justify-between text-sm text-green-500">
+                        <span>+ {ext.name}</span>
+                        <span>+{formatPrice(ext.price)}</span>
+                      </div>
+                    ))}
+                    <div className="flex justify-between font-bold mt-2 pt-2 border-t">
+                      <span>{t('الإجمالي')}</span>
+                      <span>{formatPrice(selectedCartItem.price + tempSelectedExtras.reduce((sum, e) => sum + e.price, 0))}</span>
+                    </div>
+                  </>
+                )}
+              </div>
+              
+              {/* أزرار الحفظ */}
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() => {
+                    setExtrasModalOpen(false);
+                    setSelectedCartItem(null);
+                  }}
+                >
+                  {t('إلغاء')}
+                </Button>
+                <Button
+                  className="flex-1"
+                  onClick={() => {
+                    setCart(prev => prev.map((item, idx) => 
+                      idx === selectedCartItem.cartIndex
+                        ? { ...item, notes: tempNotes, selectedExtras: tempSelectedExtras }
+                        : item
+                    ));
+                    setExtrasModalOpen(false);
+                    setSelectedCartItem(null);
+                    toast.success(t('تم حفظ الإضافات والملاحظات'));
+                  }}
+                >
+                  {t('حفظ')}
+                </Button>
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>

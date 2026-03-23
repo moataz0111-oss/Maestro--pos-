@@ -435,9 +435,10 @@ export default function Settings() {
   const [editCategoryForm, setEditCategoryForm] = useState(null);
   const [editCategoryDialogOpen, setEditCategoryDialogOpen] = useState(false);
   const [productForm, setProductForm] = useState({
-    name: '', name_en: '', category_id: '', price: '', cost: '', operating_cost: '', packaging_cost: '', image: '', description: '', barcode: '', manufactured_product_id: '', printer_ids: []
+    name: '', name_en: '', category_id: '', price: '', cost: '', operating_cost: '', packaging_cost: '', image: '', description: '', barcode: '', manufactured_product_id: '', printer_ids: [], extras: []
   });
   const [editProductForm, setEditProductForm] = useState(null);
+  const [newExtraForm, setNewExtraForm] = useState({ name: '', name_en: '', price: '', manufactured_product_id: '' });
   const [manufacturedProducts, setManufacturedProducts] = useState([]);
   const [kitchenSectionForm, setKitchenSectionForm] = useState({
     name: '', name_en: '', color: '#D4AF37', icon: '🍳', printer_id: '', branch_id: '', sort_order: 0
@@ -1385,11 +1386,13 @@ export default function Settings() {
         cost: parseFloat(productForm.cost) || 0,
         operating_cost: parseFloat(productForm.operating_cost) || 0,
         packaging_cost: parseFloat(productForm.packaging_cost) || 0,
-        manufactured_product_id: productForm.manufactured_product_id || null
+        manufactured_product_id: productForm.manufactured_product_id || null,
+        extras: productForm.extras || []
       });
       toast.success(t('تم إنشاء المنتج'));
       setProductDialogOpen(false);
-      setProductForm({ name: '', name_en: '', category_id: '', price: '', cost: '', operating_cost: '', packaging_cost: '', image: '', description: '', barcode: '', manufactured_product_id: '', printer_ids: [] });
+      setProductForm({ name: '', name_en: '', category_id: '', price: '', cost: '', operating_cost: '', packaging_cost: '', image: '', description: '', barcode: '', manufactured_product_id: '', printer_ids: [], extras: [] });
+      setNewExtraForm({ name: '', name_en: '', price: '', manufactured_product_id: '' });
       fetchData();
     } catch (error) {
       toast.error(error.response?.data?.detail || t('فشل في إنشاء المنتج'));
@@ -1410,7 +1413,9 @@ export default function Settings() {
       description: p.description || '',
       barcode: p.barcode || '',
       is_available: p.is_available !== false,
-      manufactured_product_id: p.manufactured_product_id || ''
+      manufactured_product_id: p.manufactured_product_id || '',
+      extras: p.extras || [],
+      printer_ids: p.printer_ids || []
     });
     setEditProductDialogOpen(true);
   };
@@ -1424,11 +1429,13 @@ export default function Settings() {
         cost: parseFloat(editProductForm.cost) || 0,
         operating_cost: parseFloat(editProductForm.operating_cost) || 0,
         packaging_cost: parseFloat(editProductForm.packaging_cost) || 0,
-        manufactured_product_id: editProductForm.manufactured_product_id || null
+        manufactured_product_id: editProductForm.manufactured_product_id || null,
+        extras: editProductForm.extras || []
       });
       toast.success(t('تم تحديث المنتج'));
       setEditProductDialogOpen(false);
       setEditProductForm(null);
+      setNewExtraForm({ name: '', name_en: '', price: '', manufactured_product_id: '' });
       fetchData();
     } catch (error) {
       toast.error(error.response?.data?.detail || t('فشل في تحديث المنتج'));
@@ -3466,6 +3473,99 @@ export default function Settings() {
                           )}
                         </div>
                         
+                        {/* قسم الإضافات للمنتج الجديد */}
+                        <div className="p-3 bg-orange-500/10 border border-orange-500/30 rounded-lg">
+                          <Label className="text-foreground font-medium mb-3 flex items-center gap-2">
+                            <Plus className="h-4 w-4 text-orange-500" />{t('الإضافات المتاحة')}
+                          </Label>
+                          <p className="text-xs text-muted-foreground mb-3">{t('إضافات يمكن للكاشير اختيارها عند البيع (مثل: زيادة جبن، صوص إضافي)')}</p>
+                          
+                          {/* قائمة الإضافات الحالية */}
+                          {(productForm.extras || []).length > 0 && (
+                            <div className="space-y-2 mb-3">
+                              {(productForm.extras || []).map((extra, index) => (
+                                <div key={index} className="flex items-center gap-2 bg-background/50 p-2 rounded border">
+                                  <span className="flex-1 text-sm">{extra.name}</span>
+                                  <span className="text-sm text-green-500">+{extra.price} {t('د.ع')}</span>
+                                  {extra.manufactured_product_id && (
+                                    <span className="text-xs text-purple-400 bg-purple-500/20 px-2 py-0.5 rounded">
+                                      {manufacturedProducts.find(mp => mp.id === extra.manufactured_product_id)?.name || t('مرتبط')}
+                                    </span>
+                                  )}
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => {
+                                      const newExtras = [...(productForm.extras || [])];
+                                      newExtras.splice(index, 1);
+                                      setProductForm({ ...productForm, extras: newExtras });
+                                    }}
+                                    className="h-6 w-6 p-0 text-red-500 hover:text-red-400"
+                                  >
+                                    <Trash2 className="h-3 w-3" />
+                                  </Button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          
+                          {/* إضافة إضافة جديدة */}
+                          <div className="grid grid-cols-4 gap-2">
+                            <Input
+                              placeholder={t('اسم الإضافة')}
+                              value={newExtraForm.name}
+                              onChange={(e) => setNewExtraForm({ ...newExtraForm, name: e.target.value })}
+                              className="text-sm"
+                            />
+                            <Input
+                              type="number"
+                              placeholder={t('السعر')}
+                              value={newExtraForm.price}
+                              onChange={(e) => setNewExtraForm({ ...newExtraForm, price: e.target.value })}
+                              className="text-sm"
+                            />
+                            <Select 
+                              value={newExtraForm.manufactured_product_id || 'none'} 
+                              onValueChange={(v) => setNewExtraForm({ ...newExtraForm, manufactured_product_id: v === 'none' ? '' : v })}
+                            >
+                              <SelectTrigger className="text-sm">
+                                <SelectValue placeholder={t('منتج مصنع')} />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="none">{t('بدون ربط')}</SelectItem>
+                                {manufacturedProducts.map(mp => (
+                                  <SelectItem key={mp.id} value={mp.id}>{mp.name}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                if (newExtraForm.name && newExtraForm.price) {
+                                  const newExtra = {
+                                    id: Date.now().toString(),
+                                    name: newExtraForm.name,
+                                    name_en: newExtraForm.name_en || newExtraForm.name,
+                                    price: parseFloat(newExtraForm.price) || 0,
+                                    manufactured_product_id: newExtraForm.manufactured_product_id || null
+                                  };
+                                  setProductForm({
+                                    ...productForm,
+                                    extras: [...(productForm.extras || []), newExtra]
+                                  });
+                                  setNewExtraForm({ name: '', name_en: '', price: '', manufactured_product_id: '' });
+                                }
+                              }}
+                              className="text-orange-500 border-orange-500/50 hover:bg-orange-500/10"
+                            >
+                              <Plus className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                        
                         <div>
                           <ImageUploader
                             value={productForm.image}
@@ -3683,13 +3783,13 @@ export default function Settings() {
                           />
                         </div>
                         <div>
-                          <Label className="text-foreground">{t('تكلفة التغليف (للسفري/التوصيل)')}</Label>
+                          <Label className="text-foreground text-xs">{t('تكلفة التغليف')}</Label>
                           <Input
                             type="number"
                             value={editProductForm.packaging_cost}
                             onChange={(e) => setEditProductForm({ ...editProductForm, packaging_cost: e.target.value })}
                             className="mt-1"
-                            placeholder={t('تُحسب فقط للطلبات السفرية والتوصيل')}
+                            placeholder="0"
                           />
                         </div>
                       </div>
@@ -3729,6 +3829,100 @@ export default function Settings() {
                           <p className="text-xs text-amber-600 mt-2 bg-amber-500/10 p-2 rounded">{t('لا توجد منتجات مصنعة حالياً. أضف منتجات من قسم المخزن والتصنيع أولاً')}</p>
                         )}
                       </div>
+                      
+                      {/* قسم الإضافات */}
+                      <div className="p-3 bg-orange-500/10 border border-orange-500/30 rounded-lg">
+                        <Label className="text-foreground font-medium mb-3 flex items-center gap-2">
+                          <Plus className="h-4 w-4 text-orange-500" />{t('الإضافات المتاحة')}
+                        </Label>
+                        <p className="text-xs text-muted-foreground mb-3">{t('إضافات يمكن للكاشير اختيارها عند البيع (مثل: زيادة جبن، صوص إضافي)')}</p>
+                        
+                        {/* قائمة الإضافات الحالية */}
+                        {(editProductForm.extras || []).length > 0 && (
+                          <div className="space-y-2 mb-3">
+                            {(editProductForm.extras || []).map((extra, index) => (
+                              <div key={index} className="flex items-center gap-2 bg-background/50 p-2 rounded border">
+                                <span className="flex-1 text-sm">{extra.name}</span>
+                                <span className="text-sm text-green-500">+{extra.price} {t('د.ع')}</span>
+                                {extra.manufactured_product_id && (
+                                  <span className="text-xs text-purple-400 bg-purple-500/20 px-2 py-0.5 rounded">
+                                    {manufacturedProducts.find(mp => mp.id === extra.manufactured_product_id)?.name || t('مرتبط')}
+                                  </span>
+                                )}
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => {
+                                    const newExtras = [...(editProductForm.extras || [])];
+                                    newExtras.splice(index, 1);
+                                    setEditProductForm({ ...editProductForm, extras: newExtras });
+                                  }}
+                                  className="h-6 w-6 p-0 text-red-500 hover:text-red-400"
+                                >
+                                  <Trash2 className="h-3 w-3" />
+                                </Button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        
+                        {/* إضافة إضافة جديدة */}
+                        <div className="grid grid-cols-4 gap-2">
+                          <Input
+                            placeholder={t('اسم الإضافة')}
+                            value={newExtraForm.name}
+                            onChange={(e) => setNewExtraForm({ ...newExtraForm, name: e.target.value })}
+                            className="text-sm"
+                          />
+                          <Input
+                            type="number"
+                            placeholder={t('السعر')}
+                            value={newExtraForm.price}
+                            onChange={(e) => setNewExtraForm({ ...newExtraForm, price: e.target.value })}
+                            className="text-sm"
+                          />
+                          <Select 
+                            value={newExtraForm.manufactured_product_id || 'none'} 
+                            onValueChange={(v) => setNewExtraForm({ ...newExtraForm, manufactured_product_id: v === 'none' ? '' : v })}
+                          >
+                            <SelectTrigger className="text-sm">
+                              <SelectValue placeholder={t('منتج مصنع (اختياري)')} />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="none">{t('بدون ربط')}</SelectItem>
+                              {manufacturedProducts.map(mp => (
+                                <SelectItem key={mp.id} value={mp.id}>{mp.name}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              if (newExtraForm.name && newExtraForm.price) {
+                                const newExtra = {
+                                  id: Date.now().toString(),
+                                  name: newExtraForm.name,
+                                  name_en: newExtraForm.name_en || newExtraForm.name,
+                                  price: parseFloat(newExtraForm.price) || 0,
+                                  manufactured_product_id: newExtraForm.manufactured_product_id || null
+                                };
+                                setEditProductForm({
+                                  ...editProductForm,
+                                  extras: [...(editProductForm.extras || []), newExtra]
+                                });
+                                setNewExtraForm({ name: '', name_en: '', price: '', manufactured_product_id: '' });
+                              }
+                            }}
+                            className="text-orange-500 border-orange-500/50 hover:bg-orange-500/10"
+                          >
+                            <Plus className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                      
                       <div>
                         <Label className="text-foreground">{t('الوصف')}</Label>
                         <Textarea
