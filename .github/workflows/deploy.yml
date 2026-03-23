@@ -86,13 +86,14 @@ jobs:
           echo "📊 Services status:"
           docker-compose ps
           
-          echo "✅ Deployment completed at $(date)"
+          # إعداد Backup التلقائي (Cron Job)
+          echo "⏰ Setting up automatic backup..."
+          chmod +x /var/www/maestro/scripts/backup.sh
+          chmod +x /var/www/maestro/scripts/restore.sh
+          mkdir -p /var/www/maestro/backups
           
-          # تنظيف الـ images القديمة
-          docker image prune -f
-          
-          # عرض حالة الخدمات
-          docker-compose ps
+          # إضافة cron job للنسخ الاحتياطي اليومي (الساعة 3 صباحاً)
+          (crontab -l 2>/dev/null | grep -v "maestro.*backup"; echo "0 3 * * * /var/www/maestro/scripts/backup.sh >> /var/log/maestro-backup.log 2>&1") | crontab -
           
           echo "✅ Deployment completed at $(date)"
           
