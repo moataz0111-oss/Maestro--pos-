@@ -7,7 +7,6 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from motor.motor_asyncio import AsyncIOMotorClient
 from typing import Optional, List, Dict, Any
 from datetime import datetime, timezone, timedelta
-from enum import Enum
 import os
 import jwt
 import bcrypt
@@ -19,15 +18,23 @@ logger = logging.getLogger(__name__)
 
 # MongoDB connection - singleton
 _db = None
+_client = None
 
 def get_database():
     """Get database instance"""
-    global _db
+    global _db, _client
     if _db is None:
         mongo_url = os.environ['MONGO_URL']
-        client = AsyncIOMotorClient(mongo_url)
-        _db = client[os.environ['DB_NAME']]
+        _client = AsyncIOMotorClient(mongo_url)
+        _db = _client[os.environ['DB_NAME']]
     return _db
+
+def get_client():
+    """Get MongoDB client"""
+    global _client
+    if _client is None:
+        get_database()
+    return _client
 
 # JWT Configuration
 JWT_SECRET = os.environ.get('JWT_SECRET')
@@ -36,41 +43,17 @@ JWT_EXPIRATION_HOURS = 24
 
 security = HTTPBearer()
 
-# ==================== ENUMS ====================
-class UserRole(str, Enum):
+# ==================== USER ROLES ====================
+class UserRole:
     SUPER_ADMIN = "super_admin"
     ADMIN = "admin"
     MANAGER = "manager"
-    CASHIER = "cashier"
     SUPERVISOR = "supervisor"
+    CASHIER = "cashier"
     DELIVERY = "delivery"
+    CALL_CENTER = "call_center"
     KITCHEN = "kitchen"
     WAITER = "waiter"
-
-class OrderStatus(str, Enum):
-    PENDING = "pending"
-    PREPARING = "preparing"
-    READY = "ready"
-    DELIVERED = "delivered"
-    CANCELLED = "cancelled"
-    ON_WAY = "on_way"
-    COMPLETED = "completed"
-
-class OrderType(str, Enum):
-    DINE_IN = "dine_in"
-    TAKEAWAY = "takeaway"
-    DELIVERY = "delivery"
-
-class PaymentMethod(str, Enum):
-    CASH = "cash"
-    CARD = "card"
-    CREDIT = "credit"
-
-class PaymentStatus(str, Enum):
-    PENDING = "pending"
-    PAID = "paid"
-    PARTIAL = "partial"
-    REFUNDED = "refunded"
 
 # ==================== AUTH HELPERS ====================
 def hash_password(password: str) -> str:
@@ -79,11 +62,12 @@ def hash_password(password: str) -> str:
 def verify_password(password: str, hashed: str) -> bool:
     return bcrypt.checkpw(password.encode('utf-8'), hashed.encode('utf-8'))
 
-def create_token(user_id: str, role: str, branch_id: Optional[str] = None) -> str:
+def create_token(user_id: str, role: str, branch_id: Optional[str] = None, tenant_id: Optional[str] = None) -> str:
     payload = {
         "user_id": user_id,
         "role": role,
         "branch_id": branch_id,
+        "tenant_id": tenant_id,
         "exp": datetime.now(timezone.utc) + timedelta(hours=JWT_EXPIRATION_HOURS)
     }
     return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
@@ -102,18 +86,29 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
     except jwt.InvalidTokenError:
         raise HTTPException(status_code=401, detail="رمز غير صالح")
 
+async def verify_super_admin(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    """التحقق من أن المستخدم هو Super Admin"""
+    user = await get_current_user(credentials)
+    if user.get("role") != UserRole.SUPER_ADMIN:
+        raise HTTPException(status_code=403, detail="هذه الوظيفة متاحة فقط لمالك النظام")
+    return user
+
 # ==================== TENANT HELPERS ====================
 def get_user_tenant_id(user: dict) -> Optional[str]:
-    """الحصول على tenant_id للمستخدم - Super Admin لا يحتاج tenant_id"""
+    """الحصول على tenant_id للمستخدم - Super Admin يستخدم tenant النظام"""
     if user.get("role") == UserRole.SUPER_ADMIN:
-        return None
+        return user.get("tenant_id") or "system"
     return user.get("tenant_id") or "default"
 
 def build_tenant_query(user: dict, base_query: dict = None) -> dict:
     """بناء query مع فلترة tenant_id"""
     query = base_query.copy() if base_query else {}
-    tenant_id = get_user_tenant_id(user)
     
+    # Super Admin يرى كل شيء
+    if user.get("role") == UserRole.SUPER_ADMIN:
+        return query
+    
+    tenant_id = get_user_tenant_id(user)
     if tenant_id:
         query["tenant_id"] = tenant_id
     
@@ -126,6 +121,7 @@ def build_branch_query(user: dict, base_query: dict = None) -> dict:
     user_branch_id = user.get("branch_id")
     user_role = user.get("role")
     
+    # المستخدمون العاديون (cashier, supervisor, delivery) يرون فقط فرعهم
     if user_branch_id and user_role not in [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.MANAGER]:
         query["branch_id"] = user_branch_id
     
@@ -141,3 +137,11 @@ def has_role(user: dict, roles: list) -> bool:
     """التحقق من صلاحية المستخدم"""
     user_role = user.get("role", "")
     return user_role in roles or "super_admin" in roles and user_role == "super_admin"
+
+def generate_id() -> str:
+    """توليد معرف فريد"""
+    return str(uuid.uuid4())
+
+def get_current_timestamp() -> str:
+    """الحصول على الوقت الحالي بصيغة ISO"""
+    return datetime.now(timezone.utc).isoformat()
