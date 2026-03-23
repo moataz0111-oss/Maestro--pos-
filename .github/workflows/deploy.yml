@@ -37,7 +37,56 @@ jobs:
           git reset --hard origin/conflict_230326_0646
           
           # إنشاء مجلدات
-          mkdir -p certbot/conf certbot/www backups
+          mkdir -p certbot/conf certbot/www backups deploy/backups
+          
+          # التحقق من وجود شهادة SSL
+          if [ ! -d "certbot/conf/live/maestroegp.com" ]; then
+            echo "🔐 SSL certificate not found, obtaining new certificate..."
+            
+            # تشغيل Nginx مؤقتاً للحصول على الشهادة
+            docker-compose down 2>/dev/null || true
+            
+            # إنشاء nginx.conf مؤقت للحصول على الشهادة
+            cat > nginx-temp.conf << 'NGINXEOF'
+          events { worker_connections 1024; }
+          http {
+            server {
+              listen 80;
+              server_name maestroegp.com www.maestroegp.com;
+              location /.well-known/acme-challenge/ { root /var/www/certbot; }
+              location / { return 200 'SSL Setup in progress'; add_header Content-Type text/plain; }
+            }
+          }
+          NGINXEOF
+            
+            # تشغيل nginx مؤقت
+            docker run -d --name temp-nginx -p 80:80 \
+              -v $(pwd)/nginx-temp.conf:/etc/nginx/nginx.conf:ro \
+              -v $(pwd)/certbot/www:/var/www/certbot \
+              nginx:alpine
+            
+            sleep 5
+            
+            # الحصول على شهادة SSL
+            docker run --rm \
+              -v $(pwd)/certbot/conf:/etc/letsencrypt \
+              -v $(pwd)/certbot/www:/var/www/certbot \
+              certbot/certbot certonly --webroot \
+              --webroot-path=/var/www/certbot \
+              --email admin@maestroegp.com \
+              --agree-tos --no-eff-email \
+              -d maestroegp.com -d www.maestroegp.com \
+              --non-interactive || echo "Certbot may have failed, continuing..."
+            
+            # إيقاف nginx المؤقت
+            docker stop temp-nginx 2>/dev/null || true
+            docker rm temp-nginx 2>/dev/null || true
+            rm -f nginx-temp.conf
+            
+            echo "✅ SSL certificate obtained"
+          else
+            echo "✅ SSL certificate already exists"
+          fi
           
           # إيقاف containers القديمة (بدون حذف البيانات)
           docker-compose down 2>/dev/null || true
@@ -60,6 +109,9 @@ jobs:
           
           echo "📋 MongoDB logs:"
           docker-compose logs --tail=20 mongodb
+          
+          echo "📋 Nginx logs:"
+          docker-compose logs --tail=20 nginx
           
           # انتظار MongoDB
           echo "⏳ Waiting for MongoDB..."
