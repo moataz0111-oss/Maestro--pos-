@@ -8,7 +8,7 @@ services:
     restart: always
     volumes:
       - mongodb_data:/data/db
-      - ./backups:/backups
+      - ./deploy/backups:/backups
     environment:
       - MONGO_INITDB_ROOT_USERNAME=maestro_admin
       - MONGO_INITDB_ROOT_PASSWORD=Maestro@2024Secure
@@ -18,8 +18,8 @@ services:
   # Backend - FastAPI
   backend:
     build:
-      context: .
-      dockerfile: Dockerfile.backend
+      context: ./backend
+      dockerfile: Dockerfile
     container_name: maestro-backend
     restart: always
     depends_on:
@@ -36,8 +36,8 @@ services:
   # Frontend - React
   frontend:
     build:
-      context: .
-      dockerfile: Dockerfile.frontend
+      context: ./frontend
+      dockerfile: Dockerfile
       args:
         - REACT_APP_BACKEND_URL=https://maestroegp.com
     container_name: maestro-frontend

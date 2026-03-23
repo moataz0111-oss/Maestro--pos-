@@ -31,15 +31,15 @@ jobs:
           git fetch origin
           git reset --hard origin/conflict_230326_0646
           
-          # الدخول لمجلد النشر
-          cd deploy
-          
-          # إعادة بناء وتشغيل Docker
-          docker-compose pull
+          # إعادة بناء وتشغيل Docker من المجلد الرئيسي
+          docker-compose down 2>/dev/null || true
           docker-compose up -d --build --remove-orphans
           
           # تنظيف الـ images القديمة
           docker image prune -f
+          
+          # عرض حالة الخدمات
+          docker-compose ps
           
           echo "✅ Deployment completed at $(date)"
           
