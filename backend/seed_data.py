@@ -14,7 +14,7 @@ def hash_password(password: str) -> str:
     return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
 
 # الاتصال بقاعدة البيانات
-MONGO_URL = os.environ.get("MONGO_URL", "mongodb://maestro_admin:Maestro@2024Secure@mongodb:27017/maestro_db?authSource=admin")
+MONGO_URL = os.environ.get("MONGO_URL", "mongodb://maestro_admin:Maestro%402024Secure@mongodb:27017/maestro_db?authSource=admin")
 DB_NAME = os.environ.get("DB_NAME", "maestro_db")
 
 client = MongoClient(MONGO_URL)
