@@ -99,6 +99,7 @@ def seed_hani_tenant():
     
     admin_user = {
         "id": generate_id(),
+        "username": f"hani_{generate_id()[:8]}",
         "email": "hanialdujaili@gmail.com",
         "password_hash": password_hashed,
         "password": password_hashed,
@@ -179,6 +180,7 @@ def seed_demo_tenant():
     
     admin_user = {
         "id": generate_id(),
+        "username": f"demo_{generate_id()[:8]}",
         "email": "demo@maestroegp.com",
         "password_hash": password_hashed,
         "password": password_hashed,
