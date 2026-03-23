@@ -19,7 +19,7 @@ from datetime import datetime
 # Get API URL from environment
 BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', '').rstrip('/')
 if not BASE_URL:
-    BASE_URL = "https://offline-first-pos-3.preview.emergentagent.com"
+    BASE_URL = "https://maestro-prod.preview.emergentagent.com"
 
 API_URL = f"{BASE_URL}/api"
 

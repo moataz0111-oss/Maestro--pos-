@@ -36,7 +36,7 @@
   "seed_data_creation": "",
   "retest_needed": false,
   "main_agent_can_self_test": true,
-  "context_for_next_testing_agent": "All requested features verified working: 1) Login works correctly with provided credentials, 2) POS page loads without errors showing categories and products, 3) Can add products to cart (برجر كلاسيك - 5,000 IQD), 4) Can select branch (Aljadraia, Alsaydaia available), 5) Can select order type (داخل/سفري/توصيل), 6) Tables visible when dine_in selected (tables 1-5 shown), 7) Service Worker registered at https://offline-first-pos-3.preview.emergentagent.com/, 8) PWA manifest loaded with name 'Maestro EGP - نظام إدارة المطاعم', 4 icons, standalone display mode. Minor IndexedDB error noted but doesn't affect functionality.",
+  "context_for_next_testing_agent": "All requested features verified working: 1) Login works correctly with provided credentials, 2) POS page loads without errors showing categories and products, 3) Can add products to cart (برجر كلاسيك - 5,000 IQD), 4) Can select branch (Aljadraia, Alsaydaia available), 5) Can select order type (داخل/سفري/توصيل), 6) Tables visible when dine_in selected (tables 1-5 shown), 7) Service Worker registered at https://maestro-prod.preview.emergentagent.com/, 8) PWA manifest loaded with name 'Maestro EGP - نظام إدارة المطاعم', 4 icons, standalone display mode. Minor IndexedDB error noted but doesn't affect functionality.",
   "tests_performed": [
     {
       "test": "Login functionality",
@@ -66,7 +66,7 @@
     {
       "test": "Service Worker registered",
       "status": "PASSED",
-      "details": "Service Worker registered at scope https://offline-first-pos-3.preview.emergentagent.com/"
+      "details": "Service Worker registered at scope https://maestro-prod.preview.emergentagent.com/"
     },
     {
       "test": "PWA manifest loaded",

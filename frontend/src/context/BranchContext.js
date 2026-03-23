@@ -47,32 +47,6 @@ export const BranchProvider = ({ children }) => {
     }
   }, [isAuthenticated, user]);
 
-  // حساب الطلبات المعلقة عند تحميل الفروع من localStorage (للعمل offline)
-  useEffect(() => {
-    if (branches.length > 0 && Object.keys(pendingOrdersCounts).length === 0) {
-      // حساب الطلبات المعلقة فوراً
-      fetchPendingOrdersCounts(branches);
-    }
-  }, [branches]);
-
-  // تحديث عدد الطلبات المعلقة كل 10 ثواني
-  useEffect(() => {
-    if (branches.length > 0 && isAuthenticated) {
-      const interval = setInterval(() => {
-        fetchPendingOrdersCounts(branches);
-      }, 10000); // كل 10 ثواني
-      
-      return () => clearInterval(interval);
-    }
-  }, [branches, isAuthenticated]);
-
-  // دالة لتحديث عدد الطلبات المعلقة يدوياً (تُستدعى من POS بعد إنشاء طلب)
-  const refreshPendingCounts = useCallback(() => {
-    if (branches.length > 0) {
-      fetchPendingOrdersCounts(branches);
-    }
-  }, [branches, fetchPendingOrdersCounts]);
-
   // جلب عدد الطلبات المعلقة لكل فرع
   const fetchPendingOrdersCounts = useCallback(async (branchesList) => {
     if (!branchesList || branchesList.length === 0) return;

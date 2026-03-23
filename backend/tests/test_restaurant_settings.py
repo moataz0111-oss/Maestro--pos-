@@ -8,7 +8,7 @@ import os
 from PIL import Image
 import io
 
-BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://offline-first-pos-3.preview.emergentagent.com')
+BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://maestro-prod.preview.emergentagent.com')
 
 class TestRestaurantSettings:
     """Restaurant settings endpoint tests - name and logo upload"""
