@@ -28,6 +28,8 @@ services:
       - MONGO_URL=mongodb://maestro_admin:Maestro%402024Secure@mongodb:27017/maestro_db?authSource=admin
       - DB_NAME=maestro_db
       - JWT_SECRET=your-super-secret-jwt-key-change-this-in-production
+    volumes:
+      - uploads_data:/app/uploads
     networks:
       - maestro-network
 
@@ -109,6 +111,7 @@ services:
 volumes:
   mongodb_data:
   portainer_data:
+  uploads_data:
 
 networks:
   maestro-network:

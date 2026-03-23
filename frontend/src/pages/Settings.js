@@ -1959,7 +1959,8 @@ export default function Settings() {
                         toast.success(t('تم حفظ إعدادات المطعم بنجاح'));
                       } catch (error) {
                         console.error('Save restaurant settings error:', error);
-                        toast.error(t('فشل في حفظ الإعدادات'));
+                        const errorMsg = error.response?.data?.detail || error.message || t('فشل في حفظ الإعدادات');
+                        toast.error(`${t('فشل في حفظ الإعدادات')}: ${errorMsg}`);
                       } finally {
                         setSavingRestaurant(false);
                       }
