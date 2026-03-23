@@ -129,6 +129,10 @@ jobs:
           docker exec maestro-backend pip install bcrypt pymongo 2>/dev/null || true
           docker exec maestro-backend python /app/seed_data.py || echo "Seed completed"
           
+          # تشغيل سكريبت البيانات التجريبية لـ Graffiti Burger
+          echo "📦 Running demo data script for Graffiti Burger..."
+          docker exec maestro-backend python /app/seed_demo_data.py || echo "Demo data completed"
+          
           # إعداد Backup التلقائي
           chmod +x /var/www/maestro/scripts/backup.sh 2>/dev/null || true
           (crontab -l 2>/dev/null | grep -v "maestro.*backup"; echo "0 3 * * * /var/www/maestro/scripts/backup.sh >> /var/log/maestro-backup.log 2>&1") | crontab -
