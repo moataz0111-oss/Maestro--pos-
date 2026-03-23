@@ -4707,15 +4707,7 @@ export default function SuperAdmin() {
           <DialogFooter className="mt-4">
             <Button variant="outline" onClick={() => setShowInvoiceSettings(false)} className="border-gray-600">
               {t('إلغاء')}</Button>
-            <Button onClick={async () => { 
-              await saveInvoiceSettings(); 
-              try {
-                await axios.put(`${API}/login-backgrounds`, backgroundSettings);
-                toast.success(t('تم حفظ إعدادات الخلفيات'));
-              } catch (error) {
-                toast.error(t('فشل في حفظ إعدادات الخلفيات'));
-              }
-            }} className="bg-green-600 hover:bg-green-700">
+            <Button onClick={saveInvoiceSettings} className="bg-green-600 hover:bg-green-700">
               <Check className="h-4 w-4 ml-2" />
               {t('حفظ جميع الإعدادات')}
             </Button>
