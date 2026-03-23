@@ -2229,7 +2229,8 @@ async def get_branches(current_user: dict = Depends(get_current_user), include_i
     if not include_inactive:
         query["is_active"] = {"$ne": False}
     
-    # إخفاء الفروع الافتراضية (الفرع الرئيسي، Main Branch، إلخ)
+    # إخفاء الفروع الافتراضية فقط إذا كان الاسم تماماً يطابق الأسماء الافتراضية
+    # (لا نستبعد الأسماء التي تحتوي على تفاصيل إضافية مثل "الفرع الرئيسي - التجمع الخامس")
     default_branch_names = ["الفرع الرئيسي", "Main Branch", "الفرع الثاني", "فرع المالك الرئيسي"]
     query["name"] = {"$nin": default_branch_names}
     
@@ -14817,7 +14818,7 @@ async def get_menu_link(request: Request, current_user: dict = Depends(get_curre
         base_url = f"{parsed.scheme}://{parsed.netloc}"
     else:
         # fallback للـ environment variable
-        base_url = os.environ.get('REACT_APP_BACKEND_URL', 'https://pos-deployment-test.preview.emergentagent.com')
+        base_url = os.environ.get('REACT_APP_BACKEND_URL', 'https://bilingual-pos-system.preview.emergentagent.com')
     
     menu_url = f"{base_url}/menu/{tenant.get('menu_slug', tenant_id)}"
     

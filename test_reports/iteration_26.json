@@ -108,7 +108,7 @@
   },
   
   "test_credentials": {
-    "api_url": "https://pos-deployment-test.preview.emergentagent.com",
+    "api_url": "https://bilingual-pos-system.preview.emergentagent.com",
     "owner_email": "owner@maestroegp.com",
     "owner_password": "owner123",
     "super_admin_secret": "271018",
