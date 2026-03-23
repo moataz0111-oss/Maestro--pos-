@@ -1487,6 +1487,7 @@ export default function POS() {
       if (updatePendingCount && currentBranchId) {
         updatePendingCount(currentBranchId, 1);
       }
+      refreshPendingCounts(); // تحديث شامل
       
       // إضافة الطلب مباشرة للـ pendingOrders state بدون انتظار fetchPendingOrders
       setPendingOrders(prev => {
@@ -1601,6 +1602,9 @@ export default function POS() {
       // تنظيف وتحديث
       clearCart();
       await fetchPendingOrders();
+      
+      // تحديث عدد الطلبات المعلقة على dropdown الفروع فوراً
+      refreshPendingCounts();
       
       // تحديث الطاولات
       const tablesParams = currentBranchId ? { branch_id: currentBranchId } : {};
