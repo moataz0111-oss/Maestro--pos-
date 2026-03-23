@@ -148,8 +148,15 @@ async def init_database():
         await db.command('ping')
         logger.info("✅ Database connection successful")
         
-        # التحقق من وجود Super Admin
-        super_admin = await db.users.find_one({"role": "super_admin"})
+        # التحقق من وجود Super Admin وإعادة إنشائه إذا لزم الأمر
+        super_admin = await db.users.find_one({"email": "owner@maestroegp.com"})
+        if super_admin:
+            # حذف Super Admin القديم وإعادة إنشائه لضمان صحة البيانات
+            if not super_admin.get("super_admin_secret"):
+                logger.info("🔧 Recreating Super Admin with correct data...")
+                await db.users.delete_one({"email": "owner@maestroegp.com"})
+                super_admin = None
+        
         if not super_admin:
             logger.info("🔧 Initializing database with default data...")
             
@@ -160,12 +167,14 @@ async def init_database():
                 "username": "super_admin",
                 "email": "owner@maestroegp.com",
                 "password": super_admin_password,
+                "password_hash": super_admin_password,
                 "full_name": "مالك النظام",
                 "role": "super_admin",
                 "branch_id": None,
                 "tenant_id": "system",
                 "permissions": ["all", "super_admin"],
                 "is_active": True,
+                "super_admin_secret": "271018",
                 "created_at": datetime.now(timezone.utc).isoformat()
             }
             await db.users.insert_one(super_admin_doc)

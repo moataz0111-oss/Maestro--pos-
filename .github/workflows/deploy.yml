@@ -39,12 +39,12 @@ jobs:
           # إنشاء مجلدات
           mkdir -p certbot/conf certbot/www backups
           
-          # إيقاف كل containers القديمة
+          # إيقاف containers القديمة (بدون حذف البيانات)
           docker-compose down 2>/dev/null || true
           
           # بناء وتشغيل Docker
           echo "🔨 Building and starting services..."
-          docker-compose up -d --build
+          docker-compose up -d --build --force-recreate
           
           # انتظار بدء الخدمات
           echo "⏳ Waiting for services to start..."
