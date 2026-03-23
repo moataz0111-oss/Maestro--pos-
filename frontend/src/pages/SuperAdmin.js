@@ -4725,13 +4725,13 @@ export default function SuperAdmin() {
           </DialogHeader>
           
           <div className="space-y-4 py-4 max-h-[60vh] overflow-y-auto">
-            {/* الباقات الجديدة */}
+            {/* الباقات الثلاث: ذهبي، فضي، برونزي */}
             <div className="grid grid-cols-3 gap-3">
               {/* باقة برونزية */}
               <div className="space-y-2 p-3 bg-amber-900/20 rounded-lg border border-amber-700/30">
                 <div className="flex items-center gap-2">
                   <div className="w-3 h-3 rounded-full bg-amber-600"></div>
-                  <Label className="text-amber-400 text-sm font-bold">{t('برونزية')}</Label>
+                  <Label className="text-amber-400 text-sm font-bold">{t('برونزي')}</Label>
                 </div>
                 <div className="relative">
                   <span className="absolute right-2 top-1/2 -translate-y-1/2 text-green-400 text-sm">$</span>
@@ -4751,7 +4751,7 @@ export default function SuperAdmin() {
               <div className="space-y-2 p-3 bg-gray-500/20 rounded-lg border border-gray-500/30">
                 <div className="flex items-center gap-2">
                   <div className="w-3 h-3 rounded-full bg-gray-400"></div>
-                  <Label className="text-gray-300 text-sm font-bold">{t('فضية')}</Label>
+                  <Label className="text-gray-300 text-sm font-bold">{t('فضي')}</Label>
                 </div>
                 <div className="relative">
                   <span className="absolute right-2 top-1/2 -translate-y-1/2 text-green-400 text-sm">$</span>
@@ -4771,7 +4771,7 @@ export default function SuperAdmin() {
               <div className="space-y-2 p-3 bg-yellow-900/20 rounded-lg border border-yellow-600/30">
                 <div className="flex items-center gap-2">
                   <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
-                  <Label className="text-yellow-400 text-sm font-bold">{t('ذهبية')}</Label>
+                  <Label className="text-yellow-400 text-sm font-bold">{t('ذهبي')}</Label>
                 </div>
                 <div className="relative">
                   <span className="absolute right-2 top-1/2 -translate-y-1/2 text-green-400 text-sm">$</span>
@@ -4788,68 +4788,24 @@ export default function SuperAdmin() {
               </div>
             </div>
 
-            <div className="border-t border-gray-700 pt-4">
-              <p className="text-xs text-gray-500 mb-3">{t('الباقات القديمة (للتوافق)')}</p>
-              <div className="grid grid-cols-2 gap-3">
-                {/* سعر الاشتراك الأساسي */}
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full bg-blue-500"></div>
-                    <Label className="text-gray-400 text-xs">{t('أساسي')}</Label>
-                  </div>
-                  <div className="relative">
-                    <span className="absolute right-2 top-1/2 -translate-y-1/2 text-green-400 text-sm">$</span>
-                    <Input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={subscriptionPrices.basic}
-                      onChange={(e) => setSubscriptionPrices({...subscriptionPrices, basic: parseFloat(e.target.value) || 0})}
-                      className="bg-gray-700/50 border-gray-600 text-white pr-6 text-sm"
-                    />
-                  </div>
-                </div>
-
-                {/* سعر الاشتراك المميز */}
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full bg-purple-500"></div>
-                    <Label className="text-gray-400 text-xs">{t('مميز')}</Label>
-                  </div>
-                  <div className="relative">
-                    <span className="absolute right-2 top-1/2 -translate-y-1/2 text-green-400 text-sm">$</span>
-                    <Input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={subscriptionPrices.premium}
-                      onChange={(e) => setSubscriptionPrices({...subscriptionPrices, premium: parseFloat(e.target.value) || 0})}
-                      className="bg-gray-700/50 border-gray-600 text-white pr-6 text-sm"
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* ملخص الأسعار */}
+            {/* ملخص الأسعار السنوية - محسوب تلقائياً */}
             <div className="bg-gray-700/30 rounded-lg p-4">
               <p className="text-sm text-gray-400 mb-3">{t('ملخص الأسعار السنوية:')}</p>
-              <div className="grid grid-cols-2 gap-2 text-xs">
-                <div className="flex justify-between">
-                  <span className="text-amber-400">{t('برونزية')}</span>
-                  <span className="text-green-400">{t('${(subscriptionPrices.bronze * 12).toFixed(0)}/سنة')}</span>
+              <div className="grid grid-cols-3 gap-3 text-sm">
+                <div className="text-center p-2 bg-amber-900/30 rounded-lg">
+                  <span className="text-amber-400 block">{t('برونزي')}</span>
+                  <span className="text-green-400 font-bold">${(subscriptionPrices.bronze * 12).toFixed(0)}</span>
+                  <span className="text-gray-500 text-xs">/{t('سنة')}</span>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-300">{t('فضية')}</span>
-                  <span className="text-green-400">{t('${(subscriptionPrices.silver * 12).toFixed(0)}/سنة')}</span>
+                <div className="text-center p-2 bg-gray-600/30 rounded-lg">
+                  <span className="text-gray-300 block">{t('فضي')}</span>
+                  <span className="text-green-400 font-bold">${(subscriptionPrices.silver * 12).toFixed(0)}</span>
+                  <span className="text-gray-500 text-xs">/{t('سنة')}</span>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-yellow-400">{t('ذهبية')}</span>
-                  <span className="text-green-400">{t('${(subscriptionPrices.gold * 12).toFixed(0)}/سنة')}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-blue-400">{t('أساسي')}</span>
-                  <span className="text-green-400">{t('${(subscriptionPrices.basic * 12).toFixed(0)}/سنة')}</span>
+                <div className="text-center p-2 bg-yellow-900/30 rounded-lg">
+                  <span className="text-yellow-400 block">{t('ذهبي')}</span>
+                  <span className="text-green-400 font-bold">${(subscriptionPrices.gold * 12).toFixed(0)}</span>
+                  <span className="text-gray-500 text-xs">/{t('سنة')}</span>
                 </div>
               </div>
             </div>
