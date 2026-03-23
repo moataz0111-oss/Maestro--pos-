@@ -29,8 +29,10 @@ def seed_super_admin():
     super_admin = {
         "id": generate_id(),
         "email": "owner@maestroegp.com",
+        "password_hash": hash_password("owner123"),
         "password": hash_password("owner123"),
         "name": "مالك النظام",
+        "full_name": "مالك النظام",
         "role": "super_admin",
         "is_active": True,
         "super_admin_secret": "271018",
@@ -98,8 +100,10 @@ def seed_hani_tenant():
     admin_user = {
         "id": generate_id(),
         "email": "hanialdujaili@gmail.com",
+        "password_hash": hash_password("Hani@2024"),
         "password": hash_password("Hani@2024"),
         "name": "هاني الدجيلي",
+        "full_name": "هاني الدجيلي",
         "role": "admin",
         "tenant_id": tenant_id,
         "is_active": True,
@@ -175,8 +179,10 @@ def seed_demo_tenant():
     admin_user = {
         "id": generate_id(),
         "email": "demo@maestroegp.com",
+        "password_hash": hash_password("Demo@2024"),
         "password": hash_password("Demo@2024"),
         "name": "Demo User",
+        "full_name": "Demo User",
         "role": "admin",
         "tenant_id": tenant_id,
         "is_active": True,
