@@ -31,8 +31,29 @@ jobs:
           git fetch origin
           git reset --hard origin/conflict_230326_0646
           
-          # إعادة بناء وتشغيل Docker من المجلد الرئيسي
+          # إنشاء مجلدات SSL
+          mkdir -p certbot/conf certbot/www
+          
+          # إيقاف الخدمات القديمة
           docker-compose down 2>/dev/null || true
+          
+          # إنشاء شهادة SSL إذا لم تكن موجودة
+          if [ ! -f "certbot/conf/live/maestroegp.com/fullchain.pem" ]; then
+            echo "🔐 Getting SSL certificate..."
+            
+            # تشغيل nginx مؤقتاً للحصول على الشهادة
+            docker run -d --name temp-nginx -p 80:80 -v $(pwd)/certbot/www:/var/www/certbot nginx:alpine
+            sleep 5
+            
+            # الحصول على الشهادة
+            docker run --rm -v $(pwd)/certbot/conf:/etc/letsencrypt -v $(pwd)/certbot/www:/var/www/certbot certbot/certbot certonly --webroot --webroot-path=/var/www/certbot --email admin@maestroegp.com --agree-tos --no-eff-email -d maestroegp.com -d www.maestroegp.com || echo "SSL cert already exists or domain not pointing yet"
+            
+            # إيقاف nginx المؤقت
+            docker stop temp-nginx 2>/dev/null || true
+            docker rm temp-nginx 2>/dev/null || true
+          fi
+          
+          # تشغيل Docker Compose
           docker-compose up -d --build --remove-orphans
           
           # انتظار بدء الخدمات
