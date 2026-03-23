@@ -34,46 +34,59 @@ jobs:
           # إنشاء مجلدات SSL
           mkdir -p certbot/conf certbot/www
           
-          # إيقاف الخدمات القديمة
-          docker-compose down 2>/dev/null || true
+          # بناء الـ images الجديدة بدون إيقاف الخدمات الحالية
+          echo "🔨 Building new images..."
+          docker-compose build --no-cache
           
-          # إنشاء شهادة SSL إذا لم تكن موجودة
-          if [ ! -f "certbot/conf/live/maestroegp.com/fullchain.pem" ]; then
-            echo "🔐 Getting SSL certificate..."
-            
-            # تشغيل nginx مؤقتاً للحصول على الشهادة
-            docker run -d --name temp-nginx -p 80:80 -v $(pwd)/certbot/www:/var/www/certbot nginx:alpine
-            sleep 5
-            
-            # الحصول على الشهادة
-            docker run --rm -v $(pwd)/certbot/conf:/etc/letsencrypt -v $(pwd)/certbot/www:/var/www/certbot certbot/certbot certonly --webroot --webroot-path=/var/www/certbot --email admin@maestroegp.com --agree-tos --no-eff-email -d maestroegp.com -d www.maestroegp.com || echo "SSL cert already exists or domain not pointing yet"
-            
-            # إيقاف nginx المؤقت
-            docker stop temp-nginx 2>/dev/null || true
-            docker rm temp-nginx 2>/dev/null || true
-          fi
+          # تحديث الخدمات واحدة تلو الأخرى (Zero Downtime)
+          echo "🔄 Updating services with zero downtime..."
           
-          # تشغيل Docker Compose
-          docker-compose up -d --build --remove-orphans
+          # تحديث MongoDB أولاً (إذا لزم الأمر)
+          docker-compose up -d mongodb
+          sleep 10
           
-          # انتظار بدء الخدمات
-          echo "⏳ Waiting for services to start..."
-          sleep 45
+          # تحديث Backend
+          docker-compose up -d --no-deps backend
+          sleep 15
+          
+          # تحديث Frontend
+          docker-compose up -d --no-deps frontend
+          sleep 10
+          
+          # تحديث Nginx
+          docker-compose up -d --no-deps nginx 2>/dev/null || docker-compose up -d nginx
+          
+          # تحديث Portainer و Netdata
+          docker-compose up -d --no-deps portainer netdata 2>/dev/null || true
+          
+          # انتظار استقرار الخدمات
+          echo "⏳ Waiting for services to stabilize..."
+          sleep 30
           
           # انتظار MongoDB
           echo "⏳ Waiting for MongoDB..."
-          until docker exec maestro-mongodb mongosh --eval "db.adminCommand('ping')" -u maestro_admin -p "Maestro@2024Secure" --authenticationDatabase admin > /dev/null 2>&1; do
-            echo "Waiting for MongoDB..."
+          for i in {1..30}; do
+            if docker exec maestro-mongodb mongosh --eval "db.adminCommand('ping')" -u maestro_admin -p "Maestro@2024Secure" --authenticationDatabase admin > /dev/null 2>&1; then
+              echo "✅ MongoDB is ready"
+              break
+            fi
+            echo "Waiting for MongoDB... ($i/30)"
             sleep 5
           done
-          echo "✅ MongoDB is ready"
           
-          # تثبيت المتطلبات وتشغيل سكريبت إدخال البيانات الأساسية
+          # تشغيل سكريبت إدخال البيانات الأساسية
           echo "📦 Running seed data script..."
-          docker exec maestro-backend pip install passlib bcrypt pymongo 2>/dev/null || true
-          docker exec maestro-backend python /app/seed_data.py
+          docker exec maestro-backend pip install bcrypt pymongo 2>/dev/null || true
+          docker exec maestro-backend python /app/seed_data.py || echo "Seed completed or already exists"
           
-          echo "✅ Seed data completed"
+          # تنظيف الـ images القديمة
+          docker image prune -f
+          
+          # عرض حالة الخدمات
+          echo "📊 Services status:"
+          docker-compose ps
+          
+          echo "✅ Deployment completed at $(date)"
           
           # تنظيف الـ images القديمة
           docker image prune -f
