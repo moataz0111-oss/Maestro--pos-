@@ -49,8 +49,43 @@ services:
     networks:
       - maestro-network
 
+  # Portainer - إدارة Docker من واجهة ويب
+  portainer:
+    image: portainer/portainer-ce:latest
+    container_name: maestro-portainer
+    restart: always
+    ports:
+      - "9000:9000"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - portainer_data:/data
+    networks:
+      - maestro-network
+
+  # Netdata - مراقبة موارد السيرفر
+  netdata:
+    image: netdata/netdata:stable
+    container_name: maestro-netdata
+    restart: always
+    ports:
+      - "19999:19999"
+    cap_add:
+      - SYS_PTRACE
+    security_opt:
+      - apparmor:unconfined
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      - NETDATA_CLAIM_TOKEN=
+      - NETDATA_CLAIM_ROOMS=
+    networks:
+      - maestro-network
+
 volumes:
   mongodb_data:
+  portainer_data:
 
 networks:
   maestro-network:
