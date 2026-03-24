@@ -304,11 +304,9 @@ export default function SuperAdmin() {
   // أسعار الاشتراكات
   const [showPricesModal, setShowPricesModal] = useState(false);
   const [subscriptionPrices, setSubscriptionPrices] = useState({
-    bronze: 15,
-    silver: 30,
     gold: 50,
-    basic: 25,
-    premium: 50
+    silver: 30,
+    bronze: 15
   });
   const [savingPrices, setSavingPrices] = useState(false);
   
@@ -401,6 +399,7 @@ export default function SuperAdmin() {
       fetchOwnerSettings();
       fetchCurrencySettings();
       fetchSalesSummary();
+      fetchSubscriptionPrices();
     }
   }, [isAuthenticated]);
 
@@ -784,6 +783,22 @@ export default function SuperAdmin() {
       toast.error(t('فشل في حفظ الأسعار'));
     } finally {
       setSavingPrices(false);
+    }
+  };
+
+  // جلب أسعار الاشتراكات المحفوظة
+  const fetchSubscriptionPrices = async () => {
+    try {
+      const res = await axios.get(`${API}/super-admin/subscription-prices`);
+      if (res.data?.prices) {
+        setSubscriptionPrices({
+          bronze: res.data.prices.bronze?.monthly || 15,
+          silver: res.data.prices.silver?.monthly || 30,
+          gold: res.data.prices.gold?.monthly || 50
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching subscription prices:', error);
     }
   };
 
@@ -4829,22 +4844,22 @@ export default function SuperAdmin() {
           
           <div className="space-y-4 py-4 max-h-[60vh] overflow-y-auto">
             {/* الباقات الثلاث: ذهبي، فضي، برونزي */}
-            <div className="grid grid-cols-3 gap-3">
-              {/* باقة برونزية */}
-              <div className="space-y-2 p-3 bg-amber-900/20 rounded-lg border border-amber-700/30">
+            <div className="grid grid-cols-3 gap-3" dir="ltr">
+              {/* باقة ذهبية */}
+              <div className="space-y-2 p-3 bg-yellow-900/20 rounded-lg border border-yellow-600/30">
                 <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded-full bg-amber-600"></div>
-                  <Label className="text-amber-400 text-sm font-bold">{t('برونزي')}</Label>
+                  <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
+                  <Label className="text-yellow-400 text-sm font-bold">🥇 {t('ذهبي')}</Label>
                 </div>
                 <div className="relative">
-                  <span className="absolute right-2 top-1/2 -translate-y-1/2 text-green-400 text-sm">$</span>
+                  <span className="absolute left-2 top-1/2 -translate-y-1/2 text-green-400 text-sm">$</span>
                   <Input
                     type="number"
                     min="0"
                     step="0.01"
-                    value={subscriptionPrices.bronze}
-                    onChange={(e) => setSubscriptionPrices({...subscriptionPrices, bronze: parseFloat(e.target.value) || 0})}
-                    className="bg-gray-700/50 border-gray-600 text-white pr-6 text-center"
+                    value={subscriptionPrices.gold || ''}
+                    onChange={(e) => setSubscriptionPrices({...subscriptionPrices, gold: parseFloat(e.target.value) || 0})}
+                    className="bg-gray-700/50 border-gray-600 text-white pl-6 text-center"
                   />
                 </div>
                 <p className="text-xs text-gray-500 text-center">{t('/شهر')}</p>
@@ -4854,37 +4869,37 @@ export default function SuperAdmin() {
               <div className="space-y-2 p-3 bg-gray-500/20 rounded-lg border border-gray-500/30">
                 <div className="flex items-center gap-2">
                   <div className="w-3 h-3 rounded-full bg-gray-400"></div>
-                  <Label className="text-gray-300 text-sm font-bold">{t('فضي')}</Label>
+                  <Label className="text-gray-300 text-sm font-bold">🥈 {t('فضي')}</Label>
                 </div>
                 <div className="relative">
-                  <span className="absolute right-2 top-1/2 -translate-y-1/2 text-green-400 text-sm">$</span>
+                  <span className="absolute left-2 top-1/2 -translate-y-1/2 text-green-400 text-sm">$</span>
                   <Input
                     type="number"
                     min="0"
                     step="0.01"
-                    value={subscriptionPrices.silver}
+                    value={subscriptionPrices.silver || ''}
                     onChange={(e) => setSubscriptionPrices({...subscriptionPrices, silver: parseFloat(e.target.value) || 0})}
-                    className="bg-gray-700/50 border-gray-600 text-white pr-6 text-center"
+                    className="bg-gray-700/50 border-gray-600 text-white pl-6 text-center"
                   />
                 </div>
                 <p className="text-xs text-gray-500 text-center">{t('/شهر')}</p>
               </div>
 
-              {/* باقة ذهبية */}
-              <div className="space-y-2 p-3 bg-yellow-900/20 rounded-lg border border-yellow-600/30">
+              {/* باقة برونزية */}
+              <div className="space-y-2 p-3 bg-amber-900/20 rounded-lg border border-amber-700/30">
                 <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
-                  <Label className="text-yellow-400 text-sm font-bold">{t('ذهبي')}</Label>
+                  <div className="w-3 h-3 rounded-full bg-amber-600"></div>
+                  <Label className="text-amber-400 text-sm font-bold">🥉 {t('برونزي')}</Label>
                 </div>
                 <div className="relative">
-                  <span className="absolute right-2 top-1/2 -translate-y-1/2 text-green-400 text-sm">$</span>
+                  <span className="absolute left-2 top-1/2 -translate-y-1/2 text-green-400 text-sm">$</span>
                   <Input
                     type="number"
                     min="0"
                     step="0.01"
-                    value={subscriptionPrices.gold}
-                    onChange={(e) => setSubscriptionPrices({...subscriptionPrices, gold: parseFloat(e.target.value) || 0})}
-                    className="bg-gray-700/50 border-gray-600 text-white pr-6 text-center"
+                    value={subscriptionPrices.bronze || ''}
+                    onChange={(e) => setSubscriptionPrices({...subscriptionPrices, bronze: parseFloat(e.target.value) || 0})}
+                    className="bg-gray-700/50 border-gray-600 text-white pl-6 text-center"
                   />
                 </div>
                 <p className="text-xs text-gray-500 text-center">{t('/شهر')}</p>
@@ -4894,20 +4909,20 @@ export default function SuperAdmin() {
             {/* ملخص الأسعار السنوية - محسوب تلقائياً */}
             <div className="bg-gray-700/30 rounded-lg p-4">
               <p className="text-sm text-gray-400 mb-3">{t('ملخص الأسعار السنوية:')}</p>
-              <div className="grid grid-cols-3 gap-3 text-sm">
-                <div className="text-center p-2 bg-amber-900/30 rounded-lg">
-                  <span className="text-amber-400 block">{t('برونزي')}</span>
-                  <span className="text-green-400 font-bold">${(subscriptionPrices.bronze * 12).toFixed(0)}</span>
+              <div className="grid grid-cols-3 gap-3 text-sm" dir="ltr">
+                <div className="text-center p-2 bg-yellow-900/30 rounded-lg">
+                  <span className="text-yellow-400 block">🥇 {t('ذهبي')}</span>
+                  <span className="text-green-400 font-bold">${((subscriptionPrices.gold || 0) * 12).toFixed(0)}</span>
                   <span className="text-gray-500 text-xs">/{t('سنة')}</span>
                 </div>
                 <div className="text-center p-2 bg-gray-600/30 rounded-lg">
-                  <span className="text-gray-300 block">{t('فضي')}</span>
-                  <span className="text-green-400 font-bold">${(subscriptionPrices.silver * 12).toFixed(0)}</span>
+                  <span className="text-gray-300 block">🥈 {t('فضي')}</span>
+                  <span className="text-green-400 font-bold">${((subscriptionPrices.silver || 0) * 12).toFixed(0)}</span>
                   <span className="text-gray-500 text-xs">/{t('سنة')}</span>
                 </div>
-                <div className="text-center p-2 bg-yellow-900/30 rounded-lg">
-                  <span className="text-yellow-400 block">{t('ذهبي')}</span>
-                  <span className="text-green-400 font-bold">${(subscriptionPrices.gold * 12).toFixed(0)}</span>
+                <div className="text-center p-2 bg-amber-900/30 rounded-lg">
+                  <span className="text-amber-400 block">🥉 {t('برونزي')}</span>
+                  <span className="text-green-400 font-bold">${((subscriptionPrices.bronze || 0) * 12).toFixed(0)}</span>
                   <span className="text-gray-500 text-xs">/{t('سنة')}</span>
                 </div>
               </div>

@@ -9002,8 +9002,6 @@ class SubscriptionPricesUpdate(BaseModel):
     bronze: float = 15  # السعر الشهري للبرونزية بالدولار
     silver: float = 30  # السعر الشهري للفضية بالدولار
     gold: float = 50  # السعر الشهري للذهبية بالدولار
-    basic: float = 25  # السعر الشهري للأساسي بالدولار
-    premium: float = 50  # السعر الشهري للمميز بالدولار
 
 @api_router.get("/super-admin/subscription-prices")
 async def get_subscription_prices(current_user: dict = Depends(verify_super_admin)):
@@ -9012,11 +9010,9 @@ async def get_subscription_prices(current_user: dict = Depends(verify_super_admi
     
     # الأسعار الافتراضية بالدولار
     default_prices = {
-        "bronze": {"monthly": 15, "name": "برونزية"},
-        "silver": {"monthly": 30, "name": "فضية"},
         "gold": {"monthly": 50, "name": "ذهبية"},
-        "basic": {"monthly": 25, "name": "أساسي"},
-        "premium": {"monthly": 50, "name": "مميز"},
+        "silver": {"monthly": 30, "name": "فضية"},
+        "bronze": {"monthly": 15, "name": "برونزية"},
         "trial": {"monthly": 0, "name": "تجريبي"},
         "demo": {"monthly": 0, "name": "عرض"}
     }
@@ -9037,11 +9033,9 @@ async def update_subscription_prices(prices: SubscriptionPricesUpdate, current_u
     """تحديث أسعار الاشتراكات بالدولار"""
     
     new_prices = {
-        "bronze": {"monthly": prices.bronze, "name": "برونزية"},
-        "silver": {"monthly": prices.silver, "name": "فضية"},
         "gold": {"monthly": prices.gold, "name": "ذهبية"},
-        "basic": {"monthly": prices.basic, "name": "أساسي"},
-        "premium": {"monthly": prices.premium, "name": "مميز"},
+        "silver": {"monthly": prices.silver, "name": "فضية"},
+        "bronze": {"monthly": prices.bronze, "name": "برونزية"},
         "trial": {"monthly": 0, "name": "تجريبي"},
         "demo": {"monthly": 0, "name": "عرض"}
     }
