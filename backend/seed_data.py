@@ -26,8 +26,11 @@ def generate_id():
 def seed_super_admin():
     """إنشاء حساب Super Admin"""
     
-    # حذف المستخدم القديم إذا وجد
-    db.users.delete_one({"email": "owner@maestroegp.com"})
+    # التحقق من وجود Super Admin - لا نحذف البيانات الموجودة
+    existing_admin = db.users.find_one({"email": "owner@maestroegp.com"})
+    if existing_admin:
+        print("✅ Super Admin موجود مسبقاً - تخطي")
+        return existing_admin.get("id")
     
     # إنشاء hash واحد فقط
     password_hashed = hash_password("owner123")
@@ -91,29 +94,31 @@ def seed_hani_tenant():
         db.tenants.insert_one(tenant)
         print("✅ Hani tenant created: Graffiti Burger")
     
-    # حذف المستخدم القديم إذا وجد
-    db.users.delete_one({"email": "hanialdujaili@gmail.com"})
-    
-    # إنشاء hash واحد فقط
-    password_hashed = hash_password("Hani@2024")
-    
-    admin_user = {
-        "id": generate_id(),
-        "username": f"hani_{generate_id()[:8]}",
-        "email": "hanialdujaili@gmail.com",
-        "password_hash": password_hashed,
-        "password": password_hashed,
-        "name": "هاني الدجيلي",
-        "full_name": "هاني الدجيلي",
-        "role": "admin",
-        "tenant_id": tenant_id,
-        "is_active": True,
-        "created_at": datetime.now(timezone.utc).isoformat(),
-        "updated_at": datetime.now(timezone.utc).isoformat()
-    }
-    
-    db.users.insert_one(admin_user)
-    print("✅ Hani admin created: hanialdujaili@gmail.com / Hani@2024")
+    # التحقق من وجود المستخدم - لا نحذف البيانات الموجودة
+    existing_user = db.users.find_one({"email": "hanialdujaili@gmail.com"})
+    if existing_user:
+        print("✅ Hani admin موجود مسبقاً - تخطي")
+    else:
+        # إنشاء hash واحد فقط
+        password_hashed = hash_password("Hani@2024")
+        
+        admin_user = {
+            "id": generate_id(),
+            "username": f"hani_{generate_id()[:8]}",
+            "email": "hanialdujaili@gmail.com",
+            "password_hash": password_hashed,
+            "password": password_hashed,
+            "name": "هاني الدجيلي",
+            "full_name": "هاني الدجيلي",
+            "role": "admin",
+            "tenant_id": tenant_id,
+            "is_active": True,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        }
+        
+        db.users.insert_one(admin_user)
+        print("✅ Hani admin created: hanialdujaili@gmail.com / Hani@2024")
     
     # إنشاء فرع رئيسي لهاني
     branch = {
@@ -172,29 +177,31 @@ def seed_demo_tenant():
         db.tenants.insert_one(tenant)
         print("✅ Demo tenant created")
     
-    # حذف المستخدم القديم إذا وجد
-    db.users.delete_one({"email": "demo@maestroegp.com"})
-    
-    # إنشاء hash واحد فقط
-    password_hashed = hash_password("Demo@2024")
-    
-    admin_user = {
-        "id": generate_id(),
-        "username": f"demo_{generate_id()[:8]}",
-        "email": "demo@maestroegp.com",
-        "password_hash": password_hashed,
-        "password": password_hashed,
-        "name": "Demo User",
-        "full_name": "Demo User",
-        "role": "admin",
-        "tenant_id": tenant_id,
-        "is_active": True,
-        "created_at": datetime.now(timezone.utc).isoformat(),
-        "updated_at": datetime.now(timezone.utc).isoformat()
-    }
-    
-    db.users.insert_one(admin_user)
-    print("✅ Demo admin created: demo@maestroegp.com / Demo@2024")
+    # التحقق من وجود المستخدم - لا نحذف البيانات الموجودة
+    existing_user = db.users.find_one({"email": "demo@maestroegp.com"})
+    if existing_user:
+        print("✅ Demo admin موجود مسبقاً - تخطي")
+    else:
+        # إنشاء hash واحد فقط
+        password_hashed = hash_password("Demo@2024")
+        
+        admin_user = {
+            "id": generate_id(),
+            "username": f"demo_{generate_id()[:8]}",
+            "email": "demo@maestroegp.com",
+            "password_hash": password_hashed,
+            "password": password_hashed,
+            "name": "Demo User",
+            "full_name": "Demo User",
+            "role": "admin",
+            "tenant_id": tenant_id,
+            "is_active": True,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        }
+        
+        db.users.insert_one(admin_user)
+        print("✅ Demo admin created: demo@maestroegp.com / Demo@2024")
     
     # إنشاء فرع رئيسي للـ Demo
     branch = {

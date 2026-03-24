@@ -65,6 +65,21 @@
 **الملفات المعدلة**:
 - `/app/backend/server.py` - السطور 1243-1250, 4593-4644
 
+### Data Persistence on Deployment ✅ (Fixed - March 24, 2026)
+**المشكلة**: البيانات (المبيعات، المنتجات، التعديلات) كانت تُحذف عند كل تحديث/نشر للتطبيق.
+
+**السبب**: سكريبتات `seed_data.py` و `seed_demo_data.py` كانت تحتوي على أوامر `delete_many()` و `delete_one()` التي تحذف البيانات الموجودة قبل إعادة إنشائها.
+
+**الحل**:
+- [x] تعديل جميع دوال الـ seed للتحقق من وجود البيانات أولاً
+- [x] إذا البيانات موجودة → تخطي (لا حذف ولا إضافة)
+- [x] إذا البيانات غير موجودة → إضافة فقط
+- [x] حذف جميع أوامر `delete_many()` و `delete_one()` من السكريبتات
+
+**الملفات المعدلة**:
+- `/app/backend/seed_data.py`
+- `/app/backend/seed_demo_data.py`
+
 ### Production Deployment Files ✅ (Created - March 23, 2026)
 - [x] إنشاء سكريبت `seed_data.py` لإدخال البيانات الأساسية (Super Admin, Hani, Demo)
 - [x] إنشاء دليل النشر `PRODUCTION_GUIDE.md` مع جميع الأوامر
@@ -136,6 +151,7 @@
 - ✅ Pending orders count shows correctly in offline mode
 - ✅ Opening orders from pending list works in offline mode
 - ✅ Product Extras included in Sales Reports (Fixed March 24, 2026)
+- ✅ Data persistence on deployment (Fixed March 24, 2026) - البيانات لن تُحذف بعد الآن
 - Mocked: ZKTeco fingerprint integration
 
 ---

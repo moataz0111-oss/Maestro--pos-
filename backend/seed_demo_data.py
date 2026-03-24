@@ -28,8 +28,13 @@ def seed_branches():
     """إضافة الفروع"""
     print("📍 إضافة الفروع...")
     
-    # حذف الفروع القديمة
-    db.branches.delete_many({"tenant_id": TENANT_ID})
+    # التحقق من وجود فروع مسبقاً - لا نحذف البيانات الموجودة
+    existing_branches = list(db.branches.find({"tenant_id": TENANT_ID}))
+    if existing_branches:
+        print(f"✅ الفروع موجودة مسبقاً ({len(existing_branches)} فرع) - تخطي")
+        return existing_branches
+    
+    # إضافة الفروع فقط إذا لم تكن موجودة
     
     branches = [
         {
@@ -81,8 +86,13 @@ def seed_categories():
     """إضافة الفئات"""
     print("📂 إضافة الفئات...")
     
-    # حذف الفئات القديمة
-    db.categories.delete_many({"tenant_id": TENANT_ID})
+    # التحقق من وجود فئات مسبقاً - لا نحذف البيانات الموجودة
+    existing_categories = list(db.categories.find({"tenant_id": TENANT_ID}))
+    if existing_categories:
+        print(f"✅ الفئات موجودة مسبقاً ({len(existing_categories)} فئة) - تخطي")
+        return existing_categories
+    
+    # إضافة الفئات فقط إذا لم تكن موجودة
     
     categories = [
         {
@@ -167,8 +177,11 @@ def seed_products(categories):
     """إضافة المنتجات"""
     print("🍔 إضافة المنتجات...")
     
-    # حذف المنتجات القديمة
-    db.products.delete_many({"tenant_id": TENANT_ID})
+    # التحقق من وجود منتجات مسبقاً - لا نحذف البيانات الموجودة
+    existing_products = db.products.count_documents({"tenant_id": TENANT_ID})
+    if existing_products > 0:
+        print(f"✅ المنتجات موجودة مسبقاً ({existing_products} منتج) - تخطي")
+        return
     
     # الحصول على معرفات الفئات
     cat_ids = {cat["name"]: cat["id"] for cat in categories}
@@ -475,8 +488,11 @@ def seed_tables(branches):
     """إضافة الطاولات"""
     print("🪑 إضافة الطاولات...")
     
-    # حذف الطاولات القديمة
-    db.tables.delete_many({"tenant_id": TENANT_ID})
+    # التحقق من وجود طاولات مسبقاً - لا نحذف البيانات الموجودة
+    existing_tables = db.tables.count_documents({"tenant_id": TENANT_ID})
+    if existing_tables > 0:
+        print(f"✅ الطاولات موجودة مسبقاً ({existing_tables} طاولة) - تخطي")
+        return
     
     tables = []
     for branch in branches:
@@ -501,8 +517,11 @@ def seed_customers():
     """إضافة عملاء تجريبيين"""
     print("👥 إضافة العملاء...")
     
-    # حذف العملاء القدامى
-    db.customers.delete_many({"tenant_id": TENANT_ID})
+    # التحقق من وجود عملاء مسبقاً - لا نحذف البيانات الموجودة
+    existing_customers = db.customers.count_documents({"tenant_id": TENANT_ID})
+    if existing_customers > 0:
+        print(f"✅ العملاء موجودون مسبقاً ({existing_customers} عميل) - تخطي")
+        return
     
     customers = [
         {
@@ -584,11 +603,14 @@ def seed_users(branches):
     def hash_password(password):
         return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
     
-    # حذف المستخدمين القدامى (باستثناء الأدمن)
-    db.users.delete_many({
+    # التحقق من وجود مستخدمين إضافيين (غير الأدمن) - لا نحذف البيانات الموجودة
+    existing_users = db.users.count_documents({
         "tenant_id": TENANT_ID,
         "email": {"$ne": "hanialdujaili@gmail.com"}
     })
+    if existing_users > 0:
+        print(f"✅ المستخدمون موجودون مسبقاً ({existing_users} مستخدم) - تخطي")
+        return
     
     users = []
     password_hash = hash_password("123456")
