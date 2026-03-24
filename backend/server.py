@@ -404,7 +404,52 @@ async def startup_event():
     # تشغيل التحديثات التلقائية لجميع العملاء
     await apply_automatic_updates()
     
+    # إضافة الخلفيات الافتراضية إذا لم تكن موجودة
+    await seed_default_backgrounds()
+    
     logger.info("✅ Application started successfully")
+
+async def seed_default_backgrounds():
+    """إضافة الخلفيات الافتراضية لصفحة الدخول"""
+    try:
+        existing = await db.settings.find_one({"type": "login_backgrounds"})
+        if existing and existing.get("value", {}).get("backgrounds"):
+            # تحقق من أن الخلفيات ليست فارغة
+            if len(existing.get("value", {}).get("backgrounds", [])) > 0:
+                logger.info("   ✅ Login backgrounds already exist")
+                return
+        
+        # الخلفيات الافتراضية
+        backgrounds = [
+            {"id": str(uuid.uuid4()), "image_url": "/api/uploads/backgrounds/restaurant_1.jpg", "title": "مطعم فاخر 1", "animation_type": "fade", "animation_duration": 8, "overlay_opacity": 0.5, "is_active": True, "sort_order": 0, "created_at": datetime.now(timezone.utc).isoformat()},
+            {"id": str(uuid.uuid4()), "image_url": "/api/uploads/backgrounds/restaurant_2.jpg", "title": "مطعم فاخر 2", "animation_type": "fade", "animation_duration": 8, "overlay_opacity": 0.5, "is_active": True, "sort_order": 1, "created_at": datetime.now(timezone.utc).isoformat()},
+            {"id": str(uuid.uuid4()), "image_url": "/api/uploads/backgrounds/restaurant_3.jpg", "title": "مطعم فاخر 3", "animation_type": "fade", "animation_duration": 8, "overlay_opacity": 0.5, "is_active": True, "sort_order": 2, "created_at": datetime.now(timezone.utc).isoformat()},
+            {"id": str(uuid.uuid4()), "image_url": "/api/uploads/backgrounds/restaurant_4.jpg", "title": "مطعم فاخر 4", "animation_type": "fade", "animation_duration": 8, "overlay_opacity": 0.5, "is_active": True, "sort_order": 3, "created_at": datetime.now(timezone.utc).isoformat()},
+            {"id": str(uuid.uuid4()), "image_url": "/api/uploads/backgrounds/restaurant_5.jpg", "title": "مطعم فاخر 5", "animation_type": "fade", "animation_duration": 8, "overlay_opacity": 0.5, "is_active": True, "sort_order": 4, "created_at": datetime.now(timezone.utc).isoformat()},
+            {"id": str(uuid.uuid4()), "image_url": "/api/uploads/backgrounds/restaurant_6.jpg", "title": "مطعم فاخر 6", "animation_type": "fade", "animation_duration": 8, "overlay_opacity": 0.5, "is_active": True, "sort_order": 5, "created_at": datetime.now(timezone.utc).isoformat()},
+        ]
+        
+        settings = {
+            "backgrounds": backgrounds,
+            "animation_enabled": True,
+            "transition_type": "fade",
+            "transition_duration": 1.5,
+            "auto_play": True,
+            "show_logo": True,
+            "logo_url": None,
+            "logo_animation": "pulse",
+            "overlay_color": "rgba(0,0,0,0.5)",
+            "text_color": "#ffffff"
+        }
+        
+        await db.settings.update_one(
+            {"type": "login_backgrounds"},
+            {"$set": {"type": "login_backgrounds", "value": settings}},
+            upsert=True
+        )
+        logger.info(f"   ✅ Added {len(backgrounds)} default backgrounds")
+    except Exception as e:
+        logger.error(f"   ❌ Failed to seed backgrounds: {e}")
 
 async def apply_automatic_updates():
     """تطبيق التحديثات التلقائية على جميع العملاء عند كل بدء تشغيل"""
