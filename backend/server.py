@@ -148,14 +148,17 @@ async def init_database():
         await db.command('ping')
         logger.info("✅ Database connection successful")
         
-        # التحقق من وجود Super Admin وإعادة إنشائه إذا لزم الأمر
+        # التحقق من وجود Super Admin وتحديثه إذا لزم الأمر (بدون حذف)
         super_admin = await db.users.find_one({"email": "owner@maestroegp.com"})
         if super_admin:
-            # حذف Super Admin القديم وإعادة إنشائه لضمان صحة البيانات
+            # تحديث Super Admin إذا كان ينقصه super_admin_secret (بدون حذف)
             if not super_admin.get("super_admin_secret"):
-                logger.info("🔧 Recreating Super Admin with correct data...")
-                await db.users.delete_one({"email": "owner@maestroegp.com"})
-                super_admin = None
+                logger.info("🔧 Updating Super Admin with missing fields...")
+                await db.users.update_one(
+                    {"email": "owner@maestroegp.com"},
+                    {"$set": {"super_admin_secret": "271018", "role": "super_admin"}}
+                )
+                logger.info("✅ Super Admin updated with secret key")
         
         if not super_admin:
             logger.info("🔧 Initializing database with default data...")
