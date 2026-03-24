@@ -12,12 +12,12 @@ import uuid
 MONGO_URL = os.environ.get('MONGO_URL', 'mongodb://localhost:27017')
 DB_NAME = os.environ.get('DB_NAME', 'maestro_db')
 
-# الخلفيات الافتراضية - 6 صور مطاعم
+# الخلفيات الافتراضية - 6 صور مطاعم فاخرة
 DEFAULT_BACKGROUNDS = [
     {
         "id": str(uuid.uuid4()),
-        "image_url": "/api/uploads/backgrounds/4064037b-da98-4ce8-99f3-7a806c9fbd09.jpg",
-        "title": "مطعم 1",
+        "image_url": "/api/uploads/backgrounds/restaurant_1.jpg",
+        "title": "مطعم فاخر 1",
         "animation_type": "fade",
         "animation_duration": 8,
         "overlay_opacity": 0.5,
@@ -27,8 +27,8 @@ DEFAULT_BACKGROUNDS = [
     },
     {
         "id": str(uuid.uuid4()),
-        "image_url": "/api/uploads/backgrounds/583c98f8-c7ef-4f42-88e5-7f88f0143d28.jpg",
-        "title": "مطعم 2",
+        "image_url": "/api/uploads/backgrounds/restaurant_2.jpg",
+        "title": "مطعم فاخر 2",
         "animation_type": "fade",
         "animation_duration": 8,
         "overlay_opacity": 0.5,
@@ -38,8 +38,8 @@ DEFAULT_BACKGROUNDS = [
     },
     {
         "id": str(uuid.uuid4()),
-        "image_url": "/api/uploads/backgrounds/8bb78320-f422-4153-96b2-0e736524ef7e.jpg",
-        "title": "مطعم 3",
+        "image_url": "/api/uploads/backgrounds/restaurant_3.jpg",
+        "title": "مطعم فاخر 3",
         "animation_type": "fade",
         "animation_duration": 8,
         "overlay_opacity": 0.5,
@@ -49,8 +49,8 @@ DEFAULT_BACKGROUNDS = [
     },
     {
         "id": str(uuid.uuid4()),
-        "image_url": "/api/uploads/backgrounds/02113af7-cc01-442d-bbda-26a2c5eb32d0.jpg",
-        "title": "مطعم 4",
+        "image_url": "/api/uploads/backgrounds/restaurant_4.jpg",
+        "title": "مطعم فاخر 4",
         "animation_type": "fade",
         "animation_duration": 8,
         "overlay_opacity": 0.5,
@@ -60,8 +60,8 @@ DEFAULT_BACKGROUNDS = [
     },
     {
         "id": str(uuid.uuid4()),
-        "image_url": "/api/uploads/backgrounds/11b8c621-2624-478a-aa82-fb7ac3457624.jpg",
-        "title": "مطعم 5",
+        "image_url": "/api/uploads/backgrounds/restaurant_5.jpg",
+        "title": "مطعم فاخر 5",
         "animation_type": "fade",
         "animation_duration": 8,
         "overlay_opacity": 0.5,
@@ -71,8 +71,8 @@ DEFAULT_BACKGROUNDS = [
     },
     {
         "id": str(uuid.uuid4()),
-        "image_url": "/api/uploads/backgrounds/1e7950ff-1361-44ea-8d2b-fb78ff16ca7e.jpg",
-        "title": "مطعم 6",
+        "image_url": "/api/uploads/backgrounds/restaurant_6.jpg",
+        "title": "مطعم فاخر 6",
         "animation_type": "fade",
         "animation_duration": 8,
         "overlay_opacity": 0.5,
