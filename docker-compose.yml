@@ -29,7 +29,7 @@ services:
       - DB_NAME=maestro_db
       - JWT_SECRET=your-super-secret-jwt-key-change-this-in-production
     volumes:
-      - uploads_data:/app/uploads
+      - ./uploads:/app/uploads
     networks:
       - maestro-network
 
@@ -111,7 +111,6 @@ services:
 volumes:
   mongodb_data:
   portainer_data:
-  uploads_data:
 
 networks:
   maestro-network:
