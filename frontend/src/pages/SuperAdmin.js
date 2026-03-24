@@ -1693,20 +1693,16 @@ export default function SuperAdmin() {
       demo: 'bg-gray-500/20 text-gray-400',
       bronze: 'bg-amber-600/20 text-amber-400',
       silver: 'bg-gray-400/20 text-gray-300',
-      gold: 'bg-yellow-500/20 text-yellow-400',
-      basic: 'bg-blue-500/20 text-blue-400',
-      premium: 'bg-purple-500/20 text-purple-400'
+      gold: 'bg-yellow-500/20 text-yellow-400'
     };
     const labels = { 
       trial: t('تجريبي'), 
       demo: t('عرض'),
       bronze: '🥉 ' + t('برونزية'), 
       silver: '🥈 ' + t('فضية'), 
-      gold: '🥇 ' + t('ذهبية'),
-      basic: t('أساسي'), 
-      premium: t('مميز') 
+      gold: '🥇 ' + t('ذهبية')
     };
-    return <Badge className={styles[type] || 'bg-gray-500/20 text-gray-400'}>{labels[type] || type}</Badge>;
+    return <Badge className={styles[type] || 'bg-gray-500/20 text-gray-400'}>{labels[type] || t('غير محدد')}</Badge>;
   };
 
   const getStatusBadge = (status) => {
@@ -2779,7 +2775,12 @@ export default function SuperAdmin() {
                               <div>
                                 <p className="font-medium">{item.tenant_name}</p>
                                 <p className="text-xs text-gray-400">
-                                  {item.subscription_type === 'basic' ? t('أساسي') : t('مميز')} - {item.duration_months} {t('شهر')}
+                                  {item.subscription_type === 'gold' ? '🥇 ' + t('ذهبية') : 
+                                   item.subscription_type === 'silver' ? '🥈 ' + t('فضية') : 
+                                   item.subscription_type === 'bronze' ? '🥉 ' + t('برونزية') : 
+                                   item.subscription_type === 'demo' ? t('تجريبي') : 
+                                   item.subscription_type === 'trial' ? t('فترة تجريبية') : 
+                                   t('غير محدد')} - {item.duration_months} {t('شهر')}
                                 </p>
                               </div>
                               <span className="text-green-400 font-medium">
@@ -2814,7 +2815,12 @@ export default function SuperAdmin() {
                           <div key={type} className="bg-gray-800/50 rounded-lg p-3 text-center">
                             <p className="text-2xl font-bold">{data.count}</p>
                             <p className="text-xs text-gray-400">
-                              {type === 'premium' ? t('مميز') : type === 'basic' ? t('أساسي') : type === 'demo' ? t('عرض') : type === 'trial' ? t('تجريبي') : type}
+                              {type === 'gold' ? '🥇 ' + t('ذهبية') : 
+                               type === 'silver' ? '🥈 ' + t('فضية') : 
+                               type === 'bronze' ? '🥉 ' + t('برونزية') : 
+                               type === 'demo' ? t('عرض') : 
+                               type === 'trial' ? t('تجريبي') : 
+                               t('غير محدد')}
                             </p>
                             <p className="text-sm text-purple-400 mt-1">
                               ${subscriptionsDashboard.subscription_prices[type]?.monthly || 0}/{t('شهر')}
@@ -3620,12 +3626,14 @@ export default function SuperAdmin() {
                       <div className="flex justify-between items-center p-2 bg-gray-700/30 rounded">
                         <span className="text-gray-400">{t('نوع الاشتراك')}</span>
                         <Badge className={
-                          (tenantDetails.tenant?.subscription_type || selectedTenant?.subscription_type) === 'premium' ? 'bg-purple-500/20 text-purple-400' :
-                          (tenantDetails.tenant?.subscription_type || selectedTenant?.subscription_type) === 'basic' ? 'bg-blue-500/20 text-blue-400' :
-                          'bg-yellow-500/20 text-yellow-400'
+                          (tenantDetails.tenant?.subscription_type || selectedTenant?.subscription_type) === 'gold' ? 'bg-yellow-500/20 text-yellow-400' :
+                          (tenantDetails.tenant?.subscription_type || selectedTenant?.subscription_type) === 'silver' ? 'bg-gray-400/20 text-gray-300' :
+                          (tenantDetails.tenant?.subscription_type || selectedTenant?.subscription_type) === 'bronze' ? 'bg-amber-600/20 text-amber-400' :
+                          'bg-blue-500/20 text-blue-400'
                         }>
-                          {(tenantDetails.tenant?.subscription_type || selectedTenant?.subscription_type) === 'premium' ? t('مميز') : 
-                           (tenantDetails.tenant?.subscription_type || selectedTenant?.subscription_type) === 'basic' ? t('أساسي') : 
+                          {(tenantDetails.tenant?.subscription_type || selectedTenant?.subscription_type) === 'gold' ? '🥇 ' + t('ذهبية') : 
+                           (tenantDetails.tenant?.subscription_type || selectedTenant?.subscription_type) === 'silver' ? '🥈 ' + t('فضية') : 
+                           (tenantDetails.tenant?.subscription_type || selectedTenant?.subscription_type) === 'bronze' ? '🥉 ' + t('برونزية') : 
                            (tenantDetails.tenant?.subscription_type || selectedTenant?.subscription_type) === 'demo' ? t('تجريبي') : t('فترة تجريبية')}
                         </Badge>
                       </div>
