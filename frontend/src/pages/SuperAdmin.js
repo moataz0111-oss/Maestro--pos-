@@ -2954,11 +2954,9 @@ export default function SuperAdmin() {
                   <SelectContent>
                     <SelectItem value="demo">{t('تجريبي')}</SelectItem>
                     <SelectItem value="trial">{t('فترة تجريبية')}</SelectItem>
-                    <SelectItem value="bronze">{t('برونزية')}</SelectItem>
-                    <SelectItem value="silver">{t('فضية')}</SelectItem>
-                    <SelectItem value="gold">{t('ذهبية')}</SelectItem>
-                    <SelectItem value="basic">{t('أساسي')}</SelectItem>
-                    <SelectItem value="premium">{t('مميز')}</SelectItem>
+                    <SelectItem value="bronze">🥉 {t('برونزية')}</SelectItem>
+                    <SelectItem value="silver">🥈 {t('فضية')}</SelectItem>
+                    <SelectItem value="gold">🥇 {t('ذهبية')}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -3107,11 +3105,9 @@ export default function SuperAdmin() {
                   <SelectContent>
                     <SelectItem value="demo">{t('تجريبي')}</SelectItem>
                     <SelectItem value="trial">{t('فترة تجريبية')}</SelectItem>
-                    <SelectItem value="bronze">{t('برونزية')}</SelectItem>
-                    <SelectItem value="silver">{t('فضية')}</SelectItem>
-                    <SelectItem value="gold">{t('ذهبية')}</SelectItem>
-                    <SelectItem value="basic">{t('أساسي')}</SelectItem>
-                    <SelectItem value="premium">{t('مميز')}</SelectItem>
+                    <SelectItem value="bronze">🥉 {t('برونزية')}</SelectItem>
+                    <SelectItem value="silver">🥈 {t('فضية')}</SelectItem>
+                    <SelectItem value="gold">🥇 {t('ذهبية')}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
