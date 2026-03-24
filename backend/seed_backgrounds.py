@@ -12,7 +12,7 @@ import uuid
 MONGO_URL = os.environ.get('MONGO_URL', 'mongodb://localhost:27017')
 DB_NAME = os.environ.get('DB_NAME', 'maestro_db')
 
-# الخلفيات الافتراضية
+# الخلفيات الافتراضية - 6 صور مطاعم
 DEFAULT_BACKGROUNDS = [
     {
         "id": str(uuid.uuid4()),
@@ -45,6 +45,39 @@ DEFAULT_BACKGROUNDS = [
         "overlay_opacity": 0.5,
         "is_active": True,
         "sort_order": 2,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    },
+    {
+        "id": str(uuid.uuid4()),
+        "image_url": "/api/uploads/backgrounds/02113af7-cc01-442d-bbda-26a2c5eb32d0.jpg",
+        "title": "مطعم 4",
+        "animation_type": "fade",
+        "animation_duration": 8,
+        "overlay_opacity": 0.5,
+        "is_active": True,
+        "sort_order": 3,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    },
+    {
+        "id": str(uuid.uuid4()),
+        "image_url": "/api/uploads/backgrounds/11b8c621-2624-478a-aa82-fb7ac3457624.jpg",
+        "title": "مطعم 5",
+        "animation_type": "fade",
+        "animation_duration": 8,
+        "overlay_opacity": 0.5,
+        "is_active": True,
+        "sort_order": 4,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    },
+    {
+        "id": str(uuid.uuid4()),
+        "image_url": "/api/uploads/backgrounds/1e7950ff-1361-44ea-8d2b-fb78ff16ca7e.jpg",
+        "title": "مطعم 6",
+        "animation_type": "fade",
+        "animation_duration": 8,
+        "overlay_opacity": 0.5,
+        "is_active": True,
+        "sort_order": 5,
         "created_at": datetime.now(timezone.utc).isoformat()
     }
 ]
