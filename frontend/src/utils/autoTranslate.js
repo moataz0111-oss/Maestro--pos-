@@ -3538,6 +3538,7 @@ const translationMap = {
   'مطعم فاخر 4': { en: 'Luxury Restaurant 4', ku: 'چێشتخانەی لوکس ٤' },
   'مطعم فاخر 5': { en: 'Luxury Restaurant 5', ku: 'چێشتخانەی لوکس ٥' },
   'مطعم فاخر 6': { en: 'Luxury Restaurant 6', ku: 'چێشتخانەی لوکس ٦' },
+  'وصف اختياري': { en: 'Optional description', ku: 'وەسفی هەڵبژاردەیی' },
 };
 
 // الحصول على اللغة الحالية
