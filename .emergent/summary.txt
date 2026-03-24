@@ -1,0 +1,211 @@
+<analysis>**original_problem_statement**: 
+The user is building a bilingual (Arabic/English) restaurant POS system (PWA) with Offline-First capabilities. In this session, the user wanted to: 1) Verify the new Product Extras feature worked via screenshots. 2) Fix a bug where the restaurant logo and login backgrounds failed to save on the production server. 3) Fix the annual subscription calculation logic and restrict plans to Gold/Silver/Bronze. 4) Add a feature to extend/renew tenant subscriptions. 5) Resolve a GitHub Secret Scanning alert. 6) Install a newly reissued Namecheap SSL certificate.
+
+**User's preferred language**: Arabic (العربية). You MUST INSTRUCT the next agent to respond in the user's preferred language only. All user communications MUST be strictly in Arabic.
+
+**what currently exists?** 
+A fully functional React frontend and FastAPI backend deployed via Docker. The Product Extras feature has been completed and verified. Docker volumes have been updated to persist uploaded images properly. The tenant subscription logic has been updated. A new Namecheap SSL certificate has been successfully issued by Sectigo, and the user has uploaded the  file containing the certificate.
+
+**Last working item**: 
+    - Last item agent was working: Unzipping and installing the newly issued Namecheap SSL certificate (). The agent failed because the  command was not installed in the environment.
+    - Status: IN PROGRESS
+    - Agent Testing Done: N
+    - Which testing method agent to use?: Manual testing via curl/browser to ensure Nginx serves the new SSL certificate properly.
+    - User Testing Done: N
+
+**All Pending/In progress Issue list**: 
+  - Issue 1: Extract and Install Namecheap SSL Certificate (P0)
+     - Attempted fixes: The agent tried to run  on the uploaded archive but failed with .
+     - Next debug checklist: 
+        1. Run Get:1 https://deb.nodesource.com/node_20.x nodistro InRelease [12.1 kB]
+Hit:2 https://cloudfront.debian.net/debian bookworm InRelease
+Get:3 https://repo.mongodb.org/apt/ubuntu jammy/mongodb-org/7.0 InRelease [3005 B]
+Get:4 https://cloudfront.debian.net/debian bookworm-updates InRelease [55.4 kB]
+Get:5 https://cloudfront.debian.net/debian-security bookworm-security InRelease [48.0 kB]
+Get:6 https://deb.nodesource.com/node_20.x nodistro/main arm64 Packages [13.7 kB]
+Get:7 https://repo.mongodb.org/apt/ubuntu jammy/mongodb-org/7.0/multiverse arm64 Packages [107 kB]
+Get:8 https://repo.mongodb.org/apt/ubuntu jammy/mongodb-org/7.0/multiverse amd64 Packages [109 kB]
+Get:9 https://cloudfront.debian.net/debian-security bookworm-security/main arm64 Packages [290 kB]
+Fetched 638 kB in 1s (802 kB/s)
+Reading package lists...
+Reading package lists...
+Building dependency tree...
+Reading state information...
+The following NEW packages will be installed:
+  unzip
+0 upgraded, 1 newly installed, 0 to remove and 11 not upgraded.
+Need to get 157 kB of archives.
+After this operation, 502 kB of additional disk space will be used.
+Get:1 https://cloudfront.debian.net/debian bookworm/main arm64 unzip arm64 6.0-28 [157 kB]
+Fetched 157 kB in 0s (1686 kB/s)
+Selecting previously unselected package unzip.
+(Reading database ... (Reading database ... 5%(Reading database ... 10%(Reading database ... 15%(Reading database ... 20%(Reading database ... 25%(Reading database ... 30%(Reading database ... 35%(Reading database ... 40%(Reading database ... 45%(Reading database ... 50%(Reading database ... 55%(Reading database ... 60%(Reading database ... 65%(Reading database ... 70%(Reading database ... 75%(Reading database ... 80%(Reading database ... 85%(Reading database ... 90%(Reading database ... 95%(Reading database ... 100%(Reading database ... 46697 files and directories currently installed.)
+Preparing to unpack .../unzip_6.0-28_arm64.deb ...
+Unpacking unzip (6.0-28) ...
+Setting up unzip (6.0-28) ....
+        2. Unzip the user's uploaded file .
+        3. Retrieve the generated Private Key (which was outputted in the bash logs during message #425 of the previous session).
+        4. Configure the , , and  files.
+        5. Update  and/or  to mount and use these specific certificates instead of Let's Encrypt (if required for production). 
+     - Why fix this issue and what will be achieved with the fix?: The user spent over an hour working with Namecheap support to reissue this certificate and validate the DNS. It is their top priority to get it installed.
+     - Status: IN PROGRESS
+     - Is recurring issue?: N
+     - Should Test frontend/backend/both after fix?: Backend (Nginx configuration test).
+     - Blocked on other issue: None
+
+**In progress Task List**:
+  - Task 1: Deploy all fixes to Production (P0)
+     - Where to resume: Once the SSL certificate is configured, ask the user to click Save to GitHub to trigger the deployment pipeline.
+     - What will be achieved with this?: All the fixes (Docker volumes, extras feature, subscription extensions) will go live on the VPS.
+     - Status: BLOCKED
+     - Should Test frontend/backend/both after fix?: NA
+     - Blocked on something: Issue 1 (SSL Installation).
+
+**Upcoming and Future Tasks**
+    Upcoming Tasks:
+    - (P1) **ZKTeco Fingerprint Integration**: Implement UI configuration and hardware integration for fingerprint scanning.
+    - (P2) **Export Reports to Excel**: Add Excel export functionality to reports.
+    
+    Future Tasks:
+    - (P3) **Refactor **: Break down the massive monolith ( - 16k+ lines) into modular FastAPI routers. 
+    - (P4) **Refactor **: Extract offline sync logic to reduce file size (>3500 lines).
+
+**Completed work in this session**
+- Added  field to  and  Pydantic models in  and verified POS UI (DONE)
+- Fixed Docker volume persistence for uploaded files by mapping  in  and updating  (DONE)
+- Increased  to 10M in  (DONE)
+- Fixed absolute URL bug in  to return relative URLs (DONE)
+- Fixed annual subscription calculation bug and restricted plans to Gold/Silver/Bronze in  (DONE)
+- Added  and  to the tenant edit modal and backend API  (DONE)
+- Fixed incorrect state update bug when saving Invoice Settings (DONE)
+- Guided user to revoke an exposed Google API key and clear the GitHub Secret alert (DONE)
+- Guided user through Namecheap SSL reissue process and CNAME DNS validation (DONE)
+
+**Earlier issues found/mentioned but not fixed**
+   - None
+
+**Known issue recurrence from previous fork**
+  - Issue recurrence in previous fork: Database seeding connection errors.
+  - Recurrence count: 5
+  - Status: RESOLVED (Fixed by explicitly passing the correct  and  to the seed script).
+
+**Code Architecture**
+
+
+**Key Technical Concepts**
+- Full-stack React + FastAPI + MongoDB.
+- Dockerized deployment via GitHub Actions (Contabo VPS).
+- SSL/TLS configuration via Nginx.
+
+**key DB schema**
+  - : added  (array).
+  - : added  (datetime),  (int).
+
+**changes in tech stack**
+  - None
+
+**All files of reference** 
+  -  & : Edited to add persistent volumes for .
+  - : Edited to increase max body size for uploads.
+  - : Modified , , , and .
+  - : Modified subscription pricing logic, invoice settings save logic, and tenant edit modal.
+
+**Areas that need refactoring**:
+- : Over 16,300 lines.
+- : Over 5,300 lines.
+
+**key api endpoints**
+- : Updates tenant, now handles  and .
+- : Uploads login background images.
+
+**Critical Info for New Agent** 
+- **Language**: You MUST speak Arabic to the user.
+- **SSL Private Key**: The Private Key required for the Namecheap SSL certificate was generated by the previous agent in message #425. You will need to extract it from your context history or regenerate the CSR/Key pair if you cannot find it, though the certificate  is bound to the key from message #425.
+- **Deployment**: After finishing the SSL setup, remind the user to press Save to GitHub to push all the collected fixes to the live VPS.
+
+**documents and test reports created in this job**
+  - None
+
+**Last 10 User Messages and any pending HUMAN messages** 
+1. **LATEST**: User uploaded the issued SSL certificate .
+2. User shared an email from Namecheap about SSL automation options.
+3. User confirmed the Namecheap live chat said the certificate was issued.
+4. User relayed message from Namecheap live chat asking to wait 5 minutes.
+5. User asked what to do next in the chat.
+6. User confirmed they saved the CNAME record.
+7. User confirmed the CNAME target value was entered.
+8. User asked what to do with the CNAME record Namecheap support provided.
+9. User shared the response from Namecheap support indicating a wrong target value.
+10. User noted they had been waiting for over 26 hours for the SSL.
+
+**Project Health Check:**
+- Broken: SSL unzipping script (missing UnZip 6.00 of 20 April 2009, by Debian. Original by Info-ZIP.
+
+Usage: unzip [-Z] [-opts[modifiers]] file[.zip] [list] [-x xlist] [-d exdir]
+  Default action is to extract files in list, except those in xlist, to exdir;
+  file[.zip] may be a wildcard.  -Z => ZipInfo mode ("unzip -Z" for usage).
+
+  -p  extract files to pipe, no messages     -l  list files (short format)
+  -f  freshen existing files, create none    -t  test compressed archive data
+  -u  update files, create if necessary      -z  display archive comment only
+  -v  list verbosely/show version info       -T  timestamp archive to latest
+  -x  exclude files that follow (in xlist)   -d  extract files into exdir
+modifiers:
+  -n  never overwrite existing files         -q  quiet mode (-qq => quieter)
+  -o  overwrite files WITHOUT prompting      -a  auto-convert any text files
+  -j  junk paths (do not make directories)   -aa treat ALL files as text
+  -U  use escapes for all non-ASCII Unicode  -UU ignore any Unicode fields
+  -C  match filenames case-insensitively     -L  make (some) names lowercase
+  -X  restore UID/GID info                   -V  retain VMS version numbers
+  -K  keep setuid/setgid/tacky permissions   -M  pipe through "more" pager
+See "unzip -hh" or unzip.txt for more help.  Examples:
+  unzip data1 -x joe   => extract all files except joe from zipfile data1.zip
+  unzip -p foo | more  => send contents of foo.zip via pipe into program more
+  unzip -fo foo ReadMe => quietly replace existing ReadMe if archive file newer package).
+- Mocked: Demo data seeded for Graffiti Burger.
+
+**3rd Party Integrations** 
+- Namecheap / Sectigo (SSL Certificates) - Requires manual configuration.
+- GitHub Actions (Deployment)
+
+**Testing status**
+  - Testing agent used after significant changes: NO (Manual/screenshot testing used as per user preference).
+  - Troubleshoot agent used after agent stuck in loop: NO
+  - Test files created: None
+  - Known regressions: None
+
+**Credentials to test flow:**
+- Super Admin:  /  / Secret: 
+- Hani:  / 
+- Demo:  / 
+- Graffiti Burger Cashier:  / 
+- Graffiti Burger Manager:  / 
+
+**What agent forgot to execute**
+The agent forgot to install the UnZip 6.00 of 20 April 2009, by Debian. Original by Info-ZIP.
+
+Usage: unzip [-Z] [-opts[modifiers]] file[.zip] [list] [-x xlist] [-d exdir]
+  Default action is to extract files in list, except those in xlist, to exdir;
+  file[.zip] may be a wildcard.  -Z => ZipInfo mode ("unzip -Z" for usage).
+
+  -p  extract files to pipe, no messages     -l  list files (short format)
+  -f  freshen existing files, create none    -t  test compressed archive data
+  -u  update files, create if necessary      -z  display archive comment only
+  -v  list verbosely/show version info       -T  timestamp archive to latest
+  -x  exclude files that follow (in xlist)   -d  extract files into exdir
+modifiers:
+  -n  never overwrite existing files         -q  quiet mode (-qq => quieter)
+  -o  overwrite files WITHOUT prompting      -a  auto-convert any text files
+  -j  junk paths (do not make directories)   -aa treat ALL files as text
+  -U  use escapes for all non-ASCII Unicode  -UU ignore any Unicode fields
+  -C  match filenames case-insensitively     -L  make (some) names lowercase
+  -X  restore UID/GID info                   -V  retain VMS version numbers
+  -K  keep setuid/setgid/tacky permissions   -M  pipe through "more" pager
+See "unzip -hh" or unzip.txt for more help.  Examples:
+  unzip data1 -x joe   => extract all files except joe from zipfile data1.zip
+  unzip -p foo | more  => send contents of foo.zip via pipe into program more
+  unzip -fo foo ReadMe => quietly replace existing ReadMe if archive file newer utility (Reading package lists...
+Building dependency tree...
+Reading state information...
+unzip is already the newest version (6.0-28).
+0 upgraded, 0 newly installed, 0 to remove and 11 not upgraded.) before attempting to extract the user's uploaded SSL certificate.</analysis>
