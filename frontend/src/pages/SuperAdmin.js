@@ -4843,12 +4843,11 @@ export default function SuperAdmin() {
           </DialogHeader>
           
           <div className="space-y-4 py-4 max-h-[60vh] overflow-y-auto">
-            {/* الباقات الثلاث: ذهبي، فضي، برونزي */}
-            <div className="grid grid-cols-3 gap-3" dir="ltr">
+            {/* الباقات الثلاث: ذهبي، فضي، برونزي - الترتيب يتبع اتجاه اللغة */}
+            <div className="grid grid-cols-3 gap-3">
               {/* باقة ذهبية */}
               <div className="space-y-2 p-3 bg-yellow-900/20 rounded-lg border border-yellow-600/30">
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
+                <div className="flex items-center gap-2 justify-center">
                   <Label className="text-yellow-400 text-sm font-bold">🥇 {t('ذهبي')}</Label>
                 </div>
                 <div className="relative">
@@ -4857,6 +4856,7 @@ export default function SuperAdmin() {
                     type="number"
                     min="0"
                     step="0.01"
+                    dir="ltr"
                     value={subscriptionPrices.gold || ''}
                     onChange={(e) => setSubscriptionPrices({...subscriptionPrices, gold: parseFloat(e.target.value) || 0})}
                     className="bg-gray-700/50 border-gray-600 text-white pl-6 text-center"
@@ -4867,8 +4867,7 @@ export default function SuperAdmin() {
 
               {/* باقة فضية */}
               <div className="space-y-2 p-3 bg-gray-500/20 rounded-lg border border-gray-500/30">
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded-full bg-gray-400"></div>
+                <div className="flex items-center gap-2 justify-center">
                   <Label className="text-gray-300 text-sm font-bold">🥈 {t('فضي')}</Label>
                 </div>
                 <div className="relative">
@@ -4877,6 +4876,7 @@ export default function SuperAdmin() {
                     type="number"
                     min="0"
                     step="0.01"
+                    dir="ltr"
                     value={subscriptionPrices.silver || ''}
                     onChange={(e) => setSubscriptionPrices({...subscriptionPrices, silver: parseFloat(e.target.value) || 0})}
                     className="bg-gray-700/50 border-gray-600 text-white pl-6 text-center"
@@ -4887,8 +4887,7 @@ export default function SuperAdmin() {
 
               {/* باقة برونزية */}
               <div className="space-y-2 p-3 bg-amber-900/20 rounded-lg border border-amber-700/30">
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded-full bg-amber-600"></div>
+                <div className="flex items-center gap-2 justify-center">
                   <Label className="text-amber-400 text-sm font-bold">🥉 {t('برونزي')}</Label>
                 </div>
                 <div className="relative">
@@ -4897,6 +4896,7 @@ export default function SuperAdmin() {
                     type="number"
                     min="0"
                     step="0.01"
+                    dir="ltr"
                     value={subscriptionPrices.bronze || ''}
                     onChange={(e) => setSubscriptionPrices({...subscriptionPrices, bronze: parseFloat(e.target.value) || 0})}
                     className="bg-gray-700/50 border-gray-600 text-white pl-6 text-center"
@@ -4909,7 +4909,7 @@ export default function SuperAdmin() {
             {/* ملخص الأسعار السنوية - محسوب تلقائياً */}
             <div className="bg-gray-700/30 rounded-lg p-4">
               <p className="text-sm text-gray-400 mb-3">{t('ملخص الأسعار السنوية:')}</p>
-              <div className="grid grid-cols-3 gap-3 text-sm" dir="ltr">
+              <div className="grid grid-cols-3 gap-3 text-sm">
                 <div className="text-center p-2 bg-yellow-900/30 rounded-lg">
                   <span className="text-yellow-400 block">🥇 {t('ذهبي')}</span>
                   <span className="text-green-400 font-bold">${((subscriptionPrices.gold || 0) * 12).toFixed(0)}</span>
