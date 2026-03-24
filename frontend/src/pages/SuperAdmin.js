@@ -2826,26 +2826,32 @@ export default function SuperAdmin() {
                       </div>
                       
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        {Object.entries(subscriptionsDashboard.subscription_types).map(([type, data]) => (
-                          <div key={type} className="bg-gray-800/50 rounded-lg p-3 text-center">
-                            <p className="text-2xl font-bold">{data.count}</p>
-                            <p className="text-xs text-gray-400">
-                              {type === 'gold' ? '🥇 ' + t('ذهبية') : 
-                               type === 'silver' ? '🥈 ' + t('فضية') : 
-                               type === 'bronze' ? '🥉 ' + t('برونزية') : 
-                               type === 'demo' ? t('عرض') : 
-                               type === 'trial' ? t('تجريبي') : 
-                               t('غير محدد')}
-                            </p>
-                            <p className="text-sm text-purple-400 mt-1">
-                              ${subscriptionsDashboard.subscription_prices[type]?.monthly || 0}/{t('شهر')}
-                            </p>
-                            <div className="flex justify-center gap-2 mt-2 text-xs">
-                              <span className="text-green-400">{data.active} {t('نشط')}</span>
-                              <span className="text-red-400">{data.expired} {t('منتهي')}</span>
+                        {Object.entries(subscriptionsDashboard.subscription_types).map(([type, data]) => {
+                          // تحديد اللون والشعار لكل صفة
+                          const typeConfig = {
+                            gold: { emoji: '🥇', label: t('ذهبية'), bgColor: 'bg-yellow-900/30', textColor: 'text-yellow-400', borderColor: 'border-yellow-600/50' },
+                            silver: { emoji: '🥈', label: t('فضية'), bgColor: 'bg-gray-600/30', textColor: 'text-gray-300', borderColor: 'border-gray-500/50' },
+                            bronze: { emoji: '🥉', label: t('برونزية'), bgColor: 'bg-amber-900/30', textColor: 'text-amber-400', borderColor: 'border-amber-700/50' },
+                            demo: { emoji: '📋', label: t('عرض'), bgColor: 'bg-gray-800/30', textColor: 'text-gray-400', borderColor: 'border-gray-600/50' },
+                            trial: { emoji: '⏳', label: t('تجريبي'), bgColor: 'bg-blue-900/30', textColor: 'text-blue-400', borderColor: 'border-blue-600/50' }
+                          };
+                          const config = typeConfig[type] || { emoji: '❓', label: t('غير محدد'), bgColor: 'bg-gray-800/30', textColor: 'text-gray-400', borderColor: 'border-gray-600/50' };
+                          
+                          return (
+                            <div key={type} className={`${config.bgColor} rounded-lg p-3 text-center border ${config.borderColor}`}>
+                              <p className={`text-3xl font-bold ${config.textColor}`}>{config.emoji}</p>
+                              <p className={`text-lg font-bold ${config.textColor}`}>{data.count}</p>
+                              <p className={`text-sm font-medium ${config.textColor}`}>{config.label}</p>
+                              <p className="text-sm text-green-400 mt-1">
+                                ${subscriptionsDashboard.subscription_prices[type]?.monthly || 0}/{t('شهر')}
+                              </p>
+                              <div className="flex justify-center gap-2 mt-2 text-xs">
+                                <span className="text-green-400">{data.active} {t('نشط')}</span>
+                                <span className="text-red-400">{data.expired} {t('منتهي')}</span>
+                              </div>
                             </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     </div>
                   </div>
