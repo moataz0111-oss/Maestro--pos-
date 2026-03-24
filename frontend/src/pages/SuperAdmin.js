@@ -4849,8 +4849,8 @@ export default function SuperAdmin() {
           </DialogHeader>
           
           <div className="space-y-4 py-4 max-h-[60vh] overflow-y-auto">
-            {/* الباقات الثلاث: ذهبي، فضي، برونزي - الترتيب يتبع اتجاه اللغة */}
-            <div className="grid grid-cols-3 gap-3">
+            {/* الباقات الثلاث: ذهبي، فضي، برونزي - الترتيب دائماً Gold - Silver - Bronze من اليسار */}
+            <div className="grid grid-cols-3 gap-3" style={{direction: 'ltr'}}>
               {/* باقة ذهبية */}
               <div className="space-y-2 p-3 bg-yellow-900/20 rounded-lg border border-yellow-600/30">
                 <div className="flex items-center gap-2 justify-center">
@@ -4915,7 +4915,7 @@ export default function SuperAdmin() {
             {/* ملخص الأسعار السنوية - محسوب تلقائياً */}
             <div className="bg-gray-700/30 rounded-lg p-4">
               <p className="text-sm text-gray-400 mb-3">{t('ملخص الأسعار السنوية:')}</p>
-              <div className="grid grid-cols-3 gap-3 text-sm">
+              <div className="grid grid-cols-3 gap-3 text-sm" style={{direction: 'ltr'}}>
                 <div className="text-center p-2 bg-yellow-900/30 rounded-lg">
                   <span className="text-yellow-400 block">🥇 {t('ذهبي')}</span>
                   <span className="text-green-400 font-bold">${((subscriptionPrices.gold || 0) * 12).toFixed(0)}</span>
@@ -4946,12 +4946,12 @@ export default function SuperAdmin() {
               {savingPrices ? (
                 <>
                   <Loader2 className="h-4 w-4 ml-2 animate-spin" />
-                  جاري الحفظ...
+                  {t('جاري الحفظ...')}
                 </>
               ) : (
                 <>
                   <Check className="h-4 w-4 ml-2" />
-                  حفظ الأسعار
+                  {t('حفظ الأسعار')}
                 </>
               )}
             </Button>
