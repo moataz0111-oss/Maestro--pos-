@@ -3532,6 +3532,12 @@ const translationMap = {
   '+أشهر 3': { en: '+3 months', ku: '+٣ مانگ' },
   '+أشهر 6': { en: '+6 months', ku: '+٦ مانگ' },
   '+سنة 1': { en: '+1 year', ku: '+١ ساڵ' },
+  'مطعم فاخر 1': { en: 'Luxury Restaurant 1', ku: 'چێشتخانەی لوکس ١' },
+  'مطعم فاخر 2': { en: 'Luxury Restaurant 2', ku: 'چێشتخانەی لوکس ٢' },
+  'مطعم فاخر 3': { en: 'Luxury Restaurant 3', ku: 'چێشتخانەی لوکس ٣' },
+  'مطعم فاخر 4': { en: 'Luxury Restaurant 4', ku: 'چێشتخانەی لوکس ٤' },
+  'مطعم فاخر 5': { en: 'Luxury Restaurant 5', ku: 'چێشتخانەی لوکس ٥' },
+  'مطعم فاخر 6': { en: 'Luxury Restaurant 6', ku: 'چێشتخانەی لوکس ٦' },
 };
 
 // الحصول على اللغة الحالية

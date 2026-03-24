@@ -4711,7 +4711,7 @@ export default function SuperAdmin() {
                         </div>
                         {/* معلومات الخلفية */}
                         <div className="p-3 bg-gray-800/80">
-                          <p className="text-sm font-medium text-white truncate">{bg.title || bg.name || t('خلفية')}</p>
+                          <p className="text-sm font-medium text-white truncate">{t(bg.title) || t(bg.name) || t('خلفية')}</p>
                         </div>
                       </div>
                     );
