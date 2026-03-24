@@ -3361,7 +3361,7 @@ export default function Settings() {
                       <Button className="bg-primary text-primary-foreground">
                         <Plus className="h-4 w-4 ml-2" />{t('إضافة منتج')}</Button>
                     </DialogTrigger>
-                    <DialogContent className="max-w-2xl">
+                    <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
                       <DialogHeader>
                         <DialogTitle className="text-foreground">{t('إضافة منتج جديد')}</DialogTitle>
                       </DialogHeader>
@@ -3715,7 +3715,7 @@ export default function Settings() {
 
               {/* Edit Product Dialog */}
               <Dialog open={editProductDialogOpen} onOpenChange={setEditProductDialogOpen}>
-                <DialogContent className="max-w-2xl">
+                <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
                   <DialogHeader>
                     <DialogTitle className="text-foreground">{t('تعديل المنتج')}</DialogTitle>
                   </DialogHeader>
