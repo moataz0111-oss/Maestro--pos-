@@ -1,0 +1,83 @@
+{
+  "summary": "Bug Fix Verified: Product Extras are now correctly included in sales reports and dashboard statistics. All 9 tests passed. The fix properly calculates order totals including extras prices, stores extras_total on each item, and both dashboard stats and smart reports endpoints show correct totals.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_extras_in_sales_reports_iter119.py",
+    "/app/test_reports/pytest/pytest_results_iter119.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Fix verified: OrderItemCreate model now includes `extras` field (line 1250)",
+    "Fix verified: Subtotal calculation now includes extras price: (base_price + extras_price) * quantity (lines 4594-4605)",
+    "Fix verified: Each order item now has `extras_total` field showing the price of extras (line 4644)",
+    "Dashboard stats and smart reports correctly include extras via order.total field"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_extras_in_sales_reports_iter119.py"
+  ],
+  "success_rate": {
+    "backend": "100% (9/9 tests passed)",
+    "frontend": "N/A (backend only testing)"
+  },
+  "test_credentials": {
+    "super_admin": {
+      "email": "owner@maestroegp.com",
+      "password": "owner123"
+    }
+  },
+  "seed_data_creation": "Created test order with extras: product price 5000 * 2 + extras (1500+500) * 2 = 14000 total",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Bug fix for product extras in sales reports verified. Test orders exist with extras_total field. Dashboard stats and smart reports endpoints correctly include extras in totals. Test branch ID: 4e275c2c-52b0-4cac-a46a-2cba5b3e835f, Test product ID: 81765759-2465-4d7c-b5ec-cf81addcba7a",
+  "tests_performed": [
+    {
+      "feature": "API Health Check",
+      "status": "PASSED",
+      "details": "API is accessible at /api/health"
+    },
+    {
+      "feature": "Authentication",
+      "status": "PASSED",
+      "details": "Super admin login works with owner@maestroegp.com"
+    },
+    {
+      "feature": "Create Order with Extras",
+      "status": "PASSED",
+      "details": "Order created with extras. Expected total: 14000, Actual total: 14000. extras_total field correctly set to 2000 (1500+500)"
+    },
+    {
+      "feature": "Existing Orders Have extras_total",
+      "status": "PASSED",
+      "details": "Found 4 orders with extras, all have extras_total field set correctly"
+    },
+    {
+      "feature": "Dashboard Stats Include Extras",
+      "status": "PASSED",
+      "details": "Dashboard shows Total Sales: 59000, Total Orders: 4, Average: 14750 - includes extras via order.total"
+    },
+    {
+      "feature": "Smart Reports Include Extras",
+      "status": "PASSED",
+      "details": "Smart reports shows Total Sales: 59000, Total Orders: 4 - includes extras via order.total"
+    },
+    {
+      "feature": "Order Subtotal Calculation",
+      "status": "PASSED",
+      "details": "Verified subtotal calculation: (base_price + extras_price) * quantity matches stored subtotal"
+    },
+    {
+      "feature": "Dashboard and Reports Consistency",
+      "status": "PASSED",
+      "details": "Dashboard and Smart Reports show consistent totals (59000 sales, 4 orders)"
+    }
+  ],
+  "rca_of_the_issue": "The original bug was that product extras prices were not being included in sales reports and dashboard statistics. The fix added: 1) `extras` field to OrderItemCreate model to accept extras data, 2) Updated subtotal calculation to sum (item.price + extras_price) * quantity, 3) Added `extras_total` field to each order item for tracking. Since dashboard stats and smart reports use order.total (which is derived from subtotal), they now correctly include extras."
+}

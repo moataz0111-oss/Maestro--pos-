@@ -103,7 +103,7 @@
   },
   
   "test_credentials": {
-    "api_url": "https://offline-first-pos-4.preview.emergentagent.com",
+    "api_url": "https://sales-report-debug-1.preview.emergentagent.com",
     "customer_menu_url": "/menu/default"
   },
   

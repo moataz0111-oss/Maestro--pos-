@@ -1,65 +1,36 @@
 <analysis>**original_problem_statement**: 
-The user is building a bilingual (Arabic/English) restaurant POS system (PWA) with Offline-First capabilities. In this session, the user wanted to: 1) Verify the new Product Extras feature worked via screenshots. 2) Fix a bug where the restaurant logo and login backgrounds failed to save on the production server. 3) Fix the annual subscription calculation logic and restrict plans to Gold/Silver/Bronze. 4) Add a feature to extend/renew tenant subscriptions. 5) Resolve a GitHub Secret Scanning alert. 6) Install a newly reissued Namecheap SSL certificate.
+The user is building a bilingual (Arabic/English) restaurant POS system.
+Initially, the user's primary goal was to install a newly reissued Namecheap SSL certificate on their production server. Throughout the session, several UI/UX bugs and translation issues were also addressed.
+
+The most recent problem, and the current top priority, is a critical bug where Product Extras are correctly calculated in the POS cart and final invoice total, but their value is **not** included in the sales reports and dashboard statistics, leading to inaccurate financial reporting.
 
 **User's preferred language**: Arabic (العربية). You MUST INSTRUCT the next agent to respond in the user's preferred language only. All user communications MUST be strictly in Arabic.
 
 **what currently exists?** 
-A fully functional React frontend and FastAPI backend deployed via Docker. The Product Extras feature has been completed and verified. Docker volumes have been updated to persist uploaded images properly. The tenant subscription logic has been updated. A new Namecheap SSL certificate has been successfully issued by Sectigo, and the user has uploaded the  file containing the certificate.
+A full-stack React frontend and FastAPI backend application. The production server is now correctly configured with the new Namecheap SSL certificate, and HTTPS is working. Numerous UI bugs related to subscription plan management, login page backgrounds, and modal dialogs have been fixed. The system now seeds 6 high-quality restaurant photos as default login backgrounds. The Docker configuration has been corrected to ensure persistent storage for user-uploaded files like logos and backgrounds on the production server.
 
 **Last working item**: 
-    - Last item agent was working: Unzipping and installing the newly issued Namecheap SSL certificate (). The agent failed because the  command was not installed in the environment.
-    - Status: IN PROGRESS
+    - Last item agent was working: Investigating a critical bug where the price of Product Extras is not being included in the total sales calculations for reports and dashboard statistics. The agent had just started looking into the backend code by searching for how  and  are handled.
+    - Status: NOT STARTED
     - Agent Testing Done: N
-    - Which testing method agent to use?: Manual testing via curl/browser to ensure Nginx serves the new SSL certificate properly.
-    - User Testing Done: N
+    - Which testing method agent to use?: Backend testing agent. The agent should create a test that places an order containing items with extras, and then calls the relevant report endpoints (e.g., , ) to assert that the price of the extras is included in the aggregated .
+    - User Testing Done: Y (User discovered and reported the bug)
 
 **All Pending/In progress Issue list**: 
-  - Issue 1: Extract and Install Namecheap SSL Certificate (P0)
-     - Attempted fixes: The agent tried to run  on the uploaded archive but failed with .
-     - Next debug checklist: 
-        1. Run Get:1 https://deb.nodesource.com/node_20.x nodistro InRelease [12.1 kB]
-Hit:2 https://cloudfront.debian.net/debian bookworm InRelease
-Get:3 https://repo.mongodb.org/apt/ubuntu jammy/mongodb-org/7.0 InRelease [3005 B]
-Get:4 https://cloudfront.debian.net/debian bookworm-updates InRelease [55.4 kB]
-Get:5 https://cloudfront.debian.net/debian-security bookworm-security InRelease [48.0 kB]
-Get:6 https://deb.nodesource.com/node_20.x nodistro/main arm64 Packages [13.7 kB]
-Get:7 https://repo.mongodb.org/apt/ubuntu jammy/mongodb-org/7.0/multiverse arm64 Packages [107 kB]
-Get:8 https://repo.mongodb.org/apt/ubuntu jammy/mongodb-org/7.0/multiverse amd64 Packages [109 kB]
-Get:9 https://cloudfront.debian.net/debian-security bookworm-security/main arm64 Packages [290 kB]
-Fetched 638 kB in 1s (802 kB/s)
-Reading package lists...
-Reading package lists...
-Building dependency tree...
-Reading state information...
-The following NEW packages will be installed:
-  unzip
-0 upgraded, 1 newly installed, 0 to remove and 11 not upgraded.
-Need to get 157 kB of archives.
-After this operation, 502 kB of additional disk space will be used.
-Get:1 https://cloudfront.debian.net/debian bookworm/main arm64 unzip arm64 6.0-28 [157 kB]
-Fetched 157 kB in 0s (1686 kB/s)
-Selecting previously unselected package unzip.
-(Reading database ... (Reading database ... 5%(Reading database ... 10%(Reading database ... 15%(Reading database ... 20%(Reading database ... 25%(Reading database ... 30%(Reading database ... 35%(Reading database ... 40%(Reading database ... 45%(Reading database ... 50%(Reading database ... 55%(Reading database ... 60%(Reading database ... 65%(Reading database ... 70%(Reading database ... 75%(Reading database ... 80%(Reading database ... 85%(Reading database ... 90%(Reading database ... 95%(Reading database ... 100%(Reading database ... 46697 files and directories currently installed.)
-Preparing to unpack .../unzip_6.0-28_arm64.deb ...
-Unpacking unzip (6.0-28) ...
-Setting up unzip (6.0-28) ....
-        2. Unzip the user's uploaded file .
-        3. Retrieve the generated Private Key (which was outputted in the bash logs during message #425 of the previous session).
-        4. Configure the , , and  files.
-        5. Update  and/or  to mount and use these specific certificates instead of Let's Encrypt (if required for production). 
-     - Why fix this issue and what will be achieved with the fix?: The user spent over an hour working with Namecheap support to reissue this certificate and validate the DNS. It is their top priority to get it installed.
-     - Status: IN PROGRESS
+  - Issue 1: Product Extras not included in Sales Reports (P0)
+     - Attempted fixes: None. The agent was in the initial investigation phase.
+     - Next debug checklist:
+        1. Examine the order creation logic at the  endpoint in . Confirm that the final  field saved in the  document correctly includes the price of selected extras.
+        2. Inspect the database aggregation logic for all sales reporting endpoints (e.g., , ). The bug is likely here. The query is probably summing the prices of the main items but failing to include the price of  from the order data.
+        3. Modify the aggregation queries to correctly sum the  field from each order document, which should already include the extras' price, instead of recalculating the total from scratch.
+     - Why fix this issue and what will be achieved with the fix?: Sales reports are a critical business feature, and their current inaccuracy makes them unreliable. Fixing this will ensure financial data is correct.
+     - Status:  NOT STARTED
      - Is recurring issue?: N
-     - Should Test frontend/backend/both after fix?: Backend (Nginx configuration test).
+     - Should Test frontend/backend/both after fix?: Backend
      - Blocked on other issue: None
 
 **In progress Task List**:
-  - Task 1: Deploy all fixes to Production (P0)
-     - Where to resume: Once the SSL certificate is configured, ask the user to click Save to GitHub to trigger the deployment pipeline.
-     - What will be achieved with this?: All the fixes (Docker volumes, extras feature, subscription extensions) will go live on the VPS.
-     - Status: BLOCKED
-     - Should Test frontend/backend/both after fix?: NA
-     - Blocked on something: Issue 1 (SSL Installation).
+  - None
 
 **Upcoming and Future Tasks**
     Upcoming Tasks:
@@ -71,141 +42,147 @@ Setting up unzip (6.0-28) ....
     - (P4) **Refactor **: Extract offline sync logic to reduce file size (>3500 lines).
 
 **Completed work in this session**
-- Added  field to  and  Pydantic models in  and verified POS UI (DONE)
-- Fixed Docker volume persistence for uploaded files by mapping  in  and updating  (DONE)
-- Increased  to 10M in  (DONE)
-- Fixed absolute URL bug in  to return relative URLs (DONE)
-- Fixed annual subscription calculation bug and restricted plans to Gold/Silver/Bronze in  (DONE)
-- Added  and  to the tenant edit modal and backend API  (DONE)
-- Fixed incorrect state update bug when saving Invoice Settings (DONE)
-- Guided user to revoke an exposed Google API key and clear the GitHub Secret alert (DONE)
-- Guided user through Namecheap SSL reissue process and CNAME DNS validation (DONE)
+- **Namecheap SSL Certificate Installation (DONE)**:
+  - Guided the user through a complex, multi-step process to reissue, validate (via CNAME), and download a new SSL certificate from Namecheap.
+  - Debugged and executed commands directly on the user's production Contabo VPS via SSH to install the certificate.
+  - Resolved multiple server-side issues, including incorrect project paths, git branch mismatches, missing  utility, and a PEM file format error ().
+  - Updated  to use the new certificate and verified that  is serving traffic over HTTPS.
+- **Subscription Plan UI/UX (DONE)**:
+  - Removed obsolete Basic and Premium plans from all UI dropdowns in .
+  - Fixed logic to ensure subscription prices (Gold, Silver, Bronze) are fetched from the backend on load and saved correctly.
+  - Corrected the visual layout of plans to a logical order (Gold -> Silver -> Bronze) that respects both LTR and RTL language directions.
+  - Added all missing translations for the subscription price management modal.
+- **Login Page Backgrounds & Logo Persistence (DONE)**:
+  - Fixed the root cause of images not saving on production by correcting the volume mount in  from a named volume to a host-path volume ().
+  - Replaced low-quality placeholder images with 6 high-quality, real restaurant photos.
+  - Created and configured a seed script () to automatically populate the database with these 6 backgrounds on application startup, ensuring they are available after deployment.
+- **General UI/UX and Translation Fixes (DONE)**:
+  - Fixed the Add/Edit Product modals in  to be scrollable on smaller screens.
+  - Added several missing translations for placeholders and button labels that were appearing in the wrong language.
 
 **Earlier issues found/mentioned but not fixed**
    - None
 
 **Known issue recurrence from previous fork**
-  - Issue recurrence in previous fork: Database seeding connection errors.
-  - Recurrence count: 5
-  - Status: RESOLVED (Fixed by explicitly passing the correct  and  to the seed script).
+  - None
 
 **Code Architecture**
 
 
 **Key Technical Concepts**
-- Full-stack React + FastAPI + MongoDB.
-- Dockerized deployment via GitHub Actions (Contabo VPS).
-- SSL/TLS configuration via Nginx.
+- SSL/TLS Certificate Management (CSR, Private Key, Chain, Nginx).
+- Docker Volumes (Host-path binding for data persistence).
+- Live Production Server Debugging (SSH, , usage: git [-v | --version] [-h | --help] [-C <path>] [-c <name>=<value>]
+           [--exec-path[=<path>]] [--html-path] [--man-path] [--info-path]
+           [-p | --paginate | -P | --no-pager] [--no-replace-objects] [--bare]
+           [--git-dir=<path>] [--work-tree=<path>] [--namespace=<name>]
+           [--super-prefix=<path>] [--config-env=<name>=<envvar>]
+           <command> [<args>]
+
+These are common Git commands used in various situations:
+
+start a working area (see also: git help tutorial)
+   clone     Clone a repository into a new directory
+   init      Create an empty Git repository or reinitialize an existing one
+
+work on the current change (see also: git help everyday)
+   add       Add file contents to the index
+   mv        Move or rename a file, a directory, or a symlink
+   restore   Restore working tree files
+   rm        Remove files from the working tree and from the index
+
+examine the history and state (see also: git help revisions)
+   bisect    Use binary search to find the commit that introduced a bug
+   diff      Show changes between commits, commit and working tree, etc
+   grep      Print lines matching a pattern
+   log       Show commit logs
+   show      Show various types of objects
+   status    Show the working tree status
+
+grow, mark and tweak your common history
+   branch    List, create, or delete branches
+   commit    Record changes to the repository
+   merge     Join two or more development histories together
+   rebase    Reapply commits on top of another base tip
+   reset     Reset current HEAD to the specified state
+   switch    Switch branches
+   tag       Create, list, delete or verify a tag object signed with GPG
+
+collaborate (see also: git help workflows)
+   fetch     Download objects and refs from another repository
+   pull      Fetch from and integrate with another repository or a local branch
+   push      Update remote refs along with associated objects
+
+'git help -a' and 'git help -g' list available subcommands and some
+concept guides. See 'git help <command>' or 'git help <concept>'
+to read about a specific subcommand or concept.
+See 'git help git' for an overview of the system., file manipulation).
+- FastAPI Startup Events (for database seeding).
+- React UI (State management, conditional rendering for LTR/RTL).
 
 **key DB schema**
-  - : added  (array).
-  - : added  (datetime),  (int).
+  - : A document with  holds the prices for Gold, Silver, and Bronze plans. Another document with  holds an array of background image objects.
 
 **changes in tech stack**
   - None
 
-**All files of reference** 
-  -  & : Edited to add persistent volumes for .
-  - : Edited to increase max body size for uploads.
-  - : Modified , , , and .
-  - : Modified subscription pricing logic, invoice settings save logic, and tenant edit modal.
+**All files of reference**
+- : Updated to use the new Namecheap SSL certificate files.
+- : Modified the  service to use a host-path volume () for persistent file storage.
+- : Heavily modified for UI fixes related to subscription plans, pricing modal, and translations.
+- : Modified to automatically run the background seeding script on startup.
+- : **New file** created to populate the database with 6 default login backgrounds.
+- : **New directory** containing 6 high-quality restaurant photos that are now part of the repository.
+- : Modified to make product modals scrollable.
+- : Updated with several new translations.
 
 **Areas that need refactoring**:
 - : Over 16,300 lines.
 - : Over 5,300 lines.
 
 **key api endpoints**
-- : Updates tenant, now handles  and .
-- : Uploads login background images.
+- : Creates an order. The reports that consume this data are bugged.
+- : **(BUGGED)** - Does not include extras in total.
+- : **(BUGGED)** - Does not include extras in total.
+- : Fetches login page settings, including background images.
 
-**Critical Info for New Agent** 
+**Critical Info for New Agent**
 - **Language**: You MUST speak Arabic to the user.
-- **SSL Private Key**: The Private Key required for the Namecheap SSL certificate was generated by the previous agent in message #425. You will need to extract it from your context history or regenerate the CSR/Key pair if you cannot find it, though the certificate  is bound to the key from message #425.
-- **Deployment**: After finishing the SSL setup, remind the user to press Save to GitHub to push all the collected fixes to the live VPS.
+- **Top Priority**: The immediate task is to fix the critical bug where Product Extras are not included in sales reports. This makes all financial reporting inaccurate.
+- **Deployment**: A large number of important fixes (SSL, image persistence, UI improvements) have been completed. Remind the user to click **Save to GitHub** to deploy everything to their production server. The seeded backgrounds will appear automatically after deployment. The user will need to re-upload their company logo via the admin panel, which will now persist correctly.
 
 **documents and test reports created in this job**
-  - None
+  - 
 
 **Last 10 User Messages and any pending HUMAN messages** 
-1. **LATEST**: User uploaded the issued SSL certificate .
-2. User shared an email from Namecheap about SSL automation options.
-3. User confirmed the Namecheap live chat said the certificate was issued.
-4. User relayed message from Namecheap live chat asking to wait 5 minutes.
-5. User asked what to do next in the chat.
-6. User confirmed they saved the CNAME record.
-7. User confirmed the CNAME target value was entered.
-8. User asked what to do with the CNAME record Namecheap support provided.
-9. User shared the response from Namecheap support indicating a wrong target value.
-10. User noted they had been waiting for over 26 hours for the SSL.
+1. **LATEST**: User confirmed the extras bug by providing screenshots showing the cart total is correct, but the sales reports are wrong.
+2. User instructed the agent to proceed with the fix (ا).
+3. User reported that the product edit modal is not scrollable. (FIXED)
+4. User pointed out a missing translation for Optional description. (FIXED)
+5. User reported that the background images were just color gradients, not real photos, and they wanted the original 6 images. (FIXED)
+6. User reported that after saving, the backgrounds and logo were not appearing on the live server. (FIXED - by correcting Docker volumes)
+7. User reported missing translations and incorrect layout in the subscription prices modal in English. (FIXED)
+8. User asked why the subscription tier badge and color were not showing in the subscription distribution chart. (FIXED)
+9. User reported that subscription prices were not saving and the annual calculation was showing . (FIXED)
+10. User confirmed that the  and  subscription tiers should be removed. (DONE)
 
 **Project Health Check:**
-- Broken: SSL unzipping script (missing UnZip 6.00 of 20 April 2009, by Debian. Original by Info-ZIP.
+- **Broken**: Backend logic for aggregating  in all financial reports.
+- **Mocked**: Default login page backgrounds are now seeded from high-quality images included in the repository.
 
-Usage: unzip [-Z] [-opts[modifiers]] file[.zip] [list] [-x xlist] [-d exdir]
-  Default action is to extract files in list, except those in xlist, to exdir;
-  file[.zip] may be a wildcard.  -Z => ZipInfo mode ("unzip -Z" for usage).
-
-  -p  extract files to pipe, no messages     -l  list files (short format)
-  -f  freshen existing files, create none    -t  test compressed archive data
-  -u  update files, create if necessary      -z  display archive comment only
-  -v  list verbosely/show version info       -T  timestamp archive to latest
-  -x  exclude files that follow (in xlist)   -d  extract files into exdir
-modifiers:
-  -n  never overwrite existing files         -q  quiet mode (-qq => quieter)
-  -o  overwrite files WITHOUT prompting      -a  auto-convert any text files
-  -j  junk paths (do not make directories)   -aa treat ALL files as text
-  -U  use escapes for all non-ASCII Unicode  -UU ignore any Unicode fields
-  -C  match filenames case-insensitively     -L  make (some) names lowercase
-  -X  restore UID/GID info                   -V  retain VMS version numbers
-  -K  keep setuid/setgid/tacky permissions   -M  pipe through "more" pager
-See "unzip -hh" or unzip.txt for more help.  Examples:
-  unzip data1 -x joe   => extract all files except joe from zipfile data1.zip
-  unzip -p foo | more  => send contents of foo.zip via pipe into program more
-  unzip -fo foo ReadMe => quietly replace existing ReadMe if archive file newer package).
-- Mocked: Demo data seeded for Graffiti Burger.
-
-**3rd Party Integrations** 
-- Namecheap / Sectigo (SSL Certificates) - Requires manual configuration.
-- GitHub Actions (Deployment)
+**3rd Party Integrations**
+- **Namecheap / Sectigo**: SSL Certificate provider. Successfully configured.
+- **GitHub Actions**: CI/CD pipeline for deployment to the user's VPS.
 
 **Testing status**
-  - Testing agent used after significant changes: NO (Manual/screenshot testing used as per user preference).
+  - Testing agent used after significant changes: NO (Extensive manual testing via screenshots and direct production server commands).
   - Troubleshoot agent used after agent stuck in loop: NO
   - Test files created: None
   - Known regressions: None
 
 **Credentials to test flow:**
 - Super Admin:  /  / Secret: 
-- Hani:  / 
 - Demo:  / 
-- Graffiti Burger Cashier:  / 
-- Graffiti Burger Manager:  / 
 
 **What agent forgot to execute**
-The agent forgot to install the UnZip 6.00 of 20 April 2009, by Debian. Original by Info-ZIP.
-
-Usage: unzip [-Z] [-opts[modifiers]] file[.zip] [list] [-x xlist] [-d exdir]
-  Default action is to extract files in list, except those in xlist, to exdir;
-  file[.zip] may be a wildcard.  -Z => ZipInfo mode ("unzip -Z" for usage).
-
-  -p  extract files to pipe, no messages     -l  list files (short format)
-  -f  freshen existing files, create none    -t  test compressed archive data
-  -u  update files, create if necessary      -z  display archive comment only
-  -v  list verbosely/show version info       -T  timestamp archive to latest
-  -x  exclude files that follow (in xlist)   -d  extract files into exdir
-modifiers:
-  -n  never overwrite existing files         -q  quiet mode (-qq => quieter)
-  -o  overwrite files WITHOUT prompting      -a  auto-convert any text files
-  -j  junk paths (do not make directories)   -aa treat ALL files as text
-  -U  use escapes for all non-ASCII Unicode  -UU ignore any Unicode fields
-  -C  match filenames case-insensitively     -L  make (some) names lowercase
-  -X  restore UID/GID info                   -V  retain VMS version numbers
-  -K  keep setuid/setgid/tacky permissions   -M  pipe through "more" pager
-See "unzip -hh" or unzip.txt for more help.  Examples:
-  unzip data1 -x joe   => extract all files except joe from zipfile data1.zip
-  unzip -p foo | more  => send contents of foo.zip via pipe into program more
-  unzip -fo foo ReadMe => quietly replace existing ReadMe if archive file newer utility (Reading package lists...
-Building dependency tree...
-Reading state information...
-unzip is already the newest version (6.0-28).
-0 upgraded, 0 newly installed, 0 to remove and 11 not upgraded.) before attempting to extract the user's uploaded SSL certificate.</analysis>
+- The agent was just beginning to diagnose the sales report bug when the session ended. The investigation and fix need to be completed.</analysis>

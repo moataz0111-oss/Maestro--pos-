@@ -1247,6 +1247,7 @@ class OrderItemCreate(BaseModel):
     price: float
     cost: float = 0.0
     notes: Optional[str] = None
+    extras: List[Dict[str, Any]] = []  # الإضافات المحددة للمنتج
 
 class OrderCreate(BaseModel):
     order_type: str = OrderType.DINE_IN
@@ -4590,7 +4591,16 @@ async def create_order(order: OrderCreate, current_user: dict = Depends(get_curr
     
     shift_id = current_shift["id"] if current_shift else None
     
-    subtotal = sum(item.price * item.quantity for item in order.items)
+    # حساب المجموع الفرعي مع الإضافات
+    def calculate_item_total(item):
+        # سعر المنتج الأساسي
+        base_price = item.price
+        # إضافة سعر الإضافات (extras)
+        extras_price = sum(extra.get("price", 0) for extra in (item.extras or []))
+        # المجموع للعنصر الواحد
+        return (base_price + extras_price) * item.quantity
+    
+    subtotal = sum(calculate_item_total(item) for item in order.items)
     tax = subtotal * 0.0  # No tax for Iraq
     total = subtotal - order.discount + tax
     
@@ -4630,6 +4640,8 @@ async def create_order(order: OrderCreate, current_user: dict = Depends(get_curr
         item_dict = item.model_dump()
         item_dict["cost"] = item_cost
         item_dict["packaging_cost"] = packaging_cost
+        # حساب إجمالي سعر الإضافات للعنصر
+        item_dict["extras_total"] = sum(extra.get("price", 0) for extra in (item.extras or []))
         items_with_cost.append(item_dict)
     
     # Calculate delivery commission if applicable
@@ -14883,7 +14895,7 @@ async def get_menu_link(request: Request, current_user: dict = Depends(get_curre
         base_url = f"{parsed.scheme}://{parsed.netloc}"
     else:
         # fallback للـ environment variable
-        base_url = os.environ.get('REACT_APP_BACKEND_URL', 'https://offline-first-pos-4.preview.emergentagent.com')
+        base_url = os.environ.get('REACT_APP_BACKEND_URL', 'https://sales-report-debug-1.preview.emergentagent.com')
     
     menu_url = f"{base_url}/menu/{tenant.get('menu_slug', tenant_id)}"
     

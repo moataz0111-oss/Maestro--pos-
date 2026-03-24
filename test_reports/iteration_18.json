@@ -95,7 +95,7 @@
   },
   
   "test_credentials": {
-    "api_url": "https://offline-first-pos-4.preview.emergentagent.com",
+    "api_url": "https://sales-report-debug-1.preview.emergentagent.com",
     "admin_email": "admin@maestroegp.com",
     "admin_password": "admin123"
   },

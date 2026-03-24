@@ -108,7 +108,7 @@
   },
   
   "test_credentials": {
-    "api_url": "https://offline-first-pos-4.preview.emergentagent.com",
+    "api_url": "https://sales-report-debug-1.preview.emergentagent.com",
     "owner": {
       "email": "owner@maestroegp.com",
       "password": "owner123",
