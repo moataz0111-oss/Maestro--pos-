@@ -53,6 +53,18 @@
 - [x] التأكد من ترتيب تعريف الدوال قبل استخدامها في `useEffect`
 - [x] التحقق من عمل التطبيق بعد تسجيل الدخول
 
+### Product Extras in Sales Reports ✅ (Fixed - March 24, 2026)
+**المشكلة**: الإضافات (Extras) كانت تُحسب بشكل صحيح في سلة POS والفاتورة، لكنها لم تُضمّن في تقارير المبيعات وإحصائيات لوحة التحكم.
+
+**الحل**:
+- [x] إضافة حقل `extras` إلى نموذج `OrderItemCreate` (السطر 1250)
+- [x] تعديل حساب `subtotal` ليشمل سعر الإضافات: `(base_price + extras_price) * quantity`
+- [x] إضافة حقل `extras_total` لكل عنصر في الطلب لسهولة التتبع
+- [x] التحقق من صحة التقارير (9/9 اختبارات ناجحة)
+
+**الملفات المعدلة**:
+- `/app/backend/server.py` - السطور 1243-1250, 4593-4644
+
 ### Production Deployment Files ✅ (Created - March 23, 2026)
 - [x] إنشاء سكريبت `seed_data.py` لإدخال البيانات الأساسية (Super Admin, Hani, Demo)
 - [x] إنشاء دليل النشر `PRODUCTION_GUIDE.md` مع جميع الأوامر
@@ -123,6 +135,7 @@
 - ✅ Navigation works in offline mode
 - ✅ Pending orders count shows correctly in offline mode
 - ✅ Opening orders from pending list works in offline mode
+- ✅ Product Extras included in Sales Reports (Fixed March 24, 2026)
 - Mocked: ZKTeco fingerprint integration
 
 ---
