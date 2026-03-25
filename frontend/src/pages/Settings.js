@@ -1321,8 +1321,34 @@ export default function Settings() {
       
       toast.success(`✅ ${t('تم تسجيل الدخول كـ')} ${impersonatedUser.full_name || impersonatedUser.username}`);
       
-      // إعادة التوجيه للوحة التحكم
-      window.location.href = '/';
+      // إعادة التوجيه حسب دور المستخدم
+      let redirectUrl = '/';
+      switch (impersonatedUser.role) {
+        case 'warehouse_keeper':
+        case 'manufacturer':
+          redirectUrl = '/warehouse-manufacturing';
+          break;
+        case 'purchasing':
+          redirectUrl = '/purchases-new';
+          break;
+        case 'cashier':
+        case 'captain':
+          redirectUrl = '/pos';
+          break;
+        case 'kitchen':
+          redirectUrl = '/kitchen-display';
+          break;
+        case 'call_center':
+          redirectUrl = '/pos';
+          break;
+        case 'delivery':
+          redirectUrl = '/driver';
+          break;
+        default:
+          redirectUrl = '/';
+      }
+      
+      window.location.href = redirectUrl;
       
     } catch (error) {
       console.error('Impersonate error:', error);

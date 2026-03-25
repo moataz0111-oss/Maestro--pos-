@@ -210,7 +210,7 @@ const PermissionRoute = ({ children, permission }) => {
   }
   
   // صلاحيات مسؤول المشتريات
-  if (user?.role === 'purchaser') {
+  if (user?.role === 'purchasing') {
     const allowedPermissions = ['purchasing'];
     if (allowedPermissions.includes(permission)) {
       return children;
@@ -270,7 +270,7 @@ const PublicRoute = ({ children }) => {
     if (user?.role === 'manufacturer') {
       return <Navigate to="/warehouse-manufacturing" />;
     }
-    if (user?.role === 'purchaser') {
+    if (user?.role === 'purchasing') {
       return <Navigate to="/purchasing" />;
     }
     return <Navigate to="/" />;
