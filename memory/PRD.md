@@ -318,3 +318,48 @@
 - يجب زيارة التطبيق مرة واحدة وهو متصل لتثبيت Service Worker
 - قاعدة البيانات الإنتاجية تحتاج seed عبر `/api/utils/seed-data`
 - **تطبيق سطح المكتب (Electron) تم حذفه** - التركيز على PWA
+
+---
+
+## Latest Updates (March 25, 2026)
+
+### تحسينات صفحة التقارير ✅
+تم إضافة 3 ميزات جديدة حسب طلب العميل:
+
+#### 1. زر تحصيل الآجل (تبويب الآجل)
+- إضافة عمود "إجراء" في جدول الطلبات الآجلة
+- زر "تحصيل" لكل طلب غير محصل
+- نافذة Dialog لتسجيل التحصيل مع:
+  - المبلغ المحصل
+  - اسم المستلم
+  - التاريخ والوقت (تلقائي)
+  - ملاحظات (اختياري)
+- API: `POST /api/reports/credit/collect`
+- API: `GET /api/reports/credit/collections`
+
+#### 2. تحديث تبويب التوصيل (شركات التوصيل كآجل)
+- 5 بطاقات إحصائية جديدة:
+  - إجمالي المبيعات (قبل الاستقطاع)
+  - العمولات المستقطعة
+  - صافي المستحق (بعد الاستقطاع)
+  - تم التحصيل
+  - المتبقي للتحصيل
+- زر تحصيل لكل شركة توصيل
+- API: `POST /api/reports/delivery/collect`
+- API: `GET /api/reports/delivery/collections`
+
+#### 3. مربع تكلفة التغليف (تبويب المبيعات)
+- 3 مربعات جديدة في تبويب المبيعات:
+  - تكلفة المواد (برتقالي)
+  - تكلفة التغليف (أصفر)
+  - صافي الربح (أخضر)
+- API محدث: `GET /api/reports/sales` يُرجع `total_packaging_cost` و `total_materials_cost`
+
+### Files Modified:
+- `/app/backend/routes/reports_routes.py` - إضافة endpoints التحصيل
+- `/app/frontend/src/pages/Reports.js` - تحديث واجهات التبويبات الثلاث
+
+### Testing Status: ✅
+- Backend: 100% (15/15 tests passed)
+- Frontend: 100% verified
+- Test Report: `/app/test_reports/iteration_124.json`
