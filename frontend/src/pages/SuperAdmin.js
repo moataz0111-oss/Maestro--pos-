@@ -569,7 +569,7 @@ export default function SuperAdmin() {
     if (!confirm(t('هل تريد إلغاء ترخيص هذا الجهاز؟'))) return;
     
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('super_admin_token');
       const headers = { Authorization: `Bearer ${token}` };
       await axios.delete(`${API}/super-admin/tenants/${tenantId}/devices/${deviceId}`, { headers });
       
@@ -717,7 +717,7 @@ export default function SuperAdmin() {
 
   const deleteNotification = async (notificationId) => {
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('super_admin_token');
       const headers = { Authorization: `Bearer ${token}` };
       await axios.delete(`${API}/super-admin/notifications/${notificationId}`, { headers });
       fetchNotifications();
@@ -728,7 +728,7 @@ export default function SuperAdmin() {
 
   const clearAllNotifications = async () => {
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('super_admin_token');
       const headers = { Authorization: `Bearer ${token}` };
       await axios.delete(`${API}/super-admin/notifications`, { headers });
       fetchNotifications();
@@ -960,7 +960,11 @@ export default function SuperAdmin() {
 
   const deleteTenant = async () => {
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('super_admin_token');
+      if (!token) {
+        toast.error(t('يرجى تسجيل الدخول مرة أخرى'));
+        return;
+      }
       const headers = { Authorization: `Bearer ${token}` };
       await axios.delete(`${API}/super-admin/tenants/${selectedTenant.id}?permanent=true`, { headers });
       toast.success(t('تم حذف العميل نهائياً'));
@@ -968,7 +972,8 @@ export default function SuperAdmin() {
       setSelectedTenant(null);
       fetchData();
     } catch (error) {
-      toast.error(t('فشل في حذف العميل'));
+      console.error('Delete tenant error:', error);
+      toast.error(error.response?.data?.detail || t('فشل في حذف العميل'));
     }
   };
 
@@ -1510,7 +1515,7 @@ export default function SuperAdmin() {
   // حذف شعار صفحة تسجيل الدخول
   const deleteLoginLogo = async () => {
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('super_admin_token');
       const headers = { Authorization: `Bearer ${token}` };
       await axios.delete(`${API}/login-backgrounds/logo`, { headers });
       setBackgroundSettings(prev => ({
@@ -1536,7 +1541,7 @@ export default function SuperAdmin() {
 
   const deleteBackground = async (bgId) => {
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('super_admin_token');
       const headers = { Authorization: `Bearer ${token}` };
       await axios.delete(`${API}/login-backgrounds/${bgId}`, { headers });
       setBackgroundSettings(prev => ({
@@ -3882,7 +3887,7 @@ export default function SuperAdmin() {
                             onClick={async () => {
                               if (confirm(t('هل تريد إلغاء ترخيص هذا الجهاز؟'))) {
                                 try {
-                                  const token = localStorage.getItem('token');
+                                  const token = localStorage.getItem('super_admin_token');
                                   const headers = { Authorization: `Bearer ${token}` };
                                   await axios.delete(`${API}/super-admin/tenants/${selectedTenant.id}/devices/${device.device_id}`, { headers });
                                   setTenantDetails(prev => ({
