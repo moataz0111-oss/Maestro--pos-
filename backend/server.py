@@ -11943,12 +11943,6 @@ async def get_sales_report(
         if o.get("payment_method") == "credit" and o.get("order_type") != "delivery"
     )
     
-    # آجل شركات التوصيل (منفصل)
-    delivery_credit_amount = sum(
-        o.get("total", 0) for o in orders 
-        if o.get("order_type") == "delivery"
-    )
-    
     # تقسيم حسب نوع الطلب
     dine_in_amount = sum(o.get("total", 0) for o in orders if o.get("order_type") == "dine_in")
     takeaway_amount = sum(o.get("total", 0) for o in orders if o.get("order_type") == "takeaway")
@@ -11958,7 +11952,25 @@ async def get_sales_report(
     cash_orders_count = len([o for o in orders if o.get("payment_method") == "cash" and o.get("order_type") != "delivery"])
     card_orders_count = len([o for o in orders if o.get("payment_method") == "card"])
     credit_orders_count = len([o for o in orders if o.get("payment_method") == "credit" and o.get("order_type") != "delivery"])
-    delivery_credit_orders_count = len([o for o in orders if o.get("order_type") == "delivery"])
+    
+    # تجميع شركات التوصيل حسب الاسم (في حسب طريقة الدفع)
+    delivery_apps_amounts = {}
+    for o in orders:
+        if o.get("order_type") == "delivery":
+            app_name = o.get("delivery_app_name") or o.get("delivery_app") or "توصيل"
+            if app_name not in delivery_apps_amounts:
+                delivery_apps_amounts[app_name] = 0
+            delivery_apps_amounts[app_name] += o.get("total", 0)
+    
+    # بناء by_payment_method مع أسماء شركات التوصيل
+    by_payment_method = {
+        "نقدي": cash_amount,  # فقط الكاش المحصّل باليد (بدون توصيل)
+        "بطاقة": card_amount,  # مبيعات البطاقة
+        "آجل": credit_amount,  # الآجل العادي (بدون التوصيل)
+    }
+    # إضافة كل شركة توصيل باسمها
+    for app_name, amount in delivery_apps_amounts.items():
+        by_payment_method[app_name] = amount
     
     return {
         "period": period,
@@ -11970,17 +11982,11 @@ async def get_sales_report(
             "takeaway": takeaway_amount,
             "delivery": delivery_amount
         },
-        "by_payment_method": {
-            "cash": cash_amount,  # فقط الكاش المحصّل باليد (بدون توصيل وبدون بطاقة)
-            "card": card_amount,  # مبيعات البطاقة (منفصلة)
-            "credit": credit_amount,  # الآجل العادي (بدون التوصيل)
-            "delivery_credit": delivery_credit_amount  # آجل شركات التوصيل (منفصل)
-        },
+        "by_payment_method": by_payment_method,
         "by_payment": {
             "cash": cash_orders_count,
             "card": card_orders_count,
-            "credit": credit_orders_count,
-            "delivery_credit": delivery_credit_orders_count
+            "credit": credit_orders_count
         }
     }
 

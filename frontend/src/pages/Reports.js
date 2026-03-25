@@ -228,11 +228,11 @@ const ComprehensiveReportTab = ({
   };
 
   // بيانات الرسم البياني الدائري للمبيعات
-  const paymentChartData = salesReport?.by_payment_method ? [
-    { label: t('نقدي'), value: salesReport.by_payment_method.cash || 0 },
-    { label: t('بطاقة'), value: salesReport.by_payment_method.card || 0 },
-    { label: t('آجل'), value: salesReport.by_payment_method.credit || 0 }
-  ].filter(d => d.value > 0) : [];
+  const paymentChartData = salesReport?.by_payment_method ? 
+    Object.entries(salesReport.by_payment_method)
+      .filter(([_, value]) => value > 0)
+      .map(([label, value]) => ({ label, value }))
+    : [];
 
   // بيانات الرسم البياني لنوع الطلب
   const orderTypeChartData = salesReport?.by_order_type ? [
@@ -375,19 +375,19 @@ const ComprehensiveReportTab = ({
         <StatBox 
           icon={Wallet} 
           label={t('المبيعات النقدية')} 
-          value={formatPrice(salesReport?.by_payment_method?.cash || 0)} 
+          value={formatPrice(salesReport?.by_payment_method?.['نقدي'] || 0)} 
           color="green"
         />
         <StatBox 
           icon={CreditCard} 
           label={t('مبيعات البطاقة')} 
-          value={formatPrice(salesReport?.by_payment_method?.card || 0)} 
+          value={formatPrice(salesReport?.by_payment_method?.['بطاقة'] || 0)} 
           color="blue"
         />
         <StatBox 
           icon={Receipt} 
           label={t('المبيعات الآجلة')} 
-          value={formatPrice(salesReport?.by_payment_method?.credit || 0)} 
+          value={formatPrice(salesReport?.by_payment_method?.['آجل'] || 0)} 
           color="orange"
         />
         <StatBox 
@@ -1824,7 +1824,7 @@ export default function Reports() {
                         {Object.entries(salesReport.by_payment_method || {}).map(([method, amount]) => (
                           <div key={method} className="flex justify-between items-center">
                             <span className="text-muted-foreground">
-                              {method === 'cash' ? t('نقدي') : method === 'card' ? t('بطاقة') : method === 'credit' ? t('آجل') : method}
+                              {method}
                             </span>
                             <span className="font-bold text-foreground tabular-nums">{formatPrice(amount)}</span>
                           </div>
