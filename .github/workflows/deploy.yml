@@ -100,7 +100,7 @@ jobs:
           
           # بناء وتشغيل Docker (بدون cache لتجنب المشاكل)
           echo "🔨 Building and starting services..."
-          docker-compose build --no-cache --pull frontend backend
+          docker-compose build --no-cache --build-arg CACHEBUST=$(date +%s) frontend backend
           docker-compose up -d --force-recreate
           
           # انتظار بدء الخدمات
