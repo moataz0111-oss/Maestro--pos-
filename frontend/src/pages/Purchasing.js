@@ -77,6 +77,7 @@ export default function Purchasing() {
   const [showSupplierDialog, setShowSupplierDialog] = useState(false);
   const [showImageDialog, setShowImageDialog] = useState(null);
   const [showCameraDialog, setShowCameraDialog] = useState(false);
+  const [ocrLoading, setOcrLoading] = useState(false);
   const videoRef = React.useRef(null);
   const canvasRef = React.useRef(null);
   const [cameraStream, setCameraStream] = useState(null);
@@ -225,6 +226,48 @@ export default function Purchasing() {
       
       closeCamera();
       toast.success(t('تم التقاط الصورة بنجاح'));
+    }
+  };
+
+  // استخراج بيانات الفاتورة من الصورة (OCR)
+  const extractInvoiceData = async (imageData) => {
+    if (!imageData) {
+      toast.error(t('يرجى تحميل صورة أولاً'));
+      return;
+    }
+    
+    setOcrLoading(true);
+    try {
+      const response = await axios.post(`${API}/purchase-invoices/ocr`, {
+        image_data: imageData
+      }, { headers });
+      
+      if (response.data.success) {
+        const data = response.data.data;
+        
+        // تحديث النموذج بالبيانات المستخرجة
+        setInvoiceForm(prev => ({
+          ...prev,
+          invoice_number: data.invoice_number || prev.invoice_number,
+          notes: data.notes || prev.notes,
+          items: data.items && data.items.length > 0 ? data.items.map(item => ({
+            name: item.name || '',
+            quantity: item.quantity || 1,
+            unit: item.unit || 'كغم',
+            unit_price: item.unit_price || 0,
+            total: (item.quantity || 1) * (item.unit_price || 0)
+          })) : prev.items
+        }));
+        
+        toast.success(t('تم استخراج بيانات الفاتورة بنجاح! راجع البيانات وعدّلها إذا لزم الأمر.'));
+      } else {
+        toast.warning(t('لم نتمكن من استخراج البيانات تلقائياً. يرجى إدخالها يدوياً.'));
+      }
+    } catch (error) {
+      console.error('OCR Error:', error);
+      toast.error(t('فشل في تحليل الصورة. يرجى إدخال البيانات يدوياً.'));
+    } finally {
+      setOcrLoading(false);
     }
   };
 
@@ -704,15 +747,37 @@ export default function Purchasing() {
             <div className="border-2 border-dashed rounded-lg p-4">
               <Label className="mb-2 block">{t('صورة الفاتورة')}</Label>
               {invoiceForm.imagePreview ? (
-                <div className="relative">
-                  <img src={invoiceForm.imagePreview} alt="فاتورة" className="w-full max-h-48 object-contain rounded-lg" />
+                <div className="space-y-3">
+                  <div className="relative">
+                    <img src={invoiceForm.imagePreview} alt="فاتورة" className="w-full max-h-48 object-contain rounded-lg" />
+                    <Button
+                      variant="destructive"
+                      size="icon"
+                      className="absolute top-2 right-2"
+                      onClick={() => setInvoiceForm(prev => ({ ...prev, image: null, imagePreview: null }))}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  {/* زر استخراج البيانات */}
                   <Button
-                    variant="destructive"
-                    size="icon"
-                    className="absolute top-2 right-2"
-                    onClick={() => setInvoiceForm(prev => ({ ...prev, image: null, imagePreview: null }))}
+                    type="button"
+                    variant="outline"
+                    className="w-full bg-gradient-to-r from-blue-500 to-purple-500 text-white hover:from-blue-600 hover:to-purple-600 border-0"
+                    onClick={() => extractInvoiceData(invoiceForm.imagePreview)}
+                    disabled={ocrLoading}
                   >
-                    <X className="h-4 w-4" />
+                    {ocrLoading ? (
+                      <>
+                        <RefreshCw className="h-4 w-4 ml-2 animate-spin" />
+                        {t('جاري تحليل الصورة...')}
+                      </>
+                    ) : (
+                      <>
+                        <Search className="h-4 w-4 ml-2" />
+                        {t('استخراج البيانات تلقائياً (AI)')}
+                      </>
+                    )}
                   </Button>
                 </div>
               ) : (

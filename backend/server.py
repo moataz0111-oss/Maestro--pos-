@@ -9492,6 +9492,18 @@ async def reset_tenant_inventory(tenant_id: str, confirm: bool = False, delete_a
     deleted_transfers = await db.warehouse_transfers.delete_many(query)
     results["reset_counts"]["warehouse_transfers"] = deleted_transfers.deleted_count
     
+    # حذف فواتير الشراء الجديدة
+    deleted_purchase_invoices = await db.purchase_invoices.delete_many(query)
+    results["reset_counts"]["purchase_invoices"] = deleted_purchase_invoices.deleted_count
+    
+    # حذف موردي المشتريات
+    deleted_purchase_suppliers = await db.purchase_suppliers.delete_many(query)
+    results["reset_counts"]["purchase_suppliers"] = deleted_purchase_suppliers.deleted_count
+    
+    # حذف طلبات الشراء من المخزن
+    deleted_warehouse_requests = await db.warehouse_purchase_requests.delete_many(query)
+    results["reset_counts"]["warehouse_purchase_requests"] = deleted_warehouse_requests.deleted_count
+    
     return {
         "message": f"تم تصفير بيانات المخزون لـ '{results['tenant_name']}' بنجاح",
         "success": True,
@@ -9668,6 +9680,92 @@ async def transfer_warehouse_request(request_id: str, current_user: dict = Depen
     )
     
     return {"message": "تم التحويل للمخزن"}
+
+# ==================== OCR - استخراج بيانات الفاتورة ====================
+
+class OCRRequest(BaseModel):
+    image_data: str  # Base64 encoded image
+
+@api_router.post("/purchase-invoices/ocr")
+async def extract_invoice_data(request: OCRRequest, current_user: dict = Depends(get_current_user)):
+    """استخراج بيانات الفاتورة من الصورة باستخدام AI"""
+    try:
+        from emergentintegrations.llm.chat import LlmChat, UserMessage, ImageContent
+        import os
+        import json
+        
+        api_key = os.environ.get('EMERGENT_LLM_KEY')
+        if not api_key:
+            raise HTTPException(status_code=500, detail="مفتاح API غير متوفر")
+        
+        # إزالة prefix من Base64 إذا وجد
+        image_base64 = request.image_data
+        if ',' in image_base64:
+            image_base64 = image_base64.split(',')[1]
+        
+        # إنشاء chat instance
+        chat = LlmChat(
+            api_key=api_key,
+            session_id=f"ocr-{current_user['id']}-{uuid.uuid4()}",
+            system_message="""أنت مساعد متخصص في استخراج بيانات الفواتير من الصور.
+قم بتحليل صورة الفاتورة واستخرج البيانات التالية بدقة:
+- رقم الفاتورة
+- اسم المورد/الشركة
+- قائمة الأصناف (الاسم، الكمية، الوحدة، السعر)
+- المجموع الكلي
+- أي ملاحظات مهمة
+
+أرجع النتيجة بصيغة JSON فقط بدون أي نص إضافي."""
+        ).with_model("gemini", "gemini-2.5-flash")
+        
+        # إنشاء محتوى الصورة
+        image_content = ImageContent(image_base64=image_base64)
+        
+        # إرسال الرسالة
+        user_message = UserMessage(
+            text="""حلل صورة الفاتورة هذه واستخرج البيانات بصيغة JSON التالية:
+{
+    "invoice_number": "رقم الفاتورة أو null",
+    "supplier_name": "اسم المورد/الشركة أو null",
+    "items": [
+        {"name": "اسم الصنف", "quantity": الكمية_كرقم, "unit": "الوحدة", "unit_price": السعر_كرقم}
+    ],
+    "total_amount": المجموع_كرقم,
+    "notes": "أي ملاحظات مهمة أو null"
+}
+
+إذا لم تتمكن من قراءة قيمة معينة، ضع null. أرجع JSON فقط.""",
+            file_contents=[image_content]
+        )
+        
+        response = await chat.send_message(user_message)
+        
+        # محاولة parse الـ JSON
+        try:
+            # تنظيف الرد من أي markdown
+            clean_response = response.strip()
+            if clean_response.startswith('```'):
+                clean_response = clean_response.split('```')[1]
+                if clean_response.startswith('json'):
+                    clean_response = clean_response[4:]
+            clean_response = clean_response.strip()
+            
+            extracted_data = json.loads(clean_response)
+            return {
+                "success": True,
+                "data": extracted_data
+            }
+        except json.JSONDecodeError:
+            # إذا فشل parsing، أرجع الرد كما هو
+            return {
+                "success": False,
+                "raw_response": response,
+                "message": "لم نتمكن من تحويل النتيجة إلى بيانات منظمة"
+            }
+            
+    except Exception as e:
+        logging.error(f"OCR Error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"خطأ في تحليل الصورة: {str(e)}")
 
 @api_router.get("/suppliers")
 async def get_suppliers(current_user: dict = Depends(get_current_user)):

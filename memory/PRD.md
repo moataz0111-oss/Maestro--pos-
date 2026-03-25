@@ -545,3 +545,43 @@
 
 ### Files Modified:
 - `/app/backend/server.py` - Lines 9543-9673: Added purchase invoice APIs with image support
+
+---
+
+### ميزة OCR لاستخراج بيانات الفاتورة ✅ (March 25, 2026)
+
+تم إضافة ميزة الذكاء الاصطناعي لاستخراج بيانات الفاتورة من الصورة تلقائياً:
+
+#### الوظائف:
+- **تحليل صور الفواتير** باستخدام Gemini 2.5 Flash
+- **استخراج البيانات التالية تلقائياً**:
+  - رقم الفاتورة
+  - اسم المورد/الشركة
+  - قائمة الأصناف (الاسم، الكمية، الوحدة، السعر)
+  - المجموع الكلي
+  - الملاحظات
+
+#### كيفية الاستخدام:
+1. رفع صورة الفاتورة أو التقاطها بالكاميرا
+2. النقر على زر "استخراج البيانات تلقائياً (AI)"
+3. مراجعة البيانات المستخرجة وتعديلها إذا لزم الأمر
+4. حفظ الفاتورة
+
+#### Backend API:
+- `POST /api/purchase-invoices/ocr` - استخراج بيانات الفاتورة من الصورة
+
+#### Files Modified:
+- `/app/backend/server.py` - Lines 9684-9772: Added OCR API endpoint
+- `/app/frontend/src/pages/Purchasing.js` - Added OCR button and extractInvoiceData function
+
+---
+
+### إضافة الفواتير والموردين لنظام التصفير ✅ (March 25, 2026)
+
+تم إضافة الجداول التالية لنظام تصفير المخزون:
+- `purchase_invoices` - فواتير الشراء
+- `purchase_suppliers` - موردي المشتريات
+- `warehouse_purchase_requests` - طلبات الشراء من المخزن
+
+#### Files Modified:
+- `/app/backend/server.py` - Lines 9491-9510: Updated reset-inventory endpoint
