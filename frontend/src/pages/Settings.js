@@ -1272,13 +1272,15 @@ export default function Settings() {
   };
 
   const handleDeleteUser = async (userId) => {
-    if (!confirm(t('هل أنت متأكد؟'))) return;
+    if (!confirm(t('هل أنت متأكد من حذف هذا المستخدم؟ لا يمكن التراجع عن هذا الإجراء.'))) return;
     try {
-      await axios.delete(`${API}/users/${userId}`);
-      toast.success(t('تم حذف المستخدم'));
+      await axios.delete(`${API}/users/${userId}`, { headers });
+      toast.success(t('تم حذف المستخدم بنجاح'));
       fetchData();
     } catch (error) {
-      toast.error(t('فشل في حذف المستخدم'));
+      console.error('Delete user error:', error);
+      const errorMessage = error.response?.data?.detail || t('فشل في حذف المستخدم');
+      toast.error(errorMessage);
     }
   };
 

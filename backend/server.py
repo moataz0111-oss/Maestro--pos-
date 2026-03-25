@@ -2119,8 +2119,9 @@ async def update_user(user_id: str, update: UserUpdate, current_user: dict = Dep
 
 @api_router.delete("/users/{user_id}")
 async def delete_user(user_id: str, current_user: dict = Depends(get_current_user)):
-    if current_user["role"] not in [UserRole.ADMIN, UserRole.SUPER_ADMIN]:
-        raise HTTPException(status_code=403, detail="غير مصرح")
+    """حذف مستخدم - يمكن للـ Admin و Super Admin فقط"""
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.SUPER_ADMIN, UserRole.MANAGER]:
+        raise HTTPException(status_code=403, detail="غير مصرح لك بحذف المستخدمين")
     
     # التحقق من أن المستخدم ينتمي لنفس الـ tenant
     query = build_tenant_query(current_user, {"id": user_id})
@@ -2128,8 +2129,22 @@ async def delete_user(user_id: str, current_user: dict = Depends(get_current_use
     if not user:
         raise HTTPException(status_code=404, detail="المستخدم غير موجود")
     
-    await db.users.delete_one({"id": user_id})
-    return {"message": "تم حذف المستخدم"}
+    # لا يمكن حذف نفسك
+    if user_id == current_user.get("user_id"):
+        raise HTTPException(status_code=400, detail="لا يمكنك حذف حسابك الخاص")
+    
+    # لا يمكن حذف Admin إلا من قبل Super Admin
+    if user.get("role") == UserRole.ADMIN and current_user["role"] != UserRole.SUPER_ADMIN:
+        raise HTTPException(status_code=403, detail="لا يمكن حذف مدير النظام")
+    
+    # حذف المستخدم نهائياً
+    result = await db.users.delete_one({"id": user_id})
+    
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="فشل في حذف المستخدم")
+    
+    logger.info(f"User {user_id} deleted by {current_user.get('user_id')}")
+    return {"message": "تم حذف المستخدم بنجاح"}
 
 @api_router.get("/tenant/limits")
 async def get_tenant_limits(current_user: dict = Depends(get_current_user)):
