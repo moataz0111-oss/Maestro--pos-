@@ -120,10 +120,10 @@ jobs:
             echo "============================================="
             echo ""
             
-            # بناء الـ images الجديدة فقط (Backend + Frontend)
+            # بناء الـ images الجديدة فقط (Backend + Frontend) - بدون cache
             # MongoDB لا يُبنى - يستخدم image جاهز
             echo "🔨 Building new images (Backend + Frontend only)..."
-            docker-compose build --build-arg CACHEBUST=$(date +%s) frontend backend
+            docker-compose build --no-cache --pull frontend backend
             
             # تحديث Backend فقط
             echo ""
