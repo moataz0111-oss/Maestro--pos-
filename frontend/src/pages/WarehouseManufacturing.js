@@ -92,6 +92,7 @@ export default function WarehouseManufacturing() {
     quantity: 0,
     min_quantity: 0,
     cost_per_unit: 0,
+    waste_percentage: 0, // نسبة الهدر %
     category: ''
   });
   
@@ -184,6 +185,7 @@ export default function WarehouseManufacturing() {
         quantity: 0,
         min_quantity: 0,
         cost_per_unit: 0,
+        waste_percentage: 0,
         category: ''
       });
       fetchData();
@@ -667,6 +669,18 @@ export default function WarehouseManufacturing() {
                         <p className="text-muted-foreground">{t('التكلفة/وحدة')}</p>
                         <p className="font-medium">{formatPrice(material.cost_per_unit)}</p>
                       </div>
+                      {material.waste_percentage > 0 && (
+                        <div>
+                          <p className="text-muted-foreground">{t('نسبة الهدر')}</p>
+                          <p className="font-medium text-orange-500">{material.waste_percentage}%</p>
+                        </div>
+                      )}
+                      {material.effective_cost_per_unit > 0 && material.effective_cost_per_unit !== material.cost_per_unit && (
+                        <div>
+                          <p className="text-muted-foreground">{t('التكلفة الفعلية')}</p>
+                          <p className="font-medium text-orange-600">{formatPrice(material.effective_cost_per_unit)}</p>
+                        </div>
+                      )}
                       <div>
                         <p className="text-muted-foreground">{t('القيمة الكلية')}</p>
                         <p className="font-medium text-primary">{formatPrice(material.total_value || material.quantity * material.cost_per_unit)}</p>
@@ -1005,6 +1019,28 @@ export default function WarehouseManufacturing() {
                   value={rawMaterialForm.cost_per_unit}
                   onChange={(e) => setRawMaterialForm(prev => ({ ...prev, cost_per_unit: parseFloat(e.target.value) || 0 }))}
                 />
+              </div>
+              <div>
+                <Label>{t('نسبة الهدر %')}</Label>
+                <Input
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="0.1"
+                  value={rawMaterialForm.waste_percentage}
+                  onChange={(e) => setRawMaterialForm(prev => ({ ...prev, waste_percentage: parseFloat(e.target.value) || 0 }))}
+                  placeholder="مثال: 10 للحم"
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  {rawMaterialForm.waste_percentage > 0 && rawMaterialForm.cost_per_unit > 0 && (
+                    <>
+                      {t('التكلفة الفعلية بعد الهدر')}: {' '}
+                      <span className="font-bold text-orange-500">
+                        {formatPrice(rawMaterialForm.cost_per_unit / (1 - rawMaterialForm.waste_percentage / 100))}
+                      </span>
+                    </>
+                  )}
+                </p>
               </div>
             </div>
             

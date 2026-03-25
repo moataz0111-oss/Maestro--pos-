@@ -3539,6 +3539,12 @@ const translationMap = {
   'مطعم فاخر 5': { en: 'Luxury Restaurant 5', ku: 'چێشتخانەی لوکس ٥' },
   'مطعم فاخر 6': { en: 'Luxury Restaurant 6', ku: 'چێشتخانەی لوکس ٦' },
   'وصف اختياري': { en: 'Optional description', ku: 'وەسفی هەڵبژاردەیی' },
+  
+  // ===== المخزون والهدر =====
+  'نسبة الهدر %': { en: 'Waste Percentage %', ku: 'ڕێژەی بەفیڕۆچوون %' },
+  'نسبة الهدر': { en: 'Waste Percentage', ku: 'ڕێژەی بەفیڕۆچوون' },
+  'التكلفة الفعلية بعد الهدر': { en: 'Effective Cost After Waste', ku: 'تێچووی ڕاستەقینە دوای بەفیڕۆچوون' },
+  'التكلفة الفعلية': { en: 'Effective Cost', ku: 'تێچووی ڕاستەقینە' },
 };
 
 // الحصول على اللغة الحالية

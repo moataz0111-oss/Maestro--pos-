@@ -82,6 +82,24 @@
 - `/app/frontend/src/pages/WarehouseManufacturing.js` - إصلاح ألوان حقل الكمية
 - `/app/backend/routes/inventory_system.py` - إضافة endpoint التحويل
 
+### Waste Percentage Feature ✅ (Added - March 25, 2026)
+**الميزة الجديدة**: إضافة حقل "نسبة الهدر" للمواد الخام في المخزون.
+
+**الوصف**: 
+- عند شراء مادة خام (مثل اللحم)، يمكن تحديد نسبة الهدر (مثل 10%)
+- النظام يحسب تلقائياً التكلفة الفعلية بعد الهدر
+- مثال: كيلو لحم بـ 8,000 دينار مع هدر 10% = التكلفة الفعلية 8,889 دينار
+
+**التغييرات**:
+- إضافة حقل `waste_percentage` لنموذج المادة الخام (Frontend)
+- إضافة حقل `effective_cost_per_unit` للـ Backend
+- عرض نسبة الهدر والتكلفة الفعلية في بطاقة المادة الخام
+
+**الملفات المعدلة**:
+- `/app/frontend/src/pages/WarehouseManufacturing.js`
+- `/app/backend/routes/inventory_system.py`
+- `/app/frontend/src/utils/autoTranslate.js`
+
 ### Data Persistence on Deployment ✅ (Fixed - March 24, 2026)
 **المشكلة**: البيانات (المبيعات، المنتجات، التعديلات) كانت تُحذف عند كل تحديث/نشر للتطبيق.
 

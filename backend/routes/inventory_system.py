@@ -99,6 +99,7 @@ class RawMaterialCreate(BaseModel):
     quantity: float = 0.0
     min_quantity: float = 0.0
     cost_per_unit: float = 0.0
+    waste_percentage: float = 0.0  # نسبة الهدر %
     category: Optional[str] = None
 
 class RawMaterialResponse(BaseModel):
@@ -109,6 +110,8 @@ class RawMaterialResponse(BaseModel):
     quantity: float
     min_quantity: float
     cost_per_unit: float
+    waste_percentage: float = 0.0  # نسبة الهدر %
+    effective_cost_per_unit: float = 0.0  # التكلفة الفعلية بعد الهدر
     total_value: float = 0.0
     category: Optional[str] = None
     last_updated: str
@@ -532,9 +535,16 @@ async def create_raw_material(material: RawMaterialCreate):
     """إضافة مادة خام جديدة"""
     db = get_db()
     
+    # حساب التكلفة الفعلية بعد الهدر
+    waste_percentage = material.waste_percentage or 0
+    effective_cost = material.cost_per_unit
+    if waste_percentage > 0 and waste_percentage < 100:
+        effective_cost = material.cost_per_unit / (1 - waste_percentage / 100)
+    
     material_doc = {
         "id": str(uuid.uuid4()),
         **material.model_dump(),
+        "effective_cost_per_unit": round(effective_cost, 2),
         "total_value": material.quantity * material.cost_per_unit,
         "last_updated": datetime.now(timezone.utc).isoformat(),
         "created_at": datetime.now(timezone.utc).isoformat()
@@ -550,9 +560,15 @@ async def get_raw_materials():
     db = get_db()
     materials = await db.raw_materials.find({}, {"_id": 0}).to_list(1000)
     
-    # حساب القيمة الإجمالية لكل مادة
+    # حساب القيمة الإجمالية والتكلفة الفعلية لكل مادة
     for material in materials:
         material["total_value"] = material.get("quantity", 0) * material.get("cost_per_unit", 0)
+        # حساب التكلفة الفعلية بعد الهدر إذا لم تكن موجودة
+        waste_percentage = material.get("waste_percentage", 0)
+        if waste_percentage > 0 and waste_percentage < 100 and not material.get("effective_cost_per_unit"):
+            material["effective_cost_per_unit"] = round(material.get("cost_per_unit", 0) / (1 - waste_percentage / 100), 2)
+        elif not material.get("effective_cost_per_unit"):
+            material["effective_cost_per_unit"] = material.get("cost_per_unit", 0)
     
     return materials
 
@@ -571,7 +587,14 @@ async def update_raw_material(material_id: str, material: RawMaterialCreate):
     """تحديث مادة خام"""
     db = get_db()
     
+    # حساب التكلفة الفعلية بعد الهدر
+    waste_percentage = material.waste_percentage or 0
+    effective_cost = material.cost_per_unit
+    if waste_percentage > 0 and waste_percentage < 100:
+        effective_cost = material.cost_per_unit / (1 - waste_percentage / 100)
+    
     update_data = material.model_dump()
+    update_data["effective_cost_per_unit"] = round(effective_cost, 2)
     update_data["total_value"] = material.quantity * material.cost_per_unit
     update_data["last_updated"] = datetime.now(timezone.utc).isoformat()
     
