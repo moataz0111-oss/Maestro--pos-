@@ -236,6 +236,8 @@ export default function Tables() {
     if (!tableToDelete) return;
     
     try {
+      const token = localStorage.getItem('token');
+      const headers = { Authorization: `Bearer ${token}` };
       await axios.delete(`${API}/tables/${tableToDelete.id}`, { headers });
       toast.success(t('تم حذف الطاولة بنجاح'));
       setDeleteConfirmOpen(false);

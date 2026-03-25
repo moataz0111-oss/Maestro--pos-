@@ -937,6 +937,8 @@ export default function Settings() {
   const handleDeleteStaff = async (staffId) => {
     if (!window.confirm('هل أنت متأكد من تعطيل هذا الموظف؟')) return;
     try {
+      const token = localStorage.getItem('token');
+      const headers = { Authorization: `Bearer ${token}` };
       await axios.delete(`${API}/staff/${staffId}`, { headers });
       toast.success(t('تم الحفظ بنجاح'));
       fetchStaffData();
@@ -1067,6 +1069,8 @@ export default function Settings() {
   const handleDeleteBranch = async (branchId) => {
     if (!confirm(t('هل أنت متأكد من حذف هذا الفرع؟'))) return;
     try {
+      const token = localStorage.getItem('token');
+      const headers = { Authorization: `Bearer ${token}` };
       await axios.delete(`${API}/branches/${branchId}`, { headers });
       toast.success(t('تم حذف الفرع بنجاح'));
       fetchData();
@@ -1150,6 +1154,8 @@ export default function Settings() {
   const handleDeletePrinter = async (printerId) => {
     if (!window.confirm(t('هل أنت متأكد من حذف هذه الطابعة؟'))) return;
     try {
+      const token = localStorage.getItem('token');
+      const headers = { Authorization: `Bearer ${token}` };
       await axios.delete(`${API}/printers/${printerId}`, { headers });
       toast.success(t('تم حذف الطابعة'));
       fetchData();
@@ -1274,6 +1280,8 @@ export default function Settings() {
   const handleDeleteUser = async (userId) => {
     if (!confirm(t('هل أنت متأكد من حذف هذا المستخدم؟ لا يمكن التراجع عن هذا الإجراء.'))) return;
     try {
+      const token = localStorage.getItem('token');
+      const headers = { Authorization: `Bearer ${token}` };
       await axios.delete(`${API}/users/${userId}`, { headers });
       toast.success(t('تم حذف المستخدم بنجاح'));
       fetchData();
@@ -1439,6 +1447,8 @@ export default function Settings() {
   const handleDeleteCategory = async (categoryId) => {
     if (!confirm(t('هل أنت متأكد من حذف هذه الفئة؟'))) return;
     try {
+      const token = localStorage.getItem('token');
+      const headers = { Authorization: `Bearer ${token}` };
       await axios.delete(`${API}/categories/${categoryId}`, { headers });
       toast.success(t('تم حذف الفئة بنجاح'));
       fetchData();
@@ -1547,6 +1557,8 @@ export default function Settings() {
   const handleDeleteProduct = async (productId) => {
     if (!confirm(t('هل أنت متأكد من حذف هذا المنتج؟'))) return;
     try {
+      const token = localStorage.getItem('token');
+      const headers = { Authorization: `Bearer ${token}` };
       await axios.delete(`${API}/products/${productId}`, { headers });
       toast.success(t('تم حذف المنتج بنجاح'));
       fetchData();

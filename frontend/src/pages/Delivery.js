@@ -226,6 +226,8 @@ export default function Delivery() {
   const handleDeleteDriver = async (driverId, driverName) => {
     if (!window.confirm(`${t('هل أنت متأكد من حذف السائق')} "${driverName}"؟`)) return;
     try {
+      const token = localStorage.getItem('token');
+      const headers = { Authorization: `Bearer ${token}` };
       await axios.delete(`${API}/drivers/${driverId}`, { headers });
       toast.success(t('تم حذف السائق'));
       fetchData();
@@ -259,6 +261,8 @@ export default function Delivery() {
     setDeleteConfirmOpen(false);
     
     try {
+      const token = localStorage.getItem('token');
+      const headers = { Authorization: `Bearer ${token}` };
       // مسح السائقين واحداً تلو الآخر
       for (const driverId of selectedDrivers) {
         await axios.delete(`${API}/drivers/${driverId}`, { headers });

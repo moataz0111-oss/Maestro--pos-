@@ -6227,19 +6227,28 @@ async def get_today_cash_register(current_user: dict = Depends(get_current_user)
     card_orders = await db.orders.find(card_query, {"total": 1}).to_list(500)
     total_card_sales = sum(o.get("total", 0) for o in card_orders)
     
-    # الآجل (يشمل التوصيل + الآجل العادي)
+    # الآجل العادي (بدون التوصيل - شركات التوصيل لها قسم منفصل)
     credit_query = {
         "created_at": {"$regex": f"^{today}"},
         "status": {"$ne": "cancelled"},
-        "$or": [
-            {"payment_method": "credit"},
-            {"order_type": "delivery"}  # التوصيل يعتبر آجل
-        ]
+        "payment_method": "credit",
+        "order_type": {"$ne": "delivery"}  # استثناء التوصيل
     }
     if branch_id:
         credit_query["branch_id"] = branch_id
     credit_orders = await db.orders.find(credit_query, {"total": 1}).to_list(500)
     total_credit = sum(o.get("total", 0) for o in credit_orders)
+    
+    # آجل شركات التوصيل (منفصل)
+    delivery_credit_query = {
+        "created_at": {"$regex": f"^{today}"},
+        "status": {"$ne": "cancelled"},
+        "order_type": "delivery"
+    }
+    if branch_id:
+        delivery_credit_query["branch_id"] = branch_id
+    delivery_credit_orders = await db.orders.find(delivery_credit_query, {"total": 1, "delivery_app": 1}).to_list(500)
+    total_delivery_credit = sum(o.get("total", 0) for o in delivery_credit_orders)
     
     # المصاريف
     expenses_query = {"date": today}
@@ -6256,8 +6265,8 @@ async def get_today_cash_register(current_user: dict = Depends(get_current_user)
         sort=[("closed_at", -1)]
     )
     
-    # إجمالي المبيعات = كل شيء (نقدي + بطاقة + آجل)
-    total_all_sales = total_cash_sales + total_card_sales + total_credit
+    # إجمالي المبيعات = كل شيء (نقدي + بطاقة + آجل + آجل توصيل)
+    total_all_sales = total_cash_sales + total_card_sales + total_credit + total_delivery_credit
     
     # المتوقع في الصندوق = نقدي فقط - مصاريف (البطاقة لا تدخل الصندوق)
     expected_cash = total_cash_sales - total_expenses
@@ -6266,9 +6275,10 @@ async def get_today_cash_register(current_user: dict = Depends(get_current_user)
         "date": today,
         "cash_sales": total_cash_sales,  # فقط الكاش المحصّل باليد (بدون توصيل وبدون بطاقة)
         "card_sales": total_card_sales,  # مبيعات البطاقة (منفصلة)
-        "credit_sales": total_credit,  # يشمل التوصيل
+        "credit_sales": total_credit,  # الآجل العادي (بدون التوصيل)
+        "delivery_credit_sales": total_delivery_credit,  # آجل شركات التوصيل (منفصل)
         "total_sales": total_all_sales,  # إجمالي كل المبيعات
-        "orders_count": len(cash_orders) + len(card_orders) + len(credit_orders),
+        "orders_count": len(cash_orders) + len(card_orders) + len(credit_orders) + len(delivery_credit_orders),
         "expenses": expenses,
         "total_expenses": total_expenses,
         "expected_cash": expected_cash,  # المتوقع في الصندوق = نقدي - مصاريف
@@ -11925,10 +11935,16 @@ async def get_sales_report(
         if o.get("payment_method") == "card"
     )
     
-    # الآجل (يشمل التوصيل لأن شركات التوصيل آجل + الآجل العادي)
+    # الآجل العادي (بدون التوصيل - شركات التوصيل لها قسم منفصل)
     credit_amount = sum(
         o.get("total", 0) for o in orders 
-        if o.get("payment_method") == "credit" or o.get("order_type") == "delivery"
+        if o.get("payment_method") == "credit" and o.get("order_type") != "delivery"
+    )
+    
+    # آجل شركات التوصيل (منفصل)
+    delivery_credit_amount = sum(
+        o.get("total", 0) for o in orders 
+        if o.get("order_type") == "delivery"
     )
     
     # تقسيم حسب نوع الطلب
@@ -11939,7 +11955,8 @@ async def get_sales_report(
     # عدد الطلبات حسب طريقة الدفع
     cash_orders_count = len([o for o in orders if o.get("payment_method") == "cash" and o.get("order_type") != "delivery"])
     card_orders_count = len([o for o in orders if o.get("payment_method") == "card"])
-    credit_orders_count = len([o for o in orders if o.get("payment_method") == "credit" or o.get("order_type") == "delivery"])
+    credit_orders_count = len([o for o in orders if o.get("payment_method") == "credit" and o.get("order_type") != "delivery"])
+    delivery_credit_orders_count = len([o for o in orders if o.get("order_type") == "delivery"])
     
     return {
         "period": period,
@@ -11954,12 +11971,14 @@ async def get_sales_report(
         "by_payment_method": {
             "cash": cash_amount,  # فقط الكاش المحصّل باليد (بدون توصيل وبدون بطاقة)
             "card": card_amount,  # مبيعات البطاقة (منفصلة)
-            "credit": credit_amount  # يشمل التوصيل + الآجل
+            "credit": credit_amount,  # الآجل العادي (بدون التوصيل)
+            "delivery_credit": delivery_credit_amount  # آجل شركات التوصيل (منفصل)
         },
         "by_payment": {
             "cash": cash_orders_count,
             "card": card_orders_count,
-            "credit": credit_orders_count
+            "credit": credit_orders_count,
+            "delivery_credit": delivery_credit_orders_count
         }
     }
 
