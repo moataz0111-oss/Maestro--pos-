@@ -59,6 +59,7 @@ export default function BranchOrders() {
   const [orders, setOrders] = useState([]);
   const [branches, setBranches] = useState([]);
   const [manufacturedProducts, setManufacturedProducts] = useState([]);
+  const [packagingMaterials, setPackagingMaterials] = useState([]); // مواد التغليف
   const [branchInventory, setBranchInventory] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showAddDialog, setShowAddDialog] = useState(false);
@@ -71,10 +72,13 @@ export default function BranchOrders() {
   const [form, setForm] = useState({
     to_branch_id: '',
     items: [],
+    packaging_items: [], // مواد التغليف المطلوبة
     notes: '',
     priority: 'normal'
   });
   const [selectedProduct, setSelectedProduct] = useState('');
+  const [selectedPackaging, setSelectedPackaging] = useState(''); // مادة التغليف المختارة
+  const [packagingQuantity, setPackagingQuantity] = useState(1); // كمية التغليف
   const [quantity, setQuantity] = useState(1);
   const token = localStorage.getItem('token');
   const headers = { Authorization: `Bearer ${token}` };
@@ -84,15 +88,17 @@ export default function BranchOrders() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [requestsRes, branchesRes, productsRes] = await Promise.all([
+      const [requestsRes, branchesRes, productsRes, packagingRes] = await Promise.all([
         axios.get(`${API}/branch-requests`, { headers }).catch(() => ({ data: [] })),
         axios.get(`${API}/branches`, { headers }).catch(() => ({ data: [] })),
-        axios.get(`${API}/manufactured-products`, { headers }).catch(() => ({ data: [] }))
+        axios.get(`${API}/manufactured-products`, { headers }).catch(() => ({ data: [] })),
+        axios.get(`${API}/packaging-materials`, { headers }).catch(() => ({ data: [] }))
       ]);
       
       setOrders(requestsRes.data || []);
       setBranches(branchesRes.data || []);
       setManufacturedProducts(productsRes.data || []);
+      setPackagingMaterials(packagingRes.data || []);
       
       // جلب مخزون الفرع المحدد
       if (selectedBranch) {
@@ -141,6 +147,53 @@ export default function BranchOrders() {
     setQuantity(1);
     toast.success(`${t('تمت إضافة')} ${product.name}`);
   };
+  
+  // إضافة مادة تغليف للطلب
+  const addPackagingToOrder = () => {
+    if (!selectedPackaging || packagingQuantity <= 0) {
+      toast.error(t('اختر مادة تغليف وحدد الكمية'));
+      return;
+    }
+    
+    const material = packagingMaterials.find(m => m.id === selectedPackaging);
+    if (!material) return;
+    
+    if (material.quantity < packagingQuantity) {
+      toast.error(`${t('الكمية غير كافية. متوفر:')} ${material.quantity} ${material.unit}`);
+      return;
+    }
+    
+    const existing = form.packaging_items.find(i => i.packaging_material_id === selectedPackaging);
+    if (existing) {
+      toast.error(t('هذه المادة موجودة بالفعل'));
+      return;
+    }
+    
+    setForm(prev => ({
+      ...prev,
+      packaging_items: [...prev.packaging_items, {
+        packaging_material_id: material.id,
+        name: material.name,
+        quantity: packagingQuantity,
+        unit: material.unit,
+        cost_per_unit: material.cost_per_unit,
+        available: material.quantity
+      }]
+    }));
+    
+    setSelectedPackaging('');
+    setPackagingQuantity(1);
+    toast.success(`${t('تمت إضافة')} ${material.name}`);
+  };
+  
+  // حذف مادة تغليف من الطلب
+  const removePackagingFromOrder = (index) => {
+    setForm(prev => ({
+      ...prev,
+      packaging_items: prev.packaging_items.filter((_, i) => i !== index)
+    }));
+  };
+  
   const removeProductFromOrder = (index) => {
     setForm(prev => ({
       ...prev,
@@ -148,11 +201,13 @@ export default function BranchOrders() {
     }));
   };
   const calculateTotal = () => {
-    return form.items.reduce((sum, item) => sum + (item.quantity * item.cost_per_unit), 0);
+    const itemsTotal = form.items.reduce((sum, item) => sum + (item.quantity * item.cost_per_unit), 0);
+    const packagingTotal = form.packaging_items.reduce((sum, item) => sum + (item.quantity * item.cost_per_unit), 0);
+    return itemsTotal + packagingTotal;
   };
   const handleSubmitOrder = async () => {
-    if (!form.to_branch_id || form.items.length === 0) {
-      toast.error(t('اختر الفرع وأضف منتجات'));
+    if (!form.to_branch_id || (form.items.length === 0 && form.packaging_items.length === 0)) {
+      toast.error(t('اختر الفرع وأضف منتجات أو مواد تغليف'));
       return;
     }
     
@@ -178,6 +233,7 @@ export default function BranchOrders() {
       setForm({
         to_branch_id: '',
         items: [],
+        packaging_items: [],
         notes: '',
         priority: 'normal'
       });
@@ -588,6 +644,91 @@ export default function BranchOrders() {
               )}
             </div>
             
+            {/* إضافة مواد تغليف */}
+            <div className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-lg space-y-3">
+              <div className="flex items-center gap-2">
+                <Box className="h-5 w-5 text-amber-500" />
+                <Label className="font-bold">{t('إضافة مواد تغليف')}</Label>
+              </div>
+              
+              {packagingMaterials.length === 0 ? (
+                <div className="text-center py-4 text-muted-foreground">
+                  <AlertCircle className="h-8 w-8 mx-auto mb-2 text-yellow-500" />
+                  <p className="text-sm">{t('لا توجد مواد تغليف متوفرة')}</p>
+                </div>
+              ) : (
+                <div className="flex gap-2">
+                  <Select value={selectedPackaging} onValueChange={setSelectedPackaging}>
+                    <SelectTrigger className="flex-1 bg-background">
+                      <SelectValue placeholder={t('اختر مادة تغليف...')} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {packagingMaterials.filter(m => m.quantity > 0).map(material => (
+                        <SelectItem key={material.id} value={material.id}>
+                          {material.name} (متوفر: {material.quantity} {material.unit})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Input
+                    type="number"
+                    min="1"
+                    value={packagingQuantity}
+                    onChange={(e) => setPackagingQuantity(parseInt(e.target.value) || 1)}
+                    className="w-24 bg-background"
+                    placeholder={t('الكمية')}
+                  />
+                  <Button
+                    type="button"
+                    size="icon"
+                    className="bg-amber-500 hover:bg-amber-600"
+                    onClick={addPackagingToOrder}
+                  >
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                </div>
+              )}
+            </div>
+            
+            {/* قائمة مواد التغليف المختارة */}
+            {form.packaging_items.length > 0 && (
+              <div className="border border-amber-500/30 rounded-lg overflow-hidden">
+                <div className="bg-amber-500/10 px-3 py-2 font-medium text-sm flex items-center gap-2">
+                  <Box className="h-4 w-4 text-amber-500" />
+                  {t('مواد التغليف المطلوبة')} ({form.packaging_items.length})
+                </div>
+                <div className="divide-y max-h-48 overflow-y-auto">
+                  {form.packaging_items.map((item, index) => (
+                    <div key={index} className="px-3 py-2 flex items-center justify-between">
+                      <div>
+                        <span className="font-medium">{item.name}</span>
+                        <span className="text-muted-foreground text-sm mr-2">
+                          ({item.quantity} {item.unit} × {formatPrice(item.cost_per_unit)})
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-amber-600">{formatPrice(item.quantity * item.cost_per_unit)}</span>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-destructive"
+                          onClick={() => removePackagingFromOrder(index)}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div className="bg-amber-500/10 px-3 py-2 flex justify-between items-center">
+                  <span className="font-medium">{t('إجمالي التغليف:')}</span>
+                  <span className="font-bold text-lg text-amber-600">
+                    {formatPrice(form.packaging_items.reduce((sum, i) => sum + (i.quantity * i.cost_per_unit), 0))}
+                  </span>
+                </div>
+              </div>
+            )}
+            
             {/* قائمة المنتجات المختارة */}
             {form.items.length > 0 && (
               <div className="border rounded-lg overflow-hidden">
@@ -641,7 +782,7 @@ export default function BranchOrders() {
               {t('إلغاء')}</Button>
             <Button 
               onClick={handleSubmitOrder}
-              disabled={!form.to_branch_id || form.items.length === 0 || submitting}
+              disabled={!form.to_branch_id || (form.items.length === 0 && form.packaging_items.length === 0) || submitting}
               className="bg-primary"
             >
               {submitting ? <RefreshCw className="h-4 w-4 animate-spin ml-2" /> : <Send className="h-4 w-4 ml-2" />}
