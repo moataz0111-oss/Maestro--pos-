@@ -1096,6 +1096,7 @@ class ProductCreate(BaseModel):
     printer_ids: List[str] = []  # الطابعات المرتبطة بالمنتج
     extras: List[Dict[str, Any]] = []  # الإضافات المتاحة للمنتج
     packaging_items: List[Dict[str, Any]] = []  # مواد التغليف المربوطة للخصم التلقائي
+    recipe_quantities: List[Dict[str, Any]] = []  # كميات المكونات للوصفة
 
 class ProductResponse(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -1117,6 +1118,8 @@ class ProductResponse(BaseModel):
     manufactured_product_id: Optional[str] = None  # ربط بالمنتج المصنع من النظام الجديد
     printer_ids: List[str] = []  # الطابعات المرتبطة بالمنتج
     extras: List[Dict[str, Any]] = []  # الإضافات المتاحة للمنتج (جبنة إضافية، صوص، إلخ)
+    packaging_items: List[Dict[str, Any]] = []  # مواد التغليف المربوطة للخصم التلقائي
+    recipe_quantities: List[Dict[str, Any]] = []  # كميات المكونات للوصفة
 
 # Inventory Models
 class InventoryItemCreate(BaseModel):
@@ -14849,7 +14852,7 @@ async def get_menu_link(request: Request, current_user: dict = Depends(get_curre
         base_url = f"{parsed.scheme}://{parsed.netloc}"
     else:
         # fallback للـ environment variable
-        base_url = os.environ.get('REACT_APP_BACKEND_URL', 'https://resto-pos-bilingual.preview.emergentagent.com')
+        base_url = os.environ.get('REACT_APP_BACKEND_URL', 'https://product-setup-plus.preview.emergentagent.com')
     
     menu_url = f"{base_url}/menu/{tenant.get('menu_slug', tenant_id)}"
     

@@ -9,7 +9,7 @@
 
 ## رابط Webhook الخاص بك:
 ```
-https://resto-pos-bilingual.preview.emergentagent.com/api/callcenter/webhook
+https://product-setup-plus.preview.emergentagent.com/api/callcenter/webhook
 ```
 
 ---
@@ -23,7 +23,7 @@ https://resto-pos-bilingual.preview.emergentagent.com/api/callcenter/webhook
 4. أضف الإعدادات التالية:
 
 ```
-CRM Server URL: https://resto-pos-bilingual.preview.emergentagent.com/api/callcenter/webhook
+CRM Server URL: https://product-setup-plus.preview.emergentagent.com/api/callcenter/webhook
 HTTP Method: POST
 Content Type: application/json
 ```
@@ -51,7 +51,7 @@ Content Type: application/json
 3. في **Webhooks**, أضف:
 
 ```
-Webhook URL: https://resto-pos-bilingual.preview.emergentagent.com/api/callcenter/webhook
+Webhook URL: https://product-setup-plus.preview.emergentagent.com/api/callcenter/webhook
 Event Filter: /restapi/v1.0/account/~/extension/~/telephony/sessions
 ```
 
@@ -68,7 +68,7 @@ Event Filter: /restapi/v1.0/account/~/extension/~/telephony/sessions
 3. أضف Webhook جديد:
 
 ```
-URL: https://resto-pos-bilingual.preview.emergentagent.com/api/callcenter/webhook
+URL: https://product-setup-plus.preview.emergentagent.com/api/callcenter/webhook
 Events: call.started, call.answered, call.ended
 ```
 
@@ -85,7 +85,7 @@ Events: call.started, call.answered, call.ended
 
 ```
 Name: Maestro POS Integration
-URL: https://resto-pos-bilingual.preview.emergentagent.com/api/callcenter/webhook
+URL: https://product-setup-plus.preview.emergentagent.com/api/callcenter/webhook
 Events: incoming_call, call_answered, call_ended
 ```
 
@@ -102,7 +102,7 @@ Events: incoming_call, call_answered, call_ended
 #!/usr/bin/php -q
 <?php
 // Maestro POS Caller ID Integration
-$webhook_url = "https://resto-pos-bilingual.preview.emergentagent.com/api/callcenter/webhook";
+$webhook_url = "https://product-setup-plus.preview.emergentagent.com/api/callcenter/webhook";
 
 // قراءة متغيرات AGI
 $stdin = fopen('php://stdin', 'r');
@@ -168,7 +168,7 @@ asterisk -rx "dialplan reload"
 4. في **A CALL COMES IN**, اختر **Webhook** وأضف:
 
 ```
-URL: https://resto-pos-bilingual.preview.emergentagent.com/api/callcenter/webhook
+URL: https://product-setup-plus.preview.emergentagent.com/api/callcenter/webhook
 HTTP: POST
 ```
 
@@ -199,7 +199,7 @@ Zoiper هو تطبيق Softphone ولا يدعم Webhooks مباشرة.
 
 ### طريقة 2: اختبار Webhook يدوياً
 ```bash
-curl -X POST "https://resto-pos-bilingual.preview.emergentagent.com/api/callcenter/webhook" \
+curl -X POST "https://product-setup-plus.preview.emergentagent.com/api/callcenter/webhook" \
   -H "Content-Type: application/json" \
   -d '{"phone": "07801234567", "caller_name": "عميل اختبار", "direction": "incoming"}'
 ```

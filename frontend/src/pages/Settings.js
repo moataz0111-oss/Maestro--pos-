@@ -438,7 +438,7 @@ export default function Settings() {
     name: '', name_en: '', category_id: '', price: '', cost: '', operating_cost: '', packaging_cost: '', image: '', description: '', barcode: '', manufactured_product_id: '', recipe_quantities: [], printer_ids: [], extras: [], packaging_items: []
   });
   const [editProductForm, setEditProductForm] = useState(null);
-  const [newExtraForm, setNewExtraForm] = useState({ name: '', name_en: '', price: '', manufactured_product_id: '' });
+  const [newExtraForm, setNewExtraForm] = useState({ name: '', name_en: '', price: '', quantity: 1, unit: 'قطعة', manufactured_product_id: '' });
   const [manufacturedProducts, setManufacturedProducts] = useState([]);
   const [packagingMaterials, setPackagingMaterials] = useState([]);
   const [kitchenSectionForm, setKitchenSectionForm] = useState({
@@ -1465,7 +1465,7 @@ export default function Settings() {
       toast.success(t('تم تحديث المنتج'));
       setEditProductDialogOpen(false);
       setEditProductForm(null);
-      setNewExtraForm({ name: '', name_en: '', price: '', manufactured_product_id: '' });
+      setNewExtraForm({ name: '', name_en: '', price: '', quantity: 1, unit: 'قطعة', manufactured_product_id: '' });
       fetchData();
     } catch (error) {
       toast.error(error.response?.data?.detail || t('فشل في تحديث المنتج'));
@@ -3458,29 +3458,38 @@ export default function Settings() {
                             <Input
                               type="number"
                               value={productForm.cost}
-                              onChange={(e) => setProductForm({ ...productForm, cost: e.target.value })}
-                              placeholder="2000"
+                              onChange={(e) => {
+                                if (!productForm.manufactured_product_id) {
+                                  setProductForm({ ...productForm, cost: e.target.value });
+                                }
+                              }}
+                              placeholder="0"
                               className="mt-1"
                               readOnly={!!productForm.manufactured_product_id}
                               style={productForm.manufactured_product_id ? { backgroundColor: 'rgba(139, 92, 246, 0.1)', cursor: 'not-allowed' } : {}}
                             />
-                            {productForm.manufactured_product_id && (
-                              <p className="text-xs text-purple-400 mt-1">{t('يُحسب تلقائياً من المكونات')}</p>
-                            )}
+                            <p className="text-xs text-muted-foreground mt-1">
+                              {productForm.manufactured_product_id 
+                                ? t('تُحسب تلقائياً من المنتج المصنع المربوط')
+                                : t('أدخل تكلفة يدوية أو اربط بمنتج مصنع')
+                              }
+                            </p>
                           </div>
                           <div>
                             <Label className="text-foreground text-xs">{t('تكلفة التغليف')}</Label>
                             <Input
                               type="number"
                               value={productForm.packaging_cost}
-                              onChange={(e) => setProductForm({ ...productForm, packaging_cost: e.target.value })}
+                              onChange={(e) => setProductForm({ ...productForm, packaging_cost: e.target.value, packaging_items: [] })}
                               placeholder="250"
                               className="mt-1"
-                              disabled={productForm.packaging_items?.length > 0}
                             />
-                            {productForm.packaging_items?.length > 0 && (
-                              <p className="text-xs text-amber-500 mt-1">{t('يُحسب تلقائياً من مواد التغليف المربوطة')}</p>
-                            )}
+                            <p className="text-xs text-muted-foreground mt-1">
+                              {productForm.packaging_items?.length > 0 
+                                ? t('محسوب من مواد التغليف المربوطة')
+                                : t('أدخل مبلغ يدوي أو اربط مواد التغليف أدناه')
+                              }
+                            </p>
                           </div>
                         </div>
                         
@@ -3686,6 +3695,7 @@ export default function Settings() {
                               {(productForm.extras || []).map((extra, index) => (
                                 <div key={index} className="flex items-center gap-2 bg-background/50 p-2 rounded border">
                                   <span className="flex-1 text-sm">{extra.name}</span>
+                                  <span className="text-xs text-muted-foreground">{extra.quantity || 1} {extra.unit || 'قطعة'}</span>
                                   <span className="text-sm text-green-500">+{extra.price} {t('د.ع')}</span>
                                   {extra.manufactured_product_id && (
                                     <span className="text-xs text-purple-400 bg-purple-500/20 px-2 py-0.5 rounded">
@@ -3711,13 +3721,36 @@ export default function Settings() {
                           )}
                           
                           {/* إضافة إضافة جديدة */}
-                          <div className="grid grid-cols-4 gap-2">
+                          <div className="grid grid-cols-6 gap-2">
                             <Input
                               placeholder={t('اسم الإضافة')}
                               value={newExtraForm.name}
                               onChange={(e) => setNewExtraForm({ ...newExtraForm, name: e.target.value })}
-                              className="text-sm"
+                              className="text-sm col-span-2"
                             />
+                            <Input
+                              type="number"
+                              placeholder={t('الكمية')}
+                              value={newExtraForm.quantity}
+                              onChange={(e) => setNewExtraForm({ ...newExtraForm, quantity: parseFloat(e.target.value) || 1 })}
+                              className="text-sm"
+                              min="1"
+                            />
+                            <Select 
+                              value={newExtraForm.unit} 
+                              onValueChange={(v) => setNewExtraForm({ ...newExtraForm, unit: v })}
+                            >
+                              <SelectTrigger className="text-sm">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="قطعة">{t('قطعة')}</SelectItem>
+                                <SelectItem value="غرام">{t('غرام')}</SelectItem>
+                                <SelectItem value="ملعقة">{t('ملعقة')}</SelectItem>
+                                <SelectItem value="كوب">{t('كوب')}</SelectItem>
+                                <SelectItem value="شريحة">{t('شريحة')}</SelectItem>
+                              </SelectContent>
+                            </Select>
                             <Input
                               type="number"
                               placeholder={t('السعر')}
@@ -3725,20 +3758,6 @@ export default function Settings() {
                               onChange={(e) => setNewExtraForm({ ...newExtraForm, price: e.target.value })}
                               className="text-sm"
                             />
-                            <Select 
-                              value={newExtraForm.manufactured_product_id || 'none'} 
-                              onValueChange={(v) => setNewExtraForm({ ...newExtraForm, manufactured_product_id: v === 'none' ? '' : v })}
-                            >
-                              <SelectTrigger className="text-sm">
-                                <SelectValue placeholder={t('منتج مصنع')} />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="none">{t('بدون ربط')}</SelectItem>
-                                {manufacturedProducts.map(mp => (
-                                  <SelectItem key={mp.id} value={mp.id}>{mp.name}</SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
                             <Button
                               type="button"
                               variant="outline"
@@ -3750,19 +3769,38 @@ export default function Settings() {
                                     name: newExtraForm.name,
                                     name_en: newExtraForm.name_en || newExtraForm.name,
                                     price: parseFloat(newExtraForm.price) || 0,
+                                    quantity: newExtraForm.quantity || 1,
+                                    unit: newExtraForm.unit || 'قطعة',
                                     manufactured_product_id: newExtraForm.manufactured_product_id || null
                                   };
                                   setProductForm({
                                     ...productForm,
                                     extras: [...(productForm.extras || []), newExtra]
                                   });
-                                  setNewExtraForm({ name: '', name_en: '', price: '', manufactured_product_id: '' });
+                                  setNewExtraForm({ name: '', name_en: '', price: '', quantity: 1, unit: 'قطعة', manufactured_product_id: '' });
                                 }
                               }}
                               className="text-orange-500 border-orange-500/50 hover:bg-orange-500/10"
                             >
                               <Plus className="h-4 w-4" />
                             </Button>
+                          </div>
+                          {/* اختيار المنتج المصنع للإضافة */}
+                          <div className="mt-2">
+                            <Select 
+                              value={newExtraForm.manufactured_product_id || 'none'} 
+                              onValueChange={(v) => setNewExtraForm({ ...newExtraForm, manufactured_product_id: v === 'none' ? '' : v })}
+                            >
+                              <SelectTrigger className="text-sm">
+                                <SelectValue placeholder={t('ربط بمنتج مصنع (اختياري)')} />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="none">{t('بدون ربط')}</SelectItem>
+                                {manufacturedProducts.map(mp => (
+                                  <SelectItem key={mp.id} value={mp.id}>{mp.name}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
                           </div>
                         </div>
                         
@@ -3978,26 +4016,120 @@ export default function Settings() {
                           <Input
                             type="number"
                             value={editProductForm.cost}
-                            onChange={(e) => setEditProductForm({ ...editProductForm, cost: e.target.value })}
+                            onChange={(e) => {
+                              if (!editProductForm.manufactured_product_id) {
+                                setEditProductForm({ ...editProductForm, cost: e.target.value });
+                              }
+                            }}
+                            placeholder="0"
                             className="mt-1"
                             readOnly={!!editProductForm.manufactured_product_id}
                             style={editProductForm.manufactured_product_id ? { backgroundColor: 'rgba(139, 92, 246, 0.1)', cursor: 'not-allowed' } : {}}
                           />
-                          {editProductForm.manufactured_product_id && (
-                            <p className="text-xs text-purple-400 mt-1">{t('يُحسب تلقائياً من المكونات')}</p>
-                          )}
+                          <p className="text-xs text-muted-foreground mt-1">
+                            {editProductForm.manufactured_product_id 
+                              ? t('تُحسب تلقائياً من المنتج المصنع المربوط')
+                              : t('أدخل تكلفة يدوية أو اربط بمنتج مصنع')
+                            }
+                          </p>
                         </div>
                         <div>
                           <Label className="text-foreground text-xs">{t('تكلفة التغليف')}</Label>
                           <Input
                             type="number"
                             value={editProductForm.packaging_cost}
-                            onChange={(e) => setEditProductForm({ ...editProductForm, packaging_cost: e.target.value })}
+                            onChange={(e) => setEditProductForm({ ...editProductForm, packaging_cost: e.target.value, packaging_items: [] })}
                             className="mt-1"
                             placeholder="0"
                           />
+                          <p className="text-xs text-muted-foreground mt-1">
+                            {(editProductForm.packaging_items || []).length > 0 
+                              ? t('محسوب من مواد التغليف المربوطة')
+                              : t('أدخل مبلغ يدوي أو اربط مواد التغليف أدناه')
+                            }
+                          </p>
                         </div>
                       </div>
+                      
+                      {/* ربط بمواد التغليف (للخصم التلقائي عند السفري/التوصيل) */}
+                      {packagingMaterials.length > 0 && (
+                      <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg">
+                        <Label className="text-foreground font-medium mb-2 flex items-center gap-2">
+                          <Package className="h-4 w-4 text-amber-500" />{t('ربط بمواد التغليف (للخصم التلقائي)')}
+                        </Label>
+                        <p className="text-xs text-muted-foreground mb-3">{t('يُخصم تلقائياً عند الطلب السفري أو التوصيل')}</p>
+                        
+                        <div className="space-y-2 mb-3">
+                          {(editProductForm.packaging_items || []).map((item, idx) => (
+                            <div key={idx} className="flex items-center gap-2 p-2 bg-background rounded border">
+                              <span className="flex-1 text-sm">{item.name}</span>
+                              <Input
+                                type="number"
+                                value={item.quantity}
+                                onChange={(e) => {
+                                  const items = [...(editProductForm.packaging_items || [])];
+                                  items[idx].quantity = parseFloat(e.target.value) || 1;
+                                  // إعادة حساب التكلفة
+                                  const totalCost = items.reduce((sum, i) => sum + (i.quantity * i.cost_per_unit), 0);
+                                  setEditProductForm({ ...editProductForm, packaging_items: items, packaging_cost: totalCost });
+                                }}
+                                className="w-20"
+                                min="1"
+                              />
+                              <span className="text-xs text-muted-foreground">{item.unit}</span>
+                              <span className="text-xs text-amber-600">{(item.quantity * item.cost_per_unit).toLocaleString()} د.ع</span>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => {
+                                  const items = (editProductForm.packaging_items || []).filter((_, i) => i !== idx);
+                                  const totalCost = items.reduce((sum, i) => sum + (i.quantity * i.cost_per_unit), 0);
+                                  setEditProductForm({ ...editProductForm, packaging_items: items, packaging_cost: totalCost || '' });
+                                }}
+                                className="text-red-500 h-7 w-7 p-0"
+                              >
+                                <X className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                        
+                        <Select
+                          value=""
+                          onValueChange={(materialId) => {
+                            const material = packagingMaterials.find(m => m.id === materialId);
+                            if (material) {
+                              const exists = (editProductForm.packaging_items || []).find(i => i.packaging_material_id === materialId);
+                              if (!exists) {
+                                const newItem = {
+                                  packaging_material_id: materialId,
+                                  name: material.name,
+                                  quantity: 1,
+                                  unit: material.unit,
+                                  cost_per_unit: material.cost_per_unit
+                                };
+                                const items = [...(editProductForm.packaging_items || []), newItem];
+                                const totalCost = items.reduce((sum, i) => sum + (i.quantity * i.cost_per_unit), 0);
+                                setEditProductForm({ ...editProductForm, packaging_items: items, packaging_cost: totalCost });
+                              }
+                            }
+                          }}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder={t('+ إضافة مادة تغليف')} />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {packagingMaterials.map(m => (
+                              <SelectItem key={m.id} value={m.id}>
+                                {m.name} ({m.cost_per_unit} د.ع/{m.unit})
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      )}
+                      
                       <div>
                         <ImageUploader
                           value={editProductForm.image}
@@ -4133,6 +4265,7 @@ export default function Settings() {
                             {(editProductForm.extras || []).map((extra, index) => (
                               <div key={index} className="flex items-center gap-2 bg-background/50 p-2 rounded border">
                                 <span className="flex-1 text-sm">{extra.name}</span>
+                                <span className="text-xs text-muted-foreground">{extra.quantity || 1} {extra.unit || 'قطعة'}</span>
                                 <span className="text-sm text-green-500">+{extra.price} {t('د.ع')}</span>
                                 {extra.manufactured_product_id && (
                                   <span className="text-xs text-purple-400 bg-purple-500/20 px-2 py-0.5 rounded">
@@ -4158,13 +4291,36 @@ export default function Settings() {
                         )}
                         
                         {/* إضافة إضافة جديدة */}
-                        <div className="grid grid-cols-4 gap-2">
+                        <div className="grid grid-cols-6 gap-2">
                           <Input
                             placeholder={t('اسم الإضافة')}
                             value={newExtraForm.name}
                             onChange={(e) => setNewExtraForm({ ...newExtraForm, name: e.target.value })}
-                            className="text-sm"
+                            className="text-sm col-span-2"
                           />
+                          <Input
+                            type="number"
+                            placeholder={t('الكمية')}
+                            value={newExtraForm.quantity}
+                            onChange={(e) => setNewExtraForm({ ...newExtraForm, quantity: parseFloat(e.target.value) || 1 })}
+                            className="text-sm"
+                            min="1"
+                          />
+                          <Select 
+                            value={newExtraForm.unit} 
+                            onValueChange={(v) => setNewExtraForm({ ...newExtraForm, unit: v })}
+                          >
+                            <SelectTrigger className="text-sm">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="قطعة">{t('قطعة')}</SelectItem>
+                              <SelectItem value="غرام">{t('غرام')}</SelectItem>
+                              <SelectItem value="ملعقة">{t('ملعقة')}</SelectItem>
+                              <SelectItem value="كوب">{t('كوب')}</SelectItem>
+                              <SelectItem value="شريحة">{t('شريحة')}</SelectItem>
+                            </SelectContent>
+                          </Select>
                           <Input
                             type="number"
                             placeholder={t('السعر')}
@@ -4172,20 +4328,6 @@ export default function Settings() {
                             onChange={(e) => setNewExtraForm({ ...newExtraForm, price: e.target.value })}
                             className="text-sm"
                           />
-                          <Select 
-                            value={newExtraForm.manufactured_product_id || 'none'} 
-                            onValueChange={(v) => setNewExtraForm({ ...newExtraForm, manufactured_product_id: v === 'none' ? '' : v })}
-                          >
-                            <SelectTrigger className="text-sm">
-                              <SelectValue placeholder={t('منتج مصنع (اختياري)')} />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="none">{t('بدون ربط')}</SelectItem>
-                              {manufacturedProducts.map(mp => (
-                                <SelectItem key={mp.id} value={mp.id}>{mp.name}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
                           <Button
                             type="button"
                             variant="outline"
@@ -4197,19 +4339,38 @@ export default function Settings() {
                                   name: newExtraForm.name,
                                   name_en: newExtraForm.name_en || newExtraForm.name,
                                   price: parseFloat(newExtraForm.price) || 0,
+                                  quantity: newExtraForm.quantity || 1,
+                                  unit: newExtraForm.unit || 'قطعة',
                                   manufactured_product_id: newExtraForm.manufactured_product_id || null
                                 };
                                 setEditProductForm({
                                   ...editProductForm,
                                   extras: [...(editProductForm.extras || []), newExtra]
                                 });
-                                setNewExtraForm({ name: '', name_en: '', price: '', manufactured_product_id: '' });
+                                setNewExtraForm({ name: '', name_en: '', price: '', quantity: 1, unit: 'قطعة', manufactured_product_id: '' });
                               }
                             }}
                             className="text-orange-500 border-orange-500/50 hover:bg-orange-500/10"
                           >
                             <Plus className="h-4 w-4" />
                           </Button>
+                        </div>
+                        {/* اختيار المنتج المصنع للإضافة */}
+                        <div className="mt-2">
+                          <Select 
+                            value={newExtraForm.manufactured_product_id || 'none'} 
+                            onValueChange={(v) => setNewExtraForm({ ...newExtraForm, manufactured_product_id: v === 'none' ? '' : v })}
+                          >
+                            <SelectTrigger className="text-sm">
+                              <SelectValue placeholder={t('ربط بمنتج مصنع (اختياري)')} />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="none">{t('بدون ربط')}</SelectItem>
+                              {manufacturedProducts.map(mp => (
+                                <SelectItem key={mp.id} value={mp.id}>{mp.name}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
                         </div>
                       </div>
                       
