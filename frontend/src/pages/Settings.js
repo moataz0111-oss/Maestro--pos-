@@ -435,11 +435,12 @@ export default function Settings() {
   const [editCategoryForm, setEditCategoryForm] = useState(null);
   const [editCategoryDialogOpen, setEditCategoryDialogOpen] = useState(false);
   const [productForm, setProductForm] = useState({
-    name: '', name_en: '', category_id: '', price: '', cost: '', operating_cost: '', packaging_cost: '', image: '', description: '', barcode: '', manufactured_product_id: '', recipe_quantities: [], printer_ids: [], extras: []
+    name: '', name_en: '', category_id: '', price: '', cost: '', operating_cost: '', packaging_cost: '', image: '', description: '', barcode: '', manufactured_product_id: '', recipe_quantities: [], printer_ids: [], extras: [], packaging_items: []
   });
   const [editProductForm, setEditProductForm] = useState(null);
   const [newExtraForm, setNewExtraForm] = useState({ name: '', name_en: '', price: '', manufactured_product_id: '' });
   const [manufacturedProducts, setManufacturedProducts] = useState([]);
+  const [packagingMaterials, setPackagingMaterials] = useState([]);
   const [kitchenSectionForm, setKitchenSectionForm] = useState({
     name: '', name_en: '', color: '#D4AF37', icon: '🍳', printer_id: '', branch_id: '', sort_order: 0
   });
@@ -570,6 +571,14 @@ export default function Settings() {
       setCustomers(customersRes.data);
       setManufacturedProducts(mfgProductsRes.data || []);
       setPrinterTypes([...(printerTypesRes.data?.default || []), ...(printerTypesRes.data?.custom || [])]);
+      
+      // جلب مواد التغليف
+      try {
+        const packagingRes = await axios.get(`${API}/packaging-materials`);
+        setPackagingMaterials(packagingRes.data || []);
+      } catch (err) {
+        console.log('No packaging materials found');
+      }
       
       // تعيين الفرع الافتراضي لنموذج المستخدم الجديد
       if (branchesRes.data.length > 0) {
@@ -1388,11 +1397,12 @@ export default function Settings() {
         packaging_cost: parseFloat(productForm.packaging_cost) || 0,
         manufactured_product_id: productForm.manufactured_product_id || null,
         recipe_quantities: productForm.recipe_quantities || [],
-        extras: productForm.extras || []
+        extras: productForm.extras || [],
+        packaging_items: productForm.packaging_items || []
       });
       toast.success(t('تم إنشاء المنتج'));
       setProductDialogOpen(false);
-      setProductForm({ name: '', name_en: '', category_id: '', price: '', cost: '', operating_cost: '', packaging_cost: '', image: '', description: '', barcode: '', manufactured_product_id: '', recipe_quantities: [], printer_ids: [], extras: [] });
+      setProductForm({ name: '', name_en: '', category_id: '', price: '', cost: '', operating_cost: '', packaging_cost: '', image: '', description: '', barcode: '', manufactured_product_id: '', recipe_quantities: [], printer_ids: [], extras: [], packaging_items: [] });
       setNewExtraForm({ name: '', name_en: '', price: '', manufactured_product_id: '' });
       fetchData();
     } catch (error) {
@@ -1432,7 +1442,8 @@ export default function Settings() {
       manufactured_product_id: p.manufactured_product_id || '',
       recipe_quantities: recipeQuantities,
       extras: p.extras || [],
-      printer_ids: p.printer_ids || []
+      printer_ids: p.printer_ids || [],
+      packaging_items: p.packaging_items || []
     });
     setEditProductDialogOpen(true);
   };
@@ -1448,7 +1459,8 @@ export default function Settings() {
         packaging_cost: parseFloat(editProductForm.packaging_cost) || 0,
         manufactured_product_id: editProductForm.manufactured_product_id || null,
         recipe_quantities: editProductForm.recipe_quantities || [],
-        extras: editProductForm.extras || []
+        extras: editProductForm.extras || [],
+        packaging_items: editProductForm.packaging_items || []
       });
       toast.success(t('تم تحديث المنتج'));
       setEditProductDialogOpen(false);
@@ -3464,9 +3476,92 @@ export default function Settings() {
                               onChange={(e) => setProductForm({ ...productForm, packaging_cost: e.target.value })}
                               placeholder="250"
                               className="mt-1"
+                              disabled={productForm.packaging_items?.length > 0}
                             />
+                            {productForm.packaging_items?.length > 0 && (
+                              <p className="text-xs text-amber-500 mt-1">{t('يُحسب تلقائياً من مواد التغليف المربوطة')}</p>
+                            )}
                           </div>
                         </div>
+                        
+                        {/* ربط بمواد التغليف (للخصم التلقائي عند السفري/التوصيل) */}
+                        {packagingMaterials.length > 0 && (
+                        <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg">
+                          <Label className="text-foreground font-medium mb-2 flex items-center gap-2">
+                            <Package className="h-4 w-4 text-amber-500" />{t('ربط بمواد التغليف (للخصم التلقائي)')}
+                          </Label>
+                          <p className="text-xs text-muted-foreground mb-3">{t('يُخصم تلقائياً عند الطلب السفري أو التوصيل')}</p>
+                          
+                          <div className="space-y-2 mb-3">
+                            {(productForm.packaging_items || []).map((item, idx) => (
+                              <div key={idx} className="flex items-center gap-2 p-2 bg-background rounded border">
+                                <span className="flex-1 text-sm">{item.name}</span>
+                                <Input
+                                  type="number"
+                                  value={item.quantity}
+                                  onChange={(e) => {
+                                    const items = [...(productForm.packaging_items || [])];
+                                    items[idx].quantity = parseFloat(e.target.value) || 1;
+                                    // إعادة حساب التكلفة
+                                    const totalCost = items.reduce((sum, i) => sum + (i.quantity * i.cost_per_unit), 0);
+                                    setProductForm({ ...productForm, packaging_items: items, packaging_cost: totalCost });
+                                  }}
+                                  className="w-20"
+                                  min="1"
+                                />
+                                <span className="text-xs text-muted-foreground">{item.unit}</span>
+                                <span className="text-xs text-amber-600">{(item.quantity * item.cost_per_unit).toLocaleString()} د.ع</span>
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => {
+                                    const items = (productForm.packaging_items || []).filter((_, i) => i !== idx);
+                                    const totalCost = items.reduce((sum, i) => sum + (i.quantity * i.cost_per_unit), 0);
+                                    setProductForm({ ...productForm, packaging_items: items, packaging_cost: totalCost || '' });
+                                  }}
+                                  className="text-red-500 h-7 w-7 p-0"
+                                >
+                                  <X className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            ))}
+                          </div>
+                          
+                          <Select
+                            value=""
+                            onValueChange={(materialId) => {
+                              const material = packagingMaterials.find(m => m.id === materialId);
+                              if (material) {
+                                const exists = (productForm.packaging_items || []).find(i => i.packaging_material_id === materialId);
+                                if (!exists) {
+                                  const newItem = {
+                                    packaging_material_id: materialId,
+                                    name: material.name,
+                                    quantity: 1,
+                                    unit: material.unit,
+                                    cost_per_unit: material.cost_per_unit
+                                  };
+                                  const items = [...(productForm.packaging_items || []), newItem];
+                                  const totalCost = items.reduce((sum, i) => sum + (i.quantity * i.cost_per_unit), 0);
+                                  setProductForm({ ...productForm, packaging_items: items, packaging_cost: totalCost });
+                                }
+                              }
+                            }}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder={t('+ إضافة مادة تغليف')} />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {packagingMaterials.map(m => (
+                                <SelectItem key={m.id} value={m.id}>
+                                  {m.name} ({m.cost_per_unit} د.ع/{m.unit})
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        )}
                         
                         {/* ربط بالمنتج المصنع */}
                         <div className="p-3 bg-purple-500/10 border border-purple-500/30 rounded-lg">

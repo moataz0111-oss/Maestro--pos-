@@ -1095,6 +1095,7 @@ class ProductCreate(BaseModel):
     manufactured_product_id: Optional[str] = None  # ربط بالمنتج المصنع من النظام الجديد
     printer_ids: List[str] = []  # الطابعات المرتبطة بالمنتج
     extras: List[Dict[str, Any]] = []  # الإضافات المتاحة للمنتج
+    packaging_items: List[Dict[str, Any]] = []  # مواد التغليف المربوطة للخصم التلقائي
 
 class ProductResponse(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -4214,87 +4215,6 @@ async def get_next_request_number() -> int:
     )
     return counter["counter"]
 
-@api_router.post("/purchase-requests", response_model=PurchaseRequestResponse)
-async def create_purchase_request(request: PurchaseRequestCreate, current_user: dict = Depends(get_current_user)):
-    """إنشاء طلب شراء"""
-    if current_user["role"] not in [UserRole.ADMIN, UserRole.MANAGER, UserRole.SUPERVISOR, UserRole.SUPER_ADMIN]:
-        raise HTTPException(status_code=403, detail="غير مصرح")
-    
-    request_number = await get_next_request_number()
-    
-    branch = await db.branches.find_one({"id": request.branch_id}, {"name": 1})
-    
-    request_doc = {
-        "id": str(uuid.uuid4()),
-        "request_number": request_number,
-        **request.model_dump(),
-        "branch_name": branch.get("name") if branch else None,
-        "status": "pending",
-        "tenant_id": get_user_tenant_id(current_user),
-        "created_by": current_user["id"],
-        "created_at": datetime.now(timezone.utc).isoformat()
-    }
-    await db.purchase_requests.insert_one(request_doc)
-    del request_doc["_id"]
-    return request_doc
-
-@api_router.get("/purchase-requests")
-async def get_purchase_requests(
-    branch_id: Optional[str] = None,
-    status: Optional[str] = None,
-    priority: Optional[str] = None,
-    current_user: dict = Depends(get_current_user)
-):
-    """جلب طلبات الشراء"""
-    query = build_tenant_query(current_user)
-    if branch_id:
-        query["branch_id"] = branch_id
-    if status:
-        query["status"] = status
-    if priority:
-        query["priority"] = priority
-    
-    requests = await db.purchase_requests.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
-    return requests
-
-@api_router.put("/purchase-requests/{request_id}/approve")
-async def approve_purchase_request(request_id: str, current_user: dict = Depends(get_current_user)):
-    """الموافقة على طلب الشراء"""
-    if current_user["role"] not in [UserRole.ADMIN, UserRole.MANAGER, UserRole.SUPER_ADMIN]:
-        raise HTTPException(status_code=403, detail="غير مصرح")
-    
-    query = build_tenant_query(current_user, {"id": request_id})
-    request = await db.purchase_requests.find_one(query)
-    if not request:
-        raise HTTPException(status_code=404, detail="الطلب غير موجود")
-    
-    await db.purchase_requests.update_one(
-        {"id": request_id},
-        {"$set": {
-            "status": "approved",
-            "approved_by": current_user["id"],
-            "approved_at": datetime.now(timezone.utc).isoformat()
-        }}
-    )
-    return {"message": "تمت الموافقة على طلب الشراء"}
-
-@api_router.put("/purchase-requests/{request_id}/status")
-async def update_purchase_request_status(request_id: str, status: str, current_user: dict = Depends(get_current_user)):
-    """تحديث حالة طلب الشراء"""
-    if current_user["role"] not in [UserRole.ADMIN, UserRole.MANAGER, UserRole.SUPERVISOR, UserRole.SUPER_ADMIN]:
-        raise HTTPException(status_code=403, detail="غير مصرح")
-    
-    query = build_tenant_query(current_user, {"id": request_id})
-    request = await db.purchase_requests.find_one(query)
-    if not request:
-        raise HTTPException(status_code=404, detail="الطلب غير موجود")
-    
-    await db.purchase_requests.update_one(
-        {"id": request_id},
-        {"$set": {"status": status}}
-    )
-    return {"message": "تم تحديث الحالة"}
-
 # ==================== TABLE ROUTES ====================
 
 @api_router.post("/tables", response_model=TableResponse)
@@ -4846,6 +4766,28 @@ async def create_order(order: OrderCreate, current_user: dict = Depends(get_curr
                         {"id": ing["inventory_id"]},
                         {"$inc": {"quantity": -ing["quantity"] * item.quantity}}
                     )
+            
+            # خصم مواد التغليف من مخزون الفرع (للتوصيل والسفري فقط)
+            if is_delivery_or_takeaway and product.get("packaging_items"):
+                for pkg_item in product["packaging_items"]:
+                    packaging_material_id = pkg_item.get("packaging_material_id")
+                    pkg_quantity = pkg_item.get("quantity", 1) * item.quantity
+                    
+                    if packaging_material_id:
+                        # خصم من مخزون الفرع
+                        branch_pkg = await db.branch_packaging_inventory.find_one({
+                            "branch_id": order.branch_id,
+                            "packaging_material_id": packaging_material_id
+                        })
+                        
+                        if branch_pkg:
+                            await db.branch_packaging_inventory.update_one(
+                                {"id": branch_pkg["id"]},
+                                {
+                                    "$inc": {"used_quantity": pkg_quantity},
+                                    "$set": {"last_updated": datetime.now(timezone.utc).isoformat()}
+                                }
+                            )
     
     return order_doc
 
