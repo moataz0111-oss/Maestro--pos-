@@ -148,6 +148,48 @@
 
 ---
 
+### Role-Based Access Control (RBAC) ✅ (Added - March 25, 2026)
+**الميزة الجديدة**: صلاحيات الأدوار وتوجيه المستخدمين حسب دورهم.
+
+**الأدوار وصلاحياتها**:
+1. **warehouse_keeper (أمين المخزن)**:
+   - يرى فقط: المخزن، طلبات التصنيع الواردة، الحركات، التحويلات
+   - التوجيه التلقائي: `/warehouse-manufacturing`
+
+2. **manufacturer (مسؤول التصنيع)**:
+   - يرى فقط: التصنيع، طلبات الفروع، التحويلات
+   - التوجيه التلقائي: `/warehouse-manufacturing`
+
+3. **purchaser (مسؤول المشتريات)**:
+   - يرى فقط: صفحة المشتريات
+   - التوجيه التلقائي: `/purchasing`
+
+**التغييرات**:
+- تعديل `PermissionRoute` في App.js للتحقق من صلاحيات الدور
+- تعديل `PublicRoute` للتوجيه التلقائي بعد تسجيل الدخول
+- إخفاء/إظهار التابات في WarehouseManufacturing.js حسب الدور
+
+**الملفات المعدلة**:
+- `/app/frontend/src/App.js`
+- `/app/frontend/src/pages/WarehouseManufacturing.js`
+
+**حالة الاختبار**: ✅ 20/20 اختبارات ناجحة (iteration_123)
+
+---
+
+### Purchase Receive Endpoint ✅ (Added - March 25, 2026)
+**الميزة الجديدة**: استلام طلبات الشراء وإضافة المواد للمخزن تلقائياً.
+
+**الـ API**:
+- `POST /api/purchase-requests/{id}/receive` - استلام الطلب وتحديث المخزون
+
+**الملفات المعدلة**:
+- `/app/backend/routes/inventory_system.py`
+
+**حالة الاختبار**: ✅ متضمن في iteration_123
+
+---
+
 ### Waste Percentage Feature ✅ (Added - March 25, 2026)
 **الميزة الجديدة**: إضافة حقل "نسبة الهدر" للمواد الخام في المخزون.
 
