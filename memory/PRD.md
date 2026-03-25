@@ -96,17 +96,32 @@
 - إضافة شريط تقدم بصري لنسبة المتبقي
 - زر "زيادة الكمية" مع نافذة حوار مخصصة
 
-**التغييرات**:
-- Backend: إضافة endpoint `add-stock` + تتبع `transferred_quantity` عند التحويل
-- Frontend: عرض الإحصائيات + زر زيادة الكمية + شريط التقدم
-- ترجمات جديدة للكلمات المضافة
-
 **الملفات المعدلة**:
 - `/app/backend/routes/inventory_system.py`
 - `/app/frontend/src/pages/WarehouseManufacturing.js`
 - `/app/frontend/src/utils/autoTranslate.js`
 
 **حالة الاختبار**: ✅ 10/10 اختبارات ناجحة (iteration_120)
+
+---
+
+### Raw Materials Stock & Statistics Feature ✅ (Added - March 25, 2026)
+**الميزة الجديدة**: إضافة زيادة كمية المادة الخام مباشرة + عرض إحصائيات المخزون + تنبيهات انخفاض المخزون.
+
+**الحل**:
+- إضافة endpoint `POST /api/raw-materials-new/{id}/add-stock?quantity=N` لزيادة الكمية مباشرة
+- إضافة حقول `total_received` و `transferred_to_manufacturing` لتتبع الإحصائيات
+- عرض إحصائيات (إجمالي الوارد، المحول للتصنيع، المتبقي) لكل مادة خام
+- إضافة شريط تقدم بصري لنسبة المتبقي
+- زر "+" لزيادة الكمية مع نافذة حوار مخصصة
+- تنبيه بصري (animate-pulse + أيقونة تحذير) عند انخفاض المخزون أقل من الحد الأدنى
+
+**الملفات المعدلة**:
+- `/app/backend/routes/inventory_system.py`
+- `/app/frontend/src/pages/WarehouseManufacturing.js`
+- `/app/frontend/src/utils/autoTranslate.js`
+
+**حالة الاختبار**: ✅ 10/10 اختبارات ناجحة (iteration_121)
 
 ---
 
