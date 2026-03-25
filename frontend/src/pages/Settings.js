@@ -513,6 +513,50 @@ export default function Settings() {
     }
   }, []);
 
+  // دالة حساب التكلفة مع تحويل الوحدات (غرام/كغم/قطعة/مل/لتر)
+  const calculateIngredientCost = (item, pieceWeight = null, pieceWeightUnit = 'غرام') => {
+    const qty = item.quantity || 0;
+    const costPerUnit = item.cost_per_unit || 0;
+    const unit = item.unit;
+    const baseUnit = item.base_unit || unit;
+    
+    let multiplier = 1;
+    
+    // تحويل الأوزان
+    if (baseUnit === 'كغم' && unit === 'غرام') {
+      multiplier = 1 / 1000; // غرام إلى كغم
+    } else if (baseUnit === 'غرام' && unit === 'كغم') {
+      multiplier = 1000; // كغم إلى غرام
+    } else if (baseUnit === 'لتر' && unit === 'مل') {
+      multiplier = 1 / 1000; // مل إلى لتر
+    } else if (baseUnit === 'مل' && unit === 'لتر') {
+      multiplier = 1000; // لتر إلى مل
+    }
+    // تحويل القطعة إلى وزن إذا كان وزن القطعة متوفر
+    else if ((unit === 'قطعة' || unit === 'حبة') && pieceWeight && (baseUnit === 'كغم' || baseUnit === 'غرام')) {
+      // تحويل وزن القطعة للوحدة الأساسية
+      let pieceWeightInBase = pieceWeight;
+      if (pieceWeightUnit === 'غرام' && baseUnit === 'كغم') {
+        pieceWeightInBase = pieceWeight / 1000;
+      } else if (pieceWeightUnit === 'كغم' && baseUnit === 'غرام') {
+        pieceWeightInBase = pieceWeight * 1000;
+      }
+      multiplier = pieceWeightInBase;
+    }
+    // تحويل من الوزن إلى قطعة (عكسي)
+    else if ((baseUnit === 'قطعة' || baseUnit === 'حبة') && pieceWeight && (unit === 'كغم' || unit === 'غرام')) {
+      let pieceWeightInUnit = pieceWeight;
+      if (pieceWeightUnit === 'غرام' && unit === 'كغم') {
+        pieceWeightInUnit = pieceWeight / 1000;
+      } else if (pieceWeightUnit === 'كغم' && unit === 'غرام') {
+        pieceWeightInUnit = pieceWeight * 1000;
+      }
+      multiplier = 1 / pieceWeightInUnit;
+    }
+    
+    return qty * costPerUnit * multiplier;
+  };
+
   // جلب صلاحيات الإعدادات المتاحة للعميل
   const fetchSettingsPermissions = async () => {
     try {
@@ -3586,7 +3630,7 @@ export default function Settings() {
                                 onValueChange={(v) => {
                                   const selectedProduct = manufacturedProducts.find(mp => mp.id === v);
                                   if (v === 'none' || !selectedProduct) {
-                                    setProductForm({ ...productForm, manufactured_product_id: null, recipe_quantities: [], cost: '' });
+                                    setProductForm({ ...productForm, manufactured_product_id: null, recipe_quantities: [], cost: '', manufactured_piece_weight: null, manufactured_piece_weight_unit: 'غرام' });
                                   } else {
                                     // إنشاء قائمة المكونات مع كميات افتراضية
                                     const recipeQtys = (selectedProduct.recipe || []).map(ing => ({
@@ -3597,26 +3641,16 @@ export default function Settings() {
                                       base_unit: ing.unit, // حفظ الوحدة الأساسية
                                       cost_per_unit: ing.cost_per_unit || 0
                                     }));
-                                    // حساب التكلفة مع تحويل الوحدات
-                                    const calculateCost = (item) => {
-                                      let multiplier = 1;
-                                      const baseUnit = item.base_unit || item.unit;
-                                      if (baseUnit === 'كغم' && item.unit === 'غرام') {
-                                        multiplier = 1 / 1000;
-                                      } else if (baseUnit === 'غرام' && item.unit === 'كغم') {
-                                        multiplier = 1000;
-                                      } else if (baseUnit === 'لتر' && item.unit === 'مل') {
-                                        multiplier = 1 / 1000;
-                                      } else if (baseUnit === 'مل' && item.unit === 'لتر') {
-                                        multiplier = 1000;
-                                      }
-                                      return item.quantity * item.cost_per_unit * multiplier;
-                                    };
-                                    const totalCost = recipeQtys.reduce((sum, ing) => sum + calculateCost(ing), 0);
+                                    // حساب التكلفة باستخدام الدالة المساعدة
+                                    const pieceWeight = selectedProduct.piece_weight;
+                                    const pieceWeightUnit = selectedProduct.piece_weight_unit || 'غرام';
+                                    const totalCost = recipeQtys.reduce((sum, ing) => sum + calculateIngredientCost(ing, pieceWeight, pieceWeightUnit), 0);
                                     setProductForm({ 
                                       ...productForm, 
                                       manufactured_product_id: v,
                                       recipe_quantities: recipeQtys,
+                                      manufactured_piece_weight: pieceWeight,
+                                      manufactured_piece_weight_unit: pieceWeightUnit,
                                       cost: totalCost.toFixed(0)
                                     });
                                   }
@@ -3641,22 +3675,9 @@ export default function Settings() {
                                 <div className="mt-3 space-y-2 p-3 bg-background/50 rounded-lg border">
                                   <p className="text-sm font-medium text-purple-400 mb-2">{t('المكونات وكمياتها:')}</p>
                                   {productForm.recipe_quantities.map((ing, idx) => {
-                                    // حساب التكلفة مع تحويل الوحدات
-                                    const calculateCostWithUnit = (qty, unit, costPerUnit, baseUnit) => {
-                                      let multiplier = 1;
-                                      if (baseUnit === 'كغم' && unit === 'غرام') {
-                                        multiplier = 1 / 1000;
-                                      } else if (baseUnit === 'غرام' && unit === 'كغم') {
-                                        multiplier = 1000;
-                                      } else if (baseUnit === 'لتر' && unit === 'مل') {
-                                        multiplier = 1 / 1000;
-                                      } else if (baseUnit === 'مل' && unit === 'لتر') {
-                                        multiplier = 1000;
-                                      }
-                                      return qty * costPerUnit * multiplier;
-                                    };
-                                    
-                                    const itemCost = calculateCostWithUnit(ing.quantity, ing.unit, ing.cost_per_unit, ing.base_unit || ing.unit);
+                                    const pieceWeight = productForm.manufactured_piece_weight;
+                                    const pieceWeightUnit = productForm.manufactured_piece_weight_unit || 'غرام';
+                                    const itemCost = calculateIngredientCost(ing, pieceWeight, pieceWeightUnit);
                                     
                                     return (
                                     <div key={idx} className="flex items-center gap-2">
@@ -3669,22 +3690,9 @@ export default function Settings() {
                                         onChange={(e) => {
                                           const newRecipe = [...productForm.recipe_quantities];
                                           newRecipe[idx].quantity = parseFloat(e.target.value) || 0;
-                                          // حساب التكلفة الإجمالية مع تحويل الوحدات
-                                          const calculateCost = (item) => {
-                                            let multiplier = 1;
-                                            const baseUnit = item.base_unit || item.unit;
-                                            if (baseUnit === 'كغم' && item.unit === 'غرام') {
-                                              multiplier = 1 / 1000;
-                                            } else if (baseUnit === 'غرام' && item.unit === 'كغم') {
-                                              multiplier = 1000;
-                                            } else if (baseUnit === 'لتر' && item.unit === 'مل') {
-                                              multiplier = 1 / 1000;
-                                            } else if (baseUnit === 'مل' && item.unit === 'لتر') {
-                                              multiplier = 1000;
-                                            }
-                                            return item.quantity * item.cost_per_unit * multiplier;
-                                          };
-                                          const newCost = newRecipe.reduce((sum, i) => sum + calculateCost(i), 0);
+                                          const pw = productForm.manufactured_piece_weight;
+                                          const pwu = productForm.manufactured_piece_weight_unit || 'غرام';
+                                          const newCost = newRecipe.reduce((sum, i) => sum + calculateIngredientCost(i, pw, pwu), 0);
                                           setProductForm({ 
                                             ...productForm, 
                                             recipe_quantities: newRecipe,
@@ -3701,22 +3709,9 @@ export default function Settings() {
                                             newRecipe[idx].base_unit = newRecipe[idx].unit;
                                           }
                                           newRecipe[idx].unit = v;
-                                          // إعادة حساب التكلفة بالوحدة الجديدة
-                                          const calculateCost = (item) => {
-                                            let multiplier = 1;
-                                            const baseUnit = item.base_unit || item.unit;
-                                            if (baseUnit === 'كغم' && item.unit === 'غرام') {
-                                              multiplier = 1 / 1000;
-                                            } else if (baseUnit === 'غرام' && item.unit === 'كغم') {
-                                              multiplier = 1000;
-                                            } else if (baseUnit === 'لتر' && item.unit === 'مل') {
-                                              multiplier = 1 / 1000;
-                                            } else if (baseUnit === 'مل' && item.unit === 'لتر') {
-                                              multiplier = 1000;
-                                            }
-                                            return item.quantity * item.cost_per_unit * multiplier;
-                                          };
-                                          const newCost = newRecipe.reduce((sum, i) => sum + calculateCost(i), 0);
+                                          const pw = productForm.manufactured_piece_weight;
+                                          const pwu = productForm.manufactured_piece_weight_unit || 'غرام';
+                                          const newCost = newRecipe.reduce((sum, i) => sum + calculateIngredientCost(i, pw, pwu), 0);
                                           setProductForm({ 
                                             ...productForm, 
                                             recipe_quantities: newRecipe,
@@ -3747,18 +3742,9 @@ export default function Settings() {
                                     <span className="text-sm font-medium">{t('إجمالي تكلفة المواد:')}</span>
                                     <span className="text-sm font-bold text-primary">
                                       {formatPrice(productForm.recipe_quantities.reduce((sum, i) => {
-                                        let multiplier = 1;
-                                        const baseUnit = i.base_unit || i.unit;
-                                        if (baseUnit === 'كغم' && i.unit === 'غرام') {
-                                          multiplier = 1 / 1000;
-                                        } else if (baseUnit === 'غرام' && i.unit === 'كغم') {
-                                          multiplier = 1000;
-                                        } else if (baseUnit === 'لتر' && i.unit === 'مل') {
-                                          multiplier = 1 / 1000;
-                                        } else if (baseUnit === 'مل' && i.unit === 'لتر') {
-                                          multiplier = 1000;
-                                        }
-                                        return sum + (i.quantity * i.cost_per_unit * multiplier);
+                                        const pw = productForm.manufactured_piece_weight;
+                                        const pwu = productForm.manufactured_piece_weight_unit || 'غرام';
+                                        return sum + calculateIngredientCost(i, pw, pwu);
                                       }, 0))}
                                     </span>
                                   </div>
@@ -4257,26 +4243,16 @@ export default function Settings() {
                                       cost_per_unit: ing.cost_per_unit || 0
                                     };
                                   });
-                                  // حساب التكلفة مع تحويل الوحدات
-                                  const calculateCost = (item) => {
-                                    let multiplier = 1;
-                                    const baseUnit = item.base_unit || item.unit;
-                                    if (baseUnit === 'كغم' && item.unit === 'غرام') {
-                                      multiplier = 1 / 1000;
-                                    } else if (baseUnit === 'غرام' && item.unit === 'كغم') {
-                                      multiplier = 1000;
-                                    } else if (baseUnit === 'لتر' && item.unit === 'مل') {
-                                      multiplier = 1 / 1000;
-                                    } else if (baseUnit === 'مل' && item.unit === 'لتر') {
-                                      multiplier = 1000;
-                                    }
-                                    return item.quantity * item.cost_per_unit * multiplier;
-                                  };
-                                  const totalCost = recipeQtys.reduce((sum, ing) => sum + calculateCost(ing), 0);
+                                  // حساب التكلفة باستخدام الدالة المساعدة
+                                  const pieceWeight = selectedProduct.piece_weight;
+                                  const pieceWeightUnit = selectedProduct.piece_weight_unit || 'غرام';
+                                  const totalCost = recipeQtys.reduce((sum, ing) => sum + calculateIngredientCost(ing, pieceWeight, pieceWeightUnit), 0);
                                   setEditProductForm({ 
                                     ...editProductForm, 
                                     manufactured_product_id: v,
                                     recipe_quantities: recipeQtys,
+                                    manufactured_piece_weight: pieceWeight,
+                                    manufactured_piece_weight_unit: pieceWeightUnit,
                                     cost: totalCost.toFixed(0)
                                   });
                                 }
@@ -4301,23 +4277,9 @@ export default function Settings() {
                               <div className="mt-3 space-y-2 p-3 bg-background/50 rounded-lg border">
                                 <p className="text-sm font-medium text-purple-400 mb-2">{t('المكونات وكمياتها:')}</p>
                                 {editProductForm.recipe_quantities.map((ing, idx) => {
-                                  // حساب التكلفة مع تحويل الوحدات
-                                  const calculateCostWithUnit = (qty, unit, costPerUnit, baseUnit) => {
-                                    // تحويل الوحدات إلى الوحدة الأساسية
-                                    let multiplier = 1;
-                                    if (baseUnit === 'كغم' && unit === 'غرام') {
-                                      multiplier = 1 / 1000; // غرام إلى كغم
-                                    } else if (baseUnit === 'غرام' && unit === 'كغم') {
-                                      multiplier = 1000; // كغم إلى غرام
-                                    } else if (baseUnit === 'لتر' && unit === 'مل') {
-                                      multiplier = 1 / 1000; // مل إلى لتر
-                                    } else if (baseUnit === 'مل' && unit === 'لتر') {
-                                      multiplier = 1000; // لتر إلى مل
-                                    }
-                                    return qty * costPerUnit * multiplier;
-                                  };
-                                  
-                                  const itemCost = calculateCostWithUnit(ing.quantity, ing.unit, ing.cost_per_unit, ing.base_unit || ing.unit);
+                                  const pieceWeight = editProductForm.manufactured_piece_weight;
+                                  const pieceWeightUnit = editProductForm.manufactured_piece_weight_unit || 'غرام';
+                                  const itemCost = calculateIngredientCost(ing, pieceWeight, pieceWeightUnit);
                                   
                                   return (
                                   <div key={idx} className="flex items-center gap-2">
@@ -4330,22 +4292,9 @@ export default function Settings() {
                                       onChange={(e) => {
                                         const newRecipe = [...editProductForm.recipe_quantities];
                                         newRecipe[idx].quantity = parseFloat(e.target.value) || 0;
-                                        // حساب التكلفة الإجمالية مع تحويل الوحدات
-                                        const calculateCost = (item) => {
-                                          let multiplier = 1;
-                                          const baseUnit = item.base_unit || item.unit;
-                                          if (baseUnit === 'كغم' && item.unit === 'غرام') {
-                                            multiplier = 1 / 1000;
-                                          } else if (baseUnit === 'غرام' && item.unit === 'كغم') {
-                                            multiplier = 1000;
-                                          } else if (baseUnit === 'لتر' && item.unit === 'مل') {
-                                            multiplier = 1 / 1000;
-                                          } else if (baseUnit === 'مل' && item.unit === 'لتر') {
-                                            multiplier = 1000;
-                                          }
-                                          return item.quantity * item.cost_per_unit * multiplier;
-                                        };
-                                        const newCost = newRecipe.reduce((sum, i) => sum + calculateCost(i), 0);
+                                        const pw = editProductForm.manufactured_piece_weight;
+                                        const pwu = editProductForm.manufactured_piece_weight_unit || 'غرام';
+                                        const newCost = newRecipe.reduce((sum, i) => sum + calculateIngredientCost(i, pw, pwu), 0);
                                         setEditProductForm({ 
                                           ...editProductForm, 
                                           recipe_quantities: newRecipe,
@@ -4358,27 +4307,13 @@ export default function Settings() {
                                       value={ing.unit}
                                       onValueChange={(v) => {
                                         const newRecipe = [...editProductForm.recipe_quantities];
-                                        // حفظ الوحدة الأساسية للمقارنة
                                         if (!newRecipe[idx].base_unit) {
                                           newRecipe[idx].base_unit = newRecipe[idx].unit;
                                         }
                                         newRecipe[idx].unit = v;
-                                        // إعادة حساب التكلفة بالوحدة الجديدة
-                                        const calculateCost = (item) => {
-                                          let multiplier = 1;
-                                          const baseUnit = item.base_unit || item.unit;
-                                          if (baseUnit === 'كغم' && item.unit === 'غرام') {
-                                            multiplier = 1 / 1000;
-                                          } else if (baseUnit === 'غرام' && item.unit === 'كغم') {
-                                            multiplier = 1000;
-                                          } else if (baseUnit === 'لتر' && item.unit === 'مل') {
-                                            multiplier = 1 / 1000;
-                                          } else if (baseUnit === 'مل' && item.unit === 'لتر') {
-                                            multiplier = 1000;
-                                          }
-                                          return item.quantity * item.cost_per_unit * multiplier;
-                                        };
-                                        const newCost = newRecipe.reduce((sum, i) => sum + calculateCost(i), 0);
+                                        const pw = editProductForm.manufactured_piece_weight;
+                                        const pwu = editProductForm.manufactured_piece_weight_unit || 'غرام';
+                                        const newCost = newRecipe.reduce((sum, i) => sum + calculateIngredientCost(i, pw, pwu), 0);
                                         setEditProductForm({ 
                                           ...editProductForm, 
                                           recipe_quantities: newRecipe,
@@ -4409,18 +4344,9 @@ export default function Settings() {
                                   <span className="text-sm font-medium">{t('إجمالي تكلفة المواد:')}</span>
                                   <span className="text-sm font-bold text-primary">
                                     {formatPrice(editProductForm.recipe_quantities.reduce((sum, i) => {
-                                      let multiplier = 1;
-                                      const baseUnit = i.base_unit || i.unit;
-                                      if (baseUnit === 'كغم' && i.unit === 'غرام') {
-                                        multiplier = 1 / 1000;
-                                      } else if (baseUnit === 'غرام' && i.unit === 'كغم') {
-                                        multiplier = 1000;
-                                      } else if (baseUnit === 'لتر' && i.unit === 'مل') {
-                                        multiplier = 1 / 1000;
-                                      } else if (baseUnit === 'مل' && i.unit === 'لتر') {
-                                        multiplier = 1000;
-                                      }
-                                      return sum + (i.quantity * i.cost_per_unit * multiplier);
+                                      const pw = editProductForm.manufactured_piece_weight;
+                                      const pwu = editProductForm.manufactured_piece_weight_unit || 'غرام';
+                                      return sum + calculateIngredientCost(i, pw, pwu);
                                     }, 0))}
                                   </span>
                                 </div>
