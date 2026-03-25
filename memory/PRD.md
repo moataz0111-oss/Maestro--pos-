@@ -82,6 +82,34 @@
 - `/app/frontend/src/pages/WarehouseManufacturing.js` - إصلاح ألوان حقل الكمية
 - `/app/backend/routes/inventory_system.py` - إضافة endpoint التحويل
 
+### Add Stock / Product Statistics Feature ✅ (Added - March 25, 2026)
+**الميزة الجديدة**: إضافة زيادة كمية المنتج المصنع مباشرة + عرض إحصائيات الإنتاج.
+
+**المشكلة**: 
+- المستخدم كان يحتاج لإنشاء "تصنيع جديد" كل مرة لزيادة الكمية
+- لم يكن هناك تتبع للكمية المحولة للفروع
+
+**الحل**:
+- إضافة endpoint `POST /api/manufactured-products/{id}/add-stock?quantity=N` لزيادة الكمية مباشرة
+- إضافة حقول `total_produced` و `transferred_quantity` لتتبع الإحصائيات
+- عرض إحصائيات (إجمالي المُصنّع، المحول للفروع، المتبقي) لكل منتج
+- إضافة شريط تقدم بصري لنسبة المتبقي
+- زر "زيادة الكمية" مع نافذة حوار مخصصة
+
+**التغييرات**:
+- Backend: إضافة endpoint `add-stock` + تتبع `transferred_quantity` عند التحويل
+- Frontend: عرض الإحصائيات + زر زيادة الكمية + شريط التقدم
+- ترجمات جديدة للكلمات المضافة
+
+**الملفات المعدلة**:
+- `/app/backend/routes/inventory_system.py`
+- `/app/frontend/src/pages/WarehouseManufacturing.js`
+- `/app/frontend/src/utils/autoTranslate.js`
+
+**حالة الاختبار**: ✅ 10/10 اختبارات ناجحة (iteration_120)
+
+---
+
 ### Waste Percentage Feature ✅ (Added - March 25, 2026)
 **الميزة الجديدة**: إضافة حقل "نسبة الهدر" للمواد الخام في المخزون.
 
