@@ -258,8 +258,8 @@ HEALTHEOF
           
           # إضافة للـ crontab إذا لم يكن موجوداً
           if ! crontab -l 2>/dev/null | grep -q "check-maestro.sh"; then
-              (crontab -l 2>/dev/null; echo "*/5 * * * * /root/check-maestro.sh") | crontab -
-              echo "✅ Auto Health Monitor installed (runs every 5 minutes)"
+              (crontab -l 2>/dev/null; echo "* * * * * /root/check-maestro.sh") | crontab -
+              echo "✅ Auto Health Monitor installed (runs every 1 minute)"
           else
               echo "✅ Auto Health Monitor already installed"
           fi
