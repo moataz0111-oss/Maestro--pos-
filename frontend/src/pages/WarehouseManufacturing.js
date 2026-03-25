@@ -36,7 +36,9 @@ import {
   X,
   Building2,
   ShoppingCart,
-  Bell
+  Bell,
+  Box,
+  Receipt
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -94,6 +96,25 @@ export default function WarehouseManufacturing() {
   const [branchRequests, setBranchRequests] = useState([]);  // طلبات الفروع
   const [manufacturingRequests, setManufacturingRequests] = useState([]);  // طلبات من المخزن
   const [warehouseNotifications, setWarehouseNotifications] = useState([]);  // إشعارات المخزن
+  
+  // Packaging materials states (مواد التغليف)
+  const [packagingMaterials, setPackagingMaterials] = useState([]);
+  const [packagingRequests, setPackagingRequests] = useState([]);
+  const [showAddPackagingDialog, setShowAddPackagingDialog] = useState(false);
+  const [showAddPackagingStockDialog, setShowAddPackagingStockDialog] = useState(null);
+  const [packagingForm, setPackagingForm] = useState({
+    name: '',
+    name_en: '',
+    unit: 'قطعة',
+    quantity: 0,
+    min_quantity: 0,
+    cost_per_unit: 0,
+    category: ''
+  });
+  const [showRequestPackagingDialog, setShowRequestPackagingDialog] = useState(false);
+  const [packagingRequestItems, setPackagingRequestItems] = useState([]);
+  const [packagingRequestNotes, setPackagingRequestNotes] = useState('');
+  const [addPackagingStockQuantity, setAddPackagingStockQuantity] = useState(1);
   
   // Dialog states
   const [showAddRawMaterial, setShowAddRawMaterial] = useState(false);
@@ -175,7 +196,9 @@ export default function WarehouseManufacturing() {
         branchesRes,
         branchRequestsRes,
         manufacturingRequestsRes,
-        notificationsRes
+        notificationsRes,
+        packagingRes,
+        packagingReqRes
       ] = await Promise.all([
         axios.get(`${API}/raw-materials-new`, { headers }).catch(() => ({ data: [] })),
         axios.get(`${API}/manufacturing-inventory`, { headers }).catch(() => ({ data: [] })),
@@ -186,7 +209,9 @@ export default function WarehouseManufacturing() {
         axios.get(`${API}/branches`, { headers }).catch(() => ({ data: [] })),
         axios.get(`${API}/branch-requests`, { headers }).catch(() => ({ data: [] })),
         axios.get(`${API}/manufacturing-requests`, { headers }).catch(() => ({ data: [] })),
-        axios.get(`${API}/warehouse-notifications`, { headers }).catch(() => ({ data: [] }))
+        axios.get(`${API}/warehouse-notifications`, { headers }).catch(() => ({ data: [] })),
+        axios.get(`${API}/packaging-materials`, { headers }).catch(() => ({ data: [] })),
+        axios.get(`${API}/packaging-requests`, { headers }).catch(() => ({ data: [] }))
       ]);
       
       setRawMaterials(rawRes.data || []);
@@ -199,6 +224,8 @@ export default function WarehouseManufacturing() {
       setBranchRequests(branchRequestsRes.data || []);
       setManufacturingRequests(manufacturingRequestsRes.data || []);
       setWarehouseNotifications(notificationsRes?.data || []);
+      setPackagingMaterials(packagingRes.data || []);
+      setPackagingRequests(packagingReqRes.data || []);
     } catch (error) {
       console.error('Error fetching data:', error);
     } finally {
@@ -269,6 +296,145 @@ export default function WarehouseManufacturing() {
       items: prev.items.filter((_, i) => i !== index)
     }));
   };
+  
+  // ==================== دوال مواد التغليف ====================
+  
+  // إضافة مادة تغليف جديدة
+  const handleAddPackagingMaterial = async (e) => {
+    e.preventDefault();
+    if (!packagingForm.name) {
+      toast.error(t('الرجاء إدخال اسم المادة'));
+      return;
+    }
+    
+    setSubmitting(true);
+    try {
+      await axios.post(`${API}/packaging-materials`, packagingForm, { headers });
+      toast.success(t('تمت إضافة مادة التغليف'));
+      setShowAddPackagingDialog(false);
+      setPackagingForm({
+        name: '',
+        name_en: '',
+        unit: 'قطعة',
+        quantity: 0,
+        min_quantity: 0,
+        cost_per_unit: 0,
+        category: ''
+      });
+      fetchData();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || t('فشل في إضافة المادة'));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+  
+  // إضافة كمية لمادة تغليف
+  const handleAddPackagingStock = async () => {
+    if (!showAddPackagingStockDialog || addPackagingStockQuantity <= 0) {
+      toast.error(t('الرجاء إدخال كمية صحيحة'));
+      return;
+    }
+    
+    setSubmitting(true);
+    try {
+      await axios.post(
+        `${API}/packaging-materials/${showAddPackagingStockDialog.id}/add-stock?quantity=${addPackagingStockQuantity}`,
+        {},
+        { headers }
+      );
+      toast.success(t('تمت إضافة الكمية بنجاح'));
+      setShowAddPackagingStockDialog(null);
+      setAddPackagingStockQuantity(1);
+      fetchData();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || t('فشل في إضافة الكمية'));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+  
+  // إضافة صنف لطلب مواد التغليف
+  const addItemToPackagingRequest = (material) => {
+    const existing = packagingRequestItems.find(i => i.packaging_material_id === material.id);
+    if (existing) {
+      toast.error(t('هذه المادة موجودة بالفعل'));
+      return;
+    }
+    
+    setPackagingRequestItems(prev => [...prev, {
+      packaging_material_id: material.id,
+      name: material.name,
+      quantity: 1,
+      unit: material.unit
+    }]);
+  };
+  
+  // تحديث كمية صنف في طلب التغليف
+  const updatePackagingRequestItemQty = (index, qty) => {
+    setPackagingRequestItems(prev => {
+      const items = [...prev];
+      items[index].quantity = qty;
+      return items;
+    });
+  };
+  
+  // حذف صنف من طلب التغليف
+  const removePackagingRequestItem = (index) => {
+    setPackagingRequestItems(prev => prev.filter((_, i) => i !== index));
+  };
+  
+  // إرسال طلب مواد تغليف
+  const handleSubmitPackagingRequest = async () => {
+    if (packagingRequestItems.length === 0) {
+      toast.error(t('الرجاء إضافة مواد للطلب'));
+      return;
+    }
+    
+    setSubmitting(true);
+    try {
+      await axios.post(`${API}/packaging-requests`, {
+        items: packagingRequestItems,
+        priority: 'normal',
+        notes: packagingRequestNotes
+      }, { headers });
+      
+      toast.success(t('تم إرسال الطلب بنجاح'));
+      setShowRequestPackagingDialog(false);
+      setPackagingRequestItems([]);
+      setPackagingRequestNotes('');
+      fetchData();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || t('فشل في إرسال الطلب'));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+  
+  // الموافقة على طلب تغليف
+  const handleApprovePackagingRequest = async (requestId) => {
+    try {
+      await axios.post(`${API}/packaging-requests/${requestId}/approve`, {}, { headers });
+      toast.success(t('تمت الموافقة على الطلب'));
+      fetchData();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || t('فشل في الموافقة'));
+    }
+  };
+  
+  // تحويل مواد التغليف للفرع
+  const handleTransferPackagingRequest = async (requestId) => {
+    try {
+      await axios.post(`${API}/packaging-requests/${requestId}/transfer`, {}, { headers });
+      toast.success(t('تم تحويل المواد للفرع بنجاح'));
+      fetchData();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || t('فشل في التحويل'));
+    }
+  };
+  
+  // ==================== نهاية دوال مواد التغليف ====================
+
   // تحويل للتصنيع
   const handleTransferToManufacturing = async () => {
     if (transferForm.items.length === 0) {
@@ -801,7 +967,7 @@ export default function WarehouseManufacturing() {
         )}
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className={`grid w-full max-w-4xl ${isAdmin ? 'grid-cols-6' : isWarehouseKeeper ? 'grid-cols-3' : isManufacturer ? 'grid-cols-3' : 'grid-cols-6'}`}>
+          <TabsList className={`grid w-full max-w-5xl ${isAdmin ? 'grid-cols-7' : isWarehouseKeeper ? 'grid-cols-4' : isManufacturer ? 'grid-cols-3' : 'grid-cols-7'}`}>
             {/* تاب المخزن - للمدير وأمين المخزن فقط */}
             {(isAdmin || isWarehouseKeeper) && (
               <TabsTrigger value="warehouse" className="gap-2" data-testid="tab-warehouse">
@@ -817,6 +983,18 @@ export default function WarehouseManufacturing() {
                 {manufacturingRequests.filter(r => r.status === 'pending').length > 0 && (
                   <Badge className="absolute -top-2 -right-2 bg-orange-500 text-white text-xs px-1.5 py-0.5 rounded-full">
                     {manufacturingRequests.filter(r => r.status === 'pending').length}
+                  </Badge>
+                )}
+              </TabsTrigger>
+            )}
+            {/* تاب الورقيات/التغليف - للمدير وأمين المخزن فقط */}
+            {(isAdmin || isWarehouseKeeper) && (
+              <TabsTrigger value="packaging" className="gap-2 relative" data-testid="tab-packaging">
+                <Box className="h-4 w-4" />
+                {t('الورقيات')}
+                {packagingRequests.filter(r => r.status === 'pending').length > 0 && (
+                  <Badge className="absolute -top-2 -right-2 bg-amber-500 text-white text-xs px-1.5 py-0.5 rounded-full">
+                    {packagingRequests.filter(r => r.status === 'pending').length}
                   </Badge>
                 )}
               </TabsTrigger>
@@ -1178,6 +1356,165 @@ export default function WarehouseManufacturing() {
                             </Button>
                           </div>
                         )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+          
+          {/* الورقيات/التغليف */}
+          <TabsContent value="packaging" className="space-y-4">
+            {/* زر إضافة مادة تغليف جديدة */}
+            <Card className="border-amber-500/30 bg-amber-500/5">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <Box className="h-8 w-8 text-amber-500" />
+                    <div>
+                      <h3 className="font-bold">{t('مواد التغليف والورقيات')}</h3>
+                      <p className="text-sm text-muted-foreground">{t('إدارة الأكياس والعلب والورق')}</p>
+                    </div>
+                  </div>
+                  <Button
+                    onClick={() => setShowAddPackagingDialog(true)}
+                    className="bg-amber-500 hover:bg-amber-600"
+                    data-testid="add-packaging-btn"
+                  >
+                    <Plus className="h-4 w-4 ml-2" />
+                    {t('إضافة صنف')}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+            
+            {/* طلبات مواد التغليف المعلقة */}
+            {packagingRequests.filter(r => r.status === 'pending').length > 0 && (
+              <Card className="border-orange-500/50 bg-orange-500/5">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-orange-600">
+                    <Bell className="h-5 w-5" />
+                    {t('طلبات تغليف جديدة')} ({packagingRequests.filter(r => r.status === 'pending').length})
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    {packagingRequests.filter(r => r.status === 'pending').map(request => (
+                      <div key={request.id} className="p-4 bg-background rounded-lg border">
+                        <div className="flex justify-between items-start mb-3">
+                          <div>
+                            <p className="font-bold">#{request.request_number}</p>
+                            <p className="text-sm text-muted-foreground">{request.from_branch_name || t('فرع غير محدد')}</p>
+                            <p className="text-xs text-muted-foreground">{new Date(request.created_at).toLocaleString('ar-IQ')}</p>
+                          </div>
+                          <div className="flex gap-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleApprovePackagingRequest(request.id)}
+                              className="text-green-600 border-green-600"
+                            >
+                              <CheckCircle className="h-4 w-4 ml-1" />
+                              {t('موافقة')}
+                            </Button>
+                            <Button
+                              size="sm"
+                              onClick={() => handleTransferPackagingRequest(request.id)}
+                              className="bg-amber-500 hover:bg-amber-600"
+                            >
+                              <Send className="h-4 w-4 ml-1" />
+                              {t('تحويل')}
+                            </Button>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                          {request.items?.map((item, idx) => (
+                            <div key={idx} className="p-2 bg-amber-500/10 rounded text-sm">
+                              <p className="font-medium">{item.name}</p>
+                              <p className="text-muted-foreground">{item.quantity} {item.unit}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+            
+            {/* قائمة مواد التغليف */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Box className="h-5 w-5 text-amber-500" />
+                  {t('مخزون مواد التغليف')}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {packagingMaterials.length === 0 ? (
+                  <div className="text-center py-12 text-muted-foreground">
+                    <Box className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                    <p>{t('لا توجد مواد تغليف')}</p>
+                    <p className="text-sm">{t('اضغط على "إضافة صنف" لإضافة مادة جديدة')}</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {packagingMaterials.map(material => (
+                      <div key={material.id} className="p-4 bg-muted/30 rounded-lg border hover:border-amber-500/50 transition-colors">
+                        <div className="flex justify-between items-start">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2">
+                              <h4 className="font-bold">{material.name}</h4>
+                              {material.name_en && <span className="text-sm text-muted-foreground">({material.name_en})</span>}
+                              {material.category && (
+                                <Badge variant="outline" className="text-xs">{material.category}</Badge>
+                              )}
+                            </div>
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-3">
+                              <div>
+                                <p className="text-xs text-muted-foreground">{t('الكمية المتوفرة')}</p>
+                                <p className="font-bold text-lg">{material.quantity} {material.unit}</p>
+                              </div>
+                              <div>
+                                <p className="text-xs text-muted-foreground">{t('إجمالي المستلم')}</p>
+                                <p className="font-medium text-blue-600">{material.total_received || 0}</p>
+                              </div>
+                              <div>
+                                <p className="text-xs text-muted-foreground">{t('المحول للفروع')}</p>
+                                <p className="font-medium text-orange-600">{material.transferred_to_branches || 0}</p>
+                              </div>
+                              <div>
+                                <p className="text-xs text-muted-foreground">{t('سعر الوحدة')}</p>
+                                <p className="font-medium">{formatPrice(material.cost_per_unit)}</p>
+                              </div>
+                            </div>
+                            {/* شريط التقدم */}
+                            <div className="mt-3">
+                              <div className="flex justify-between text-xs mb-1">
+                                <span>{t('المتبقي')}: {material.remaining_quantity || material.quantity}</span>
+                                <span>{t('القيمة')}: {formatPrice(material.total_value || 0)}</span>
+                              </div>
+                              <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+                                <div 
+                                  className={`h-full ${material.quantity <= material.min_quantity ? 'bg-red-500' : 'bg-amber-500'}`}
+                                  style={{ width: `${Math.min(100, (material.quantity / (material.total_received || material.quantity || 1)) * 100)}%` }}
+                                />
+                              </div>
+                            </div>
+                          </div>
+                          <div className="flex flex-col gap-2 mr-4">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => setShowAddPackagingStockDialog(material)}
+                              className="gap-1"
+                            >
+                              <Plus className="h-4 w-4" />
+                              {t('إضافة كمية')}
+                            </Button>
+                          </div>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -2535,6 +2872,151 @@ export default function WarehouseManufacturing() {
               {t('إرسال الطلب')}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      
+      {/* Dialog إضافة مادة تغليف جديدة */}
+      <Dialog open={showAddPackagingDialog} onOpenChange={setShowAddPackagingDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Box className="h-5 w-5 text-amber-500" />
+              {t('إضافة مادة تغليف جديدة')}
+            </DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleAddPackagingMaterial} className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label>{t('اسم المادة')}</Label>
+                <Input
+                  value={packagingForm.name}
+                  onChange={(e) => setPackagingForm({...packagingForm, name: e.target.value})}
+                  placeholder={t('مثال: كيس ورقي كبير')}
+                  required
+                />
+              </div>
+              <div>
+                <Label>{t('الاسم بالإنجليزية')}</Label>
+                <Input
+                  value={packagingForm.name_en}
+                  onChange={(e) => setPackagingForm({...packagingForm, name_en: e.target.value})}
+                  placeholder="Large Paper Bag"
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-4">
+              <div>
+                <Label>{t('الوحدة')}</Label>
+                <Select value={packagingForm.unit} onValueChange={(v) => setPackagingForm({...packagingForm, unit: v})}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="قطعة">{t('قطعة')}</SelectItem>
+                    <SelectItem value="كيس">{t('كيس')}</SelectItem>
+                    <SelectItem value="علبة">{t('علبة')}</SelectItem>
+                    <SelectItem value="رول">{t('رول')}</SelectItem>
+                    <SelectItem value="ورقة">{t('ورقة')}</SelectItem>
+                    <SelectItem value="حزمة">{t('حزمة')}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>{t('الكمية')}</Label>
+                <Input
+                  type="number"
+                  value={packagingForm.quantity}
+                  onChange={(e) => setPackagingForm({...packagingForm, quantity: parseFloat(e.target.value) || 0})}
+                  min="0"
+                />
+              </div>
+              <div>
+                <Label>{t('الحد الأدنى')}</Label>
+                <Input
+                  type="number"
+                  value={packagingForm.min_quantity}
+                  onChange={(e) => setPackagingForm({...packagingForm, min_quantity: parseFloat(e.target.value) || 0})}
+                  min="0"
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label>{t('سعر الوحدة')}</Label>
+                <Input
+                  type="number"
+                  value={packagingForm.cost_per_unit}
+                  onChange={(e) => setPackagingForm({...packagingForm, cost_per_unit: parseFloat(e.target.value) || 0})}
+                  min="0"
+                />
+              </div>
+              <div>
+                <Label>{t('الفئة')}</Label>
+                <Select value={packagingForm.category} onValueChange={(v) => setPackagingForm({...packagingForm, category: v})}>
+                  <SelectTrigger>
+                    <SelectValue placeholder={t('اختر الفئة')} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="أكياس">{t('أكياس')}</SelectItem>
+                    <SelectItem value="علب">{t('علب')}</SelectItem>
+                    <SelectItem value="ورق">{t('ورق')}</SelectItem>
+                    <SelectItem value="أدوات">{t('أدوات')}</SelectItem>
+                    <SelectItem value="أخرى">{t('أخرى')}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setShowAddPackagingDialog(false)}>
+                {t('إلغاء')}
+              </Button>
+              <Button type="submit" disabled={submitting} className="bg-amber-500 hover:bg-amber-600">
+                {submitting ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                <span className="mr-2">{t('إضافة')}</span>
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+      
+      {/* Dialog إضافة كمية لمادة تغليف */}
+      <Dialog open={!!showAddPackagingStockDialog} onOpenChange={() => setShowAddPackagingStockDialog(null)}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Plus className="h-5 w-5 text-green-500" />
+              {t('إضافة كمية')}
+            </DialogTitle>
+          </DialogHeader>
+          {showAddPackagingStockDialog && (
+            <div className="space-y-4">
+              <div className="p-3 bg-amber-500/10 rounded-lg">
+                <p className="font-bold">{showAddPackagingStockDialog.name}</p>
+                <p className="text-sm text-muted-foreground">
+                  {t('الكمية الحالية')}: {showAddPackagingStockDialog.quantity} {showAddPackagingStockDialog.unit}
+                </p>
+              </div>
+              <div>
+                <Label>{t('الكمية المضافة')}</Label>
+                <Input
+                  type="number"
+                  value={addPackagingStockQuantity}
+                  onChange={(e) => setAddPackagingStockQuantity(parseFloat(e.target.value) || 0)}
+                  min="1"
+                  className="mt-1"
+                />
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setShowAddPackagingStockDialog(null)}>
+                  {t('إلغاء')}
+                </Button>
+                <Button onClick={handleAddPackagingStock} disabled={submitting} className="bg-green-500 hover:bg-green-600">
+                  {submitting ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                  <span className="mr-2">{t('إضافة')}</span>
+                </Button>
+              </DialogFooter>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>
