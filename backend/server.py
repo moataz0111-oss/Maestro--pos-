@@ -9541,6 +9541,134 @@ class RawMaterialCreate(BaseModel):
     supplier_id: Optional[str] = None
     branch_id: Optional[str] = None
 
+# ==================== PURCHASE INVOICES - فواتير الشراء ====================
+
+class PurchaseInvoiceItemCreate(BaseModel):
+    name: str
+    quantity: float
+    unit: str = "كغم"
+    unit_price: float
+
+class PurchaseInvoiceCreate(BaseModel):
+    supplier_id: Optional[str] = None
+    invoice_number: Optional[str] = None
+    items: List[PurchaseInvoiceItemCreate]
+    notes: Optional[str] = None
+    total_amount: float
+    image_data: Optional[str] = None  # Base64 encoded image
+
+class PurchaseSupplierCreate(BaseModel):
+    name: str
+    company_name: Optional[str] = None
+    phone: str
+    address: Optional[str] = None
+    products: Optional[str] = None
+    notes: Optional[str] = None
+
+@api_router.get("/purchase-invoices")
+async def get_purchase_invoices(current_user: dict = Depends(get_current_user)):
+    """جلب فواتير الشراء"""
+    query = build_tenant_query(current_user)
+    invoices = await db.purchase_invoices.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
+    
+    # إضافة اسم المورد لكل فاتورة
+    for invoice in invoices:
+        if invoice.get("supplier_id"):
+            supplier = await db.purchase_suppliers.find_one({"id": invoice["supplier_id"]}, {"_id": 0})
+            invoice["supplier_name"] = supplier.get("name") if supplier else None
+    
+    return invoices
+
+@api_router.post("/purchase-invoices")
+async def create_purchase_invoice(invoice: PurchaseInvoiceCreate, current_user: dict = Depends(get_current_user)):
+    """إنشاء فاتورة شراء جديدة"""
+    tenant_id = get_user_tenant_id(current_user)
+    
+    invoice_doc = {
+        "id": str(uuid.uuid4()),
+        "supplier_id": invoice.supplier_id,
+        "invoice_number": invoice.invoice_number,
+        "items": [item.model_dump() for item in invoice.items],
+        "notes": invoice.notes,
+        "total_amount": invoice.total_amount,
+        "image_data": invoice.image_data,
+        "status": "new",
+        "tenant_id": tenant_id,
+        "created_by": current_user["id"],
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    
+    await db.purchase_invoices.insert_one(invoice_doc)
+    del invoice_doc["_id"]
+    
+    # إضافة اسم المورد للرد
+    if invoice.supplier_id:
+        supplier = await db.purchase_suppliers.find_one({"id": invoice.supplier_id}, {"_id": 0})
+        invoice_doc["supplier_name"] = supplier.get("name") if supplier else None
+    
+    return invoice_doc
+
+@api_router.delete("/purchase-invoices/{invoice_id}")
+async def delete_purchase_invoice(invoice_id: str, current_user: dict = Depends(get_current_user)):
+    """حذف فاتورة شراء"""
+    query = build_tenant_query(current_user)
+    query["id"] = invoice_id
+    
+    result = await db.purchase_invoices.delete_one(query)
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="الفاتورة غير موجودة")
+    
+    return {"message": "تم حذف الفاتورة"}
+
+@api_router.get("/purchase-suppliers")
+async def get_purchase_suppliers(current_user: dict = Depends(get_current_user)):
+    """جلب موردي المشتريات"""
+    query = build_tenant_query(current_user)
+    suppliers = await db.purchase_suppliers.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
+    return suppliers
+
+@api_router.post("/purchase-suppliers")
+async def create_purchase_supplier(supplier: PurchaseSupplierCreate, current_user: dict = Depends(get_current_user)):
+    """إضافة مورد جديد"""
+    tenant_id = get_user_tenant_id(current_user)
+    
+    supplier_doc = {
+        "id": str(uuid.uuid4()),
+        **supplier.model_dump(),
+        "tenant_id": tenant_id,
+        "created_by": current_user["id"],
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    
+    await db.purchase_suppliers.insert_one(supplier_doc)
+    del supplier_doc["_id"]
+    return supplier_doc
+
+@api_router.get("/warehouse-purchase-requests")
+async def get_warehouse_purchase_requests(current_user: dict = Depends(get_current_user)):
+    """جلب طلبات الشراء من المخزن"""
+    query = build_tenant_query(current_user)
+    requests = await db.warehouse_purchase_requests.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
+    return requests
+
+@api_router.post("/warehouse-purchase-requests/{request_id}/transfer")
+async def transfer_warehouse_request(request_id: str, current_user: dict = Depends(get_current_user)):
+    """تحويل طلب الشراء للمخزن"""
+    query = build_tenant_query(current_user)
+    query["id"] = request_id
+    
+    request = await db.warehouse_purchase_requests.find_one(query)
+    if not request:
+        raise HTTPException(status_code=404, detail="الطلب غير موجود")
+    
+    # تحديث حالة الطلب
+    await db.warehouse_purchase_requests.update_one(
+        {"id": request_id},
+        {"$set": {"status": "completed", "transferred_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    
+    return {"message": "تم التحويل للمخزن"}
+
 @api_router.get("/suppliers")
 async def get_suppliers(current_user: dict = Depends(get_current_user)):
     """جلب قائمة الموردين"""

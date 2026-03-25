@@ -533,3 +533,15 @@
 - Frontend: 100% (8/8 tests passed)
 - Test Report: `/app/test_reports/iteration_128.json`
 - ملاحظة: خطأ "الكاميرا غير متاحة" في بيئة headless متوقع وطبيعي
+
+### Backend APIs Added:
+- `GET /api/purchase-invoices` - جلب فواتير الشراء
+- `POST /api/purchase-invoices` - إنشاء فاتورة شراء مع صورة (image_data)
+- `DELETE /api/purchase-invoices/{id}` - حذف فاتورة
+- `GET /api/purchase-suppliers` - جلب موردي المشتريات
+- `POST /api/purchase-suppliers` - إضافة مورد جديد
+- `GET /api/warehouse-purchase-requests` - طلبات الشراء من المخزن
+- `POST /api/warehouse-purchase-requests/{id}/transfer` - تحويل للمخزن
+
+### Files Modified:
+- `/app/backend/server.py` - Lines 9543-9673: Added purchase invoice APIs with image support
