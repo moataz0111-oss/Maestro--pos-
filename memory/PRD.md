@@ -65,6 +65,23 @@
 **الملفات المعدلة**:
 - `/app/backend/server.py` - السطور 1243-1250, 4593-4644
 
+### Manufacturing to Branch Transfer Fix ✅ (Fixed - March 25, 2026)
+**المشكلة 1 - UI**: حقل الكمية لم يتغير لونه بين الوضع الليلي والنهاري.
+**الحل**: إضافة `bg-white dark:bg-gray-800 text-black dark:text-white` للحقل.
+
+**المشكلة 2 - وظيفية**: زر "تحويل للفرع" لا يعمل عند إدخال الكمية.
+**السبب**: الـ endpoint `POST /api/warehouse-transfers` غير موجود.
+**الحل**: إنشاء endpoint جديد للتحويل من التصنيع للفرع يقوم بـ:
+- التحقق من وجود الفرع
+- التحقق من توفر الكمية المطلوبة
+- خصم الكمية من المنتجات المصنعة
+- إضافة الكمية لمخزون الفرع
+- تسجيل حركة التحويل
+
+**الملفات المعدلة**:
+- `/app/frontend/src/pages/WarehouseManufacturing.js` - إصلاح ألوان حقل الكمية
+- `/app/backend/routes/inventory_system.py` - إضافة endpoint التحويل
+
 ### Data Persistence on Deployment ✅ (Fixed - March 24, 2026)
 **المشكلة**: البيانات (المبيعات، المنتجات، التعديلات) كانت تُحذف عند كل تحديث/نشر للتطبيق.
 

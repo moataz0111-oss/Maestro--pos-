@@ -699,6 +699,145 @@ async def get_warehouse_transfers(transfer_type: Optional[str] = None):
     transfers = await db.warehouse_transfers.find(query, {"_id": 0}).sort("created_at", -1).to_list(1000)
     return transfers
 
+@router.post("/warehouse-transfers")
+async def create_warehouse_transfer(transfer_data: dict):
+    """إنشاء تحويل من التصنيع للفرع"""
+    db = get_db()
+    
+    transfer_type = transfer_data.get("transfer_type")
+    to_branch_id = transfer_data.get("to_branch_id")
+    items = transfer_data.get("items", [])
+    notes = transfer_data.get("notes", "")
+    
+    if transfer_type != "manufacturing_to_branch":
+        raise HTTPException(status_code=400, detail="نوع التحويل غير مدعوم")
+    
+    if not to_branch_id:
+        raise HTTPException(status_code=400, detail="يجب تحديد الفرع المستلم")
+    
+    if not items:
+        raise HTTPException(status_code=400, detail="يجب إضافة منتجات للتحويل")
+    
+    # جلب معلومات الفرع
+    branch = await db.branches.find_one({"id": to_branch_id}, {"_id": 0})
+    if not branch:
+        raise HTTPException(status_code=404, detail="الفرع غير موجود")
+    
+    # رقم تسلسلي
+    last_transfer = await db.warehouse_transfers.find_one(sort=[("transfer_number", -1)])
+    transfer_number = (last_transfer.get("transfer_number", 0) if last_transfer else 0) + 1
+    
+    # التحقق من توفر المنتجات المصنعة
+    items_with_details = []
+    insufficient = []
+    
+    for item in items:
+        product_id = item.get("product_id")
+        requested_qty = item.get("quantity", 0)
+        
+        # البحث في المنتجات المصنعة
+        product = await db.manufactured_products.find_one({"id": product_id}, {"_id": 0})
+        if not product:
+            raise HTTPException(status_code=404, detail=f"المنتج غير موجود: {product_id}")
+        
+        available_qty = product.get("quantity", 0)
+        
+        if available_qty < requested_qty:
+            insufficient.append({
+                "name": product.get("name"),
+                "requested": requested_qty,
+                "available": available_qty,
+                "unit": product.get("unit", "قطعة")
+            })
+        else:
+            items_with_details.append({
+                "product_id": product["id"],
+                "product_name": product.get("name"),
+                "quantity": requested_qty,
+                "unit": product.get("unit", "قطعة"),
+                "cost": product.get("raw_material_cost", 0) * requested_qty
+            })
+    
+    if insufficient:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "message": "كمية غير كافية",
+                "insufficient_products": insufficient
+            }
+        )
+    
+    # إنشاء سجل التحويل
+    transfer_doc = {
+        "id": str(uuid.uuid4()),
+        "transfer_number": transfer_number,
+        "transfer_type": "manufacturing_to_branch",
+        "to_branch_id": to_branch_id,
+        "to_branch_name": branch.get("name"),
+        "items": items_with_details,
+        "total_cost": sum(item.get("cost", 0) for item in items_with_details),
+        "status": "completed",
+        "notes": notes,
+        "created_by": "system",
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    
+    await db.warehouse_transfers.insert_one(transfer_doc)
+    
+    # خصم الكمية من المنتجات المصنعة
+    for item in items_with_details:
+        await db.manufactured_products.update_one(
+            {"id": item["product_id"]},
+            {
+                "$inc": {"quantity": -item["quantity"]},
+                "$set": {"last_updated": datetime.now(timezone.utc).isoformat()}
+            }
+        )
+    
+    # إضافة الكمية لمخزون الفرع
+    for item in items_with_details:
+        # البحث عن المنتج في مخزون الفرع
+        existing = await db.branch_inventory.find_one({
+            "branch_id": to_branch_id,
+            "product_id": item["product_id"]
+        })
+        
+        if existing:
+            await db.branch_inventory.update_one(
+                {"branch_id": to_branch_id, "product_id": item["product_id"]},
+                {
+                    "$inc": {"quantity": item["quantity"]},
+                    "$set": {"last_updated": datetime.now(timezone.utc).isoformat()}
+                }
+            )
+        else:
+            await db.branch_inventory.insert_one({
+                "id": str(uuid.uuid4()),
+                "branch_id": to_branch_id,
+                "product_id": item["product_id"],
+                "product_name": item["product_name"],
+                "quantity": item["quantity"],
+                "unit": item["unit"],
+                "last_updated": datetime.now(timezone.utc).isoformat(),
+                "created_at": datetime.now(timezone.utc).isoformat()
+            })
+    
+    # تسجيل الحركة
+    await db.inventory_movements.insert_one({
+        "id": str(uuid.uuid4()),
+        "type": "transfer_to_branch",
+        "transfer_id": transfer_doc["id"],
+        "from_location": "manufacturing",
+        "to_location": to_branch_id,
+        "to_location_name": branch.get("name"),
+        "items": items_with_details,
+        "notes": notes,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    })
+    
+    del transfer_doc["_id"]
+    return transfer_doc
+
 @router.get("/warehouse-transactions")
 async def get_warehouse_transactions(type: Optional[str] = None):
     """جلب حركات المخزن (واردات/صادرات)"""

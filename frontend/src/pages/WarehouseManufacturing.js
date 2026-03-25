@@ -1381,8 +1381,8 @@ export default function WarehouseManufacturing() {
                 <Label className="mb-2 block">{t('المنتجات المختارة للتحويل')}</Label>
                 <div className="space-y-2">
                   {branchTransferForm.items.map((item, idx) => (
-                    <div key={idx} className="flex items-center gap-2 p-2 bg-green-50 border border-green-200 rounded">
-                      <span className="flex-1 font-medium">{item.product_name}</span>
+                    <div key={idx} className="flex items-center gap-2 p-2 bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-700 rounded">
+                      <span className="flex-1 font-medium text-foreground">{item.product_name}</span>
                       <Input 
                         type="number"
                         min="1"
@@ -1390,10 +1390,10 @@ export default function WarehouseManufacturing() {
                         max={item.available}
                         value={item.quantity}
                         onChange={(e) => updateBranchTransferQty(idx, e.target.value)}
-                        className="w-24"
+                        className="w-24 bg-white dark:bg-gray-800 text-black dark:text-white border-gray-300 dark:border-gray-600"
                       />
                       <span className="text-sm text-muted-foreground">{item.unit}</span>
-                      <span className="text-xs text-green-600">{t('(متاح: {item.available})')}</span>
+                      <span className="text-xs text-green-600 dark:text-green-400">{t('(متاح: {item.available})')}</span>
                       <Button 
                         variant="ghost" 
                         size="icon"
