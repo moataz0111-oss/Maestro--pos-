@@ -24,25 +24,23 @@ jobs:
         command_timeout: 30m
         script: |
           echo "🚀 Starting Zero-Downtime deployment at $(date)"
-          echo "⚠️ النظام يبقى يعمل أثناء التحديث - المستخدمون لن يتأثروا"
           
-          # إيقاف Nginx القديم على Ubuntu (غير Docker)
+          # إيقاف Nginx القديم على Ubuntu
           systemctl stop nginx 2>/dev/null || true
           systemctl disable nginx 2>/dev/null || true
           
           cd /var/www/maestro
           
-          # سحب أحدث الكود
+          # سحب الكود
           echo "📥 Pulling latest code..."
           git fetch origin
           git reset --hard origin/conflict_230326_0646
           
           mkdir -p certbot/conf certbot/www backups deploy/backups uploads
           
-          # التحقق من SSL - فقط إذا لم يكن موجوداً
+          # SSL check
           if [ ! -d "certbot/conf/live/maestroegp.com" ]; then
-            echo "🔐 Getting SSL certificate..."
-            # هذا يحدث مرة واحدة فقط عند أول تثبيت
+            echo "🔐 Getting SSL certificate (first time only)..."
             docker-compose down 2>/dev/null || true
             
             cat > nginx-temp.conf << 'NGINXEOF'
@@ -61,7 +59,6 @@ jobs:
               -v $(pwd)/nginx-temp.conf:/etc/nginx/nginx.conf:ro \
               -v $(pwd)/certbot/www:/var/www/certbot \
               nginx:alpine
-            
             sleep 5
             
             docker run --rm \
@@ -78,95 +75,119 @@ jobs:
             docker rm temp-nginx 2>/dev/null || true
             rm -f nginx-temp.conf
             
-            # تشغيل كل الخدمات لأول مرة
             docker-compose up -d
             sleep 30
           else
             # =============================================
-            # 🔄 تحديث بدون توقف - Zero Downtime Update
+            # 🔄 تحديث بدون توقف
             # =============================================
-            # ⚠️ مهم: لا نستخدم docker-compose down أبداً!
-            # النظام يبقى يعمل طوال عملية التحديث
             
             echo ""
             echo "============================================="
-            echo "🔄 Zero Downtime Update - تحديث بدون توقف"
+            echo "🔄 Zero Downtime Update"
             echo "============================================="
-            echo "✅ MongoDB يبقى يعمل - البيانات محفوظة"
-            echo "✅ المستخدمون يستطيعون استخدام النظام"
-            echo ""
             
-            # بناء الـ images الجديدة (النظام يعمل أثناء البناء)
+            # التأكد من أن الخدمات تعمل قبل التحديث
+            echo "📊 Current services status:"
+            docker-compose ps
+            
+            # بناء الـ images الجديدة
+            echo ""
             echo "🔨 Building new images..."
-            echo "   النظام يعمل بشكل طبيعي أثناء البناء..."
             docker-compose build --build-arg CACHEBUST=$(date +%s) frontend backend
             
+            # تحديث Backend
             echo ""
-            echo "🔄 Updating services one by one..."
-            echo "   تحديث خدمة واحدة في كل مرة لضمان استمرار العمل"
-            echo ""
-            
-            # 1. تحديث Backend (MongoDB و Frontend يعملان)
-            echo "📦 [1/3] Updating Backend..."
-            echo "   Frontend و Nginx يعملان - المستخدمون يستطيعون التصفح"
+            echo "📦 Updating Backend..."
             docker-compose up -d --no-deps --force-recreate backend
             
-            # انتظار Backend ليبدأ
-            echo "   Waiting for Backend to start..."
-            sleep 15
+            # انتظار Backend
+            echo "⏳ Waiting for Backend to be ready..."
+            sleep 20
             
             # التحقق من أن Backend يعمل
-            for i in {1..10}; do
-              if docker-compose exec -T backend curl -s http://localhost:8001/api/health > /dev/null 2>&1; then
-                echo "   ✅ Backend is healthy"
+            BACKEND_OK=false
+            for i in {1..30}; do
+              if curl -s http://localhost:8001/api/health > /dev/null 2>&1; then
+                echo "✅ Backend is healthy!"
+                BACKEND_OK=true
                 break
               fi
-              echo "   Waiting for Backend... ($i/10)"
-              sleep 3
+              echo "   Waiting for Backend... ($i/30)"
+              sleep 2
             done
             
-            # 2. تحديث Frontend (Backend و Nginx يعملان)
+            if [ "$BACKEND_OK" = false ]; then
+              echo "⚠️ Backend health check failed, checking logs..."
+              docker-compose logs --tail=50 backend
+              echo ""
+              echo "🔄 Restarting Backend..."
+              docker-compose restart backend
+              sleep 20
+            fi
+            
+            # تحديث Frontend
             echo ""
-            echo "🎨 [2/3] Updating Frontend..."
-            echo "   Backend و Nginx يعملان - API متاح"
+            echo "🎨 Updating Frontend..."
             docker-compose up -d --no-deps --force-recreate frontend
             sleep 10
             
-            # 3. إعادة تحميل Nginx لتحديث الـ cache (بدون توقف)
+            # تحديث Nginx
             echo ""
-            echo "🌐 [3/3] Reloading Nginx..."
+            echo "🌐 Updating Nginx..."
             docker-compose exec -T nginx nginx -s reload 2>/dev/null || \
               docker-compose up -d --no-deps --force-recreate nginx
             sleep 5
           fi
           
           # =============================================
-          # ✅ التحقق من الخدمات
+          # ✅ التحقق النهائي
           # =============================================
           
           echo ""
           echo "============================================="
-          echo "📊 Services Status"
+          echo "🔍 Final Health Check"
           echo "============================================="
+          
+          # التحقق من كل الخدمات
           docker-compose ps
           
+          # التحقق من أن تسجيل الدخول يعمل
           echo ""
-          echo "📋 Backend Health Check:"
-          docker-compose logs --tail=20 backend | grep -E "startup|running|ready|error" || true
+          echo "🔐 Testing Login API..."
+          LOGIN_TEST=$(curl -s -X POST http://localhost:8001/api/super-admin/login \
+            -H "Content-Type: application/json" \
+            -d '{"email":"owner@maestroegp.com","password":"owner123","secret_key":"271018"}' \
+            2>/dev/null)
           
-          # تنظيف الـ images القديمة
-          echo ""
-          echo "🧹 Cleaning old images..."
+          if echo "$LOGIN_TEST" | grep -q "token"; then
+            echo "✅ Login API is working!"
+          else
+            echo "⚠️ Login test result: $LOGIN_TEST"
+            echo "🔄 Restarting all services..."
+            docker-compose restart backend frontend nginx
+            sleep 30
+            
+            # إعادة الاختبار
+            LOGIN_TEST2=$(curl -s -X POST http://localhost:8001/api/super-admin/login \
+              -H "Content-Type: application/json" \
+              -d '{"email":"owner@maestroegp.com","password":"owner123","secret_key":"271018"}' \
+              2>/dev/null)
+            
+            if echo "$LOGIN_TEST2" | grep -q "token"; then
+              echo "✅ Login API is working after restart!"
+            else
+              echo "❌ Login still failing. Backend logs:"
+              docker-compose logs --tail=100 backend
+            fi
+          fi
+          
+          # تنظيف
           docker image prune -f 2>/dev/null || true
           
           echo ""
           echo "============================================="
-          echo "✅ Zero-Downtime deployment completed!"
-          echo "============================================="
-          echo "✅ البيانات محفوظة - MongoDB لم يتوقف أبداً"
-          echo "✅ المستخدمون لم يتأثروا أثناء التحديث"
-          echo "✅ النظام يعمل بشكل طبيعي الآن"
-          echo "⏰ Completed at $(date)"
+          echo "✅ Deployment completed at $(date)"
           echo "============================================="
           
     - name: 📢 Notify Success
