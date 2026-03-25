@@ -2123,9 +2123,14 @@ async def delete_user(user_id: str, current_user: dict = Depends(get_current_use
     if current_user["role"] not in [UserRole.ADMIN, UserRole.SUPER_ADMIN, UserRole.MANAGER]:
         raise HTTPException(status_code=403, detail="غير مصرح لك بحذف المستخدمين")
     
-    # التحقق من أن المستخدم ينتمي لنفس الـ tenant
-    query = build_tenant_query(current_user, {"id": user_id})
-    user = await db.users.find_one(query)
+    # Super Admin يمكنه حذف أي مستخدم
+    if current_user["role"] == UserRole.SUPER_ADMIN:
+        user = await db.users.find_one({"id": user_id})
+    else:
+        # Admin يحذف فقط مستخدمي نفس الـ tenant
+        query = build_tenant_query(current_user, {"id": user_id})
+        user = await db.users.find_one(query)
+    
     if not user:
         raise HTTPException(status_code=404, detail="المستخدم غير موجود")
     
@@ -2136,6 +2141,10 @@ async def delete_user(user_id: str, current_user: dict = Depends(get_current_use
     # لا يمكن حذف Admin إلا من قبل Super Admin
     if user.get("role") == UserRole.ADMIN and current_user["role"] != UserRole.SUPER_ADMIN:
         raise HTTPException(status_code=403, detail="لا يمكن حذف مدير النظام")
+    
+    # لا يمكن حذف Super Admin
+    if user.get("role") == UserRole.SUPER_ADMIN:
+        raise HTTPException(status_code=403, detail="لا يمكن حذف Super Admin")
     
     # حذف المستخدم نهائياً
     result = await db.users.delete_one({"id": user_id})
