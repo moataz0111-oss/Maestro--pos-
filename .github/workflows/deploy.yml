@@ -219,45 +219,22 @@ jobs:
           echo ""
           echo "🛡️ Setting up Auto Health Monitor..."
           
-          cat > /root/check-maestro.sh << 'HEALTHEOF'
-#!/bin/bash
-# Maestro Auto Health Check - يفحص كل 5 دقائق ويصلح تلقائياً
-
-LOG_FILE="/var/log/maestro-monitor.log"
-
-# فحص إذا كان الموقع يعمل
-if ! curl -s --max-time 10 http://127.0.0.1/api/health > /dev/null 2>&1; then
-    echo "$(date): ⚠️ Maestro not responding, attempting restart..." >> $LOG_FILE
-    
-    cd /var/www/maestro
-    
-    # إعادة تشغيل الخدمات
-    docker-compose restart backend nginx frontend 2>/dev/null
-    
-    sleep 30
-    
-    # فحص مرة أخرى
-    if curl -s --max-time 10 http://127.0.0.1/api/health > /dev/null 2>&1; then
-        echo "$(date): ✅ Maestro recovered successfully" >> $LOG_FILE
-    else
-        echo "$(date): ❌ Maestro still down after restart" >> $LOG_FILE
-        # محاولة أخيرة - إعادة تشغيل كاملة
-        docker-compose down
-        docker-compose up -d
-        sleep 30
-        if curl -s --max-time 10 http://127.0.0.1/api/health > /dev/null 2>&1; then
-            echo "$(date): ✅ Maestro recovered after full restart" >> $LOG_FILE
-        else
-            echo "$(date): ❌ CRITICAL: Maestro failed to recover" >> $LOG_FILE
-        fi
-    fi
-fi
-HEALTHEOF
+          # إنشاء سكربت المراقبة
+          echo '#!/bin/bash' > /root/check-maestro.sh
+          echo 'LOG=/var/log/maestro-monitor.log' >> /root/check-maestro.sh
+          echo 'if ! curl -s --max-time 10 http://127.0.0.1/api/health > /dev/null 2>&1; then' >> /root/check-maestro.sh
+          echo '  echo "$(date): Restarting Maestro..." >> $LOG' >> /root/check-maestro.sh
+          echo '  cd /var/www/maestro && docker-compose restart backend nginx frontend' >> /root/check-maestro.sh
+          echo '  sleep 30' >> /root/check-maestro.sh
+          echo '  if ! curl -s --max-time 10 http://127.0.0.1/api/health > /dev/null 2>&1; then' >> /root/check-maestro.sh
+          echo '    docker-compose down && docker-compose up -d' >> /root/check-maestro.sh
+          echo '  fi' >> /root/check-maestro.sh
+          echo 'fi' >> /root/check-maestro.sh
           
           chmod +x /root/check-maestro.sh
           
           # إضافة للـ crontab إذا لم يكن موجوداً
-          if ! crontab -l 2>/dev/null | grep -q "check-maestro.sh"; then
+          if ! crontab -l 2>/dev/null | grep -q "check-maestro"; then
               (crontab -l 2>/dev/null; echo "* * * * * /root/check-maestro.sh") | crontab -
               echo "✅ Auto Health Monitor installed (runs every 1 minute)"
           else
@@ -272,10 +249,8 @@ HEALTHEOF
           echo "✅ Backend: Updated"
           echo "✅ Frontend: Updated"
           echo "✅ Nginx: Updated"
-          echo "✅ Auto Monitor: Active (every 5 min)"
-          echo "✅ بيانات العملاء: محمية"
-          echo "✅ بياناتك: محمية"
-          echo "⏰ $(date)"
+          echo "✅ Auto Monitor: Active (every 1 min)"
+          echo "✅ Data: Protected"
           echo "============================================="
           
     - name: 📢 Notify Success
