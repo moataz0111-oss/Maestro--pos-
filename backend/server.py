@@ -9529,6 +9529,30 @@ async def reset_tenant_inventory(tenant_id: str, confirm: bool = False, delete_a
     deleted_warehouse_requests = await db.warehouse_purchase_requests.delete_many(query)
     results["reset_counts"]["warehouse_purchase_requests"] = deleted_warehouse_requests.deleted_count
     
+    # ==================== تصفير مخزون التغليف (الورقيات) ====================
+    
+    # حذف مواد التغليف
+    deleted_packaging_materials = await db.packaging_materials.delete_many(query)
+    results["reset_counts"]["packaging_materials"] = deleted_packaging_materials.deleted_count
+    
+    # حذف طلبات التغليف
+    deleted_packaging_requests = await db.packaging_requests.delete_many(query)
+    results["reset_counts"]["packaging_requests"] = deleted_packaging_requests.deleted_count
+    
+    # حذف مخزون التغليف في الفروع
+    deleted_branch_packaging = await db.branch_packaging_inventory.delete_many(query)
+    results["reset_counts"]["branch_packaging_inventory"] = deleted_branch_packaging.deleted_count
+    
+    # ==================== تصفير المواد الغذائية ====================
+    
+    # حذف المواد الخام الجديدة
+    deleted_raw_new = await db.raw_materials_new.delete_many(query)
+    results["reset_counts"]["raw_materials_new"] = deleted_raw_new.deleted_count
+    
+    # حذف طلبات التصنيع (من المصنع للمخزن)
+    deleted_mfg_requests = await db.manufacturing_requests.delete_many(query)
+    results["reset_counts"]["manufacturing_requests"] = deleted_mfg_requests.deleted_count
+    
     return {
         "message": f"تم تصفير بيانات المخزون لـ '{results['tenant_name']}' بنجاح",
         "success": True,
@@ -15369,7 +15393,7 @@ async def get_menu_link(request: Request, current_user: dict = Depends(get_curre
         base_url = f"{parsed.scheme}://{parsed.netloc}"
     else:
         # fallback للـ environment variable
-        base_url = os.environ.get('REACT_APP_BACKEND_URL', 'https://invoice-ocr-16.preview.emergentagent.com')
+        base_url = os.environ.get('REACT_APP_BACKEND_URL', 'https://zero-downtime-deploy-1.preview.emergentagent.com')
     
     menu_url = f"{base_url}/menu/{tenant.get('menu_slug', tenant_id)}"
     

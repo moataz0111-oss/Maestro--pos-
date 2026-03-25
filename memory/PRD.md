@@ -585,3 +585,21 @@
 
 #### Files Modified:
 - `/app/backend/server.py` - Lines 9491-9510: Updated reset-inventory endpoint
+
+---
+
+### تحسين نظام تصفير المخزون - إضافة التغليف والمواد الغذائية ✅ (March 26, 2026)
+
+تم إضافة collections جديدة لآلية تصفير المخزون لتشمل:
+
+#### مخزون التغليف (الورقيات):
+- `packaging_materials` - مواد التغليف الرئيسية
+- `packaging_requests` - طلبات التغليف من الفروع
+- `branch_packaging_inventory` - مخزون التغليف في الفروع
+
+#### مخزون المواد الغذائية:
+- `raw_materials_new` - المواد الخام الجديدة
+- `manufacturing_requests` - طلبات التصنيع من المصنع للمخزن
+
+#### Files Modified:
+- `/app/backend/server.py` - Lines 9532-9554: Added packaging and food inventory reset

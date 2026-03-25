@@ -7,7 +7,7 @@ import pytest
 import requests
 import os
 
-BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://invoice-ocr-16.preview.emergentagent.com')
+BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://zero-downtime-deploy-1.preview.emergentagent.com')
 
 class TestImpersonationLogsAPI:
     """Tests for impersonation logs endpoint"""
