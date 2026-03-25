@@ -42,7 +42,10 @@ import {
   Banknote,
   ArrowUpRight,
   ArrowDownRight,
-  Activity
+  Activity,
+  CheckCircle,
+  CircleDollarSign,
+  User
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -58,6 +61,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../components/ui/select';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '../components/ui/dialog';
 import { 
   printComprehensiveReport, 
   printSalesReport, 
@@ -766,6 +776,534 @@ const SmartReportTab = ({ t, formatPrice, selectedBranchId, branches, getBranchI
   );
 };
 
+// ===================== Credit Report Tab (تبويب الآجل) =====================
+const CreditReportTab = ({ creditReport, t, formatPrice, fetchReports, handlePrintCreditReport }) => {
+  const [showCollectDialog, setShowCollectDialog] = useState(false);
+  const [selectedOrder, setSelectedOrder] = useState(null);
+  const [collectForm, setCollectForm] = useState({
+    amount: '',
+    collected_by: '',
+    notes: ''
+  });
+  const [collecting, setCollecting] = useState(false);
+
+  const handleOpenCollect = (order) => {
+    setSelectedOrder(order);
+    setCollectForm({
+      amount: order.remaining_amount || order.total,
+      collected_by: '',
+      notes: ''
+    });
+    setShowCollectDialog(true);
+  };
+
+  const handleCollect = async () => {
+    if (!collectForm.amount || !collectForm.collected_by) {
+      toast.error(t('يرجى إدخال المبلغ واسم المستلم'));
+      return;
+    }
+    
+    setCollecting(true);
+    try {
+      await axios.post(`${API}/reports/credit/collect`, {
+        order_id: selectedOrder.id,
+        amount: parseFloat(collectForm.amount),
+        collected_by: collectForm.collected_by,
+        notes: collectForm.notes
+      });
+      toast.success(t('تم تسجيل التحصيل بنجاح'));
+      setShowCollectDialog(false);
+      fetchReports();
+    } catch (error) {
+      console.error('Collection error:', error);
+      toast.error(t('فشل في تسجيل التحصيل'));
+    } finally {
+      setCollecting(false);
+    }
+  };
+
+  if (!creditReport) return null;
+
+  return (
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <Card className="border-l-4 border-l-blue-500">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-muted-foreground">{t('إجمالي الآجل')}</p>
+                <p className="text-2xl font-bold text-blue-600">{formatPrice(creditReport.total_credit)}</p>
+              </div>
+              <CreditCard className="h-8 w-8 text-blue-500 opacity-50" />
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="border-l-4 border-l-purple-500">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-muted-foreground">{t('عدد الطلبات')}</p>
+                <p className="text-2xl font-bold text-purple-600">{creditReport.total_orders}</p>
+              </div>
+              <ShoppingCart className="h-8 w-8 text-purple-500 opacity-50" />
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="border-l-4 border-l-green-500">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-muted-foreground">{t('تم التحصيل')}</p>
+                <p className="text-2xl font-bold text-green-600">{formatPrice(creditReport.collected_amount)}</p>
+              </div>
+              <CheckCircle className="h-8 w-8 text-green-500 opacity-50" />
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="border-l-4 border-l-red-500">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-muted-foreground">{t('المتبقي')}</p>
+                <p className="text-2xl font-bold text-red-600">{formatPrice(creditReport.remaining_amount)}</p>
+              </div>
+              <TrendingDown className="h-8 w-8 text-red-500 opacity-50" />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card className="border-border/50 bg-card">
+        <CardHeader>
+          <CardTitle className="text-lg text-foreground flex items-center gap-2">
+            <CreditCard className="h-5 w-5 text-blue-500" />
+            {t('الطلبات الآجلة')}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border">
+                  <th className="text-right p-3 text-muted-foreground">#</th>
+                  <th className="text-right p-3 text-muted-foreground">{t('التاريخ')}</th>
+                  <th className="text-right p-3 text-muted-foreground">{t('العميل')}</th>
+                  <th className="text-right p-3 text-muted-foreground">{t('الهاتف')}</th>
+                  <th className="text-right p-3 text-muted-foreground">{t('المبلغ')}</th>
+                  <th className="text-right p-3 text-muted-foreground">{t('المحصل')}</th>
+                  <th className="text-right p-3 text-muted-foreground">{t('المتبقي')}</th>
+                  <th className="text-right p-3 text-muted-foreground">{t('الحالة')}</th>
+                  <th className="text-right p-3 text-muted-foreground">{t('إجراء')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {creditReport.orders?.map(order => (
+                  <tr key={order.id} className="border-b border-border/50 hover:bg-blue-500/5">
+                    <td className="p-3 font-medium text-foreground">#{order.order_number}</td>
+                    <td className="p-3 text-muted-foreground">
+                      {new Date(order.created_at).toLocaleDateString('ar-IQ')}
+                    </td>
+                    <td className="p-3 text-foreground">{order.customer_name || '-'}</td>
+                    <td className="p-3 text-muted-foreground">{order.customer_phone || '-'}</td>
+                    <td className="p-3 tabular-nums text-blue-500 font-medium">{formatPrice(order.total)}</td>
+                    <td className="p-3 tabular-nums text-green-500">{formatPrice(order.collected_amount || 0)}</td>
+                    <td className="p-3 tabular-nums text-red-500">{formatPrice(order.remaining_amount || order.total)}</td>
+                    <td className="p-3">
+                      <span className={`px-2 py-1 rounded-full text-xs ${
+                        order.is_fully_collected ? 'bg-green-500/10 text-green-500' : 'bg-red-500/10 text-red-500'
+                      }`}>
+                        {order.is_fully_collected ? t('تم التحصيل') : t('لم يحصل')}
+                      </span>
+                    </td>
+                    <td className="p-3">
+                      {!order.is_fully_collected && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleOpenCollect(order)}
+                          className="gap-1 text-green-600 border-green-600 hover:bg-green-50"
+                          data-testid={`collect-btn-${order.order_number}`}
+                        >
+                          <CircleDollarSign className="h-4 w-4" />
+                          {t('تحصيل')}
+                        </Button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {(!creditReport.orders || creditReport.orders.length === 0) && (
+              <div className="text-center py-8 text-muted-foreground">
+                <CreditCard className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                <p>{t('لا توجد طلبات آجلة في هذه الفترة')}</p>
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      <div className="flex justify-end gap-2 mt-4">
+        <Button variant="outline" onClick={handlePrintCreditReport} className="gap-2">
+          <Printer className="h-4 w-4" />
+          {t('طباعة التقرير')}
+        </Button>
+      </div>
+
+      {/* Dialog تحصيل الآجل */}
+      <Dialog open={showCollectDialog} onOpenChange={setShowCollectDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <CircleDollarSign className="h-5 w-5 text-green-500" />
+              {t('تحصيل مبلغ آجل')}
+            </DialogTitle>
+          </DialogHeader>
+          {selectedOrder && (
+            <div className="space-y-4 py-4">
+              <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg">
+                <p className="text-sm text-muted-foreground">{t('الطلب')}: <span className="font-bold">#{selectedOrder.order_number}</span></p>
+                <p className="text-sm text-muted-foreground">{t('العميل')}: <span className="font-medium">{selectedOrder.customer_name || '-'}</span></p>
+                <p className="text-sm text-muted-foreground">{t('المبلغ الكلي')}: <span className="font-bold text-blue-600">{formatPrice(selectedOrder.total)}</span></p>
+                <p className="text-sm text-muted-foreground">{t('المتبقي للتحصيل')}: <span className="font-bold text-red-600">{formatPrice(selectedOrder.remaining_amount || selectedOrder.total)}</span></p>
+              </div>
+              
+              <div className="space-y-3">
+                <div>
+                  <Label>{t('المبلغ المحصل')}</Label>
+                  <Input
+                    type="number"
+                    value={collectForm.amount}
+                    onChange={(e) => setCollectForm({...collectForm, amount: e.target.value})}
+                    placeholder={t('أدخل المبلغ')}
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label>{t('اسم المستلم')}</Label>
+                  <Input
+                    value={collectForm.collected_by}
+                    onChange={(e) => setCollectForm({...collectForm, collected_by: e.target.value})}
+                    placeholder={t('من استلم المبلغ')}
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label>{t('ملاحظات')} ({t('اختياري')})</Label>
+                  <Input
+                    value={collectForm.notes}
+                    onChange={(e) => setCollectForm({...collectForm, notes: e.target.value})}
+                    placeholder={t('أي ملاحظات إضافية')}
+                    className="mt-1"
+                  />
+                </div>
+                <div className="bg-gray-100 dark:bg-gray-800 p-3 rounded-lg text-sm">
+                  <p className="flex items-center gap-2">
+                    <Clock className="h-4 w-4" />
+                    {t('التاريخ والوقت')}: {new Date().toLocaleString('ar-IQ')}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+          <DialogFooter className="flex gap-2">
+            <Button variant="outline" onClick={() => setShowCollectDialog(false)}>
+              {t('إلغاء')}
+            </Button>
+            <Button onClick={handleCollect} disabled={collecting} className="bg-green-600 hover:bg-green-700">
+              {collecting ? <RefreshCw className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
+              <span className="mr-2">{t('تأكيد التحصيل')}</span>
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+};
+
+// ===================== Delivery Report Tab (تبويب التوصيل) =====================
+const DeliveryReportTab = ({ deliveryCreditsReport, t, formatPrice, fetchReports, handlePrintDeliveryReport }) => {
+  const [showCollectDialog, setShowCollectDialog] = useState(false);
+  const [selectedApp, setSelectedApp] = useState(null);
+  const [collectForm, setCollectForm] = useState({
+    amount: '',
+    collected_by: '',
+    notes: ''
+  });
+  const [collecting, setCollecting] = useState(false);
+
+  const handleOpenCollect = (appName, data) => {
+    setSelectedApp({ name: appName, ...data });
+    setCollectForm({
+      amount: data.remaining_amount || data.net_amount,
+      collected_by: '',
+      notes: ''
+    });
+    setShowCollectDialog(true);
+  };
+
+  const handleCollect = async () => {
+    if (!collectForm.amount || !collectForm.collected_by) {
+      toast.error(t('يرجى إدخال المبلغ واسم المستلم'));
+      return;
+    }
+    
+    setCollecting(true);
+    try {
+      await axios.post(`${API}/reports/delivery/collect`, {
+        delivery_app_id: selectedApp.id,
+        delivery_app_name: selectedApp.name,
+        amount: parseFloat(collectForm.amount),
+        collected_by: collectForm.collected_by,
+        notes: collectForm.notes
+      });
+      toast.success(t('تم تسجيل التحصيل بنجاح'));
+      setShowCollectDialog(false);
+      fetchReports();
+    } catch (error) {
+      console.error('Collection error:', error);
+      toast.error(t('فشل في تسجيل التحصيل'));
+    } finally {
+      setCollecting(false);
+    }
+  };
+
+  if (!deliveryCreditsReport) return null;
+
+  return (
+    <div className="space-y-6">
+      {/* البطاقات الإحصائية */}
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+        <Card className="border-l-4 border-l-blue-500">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-muted-foreground">{t('إجمالي المبيعات')}</p>
+                <p className="text-xl font-bold text-blue-600">{formatPrice(deliveryCreditsReport.total_sales)}</p>
+                <p className="text-xs text-muted-foreground mt-1">{t('قبل الاستقطاع')}</p>
+              </div>
+              <DollarSign className="h-7 w-7 text-blue-500 opacity-50" />
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="border-l-4 border-l-red-500">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-muted-foreground">{t('العمولات المستقطعة')}</p>
+                <p className="text-xl font-bold text-red-600">-{formatPrice(deliveryCreditsReport.total_commission)}</p>
+              </div>
+              <TrendingDown className="h-7 w-7 text-red-500 opacity-50" />
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="border-l-4 border-l-amber-500">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-muted-foreground">{t('صافي المستحق')}</p>
+                <p className="text-xl font-bold text-amber-600">{formatPrice(deliveryCreditsReport.net_receivable)}</p>
+                <p className="text-xs text-muted-foreground mt-1">{t('بعد الاستقطاع')}</p>
+              </div>
+              <Target className="h-7 w-7 text-amber-500 opacity-50" />
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="border-l-4 border-l-green-500">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-muted-foreground">{t('تم التحصيل')}</p>
+                <p className="text-xl font-bold text-green-600">{formatPrice(deliveryCreditsReport.total_collected || 0)}</p>
+              </div>
+              <CheckCircle className="h-7 w-7 text-green-500 opacity-50" />
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="border-l-4 border-l-purple-500">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-muted-foreground">{t('المتبقي للتحصيل')}</p>
+                <p className="text-xl font-bold text-purple-600">{formatPrice(deliveryCreditsReport.total_remaining || deliveryCreditsReport.net_receivable)}</p>
+              </div>
+              <Truck className="h-7 w-7 text-purple-500 opacity-50" />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* تفاصيل كل شركة */}
+      <Card className="border-border/50 bg-card">
+        <CardHeader>
+          <CardTitle className="text-lg text-foreground flex items-center gap-2">
+            <Truck className="h-5 w-5 text-primary" />
+            {t('تفاصيل كل شركة توصيل')}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            {Object.entries(deliveryCreditsReport.by_delivery_app || {}).map(([appName, data]) => (
+              <div key={appName} className="p-4 bg-muted/30 rounded-lg border border-border/50">
+                <div className="flex justify-between items-start mb-4">
+                  <div>
+                    <h4 className="font-bold text-lg text-foreground flex items-center gap-2">
+                      <Truck className="h-5 w-5 text-primary" />
+                      {appName}
+                    </h4>
+                    <p className="text-sm text-muted-foreground">
+                      {t('نسبة العمولة')}: {data.commission_rate || 0}%
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="px-3 py-1 bg-primary/10 text-primary rounded-full text-sm font-bold">
+                      {data.count} {t('طلب')}
+                    </span>
+                    {(data.remaining_amount || data.net_amount) > 0 && (
+                      <Button
+                        size="sm"
+                        onClick={() => handleOpenCollect(appName, data)}
+                        className="gap-1 bg-green-600 hover:bg-green-700"
+                        data-testid={`collect-delivery-${appName}`}
+                      >
+                        <CircleDollarSign className="h-4 w-4" />
+                        {t('تحصيل')}
+                      </Button>
+                    )}
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                  <div className="text-center p-3 bg-blue-500/10 rounded-lg">
+                    <p className="text-xs text-blue-600">{t('المبيعات (قبل الاستقطاع)')}</p>
+                    <p className="text-lg font-bold text-blue-600 tabular-nums">{formatPrice(data.total)}</p>
+                  </div>
+                  <div className="text-center p-3 bg-red-500/10 rounded-lg">
+                    <p className="text-xs text-red-500">{t('العمولة المستقطعة')}</p>
+                    <p className="text-lg font-bold text-red-500 tabular-nums">-{formatPrice(data.commission)}</p>
+                  </div>
+                  <div className="text-center p-3 bg-amber-500/10 rounded-lg">
+                    <p className="text-xs text-amber-600">{t('الصافي (بعد الاستقطاع)')}</p>
+                    <p className="text-lg font-bold text-amber-600 tabular-nums">{formatPrice(data.net_amount)}</p>
+                  </div>
+                  <div className="text-center p-3 bg-green-500/10 rounded-lg">
+                    <p className="text-xs text-green-600">{t('تم التحصيل')}</p>
+                    <p className="text-lg font-bold text-green-600 tabular-nums">{formatPrice(data.collected_amount || 0)}</p>
+                  </div>
+                  <div className="text-center p-3 bg-purple-500/10 rounded-lg">
+                    <p className="text-xs text-purple-600">{t('المتبقي')}</p>
+                    <p className="text-lg font-bold text-purple-600 tabular-nums">{formatPrice(data.remaining_amount || data.net_amount)}</p>
+                  </div>
+                </div>
+              </div>
+            ))}
+            
+            {Object.keys(deliveryCreditsReport.by_delivery_app || {}).length === 0 && (
+              <div className="text-center py-8 text-muted-foreground">
+                <Truck className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                <p>{t('لا توجد طلبات توصيل في هذه الفترة')}</p>
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      <div className="flex justify-end gap-2 mt-4">
+        <Button variant="outline" onClick={handlePrintDeliveryReport} className="gap-2">
+          <Printer className="h-4 w-4" />
+          {t('طباعة التقرير')}
+        </Button>
+      </div>
+
+      {/* Dialog تحصيل التوصيل */}
+      <Dialog open={showCollectDialog} onOpenChange={setShowCollectDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <CircleDollarSign className="h-5 w-5 text-green-500" />
+              {t('تحصيل من شركة التوصيل')}
+            </DialogTitle>
+          </DialogHeader>
+          {selectedApp && (
+            <div className="space-y-4 py-4">
+              <div className="bg-purple-50 dark:bg-purple-900/20 p-3 rounded-lg">
+                <p className="text-sm font-bold text-foreground flex items-center gap-2">
+                  <Truck className="h-4 w-4" />
+                  {selectedApp.name}
+                </p>
+                <div className="grid grid-cols-2 gap-2 mt-2 text-sm">
+                  <div>
+                    <span className="text-muted-foreground">{t('المبيعات')}:</span>
+                    <span className="font-bold text-blue-600 mr-1">{formatPrice(selectedApp.total)}</span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">{t('العمولة')}:</span>
+                    <span className="font-bold text-red-500 mr-1">-{formatPrice(selectedApp.commission)}</span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">{t('الصافي')}:</span>
+                    <span className="font-bold text-amber-600 mr-1">{formatPrice(selectedApp.net_amount)}</span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">{t('المتبقي')}:</span>
+                    <span className="font-bold text-purple-600 mr-1">{formatPrice(selectedApp.remaining_amount || selectedApp.net_amount)}</span>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="space-y-3">
+                <div>
+                  <Label>{t('المبلغ المحصل')}</Label>
+                  <Input
+                    type="number"
+                    value={collectForm.amount}
+                    onChange={(e) => setCollectForm({...collectForm, amount: e.target.value})}
+                    placeholder={t('أدخل المبلغ')}
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label>{t('اسم المستلم')}</Label>
+                  <Input
+                    value={collectForm.collected_by}
+                    onChange={(e) => setCollectForm({...collectForm, collected_by: e.target.value})}
+                    placeholder={t('من استلم المبلغ')}
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label>{t('ملاحظات')} ({t('اختياري')})</Label>
+                  <Input
+                    value={collectForm.notes}
+                    onChange={(e) => setCollectForm({...collectForm, notes: e.target.value})}
+                    placeholder={t('أي ملاحظات إضافية')}
+                    className="mt-1"
+                  />
+                </div>
+                <div className="bg-gray-100 dark:bg-gray-800 p-3 rounded-lg text-sm">
+                  <p className="flex items-center gap-2">
+                    <Clock className="h-4 w-4" />
+                    {t('التاريخ والوقت')}: {new Date().toLocaleString('ar-IQ')}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+          <DialogFooter className="flex gap-2">
+            <Button variant="outline" onClick={() => setShowCollectDialog(false)}>
+              {t('إلغاء')}
+            </Button>
+            <Button onClick={handleCollect} disabled={collecting} className="bg-green-600 hover:bg-green-700">
+              {collecting ? <RefreshCw className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
+              <span className="mr-2">{t('تأكيد التحصيل')}</span>
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+};
+
 export default function Reports() {
   const { user, hasRole } = useAuth();
   const { selectedBranchId, branches, getBranchIdForApi, canSelectAllBranches } = useBranch();
@@ -1202,6 +1740,7 @@ export default function Reports() {
           <TabsContent value="sales">
             {salesReport && (
               <div className="space-y-6">
+                {/* الصف الأول: المبيعات والطلبات */}
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                   <StatCard
                     title={t('إجمالي المبيعات')}
@@ -1210,10 +1749,11 @@ export default function Reports() {
                     color="green-500"
                   />
                   <StatCard
-                    title={t('إجمالي التكاليف')}
-                    value={formatPrice(salesReport.total_cost)}
-                    icon={TrendingDown}
-                    color="red-500"
+                    title={t('عدد الطلبات')}
+                    value={salesReport.total_orders}
+                    subtitle={`${t('متوسط')}: ${formatPrice(salesReport.average_order_value)}`}
+                    icon={ShoppingCart}
+                    color="blue-500"
                   />
                   <StatCard
                     title={t('إجمالي الأرباح')}
@@ -1223,12 +1763,51 @@ export default function Reports() {
                     color="primary"
                   />
                   <StatCard
-                    title={t('عدد الطلبات')}
-                    value={salesReport.total_orders}
-                    subtitle={`${t('متوسط')}: ${formatPrice(salesReport.average_order_value)}`}
-                    icon={ShoppingCart}
-                    color="blue-500"
+                    title={t('إجمالي التكاليف')}
+                    value={formatPrice(salesReport.total_cost)}
+                    icon={TrendingDown}
+                    color="red-500"
                   />
+                </div>
+
+                {/* الصف الثاني: تفاصيل التكاليف (تكلفة المواد + التغليف) */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <Card className="border-l-4 border-l-orange-500">
+                    <CardContent className="p-4">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-xs text-muted-foreground">{t('تكلفة المواد')}</p>
+                          <p className="text-2xl font-bold text-orange-600">{formatPrice(salesReport.total_materials_cost || 0)}</p>
+                        </div>
+                        <Package className="h-8 w-8 text-orange-500 opacity-50" />
+                      </div>
+                    </CardContent>
+                  </Card>
+                  <Card className="border-l-4 border-l-amber-500">
+                    <CardContent className="p-4">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-xs text-muted-foreground">{t('تكلفة التغليف')}</p>
+                          <p className="text-2xl font-bold text-amber-600">{formatPrice(salesReport.total_packaging_cost || 0)}</p>
+                        </div>
+                        <Receipt className="h-8 w-8 text-amber-500 opacity-50" />
+                      </div>
+                    </CardContent>
+                  </Card>
+                  <Card className="border-l-4 border-l-emerald-500">
+                    <CardContent className="p-4">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-xs text-muted-foreground">{t('صافي الربح')}</p>
+                          <p className="text-2xl font-bold text-emerald-600">{formatPrice(salesReport.total_profit)}</p>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            {t('بعد خصم التكاليف')}
+                          </p>
+                        </div>
+                        <TrendingUp className="h-8 w-8 text-emerald-500 opacity-50" />
+                      </div>
+                    </CardContent>
+                  </Card>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -1631,100 +2210,13 @@ export default function Reports() {
 
           {/* Delivery Credits Report */}
           <TabsContent value="delivery">
-            {deliveryCreditsReport && (
-              <div className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                  <StatCard
-                    title={t('إجمالي المبيعات')}
-                    value={formatPrice(deliveryCreditsReport.total_sales || deliveryCreditsReport.total_credit)}
-                    icon={DollarSign}
-                    color="blue-500"
-                  />
-                  <StatCard
-                    title={t('إجمالي العمولات')}
-                    value={formatPrice(deliveryCreditsReport.total_commission)}
-                    icon={TrendingDown}
-                    color="red-500"
-                  />
-                  <StatCard
-                    title={t('صافي المستحق')}
-                    value={formatPrice(deliveryCreditsReport.net_receivable)}
-                    icon={TrendingUp}
-                    color="green-500"
-                  />
-                  <StatCard
-                    title={t('عدد الطلبات')}
-                    value={deliveryCreditsReport.total_orders}
-                    icon={Truck}
-                    color="purple-500"
-                  />
-                </div>
-
-                <Card className="border-border/50 bg-card">
-                  <CardHeader>
-                    <CardTitle className="text-lg text-foreground">{t('تفاصيل كل شركة توصيل')}</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-4">
-                      {Object.entries(deliveryCreditsReport.by_delivery_app || {}).map(([appName, data]) => (
-                        <div key={appName} className="p-4 bg-muted/30 rounded-lg border border-border/50">
-                          <div className="flex justify-between items-start mb-4">
-                            <div>
-                              <h4 className="font-bold text-lg text-foreground flex items-center gap-2">
-                                <Truck className="h-5 w-5 text-primary" />
-                                {appName}
-                              </h4>
-                              <p className="text-sm text-muted-foreground">
-                                {t('نسبة العمولة')}: {data.commission_rate || 0}%
-                              </p>
-                            </div>
-                            <span className="px-3 py-1 bg-primary/10 text-primary rounded-full text-sm font-bold">
-                              {data.count} {t('طلب')}
-                            </span>
-                          </div>
-                          
-                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                            <div className="text-center p-3 bg-background rounded-lg">
-                              <p className="text-xs text-muted-foreground">{t('إجمالي المبيعات')}</p>
-                              <p className="text-lg font-bold text-foreground tabular-nums">{formatPrice(data.total)}</p>
-                            </div>
-                            <div className="text-center p-3 bg-red-500/10 rounded-lg">
-                              <p className="text-xs text-red-500">{t('العمولة المستقطعة')}</p>
-                              <p className="text-lg font-bold text-red-500 tabular-nums">-{formatPrice(data.commission)}</p>
-                            </div>
-                            <div className="text-center p-3 bg-green-500/10 rounded-lg">
-                              <p className="text-xs text-green-500">{t('الصافي')}</p>
-                              <p className="text-lg font-bold text-green-500 tabular-nums">{formatPrice(data.net_amount)}</p>
-                            </div>
-                            <div className="text-center p-3 bg-background rounded-lg">
-                              <p className="text-xs text-muted-foreground">{t('مدفوع / آجل')}</p>
-                              <p className="text-sm font-bold">
-                                <span className="text-green-500">{data.paid_count || 0}</span>
-                                {' / '}
-                                <span className="text-orange-500">{data.credit_count || 0}</span>
-                              </p>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                      
-                      {Object.keys(deliveryCreditsReport.by_delivery_app || {}).length === 0 && (
-                        <div className="text-center py-8 text-muted-foreground">
-                          <Truck className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                          <p>{t('لا توجد طلبات توصيل في هذه الفترة')}</p>
-                        </div>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
-                <div className="flex justify-end gap-2 mt-4">
-                  <Button variant="outline" onClick={handlePrintProductsReport} className="gap-2">
-                    <Printer className="h-4 w-4" />
-                    {t('طباعة التقرير')}
-                  </Button>
-                </div>
-              </div>
-            )}
+            <DeliveryReportTab
+              deliveryCreditsReport={deliveryCreditsReport}
+              t={t}
+              formatPrice={formatPrice}
+              fetchReports={fetchReports}
+              handlePrintDeliveryReport={handlePrintDeliveryReport}
+            />
           </TabsContent>
 
           {/* Cancellations Report */}
@@ -2013,93 +2505,13 @@ export default function Reports() {
 
           {/* Credit Report (الآجل) */}
           <TabsContent value="credit">
-            {creditReport && (
-              <div className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                  <StatCard
-                    title={t('إجمالي الآجل')}
-                    value={formatPrice(creditReport.total_credit)}
-                    icon={CreditCard}
-                    color="blue-500"
-                  />
-                  <StatCard
-                    title={t('عدد الطلبات')}
-                    value={creditReport.total_orders}
-                    icon={ShoppingCart}
-                    color="purple-500"
-                  />
-                  <StatCard
-                    title={t('تم التحصيل')}
-                    value={formatPrice(creditReport.collected_amount)}
-                    icon={TrendingUp}
-                    color="green-500"
-                  />
-                  <StatCard
-                    title={t('المتبقي')}
-                    value={formatPrice(creditReport.remaining_amount)}
-                    icon={TrendingDown}
-                    color="red-500"
-                  />
-                </div>
-
-                <Card className="border-border/50 bg-card">
-                  <CardHeader>
-                    <CardTitle className="text-lg text-foreground flex items-center gap-2">
-                      <CreditCard className="h-5 w-5 text-blue-500" />
-                      {t('الطلبات الآجلة')}
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-sm">
-                        <thead>
-                          <tr className="border-b border-border">
-                            <th className="text-right p-3 text-muted-foreground">#</th>
-                            <th className="text-right p-3 text-muted-foreground">{t('التاريخ')}</th>
-                            <th className="text-right p-3 text-muted-foreground">{t('العميل')}</th>
-                            <th className="text-right p-3 text-muted-foreground">{t('الهاتف')}</th>
-                            <th className="text-right p-3 text-muted-foreground">{t('المبلغ')}</th>
-                            <th className="text-right p-3 text-muted-foreground">{t('الحالة')}</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {creditReport.orders?.map(order => (
-                            <tr key={order.id} className="border-b border-border/50 hover:bg-blue-500/5">
-                              <td className="p-3 font-medium text-foreground">#{order.order_number}</td>
-                              <td className="p-3 text-muted-foreground">
-                                {new Date(order.created_at).toLocaleDateString('en-US')}
-                              </td>
-                              <td className="p-3 text-foreground">{order.customer_name || '-'}</td>
-                              <td className="p-3 text-muted-foreground">{order.customer_phone || '-'}</td>
-                              <td className="p-3 tabular-nums text-blue-500">{formatPrice(order.total)}</td>
-                              <td className="p-3">
-                                <span className={`px-2 py-1 rounded-full text-xs ${
-                                  order.credit_collected ? 'bg-green-500/10 text-green-500' : 'bg-red-500/10 text-red-500'
-                                }`}>
-                                  {order.credit_collected ? t('تم التحصيل') : t('لم يحصل')}
-                                </span>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                      {(!creditReport.orders || creditReport.orders.length === 0) && (
-                        <div className="text-center py-8 text-muted-foreground">
-                          <CreditCard className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                          <p>{t('لا توجد طلبات آجلة في هذه الفترة')}</p>
-                        </div>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
-                <div className="flex justify-end gap-2 mt-4">
-                  <Button variant="outline" onClick={handlePrintProductsReport} className="gap-2">
-                    <Printer className="h-4 w-4" />
-                    {t('طباعة التقرير')}
-                  </Button>
-                </div>
-              </div>
-            )}
+            <CreditReportTab
+              creditReport={creditReport}
+              t={t}
+              formatPrice={formatPrice}
+              fetchReports={fetchReports}
+              handlePrintCreditReport={handlePrintCreditReport}
+            />
           </TabsContent>
         {/* Smart Report (التقرير الذكي) */}
           <TabsContent value="smart">

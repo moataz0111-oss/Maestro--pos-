@@ -60,6 +60,7 @@ async def get_sales_report(
         "delivery_app": 1,
         "delivery_app_name": 1,
         "delivery_commission": 1,
+        "packaging_cost": 1,  # تكلفة التغليف
         "created_at": 1,
         "items": 1
     }
@@ -70,6 +71,8 @@ async def get_sales_report(
     
     total_sales = sum(o["total"] for o in orders)
     total_cost = sum(o.get("total_cost", 0) for o in orders)
+    total_packaging_cost = sum(o.get("packaging_cost", 0) for o in orders)  # إجمالي تكلفة التغليف
+    total_materials_cost = total_cost - total_packaging_cost  # تكلفة المواد بدون التغليف
     total_profit = sum(o.get("profit", 0) for o in orders)
     total_orders = len(orders)
     avg_order_value = total_sales / total_orders if total_orders > 0 else 0
@@ -106,10 +109,11 @@ async def get_sales_report(
         
         date = o["created_at"][:10]
         if date not in by_date:
-            by_date[date] = {"sales": 0, "orders": 0, "profit": 0}
+            by_date[date] = {"sales": 0, "orders": 0, "profit": 0, "packaging_cost": 0}
         by_date[date]["sales"] += o["total"]
         by_date[date]["orders"] += 1
         by_date[date]["profit"] += o.get("profit", 0)
+        by_date[date]["packaging_cost"] += o.get("packaging_cost", 0)
         
         for item in o.get("items", []):
             pid = item.get("name", "غير معروف")
@@ -125,6 +129,8 @@ async def get_sales_report(
     return {
         "total_sales": total_sales,
         "total_cost": total_cost,
+        "total_materials_cost": total_materials_cost,  # تكلفة المواد
+        "total_packaging_cost": total_packaging_cost,  # تكلفة التغليف
         "total_profit": total_profit,
         "profit_margin": (total_profit / total_sales * 100) if total_sales > 0 else 0,
         "total_orders": total_orders,
@@ -379,7 +385,7 @@ async def get_profit_loss_report(
             start_dt = datetime.fromisoformat(start_date)
             end_dt = datetime.fromisoformat(end_date)
             days_in_period = (end_dt - start_dt).days + 1
-        except:
+        except Exception:
             days_in_period = 30
     else:
         days_in_period = 30
@@ -480,6 +486,23 @@ async def get_delivery_credits_report(
     app_names = {app["id"]: app["name"] for app in delivery_apps_list}
     app_rates = {app["id"]: app["commission_rate"] for app in delivery_apps_list}
     
+    # جلب سجلات التحصيل للتوصيل
+    collections_query = {"collection_type": "delivery"}
+    if tenant_id:
+        collections_query["tenant_id"] = tenant_id
+    if start_date:
+        collections_query["date"] = {"$gte": start_date}
+    if end_date:
+        collections_query.setdefault("date", {})["$lte"] = end_date
+    
+    delivery_collections = await db.delivery_collections.find(collections_query, {"_id": 0}).to_list(1000)
+    
+    # حساب المبالغ المحصلة لكل شركة توصيل
+    collected_by_app = {}
+    for c in delivery_collections:
+        app_id = c.get("delivery_app_id")
+        collected_by_app[app_id] = collected_by_app.get(app_id, 0) + c.get("amount", 0)
+    
     by_app = {}
     for o in orders:
         app_id = o.get("delivery_app")
@@ -490,6 +513,7 @@ async def get_delivery_credits_report(
                 "id": app_id, "commission_rate": app_rates.get(app_id, 0),
                 "count": 0, "total": 0, "commission": 0, "net_amount": 0,
                 "paid_count": 0, "credit_count": 0, "paid_amount": 0, "credit_amount": 0,
+                "collected_amount": 0, "remaining_amount": 0,
                 "orders": []
             }
         
@@ -498,33 +522,46 @@ async def get_delivery_credits_report(
         by_app[app_name]["commission"] += o.get("delivery_commission", 0)
         by_app[app_name]["net_amount"] += o["total"] - o.get("delivery_commission", 0)
         
-        if o.get("payment_status") == "paid" or o.get("payment_method") != "credit":
+        # جميع طلبات التوصيل تعتبر آجلة حتى يتم تحصيلها
+        is_collected = o.get("delivery_collected", False)
+        if is_collected:
             by_app[app_name]["paid_count"] += 1
-            by_app[app_name]["paid_amount"] += o["total"]
+            by_app[app_name]["paid_amount"] += o["total"] - o.get("delivery_commission", 0)
         else:
             by_app[app_name]["credit_count"] += 1
-            by_app[app_name]["credit_amount"] += o["total"]
+            by_app[app_name]["credit_amount"] += o["total"] - o.get("delivery_commission", 0)
         
         by_app[app_name]["orders"].append({
+            "id": o.get("id"),
             "order_number": o["order_number"],
             "total": o["total"],
             "commission": o.get("delivery_commission", 0),
             "net": o["total"] - o.get("delivery_commission", 0),
-            "payment_status": o.get("payment_status", "pending"),
+            "delivery_collected": is_collected,
             "created_at": o["created_at"]
         })
     
+    # إضافة المبالغ المحصلة لكل شركة
+    for app_name, data in by_app.items():
+        app_id = data["id"]
+        data["collected_amount"] = collected_by_app.get(app_id, 0)
+        data["remaining_amount"] = data["net_amount"] - data["collected_amount"]
+    
     total_all = sum(o["total"] for o in orders)
     total_commission = sum(o.get("delivery_commission", 0) for o in orders)
-    total_credit = sum(o["total"] for o in orders if o.get("payment_method") == "credit")
+    total_net = total_all - total_commission
+    total_collected = sum(collected_by_app.values())
+    total_remaining = total_net - total_collected
     
     return {
-        "total_sales": total_all,
-        "total_credit": total_credit,
-        "total_commission": total_commission,
-        "net_receivable": total_all - total_commission,
+        "total_sales": total_all,  # إجمالي المبيعات قبل الاستقطاع
+        "total_commission": total_commission,  # العمولة المستقطعة
+        "net_receivable": total_net,  # صافي المستحق (بعد الاستقطاع)
+        "total_collected": total_collected,  # المبلغ المحصل
+        "total_remaining": total_remaining,  # المتبقي للتحصيل
         "total_orders": len(orders),
-        "by_delivery_app": by_app
+        "by_delivery_app": by_app,
+        "collections": delivery_collections
     }
 
 # ==================== PRODUCTS REPORT ====================
@@ -754,14 +791,238 @@ async def get_credit_report(
     
     orders = await db.orders.find(query, {"_id": 0}).to_list(500)
     
+    # جلب سجلات التحصيل لهذه الطلبات
+    order_ids = [o.get("id") for o in orders]
+    collections = await db.credit_collections.find(
+        {"order_id": {"$in": order_ids}}, {"_id": 0}
+    ).to_list(1000)
+    
+    # حساب المبالغ المحصلة لكل طلب
+    collected_by_order = {}
+    for c in collections:
+        order_id = c.get("order_id")
+        collected_by_order[order_id] = collected_by_order.get(order_id, 0) + c.get("amount", 0)
+    
+    # إضافة معلومات التحصيل لكل طلب
+    for o in orders:
+        o["collected_amount"] = collected_by_order.get(o.get("id"), 0)
+        o["remaining_amount"] = o.get("total", 0) - o["collected_amount"]
+        o["is_fully_collected"] = o["remaining_amount"] <= 0
+    
     total_credit = sum(o.get("total", 0) for o in orders)
-    collected = sum(o.get("total", 0) for o in orders if o.get("credit_collected"))
-    remaining = total_credit - collected
+    total_collected = sum(o.get("collected_amount", 0) for o in orders)
+    remaining = total_credit - total_collected
     
     return {
         "total_credit": total_credit,
         "total_orders": len(orders),
-        "collected_amount": collected,
+        "collected_amount": total_collected,
         "remaining_amount": remaining,
-        "orders": orders
+        "orders": orders,
+        "collections": collections
+    }
+
+# ==================== CREDIT COLLECTION (تحصيل الآجل) ====================
+from pydantic import BaseModel
+
+class CreditCollectionCreate(BaseModel):
+    order_id: str
+    amount: float
+    collected_by: str  # اسم المستلم
+    notes: Optional[str] = None
+
+@router.post("/credit/collect")
+async def collect_credit(
+    collection: CreditCollectionCreate,
+    current_user: dict = Depends(get_current_user)
+):
+    """تسجيل تحصيل مبلغ آجل"""
+    db = get_database()
+    tenant_id = get_user_tenant_id(current_user)
+    
+    # التحقق من وجود الطلب
+    order_query = {"id": collection.order_id}
+    if tenant_id:
+        order_query["tenant_id"] = tenant_id
+    
+    order = await db.orders.find_one(order_query)
+    if not order:
+        raise HTTPException(status_code=404, detail="الطلب غير موجود")
+    
+    # إنشاء سجل التحصيل
+    now = datetime.now(timezone.utc)
+    collection_record = {
+        "id": f"col_{now.strftime('%Y%m%d%H%M%S')}_{collection.order_id[-6:]}",
+        "order_id": collection.order_id,
+        "order_number": order.get("order_number"),
+        "amount": collection.amount,
+        "collected_by": collection.collected_by,
+        "collected_by_user_id": current_user.get("id"),
+        "collected_at": now.isoformat(),
+        "date": now.strftime("%Y-%m-%d"),
+        "time": now.strftime("%H:%M:%S"),
+        "notes": collection.notes,
+        "tenant_id": tenant_id,
+        "branch_id": order.get("branch_id"),
+        "customer_name": order.get("customer_name"),
+        "customer_phone": order.get("customer_phone"),
+        "collection_type": "credit"  # نوع التحصيل: credit أو delivery
+    }
+    
+    await db.credit_collections.insert_one(collection_record)
+    
+    # تحديث حالة الطلب إذا تم تحصيل المبلغ بالكامل
+    total_collected = await db.credit_collections.aggregate([
+        {"$match": {"order_id": collection.order_id}},
+        {"$group": {"_id": None, "total": {"$sum": "$amount"}}}
+    ]).to_list(1)
+    
+    total_collected_amount = total_collected[0]["total"] if total_collected else 0
+    
+    if total_collected_amount >= order.get("total", 0):
+        await db.orders.update_one(
+            {"id": collection.order_id},
+            {"$set": {"credit_collected": True, "credit_collected_at": now.isoformat()}}
+        )
+    
+    # حذف _id من السجل قبل الإرجاع
+    collection_record.pop("_id", None)
+    
+    return {
+        "message": "تم تسجيل التحصيل بنجاح",
+        "collection": collection_record,
+        "total_collected": total_collected_amount,
+        "remaining": order.get("total", 0) - total_collected_amount
+    }
+
+@router.get("/credit/collections")
+async def get_credit_collections(
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    order_id: Optional[str] = None,
+    branch_id: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """جلب سجلات التحصيل"""
+    db = get_database()
+    tenant_id = get_user_tenant_id(current_user)
+    
+    query = {}
+    if tenant_id:
+        query["tenant_id"] = tenant_id
+    
+    if order_id:
+        query["order_id"] = order_id
+    
+    user_branch_id = current_user.get("branch_id")
+    user_role = current_user.get("role")
+    
+    if user_branch_id and user_role not in [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.MANAGER]:
+        query["branch_id"] = user_branch_id
+    elif branch_id:
+        query["branch_id"] = branch_id
+    
+    if start_date:
+        query["date"] = {"$gte": start_date}
+    if end_date:
+        query.setdefault("date", {})["$lte"] = end_date
+    
+    collections = await db.credit_collections.find(query, {"_id": 0}).to_list(1000)
+    
+    return {
+        "collections": collections,
+        "total_collected": sum(c.get("amount", 0) for c in collections),
+        "count": len(collections)
+    }
+
+# ==================== DELIVERY COLLECTION (تحصيل التوصيل) ====================
+class DeliveryCollectionCreate(BaseModel):
+    delivery_app_id: str
+    delivery_app_name: str
+    amount: float
+    collected_by: str
+    notes: Optional[str] = None
+    order_ids: Optional[List[str]] = None  # قائمة الطلبات المحصلة (اختياري)
+
+@router.post("/delivery/collect")
+async def collect_delivery(
+    collection: DeliveryCollectionCreate,
+    current_user: dict = Depends(get_current_user)
+):
+    """تسجيل تحصيل من شركة توصيل"""
+    db = get_database()
+    tenant_id = get_user_tenant_id(current_user)
+    
+    now = datetime.now(timezone.utc)
+    collection_record = {
+        "id": f"del_{now.strftime('%Y%m%d%H%M%S')}",
+        "delivery_app_id": collection.delivery_app_id,
+        "delivery_app_name": collection.delivery_app_name,
+        "amount": collection.amount,
+        "collected_by": collection.collected_by,
+        "collected_by_user_id": current_user.get("id"),
+        "collected_at": now.isoformat(),
+        "date": now.strftime("%Y-%m-%d"),
+        "time": now.strftime("%H:%M:%S"),
+        "notes": collection.notes,
+        "order_ids": collection.order_ids or [],
+        "tenant_id": tenant_id,
+        "branch_id": current_user.get("branch_id"),
+        "collection_type": "delivery"
+    }
+    
+    await db.delivery_collections.insert_one(collection_record)
+    
+    # تحديث الطلبات كمحصلة إذا تم تحديدها
+    if collection.order_ids:
+        await db.orders.update_many(
+            {"id": {"$in": collection.order_ids}},
+            {"$set": {"delivery_collected": True, "delivery_collected_at": now.isoformat()}}
+        )
+    
+    collection_record.pop("_id", None)
+    
+    return {
+        "message": "تم تسجيل التحصيل بنجاح",
+        "collection": collection_record
+    }
+
+@router.get("/delivery/collections")
+async def get_delivery_collections(
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    delivery_app_id: Optional[str] = None,
+    branch_id: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """جلب سجلات تحصيل التوصيل"""
+    db = get_database()
+    tenant_id = get_user_tenant_id(current_user)
+    
+    query = {}
+    if tenant_id:
+        query["tenant_id"] = tenant_id
+    
+    if delivery_app_id:
+        query["delivery_app_id"] = delivery_app_id
+    
+    user_branch_id = current_user.get("branch_id")
+    user_role = current_user.get("role")
+    
+    if user_branch_id and user_role not in [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.MANAGER]:
+        query["branch_id"] = user_branch_id
+    elif branch_id:
+        query["branch_id"] = branch_id
+    
+    if start_date:
+        query["date"] = {"$gte": start_date}
+    if end_date:
+        query.setdefault("date", {})["$lte"] = end_date
+    
+    collections = await db.delivery_collections.find(query, {"_id": 0}).to_list(1000)
+    
+    return {
+        "collections": collections,
+        "total_collected": sum(c.get("amount", 0) for c in collections),
+        "count": len(collections)
     }

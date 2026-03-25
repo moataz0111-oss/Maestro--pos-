@@ -1627,7 +1627,13 @@ def hash_password(password: str) -> str:
     return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
 
 def verify_password(password: str, hashed: str) -> bool:
-    return bcrypt.checkpw(password.encode('utf-8'), hashed.encode('utf-8'))
+    try:
+        result = bcrypt.checkpw(password.encode('utf-8'), hashed.encode('utf-8'))
+        logger.info(f"Password verify result: {result}, hash prefix: {hashed[:20] if hashed else 'None'}")
+        return result
+    except Exception as e:
+        logger.error(f"Password verify error: {e}")
+        return False
 
 def create_token(user_id: str, role: str, branch_id: Optional[str] = None) -> str:
     payload = {
@@ -1907,11 +1913,14 @@ async def login(credentials: UserLogin):
     user = await db.users.find_one({"email": credentials.email}, {"_id": 0})
     
     if not user:
+        logger.warning(f"Login failed: User not found - {credentials.email}")
         raise HTTPException(status_code=401, detail="بيانات الدخول غير صحيحة")
     
     stored_hash = user.get("password_hash", user.get("password", ""))
+    logger.info(f"Login attempt for {credentials.email}, hash exists: {bool(stored_hash)}")
     
     if not verify_password(credentials.password, stored_hash):
+        logger.warning(f"Login failed: Password mismatch for {credentials.email}")
         raise HTTPException(status_code=401, detail="بيانات الدخول غير صحيحة")
     
     if not user.get("is_active", True):
