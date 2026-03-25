@@ -3548,6 +3548,9 @@ const translationMap = {
   'وزن القطعة (اختياري)': { en: 'Piece Weight (optional)', ku: 'کێشی پارچە (هەڵبژاردەیی)' },
   'مثال: القطعة = 100 غرام من اللحم': { en: 'Example: 1 piece = 100g of meat', ku: 'نموونە: پارچەیەک = ١٠٠ گرام گۆشت' },
   'القطعة': { en: 'Piece', ku: 'پارچە' },
+  'المكونات وكمياتها:': { en: 'Ingredients and quantities:', ku: 'پێکهاتە و بڕەکان:' },
+  'إجمالي تكلفة المواد:': { en: 'Total material cost:', ku: 'کۆی تێچووی کەرەستە:' },
+  'يُحسب تلقائياً من المكونات': { en: 'Calculated automatically from ingredients', ku: 'بە ئۆتۆماتیکی لە پێکهاتەکان دەژمێردرێت' },
 };
 
 // الحصول على اللغة الحالية

@@ -435,7 +435,7 @@ export default function Settings() {
   const [editCategoryForm, setEditCategoryForm] = useState(null);
   const [editCategoryDialogOpen, setEditCategoryDialogOpen] = useState(false);
   const [productForm, setProductForm] = useState({
-    name: '', name_en: '', category_id: '', price: '', cost: '', operating_cost: '', packaging_cost: '', image: '', description: '', barcode: '', manufactured_product_id: '', printer_ids: [], extras: []
+    name: '', name_en: '', category_id: '', price: '', cost: '', operating_cost: '', packaging_cost: '', image: '', description: '', barcode: '', manufactured_product_id: '', recipe_quantities: [], printer_ids: [], extras: []
   });
   const [editProductForm, setEditProductForm] = useState(null);
   const [newExtraForm, setNewExtraForm] = useState({ name: '', name_en: '', price: '', manufactured_product_id: '' });
@@ -1387,11 +1387,12 @@ export default function Settings() {
         operating_cost: parseFloat(productForm.operating_cost) || 0,
         packaging_cost: parseFloat(productForm.packaging_cost) || 0,
         manufactured_product_id: productForm.manufactured_product_id || null,
+        recipe_quantities: productForm.recipe_quantities || [],
         extras: productForm.extras || []
       });
       toast.success(t('تم إنشاء المنتج'));
       setProductDialogOpen(false);
-      setProductForm({ name: '', name_en: '', category_id: '', price: '', cost: '', operating_cost: '', packaging_cost: '', image: '', description: '', barcode: '', manufactured_product_id: '', printer_ids: [], extras: [] });
+      setProductForm({ name: '', name_en: '', category_id: '', price: '', cost: '', operating_cost: '', packaging_cost: '', image: '', description: '', barcode: '', manufactured_product_id: '', recipe_quantities: [], printer_ids: [], extras: [] });
       setNewExtraForm({ name: '', name_en: '', price: '', manufactured_product_id: '' });
       fetchData();
     } catch (error) {
@@ -1400,6 +1401,21 @@ export default function Settings() {
   };
 
   const handleEditProduct = (p) => {
+    // تحميل مكونات الوصفة إذا كان المنتج مرتبط بمنتج مصنع
+    let recipeQuantities = p.recipe_quantities || [];
+    if (p.manufactured_product_id && recipeQuantities.length === 0) {
+      const mfgProduct = manufacturedProducts.find(mp => mp.id === p.manufactured_product_id);
+      if (mfgProduct && mfgProduct.recipe) {
+        recipeQuantities = mfgProduct.recipe.map(ing => ({
+          raw_material_id: ing.raw_material_id,
+          raw_material_name: ing.raw_material_name,
+          quantity: ing.quantity || 0,
+          unit: ing.unit,
+          cost_per_unit: ing.cost_per_unit || 0
+        }));
+      }
+    }
+    
     setEditProductForm({
       id: p.id,
       name: p.name,
@@ -1414,6 +1430,7 @@ export default function Settings() {
       barcode: p.barcode || '',
       is_available: p.is_available !== false,
       manufactured_product_id: p.manufactured_product_id || '',
+      recipe_quantities: recipeQuantities,
       extras: p.extras || [],
       printer_ids: p.printer_ids || []
     });
@@ -1430,6 +1447,7 @@ export default function Settings() {
         operating_cost: parseFloat(editProductForm.operating_cost) || 0,
         packaging_cost: parseFloat(editProductForm.packaging_cost) || 0,
         manufactured_product_id: editProductForm.manufactured_product_id || null,
+        recipe_quantities: editProductForm.recipe_quantities || [],
         extras: editProductForm.extras || []
       });
       toast.success(t('تم تحديث المنتج'));
@@ -3431,7 +3449,12 @@ export default function Settings() {
                               onChange={(e) => setProductForm({ ...productForm, cost: e.target.value })}
                               placeholder="2000"
                               className="mt-1"
+                              readOnly={!!productForm.manufactured_product_id}
+                              style={productForm.manufactured_product_id ? { backgroundColor: 'rgba(139, 92, 246, 0.1)', cursor: 'not-allowed' } : {}}
                             />
+                            {productForm.manufactured_product_id && (
+                              <p className="text-xs text-purple-400 mt-1">{t('يُحسب تلقائياً من المكونات')}</p>
+                            )}
                           </div>
                           <div>
                             <Label className="text-foreground text-xs">{t('تكلفة التغليف')}</Label>
@@ -3453,7 +3476,27 @@ export default function Settings() {
                             <>
                               <Select 
                                 value={productForm.manufactured_product_id || 'none'} 
-                                onValueChange={(v) => setProductForm({ ...productForm, manufactured_product_id: v === 'none' ? null : v })}
+                                onValueChange={(v) => {
+                                  const selectedProduct = manufacturedProducts.find(mp => mp.id === v);
+                                  if (v === 'none' || !selectedProduct) {
+                                    setProductForm({ ...productForm, manufactured_product_id: null, recipe_quantities: [], cost: '' });
+                                  } else {
+                                    // إنشاء قائمة المكونات مع كميات افتراضية
+                                    const recipeQtys = (selectedProduct.recipe || []).map(ing => ({
+                                      raw_material_id: ing.raw_material_id,
+                                      raw_material_name: ing.raw_material_name,
+                                      quantity: ing.quantity || 0,
+                                      unit: ing.unit,
+                                      cost_per_unit: ing.cost_per_unit || 0
+                                    }));
+                                    setProductForm({ 
+                                      ...productForm, 
+                                      manufactured_product_id: v,
+                                      recipe_quantities: recipeQtys,
+                                      cost: recipeQtys.reduce((sum, ing) => sum + (ing.quantity * ing.cost_per_unit), 0).toFixed(0)
+                                    });
+                                  }
+                                }}
                               >
                                 <SelectTrigger className="mt-2">
                                   <SelectValue placeholder={t('اختر المنتج المصنع (اختياري)')} />
@@ -3463,11 +3506,52 @@ export default function Settings() {
                                   {manufacturedProducts.map(mp => (
                                     <SelectItem key={mp.id} value={mp.id}>
                                       {mp.name} ({mp.quantity} {mp.unit})
+                                      {mp.piece_weight && ` - ${t('القطعة')}: ${mp.piece_weight} ${mp.piece_weight_unit || 'غرام'}`}
                                     </SelectItem>
                                   ))}
                                 </SelectContent>
                               </Select>
-                              <p className="text-xs text-muted-foreground mt-2">{t('عند ربط المنتج، سيتم خصم الكمية تلقائياً من مخزون الفرع عند البيع')}</p>
+                              
+                              {/* عرض مكونات الوصفة للتعديل */}
+                              {productForm.manufactured_product_id && productForm.recipe_quantities?.length > 0 && (
+                                <div className="mt-3 space-y-2 p-3 bg-background/50 rounded-lg border">
+                                  <p className="text-sm font-medium text-purple-400 mb-2">{t('المكونات وكمياتها:')}</p>
+                                  {productForm.recipe_quantities.map((ing, idx) => (
+                                    <div key={idx} className="flex items-center gap-2">
+                                      <span className="flex-1 text-sm">{ing.raw_material_name}</span>
+                                      <Input
+                                        type="number"
+                                        min="0"
+                                        step="0.1"
+                                        value={ing.quantity}
+                                        onChange={(e) => {
+                                          const newRecipe = [...productForm.recipe_quantities];
+                                          newRecipe[idx].quantity = parseFloat(e.target.value) || 0;
+                                          const newCost = newRecipe.reduce((sum, i) => sum + (i.quantity * i.cost_per_unit), 0);
+                                          setProductForm({ 
+                                            ...productForm, 
+                                            recipe_quantities: newRecipe,
+                                            cost: newCost.toFixed(0)
+                                          });
+                                        }}
+                                        className="w-20 h-8 text-center"
+                                      />
+                                      <span className="text-xs text-muted-foreground w-16">{ing.unit}</span>
+                                      <span className="text-xs text-green-500 w-20 text-left">
+                                        {formatPrice(ing.quantity * ing.cost_per_unit)}
+                                      </span>
+                                    </div>
+                                  ))}
+                                  <div className="flex items-center justify-between pt-2 border-t mt-2">
+                                    <span className="text-sm font-medium">{t('إجمالي تكلفة المواد:')}</span>
+                                    <span className="text-sm font-bold text-primary">
+                                      {formatPrice(productForm.recipe_quantities.reduce((sum, i) => sum + (i.quantity * i.cost_per_unit), 0))}
+                                    </span>
+                                  </div>
+                                </div>
+                              )}
+                              
+                              <p className="text-xs text-muted-foreground mt-2">{t('عند ربط المنتج، سيتم خصم المكونات تلقائياً من المخزون عند البيع')}</p>
                             </>
                           ) : (
                             <p className="text-xs text-amber-600 mt-2 bg-amber-500/10 p-2 rounded">{t('لا توجد منتجات مصنعة حالياً. أضف منتجات من قسم المخزن والتصنيع أولاً')}</p>
@@ -3781,7 +3865,12 @@ export default function Settings() {
                             value={editProductForm.cost}
                             onChange={(e) => setEditProductForm({ ...editProductForm, cost: e.target.value })}
                             className="mt-1"
+                            readOnly={!!editProductForm.manufactured_product_id}
+                            style={editProductForm.manufactured_product_id ? { backgroundColor: 'rgba(139, 92, 246, 0.1)', cursor: 'not-allowed' } : {}}
                           />
+                          {editProductForm.manufactured_product_id && (
+                            <p className="text-xs text-purple-400 mt-1">{t('يُحسب تلقائياً من المكونات')}</p>
+                          )}
                         </div>
                         <div>
                           <Label className="text-foreground text-xs">{t('تكلفة التغليف')}</Label>
@@ -3810,7 +3899,31 @@ export default function Settings() {
                           <>
                             <Select 
                               value={editProductForm.manufactured_product_id || 'none'} 
-                              onValueChange={(v) => setEditProductForm({ ...editProductForm, manufactured_product_id: v === 'none' ? null : v })}
+                              onValueChange={(v) => {
+                                const selectedProduct = manufacturedProducts.find(mp => mp.id === v);
+                                if (v === 'none' || !selectedProduct) {
+                                  setEditProductForm({ ...editProductForm, manufactured_product_id: null, recipe_quantities: [] });
+                                } else {
+                                  // إنشاء قائمة المكونات مع كميات افتراضية أو استخدام الموجودة
+                                  const existingRecipe = editProductForm.recipe_quantities || [];
+                                  const recipeQtys = (selectedProduct.recipe || []).map(ing => {
+                                    const existing = existingRecipe.find(e => e.raw_material_id === ing.raw_material_id);
+                                    return {
+                                      raw_material_id: ing.raw_material_id,
+                                      raw_material_name: ing.raw_material_name,
+                                      quantity: existing ? existing.quantity : (ing.quantity || 0),
+                                      unit: ing.unit,
+                                      cost_per_unit: ing.cost_per_unit || 0
+                                    };
+                                  });
+                                  setEditProductForm({ 
+                                    ...editProductForm, 
+                                    manufactured_product_id: v,
+                                    recipe_quantities: recipeQtys,
+                                    cost: recipeQtys.reduce((sum, ing) => sum + (ing.quantity * ing.cost_per_unit), 0).toFixed(0)
+                                  });
+                                }
+                              }}
                             >
                               <SelectTrigger className="mt-2">
                                 <SelectValue placeholder={t('اختر المنتج المصنع (اختياري)')} />
@@ -3820,10 +3933,51 @@ export default function Settings() {
                                 {manufacturedProducts.map(mp => (
                                   <SelectItem key={mp.id} value={mp.id}>
                                     {mp.name} ({mp.quantity} {mp.unit})
+                                    {mp.piece_weight && ` - ${t('القطعة')}: ${mp.piece_weight} ${mp.piece_weight_unit || 'غرام'}`}
                                   </SelectItem>
                                 ))}
                               </SelectContent>
                             </Select>
+                            
+                            {/* عرض مكونات الوصفة للتعديل */}
+                            {editProductForm.manufactured_product_id && editProductForm.recipe_quantities?.length > 0 && (
+                              <div className="mt-3 space-y-2 p-3 bg-background/50 rounded-lg border">
+                                <p className="text-sm font-medium text-purple-400 mb-2">{t('المكونات وكمياتها:')}</p>
+                                {editProductForm.recipe_quantities.map((ing, idx) => (
+                                  <div key={idx} className="flex items-center gap-2">
+                                    <span className="flex-1 text-sm">{ing.raw_material_name}</span>
+                                    <Input
+                                      type="number"
+                                      min="0"
+                                      step="0.1"
+                                      value={ing.quantity}
+                                      onChange={(e) => {
+                                        const newRecipe = [...editProductForm.recipe_quantities];
+                                        newRecipe[idx].quantity = parseFloat(e.target.value) || 0;
+                                        const newCost = newRecipe.reduce((sum, i) => sum + (i.quantity * i.cost_per_unit), 0);
+                                        setEditProductForm({ 
+                                          ...editProductForm, 
+                                          recipe_quantities: newRecipe,
+                                          cost: newCost.toFixed(0)
+                                        });
+                                      }}
+                                      className="w-20 h-8 text-center"
+                                    />
+                                    <span className="text-xs text-muted-foreground w-16">{ing.unit}</span>
+                                    <span className="text-xs text-green-500 w-20 text-left">
+                                      {formatPrice(ing.quantity * ing.cost_per_unit)}
+                                    </span>
+                                  </div>
+                                ))}
+                                <div className="flex items-center justify-between pt-2 border-t mt-2">
+                                  <span className="text-sm font-medium">{t('إجمالي تكلفة المواد:')}</span>
+                                  <span className="text-sm font-bold text-primary">
+                                    {formatPrice(editProductForm.recipe_quantities.reduce((sum, i) => sum + (i.quantity * i.cost_per_unit), 0))}
+                                  </span>
+                                </div>
+                              </div>
+                            )}
+                            
                             <p className="text-xs text-muted-foreground mt-2">{t('عند ربط المنتج، سيتم خصم المكونات تلقائياً من المخزون عند البيع')}</p>
                           </>
                         ) : (
