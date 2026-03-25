@@ -75,6 +75,7 @@ export default function WarehouseManufacturing() {
   const [warehouseTransactions, setWarehouseTransactions] = useState([]);
   const [branches, setBranches] = useState([]);
   const [stats, setStats] = useState(null);
+  const [branchRequests, setBranchRequests] = useState([]);  // طلبات الفروع
   
   // Dialog states
   const [showAddRawMaterial, setShowAddRawMaterial] = useState(false);
@@ -143,7 +144,8 @@ export default function WarehouseManufacturing() {
         transfersRes, 
         transactionsRes,
         statsRes,
-        branchesRes
+        branchesRes,
+        requestsRes
       ] = await Promise.all([
         axios.get(`${API}/raw-materials-new`, { headers }).catch(() => ({ data: [] })),
         axios.get(`${API}/manufacturing-inventory`, { headers }).catch(() => ({ data: [] })),
@@ -151,7 +153,8 @@ export default function WarehouseManufacturing() {
         axios.get(`${API}/inventory-transfers`, { headers }).catch(() => ({ data: [] })),
         axios.get(`${API}/inventory-transactions`, { headers }).catch(() => ({ data: [] })),
         axios.get(`${API}/inventory-stats`, { headers }).catch(() => ({ data: null })),
-        axios.get(`${API}/branches`, { headers }).catch(() => ({ data: [] }))
+        axios.get(`${API}/branches`, { headers }).catch(() => ({ data: [] })),
+        axios.get(`${API}/branch-requests`, { headers }).catch(() => ({ data: [] }))
       ]);
       
       setRawMaterials(rawRes.data || []);
@@ -161,6 +164,7 @@ export default function WarehouseManufacturing() {
       setWarehouseTransactions(transactionsRes.data || []);
       setStats(statsRes.data);
       setBranches(branchesRes.data || []);
+      setBranchRequests(requestsRes.data || []);
     } catch (error) {
       console.error('Error fetching data:', error);
     } finally {
@@ -349,6 +353,27 @@ export default function WarehouseManufacturing() {
       setSubmitting(false);
     }
   };
+  
+  // تنفيذ طلب فرع
+  const handleFulfillRequest = async (requestId) => {
+    try {
+      setSubmitting(true);
+      await axios.post(`${API}/branch-requests/${requestId}/fulfill`, {}, { headers });
+      toast.success(t('تم تنفيذ الطلب وتحويل المنتجات للفرع'));
+      fetchData();
+    } catch (error) {
+      const detail = error.response?.data?.detail;
+      if (typeof detail === 'object' && detail.insufficient_products) {
+        const products = detail.insufficient_products.map(p => `${p.name}: طلب ${p.requested} متوفر ${p.available}`).join('\n');
+        toast.error(`${t('كمية غير كافية')}\n${products}`);
+      } else {
+        toast.error(detail || t('فشل في تنفيذ الطلب'));
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  };
+  
   // إضافة مكون للوصفة
   const addIngredientToRecipe = () => {
     if (!newIngredient.raw_material_id || newIngredient.quantity <= 0) {
@@ -593,7 +618,7 @@ export default function WarehouseManufacturing() {
         )}
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid grid-cols-4 w-full max-w-2xl">
+          <TabsList className="grid grid-cols-5 w-full max-w-3xl">
             <TabsTrigger value="warehouse" className="gap-2" data-testid="tab-warehouse">
               <Warehouse className="h-4 w-4" />
               {t('المخزن')}
@@ -601,6 +626,15 @@ export default function WarehouseManufacturing() {
             <TabsTrigger value="manufacturing" className="gap-2" data-testid="tab-manufacturing">
               <Factory className="h-4 w-4" />
               {t('التصنيع')}
+            </TabsTrigger>
+            <TabsTrigger value="branch-requests" className="gap-2 relative" data-testid="tab-branch-requests">
+              <Building2 className="h-4 w-4" />
+              {t('طلبات الفروع')}
+              {branchRequests.filter(r => r.status === 'pending').length > 0 && (
+                <Badge className="absolute -top-2 -right-2 bg-red-500 text-white text-xs px-1.5 py-0.5 rounded-full">
+                  {branchRequests.filter(r => r.status === 'pending').length}
+                </Badge>
+              )}
             </TabsTrigger>
             <TabsTrigger value="transactions" className="gap-2" data-testid="tab-transactions">
               <ArrowUpCircle className="h-4 w-4" />
@@ -898,6 +932,133 @@ export default function WarehouseManufacturing() {
               </CardContent>
             </Card>
           </TabsContent>
+          
+          {/* طلبات الفروع */}
+          <TabsContent value="branch-requests" className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Building2 className="h-5 w-5 text-primary" />
+                  {t('طلبات الفروع الواردة')}
+                  {branchRequests.filter(r => r.status === 'pending').length > 0 && (
+                    <Badge className="bg-red-500">{branchRequests.filter(r => r.status === 'pending').length} {t('جديد')}</Badge>
+                  )}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {branchRequests.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <Building2 className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                    <p>{t('لا توجد طلبات من الفروع')}</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {branchRequests.map(request => (
+                      <div key={request.id} className={`p-4 border rounded-lg ${request.status === 'pending' ? 'border-orange-500 bg-orange-500/5' : ''}`}>
+                        <div className="flex items-start justify-between mb-3">
+                          <div>
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="font-bold text-lg">{t('طلب')} #{request.request_number}</span>
+                              <Badge className={
+                                request.status === 'pending' ? 'bg-orange-500/20 text-orange-500' :
+                                request.status === 'approved' ? 'bg-blue-500/20 text-blue-500' :
+                                request.status === 'processing' ? 'bg-purple-500/20 text-purple-500' :
+                                request.status === 'shipped' ? 'bg-cyan-500/20 text-cyan-500' :
+                                request.status === 'delivered' ? 'bg-green-500/20 text-green-500' :
+                                'bg-red-500/20 text-red-500'
+                              }>
+                                {request.status === 'pending' ? t('جديد - بانتظار التنفيذ') :
+                                 request.status === 'approved' ? t('موافق عليه') :
+                                 request.status === 'processing' ? t('قيد التجهيز') :
+                                 request.status === 'shipped' ? t('تم الشحن') :
+                                 request.status === 'delivered' ? t('تم التسليم') :
+                                 request.status === 'cancelled' ? t('ملغي') : request.status}
+                              </Badge>
+                              {request.priority === 'urgent' && (
+                                <Badge className="bg-red-500">{t('مستعجل')}</Badge>
+                              )}
+                            </div>
+                            <p className="text-sm text-muted-foreground flex items-center gap-2">
+                              <Building2 className="h-4 w-4" />
+                              {t('إلى')}: <span className="font-medium text-foreground">{request.to_branch_name}</span>
+                            </p>
+                            {request.requested_by_name && (
+                              <p className="text-sm text-muted-foreground">
+                                {t('طلب بواسطة')}: <span className="font-medium">{request.requested_by_name}</span>
+                              </p>
+                            )}
+                          </div>
+                          <div className="text-left">
+                            <p className="text-xs text-muted-foreground">
+                              {new Date(request.created_at).toLocaleDateString('ar-EG', {
+                                year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+                              })}
+                            </p>
+                          </div>
+                        </div>
+                        
+                        {/* المنتجات المطلوبة */}
+                        <div className="bg-muted/30 rounded-lg p-3 mb-3">
+                          <p className="text-sm font-medium mb-2">{t('المنتجات المطلوبة')}:</p>
+                          <div className="space-y-2">
+                            {request.items?.map((item, idx) => (
+                              <div key={idx} className="flex items-center justify-between text-sm">
+                                <span>{item.product_name}</span>
+                                <div className="flex items-center gap-2">
+                                  <Badge variant="outline">{item.quantity} {item.unit}</Badge>
+                                  <span className={item.available_quantity >= item.quantity ? 'text-green-500' : 'text-red-500'}>
+                                    ({t('متوفر')}: {item.available_quantity || 0})
+                                  </span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                          <div className="mt-2 pt-2 border-t flex justify-between">
+                            <span className="font-medium">{t('إجمالي التكلفة')}:</span>
+                            <span className="font-bold text-primary">{formatPrice(request.total_cost || 0)}</span>
+                          </div>
+                        </div>
+                        
+                        {request.notes && (
+                          <p className="text-sm text-muted-foreground mb-3 p-2 bg-yellow-500/10 rounded">
+                            <strong>{t('ملاحظات')}:</strong> {request.notes}
+                          </p>
+                        )}
+                        
+                        {/* أزرار الإجراءات */}
+                        {(request.status === 'pending' || request.status === 'approved' || request.status === 'processing') && (
+                          <div className="flex items-center gap-2">
+                            <Button
+                              size="sm"
+                              className="bg-green-600 hover:bg-green-700"
+                              onClick={() => handleFulfillRequest(request.id)}
+                              disabled={submitting}
+                            >
+                              <CheckCircle className="h-4 w-4 mr-1" />
+                              {t('تنفيذ وتحويل للفرع')}
+                            </Button>
+                          </div>
+                        )}
+                        
+                        {request.status === 'delivered' && (
+                          <div className="flex items-center gap-2 text-green-500">
+                            <CheckCircle className="h-5 w-5" />
+                            <span className="font-medium">{t('تم التسليم')}</span>
+                            {request.delivered_at && (
+                              <span className="text-sm text-muted-foreground">
+                                - {new Date(request.delivered_at).toLocaleDateString('ar-EG')}
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+          
           {/* التحويلات */}
           <TabsContent value="transfers" className="space-y-4">
             <Card>

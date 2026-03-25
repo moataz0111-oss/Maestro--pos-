@@ -84,13 +84,13 @@ export default function BranchOrders() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [ordersRes, branchesRes, productsRes] = await Promise.all([
-        axios.get(`${API}/branch-orders-new`, { headers }).catch(() => ({ data: [] })),
+      const [requestsRes, branchesRes, productsRes] = await Promise.all([
+        axios.get(`${API}/branch-requests`, { headers }).catch(() => ({ data: [] })),
         axios.get(`${API}/branches`, { headers }).catch(() => ({ data: [] })),
         axios.get(`${API}/manufactured-products`, { headers }).catch(() => ({ data: [] }))
       ]);
       
-      setOrders(ordersRes.data || []);
+      setOrders(requestsRes.data || []);
       setBranches(branchesRes.data || []);
       setManufacturedProducts(productsRes.data || []);
       
@@ -156,19 +156,24 @@ export default function BranchOrders() {
       return;
     }
     
+    // جلب معلومات المستخدم
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    
     setSubmitting(true);
     try {
-      await axios.post(`${API}/branch-orders-new`, {
+      await axios.post(`${API}/branch-requests`, {
         to_branch_id: form.to_branch_id,
         items: form.items.map(i => ({
           product_id: i.product_id,
           quantity: i.quantity
         })),
         priority: form.priority,
-        notes: form.notes
+        notes: form.notes,
+        requested_by: user.id || '',
+        requested_by_name: user.name || user.full_name || user.email || ''
       }, { headers });
       
-      toast.success(t('تم إنشاء الطلب بنجاح'));
+      toast.success(t('تم إرسال الطلب للتصنيع'));
       setShowAddDialog(false);
       setForm({
         to_branch_id: '',
@@ -190,7 +195,7 @@ export default function BranchOrders() {
   };
   const handleUpdateStatus = async (orderId, status) => {
     try {
-      await axios.patch(`${API}/branch-orders-new/${orderId}/status?status=${status}`, {}, { headers });
+      await axios.put(`${API}/branch-requests/${orderId}/status`, { status }, { headers });
       toast.success(t('تم تحديث الحالة'));
       fetchData();
     } catch (error) {

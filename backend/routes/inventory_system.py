@@ -870,7 +870,230 @@ async def create_warehouse_transfer(transfer_data: dict):
     del transfer_doc["_id"]
     return transfer_doc
 
-@router.get("/warehouse-transactions")
+# ==================== BRANCH REQUESTS (طلبات الفروع من التصنيع) ====================
+
+@router.post("/branch-requests")
+async def create_branch_request(request_data: dict):
+    """إنشاء طلب فرع من التصنيع"""
+    db = get_db()
+    
+    to_branch_id = request_data.get("to_branch_id")
+    items = request_data.get("items", [])
+    priority = request_data.get("priority", "normal")
+    notes = request_data.get("notes", "")
+    requested_by = request_data.get("requested_by", "")
+    requested_by_name = request_data.get("requested_by_name", "")
+    
+    if not to_branch_id:
+        raise HTTPException(status_code=400, detail="يجب تحديد الفرع")
+    
+    if not items:
+        raise HTTPException(status_code=400, detail="يجب إضافة منتجات للطلب")
+    
+    # جلب معلومات الفرع
+    branch = await db.branches.find_one({"id": to_branch_id}, {"_id": 0})
+    if not branch:
+        raise HTTPException(status_code=404, detail="الفرع غير موجود")
+    
+    # رقم تسلسلي
+    last_request = await db.branch_requests.find_one(sort=[("request_number", -1)])
+    request_number = (last_request.get("request_number", 0) if last_request else 0) + 1
+    
+    # تفاصيل المنتجات
+    items_with_details = []
+    total_cost = 0
+    
+    for item in items:
+        product_id = item.get("product_id")
+        quantity = item.get("quantity", 0)
+        
+        # جلب المنتج المصنع
+        product = await db.manufactured_products.find_one({"id": product_id}, {"_id": 0})
+        if product:
+            cost = product.get("raw_material_cost", 0) * quantity
+            total_cost += cost
+            items_with_details.append({
+                "product_id": product_id,
+                "product_name": product.get("name"),
+                "quantity": quantity,
+                "unit": product.get("unit", "قطعة"),
+                "cost_per_unit": product.get("raw_material_cost", 0),
+                "total_cost": cost,
+                "available_quantity": product.get("quantity", 0)
+            })
+    
+    # إنشاء سجل الطلب
+    request_doc = {
+        "id": str(uuid.uuid4()),
+        "request_number": request_number,
+        "to_branch_id": to_branch_id,
+        "to_branch_name": branch.get("name"),
+        "items": items_with_details,
+        "total_cost": total_cost,
+        "status": "pending",  # pending, approved, processing, shipped, delivered, cancelled
+        "priority": priority,
+        "notes": notes,
+        "requested_by": requested_by,
+        "requested_by_name": requested_by_name,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "approved_at": None,
+        "shipped_at": None,
+        "delivered_at": None
+    }
+    
+    await db.branch_requests.insert_one(request_doc)
+    del request_doc["_id"]
+    return request_doc
+
+@router.get("/branch-requests")
+async def get_branch_requests(status: Optional[str] = None, branch_id: Optional[str] = None):
+    """جلب طلبات الفروع"""
+    db = get_db()
+    
+    query = {}
+    if status:
+        query["status"] = status
+    if branch_id:
+        query["to_branch_id"] = branch_id
+    
+    requests = await db.branch_requests.find(query, {"_id": 0}).sort("created_at", -1).to_list(1000)
+    return requests
+
+@router.put("/branch-requests/{request_id}/status")
+async def update_branch_request_status(request_id: str, status_data: dict):
+    """تحديث حالة طلب الفرع"""
+    db = get_db()
+    
+    new_status = status_data.get("status")
+    valid_statuses = ["pending", "approved", "processing", "shipped", "delivered", "cancelled"]
+    
+    if new_status not in valid_statuses:
+        raise HTTPException(status_code=400, detail="حالة غير صالحة")
+    
+    update_data = {"status": new_status}
+    
+    if new_status == "approved":
+        update_data["approved_at"] = datetime.now(timezone.utc).isoformat()
+    elif new_status == "shipped":
+        update_data["shipped_at"] = datetime.now(timezone.utc).isoformat()
+    elif new_status == "delivered":
+        update_data["delivered_at"] = datetime.now(timezone.utc).isoformat()
+    
+    result = await db.branch_requests.update_one(
+        {"id": request_id},
+        {"$set": update_data}
+    )
+    
+    if result.modified_count == 0:
+        raise HTTPException(status_code=404, detail="الطلب غير موجود")
+    
+    return {"message": "تم تحديث الحالة", "status": new_status}
+
+@router.post("/branch-requests/{request_id}/fulfill")
+async def fulfill_branch_request(request_id: str):
+    """تنفيذ طلب الفرع (تحويل المنتجات)"""
+    db = get_db()
+    
+    # جلب الطلب
+    request = await db.branch_requests.find_one({"id": request_id}, {"_id": 0})
+    if not request:
+        raise HTTPException(status_code=404, detail="الطلب غير موجود")
+    
+    if request.get("status") not in ["pending", "approved", "processing"]:
+        raise HTTPException(status_code=400, detail="لا يمكن تنفيذ هذا الطلب")
+    
+    # التحقق من توفر الكميات
+    insufficient = []
+    for item in request.get("items", []):
+        product = await db.manufactured_products.find_one({"id": item.get("product_id")}, {"_id": 0})
+        if not product or product.get("quantity", 0) < item.get("quantity", 0):
+            insufficient.append({
+                "name": item.get("product_name"),
+                "requested": item.get("quantity"),
+                "available": product.get("quantity", 0) if product else 0
+            })
+    
+    if insufficient:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "message": "كمية غير كافية في مخزون التصنيع",
+                "insufficient_products": insufficient
+            }
+        )
+    
+    # تنفيذ التحويل
+    to_branch_id = request.get("to_branch_id")
+    branch = await db.branches.find_one({"id": to_branch_id}, {"_id": 0})
+    
+    for item in request.get("items", []):
+        product_id = item.get("product_id")
+        quantity = item.get("quantity")
+        
+        # خصم من المنتجات المصنعة
+        await db.manufactured_products.update_one(
+            {"id": product_id},
+            {
+                "$inc": {"quantity": -quantity},
+                "$set": {"last_updated": datetime.now(timezone.utc).isoformat()}
+            }
+        )
+        
+        # إضافة لمخزون الفرع
+        existing = await db.branch_inventory.find_one({
+            "branch_id": to_branch_id,
+            "product_id": product_id
+        })
+        
+        if existing:
+            await db.branch_inventory.update_one(
+                {"id": existing["id"]},
+                {
+                    "$inc": {
+                        "quantity": quantity,
+                        "received_quantity": quantity
+                    },
+                    "$set": {"last_updated": datetime.now(timezone.utc).isoformat()}
+                }
+            )
+        else:
+            await db.branch_inventory.insert_one({
+                "id": str(uuid.uuid4()),
+                "branch_id": to_branch_id,
+                "product_id": product_id,
+                "product_name": item.get("product_name"),
+                "quantity": quantity,
+                "received_quantity": quantity,
+                "sold_quantity": 0,
+                "unit": item.get("unit", "قطعة"),
+                "cost_per_unit": item.get("cost_per_unit", 0),
+                "last_updated": datetime.now(timezone.utc).isoformat(),
+                "created_at": datetime.now(timezone.utc).isoformat()
+            })
+    
+    # تحديث حالة الطلب
+    await db.branch_requests.update_one(
+        {"id": request_id},
+        {"$set": {
+            "status": "delivered",
+            "shipped_at": datetime.now(timezone.utc).isoformat(),
+            "delivered_at": datetime.now(timezone.utc).isoformat()
+        }}
+    )
+    
+    # تسجيل الحركة
+    await db.inventory_movements.insert_one({
+        "id": str(uuid.uuid4()),
+        "type": "branch_request_fulfilled",
+        "request_id": request_id,
+        "from_location": "manufacturing",
+        "to_location": to_branch_id,
+        "to_location_name": branch.get("name") if branch else "",
+        "items": request.get("items", []),
+        "created_at": datetime.now(timezone.utc).isoformat()
+    })
+    
+    return {"message": "تم تنفيذ الطلب بنجاح", "request_id": request_id}
 async def get_warehouse_transactions(type: Optional[str] = None):
     """جلب حركات المخزن (واردات/صادرات)"""
     db = get_db()
