@@ -125,6 +125,29 @@
 
 ---
 
+### Manufacturing to Warehouse Requests Feature ✅ (Added - March 25, 2026)
+**الميزة الجديدة**: نظام طلبات المواد الخام من التصنيع إلى المخزن.
+
+**الوصف**:
+- قسم التصنيع يمكنه طلب مواد خام من المخزن
+- المخزن يرى الطلبات الواردة في تاب "طلبات التصنيع"
+- أمين المخزن يمكنه تنفيذ الطلب (تحويل المواد) أو رفضه
+
+**الـ APIs**:
+- `POST /api/manufacturing-requests` - إنشاء طلب جديد
+- `GET /api/manufacturing-requests` - جلب جميع الطلبات
+- `POST /api/manufacturing-requests/{id}/fulfill` - تنفيذ الطلب وتحويل المواد
+- `PATCH /api/manufacturing-requests/{id}/status?status=rejected` - رفض الطلب
+
+**الملفات المعدلة**:
+- `/app/backend/routes/inventory_system.py`
+- `/app/frontend/src/pages/WarehouseManufacturing.js`
+- `/app/frontend/src/utils/autoTranslate.js`
+
+**حالة الاختبار**: ✅ 14/14 اختبارات ناجحة (iteration_122)
+
+---
+
 ### Waste Percentage Feature ✅ (Added - March 25, 2026)
 **الميزة الجديدة**: إضافة حقل "نسبة الهدر" للمواد الخام في المخزون.
 
