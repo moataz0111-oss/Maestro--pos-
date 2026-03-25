@@ -1703,7 +1703,11 @@ export default function Settings() {
       cashier: t('كاشير'),
       captain: t('كابتن'),
       delivery: t('سائق توصيل'),
-      call_center: t('كول سنتر')
+      call_center: t('كول سنتر'),
+      warehouse_keeper: t('أمين مخزن'),
+      manufacturer: t('مصنّع'),
+      purchasing: t('مسؤول مشتريات'),
+      kitchen: t('مطبخ')
     };
     return roles[role] || role;
   };
@@ -2448,6 +2452,9 @@ export default function Settings() {
                                       <SelectItem value="captain">{t('كابتن')}</SelectItem>
                                       <SelectItem value="kitchen">{t('مطبخ')}</SelectItem>
                                       <SelectItem value="call_center">{t('كول سنتر')}</SelectItem>
+                                      <SelectItem value="warehouse_keeper">{t('أمين مخزن')}</SelectItem>
+                                      <SelectItem value="manufacturer">{t('مصنّع')}</SelectItem>
+                                      <SelectItem value="purchasing">{t('مسؤول مشتريات')}</SelectItem>
                                       <SelectItem value="manager">{t('مدير')}</SelectItem>
                                       <SelectItem value="admin">{t('مدير عام')}</SelectItem>
                                     </SelectContent>
@@ -2537,6 +2544,30 @@ export default function Settings() {
                           >
                             {t('كول سنتر')} ({users.filter(u => u.role === 'call_center').length})
                           </Button>
+                          <Button
+                            variant={userRoleFilter === 'warehouse_keeper' ? 'default' : 'outline'}
+                            size="sm"
+                            onClick={() => setUserRoleFilter('warehouse_keeper')}
+                            className="h-8"
+                          >
+                            {t('أمين مخزن')} ({users.filter(u => u.role === 'warehouse_keeper').length})
+                          </Button>
+                          <Button
+                            variant={userRoleFilter === 'manufacturer' ? 'default' : 'outline'}
+                            size="sm"
+                            onClick={() => setUserRoleFilter('manufacturer')}
+                            className="h-8"
+                          >
+                            {t('مصنّع')} ({users.filter(u => u.role === 'manufacturer').length})
+                          </Button>
+                          <Button
+                            variant={userRoleFilter === 'purchasing' ? 'default' : 'outline'}
+                            size="sm"
+                            onClick={() => setUserRoleFilter('purchasing')}
+                            className="h-8"
+                          >
+                            {t('مسؤول مشتريات')} ({users.filter(u => u.role === 'purchasing').length})
+                          </Button>
                         </div>
                       </div>
                       
@@ -2572,9 +2603,12 @@ export default function Settings() {
                                     u.role === 'manager' ? 'bg-blue-500/20 text-blue-400' :
                                     u.role === 'cashier' ? 'bg-green-500/20 text-green-400' :
                                     u.role === 'call_center' ? 'bg-cyan-500/20 text-cyan-400' :
+                                    u.role === 'warehouse_keeper' ? 'bg-amber-500/20 text-amber-400' :
+                                    u.role === 'manufacturer' ? 'bg-purple-500/20 text-purple-400' :
+                                    u.role === 'purchasing' ? 'bg-orange-500/20 text-orange-400' :
                                     'bg-gray-500/20 text-gray-400'
                                   }`}>
-                                    {u.role === 'admin' ? t('مدير عام') : u.role === 'manager' ? t('مدير') : u.role === 'cashier' ? t('كاشير') : u.role === 'captain' ? t('كابتن') : u.role === 'kitchen' ? t('مطبخ') : u.role === 'call_center' ? t('كول سنتر') : u.role}
+                                    {getRoleText(u.role)}
                                   </span>
                                 </TableCell>
                                 <TableCell>{branches.find(b => b.id === u.branch_id)?.name || '-'}</TableCell>
@@ -2658,6 +2692,9 @@ export default function Settings() {
                                     <SelectItem value="captain">{t('كابتن')}</SelectItem>
                                     <SelectItem value="kitchen">{t('مطبخ')}</SelectItem>
                                     <SelectItem value="call_center">{t('كول سنتر')}</SelectItem>
+                                    <SelectItem value="warehouse_keeper">{t('أمين مخزن')}</SelectItem>
+                                    <SelectItem value="manufacturer">{t('مصنّع')}</SelectItem>
+                                    <SelectItem value="purchasing">{t('مسؤول مشتريات')}</SelectItem>
                                   </SelectContent>
                                 </Select>
                               </div>
