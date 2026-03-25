@@ -88,14 +88,19 @@ jobs:
             echo "✅ SSL certificate already exists"
           fi
           
-          # إيقاف containers القديمة وتنظيف cache
-          echo "🛑 Stopping old containers and cleaning cache..."
+          # إيقاف وحذف كل شيء قديم
+          echo "🛑 Stopping and removing old containers..."
           docker-compose down --remove-orphans 2>/dev/null || true
+          
+          # حذف images القديمة للـ frontend لإجبار إعادة البناء
+          echo "🗑️ Removing old frontend image..."
+          docker rmi maestro_frontend -f 2>/dev/null || true
+          docker rmi $(docker images -q --filter "dangling=true") -f 2>/dev/null || true
           docker system prune -f 2>/dev/null || true
           
           # بناء وتشغيل Docker (بدون cache لتجنب المشاكل)
           echo "🔨 Building and starting services..."
-          docker-compose build --no-cache
+          docker-compose build --no-cache --pull frontend backend
           docker-compose up -d --force-recreate
           
           # انتظار بدء الخدمات
