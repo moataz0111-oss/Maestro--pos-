@@ -178,7 +178,9 @@ export default function Reservations() {
     if (!window.confirm(t('هل أنت متأكد؟'))) return;
     
     try {
-      await axios.delete(`${API}/reservations/${id}`);
+      const token = localStorage.getItem('token');
+      const headers = { Authorization: `Bearer ${token}` };
+      await axios.delete(`${API}/reservations/${id}`, { headers });
       toast.success(t('تم حذف الحجز'));
       fetchReservations();
     } catch (error) {

@@ -6774,7 +6774,9 @@ export default function Settings() {
                               onClick={async () => {
                                 if (!confirm(t('هل أنت متأكد؟'))) return;
                                 try {
-                                  await axios.delete(`${API}/customers/${customer.id}`);
+                                  const token = localStorage.getItem('token');
+                                  const headers = { Authorization: `Bearer ${token}` };
+                                  await axios.delete(`${API}/customers/${customer.id}`, { headers });
                                   toast.success(t('تم حذف العميل'));
                                   fetchData();
                                 } catch (error) {

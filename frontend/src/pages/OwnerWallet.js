@@ -235,7 +235,9 @@ export default function OwnerWallet() {
   const handleDeleteDeposit = async (id) => {
     if (!window.confirm(t('هل تريد حذف هذا الإيداع؟'))) return;
     try {
-      await axios.delete(`${API}/owner-wallet/deposits/${id}`);
+      const token = localStorage.getItem('token');
+      const headers = { Authorization: `Bearer ${token}` };
+      await axios.delete(`${API}/owner-wallet/deposits/${id}`, { headers });
       toast.success(t('تم الحذف'));
       fetchData();
     } catch (error) {
@@ -246,7 +248,9 @@ export default function OwnerWallet() {
   const handleDeleteWithdrawal = async (id) => {
     if (!window.confirm(t('هل تريد حذف هذا السحب؟'))) return;
     try {
-      await axios.delete(`${API}/owner-wallet/withdrawals/${id}`);
+      const token = localStorage.getItem('token');
+      const headers = { Authorization: `Bearer ${token}` };
+      await axios.delete(`${API}/owner-wallet/withdrawals/${id}`, { headers });
       toast.success(t('تم الحذف'));
       fetchData();
     } catch (error) {

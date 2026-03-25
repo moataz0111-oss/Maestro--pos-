@@ -218,7 +218,9 @@ export default function ExternalBranchesManagement() {
     if (!window.confirm(t('هل أنت متأكد من إلغاء تسجيل هذا الفرع كمباع؟'))) return;
     
     try {
-      await axios.delete(`${API}/external-branches/${soldBranchId}`);
+      const token = localStorage.getItem('token');
+      const headers = { Authorization: `Bearer ${token}` };
+      await axios.delete(`${API}/external-branches/${soldBranchId}`, { headers });
       toast.success(t('تم إلغاء التسجيل'));
       fetchData();
     } catch (error) {
