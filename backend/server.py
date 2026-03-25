@@ -4790,7 +4790,10 @@ async def create_order(order: OrderCreate, current_user: dict = Depends(get_curr
                     await db.branch_inventory.update_one(
                         {"id": branch_item["id"]},
                         {
-                            "$inc": {"quantity": -item.quantity},
+                            "$inc": {
+                                "quantity": -item.quantity,
+                                "sold_quantity": item.quantity  # زيادة الكمية المباعة
+                            },
                             "$set": {"last_updated": datetime.now(timezone.utc).isoformat()}
                         }
                     )

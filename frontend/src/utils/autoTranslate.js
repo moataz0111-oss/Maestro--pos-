@@ -3552,6 +3552,14 @@ const translationMap = {
   'إجمالي تكلفة المواد:': { en: 'Total material cost:', ku: 'کۆی تێچووی کەرەستە:' },
   'يُحسب تلقائياً من المكونات': { en: 'Calculated automatically from ingredients', ku: 'بە ئۆتۆماتیکی لە پێکهاتەکان دەژمێردرێت' },
   'ملعقة': { en: 'Spoon', ku: 'کەوچک' },
+  
+  // ===== مخزون الفروع =====
+  'الوارد': { en: 'Received', ku: 'وەرگیراو' },
+  'المتبقي': { en: 'Remaining', ku: 'ماوە' },
+  'المباع': { en: 'Sold', ku: 'فرۆشراو' },
+  'نسبة البيع': { en: 'Sale Rate', ku: 'ڕێژەی فرۆشتن' },
+  'نفد': { en: 'Out of Stock', ku: 'نەماوە' },
+  'متوفر': { en: 'Available', ku: 'بەردەستە' },
 };
 
 // الحصول على اللغة الحالية

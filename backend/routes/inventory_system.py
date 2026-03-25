@@ -833,7 +833,10 @@ async def create_warehouse_transfer(transfer_data: dict):
             await db.branch_inventory.update_one(
                 {"branch_id": to_branch_id, "product_id": item["product_id"]},
                 {
-                    "$inc": {"quantity": item["quantity"]},
+                    "$inc": {
+                        "quantity": item["quantity"],
+                        "received_quantity": item["quantity"]
+                    },
                     "$set": {"last_updated": datetime.now(timezone.utc).isoformat()}
                 }
             )
@@ -844,6 +847,8 @@ async def create_warehouse_transfer(transfer_data: dict):
                 "product_id": item["product_id"],
                 "product_name": item["product_name"],
                 "quantity": item["quantity"],
+                "received_quantity": item["quantity"],  # الكمية الواردة
+                "sold_quantity": 0,  # الكمية المباعة
                 "unit": item["unit"],
                 "last_updated": datetime.now(timezone.utc).isoformat(),
                 "created_at": datetime.now(timezone.utc).isoformat()
@@ -1164,9 +1169,12 @@ async def get_branch_inventory(branch_id: str):
     db = get_db()
     inventory = await db.branch_inventory.find({"branch_id": branch_id}, {"_id": 0}).to_list(1000)
     
-    # حساب القيمة الإجمالية
+    # حساب القيمة الإجمالية وضمان وجود الحقول الجديدة
     for item in inventory:
         item["total_value"] = item.get("quantity", 0) * item.get("cost_per_unit", 0)
+        item["received_quantity"] = item.get("received_quantity", item.get("quantity", 0))
+        item["sold_quantity"] = item.get("sold_quantity", 0)
+        item["remaining_quantity"] = item.get("quantity", 0)
     
     return inventory
 
@@ -1190,11 +1198,14 @@ async def sell_from_branch(branch_id: str, product_id: str, quantity: float = 1)
             detail=f"الكمية غير كافية. متوفر: {inventory_item.get('quantity', 0)}"
         )
     
-    # خصم الكمية
+    # خصم الكمية وزيادة المباع
     await db.branch_inventory.update_one(
         {"id": inventory_item["id"]},
         {
-            "$inc": {"quantity": -quantity},
+            "$inc": {
+                "quantity": -quantity,
+                "sold_quantity": quantity
+            },
             "$set": {"last_updated": datetime.now(timezone.utc).isoformat()}
         }
     )
@@ -1202,6 +1213,7 @@ async def sell_from_branch(branch_id: str, product_id: str, quantity: float = 1)
     return {
         "message": f"تم البيع: {quantity} {inventory_item.get('product_name')}",
         "remaining": inventory_item.get("quantity", 0) - quantity,
+        "sold": inventory_item.get("sold_quantity", 0) + quantity,
         "cost": quantity * inventory_item.get("cost_per_unit", 0)
     }
 

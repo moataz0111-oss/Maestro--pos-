@@ -447,26 +447,38 @@ export default function BranchOrders() {
                       <div className="flex items-start justify-between mb-3">
                         <div>
                           <h3 className="font-bold">{item.product_name}</h3>
+                          <p className="text-xs text-muted-foreground">{item.unit}</p>
                         </div>
                         <Badge className={item.quantity > 0 ? 'bg-green-500/20 text-green-500' : 'bg-red-500/20 text-red-500'}>
                           {item.quantity > 0 ? t('متوفر') : t('نفد')}
                         </Badge>
                       </div>
                       
-                      <div className="grid grid-cols-2 gap-2 text-sm">
-                        <div>
-                          <p className="text-muted-foreground">{t('الكمية')}</p>
-                          <p className="text-lg font-bold">{item.quantity}</p>
+                      <div className="grid grid-cols-3 gap-2 text-sm mb-3">
+                        <div className="text-center p-2 bg-blue-500/10 rounded">
+                          <p className="text-xs text-blue-400">{t('الوارد')}</p>
+                          <p className="text-lg font-bold text-blue-500">{item.received_quantity || item.quantity || 0}</p>
                         </div>
-                        <div>
-                          <p className="text-muted-foreground">{t('التكلفة/وحدة')}</p>
-                          <p className="font-medium">{formatPrice(item.cost_per_unit)}</p>
+                        <div className="text-center p-2 bg-green-500/10 rounded">
+                          <p className="text-xs text-green-400">{t('المتبقي')}</p>
+                          <p className="text-lg font-bold text-green-500">{item.quantity || 0}</p>
                         </div>
-                        <div className="col-span-2">
-                          <p className="text-muted-foreground">{t('القيمة الإجمالية')}</p>
-                          <p className="font-bold text-primary">{formatPrice(item.total_value)}</p>
+                        <div className="text-center p-2 bg-orange-500/10 rounded">
+                          <p className="text-xs text-orange-400">{t('المباع')}</p>
+                          <p className="text-lg font-bold text-orange-500">{item.sold_quantity || 0}</p>
                         </div>
                       </div>
+                      
+                      {/* شريط التقدم */}
+                      <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 mb-2">
+                        <div 
+                          className="bg-gradient-to-r from-green-500 to-orange-500 h-2 rounded-full transition-all"
+                          style={{ width: `${((item.sold_quantity || 0) / (item.received_quantity || item.quantity || 1)) * 100}%` }}
+                        />
+                      </div>
+                      <p className="text-xs text-center text-muted-foreground">
+                        {t('نسبة البيع')}: {(((item.sold_quantity || 0) / (item.received_quantity || item.quantity || 1)) * 100).toFixed(1)}%
+                      </p>
                     </CardContent>
                   </Card>
                 ))}
