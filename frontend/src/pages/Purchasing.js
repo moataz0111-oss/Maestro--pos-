@@ -76,6 +76,10 @@ export default function Purchasing() {
   const [showInvoiceDialog, setShowInvoiceDialog] = useState(false);
   const [showSupplierDialog, setShowSupplierDialog] = useState(false);
   const [showImageDialog, setShowImageDialog] = useState(null);
+  const [showCameraDialog, setShowCameraDialog] = useState(false);
+  const videoRef = React.useRef(null);
+  const canvasRef = React.useRef(null);
+  const [cameraStream, setCameraStream] = useState(null);
   
   // Form states
   const [invoiceForm, setInvoiceForm] = useState({
@@ -187,6 +191,67 @@ export default function Purchasing() {
       reader.readAsDataURL(file);
     }
   };
+
+  // فتح الكاميرا
+  const openCamera = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        video: { facingMode: 'environment' } // الكاميرا الخلفية
+      });
+      setCameraStream(stream);
+      setShowCameraDialog(true);
+      // سيتم ربط الـ stream بالـ video في useEffect
+    } catch (error) {
+      console.error('Camera error:', error);
+      toast.error(t('لم نتمكن من الوصول للكاميرا. تأكد من السماح بالوصول.'));
+    }
+  };
+
+  // التقاط صورة من الكاميرا
+  const capturePhoto = () => {
+    if (videoRef.current && canvasRef.current) {
+      const video = videoRef.current;
+      const canvas = canvasRef.current;
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(video, 0, 0);
+      
+      const imageData = canvas.toDataURL('image/jpeg', 0.8);
+      setInvoiceForm(prev => ({
+        ...prev,
+        imagePreview: imageData
+      }));
+      
+      closeCamera();
+      toast.success(t('تم التقاط الصورة بنجاح'));
+    }
+  };
+
+  // إغلاق الكاميرا
+  const closeCamera = () => {
+    if (cameraStream) {
+      cameraStream.getTracks().forEach(track => track.stop());
+      setCameraStream(null);
+    }
+    setShowCameraDialog(false);
+  };
+
+  // ربط الـ stream بالـ video عند فتح الـ dialog
+  React.useEffect(() => {
+    if (showCameraDialog && cameraStream && videoRef.current) {
+      videoRef.current.srcObject = cameraStream;
+    }
+  }, [showCameraDialog, cameraStream]);
+
+  // تنظيف الكاميرا عند unmount
+  React.useEffect(() => {
+    return () => {
+      if (cameraStream) {
+        cameraStream.getTracks().forEach(track => track.stop());
+      }
+    };
+  }, [cameraStream]);
 
   // حفظ الفاتورة
   const handleSaveInvoice = async () => {
@@ -651,16 +716,29 @@ export default function Purchasing() {
                   </Button>
                 </div>
               ) : (
-                <label className="flex flex-col items-center justify-center p-8 cursor-pointer hover:bg-muted/50 rounded-lg">
-                  <Camera className="h-12 w-12 text-muted-foreground mb-2" />
-                  <p className="text-sm text-muted-foreground">{t('اضغط لرفع صورة الفاتورة')}</p>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={handleImageUpload}
-                  />
-                </label>
+                <div className="flex gap-4 justify-center">
+                  {/* زر فتح الكاميرا */}
+                  <button
+                    type="button"
+                    onClick={openCamera}
+                    className="flex flex-col items-center justify-center p-6 cursor-pointer hover:bg-primary/10 rounded-lg border-2 border-primary/30 hover:border-primary transition-all"
+                  >
+                    <Camera className="h-12 w-12 text-primary mb-2" />
+                    <p className="text-sm font-medium text-primary">{t('التقاط صورة')}</p>
+                  </button>
+                  
+                  {/* زر رفع من الجهاز */}
+                  <label className="flex flex-col items-center justify-center p-6 cursor-pointer hover:bg-muted/50 rounded-lg border-2 border-dashed hover:border-muted-foreground transition-all">
+                    <Upload className="h-12 w-12 text-muted-foreground mb-2" />
+                    <p className="text-sm text-muted-foreground">{t('رفع من الجهاز')}</p>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={handleImageUpload}
+                    />
+                  </label>
+                </div>
               )}
             </div>
             
@@ -850,6 +928,50 @@ export default function Purchasing() {
           {showImageDialog?.image_data && (
             <img src={showImageDialog.image_data} alt="فاتورة" className="w-full rounded-lg" />
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog: الكاميرا */}
+      <Dialog open={showCameraDialog} onOpenChange={closeCamera}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Camera className="h-5 w-5 text-primary" />
+              {t('التقاط صورة الفاتورة')}
+            </DialogTitle>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            {/* عرض الكاميرا */}
+            <div className="relative bg-black rounded-lg overflow-hidden">
+              <video
+                ref={videoRef}
+                autoPlay
+                playsInline
+                muted
+                className="w-full h-auto"
+                style={{ maxHeight: '400px' }}
+              />
+            </div>
+            
+            {/* Canvas مخفي لالتقاط الصورة */}
+            <canvas ref={canvasRef} className="hidden" />
+            
+            <p className="text-center text-sm text-muted-foreground">
+              {t('وجّه الكاميرا نحو الفاتورة ثم اضغط زر الالتقاط')}
+            </p>
+          </div>
+          
+          <DialogFooter className="flex gap-2">
+            <Button variant="outline" onClick={closeCamera}>
+              <X className="h-4 w-4 ml-2" />
+              {t('إلغاء')}
+            </Button>
+            <Button onClick={capturePhoto} className="bg-primary">
+              <Camera className="h-4 w-4 ml-2" />
+              {t('التقاط الصورة')}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

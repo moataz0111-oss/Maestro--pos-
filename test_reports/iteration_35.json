@@ -108,7 +108,7 @@
   },
   
   "test_credentials": {
-    "api_url": "https://product-setup-plus.preview.emergentagent.com",
+    "api_url": "https://invoice-snap-11.preview.emergentagent.com",
     "owner": {
       "email": "owner@maestroegp.com",
       "password": "owner123",
