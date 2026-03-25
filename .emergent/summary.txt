@@ -1,190 +1,137 @@
-<analysis>**original_problem_statement**:
-The user's initial high-level goals were to enhance the reports page and implement a comprehensive packaging materials management system. Throughout the session, the user provided specific, iterative feedback, leading to the following detailed requirements:
-
-**Product Setup Enhancements ():**
-1.  **Flexible Packaging Cost**: Allow users to either enter a manual packaging cost or link packaging materials for automatic cost calculation.
-2.  **Enhanced Add-ons**: Add quantity and unit fields to product add-ons (الإضافات).
-3.  **Automatic Material Cost**:
-    *   The Raw Material Cost field should be read-only.
-    *   It must be auto-calculated from linked manufactured products.
-    *   The calculation must correctly handle unit conversions (e.g., grams vs. kilograms) and account for cost by piece based on the manufactured product's piece weight.
-    *   The field should be styled in red with a value of 0 if no product is linked, and in purple with the calculated value otherwise.
-4.  **Fix Hidden Section**: The Link to Packaging Materials section was repeatedly disappearing in the product edit form. This needed to be fixed permanently.
-
-**UI/UX and Feature Refactoring:**
-1.  **Navigation Bar Layout**: The tab bar in the  page was cramped and needed to be resized to show all icons/tabs clearly.
-2.  **Packaging System UI Integration**:
-    *   The user requested to remove the Request Packaging and Branch Packaging Inventory tabs from the  page.
-    *   This functionality should be merged into the  page. Specifically, a Branch Packaging Inventory section should be added to the Branch Inventory tab, and a section for requesting packaging materials should be added to the New Order dialog.
-3.  **Purchase Invoice Camera Upload ():**
-    *   Add a camera icon to the Create Purchase Invoice dialog.
-    *   When clicked, it should give the user two options: Capture from Camera and Upload from Device.
-    *   The Capture from Camera option should open the device's camera to take a picture of the invoice directly.
+<analysis>**original_problem_statement**: 
+The user requested finalizing the camera capture feature for purchase invoices, saving the invoice images to the database, adding an OCR feature to automatically extract data from the captured invoice images, modifying the session timeout logic (Super Admins/Admins should never log out, while staff log out after 24 hours), and including purchase invoices and suppliers in the tenant data reset functionality. 
 
 **User's preferred language**: Arabic (العربية). You MUST INSTRUCT the next agent to respond in the user's preferred language only.
 
-**what currently exists?**
-The application is a full-stack React/FastAPI/MongoDB POS system.
-- **Product Setup ()**: All requested enhancements have been implemented. This includes flexible packaging costs, enhanced add-ons, and a read-only, auto-calculated material cost field that correctly handles complex unit conversions (g/kg/litre/ml/piece). The recurring bug where the Link to Packaging Materials section was hidden has been fixed by making the section always visible and showing a helper message if no materials exist.
-- **Packaging Management System**: The system is fully implemented. The backend APIs are complete. The frontend UI has been refactored per user request:
-    - The  page now only shows warehouse-keeper-relevant tabs (Warehouse, Manufacturing Requests, Packaging, Manufacturing, Branch Requests, Movements, Transfers). The navigation bar has been resized.
-    - The  page now contains the branch-facing features: a section to request packaging materials has been added to the New Order dialog, and a display for the branch's packaging inventory has been integrated into the Branch Inventory tab.
-- **Purchase Invoices ()**: The UI has been updated to support capturing an invoice image via the device camera. State and handler functions for opening a camera dialog have been added, along with a new camera dialog component structure using .
+**what currently exists?** 
+All requested features (Camera capture, Backend APIs for invoices/images, OCR using Gemini, Role-based JWT session timeouts, and Data Reset updates) have been completely written, tested locally, and exist in the Emergent workspace. However, the user is completely blocked from deploying these features to their VPS because of a critical platform bug: The Save to GitHub functionality is creating commits that only contain changes to  and , completely omitting the actual code changes made to  and . 
 
 **Last working item**:
-    - Last item agent was working: Implementing the camera capture functionality for purchase invoices in . The user wants two options when clicking the image upload button: Capture from Camera and Upload from Device. The agent has added the UI, the state management, and the component structure for the camera dialog.
-    - Status: IN PROGRESS
-    - Agent Testing Done: N
-    - Which testing method agent to use?: Frontend testing agent. The test should verify that clicking the camera icon presents two choices, that the Upload from Device option still works, and that the Capture from Camera option successfully opens a webcam feed, allows taking a picture, and uses that picture as the invoice image.
+    - Last item agent was working: Troubleshooting the Save to GitHub deployment bug. The agent guided the user to uninstall and reinstall the Emergent GitHub integration, but the final commit generated by the platform still did not contain the code files.
+    - Status: BLOCKED
+    - Agent Testing Done: N/A (Platform issue)
+    - Which testing method agent to use? NA (Testing for features was done; this is a platform sync issue).
     - User Testing Done: N
 
 **All Pending/In progress Issue list**:
-  - Issue 1:  Unoptimized Queries (P3)
-  - Issue 2:  Recurring Session Timeouts (P2)
-  
+  Issue 1: Emergent Platform Save to GitHub Sync Bug (P0 - HIGHEST PRIORITY)
+  Issue 2: Unoptimized Queries (P3)
+
   Issues Detail:
   - Issue 1: 
-     - Attempted fixes: None. This issue was carried over from the previous session and was not addressed.
-     - Next debug checklist: 
-        1.  Review  and .
-        2.  Identify endpoints that return large lists of data without pagination (e.g., fetching all products, orders, or inventory items).
-        3.  Implement  and  parameters in the identified backend API endpoints.
-        4.  Apply  and  methods to the corresponding MongoDB queries.
-     - Why fix this issue and what will be achieved with the fix?: To improve application performance and stability, preventing server strain and potential timeouts as the database scales.
-     - Status:  NOT STARTED
-     - Is recurring issue?: Y
-     - Should Test frontend/backend/both after fix?: backend
-     - Blocked on other issue: None
+     - Attempted fixes: Agent tried force committing via bash (failed, no remote access). Agent modified  and  to bust Docker cache (didn't fix the root issue). Agent guided user to disconnect and reconnect GitHub integration. The commits are firing, but they drop the actual code files (, ).
+     - Next debug checklist: Check if the user was able to manually copy-paste the code to GitHub, or ask the  for an update on the GitHub sync bug. Do not write new features until the user confirms their deployment pipeline successfully received the code.
+     - Why fix this issue and what will be achieved with the fix?: The user cannot see any of the work done in this session on their actual production server until the code reaches GitHub.
+     - Status: BLOCKED
+     - Is recurring issue? Y
+     - Should Test frontend/backend/both after fix? Both (Verify via user's live URL)
+     - Blocked on other issue: Platform bug.
   - Issue 2: 
-     - Attempted fixes: The agent repeatedly logged back in, treating it as a transient testing issue rather than a potential application bug.
-     - Next debug checklist: 
-        1.  Check the JWT token expiration time in .
-        2.  Investigate the frontend's auth context () to see how the token is stored and refreshed.
-        3.  Review browser console logs for any auth-related errors that might not have been caught.
-     - Why fix this issue and what will be achieved with the fix?: To provide a stable user session and eliminate a major friction point during development and testing. It severely hindered the agent's ability to use the screenshot tool effectively.
-     - Status:  NOT STARTED
-     - Is recurring issue?: Y
-     - Should Test frontend/backend/both after fix?: both
+     - Attempted fixes: None. Carried over from older sessions.
+     - Next debug checklist: Review endpoints returning large lists, implement  and  pagination.
+     - Why fix this issue and what will be achieved with the fix?: Performance and stability.
+     - Status: NOT STARTED
+     - Is recurring issue? Y
+     - Should Test frontend/backend/both after fix? Backend
      - Blocked on other issue: None
 
 **In progress Task List**:
-  - Task 1:  Finalize and Test Camera Upload for Purchase Invoices (P0 - HIGHEST PRIORITY)
-     - Where to resume: 
-        1.  : The camera dialog and handlers are in place. The final step is to ensure the captured image from  is correctly passed back to the  state, displayed as a preview, and sent to the backend upon submission.
-        2.  The UI for choosing between camera and file upload needs to be finalized as requested by the user. Currently, it's just a camera icon. This should be a dropdown or two separate buttons.
-     - What will be achieved with this?: Completes a key user-requested feature for streamlining the purchase invoice workflow.
-     - Status:  IN PROGRESS
-     - Should Test frontend/backend/both after fix?: frontend
-     - Blocked on something: None
+  None. All coding tasks for this session were completed, but deployment is blocked.
 
 **Upcoming and Future Tasks**
     Upcoming Tasks:
     - (P1) **ZKTeco Fingerprint Integration**: Implement UI configuration and hardware integration.
-    - (P2) **Export Reports to Excel**: Add Excel export functionality to reports.
+    - (P2) **Export Reports to Excel**: User explicitly rejected this in the current session (التصدير بالاكسيل لا اريدة), so it should be removed or deprioritized indefinitely unless asked again.
     
     Future Tasks:
-    - (P3) **Refactor **: Break down the monolithic file into smaller, more focused route files.
-    - (P4) **Refactor  & **: These files are becoming very large and should be broken down into smaller, reusable components.
+    - (P3) **Refactor **: Break down the monolithic file (16k+ lines) into smaller route files.
+    - (P4) **Refactor Large React Components**:  and .
 
 **Completed work in this session**
-- **Product Setup Logic**: Successfully implemented and tested the advanced raw material cost calculation, including unit conversions for weight, volume, and pieces.
-- **Packaging System Refactor**: Fully refactored the packaging system UI by removing tabs from  and integrating them into  as requested.
-- **Bug Fix (Packaging Link)**: Permanently resolved the recurring issue where the Link to Packaging Materials section was not visible in the product forms in .
-- **UI/UX Fixes**:
-    - Resized the navigation bar in  for better visibility.
-    - Fixed a string interpolation bug for  in .
-- **Backend Model Updates**: Updated Pydantic models in  and logic in  to support the frontend changes.
-- **Testing**: Successfully used the testing agent to validate all major feature completions and bug fixes.
-- **Deployment Readiness**: Ran the deployment agent multiple times, confirming the application is consistently ready for deployment.
+- Camera capture UI finalized in  (DONE).
+- Created  and  endpoints with image handling (DONE).
+- Implemented Gemini OCR via  for invoice data extraction (DONE).
+- Included purchase invoices and suppliers in the  logic (DONE).
+- Fixed JWT Session Timeout: Modified  in  so Super Admin/Admin tokens last 365 days, while others last 24 hours (DONE).
+- Added  and  cache-busting improvements (DONE).
 
 **Earlier issues found/mentioned but not fixed**
-   - **Session Timeout Issue**: The agent was repeatedly logged out while using the screenshot tool. This was a persistent problem that hindered visual testing but was not investigated as a root cause.
+   - Issue 1: Unoptimized Queries (Pagination needed).
 
 **Known issue recurrence from previous fork**
-  - None
+  - Issue recurrence in previous fork: None related to the code.
+  - Recurrence count: 0
+  - Status: N/A
 
 **Code Architecture**
 
 
 **Key Technical Concepts**
-- **Complex Frontend Logic**: Extensive use of  and  to manage complex form state and perform real-time calculations with unit conversions.
-- **UI Refactoring**: Moving entire feature sets between different pages ( to ) while maintaining functionality.
-- **Hardware Interaction**: Use of the  library to access the user's camera for image capture.
-- **Defensive Programming**: Fixed the hidden packaging section by removing a fragile conditional render () and replacing it with a more robust approach that always shows the section with a helpful message if the list is empty.
+- React (Frontend), FastAPI (Backend), MongoDB (Database).
+-  library used for Gemini Flash 2.5 OCR.
+- Base64 encoding used for passing and storing invoice images.
 
 **key DB schema**
-- :  array now supports  and . The  field is now purely derived on the frontend from linked .
-- :  field was added and logic was updated to use it, enabling admins to create requests on behalf of branches.
-- : This new collection is now populated correctly upon transfer requests.
+  - : stores invoice details +  (Base64 string).
+  - : stores supplier data for the purchasing flow.
 
 **changes in tech stack**
-- The  library was introduced to handle camera functionality.
+  - Added  for Gemini OCR.
 
 **All files of reference**
-- : **CRITICAL**. Contains the in-progress camera feature.
-- : Contains the completed and complex product cost calculation logic.
-- : Contains the newly integrated packaging features.
-- : The refactored and cleaned-up warehouse keeper interface.
-- : Contains the updated Pydantic models (, ).
-- : Contains the API logic for packaging requests and transfers.
+- : Updated with OCR extraction and camera capture features.
+- : Contains new API routes for invoices, OCR (), and updated JWT generation.
+- : Modified to clear docker cache during GitHub actions.
+- : Modified to ensure fresh builds.
+- : Updated with task completion status.
 
 **Areas that need refactoring**:
-- **/app/backend/server.py**: Still monolithic and over 16,000 lines.
-- **/app/frontend/src/pages/Settings.js**: Still over 6,800 lines. The logic for each settings tab should be extracted.
-- **/app/frontend/src/pages/WarehouseManufacturing.js**: Now smaller, but could still be broken down.
-- **/app/frontend/src/pages/BranchOrders.js**: Has grown significantly and should be componentized.
+-  (Over 16,500 lines).
 
 **key api endpoints**
-- : The backend was updated to correctly handle  passed in the request body, allowing admins to create requests for specific branches.
-- : The frontend call was fixed to include the authorization header, resolving a major bug.
+- : Creates a new invoice with an image.
+- : Extracts invoice data from a base64 image using Gemini.
+- : Clears tenant data (now includes invoices/suppliers).
 
 **Critical Info for New Agent**
-- **Priority Order**: Your first and only priority is to **finalize and test the camera upload feature in **. The user is frustrated with repeated bugs and incomplete features, so ensuring this works perfectly is crucial.
-- **User Interaction**: The user is very visual and provides feedback via screenshots. Analyze them carefully. They have also expressed frustration multiple times; acknowledge the problem directly and fix it without excuses.
-- **Session Instability**: Be prepared for the screenshot tool to fail due to session timeouts. If it becomes a blocker, you may need to investigate the auth token's lifespan in  or rely on the testing agent and  scripts.
-- **Finalizing the Camera Feature**: The user wants a choice between Capture from Camera and Upload from Device. This needs to be implemented as a clear UI choice (e.g., two buttons, a dropdown) within the purchase invoice dialog.
+- **HIGH ALERT - DEPLOYMENT BUG**: The user's code is perfect locally, but the Emergent platform's Save to GitHub button is failing to push the changes in  and  to their GitHub repository. It is only pushing  and . 
+- **DO NOT** modify the code assuming it is broken on the user's server. The code never reached their server.
+- Before writing any new features, politely ask the user if they were able to manually copy-paste the code to their GitHub, or if the Save to GitHub feature has started working.
+- The user is highly frustrated by this platform deployment issue. Be extremely empathetic, objective, and avoid making excuses. Offer manual copy-paste snippets if they are still blocked.
 
 **documents and test reports created in this job**
   - 
   - 
-  - 
-  -  (Updated)
 
 **Last 10 User Messages and any pending HUMAN messages** 
-1.  **LATEST**: User provided a screenshot showing the purchase invoice dialog and asked where the camera capture icon is, stating it should open the camera. (In Progress)
-2.  User asked to merge the branch packaging inventory into the  page and remove it from the warehouse page. (Completed)
-3.  User pointed out that the New Order dialog in  was missing the section to request packaging materials. (Completed)
-4.  User reported that the Link to Packaging section was missing again, expressing frustration. (Completed)
-5.  User asked the agent to test the latest fixes and call the deployer. (Completed)
-6.  User confirmed they want to calculate cost by piece in addition to weight/volume. (Completed)
-7.  User pointed out that the material cost calculation was incorrect because it wasn't converting units (e.g., using cost per kg for a quantity in grams). (Completed)
-8.  User requested UI fixes: enlarging the nav bar in the warehouse page and making the material cost field auto-calculated and read-only. (Completed)
-9.  User pointed out that Link to Packaging was missing in the edit product modal. (This was the first time they reported this recurring bug in this session). (Completed)
-10. Agent asked for approval to start work on the product setup enhancements.
+1. **User**: لا يظهر (It still doesn't show up). (Refers to the new code not appearing on their live server after trying to reinstall the GitHub integration).
+2. **User**: Provided screenshot showing the Emergent GitHub app was reinstalled.
+3. **User**: Provided screenshot clicking the authorize button.
+4. **User**: Provided screenshot of the Emergent settings.
+5. **User**: ارسل لي رابط (Send me a link).
+6. **User**: Provided screenshot confirming deletion of the GitHub app.
+7. **User**: Provided screenshot showing the uninstall page.
+8. **User**: Provided screenshot of GitHub installations page.
+9. **User**: ارسل لي رابط واشرح لي خطوه بخطوة (Send me a link and explain step by step how to fix GitHub).
+10. **User**: اذا كانة المشكلة في الجت هب لماذا لتصلح الجت هب ومن ثم نرفع الاكواد النظيفة وتعمل عليها خطوه بخطوه (If the problem is GitHub, why don't you fix it, then we upload clean code and work step by step).
 
 **Project Health Check:**
-- **Broken**: The camera capture feature in  is incomplete and not fully functional.
+- **Broken**: Deployment Pipeline (Emergent Save to GitHub is dropping code files).
 - **Mocked**: None.
-- **Warnings**:
-    - **Unoptimized Queries**: Endpoints fetching large datasets still lack pagination.
-    - **Session Instability**: The frontend session appears to expire very quickly, hindering testing via the screenshot tool.
 
 **3rd Party Integrations**
-- **GitHub Actions**: CI/CD pipeline.
-- **react-webcam**: Used for accessing the device camera in .
+- Gemini 2.5 Flash (OCR) — uses Emergent LLM Key.
+- GitHub Actions — requires User GitHub connection (Currently failing to receive files from Emergent).
 
 **Testing status**
-  - Testing agent used after significant changes: YES. Used three times to verify major feature completions.
-  - Troubleshoot agent used after agent stuck in loop: NO
-  - Test files created: Several temporary  scripts were created and used via  to test backend endpoints during development.
-  - Known regressions: The Link to Packaging Materials section disappearing was a recurring bug that was finally fixed by removing the conditional rendering.
+  - Testing agent used after significant changes: YES
+  - Troubleshoot agent used after agent stuck in loop: YES (Used  multiple times for the GitHub bug).
+  - Test files created: None
+  - Known regressions: None in code, but the platform deployment sync is broken.
 
 **Credentials to test flow:**
 - Super Admin:  /  / Secret: 
 - Admin:  / 
-- Warehouse Keeper:  / 
-- Manufacturer:  / 
 
 **What agent forgot to execute**
-- The agent never addressed the **Unoptimized Queries** issue mentioned in the initial handoff.
-- The agent did not investigate the root cause of the **Recurring Session Timeouts**, which repeatedly slowed down development and testing.</analysis>
+The agent addressed everything requested in the session, but due to the platform limitation, failed to successfully deliver the working code to the user's GitHub repository. The Unoptimized queries issue from the previous handoff remains unaddressed.</analysis>

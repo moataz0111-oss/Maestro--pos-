@@ -103,7 +103,7 @@
   },
   
   "test_credentials": {
-    "api_url": "https://invoice-snap-11.preview.emergentagent.com",
+    "api_url": "https://invoice-ocr-16.preview.emergentagent.com",
     "customer_menu_url": "/menu/default"
   },
   
