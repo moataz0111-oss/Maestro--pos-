@@ -6203,27 +6203,41 @@ async def get_today_cash_register(current_user: dict = Depends(get_current_user)
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     branch_id = current_user.get("branch_id")
     
-    # مبيعات اليوم النقدية
-    sales_query = {
+    # مبيعات اليوم النقدية (فقط الكاش المحصّل باليد - بدون التوصيل لأنه آجل)
+    cash_query = {
         "created_at": {"$regex": f"^{today}"},
         "payment_method": "cash",
-        "status": {"$ne": "cancelled"}
+        "status": {"$ne": "cancelled"},
+        "order_type": {"$nin": ["delivery"]}  # استثناء التوصيل من النقدي
     }
     if branch_id:
-        sales_query["branch_id"] = branch_id
+        cash_query["branch_id"] = branch_id
     
-    cash_orders = await db.orders.find(sales_query, {"_id": 0, "total": 1, "order_number": 1}).to_list(500)
+    cash_orders = await db.orders.find(cash_query, {"_id": 0, "total": 1, "order_number": 1}).to_list(500)
     total_cash_sales = sum(o.get("total", 0) for o in cash_orders)
     
     # مبيعات البطاقة
-    card_query = sales_query.copy()
-    card_query["payment_method"] = "card"
+    card_query = {
+        "created_at": {"$regex": f"^{today}"},
+        "payment_method": "card",
+        "status": {"$ne": "cancelled"}
+    }
+    if branch_id:
+        card_query["branch_id"] = branch_id
     card_orders = await db.orders.find(card_query, {"total": 1}).to_list(500)
     total_card_sales = sum(o.get("total", 0) for o in card_orders)
     
-    # الآجل
-    credit_query = sales_query.copy()
-    credit_query["payment_method"] = "credit"
+    # الآجل (يشمل التوصيل + الآجل العادي)
+    credit_query = {
+        "created_at": {"$regex": f"^{today}"},
+        "status": {"$ne": "cancelled"},
+        "$or": [
+            {"payment_method": "credit"},
+            {"order_type": "delivery"}  # التوصيل يعتبر آجل
+        ]
+    }
+    if branch_id:
+        credit_query["branch_id"] = branch_id
     credit_orders = await db.orders.find(credit_query, {"total": 1}).to_list(500)
     total_credit = sum(o.get("total", 0) for o in credit_orders)
     
@@ -6242,16 +6256,19 @@ async def get_today_cash_register(current_user: dict = Depends(get_current_user)
         sort=[("closed_at", -1)]
     )
     
+    # إجمالي المبيعات = كل شيء (نقدي + بطاقة + آجل)
+    total_all_sales = total_cash_sales + total_card_sales + total_credit
+    
     return {
         "date": today,
-        "cash_sales": total_cash_sales,
+        "cash_sales": total_cash_sales,  # فقط الكاش المحصّل باليد
         "card_sales": total_card_sales,
-        "credit_sales": total_credit,
-        "total_sales": total_cash_sales + total_card_sales + total_credit,
+        "credit_sales": total_credit,  # يشمل التوصيل
+        "total_sales": total_all_sales,  # إجمالي كل المبيعات
         "orders_count": len(cash_orders) + len(card_orders) + len(credit_orders),
         "expenses": expenses,
         "total_expenses": total_expenses,
-        "expected_cash": total_cash_sales - total_expenses,
+        "expected_cash": total_cash_sales - total_expenses,  # المتوقع في الصندوق = نقدي - مصاريف
         "last_close": last_close
     }
 
@@ -11861,7 +11878,7 @@ async def get_sales_report(
     branch_id: Optional[str] = None,
     current_user: dict = Depends(get_current_user)
 ):
-    """تقرير المبيعات"""
+    """تقرير المبيعات - النقدي فقط الكاش المحصّل باليد (بدون التوصيل)"""
     query = build_tenant_query(current_user)
     
     if branch_id:
@@ -11888,33 +11905,58 @@ async def get_sales_report(
     
     orders = await db.orders.find(query, {"_id": 0}).to_list(10000)
     
-    # حساب الإحصائيات
+    # إجمالي المبيعات (كل شيء)
     total_sales = sum(o.get("total", 0) for o in orders)
     total_orders = len(orders)
     avg_order_value = total_sales / total_orders if total_orders > 0 else 0
     
-    # تقسيم حسب نوع الطلب
-    dine_in = len([o for o in orders if o.get("order_type") == "dine_in"])
-    takeaway = len([o for o in orders if o.get("order_type") == "takeaway"])
-    delivery = len([o for o in orders if o.get("order_type") == "delivery"])
+    # المبيعات النقدية (فقط الكاش المحصّل باليد - بدون التوصيل لأنه آجل)
+    cash_amount = sum(
+        o.get("total", 0) for o in orders 
+        if o.get("payment_method") == "cash" and o.get("order_type") != "delivery"
+    )
     
-    # تقسيم حسب طريقة الدفع
-    cash_orders = len([o for o in orders if o.get("payment_method") == "cash"])
-    card_orders = len([o for o in orders if o.get("payment_method") == "card"])
+    # مبيعات البطاقة
+    card_amount = sum(
+        o.get("total", 0) for o in orders 
+        if o.get("payment_method") == "card"
+    )
+    
+    # الآجل (يشمل التوصيل لأن شركات التوصيل آجل)
+    credit_amount = sum(
+        o.get("total", 0) for o in orders 
+        if o.get("payment_method") == "credit" or o.get("order_type") == "delivery"
+    )
+    
+    # تقسيم حسب نوع الطلب
+    dine_in_amount = sum(o.get("total", 0) for o in orders if o.get("order_type") == "dine_in")
+    takeaway_amount = sum(o.get("total", 0) for o in orders if o.get("order_type") == "takeaway")
+    delivery_amount = sum(o.get("total", 0) for o in orders if o.get("order_type") == "delivery")
+    
+    # عدد الطلبات حسب طريقة الدفع
+    cash_orders_count = len([o for o in orders if o.get("payment_method") == "cash" and o.get("order_type") != "delivery"])
+    card_orders_count = len([o for o in orders if o.get("payment_method") == "card"])
+    credit_orders_count = len([o for o in orders if o.get("payment_method") == "credit" or o.get("order_type") == "delivery"])
     
     return {
         "period": period,
-        "total_sales": total_sales,
+        "total_sales": total_sales,  # إجمالي كل المبيعات
         "total_orders": total_orders,
         "average_order_value": round(avg_order_value, 2),
         "by_type": {
-            "dine_in": dine_in,
-            "takeaway": takeaway,
-            "delivery": delivery
+            "dine_in": dine_in_amount,
+            "takeaway": takeaway_amount,
+            "delivery": delivery_amount
+        },
+        "by_payment_method": {
+            "cash": cash_amount,  # فقط الكاش المحصّل باليد
+            "card": card_amount,
+            "credit": credit_amount  # يشمل التوصيل
         },
         "by_payment": {
-            "cash": cash_orders,
-            "card": card_orders
+            "cash": cash_orders_count,
+            "card": card_orders_count,
+            "credit": credit_orders_count
         }
     }
 

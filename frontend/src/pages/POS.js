@@ -122,7 +122,7 @@ export default function POS() {
   const [customerPhone, setCustomerPhone] = useState('');
   const [deliveryAddress, setDeliveryAddress] = useState('');
   const [buzzerNumber, setBuzzerNumber] = useState('');
-  const [paymentMethod, setPaymentMethod] = useState('cash');
+  const [paymentMethod, setPaymentMethod] = useState('');  // فارغ - يجب على المستخدم الاختيار
   const [discount, setDiscount] = useState(0);
   const [discountType, setDiscountType] = useState('fixed'); // fixed or percentage
   const [deliveryApp, setDeliveryApp] = useState('');
@@ -1402,11 +1402,48 @@ export default function POS() {
       return;
     }
 
-    // العنوان مطلوب فقط إذا تم اختيار سائق (وليس شركة توصيل)
-    if (orderType === 'delivery' && selectedDriver && !deliveryAddress) {
-      toast.error(t('يرجى إدخال عنوان التوصيل'));
+    // ============ قواعد الدفع الجديدة ============
+    
+    // 1. إجبار تحديد طريقة الدفع
+    if (!paymentMethod || paymentMethod === 'pending') {
+      toast.error(t('يرجى تحديد طريقة الدفع (نقدي، آجل، أو بطاقة)'));
       return;
     }
+
+    // 2. قواعد التوصيل - يجب اختيار شركة توصيل أو سائق
+    if (orderType === 'delivery') {
+      if (!deliveryApp && !selectedDriver) {
+        toast.error(t('يرجى اختيار شركة توصيل أو سائق'));
+        return;
+      }
+      
+      // عند اختيار سائق - إجبار إدخال بيانات العميل
+      if (selectedDriver) {
+        if (!deliveryAddress) {
+          toast.error(t('يرجى إدخال عنوان التوصيل'));
+          return;
+        }
+        if (!customerName) {
+          toast.error(t('يرجى إدخال اسم العميل'));
+          return;
+        }
+        // الكاشير يجب أن يدخل رقم الهاتف (الكول سنتر يدخله تلقائياً)
+        if (!customerPhone && user?.role !== 'call_center') {
+          toast.error(t('يرجى إدخال رقم هاتف العميل'));
+          return;
+        }
+      }
+    }
+
+    // 3. السفري - إجبار إدخال رقم البزون
+    if (orderType === 'takeaway') {
+      if (!buzzerNumber) {
+        toast.error(t('يرجى إدخال رقم جهاز البزون'));
+        return;
+      }
+    }
+
+    // ============ نهاية قواعد الدفع ============
 
     // تحديد الفرع النشط في بداية الدالة (مع fallback لـ localStorage)
     const savedBranchIdForSubmit = localStorage.getItem('selectedBranchId');
