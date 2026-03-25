@@ -1986,9 +1986,13 @@ async def impersonate_user(user_id: str, current_user: dict = Depends(get_curren
     if current_user["role"] not in [UserRole.ADMIN, UserRole.SUPER_ADMIN]:
         raise HTTPException(status_code=403, detail="غير مصرح - هذه الميزة للمدراء فقط")
     
-    # التحقق من أن المستخدم ينتمي لنفس الـ tenant
-    query = build_tenant_query(current_user, {"id": user_id})
-    target_user = await db.users.find_one(query, {"_id": 0})
+    # Super Admin يمكنه معاينة أي مستخدم
+    if current_user["role"] == UserRole.SUPER_ADMIN:
+        target_user = await db.users.find_one({"id": user_id}, {"_id": 0})
+    else:
+        # التحقق من أن المستخدم ينتمي لنفس الـ tenant
+        query = build_tenant_query(current_user, {"id": user_id})
+        target_user = await db.users.find_one(query, {"_id": 0})
     
     if not target_user:
         raise HTTPException(status_code=404, detail="المستخدم غير موجود")
@@ -2352,12 +2356,19 @@ async def update_branch(branch_id: str, branch: BranchCreate, current_user: dict
 async def delete_branch(branch_id: str, current_user: dict = Depends(get_current_user)):
     if current_user["role"] not in [UserRole.ADMIN, UserRole.SUPER_ADMIN]:
         raise HTTPException(status_code=403, detail="غير مصرح")
+    
     # Check if branch has users or orders
     users_count = await db.users.count_documents({"branch_id": branch_id})
     if users_count > 0:
         raise HTTPException(status_code=400, detail="لا يمكن حذف الفرع - يوجد مستخدمين مرتبطين به")
-    await db.branches.update_one({"id": branch_id}, {"$set": {"is_active": False}})
-    return {"message": "تم تعطيل الفرع"}
+    
+    # حذف الفرع نهائياً
+    result = await db.branches.delete_one({"id": branch_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="الفرع غير موجود")
+    
+    logger.info(f"Branch {branch_id} deleted by {current_user.get('user_id')}")
+    return {"message": "تم حذف الفرع بنجاح"}
 
 # ==================== KITCHEN SECTIONS ROUTES ====================
 
@@ -2463,9 +2474,19 @@ async def update_category(category_id: str, category: CategoryCreate, current_us
 async def delete_category(category_id: str, current_user: dict = Depends(get_current_user)):
     if current_user["role"] not in [UserRole.ADMIN, UserRole.MANAGER, UserRole.SUPER_ADMIN]:
         raise HTTPException(status_code=403, detail="غير مصرح")
-    query = build_tenant_query(current_user, {"id": category_id})
-    await db.categories.delete_one(query)
-    return {"message": "تم الحذف"}
+    
+    # Super Admin يحذف أي فئة
+    if current_user["role"] == UserRole.SUPER_ADMIN:
+        query = {"id": category_id}
+    else:
+        query = build_tenant_query(current_user, {"id": category_id})
+    
+    result = await db.categories.delete_one(query)
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="الفئة غير موجودة")
+    
+    logger.info(f"Category {category_id} deleted by {current_user.get('user_id')}")
+    return {"message": "تم حذف الفئة بنجاح"}
 
 # ==================== PRODUCT ROUTES ====================
 
@@ -2531,10 +2552,21 @@ async def update_product(product_id: str, product: ProductCreate, current_user: 
 
 @api_router.delete("/products/{product_id}")
 async def delete_product(product_id: str, current_user: dict = Depends(get_current_user)):
-    if current_user["role"] not in [UserRole.ADMIN, UserRole.MANAGER]:
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.MANAGER, UserRole.SUPER_ADMIN]:
         raise HTTPException(status_code=403, detail="غير مصرح")
-    await db.products.delete_one({"id": product_id})
-    return {"message": "تم الحذف"}
+    
+    # Super Admin يحذف أي منتج، Admin يحذف منتجات tenant الخاص به
+    if current_user["role"] == UserRole.SUPER_ADMIN:
+        query = {"id": product_id}
+    else:
+        query = build_tenant_query(current_user, {"id": product_id})
+    
+    result = await db.products.delete_one(query)
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="المنتج غير موجود")
+    
+    logger.info(f"Product {product_id} deleted by {current_user.get('user_id')}")
+    return {"message": "تم حذف المنتج بنجاح"}
 
 # ==================== INVENTORY ROUTES ====================
 
@@ -4399,10 +4431,15 @@ async def transfer_table_order(
 @api_router.delete("/tables/{table_id}")
 async def delete_table(table_id: str, current_user: dict = Depends(get_current_user)):
     """حذف طاولة - فقط للمالك أو المدير"""
-    if current_user.get("role") not in ["super_admin", "admin", "manager"]:
+    if current_user.get("role") not in [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.MANAGER, "super_admin", "admin", "manager"]:
         raise HTTPException(status_code=403, detail="ليس لديك صلاحية حذف الطاولات")
     
-    query = build_tenant_query(current_user, {"id": table_id})
+    # Super Admin يحذف أي طاولة
+    if current_user.get("role") in [UserRole.SUPER_ADMIN, "super_admin"]:
+        query = {"id": table_id}
+    else:
+        query = build_tenant_query(current_user, {"id": table_id})
+    
     table = await db.tables.find_one(query)
     if not table:
         raise HTTPException(status_code=404, detail="الطاولة غير موجودة")
@@ -4411,8 +4448,9 @@ async def delete_table(table_id: str, current_user: dict = Depends(get_current_u
     if table.get("status") == "occupied":
         raise HTTPException(status_code=400, detail="لا يمكن حذف طاولة مشغولة")
     
-    await db.tables.delete_one(query)
-    return {"message": "تم حذف الطاولة"}
+    await db.tables.delete_one({"id": table_id})
+    logger.info(f"Table {table_id} deleted by {current_user.get('user_id')}")
+    return {"message": "تم حذف الطاولة بنجاح"}
 
 # ==================== CUSTOMER ROUTES - إدارة العملاء ====================
 
