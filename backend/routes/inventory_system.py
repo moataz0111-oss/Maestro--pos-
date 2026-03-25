@@ -1581,11 +1581,16 @@ async def get_manufactured_products():
     db = get_db()
     products = await db.manufactured_products.find({}, {"_id": 0}).to_list(1000)
     
-    # إضافة الحقول الإحصائية
+    # إضافة الحقول الإحصائية - المتبقي = إجمالي المُصنّع - المحول
     for product in products:
-        product["total_produced"] = product.get("total_produced", product.get("quantity", 0))
-        product["transferred_quantity"] = product.get("transferred_quantity", 0)
-        product["remaining_quantity"] = product.get("quantity", 0)
+        total = product.get("total_produced", 0)
+        transferred = product.get("transferred_quantity", 0)
+        # المتبقي = إجمالي المُصنّع - المحول للفروع
+        remaining = total - transferred
+        product["total_produced"] = total
+        product["transferred_quantity"] = transferred
+        product["remaining_quantity"] = remaining
+        product["quantity"] = remaining  # تحديث الكمية لتتوافق
     
     return products
 
@@ -2093,4 +2098,193 @@ async def reset_inventory_data(data: ResetDataRequest):
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"خطأ في تصفير البيانات: {str(e)}")
+
+
+
+# ==================== NOTIFICATIONS (الإشعارات) ====================
+
+@router.get("/warehouse-notifications")
+async def get_warehouse_notifications(status: Optional[str] = None):
+    """جلب إشعارات المخزن"""
+    db = get_db()
+    
+    query = {"target_role": {"$in": ["warehouse_keeper", "admin", "super_admin"]}}
+    if status:
+        query["status"] = status
+    
+    notifications = await db.notifications.find(query, {"_id": 0}).sort("created_at", -1).to_list(100)
+    return notifications
+
+@router.post("/warehouse-notifications")
+async def create_warehouse_notification(
+    title: str,
+    message: str,
+    notification_type: str = "info",
+    related_id: Optional[str] = None,
+    related_type: Optional[str] = None
+):
+    """إنشاء إشعار للمخزن"""
+    db = get_db()
+    
+    notification = {
+        "id": str(uuid.uuid4()),
+        "title": title,
+        "message": message,
+        "type": notification_type,  # info, warning, success, purchase_delivery
+        "target_role": "warehouse_keeper",
+        "related_id": related_id,
+        "related_type": related_type,
+        "status": "unread",
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    
+    await db.notifications.insert_one(notification)
+    del notification["_id"]
+    return notification
+
+@router.patch("/warehouse-notifications/{notification_id}/read")
+async def mark_notification_read(notification_id: str):
+    """تحديد الإشعار كمقروء"""
+    db = get_db()
+    
+    await db.notifications.update_one(
+        {"id": notification_id},
+        {"$set": {"status": "read", "read_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    return {"message": "تم تحديد الإشعار كمقروء"}
+
+@router.delete("/warehouse-notifications/{notification_id}")
+async def delete_notification(notification_id: str):
+    """حذف إشعار"""
+    db = get_db()
+    await db.notifications.delete_one({"id": notification_id})
+    return {"message": "تم حذف الإشعار"}
+
+
+# ==================== PURCHASE DELIVERY TO WAREHOUSE ====================
+
+@router.post("/purchase-requests/{request_id}/deliver-to-warehouse")
+async def deliver_purchase_to_warehouse(request_id: str):
+    """تحويل المشتريات للمخزن (إنشاء إشعار للاستلام)"""
+    db = get_db()
+    
+    request = await db.purchase_requests.find_one({"id": request_id})
+    if not request:
+        raise HTTPException(status_code=404, detail="الطلب غير موجود")
+    
+    if request.get("status") not in ["approved", "ordered"]:
+        raise HTTPException(status_code=400, detail="يجب اعتماد الطلب أو طلبه من المورد أولاً")
+    
+    # تحديث حالة الطلب
+    await db.purchase_requests.update_one(
+        {"id": request_id},
+        {"$set": {
+            "status": "in_transit",
+            "delivery_started_at": datetime.now(timezone.utc).isoformat()
+        }}
+    )
+    
+    # إنشاء إشعار للمخزن
+    items_summary = ", ".join([f"{item.get('material_name')} ({item.get('quantity')} {item.get('unit', '')})" 
+                               for item in request.get("items", [])[:3]])
+    if len(request.get("items", [])) > 3:
+        items_summary += f" و {len(request.get('items', [])) - 3} أصناف أخرى"
+    
+    notification = {
+        "id": str(uuid.uuid4()),
+        "title": f"مشتريات جاهزة للاستلام - طلب #{request.get('request_number')}",
+        "message": f"تم تحويل مشتريات من قسم المشتريات وتحتاج للاستلام: {items_summary}",
+        "type": "purchase_delivery",
+        "target_role": "warehouse_keeper",
+        "related_id": request_id,
+        "related_type": "purchase_request",
+        "status": "unread",
+        "items": request.get("items", []),
+        "total_cost": request.get("total_cost", 0),
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    
+    await db.notifications.insert_one(notification)
+    
+    return {
+        "message": "تم تحويل المشتريات للمخزن وإرسال إشعار للاستلام",
+        "notification_id": notification["id"],
+        "request_id": request_id
+    }
+
+@router.post("/warehouse-notifications/{notification_id}/receive")
+async def receive_from_notification(notification_id: str):
+    """استلام المشتريات من الإشعار وإضافتها للمخزن"""
+    db = get_db()
+    
+    notification = await db.notifications.find_one({"id": notification_id})
+    if not notification:
+        raise HTTPException(status_code=404, detail="الإشعار غير موجود")
+    
+    if notification.get("type") != "purchase_delivery":
+        raise HTTPException(status_code=400, detail="هذا الإشعار ليس إشعار مشتريات")
+    
+    request_id = notification.get("related_id")
+    items = notification.get("items", [])
+    
+    # إضافة المواد للمخزن
+    for item in items:
+        material_name = item.get("material_name")
+        quantity = item.get("quantity", 0)
+        
+        existing_material = await db.raw_materials.find_one({"name": material_name})
+        
+        if existing_material:
+            await db.raw_materials.update_one(
+                {"id": existing_material["id"]},
+                {
+                    "$inc": {"quantity": quantity, "total_received": quantity},
+                    "$set": {"last_updated": datetime.now(timezone.utc).isoformat()}
+                }
+            )
+        else:
+            await db.raw_materials.insert_one({
+                "id": str(uuid.uuid4()),
+                "name": material_name,
+                "unit": item.get("unit", "كغم"),
+                "quantity": quantity,
+                "total_received": quantity,
+                "transferred_to_manufacturing": 0,
+                "min_quantity": 10,
+                "cost_per_unit": item.get("estimated_cost", item.get("cost_per_unit", 0)),
+                "waste_percentage": 0,
+                "created_at": datetime.now(timezone.utc).isoformat()
+            })
+    
+    # تحديث حالة طلب الشراء
+    if request_id:
+        await db.purchase_requests.update_one(
+            {"id": request_id},
+            {"$set": {
+                "status": "received",
+                "received_at": datetime.now(timezone.utc).isoformat()
+            }}
+        )
+    
+    # تحديث الإشعار
+    await db.notifications.update_one(
+        {"id": notification_id},
+        {"$set": {
+            "status": "completed",
+            "completed_at": datetime.now(timezone.utc).isoformat()
+        }}
+    )
+    
+    # تسجيل الحركة
+    await db.inventory_movements.insert_one({
+        "id": str(uuid.uuid4()),
+        "type": "purchase_received",
+        "notification_id": notification_id,
+        "request_id": request_id,
+        "items": items,
+        "notes": "استلام مشتريات من إشعار",
+        "created_at": datetime.now(timezone.utc).isoformat()
+    })
+    
+    return {"message": "تم استلام المشتريات وإضافتها للمخزن بنجاح"}
 

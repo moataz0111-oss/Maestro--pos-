@@ -28,7 +28,8 @@ import {
   DollarSign,
   Bell,
   TrendingDown,
-  Printer
+  Printer,
+  Send
 } from 'lucide-react';
 import {
   Dialog,
@@ -246,6 +247,22 @@ export default function Purchasing() {
       toast.success(t('تم تحديث حالة الطلب'));
     }
   };
+  
+  // تحويل المشتريات للمخزن (إرسال إشعار)
+  const handleDeliverToWarehouse = async (orderId) => {
+    try {
+      await axios.post(`${API}/purchase-requests/${orderId}/deliver-to-warehouse`, {}, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+      toast.success(t('تم تحويل المشتريات للمخزن وإرسال إشعار للاستلام'));
+      fetchData();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || t('فشل في تحويل المشتريات'));
+    }
+  };
+  
   const createOrderFromAlert = (alert) => {
     const material = rawMaterials.find(m => m.name === alert.material_name);
     if (material) {
@@ -512,13 +529,23 @@ export default function Purchasing() {
                             {t('تم الطلب')}</Button>
                         )}
                         {order.status === 'ordered' && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => updateStatus(order.id, 'delivered')}
-                            className="text-green-500 hover:bg-green-500/10"
-                          >
-                            {t('تم الاستلام')}</Button>
+                          <>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleDeliverToWarehouse(order.id)}
+                              className="text-orange-500 hover:bg-orange-500/10"
+                            >
+                              <Send className="h-3 w-3 ml-1" />
+                              {t('تحويل للمخزن')}</Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => updateStatus(order.id, 'delivered')}
+                              className="text-green-500 hover:bg-green-500/10"
+                            >
+                              {t('تم الاستلام')}</Button>
+                          </>
                         )}
                       </div>
                     </div>

@@ -35,7 +35,8 @@ import {
   Clock,
   X,
   Building2,
-  ShoppingCart
+  ShoppingCart,
+  Bell
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -92,6 +93,7 @@ export default function WarehouseManufacturing() {
   const [stats, setStats] = useState(null);
   const [branchRequests, setBranchRequests] = useState([]);  // طلبات الفروع
   const [manufacturingRequests, setManufacturingRequests] = useState([]);  // طلبات من المخزن
+  const [warehouseNotifications, setWarehouseNotifications] = useState([]);  // إشعارات المخزن
   
   // Dialog states
   const [showAddRawMaterial, setShowAddRawMaterial] = useState(false);
@@ -172,7 +174,8 @@ export default function WarehouseManufacturing() {
         statsRes,
         branchesRes,
         branchRequestsRes,
-        manufacturingRequestsRes
+        manufacturingRequestsRes,
+        notificationsRes
       ] = await Promise.all([
         axios.get(`${API}/raw-materials-new`, { headers }).catch(() => ({ data: [] })),
         axios.get(`${API}/manufacturing-inventory`, { headers }).catch(() => ({ data: [] })),
@@ -182,7 +185,8 @@ export default function WarehouseManufacturing() {
         axios.get(`${API}/inventory-stats`, { headers }).catch(() => ({ data: null })),
         axios.get(`${API}/branches`, { headers }).catch(() => ({ data: [] })),
         axios.get(`${API}/branch-requests`, { headers }).catch(() => ({ data: [] })),
-        axios.get(`${API}/manufacturing-requests`, { headers }).catch(() => ({ data: [] }))
+        axios.get(`${API}/manufacturing-requests`, { headers }).catch(() => ({ data: [] })),
+        axios.get(`${API}/warehouse-notifications`, { headers }).catch(() => ({ data: [] }))
       ]);
       
       setRawMaterials(rawRes.data || []);
@@ -194,6 +198,7 @@ export default function WarehouseManufacturing() {
       setBranches(branchesRes.data || []);
       setBranchRequests(branchRequestsRes.data || []);
       setManufacturingRequests(manufacturingRequestsRes.data || []);
+      setWarehouseNotifications(notificationsRes?.data || []);
     } catch (error) {
       console.error('Error fetching data:', error);
     } finally {
@@ -636,6 +641,20 @@ export default function WarehouseManufacturing() {
     }
   };
   
+  // استلام مشتريات من إشعار
+  const handleReceiveFromNotification = async (notificationId) => {
+    setSubmitting(true);
+    try {
+      await axios.post(`${API}/warehouse-notifications/${notificationId}/receive`, {}, { headers });
+      toast.success(t('تم استلام المشتريات وإضافتها للمخزن'));
+      fetchData();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || t('فشل في استلام المشتريات'));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+  
   // تصفية البيانات
   const filteredRawMaterials = rawMaterials.filter(m => 
     !searchQuery || m.name.includes(searchQuery) || m.name_en?.includes(searchQuery)
@@ -858,6 +877,45 @@ export default function WarehouseManufacturing() {
                       <ShoppingCart className="h-4 w-4 ml-2" />
                       {t('المشتريات')}
                     </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+            
+            {/* إشعارات المشتريات الجاهزة للاستلام */}
+            {warehouseNotifications.filter(n => n.status === 'unread' && n.type === 'purchase_delivery').length > 0 && (
+              <Card className="border-green-500 bg-green-500/5">
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Bell className="h-5 w-5 text-green-500 animate-bounce" />
+                    <span className="font-bold text-green-600">{t('مشتريات جاهزة للاستلام')}</span>
+                    <Badge className="bg-green-500 text-white">{warehouseNotifications.filter(n => n.status === 'unread' && n.type === 'purchase_delivery').length}</Badge>
+                  </div>
+                  <div className="space-y-3">
+                    {warehouseNotifications.filter(n => n.status === 'unread' && n.type === 'purchase_delivery').map(notification => (
+                      <div key={notification.id} className="p-3 bg-background rounded-lg border border-green-500/30">
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <p className="font-medium">{notification.title}</p>
+                            <p className="text-sm text-muted-foreground">{notification.message}</p>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              {new Date(notification.created_at).toLocaleDateString('ar-EG', {
+                                year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+                              })}
+                            </p>
+                          </div>
+                          <Button 
+                            onClick={() => handleReceiveFromNotification(notification.id)}
+                            className="bg-green-500 hover:bg-green-600"
+                            disabled={submitting}
+                            size="sm"
+                          >
+                            {submitting ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Package className="h-4 w-4 ml-1" />}
+                            {t('استلام')}
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </CardContent>
               </Card>

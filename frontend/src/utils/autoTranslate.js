@@ -3641,6 +3641,15 @@ const translationMap = {
   'طلب شراء جديد': { en: 'New Purchase Request', ku: 'داواکارییی کڕینی نوێ' },
   'إنشاء طلب شراء مواد خام من المشتريات': { en: 'Create purchase request for raw materials', ku: 'داواکارییی کڕین دروست بکە بۆ کەلوپەل' },
   'المشتريات': { en: 'Purchasing', ku: 'کڕین' },
+  
+  // ===== إشعارات المخزن =====
+  'مشتريات جاهزة للاستلام': { en: 'Purchases Ready for Receiving', ku: 'کڕینەکان ئامادەن بۆ وەرگرتن' },
+  'استلام': { en: 'Receive', ku: 'وەرگرتن' },
+  'تم استلام المشتريات وإضافتها للمخزن': { en: 'Purchases received and added to stock', ku: 'کڕینەکان وەرگیران و زیادکران بۆ کۆگا' },
+  'فشل في استلام المشتريات': { en: 'Failed to receive purchases', ku: 'وەرگرتنی کڕینەکان سەرنەکەوت' },
+  'تحويل للمخزن': { en: 'Transfer to Warehouse', ku: 'گواستنەوە بۆ کۆگا' },
+  'تم تحويل المشتريات للمخزن وإرسال إشعار للاستلام': { en: 'Purchases transferred to warehouse and notification sent', ku: 'کڕینەکان گوازرانەوە بۆ کۆگا و ئاگادارکردنەوە نێردرا' },
+  'فشل في تحويل المشتريات': { en: 'Failed to transfer purchases', ku: 'گواستنەوەی کڕینەکان سەرنەکەوت' },
 };
 
 // الحصول على اللغة الحالية
