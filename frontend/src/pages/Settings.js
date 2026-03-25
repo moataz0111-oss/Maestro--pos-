@@ -3541,13 +3541,16 @@ export default function Settings() {
                         </div>
                         
                         {/* ربط بمواد التغليف (للخصم التلقائي عند السفري/التوصيل) */}
-                        {packagingMaterials.length > 0 && (
                         <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg">
                           <Label className="text-foreground font-medium mb-2 flex items-center gap-2">
                             <Package className="h-4 w-4 text-amber-500" />{t('ربط بمواد التغليف (للخصم التلقائي)')}
                           </Label>
                           <p className="text-xs text-muted-foreground mb-3">{t('يُخصم تلقائياً عند الطلب السفري أو التوصيل')}</p>
                           
+                          {packagingMaterials.length === 0 ? (
+                            <p className="text-xs text-yellow-600 p-2 bg-yellow-500/10 rounded">{t('لا توجد مواد تغليف. أضف مواد التغليف من صفحة المخزن أولاً.')}</p>
+                          ) : (
+                            <>
                           <div className="space-y-2 mb-3">
                             {(productForm.packaging_items || []).map((item, idx) => (
                               <div key={idx} className="flex items-center gap-2 p-2 bg-background rounded border">
@@ -3616,8 +3619,9 @@ export default function Settings() {
                               ))}
                             </SelectContent>
                           </Select>
+                            </>
+                          )}
                         </div>
-                        )}
                         
                         {/* ربط بالمنتج المصنع */}
                         <div className="p-3 bg-purple-500/10 border border-purple-500/30 rounded-lg">
@@ -4131,13 +4135,16 @@ export default function Settings() {
                       </div>
                       
                       {/* ربط بمواد التغليف (للخصم التلقائي عند السفري/التوصيل) */}
-                      {packagingMaterials.length > 0 && (
                       <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg">
                         <Label className="text-foreground font-medium mb-2 flex items-center gap-2">
                           <Package className="h-4 w-4 text-amber-500" />{t('ربط بمواد التغليف (للخصم التلقائي)')}
                         </Label>
                         <p className="text-xs text-muted-foreground mb-3">{t('يُخصم تلقائياً عند الطلب السفري أو التوصيل')}</p>
                         
+                        {packagingMaterials.length === 0 ? (
+                          <p className="text-xs text-yellow-600 p-2 bg-yellow-500/10 rounded">{t('لا توجد مواد تغليف. أضف مواد التغليف من صفحة المخزن أولاً.')}</p>
+                        ) : (
+                          <>
                         <div className="space-y-2 mb-3">
                           {(editProductForm.packaging_items || []).map((item, idx) => (
                             <div key={idx} className="flex items-center gap-2 p-2 bg-background rounded border">
@@ -4206,8 +4213,9 @@ export default function Settings() {
                             ))}
                           </SelectContent>
                         </Select>
+                          </>
+                        )}
                       </div>
-                      )}
                       
                       <div>
                         <ImageUploader
