@@ -147,6 +147,8 @@ class ManufacturedProductCreate(BaseModel):
     name: str
     name_en: Optional[str] = None
     unit: str = "قطعة"
+    piece_weight: Optional[float] = None  # وزن القطعة (اختياري)
+    piece_weight_unit: Optional[str] = "غرام"  # وحدة وزن القطعة
     recipe: List[RecipeIngredient]  # الوصفة
     quantity: float = 0.0  # الكمية المصنعة المتوفرة
     min_quantity: float = 0.0
@@ -158,6 +160,8 @@ class ManufacturedProductResponse(BaseModel):
     name: str
     name_en: Optional[str] = None
     unit: str
+    piece_weight: Optional[float] = None  # وزن القطعة
+    piece_weight_unit: Optional[str] = "غرام"
     recipe: List[Dict[str, Any]]
     quantity: float  # الكمية المتوفرة
     min_quantity: float

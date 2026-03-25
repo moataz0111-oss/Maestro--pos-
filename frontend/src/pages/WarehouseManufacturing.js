@@ -111,6 +111,8 @@ export default function WarehouseManufacturing() {
     name: '',
     name_en: '',
     unit: 'قطعة',
+    piece_weight: '', // وزن القطعة بالغرام (اختياري)
+    piece_weight_unit: 'غرام', // وحدة وزن القطعة
     recipe: [],
     quantity: 0,
     min_quantity: 0,
@@ -408,6 +410,8 @@ export default function WarehouseManufacturing() {
         name: '',
         name_en: '',
         unit: 'قطعة',
+        piece_weight: '',
+        piece_weight_unit: 'غرام',
         recipe: [],
         quantity: 0,
         min_quantity: 0,
@@ -768,6 +772,11 @@ export default function WarehouseManufacturing() {
                                 <Badge className={product.quantity <= product.min_quantity ? 'bg-red-500/20 text-red-500' : 'bg-green-500/20 text-green-500'}>
                                   {product.quantity} {product.unit}
                                 </Badge>
+                                {product.piece_weight && (
+                                  <Badge variant="outline" className="text-orange-500 border-orange-500">
+                                    {t('القطعة')} = {product.piece_weight} {product.piece_weight_unit || 'غرام'}
+                                  </Badge>
+                                )}
                               </div>
                               
                               <div className="grid grid-cols-3 gap-4 text-sm mb-3">
@@ -1183,6 +1192,42 @@ export default function WarehouseManufacturing() {
                   </SelectContent>
                 </Select>
               </div>
+              
+              {/* حقل وزن القطعة - يظهر فقط عند اختيار قطعة */}
+              {(productForm.unit === 'قطعة' || productForm.unit === 'حبة' || productForm.unit === 'صحن') && (
+                <div className="col-span-2">
+                  <Label>{t('وزن القطعة (اختياري)')}</Label>
+                  <div className="flex gap-2 mt-1">
+                    <Input
+                      type="number"
+                      min="0"
+                      step="1"
+                      placeholder={t('مثال: 100')}
+                      value={productForm.piece_weight}
+                      onChange={(e) => setProductForm(prev => ({ ...prev, piece_weight: e.target.value }))}
+                      className="flex-1"
+                    />
+                    <Select 
+                      value={productForm.piece_weight_unit} 
+                      onValueChange={(v) => setProductForm(prev => ({ ...prev, piece_weight_unit: v }))}
+                    >
+                      <SelectTrigger className="w-24">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="غرام">{t('غرام')}</SelectItem>
+                        <SelectItem value="كغم">{t('كغم')}</SelectItem>
+                        <SelectItem value="مل">{t('مل')}</SelectItem>
+                        <SelectItem value="لتر">{t('لتر')}</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {t('مثال: القطعة = 100 غرام من اللحم')}
+                  </p>
+                </div>
+              )}
+              
               <div>
                 <Label>{t('سعر البيع')}</Label>
                 <Input
