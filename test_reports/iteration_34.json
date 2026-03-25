@@ -132,7 +132,7 @@
   },
   
   "test_credentials": {
-    "api_url": "https://pos-inventory-flow-1.preview.emergentagent.com",
+    "api_url": "https://resto-pos-bilingual.preview.emergentagent.com",
     "owner": {
       "email": "owner@maestroegp.com",
       "password": "owner123",

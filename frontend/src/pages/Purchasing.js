@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from '../hooks/useTranslation';
 import { BACKEND_URL } from '../utils/api';
 import { useNavigate } from 'react-router-dom';
@@ -7,6 +7,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
+import { Textarea } from '../components/ui/textarea';
+import { Badge } from '../components/ui/badge';
 import { toast } from 'sonner';
 import {
   ArrowRight,
@@ -17,19 +19,21 @@ import {
   Clock,
   CheckCircle,
   XCircle,
-  AlertCircle,
   Search,
-  Filter,
   FileText,
   RefreshCw,
   Eye,
-  Edit,
   Trash2,
   DollarSign,
-  Bell,
-  TrendingDown,
-  Printer,
-  Send
+  Camera,
+  Upload,
+  Send,
+  Phone,
+  MapPin,
+  Calendar,
+  Image as ImageIcon,
+  X,
+  Truck
 } from 'lucide-react';
 import {
   Dialog,
@@ -51,711 +55,801 @@ import {
   TabsList,
   TabsTrigger,
 } from '../components/ui/tabs';
+
 const API = BACKEND_URL + '/api';
+
 export default function Purchasing() {
   const navigate = useNavigate();
   const { t, isRTL } = useTranslation();
-  const [purchaseOrders, setPurchaseOrders] = useState([]);
-  const [suppliers, setSuppliers] = useState([]);
-  const [rawMaterials, setRawMaterials] = useState([]);
-  const [lowStockAlerts, setLowStockAlerts] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [showAddDialog, setShowAddDialog] = useState(false);
-  const [showSupplierDialog, setShowSupplierDialog] = useState(false);
-  const [selectedTab, setSelectedTab] = useState('orders');
-  const [filterStatus, setFilterStatus] = useState('all');
   
-  const [form, setForm] = useState({
+  // States
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [activeTab, setActiveTab] = useState('invoices');
+  
+  // Data states
+  const [invoices, setInvoices] = useState([]);
+  const [suppliers, setSuppliers] = useState([]);
+  const [warehouseRequests, setWarehouseRequests] = useState([]);
+  
+  // Dialog states
+  const [showInvoiceDialog, setShowInvoiceDialog] = useState(false);
+  const [showSupplierDialog, setShowSupplierDialog] = useState(false);
+  const [showImageDialog, setShowImageDialog] = useState(null);
+  
+  // Form states
+  const [invoiceForm, setInvoiceForm] = useState({
     supplier_id: '',
+    invoice_number: '',
     items: [],
     notes: '',
-    expected_delivery: ''
+    total_amount: 0,
+    image: null,
+    imagePreview: null
   });
-  const [selectedMaterial, setSelectedMaterial] = useState('');
-  const [quantity, setQuantity] = useState(1);
-  const [unitPrice, setUnitPrice] = useState(0);
+  
+  const [newItem, setNewItem] = useState({
+    name: '',
+    quantity: 1,
+    unit: 'كغم',
+    unit_price: 0
+  });
+  
   const [supplierForm, setSupplierForm] = useState({
     name: '',
+    company_name: '',
     phone: '',
-    email: '',
     address: '',
+    products: '',
     notes: ''
   });
-  useEffect(() => {
-    fetchData();
-  }, []);
-  const fetchData = async () => {
+
+  const headers = {
+    'Authorization': `Bearer ${localStorage.getItem('token')}`,
+    'Content-Type': 'application/json'
+  };
+
+  const formatPrice = (price) => {
+    return new Intl.NumberFormat('ar-IQ', { 
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0 
+    }).format(price || 0) + ' د.ع';
+  };
+
+  const fetchData = useCallback(async () => {
     try {
-      const [ordersRes, suppliersRes, materialsRes, alertsRes] = await Promise.all([
-        axios.get(`${API}/purchase-orders`),
-        axios.get(`${API}/suppliers`),
-        axios.get(`${API}/raw-materials`),
-        axios.get(`${API}/inventory/low-stock-alerts`)
+      setLoading(true);
+      const [invoicesRes, suppliersRes, requestsRes] = await Promise.all([
+        axios.get(`${API}/purchase-invoices`, { headers }).catch(() => ({ data: [] })),
+        axios.get(`${API}/purchase-suppliers`, { headers }).catch(() => ({ data: [] })),
+        axios.get(`${API}/warehouse-purchase-requests`, { headers }).catch(() => ({ data: [] }))
       ]);
-      setPurchaseOrders(ordersRes.data);
-      setSuppliers(suppliersRes.data);
-      setRawMaterials(materialsRes.data);
-      setLowStockAlerts(alertsRes.data);
+      
+      setInvoices(invoicesRes.data || []);
+      setSuppliers(suppliersRes.data || []);
+      setWarehouseRequests(requestsRes.data || []);
     } catch (error) {
-      // بيانات تجريبية
-      setSuppliers([
-        { id: '1', name: 'شركة الأغذية المتحدة', phone: '0501234567', email: 'info@united.com' },
-        { id: '2', name: 'مورد اللحوم الطازجة', phone: '0507654321', email: 'fresh@meat.com' },
-        { id: '3', name: 'مصنع الخبز الذهبي', phone: '0509876543', email: 'golden@bread.com' }
-      ]);
-      setRawMaterials([
-        { id: '1', name: 'لحم بقري', unit: 'كجم', current_stock: 15, min_stock: 20, price: 25000 },
-        { id: '2', name: 'دجاج طازج', unit: 'كجم', current_stock: 8, min_stock: 15, price: 12000 },
-        { id: '3', name: 'خبز برجر', unit: 'قطعة', current_stock: 200, min_stock: 100, price: 500 },
-        { id: '4', name: 'طماطم', unit: 'كجم', current_stock: 5, min_stock: 10, price: 3000 },
-        { id: '5', name: 'بصل', unit: 'كجم', current_stock: 20, min_stock: 15, price: 2000 }
-      ]);
-      setLowStockAlerts([
-        { id: '1', material_name: 'لحم بقري', current_stock: 15, min_stock: 20, unit: 'كجم', shortage: 5 },
-        { id: '2', material_name: 'دجاج طازج', current_stock: 8, min_stock: 15, unit: 'كجم', shortage: 7 },
-        { id: '3', material_name: 'طماطم', current_stock: 5, min_stock: 10, unit: 'كجم', shortage: 5 }
-      ]);
-      setPurchaseOrders([
-        {
-          id: '1',
-          order_number: 'PO-001',
-          supplier: { id: '1', name: 'شركة الأغذية المتحدة' },
-          items: [
-            { material_name: 'لحم بقري', quantity: 50, unit: 'كجم', unit_price: 25000, total: 1250000 },
-            { material_name: 'دجاج طازج', quantity: 30, unit: 'كجم', unit_price: 12000, total: 360000 }
-          ],
-          total_amount: 1610000,
-          status: 'pending',
-          created_at: new Date(Date.now() - 1000 * 60 * 30).toISOString(),
-          expected_delivery: new Date(Date.now() + 1000 * 60 * 60 * 24 * 2).toISOString()
-        },
-        {
-          id: '2',
-          order_number: 'PO-002',
-          supplier: { id: '3', name: 'مصنع الخبز الذهبي' },
-          items: [
-            { material_name: 'خبز برجر', quantity: 500, unit: 'قطعة', unit_price: 500, total: 250000 }
-          ],
-          total_amount: 250000,
-          status: 'delivered',
-          created_at: new Date(Date.now() - 1000 * 60 * 60 * 48).toISOString(),
-          delivered_at: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString()
-        }
-      ]);
+      console.error('Error fetching data:', error);
     } finally {
       setLoading(false);
     }
+  }, []);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  // حساب إجمالي الفاتورة
+  const calculateTotal = () => {
+    return invoiceForm.items.reduce((sum, item) => sum + (item.quantity * item.unit_price), 0);
   };
-  const addItemToOrder = () => {
-    if (!selectedMaterial || quantity < 1 || unitPrice < 1) return;
-    
-    const material = rawMaterials.find(m => m.id === selectedMaterial);
-    if (!material) return;
-    
-    const newItem = {
-      material_id: material.id,
-      material_name: material.name,
-      quantity: quantity,
-      unit: material.unit,
-      unit_price: unitPrice,
-      total: quantity * unitPrice
-    };
-    
-    setForm({ ...form, items: [...form.items, newItem] });
-    setSelectedMaterial('');
-    setQuantity(1);
-    setUnitPrice(0);
-  };
-  const removeItem = (index) => {
-    const newItems = form.items.filter((_, i) => i !== index);
-    setForm({ ...form, items: newItems });
-  };
-  const getTotalAmount = () => {
-    return form.items.reduce((sum, item) => sum + item.total, 0);
-  };
-  const handleSubmit = async () => {
-    if (!form.supplier_id || form.items.length === 0) {
-      toast.error(t('الرجاء اختيار المورد وإضافة منتجات'));
+
+  // إضافة صنف للفاتورة
+  const addItemToInvoice = () => {
+    if (!newItem.name || newItem.quantity <= 0 || newItem.unit_price <= 0) {
+      toast.error(t('يرجى ملء جميع حقول الصنف'));
       return;
     }
-    try {
-      await axios.post(`${API}/purchase-orders`, {
-        ...form,
-        total_amount: getTotalAmount()
-      });
-      toast.success(t('تم إنشاء أمر الشراء بنجاح'));
-      setShowAddDialog(false);
-      resetForm();
-      fetchData();
-    } catch (error) {
-      // محاكاة النجاح
-      const newOrder = {
-        id: Date.now().toString(),
-        order_number: `PO-${String(purchaseOrders.length + 1).padStart(3, '0')}`,
-        supplier: suppliers.find(s => s.id === form.supplier_id),
-        items: form.items,
-        total_amount: getTotalAmount(),
-        status: 'pending',
-        created_at: new Date().toISOString(),
-        expected_delivery: form.expected_delivery
+    
+    setInvoiceForm(prev => ({
+      ...prev,
+      items: [...prev.items, { ...newItem, total: newItem.quantity * newItem.unit_price }]
+    }));
+    
+    setNewItem({ name: '', quantity: 1, unit: 'كغم', unit_price: 0 });
+  };
+
+  // حذف صنف من الفاتورة
+  const removeItemFromInvoice = (index) => {
+    setInvoiceForm(prev => ({
+      ...prev,
+      items: prev.items.filter((_, i) => i !== index)
+    }));
+  };
+
+  // رفع صورة الفاتورة
+  const handleImageUpload = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) {
+        toast.error(t('حجم الصورة يجب أن يكون أقل من 5 ميجابايت'));
+        return;
+      }
+      
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setInvoiceForm(prev => ({
+          ...prev,
+          image: file,
+          imagePreview: reader.result
+        }));
       };
-      setPurchaseOrders([newOrder, ...purchaseOrders]);
-      toast.success(t('تم إنشاء أمر الشراء بنجاح'));
-      setShowAddDialog(false);
-      resetForm();
+      reader.readAsDataURL(file);
     }
   };
-  const handleAddSupplier = async () => {
+
+  // حفظ الفاتورة
+  const handleSaveInvoice = async () => {
+    if (invoiceForm.items.length === 0) {
+      toast.error(t('يرجى إضافة أصناف للفاتورة'));
+      return;
+    }
+    
+    setSubmitting(true);
+    try {
+      const formData = {
+        supplier_id: invoiceForm.supplier_id,
+        invoice_number: invoiceForm.invoice_number,
+        items: invoiceForm.items,
+        notes: invoiceForm.notes,
+        total_amount: calculateTotal(),
+        image_data: invoiceForm.imagePreview // Base64 image
+      };
+      
+      await axios.post(`${API}/purchase-invoices`, formData, { headers });
+      
+      toast.success(t('تم حفظ الفاتورة بنجاح'));
+      setShowInvoiceDialog(false);
+      setInvoiceForm({
+        supplier_id: '',
+        invoice_number: '',
+        items: [],
+        notes: '',
+        total_amount: 0,
+        image: null,
+        imagePreview: null
+      });
+      fetchData();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || t('فشل في حفظ الفاتورة'));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // حفظ المورد
+  const handleSaveSupplier = async () => {
     if (!supplierForm.name || !supplierForm.phone) {
-      toast.error(t('الرجاء إدخال اسم ورقم هاتف المورد'));
+      toast.error(t('يرجى ملء الحقول المطلوبة'));
       return;
     }
+    
+    setSubmitting(true);
     try {
-      await axios.post(`${API}/suppliers`, supplierForm);
-      toast.success(t('تم إضافة المورد بنجاح'));
+      await axios.post(`${API}/purchase-suppliers`, supplierForm, { headers });
+      
+      toast.success(t('تم حفظ المورد بنجاح'));
       setShowSupplierDialog(false);
-      setSupplierForm({ name: '', phone: '', email: '', address: '', notes: '' });
-      fetchData();
-    } catch (error) {
-      const newSupplier = {
-        id: Date.now().toString(),
-        ...supplierForm
-      };
-      setSuppliers([...suppliers, newSupplier]);
-      toast.success(t('تم إضافة المورد بنجاح'));
-      setShowSupplierDialog(false);
-      setSupplierForm({ name: '', phone: '', email: '', address: '', notes: '' });
-    }
-  };
-  const resetForm = () => {
-    setForm({
-      supplier_id: '',
-      items: [],
-      notes: '',
-      expected_delivery: ''
-    });
-  };
-  const updateStatus = async (orderId, status) => {
-    try {
-      await axios.put(`${API}/purchase-orders/${orderId}/status`, { status });
-      toast.success(t('تم تحديث حالة الطلب'));
-      fetchData();
-    } catch (error) {
-      setPurchaseOrders(purchaseOrders.map(o => 
-        o.id === orderId ? { ...o, status, delivered_at: status === 'delivered' ? new Date().toISOString() : null } : o
-      ));
-      toast.success(t('تم تحديث حالة الطلب'));
-    }
-  };
-  
-  // تحويل المشتريات للمخزن (إرسال إشعار)
-  const handleDeliverToWarehouse = async (orderId) => {
-    try {
-      await axios.post(`${API}/purchase-requests/${orderId}/deliver-to-warehouse`, {}, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
+      setSupplierForm({
+        name: '',
+        company_name: '',
+        phone: '',
+        address: '',
+        products: '',
+        notes: ''
       });
-      toast.success(t('تم تحويل المشتريات للمخزن وإرسال إشعار للاستلام'));
       fetchData();
     } catch (error) {
-      toast.error(error.response?.data?.detail || t('فشل في تحويل المشتريات'));
+      toast.error(error.response?.data?.detail || t('فشل في حفظ المورد'));
+    } finally {
+      setSubmitting(false);
     }
   };
-  
-  const createOrderFromAlert = (alert) => {
-    const material = rawMaterials.find(m => m.name === alert.material_name);
-    if (material) {
-      setForm({
-        ...form,
-        items: [{
-          material_id: material.id,
-          material_name: material.name,
-          quantity: alert.shortage * 2, // طلب ضعف النقص
-          unit: material.unit,
-          unit_price: material.price,
-          total: alert.shortage * 2 * material.price
-        }]
-      });
-      setShowAddDialog(true);
+
+  // تحويل الطلب للمخزن
+  const handleTransferToWarehouse = async (requestId) => {
+    setSubmitting(true);
+    try {
+      await axios.post(`${API}/warehouse-purchase-requests/${requestId}/transfer`, {}, { headers });
+      toast.success(t('تم تحويل المواد للمخزن بنجاح'));
+      fetchData();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || t('فشل في التحويل'));
+    } finally {
+      setSubmitting(false);
     }
   };
-  const formatCurrency = (value) => {
-    return new Intl.NumberFormat('en-US').format(value) + ' د.ع';
-  };
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'pending': return 'bg-yellow-500/10 text-yellow-500 border-yellow-500/30';
-      case 'approved': return 'bg-blue-500/10 text-blue-500 border-blue-500/30';
-      case 'ordered': return 'bg-purple-500/10 text-purple-500 border-purple-500/30';
-      case 'delivered': return 'bg-green-500/10 text-green-500 border-green-500/30';
-      case 'cancelled': return 'bg-red-500/10 text-red-500 border-red-500/30';
-      default: return 'bg-gray-500/10 text-gray-500 border-gray-500/30';
+
+  // حذف فاتورة
+  const handleDeleteInvoice = async (invoiceId) => {
+    if (!confirm(t('هل أنت متأكد من حذف الفاتورة؟'))) return;
+    
+    try {
+      await axios.delete(`${API}/purchase-invoices/${invoiceId}`, { headers });
+      toast.success(t('تم حذف الفاتورة'));
+      fetchData();
+    } catch (error) {
+      toast.error(t('فشل في حذف الفاتورة'));
     }
   };
-  const getStatusLabel = (status) => {
-    switch (status) {
-      case 'pending': return t('قيد الانتظار');
-      case 'approved': return t('موافق عليه');
-      case 'ordered': return t('تم الطلب');
-      case 'delivered': return t('تم الاستلام');
-      case 'cancelled': return t('ملغي');
-      default: return status;
-    }
-  };
-  const filteredOrders = purchaseOrders.filter(o => 
-    filterStatus === 'all' || o.status === filterStatus
-  );
-  const stats = {
-    totalOrders: purchaseOrders.length,
-    pending: purchaseOrders.filter(o => o.status === 'pending').length,
-    totalValue: purchaseOrders.reduce((sum, o) => sum + (o.total_amount || 0), 0),
-    alerts: lowStockAlerts.length
-  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <RefreshCw className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-background" dir="rtl">
+    <div className="p-4 md:p-6 space-y-6" dir={isRTL ? 'rtl' : 'ltr'}>
       {/* Header */}
-      <header className="sticky top-0 z-50 bg-card/95 backdrop-blur border-b border-border">
-        <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => navigate('/dashboard')}
-              className="rounded-lg"
-            >
-              <ArrowRight className="h-5 w-5" />
-            </Button>
-            <div className="flex items-center gap-2">
-              <ShoppingCart className="h-6 w-6 text-emerald-500" />
-              <h1 className="text-xl font-bold font-cairo">{t('المشتريات')}</h1>
-            </div>
-          </div>
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              onClick={() => setShowSupplierDialog(true)}
-              className="gap-2"
-            >
-              <Plus className="h-4 w-4" />
-              {t('مورد جديد')}
-            </Button>
-            <Button
-              onClick={() => setShowAddDialog(true)}
-              className="gap-2 bg-emerald-500 hover:bg-emerald-600"
-            >
-              <Plus className="h-4 w-4" />
-              {t('أمر شراء')}
-            </Button>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <Button variant="ghost" onClick={() => navigate(-1)} size="icon">
+            <ArrowRight className="h-5 w-5" />
+          </Button>
+          <div>
+            <h1 className="text-2xl font-bold flex items-center gap-2">
+              <ShoppingCart className="h-6 w-6 text-primary" />
+              {t('إدارة المشتريات')}
+            </h1>
+            <p className="text-sm text-muted-foreground">{t('الشراء من الموردين وإرسال للمخزن')}</p>
           </div>
         </div>
-      </header>
-      <main className="max-w-7xl mx-auto p-4 space-y-6">
-        {/* Stats Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <Card className="bg-card border-border/50">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">{t('أوامر الشراء')}</p>
-                  <p className="text-2xl font-bold">{stats.totalOrders}</p>
-                </div>
-                <FileText className="h-8 w-8 text-blue-500 opacity-50" />
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="bg-card border-border/50">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">{t('قيد الانتظار')}</p>
-                  <p className="text-2xl font-bold text-yellow-500">{stats.pending}</p>
-                </div>
-                <Clock className="h-8 w-8 text-yellow-500 opacity-50" />
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="bg-card border-border/50">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">{t('إجمالي القيمة')}</p>
-                  <p className="text-lg font-bold text-emerald-500">{formatCurrency(stats.totalValue)}</p>
-                </div>
-                <DollarSign className="h-8 w-8 text-emerald-500 opacity-50" />
-              </div>
-            </CardContent>
-          </Card>
-          <Card className={`border-border/50 ${stats.alerts > 0 ? 'bg-red-500/10 border-red-500/30' : 'bg-card'}`}>
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">{t('تنبيهات المخزون')}</p>
-                  <p className={`text-2xl font-bold ${stats.alerts > 0 ? 'text-red-500' : ''}`}>{stats.alerts}</p>
-                </div>
-                <Bell className={`h-8 w-8 opacity-50 ${stats.alerts > 0 ? 'text-red-500 animate-pulse' : 'text-gray-500'}`} />
-              </div>
-            </CardContent>
-          </Card>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => setShowSupplierDialog(true)}>
+            <Building2 className="h-4 w-4 ml-2" />
+            {t('مورد جديد')}
+          </Button>
+          <Button onClick={() => setShowInvoiceDialog(true)} className="bg-primary">
+            <Plus className="h-4 w-4 ml-2" />
+            {t('فاتورة شراء')}
+          </Button>
         </div>
-        {/* Low Stock Alerts */}
-        {lowStockAlerts.length > 0 && (
-          <Card className="bg-red-500/5 border-red-500/30">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium flex items-center gap-2 text-red-500">
-                <AlertCircle className="h-4 w-4" />
-                {t('تنبيهات انخفاض المخزون')}
-              </CardTitle>
+      </div>
+
+      {/* Tabs */}
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabsList className="grid grid-cols-3 w-full max-w-lg">
+          <TabsTrigger value="invoices" className="gap-2">
+            <FileText className="h-4 w-4" />
+            {t('الفواتير')}
+          </TabsTrigger>
+          <TabsTrigger value="suppliers" className="gap-2">
+            <Building2 className="h-4 w-4" />
+            {t('الموردين')}
+          </TabsTrigger>
+          <TabsTrigger value="requests" className="gap-2 relative">
+            <Package className="h-4 w-4" />
+            {t('طلبات المخزن')}
+            {warehouseRequests.filter(r => r.status === 'pending').length > 0 && (
+              <Badge className="absolute -top-2 -right-2 bg-red-500 text-white text-xs px-1.5 py-0.5 rounded-full">
+                {warehouseRequests.filter(r => r.status === 'pending').length}
+              </Badge>
+            )}
+          </TabsTrigger>
+        </TabsList>
+
+        {/* تاب الفواتير */}
+        <TabsContent value="invoices" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle className="flex items-center gap-2">
+                  <FileText className="h-5 w-5 text-primary" />
+                  {t('فواتير الشراء')}
+                </CardTitle>
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <DollarSign className="h-4 w-4" />
+                  {t('الإجمالي')}: {formatPrice(invoices.reduce((sum, inv) => sum + (inv.total_amount || 0), 0))}
+                </div>
+              </div>
             </CardHeader>
             <CardContent>
-              <div className="flex flex-wrap gap-2">
-                {lowStockAlerts.map((alert) => (
-                  <div
-                    key={alert.id}
-                    className="flex items-center gap-2 px-3 py-2 bg-background rounded-lg border border-red-500/30"
-                  >
-                    <TrendingDown className="h-4 w-4 text-red-500" />
-                    <span className="font-medium">{alert.material_name}</span>
-                    <span className="text-sm text-muted-foreground">
-                      ({alert.current_stock}/{alert.min_stock} {alert.unit})
-                    </span>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="h-6 px-2 text-emerald-500 hover:bg-emerald-500/10"
-                      onClick={() => createOrderFromAlert(alert)}
-                    >
-                      {t('طلب شراء')}</Button>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        )}
-        {/* Tabs */}
-        <Tabs value={selectedTab} onValueChange={setSelectedTab}>
-          <div className="flex items-center justify-between">
-            <TabsList className="bg-muted">
-              <TabsTrigger value="orders">{t('أوامر الشراء')}</TabsTrigger>
-              <TabsTrigger value="suppliers">{t('الموردين')}</TabsTrigger>
-            </TabsList>
-            {selectedTab === 'orders' && (
-              <Select value={filterStatus} onValueChange={setFilterStatus}>
-                <SelectTrigger className="w-40">
-                  <Filter className="h-4 w-4 ml-2" />
-                  <SelectValue placeholder={t('الحالة')} />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">{t('الكل')}</SelectItem>
-                  <SelectItem value="pending">{t('قيد الانتظار')}</SelectItem>
-                  <SelectItem value="approved">{t('موافق عليه')}</SelectItem>
-                  <SelectItem value="ordered">{t('تم الطلب')}</SelectItem>
-                  <SelectItem value="delivered">{t('تم الاستلام')}</SelectItem>
-                </SelectContent>
-              </Select>
-            )}
-          </div>
-          <TabsContent value="orders" className="space-y-4 mt-4">
-            {loading ? (
-              <div className="text-center py-12">
-                <RefreshCw className="h-12 w-12 animate-spin mx-auto text-muted-foreground" />
-              </div>
-            ) : filteredOrders.length === 0 ? (
-              <Card className="bg-card border-border/50">
-                <CardContent className="p-12 text-center">
-                  <ShoppingCart className="h-16 w-16 mx-auto text-muted-foreground/50 mb-4" />
-                  <p className="text-lg text-muted-foreground">{t('لا توجد أوامر شراء')}</p>
-                </CardContent>
-              </Card>
-            ) : (
-              filteredOrders.map((order) => (
-                <Card key={order.id} className="bg-card border-border/50">
-                  <CardContent className="p-4">
-                    <div className="flex items-start justify-between">
-                      <div className="space-y-2">
-                        <div className="flex items-center gap-3">
-                          <span className="font-bold text-lg">{order.order_number}</span>
-                          <span className={`px-2 py-0.5 rounded text-xs border ${getStatusColor(order.status)}`}>
-                            {getStatusLabel(order.status)}
-                          </span>
+              {invoices.length === 0 ? (
+                <div className="text-center py-12 text-muted-foreground">
+                  <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                  <p>{t('لا توجد فواتير شراء')}</p>
+                  <Button variant="link" onClick={() => setShowInvoiceDialog(true)}>
+                    {t('إنشاء فاتورة جديدة')}
+                  </Button>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {invoices.map(invoice => (
+                    <div key={invoice.id} className="p-4 border rounded-lg hover:shadow-md transition-shadow">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-3 mb-2">
+                            <span className="font-bold text-lg">{t('فاتورة')} #{invoice.invoice_number || invoice.id?.slice(0, 8)}</span>
+                            <Badge className={invoice.status === 'transferred' ? 'bg-green-500/20 text-green-500' : 'bg-blue-500/20 text-blue-500'}>
+                              {invoice.status === 'transferred' ? t('محولة للمخزن') : t('جديدة')}
+                            </Badge>
+                          </div>
+                          
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm mb-3">
+                            <div className="flex items-center gap-2">
+                              <Building2 className="h-4 w-4 text-muted-foreground" />
+                              <span>{invoice.supplier_name || t('غير محدد')}</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Calendar className="h-4 w-4 text-muted-foreground" />
+                              <span>{new Date(invoice.created_at).toLocaleDateString('ar-EG', {
+                                year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+                              })}</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Package className="h-4 w-4 text-muted-foreground" />
+                              <span>{invoice.items?.length || 0} {t('أصناف')}</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <DollarSign className="h-4 w-4 text-primary" />
+                              <span className="font-bold text-primary">{formatPrice(invoice.total_amount)}</span>
+                            </div>
+                          </div>
+                          
+                          {/* الأصناف */}
+                          <div className="bg-muted/30 rounded-lg p-3 mb-3">
+                            <p className="text-sm font-medium mb-2">{t('الأصناف')}:</p>
+                            <div className="space-y-1">
+                              {invoice.items?.slice(0, 3).map((item, idx) => (
+                                <div key={idx} className="flex items-center justify-between text-sm">
+                                  <span>{item.name}</span>
+                                  <span>{item.quantity} {item.unit} × {formatPrice(item.unit_price)}</span>
+                                </div>
+                              ))}
+                              {invoice.items?.length > 3 && (
+                                <p className="text-xs text-muted-foreground">+{invoice.items.length - 3} {t('أصناف أخرى')}</p>
+                              )}
+                            </div>
+                          </div>
                         </div>
-                        <p className="text-sm text-muted-foreground flex items-center gap-1">
-                          <Building2 className="h-4 w-4" />
-                          {order.supplier?.name}
-                        </p>
-                        <div className="flex flex-wrap gap-2">
-                          {order.items?.map((item, idx) => (
-                            <span key={idx} className="px-2 py-1 bg-muted rounded text-xs">
-                              {item.material_name} × {item.quantity} {item.unit}
-                            </span>
-                          ))}
-                        </div>
-                        <div className="flex items-center gap-4 text-sm">
-                          <span className="font-bold text-emerald-500">
-                            {formatCurrency(order.total_amount)}
-                          </span>
-                          <span className="text-muted-foreground">
-                            <Clock className="h-3 w-3 inline ml-1" />
-                            {new Date(order.created_at).toLocaleDateString('en-US')}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="flex gap-2">
-                        {order.status === 'pending' && (
-                          <>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => updateStatus(order.id, 'approved')}
-                              className="text-blue-500 hover:bg-blue-500/10"
+                        
+                        {/* صورة الفاتورة */}
+                        <div className="flex flex-col gap-2 mr-4">
+                          {invoice.image_data ? (
+                            <button
+                              onClick={() => setShowImageDialog(invoice)}
+                              className="w-20 h-20 rounded-lg border overflow-hidden hover:opacity-80 transition-opacity"
                             >
-                              {t('موافقة')}</Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => updateStatus(order.id, 'cancelled')}
-                              className="text-red-500 hover:bg-red-500/10"
-                            >
-                              {t('إلغاء')}</Button>
-                          </>
-                        )}
-                        {order.status === 'approved' && (
+                              <img src={invoice.image_data} alt="فاتورة" className="w-full h-full object-cover" />
+                            </button>
+                          ) : (
+                            <div className="w-20 h-20 rounded-lg border flex items-center justify-center text-muted-foreground">
+                              <ImageIcon className="h-8 w-8" />
+                            </div>
+                          )}
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => updateStatus(order.id, 'ordered')}
-                            className="text-purple-500 hover:bg-purple-500/10"
+                            onClick={() => handleDeleteInvoice(invoice.id)}
+                            className="text-red-500 hover:bg-red-50"
                           >
-                            {t('تم الطلب')}</Button>
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* تاب الموردين */}
+        <TabsContent value="suppliers" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Building2 className="h-5 w-5 text-primary" />
+                {t('الموردين')}
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {suppliers.length === 0 ? (
+                <div className="text-center py-12 text-muted-foreground">
+                  <Building2 className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                  <p>{t('لا يوجد موردين')}</p>
+                  <Button variant="link" onClick={() => setShowSupplierDialog(true)}>
+                    {t('إضافة مورد جديد')}
+                  </Button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {suppliers.map(supplier => (
+                    <Card key={supplier.id} className="hover:shadow-md transition-shadow">
+                      <CardContent className="p-4">
+                        <div className="flex items-start justify-between mb-3">
+                          <div>
+                            <h3 className="font-bold text-lg">{supplier.name}</h3>
+                            {supplier.company_name && (
+                              <p className="text-sm text-muted-foreground">{supplier.company_name}</p>
+                            )}
+                          </div>
+                          <Building2 className="h-8 w-8 text-primary/30" />
+                        </div>
+                        
+                        <div className="space-y-2 text-sm">
+                          <div className="flex items-center gap-2">
+                            <Phone className="h-4 w-4 text-muted-foreground" />
+                            <span dir="ltr">{supplier.phone}</span>
+                          </div>
+                          {supplier.address && (
+                            <div className="flex items-center gap-2">
+                              <MapPin className="h-4 w-4 text-muted-foreground" />
+                              <span>{supplier.address}</span>
+                            </div>
+                          )}
+                          {supplier.products && (
+                            <div className="mt-2 p-2 bg-muted/30 rounded">
+                              <p className="text-xs text-muted-foreground mb-1">{t('المنتجات')}:</p>
+                              <p className="text-sm">{supplier.products}</p>
+                            </div>
+                          )}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* تاب طلبات المخزن */}
+        <TabsContent value="requests" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Package className="h-5 w-5 text-orange-500" />
+                {t('طلبات المخزن')}
+              </CardTitle>
+              <p className="text-sm text-muted-foreground">
+                {t('الطلبات الواردة من قسم المخزن')}
+              </p>
+            </CardHeader>
+            <CardContent>
+              {warehouseRequests.length === 0 ? (
+                <div className="text-center py-12 text-muted-foreground">
+                  <Package className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                  <p>{t('لا توجد طلبات من المخزن')}</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {warehouseRequests.map(request => (
+                    <div key={request.id} className={`p-4 border rounded-lg ${request.status === 'pending' ? 'border-orange-500 bg-orange-500/5' : request.status === 'completed' ? 'border-green-500 bg-green-500/5' : ''}`}>
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="flex items-center gap-3">
+                          <span className="font-bold text-lg">{t('طلب')} #{request.request_number}</span>
+                          <Badge className={
+                            request.status === 'pending' ? 'bg-orange-500/20 text-orange-500' :
+                            request.status === 'purchased' ? 'bg-blue-500/20 text-blue-500' :
+                            request.status === 'completed' ? 'bg-green-500/20 text-green-500' :
+                            'bg-gray-500/20 text-gray-500'
+                          }>
+                            {request.status === 'pending' ? t('بانتظار الشراء') :
+                             request.status === 'purchased' ? t('تم الشراء - جاهز للتحويل') :
+                             request.status === 'completed' ? t('تم التحويل') : request.status}
+                          </Badge>
+                          {request.priority === 'urgent' && (
+                            <Badge className="bg-red-500 text-white">{t('مستعجل')}</Badge>
+                          )}
+                        </div>
+                        <span className="text-sm text-muted-foreground">
+                          {new Date(request.created_at).toLocaleDateString('ar-EG', {
+                            year: 'numeric', month: 'short', day: 'numeric'
+                          })}
+                        </span>
+                      </div>
+                      
+                      {/* المواد المطلوبة */}
+                      <div className="bg-muted/30 rounded-lg p-3 mb-3">
+                        <p className="text-sm font-medium mb-2">{t('المواد المطلوبة')}:</p>
+                        <div className="space-y-1">
+                          {request.items?.map((item, idx) => (
+                            <div key={idx} className="flex items-center justify-between text-sm">
+                              <span>{item.material_name || item.name}</span>
+                              <span className="font-medium">{item.quantity} {item.unit}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                      
+                      {request.notes && (
+                        <p className="text-sm text-muted-foreground mb-3">
+                          <span className="font-medium">{t('ملاحظات')}: </span>{request.notes}
+                        </p>
+                      )}
+                      
+                      {/* أزرار الإجراءات */}
+                      <div className="flex gap-2">
+                        {request.status === 'pending' && (
+                          <Button
+                            onClick={() => {
+                              // فتح نافذة الفاتورة مع ملء المواد
+                              setInvoiceForm(prev => ({
+                                ...prev,
+                                items: request.items?.map(item => ({
+                                  name: item.material_name || item.name,
+                                  quantity: item.quantity,
+                                  unit: item.unit || 'كغم',
+                                  unit_price: 0,
+                                  total: 0
+                                })) || [],
+                                request_id: request.id
+                              }));
+                              setShowInvoiceDialog(true);
+                            }}
+                            className="bg-blue-500 hover:bg-blue-600"
+                          >
+                            <FileText className="h-4 w-4 ml-2" />
+                            {t('إنشاء فاتورة')}
+                          </Button>
                         )}
-                        {order.status === 'ordered' && (
-                          <>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleDeliverToWarehouse(order.id)}
-                              className="text-orange-500 hover:bg-orange-500/10"
-                            >
-                              <Send className="h-3 w-3 ml-1" />
-                              {t('تحويل للمخزن')}</Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => updateStatus(order.id, 'delivered')}
-                              className="text-green-500 hover:bg-green-500/10"
-                            >
-                              {t('تم الاستلام')}</Button>
-                          </>
+                        {request.status === 'purchased' && (
+                          <Button
+                            onClick={() => handleTransferToWarehouse(request.id)}
+                            className="bg-green-500 hover:bg-green-600"
+                            disabled={submitting}
+                          >
+                            {submitting ? <RefreshCw className="h-4 w-4 animate-spin ml-2" /> : <Truck className="h-4 w-4 ml-2" />}
+                            {t('تحويل للمخزن')}
+                          </Button>
+                        )}
+                        {request.status === 'completed' && (
+                          <Badge className="bg-green-500 text-white px-4 py-2">
+                            <CheckCircle className="h-4 w-4 ml-2" />
+                            {t('تم التحويل')}
+                          </Badge>
                         )}
                       </div>
                     </div>
-                  </CardContent>
-                </Card>
-              ))
-            )}
-          </TabsContent>
-          <TabsContent value="suppliers" className="space-y-4 mt-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {suppliers.map((supplier) => (
-                <Card key={supplier.id} className="bg-card border-border/50">
-                  <CardContent className="p-4">
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <h3 className="font-bold">{supplier.name}</h3>
-                        <p className="text-sm text-muted-foreground">{supplier.phone}</p>
-                        {supplier.email && (
-                          <p className="text-sm text-muted-foreground">{supplier.email}</p>
-                        )}
-                      </div>
-                      <Building2 className="h-8 w-8 text-muted-foreground/30" />
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          </TabsContent>
-        </Tabs>
-      </main>
-      {/* Add Purchase Order Dialog */}
-      <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
-        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
+
+      {/* Dialog: إنشاء فاتورة */}
+      <Dialog open={showInvoiceDialog} onOpenChange={setShowInvoiceDialog}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <ShoppingCart className="h-5 w-5 text-emerald-500" />
-              {t('أمر شراء جديد')}
+              <FileText className="h-5 w-5 text-primary" />
+              {t('إنشاء فاتورة شراء')}
             </DialogTitle>
           </DialogHeader>
           
           <div className="space-y-4">
+            {/* رفع صورة الفاتورة */}
+            <div className="border-2 border-dashed rounded-lg p-4">
+              <Label className="mb-2 block">{t('صورة الفاتورة')}</Label>
+              {invoiceForm.imagePreview ? (
+                <div className="relative">
+                  <img src={invoiceForm.imagePreview} alt="فاتورة" className="w-full max-h-48 object-contain rounded-lg" />
+                  <Button
+                    variant="destructive"
+                    size="icon"
+                    className="absolute top-2 right-2"
+                    onClick={() => setInvoiceForm(prev => ({ ...prev, image: null, imagePreview: null }))}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              ) : (
+                <label className="flex flex-col items-center justify-center p-8 cursor-pointer hover:bg-muted/50 rounded-lg">
+                  <Camera className="h-12 w-12 text-muted-foreground mb-2" />
+                  <p className="text-sm text-muted-foreground">{t('اضغط لرفع صورة الفاتورة')}</p>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handleImageUpload}
+                  />
+                </label>
+              )}
+            </div>
+            
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>{t('المورد *')}</Label>
-                <Select 
-                  value={form.supplier_id} 
-                  onValueChange={(v) => setForm({...form, supplier_id: v})}
-                >
+              <div>
+                <Label>{t('المورد')}</Label>
+                <Select value={invoiceForm.supplier_id} onValueChange={(v) => setInvoiceForm(prev => ({ ...prev, supplier_id: v }))}>
                   <SelectTrigger>
                     <SelectValue placeholder={t('اختر المورد')} />
                   </SelectTrigger>
                   <SelectContent>
                     {suppliers.map(supplier => (
-                      <SelectItem key={supplier.id} value={supplier.id}>
-                        {supplier.name}
-                      </SelectItem>
+                      <SelectItem key={supplier.id} value={supplier.id}>{supplier.name}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
-              <div className="space-y-2">
-                <Label>{t('تاريخ التسليم المتوقع')}</Label>
+              <div>
+                <Label>{t('رقم الفاتورة')}</Label>
                 <Input
-                  type="date"
-                  value={form.expected_delivery}
-                  onChange={(e) => setForm({...form, expected_delivery: e.target.value})}
+                  value={invoiceForm.invoice_number}
+                  onChange={(e) => setInvoiceForm(prev => ({ ...prev, invoice_number: e.target.value }))}
+                  placeholder={t('رقم الفاتورة')}
                 />
               </div>
             </div>
-            {/* Add Item */}
-            <div className="p-4 bg-muted/50 rounded-lg space-y-3">
-              <Label>{t('إضافة مادة')}</Label>
-              <div className="grid grid-cols-4 gap-2">
-                <Select value={selectedMaterial} onValueChange={setSelectedMaterial} className="col-span-2">
-                  <SelectTrigger>
-                    <SelectValue placeholder={t('المادة')} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {rawMaterials.map(material => (
-                      <SelectItem key={material.id} value={material.id}>
-                        {material.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+            
+            {/* إضافة صنف */}
+            <div className="border rounded-lg p-3">
+              <Label className="mb-2 block">{t('إضافة صنف')}</Label>
+              <div className="grid grid-cols-5 gap-2">
+                <Input
+                  placeholder={t('اسم الصنف')}
+                  value={newItem.name}
+                  onChange={(e) => setNewItem(prev => ({ ...prev, name: e.target.value }))}
+                  className="col-span-2"
+                />
                 <Input
                   type="number"
-                  min="1"
-                  value={quantity}
-                  onChange={(e) => setQuantity(parseInt(e.target.value) || 1)}
                   placeholder={t('الكمية')}
+                  value={newItem.quantity}
+                  onChange={(e) => setNewItem(prev => ({ ...prev, quantity: parseFloat(e.target.value) || 0 }))}
                 />
                 <Input
                   type="number"
-                  min="0"
-                  value={unitPrice}
-                  onChange={(e) => setUnitPrice(parseInt(e.target.value) || 0)}
                   placeholder={t('السعر')}
+                  value={newItem.unit_price}
+                  onChange={(e) => setNewItem(prev => ({ ...prev, unit_price: parseFloat(e.target.value) || 0 }))}
                 />
+                <Button onClick={addItemToInvoice} type="button">
+                  <Plus className="h-4 w-4" />
+                </Button>
               </div>
-              <Button onClick={addItemToOrder} size="sm" className="w-full">
-                <Plus className="h-4 w-4 ml-2" />
-                {t('إضافة')}
-              </Button>
             </div>
-            {/* Items List */}
-            {form.items.length > 0 && (
-              <div className="space-y-2">
-                <Label>{t('المواد المطلوبة')}</Label>
-                <div className="border rounded-lg divide-y">
-                  {form.items.map((item, idx) => (
-                    <div key={idx} className="p-2 flex items-center justify-between">
-                      <div>
-                        <span className="font-medium">{item.material_name}</span>
-                        <span className="text-sm text-muted-foreground mx-2">
-                          {item.quantity} {item.unit} × {formatCurrency(item.unit_price)}
-                        </span>
+            
+            {/* قائمة الأصناف */}
+            {invoiceForm.items.length > 0 && (
+              <div className="border rounded-lg p-3">
+                <Label className="mb-2 block">{t('الأصناف')} ({invoiceForm.items.length})</Label>
+                <div className="space-y-2">
+                  {invoiceForm.items.map((item, idx) => (
+                    <div key={idx} className="flex items-center justify-between p-2 bg-muted/30 rounded">
+                      <div className="flex items-center gap-4">
+                        <span className="font-medium">{item.name}</span>
+                        <span className="text-sm text-muted-foreground">{item.quantity} {item.unit}</span>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold text-emerald-500">
-                          {formatCurrency(item.total)}
-                        </span>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => removeItem(idx)}
-                          className="text-red-500 h-6 w-6 p-0"
-                        >
-                          <Trash2 className="h-4 w-4" />
+                      <div className="flex items-center gap-4">
+                        <span className="font-medium">{formatPrice(item.quantity * item.unit_price)}</span>
+                        <Button variant="ghost" size="icon" onClick={() => removeItemFromInvoice(idx)}>
+                          <X className="h-4 w-4 text-red-500" />
                         </Button>
                       </div>
                     </div>
                   ))}
-                  <div className="p-2 bg-muted/50 flex justify-between font-bold">
+                  <div className="flex justify-between pt-2 border-t font-bold">
                     <span>{t('الإجمالي')}</span>
-                    <span className="text-emerald-500">{formatCurrency(getTotalAmount())}</span>
+                    <span className="text-primary">{formatPrice(calculateTotal())}</span>
                   </div>
                 </div>
               </div>
             )}
-            <div className="space-y-2">
+            
+            <div>
               <Label>{t('ملاحظات')}</Label>
-              <Input
-                placeholder={t('ملاحظات إضافية (اختياري)')}
-                value={form.notes}
-                onChange={(e) => setForm({...form, notes: e.target.value})}
+              <Textarea
+                value={invoiceForm.notes}
+                onChange={(e) => setInvoiceForm(prev => ({ ...prev, notes: e.target.value }))}
+                placeholder={t('ملاحظات إضافية')}
               />
             </div>
           </div>
           
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowAddDialog(false)}>
-              {t('إلغاء')}</Button>
-            <Button onClick={handleSubmit} className="bg-emerald-500 hover:bg-emerald-600">{t('إنشاء الأمر')}</Button>
+            <Button variant="outline" onClick={() => setShowInvoiceDialog(false)}>
+              {t('إلغاء')}
+            </Button>
+            <Button onClick={handleSaveInvoice} disabled={submitting}>
+              {submitting ? <RefreshCw className="h-4 w-4 animate-spin ml-2" /> : <CheckCircle className="h-4 w-4 ml-2" />}
+              {t('حفظ الفاتورة')}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
-      {/* Add Supplier Dialog */}
+
+      {/* Dialog: إضافة مورد */}
       <Dialog open={showSupplierDialog} onOpenChange={setShowSupplierDialog}>
-        <DialogContent className="max-w-md">
+        <DialogContent>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Building2 className="h-5 w-5 text-blue-500" />
+              <Building2 className="h-5 w-5 text-primary" />
               {t('إضافة مورد جديد')}
             </DialogTitle>
           </DialogHeader>
           
           <div className="space-y-4">
-            <div className="space-y-2">
-              <Label>{t('اسم المورد *')}</Label>
+            <div>
+              <Label>{t('اسم المورد')} *</Label>
               <Input
-                placeholder={t('اسم الشركة أو المورد')}
                 value={supplierForm.name}
-                onChange={(e) => setSupplierForm({...supplierForm, name: e.target.value})}
+                onChange={(e) => setSupplierForm(prev => ({ ...prev, name: e.target.value }))}
+                placeholder={t('اسم المورد')}
               />
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>{t('رقم الهاتف *')}</Label>
-                <Input
-                  placeholder="05xxxxxxxx"
-                  value={supplierForm.phone}
-                  onChange={(e) => setSupplierForm({...supplierForm, phone: e.target.value})}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>{t('البريد الإلكتروني')}</Label>
-                <Input
-                  type="email"
-                  placeholder="email@example.com"
-                  value={supplierForm.email}
-                  onChange={(e) => setSupplierForm({...supplierForm, email: e.target.value})}
-                />
-              </div>
+            <div>
+              <Label>{t('اسم الشركة')}</Label>
+              <Input
+                value={supplierForm.company_name}
+                onChange={(e) => setSupplierForm(prev => ({ ...prev, company_name: e.target.value }))}
+                placeholder={t('اسم الشركة')}
+              />
             </div>
-            <div className="space-y-2">
+            <div>
+              <Label>{t('رقم الهاتف')} *</Label>
+              <Input
+                value={supplierForm.phone}
+                onChange={(e) => setSupplierForm(prev => ({ ...prev, phone: e.target.value }))}
+                placeholder={t('رقم الهاتف')}
+                dir="ltr"
+              />
+            </div>
+            <div>
               <Label>{t('العنوان')}</Label>
               <Input
-                placeholder={t('عنوان المورد')}
                 value={supplierForm.address}
-                onChange={(e) => setSupplierForm({...supplierForm, address: e.target.value})}
+                onChange={(e) => setSupplierForm(prev => ({ ...prev, address: e.target.value }))}
+                placeholder={t('العنوان')}
+              />
+            </div>
+            <div>
+              <Label>{t('المنتجات التي يوردها')}</Label>
+              <Textarea
+                value={supplierForm.products}
+                onChange={(e) => setSupplierForm(prev => ({ ...prev, products: e.target.value }))}
+                placeholder={t('مثال: لحوم، دجاج، خضروات...')}
+              />
+            </div>
+            <div>
+              <Label>{t('ملاحظات')}</Label>
+              <Textarea
+                value={supplierForm.notes}
+                onChange={(e) => setSupplierForm(prev => ({ ...prev, notes: e.target.value }))}
+                placeholder={t('ملاحظات إضافية')}
               />
             </div>
           </div>
           
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowSupplierDialog(false)}>
-              {t('إلغاء')}</Button>
-            <Button onClick={handleAddSupplier} className="bg-blue-500 hover:bg-blue-600">{t('إضافة')}</Button>
+              {t('إلغاء')}
+            </Button>
+            <Button onClick={handleSaveSupplier} disabled={submitting}>
+              {submitting ? <RefreshCw className="h-4 w-4 animate-spin ml-2" /> : <Plus className="h-4 w-4 ml-2" />}
+              {t('حفظ المورد')}
+            </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog: عرض صورة الفاتورة */}
+      <Dialog open={!!showImageDialog} onOpenChange={() => setShowImageDialog(null)}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>
+              {t('صورة الفاتورة')} #{showImageDialog?.invoice_number || showImageDialog?.id?.slice(0, 8)}
+            </DialogTitle>
+          </DialogHeader>
+          {showImageDialog?.image_data && (
+            <img src={showImageDialog.image_data} alt="فاتورة" className="w-full rounded-lg" />
+          )}
         </DialogContent>
       </Dialog>
     </div>
