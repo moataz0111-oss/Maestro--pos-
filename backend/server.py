@@ -39,7 +39,9 @@ JWT_SECRET = os.environ.get('JWT_SECRET')
 if not JWT_SECRET:
     raise ValueError("JWT_SECRET environment variable is required")
 JWT_ALGORITHM = 'HS256'
-JWT_EXPIRATION_HOURS = 72
+# مدة صلاحية الجلسة بناءً على نوع المستخدم
+JWT_EXPIRATION_HOURS_STAFF = 24  # الموظفين: 24 ساعة
+JWT_EXPIRATION_DAYS_OWNERS = 365  # المالك والعملاء: سنة كاملة
 
 # SendGrid Configuration
 SENDGRID_API_KEY = os.environ.get('SENDGRID_API_KEY', '')
@@ -1637,11 +1639,19 @@ def verify_password(password: str, hashed: str) -> bool:
         return False
 
 def create_token(user_id: str, role: str, branch_id: Optional[str] = None) -> str:
+    # تحديد مدة الجلسة بناءً على نوع المستخدم
+    # المالك (super_admin) والعملاء (admin) = سنة كاملة
+    # الموظفين (cashier, warehouse_keeper, manufacturer, branch_manager) = 24 ساعة
+    if role in [UserRole.SUPER_ADMIN, UserRole.ADMIN]:
+        expiration = datetime.now(timezone.utc) + timedelta(days=JWT_EXPIRATION_DAYS_OWNERS)
+    else:
+        expiration = datetime.now(timezone.utc) + timedelta(hours=JWT_EXPIRATION_HOURS_STAFF)
+    
     payload = {
         "user_id": user_id,
         "role": role,
         "branch_id": branch_id,
-        "exp": datetime.now(timezone.utc) + timedelta(hours=JWT_EXPIRATION_HOURS)
+        "exp": expiration
     }
     return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
 
