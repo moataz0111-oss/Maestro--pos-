@@ -3536,7 +3536,27 @@ export default function Settings() {
                                         }}
                                         className="w-20 h-8 text-center"
                                       />
-                                      <span className="text-xs text-muted-foreground w-16">{ing.unit}</span>
+                                      <Select
+                                        value={ing.unit}
+                                        onValueChange={(v) => {
+                                          const newRecipe = [...productForm.recipe_quantities];
+                                          newRecipe[idx].unit = v;
+                                          setProductForm({ ...productForm, recipe_quantities: newRecipe });
+                                        }}
+                                      >
+                                        <SelectTrigger className="w-20 h-8 text-xs">
+                                          <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          <SelectItem value="غرام">{t('غرام')}</SelectItem>
+                                          <SelectItem value="كغم">{t('كغم')}</SelectItem>
+                                          <SelectItem value="قطعة">{t('قطعة')}</SelectItem>
+                                          <SelectItem value="حبة">{t('حبة')}</SelectItem>
+                                          <SelectItem value="مل">{t('مل')}</SelectItem>
+                                          <SelectItem value="لتر">{t('لتر')}</SelectItem>
+                                          <SelectItem value="ملعقة">{t('ملعقة')}</SelectItem>
+                                        </SelectContent>
+                                      </Select>
                                       <span className="text-xs text-green-500 w-20 text-left">
                                         {formatPrice(ing.quantity * ing.cost_per_unit)}
                                       </span>
@@ -3963,7 +3983,27 @@ export default function Settings() {
                                       }}
                                       className="w-20 h-8 text-center"
                                     />
-                                    <span className="text-xs text-muted-foreground w-16">{ing.unit}</span>
+                                    <Select
+                                      value={ing.unit}
+                                      onValueChange={(v) => {
+                                        const newRecipe = [...editProductForm.recipe_quantities];
+                                        newRecipe[idx].unit = v;
+                                        setEditProductForm({ ...editProductForm, recipe_quantities: newRecipe });
+                                      }}
+                                    >
+                                      <SelectTrigger className="w-20 h-8 text-xs">
+                                        <SelectValue />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="غرام">{t('غرام')}</SelectItem>
+                                        <SelectItem value="كغم">{t('كغم')}</SelectItem>
+                                        <SelectItem value="قطعة">{t('قطعة')}</SelectItem>
+                                        <SelectItem value="حبة">{t('حبة')}</SelectItem>
+                                        <SelectItem value="مل">{t('مل')}</SelectItem>
+                                        <SelectItem value="لتر">{t('لتر')}</SelectItem>
+                                        <SelectItem value="ملعقة">{t('ملعقة')}</SelectItem>
+                                      </SelectContent>
+                                    </Select>
                                     <span className="text-xs text-green-500 w-20 text-left">
                                       {formatPrice(ing.quantity * ing.cost_per_unit)}
                                     </span>
