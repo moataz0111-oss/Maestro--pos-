@@ -6203,7 +6203,7 @@ async def get_today_cash_register(current_user: dict = Depends(get_current_user)
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     branch_id = current_user.get("branch_id")
     
-    # مبيعات اليوم النقدية (فقط الكاش المحصّل باليد - بدون التوصيل لأنه آجل)
+    # مبيعات اليوم النقدية (فقط الكاش المحصّل باليد - بدون التوصيل وبدون البطاقة)
     cash_query = {
         "created_at": {"$regex": f"^{today}"},
         "payment_method": "cash",
@@ -6216,7 +6216,7 @@ async def get_today_cash_register(current_user: dict = Depends(get_current_user)
     cash_orders = await db.orders.find(cash_query, {"_id": 0, "total": 1, "order_number": 1}).to_list(500)
     total_cash_sales = sum(o.get("total", 0) for o in cash_orders)
     
-    # مبيعات البطاقة
+    # مبيعات البطاقة (منفصلة - ليست نقدي)
     card_query = {
         "created_at": {"$regex": f"^{today}"},
         "payment_method": "card",
@@ -6259,16 +6259,19 @@ async def get_today_cash_register(current_user: dict = Depends(get_current_user)
     # إجمالي المبيعات = كل شيء (نقدي + بطاقة + آجل)
     total_all_sales = total_cash_sales + total_card_sales + total_credit
     
+    # المتوقع في الصندوق = نقدي فقط - مصاريف (البطاقة لا تدخل الصندوق)
+    expected_cash = total_cash_sales - total_expenses
+    
     return {
         "date": today,
-        "cash_sales": total_cash_sales,  # فقط الكاش المحصّل باليد
-        "card_sales": total_card_sales,
+        "cash_sales": total_cash_sales,  # فقط الكاش المحصّل باليد (بدون توصيل وبدون بطاقة)
+        "card_sales": total_card_sales,  # مبيعات البطاقة (منفصلة)
         "credit_sales": total_credit,  # يشمل التوصيل
         "total_sales": total_all_sales,  # إجمالي كل المبيعات
         "orders_count": len(cash_orders) + len(card_orders) + len(credit_orders),
         "expenses": expenses,
         "total_expenses": total_expenses,
-        "expected_cash": total_cash_sales - total_expenses,  # المتوقع في الصندوق = نقدي - مصاريف
+        "expected_cash": expected_cash,  # المتوقع في الصندوق = نقدي - مصاريف
         "last_close": last_close
     }
 
@@ -11878,7 +11881,7 @@ async def get_sales_report(
     branch_id: Optional[str] = None,
     current_user: dict = Depends(get_current_user)
 ):
-    """تقرير المبيعات - النقدي فقط الكاش المحصّل باليد (بدون التوصيل)"""
+    """تقرير المبيعات - النقدي فقط الكاش المحصّل باليد (بدون التوصيل وبدون البطاقة)"""
     query = build_tenant_query(current_user)
     
     if branch_id:
@@ -11910,19 +11913,19 @@ async def get_sales_report(
     total_orders = len(orders)
     avg_order_value = total_sales / total_orders if total_orders > 0 else 0
     
-    # المبيعات النقدية (فقط الكاش المحصّل باليد - بدون التوصيل لأنه آجل)
+    # المبيعات النقدية (فقط الكاش المحصّل باليد - بدون التوصيل وبدون البطاقة)
     cash_amount = sum(
         o.get("total", 0) for o in orders 
         if o.get("payment_method") == "cash" and o.get("order_type") != "delivery"
     )
     
-    # مبيعات البطاقة
+    # مبيعات البطاقة (منفصلة - ليست نقدي)
     card_amount = sum(
         o.get("total", 0) for o in orders 
         if o.get("payment_method") == "card"
     )
     
-    # الآجل (يشمل التوصيل لأن شركات التوصيل آجل)
+    # الآجل (يشمل التوصيل لأن شركات التوصيل آجل + الآجل العادي)
     credit_amount = sum(
         o.get("total", 0) for o in orders 
         if o.get("payment_method") == "credit" or o.get("order_type") == "delivery"
@@ -11949,9 +11952,9 @@ async def get_sales_report(
             "delivery": delivery_amount
         },
         "by_payment_method": {
-            "cash": cash_amount,  # فقط الكاش المحصّل باليد
-            "card": card_amount,
-            "credit": credit_amount  # يشمل التوصيل
+            "cash": cash_amount,  # فقط الكاش المحصّل باليد (بدون توصيل وبدون بطاقة)
+            "card": card_amount,  # مبيعات البطاقة (منفصلة)
+            "credit": credit_amount  # يشمل التوصيل + الآجل
         },
         "by_payment": {
             "cash": cash_orders_count,
