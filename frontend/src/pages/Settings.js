@@ -574,7 +574,7 @@ export default function Settings() {
       
       // جلب مواد التغليف
       try {
-        const packagingRes = await axios.get(`${API}/packaging-materials`);
+        const packagingRes = await axios.get(`${API}/packaging-materials`, { headers });
         setPackagingMaterials(packagingRes.data || []);
       } catch (err) {
         console.log('No packaging materials found');
