@@ -191,6 +191,33 @@ const PermissionRoute = ({ children, permission }) => {
     return children;
   }
   
+  // صلاحيات أمين المخزن
+  if (user?.role === 'warehouse_keeper') {
+    const allowedPermissions = ['warehouse', 'inventory', 'warehouse-manufacturing'];
+    if (allowedPermissions.includes(permission)) {
+      return children;
+    }
+    return <Navigate to="/warehouse-manufacturing" />;
+  }
+  
+  // صلاحيات مسؤول التصنيع
+  if (user?.role === 'manufacturer') {
+    const allowedPermissions = ['manufacturing', 'warehouse-manufacturing'];
+    if (allowedPermissions.includes(permission)) {
+      return children;
+    }
+    return <Navigate to="/warehouse-manufacturing" />;
+  }
+  
+  // صلاحيات مسؤول المشتريات
+  if (user?.role === 'purchaser') {
+    const allowedPermissions = ['purchasing'];
+    if (allowedPermissions.includes(permission)) {
+      return children;
+    }
+    return <Navigate to="/purchasing" />;
+  }
+  
   // التحقق من الصلاحية
   if (!hasPermission(permission)) {
     return <Navigate to="/" />;
@@ -235,7 +262,21 @@ const PublicRoute = ({ children }) => {
     return children;
   }
   
-  return isAuthenticated ? <Navigate to="/" /> : children;
+  // توجيه المستخدمين حسب أدوارهم
+  if (isAuthenticated) {
+    if (user?.role === 'warehouse_keeper') {
+      return <Navigate to="/warehouse-manufacturing" />;
+    }
+    if (user?.role === 'manufacturer') {
+      return <Navigate to="/warehouse-manufacturing" />;
+    }
+    if (user?.role === 'purchaser') {
+      return <Navigate to="/purchasing" />;
+    }
+    return <Navigate to="/" />;
+  }
+  
+  return children;
 };
 
 function AppRoutes() {

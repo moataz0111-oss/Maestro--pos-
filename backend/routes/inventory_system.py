@@ -1444,6 +1444,81 @@ async def update_purchase_request_status(request_id: str, status_data: dict):
     
     return {"message": "تم تحديث الحالة", "status": new_status}
 
+
+@router.post("/purchase-requests/{request_id}/receive")
+async def receive_purchase_request(request_id: str, received_items: Optional[List[dict]] = None):
+    """استلام طلب الشراء وإضافة المواد للمخزن"""
+    db = get_db()
+    
+    request = await db.purchase_requests.find_one({"id": request_id})
+    if not request:
+        raise HTTPException(status_code=404, detail="الطلب غير موجود")
+    
+    if request.get("status") not in ["approved", "ordered"]:
+        raise HTTPException(status_code=400, detail="يجب أن يكون الطلب معتمداً أو مطلوباً قبل الاستلام")
+    
+    # استخدام الكميات المستلمة أو الكميات المطلوبة
+    items_to_receive = received_items or request.get("items", [])
+    
+    # إضافة المواد للمخزن
+    for item in items_to_receive:
+        material_name = item.get("material_name")
+        quantity = item.get("received_quantity", item.get("quantity", 0))
+        
+        # البحث عن المادة في المخزن
+        existing_material = await db.raw_materials.find_one({"name": material_name})
+        
+        if existing_material:
+            # زيادة الكمية
+            await db.raw_materials.update_one(
+                {"id": existing_material["id"]},
+                {
+                    "$inc": {
+                        "quantity": quantity,
+                        "total_received": quantity
+                    },
+                    "$set": {"last_updated": datetime.now(timezone.utc).isoformat()}
+                }
+            )
+        else:
+            # إنشاء مادة جديدة
+            await db.raw_materials.insert_one({
+                "id": str(uuid.uuid4()),
+                "name": material_name,
+                "unit": item.get("unit", "كغم"),
+                "quantity": quantity,
+                "total_received": quantity,
+                "transferred_to_manufacturing": 0,
+                "min_quantity": 10,
+                "cost_per_unit": item.get("estimated_cost", 0),
+                "waste_percentage": 0,
+                "effective_cost_per_unit": item.get("estimated_cost", 0),
+                "created_at": datetime.now(timezone.utc).isoformat()
+            })
+    
+    # تحديث حالة الطلب
+    await db.purchase_requests.update_one(
+        {"id": request_id},
+        {"$set": {
+            "status": "received",
+            "received_at": datetime.now(timezone.utc).isoformat(),
+            "received_items": items_to_receive
+        }}
+    )
+    
+    # تسجيل الحركة
+    await db.inventory_movements.insert_one({
+        "id": str(uuid.uuid4()),
+        "type": "purchase_received",
+        "request_id": request_id,
+        "items": items_to_receive,
+        "notes": f"استلام طلب شراء #{request.get('request_number')}",
+        "created_at": datetime.now(timezone.utc).isoformat()
+    })
+    
+    return {"message": "تم استلام المشتريات وإضافتها للمخزن", "request_id": request_id}
+
+
 @router.get("/warehouse-transactions")
 async def get_warehouse_transactions(type: Optional[str] = None):
     """جلب حركات المخزن (واردات/صادرات)"""

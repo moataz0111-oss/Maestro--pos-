@@ -34,7 +34,8 @@ import {
   CheckCircle,
   Clock,
   X,
-  Building2
+  Building2,
+  ShoppingCart
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -63,7 +64,21 @@ export default function WarehouseManufacturing() {
   const { user, hasRole } = useAuth();
   const { t, isRTL } = useTranslation();
   
-  const [activeTab, setActiveTab] = useState('warehouse');
+  // تحديد الدور
+  const userRole = user?.role || '';
+  const isWarehouseKeeper = userRole === 'warehouse_keeper';
+  const isManufacturer = userRole === 'manufacturer';
+  const isPurchaser = userRole === 'purchaser';
+  const isAdmin = userRole === 'admin' || userRole === 'super_admin' || userRole === 'branch_manager';
+  
+  // تحديد التاب الافتراضي حسب الدور
+  const getDefaultTab = () => {
+    if (isManufacturer) return 'manufacturing';
+    if (isWarehouseKeeper) return 'warehouse';
+    return 'warehouse';
+  };
+  
+  const [activeTab, setActiveTab] = useState(getDefaultTab());
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   
@@ -767,44 +782,87 @@ export default function WarehouseManufacturing() {
         )}
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid grid-cols-6 w-full max-w-4xl">
-            <TabsTrigger value="warehouse" className="gap-2" data-testid="tab-warehouse">
-              <Warehouse className="h-4 w-4" />
-              {t('المخزن')}
-            </TabsTrigger>
-            <TabsTrigger value="mfg-requests" className="gap-2 relative" data-testid="tab-mfg-requests">
-              <BoxSelect className="h-4 w-4" />
-              {t('طلبات التصنيع')}
-              {manufacturingRequests.filter(r => r.status === 'pending').length > 0 && (
-                <Badge className="absolute -top-2 -right-2 bg-orange-500 text-white text-xs px-1.5 py-0.5 rounded-full">
-                  {manufacturingRequests.filter(r => r.status === 'pending').length}
-                </Badge>
-              )}
-            </TabsTrigger>
-            <TabsTrigger value="manufacturing" className="gap-2" data-testid="tab-manufacturing">
-              <Factory className="h-4 w-4" />
-              {t('التصنيع')}
-            </TabsTrigger>
-            <TabsTrigger value="branch-requests" className="gap-2 relative" data-testid="tab-branch-requests">
-              <Building2 className="h-4 w-4" />
-              {t('طلبات الفروع')}
-              {branchRequests.filter(r => r.status === 'pending').length > 0 && (
-                <Badge className="absolute -top-2 -right-2 bg-red-500 text-white text-xs px-1.5 py-0.5 rounded-full">
-                  {branchRequests.filter(r => r.status === 'pending').length}
-                </Badge>
-              )}
-            </TabsTrigger>
-            <TabsTrigger value="transactions" className="gap-2" data-testid="tab-transactions">
-              <ArrowUpCircle className="h-4 w-4" />
-              {t('الحركات')}
-            </TabsTrigger>
-            <TabsTrigger value="transfers" className="gap-2" data-testid="tab-transfers">
-              <Send className="h-4 w-4" />
-              {t('التحويلات')}
-            </TabsTrigger>
+          <TabsList className={`grid w-full max-w-4xl ${isAdmin ? 'grid-cols-6' : isWarehouseKeeper ? 'grid-cols-3' : isManufacturer ? 'grid-cols-3' : 'grid-cols-6'}`}>
+            {/* تاب المخزن - للمدير وأمين المخزن فقط */}
+            {(isAdmin || isWarehouseKeeper) && (
+              <TabsTrigger value="warehouse" className="gap-2" data-testid="tab-warehouse">
+                <Warehouse className="h-4 w-4" />
+                {t('المخزن')}
+              </TabsTrigger>
+            )}
+            {/* تاب طلبات التصنيع - للمدير وأمين المخزن (يرون الطلبات الواردة) */}
+            {(isAdmin || isWarehouseKeeper) && (
+              <TabsTrigger value="mfg-requests" className="gap-2 relative" data-testid="tab-mfg-requests">
+                <BoxSelect className="h-4 w-4" />
+                {t('طلبات التصنيع')}
+                {manufacturingRequests.filter(r => r.status === 'pending').length > 0 && (
+                  <Badge className="absolute -top-2 -right-2 bg-orange-500 text-white text-xs px-1.5 py-0.5 rounded-full">
+                    {manufacturingRequests.filter(r => r.status === 'pending').length}
+                  </Badge>
+                )}
+              </TabsTrigger>
+            )}
+            {/* تاب التصنيع - للمدير ومسؤول التصنيع */}
+            {(isAdmin || isManufacturer) && (
+              <TabsTrigger value="manufacturing" className="gap-2" data-testid="tab-manufacturing">
+                <Factory className="h-4 w-4" />
+                {t('التصنيع')}
+              </TabsTrigger>
+            )}
+            {/* تاب طلبات الفروع - للمدير ومسؤول التصنيع */}
+            {(isAdmin || isManufacturer) && (
+              <TabsTrigger value="branch-requests" className="gap-2 relative" data-testid="tab-branch-requests">
+                <Building2 className="h-4 w-4" />
+                {t('طلبات الفروع')}
+                {branchRequests.filter(r => r.status === 'pending').length > 0 && (
+                  <Badge className="absolute -top-2 -right-2 bg-red-500 text-white text-xs px-1.5 py-0.5 rounded-full">
+                    {branchRequests.filter(r => r.status === 'pending').length}
+                  </Badge>
+                )}
+              </TabsTrigger>
+            )}
+            {/* تاب الحركات - للجميع */}
+            {(isAdmin || isWarehouseKeeper) && (
+              <TabsTrigger value="transactions" className="gap-2" data-testid="tab-transactions">
+                <ArrowUpCircle className="h-4 w-4" />
+                {t('الحركات')}
+              </TabsTrigger>
+            )}
+            {/* تاب التحويلات - للمدير وأمين المخزن */}
+            {(isAdmin || isWarehouseKeeper || isManufacturer) && (
+              <TabsTrigger value="transfers" className="gap-2" data-testid="tab-transfers">
+                <Send className="h-4 w-4" />
+                {t('التحويلات')}
+              </TabsTrigger>
+            )}
           </TabsList>
           {/* المخزن (المواد الخام) */}
           <TabsContent value="warehouse" className="space-y-4">
+            {/* زر طلب شراء جديد */}
+            {(isAdmin || isWarehouseKeeper) && (
+              <Card className="border-green-500/30 bg-green-500/5">
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <ShoppingCart className="h-8 w-8 text-green-500" />
+                      <div>
+                        <h3 className="font-bold">{t('طلب شراء جديد')}</h3>
+                        <p className="text-sm text-muted-foreground">{t('إنشاء طلب شراء مواد خام من المشتريات')}</p>
+                      </div>
+                    </div>
+                    <Button
+                      onClick={() => navigate('/purchasing')}
+                      className="bg-green-500 hover:bg-green-600"
+                      data-testid="go-to-purchasing-btn"
+                    >
+                      <ShoppingCart className="h-4 w-4 ml-2" />
+                      {t('المشتريات')}
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+            
             {/* Low Stock Alert */}
             {lowStockMaterials.length > 0 && (
               <Card className="border-red-500/50 bg-red-500/5">
