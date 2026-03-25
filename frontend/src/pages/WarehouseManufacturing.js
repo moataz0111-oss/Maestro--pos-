@@ -972,17 +972,17 @@ export default function WarehouseManufacturing() {
         )}
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className={`grid w-full max-w-5xl ${isAdmin ? 'grid-cols-7' : isWarehouseKeeper ? 'grid-cols-4' : isManufacturer ? 'grid-cols-3' : 'grid-cols-7'}`}>
+          <TabsList className="flex flex-wrap gap-2 h-auto p-2 bg-muted/50 rounded-lg w-full justify-start">
             {/* تاب المخزن - للمدير وأمين المخزن فقط */}
             {(isAdmin || isWarehouseKeeper) && (
-              <TabsTrigger value="warehouse" className="gap-2" data-testid="tab-warehouse">
+              <TabsTrigger value="warehouse" className="gap-2 px-4 py-2" data-testid="tab-warehouse">
                 <Warehouse className="h-4 w-4" />
                 {t('المخزن')}
               </TabsTrigger>
             )}
             {/* تاب طلبات التصنيع - للمدير وأمين المخزن (يرون الطلبات الواردة) */}
             {(isAdmin || isWarehouseKeeper) && (
-              <TabsTrigger value="mfg-requests" className="gap-2 relative" data-testid="tab-mfg-requests">
+              <TabsTrigger value="mfg-requests" className="gap-2 px-4 py-2 relative" data-testid="tab-mfg-requests">
                 <BoxSelect className="h-4 w-4" />
                 {t('طلبات التصنيع')}
                 {manufacturingRequests.filter(r => r.status === 'pending').length > 0 && (
@@ -994,7 +994,7 @@ export default function WarehouseManufacturing() {
             )}
             {/* تاب الورقيات/التغليف - للمدير وأمين المخزن فقط */}
             {(isAdmin || isWarehouseKeeper) && (
-              <TabsTrigger value="packaging" className="gap-2 relative" data-testid="tab-packaging">
+              <TabsTrigger value="packaging" className="gap-2 px-4 py-2 relative" data-testid="tab-packaging">
                 <Box className="h-4 w-4" />
                 {t('الورقيات')}
                 {packagingRequests.filter(r => r.status === 'pending').length > 0 && (
@@ -1006,7 +1006,7 @@ export default function WarehouseManufacturing() {
             )}
             {/* تاب طلب مواد تغليف - للفروع */}
             {!isWarehouseKeeper && (
-              <TabsTrigger value="request-packaging" className="gap-2 relative" data-testid="tab-request-packaging">
+              <TabsTrigger value="request-packaging" className="gap-2 px-4 py-2 relative" data-testid="tab-request-packaging">
                 <ShoppingCart className="h-4 w-4" />
                 {t('طلب تغليف')}
                 {packagingRequests.filter(r => r.created_by === user?.id && r.status === 'pending').length > 0 && (
@@ -1018,21 +1018,21 @@ export default function WarehouseManufacturing() {
             )}
             {/* تاب مخزون التغليف في الفرع */}
             {!isWarehouseKeeper && (
-              <TabsTrigger value="branch-packaging-inv" className="gap-2" data-testid="tab-branch-packaging">
+              <TabsTrigger value="branch-packaging-inv" className="gap-2 px-4 py-2" data-testid="tab-branch-packaging">
                 <Package className="h-4 w-4" />
                 {t('مخزون الفرع')}
               </TabsTrigger>
             )}
             {/* تاب التصنيع - للمدير ومسؤول التصنيع */}
             {(isAdmin || isManufacturer) && (
-              <TabsTrigger value="manufacturing" className="gap-2" data-testid="tab-manufacturing">
+              <TabsTrigger value="manufacturing" className="gap-2 px-4 py-2" data-testid="tab-manufacturing">
                 <Factory className="h-4 w-4" />
                 {t('التصنيع')}
               </TabsTrigger>
             )}
             {/* تاب طلبات الفروع - للمدير ومسؤول التصنيع */}
             {(isAdmin || isManufacturer) && (
-              <TabsTrigger value="branch-requests" className="gap-2 relative" data-testid="tab-branch-requests">
+              <TabsTrigger value="branch-requests" className="gap-2 px-4 py-2 relative" data-testid="tab-branch-requests">
                 <Building2 className="h-4 w-4" />
                 {t('طلبات الفروع')}
                 {branchRequests.filter(r => r.status === 'pending').length > 0 && (
@@ -1044,14 +1044,14 @@ export default function WarehouseManufacturing() {
             )}
             {/* تاب الحركات - للجميع */}
             {(isAdmin || isWarehouseKeeper) && (
-              <TabsTrigger value="transactions" className="gap-2" data-testid="tab-transactions">
+              <TabsTrigger value="transactions" className="gap-2 px-4 py-2" data-testid="tab-transactions">
                 <ArrowUpCircle className="h-4 w-4" />
                 {t('الحركات')}
               </TabsTrigger>
             )}
             {/* تاب التحويلات - للمدير وأمين المخزن */}
             {(isAdmin || isWarehouseKeeper || isManufacturer) && (
-              <TabsTrigger value="transfers" className="gap-2" data-testid="tab-transfers">
+              <TabsTrigger value="transfers" className="gap-2 px-4 py-2" data-testid="tab-transfers">
                 <Send className="h-4 w-4" />
                 {t('التحويلات')}
               </TabsTrigger>

@@ -3454,24 +3454,27 @@ export default function Settings() {
                             />
                           </div>
                           <div>
-                            <Label className="text-foreground">{t('تكلفة المواد الخام')}</Label>
+                            <Label className={`text-foreground ${!productForm.manufactured_product_id || parseFloat(productForm.cost || 0) === 0 ? 'text-red-500' : 'text-green-600'}`}>
+                              {t('تكلفة المواد الخام')}
+                            </Label>
                             <Input
                               type="number"
-                              value={productForm.cost}
-                              onChange={(e) => {
-                                if (!productForm.manufactured_product_id) {
-                                  setProductForm({ ...productForm, cost: e.target.value });
-                                }
-                              }}
-                              placeholder="0"
-                              className="mt-1"
-                              readOnly={!!productForm.manufactured_product_id}
-                              style={productForm.manufactured_product_id ? { backgroundColor: 'rgba(139, 92, 246, 0.1)', cursor: 'not-allowed' } : {}}
+                              value={productForm.cost || 0}
+                              readOnly
+                              className={`mt-1 cursor-not-allowed ${
+                                !productForm.manufactured_product_id || parseFloat(productForm.cost || 0) === 0
+                                  ? 'bg-red-50 dark:bg-red-900/20 border-red-300 text-red-600 font-bold'
+                                  : 'bg-purple-50 dark:bg-purple-900/20 border-purple-300 text-purple-600 font-bold'
+                              }`}
                             />
-                            <p className="text-xs text-muted-foreground mt-1">
+                            <p className={`text-xs mt-1 ${
+                              !productForm.manufactured_product_id 
+                                ? 'text-red-500 font-medium' 
+                                : 'text-purple-500'
+                            }`}>
                               {productForm.manufactured_product_id 
                                 ? t('تُحسب تلقائياً من المنتج المصنع المربوط')
-                                : t('أدخل تكلفة يدوية أو اربط بمنتج مصنع')
+                                : t('اربط بمنتج مصنع لحساب التكلفة تلقائياً')
                               }
                             </p>
                           </div>
@@ -4012,24 +4015,27 @@ export default function Settings() {
                           />
                         </div>
                         <div>
-                          <Label className="text-foreground">{t('تكلفة المواد الخام')}</Label>
+                          <Label className={`text-foreground ${!editProductForm.manufactured_product_id || parseFloat(editProductForm.cost || 0) === 0 ? 'text-red-500' : 'text-green-600'}`}>
+                            {t('تكلفة المواد الخام')}
+                          </Label>
                           <Input
                             type="number"
-                            value={editProductForm.cost}
-                            onChange={(e) => {
-                              if (!editProductForm.manufactured_product_id) {
-                                setEditProductForm({ ...editProductForm, cost: e.target.value });
-                              }
-                            }}
-                            placeholder="0"
-                            className="mt-1"
-                            readOnly={!!editProductForm.manufactured_product_id}
-                            style={editProductForm.manufactured_product_id ? { backgroundColor: 'rgba(139, 92, 246, 0.1)', cursor: 'not-allowed' } : {}}
+                            value={editProductForm.cost || 0}
+                            readOnly
+                            className={`mt-1 cursor-not-allowed ${
+                              !editProductForm.manufactured_product_id || parseFloat(editProductForm.cost || 0) === 0
+                                ? 'bg-red-50 dark:bg-red-900/20 border-red-300 text-red-600 font-bold'
+                                : 'bg-purple-50 dark:bg-purple-900/20 border-purple-300 text-purple-600 font-bold'
+                            }`}
                           />
-                          <p className="text-xs text-muted-foreground mt-1">
+                          <p className={`text-xs mt-1 ${
+                            !editProductForm.manufactured_product_id 
+                              ? 'text-red-500 font-medium' 
+                              : 'text-purple-500'
+                          }`}>
                             {editProductForm.manufactured_product_id 
                               ? t('تُحسب تلقائياً من المنتج المصنع المربوط')
-                              : t('أدخل تكلفة يدوية أو اربط بمنتج مصنع')
+                              : t('اربط بمنتج مصنع لحساب التكلفة تلقائياً')
                             }
                           </p>
                         </div>
