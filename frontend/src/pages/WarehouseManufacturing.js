@@ -76,6 +76,7 @@ export default function WarehouseManufacturing() {
   const [branches, setBranches] = useState([]);
   const [stats, setStats] = useState(null);
   const [branchRequests, setBranchRequests] = useState([]);  // طلبات الفروع
+  const [manufacturingRequests, setManufacturingRequests] = useState([]);  // طلبات من المخزن
   
   // Dialog states
   const [showAddRawMaterial, setShowAddRawMaterial] = useState(false);
@@ -83,7 +84,9 @@ export default function WarehouseManufacturing() {
   const [showBranchTransferDialog, setShowBranchTransferDialog] = useState(false);
   const [showAddProductDialog, setShowAddProductDialog] = useState(false);
   const [showProduceDialog, setShowProduceDialog] = useState(null);
+  const [showAddStockDialog, setShowAddStockDialog] = useState(null);  // زيادة كمية المنتج
   const [selectedRecipe, setSelectedRecipe] = useState(null);
+  const [showRequestMaterialsDialog, setShowRequestMaterialsDialog] = useState(false);  // طلب مواد
   
   // Form states
   const [rawMaterialForm, setRawMaterialForm] = useState({
@@ -127,6 +130,7 @@ export default function WarehouseManufacturing() {
   });
   
   const [produceQuantity, setProduceQuantity] = useState(1);
+  const [addStockQuantity, setAddStockQuantity] = useState(1);  // كمية زيادة المخزون
   
   const [searchQuery, setSearchQuery] = useState('');
   const token = localStorage.getItem('token');
@@ -472,6 +476,25 @@ export default function WarehouseManufacturing() {
       setSubmitting(false);
     }
   };
+  
+  // زيادة كمية المنتج مباشرة (بدون خصم مواد)
+  const handleAddStock = async () => {
+    if (!showAddStockDialog || addStockQuantity <= 0) return;
+    
+    setSubmitting(true);
+    try {
+      await axios.post(`${API}/manufactured-products/${showAddStockDialog.id}/add-stock?quantity=${addStockQuantity}`, {}, { headers });
+      toast.success(t('تم زيادة الكمية بنجاح'));
+      setShowAddStockDialog(null);
+      setAddStockQuantity(1);
+      fetchData();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || t('فشل في زيادة الكمية'));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+  
   // تصفية البيانات
   const filteredRawMaterials = rawMaterials.filter(m => 
     !searchQuery || m.name.includes(searchQuery) || m.name_en?.includes(searchQuery)
@@ -797,14 +820,14 @@ export default function WarehouseManufacturing() {
                 ) : (
                   <div className="space-y-4">
                     {manufacturedProducts.map(product => (
-                      <Card key={product.id} className={`${product.quantity <= product.min_quantity ? 'ring-2 ring-red-500' : ''}`}>
+                      <Card key={product.id} className={`${product.quantity <= product.min_quantity ? 'ring-2 ring-red-500' : ''}`} data-testid={`product-${product.id}`}>
                         <CardContent className="p-4">
                           <div className="flex items-start justify-between">
                             <div className="flex-1">
-                              <div className="flex items-center gap-2 mb-2">
+                              <div className="flex items-center gap-2 mb-2 flex-wrap">
                                 <h3 className="font-bold text-lg">{product.name}</h3>
                                 <Badge className={product.quantity <= product.min_quantity ? 'bg-red-500/20 text-red-500' : 'bg-green-500/20 text-green-500'}>
-                                  {product.quantity} {product.unit}
+                                  {t('المتبقي')}: {product.quantity} {product.unit}
                                 </Badge>
                                 {product.piece_weight && (
                                   <Badge variant="outline" className="text-orange-500 border-orange-500">
@@ -812,6 +835,37 @@ export default function WarehouseManufacturing() {
                                   </Badge>
                                 )}
                               </div>
+                              
+                              {/* إحصائيات الكمية */}
+                              <div className="grid grid-cols-3 gap-2 p-2 bg-muted/30 rounded-lg mb-3">
+                                <div className="text-center">
+                                  <p className="text-xs text-muted-foreground">{t('إجمالي المُصنّع')}</p>
+                                  <p className="font-bold text-purple-500">{product.total_produced || product.quantity || 0}</p>
+                                </div>
+                                <div className="text-center border-x border-muted">
+                                  <p className="text-xs text-muted-foreground">{t('المحول للفروع')}</p>
+                                  <p className="font-bold text-blue-500">{product.transferred_quantity || 0}</p>
+                                </div>
+                                <div className="text-center">
+                                  <p className="text-xs text-muted-foreground">{t('المتبقي')}</p>
+                                  <p className="font-bold text-green-500">{product.quantity || 0}</p>
+                                </div>
+                              </div>
+                              
+                              {/* شريط التقدم */}
+                              {(product.total_produced || 0) > 0 && (
+                                <div className="mb-3">
+                                  <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+                                    <div 
+                                      className="h-full bg-gradient-to-r from-blue-500 to-green-500"
+                                      style={{ width: `${Math.min(100, ((product.quantity || 0) / (product.total_produced || 1)) * 100)}%` }}
+                                    />
+                                  </div>
+                                  <p className="text-xs text-muted-foreground text-center mt-1">
+                                    {Math.round(((product.quantity || 0) / (product.total_produced || 1)) * 100)}% {t('متبقي من الإنتاج')}
+                                  </p>
+                                </div>
+                              )}
                               
                               <div className="grid grid-cols-3 gap-4 text-sm mb-3">
                                 <div>
@@ -853,13 +907,26 @@ export default function WarehouseManufacturing() {
                               )}
                             </div>
                             
-                            <Button
-                              onClick={() => setShowProduceDialog(product)}
-                              className="bg-green-500 hover:bg-green-600"
-                            >
-                              <Factory className="h-4 w-4 ml-2" />
-                              {t('تصنيع')}
-                            </Button>
+                            {/* أزرار الإجراءات */}
+                            <div className="flex flex-col gap-2">
+                              <Button
+                                onClick={() => setShowProduceDialog(product)}
+                                className="bg-green-500 hover:bg-green-600"
+                                data-testid="produce-btn"
+                              >
+                                <Factory className="h-4 w-4 ml-2" />
+                                {t('تصنيع')}
+                              </Button>
+                              <Button
+                                onClick={() => setShowAddStockDialog(product)}
+                                variant="outline"
+                                className="border-purple-500 text-purple-600 hover:bg-purple-50"
+                                data-testid="add-stock-btn"
+                              >
+                                <Plus className="h-4 w-4 ml-2" />
+                                {t('زيادة الكمية')}
+                              </Button>
+                            </div>
                           </div>
                         </CardContent>
                       </Card>
@@ -1669,6 +1736,91 @@ export default function WarehouseManufacturing() {
             >
               {submitting ? <RefreshCw className="h-4 w-4 animate-spin ml-2" /> : <Send className="h-4 w-4 ml-2" />}
               {t('تحويل للفرع')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      
+      {/* Dialog: زيادة كمية المنتج */}
+      <Dialog open={!!showAddStockDialog} onOpenChange={() => { setShowAddStockDialog(null); setAddStockQuantity(1); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Plus className="h-5 w-5 text-purple-500" />
+              {t('زيادة كمية المنتج')}
+            </DialogTitle>
+          </DialogHeader>
+          
+          {showAddStockDialog && (
+            <div className="space-y-4">
+              <div className="p-4 bg-purple-500/10 rounded-lg">
+                <h3 className="font-bold text-lg mb-2">{showAddStockDialog.name}</h3>
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <p className="text-muted-foreground">{t('الكمية الحالية')}</p>
+                    <p className="font-bold text-green-500">{showAddStockDialog.quantity} {showAddStockDialog.unit}</p>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground">{t('إجمالي المُصنّع')}</p>
+                    <p className="font-bold text-purple-500">{showAddStockDialog.total_produced || showAddStockDialog.quantity || 0}</p>
+                  </div>
+                </div>
+              </div>
+              
+              <div>
+                <Label>{t('الكمية المراد إضافتها')}</Label>
+                <div className="flex items-center gap-2 mt-1">
+                  <Button 
+                    type="button"
+                    variant="outline" 
+                    size="icon"
+                    onClick={() => setAddStockQuantity(Math.max(1, addStockQuantity - 1))}
+                  >
+                    <Minus className="h-4 w-4" />
+                  </Button>
+                  <Input
+                    type="number"
+                    min="1"
+                    value={addStockQuantity}
+                    onChange={(e) => setAddStockQuantity(parseFloat(e.target.value) || 1)}
+                    className="w-24 text-center text-lg font-bold"
+                  />
+                  <Button 
+                    type="button"
+                    variant="outline" 
+                    size="icon"
+                    onClick={() => setAddStockQuantity(addStockQuantity + 1)}
+                  >
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                  <span className="text-sm text-muted-foreground">{showAddStockDialog.unit}</span>
+                </div>
+              </div>
+              
+              <div className="p-3 bg-green-500/10 rounded-lg text-center">
+                <p className="text-sm text-muted-foreground">{t('الكمية بعد الإضافة')}</p>
+                <p className="text-xl font-bold text-green-500">
+                  {(showAddStockDialog.quantity || 0) + addStockQuantity} {showAddStockDialog.unit}
+                </p>
+              </div>
+              
+              <p className="text-xs text-muted-foreground text-center">
+                {t('ملاحظة: هذه الإضافة لا تخصم مواد خام، استخدم زر "تصنيع" لخصم المواد')}
+              </p>
+            </div>
+          )}
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setShowAddStockDialog(null); setAddStockQuantity(1); }}>
+              {t('إلغاء')}
+            </Button>
+            <Button 
+              onClick={handleAddStock}
+              disabled={submitting || addStockQuantity <= 0}
+              className="bg-purple-500 hover:bg-purple-600"
+            >
+              {submitting ? <RefreshCw className="h-4 w-4 animate-spin ml-2" /> : <Plus className="h-4 w-4 ml-2" />}
+              {t('إضافة الكمية')}
             </Button>
           </DialogFooter>
         </DialogContent>

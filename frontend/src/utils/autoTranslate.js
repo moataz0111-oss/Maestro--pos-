@@ -3580,6 +3580,20 @@ const translationMap = {
   'تم تنفيذ الطلب وتحويل المنتجات للفرع': { en: 'Request fulfilled and products transferred', ku: 'داواکارییەکە جێبەجێکرا و بەرهەمەکان گوازرانەوە' },
   'لا توجد طلبات من الفروع': { en: 'No branch requests', ku: 'هیچ داواکارییەک نییە' },
   'جديد': { en: 'New', ku: 'نوێ' },
+  
+  // ===== إحصائيات التصنيع =====
+  'إجمالي المُصنّع': { en: 'Total Produced', ku: 'کۆی لێدراو' },
+  'المحول للفروع': { en: 'Transferred to Branches', ku: 'گواستراوە بۆ لقەکان' },
+  'متبقي من الإنتاج': { en: 'remaining of production', ku: 'ماوە لە بەرهەمهێنان' },
+  'زيادة الكمية': { en: 'Add Stock', ku: 'زیادکردنی بڕ' },
+  'زيادة كمية المنتج': { en: 'Add Product Stock', ku: 'زیادکردنی بڕی بەرهەم' },
+  'الكمية المراد إضافتها': { en: 'Quantity to Add', ku: 'بڕی زیادکردن' },
+  'الكمية بعد الإضافة': { en: 'Quantity After Addition', ku: 'بڕ دوای زیادکردن' },
+  'إضافة الكمية': { en: 'Add Quantity', ku: 'زیادکردنی بڕ' },
+  'تم زيادة الكمية بنجاح': { en: 'Stock added successfully', ku: 'بڕەکە سەرکەوتووانە زیادکرا' },
+  'فشل في زيادة الكمية': { en: 'Failed to add stock', ku: 'زیادکردنی بڕ سەرنەکەوت' },
+  'ملاحظة: هذه الإضافة لا تخصم مواد خام، استخدم زر "تصنيع" لخصم المواد': { en: 'Note: This does not deduct raw materials, use "Produce" button to deduct materials', ku: 'تێبینی: ئەمە کەلوپەل کەمناکاتەوە، دوگمەی "بەرهەمهێنان" بەکاربهێنە بۆ کەمکردنەوەی کەلوپەل' },
+  'الكمية الحالية': { en: 'Current Quantity', ku: 'بڕی ئێستا' },
 };
 
 // الحصول على اللغة الحالية

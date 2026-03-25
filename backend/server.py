@@ -858,6 +858,9 @@ class UserRole:
     CASHIER = "cashier"
     DELIVERY = "delivery"  # دور جديد للسائقين
     CALL_CENTER = "call_center"  # دور كول سنتر - يرى المكالمات والتوصيل فقط
+    WAREHOUSE_KEEPER = "warehouse_keeper"  # أمين مخزن - يرى المخزن وطلبات التصنيع
+    MANUFACTURER = "manufacturer"  # مصنع - يرى التصنيع وطلبات الفروع
+    PURCHASING = "purchasing"  # مشتريات - يرى طلبات الشراء
 
 class OrderType:
     DINE_IN = "dine_in"
@@ -14901,7 +14904,7 @@ async def get_menu_link(request: Request, current_user: dict = Depends(get_curre
         base_url = f"{parsed.scheme}://{parsed.netloc}"
     else:
         # fallback للـ environment variable
-        base_url = os.environ.get('REACT_APP_BACKEND_URL', 'https://sales-report-debug-1.preview.emergentagent.com')
+        base_url = os.environ.get('REACT_APP_BACKEND_URL', 'https://pos-inventory-flow-1.preview.emergentagent.com')
     
     menu_url = f"{base_url}/menu/{tenant.get('menu_slug', tenant_id)}"
     

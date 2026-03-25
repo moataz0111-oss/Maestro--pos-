@@ -478,7 +478,7 @@ async def get_purchase(purchase_id: str):
 # ==================== PURCHASE REQUESTS (طلبات الشراء من المخزن) ====================
 
 @router.post("/warehouse-purchase-requests")
-async def create_purchase_request(request: PurchaseRequestCreate):
+async def create_warehouse_purchase_request(request: PurchaseRequestCreate):
     """إنشاء طلب شراء من المخزن"""
     db = get_db()
     
@@ -504,7 +504,7 @@ async def create_purchase_request(request: PurchaseRequestCreate):
     return request_doc
 
 @router.get("/warehouse-purchase-requests")
-async def get_purchase_requests(status: Optional[str] = None):
+async def get_warehouse_purchase_requests(status: Optional[str] = None):
     """جلب طلبات الشراء"""
     db = get_db()
     
@@ -516,7 +516,7 @@ async def get_purchase_requests(status: Optional[str] = None):
     return requests
 
 @router.patch("/warehouse-purchase-requests/{request_id}/status")
-async def update_purchase_request_status(request_id: str, status: str):
+async def update_warehouse_purchase_request_status(request_id: str, status: str):
     """تحديث حالة طلب الشراء"""
     db = get_db()
     
@@ -811,12 +811,15 @@ async def create_warehouse_transfer(transfer_data: dict):
     
     await db.warehouse_transfers.insert_one(transfer_doc)
     
-    # خصم الكمية من المنتجات المصنعة
+    # خصم الكمية من المنتجات المصنعة وزيادة المحول
     for item in items_with_details:
         await db.manufactured_products.update_one(
             {"id": item["product_id"]},
             {
-                "$inc": {"quantity": -item["quantity"]},
+                "$inc": {
+                    "quantity": -item["quantity"],
+                    "transferred_quantity": item["quantity"]  # الكمية المحولة للفروع
+                },
                 "$set": {"last_updated": datetime.now(timezone.utc).isoformat()}
             }
         )
@@ -1030,11 +1033,14 @@ async def fulfill_branch_request(request_id: str):
         product_id = item.get("product_id")
         quantity = item.get("quantity")
         
-        # خصم من المنتجات المصنعة
+        # خصم من المنتجات المصنعة وزيادة المحول
         await db.manufactured_products.update_one(
             {"id": product_id},
             {
-                "$inc": {"quantity": -quantity},
+                "$inc": {
+                    "quantity": -quantity,
+                    "transferred_quantity": quantity  # الكمية المحولة للفروع
+                },
                 "$set": {"last_updated": datetime.now(timezone.utc).isoformat()}
             }
         )
@@ -1094,6 +1100,276 @@ async def fulfill_branch_request(request_id: str):
     })
     
     return {"message": "تم تنفيذ الطلب بنجاح", "request_id": request_id}
+
+# ==================== MANUFACTURING REQUESTS (طلبات التصنيع من المخزن) ====================
+
+@router.post("/manufacturing-requests")
+async def create_manufacturing_request(request_data: dict):
+    """إنشاء طلب من التصنيع للمخزن (لطلب مواد خام)"""
+    db = get_db()
+    
+    items = request_data.get("items", [])
+    priority = request_data.get("priority", "normal")
+    notes = request_data.get("notes", "")
+    requested_by = request_data.get("requested_by", "")
+    requested_by_name = request_data.get("requested_by_name", "")
+    
+    if not items:
+        raise HTTPException(status_code=400, detail="يجب إضافة مواد خام للطلب")
+    
+    # رقم تسلسلي
+    last_request = await db.manufacturing_requests.find_one(sort=[("request_number", -1)])
+    request_number = (last_request.get("request_number", 0) if last_request else 0) + 1
+    
+    # تفاصيل المواد
+    items_with_details = []
+    total_cost = 0
+    
+    for item in items:
+        material_id = item.get("material_id")
+        quantity = item.get("quantity", 0)
+        
+        # جلب المادة الخام
+        material = await db.raw_materials.find_one({"id": material_id}, {"_id": 0})
+        if material:
+            cost = material.get("cost_per_unit", 0) * quantity
+            total_cost += cost
+            items_with_details.append({
+                "material_id": material_id,
+                "material_name": material.get("name"),
+                "quantity": quantity,
+                "unit": material.get("unit", "كغم"),
+                "cost_per_unit": material.get("cost_per_unit", 0),
+                "total_cost": cost,
+                "available_quantity": material.get("quantity", 0)
+            })
+    
+    # إنشاء سجل الطلب
+    request_doc = {
+        "id": str(uuid.uuid4()),
+        "request_number": request_number,
+        "request_type": "manufacturing_to_warehouse",
+        "items": items_with_details,
+        "total_cost": total_cost,
+        "status": "pending",
+        "priority": priority,
+        "notes": notes,
+        "requested_by": requested_by,
+        "requested_by_name": requested_by_name,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "fulfilled_at": None
+    }
+    
+    await db.manufacturing_requests.insert_one(request_doc)
+    del request_doc["_id"]
+    return request_doc
+
+@router.get("/manufacturing-requests")
+async def get_manufacturing_requests(status: Optional[str] = None):
+    """جلب طلبات التصنيع من المخزن"""
+    db = get_db()
+    
+    query = {}
+    if status:
+        query["status"] = status
+    
+    requests = await db.manufacturing_requests.find(query, {"_id": 0}).sort("created_at", -1).to_list(1000)
+    return requests
+
+@router.post("/manufacturing-requests/{request_id}/fulfill")
+async def fulfill_manufacturing_request(request_id: str):
+    """تنفيذ طلب التصنيع (تحويل المواد من المخزن للتصنيع)"""
+    db = get_db()
+    
+    # جلب الطلب
+    request = await db.manufacturing_requests.find_one({"id": request_id}, {"_id": 0})
+    if not request:
+        raise HTTPException(status_code=404, detail="الطلب غير موجود")
+    
+    if request.get("status") != "pending":
+        raise HTTPException(status_code=400, detail="لا يمكن تنفيذ هذا الطلب")
+    
+    # التحقق من توفر الكميات
+    insufficient = []
+    for item in request.get("items", []):
+        material = await db.raw_materials.find_one({"id": item.get("material_id")}, {"_id": 0})
+        if not material or material.get("quantity", 0) < item.get("quantity", 0):
+            insufficient.append({
+                "name": item.get("material_name"),
+                "requested": item.get("quantity"),
+                "available": material.get("quantity", 0) if material else 0
+            })
+    
+    if insufficient:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "message": "كمية غير كافية في المخزن",
+                "insufficient_materials": insufficient
+            }
+        )
+    
+    # تنفيذ التحويل - خصم من المخزن وإضافة لمخزون التصنيع
+    for item in request.get("items", []):
+        material_id = item.get("material_id")
+        quantity = item.get("quantity")
+        
+        # خصم من المواد الخام
+        await db.raw_materials.update_one(
+            {"id": material_id},
+            {
+                "$inc": {"quantity": -quantity},
+                "$set": {"last_updated": datetime.now(timezone.utc).isoformat()}
+            }
+        )
+        
+        # إضافة لمخزون التصنيع
+        existing = await db.manufacturing_inventory.find_one({"material_id": material_id})
+        if existing:
+            await db.manufacturing_inventory.update_one(
+                {"material_id": material_id},
+                {
+                    "$inc": {"quantity": quantity},
+                    "$set": {"last_updated": datetime.now(timezone.utc).isoformat()}
+                }
+            )
+        else:
+            material = await db.raw_materials.find_one({"id": material_id}, {"_id": 0})
+            await db.manufacturing_inventory.insert_one({
+                "id": str(uuid.uuid4()),
+                "material_id": material_id,
+                "material_name": item.get("material_name"),
+                "quantity": quantity,
+                "unit": item.get("unit"),
+                "cost_per_unit": item.get("cost_per_unit", 0),
+                "last_updated": datetime.now(timezone.utc).isoformat(),
+                "created_at": datetime.now(timezone.utc).isoformat()
+            })
+    
+    # تحديث حالة الطلب
+    await db.manufacturing_requests.update_one(
+        {"id": request_id},
+        {"$set": {
+            "status": "fulfilled",
+            "fulfilled_at": datetime.now(timezone.utc).isoformat()
+        }}
+    )
+    
+    # تسجيل الحركة
+    await db.inventory_movements.insert_one({
+        "id": str(uuid.uuid4()),
+        "type": "warehouse_to_manufacturing",
+        "request_id": request_id,
+        "from_location": "warehouse",
+        "to_location": "manufacturing",
+        "items": request.get("items", []),
+        "created_at": datetime.now(timezone.utc).isoformat()
+    })
+    
+    return {"message": "تم تنفيذ الطلب وتحويل المواد للتصنيع", "request_id": request_id}
+
+# ==================== PURCHASE REQUESTS (طلبات الشراء) ====================
+
+@router.post("/purchase-requests")
+async def create_purchase_request(request_data: dict):
+    """إنشاء طلب شراء من المخزن"""
+    db = get_db()
+    
+    items = request_data.get("items", [])
+    supplier = request_data.get("supplier", "")
+    priority = request_data.get("priority", "normal")
+    notes = request_data.get("notes", "")
+    requested_by = request_data.get("requested_by", "")
+    requested_by_name = request_data.get("requested_by_name", "")
+    
+    if not items:
+        raise HTTPException(status_code=400, detail="يجب إضافة مواد للطلب")
+    
+    # رقم تسلسلي
+    last_request = await db.purchase_requests.find_one(sort=[("request_number", -1)])
+    request_number = (last_request.get("request_number", 0) if last_request else 0) + 1
+    
+    # تفاصيل المواد
+    items_with_details = []
+    total_cost = 0
+    
+    for item in items:
+        cost = item.get("estimated_cost", 0) * item.get("quantity", 0)
+        total_cost += cost
+        items_with_details.append({
+            "material_name": item.get("material_name"),
+            "quantity": item.get("quantity", 0),
+            "unit": item.get("unit", "كغم"),
+            "estimated_cost": item.get("estimated_cost", 0),
+            "total_cost": cost
+        })
+    
+    # إنشاء سجل الطلب
+    request_doc = {
+        "id": str(uuid.uuid4()),
+        "request_number": request_number,
+        "request_type": "purchase",
+        "items": items_with_details,
+        "total_cost": total_cost,
+        "supplier": supplier,
+        "status": "pending",  # pending, approved, ordered, received, cancelled
+        "priority": priority,
+        "notes": notes,
+        "requested_by": requested_by,
+        "requested_by_name": requested_by_name,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "approved_at": None,
+        "ordered_at": None,
+        "received_at": None
+    }
+    
+    await db.purchase_requests.insert_one(request_doc)
+    del request_doc["_id"]
+    return request_doc
+
+@router.get("/purchase-requests")
+async def get_purchase_requests(status: Optional[str] = None):
+    """جلب طلبات الشراء"""
+    db = get_db()
+    
+    query = {}
+    if status:
+        query["status"] = status
+    
+    requests = await db.purchase_requests.find(query, {"_id": 0}).sort("created_at", -1).to_list(1000)
+    return requests
+
+@router.put("/purchase-requests/{request_id}/status")
+async def update_purchase_request_status(request_id: str, status_data: dict):
+    """تحديث حالة طلب الشراء"""
+    db = get_db()
+    
+    new_status = status_data.get("status")
+    valid_statuses = ["pending", "approved", "ordered", "received", "cancelled"]
+    
+    if new_status not in valid_statuses:
+        raise HTTPException(status_code=400, detail="حالة غير صالحة")
+    
+    update_data = {"status": new_status}
+    
+    if new_status == "approved":
+        update_data["approved_at"] = datetime.now(timezone.utc).isoformat()
+    elif new_status == "ordered":
+        update_data["ordered_at"] = datetime.now(timezone.utc).isoformat()
+    elif new_status == "received":
+        update_data["received_at"] = datetime.now(timezone.utc).isoformat()
+    
+    result = await db.purchase_requests.update_one(
+        {"id": request_id},
+        {"$set": update_data}
+    )
+    
+    if result.modified_count == 0:
+        raise HTTPException(status_code=404, detail="الطلب غير موجود")
+    
+    return {"message": "تم تحديث الحالة", "status": new_status}
+
+@router.get("/warehouse-transactions")
 async def get_warehouse_transactions(type: Optional[str] = None):
     """جلب حركات المخزن (واردات/صادرات)"""
     db = get_db()
@@ -1154,6 +1430,13 @@ async def get_manufactured_products():
     """جلب جميع المنتجات المصنعة"""
     db = get_db()
     products = await db.manufactured_products.find({}, {"_id": 0}).to_list(1000)
+    
+    # إضافة الحقول الإحصائية
+    for product in products:
+        product["total_produced"] = product.get("total_produced", product.get("quantity", 0))
+        product["transferred_quantity"] = product.get("transferred_quantity", 0)
+        product["remaining_quantity"] = product.get("quantity", 0)
+    
     return products
 
 @router.get("/manufactured-products/{product_id}")
@@ -1213,17 +1496,61 @@ async def produce_product(product_id: str, quantity: int = 1):
             }
         )
     
-    # زيادة كمية المنتج المصنع
+    # زيادة كمية المنتج المصنع وإجمالي الإنتاج
     await db.manufactured_products.update_one(
         {"id": product_id},
         {
-            "$inc": {"quantity": quantity},
+            "$inc": {
+                "quantity": quantity,
+                "total_produced": quantity  # إجمالي ما تم تصنيعه
+            },
             "$set": {"last_updated": datetime.now(timezone.utc).isoformat()}
         }
     )
     
     return {
         "message": f"تم تصنيع {quantity} {product.get('unit')} من {product.get('name')}",
+        "new_quantity": product.get("quantity", 0) + quantity
+    }
+
+
+@router.post("/manufactured-products/{product_id}/add-stock")
+async def add_product_stock(product_id: str, quantity: float = 1):
+    """زيادة كمية المنتج مباشرة (بدون خصم مواد خام) - للتعديل اليدوي"""
+    db = get_db()
+    
+    product = await db.manufactured_products.find_one({"id": product_id})
+    if not product:
+        raise HTTPException(status_code=404, detail="المنتج غير موجود")
+    
+    if quantity <= 0:
+        raise HTTPException(status_code=400, detail="الكمية يجب أن تكون أكبر من صفر")
+    
+    # زيادة الكمية فقط
+    await db.manufactured_products.update_one(
+        {"id": product_id},
+        {
+            "$inc": {
+                "quantity": quantity,
+                "total_produced": quantity
+            },
+            "$set": {"last_updated": datetime.now(timezone.utc).isoformat()}
+        }
+    )
+    
+    # تسجيل الحركة
+    await db.inventory_movements.insert_one({
+        "id": str(uuid.uuid4()),
+        "type": "manual_stock_add",
+        "product_id": product_id,
+        "product_name": product.get("name"),
+        "quantity": quantity,
+        "notes": "إضافة يدوية للمخزون",
+        "created_at": datetime.now(timezone.utc).isoformat()
+    })
+    
+    return {
+        "message": f"تم إضافة {quantity} {product.get('unit')} إلى {product.get('name')}",
         "new_quantity": product.get("quantity", 0) + quantity
     }
 
