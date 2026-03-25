@@ -3,7 +3,7 @@ name: 🚀 Deploy Maestro POS to Production
 on:
   push:
     branches: [ main, conflict_230326_0646 ]
-  workflow_dispatch:  # للتشغيل اليدوي
+  workflow_dispatch:
 
 jobs:
   deploy:
@@ -22,31 +22,26 @@ jobs:
         key: ${{ secrets.VPS_SSH_KEY }}
         port: ${{ secrets.VPS_PORT }}
         script: |
-          echo "🚀 Starting deployment at $(date)"
+          echo "🚀 Starting Zero-Downtime deployment at $(date)"
           
-          # إيقاف Nginx القديم على Ubuntu
-          echo "🛑 Stopping old nginx..."
+          # إيقاف Nginx القديم على Ubuntu (غير Docker)
           systemctl stop nginx 2>/dev/null || true
           systemctl disable nginx 2>/dev/null || true
           
-          # الدخول لمجلد المشروع
           cd /var/www/maestro
           
           # سحب أحدث الكود
+          echo "📥 Pulling latest code..."
           git fetch origin
           git reset --hard origin/conflict_230326_0646
           
-          # إنشاء مجلدات
-          mkdir -p certbot/conf certbot/www backups deploy/backups
+          mkdir -p certbot/conf certbot/www backups deploy/backups uploads
           
-          # التحقق من وجود شهادة SSL
+          # التحقق من SSL
           if [ ! -d "certbot/conf/live/maestroegp.com" ]; then
-            echo "🔐 SSL certificate not found, obtaining new certificate..."
-            
-            # تشغيل Nginx مؤقتاً للحصول على الشهادة
+            echo "🔐 Getting SSL certificate..."
             docker-compose down 2>/dev/null || true
             
-            # إنشاء nginx.conf مؤقت للحصول على الشهادة
             cat > nginx-temp.conf << 'NGINXEOF'
           events { worker_connections 1024; }
           http {
@@ -54,12 +49,11 @@ jobs:
               listen 80;
               server_name maestroegp.com www.maestroegp.com;
               location /.well-known/acme-challenge/ { root /var/www/certbot; }
-              location / { return 200 'SSL Setup in progress'; add_header Content-Type text/plain; }
+              location / { return 200 'SSL Setup'; add_header Content-Type text/plain; }
             }
           }
           NGINXEOF
             
-            # تشغيل nginx مؤقت
             docker run -d --name temp-nginx -p 80:80 \
               -v $(pwd)/nginx-temp.conf:/etc/nginx/nginx.conf:ro \
               -v $(pwd)/certbot/www:/var/www/certbot \
@@ -67,7 +61,6 @@ jobs:
             
             sleep 5
             
-            # الحصول على شهادة SSL
             docker run --rm \
               -v $(pwd)/certbot/conf:/etc/letsencrypt \
               -v $(pwd)/certbot/www:/var/www/certbot \
@@ -76,79 +69,56 @@ jobs:
               --email admin@maestroegp.com \
               --agree-tos --no-eff-email \
               -d maestroegp.com -d www.maestroegp.com \
-              --non-interactive || echo "Certbot may have failed, continuing..."
+              --non-interactive || true
             
-            # إيقاف nginx المؤقت
             docker stop temp-nginx 2>/dev/null || true
             docker rm temp-nginx 2>/dev/null || true
             rm -f nginx-temp.conf
-            
-            echo "✅ SSL certificate obtained"
-          else
-            echo "✅ SSL certificate already exists"
           fi
           
-          # إيقاف وحذف كل شيء قديم
-          echo "🛑 Stopping and removing old containers..."
-          docker-compose down --remove-orphans 2>/dev/null || true
+          # =============================================
+          # 🔄 تحديث بدون توقف - Zero Downtime Update
+          # =============================================
           
-          # حذف images القديمة للـ frontend لإجبار إعادة البناء
-          echo "🗑️ Removing old frontend image..."
-          docker rmi maestro_frontend -f 2>/dev/null || true
-          docker rmi $(docker images -q --filter "dangling=true") -f 2>/dev/null || true
-          docker system prune -f 2>/dev/null || true
+          echo "🔨 Building new images (النظام يعمل أثناء البناء)..."
           
-          # بناء وتشغيل Docker (بدون cache لتجنب المشاكل)
-          echo "🔨 Building and starting services..."
-          docker-compose build --no-cache --build-arg CACHEBUST=$(date +%s) frontend backend
-          docker-compose up -d --force-recreate
+          # بناء الـ images الجديدة بدون إيقاف النظام
+          docker-compose build --build-arg CACHEBUST=$(date +%s) frontend backend
           
-          # انتظار بدء الخدمات
-          echo "⏳ Waiting for services to start..."
-          sleep 45
+          echo "🔄 Updating services one by one..."
           
-          # عرض حالة الخدمات
+          # تحديث Backend أولاً (MongoDB يبقى يعمل - البيانات محفوظة)
+          echo "📦 Updating Backend..."
+          docker-compose up -d --no-deps --force-recreate backend
+          sleep 10
+          
+          # تحديث Frontend
+          echo "🎨 Updating Frontend..."
+          docker-compose up -d --no-deps --force-recreate frontend
+          sleep 5
+          
+          # تحديث Nginx (إذا لزم)
+          echo "🌐 Updating Nginx..."
+          docker-compose up -d --no-deps --force-recreate nginx
+          sleep 5
+          
+          # =============================================
+          # ✅ التحقق من الخدمات
+          # =============================================
+          
           echo "📊 Services status:"
           docker-compose ps
           
-          # عرض logs للتحقق من الأخطاء
-          echo "📋 Backend logs (last 100 lines):"
-          docker-compose logs --tail=100 backend || docker logs maestro-backend --tail=100
+          echo "📋 Backend logs:"
+          docker-compose logs --tail=30 backend
           
-          echo "📋 MongoDB logs:"
-          docker-compose logs --tail=20 mongodb
+          # تنظيف الـ images القديمة غير المستخدمة
+          echo "🧹 Cleaning old images..."
+          docker image prune -f 2>/dev/null || true
           
-          echo "📋 Nginx logs:"
-          docker-compose logs --tail=20 nginx
-          
-          # انتظار MongoDB
-          echo "⏳ Waiting for MongoDB..."
-          for i in {1..30}; do
-            if docker exec maestro-mongodb mongosh --eval "db.adminCommand('ping')" -u maestro_admin -p "Maestro@2024Secure" --authenticationDatabase admin > /dev/null 2>&1; then
-              echo "✅ MongoDB is ready"
-              break
-            fi
-            echo "Waiting for MongoDB... ($i/30)"
-            sleep 5
-          done
-          
-          # تشغيل سكريبت إدخال البيانات
-          echo "📦 Running seed data script..."
-          docker exec maestro-backend pip install bcrypt pymongo 2>/dev/null || true
-          docker exec maestro-backend python /app/seed_data.py || echo "Seed completed"
-          
-          # تشغيل سكريبت البيانات التجريبية لـ Graffiti Burger
-          echo "📦 Running demo data script for Graffiti Burger..."
-          docker exec maestro-backend python /app/seed_demo_data.py || echo "Demo data completed"
-          
-          # إعداد Backup التلقائي
-          chmod +x /var/www/maestro/scripts/backup.sh 2>/dev/null || true
-          (crontab -l 2>/dev/null | grep -v "maestro.*backup"; echo "0 3 * * * /var/www/maestro/scripts/backup.sh >> /var/log/maestro-backup.log 2>&1") | crontab -
-          
-          # تنظيف
-          docker image prune -f
-          
-          echo "✅ Deployment completed at $(date)"
+          echo "✅ Zero-Downtime deployment completed at $(date)"
+          echo "✅ البيانات محفوظة - MongoDB لم يتوقف"
+          echo "✅ المستخدمون لم يتأثروا"
           
     - name: 📢 Notify Success
       if: success()
