@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useTranslation } from '../hooks/useTranslation';
 import { API_URL } from '../utils/api';
 import { useNavigate } from 'react-router-dom';
@@ -76,6 +76,11 @@ export default function PurchasesPage() {
   const [showSupplierDialog, setShowSupplierDialog] = useState(false);
   const [showDetailsDialog, setShowDetailsDialog] = useState(null);
   const [showUploadDialog, setShowUploadDialog] = useState(null);
+  const [showCameraDialog, setShowCameraDialog] = useState(false);
+  const [ocrLoading, setOcrLoading] = useState(false);
+  const [cameraStream, setCameraStream] = useState(null);
+  const videoRef = useRef(null);
+  const canvasRef = useRef(null);
   
   // Form states
   const [purchaseForm, setPurchaseForm] = useState({
@@ -85,7 +90,8 @@ export default function PurchasesPage() {
     total_amount: 0,
     payment_method: 'cash',
     payment_status: 'paid',
-    notes: ''
+    notes: '',
+    imagePreview: null
   });
   
   const [supplierForm, setSupplierForm] = useState({
@@ -186,6 +192,128 @@ export default function PurchasesPage() {
       };
     });
   };
+
+  // فتح الكاميرا
+  const openCamera = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        video: { facingMode: 'environment' }
+      });
+      setCameraStream(stream);
+      setShowCameraDialog(true);
+    } catch (error) {
+      console.error('Camera error:', error);
+      toast.error(t('لم نتمكن من الوصول للكاميرا. تأكد من السماح بالوصول.'));
+    }
+  };
+
+  // التقاط صورة من الكاميرا
+  const capturePhoto = () => {
+    if (videoRef.current && canvasRef.current) {
+      const video = videoRef.current;
+      const canvas = canvasRef.current;
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(video, 0, 0);
+      
+      const imageData = canvas.toDataURL('image/jpeg', 0.8);
+      setPurchaseForm(prev => ({
+        ...prev,
+        imagePreview: imageData
+      }));
+      
+      closeCamera();
+      toast.success(t('تم التقاط الصورة بنجاح'));
+    }
+  };
+
+  // إغلاق الكاميرا
+  const closeCamera = () => {
+    if (cameraStream) {
+      cameraStream.getTracks().forEach(track => track.stop());
+      setCameraStream(null);
+    }
+    setShowCameraDialog(false);
+  };
+
+  // رفع صورة من الجهاز
+  const handleImageUpload = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) {
+        toast.error(t('حجم الصورة يجب أن يكون أقل من 5 ميجابايت'));
+        return;
+      }
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setPurchaseForm(prev => ({
+          ...prev,
+          imagePreview: reader.result
+        }));
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  // استخراج بيانات الفاتورة من الصورة (OCR)
+  const extractInvoiceData = async () => {
+    if (!purchaseForm.imagePreview) {
+      toast.error(t('يرجى تحميل صورة أولاً'));
+      return;
+    }
+    
+    setOcrLoading(true);
+    try {
+      const response = await axios.post(`${API}/purchase-invoices/ocr`, {
+        image_data: purchaseForm.imagePreview
+      }, { headers });
+      
+      if (response.data.success) {
+        const data = response.data.data;
+        
+        setPurchaseForm(prev => ({
+          ...prev,
+          invoice_number: data.invoice_number || prev.invoice_number,
+          notes: data.notes || prev.notes,
+          items: data.items && data.items.length > 0 ? data.items.map(item => ({
+            name: item.name || '',
+            quantity: item.quantity || 1,
+            unit: item.unit || 'كغم',
+            cost_per_unit: item.unit_price || 0,
+            total_cost: (item.quantity || 1) * (item.unit_price || 0)
+          })) : prev.items,
+          total_amount: data.items ? data.items.reduce((sum, item) => sum + ((item.quantity || 1) * (item.unit_price || 0)), 0) : prev.total_amount
+        }));
+        
+        toast.success(t('تم استخراج بيانات الفاتورة بنجاح! راجع البيانات وعدّلها إذا لزم الأمر.'));
+      } else {
+        toast.warning(t('لم نتمكن من استخراج البيانات تلقائياً. يرجى إدخالها يدوياً.'));
+      }
+    } catch (error) {
+      console.error('OCR Error:', error);
+      toast.error(t('فشل في تحليل الصورة. يرجى إدخال البيانات يدوياً.'));
+    } finally {
+      setOcrLoading(false);
+    }
+  };
+
+  // ربط الـ stream بالـ video عند فتح الـ dialog
+  useEffect(() => {
+    if (showCameraDialog && cameraStream && videoRef.current) {
+      videoRef.current.srcObject = cameraStream;
+    }
+  }, [showCameraDialog, cameraStream]);
+
+  // تنظيف الكاميرا عند unmount
+  useEffect(() => {
+    return () => {
+      if (cameraStream) {
+        cameraStream.getTracks().forEach(track => track.stop());
+      }
+    };
+  }, [cameraStream]);
+
   // إنشاء فاتورة شراء
   const handleCreatePurchase = async () => {
     if (!purchaseForm.supplier_id || purchaseForm.items.length === 0) {
@@ -205,7 +333,8 @@ export default function PurchasesPage() {
         total_amount: 0,
         payment_method: 'cash',
         payment_status: 'paid',
-        notes: ''
+        notes: '',
+        imagePreview: null
       });
       fetchData();
     } catch (error) {
@@ -646,6 +775,70 @@ export default function PurchasesPage() {
           </DialogHeader>
           
           <div className="space-y-4">
+            {/* قسم صورة الفاتورة */}
+            <div className="border-2 border-dashed rounded-lg p-4">
+              <Label className="mb-2 block">{t('صورة الفاتورة')}</Label>
+              {purchaseForm.imagePreview ? (
+                <div className="space-y-3">
+                  <div className="relative">
+                    <img src={purchaseForm.imagePreview} alt="فاتورة" className="w-full max-h-48 object-contain rounded-lg" />
+                    <Button
+                      variant="destructive"
+                      size="icon"
+                      className="absolute top-2 right-2"
+                      onClick={() => setPurchaseForm(prev => ({ ...prev, imagePreview: null }))}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  {/* زر استخراج البيانات */}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full bg-gradient-to-r from-blue-500 to-purple-500 text-white hover:from-blue-600 hover:to-purple-600 border-0"
+                    onClick={extractInvoiceData}
+                    disabled={ocrLoading}
+                  >
+                    {ocrLoading ? (
+                      <>
+                        <RefreshCw className="h-4 w-4 ml-2 animate-spin" />
+                        {t('جاري تحليل الصورة...')}
+                      </>
+                    ) : (
+                      <>
+                        <Search className="h-4 w-4 ml-2" />
+                        {t('استخراج البيانات تلقائياً (AI)')}
+                      </>
+                    )}
+                  </Button>
+                </div>
+              ) : (
+                <div className="flex gap-4 justify-center">
+                  {/* زر فتح الكاميرا */}
+                  <button
+                    type="button"
+                    onClick={openCamera}
+                    className="flex flex-col items-center justify-center p-6 cursor-pointer hover:bg-primary/10 rounded-lg border-2 border-primary/30 hover:border-primary transition-all"
+                  >
+                    <Camera className="h-12 w-12 text-primary mb-2" />
+                    <p className="text-sm font-medium text-primary">{t('التقاط صورة')}</p>
+                  </button>
+                  
+                  {/* زر رفع من الجهاز */}
+                  <label className="flex flex-col items-center justify-center p-6 cursor-pointer hover:bg-muted/50 rounded-lg border-2 border-dashed hover:border-muted-foreground transition-all">
+                    <Upload className="h-12 w-12 text-muted-foreground mb-2" />
+                    <p className="text-sm text-muted-foreground">{t('رفع من الجهاز')}</p>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleImageUpload}
+                      className="hidden"
+                    />
+                  </label>
+                </div>
+              )}
+            </div>
+
             {/* اختيار المورد */}
             <div className="grid grid-cols-2 gap-4">
               <div>
@@ -963,6 +1156,48 @@ export default function PurchasesPage() {
               )}
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog: الكاميرا */}
+      <Dialog open={showCameraDialog} onOpenChange={closeCamera}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Camera className="h-5 w-5 text-primary" />
+              {t('التقاط صورة الفاتورة')}
+            </DialogTitle>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            <div className="relative bg-black rounded-lg overflow-hidden">
+              <video
+                ref={videoRef}
+                autoPlay
+                playsInline
+                muted
+                className="w-full h-auto"
+                style={{ maxHeight: '400px' }}
+              />
+            </div>
+            
+            <canvas ref={canvasRef} className="hidden" />
+            
+            <p className="text-center text-sm text-muted-foreground">
+              {t('وجّه الكاميرا نحو الفاتورة ثم اضغط زر الالتقاط')}
+            </p>
+          </div>
+          
+          <DialogFooter className="flex gap-2">
+            <Button variant="outline" onClick={closeCamera}>
+              <X className="h-4 w-4 ml-2" />
+              {t('إلغاء')}
+            </Button>
+            <Button onClick={capturePhoto} className="bg-primary">
+              <Camera className="h-4 w-4 ml-2" />
+              {t('التقاط الصورة')}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
