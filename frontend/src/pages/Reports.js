@@ -1770,9 +1770,8 @@ export default function Reports() {
                   />
                 </div>
 
-                {/* الصف الثاني: تفاصيل التكاليف (تكلفة المواد + التغليف) - تظهر فقط إذا كانت صلاحية تقرير التحليل مفعلة */}
-                {dashboardSettings.showBreakEvenReport !== false && (
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* الصف الثاني: تفاصيل التكاليف (تكلفة المواد + التغليف) - تظهر دائماً */}
+                <div className={`grid grid-cols-1 ${dashboardSettings.showBreakEvenReport !== false ? 'md:grid-cols-3' : 'md:grid-cols-2'} gap-4`}>
                   <Card className="border-l-4 border-l-orange-500">
                     <CardContent className="p-4">
                       <div className="flex items-center justify-between">
@@ -1795,6 +1794,8 @@ export default function Reports() {
                       </div>
                     </CardContent>
                   </Card>
+                  {/* صافي الربح - يظهر فقط إذا كانت صلاحية تقرير التحليل مفعلة */}
+                  {dashboardSettings.showBreakEvenReport !== false && (
                   <Card className="border-l-4 border-l-emerald-500">
                     <CardContent className="p-4">
                       <div className="flex items-center justify-between">
@@ -1809,8 +1810,8 @@ export default function Reports() {
                       </div>
                     </CardContent>
                   </Card>
+                  )}
                 </div>
-                )}
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   {/* By Payment Method */}
