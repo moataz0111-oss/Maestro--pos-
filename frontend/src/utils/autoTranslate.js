@@ -3594,6 +3594,14 @@ const translationMap = {
   'فشل في زيادة الكمية': { en: 'Failed to add stock', ku: 'زیادکردنی بڕ سەرنەکەوت' },
   'ملاحظة: هذه الإضافة لا تخصم مواد خام، استخدم زر "تصنيع" لخصم المواد': { en: 'Note: This does not deduct raw materials, use "Produce" button to deduct materials', ku: 'تێبینی: ئەمە کەلوپەل کەمناکاتەوە، دوگمەی "بەرهەمهێنان" بەکاربهێنە بۆ کەمکردنەوەی کەلوپەل' },
   'الكمية الحالية': { en: 'Current Quantity', ku: 'بڕی ئێستا' },
+  
+  // ===== إحصائيات المخزن (المواد الخام) =====
+  'إجمالي الوارد': { en: 'Total Received', ku: 'کۆی وەرگیراو' },
+  'المحول للتصنيع': { en: 'Transferred to Manufacturing', ku: 'گواستراوە بۆ بەرهەمهێنان' },
+  'متبقي من الوارد': { en: 'remaining of received', ku: 'ماوە لە وەرگیراو' },
+  'زيادة كمية المادة الخام': { en: 'Add Raw Material Stock', ku: 'زیادکردنی بڕی کەلوپەل' },
+  'أقل من الحد الأدنى': { en: 'Below minimum', ku: 'لە کەمترین کەمترە' },
+  'تحذير: المخزون أقل من الحد الأدنى': { en: 'Warning: Stock is below minimum', ku: 'ئاگاداری: کۆگا لە کەمترین کەمترە' },
 };
 
 // الحصول على اللغة الحالية

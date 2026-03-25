@@ -564,7 +564,7 @@ async def get_raw_materials():
     db = get_db()
     materials = await db.raw_materials.find({}, {"_id": 0}).to_list(1000)
     
-    # حساب القيمة الإجمالية والتكلفة الفعلية لكل مادة
+    # حساب القيمة الإجمالية والتكلفة الفعلية والإحصائيات لكل مادة
     for material in materials:
         material["total_value"] = material.get("quantity", 0) * material.get("cost_per_unit", 0)
         # حساب التكلفة الفعلية بعد الهدر إذا لم تكن موجودة
@@ -573,6 +573,11 @@ async def get_raw_materials():
             material["effective_cost_per_unit"] = round(material.get("cost_per_unit", 0) / (1 - waste_percentage / 100), 2)
         elif not material.get("effective_cost_per_unit"):
             material["effective_cost_per_unit"] = material.get("cost_per_unit", 0)
+        
+        # إحصائيات المخزون
+        material["total_received"] = material.get("total_received", material.get("quantity", 0))
+        material["transferred_to_manufacturing"] = material.get("transferred_to_manufacturing", 0)
+        material["remaining_quantity"] = material.get("quantity", 0)
     
     return materials
 
@@ -608,6 +613,48 @@ async def update_raw_material(material_id: str, material: RawMaterialCreate):
     )
     
     return await db.raw_materials.find_one({"id": material_id}, {"_id": 0})
+
+
+@router.post("/raw-materials-new/{material_id}/add-stock")
+async def add_raw_material_stock(material_id: str, quantity: float = 1):
+    """زيادة كمية المادة الخام مباشرة (للتعديل اليدوي)"""
+    db = get_db()
+    
+    material = await db.raw_materials.find_one({"id": material_id})
+    if not material:
+        raise HTTPException(status_code=404, detail="المادة غير موجودة")
+    
+    if quantity <= 0:
+        raise HTTPException(status_code=400, detail="الكمية يجب أن تكون أكبر من صفر")
+    
+    # زيادة الكمية وإجمالي الوارد
+    await db.raw_materials.update_one(
+        {"id": material_id},
+        {
+            "$inc": {
+                "quantity": quantity,
+                "total_received": quantity  # إجمالي الوارد
+            },
+            "$set": {"last_updated": datetime.now(timezone.utc).isoformat()}
+        }
+    )
+    
+    # تسجيل الحركة
+    await db.inventory_movements.insert_one({
+        "id": str(uuid.uuid4()),
+        "type": "raw_material_stock_add",
+        "material_id": material_id,
+        "material_name": material.get("name"),
+        "quantity": quantity,
+        "notes": "إضافة يدوية للمخزون",
+        "created_at": datetime.now(timezone.utc).isoformat()
+    })
+    
+    return {
+        "message": f"تم إضافة {quantity} {material.get('unit')} إلى {material.get('name')}",
+        "new_quantity": material.get("quantity", 0) + quantity
+    }
+
 
 # ==================== WAREHOUSE TO MANUFACTURING (تحويل من المخزن للتصنيع) ====================
 
@@ -678,12 +725,15 @@ async def transfer_to_manufacturing(transfer: WarehouseToManufacturingCreate):
     
     await db.warehouse_transfers.insert_one(transfer_doc)
     
-    # خصم المواد من المخزن
+    # خصم المواد من المخزن وتحديث الإحصائيات
     for item in items_with_details:
         await db.raw_materials.update_one(
             {"id": item["raw_material_id"]},
             {
-                "$inc": {"quantity": -item["quantity"]},
+                "$inc": {
+                    "quantity": -item["quantity"],
+                    "transferred_to_manufacturing": item["quantity"]  # تتبع المحول للتصنيع
+                },
                 "$set": {"last_updated": datetime.now(timezone.utc).isoformat()}
             }
         )

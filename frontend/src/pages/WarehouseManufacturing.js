@@ -84,7 +84,8 @@ export default function WarehouseManufacturing() {
   const [showBranchTransferDialog, setShowBranchTransferDialog] = useState(false);
   const [showAddProductDialog, setShowAddProductDialog] = useState(false);
   const [showProduceDialog, setShowProduceDialog] = useState(null);
-  const [showAddStockDialog, setShowAddStockDialog] = useState(null);  // زيادة كمية المنتج
+  const [showAddStockDialog, setShowAddStockDialog] = useState(null);  // زيادة كمية المنتج المصنع
+  const [showAddRawMaterialStockDialog, setShowAddRawMaterialStockDialog] = useState(null);  // زيادة كمية المادة الخام
   const [selectedRecipe, setSelectedRecipe] = useState(null);
   const [showRequestMaterialsDialog, setShowRequestMaterialsDialog] = useState(false);  // طلب مواد
   
@@ -131,6 +132,7 @@ export default function WarehouseManufacturing() {
   
   const [produceQuantity, setProduceQuantity] = useState(1);
   const [addStockQuantity, setAddStockQuantity] = useState(1);  // كمية زيادة المخزون
+  const [addRawMaterialStockQuantity, setAddRawMaterialStockQuantity] = useState(1);  // كمية زيادة المادة الخام
   
   const [searchQuery, setSearchQuery] = useState('');
   const token = localStorage.getItem('token');
@@ -495,6 +497,24 @@ export default function WarehouseManufacturing() {
     }
   };
   
+  // زيادة كمية المادة الخام مباشرة
+  const handleAddRawMaterialStock = async () => {
+    if (!showAddRawMaterialStockDialog || addRawMaterialStockQuantity <= 0) return;
+    
+    setSubmitting(true);
+    try {
+      await axios.post(`${API}/raw-materials-new/${showAddRawMaterialStockDialog.id}/add-stock?quantity=${addRawMaterialStockQuantity}`, {}, { headers });
+      toast.success(t('تم زيادة الكمية بنجاح'));
+      setShowAddRawMaterialStockDialog(null);
+      setAddRawMaterialStockQuantity(1);
+      fetchData();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || t('فشل في زيادة الكمية'));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+  
   // تصفية البيانات
   const filteredRawMaterials = rawMaterials.filter(m => 
     !searchQuery || m.name.includes(searchQuery) || m.name_en?.includes(searchQuery)
@@ -703,7 +723,7 @@ export default function WarehouseManufacturing() {
               {filteredRawMaterials.map(material => (
                 <Card 
                   key={material.id}
-                  className={`hover:shadow-md transition-shadow ${material.quantity <= material.min_quantity ? 'ring-2 ring-red-500' : ''}`}
+                  className={`hover:shadow-md transition-shadow ${material.quantity <= material.min_quantity ? 'ring-2 ring-red-500 animate-pulse' : ''}`}
                   data-testid={`material-${material.id}`}
                 >
                   <CardContent className="p-4">
@@ -712,10 +732,49 @@ export default function WarehouseManufacturing() {
                         <h3 className="font-bold">{material.name}</h3>
                         {material.name_en && <p className="text-sm text-muted-foreground">{material.name_en}</p>}
                       </div>
-                      <Badge className={material.quantity <= material.min_quantity ? 'bg-red-500/20 text-red-500' : 'bg-green-500/20 text-green-500'}>
-                        {material.quantity <= material.min_quantity ? t('نقص') : t('متوفر')}
-                      </Badge>
+                      <div className="flex flex-col gap-1 items-end">
+                        <Badge className={material.quantity <= material.min_quantity ? 'bg-red-500/20 text-red-500' : 'bg-green-500/20 text-green-500'}>
+                          {material.quantity <= material.min_quantity ? t('نقص') : t('متوفر')}
+                        </Badge>
+                        {material.quantity <= material.min_quantity && (
+                          <span className="text-xs text-red-500 flex items-center gap-1">
+                            <AlertTriangle className="h-3 w-3" />
+                            {t('أقل من الحد الأدنى')}
+                          </span>
+                        )}
+                      </div>
                     </div>
+                    
+                    {/* إحصائيات المخزون */}
+                    <div className="grid grid-cols-3 gap-2 p-2 bg-muted/30 rounded-lg mb-3">
+                      <div className="text-center">
+                        <p className="text-xs text-muted-foreground">{t('إجمالي الوارد')}</p>
+                        <p className="font-bold text-purple-500">{material.total_received || material.quantity || 0}</p>
+                      </div>
+                      <div className="text-center border-x border-muted">
+                        <p className="text-xs text-muted-foreground">{t('المحول للتصنيع')}</p>
+                        <p className="font-bold text-blue-500">{material.transferred_to_manufacturing || 0}</p>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-xs text-muted-foreground">{t('المتبقي')}</p>
+                        <p className="font-bold text-green-500">{material.quantity || 0}</p>
+                      </div>
+                    </div>
+                    
+                    {/* شريط التقدم */}
+                    {(material.total_received || 0) > 0 && (
+                      <div className="mb-3">
+                        <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+                          <div 
+                            className={`h-full ${material.quantity <= material.min_quantity ? 'bg-gradient-to-r from-red-500 to-orange-500' : 'bg-gradient-to-r from-blue-500 to-green-500'}`}
+                            style={{ width: `${Math.min(100, ((material.quantity || 0) / (material.total_received || 1)) * 100)}%` }}
+                          />
+                        </div>
+                        <p className="text-xs text-muted-foreground text-center mt-1">
+                          {Math.round(((material.quantity || 0) / (material.total_received || 1)) * 100)}% {t('متبقي من الوارد')}
+                        </p>
+                      </div>
+                    )}
                     
                     <div className="grid grid-cols-2 gap-2 text-sm mb-3">
                       <div>
@@ -748,15 +807,27 @@ export default function WarehouseManufacturing() {
                       </div>
                     </div>
                     
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="w-full"
-                      onClick={() => addItemToTransfer(material)}
-                    >
-                      <Send className="h-4 w-4 ml-2" />
-                      {t('إضافة للتحويل')}
-                    </Button>
+                    {/* أزرار الإجراءات */}
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="flex-1"
+                        onClick={() => addItemToTransfer(material)}
+                      >
+                        <Send className="h-4 w-4 ml-2" />
+                        {t('إضافة للتحويل')}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="border-purple-500 text-purple-600 hover:bg-purple-50"
+                        onClick={() => setShowAddRawMaterialStockDialog(material)}
+                        data-testid="add-raw-material-stock-btn"
+                      >
+                        <Plus className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </CardContent>
                 </Card>
               ))}
@@ -1817,6 +1888,102 @@ export default function WarehouseManufacturing() {
             <Button 
               onClick={handleAddStock}
               disabled={submitting || addStockQuantity <= 0}
+              className="bg-purple-500 hover:bg-purple-600"
+            >
+              {submitting ? <RefreshCw className="h-4 w-4 animate-spin ml-2" /> : <Plus className="h-4 w-4 ml-2" />}
+              {t('إضافة الكمية')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      
+      {/* Dialog: زيادة كمية المادة الخام */}
+      <Dialog open={!!showAddRawMaterialStockDialog} onOpenChange={() => { setShowAddRawMaterialStockDialog(null); setAddRawMaterialStockQuantity(1); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Plus className="h-5 w-5 text-purple-500" />
+              {t('زيادة كمية المادة الخام')}
+            </DialogTitle>
+          </DialogHeader>
+          
+          {showAddRawMaterialStockDialog && (
+            <div className="space-y-4">
+              <div className="p-4 bg-purple-500/10 rounded-lg">
+                <h3 className="font-bold text-lg mb-2">{showAddRawMaterialStockDialog.name}</h3>
+                <div className="grid grid-cols-3 gap-4 text-sm">
+                  <div>
+                    <p className="text-muted-foreground">{t('الكمية الحالية')}</p>
+                    <p className="font-bold text-green-500">{showAddRawMaterialStockDialog.quantity} {showAddRawMaterialStockDialog.unit}</p>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground">{t('إجمالي الوارد')}</p>
+                    <p className="font-bold text-purple-500">{showAddRawMaterialStockDialog.total_received || showAddRawMaterialStockDialog.quantity || 0}</p>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground">{t('المحول للتصنيع')}</p>
+                    <p className="font-bold text-blue-500">{showAddRawMaterialStockDialog.transferred_to_manufacturing || 0}</p>
+                  </div>
+                </div>
+              </div>
+              
+              {/* تحذير انخفاض المخزون */}
+              {showAddRawMaterialStockDialog.quantity <= showAddRawMaterialStockDialog.min_quantity && (
+                <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-lg flex items-center gap-2">
+                  <AlertTriangle className="h-5 w-5 text-red-500" />
+                  <p className="text-sm text-red-500">
+                    {t('تحذير: المخزون أقل من الحد الأدنى')} ({showAddRawMaterialStockDialog.min_quantity} {showAddRawMaterialStockDialog.unit})
+                  </p>
+                </div>
+              )}
+              
+              <div>
+                <Label>{t('الكمية المراد إضافتها')}</Label>
+                <div className="flex items-center gap-2 mt-1">
+                  <Button 
+                    type="button"
+                    variant="outline" 
+                    size="icon"
+                    onClick={() => setAddRawMaterialStockQuantity(Math.max(1, addRawMaterialStockQuantity - 1))}
+                  >
+                    <Minus className="h-4 w-4" />
+                  </Button>
+                  <Input
+                    type="number"
+                    min="1"
+                    step="0.5"
+                    value={addRawMaterialStockQuantity}
+                    onChange={(e) => setAddRawMaterialStockQuantity(parseFloat(e.target.value) || 1)}
+                    className="w-24 text-center text-lg font-bold"
+                  />
+                  <Button 
+                    type="button"
+                    variant="outline" 
+                    size="icon"
+                    onClick={() => setAddRawMaterialStockQuantity(addRawMaterialStockQuantity + 1)}
+                  >
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                  <span className="text-sm text-muted-foreground">{showAddRawMaterialStockDialog.unit}</span>
+                </div>
+              </div>
+              
+              <div className="p-3 bg-green-500/10 rounded-lg text-center">
+                <p className="text-sm text-muted-foreground">{t('الكمية بعد الإضافة')}</p>
+                <p className="text-xl font-bold text-green-500">
+                  {(showAddRawMaterialStockDialog.quantity || 0) + addRawMaterialStockQuantity} {showAddRawMaterialStockDialog.unit}
+                </p>
+              </div>
+            </div>
+          )}
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setShowAddRawMaterialStockDialog(null); setAddRawMaterialStockQuantity(1); }}>
+              {t('إلغاء')}
+            </Button>
+            <Button 
+              onClick={handleAddRawMaterialStock}
+              disabled={submitting || addRawMaterialStockQuantity <= 0}
               className="bg-purple-500 hover:bg-purple-600"
             >
               {submitting ? <RefreshCw className="h-4 w-4 animate-spin ml-2" /> : <Plus className="h-4 w-4 ml-2" />}
