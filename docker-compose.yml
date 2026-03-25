@@ -28,6 +28,7 @@ services:
       - MONGO_URL=mongodb://maestro_admin:Maestro%402024Secure@mongodb:27017/maestro_db?authSource=admin
       - DB_NAME=maestro_db
       - JWT_SECRET=your-super-secret-jwt-key-change-this-in-production
+      - EMERGENT_LLM_KEY=sk-emergent-904C61aE58819BbA0E
     volumes:
       - ./uploads:/app/uploads
     networks:
