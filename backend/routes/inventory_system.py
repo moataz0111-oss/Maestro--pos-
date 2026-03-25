@@ -246,6 +246,7 @@ class PackagingRequestCreate(BaseModel):
     items: List[Dict[str, Any]]  # [{packaging_material_id, name, quantity, unit}]
     priority: str = "normal"
     notes: Optional[str] = None
+    from_branch_id: Optional[str] = None  # اختياري - إذا كان المستخدم admin يمكنه تحديد الفرع
 
 class PackagingRequestResponse(BaseModel):
     id: str
@@ -2550,10 +2551,14 @@ async def create_packaging_request(
     next_number = (last_request.get("request_number", 0) if last_request else 0) + 1
     
     now = datetime.now(timezone.utc).isoformat()
+    
+    # تحديد الفرع - من المستخدم أو من الطلب
+    branch_id = current_user.get("branch_id") or request.from_branch_id
+    
     new_request = {
         "id": str(uuid.uuid4()),
         "request_number": next_number,
-        "from_branch_id": current_user.get("branch_id"),
+        "from_branch_id": branch_id,
         "items": request.items,
         "priority": request.priority,
         "status": "pending",
@@ -2565,8 +2570,8 @@ async def create_packaging_request(
     }
     
     # جلب اسم الفرع
-    if current_user.get("branch_id"):
-        branch = await db.branches.find_one({"id": current_user.get("branch_id")})
+    if branch_id:
+        branch = await db.branches.find_one({"id": branch_id})
         if branch:
             new_request["from_branch_name"] = branch.get("name")
     
