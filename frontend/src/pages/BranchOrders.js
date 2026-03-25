@@ -61,6 +61,7 @@ export default function BranchOrders() {
   const [manufacturedProducts, setManufacturedProducts] = useState([]);
   const [packagingMaterials, setPackagingMaterials] = useState([]); // مواد التغليف
   const [branchInventory, setBranchInventory] = useState([]);
+  const [branchPackagingInventory, setBranchPackagingInventory] = useState([]); // مخزون التغليف في الفرع
   const [loading, setLoading] = useState(true);
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showOrderDetails, setShowOrderDetails] = useState(null);
@@ -100,10 +101,14 @@ export default function BranchOrders() {
       setManufacturedProducts(productsRes.data || []);
       setPackagingMaterials(packagingRes.data || []);
       
-      // جلب مخزون الفرع المحدد
+      // جلب مخزون الفرع المحدد (منتجات + تغليف)
       if (selectedBranch) {
-        const invRes = await axios.get(`${API}/branch-inventory/${selectedBranch}`, { headers }).catch(() => ({ data: [] }));
+        const [invRes, pkgInvRes] = await Promise.all([
+          axios.get(`${API}/branch-inventory/${selectedBranch}`, { headers }).catch(() => ({ data: [] })),
+          axios.get(`${API}/branch-packaging-inventory?branch_id=${selectedBranch}`, { headers }).catch(() => ({ data: [] }))
+        ]);
         setBranchInventory(invRes.data || []);
+        setBranchPackagingInventory(pkgInvRes.data || []);
       }
     } catch (error) {
       console.error('Error fetching data:', error);
@@ -409,7 +414,7 @@ export default function BranchOrders() {
                             )}
                           </div>
                           
-                          <p className="font-bold text-primary">{t('الإجمالي: {formatPrice(order.total_cost)}')}</p>
+                          <p className="font-bold text-primary">{t('الإجمالي')}: {formatPrice(order.total_cost)}</p>
                         </div>
                         
                         <div className="flex flex-col gap-2">
@@ -493,56 +498,179 @@ export default function BranchOrders() {
                   <p>{t('اختر فرع لعرض مخزونه')}</p>
                 </CardContent>
               </Card>
-            ) : branchInventory.length === 0 ? (
-              <Card>
-                <CardContent className="py-12 text-center text-muted-foreground">
-                  <Box className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                  <p>{t('لا يوجد مخزون في هذا الفرع')}</p>
-                </CardContent>
-              </Card>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {branchInventory.map(item => (
-                  <Card key={item.id} className="hover:shadow-md transition-shadow">
-                    <CardContent className="p-4">
-                      <div className="flex items-start justify-between mb-3">
-                        <div>
-                          <h3 className="font-bold">{item.product_name}</h3>
-                          <p className="text-xs text-muted-foreground">{item.unit}</p>
-                        </div>
-                        <Badge className={item.quantity > 0 ? 'bg-green-500/20 text-green-500' : 'bg-red-500/20 text-red-500'}>
-                          {item.quantity > 0 ? t('متوفر') : t('نفد')}
-                        </Badge>
-                      </div>
-                      
-                      <div className="grid grid-cols-3 gap-2 text-sm mb-3">
-                        <div className="text-center p-2 bg-blue-500/10 rounded">
-                          <p className="text-xs text-blue-400">{t('الوارد')}</p>
-                          <p className="text-lg font-bold text-blue-500">{item.received_quantity || item.quantity || 0}</p>
-                        </div>
-                        <div className="text-center p-2 bg-green-500/10 rounded">
-                          <p className="text-xs text-green-400">{t('المتبقي')}</p>
-                          <p className="text-lg font-bold text-green-500">{item.quantity || 0}</p>
-                        </div>
-                        <div className="text-center p-2 bg-orange-500/10 rounded">
-                          <p className="text-xs text-orange-400">{t('المباع')}</p>
-                          <p className="text-lg font-bold text-orange-500">{item.sold_quantity || 0}</p>
-                        </div>
-                      </div>
-                      
-                      {/* شريط التقدم */}
-                      <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 mb-2">
-                        <div 
-                          className="bg-gradient-to-r from-green-500 to-orange-500 h-2 rounded-full transition-all"
-                          style={{ width: `${((item.sold_quantity || 0) / (item.received_quantity || item.quantity || 1)) * 100}%` }}
-                        />
-                      </div>
-                      <p className="text-xs text-center text-muted-foreground">
-                        {t('نسبة البيع')}: {(((item.sold_quantity || 0) / (item.received_quantity || item.quantity || 1)) * 100).toFixed(1)}%
-                      </p>
-                    </CardContent>
-                  </Card>
-                ))}
+              <div className="space-y-6">
+                {/* مخزون المنتجات المصنعة */}
+                <div>
+                  <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
+                    <Factory className="h-5 w-5 text-purple-500" />
+                    {t('مخزون المنتجات المصنعة')}
+                  </h3>
+                  {branchInventory.length === 0 ? (
+                    <Card className="border-purple-500/20">
+                      <CardContent className="py-8 text-center text-muted-foreground">
+                        <Factory className="h-10 w-10 mx-auto mb-3 opacity-50" />
+                        <p>{t('لا يوجد منتجات مصنعة في هذا الفرع')}</p>
+                      </CardContent>
+                    </Card>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {branchInventory.map(item => (
+                        <Card key={item.id} className="hover:shadow-md transition-shadow border-purple-500/20">
+                          <CardContent className="p-4">
+                            <div className="flex items-start justify-between mb-3">
+                              <div>
+                                <h3 className="font-bold">{item.product_name}</h3>
+                                <p className="text-xs text-muted-foreground">{item.unit}</p>
+                              </div>
+                              <Badge className={item.quantity > 0 ? 'bg-green-500/20 text-green-500' : 'bg-red-500/20 text-red-500'}>
+                                {item.quantity > 0 ? t('متوفر') : t('نفد')}
+                              </Badge>
+                            </div>
+                            
+                            <div className="grid grid-cols-3 gap-2 text-sm mb-3">
+                              <div className="text-center p-2 bg-blue-500/10 rounded">
+                                <p className="text-xs text-blue-400">{t('الوارد')}</p>
+                                <p className="text-lg font-bold text-blue-500">{item.received_quantity || item.quantity || 0}</p>
+                              </div>
+                              <div className="text-center p-2 bg-green-500/10 rounded">
+                                <p className="text-xs text-green-400">{t('المتبقي')}</p>
+                                <p className="text-lg font-bold text-green-500">{item.quantity || 0}</p>
+                              </div>
+                              <div className="text-center p-2 bg-orange-500/10 rounded">
+                                <p className="text-xs text-orange-400">{t('المباع')}</p>
+                                <p className="text-lg font-bold text-orange-500">{item.sold_quantity || 0}</p>
+                              </div>
+                            </div>
+                            
+                            {/* شريط التقدم */}
+                            <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 mb-2">
+                              <div 
+                                className="bg-gradient-to-r from-green-500 to-orange-500 h-2 rounded-full transition-all"
+                                style={{ width: `${((item.sold_quantity || 0) / (item.received_quantity || item.quantity || 1)) * 100}%` }}
+                              />
+                            </div>
+                            <p className="text-xs text-center text-muted-foreground">
+                              {t('نسبة البيع')}: {(((item.sold_quantity || 0) / (item.received_quantity || item.quantity || 1)) * 100).toFixed(1)}%
+                            </p>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                
+                {/* مخزون مواد التغليف */}
+                <div>
+                  <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
+                    <Package className="h-5 w-5 text-amber-500" />
+                    {t('مخزون مواد التغليف (الورقيات)')}
+                  </h3>
+                  {branchPackagingInventory.length === 0 ? (
+                    <Card className="border-amber-500/20">
+                      <CardContent className="py-8 text-center text-muted-foreground">
+                        <Package className="h-10 w-10 mx-auto mb-3 opacity-50" />
+                        <p>{t('لا توجد مواد تغليف في هذا الفرع')}</p>
+                        <p className="text-sm mt-2">{t('أرسل طلب للمستودع للحصول على مواد التغليف')}</p>
+                      </CardContent>
+                    </Card>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {branchPackagingInventory.map(item => (
+                        <Card key={item.id} className="hover:shadow-md transition-shadow border-amber-500/20">
+                          <CardContent className="p-4">
+                            <div className="flex items-start justify-between mb-3">
+                              <div>
+                                <h3 className="font-bold">{item.packaging_material_name}</h3>
+                                <p className="text-xs text-muted-foreground">{item.unit}</p>
+                              </div>
+                              <Badge className={
+                                item.remaining_quantity <= 10 ? 'bg-red-500/20 text-red-500' :
+                                item.remaining_quantity <= 50 ? 'bg-yellow-500/20 text-yellow-500' :
+                                'bg-green-500/20 text-green-500'
+                              }>
+                                {item.remaining_quantity <= 10 ? t('منخفض') :
+                                 item.remaining_quantity <= 50 ? t('متوسط') :
+                                 t('جيد')}
+                              </Badge>
+                            </div>
+                            
+                            <div className="grid grid-cols-3 gap-2 text-sm mb-3">
+                              <div className="text-center p-2 bg-blue-500/10 rounded">
+                                <p className="text-xs text-blue-400">{t('الإجمالي')}</p>
+                                <p className="text-lg font-bold text-blue-500">{item.quantity || 0}</p>
+                              </div>
+                              <div className="text-center p-2 bg-green-500/10 rounded">
+                                <p className="text-xs text-green-400">{t('المتبقي')}</p>
+                                <p className="text-lg font-bold text-green-500">{item.remaining_quantity || 0}</p>
+                              </div>
+                              <div className="text-center p-2 bg-orange-500/10 rounded">
+                                <p className="text-xs text-orange-400">{t('المستخدم')}</p>
+                                <p className="text-lg font-bold text-orange-500">{item.used_quantity || 0}</p>
+                              </div>
+                            </div>
+                            
+                            {/* شريط التقدم */}
+                            <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 mb-2">
+                              <div 
+                                className={`h-2 rounded-full transition-all ${
+                                  item.remaining_quantity <= 10 ? 'bg-red-500' :
+                                  item.remaining_quantity <= 50 ? 'bg-yellow-500' :
+                                  'bg-green-500'
+                                }`}
+                                style={{ width: `${Math.min(100, (item.remaining_quantity / (item.quantity || 1)) * 100)}%` }}
+                              />
+                            </div>
+                            <p className="text-xs text-center text-muted-foreground">
+                              {t('القيمة')}: {formatPrice(item.total_value || 0)}
+                            </p>
+                            
+                            {item.remaining_quantity <= 10 && (
+                              <div className="mt-2 flex items-center gap-2 text-red-500 text-sm justify-center">
+                                <AlertCircle className="h-4 w-4" />
+                                {t('يجب طلب كمية إضافية!')}
+                              </div>
+                            )}
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                
+                {/* إحصائيات سريعة */}
+                {(branchInventory.length > 0 || branchPackagingInventory.length > 0) && (
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <Card className="bg-purple-500/10 border-purple-500/30">
+                      <CardContent className="p-4 text-center">
+                        <p className="text-sm text-muted-foreground">{t('منتجات مصنعة')}</p>
+                        <p className="text-2xl font-bold text-purple-600">{branchInventory.length}</p>
+                      </CardContent>
+                    </Card>
+                    <Card className="bg-amber-500/10 border-amber-500/30">
+                      <CardContent className="p-4 text-center">
+                        <p className="text-sm text-muted-foreground">{t('مواد تغليف')}</p>
+                        <p className="text-2xl font-bold text-amber-600">{branchPackagingInventory.length}</p>
+                      </CardContent>
+                    </Card>
+                    <Card className="bg-red-500/10 border-red-500/30">
+                      <CardContent className="p-4 text-center">
+                        <p className="text-sm text-muted-foreground">{t('تغليف منخفض')}</p>
+                        <p className="text-2xl font-bold text-red-600">
+                          {branchPackagingInventory.filter(i => i.remaining_quantity <= 10).length}
+                        </p>
+                      </CardContent>
+                    </Card>
+                    <Card className="bg-green-500/10 border-green-500/30">
+                      <CardContent className="p-4 text-center">
+                        <p className="text-sm text-muted-foreground">{t('قيمة التغليف')}</p>
+                        <p className="text-xl font-bold text-green-600">
+                          {formatPrice(branchPackagingInventory.reduce((sum, i) => sum + (i.total_value || 0), 0))}
+                        </p>
+                      </CardContent>
+                    </Card>
+                  </div>
+                )}
               </div>
             )}
           </TabsContent>
