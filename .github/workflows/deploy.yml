@@ -2,7 +2,7 @@ name: 🚀 Deploy Maestro POS to Production
 
 on:
   push:
-    branches: [ main, conflict_230326_0646 ]
+    branches: [ main ]
   workflow_dispatch:
 
 jobs:
@@ -44,7 +44,7 @@ jobs:
           # سحب الكود
           echo "📥 Pulling latest code..."
           git fetch origin
-          git reset --hard origin/conflict_230326_0646
+          git reset --hard origin/main
           
           mkdir -p certbot/conf certbot/www backups deploy/backups uploads
           
