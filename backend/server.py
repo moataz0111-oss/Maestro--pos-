@@ -9470,8 +9470,8 @@ async def reset_tenant_sales(tenant_id: str, confirm: bool = False, current_user
     if not tenant:
         raise HTTPException(status_code=404, detail="العميل غير موجود")
     
-    # البحث عن البيانات بـ tenant_id أو بدونه (للتوافق مع البيانات القديمة)
-    query = {"$or": [{"tenant_id": tenant_id}, {"tenant_id": {"$exists": False}}, {"tenant_id": None}]}
+    # البحث بـ tenant_id فقط
+    query = {"tenant_id": tenant_id}
     
     # حذف طلبات العميل
     orders_result = await db.orders.delete_many(query)
@@ -12001,9 +12001,14 @@ async def get_credit_report(
     """تقرير الآجل - فقط الآجل العادي (بدون شركات التوصيل)"""
     query = build_tenant_query(current_user)
     
-    # فقط الآجل العادي - استبعاد طلبات التوصيل
+    # فقط الآجل العادي - استبعاد طلبات التوصيل وطلبات شركات التوصيل
     query["payment_method"] = "credit"
     query["order_type"] = {"$ne": "delivery"}  # استبعاد التوصيل
+    query["$or"] = [
+        {"delivery_app": None},
+        {"delivery_app": ""},
+        {"delivery_app": {"$exists": False}}
+    ]  # استبعاد أي طلب له شركة توصيل
     
     if branch_id:
         query["branch_id"] = branch_id

@@ -997,19 +997,24 @@ export default function SuperAdmin() {
 
   const resetTenantSales = async () => {
     try {
-      await axios.post(`${API}/super-admin/tenants/${selectedTenant.id}/reset-sales?confirm=true`);
+      const token = localStorage.getItem('super_admin_token');
+      const headers = { Authorization: `Bearer ${token}` };
+      await axios.post(`${API}/super-admin/tenants/${selectedTenant.id}/reset-sales?confirm=true`, null, { headers });
       toast.success(t('تم تصفير المبيعات بنجاح'));
       setShowResetSalesConfirm(false);
       setSelectedTenant(null);
       fetchData();
     } catch (error) {
-      toast.error(t('فشل في تصفير المبيعات'));
+      console.error('Reset sales error:', error);
+      toast.error(error.response?.data?.detail || t('فشل في تصفير المبيعات'));
     }
   };
 
   const resetTenantInventory = async () => {
     try {
-      await axios.post(`${API}/super-admin/tenants/${selectedTenant.id}/reset-inventory?confirm=true&delete_all=true`);
+      const token = localStorage.getItem('super_admin_token');
+      const headers = { Authorization: `Bearer ${token}` };
+      await axios.post(`${API}/super-admin/tenants/${selectedTenant.id}/reset-inventory?confirm=true&delete_all=true`, null, { headers });
       toast.success(t('تم تصفير بيانات المخزون بنجاح'));
       setShowResetInventoryConfirm(false);
       setSelectedTenant(null);
