@@ -363,3 +363,27 @@
 - Backend: 100% (15/15 tests passed)
 - Frontend: 100% verified
 - Test Report: `/app/test_reports/iteration_124.json`
+
+---
+
+### نظام مواد التغليف (الورقيات) ✅
+تم إنشاء نظام كامل لإدارة مواد التغليف:
+
+#### Backend APIs:
+- `GET /api/packaging-materials` - جلب مواد التغليف
+- `POST /api/packaging-materials` - إضافة مادة جديدة
+- `POST /api/packaging-materials/{id}/add-stock` - إضافة كمية
+- `GET/POST /api/packaging-requests` - طلبات مواد التغليف
+- `POST /api/packaging-requests/{id}/transfer` - تحويل للفرع
+- `GET /api/branch-packaging-inventory` - مخزون الفرع
+
+#### Frontend:
+- تاب "الورقيات" جديد في صفحة المخزن والتصنيع
+- ربط مواد التغليف بالمنتجات في الإعدادات
+- الخصم التلقائي من مخزون الفرع عند البيع (سفري/توصيل فقط)
+
+#### إصلاحات:
+- إزالة تعارض Routes (`/purchase-requests`)
+- تحديث CORS للإنتاج
+
+### Deployment Status: ✅ Ready for Production
