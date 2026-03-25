@@ -494,3 +494,42 @@
 - Backend: 100% (16/16 tests passed)
 - Frontend: 100% verified
 - Test Report: `/app/test_reports/iteration_126.json`
+
+---
+
+### ميزة التقاط صور الفواتير بالكاميرا ✅ (March 25, 2026)
+
+تم إكمال ميزة التقاط صور فواتير الشراء من الكاميرا مباشرة:
+
+#### الميزات المُنفذة:
+1. **خياران واضحان لرفع الصور**:
+   - 📷 "التقاط صورة" - يفتح كاميرا الجهاز
+   - 📁 "رفع من الجهاز" - اختيار ملف من الجهاز
+
+2. **dialog الكاميرا**:
+   - عرض بث الفيديو الحي من الكاميرا
+   - زر "التقاط الصورة" لأخذ صورة
+   - زر "إلغاء" لإغلاق الكاميرا
+   - تنظيف تلقائي للموارد (camera stream)
+
+3. **معالجة الصور**:
+   - دعم الكاميرا الخلفية (facingMode: 'environment')
+   - تحويل الصورة إلى Base64 JPEG
+   - معاينة الصورة قبل الحفظ
+   - زر حذف الصورة وإعادة الاختيار
+
+#### التقنيات المستخدمة:
+- `navigator.mediaDevices.getUserMedia` - للوصول للكاميرا
+- HTML5 Canvas - لالتقاط الصورة من الفيديو
+- React Refs (useRef) - للتحكم في video و canvas
+
+#### Files Modified:
+- `/app/frontend/src/pages/Purchasing.js`:
+  - Lines 196-254: Camera functions (openCamera, capturePhoto, closeCamera)
+  - Lines 719-741: Camera and upload buttons UI
+  - Lines 934-976: Camera dialog UI
+
+### Testing Status: ✅
+- Frontend: 100% (8/8 tests passed)
+- Test Report: `/app/test_reports/iteration_128.json`
+- ملاحظة: خطأ "الكاميرا غير متاحة" في بيئة headless متوقع وطبيعي
