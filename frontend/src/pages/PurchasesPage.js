@@ -196,11 +196,28 @@ export default function PurchasesPage() {
   // فتح الكاميرا
   const openCamera = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        video: { facingMode: 'environment' }
-      });
-      setCameraStream(stream);
       setShowCameraDialog(true);
+      // نؤخر الحصول على الـ stream قليلاً حتى يظهر الـ dialog
+      setTimeout(async () => {
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ 
+            video: { 
+              facingMode: 'environment',
+              width: { ideal: 1280 },
+              height: { ideal: 720 }
+            }
+          });
+          setCameraStream(stream);
+          if (videoRef.current) {
+            videoRef.current.srcObject = stream;
+            videoRef.current.play().catch(e => console.log('Video play error:', e));
+          }
+        } catch (err) {
+          console.error('Camera error:', err);
+          toast.error(t('لم نتمكن من الوصول للكاميرا. تأكد من السماح بالوصول.'));
+          setShowCameraDialog(false);
+        }
+      }, 500);
     } catch (error) {
       console.error('Camera error:', error);
       toast.error(t('لم نتمكن من الوصول للكاميرا. تأكد من السماح بالوصول.'));
@@ -212,19 +229,33 @@ export default function PurchasesPage() {
     if (videoRef.current && canvasRef.current) {
       const video = videoRef.current;
       const canvas = canvasRef.current;
+      
+      // تأكد من أن الفيديو يعمل
+      if (video.videoWidth === 0 || video.videoHeight === 0) {
+        toast.error(t('الكاميرا غير جاهزة، حاول مرة أخرى'));
+        return;
+      }
+      
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
       const ctx = canvas.getContext('2d');
       ctx.drawImage(video, 0, 0);
       
       const imageData = canvas.toDataURL('image/jpeg', 0.8);
-      setPurchaseForm(prev => ({
-        ...prev,
-        imagePreview: imageData
-      }));
       
-      closeCamera();
-      toast.success(t('تم التقاط الصورة بنجاح'));
+      // تأكد من أن الصورة ليست فارغة
+      if (imageData && imageData !== 'data:,') {
+        setPurchaseForm(prev => ({
+          ...prev,
+          imagePreview: imageData
+        }));
+        closeCamera();
+        toast.success(t('تم التقاط الصورة بنجاح'));
+      } else {
+        toast.error(t('فشل التقاط الصورة، حاول مرة أخرى'));
+      }
+    } else {
+      toast.error(t('الكاميرا غير متاحة'));
     }
   };
 
@@ -302,6 +333,9 @@ export default function PurchasesPage() {
   useEffect(() => {
     if (showCameraDialog && cameraStream && videoRef.current) {
       videoRef.current.srcObject = cameraStream;
+      videoRef.current.onloadedmetadata = () => {
+        videoRef.current.play().catch(e => console.log('Video play error:', e));
+      };
     }
   }, [showCameraDialog, cameraStream]);
 
@@ -780,8 +814,16 @@ export default function PurchasesPage() {
               <Label className="mb-2 block">{t('صورة الفاتورة')}</Label>
               {purchaseForm.imagePreview ? (
                 <div className="space-y-3">
-                  <div className="relative">
-                    <img src={purchaseForm.imagePreview} alt="فاتورة" className="w-full max-h-48 object-contain rounded-lg" />
+                  <div className="relative bg-gray-100 dark:bg-gray-800 rounded-lg p-2">
+                    <img 
+                      src={purchaseForm.imagePreview} 
+                      alt="فاتورة" 
+                      className="w-full max-h-48 object-contain rounded-lg"
+                      onError={(e) => {
+                        console.error('Image load error');
+                        e.target.style.display = 'none';
+                      }}
+                    />
                     <Button
                       variant="destructive"
                       size="icon"
@@ -1160,7 +1202,7 @@ export default function PurchasesPage() {
       </Dialog>
 
       {/* Dialog: الكاميرا */}
-      <Dialog open={showCameraDialog} onOpenChange={closeCamera}>
+      <Dialog open={showCameraDialog} onOpenChange={(open) => !open && closeCamera()}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -1170,18 +1212,24 @@ export default function PurchasesPage() {
           </DialogHeader>
           
           <div className="space-y-4">
-            <div className="relative bg-black rounded-lg overflow-hidden">
+            <div className="relative bg-black rounded-lg overflow-hidden min-h-[300px] flex items-center justify-center">
+              {!cameraStream && (
+                <div className="text-white text-center">
+                  <RefreshCw className="h-8 w-8 animate-spin mx-auto mb-2" />
+                  <p>{t('جاري تشغيل الكاميرا...')}</p>
+                </div>
+              )}
               <video
                 ref={videoRef}
                 autoPlay
                 playsInline
                 muted
                 className="w-full h-auto"
-                style={{ maxHeight: '400px' }}
+                style={{ maxHeight: '400px', display: cameraStream ? 'block' : 'none' }}
               />
             </div>
             
-            <canvas ref={canvasRef} className="hidden" />
+            <canvas ref={canvasRef} style={{ display: 'none' }} />
             
             <p className="text-center text-sm text-muted-foreground">
               {t('وجّه الكاميرا نحو الفاتورة ثم اضغط زر الالتقاط')}
@@ -1193,7 +1241,7 @@ export default function PurchasesPage() {
               <X className="h-4 w-4 ml-2" />
               {t('إلغاء')}
             </Button>
-            <Button onClick={capturePhoto} className="bg-primary">
+            <Button onClick={capturePhoto} className="bg-primary" disabled={!cameraStream}>
               <Camera className="h-4 w-4 ml-2" />
               {t('التقاط الصورة')}
             </Button>
