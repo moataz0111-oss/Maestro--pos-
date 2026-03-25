@@ -79,6 +79,9 @@ export default function Delivery() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [formData, setFormData] = useState({ name: '', phone: '', pin: '1234' });
   
+  const { token } = useAuth();
+  const headers = { Authorization: `Bearer ${token}` };
+  
   // حالات تحديد ومسح السائقين
   const [selectedDrivers, setSelectedDrivers] = useState([]);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
@@ -223,7 +226,7 @@ export default function Delivery() {
   const handleDeleteDriver = async (driverId, driverName) => {
     if (!window.confirm(`${t('هل أنت متأكد من حذف السائق')} "${driverName}"؟`)) return;
     try {
-      await axios.delete(`${API}/drivers/${driverId}`);
+      await axios.delete(`${API}/drivers/${driverId}`, { headers });
       toast.success(t('تم حذف السائق'));
       fetchData();
     } catch (error) {
@@ -258,7 +261,7 @@ export default function Delivery() {
     try {
       // مسح السائقين واحداً تلو الآخر
       for (const driverId of selectedDrivers) {
-        await axios.delete(`${API}/drivers/${driverId}`);
+        await axios.delete(`${API}/drivers/${driverId}`, { headers });
       }
       toast.success(`${t('تم حذف')} ${selectedDrivers.length} ${t('سائق بنجاح')}`);
       setSelectedDrivers([]);

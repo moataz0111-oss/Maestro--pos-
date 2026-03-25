@@ -59,7 +59,10 @@ export default function Tables() {
   const { user, hasRole, hasPermission } = useAuth();
   const { t, isRTL } = useTranslation();
   const { isOnline, isOffline, syncStatus } = useOffline();
+  const { token } = useAuth();
   const navigate = useNavigate();
+  
+  const headers = { Authorization: `Bearer ${token}` };
   
   const [tables, setTables] = useState([]);
   const [branches, setBranches] = useState([]);
@@ -233,8 +236,8 @@ export default function Tables() {
     if (!tableToDelete) return;
     
     try {
-      await axios.delete(`${API}/tables/${tableToDelete.id}`);
-      toast.success(t('تم حذف الطاولة'));
+      await axios.delete(`${API}/tables/${tableToDelete.id}`, { headers });
+      toast.success(t('تم حذف الطاولة بنجاح'));
       setDeleteConfirmOpen(false);
       setTableToDelete(null);
       fetchData();

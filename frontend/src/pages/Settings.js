@@ -937,7 +937,7 @@ export default function Settings() {
   const handleDeleteStaff = async (staffId) => {
     if (!window.confirm('هل أنت متأكد من تعطيل هذا الموظف؟')) return;
     try {
-      await axios.delete(`${API}/staff/${staffId}`);
+      await axios.delete(`${API}/staff/${staffId}`, { headers });
       toast.success(t('تم الحفظ بنجاح'));
       fetchStaffData();
     } catch (error) {
@@ -1065,10 +1065,10 @@ export default function Settings() {
   };
 
   const handleDeleteBranch = async (branchId) => {
-    if (!confirm(t('هل أنت متأكد؟'))) return;
+    if (!confirm(t('هل أنت متأكد من حذف هذا الفرع؟'))) return;
     try {
-      await axios.delete(`${API}/branches/${branchId}`);
-      toast.success(t('تم الحفظ بنجاح'));
+      await axios.delete(`${API}/branches/${branchId}`, { headers });
+      toast.success(t('تم حذف الفرع بنجاح'));
       fetchData();
     } catch (error) {
       toast.error(error.response?.data?.detail || t('فشل في حذف الفرع'));
@@ -1148,9 +1148,9 @@ export default function Settings() {
   };
 
   const handleDeletePrinter = async (printerId) => {
-    if (!window.confirm(t('هل أنت متأكد؟'))) return;
+    if (!window.confirm(t('هل أنت متأكد من حذف هذه الطابعة؟'))) return;
     try {
-      await axios.delete(`${API}/printers/${printerId}`);
+      await axios.delete(`${API}/printers/${printerId}`, { headers });
       toast.success(t('تم حذف الطابعة'));
       fetchData();
     } catch (error) {
@@ -1437,13 +1437,13 @@ export default function Settings() {
   };
 
   const handleDeleteCategory = async (categoryId) => {
-    if (!confirm(t('هل أنت متأكد؟'))) return;
+    if (!confirm(t('هل أنت متأكد من حذف هذه الفئة؟'))) return;
     try {
-      await axios.delete(`${API}/categories/${categoryId}`);
-      toast.success(t('تم حذف الفئة'));
+      await axios.delete(`${API}/categories/${categoryId}`, { headers });
+      toast.success(t('تم حذف الفئة بنجاح'));
       fetchData();
     } catch (error) {
-      toast.error(t('فشل في حذف الفئة'));
+      toast.error(error.response?.data?.detail || t('فشل في حذف الفئة'));
     }
   };
 
@@ -1545,13 +1545,13 @@ export default function Settings() {
   };
 
   const handleDeleteProduct = async (productId) => {
-    if (!confirm(t('هل أنت متأكد؟'))) return;
+    if (!confirm(t('هل أنت متأكد من حذف هذا المنتج؟'))) return;
     try {
-      await axios.delete(`${API}/products/${productId}`);
-      toast.success(t('تم حذف المنتج'));
+      await axios.delete(`${API}/products/${productId}`, { headers });
+      toast.success(t('تم حذف المنتج بنجاح'));
       fetchData();
     } catch (error) {
-      toast.error(t('فشل في حذف المنتج'));
+      toast.error(error.response?.data?.detail || t('فشل في حذف المنتج'));
     }
   };
 
@@ -1597,13 +1597,13 @@ export default function Settings() {
   };
 
   const handleDeleteKitchenSection = async (sectionId) => {
-    if (!confirm(t('هل أنت متأكد؟'))) return;
+    if (!confirm(t('هل أنت متأكد من حذف قسم المطبخ؟'))) return;
     try {
-      await axios.delete(`${API}/kitchen-sections/${sectionId}`);
+      await axios.delete(`${API}/kitchen-sections/${sectionId}`, { headers });
       toast.success(t('تم حذف قسم المطبخ'));
       fetchData();
     } catch (error) {
-      toast.error(t('فشل في حذف قسم المطبخ'));
+      toast.error(error.response?.data?.detail || t('فشل في حذف قسم المطبخ'));
     }
   };
 
@@ -1667,14 +1667,14 @@ export default function Settings() {
 
   // حذف شركة توصيل
   const handleDeleteDeliveryApp = async (appId) => {
-    if (!window.confirm(t('هل أنت متأكد؟'))) return;
+    if (!window.confirm(t('هل أنت متأكد من حذف شركة التوصيل؟'))) return;
     
     try {
-      await axios.delete(`${API}/delivery-app-settings/${appId}`);
+      await axios.delete(`${API}/delivery-app-settings/${appId}`, { headers });
       toast.success(t('تم حذف شركة التوصيل'));
       fetchData();
     } catch (error) {
-      toast.error(t('فشل في حذف شركة التوصيل'));
+      toast.error(error.response?.data?.detail || t('فشل في حذف شركة التوصيل'));
     }
   };
 
