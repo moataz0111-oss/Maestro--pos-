@@ -134,6 +134,11 @@ export default function WarehouseManufacturing() {
   const [addStockQuantity, setAddStockQuantity] = useState(1);  // كمية زيادة المخزون
   const [addRawMaterialStockQuantity, setAddRawMaterialStockQuantity] = useState(1);  // كمية زيادة المادة الخام
   
+  // طلبات المواد الخام
+  const [materialRequestItems, setMaterialRequestItems] = useState([]);  // قائمة المواد المطلوبة
+  const [materialRequestNotes, setMaterialRequestNotes] = useState('');
+  const [materialRequestPriority, setMaterialRequestPriority] = useState('normal');
+  
   const [searchQuery, setSearchQuery] = useState('');
   const token = localStorage.getItem('token');
   const headers = { Authorization: `Bearer ${token}` };
@@ -151,7 +156,8 @@ export default function WarehouseManufacturing() {
         transactionsRes,
         statsRes,
         branchesRes,
-        requestsRes
+        branchRequestsRes,
+        manufacturingRequestsRes
       ] = await Promise.all([
         axios.get(`${API}/raw-materials-new`, { headers }).catch(() => ({ data: [] })),
         axios.get(`${API}/manufacturing-inventory`, { headers }).catch(() => ({ data: [] })),
@@ -160,7 +166,8 @@ export default function WarehouseManufacturing() {
         axios.get(`${API}/inventory-transactions`, { headers }).catch(() => ({ data: [] })),
         axios.get(`${API}/inventory-stats`, { headers }).catch(() => ({ data: null })),
         axios.get(`${API}/branches`, { headers }).catch(() => ({ data: [] })),
-        axios.get(`${API}/branch-requests`, { headers }).catch(() => ({ data: [] }))
+        axios.get(`${API}/branch-requests`, { headers }).catch(() => ({ data: [] })),
+        axios.get(`${API}/manufacturing-requests`, { headers }).catch(() => ({ data: [] }))
       ]);
       
       setRawMaterials(rawRes.data || []);
@@ -170,7 +177,8 @@ export default function WarehouseManufacturing() {
       setWarehouseTransactions(transactionsRes.data || []);
       setStats(statsRes.data);
       setBranches(branchesRes.data || []);
-      setBranchRequests(requestsRes.data || []);
+      setBranchRequests(branchRequestsRes.data || []);
+      setManufacturingRequests(manufacturingRequestsRes.data || []);
     } catch (error) {
       console.error('Error fetching data:', error);
     } finally {
@@ -515,6 +523,104 @@ export default function WarehouseManufacturing() {
     }
   };
   
+  // إضافة مادة لقائمة الطلب
+  const addMaterialToRequest = (material) => {
+    const existing = materialRequestItems.find(item => item.material_id === material.id);
+    if (existing) {
+      setMaterialRequestItems(prev => prev.map(item =>
+        item.material_id === material.id
+          ? { ...item, quantity: item.quantity + 1 }
+          : item
+      ));
+    } else {
+      setMaterialRequestItems(prev => [...prev, {
+        material_id: material.id,
+        material_name: material.name,
+        unit: material.unit,
+        quantity: 1,
+        available_quantity: material.quantity,
+        cost_per_unit: material.cost_per_unit
+      }]);
+    }
+    toast.success(t('تم إضافة') + ` ${material.name}` + t('للطلب'));
+  };
+  
+  // حذف مادة من قائمة الطلب
+  const removeMaterialFromRequest = (materialId) => {
+    setMaterialRequestItems(prev => prev.filter(item => item.material_id !== materialId));
+  };
+  
+  // إرسال طلب المواد الخام (من التصنيع للمخزن)
+  const handleSubmitMaterialRequest = async () => {
+    if (materialRequestItems.length === 0) {
+      toast.error(t('يجب إضافة مواد للطلب'));
+      return;
+    }
+    
+    setSubmitting(true);
+    try {
+      const userData = JSON.parse(localStorage.getItem('user') || '{}');
+      await axios.post(`${API}/manufacturing-requests`, {
+        items: materialRequestItems.map(item => ({
+          material_id: item.material_id,
+          quantity: item.quantity
+        })),
+        priority: materialRequestPriority,
+        notes: materialRequestNotes,
+        requested_by: userData.id,
+        requested_by_name: userData.name || userData.email
+      }, { headers });
+      
+      toast.success(t('تم إرسال طلب المواد بنجاح'));
+      setShowRequestMaterialsDialog(false);
+      setMaterialRequestItems([]);
+      setMaterialRequestNotes('');
+      setMaterialRequestPriority('normal');
+      fetchData();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || t('فشل في إرسال الطلب'));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+  
+  // تنفيذ طلب المواد من المخزن
+  const handleFulfillManufacturingRequest = async (requestId) => {
+    setSubmitting(true);
+    try {
+      await axios.post(`${API}/manufacturing-requests/${requestId}/fulfill`, {}, { headers });
+      toast.success(t('تم تنفيذ الطلب وتحويل المواد للتصنيع'));
+      fetchData();
+    } catch (error) {
+      const detail = error.response?.data?.detail;
+      if (typeof detail === 'object' && detail.insufficient_materials) {
+        const materials = detail.insufficient_materials.map(m => `${m.name}: طلب ${m.needed} متوفر ${m.available}`).join('\n');
+        toast.error(t('مواد غير كافية') + ':\n' + materials);
+      } else {
+        toast.error(detail || t('فشل في تنفيذ الطلب'));
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  };
+  
+  // رفض طلب
+  const handleRejectManufacturingRequest = async (requestId) => {
+    setSubmitting(true);
+    try {
+      await axios.patch(`${API}/manufacturing-requests/${requestId}/status`, null, {
+        headers,
+        params: { status: 'rejected' }
+      });
+      toast.success(t('تم رفض الطلب'));
+      fetchData();
+    } catch (error) {
+      toast.error(t('فشل في رفض الطلب'));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+  
   // تصفية البيانات
   const filteredRawMaterials = rawMaterials.filter(m => 
     !searchQuery || m.name.includes(searchQuery) || m.name_en?.includes(searchQuery)
@@ -661,10 +767,19 @@ export default function WarehouseManufacturing() {
         )}
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid grid-cols-5 w-full max-w-3xl">
+          <TabsList className="grid grid-cols-6 w-full max-w-4xl">
             <TabsTrigger value="warehouse" className="gap-2" data-testid="tab-warehouse">
               <Warehouse className="h-4 w-4" />
               {t('المخزن')}
+            </TabsTrigger>
+            <TabsTrigger value="mfg-requests" className="gap-2 relative" data-testid="tab-mfg-requests">
+              <BoxSelect className="h-4 w-4" />
+              {t('طلبات التصنيع')}
+              {manufacturingRequests.filter(r => r.status === 'pending').length > 0 && (
+                <Badge className="absolute -top-2 -right-2 bg-orange-500 text-white text-xs px-1.5 py-0.5 rounded-full">
+                  {manufacturingRequests.filter(r => r.status === 'pending').length}
+                </Badge>
+              )}
             </TabsTrigger>
             <TabsTrigger value="manufacturing" className="gap-2" data-testid="tab-manufacturing">
               <Factory className="h-4 w-4" />
@@ -842,8 +957,159 @@ export default function WarehouseManufacturing() {
               )}
             </div>
           </TabsContent>
+          
+          {/* طلبات التصنيع (الواردة من التصنيع للمخزن) */}
+          <TabsContent value="mfg-requests" className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <BoxSelect className="h-5 w-5 text-orange-500" />
+                  {t('طلبات المواد الخام الواردة من التصنيع')}
+                </CardTitle>
+                <p className="text-sm text-muted-foreground">
+                  {t('هذه الطلبات وردت من قسم التصنيع وتحتاج لتنفيذها من المخزن')}
+                </p>
+              </CardHeader>
+              <CardContent>
+                {manufacturingRequests.length === 0 ? (
+                  <div className="text-center py-12 text-muted-foreground">
+                    <BoxSelect className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                    <p>{t('لا توجد طلبات واردة من التصنيع')}</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {manufacturingRequests.map(request => (
+                      <div key={request.id} className={`p-4 border rounded-lg ${request.status === 'pending' ? 'border-orange-500 bg-orange-500/5' : request.status === 'fulfilled' ? 'border-green-500 bg-green-500/5' : 'border-gray-300'}`}>
+                        <div className="flex items-start justify-between mb-3">
+                          <div className="flex items-center gap-3">
+                            <span className="font-bold text-lg">{t('طلب')} #{request.request_number}</span>
+                            <Badge className={
+                              request.status === 'pending' ? 'bg-orange-500/20 text-orange-500' :
+                              request.status === 'fulfilled' ? 'bg-green-500/20 text-green-500' :
+                              request.status === 'rejected' ? 'bg-red-500/20 text-red-500' :
+                              'bg-gray-500/20 text-gray-500'
+                            }>
+                              {request.status === 'pending' ? t('بانتظار التنفيذ') :
+                               request.status === 'fulfilled' ? t('تم التنفيذ') :
+                               request.status === 'rejected' ? t('مرفوض') : request.status}
+                            </Badge>
+                            {request.priority === 'urgent' && (
+                              <Badge className="bg-red-500 text-white">{t('مستعجل')}</Badge>
+                            )}
+                          </div>
+                          <span className="text-sm text-muted-foreground">
+                            {new Date(request.created_at).toLocaleDateString('ar-EG', {
+                              year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+                            })}
+                          </span>
+                        </div>
+                        
+                        {request.requested_by_name && (
+                          <p className="text-sm text-muted-foreground mb-2">
+                            {t('طلب بواسطة')}: <span className="font-medium">{request.requested_by_name}</span>
+                          </p>
+                        )}
+                        
+                        {/* المواد المطلوبة */}
+                        <div className="bg-muted/30 rounded-lg p-3 mb-3">
+                          <p className="text-sm font-medium mb-2">{t('المواد المطلوبة')}:</p>
+                          <div className="space-y-1">
+                            {request.items?.map((item, idx) => (
+                              <div key={idx} className="flex items-center justify-between text-sm">
+                                <span>{item.material_name}</span>
+                                <div className="flex items-center gap-2">
+                                  <span className="font-medium">{item.quantity} {item.unit}</span>
+                                  {item.available_quantity !== undefined && (
+                                    <span className={`text-xs ${item.available_quantity >= item.quantity ? 'text-green-500' : 'text-red-500'}`}>
+                                      ({t('متوفر')}: {item.available_quantity})
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                          <div className="border-t mt-2 pt-2 flex justify-between font-bold">
+                            <span>{t('إجمالي التكلفة')}</span>
+                            <span className="text-primary">{formatPrice(request.total_cost || 0)}</span>
+                          </div>
+                        </div>
+                        
+                        {request.notes && (
+                          <p className="text-sm bg-muted/20 p-2 rounded mb-3">
+                            <span className="font-medium">{t('ملاحظات')}: </span>{request.notes}
+                          </p>
+                        )}
+                        
+                        {/* أزرار الإجراءات */}
+                        {request.status === 'pending' && (
+                          <div className="flex gap-2">
+                            <Button
+                              onClick={() => handleFulfillManufacturingRequest(request.id)}
+                              className="flex-1 bg-green-500 hover:bg-green-600"
+                              disabled={submitting}
+                            >
+                              {submitting ? <RefreshCw className="h-4 w-4 animate-spin ml-2" /> : <CheckCircle className="h-4 w-4 ml-2" />}
+                              {t('تنفيذ وتحويل للتصنيع')}
+                            </Button>
+                            <Button
+                              variant="outline"
+                              onClick={() => handleRejectManufacturingRequest(request.id)}
+                              className="border-red-500 text-red-500 hover:bg-red-50"
+                              disabled={submitting}
+                            >
+                              <X className="h-4 w-4 ml-2" />
+                              {t('رفض')}
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+          
           {/* التصنيع */}
           <TabsContent value="manufacturing" className="space-y-4">
+            {/* زر طلب مواد من المخزن */}
+            <Card className="border-orange-500/30 bg-orange-500/5">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <BoxSelect className="h-8 w-8 text-orange-500" />
+                    <div>
+                      <h3 className="font-bold">{t('طلب مواد خام من المخزن')}</h3>
+                      <p className="text-sm text-muted-foreground">{t('أنشئ طلب لتوفير المواد الخام من المخزن')}</p>
+                    </div>
+                  </div>
+                  <Button
+                    onClick={() => setShowRequestMaterialsDialog(true)}
+                    className="bg-orange-500 hover:bg-orange-600"
+                    data-testid="request-materials-btn"
+                  >
+                    <Plus className="h-4 w-4 ml-2" />
+                    {t('طلب جديد')}
+                  </Button>
+                </div>
+                {materialRequestItems.length > 0 && (
+                  <div className="mt-3 p-3 bg-background rounded-lg">
+                    <p className="text-sm font-medium mb-2">{t('المواد في قائمة الطلب')} ({materialRequestItems.length}):</p>
+                    <div className="flex flex-wrap gap-2">
+                      {materialRequestItems.map(item => (
+                        <span key={item.material_id} className="px-2 py-1 bg-orange-500/10 text-orange-500 rounded-full text-sm flex items-center gap-1">
+                          {item.material_name} ({item.quantity} {item.unit})
+                          <button onClick={() => removeMaterialFromRequest(item.material_id)} className="hover:text-red-500">
+                            <X className="h-3 w-3" />
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+            
             {/* Manufacturing Inventory */}
             <Card>
               <CardHeader>
@@ -857,7 +1123,11 @@ export default function WarehouseManufacturing() {
                   <div className="text-center py-8 text-muted-foreground">
                     <Beaker className="h-12 w-12 mx-auto mb-4 opacity-50" />
                     <p>{t('لا توجد مواد في قسم التصنيع')}</p>
-                    <p className="text-sm">{t('قم بتحويل مواد من المخزن')}</p>
+                    <p className="text-sm">{t('قم بتحويل مواد من المخزن أو أنشئ طلب مواد')}</p>
+                    <Button onClick={() => setShowRequestMaterialsDialog(true)} className="mt-3 bg-orange-500 hover:bg-orange-600">
+                      <Plus className="h-4 w-4 ml-2" />
+                      {t('طلب مواد من المخزن')}
+                    </Button>
                   </div>
                 ) : (
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -1988,6 +2258,165 @@ export default function WarehouseManufacturing() {
             >
               {submitting ? <RefreshCw className="h-4 w-4 animate-spin ml-2" /> : <Plus className="h-4 w-4 ml-2" />}
               {t('إضافة الكمية')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      
+      {/* Dialog: طلب مواد خام من المخزن */}
+      <Dialog open={showRequestMaterialsDialog} onOpenChange={setShowRequestMaterialsDialog}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <BoxSelect className="h-5 w-5 text-orange-500" />
+              {t('طلب مواد خام من المخزن')}
+            </DialogTitle>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            {/* اختيار المواد المتاحة */}
+            <div>
+              <Label>{t('اختر المواد المطلوبة')}</Label>
+              <div className="grid grid-cols-2 gap-2 mt-2 max-h-48 overflow-y-auto p-2 border rounded-lg">
+                {rawMaterials.map(material => (
+                  <button
+                    key={material.id}
+                    type="button"
+                    onClick={() => addMaterialToRequest(material)}
+                    className="p-2 text-right bg-muted/30 hover:bg-orange-500/10 rounded-lg transition-colors"
+                  >
+                    <p className="font-medium text-sm">{material.name}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {t('متوفر')}: {material.quantity} {material.unit}
+                    </p>
+                  </button>
+                ))}
+              </div>
+            </div>
+            
+            {/* المواد المختارة */}
+            {materialRequestItems.length > 0 && (
+              <div>
+                <Label>{t('المواد المطلوبة')} ({materialRequestItems.length})</Label>
+                <div className="space-y-2 mt-2">
+                  {materialRequestItems.map(item => (
+                    <div key={item.material_id} className="flex items-center justify-between p-3 bg-orange-500/10 rounded-lg">
+                      <div className="flex items-center gap-3">
+                        <button onClick={() => removeMaterialFromRequest(item.material_id)} className="text-red-500 hover:text-red-700">
+                          <X className="h-4 w-4" />
+                        </button>
+                        <div>
+                          <p className="font-medium">{item.material_name}</p>
+                          <p className="text-xs text-muted-foreground">{t('متوفر')}: {item.available_quantity} {item.unit}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Button 
+                          type="button"
+                          variant="outline" 
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={() => setMaterialRequestItems(prev => prev.map(i =>
+                            i.material_id === item.material_id
+                              ? { ...i, quantity: Math.max(1, i.quantity - 1) }
+                              : i
+                          ))}
+                        >
+                          <Minus className="h-3 w-3" />
+                        </Button>
+                        <Input
+                          type="number"
+                          min="1"
+                          value={item.quantity}
+                          onChange={(e) => setMaterialRequestItems(prev => prev.map(i =>
+                            i.material_id === item.material_id
+                              ? { ...i, quantity: parseFloat(e.target.value) || 1 }
+                              : i
+                          ))}
+                          className="w-20 text-center"
+                        />
+                        <Button 
+                          type="button"
+                          variant="outline" 
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={() => setMaterialRequestItems(prev => prev.map(i =>
+                            i.material_id === item.material_id
+                              ? { ...i, quantity: i.quantity + 1 }
+                              : i
+                          ))}
+                        >
+                          <Plus className="h-3 w-3" />
+                        </Button>
+                        <span className="text-sm w-12">{item.unit}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                
+                {/* التكلفة التقديرية */}
+                <div className="p-3 bg-muted/30 rounded-lg mt-3">
+                  <div className="flex justify-between font-bold">
+                    <span>{t('التكلفة التقديرية')}</span>
+                    <span className="text-primary">
+                      {formatPrice(materialRequestItems.reduce((sum, item) => sum + (item.quantity * item.cost_per_unit), 0))}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
+            
+            {/* الأولوية */}
+            <div>
+              <Label>{t('الأولوية')}</Label>
+              <div className="flex gap-2 mt-2">
+                <Button
+                  type="button"
+                  variant={materialRequestPriority === 'normal' ? 'default' : 'outline'}
+                  onClick={() => setMaterialRequestPriority('normal')}
+                  className={materialRequestPriority === 'normal' ? 'bg-blue-500' : ''}
+                >
+                  {t('عادي')}
+                </Button>
+                <Button
+                  type="button"
+                  variant={materialRequestPriority === 'urgent' ? 'default' : 'outline'}
+                  onClick={() => setMaterialRequestPriority('urgent')}
+                  className={materialRequestPriority === 'urgent' ? 'bg-red-500' : ''}
+                >
+                  {t('مستعجل')}
+                </Button>
+              </div>
+            </div>
+            
+            {/* ملاحظات */}
+            <div>
+              <Label>{t('ملاحظات')}</Label>
+              <Textarea
+                value={materialRequestNotes}
+                onChange={(e) => setMaterialRequestNotes(e.target.value)}
+                placeholder={t('أضف ملاحظات للطلب (اختياري)')}
+                className="mt-1"
+              />
+            </div>
+          </div>
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => {
+              setShowRequestMaterialsDialog(false);
+              setMaterialRequestItems([]);
+              setMaterialRequestNotes('');
+              setMaterialRequestPriority('normal');
+            }}>
+              {t('إلغاء')}
+            </Button>
+            <Button 
+              onClick={handleSubmitMaterialRequest}
+              disabled={submitting || materialRequestItems.length === 0}
+              className="bg-orange-500 hover:bg-orange-600"
+            >
+              {submitting ? <RefreshCw className="h-4 w-4 animate-spin ml-2" /> : <Send className="h-4 w-4 ml-2" />}
+              {t('إرسال الطلب')}
             </Button>
           </DialogFooter>
         </DialogContent>

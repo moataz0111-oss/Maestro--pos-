@@ -1318,6 +1318,31 @@ async def fulfill_manufacturing_request(request_id: str):
     
     return {"message": "تم تنفيذ الطلب وتحويل المواد للتصنيع", "request_id": request_id}
 
+
+@router.patch("/manufacturing-requests/{request_id}/status")
+async def update_manufacturing_request_status(request_id: str, status: str):
+    """تحديث حالة طلب التصنيع (رفض أو إلغاء)"""
+    db = get_db()
+    
+    valid_statuses = ["pending", "fulfilled", "rejected", "cancelled"]
+    if status not in valid_statuses:
+        raise HTTPException(status_code=400, detail=f"حالة غير صالحة. الحالات المتاحة: {', '.join(valid_statuses)}")
+    
+    request = await db.manufacturing_requests.find_one({"id": request_id})
+    if not request:
+        raise HTTPException(status_code=404, detail="الطلب غير موجود")
+    
+    await db.manufacturing_requests.update_one(
+        {"id": request_id},
+        {"$set": {
+            "status": status,
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        }}
+    )
+    
+    return {"message": "تم تحديث حالة الطلب", "status": status}
+
+
 # ==================== PURCHASE REQUESTS (طلبات الشراء) ====================
 
 @router.post("/purchase-requests")

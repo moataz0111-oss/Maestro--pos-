@@ -3602,6 +3602,40 @@ const translationMap = {
   'زيادة كمية المادة الخام': { en: 'Add Raw Material Stock', ku: 'زیادکردنی بڕی کەلوپەل' },
   'أقل من الحد الأدنى': { en: 'Below minimum', ku: 'لە کەمترین کەمترە' },
   'تحذير: المخزون أقل من الحد الأدنى': { en: 'Warning: Stock is below minimum', ku: 'ئاگاداری: کۆگا لە کەمترین کەمترە' },
+  
+  // ===== طلبات التصنيع للمخزن =====
+  'طلبات التصنيع': { en: 'Manufacturing Requests', ku: 'داواکارییەکانی بەرهەمهێنان' },
+  'طلبات المواد الخام الواردة من التصنيع': { en: 'Raw Material Requests from Manufacturing', ku: 'داواکارییەکانی کەلوپەل لە بەرهەمهێنانەوە' },
+  'هذه الطلبات وردت من قسم التصنيع وتحتاج لتنفيذها من المخزن': { en: 'These requests came from manufacturing and need warehouse fulfillment', ku: 'ئەم داواکارییانە لە بەرهەمهێنانەوە هاتوون و پێویستیان بە جێبەجێکردنە لە کۆگاوە' },
+  'لا توجد طلبات واردة من التصنيع': { en: 'No requests from manufacturing', ku: 'هیچ داواکارییەک لە بەرهەمهێنانەوە نییە' },
+  'بانتظار التنفيذ': { en: 'Pending Fulfillment', ku: 'چاوەڕوانی جێبەجێکردن' },
+  'تم التنفيذ': { en: 'Fulfilled', ku: 'جێبەجێکرا' },
+  'مرفوض': { en: 'Rejected', ku: 'ڕەتکراوە' },
+  'تنفيذ وتحويل للتصنيع': { en: 'Fulfill & Transfer to Manufacturing', ku: 'جێبەجێکردن و گواستنەوە بۆ بەرهەمهێنان' },
+  'تم تنفيذ الطلب وتحويل المواد للتصنيع': { en: 'Request fulfilled and materials transferred', ku: 'داواکارییەکە جێبەجێکرا و کەلوپەلەکان گوازرانەوە' },
+  'رفض': { en: 'Reject', ku: 'ڕەتکردنەوە' },
+  'تم رفض الطلب': { en: 'Request rejected', ku: 'داواکارییەکە ڕەتکرایەوە' },
+  'فشل في رفض الطلب': { en: 'Failed to reject request', ku: 'ڕەتکردنەوەی داواکارییەکە سەرنەکەوت' },
+  'فشل في تنفيذ الطلب': { en: 'Failed to fulfill request', ku: 'جێبەجێکردنی داواکارییەکە سەرنەکەوت' },
+  
+  // ===== طلب مواد خام =====
+  'طلب مواد خام من المخزن': { en: 'Request Raw Materials from Warehouse', ku: 'داواکردنی کەلوپەل لە کۆگاوە' },
+  'أنشئ طلب لتوفير المواد الخام من المخزن': { en: 'Create a request to get raw materials from warehouse', ku: 'داواکارییەک دروست بکە بۆ وەرگرتنی کەلوپەل لە کۆگاوە' },
+  'طلب جديد': { en: 'New Request', ku: 'داواکارییی نوێ' },
+  'المواد في قائمة الطلب': { en: 'Materials in Request', ku: 'کەلوپەلەکان لە داواکارییەکەدا' },
+  'للطلب': { en: 'to request', ku: 'بۆ داواکاری' },
+  'تم إضافة': { en: 'Added', ku: 'زیادکرا' },
+  'قم بتحويل مواد من المخزن أو أنشئ طلب مواد': { en: 'Transfer materials from warehouse or create a material request', ku: 'کەلوپەل بگوازەوە لە کۆگا یان داواکارییەکی کەلوپەل دروست بکە' },
+  'اختر المواد المطلوبة': { en: 'Select Required Materials', ku: 'کەلوپەلە پێویستەکان هەڵبژێرە' },
+  'المواد المطلوبة': { en: 'Requested Materials', ku: 'کەلوپەلە داواکراوەکان' },
+  'التكلفة التقديرية': { en: 'Estimated Cost', ku: 'تێچووی خەمڵاندراو' },
+  'الأولوية': { en: 'Priority', ku: 'پێشینەیی' },
+  'عادي': { en: 'Normal', ku: 'ئاسایی' },
+  'يجب إضافة مواد للطلب': { en: 'You must add materials to request', ku: 'دەبێت کەلوپەل بۆ داواکارییەکە زیاد بکەیت' },
+  'تم إرسال طلب المواد بنجاح': { en: 'Material request sent successfully', ku: 'داواکاری کەلوپەلەکە سەرکەوتووانە نێردرا' },
+  'فشل في إرسال الطلب': { en: 'Failed to send request', ku: 'ناردنی داواکارییەکە سەرنەکەوت' },
+  'إرسال الطلب': { en: 'Send Request', ku: 'ناردنی داواکارییەکە' },
+  'أضف ملاحظات للطلب (اختياري)': { en: 'Add notes to request (optional)', ku: 'تێبینی بۆ داواکارییەکە زیاد بکە (بەدڵخوازی)' },
 };
 
 // الحصول على اللغة الحالية
