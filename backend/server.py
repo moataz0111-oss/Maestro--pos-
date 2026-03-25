@@ -2123,17 +2123,19 @@ async def update_user(user_id: str, update: UserUpdate, current_user: dict = Dep
 
 @api_router.delete("/users/{user_id}")
 async def delete_user(user_id: str, current_user: dict = Depends(get_current_user)):
-    """حذف مستخدم - يمكن للـ Admin و Super Admin فقط"""
-    if current_user["role"] not in [UserRole.ADMIN, UserRole.SUPER_ADMIN, UserRole.MANAGER]:
+    """حذف مستخدم - العملاء (Admin) فقط يحذفون مستخدميهم، Super Admin يحذف العملاء فقط من صفحة العملاء"""
+    
+    # Super Admin لا يحذف المستخدمين من هنا - يحذف العملاء فقط من endpoint العملاء
+    if current_user["role"] == UserRole.SUPER_ADMIN:
+        raise HTTPException(status_code=403, detail="المالك يحذف العملاء فقط من صفحة إدارة العملاء")
+    
+    # فقط Admin و Manager يمكنهم حذف المستخدمين
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.MANAGER]:
         raise HTTPException(status_code=403, detail="غير مصرح لك بحذف المستخدمين")
     
-    # Super Admin يمكنه حذف أي مستخدم
-    if current_user["role"] == UserRole.SUPER_ADMIN:
-        user = await db.users.find_one({"id": user_id})
-    else:
-        # Admin يحذف فقط مستخدمي نفس الـ tenant
-        query = build_tenant_query(current_user, {"id": user_id})
-        user = await db.users.find_one(query)
+    # Admin/Manager يحذف فقط مستخدمي نفس الـ tenant
+    query = build_tenant_query(current_user, {"id": user_id})
+    user = await db.users.find_one(query)
     
     if not user:
         raise HTTPException(status_code=404, detail="المستخدم غير موجود")
@@ -2142,9 +2144,9 @@ async def delete_user(user_id: str, current_user: dict = Depends(get_current_use
     if user_id == current_user.get("user_id"):
         raise HTTPException(status_code=400, detail="لا يمكنك حذف حسابك الخاص")
     
-    # لا يمكن حذف Admin إلا من قبل Super Admin
-    if user.get("role") == UserRole.ADMIN and current_user["role"] != UserRole.SUPER_ADMIN:
-        raise HTTPException(status_code=403, detail="لا يمكن حذف مدير النظام")
+    # لا يمكن حذف Admin (صاحب العميل)
+    if user.get("role") == UserRole.ADMIN:
+        raise HTTPException(status_code=403, detail="لا يمكن حذف مدير النظام - تواصل مع المالك")
     
     # لا يمكن حذف Super Admin
     if user.get("role") == UserRole.SUPER_ADMIN:
