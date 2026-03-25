@@ -11984,6 +11984,180 @@ async def get_sales_report(
         }
     }
 
+
+@api_router.get("/reports/credit")
+async def get_credit_report(
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    branch_id: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """تقرير الآجل - فقط الآجل العادي (بدون شركات التوصيل)"""
+    query = build_tenant_query(current_user)
+    
+    # فقط الآجل العادي - استبعاد طلبات التوصيل
+    query["payment_method"] = "credit"
+    query["order_type"] = {"$ne": "delivery"}  # استبعاد التوصيل
+    
+    if branch_id:
+        query["branch_id"] = branch_id
+    
+    if start_date:
+        query["created_at"] = {"$gte": start_date}
+    if end_date:
+        if "created_at" not in query:
+            query["created_at"] = {}
+        query["created_at"]["$lte"] = end_date
+    
+    orders = await db.orders.find(query, {"_id": 0}).to_list(1000)
+    
+    total_credit = sum(o.get("total", 0) for o in orders)
+    collected_amount = sum(o.get("collected_amount", 0) for o in orders)
+    remaining_amount = total_credit - collected_amount
+    
+    # تحضير بيانات الطلبات
+    order_list = []
+    for order in orders:
+        collected = order.get("collected_amount", 0)
+        remaining = order.get("total", 0) - collected
+        order_list.append({
+            "id": order.get("id"),
+            "order_number": order.get("order_number"),
+            "created_at": order.get("created_at"),
+            "customer_name": order.get("customer_name"),
+            "customer_phone": order.get("customer_phone"),
+            "total": order.get("total", 0),
+            "collected_amount": collected,
+            "remaining_amount": remaining,
+            "is_fully_collected": remaining <= 0
+        })
+    
+    return {
+        "total_credit": total_credit,
+        "collected_amount": collected_amount,
+        "remaining_amount": remaining_amount,
+        "total_orders": len(orders),
+        "orders": order_list
+    }
+
+@api_router.post("/reports/credit/collect")
+async def collect_credit_payment(
+    data: dict,
+    current_user: dict = Depends(get_current_user)
+):
+    """تسجيل تحصيل آجل"""
+    order_id = data.get("order_id")
+    amount = data.get("amount", 0)
+    collected_by = data.get("collected_by", "")
+    notes = data.get("notes", "")
+    
+    query = build_tenant_query(current_user, {"id": order_id})
+    order = await db.orders.find_one(query)
+    
+    if not order:
+        raise HTTPException(status_code=404, detail="الطلب غير موجود")
+    
+    current_collected = order.get("collected_amount", 0)
+    new_collected = current_collected + amount
+    
+    await db.orders.update_one(
+        {"id": order_id},
+        {
+            "$set": {
+                "collected_amount": new_collected,
+                "last_collection_date": datetime.now(timezone.utc).isoformat(),
+                "last_collected_by": collected_by,
+                "collection_notes": notes
+            }
+        }
+    )
+    
+    return {"message": "تم تسجيل التحصيل بنجاح", "new_collected_amount": new_collected}
+
+
+@api_router.get("/reports/delivery-credits")
+async def get_delivery_credits_report(
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    branch_id: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """تقرير آجل شركات التوصيل - منفصل عن الآجل العادي"""
+    query = build_tenant_query(current_user)
+    
+    # فقط طلبات التوصيل
+    query["order_type"] = "delivery"
+    
+    if branch_id:
+        query["branch_id"] = branch_id
+    
+    if start_date:
+        query["created_at"] = {"$gte": start_date}
+    if end_date:
+        if "created_at" not in query:
+            query["created_at"] = {}
+        query["created_at"]["$lte"] = end_date
+    
+    orders = await db.orders.find(query, {"_id": 0}).to_list(1000)
+    
+    total_sales = sum(o.get("total", 0) for o in orders)
+    total_commission = sum(o.get("delivery_commission", 0) for o in orders)
+    net_receivable = total_sales - total_commission
+    total_collected = sum(o.get("collected_amount", 0) for o in orders)
+    total_remaining = net_receivable - total_collected
+    
+    # تجميع حسب شركة التوصيل
+    by_delivery_app = {}
+    for order in orders:
+        app_name = order.get("delivery_app_name") or order.get("delivery_app") or "غير محدد"
+        if app_name not in by_delivery_app:
+            by_delivery_app[app_name] = {
+                "total_sales": 0,
+                "total_commission": 0,
+                "net_receivable": 0,
+                "orders_count": 0,
+                "collected": 0
+            }
+        by_delivery_app[app_name]["total_sales"] += order.get("total", 0)
+        by_delivery_app[app_name]["total_commission"] += order.get("delivery_commission", 0)
+        by_delivery_app[app_name]["net_receivable"] += order.get("total", 0) - order.get("delivery_commission", 0)
+        by_delivery_app[app_name]["orders_count"] += 1
+        by_delivery_app[app_name]["collected"] += order.get("collected_amount", 0)
+    
+    # تحضير قائمة الطلبات
+    order_list = []
+    for order in orders:
+        collected = order.get("collected_amount", 0)
+        commission = order.get("delivery_commission", 0)
+        net = order.get("total", 0) - commission
+        remaining = net - collected
+        order_list.append({
+            "id": order.get("id"),
+            "order_number": order.get("order_number"),
+            "created_at": order.get("created_at"),
+            "delivery_app_name": order.get("delivery_app_name") or order.get("delivery_app") or "غير محدد",
+            "customer_name": order.get("customer_name"),
+            "total": order.get("total", 0),
+            "commission": commission,
+            "net_amount": net,
+            "collected_amount": collected,
+            "remaining_amount": remaining,
+            "is_fully_collected": remaining <= 0
+        })
+    
+    return {
+        "total_sales": total_sales,
+        "total_commission": total_commission,
+        "net_receivable": net_receivable,
+        "total_collected": total_collected,
+        "total_remaining": total_remaining,
+        "total_orders": len(orders),
+        "by_delivery_app": by_delivery_app,
+        "orders": order_list
+    }
+
+
+
 @api_router.get("/smart-reports/products")
 async def get_products_report(
     period: str = "month",
