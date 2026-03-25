@@ -1,0 +1,81 @@
+{
+  "summary": "Frontend testing completed for Raw Material Cost calculation improvements in Product Setup. All 8 features tested and verified working correctly.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/test_reports/iteration_127.json"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Code review passed: calculateIngredientCost function (Settings.js lines 517-558) correctly handles unit conversions for غرام/كغم/مل/لتر/قطعة/حبة",
+    "Code review passed: Raw material cost field in Add Product form (lines 3500-3524) is readOnly with dynamic red/purple styling",
+    "Code review passed: Raw material cost field in Edit Product form (lines 4090-4114) is readOnly with dynamic red/purple styling",
+    "Code review passed: Cost recalculates automatically when quantity changes (lines 3690-3700)",
+    "Code review passed: Cost recalculates automatically when unit changes (lines 3704-3719)",
+    "Code review passed: WarehouseManufacturing tabs (lines 975-1059) use flex-wrap to display all 9 tabs"
+  ],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "N/A (frontend only testing)",
+    "frontend": "100% (8/8 features verified)"
+  },
+  "test_credentials": {
+    "demo_user": {
+      "email": "demo@maestroegp.com",
+      "password": "demo123"
+    }
+  },
+  "seed_data_creation": "None",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Raw Material Cost calculation improvements verified: 1) Cost field is read-only in both Add and Edit product forms. 2) Red styling (bg-red-50, text-red-600) when no manufactured product linked or cost=0. 3) Purple styling (bg-purple-50, text-purple-600) when manufactured product is linked. 4) Cost recalculates when quantity changes (tested: 100g->200g beef changed cost from 1410 to 2210). 5) Cost recalculates when unit changes (tested: غرام->كغم changed cost from 1410 to 800610). 6) WarehouseManufacturing page shows all 9 tabs with flex-wrap enabled.",
+  "tests_performed": [
+    {
+      "feature": "Add Product - Raw material cost field read-only",
+      "status": "PASSED",
+      "details": "Cost field has readOnly=true attribute, cursor-not-allowed class"
+    },
+    {
+      "feature": "Add Product - Red styling when no link (cost=0)",
+      "status": "PASSED",
+      "details": "backgroundColor: rgb(254, 242, 242), color: rgb(220, 38, 38), borderColor: rgb(252, 165, 165)"
+    },
+    {
+      "feature": "Add Product - Purple styling when linked",
+      "status": "PASSED",
+      "details": "After selecting manufactured product: backgroundColor: rgb(250, 245, 255), color: rgb(147, 51, 234)"
+    },
+    {
+      "feature": "Add Product - Cost recalculates on quantity change",
+      "status": "PASSED",
+      "details": "Changed beef from 100g to 200g: cost changed from 1410 to 2210 IQD"
+    },
+    {
+      "feature": "Add Product - Cost recalculates on unit change",
+      "status": "PASSED",
+      "details": "Changed beef unit from غرام to كغم: cost changed from 1410 to 800610 IQD (100kg × 8000 IQD/kg)"
+    },
+    {
+      "feature": "Edit Product - Raw material cost field read-only",
+      "status": "PASSED",
+      "details": "Cost field has readOnly=true, value=3000, red styling (no manufactured product linked)"
+    },
+    {
+      "feature": "Edit Product - Red styling when no link",
+      "status": "PASSED",
+      "details": "backgroundColor: rgb(254, 242, 242), color: rgb(220, 38, 38)"
+    },
+    {
+      "feature": "WarehouseManufacturing - All tabs visible with flex-wrap",
+      "status": "PASSED",
+      "details": "Found 9 tabs with flexWrap: wrap, display: flex. Tabs: المخزن, طلبات التصنيع, الورقيات, طلب تغليف, مخزون الفرع, التصنيع, طلبات الفروع, الحركات, التحويلات"
+    }
+  ]
+}
