@@ -88,12 +88,15 @@ jobs:
             echo "✅ SSL certificate already exists"
           fi
           
-          # إيقاف containers القديمة (بدون حذف البيانات)
-          docker-compose down 2>/dev/null || true
+          # إيقاف containers القديمة وتنظيف cache
+          echo "🛑 Stopping old containers and cleaning cache..."
+          docker-compose down --remove-orphans 2>/dev/null || true
+          docker system prune -f 2>/dev/null || true
           
-          # بناء وتشغيل Docker
+          # بناء وتشغيل Docker (بدون cache لتجنب المشاكل)
           echo "🔨 Building and starting services..."
-          docker-compose up -d --build --force-recreate
+          docker-compose build --no-cache
+          docker-compose up -d --force-recreate
           
           # انتظار بدء الخدمات
           echo "⏳ Waiting for services to start..."
