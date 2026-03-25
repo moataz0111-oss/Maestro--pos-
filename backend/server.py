@@ -9691,6 +9691,272 @@ async def transfer_warehouse_request(request_id: str, current_user: dict = Depen
     
     return {"message": "تم التحويل للمخزن"}
 
+# ==================== مواد التغليف والورقيات ====================
+
+class PackagingMaterialCreate(BaseModel):
+    name: str
+    name_en: Optional[str] = None
+    unit: str = "قطعة"
+    quantity: float = 0
+    min_quantity: float = 0
+    cost_per_unit: float = 0
+    category: Optional[str] = None
+
+class PackagingRequestCreate(BaseModel):
+    items: List[Dict[str, Any]]
+    priority: str = "normal"
+    notes: Optional[str] = None
+
+# الحصول على مواد التغليف
+@api_router.get("/packaging-materials")
+async def get_packaging_materials(current_user: dict = Depends(get_current_user)):
+    """الحصول على جميع مواد التغليف"""
+    tenant_id = current_user.get("tenant_id")
+    if not tenant_id:
+        raise HTTPException(status_code=400, detail="Tenant ID required")
+    
+    materials = await db.packaging_materials.find({"tenant_id": tenant_id}).to_list(500)
+    for m in materials:
+        m["id"] = m.pop("_id", m.get("id"))
+    return materials
+
+# إضافة مادة تغليف جديدة
+@api_router.post("/packaging-materials")
+async def create_packaging_material(material: PackagingMaterialCreate, current_user: dict = Depends(get_current_user)):
+    """إضافة مادة تغليف جديدة"""
+    tenant_id = current_user.get("tenant_id")
+    if not tenant_id:
+        raise HTTPException(status_code=400, detail="Tenant ID required")
+    
+    material_doc = {
+        "id": str(uuid.uuid4()),
+        "tenant_id": tenant_id,
+        **material.dict(),
+        "total_received": material.quantity,
+        "transferred_to_branches": 0,
+        "remaining_quantity": material.quantity,
+        "total_value": material.quantity * material.cost_per_unit,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "updated_at": datetime.now(timezone.utc).isoformat()
+    }
+    
+    await db.packaging_materials.insert_one(material_doc)
+    material_doc.pop("_id", None)
+    return material_doc
+
+# إضافة كمية لمادة تغليف
+@api_router.post("/packaging-materials/{material_id}/add-stock")
+async def add_packaging_stock(material_id: str, quantity: float, current_user: dict = Depends(get_current_user)):
+    """إضافة كمية لمادة تغليف موجودة"""
+    tenant_id = current_user.get("tenant_id")
+    
+    material = await db.packaging_materials.find_one({"id": material_id, "tenant_id": tenant_id})
+    if not material:
+        raise HTTPException(status_code=404, detail="مادة التغليف غير موجودة")
+    
+    new_quantity = material.get("quantity", 0) + quantity
+    total_received = material.get("total_received", 0) + quantity
+    
+    await db.packaging_materials.update_one(
+        {"id": material_id},
+        {
+            "$set": {
+                "quantity": new_quantity,
+                "total_received": total_received,
+                "remaining_quantity": new_quantity,
+                "total_value": new_quantity * material.get("cost_per_unit", 0),
+                "updated_at": datetime.now(timezone.utc).isoformat()
+            }
+        }
+    )
+    
+    return {"message": "تمت إضافة الكمية بنجاح", "new_quantity": new_quantity}
+
+# الحصول على طلبات التغليف
+@api_router.get("/packaging-requests")
+async def get_packaging_requests(current_user: dict = Depends(get_current_user)):
+    """الحصول على جميع طلبات التغليف"""
+    tenant_id = current_user.get("tenant_id")
+    if not tenant_id:
+        raise HTTPException(status_code=400, detail="Tenant ID required")
+    
+    requests = await db.packaging_requests.find({"tenant_id": tenant_id}).sort("created_at", -1).to_list(100)
+    for r in requests:
+        r["id"] = r.pop("_id", r.get("id"))
+    return requests
+
+# إنشاء طلب تغليف جديد
+@api_router.post("/packaging-requests")
+async def create_packaging_request(request: PackagingRequestCreate, current_user: dict = Depends(get_current_user)):
+    """إنشاء طلب مواد تغليف جديد"""
+    tenant_id = current_user.get("tenant_id")
+    branch_id = current_user.get("branch_id")
+    
+    if not tenant_id:
+        raise HTTPException(status_code=400, detail="Tenant ID required")
+    
+    # الحصول على اسم الفرع
+    branch_name = "المركز الرئيسي"
+    if branch_id:
+        branch = await db.branches.find_one({"id": branch_id})
+        if branch:
+            branch_name = branch.get("name", branch_name)
+    
+    # إنشاء رقم الطلب
+    count = await db.packaging_requests.count_documents({"tenant_id": tenant_id})
+    request_number = f"PKG-{count + 1:04d}"
+    
+    request_doc = {
+        "id": str(uuid.uuid4()),
+        "tenant_id": tenant_id,
+        "from_branch_id": branch_id,
+        "from_branch_name": branch_name,
+        "request_number": request_number,
+        "items": request.items,
+        "priority": request.priority,
+        "notes": request.notes,
+        "status": "pending",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_by": current_user.get("user_id")
+    }
+    
+    await db.packaging_requests.insert_one(request_doc)
+    request_doc.pop("_id", None)
+    return request_doc
+
+# الموافقة على طلب تغليف
+@api_router.post("/packaging-requests/{request_id}/approve")
+async def approve_packaging_request(request_id: str, current_user: dict = Depends(get_current_user)):
+    """الموافقة على طلب تغليف"""
+    tenant_id = current_user.get("tenant_id")
+    
+    request = await db.packaging_requests.find_one({"id": request_id, "tenant_id": tenant_id})
+    if not request:
+        raise HTTPException(status_code=404, detail="الطلب غير موجود")
+    
+    await db.packaging_requests.update_one(
+        {"id": request_id},
+        {
+            "$set": {
+                "status": "approved",
+                "approved_at": datetime.now(timezone.utc).isoformat(),
+                "approved_by": current_user.get("user_id")
+            }
+        }
+    )
+    
+    return {"message": "تمت الموافقة على الطلب"}
+
+# تحويل مواد التغليف للفرع
+@api_router.post("/packaging-requests/{request_id}/transfer")
+async def transfer_packaging_to_branch(request_id: str, current_user: dict = Depends(get_current_user)):
+    """تحويل مواد التغليف للفرع - تزيد الكمية تلقائياً في مخزون الفرع"""
+    tenant_id = current_user.get("tenant_id")
+    
+    request = await db.packaging_requests.find_one({"id": request_id, "tenant_id": tenant_id})
+    if not request:
+        raise HTTPException(status_code=404, detail="الطلب غير موجود")
+    
+    branch_id = request.get("from_branch_id")
+    
+    # تحويل كل صنف
+    for item in request.get("items", []):
+        material_id = item.get("packaging_material_id")
+        quantity = item.get("quantity", 0)
+        
+        # خصم من المخزن الرئيسي
+        material = await db.packaging_materials.find_one({"id": material_id, "tenant_id": tenant_id})
+        if material:
+            new_quantity = max(0, material.get("quantity", 0) - quantity)
+            transferred = material.get("transferred_to_branches", 0) + quantity
+            
+            await db.packaging_materials.update_one(
+                {"id": material_id},
+                {
+                    "$set": {
+                        "quantity": new_quantity,
+                        "remaining_quantity": new_quantity,
+                        "transferred_to_branches": transferred,
+                        "total_value": new_quantity * material.get("cost_per_unit", 0),
+                        "updated_at": datetime.now(timezone.utc).isoformat()
+                    }
+                }
+            )
+        
+        # إضافة لمخزون الفرع (أو إنشاء سجل جديد)
+        if branch_id:
+            branch_inventory = await db.branch_packaging_inventory.find_one({
+                "branch_id": branch_id,
+                "packaging_material_id": material_id,
+                "tenant_id": tenant_id
+            })
+            
+            if branch_inventory:
+                # زيادة الكمية الموجودة
+                await db.branch_packaging_inventory.update_one(
+                    {"id": branch_inventory["id"]},
+                    {
+                        "$inc": {"quantity": quantity, "total_received": quantity},
+                        "$set": {"last_updated": datetime.now(timezone.utc).isoformat()}
+                    }
+                )
+            else:
+                # إنشاء سجل جديد
+                await db.branch_packaging_inventory.insert_one({
+                    "id": str(uuid.uuid4()),
+                    "tenant_id": tenant_id,
+                    "branch_id": branch_id,
+                    "packaging_material_id": material_id,
+                    "name": item.get("name", ""),
+                    "unit": item.get("unit", "قطعة"),
+                    "quantity": quantity,
+                    "total_received": quantity,
+                    "used_quantity": 0,
+                    "cost_per_unit": material.get("cost_per_unit", 0) if material else 0,
+                    "created_at": datetime.now(timezone.utc).isoformat(),
+                    "last_updated": datetime.now(timezone.utc).isoformat()
+                })
+    
+    # تحديث حالة الطلب
+    await db.packaging_requests.update_one(
+        {"id": request_id},
+        {
+            "$set": {
+                "status": "transferred",
+                "transferred_at": datetime.now(timezone.utc).isoformat(),
+                "transferred_by": current_user.get("user_id")
+            }
+        }
+    )
+    
+    return {"message": "تم تحويل المواد للفرع بنجاح"}
+
+# الحصول على مخزون التغليف في الفروع
+@api_router.get("/branch-packaging-inventory")
+async def get_branch_packaging_inventory(branch_id: Optional[str] = None, current_user: dict = Depends(get_current_user)):
+    """الحصول على مخزون التغليف في الفروع"""
+    tenant_id = current_user.get("tenant_id")
+    user_branch_id = current_user.get("branch_id")
+    
+    if not tenant_id:
+        raise HTTPException(status_code=400, detail="Tenant ID required")
+    
+    query = {"tenant_id": tenant_id}
+    
+    # إذا المستخدم مرتبط بفرع، أظهر فقط مخزون فرعه
+    if user_branch_id:
+        query["branch_id"] = user_branch_id
+    elif branch_id:
+        query["branch_id"] = branch_id
+    
+    inventory = await db.branch_packaging_inventory.find(query).to_list(500)
+    for item in inventory:
+        item["id"] = item.pop("_id", item.get("id"))
+        # حساب الكمية المتبقية
+        item["remaining_quantity"] = item.get("quantity", 0) - item.get("used_quantity", 0)
+    
+    return inventory
+
 # ==================== OCR - استخراج بيانات الفاتورة ====================
 
 class OCRRequest(BaseModel):

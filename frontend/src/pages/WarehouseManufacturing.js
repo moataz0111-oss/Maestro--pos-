@@ -1801,6 +1801,41 @@ export default function WarehouseManufacturing() {
           
           {/* طلبات الفروع */}
           <TabsContent value="branch-requests" className="space-y-4">
+            {/* مخزون التغليف في الفرع */}
+            {branchPackagingInventory.length > 0 && (
+              <Card className="border-amber-500/30 bg-amber-500/5">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-amber-600">
+                    <Box className="h-5 w-5" />
+                    {t('مخزون التغليف في الفرع')}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    {branchPackagingInventory.map(item => (
+                      <div key={item.id} className="p-4 bg-background rounded-lg border border-amber-500/30">
+                        <h4 className="font-bold text-amber-600">{item.name}</h4>
+                        <div className="mt-2 space-y-1">
+                          <div className="flex justify-between text-sm">
+                            <span className="text-muted-foreground">{t('الكمية')}:</span>
+                            <span className="font-bold">{item.quantity} {item.unit}</span>
+                          </div>
+                          <div className="flex justify-between text-sm">
+                            <span className="text-muted-foreground">{t('المستخدم')}:</span>
+                            <span>{item.used_quantity || 0}</span>
+                          </div>
+                          <div className="flex justify-between text-sm">
+                            <span className="text-muted-foreground">{t('المتبقي')}:</span>
+                            <span className="font-bold text-green-600">{item.remaining_quantity || item.quantity}</span>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+            
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
