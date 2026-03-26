@@ -12111,6 +12111,312 @@ async def collect_credit_payment(
     return {"message": "تم تسجيل التحصيل بنجاح", "new_collected_amount": new_collected}
 
 
+
+# ==================== تقرير إغلاق الصندوق ====================
+
+@api_router.get("/reports/cash-register-closing")
+async def get_cash_register_closing_report(
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    branch_id: Optional[str] = None,
+    cashier_id: Optional[str] = None,
+    shift_id: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """تقرير إغلاق الصندوق الشامل - يعرض المبيعات والمصروفات ومطابقة الصندوق"""
+    query = build_tenant_query(current_user)
+    
+    if branch_id:
+        query["branch_id"] = branch_id
+    
+    # تحديد الفترة الزمنية
+    if start_date:
+        query["created_at"] = {"$gte": start_date}
+    if end_date:
+        if "created_at" not in query:
+            query["created_at"] = {}
+        query["created_at"]["$lte"] = end_date
+    
+    # جلب الطلبات
+    orders = await db.orders.find(query, {"_id": 0}).to_list(5000)
+    
+    # جلب المصروفات
+    expenses_query = build_tenant_query(current_user)
+    if branch_id:
+        expenses_query["branch_id"] = branch_id
+    if start_date:
+        expenses_query["created_at"] = {"$gte": start_date}
+    if end_date:
+        if "created_at" not in expenses_query:
+            expenses_query["created_at"] = {}
+        expenses_query["created_at"]["$lte"] = end_date
+    
+    expenses = await db.expenses.find(expenses_query, {"_id": 0}).to_list(1000)
+    
+    # جلب إغلاقات الصندوق
+    closings_query = build_tenant_query(current_user)
+    if branch_id:
+        closings_query["branch_id"] = branch_id
+    if cashier_id:
+        closings_query["cashier_id"] = cashier_id
+    if start_date:
+        closings_query["closed_at"] = {"$gte": start_date}
+    if end_date:
+        if "closed_at" not in closings_query:
+            closings_query["closed_at"] = {}
+        closings_query["closed_at"]["$lte"] = end_date
+    
+    closings = await db.cash_register_closings.find(closings_query, {"_id": 0}).sort("closed_at", -1).to_list(100)
+    
+    # ==================== حساب المبيعات ====================
+    
+    # حسب نوع الطلب
+    dine_in_total = sum(o.get("total", 0) for o in orders if o.get("order_type") == "dine_in")
+    takeaway_total = sum(o.get("total", 0) for o in orders if o.get("order_type") == "takeaway")
+    delivery_total = sum(o.get("total", 0) for o in orders if o.get("order_type") == "delivery" or o.get("delivery_app"))
+    
+    # حسب طريقة الدفع
+    cash_total = sum(o.get("total", 0) for o in orders if o.get("payment_method") == "cash" and not o.get("delivery_app"))
+    card_total = sum(o.get("total", 0) for o in orders if o.get("payment_method") == "card")
+    credit_total = sum(o.get("total", 0) for o in orders if o.get("payment_method") == "credit" and not o.get("delivery_app") and o.get("order_type") != "delivery")
+    
+    # شركات التوصيل
+    delivery_apps_total = {}
+    for o in orders:
+        app_name = o.get("delivery_app_name") or o.get("delivery_app")
+        if app_name:
+            if app_name not in delivery_apps_total:
+                delivery_apps_total[app_name] = {"total": 0, "count": 0, "commission": 0}
+            delivery_apps_total[app_name]["total"] += o.get("total", 0)
+            delivery_apps_total[app_name]["count"] += 1
+            delivery_apps_total[app_name]["commission"] += o.get("delivery_commission", 0)
+    
+    # ==================== حساب المصروفات ====================
+    
+    total_expenses = sum(e.get("amount", 0) for e in expenses)
+    
+    # تجميع المصروفات حسب الكاشير
+    expenses_by_cashier = {}
+    for e in expenses:
+        cashier_name = e.get("created_by_name") or e.get("created_by") or "غير محدد"
+        if cashier_name not in expenses_by_cashier:
+            expenses_by_cashier[cashier_name] = {"total": 0, "count": 0, "items": []}
+        expenses_by_cashier[cashier_name]["total"] += e.get("amount", 0)
+        expenses_by_cashier[cashier_name]["count"] += 1
+        expenses_by_cashier[cashier_name]["items"].append({
+            "description": e.get("description"),
+            "amount": e.get("amount", 0),
+            "category": e.get("category"),
+            "created_at": e.get("created_at")
+        })
+    
+    # ==================== تجميع حسب الكاشير ====================
+    
+    by_cashier = {}
+    for o in orders:
+        cashier_name = o.get("cashier_name") or o.get("created_by_name") or o.get("created_by") or "غير محدد"
+        cashier_id = o.get("cashier_id") or o.get("created_by")
+        
+        if cashier_id not in by_cashier:
+            by_cashier[cashier_id] = {
+                "cashier_name": cashier_name,
+                "cashier_id": cashier_id,
+                "total_sales": 0,
+                "orders_count": 0,
+                "cash": 0,
+                "card": 0,
+                "credit": 0,
+                "delivery": 0,
+                "dine_in": 0,
+                "takeaway": 0
+            }
+        
+        by_cashier[cashier_id]["total_sales"] += o.get("total", 0)
+        by_cashier[cashier_id]["orders_count"] += 1
+        
+        # حسب طريقة الدفع
+        if o.get("payment_method") == "cash" and not o.get("delivery_app"):
+            by_cashier[cashier_id]["cash"] += o.get("total", 0)
+        elif o.get("payment_method") == "card":
+            by_cashier[cashier_id]["card"] += o.get("total", 0)
+        elif o.get("payment_method") == "credit" and not o.get("delivery_app"):
+            by_cashier[cashier_id]["credit"] += o.get("total", 0)
+        
+        if o.get("delivery_app") or o.get("order_type") == "delivery":
+            by_cashier[cashier_id]["delivery"] += o.get("total", 0)
+        
+        # حسب نوع الطلب
+        if o.get("order_type") == "dine_in":
+            by_cashier[cashier_id]["dine_in"] += o.get("total", 0)
+        elif o.get("order_type") == "takeaway":
+            by_cashier[cashier_id]["takeaway"] += o.get("total", 0)
+    
+    # ==================== تجميع حسب الفرع ====================
+    
+    by_branch = {}
+    for o in orders:
+        branch_id = o.get("branch_id") or "unknown"
+        branch_name = o.get("branch_name") or branch_id
+        
+        if branch_id not in by_branch:
+            by_branch[branch_id] = {
+                "branch_name": branch_name,
+                "branch_id": branch_id,
+                "total_sales": 0,
+                "orders_count": 0,
+                "cash": 0,
+                "card": 0,
+                "credit": 0,
+                "delivery": 0
+            }
+        
+        by_branch[branch_id]["total_sales"] += o.get("total", 0)
+        by_branch[branch_id]["orders_count"] += 1
+        
+        if o.get("payment_method") == "cash" and not o.get("delivery_app"):
+            by_branch[branch_id]["cash"] += o.get("total", 0)
+        elif o.get("payment_method") == "card":
+            by_branch[branch_id]["card"] += o.get("total", 0)
+        elif o.get("payment_method") == "credit" and not o.get("delivery_app"):
+            by_branch[branch_id]["credit"] += o.get("total", 0)
+        if o.get("delivery_app") or o.get("order_type") == "delivery":
+            by_branch[branch_id]["delivery"] += o.get("total", 0)
+    
+    # ==================== حساب مطابقة الصندوق ====================
+    
+    total_sales = sum(o.get("total", 0) for o in orders)
+    expected_cash = cash_total - total_expenses  # النقدي المتوقع = المبيعات النقدية - المصروفات
+    
+    # الإجمالي
+    total_orders = len(orders)
+    
+    return {
+        "period": {
+            "start_date": start_date,
+            "end_date": end_date
+        },
+        "summary": {
+            "total_sales": total_sales,
+            "total_orders": total_orders,
+            "total_expenses": total_expenses,
+            "expected_cash_in_drawer": expected_cash,
+            "net_sales": total_sales - total_expenses
+        },
+        "by_order_type": {
+            "dine_in": {"total": dine_in_total, "label": "داخلي"},
+            "takeaway": {"total": takeaway_total, "label": "سفري"},
+            "delivery": {"total": delivery_total, "label": "توصيل"}
+        },
+        "by_payment_method": {
+            "cash": {"total": cash_total, "label": "نقدي"},
+            "card": {"total": card_total, "label": "بطاقة"},
+            "credit": {"total": credit_total, "label": "آجل"}
+        },
+        "delivery_apps": delivery_apps_total,
+        "by_cashier": list(by_cashier.values()),
+        "by_branch": list(by_branch.values()),
+        "expenses": {
+            "total": total_expenses,
+            "by_cashier": expenses_by_cashier,
+            "items": [{"description": e.get("description"), "amount": e.get("amount", 0), "category": e.get("category"), "created_by": e.get("created_by_name") or e.get("created_by"), "created_at": e.get("created_at")} for e in expenses]
+        },
+        "closings": closings
+    }
+
+@api_router.post("/reports/cash-register-closing")
+async def create_cash_register_closing(
+    data: dict,
+    current_user: dict = Depends(get_current_user)
+):
+    """إنشاء سجل إغلاق صندوق جديد"""
+    closing_id = str(uuid.uuid4())
+    
+    closing_record = {
+        "id": closing_id,
+        "tenant_id": current_user.get("tenant_id"),
+        "branch_id": data.get("branch_id"),
+        "branch_name": data.get("branch_name"),
+        "cashier_id": current_user.get("user_id"),
+        "cashier_name": current_user.get("full_name") or current_user.get("email"),
+        "shift_start": data.get("shift_start"),
+        "shift_end": data.get("shift_end") or datetime.now(timezone.utc).isoformat(),
+        "closed_at": datetime.now(timezone.utc).isoformat(),
+        
+        # المبيعات
+        "total_sales": data.get("total_sales", 0),
+        "cash_sales": data.get("cash_sales", 0),
+        "card_sales": data.get("card_sales", 0),
+        "credit_sales": data.get("credit_sales", 0),
+        "delivery_sales": data.get("delivery_sales", 0),
+        
+        # حسب نوع الطلب
+        "dine_in_sales": data.get("dine_in_sales", 0),
+        "takeaway_sales": data.get("takeaway_sales", 0),
+        
+        # المصروفات
+        "total_expenses": data.get("total_expenses", 0),
+        
+        # مطابقة الصندوق
+        "expected_cash": data.get("expected_cash", 0),
+        "actual_cash": data.get("actual_cash", 0),
+        "difference": data.get("actual_cash", 0) - data.get("expected_cash", 0),
+        "difference_type": "surplus" if data.get("actual_cash", 0) > data.get("expected_cash", 0) else "shortage" if data.get("actual_cash", 0) < data.get("expected_cash", 0) else "exact",
+        
+        # ملاحظات
+        "notes": data.get("notes", ""),
+        "orders_count": data.get("orders_count", 0)
+    }
+    
+    await db.cash_register_closings.insert_one(closing_record)
+    
+    return {"message": "تم إغلاق الصندوق بنجاح", "closing": closing_record}
+
+@api_router.get("/reports/cash-register-closings")
+async def get_cash_register_closings_history(
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    branch_id: Optional[str] = None,
+    cashier_id: Optional[str] = None,
+    limit: int = 50,
+    current_user: dict = Depends(get_current_user)
+):
+    """سجل إغلاقات الصندوق السابقة"""
+    query = build_tenant_query(current_user)
+    
+    if branch_id:
+        query["branch_id"] = branch_id
+    if cashier_id:
+        query["cashier_id"] = cashier_id
+    if start_date:
+        query["closed_at"] = {"$gte": start_date}
+    if end_date:
+        if "closed_at" not in query:
+            query["closed_at"] = {}
+        query["closed_at"]["$lte"] = end_date
+    
+    closings = await db.cash_register_closings.find(query, {"_id": 0}).sort("closed_at", -1).to_list(limit)
+    
+    # حساب الإحصائيات
+    total_sales = sum(c.get("total_sales", 0) for c in closings)
+    total_difference = sum(c.get("difference", 0) for c in closings)
+    surplus_count = len([c for c in closings if c.get("difference_type") == "surplus"])
+    shortage_count = len([c for c in closings if c.get("difference_type") == "shortage"])
+    exact_count = len([c for c in closings if c.get("difference_type") == "exact"])
+    
+    return {
+        "closings": closings,
+        "stats": {
+            "total_closings": len(closings),
+            "total_sales": total_sales,
+            "total_difference": total_difference,
+            "surplus_count": surplus_count,
+            "shortage_count": shortage_count,
+            "exact_count": exact_count
+        }
+    }
+
+
+
 @api_router.get("/reports/delivery-credits")
 async def get_delivery_credits_report(
     start_date: Optional[str] = None,
