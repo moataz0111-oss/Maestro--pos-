@@ -4618,11 +4618,12 @@ async def create_order(order: OrderCreate, current_user: dict = Depends(get_curr
     
     shift_id = current_shift["id"] if current_shift else None
     
-    # حساب المجموع الفرعي مع الإضافات
+    # حساب المجموع الفرعي مع الإضافات المختارة فقط
     def calculate_item_total(item):
         # سعر المنتج الأساسي
         base_price = item.price
-        # إضافة سعر الإضافات (extras)
+        # إضافة سعر الإضافات المختارة (تأتي من Frontend كـ extras)
+        # ملاحظة: item.extras هنا هي الإضافات المختارة من العميل وليس كل الإضافات
         extras_price = sum(extra.get("price", 0) for extra in (item.extras or []))
         # المجموع للعنصر الواحد
         return (base_price + extras_price) * item.quantity
@@ -4667,7 +4668,7 @@ async def create_order(order: OrderCreate, current_user: dict = Depends(get_curr
         item_dict = item.model_dump()
         item_dict["cost"] = item_cost
         item_dict["packaging_cost"] = packaging_cost
-        # حساب إجمالي سعر الإضافات للعنصر
+        # حساب إجمالي سعر الإضافات المختارة للعنصر
         item_dict["extras_total"] = sum(extra.get("price", 0) for extra in (item.extras or []))
         items_with_cost.append(item_dict)
     
