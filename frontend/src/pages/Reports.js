@@ -1826,6 +1826,20 @@ export default function Reports() {
     fetchReports();
   }, [selectedBranchId, startDate, endDate, activeTab]);
 
+  // إعادة جلب البيانات عند العودة للصفحة (visibility change)
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        fetchReports();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [selectedBranchId, startDate, endDate, activeTab]);
+
   const fetchReports = async () => {
     setLoading(true);
     const branchId = getBranchIdForApi();

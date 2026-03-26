@@ -231,6 +231,32 @@ export default function Dashboard() {
     autoOpenShift(); // فتح الوردية تلقائياً
   }, [selectedBranchId]);
 
+  // إعادة جلب البيانات عند العودة للصفحة (visibility change)
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        // إعادة جلب البيانات عند العودة للصفحة
+        fetchData();
+        fetchDashboardSettings();
+        fetchTenantInfo();
+        checkNewOrders();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [selectedBranchId]);
+
+  // إعادة جلب البيانات كل 60 ثانية للحفاظ على البيانات محدثة
+  useEffect(() => {
+    const interval = setInterval(() => {
+      fetchData();
+    }, 60000); // كل دقيقة
+    return () => clearInterval(interval);
+  }, [selectedBranchId]);
+
   // تحديد الفترة الافتراضية بناءً على صلاحيات المستخدم
   useEffect(() => {
     // المدير والأدمن يرى كل الفترات

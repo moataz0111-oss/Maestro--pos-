@@ -200,6 +200,22 @@ export default function POS() {
     const interval = setInterval(fetchPendingOrders, 30000);
     return () => clearInterval(interval);
   }, []); // فقط عند التحميل الأولي
+
+  // إعادة جلب البيانات عند العودة للصفحة (visibility change)
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        // إعادة جلب البيانات عند العودة للصفحة
+        fetchDataSilently();
+        fetchPendingOrders();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [selectedBranchId]);
   
   // جلب البيانات عند تغيير الفرع (بدون إعادة عرض شاشة التحميل)
   useEffect(() => {
