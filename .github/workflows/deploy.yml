@@ -120,6 +120,32 @@ jobs:
             echo "============================================="
             echo ""
             
+            # =============================================
+            # 🧹 تنظيف Docker لحل مشكلة ContainerConfig
+            # =============================================
+            echo "🧹 Cleaning Docker state to prevent ContainerConfig error..."
+            
+            # إيقاف وحذف containers القديمة (ليس MongoDB!)
+            echo "   Stopping old frontend/backend containers..."
+            docker stop maestro-frontend maestro-backend maestro-nginx 2>/dev/null || true
+            docker rm maestro-frontend maestro-backend maestro-nginx 2>/dev/null || true
+            
+            # تنظيف networks المعطوبة
+            echo "   Pruning broken networks..."
+            docker network prune -f 2>/dev/null || true
+            
+            # تنظيف build cache
+            echo "   Pruning build cache..."
+            docker builder prune -f 2>/dev/null || true
+            
+            # حذف images القديمة للـ frontend/backend فقط
+            echo "   Removing old frontend/backend images..."
+            docker rmi maestro-frontend maestro-backend 2>/dev/null || true
+            docker rmi $(docker images -q --filter "dangling=true") 2>/dev/null || true
+            
+            echo "✅ Docker cleanup complete"
+            echo ""
+            
             # بناء الـ images الجديدة فقط (Backend + Frontend) - بدون cache
             # MongoDB لا يُبنى - يستخدم image جاهز
             echo "🔨 Building new images (Backend + Frontend only)..."
@@ -128,7 +154,13 @@ jobs:
             # تحديث Backend فقط
             echo ""
             echo "📦 Updating Backend only..."
-            docker-compose up -d --no-deps --force-recreate backend
+            docker-compose up -d --no-deps backend || {
+              echo "⚠️ Backend start failed, attempting recovery..."
+              docker-compose down --remove-orphans 2>/dev/null || true
+              docker-compose up -d mongodb
+              sleep 10
+              docker-compose up -d backend frontend nginx
+            }
             
             # انتظار Backend
             echo "⏳ Waiting for Backend..."
@@ -147,14 +179,19 @@ jobs:
             # تحديث Frontend فقط
             echo ""
             echo "🎨 Updating Frontend only..."
-            docker-compose up -d --no-deps --force-recreate frontend
+            docker-compose up -d --no-deps frontend || {
+              echo "⚠️ Frontend start failed, attempting recovery..."
+              docker-compose restart frontend
+            }
             sleep 10
             
             # تحديث Nginx فقط
             echo ""
-            echo "🌐 Reloading Nginx..."
-            docker-compose exec -T nginx nginx -s reload 2>/dev/null || \
-              docker-compose up -d --no-deps --force-recreate nginx
+            echo "🌐 Updating Nginx..."
+            docker-compose up -d --no-deps nginx || {
+              echo "⚠️ Nginx start failed, attempting recovery..."
+              docker-compose restart nginx
+            }
             sleep 5
           fi
           
