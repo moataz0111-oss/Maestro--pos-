@@ -1022,14 +1022,14 @@ const CreditReportTab = ({ creditReport, t, formatPrice, fetchReports, handlePri
 };
 
 // ===================== Cash Register Closing Report Tab (تبويب إغلاق الصندوق) =====================
-const CashRegisterClosingTab = ({ t, formatPrice, selectedBranchId, branches, getBranchIdForApi, startDate, endDate }) => {
+const CashRegisterClosingTab = ({ t, formatPrice, selectedBranchId, branches, getBranchIdForApi }) => {
   const [report, setReport] = useState(null);
   const [loading, setLoading] = useState(false);
-  // استخدام التاريخ من الفلتر العام
-  const dateRange = {
-    start: startDate,
-    end: endDate
-  };
+  // فلاتر التاريخ الخاصة بتقرير إغلاق الصندوق
+  const [dateRange, setDateRange] = useState({
+    start: new Date().toISOString().split('T')[0],
+    end: new Date().toISOString().split('T')[0]
+  });
   const [closingsHistory, setClosingsHistory] = useState([]);
   const [localBranchId, setLocalBranchId] = useState(selectedBranchId || '');
 
@@ -1072,7 +1072,7 @@ const CashRegisterClosingTab = ({ t, formatPrice, selectedBranchId, branches, ge
 
   useEffect(() => {
     fetchReport();
-  }, [startDate, endDate, localBranchId]);
+  }, [dateRange, localBranchId]);
 
   const getDifferenceColor = (diff) => {
     if (diff > 0) return 'text-emerald-400';
@@ -1206,8 +1206,26 @@ const CashRegisterClosingTab = ({ t, formatPrice, selectedBranchId, branches, ge
 
   return (
     <div className="space-y-6" id="cash-register-print-area">
-      {/* الفلاتر - فقط الفرع والأزرار (التاريخ يأتي من الفلتر العام) */}
+      {/* الفلاتر الخاصة بإغلاق الصندوق */}
       <div className="flex flex-wrap gap-4 items-end bg-gradient-to-r from-emerald-900/30 to-teal-900/30 p-4 rounded-xl border border-emerald-700/30">
+        <div>
+          <Label className="text-emerald-300">{t('من تاريخ')}</Label>
+          <Input
+            type="date"
+            value={dateRange.start}
+            onChange={(e) => setDateRange(prev => ({ ...prev, start: e.target.value }))}
+            className="bg-gray-900/50 border-emerald-700/50 text-white w-40"
+          />
+        </div>
+        <div>
+          <Label className="text-emerald-300">{t('إلى تاريخ')}</Label>
+          <Input
+            type="date"
+            value={dateRange.end}
+            onChange={(e) => setDateRange(prev => ({ ...prev, end: e.target.value }))}
+            className="bg-gray-900/50 border-emerald-700/50 text-white w-40"
+          />
+        </div>
         <div>
           <Label className="text-emerald-300">{t('الفرع')}</Label>
           <select
@@ -2176,8 +2194,8 @@ export default function Reports() {
         </div>
       </header>
 
-      {/* Filters - تظهر فقط للتبويبات التي تحتاجها */}
-      {activeTab !== 'comprehensive' && activeTab !== 'cash-register-closing' && (
+      {/* Filters - تظهر فقط للتبويبات التي تحتاجها (تختفي عند إغلاق الصندوق لأنه له فلاتره الخاصة) */}
+      {activeTab !== 'comprehensive' && activeTab !== 'cash-register' && (
         <div className="max-w-7xl mx-auto px-6 py-4 border-b border-border">
           <div className="flex flex-wrap items-center gap-4">
             <div>
@@ -2772,8 +2790,6 @@ export default function Reports() {
               selectedBranchId={selectedBranchId}
               branches={branches}
               getBranchIdForApi={getBranchIdForApi}
-              startDate={startDate}
-              endDate={endDate}
             />
           </TabsContent>
 
