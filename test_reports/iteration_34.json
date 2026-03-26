@@ -132,7 +132,7 @@
   },
   
   "test_credentials": {
-    "api_url": "https://vps-stability-update.preview.emergentagent.com",
+    "api_url": "https://docker-ssl-verify.preview.emergentagent.com",
     "owner": {
       "email": "owner@maestroegp.com",
       "password": "owner123",

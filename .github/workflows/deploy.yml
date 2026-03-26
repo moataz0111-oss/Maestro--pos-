@@ -30,23 +30,25 @@ jobs:
           git fetch origin && git reset --hard origin/main
           
           # =============================================
+          # ضمان عمل الشبكة
+          # =============================================
+          docker network create maestro_maestro-network 2>/dev/null || true
+          
+          # =============================================
           # ضمان عمل MongoDB
           # =============================================
           if ! docker ps | grep -q "maestro-mongodb"; then
             echo "🗄️ تشغيل MongoDB..."
-            docker run -d --name maestro-mongodb --network maestro_maestro-network -v maestro_mongodb_data:/data/db mongo:7 2>/dev/null || docker start maestro-mongodb
+            docker rm -f maestro-mongodb 2>/dev/null || true
+            docker run -d --name maestro-mongodb --network maestro_maestro-network -v maestro_mongodb_data:/data/db mongo:7
             sleep 10
           fi
           
           # =============================================
-          # تحديث Backend (بدون توقف)
+          # تحديث Backend
           # =============================================
           echo "📦 تحديث Backend..."
-          
-          # بناء image جديد
           docker build -t maestro_backend:new ./backend
-          
-          # إيقاف القديم وتشغيل الجديد
           docker stop backend 2>/dev/null || true
           docker rm backend 2>/dev/null || true
           docker tag maestro_backend:new maestro_backend:latest
@@ -59,23 +61,13 @@ jobs:
           
           # انتظار Backend
           echo "⏳ انتظار Backend..."
-          for i in {1..30}; do
-            if docker exec backend curl -s http://localhost:8001/api/health > /dev/null 2>&1; then
-              echo "✅ Backend جاهز!"
-              break
-            fi
-            sleep 2
-          done
+          sleep 10
           
           # =============================================
-          # تحديث Frontend (بدون توقف)
+          # تحديث Frontend
           # =============================================
           echo "🎨 تحديث Frontend..."
-          
-          # بناء image جديد
           docker build -t maestro_frontend:new ./frontend
-          
-          # إيقاف القديم وتشغيل الجديد
           docker stop frontend 2>/dev/null || true
           docker rm frontend 2>/dev/null || true
           docker tag maestro_frontend:new maestro_frontend:latest
@@ -84,23 +76,29 @@ jobs:
             maestro_frontend:latest
           
           # =============================================
-          # ضمان عمل Nginx
+          # ضمان SSL certificates
           # =============================================
-          if ! docker ps | grep -q "nginx"; then
-            echo "🌐 تشغيل Nginx..."
-            docker run -d --name nginx \
-              --network maestro_maestro-network \
-              -p 80:80 -p 443:443 \
-              -v /var/www/maestro/nginx.conf:/etc/nginx/nginx.conf:ro \
-              -v /var/www/maestro/certbot/conf:/etc/letsencrypt:ro \
-              nginx:alpine
-          else
-            docker exec nginx nginx -s reload 2>/dev/null || docker restart nginx
-          fi
+          mkdir -p /var/www/maestro/ssl
+          cp /var/www/maestro/certbot/conf/archive/maestroegp.com/fullchain1.pem /var/www/maestro/ssl/fullchain.pem 2>/dev/null || true
+          cp /var/www/maestro/certbot/conf/archive/maestroegp.com/privkey1.pem /var/www/maestro/ssl/privkey.pem 2>/dev/null || true
+          
+          # =============================================
+          # تحديث Nginx
+          # =============================================
+          echo "🌐 تحديث Nginx..."
+          docker stop nginx 2>/dev/null || true
+          docker rm nginx 2>/dev/null || true
+          docker run -d --name nginx \
+            --network maestro_maestro-network \
+            -p 80:80 -p 443:443 \
+            -v /var/www/maestro/nginx.conf:/etc/nginx/nginx.conf:ro \
+            -v /var/www/maestro/ssl:/etc/nginx/ssl:ro \
+            nginx:alpine
           
           # =============================================
           # التحقق النهائي
           # =============================================
+          sleep 5
           echo ""
           echo "📊 حالة الخدمات:"
           docker ps --format "table {{.Names}}\t{{.Status}}"
@@ -109,7 +107,7 @@ jobs:
           if curl -s http://127.0.0.1/api/health | grep -q "ok"; then
             echo "✅ النشر نجح!"
           else
-            echo "⚠️ تحذير: API قد يحتاج وقت للبدء"
+            echo "⚠️ تحذير: قد يحتاج وقت للبدء"
           fi
           
           # تنظيف

@@ -13,7 +13,7 @@ import requests
 import os
 import uuid
 
-BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://vps-stability-update.preview.emergentagent.com').rstrip('/')
+BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://docker-ssl-verify.preview.emergentagent.com').rstrip('/')
 
 class TestBranchOrdersRecipeSystem:
     """Tests for Branch Orders with Recipe System"""

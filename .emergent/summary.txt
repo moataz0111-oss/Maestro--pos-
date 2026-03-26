@@ -1,44 +1,45 @@
-<analysis>**original_problem_statement**: 
-The user initially faced a critical production outage where the live VPS was failing to allow logins due to Docker container crashes. After resolving the server stability, the user requested several strict business logic adjustments:
-1. Ensure only Super Admins can delete Tenants, and Tenants can only delete their own users.
-2. Fix financial reports so Delivery Companies (e.g., Toters, Baly) do not show up under general Credit (الآجل), and their names appear properly in the payment methods.
-3. Fix global functions in the Super Admin dashboard (Tenant Deletion, Reset Sales, Reset Inventory) which were failing or not actually clearing database records.
-4. Implement an auto-recovery health script on the VPS.
-5. Create a comprehensive Cash Register Closing (تقرير إغلاق الصندوق) report displaying shift/daily sales, breakdowns by type/payment, expenses, shortages/overages, and cashier details, complete with print functionality and specific UI styling (Teal/Emerald green, wide tabs, no embedded close button).
+<analysis>Here is the handover summary for the next agent:
 
-**User's preferred language**: Arabic (العربية). You MUST INSTRUCT the next agent to respond in the user's preferred language only. Note: The user is anxious about data loss and server stability; provide objective, clear, and reassuring technical steps.
+**original_problem_statement**: 
+The user was facing continuous GitHub Actions deployment failures ( KeyError) on their live Contabo VPS. In addition to fixing the CI/CD pipeline, the user requested strict business logic updates: 
+1. Fix financial reports so Delivery Companies don't show up as generic Credit (الآجل).
+2. Ensure strict data isolation between tenants (e.g., warehouses and users shouldn't overlap).
+3. Super Admin impersonation should not log the actual tenant out if they are actively working.
+4. Auto-refresh pages (Dashboard, POS, Reports) when left idle so data is always current.
+5. Add Over Cash and Short Cash automatic calculations to the Cash Register Closing report.
+6. Enforce Branch selection for Takeaway and Delivery orders.
+
+**User's preferred language**: Arabic (العربية). You MUST respond in the user's preferred language only.
 
 **what currently exists?** 
-A multi-tenant POS system (React + FastAPI + MongoDB) deployed on a Contabo VPS () via GitHub Actions. The system now features separated financial reporting for delivery apps vs. standard credit, an auto-health monitor cron job running every minute, a refactored  to fix React hoisting crashes, and a newly built Cash Register Closing report in the frontend.
+A multi-tenant POS system (React + FastAPI + MongoDB) deployed on a Contabo VPS. The CI/CD pipeline () has been entirely rewritten to use native  commands instead of  to permanently bypass a persistent Docker Python SDK bug on the server. The application now features strict JWT-based tenant isolation, an auto-refresh mechanism on tab focus, and an upgraded Cash Register Closing report.
 
 **Last working item**:
-    - Last item agent was working: Fixing the GitHub Actions deployment script (). 
-    - Reasoning: The user pushed the latest code to GitHub, but the deployment workflow failed on the VPS with a Python  inside . The agent recognized this is a known Docker Compose state caching issue and needs to adjust the  to safely prune/down containers before recreating them.
-    - Status: IN PROGRESS
-    - Agent Testing Done: N (Failed in CI/CD)
-    - Which testing method agent to use? Manual testing by triggering the GitHub action or verifying the bash commands directly on the VPS.
-    - User Testing Done: Y (User observed the GitHub Action failure and reported the error logs).
+    - Last item agent was working: Finalizing the  script to include the correct physical SSL certificate paths () and asking the user to run a manual  binary upgrade on the VPS. 
+    - Status: USER VERIFICATION PENDING
+    - Agent Testing Done: Y (Agent tested individual containers , ,  manually via VPS bash).
+    - Which testing method agent to use? Manual verification via GitHub Actions logs and checking .
+    - User Testing Done: N (User was just instructed to push to GitHub to test the new CI/CD workflow).
 
 **All Pending/In progress Issue list**: 
-  Issue 1: GitHub Actions Deployment Failure ( KeyError) (P0 - CRITICAL)
-     - Attempted fixes: The agent provided manual bash commands to stop/remove containers and prune networks on the VPS, which worked locally. However, the  script was not adequately updated to handle this automatically during CI/CD.
-     - Next debug checklist: Check . Modify the deployment step to gracefully handle Docker state issues (e.g., executing , , and  BEFORE ). Ensure MongoDB volumes are STRICTLY protected.
-     - Why fix this issue and what will be achieved with the fix?: The CI/CD pipeline is currently broken. Fixing this allows the user to reliably receive all the frontend report updates and bug fixes we just completed.
-     - Status: IN PROGRESS
-     - Is recurring issue? Y (Docker on this specific VPS frequently corrupts its internal state).
-     - Should Test frontend/backend/both after fix? Both (via CI/CD logs).
-     - Blocked on other issue: None.
+  Issue 1: Verification of new CI/CD Workflow () (P0)
+     - Attempted fixes: Replaced all  commands with native , , and  commands. Fixed Nginx SSL symlink issues by physically copying certs to .
+     - Next debug checklist: Check the latest GitHub Actions run. If Nginx fails to start, verify that  exists and is correctly mapped in the  command inside .
+     - Why fix this issue and what will be achieved with the fix?: Ensures zero-downtime deployments without manual SSH intervention.
+     - Status: USER VERIFICATION PENDING
+     - Is recurring issue? Y (Docker state corruption was the main blocker of this session).
+     - Should Test frontend/backend/both after fix? Both via CI/CD logs.
 
-  Issue 2: Verification of Cash Register Closing Report (P1)
-     - Attempted fixes: Agent built the UI, removed the internal close button, adjusted colors, and added print functionality.
-     - Next debug checklist: Once CI/CD is fixed and deployed, verify that  properly fetches and displays the  data without crashing.
-     - Why fix this issue and what will be achieved with the fix?: Fulfils the user's major feature request for this session.
-     - Status: USER VERIFICATION PENDING (Blocked by Issue 1).
+  Issue 2: Impersonation Session Overwrite (P1)
+     - Attempted fixes: Added a Return to Admin button and attempted to open impersonation in a new tab. 
+     - Next debug checklist: LocalStorage is shared across tabs in the same browser, meaning Super Admin impersonation still overwrites the active session token. Consider shifting impersonation logic to use  or a specific  implementation.
+     - Why fix this issue and what will be achieved with the fix?: Prevents disrupting the actual tenant's work when the Super Admin logs in to assist them.
+     - Status: IN PROGRESS
      - Is recurring issue? N
      - Should Test frontend/backend/both after fix? Frontend.
 
 **In progress Task List**:
-  None (All feature tasks are coded, pending successful deployment).
+  None currently.
 
 **Upcoming and Future Tasks**
     Upcoming Tasks:
@@ -49,82 +50,82 @@ A multi-tenant POS system (React + FastAPI + MongoDB) deployed on a Contabo VPS 
     - (P2) **Refactor **: Break down the frontend monolith (5.4k+ lines) into smaller components.
 
 **Completed work in this session**
-- Recovered live server and proved MongoDB data was safe (no data was lost during outages). (DONE)
-- Created  auto-health monitor and added to VPS crontab (runs every minute). (DONE)
-- Fixed Tenant Deletion by mapping  instead of  in  headers. (DONE)
-- Fixed Reset Sales backend query to target specific  and added missing Auth headers in frontend. (DONE)
-- Separated Delivery Companies (e.g., Toters) from Credit (الآجل) in backend  and  APIs. (DONE)
-- Updated Frontend Reports to show Delivery Company names in Payment Methods instead of generic english credit. (DONE)
-- Used  to fix severe JavaScript hoisting bugs in  (moving  hooks below arrow function definitions). (DONE)
-- Created the Cash Register Closing UI and integrated it with backend endpoints, including print capabilities. (DONE)
+- Removed  from  to fix frontend build failures. (DONE)
+- Upgraded  to v9 and updated  API. (DONE)
+- Added  to order creation logic to permanently separate delivery apps from standard credit. (DONE)
+- Created  endpoint to patch historical delivery orders. (DONE)
+- Implemented  event listeners in , , and  for auto-refreshing data. (DONE)
+- Added automatic Over Cash (زيادة) and Short Cash (نقص) calculation in Cash Register Closing. (DONE)
+- Enforced Branch Selection for Takeaway and Delivery orders in . (DONE)
+- Added  into the JWT payload to enforce strict multi-tenant data isolation. (DONE)
+- Completely rewrote  to use  to bypass the  KeyError. (DONE)
 
 **Earlier issues found/mentioned but not fixed**
-   - Issue 1: Unoptimized Queries
-   - Debug checklist: Implement  and  pagination on endpoints returning large arrays.
-   - Why to solve this issue and what will be achieved with this?: Performance scaling for large tenants.
+   - Issue 1: Historical Data Migration for Delivery Orders
+   - Debug checklist: The  endpoint was created but the user needs to actually trigger it via curl or Super Admin UI to fix old data showing as Credit.
+   - Why to solve this issue and what will be achieved with this?: Old delivery orders still show up as Credit until this script is executed.
    - Should Test frontend/backend/both after fix: Backend
-   - Is recurring issue? Y
+   - Is recurring issue? N
 
 **Known issue recurrence from previous fork**
-  - Issue recurrence in previous fork: Docker Compose  during deployments.
-  - Recurrence count: 3+
-  - Status: IN PROGRESS (Needs permanent fix in ).
-  
-  - Issue recurrence in previous fork: Missing headers (Authorization) in Axios requests.
-  - Recurrence count: 3+
-  - Status: RESOLVED for , but requires vigilance for future features.
+  - Issue recurrence in previous fork: Docker Compose 
+  - Recurrence count: 5+
+  - Status: RESOLVED (By abandoning  in the deployment script). Note: Do NOT revert to  in the CI/CD pipeline.
 
 **Code Architecture**
 
 
 **Key Technical Concepts**
 - React (Frontend), FastAPI (Backend), MongoDB.
-- Docker Compose is used on the Contabo VPS.
-- JavaScript Hoisting: A major issue occurred because arrow functions were being called inside  hooks *before* they were defined in the large React component.
+- Docker: Nginx handles SSL and reverse proxies to frontend (3000) and backend (8001).
+- JWT Authentication: Tokens now explicitly carry .
 
 **key DB schema**
-  - , , 
+  - : , , , 
+  - : , 
 
 **changes in tech stack**
-  - None.
+  - Upgraded frontend  to v9.
 
 **All files of reference**
--  (Critical P0 fix needed here)
+-  (Heavily modified to use ).
+- 
+- 
 - 
 - 
 - 
 
 **Areas that need refactoring**:
 -  (Critically large).
--  (Critically large, prone to hoisting and state bugs).
+-  (Critically large).
 
 **key api endpoints**
-- : Modified to exclude delivery apps.
-- : New endpoint for delivery app credits.
-- : Fixed query.
+- : New utility to patch old data.
+- : Added Auth headers from frontend to fix empty returns.
+- : Impersonation logic.
 
 **Critical Info for New Agent**
-- **DOCKER CACHE BUG:** The VPS suffers from a persistent Docker Python bug ( KeyError) upon . The manual fix is to stop containers, remove them, and run . You **MUST** update  to gracefully handle this pre-cleanup step during the CI/CD pipeline so the user doesn't have to manually SSH into the server every time they deploy.
-- **DATA PROTECTION**: The user was very close to abandoning the platform because they thought data was deleted. Always assure them that MongoDB volumes () are safe. *Never* add  to  in the deploy script.
-- **LANGUAGE**: Speak only Arabic. Be extremely direct and reassuring.
+- **DOCKER CACHE BUG:** The VPS has a severely corrupted  environment. DO NOT use  in automated scripts. The  has been meticulously crafted to use , , and  to bypass this.
+- **SSL CERTIFICATES:** Certbot symlinks inside Docker volumes were failing (). The current manual workaround involves a physical copy of the certs to  on the VPS. Ensure Nginx volume mounts in  point to this static  directory.
+- **DATA PROTECTION**: MongoDB is mounted to a local volume . Never execute  or .
 
 **documents and test reports created in this job**
-  -  (Created as a manual bypass script for the user, but CI/CD is the priority).
+  - None.
 
 **Last 10 User Messages and any pending HUMAN messages** 
-1. User notes Frontend is not updating after GitHub deployment.
-2. Agent guides through manual VPS bash commands to rebuild.
-3. User runs commands, hits Yarn registry 500 error.
-4. Agent guides user to wait and retry.
-5. User finally gets a successful build and tests the site.
-6. User reports the Create Tenant button crashes the page.
-7. Agent uses Troubleshoot subagent, finds JS Hoisting error, and fixes it.
-8. User requests Cash Register Closing report with specific UI adjustments.
-9. Agent implements the report, pushes to GitHub.
-10. *Pending human message*: User pastes error logs showing the GitHub Action failed with  during the backend recreation step.
+1. User reported Nginx container failing to start on the VPS due to SSL certs missing.
+2. Agent discovered Certbot symlinks were broken inside the Docker container.
+3. Agent instructed user to  and  the actual  files.
+4. User executed copy commands.
+5. Agent provided manual  command for Nginx using the new  folder.
+6. User executed and confirmed Nginx started successfully.
+7. Agent asked user to test .
+8. User confirmed everything works and asked if they should proceed with upgrading  binary and pushing to GitHub.
+9. Agent provided the  upgrade command and updated  to reflect the new  paths.
+10. *Pending*: User is waiting for the GitHub Action to finish after saving.
 
 **Project Health Check:**
-- **Broken**: CI/CD Pipeline ( fails on VPS Docker Compose step).
+- **Broken**: None currently, pending CI/CD test.
 - **Mocked**: None.
 
 **3rd Party Integrations**
@@ -132,14 +133,10 @@ A multi-tenant POS system (React + FastAPI + MongoDB) deployed on a Contabo VPS 
 - Emergent LLM Key (used in backend ).
 
 **Testing status**
-  - Testing agent used after significant changes: NO (Used Troubleshoot subagent instead for JS bugs).
-  - Troubleshoot agent used after agent stuck in loop: YES (Resolved React hoisting issue).
+  - Testing agent used after significant changes: NO (Heavy manual SSH troubleshooting was required).
+  - Troubleshoot agent used after agent stuck in loop: NO.
   - Test files created: None.
-  - Known regressions: CI/CD deployment is currently failing due to Docker state corruption on the VPS.
-
-**Credentials to test flow:**
-- Super Admin:  /  / Secret: 
-- Live VPS SSH: 
+  - Known regressions: Impersonation shared state via localStorage.
 
 **What agent forgot to execute**
-The agent updated the application code perfectly but neglected to proactively patch the known Docker Compose bug inside the  file *before* telling the user to click Save to GitHub, resulting in a failed automated deployment. The immediate next step is to fix  and trigger a push.</analysis>
+The agent successfully stabilized the server via manual SSH commands but forgot to thoroughly test if the newly written  perfectly replicates the manual SSL certificate copy process (if certs renew, the physical copies in  won't update automatically). The next agent should monitor the CI/CD run and plan a better long-term SSL volume mounting strategy for Nginx.</analysis>
