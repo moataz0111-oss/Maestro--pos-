@@ -1,42 +1,42 @@
-<analysis>Here is the handover summary for the next agent:
-
-**original_problem_statement**: 
-The user was facing continuous GitHub Actions deployment failures ( KeyError) on their live Contabo VPS. In addition to fixing the CI/CD pipeline, the user requested strict business logic updates: 
+<analysis>**original_problem_statement**: 
+The user was facing continuous GitHub Actions deployment failures on their live Contabo VPS. In addition, the user requested strict business logic updates:
 1. Fix financial reports so Delivery Companies don't show up as generic Credit (الآجل).
-2. Ensure strict data isolation between tenants (e.g., warehouses and users shouldn't overlap).
+2. Ensure strict data isolation between tenants (e.g., branches and users shouldn't overlap between different tenants).
 3. Super Admin impersonation should not log the actual tenant out if they are actively working.
-4. Auto-refresh pages (Dashboard, POS, Reports) when left idle so data is always current.
-5. Add Over Cash and Short Cash automatic calculations to the Cash Register Closing report.
-6. Enforce Branch selection for Takeaway and Delivery orders.
+4. Add auto-refresh and cash register closing calculations.
+5. Remove the hardcoded Main Branch (الفرع الرئيسي) concept completely, allowing users to solely rely on their custom branches.
+6. **(NEW)** Fix a critical bug where the order total doubles specifically for Takeaway (سفري) and Delivery (توصيل) orders upon checkout.
+7. **(NEW)** Fix the Comprehensive Report (التقرير الشامل) displaying 0 for Cash, Credit, and Delivery Companies.
 
-**User's preferred language**: Arabic (العربية). You MUST respond in the user's preferred language only.
+**User's preferred language**: Arabic (العربية). (INSTRUCT NEXT AGENT: You MUST respond in Arabic only).
 
 **what currently exists?** 
-A multi-tenant POS system (React + FastAPI + MongoDB) deployed on a Contabo VPS. The CI/CD pipeline () has been entirely rewritten to use native  commands instead of  to permanently bypass a persistent Docker Python SDK bug on the server. The application now features strict JWT-based tenant isolation, an auto-refresh mechanism on tab focus, and an upgraded Cash Register Closing report.
+A multi-tenant POS system (React + FastAPI + MongoDB) deployed on a Contabo VPS. The CI/CD pipeline uses native  commands. Strict JWT-based tenant isolation has been implemented across branches, categories, products, and stats to prevent data leakage. The impersonation feature now uses URL parameters and  to prevent session collisions. Delivery company orders have been mathematically separated from standard credit orders in the backend.
 
 **Last working item**:
-    - Last item agent was working: Finalizing the  script to include the correct physical SSL certificate paths () and asking the user to run a manual  binary upgrade on the VPS. 
-    - Status: USER VERIFICATION PENDING
-    - Agent Testing Done: Y (Agent tested individual containers , ,  manually via VPS bash).
-    - Which testing method agent to use? Manual verification via GitHub Actions logs and checking .
-    - User Testing Done: N (User was just instructed to push to GitHub to test the new CI/CD workflow).
+    - Last item agent was working: Investigating two new bugs reported by the user after the latest deployment: 1) Order totals are doubling (e.g., 1000 IQD becomes 2000 IQD) specifically for Takeaway and Delivery order types (Dine-in works correctly). 2) The Comprehensive Report is showing zero values for aggregated sales (Cash, Credit, Delivery).
+    - Status: IN PROGRESS
+    - Agent Testing Done: N
+    - Which testing method agent to use? Frontend/backend testing agent or manual API testing + screenshot tool.
+    - User Testing Done: Y (User tested on production and reported the bug).
 
 **All Pending/In progress Issue list**: 
-  Issue 1: Verification of new CI/CD Workflow () (P0)
-     - Attempted fixes: Replaced all  commands with native , , and  commands. Fixed Nginx SSL symlink issues by physically copying certs to .
-     - Next debug checklist: Check the latest GitHub Actions run. If Nginx fails to start, verify that  exists and is correctly mapped in the  command inside .
-     - Why fix this issue and what will be achieved with the fix?: Ensures zero-downtime deployments without manual SSH intervention.
-     - Status: USER VERIFICATION PENDING
-     - Is recurring issue? Y (Docker state corruption was the main blocker of this session).
-     - Should Test frontend/backend/both after fix? Both via CI/CD logs.
-
-  Issue 2: Impersonation Session Overwrite (P1)
-     - Attempted fixes: Added a Return to Admin button and attempted to open impersonation in a new tab. 
-     - Next debug checklist: LocalStorage is shared across tabs in the same browser, meaning Super Admin impersonation still overwrites the active session token. Consider shifting impersonation logic to use  or a specific  implementation.
-     - Why fix this issue and what will be achieved with the fix?: Prevents disrupting the actual tenant's work when the Super Admin logs in to assist them.
+  Issue 1: Takeaway & Delivery Order Price Doubling (P0)
+     - Attempted fixes: Agent previously fixed an issue where all available  were being passed instead of , but the user clarified that the price doubling *only* happens on Takeaway and Delivery orders, meaning the issue is specific to those order types.
+     - Next debug checklist: Check  around lines 4650-4700 ( and  creation). Look closely at how  or delivery fees are applied. Also, check  frontend checkout logic specifically for  and  to see if the frontend is double-counting.
+     - Why fix this issue and what will be achieved with the fix?: This is a critical mathematical error preventing the restaurant from charging the correct amount for off-premise orders.
      - Status: IN PROGRESS
      - Is recurring issue? N
-     - Should Test frontend/backend/both after fix? Frontend.
+     - Should Test frontend/backend/both after fix? Both
+     - Blocked on other issue: None
+
+  Issue 2: Comprehensive Report Displaying Zeros (P0)
+     - Attempted fixes: None yet. Issue was just reported.
+     - Next debug checklist: Check  and  in . Ensure the new logic that separates  from  hasn't broken the overall aggregation. Check  in  to ensure it maps the correct response keys (e.g., ).
+     - Why fix this issue and what will be achieved with the fix?: Ensures accurate financial overviews for the restaurant owners.
+     - Status: NOT STARTED
+     - Is recurring issue? N
+     - Should Test frontend/backend/both after fix? Both
 
 **In progress Task List**:
   None currently.
@@ -50,19 +50,17 @@ A multi-tenant POS system (React + FastAPI + MongoDB) deployed on a Contabo VPS.
     - (P2) **Refactor **: Break down the frontend monolith (5.4k+ lines) into smaller components.
 
 **Completed work in this session**
-- Removed  from  to fix frontend build failures. (DONE)
-- Upgraded  to v9 and updated  API. (DONE)
-- Added  to order creation logic to permanently separate delivery apps from standard credit. (DONE)
-- Created  endpoint to patch historical delivery orders. (DONE)
-- Implemented  event listeners in , , and  for auto-refreshing data. (DONE)
-- Added automatic Over Cash (زيادة) and Short Cash (نقص) calculation in Cash Register Closing. (DONE)
-- Enforced Branch Selection for Takeaway and Delivery orders in . (DONE)
-- Added  into the JWT payload to enforce strict multi-tenant data isolation. (DONE)
-- Completely rewrote  to use  to bypass the  KeyError. (DONE)
+- Fixed critical Tenant Data Isolation bug across multiple endpoints (, , , ) by enforcing strict  filtering. (DONE)
+- Fixed Impersonation session collision by transitioning to URL parameters and . (DONE)
+- Removed hardcoded الفرع الرئيسي (Main Branch) concept; tenants now rely entirely on their own custom branches. (DONE)
+- Fixed Delivery vs. Credit reporting logic (Delivery apps now correctly separate from standard Credit). (DONE)
+- Cleaned up  to allow successful deployment. (DONE)
+- Fixed UI date filters showing redundantly in the Cash Register Closing report. (DONE)
+- Fixed  error in Dashboard during impersonation. (DONE)
 
 **Earlier issues found/mentioned but not fixed**
    - Issue 1: Historical Data Migration for Delivery Orders
-   - Debug checklist: The  endpoint was created but the user needs to actually trigger it via curl or Super Admin UI to fix old data showing as Credit.
+   - Debug checklist: The  endpoint was created in a previous session, but the user needs to actually trigger it via curl or Super Admin UI to fix old data showing as Credit.
    - Why to solve this issue and what will be achieved with this?: Old delivery orders still show up as Credit until this script is executed.
    - Should Test frontend/backend/both after fix: Backend
    - Is recurring issue? N
@@ -77,18 +75,18 @@ A multi-tenant POS system (React + FastAPI + MongoDB) deployed on a Contabo VPS.
 
 **Key Technical Concepts**
 - React (Frontend), FastAPI (Backend), MongoDB.
-- Docker: Nginx handles SSL and reverse proxies to frontend (3000) and backend (8001).
-- JWT Authentication: Tokens now explicitly carry .
+- JWT Authentication: Tokens explicitly carry .
+- Multi-tenancy: Strict isolation applied using .
 
 **key DB schema**
-  - : , , , 
+  - : , , , , , 
   - : , 
 
 **changes in tech stack**
-  - Upgraded frontend  to v9.
+  - None.
 
 **All files of reference**
--  (Heavily modified to use ).
+- 
 - 
 - 
 - 
@@ -100,32 +98,33 @@ A multi-tenant POS system (React + FastAPI + MongoDB) deployed on a Contabo VPS.
 -  (Critically large).
 
 **key api endpoints**
-- : New utility to patch old data.
-- : Added Auth headers from frontend to fix empty returns.
-- : Impersonation logic.
+- : Order creation (focus area for price doubling bug).
+- : Aggregated sales data.
+- : Credit report data.
 
 **Critical Info for New Agent**
-- **DOCKER CACHE BUG:** The VPS has a severely corrupted  environment. DO NOT use  in automated scripts. The  has been meticulously crafted to use , , and  to bypass this.
-- **SSL CERTIFICATES:** Certbot symlinks inside Docker volumes were failing (). The current manual workaround involves a physical copy of the certs to  on the VPS. Ensure Nginx volume mounts in  point to this static  directory.
-- **DATA PROTECTION**: MongoDB is mounted to a local volume . Never execute  or .
+- **TENANT ISOLATION:** Never bypass  in database queries. Super Admins without a specific  should receive  queries to prevent data leaks.
+- **IMPERSONATION:** Impersonation state is now handled via URL params () and . Do not revert to  for impersonation tokens.
+- **DEPLOYMENT LAG:** The user tests on their live production VPS. Often, they will report a bug is still happening simply because the GitHub Action hasn't been triggered or hasn't finished yet. Always remind the user to press Save to GitHub to deploy the latest fixes.
+- **EXTRAS LOGIC:** Be careful distinguishing between  (all available extras) and  (the ones the user actually chose).
 
 **documents and test reports created in this job**
-  - None.
+  -  (Updated with completed tasks)
 
 **Last 10 User Messages and any pending HUMAN messages** 
-1. User reported Nginx container failing to start on the VPS due to SSL certs missing.
-2. Agent discovered Certbot symlinks were broken inside the Docker container.
-3. Agent instructed user to  and  the actual  files.
-4. User executed copy commands.
-5. Agent provided manual  command for Nginx using the new  folder.
-6. User executed and confirmed Nginx started successfully.
-7. Agent asked user to test .
-8. User confirmed everything works and asked if they should proceed with upgrading  binary and pushing to GitHub.
-9. Agent provided the  upgrade command and updated  to reflect the new  paths.
-10. *Pending*: User is waiting for the GitHub Action to finish after saving.
+1. User pointed out that the  was blocking  deployment.
+2. Agent fixed .
+3. User provided deployment logs showing success.
+4. Agent confirmed deployment success.
+5. User reported that Delivery orders still show up in Credit reports.
+6. Agent realized the code hadn't been pushed to GitHub yet and asked the user to push.
+7. User reported that the order price doubles upon checkout without adding anything (e.g., 1000 becomes 2000).
+8. Agent attempted to fix  logic thinking it was calculating all extras instead of selected ones.
+9. User confirmed that the Comprehensive report now shows 0 for revenues, and clarified that the price doubling bug *only* affects Takeaway and Delivery order types (Dine-in works correctly).
+10. *Pending*: Agent needs to debug the Takeaway/Delivery specific price doubling and the Comprehensive Report zeroing issue.
 
 **Project Health Check:**
-- **Broken**: None currently, pending CI/CD test.
+- **Broken**: Takeaway & Delivery order price calculations. Comprehensive Report aggregations.
 - **Mocked**: None.
 
 **3rd Party Integrations**
@@ -133,10 +132,10 @@ A multi-tenant POS system (React + FastAPI + MongoDB) deployed on a Contabo VPS.
 - Emergent LLM Key (used in backend ).
 
 **Testing status**
-  - Testing agent used after significant changes: NO (Heavy manual SSH troubleshooting was required).
-  - Troubleshoot agent used after agent stuck in loop: NO.
-  - Test files created: None.
-  - Known regressions: Impersonation shared state via localStorage.
+  - Testing agent used after significant changes: NO
+  - Troubleshoot agent used after agent stuck in loop: NO
+  - Test files created: None
+  - Known regressions: Order subtotal calculation (Takeaway/Delivery), Comprehensive Report data formatting.
 
 **What agent forgot to execute**
-The agent successfully stabilized the server via manual SSH commands but forgot to thoroughly test if the newly written  perfectly replicates the manual SSL certificate copy process (if certs renew, the physical copies in  won't update automatically). The next agent should monitor the CI/CD run and plan a better long-term SSL volume mounting strategy for Nginx.</analysis>
+The agent stopped before investigating why Takeaway and Delivery orders double in price. The agent fixed an assumed bug regarding , but missed the core logic flaw related to order types. The next agent must prioritize this.</analysis>

@@ -83,9 +83,19 @@ async def get_sales_report(
     by_date = {}
     by_product = {}
     
+    # تحويل أسماء طرق الدفع للعربية
+    payment_method_names = {
+        "cash": "نقدي",
+        "card": "بطاقة",
+        "credit": "آجل",
+        "pending": "معلق"
+    }
+    
     for o in orders:
         pm = o["payment_method"]
-        by_payment[pm] = by_payment.get(pm, 0) + o["total"]
+        # استخدام الاسم العربي
+        pm_arabic = payment_method_names.get(pm, pm)
+        by_payment[pm_arabic] = by_payment.get(pm_arabic, 0) + o["total"]
         
         ot = o["order_type"]
         by_type[ot] = by_type.get(ot, 0) + o["total"]
