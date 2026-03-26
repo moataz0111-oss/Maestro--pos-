@@ -667,3 +667,39 @@
 - `/app/.github/workflows/deploy.yml`
 
 **ملاحظة**: لا تستخدم `docker-compose up` في scripts النشر التلقائي على VPS
+
+
+---
+
+### 🔐 إصلاح مشكلة Impersonation (انتحال الهوية) ✅ (March 26, 2026)
+
+**المشكلة**: عند دخول Super Admin لحساب عميل، يتم الكتابة فوق جلسة العميل الفعلي إذا كان يعمل في نفس المتصفح (لأن localStorage مشترك بين جميع التابات)
+
+**الحل**: استخدام `sessionStorage` للنوافذ الجديدة بدلاً من `localStorage`
+
+#### التغييرات:
+
+1. **SuperAdmin.js** - `impersonateTenant()`:
+   - حفظ بيانات Impersonation في `sessionStorage` بدلاً من `localStorage`
+   - فتح نافذة جديدة مع URL خاص
+   - تمرير البيانات عبر `postMessage` كخطة بديلة
+   - الاحتفاظ بـ fallback للسلوك القديم إذا تم حظر النوافذ المنبثقة
+
+2. **AuthContext.js**:
+   - قراءة `impersonation_session` من `sessionStorage` عند التحميل
+   - استماع لـ `postMessage` من نافذة Super Admin
+   - التحقق من صلاحية الجلسة (5 دقائق)
+
+3. **Dashboard.js** - `exitImpersonation()`:
+   - إغلاق النافذة الجديدة بدلاً من إعادة التوجيه
+   - مسح `sessionStorage` عند الخروج
+
+**النتيجة**:
+- ✅ Super Admin يمكنه معاينة حسابات العملاء في نافذة منفصلة
+- ✅ العميل الفعلي لا يتأثر إذا كان يعمل في تاب آخر
+- ✅ كل نافذة لها جلستها الخاصة
+
+**الملفات المعدلة**:
+- `/app/frontend/src/pages/SuperAdmin.js`
+- `/app/frontend/src/context/AuthContext.js`
+- `/app/frontend/src/pages/Dashboard.js`

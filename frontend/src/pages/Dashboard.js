@@ -1180,14 +1180,35 @@ export default function Dashboard() {
   }
 
   // التحقق من وضع المعاينة (انتحال الحساب)
-  // نقرأ من localStorage لأن /auth/me لا يُرجع حقل impersonated
-  const storedUser = JSON.parse(localStorage.getItem('user') || '{}');
-  const isImpersonating = storedUser?.impersonated === true || localStorage.getItem('impersonated') === 'true' || localStorage.getItem('original_super_admin_token');
-  const originalUserName = storedUser?.original_user_name;
+  // نتحقق من sessionStorage أولاً (للنوافذ الجديدة) ثم localStorage
+  const impersonationSession = sessionStorage.getItem('impersonation_session');
+  let isImpersonating = false;
+  let originalUserName = null;
+  let impersonationData = null;
+  
+  if (impersonationSession) {
+    try {
+      impersonationData = JSON.parse(impersonationSession);
+      isImpersonating = true;
+      originalUserName = 'Super Admin';
+    } catch (e) {}
+  } else {
+    const storedUser = JSON.parse(localStorage.getItem('user') || '{}');
+    isImpersonating = storedUser?.impersonated === true || localStorage.getItem('impersonated') === 'true' || localStorage.getItem('original_super_admin_token');
+    originalUserName = storedUser?.original_user_name;
+  }
   
   // العودة للحساب الأصلي
   const exitImpersonation = () => {
-    // للمالك (Super Admin)
+    // إذا كانت جلسة sessionStorage (نافذة جديدة من Super Admin)
+    if (impersonationSession) {
+      sessionStorage.removeItem('impersonation_session');
+      toast.success(t('تم إغلاق جلسة المعاينة'));
+      window.close(); // إغلاق النافذة الجديدة
+      return;
+    }
+    
+    // للمالك (Super Admin) - السلوك القديم
     const originalSuperAdminToken = localStorage.getItem('original_super_admin_token');
     if (originalSuperAdminToken) {
       localStorage.setItem('super_admin_token', originalSuperAdminToken);

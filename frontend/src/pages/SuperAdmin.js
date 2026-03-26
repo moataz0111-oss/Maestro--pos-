@@ -951,26 +951,53 @@ export default function SuperAdmin() {
       const headers = { Authorization: `Bearer ${token}` };
       const res = await axios.post(`${API}/super-admin/impersonate/${tenant.id}`, null, { headers });
       
-      // حفظ الـ token الأصلي للعودة لاحقاً
-      localStorage.setItem('original_super_admin_token', token);
+      // ====================================================
+      // حل مشكلة تداخل الجلسات:
+      // نستخدم sessionStorage للنافذة الجديدة فقط
+      // بدلاً من localStorage الذي يتشارك بين جميع التابات
+      // ====================================================
       
-      // حفظ الـ token الجديد والمستخدم
-      localStorage.setItem('token', res.data.token);
-      localStorage.setItem('user', JSON.stringify(res.data.user));
+      // إنشاء بيانات الجلسة المؤقتة
+      const impersonationData = {
+        token: res.data.token,
+        user: res.data.user,
+        tenant: res.data.tenant,
+        original_super_admin_token: token,
+        impersonated: true,
+        timestamp: Date.now()
+      };
       
-      // حفظ علامة الـ impersonation
-      localStorage.setItem('impersonated', 'true');
-      localStorage.setItem('impersonated_tenant', JSON.stringify(res.data.tenant));
+      // حفظ في sessionStorage (خاص بكل تاب)
+      // سيتم قراءته في App.js أو AuthContext عند التحميل
+      sessionStorage.setItem('impersonation_session', JSON.stringify(impersonationData));
       
       toast.success(t('جاري الدخول كـ') + ` ${tenant.name}...`);
       
       // فتح في نافذة جديدة للحفاظ على جلسة المالك
-      const newWindow = window.open('/', '_blank');
+      // النافذة الجديدة ستقرأ من sessionStorage الخاص بها
+      const impersonationUrl = `${window.location.origin}/?impersonate=true&tenant=${tenant.id}`;
+      const newWindow = window.open(impersonationUrl, '_blank');
+      
       if (!newWindow) {
-        // إذا تم حظر النوافذ المنبثقة، نفتح في نفس النافذة
+        // إذا تم حظر النوافذ المنبثقة، ننبه المستخدم
+        toast.warning(t('يرجى السماح بالنوافذ المنبثقة أو فتح الرابط يدوياً'));
+        // حفظ في localStorage كـ fallback (السلوك القديم)
+        localStorage.setItem('original_super_admin_token', token);
+        localStorage.setItem('token', res.data.token);
+        localStorage.setItem('user', JSON.stringify(res.data.user));
+        localStorage.setItem('impersonated', 'true');
+        localStorage.setItem('impersonated_tenant', JSON.stringify(res.data.tenant));
         setTimeout(() => {
           window.location.href = '/';
         }, 500);
+      } else {
+        // تمرير البيانات للنافذة الجديدة عبر postMessage
+        setTimeout(() => {
+          newWindow.postMessage({
+            type: 'IMPERSONATION_DATA',
+            data: impersonationData
+          }, window.location.origin);
+        }, 1000);
       }
     } catch (error) {
       console.error('Impersonate error:', error);
