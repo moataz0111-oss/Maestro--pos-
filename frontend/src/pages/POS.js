@@ -1404,6 +1404,15 @@ export default function POS() {
 
     // ============ قواعد الدفع الجديدة ============
     
+    // 0. إجبار اختيار الفرع للسفري والتوصيل
+    const savedBranchIdCheck = localStorage.getItem('selectedBranchId');
+    const currentBranchIdCheck = getBranchIdForApi() || savedBranchIdCheck || user?.branch_id;
+    
+    if ((orderType === 'takeaway' || orderType === 'delivery') && !currentBranchIdCheck) {
+      toast.error(t('يرجى اختيار الفرع أولاً'));
+      return;
+    }
+    
     // 1. إجبار تحديد طريقة الدفع
     if (!paymentMethod || paymentMethod === 'pending') {
       toast.error(t('يرجى تحديد طريقة الدفع (نقدي، آجل، أو بطاقة)'));

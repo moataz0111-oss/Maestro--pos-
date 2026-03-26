@@ -17556,6 +17556,77 @@ except Exception as e:
     logger.warning(f"⚠️ WebSocket service not available: {e}")
     socket_app = app  # Fallback to regular app
 
+
+# ==================== تحديث الطلبات القديمة لشركات التوصيل ====================
+@api_router.post("/admin/fix-delivery-orders")
+async def fix_delivery_orders(current_user: dict = Depends(verify_super_admin)):
+    """تحديث الطلبات القديمة لشركات التوصيل - يُنفذ مرة واحدة"""
+    
+    # جلب كل العملاء الذين هم شركات توصيل
+    delivery_customers = await db.customers.find({"is_delivery_company": True}, {"_id": 0, "id": 1, "name": 1, "phone": 1}).to_list(1000)
+    
+    if not delivery_customers:
+        return {"message": "لا توجد شركات توصيل مسجلة", "updated": 0}
+    
+    # بناء قائمة أرقام الهواتف والأسماء
+    delivery_phones = {c.get("phone") for c in delivery_customers if c.get("phone")}
+    delivery_customer_ids = {c.get("id") for c in delivery_customers}
+    delivery_names = {c.get("name").lower() for c in delivery_customers if c.get("name")}
+    
+    # جلب كل الطلبات الآجلة التي قد تكون لشركات توصيل
+    orders = await db.orders.find({
+        "payment_method": "credit",
+        "is_delivery_company": {"$ne": True}  # لم يتم تحديثها بعد
+    }, {"_id": 0}).to_list(10000)
+    
+    updated_count = 0
+    for order in orders:
+        should_update = False
+        delivery_company_name = None
+        
+        # التحقق بالـ customer_id
+        if order.get("customer_id") in delivery_customer_ids:
+            should_update = True
+            # جلب اسم الشركة
+            for c in delivery_customers:
+                if c.get("id") == order.get("customer_id"):
+                    delivery_company_name = c.get("name")
+                    break
+        
+        # التحقق برقم الهاتف
+        elif order.get("customer_phone") in delivery_phones:
+            should_update = True
+            for c in delivery_customers:
+                if c.get("phone") == order.get("customer_phone"):
+                    delivery_company_name = c.get("name")
+                    break
+        
+        # التحقق باسم العميل
+        elif order.get("customer_name") and order.get("customer_name").lower() in delivery_names:
+            should_update = True
+            delivery_company_name = order.get("customer_name")
+        
+        if should_update:
+            update_data = {
+                "is_delivery_company": True,
+            }
+            if delivery_company_name:
+                update_data["delivery_app_name"] = delivery_company_name
+            
+            await db.orders.update_one(
+                {"id": order.get("id")},
+                {"$set": update_data}
+            )
+            updated_count += 1
+    
+    return {
+        "message": f"تم تحديث {updated_count} طلب",
+        "updated": updated_count,
+        "delivery_companies_count": len(delivery_customers)
+    }
+
+
+
 @app.on_event("shutdown")
 async def shutdown_db_client():
     client.close()
