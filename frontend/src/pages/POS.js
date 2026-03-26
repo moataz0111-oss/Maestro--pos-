@@ -1279,7 +1279,15 @@ export default function POS() {
           customer_phone: customerPhone,
           delivery_address: orderType === 'delivery' ? deliveryAddress : null,
           buzzer_number: orderType === 'takeaway' ? buzzerNumber : null,
-          items: cart,
+          items: cart.map(item => ({
+            product_id: item.product_id || item.id,
+            product_name: item.product_name || item.name,
+            price: item.price,
+            quantity: item.quantity,
+            cost: item.cost || 0,
+            notes: item.notes || '',
+            extras: item.selectedExtras || []
+          })),
           branch_id: currentBranchId || (await axios.get(`${API}/branches`)).data[0]?.id,
           payment_method: 'pending',
           discount: discount,
@@ -1618,7 +1626,15 @@ export default function POS() {
           customer_phone: customerPhone,
           delivery_address: orderType === 'delivery' ? deliveryAddress : null,
           buzzer_number: orderType === 'takeaway' ? buzzerNumber : null,
-          items: cart,
+          items: cart.map(item => ({
+            product_id: item.product_id || item.id,
+            product_name: item.product_name || item.name,
+            price: item.price,
+            quantity: item.quantity,
+            cost: item.cost || 0,
+            notes: item.notes || '',
+            extras: item.selectedExtras || []
+          })),
           branch_id: currentBranchId || (await axios.get(`${API}/branches`)).data[0]?.id,
           payment_method: paymentMethod,
           discount: discount,
@@ -1642,8 +1658,11 @@ export default function POS() {
           customer_phone: customerPhone || null,
           delivery_address: deliveryAddress || null,
           driver_id: selectedDriver || null,
-          total_amount: res.data.total_amount || cart.reduce((sum, item) => sum + (item.price * item.quantity), 0),
-          items: cart,
+          total_amount: res.data.total_amount || cart.reduce((sum, item) => sum + ((item.price + (item.selectedExtras || []).reduce((s, e) => s + e.price, 0)) * item.quantity), 0),
+          items: cart.map(item => ({
+            ...item,
+            extras: item.selectedExtras || []
+          })),
           notes: orderNotes || null
         });
       }
@@ -1780,8 +1799,11 @@ export default function POS() {
         customer_phone: customerPhone || null,
         delivery_address: deliveryAddress || null,
         driver_id: selectedDriver || null,
-        total_amount: savedOrder.total_amount || cart.reduce((sum, item) => sum + (item.price * item.quantity), 0),
-        items: cart,
+        total_amount: savedOrder.total_amount || cart.reduce((sum, item) => sum + ((item.price + (item.selectedExtras || []).reduce((s, e) => s + e.price, 0)) * item.quantity), 0),
+        items: cart.map(item => ({
+          ...item,
+          extras: item.selectedExtras || []
+        })),
         notes: orderNotes || null
       });
       
