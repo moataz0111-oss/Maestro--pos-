@@ -1030,6 +1030,15 @@ const CashRegisterClosingTab = ({ t, formatPrice, selectedBranchId, branches, ge
     end: new Date().toISOString().split('T')[0]
   });
   const [closingsHistory, setClosingsHistory] = useState([]);
+  const [localBranchId, setLocalBranchId] = useState(selectedBranchId || '');
+  const [countedCash, setCountedCash] = useState(''); // النقد المعدود
+
+  // حساب الفرق (Over/Short)
+  const expectedCash = report?.summary?.cash_sales || 0;
+  const countedCashValue = parseFloat(countedCash) || 0;
+  const cashDifference = countedCashValue - expectedCash;
+  const isOverCash = cashDifference > 0;
+  const isShortCash = cashDifference < 0;
 
   const fetchReport = async () => {
     setLoading(true);
@@ -1037,8 +1046,8 @@ const CashRegisterClosingTab = ({ t, formatPrice, selectedBranchId, branches, ge
       const params = new URLSearchParams();
       params.append('start_date', dateRange.start);
       params.append('end_date', dateRange.end + 'T23:59:59');
-      const branchId = getBranchIdForApi();
-      if (branchId) params.append('branch_id', branchId);
+      const branchId = localBranchId || getBranchIdForApi();
+      if (branchId && branchId !== 'all') params.append('branch_id', branchId);
       
       const [reportRes, historyRes] = await Promise.all([
         axios.get(`${API_URL}/reports/cash-register-closing?${params}`),
@@ -1047,6 +1056,8 @@ const CashRegisterClosingTab = ({ t, formatPrice, selectedBranchId, branches, ge
       
       setReport(reportRes.data);
       setClosingsHistory(historyRes.data.closings || []);
+      // مسح النقد المعدود عند جلب تقرير جديد
+      setCountedCash('');
     } catch (error) {
       console.error('Error fetching cash register report:', error);
       toast.error(t('فشل في جلب تقرير الصندوق'));
@@ -1057,7 +1068,7 @@ const CashRegisterClosingTab = ({ t, formatPrice, selectedBranchId, branches, ge
 
   useEffect(() => {
     fetchReport();
-  }, [dateRange, selectedBranchId]);
+  }, [dateRange, localBranchId]);
 
   const getDifferenceColor = (diff) => {
     if (diff > 0) return 'text-emerald-400';
@@ -1211,6 +1222,19 @@ const CashRegisterClosingTab = ({ t, formatPrice, selectedBranchId, branches, ge
             className="bg-gray-900/50 border-emerald-700/50 text-white w-40"
           />
         </div>
+        <div>
+          <Label className="text-emerald-300">{t('الفرع')}</Label>
+          <select
+            value={localBranchId}
+            onChange={(e) => setLocalBranchId(e.target.value)}
+            className="bg-gray-900/50 border border-emerald-700/50 text-white rounded-md px-3 py-2 w-44"
+          >
+            <option value="">{t('جميع الفروع')}</option>
+            {branches?.map(branch => (
+              <option key={branch.id} value={branch.id}>{branch.name}</option>
+            ))}
+          </select>
+        </div>
         <Button onClick={fetchReport} disabled={loading} className="bg-emerald-600 hover:bg-emerald-700">
           <RefreshCw className={`h-4 w-4 ml-2 ${loading ? 'animate-spin' : ''}`} />
           {t('تحديث')}
@@ -1220,6 +1244,62 @@ const CashRegisterClosingTab = ({ t, formatPrice, selectedBranchId, branches, ge
           {t('طباعة')}
         </Button>
       </div>
+
+      {/* حقل النقد المعدود ومربعات Over/Short */}
+      {report && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {/* حقل إدخال النقد المعدود */}
+          <Card className="bg-gradient-to-br from-blue-900/40 to-blue-800/20 border-blue-700/30">
+            <CardContent className="p-4">
+              <Label className="text-blue-300 mb-2 block">{t('النقد المعدود (الفعلي)')}</Label>
+              <Input
+                type="number"
+                value={countedCash}
+                onChange={(e) => setCountedCash(e.target.value)}
+                placeholder={t('أدخل المبلغ المعدود')}
+                className="bg-gray-900/50 border-blue-700/50 text-white text-lg"
+              />
+              <p className="text-blue-300 text-sm mt-2">
+                {t('النقدي المتوقع')}: <span className="font-bold text-white">{formatPrice(expectedCash)}</span>
+              </p>
+            </CardContent>
+          </Card>
+
+          {/* Over Cash - زيادة */}
+          <Card className={`bg-gradient-to-br ${isOverCash && countedCash ? 'from-emerald-900/60 to-emerald-800/40 border-emerald-500' : 'from-emerald-900/20 to-emerald-800/10 border-emerald-700/30'} border-2 transition-all`}>
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3">
+                <div className={`p-3 rounded-lg ${isOverCash && countedCash ? 'bg-emerald-500/30' : 'bg-emerald-500/10'}`}>
+                  <TrendingUp className={`h-6 w-6 ${isOverCash && countedCash ? 'text-emerald-400' : 'text-emerald-600'}`} />
+                </div>
+                <div>
+                  <p className="text-sm text-emerald-300">{t('زيادة (Over Cash)')}</p>
+                  <p className={`text-2xl font-bold ${isOverCash && countedCash ? 'text-emerald-400' : 'text-emerald-600'}`}>
+                    {isOverCash && countedCash ? '+' + formatPrice(cashDifference) : formatPrice(0)}
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Short Cash - نقص */}
+          <Card className={`bg-gradient-to-br ${isShortCash && countedCash ? 'from-red-900/60 to-red-800/40 border-red-500' : 'from-red-900/20 to-red-800/10 border-red-700/30'} border-2 transition-all`}>
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3">
+                <div className={`p-3 rounded-lg ${isShortCash && countedCash ? 'bg-red-500/30' : 'bg-red-500/10'}`}>
+                  <TrendingDown className={`h-6 w-6 ${isShortCash && countedCash ? 'text-red-400' : 'text-red-600'}`} />
+                </div>
+                <div>
+                  <p className="text-sm text-red-300">{t('نقص (Short Cash)')}</p>
+                  <p className={`text-2xl font-bold ${isShortCash && countedCash ? 'text-red-400' : 'text-red-600'}`}>
+                    {isShortCash && countedCash ? formatPrice(Math.abs(cashDifference)) : formatPrice(0)}
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       {loading ? (
         <div className="flex justify-center py-12">
