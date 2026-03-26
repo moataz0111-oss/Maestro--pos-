@@ -11962,13 +11962,15 @@ async def get_sales_report(
         if o.get("payment_method") == "card"
     )
     
-    # الآجل العادي (بدون شركة توصيل - يمكن أن يكون داخلي، سفري، أو توصيل بدون شركة)
+    # الآجل العادي (بدون شركة توصيل بأي شكل)
     credit_amount = sum(
         o.get("total", 0) for o in orders 
         if o.get("payment_method") == "credit" 
         and not o.get("delivery_app") 
         and not o.get("delivery_app_name")
+        and not o.get("delivery_app_id")
         and not o.get("is_delivery_company")
+        and not (o.get("delivery_commission") and float(o.get("delivery_commission", 0)) > 0)
     )
     
     # تقسيم حسب نوع الطلب
@@ -11979,7 +11981,7 @@ async def get_sales_report(
     # عدد الطلبات حسب طريقة الدفع
     cash_orders_count = len([o for o in orders if o.get("payment_method") == "cash" and o.get("order_type") != "delivery" and not o.get("delivery_app")])
     card_orders_count = len([o for o in orders if o.get("payment_method") == "card"])
-    credit_orders_count = len([o for o in orders if o.get("payment_method") == "credit" and not o.get("delivery_app") and not o.get("delivery_app_name") and not o.get("is_delivery_company")])
+    credit_orders_count = len([o for o in orders if o.get("payment_method") == "credit" and not o.get("delivery_app") and not o.get("delivery_app_name") and not o.get("delivery_app_id") and not o.get("is_delivery_company") and not (o.get("delivery_commission") and float(o.get("delivery_commission", 0)) > 0)])
     
     # تجميع شركات التوصيل حسب الاسم (في حسب طريقة الدفع)
     delivery_apps_amounts = {}
@@ -11987,16 +11989,20 @@ async def get_sales_report(
         # فقط طلبات الآجل التي لها شركة توصيل
         if o.get("payment_method") != "credit":
             continue
-            
-        # أي طلب له شركة توصيل
-        app_name = o.get("delivery_app_name") or o.get("delivery_app")
+        
+        # التحقق من وجود شركة توصيل بأي طريقة
+        app_name = o.get("delivery_app_name") or o.get("delivery_app") or o.get("delivery_app_id")
         
         # إذا كان العميل شركة توصيل وليس هناك اسم شركة، نستخدم اسم العميل
         if not app_name and o.get("is_delivery_company"):
             app_name = o.get("customer_name") or "شركة توصيل"
         
+        # إذا كان لديه عمولة توصيل ولكن بدون اسم، نستخدم "شركة توصيل"
+        if not app_name and o.get("delivery_commission") and float(o.get("delivery_commission", 0)) > 0:
+            app_name = o.get("customer_name") or "شركة توصيل"
+        
         if app_name:
-            # له شركة توصيل محددة - يظهر باسم الشركة
+            # له شركة توصيل - يظهر باسم الشركة
             if app_name not in delivery_apps_amounts:
                 delivery_apps_amounts[app_name] = 0
             delivery_apps_amounts[app_name] += o.get("total", 0)
@@ -12077,21 +12083,24 @@ async def get_credit_report(
     delivery_customers = await db.customers.find(delivery_customers_query, {"id": 1}).to_list(1000)
     delivery_customer_ids = {c.get("id") for c in delivery_customers}
     
-    # فلترة يدوية - استبعاد طلبات شركات التوصيل فقط (وليس نوع الطلب)
+    # فلترة يدوية - استبعاد طلبات شركات التوصيل بكل الطرق الممكنة
     orders = []
     for o in all_orders:
-        # استبعاد إذا كان له شركة توصيل
-        if o.get("delivery_app") or o.get("delivery_app_name"):
+        # استبعاد إذا كان له شركة توصيل بأي شكل
+        if o.get("delivery_app") or o.get("delivery_app_name") or o.get("delivery_app_id"):
             continue
         # استبعاد إذا كان العميل شركة توصيل (من الـ flag)
         if o.get("is_delivery_company") or o.get("is_delivery_app"):
+            continue
+        # استبعاد إذا كان لديه عمولة توصيل (يعني شركة توصيل)
+        if o.get("delivery_commission") and float(o.get("delivery_commission", 0)) > 0:
             continue
         # استبعاد إذا كان الـ customer_id مرتبط بشركة توصيل
         if o.get("customer_id") in delivery_customer_ids:
             continue
         # استبعاد إذا كان اسم العميل يحتوي على كلمات شركات التوصيل المعروفة
         customer_name = (o.get("customer_name") or "").lower()
-        delivery_keywords = ["toters", "تترز", "baly", "بالي", "talabat", "طلبات", "carriage", "كاريدج", "hungerstation", "هنقرستيشن"]
+        delivery_keywords = ["toters", "تترز", "baly", "بالي", "talabat", "طلبات", "carriage", "كاريدج", "hungerstation", "هنقرستيشن", "jahez", "جاهز", "marsool", "مرسول"]
         if any(keyword in customer_name for keyword in delivery_keywords):
             continue
         # الطلب ليس له شركة توصيل - يُضاف للآجل العادي
