@@ -269,34 +269,8 @@ const ComprehensiveReportTab = ({
           </div>
         </div>
         
-        {/* فلاتر التاريخ والفرع */}
+        {/* فلتر الفرع فقط - كل تقرير له فلاتر التاريخ الخاصة به */}
         <div className="flex flex-wrap items-end gap-4 pt-2 border-t border-border/30">
-          <div>
-            <Label className="text-xs text-muted-foreground">{t('من تاريخ')}</Label>
-            <Input
-              type="date"
-              value={startDate}
-              onChange={(e) => {
-                onStartDateChange(e.target.value);
-                // جلب البيانات بعد التغيير
-                setTimeout(() => fetchAllReports(), 100);
-              }}
-              className="mt-1 w-[150px]"
-            />
-          </div>
-          <div>
-            <Label className="text-xs text-muted-foreground">{t('إلى تاريخ')}</Label>
-            <Input
-              type="date"
-              value={endDate}
-              onChange={(e) => {
-                onEndDateChange(e.target.value);
-                // جلب البيانات بعد التغيير
-                setTimeout(() => fetchAllReports(), 100);
-              }}
-              className="mt-1 w-[150px]"
-            />
-          </div>
           <div>
             <Label className="text-xs text-muted-foreground">{t('الفرع')}</Label>
             <Select value={selectedBranchId || 'all'} onValueChange={(val) => {
