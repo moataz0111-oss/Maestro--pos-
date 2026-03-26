@@ -12036,7 +12036,7 @@ async def get_credit_report(
     # جلب الطلبات
     all_orders = await db.orders.find(query, {"_id": 0}).to_list(1000)
     
-    # فلترة يدوية - استبعاد طلبات شركات التوصيل
+    # فلترة يدوية - استبعاد طلبات شركات التوصيل بكل الطرق الممكنة
     orders = []
     for o in all_orders:
         # استبعاد إذا كان نوع الطلب توصيل
@@ -12044,6 +12044,14 @@ async def get_credit_report(
             continue
         # استبعاد إذا كان له شركة توصيل
         if o.get("delivery_app") or o.get("delivery_app_name"):
+            continue
+        # استبعاد إذا كان العميل شركة توصيل
+        if o.get("is_delivery_company") or o.get("is_delivery_app"):
+            continue
+        # استبعاد إذا كان اسم العميل يحتوي على كلمات شركات التوصيل المعروفة
+        customer_name = (o.get("customer_name") or "").lower()
+        delivery_keywords = ["toters", "تترز", "baly", "بالي", "talabat", "طلبات", "carriage", "كاريدج", "hungerstation", "هنقرستيشن"]
+        if any(keyword in customer_name for keyword in delivery_keywords):
             continue
         orders.append(o)
     

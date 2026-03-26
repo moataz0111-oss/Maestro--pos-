@@ -2132,7 +2132,7 @@ export default function Reports() {
       {/* Report Tabs */}
       <main className="max-w-7xl mx-auto px-6 py-6">
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid grid-cols-6 md:grid-cols-12 mb-6">
+          <TabsList className="flex flex-wrap gap-2 h-auto p-2 mb-6 bg-muted/50">
             {dashboardSettings.showComprehensiveReport !== false && (
               <TabsTrigger value="comprehensive" className="text-green-500 font-bold">{t('التقرير الشامل')}</TabsTrigger>
             )}
@@ -2276,14 +2276,22 @@ export default function Reports() {
                     </CardHeader>
                     <CardContent>
                       <div className="space-y-3">
-                        {Object.entries(salesReport.by_payment_method || {}).map(([method, amount]) => (
-                          <div key={method} className="flex justify-between items-center">
-                            <span className="text-muted-foreground">
-                              {method}
-                            </span>
-                            <span className="font-bold text-foreground tabular-nums">{formatPrice(amount)}</span>
-                          </div>
-                        ))}
+                        {Object.entries(salesReport.by_payment_method || {}).map(([method, amount]) => {
+                          // ترجمة أسماء طرق الدفع
+                          const translatedMethod = 
+                            method === 'credit' ? t('آجل') :
+                            method === 'cash' ? t('نقدي') :
+                            method === 'card' ? t('بطاقة') :
+                            method; // إبقاء اسم شركة التوصيل كما هو
+                          return (
+                            <div key={method} className="flex justify-between items-center">
+                              <span className="text-muted-foreground">
+                                {translatedMethod}
+                              </span>
+                              <span className="font-bold text-foreground tabular-nums">{formatPrice(amount)}</span>
+                            </div>
+                          );
+                        })}
                       </div>
                     </CardContent>
                   </Card>

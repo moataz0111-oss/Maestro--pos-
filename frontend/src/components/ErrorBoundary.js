@@ -51,7 +51,7 @@ class ErrorBoundary extends React.Component {
                 مسح البيانات وإعادة تسجيل الدخول
               </button>
             </div>
-            {process.env.NODE_ENV === 'development' && this.state.error && (
+            {this.state.error && (
               <div className="mt-6 p-4 bg-gray-800 rounded-lg text-left text-sm overflow-auto max-h-48">
                 <p className="text-red-400 font-mono">{this.state.error.toString()}</p>
                 {this.state.errorInfo && (
