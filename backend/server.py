@@ -2365,10 +2365,8 @@ async def get_branches(current_user: dict = Depends(get_current_user), include_i
     if not include_inactive:
         query["is_active"] = {"$ne": False}
     
-    # إخفاء الفروع الافتراضية فقط إذا كان الاسم تماماً يطابق الأسماء الافتراضية
-    # (لا نستبعد الأسماء التي تحتوي على تفاصيل إضافية مثل "الفرع الرئيسي - التجمع الخامس")
-    default_branch_names = ["الفرع الرئيسي", "Main Branch", "الفرع الثاني", "فرع المالك الرئيسي"]
-    query["name"] = {"$nin": default_branch_names}
+    # لا نستبعد أي فروع بناءً على الاسم - كل فروع العميل مهمة
+    # (تم إزالة فلتر الأسماء الافتراضية لأنه يسبب مشاكل للعملاء)
     
     branches = await db.branches.find(query, {"_id": 0}).to_list(100)
     return branches
