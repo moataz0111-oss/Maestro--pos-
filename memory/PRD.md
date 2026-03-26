@@ -603,3 +603,67 @@
 
 #### Files Modified:
 - `/app/backend/server.py` - Lines 9532-9554: Added packaging and food inventory reset
+
+
+---
+
+### 🚨 إصلاح عزل البيانات بين المستأجرين (Multi-tenant Isolation) ✅ (March 26, 2026)
+
+**المشكلة الحرجة**: العملاء كانوا يرون بيانات عملاء آخرين:
+- في الشاشة الرئيسية (Dashboard) ونقطة البيع (POS) تظهر فروع عملاء آخرين
+- في صفحة الطاولات تظهر الفروع الصحيحة (كان العزل يعمل جزئياً)
+
+**السبب الجذري**:
+1. دالة `build_tenant_query()` كانت تسمح لـ Super Admin برؤية كل البيانات
+2. عند Impersonation، لم يتم فلترة البيانات بشكل صحيح
+3. دالة `get_user_tenant_id()` كانت تُرجع `"default"` كـ fallback
+
+**الإصلاحات**:
+
+#### 1. إصلاح `get_user_tenant_id()` (السطر 1672-1686)
+- Super Admin بدون tenant يحصل على `None` (بدلاً من `"system"`)
+- يمنع الوصول العشوائي لبيانات العملاء
+
+#### 2. إصلاح `build_tenant_query()` (السطر 1688-1718)
+- Super Admin بدون tenant يحصل على query بـ `__NO_ACCESS__`
+- يُرجع نتائج فارغة لمنع تسرب البيانات
+
+#### 3. إصلاح `get_branches()` (السطر 2340-2374)
+- Super Admin بدون tenant يحصل على قائمة فارغة
+- فلترة صارمة بـ `tenant_id`
+
+#### 4. إصلاح `get_categories()` (السطر 2492-2502)
+- نفس منطق العزل الصارم
+
+#### 5. إصلاح `get_products()` (السطر 2549-2569)
+- نفس منطق العزل الصارم
+
+#### 6. إصلاح `get_dashboard_stats()` (السطر 14633-14655)
+- يُرجع إحصائيات فارغة للـ Super Admin بدون tenant
+
+#### 7. تحسين تسجيل الدخول والخروج (Frontend)
+- مسح `localStorage.branches` عند تسجيل الدخول
+- مسح `localStorage.branches` عند تسجيل الخروج
+- يضمن الحصول على البيانات الحديثة من API
+
+**الملفات المعدلة**:
+- `/app/backend/server.py`
+- `/app/frontend/src/context/AuthContext.js`
+
+**هل سيتكرر؟**: لا! الإصلاح يضمن:
+- كل tenant يرى فقط بياناته
+- Super Admin يستخدم Super Admin Panel فقط لإدارة العملاء
+- لا fallback إلى `"default"` يمكن أن يتسبب في تداخل البيانات
+
+---
+
+### CI/CD Deployment Fix ✅ (March 26, 2026)
+
+**المشكلة**: GitHub Actions كانت تفشل بسبب خطأ `ContainerConfig KeyError` من Docker Compose
+
+**الحل**: إعادة كتابة `deploy.yml` لاستخدام `docker run` مباشرة بدلاً من `docker-compose`
+
+**الملفات المعدلة**:
+- `/app/.github/workflows/deploy.yml`
+
+**ملاحظة**: لا تستخدم `docker-compose up` في scripts النشر التلقائي على VPS

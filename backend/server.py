@@ -1671,25 +1671,50 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
 
 # دالة مساعدة للحصول على tenant_id للمستخدم
 def get_user_tenant_id(user: dict) -> Optional[str]:
-    """الحصول على tenant_id للمستخدم - Super Admin يستخدم tenant النظام"""
-    if user.get("role") == UserRole.SUPER_ADMIN:
-        # Super Admin يستخدم tenant النظام الافتراضي
-        return user.get("tenant_id") or "system"
-    # إذا لم يكن للمستخدم tenant_id، نستخدم "default"
-    return user.get("tenant_id") or "default"
+    """
+    الحصول على tenant_id للمستخدم
+    
+    - Super Admin الحقيقي بدون tenant: يُرجع None (لا يصل لبيانات عملاء)
+    - Super Admin في وضع Impersonation: يُرجع tenant_id المستخدم الهدف
+    - المستخدمين العاديين: يُرجع tenant_id الخاص بهم
+    """
+    tenant_id = user.get("tenant_id")
+    
+    # إذا كان Super Admin بدون tenant_id، لا يُرجع default
+    if user.get("role") == UserRole.SUPER_ADMIN and not tenant_id:
+        return None  # لا يصل لبيانات أي عميل
+    
+    return tenant_id or "default"
 
 # دالة مساعدة لبناء query مع tenant_id
 def build_tenant_query(user: dict, base_query: dict = None) -> dict:
-    """بناء query مع فلترة tenant_id"""
+    """
+    بناء query مع فلترة tenant_id - يضمن عزل البيانات بين المستأجرين
+    
+    ملاحظات مهمة:
+    - Super Admin الحقيقي (بدون impersonation) لا يستخدم هذه الدالة للوصول لبيانات العملاء
+    - عند Impersonation، المستخدم يصبح admin عادي بـ tenant_id محدد
+    - كل مستخدم يرى فقط بيانات الـ tenant الخاص به
+    """
     query = base_query.copy() if base_query else {}
     
-    # Super Admin يرى كل شيء
-    if user.get("role") == UserRole.SUPER_ADMIN:
+    # الحصول على tenant_id من المستخدم
+    tenant_id = user.get("tenant_id")
+    
+    # Super Admin الحقيقي (tenant_id = None أو system) بدون impersonation
+    # لا يجب أن يصل لهذه الدالة عند استعراض بيانات العملاء
+    # لكن إذا وصل، نُرجع query فارغ لمنع تسرب البيانات
+    if user.get("role") == UserRole.SUPER_ADMIN and not tenant_id:
+        # Super Admin بدون tenant - لا يرى بيانات أي عميل
+        query["tenant_id"] = "__NO_ACCESS__"  # قيمة غير موجودة لإرجاع نتائج فارغة
         return query
     
-    tenant_id = get_user_tenant_id(user)
+    # جميع المستخدمين الآخرين (بما فيهم admin المنتحَل من Super Admin)
     if tenant_id:
         query["tenant_id"] = tenant_id
+    else:
+        # fallback للبيانات القديمة بدون tenant_id
+        query["tenant_id"] = "default"
     
     return query
 
@@ -2313,12 +2338,21 @@ async def create_branch(branch: BranchCreate, current_user: dict = Depends(get_c
 
 @api_router.get("/branches", response_model=List[BranchResponse])
 async def get_branches(current_user: dict = Depends(get_current_user), include_inactive: bool = False):
-    # Super Admin يرى الفروع الخاصة به (tenant_id الخاص به)
-    if current_user.get("role") == UserRole.SUPER_ADMIN:
-        owner_tenant_id = current_user.get("tenant_id") or "default"
-        query = {"tenant_id": owner_tenant_id}
-    else:
-        query = build_tenant_query(current_user)  # فلترة حسب tenant_id
+    """
+    جلب الفروع - مع عزل صارم للبيانات بين المستأجرين
+    
+    - Super Admin الحقيقي (بدون tenant_id) = لا يرى فروع (يستخدم Super Admin Panel)
+    - Admin/Manager = يرى فروع الـ tenant الخاص به فقط
+    - Cashier/Staff = يرى فرعه فقط
+    """
+    tenant_id = current_user.get("tenant_id")
+    
+    # Super Admin الحقيقي بدون tenant - لا يرى فروع عادية
+    if current_user.get("role") == UserRole.SUPER_ADMIN and not tenant_id:
+        return []  # Super Admin يستخدم Super Admin Panel لإدارة العملاء
+    
+    # بناء query مع فلترة صارمة للـ tenant
+    query = {"tenant_id": tenant_id} if tenant_id else {"tenant_id": "default"}
     
     # المستخدمون المرتبطون بفرع معين يرون فقط فرعهم
     user_branch_id = current_user.get("branch_id")
@@ -2456,12 +2490,14 @@ async def create_category(category: CategoryCreate, current_user: dict = Depends
 
 @api_router.get("/categories", response_model=List[CategoryResponse])
 async def get_categories(current_user: dict = Depends(get_current_user)):
-    # Super Admin يرى الفئات الخاصة به (tenant_id الخاص به)
-    if current_user.get("role") == UserRole.SUPER_ADMIN:
-        owner_tenant_id = current_user.get("tenant_id") or "default"
-        query = {"tenant_id": owner_tenant_id}
-    else:
-        query = build_tenant_query(current_user)  # فلترة حسب tenant_id
+    """جلب الفئات - مع عزل صارم للبيانات"""
+    tenant_id = current_user.get("tenant_id")
+    
+    # Super Admin بدون tenant لا يرى فئات
+    if current_user.get("role") == UserRole.SUPER_ADMIN and not tenant_id:
+        return []
+    
+    query = {"tenant_id": tenant_id} if tenant_id else {"tenant_id": "default"}
     categories = await db.categories.find(query, {"_id": 0}).sort("sort_order", 1).to_list(100)
     return categories
 
@@ -2518,12 +2554,14 @@ async def get_products(
     limit: int = Query(100, ge=1, le=500, description="الحد الأقصى للعناصر"),
     current_user: dict = Depends(get_current_user)
 ):
-    # Super Admin يرى المنتجات الخاصة به (tenant_id الخاص به)
-    if current_user.get("role") == UserRole.SUPER_ADMIN:
-        owner_tenant_id = current_user.get("tenant_id") or "default"
-        query = {"tenant_id": owner_tenant_id}
-    else:
-        query = build_tenant_query(current_user)  # فلترة حسب tenant_id
+    """جلب المنتجات - مع عزل صارم للبيانات"""
+    tenant_id = current_user.get("tenant_id")
+    
+    # Super Admin بدون tenant لا يرى منتجات
+    if current_user.get("role") == UserRole.SUPER_ADMIN and not tenant_id:
+        return []
+    
+    query = {"tenant_id": tenant_id} if tenant_id else {"tenant_id": "default"}
     if category_id:
         query["category_id"] = category_id
     products = await db.products.find(query, {"_id": 0}).skip(skip).limit(limit).to_list(limit)
@@ -14586,7 +14624,17 @@ async def get_dashboard_stats(
     current_user: dict = Depends(get_current_user)
 ):
     """إحصائيات Dashboard الشاملة - يومي/أسبوعي/شهري/إجمالي"""
-    tenant_id = get_user_tenant_id(current_user)
+    tenant_id = current_user.get("tenant_id")
+    
+    # Super Admin بدون tenant لا يرى إحصائيات
+    if current_user.get("role") == UserRole.SUPER_ADMIN and not tenant_id:
+        return {
+            "today": {"total_sales": 0, "total_orders": 0, "average_order_value": 0, "gross_profit": 0, "operating_costs": 0, "total_profit": 0, "by_payment_method": {}},
+            "week": {"total_sales": 0, "total_orders": 0, "average_order_value": 0, "gross_profit": 0, "operating_costs": 0, "total_profit": 0, "by_payment_method": {}},
+            "month": {"total_sales": 0, "total_orders": 0, "average_order_value": 0, "gross_profit": 0, "operating_costs": 0, "total_profit": 0, "by_payment_method": {}},
+            "all_time": {"total_sales": 0, "total_orders": 0, "average_order_value": 0, "gross_profit": 0, "operating_costs": 0, "total_profit": 0, "by_payment_method": {}},
+            "operating_costs_details": {"rent": 0, "electricity": 0, "water": 0, "generator": 0, "salaries": 0, "total": 0}
+        }
     
     # تحديد الفلتر الأساسي
     base_query = {"status": {"$ne": OrderStatus.CANCELLED}}
@@ -14594,7 +14642,7 @@ async def get_dashboard_stats(
     if tenant_id:
         base_query["tenant_id"] = tenant_id
     else:
-        base_query["$or"] = [{"tenant_id": {"$exists": False}}, {"tenant_id": None}]
+        base_query["tenant_id"] = "default"
     
     # فلترة الفرع
     user_branch_id = current_user.get("branch_id")

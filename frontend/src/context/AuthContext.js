@@ -190,6 +190,12 @@ export const AuthProvider = ({ children }) => {
           };
         }
         
+        // مسح البيانات القديمة قبل حفظ الجديدة (لضمان عزل البيانات بين المستأجرين)
+        localStorage.removeItem('branches');
+        localStorage.removeItem('selectedBranchId');
+        sessionStorage.removeItem('branches_loaded');
+        console.log('🗑️ تم مسح بيانات الفروع القديمة');
+        
         localStorage.setItem('token', newToken);
         axios.defaults.headers.common['Authorization'] = `Bearer ${newToken}`;
         setToken(newToken);
@@ -304,12 +310,13 @@ export const AuthProvider = ({ children }) => {
   };
 
   const logout = () => {
-    // حذف جميع البيانات المخزنة
+    // حذف جميع البيانات المخزنة (بما فيها بيانات الفروع لضمان عزل البيانات)
     localStorage.removeItem('token');
     localStorage.removeItem('offline_user');
     localStorage.removeItem('cached_user');
     localStorage.removeItem('currentShift');
     localStorage.removeItem('selectedBranchId');
+    localStorage.removeItem('branches');  // مسح بيانات الفروع المخزنة
     sessionStorage.clear();
     
     delete axios.defaults.headers.common['Authorization'];
