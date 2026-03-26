@@ -40,22 +40,44 @@ jobs:
             sleep 15
           fi
           
-          # إيقاف وحذف الخدمات القديمة (ليس MongoDB)
-          docker stop maestro-frontend maestro-backend maestro-nginx 2>/dev/null || true
-          docker rm maestro-frontend maestro-backend maestro-nginx 2>/dev/null || true
+          # ============================================
+          # حل مشكلة ContainerConfig نهائياً
+          # ============================================
+          echo "🧹 تنظيف Docker لحل ContainerConfig..."
           
-          # تنظيف
+          # إيقاف كل الخدمات ما عدا MongoDB
+          docker stop maestro-frontend maestro-backend maestro-nginx 2>/dev/null || true
+          
+          # حذف الـ containers بالقوة
+          docker rm -f maestro-frontend maestro-backend maestro-nginx 2>/dev/null || true
+          
+          # حذف الـ images القديمة
+          docker rmi -f maestro_frontend maestro_backend maestro-frontend maestro-backend 2>/dev/null || true
+          docker rmi -f $(docker images -q --filter "dangling=true") 2>/dev/null || true
+          
+          # تنظيف الشبكات والـ cache
           docker network prune -f 2>/dev/null || true
           docker builder prune -f 2>/dev/null || true
-          docker rmi maestro_frontend maestro_backend maestro-frontend maestro-backend 2>/dev/null || true
+          docker system prune -f 2>/dev/null || true
           
-          # بناء جديد
+          echo "✅ تم التنظيف"
+          
+          # ============================================
+          # بناء جديد تماماً
+          # ============================================
+          echo "🔨 بناء الـ images..."
           docker-compose build --no-cache frontend backend
           
-          # تشغيل
-          docker-compose up -d
+          # تشغيل الخدمات
+          echo "🚀 تشغيل الخدمات..."
+          docker-compose up -d mongodb
+          sleep 5
+          docker-compose up -d backend
+          sleep 10
+          docker-compose up -d frontend nginx
           
           # انتظار
+          echo "⏳ انتظار بدء الخدمات..."
           sleep 30
           
           # تحقق
@@ -66,7 +88,7 @@ jobs:
             echo "✅ الخدمات تعمل!"
           else
             echo "⚠️ إعادة التشغيل..."
-            docker-compose restart
+            docker-compose restart backend frontend nginx
             sleep 20
           fi
           
