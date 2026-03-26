@@ -11962,14 +11962,15 @@ async def get_sales_report(
         if o.get("payment_method") == "card"
     )
     
-    # الآجل العادي (بدون التوصيل - استبعاد أي طلب له شركة توصيل)
+    # الآجل العادي (استبعاد طلبات التوصيل وشركات التوصيل)
+    # الآجل العادي = credit + ليس توصيل + ليس شركة توصيل
     credit_amount = sum(
         o.get("total", 0) for o in orders 
         if o.get("payment_method") == "credit" 
-        and o.get("order_type") != "delivery"
+        and o.get("order_type") != "delivery"  # ليس توصيل
         and not o.get("delivery_app") 
         and not o.get("delivery_app_name")
-        and not o.get("is_delivery_company")  # استبعاد طلبات شركات التوصيل
+        and not o.get("is_delivery_company")
     )
     
     # تقسيم حسب نوع الطلب
@@ -11980,7 +11981,7 @@ async def get_sales_report(
     # عدد الطلبات حسب طريقة الدفع
     cash_orders_count = len([o for o in orders if o.get("payment_method") == "cash" and o.get("order_type") != "delivery" and not o.get("delivery_app")])
     card_orders_count = len([o for o in orders if o.get("payment_method") == "card"])
-    credit_orders_count = len([o for o in orders if o.get("payment_method") == "credit" and o.get("order_type") != "delivery" and not o.get("delivery_app") and not o.get("delivery_app_name") and not o.get("is_delivery_company")])
+    credit_orders_count = len([o for o in orders if o.get("payment_method") == "credit" and not o.get("delivery_app") and not o.get("delivery_app_name") and not o.get("is_delivery_company") and o.get("order_type") != "delivery"])
     
     # تجميع شركات التوصيل حسب الاسم (في حسب طريقة الدفع)
     delivery_apps_amounts = {}
@@ -11996,11 +11997,11 @@ async def get_sales_report(
             if app_name not in delivery_apps_amounts:
                 delivery_apps_amounts[app_name] = 0
             delivery_apps_amounts[app_name] += o.get("total", 0)
-        elif o.get("order_type") == "delivery":
-            # طلب توصيل بدون شركة محددة
-            if "توصيل أخرى" not in delivery_apps_amounts:
-                delivery_apps_amounts["توصيل أخرى"] = 0
-            delivery_apps_amounts["توصيل أخرى"] += o.get("total", 0)
+        elif o.get("order_type") == "delivery" and o.get("payment_method") == "credit":
+            # طلب توصيل آجل بدون شركة محددة - يظهر كـ "شركات التوصيل"
+            if "شركات التوصيل" not in delivery_apps_amounts:
+                delivery_apps_amounts["شركات التوصيل"] = 0
+            delivery_apps_amounts["شركات التوصيل"] += o.get("total", 0)
     
     # بناء by_payment_method مع أسماء شركات التوصيل
     by_payment_method = {}
@@ -12081,9 +12082,6 @@ async def get_credit_report(
     # فلترة يدوية - استبعاد طلبات شركات التوصيل بكل الطرق الممكنة
     orders = []
     for o in all_orders:
-        # استبعاد إذا كان نوع الطلب توصيل
-        if o.get("order_type") == "delivery":
-            continue
         # استبعاد إذا كان له شركة توصيل
         if o.get("delivery_app") or o.get("delivery_app_name"):
             continue
