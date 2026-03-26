@@ -134,9 +134,9 @@ jobs:
             echo "⏳ Waiting for Backend..."
             sleep 20
             
-            # التحقق من Backend
+            # التحقق من Backend عبر Nginx
             for i in {1..30}; do
-              if curl -s http://localhost:8001/api/health > /dev/null 2>&1; then
+              if curl -s http://127.0.0.1/api/health > /dev/null 2>&1; then
                 echo "✅ Backend is healthy!"
                 break
               fi
@@ -185,7 +185,7 @@ jobs:
           # اختبار تسجيل الدخول
           echo ""
           echo "🔐 Testing Login..."
-          LOGIN_TEST=$(curl -s -X POST http://localhost:8001/api/super-admin/login \
+          LOGIN_TEST=$(curl -s -X POST http://127.0.0.1/api/super-admin/login \
             -H "Content-Type: application/json" \
             -d '{"email":"owner@maestroegp.com","password":"owner123","secret_key":"271018"}' \
             2>/dev/null)
@@ -197,7 +197,7 @@ jobs:
             docker-compose restart backend nginx
             sleep 20
             
-            LOGIN_TEST2=$(curl -s -X POST http://localhost:8001/api/super-admin/login \
+            LOGIN_TEST2=$(curl -s -X POST http://127.0.0.1/api/super-admin/login \
               -H "Content-Type: application/json" \
               -d '{"email":"owner@maestroegp.com","password":"owner123","secret_key":"271018"}' \
               2>/dev/null)
