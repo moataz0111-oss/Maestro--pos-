@@ -375,66 +375,13 @@ export default function SuperAdmin() {
     }
   };
 
-  useEffect(() => {
-    if (token) {
-      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-      verifyToken();
-    } else {
-      // تحقق إذا كان هناك token قديم غير صالح
-      localStorage.removeItem('super_admin_token');
-    }
-  }, [token]);
-
-  useEffect(() => {
-    if (isAuthenticated) {
-      fetchData();
-      fetchBackgroundSettings();
-      fetchSystemBranding();
-      fetchInvoiceSettings();
-      fetchLoginPageSettings();
-      fetchNotifications();
-      fetchNotificationSettings();
-      fetchExpiringSubscriptions();
-      fetchSubscriptionsDashboard();
-      fetchOwnerSettings();
-      fetchCurrencySettings();
-      fetchSalesSummary();
-      fetchSubscriptionPrices();
-    }
-  }, [isAuthenticated]);
-
-  // Fetch devices data when tenants are loaded
-  useEffect(() => {
-    if (isAuthenticated && tenants.length > 0) {
-      fetchAllDevices();
-    }
-  }, [isAuthenticated, tenants.length]);
-
-  // Auto-refresh notifications every 30 seconds
-  useEffect(() => {
-    let interval;
-    if (isAuthenticated) {
-      interval = setInterval(() => {
-        fetchNotifications();
-        fetchExpiringSubscriptions();
-      }, 30000);
-    }
-    return () => clearInterval(interval);
-  }, [isAuthenticated]);
-
-  // Auto-refresh live stats
-  useEffect(() => {
-    let interval;
-    if (showLiveView && selectedTenant) {
-      fetchLiveStats(selectedTenant.id);
-      interval = setInterval(() => fetchLiveStats(selectedTenant.id), 10000);
-    }
-    return () => clearInterval(interval);
-  }, [showLiveView, selectedTenant]);
-
+  // ==================== All Functions Definitions ====================
+  
   const verifyToken = async () => {
     try {
-      const res = await axios.get(`${API}/auth/me`);
+      const token = localStorage.getItem('super_admin_token');
+      const headers = { Authorization: `Bearer ${token}` };
+      const res = await axios.get(`${API}/auth/me`, { headers });
       if (res.data.role === 'super_admin') {
         setUser(res.data);
         setIsAuthenticated(true);
@@ -447,7 +394,9 @@ export default function SuperAdmin() {
       logout();
     }
   };
-
+  
+  // ==================== Fetch Functions ====================
+  
   const fetchData = async () => {
     try {
       console.log('Fetching data...');
@@ -1800,6 +1749,61 @@ export default function SuperAdmin() {
     };
     return <Badge className={styles[status]}>{labels[status] || status}</Badge>;
   };
+
+  // ==================== useEffect Hooks ====================
+  
+  useEffect(() => {
+    if (token) {
+      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+      verifyToken();
+    } else {
+      localStorage.removeItem('super_admin_token');
+    }
+  }, [token]);
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      fetchData();
+      fetchBackgroundSettings();
+      fetchSystemBranding();
+      fetchInvoiceSettings();
+      fetchLoginPageSettings();
+      fetchNotifications();
+      fetchNotificationSettings();
+      fetchExpiringSubscriptions();
+      fetchSubscriptionsDashboard();
+      fetchOwnerSettings();
+      fetchCurrencySettings();
+      fetchSalesSummary();
+      fetchSubscriptionPrices();
+    }
+  }, [isAuthenticated]);
+
+  useEffect(() => {
+    if (isAuthenticated && tenants.length > 0) {
+      fetchAllDevices();
+    }
+  }, [isAuthenticated, tenants.length]);
+
+  useEffect(() => {
+    let interval;
+    if (isAuthenticated) {
+      interval = setInterval(() => {
+        fetchNotifications();
+        fetchExpiringSubscriptions();
+      }, 30000);
+    }
+    return () => clearInterval(interval);
+  }, [isAuthenticated]);
+
+  useEffect(() => {
+    let interval;
+    if (showLiveView && selectedTenant) {
+      fetchLiveStats(selectedTenant.id);
+      interval = setInterval(() => fetchLiveStats(selectedTenant.id), 10000);
+    }
+    return () => clearInterval(interval);
+  }, [showLiveView, selectedTenant]);
 
   // Login/Register Screen
   if (!isAuthenticated) {
