@@ -1179,58 +1179,40 @@ export default function Dashboard() {
     );
   }
 
-  // التحقق من وضع المعاينة (انتحال الحساب)
-  // نتحقق من sessionStorage أولاً (للنوافذ الجديدة) ثم localStorage
-  const impersonationSession = sessionStorage.getItem('impersonation_session');
-  let isImpersonating = false;
-  let originalUserName = null;
-  let impersonationData = null;
+  // التحقق من وضع المعاينة (انتحال الحساب من Super Admin)
+  // يظهر فقط إذا كان هناك original_super_admin_token (يعني دخول من Super Admin)
+  const originalSuperAdminToken = localStorage.getItem('original_super_admin_token');
+  const isImpersonating = !!originalSuperAdminToken;
+  const impersonatedTenant = isImpersonating ? JSON.parse(localStorage.getItem('impersonated_tenant') || '{}') : null;
   
-  if (impersonationSession) {
-    try {
-      impersonationData = JSON.parse(impersonationSession);
-      isImpersonating = true;
-      originalUserName = 'Super Admin';
-    } catch (e) {}
-  } else {
-    const storedUser = JSON.parse(localStorage.getItem('user') || '{}');
-    isImpersonating = storedUser?.impersonated === true || localStorage.getItem('impersonated') === 'true' || localStorage.getItem('original_super_admin_token');
-    originalUserName = storedUser?.original_user_name;
-  }
-  
-  // العودة للحساب الأصلي
+  // العودة للحساب الأصلي (للمالك Super Admin فقط)
   const exitImpersonation = () => {
-    // إذا كانت جلسة sessionStorage (نافذة جديدة من Super Admin)
-    if (impersonationSession) {
-      sessionStorage.removeItem('impersonation_session');
-      toast.success(t('تم إغلاق جلسة المعاينة'));
-      window.close(); // إغلاق النافذة الجديدة
-      return;
-    }
-    
-    // للمالك (Super Admin) - السلوك القديم
-    const originalSuperAdminToken = localStorage.getItem('original_super_admin_token');
     if (originalSuperAdminToken) {
+      // حفظ token المالك
       localStorage.setItem('super_admin_token', originalSuperAdminToken);
+      // مسح بيانات الـ impersonation
       localStorage.removeItem('original_super_admin_token');
       localStorage.removeItem('token');
-      localStorage.removeItem('user');
+      localStorage.removeItem('cached_user');
       localStorage.removeItem('impersonated');
       localStorage.removeItem('impersonated_tenant');
+      localStorage.removeItem('branches');
+      sessionStorage.clear();
       toast.success(t('تم العودة لحساب المالك'));
       window.location.href = '/super-admin';
       return;
     }
     
-    // للعميل (Admin) الذي يدخل كمستخدم
+    // للعميل (Admin) الذي يدخل كمستخدم آخر
     const originalUser = localStorage.getItem('original_user');
     const originalToken = localStorage.getItem('original_token');
     
     if (originalUser && originalToken) {
-      localStorage.setItem('user', originalUser);
+      localStorage.setItem('cached_user', originalUser);
       localStorage.setItem('token', originalToken);
       localStorage.removeItem('original_user');
       localStorage.removeItem('original_token');
+      localStorage.removeItem('branches');
       toast.success(t('تم العودة للحساب الأصلي'));
       window.location.href = '/settings';
     }

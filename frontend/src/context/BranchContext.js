@@ -28,21 +28,23 @@ export const BranchProvider = ({ children }) => {
     return savedBranch || 'all';
   });
   const [loading, setLoading] = useState(() => {
-    // لا نُظهر التحميل إذا كانت الفروع محملة من localStorage
+    // نبدأ بـ true دائماً ونترك fetchBranches يحدد النهاية
+    // هذا يضمن عرض حالة التحميل حتى جلب الفروع من API
     const savedBranches = localStorage.getItem('branches');
     if (savedBranches) {
       try {
         const parsed = JSON.parse(savedBranches);
-        if (parsed.length > 0) return false;
+        if (parsed.length > 0) return false; // فروع موجودة مسبقاً
       } catch (e) {}
     }
-    return sessionStorage.getItem('branches_loaded') !== 'true';
+    return true; // لا توجد فروع، نحتاج للتحميل
   });
   const [pendingOrdersCounts, setPendingOrdersCounts] = useState({}); // عدد الطلبات المعلقة لكل فرع
 
   // جلب الفروع عند تسجيل الدخول
   useEffect(() => {
     if (isAuthenticated && user) {
+      setLoading(true); // بدء التحميل
       fetchBranches();
     }
   }, [isAuthenticated, user]);

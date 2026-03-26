@@ -26,7 +26,19 @@ export default function BranchSelector({ className = '', showLabel = false, show
   // الموظفون المقيدون بفرع لا يمكنهم تغيير الفرع
   const isRestricted = user?.branch_id && !hasRole(['admin', 'super_admin', 'manager']);
 
-  if (loading || branches.length === 0) {
+  // إظهار حالة التحميل
+  if (loading) {
+    return (
+      <div className={`flex items-center gap-2 ${className}`}>
+        <div className="w-[180px] h-9 bg-card/50 border border-border/50 rounded-md animate-pulse flex items-center justify-center">
+          <span className="text-xs text-muted-foreground">{t('جاري التحميل...')}</span>
+        </div>
+      </div>
+    );
+  }
+
+  // إخفاء فقط إذا لم تكن هناك فروع بعد التحميل
+  if (!loading && branches.length === 0) {
     return null;
   }
 

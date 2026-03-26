@@ -44,20 +44,34 @@ const hashPassword = async (password) => {
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(() => {
     // ====================================================
-    // أولاً: التحقق من جلسة Impersonation في sessionStorage
-    // (للنوافذ الجديدة المفتوحة من Super Admin)
+    // أولاً: التحقق من جلسة Impersonation معلقة (من نافذة Super Admin)
     // ====================================================
-    const impersonationSession = sessionStorage.getItem('impersonation_session');
-    if (impersonationSession) {
+    const pendingImpersonation = localStorage.getItem('pending_impersonation');
+    if (pendingImpersonation) {
       try {
-        const data = JSON.parse(impersonationSession);
-        // التحقق من أن البيانات حديثة (أقل من 5 دقائق)
-        if (data.timestamp && Date.now() - data.timestamp < 5 * 60 * 1000) {
-          console.log('🔐 تم استعادة جلسة Impersonation من sessionStorage');
+        const data = JSON.parse(pendingImpersonation);
+        // التحقق من أن البيانات حديثة (أقل من دقيقة واحدة)
+        if (data.timestamp && Date.now() - data.timestamp < 60 * 1000) {
+          console.log('🔐 تم استعادة جلسة Impersonation المعلقة');
+          // حفظ البيانات في localStorage العادي
+          localStorage.setItem('token', data.token);
+          localStorage.setItem('cached_user', JSON.stringify(data.user));
+          localStorage.setItem('impersonated', 'true');
+          localStorage.setItem('impersonated_tenant', JSON.stringify(data.tenant));
+          localStorage.setItem('original_super_admin_token', data.original_super_admin_token);
+          // مسح بيانات الفروع القديمة
+          localStorage.removeItem('branches');
+          sessionStorage.removeItem('branches_loaded');
+          // مسح البيانات المعلقة
+          localStorage.removeItem('pending_impersonation');
           return data.user;
+        } else {
+          // البيانات قديمة، نحذفها
+          localStorage.removeItem('pending_impersonation');
         }
       } catch (e) {
-        console.log('فشل قراءة جلسة Impersonation');
+        console.log('فشل قراءة جلسة Impersonation المعلقة');
+        localStorage.removeItem('pending_impersonation');
       }
     }
     
@@ -74,12 +88,12 @@ export const AuthProvider = ({ children }) => {
   });
   
   const [token, setToken] = useState(() => {
-    // التحقق من جلسة Impersonation أولاً
-    const impersonationSession = sessionStorage.getItem('impersonation_session');
-    if (impersonationSession) {
+    // التحقق من جلسة Impersonation معلقة أولاً
+    const pendingImpersonation = localStorage.getItem('pending_impersonation');
+    if (pendingImpersonation) {
       try {
-        const data = JSON.parse(impersonationSession);
-        if (data.timestamp && Date.now() - data.timestamp < 5 * 60 * 1000) {
+        const data = JSON.parse(pendingImpersonation);
+        if (data.timestamp && Date.now() - data.timestamp < 60 * 1000) {
           return data.token;
         }
       } catch (e) {}
@@ -88,10 +102,6 @@ export const AuthProvider = ({ children }) => {
   });
   
   const [loading, setLoading] = useState(() => {
-    // إذا كان هناك مستخدم مخزن، لا نعرض شاشة التحميل
-    const impersonationSession = sessionStorage.getItem('impersonation_session');
-    if (impersonationSession) return false;
-    
     const cachedUser = localStorage.getItem('cached_user');
     const hasToken = localStorage.getItem('token');
     return hasToken && !cachedUser;
@@ -100,32 +110,6 @@ export const AuthProvider = ({ children }) => {
   const [error, setError] = useState(null);
   const [isOfflineLogin, setIsOfflineLogin] = useState(false);
   const [userFetched, setUserFetched] = useState(false);
-
-  // استماع لرسائل postMessage من نافذة Super Admin
-  useEffect(() => {
-    const handleMessage = (event) => {
-      if (event.origin !== window.location.origin) return;
-      
-      if (event.data?.type === 'IMPERSONATION_DATA') {
-        const data = event.data.data;
-        console.log('📨 تم استلام بيانات Impersonation عبر postMessage');
-        
-        // حفظ في sessionStorage
-        sessionStorage.setItem('impersonation_session', JSON.stringify(data));
-        
-        // تحديث الحالة
-        setToken(data.token);
-        setUser(data.user);
-        axios.defaults.headers.common['Authorization'] = `Bearer ${data.token}`;
-        
-        // إعادة تحميل الصفحة لتفعيل الجلسة
-        window.location.reload();
-      }
-    };
-    
-    window.addEventListener('message', handleMessage);
-    return () => window.removeEventListener('message', handleMessage);
-  }, []);
 
   // تهيئة المصادقة مرة واحدة فقط عند التحميل الأولي
   useEffect(() => {
