@@ -4673,10 +4673,25 @@ async def create_order(order: OrderCreate, current_user: dict = Depends(get_curr
     
     # الحصول على اسم شركة التوصيل
     delivery_app_name = None
+    is_delivery_company = False
+    customer_id = None
+    
     if order.delivery_app:
         delivery_app_doc = await db.delivery_apps.find_one({"id": order.delivery_app})
         if delivery_app_doc:
             delivery_app_name = delivery_app_doc.get("name")
+    
+    # التحقق إذا كان العميل شركة توصيل
+    if order.customer_phone:
+        customer = await db.customers.find_one({
+            "$or": [{"phone": order.customer_phone}, {"phone2": order.customer_phone}]
+        })
+        if customer:
+            customer_id = customer.get("id")
+            is_delivery_company = customer.get("is_delivery_company", False)
+            # إذا كان العميل شركة توصيل، نستخدم اسمه كاسم شركة التوصيل
+            if is_delivery_company and not delivery_app_name:
+                delivery_app_name = customer.get("name")
     
     order_doc = {
         "id": str(uuid.uuid4()),
@@ -4705,6 +4720,8 @@ async def create_order(order: OrderCreate, current_user: dict = Depends(get_curr
         "delivery_app": order.delivery_app,
         "delivery_app_name": delivery_app_name,  # اسم شركة التوصيل
         "delivery_commission": delivery_commission,
+        "is_delivery_company": is_delivery_company,  # هل العميل شركة توصيل
+        "customer_id": customer_id,  # معرف العميل
         "driver_id": order.driver_id,
         "notes": order.notes,
         "credit_transferred": False,
@@ -11944,23 +11961,29 @@ async def get_sales_report(
         and o.get("order_type") != "delivery"
         and not o.get("delivery_app") 
         and not o.get("delivery_app_name")
+        and not o.get("is_delivery_company")  # استبعاد طلبات شركات التوصيل
     )
     
     # تقسيم حسب نوع الطلب
     dine_in_amount = sum(o.get("total", 0) for o in orders if o.get("order_type") == "dine_in")
     takeaway_amount = sum(o.get("total", 0) for o in orders if o.get("order_type") == "takeaway")
-    delivery_amount = sum(o.get("total", 0) for o in orders if o.get("order_type") == "delivery" or o.get("delivery_app") or o.get("delivery_app_name"))
+    delivery_amount = sum(o.get("total", 0) for o in orders if o.get("order_type") == "delivery" or o.get("delivery_app") or o.get("delivery_app_name") or o.get("is_delivery_company"))
     
     # عدد الطلبات حسب طريقة الدفع
     cash_orders_count = len([o for o in orders if o.get("payment_method") == "cash" and o.get("order_type") != "delivery" and not o.get("delivery_app")])
     card_orders_count = len([o for o in orders if o.get("payment_method") == "card"])
-    credit_orders_count = len([o for o in orders if o.get("payment_method") == "credit" and o.get("order_type") != "delivery" and not o.get("delivery_app") and not o.get("delivery_app_name")])
+    credit_orders_count = len([o for o in orders if o.get("payment_method") == "credit" and o.get("order_type") != "delivery" and not o.get("delivery_app") and not o.get("delivery_app_name") and not o.get("is_delivery_company")])
     
     # تجميع شركات التوصيل حسب الاسم (في حسب طريقة الدفع)
     delivery_apps_amounts = {}
     for o in orders:
-        # أي طلب له شركة توصيل يُحسب هنا
+        # أي طلب له شركة توصيل أو العميل شركة توصيل
         app_name = o.get("delivery_app_name") or o.get("delivery_app")
+        
+        # إذا كان العميل شركة توصيل وليس هناك اسم شركة، نستخدم اسم العميل
+        if not app_name and o.get("is_delivery_company"):
+            app_name = o.get("customer_name") or "شركة توصيل"
+        
         if app_name:
             if app_name not in delivery_apps_amounts:
                 delivery_apps_amounts[app_name] = 0
