@@ -2191,8 +2191,8 @@ export default function Reports() {
         </div>
       </header>
 
-      {/* Filters - تظهر فقط عند عدم اختيار التقرير الشامل */}
-      {activeTab !== 'comprehensive' && (
+      {/* Filters - تظهر فقط للتبويبات التي تحتاجها */}
+      {activeTab !== 'comprehensive' && activeTab !== 'cash-register-closing' && (
         <div className="max-w-7xl mx-auto px-6 py-4 border-b border-border">
           <div className="flex flex-wrap items-center gap-4">
             <div>

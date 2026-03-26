@@ -787,7 +787,11 @@ export default function Dashboard() {
       // إرسال branch_id المحدد للحصول على بيانات الفرع الصحيح
       const branchId = getBranchIdForApi();
       const params = branchId ? { branch_id: branchId } : {};
-      const res = await axios.get(`${API}/cash-register/summary`, { params });
+      const token = localStorage.getItem('token');
+      const res = await axios.get(`${API}/cash-register/summary`, { 
+        params,
+        headers: { Authorization: `Bearer ${token}` }
+      });
       setCashSummary(res.data);
       // إعادة تعيين الجرد
       setDenominations({
@@ -795,9 +799,12 @@ export default function Dashboard() {
       });
       setCloseNotes('');
     } catch (error) {
+      console.error('Cash register error:', error);
       if (error.response?.status === 404) {
         toast.error(t('لا يوجد وردية مفتوحة'));
         setCashRegisterOpen(false);
+      } else if (error.response?.status === 401) {
+        toast.error(t('يرجى تسجيل الدخول مرة أخرى'));
       } else {
         toast.error(t('فشل في جلب بيانات الصندوق'));
       }
@@ -832,10 +839,13 @@ export default function Dashboard() {
     
     try {
       const branchId = getBranchIdForApi();
+      const token = localStorage.getItem('token');
       const res = await axios.post(`${API}/cash-register/close`, {
         denominations,
         notes: closeNotes,
         branch_id: branchId
+      }, {
+        headers: { Authorization: `Bearer ${token}` }
       });
       
       setClosingResult(res.data);
