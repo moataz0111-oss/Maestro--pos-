@@ -3,7 +3,9 @@
  * خدمة إشعارات Push للتطبيق
  */
 
-const API = process.env.REACT_APP_BACKEND_URL + '/api';
+import { API_URL } from '../utils/api';
+
+const API = API_URL;
 
 // مفتاح VAPID العام (يمكن تغييره في الإنتاج)
 const VAPID_PUBLIC_KEY = 'BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFgDzkrxZJjSgSnfckjBJuBkr3qBUYIHBQFLXYp5Nksh8U';

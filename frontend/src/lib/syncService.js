@@ -7,6 +7,7 @@ import db, { STORES } from './offlineDB';
 import offlineStorage from './offlineStorage';
 import { getOnlineStatus } from '../hooks/useOnlineStatus';
 import { playSyncComplete } from '../utils/sound';
+import { API_URL } from '../utils/api';
 
 let isSyncing = false;
 let syncListeners = [];
@@ -49,7 +50,7 @@ export const startSync = async (token) => {
   };
 
   try {
-    const API = process.env.REACT_APP_BACKEND_URL + '/api';
+    const API = API_URL;
     const headers = {
       'Authorization': `Bearer ${token}`,
       'Content-Type': 'application/json'
