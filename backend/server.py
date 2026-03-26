@@ -1638,7 +1638,7 @@ def verify_password(password: str, hashed: str) -> bool:
     except Exception:
         return False
 
-def create_token(user_id: str, role: str, branch_id: Optional[str] = None) -> str:
+def create_token(user_id: str, role: str, branch_id: Optional[str] = None, tenant_id: Optional[str] = None) -> str:
     # تحديد مدة الجلسة بناءً على نوع المستخدم
     # المالك (super_admin) والعملاء (admin) = لا يسجلون خروج أبداً (100 سنة)
     # الموظفين (cashier, warehouse_keeper, manufacturer, branch_manager) = 24 ساعة
@@ -1651,6 +1651,7 @@ def create_token(user_id: str, role: str, branch_id: Optional[str] = None) -> st
         "user_id": user_id,
         "role": role,
         "branch_id": branch_id,
+        "tenant_id": tenant_id,
         "exp": expiration
     }
     return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
@@ -1916,7 +1917,7 @@ async def register(user: UserCreate):
     await db.users.insert_one(user_doc)
     del user_doc["password"]
     del user_doc["_id"]
-    token = create_token(user_doc["id"], user_doc["role"], user_doc.get("branch_id"))
+    token = create_token(user_doc["id"], user_doc["role"], user_doc.get("branch_id"), user_doc.get("tenant_id"))
     return {"user": user_doc, "token": token}
 
 @api_router.post("/auth/login")
@@ -1965,7 +1966,7 @@ async def login(credentials: UserLogin):
         del user["password"]
     if "password_hash" in user:
         del user["password_hash"]
-    token = create_token(user["id"], user["role"], user.get("branch_id"))
+    token = create_token(user["id"], user["role"], user.get("branch_id"), user.get("tenant_id"))
     return {"user": user, "token": token}
 
 @api_router.get("/auth/me")
@@ -2035,7 +2036,7 @@ async def impersonate_user(user_id: str, current_user: dict = Depends(get_curren
     await db.impersonation_logs.insert_one(audit_log)
     
     # إنشاء توكن للمستخدم المنتحل
-    token = create_token(target_user["id"], target_user["role"], target_user.get("branch_id"))
+    token = create_token(target_user["id"], target_user["role"], target_user.get("branch_id"), target_user.get("tenant_id"))
     
     return {
         "user": target_user,
@@ -8096,7 +8097,7 @@ async def super_admin_login(request: SuperAdminLoginRequest):
     if not password_field or not verify_password(request.password, password_field):
         raise HTTPException(status_code=401, detail="كلمة المرور غير صحيحة")
     
-    token = create_token(user["id"], user["role"], user.get("branch_id"))
+    token = create_token(user["id"], user["role"], user.get("branch_id"), user.get("tenant_id"))
     
     return {
         "token": token,
@@ -8146,7 +8147,7 @@ async def register_super_admin(request: SuperAdminRegisterRequest):
     
     await db.users.insert_one(user_doc)
     
-    token = create_token(user_doc["id"], user_doc["role"], None)
+    token = create_token(user_doc["id"], user_doc["role"], user_doc.get("branch_id"), user_doc.get("tenant_id"))
     
     return {
         "message": "تم إنشاء حساب Super Admin بنجاح",
@@ -9202,7 +9203,7 @@ async def impersonate_tenant(tenant_id: str, current_user: dict = Depends(verify
             raise HTTPException(status_code=404, detail="مدير النظام الرئيسي غير موجود")
         
         # إنشاء token للدخول
-        token = create_token(admin["id"], admin["role"], admin.get("branch_id"))
+        token = create_token(admin["id"], admin["role"], admin.get("branch_id"), admin.get("tenant_id"))
         
         return {
             "token": token,
@@ -9233,7 +9234,7 @@ async def impersonate_tenant(tenant_id: str, current_user: dict = Depends(verify
         raise HTTPException(status_code=404, detail="مدير العميل غير موجود")
     
     # إنشاء token للدخول كالعميل مع علامة impersonation
-    token = create_token(admin["id"], admin["role"], admin.get("branch_id"))
+    token = create_token(admin["id"], admin["role"], admin.get("branch_id"), admin.get("tenant_id"))
     
     return {
         "token": token,
