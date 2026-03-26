@@ -951,14 +951,30 @@ export default function SuperAdmin() {
       const headers = { Authorization: `Bearer ${token}` };
       const res = await axios.post(`${API}/super-admin/impersonate/${tenant.id}`, null, { headers });
       
+      // حفظ الـ token الأصلي للعودة لاحقاً
       localStorage.setItem('original_super_admin_token', token);
+      
+      // حفظ الـ token الجديد والمستخدم
       localStorage.setItem('token', res.data.token);
+      localStorage.setItem('user', JSON.stringify(res.data.user));
+      
+      // حفظ علامة الـ impersonation
+      localStorage.setItem('impersonated', 'true');
+      localStorage.setItem('impersonated_tenant', JSON.stringify(res.data.tenant));
       
       toast.success(t('جاري الدخول كـ') + ` ${tenant.name}...`);
-      window.location.href = '/';
+      
+      // فتح في نافذة جديدة للحفاظ على جلسة المالك
+      const newWindow = window.open('/', '_blank');
+      if (!newWindow) {
+        // إذا تم حظر النوافذ المنبثقة، نفتح في نفس النافذة
+        setTimeout(() => {
+          window.location.href = '/';
+        }, 500);
+      }
     } catch (error) {
       console.error('Impersonate error:', error);
-      toast.error(t('فشل الدخول كعميل'));
+      toast.error(getErrorMessage(error) || t('فشل الدخول كعميل'));
     }
   };
 

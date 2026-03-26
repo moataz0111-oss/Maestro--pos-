@@ -9198,22 +9198,21 @@ async def impersonate_tenant(tenant_id: str, current_user: dict = Depends(verify
         admin = await db.users.find_one({
             "$or": [{"tenant_id": {"$exists": False}}, {"tenant_id": None}],
             "role": UserRole.ADMIN
-        })
+        }, {"_id": 0, "password": 0})
         if not admin:
             raise HTTPException(status_code=404, detail="مدير النظام الرئيسي غير موجود")
         
         # إنشاء token للدخول
         token = create_token(admin["id"], admin["role"], admin.get("branch_id"), admin.get("tenant_id"))
         
+        # إضافة علامات الـ impersonation للمستخدم
+        admin["impersonated"] = True
+        admin["impersonated_by"] = current_user.get("id")
+        admin["original_role"] = UserRole.SUPER_ADMIN
+        
         return {
             "token": token,
-            "user": {
-                "id": admin["id"],
-                "email": admin["email"],
-                "full_name": admin.get("full_name") or admin.get("name", ""),
-                "role": admin["role"],
-                "tenant_id": None
-            },
+            "user": admin,
             "tenant": {
                 "id": "main-system",
                 "name": "🏠 النظام الرئيسي",
@@ -9229,22 +9228,21 @@ async def impersonate_tenant(tenant_id: str, current_user: dict = Depends(verify
         raise HTTPException(status_code=404, detail="العميل غير موجود")
     
     # البحث عن admin العميل
-    admin = await db.users.find_one({"tenant_id": tenant_id, "role": UserRole.ADMIN})
+    admin = await db.users.find_one({"tenant_id": tenant_id, "role": UserRole.ADMIN}, {"_id": 0, "password": 0})
     if not admin:
         raise HTTPException(status_code=404, detail="مدير العميل غير موجود")
     
     # إنشاء token للدخول كالعميل مع علامة impersonation
     token = create_token(admin["id"], admin["role"], admin.get("branch_id"), admin.get("tenant_id"))
     
+    # إضافة علامات الـ impersonation للمستخدم
+    admin["impersonated"] = True
+    admin["impersonated_by"] = current_user.get("id")
+    admin["original_role"] = UserRole.SUPER_ADMIN
+    
     return {
         "token": token,
-        "user": {
-            "id": admin["id"],
-            "email": admin["email"],
-            "full_name": admin.get("full_name") or admin.get("name", ""),
-            "role": admin["role"],
-            "tenant_id": tenant_id
-        },
+        "user": admin,
         "tenant": tenant,
         "impersonated": True,
         "original_super_admin": current_user["id"]

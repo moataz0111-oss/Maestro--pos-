@@ -1172,11 +1172,26 @@ export default function Dashboard() {
   // التحقق من وضع المعاينة (انتحال الحساب)
   // نقرأ من localStorage لأن /auth/me لا يُرجع حقل impersonated
   const storedUser = JSON.parse(localStorage.getItem('user') || '{}');
-  const isImpersonating = storedUser?.impersonated === true;
+  const isImpersonating = storedUser?.impersonated === true || localStorage.getItem('impersonated') === 'true' || localStorage.getItem('original_super_admin_token');
   const originalUserName = storedUser?.original_user_name;
   
   // العودة للحساب الأصلي
   const exitImpersonation = () => {
+    // للمالك (Super Admin)
+    const originalSuperAdminToken = localStorage.getItem('original_super_admin_token');
+    if (originalSuperAdminToken) {
+      localStorage.setItem('super_admin_token', originalSuperAdminToken);
+      localStorage.removeItem('original_super_admin_token');
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      localStorage.removeItem('impersonated');
+      localStorage.removeItem('impersonated_tenant');
+      toast.success(t('تم العودة لحساب المالك'));
+      window.location.href = '/super-admin';
+      return;
+    }
+    
+    // للعميل (Admin) الذي يدخل كمستخدم
     const originalUser = localStorage.getItem('original_user');
     const originalToken = localStorage.getItem('original_token');
     
