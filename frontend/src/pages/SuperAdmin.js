@@ -451,9 +451,11 @@ export default function SuperAdmin() {
   const fetchData = async () => {
     try {
       console.log('Fetching data...');
+      const token = localStorage.getItem('super_admin_token');
+      const headers = { Authorization: `Bearer ${token}` };
       const [tenantsRes, statsRes] = await Promise.all([
-        axios.get(`${API}/super-admin/tenants`),
-        axios.get(`${API}/super-admin/stats`)
+        axios.get(`${API}/super-admin/tenants`, { headers }),
+        axios.get(`${API}/super-admin/stats`, { headers })
       ]);
       console.log('Tenants:', tenantsRes.data);
       setTenants(tenantsRes.data);
@@ -466,7 +468,9 @@ export default function SuperAdmin() {
 
   const fetchLiveStats = async (tenantId) => {
     try {
-      const res = await axios.get(`${API}/super-admin/tenants/${tenantId}/live-stats`);
+      const token = localStorage.getItem('super_admin_token');
+      const headers = { Authorization: `Bearer ${token}` };
+      const res = await axios.get(`${API}/super-admin/tenants/${tenantId}/live-stats`, { headers });
       setLiveStats(res.data);
     } catch (error) {
       console.error('Failed to fetch live stats:', error);
@@ -477,9 +481,11 @@ export default function SuperAdmin() {
   const fetchAllDevices = async () => {
     setLoadingDevices(true);
     try {
+      const token = localStorage.getItem('super_admin_token');
+      const headers = { Authorization: `Bearer ${token}` };
       // جلب الأجهزة لكل عميل
       const devicesPromises = tenants.map(tenant => 
-        axios.get(`${API}/super-admin/tenants/${tenant.id}/devices`)
+        axios.get(`${API}/super-admin/tenants/${tenant.id}/devices`, { headers })
           .then(res => ({ 
             tenantId: tenant.id, 
             tenantName: tenant.name || tenant.name_ar || tenant.slug,
@@ -544,7 +550,9 @@ export default function SuperAdmin() {
   // Update max devices for a tenant
   const updateMaxDevices = async (tenantId, newMax) => {
     try {
-      await axios.put(`${API}/super-admin/tenants/${tenantId}/max-devices`, { max_devices: newMax });
+      const token = localStorage.getItem('super_admin_token');
+      const headers = { Authorization: `Bearer ${token}` };
+      await axios.put(`${API}/super-admin/tenants/${tenantId}/max-devices`, { max_devices: newMax }, { headers });
       
       // تحديث البيانات محلياً
       setTenants(prev => prev.map(t => 
@@ -660,7 +668,9 @@ export default function SuperAdmin() {
   
   const fetchNotifications = async () => {
     try {
-      const res = await axios.get(`${API}/super-admin/notifications`);
+      const token = localStorage.getItem('super_admin_token');
+      const headers = { Authorization: `Bearer ${token}` };
+      const res = await axios.get(`${API}/super-admin/notifications`, { headers });
       setNotifications(res.data.notifications || []);
       setUnreadCount(res.data.unread_count || 0);
     } catch (error) {
@@ -670,7 +680,9 @@ export default function SuperAdmin() {
 
   const fetchNotificationSettings = async () => {
     try {
-      const res = await axios.get(`${API}/super-admin/notification-settings`);
+      const token = localStorage.getItem('super_admin_token');
+      const headers = { Authorization: `Bearer ${token}` };
+      const res = await axios.get(`${API}/super-admin/notification-settings`, { headers });
       setNotificationSettings(res.data);
     } catch (error) {
       console.error('Error fetching notification settings:', error);
@@ -679,7 +691,9 @@ export default function SuperAdmin() {
 
   const saveNotificationSettings = async () => {
     try {
-      await axios.put(`${API}/super-admin/notification-settings`, notificationSettings);
+      const token = localStorage.getItem('super_admin_token');
+      const headers = { Authorization: `Bearer ${token}` };
+      await axios.put(`${API}/super-admin/notification-settings`, notificationSettings, { headers });
       toast.success(t('تم حفظ إعدادات الإشعارات'));
       setShowNotificationSettings(false);
     } catch (error) {
@@ -689,7 +703,9 @@ export default function SuperAdmin() {
 
   const fetchExpiringSubscriptions = async () => {
     try {
-      const res = await axios.get(`${API}/super-admin/expiring-subscriptions`);
+      const token = localStorage.getItem('super_admin_token');
+      const headers = { Authorization: `Bearer ${token}` };
+      const res = await axios.get(`${API}/super-admin/expiring-subscriptions`, { headers });
       setExpiringSubscriptions(res.data);
     } catch (error) {
       console.error('Error fetching expiring subscriptions:', error);
@@ -698,7 +714,9 @@ export default function SuperAdmin() {
 
   const markNotificationAsRead = async (notificationId) => {
     try {
-      await axios.put(`${API}/super-admin/notifications/${notificationId}/read`);
+      const token = localStorage.getItem('super_admin_token');
+      const headers = { Authorization: `Bearer ${token}` };
+      await axios.put(`${API}/super-admin/notifications/${notificationId}/read`, null, { headers });
       fetchNotifications();
     } catch (error) {
       console.error('Error marking notification as read:', error);
@@ -707,7 +725,9 @@ export default function SuperAdmin() {
 
   const markAllNotificationsAsRead = async () => {
     try {
-      await axios.put(`${API}/super-admin/notifications/read-all`);
+      const token = localStorage.getItem('super_admin_token');
+      const headers = { Authorization: `Bearer ${token}` };
+      await axios.put(`${API}/super-admin/notifications/read-all`, null, { headers });
       fetchNotifications();
       toast.success(t('تم تعليم جميع الإشعارات كمقروءة'));
     } catch (error) {
@@ -741,11 +761,13 @@ export default function SuperAdmin() {
   // تفعيل/تعطيل العميل مع إشعار
   const toggleTenantStatus = async (tenant) => {
     try {
+      const token = localStorage.getItem('super_admin_token');
+      const headers = { Authorization: `Bearer ${token}` };
       if (tenant.is_active) {
-        await axios.put(`${API}/super-admin/tenants/${tenant.id}/deactivate`);
+        await axios.put(`${API}/super-admin/tenants/${tenant.id}/deactivate`, null, { headers });
         toast.success(t('تم تعطيل العميل'));
       } else {
-        await axios.put(`${API}/super-admin/tenants/${tenant.id}/reactivate`);
+        await axios.put(`${API}/super-admin/tenants/${tenant.id}/reactivate`, null, { headers });
         toast.success(t('تم تفعيل العميل'));
       }
       fetchData();
@@ -760,7 +782,9 @@ export default function SuperAdmin() {
   const fetchSubscriptionsDashboard = async () => {
     setLoadingDashboard(true);
     try {
-      const res = await axios.get(`${API}/super-admin/subscriptions-dashboard`);
+      const token = localStorage.getItem('super_admin_token');
+      const headers = { Authorization: `Bearer ${token}` };
+      const res = await axios.get(`${API}/super-admin/subscriptions-dashboard`, { headers });
       setSubscriptionsDashboard(res.data);
       
       // تحديث الأسعار من البيانات
@@ -781,7 +805,9 @@ export default function SuperAdmin() {
   const saveSubscriptionPrices = async () => {
     setSavingPrices(true);
     try {
-      await axios.put(`${API}/super-admin/subscription-prices`, subscriptionPrices);
+      const token = localStorage.getItem('super_admin_token');
+      const headers = { Authorization: `Bearer ${token}` };
+      await axios.put(`${API}/super-admin/subscription-prices`, subscriptionPrices, { headers });
       toast.success(t('تم حفظ أسعار الاشتراكات'));
       setShowPricesModal(false);
       fetchSubscriptionsDashboard();
@@ -795,7 +821,9 @@ export default function SuperAdmin() {
   // جلب أسعار الاشتراكات المحفوظة
   const fetchSubscriptionPrices = async () => {
     try {
-      const res = await axios.get(`${API}/super-admin/subscription-prices`);
+      const token = localStorage.getItem('super_admin_token');
+      const headers = { Authorization: `Bearer ${token}` };
+      const res = await axios.get(`${API}/super-admin/subscription-prices`, { headers });
       if (res.data?.prices) {
         setSubscriptionPrices({
           bronze: res.data.prices.bronze?.monthly || 15,
@@ -813,7 +841,9 @@ export default function SuperAdmin() {
   // جلب إعدادات العملة للمالك
   const fetchCurrencySettings = async () => {
     try {
-      const res = await axios.get(`${API}/super-admin/currency-settings`);
+      const token = localStorage.getItem('super_admin_token');
+      const headers = { Authorization: `Bearer ${token}` };
+      const res = await axios.get(`${API}/super-admin/currency-settings`, { headers });
       setCurrencySettings(res.data);
     } catch (error) {
       console.error('Error fetching currency settings:', error);
@@ -824,8 +854,11 @@ export default function SuperAdmin() {
   const fetchSalesSummary = async (displayCurrency = currencySettings.preferred_currency) => {
     setLoadingSalesSummary(true);
     try {
+      const token = localStorage.getItem('super_admin_token');
+      const headers = { Authorization: `Bearer ${token}` };
       const res = await axios.get(`${API}/super-admin/sales-summary`, {
-        params: { display_currency: displayCurrency }
+        params: { display_currency: displayCurrency },
+        headers
       });
       setSalesSummary(res.data);
     } catch (error) {
@@ -840,7 +873,9 @@ export default function SuperAdmin() {
   const fetchLiveRates = async () => {
     setLoadingLiveRates(true);
     try {
-      const res = await axios.get(`${API}/super-admin/live-exchange-rates`);
+      const token = localStorage.getItem('super_admin_token');
+      const headers = { Authorization: `Bearer ${token}` };
+      const res = await axios.get(`${API}/super-admin/live-exchange-rates`, { headers });
       setLiveRates(res.data);
       if (res.data.success) {
         toast.success(t('تم جلب أسعار الصرف الحية'));
@@ -859,10 +894,11 @@ export default function SuperAdmin() {
   const saveCurrencySettings = async () => {
     setSavingCurrencySettings(true);
     try {
-      await axios.put(`${API}/super-admin/currency-settings`, currencySettings);
+      const token = localStorage.getItem('super_admin_token');
+      const headers = { Authorization: `Bearer ${token}` };
+      await axios.put(`${API}/super-admin/currency-settings`, currencySettings, { headers });
       toast.success(t('تم حفظ إعدادات العملة'));
       setShowCurrencySettingsModal(false);
-      // تحديث ملخص المبيعات بالعملة الجديدة
       fetchSalesSummary(currencySettings.preferred_currency);
     } catch (error) {
       toast.error(t('فشل في حفظ إعدادات العملة'));
@@ -874,8 +910,11 @@ export default function SuperAdmin() {
   // تحديث سعر صرف مخصص
   const updateCustomRate = async (fromCurrency, toCurrency, rate) => {
     try {
+      const token = localStorage.getItem('super_admin_token');
+      const headers = { Authorization: `Bearer ${token}` };
       await axios.put(`${API}/super-admin/custom-exchange-rate`, null, {
-        params: { from_currency: fromCurrency, to_currency: toCurrency, rate }
+        params: { from_currency: fromCurrency, to_currency: toCurrency, rate },
+        headers
       });
       toast.success(t('تم تحديث سعر صرف') + ` ${fromCurrency}`);
       fetchCurrencySettings();
@@ -890,18 +929,19 @@ export default function SuperAdmin() {
     setLoading(true);
     
     try {
+      const token = localStorage.getItem('super_admin_token');
+      const headers = { Authorization: `Bearer ${token}` };
       const res = await axios.post(`${API}/super-admin/tenants`, {
         ...newTenantForm,
         is_demo: newTenantForm.is_demo
-      });
+      }, { headers });
       toast.success(t('تم إنشاء العميل بنجاح'));
       
       setCopiedCredentials(res.data.admin_credentials);
       fetchData();
-      fetchNotifications(); // تحديث الإشعارات
+      fetchNotifications();
       setShowNewTenant(false);
       
-      // Reset form
       setNewTenantForm({
         name: '',
         slug: '',
@@ -915,6 +955,7 @@ export default function SuperAdmin() {
         is_demo: false
       });
     } catch (error) {
+      console.error('Create tenant error:', error);
       toast.error(error.response?.data?.detail || t('فشل إنشاء العميل'));
     } finally {
       setLoading(false);
@@ -926,7 +967,9 @@ export default function SuperAdmin() {
     setShowTenantDetails(true);
     
     try {
-      const res = await axios.get(`${API}/super-admin/tenants/${tenant.id}`);
+      const token = localStorage.getItem('super_admin_token');
+      const headers = { Authorization: `Bearer ${token}` };
+      const res = await axios.get(`${API}/super-admin/tenants/${tenant.id}`, { headers });
       setTenantDetails(res.data);
     } catch (error) {
       toast.error(t('فشل في جلب التفاصيل'));
@@ -941,19 +984,17 @@ export default function SuperAdmin() {
 
   const impersonateTenant = async (tenant) => {
     try {
-      const res = await axios.post(`${API}/super-admin/impersonate/${tenant.id}`);
+      const token = localStorage.getItem('super_admin_token');
+      const headers = { Authorization: `Bearer ${token}` };
+      const res = await axios.post(`${API}/super-admin/impersonate/${tenant.id}`, null, { headers });
       
-      // حفظ token الأصلي للرجوع
       localStorage.setItem('original_super_admin_token', token);
-      
-      // استخدام token العميل
       localStorage.setItem('token', res.data.token);
       
       toast.success(t('جاري الدخول كـ') + ` ${tenant.name}...`);
-      
-      // إعادة التوجيه للصفحة الرئيسية
       window.location.href = '/';
     } catch (error) {
+      console.error('Impersonate error:', error);
       toast.error(t('فشل الدخول كعميل'));
     }
   };
