@@ -269,8 +269,34 @@ const ComprehensiveReportTab = ({
           </div>
         </div>
         
-        {/* فلتر الفرع فقط - كل تقرير له فلاتر التاريخ الخاصة به */}
+        {/* فلاتر التاريخ والفرع */}
         <div className="flex flex-wrap items-end gap-4 pt-2 border-t border-border/30">
+          <div>
+            <Label className="text-xs text-muted-foreground">{t('من تاريخ')}</Label>
+            <Input
+              type="date"
+              value={startDate}
+              onChange={(e) => {
+                onStartDateChange(e.target.value);
+                // جلب البيانات بعد التغيير
+                setTimeout(() => fetchAllReports(), 100);
+              }}
+              className="mt-1 w-[150px]"
+            />
+          </div>
+          <div>
+            <Label className="text-xs text-muted-foreground">{t('إلى تاريخ')}</Label>
+            <Input
+              type="date"
+              value={endDate}
+              onChange={(e) => {
+                onEndDateChange(e.target.value);
+                // جلب البيانات بعد التغيير
+                setTimeout(() => fetchAllReports(), 100);
+              }}
+              className="mt-1 w-[150px]"
+            />
+          </div>
           <div>
             <Label className="text-xs text-muted-foreground">{t('الفرع')}</Label>
             <Select value={selectedBranchId || 'all'} onValueChange={(val) => {
@@ -996,13 +1022,14 @@ const CreditReportTab = ({ creditReport, t, formatPrice, fetchReports, handlePri
 };
 
 // ===================== Cash Register Closing Report Tab (تبويب إغلاق الصندوق) =====================
-const CashRegisterClosingTab = ({ t, formatPrice, selectedBranchId, branches, getBranchIdForApi }) => {
+const CashRegisterClosingTab = ({ t, formatPrice, selectedBranchId, branches, getBranchIdForApi, startDate, endDate }) => {
   const [report, setReport] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [dateRange, setDateRange] = useState({
-    start: new Date().toISOString().split('T')[0],
-    end: new Date().toISOString().split('T')[0]
-  });
+  // استخدام التاريخ من الفلتر العام
+  const dateRange = {
+    start: startDate,
+    end: endDate
+  };
   const [closingsHistory, setClosingsHistory] = useState([]);
   const [localBranchId, setLocalBranchId] = useState(selectedBranchId || '');
 
@@ -1045,7 +1072,7 @@ const CashRegisterClosingTab = ({ t, formatPrice, selectedBranchId, branches, ge
 
   useEffect(() => {
     fetchReport();
-  }, [dateRange, localBranchId]);
+  }, [startDate, endDate, localBranchId]);
 
   const getDifferenceColor = (diff) => {
     if (diff > 0) return 'text-emerald-400';
@@ -1179,26 +1206,8 @@ const CashRegisterClosingTab = ({ t, formatPrice, selectedBranchId, branches, ge
 
   return (
     <div className="space-y-6" id="cash-register-print-area">
-      {/* الفلاتر */}
+      {/* الفلاتر - فقط الفرع والأزرار (التاريخ يأتي من الفلتر العام) */}
       <div className="flex flex-wrap gap-4 items-end bg-gradient-to-r from-emerald-900/30 to-teal-900/30 p-4 rounded-xl border border-emerald-700/30">
-        <div>
-          <Label className="text-emerald-300">{t('من تاريخ')}</Label>
-          <Input
-            type="date"
-            value={dateRange.start}
-            onChange={(e) => setDateRange(prev => ({ ...prev, start: e.target.value }))}
-            className="bg-gray-900/50 border-emerald-700/50 text-white w-40"
-          />
-        </div>
-        <div>
-          <Label className="text-emerald-300">{t('إلى تاريخ')}</Label>
-          <Input
-            type="date"
-            value={dateRange.end}
-            onChange={(e) => setDateRange(prev => ({ ...prev, end: e.target.value }))}
-            className="bg-gray-900/50 border-emerald-700/50 text-white w-40"
-          />
-        </div>
         <div>
           <Label className="text-emerald-300">{t('الفرع')}</Label>
           <select
@@ -2763,6 +2772,8 @@ export default function Reports() {
               selectedBranchId={selectedBranchId}
               branches={branches}
               getBranchIdForApi={getBranchIdForApi}
+              startDate={startDate}
+              endDate={endDate}
             />
           </TabsContent>
 
