@@ -12036,6 +12036,17 @@ async def get_credit_report(
     # جلب الطلبات
     all_orders = await db.orders.find(query, {"_id": 0}).to_list(1000)
     
+    # جلب قائمة العملاء الذين هم شركات توصيل
+    tenant_id = current_user.get("tenant_id")
+    delivery_customers_query = {"is_delivery_company": True}
+    if tenant_id:
+        delivery_customers_query["tenant_id"] = tenant_id
+    else:
+        delivery_customers_query["$or"] = [{"tenant_id": {"$exists": False}}, {"tenant_id": None}]
+    
+    delivery_customers = await db.customers.find(delivery_customers_query, {"id": 1}).to_list(1000)
+    delivery_customer_ids = {c.get("id") for c in delivery_customers}
+    
     # فلترة يدوية - استبعاد طلبات شركات التوصيل بكل الطرق الممكنة
     orders = []
     for o in all_orders:
@@ -12045,8 +12056,11 @@ async def get_credit_report(
         # استبعاد إذا كان له شركة توصيل
         if o.get("delivery_app") or o.get("delivery_app_name"):
             continue
-        # استبعاد إذا كان العميل شركة توصيل
+        # استبعاد إذا كان العميل شركة توصيل (من الـ flag)
         if o.get("is_delivery_company") or o.get("is_delivery_app"):
+            continue
+        # استبعاد إذا كان الـ customer_id مرتبط بشركة توصيل
+        if o.get("customer_id") in delivery_customer_ids:
             continue
         # استبعاد إذا كان اسم العميل يحتوي على كلمات شركات التوصيل المعروفة
         customer_name = (o.get("customer_name") or "").lower()
@@ -14626,9 +14640,12 @@ async def get_dashboard_stats(
         net_profit = gross_profit - period_operating_costs
         
         by_payment = {}
+        payment_translations = {"cash": "نقدي", "card": "بطاقة", "credit": "آجل"}
         for o in orders:
             pm = o.get("payment_method", "cash")
-            by_payment[pm] = by_payment.get(pm, 0) + o.get("total", 0)
+            # ترجمة اسم طريقة الدفع للعربية
+            translated_pm = payment_translations.get(pm, pm)
+            by_payment[translated_pm] = by_payment.get(translated_pm, 0) + o.get("total", 0)
         
         return {
             "total_sales": total_sales,

@@ -39,14 +39,14 @@ jobs:
           # 🔧 ترقية Docker Compose لحل مشكلة ContainerConfig
           # =============================================
           echo "🔧 Checking Docker Compose version..."
-          COMPOSE_VERSION=$(docker compose version 2>/dev/null | grep -oP '\d+\.\d+' | head -1 || echo "0")
+          COMPOSE_VERSION=$(docker-compose version 2>/dev/null | grep -oP '\d+\.\d+' | head -1 || echo "0")
           if [ "$COMPOSE_VERSION" = "0" ] || [ "$(echo "$COMPOSE_VERSION < 2.0" | bc -l 2>/dev/null || echo 1)" = "1" ]; then
             echo "⬆️ Upgrading Docker Compose to v2..."
             apt-get update -qq
             apt-get install -y -qq docker-compose-plugin 2>/dev/null || true
             # إنشاء alias للتوافق
             echo '#!/bin/bash' > /usr/local/bin/docker-compose
-            echo 'docker compose "$@"' >> /usr/local/bin/docker-compose
+            echo 'docker-compose "$@"' >> /usr/local/bin/docker-compose
             chmod +x /usr/local/bin/docker-compose
             echo "✅ Docker Compose upgraded"
           else
@@ -77,7 +77,7 @@ jobs:
             echo "✅ All data is safe and protected"
           else
             echo "⚠️ MongoDB is not running, starting it..."
-            docker compose up -d mongodb
+            docker-compose up -d mongodb
             sleep 15
             echo "✅ MongoDB started"
           fi
@@ -87,7 +87,7 @@ jobs:
             echo ""
             echo "🔐 Getting SSL certificate (first time only)..."
             # نوقف فقط frontend, backend, nginx - ليس MongoDB!
-            docker compose stop frontend backend nginx 2>/dev/null || true
+            docker-compose stop frontend backend nginx 2>/dev/null || true
             
             cat > nginx-temp.conf << 'NGINXEOF'
           events { worker_connections 1024; }
@@ -122,7 +122,7 @@ jobs:
             rm -f nginx-temp.conf
             
             # تشغيل الخدمات (MongoDB يعمل أصلاً)
-            docker compose up -d backend frontend nginx
+            docker-compose up -d backend frontend nginx
             sleep 30
           else
             # =============================================
@@ -134,7 +134,7 @@ jobs:
             echo "🔄 Zero Downtime Update"
             echo "============================================="
             echo "⚠️ MongoDB سيبقى يعمل طوال التحديث"
-            echo "⚠️ لن نستخدم docker compose down أبداً"
+            echo "⚠️ لن نستخدم docker-compose down أبداً"
             echo "============================================="
             echo ""
             
@@ -167,17 +167,17 @@ jobs:
             # بناء الـ images الجديدة فقط (Backend + Frontend) - بدون cache
             # MongoDB لا يُبنى - يستخدم image جاهز
             echo "🔨 Building new images (Backend + Frontend only)..."
-            docker compose build --no-cache --pull frontend backend
+            docker-compose build --no-cache frontend backend
             
             # تحديث Backend فقط
             echo ""
             echo "📦 Updating Backend only..."
-            docker compose up -d --no-deps backend || {
+            docker-compose up -d --no-deps backend || {
               echo "⚠️ Backend start failed, attempting recovery..."
-              docker compose down --remove-orphans 2>/dev/null || true
-              docker compose up -d mongodb
+              docker-compose down --remove-orphans 2>/dev/null || true
+              docker-compose up -d mongodb
               sleep 10
-              docker compose up -d backend frontend nginx
+              docker-compose up -d backend frontend nginx
             }
             
             # انتظار Backend
@@ -197,18 +197,18 @@ jobs:
             # تحديث Frontend فقط
             echo ""
             echo "🎨 Updating Frontend only..."
-            docker compose up -d --no-deps frontend || {
+            docker-compose up -d --no-deps frontend || {
               echo "⚠️ Frontend start failed, attempting recovery..."
-              docker compose restart frontend
+              docker-compose restart frontend
             }
             sleep 10
             
             # تحديث Nginx فقط
             echo ""
             echo "🌐 Updating Nginx..."
-            docker compose up -d --no-deps nginx || {
+            docker-compose up -d --no-deps nginx || {
               echo "⚠️ Nginx start failed, attempting recovery..."
-              docker compose restart nginx
+              docker-compose restart nginx
             }
             sleep 5
           fi
@@ -225,7 +225,7 @@ jobs:
           # التحقق من الخدمات
           echo ""
           echo "📊 Services Status:"
-          docker compose ps
+          docker-compose ps
           
           # التحقق من MongoDB
           echo ""
@@ -249,7 +249,7 @@ jobs:
             echo "✅ Login is working!"
           else
             echo "⚠️ Login issue, restarting Backend and Nginx..."
-            docker compose restart backend nginx
+            docker-compose restart backend nginx
             sleep 20
             
             LOGIN_TEST2=$(curl -s -X POST http://127.0.0.1/api/super-admin/login \
@@ -261,7 +261,7 @@ jobs:
               echo "✅ Login working after restart!"
             else
               echo "❌ Login still failing. Logs:"
-              docker compose logs --tail=50 backend
+              docker-compose logs --tail=50 backend
             fi
           fi
           
@@ -279,10 +279,10 @@ jobs:
           echo 'LOG=/var/log/maestro-monitor.log' >> /root/check-maestro.sh
           echo 'if ! curl -s --max-time 10 http://127.0.0.1/api/health > /dev/null 2>&1; then' >> /root/check-maestro.sh
           echo '  echo "$(date): Restarting Maestro..." >> $LOG' >> /root/check-maestro.sh
-          echo '  cd /var/www/maestro && docker compose restart backend nginx frontend' >> /root/check-maestro.sh
+          echo '  cd /var/www/maestro && docker-compose restart backend nginx frontend' >> /root/check-maestro.sh
           echo '  sleep 30' >> /root/check-maestro.sh
           echo '  if ! curl -s --max-time 10 http://127.0.0.1/api/health > /dev/null 2>&1; then' >> /root/check-maestro.sh
-          echo '    docker compose down && docker compose up -d' >> /root/check-maestro.sh
+          echo '    docker-compose down && docker-compose up -d' >> /root/check-maestro.sh
           echo '  fi' >> /root/check-maestro.sh
           echo 'fi' >> /root/check-maestro.sh
           
