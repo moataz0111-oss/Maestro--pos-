@@ -69,7 +69,7 @@ export default function PayrollPrint() {
             <h1 className="text-2xl font-bold text-gray-900">كشف راتب</h1>
             <p className="text-gray-600">Payroll Statement</p>
             <p className="text-sm text-gray-500 mt-2">
-              {branch?.name || 'الفرع الرئيسي'}
+              {branch?.name || 'الفرع'}
             </p>
           </div>
           {/* Employee Info */}

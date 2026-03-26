@@ -3085,7 +3085,7 @@ export default function POS() {
               {/* اسم الفرع - يظهر لجميع أنواع الطلبات */}
               {getBranchIdForApi() && branches.length > 0 && (
                 <p>
-                  <span className="font-medium">{t('الفرع')}:</span> {branches.find(b => b.id === getBranchIdForApi())?.name || t('الفرع الرئيسي')}
+                  <span className="font-medium">{t('الفرع')}:</span> {branches.find(b => b.id === getBranchIdForApi())?.name || t('غير محدد')}
                 </p>
               )}
               

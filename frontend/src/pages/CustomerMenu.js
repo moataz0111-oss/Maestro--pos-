@@ -679,30 +679,16 @@ export default function CustomerMenu() {
       setCategories(res.data.categories || []);
       setProducts(res.data.products || []);
       
-      // فلترة الفروع - إخفاء "الفرع الرئيسي" إذا وُجدت فروع أخرى
+      // عرض جميع الفروع النشطة بدون فلترة
       let fetchedBranches = res.data.branches || [];
-      if (fetchedBranches.length > 1) {
-        // إذا كان هناك أكثر من فرع، أخفِ الفرع الرئيسي
-        const mainBranchNames = [t('الفرع الرئيسي'), 'Main Branch'];
-        const filteredBranches = fetchedBranches.filter(b => 
-          !mainBranchNames.includes(b.name)
-        );
-        // استخدم الفلترة فقط إذا بقي فرع واحد على الأقل
-        if (filteredBranches.length > 0) {
-          fetchedBranches = filteredBranches;
-        }
-      }
       setBranches(fetchedBranches);
       
       if (res.data.restaurant?.name) {
         document.title = res.data.restaurant.name + ' - ' + t('القائمة');
       }
       
-      // If only one branch or no branches, skip branch selection
-      // لكن فقط إذا كان الفرع الوحيد ليس "الفرع الرئيسي"
-      const mainBranchNames = [t('الفرع الرئيسي'), 'Main Branch'];
-      if (fetchedBranches.length === 1 && 
-          !mainBranchNames.includes(fetchedBranches[0].name)) {
+      // If only one branch, auto-select it
+      if (fetchedBranches.length === 1) {
         setSelectedBranch(fetchedBranches[0].id);
         localStorage.setItem(`branch_${tenantId}`, fetchedBranches[0].id);
         setStep('menu');

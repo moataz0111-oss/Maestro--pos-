@@ -559,23 +559,9 @@ async def apply_automatic_updates():
             {"$set": {"is_active": True}}
         )
         
-        # 4. إنشاء فرع افتراضي لكل عميل ليس لديه فرع
-        tenants = await db.tenants.find({}, {"_id": 0, "id": 1, "name": 1}).to_list(1000)
-        for tenant in tenants:
-            tenant_branch = await db.branches.find_one({"tenant_id": tenant["id"]})
-            if not tenant_branch:
-                default_branch = {
-                    "id": str(uuid.uuid4()),
-                    "name": "الفرع الرئيسي",
-                    "address": "",
-                    "phone": "",
-                    "is_active": True,
-                    "is_main": True,
-                    "tenant_id": tenant["id"],
-                    "created_at": datetime.now(timezone.utc).isoformat()
-                }
-                await db.branches.insert_one(default_branch)
-                logger.info(f"   ✅ Created branch for: {tenant.get('name', tenant['id'][:8])}")
+        # 4. لا نُنشئ فروع افتراضية للعملاء - العميل يُنشئ فروعه بنفسه
+        # هذا يمنع التداخل ويعطي العميل تحكماً كاملاً
+        # العملاء بدون فروع سيرون رسالة "يرجى إنشاء فرع أولاً"
         
         # 5. إغلاق الورديات القديمة (أكثر من 24 ساعة)
         old_cutoff = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
@@ -2216,11 +2202,10 @@ async def get_tenant_limits(current_user: dict = Depends(get_current_user)):
     max_branches = tenant.get("max_branches", 1)
     max_users = tenant.get("max_users", 5)
     
-    # حساب العدد الحالي (استثناء الفروع الافتراضية)
+    # حساب العدد الحالي (جميع الفروع النشطة)
     current_branches = await db.branches.count_documents({
         "tenant_id": tenant_id, 
-        "is_active": {"$ne": False},
-        "name": {"$nin": ["الفرع الرئيسي", "Main Branch", "الفرع الثاني", "فرع المالك الرئيسي"]}
+        "is_active": {"$ne": False}
     })
     current_users = await db.users.count_documents({
         "tenant_id": tenant_id, 
@@ -2316,8 +2301,7 @@ async def create_branch(branch: BranchCreate, current_user: dict = Depends(get_c
             max_branches = tenant.get("max_branches", 1)
             current_branches_count = await db.branches.count_documents({
                 "tenant_id": tenant_id, 
-                "is_active": {"$ne": False},
-                "name": {"$nin": ["الفرع الرئيسي", "Main Branch", "الفرع الثاني", "فرع المالك الرئيسي"]}
+                "is_active": {"$ne": False}
             })
             if current_branches_count >= max_branches:
                 raise HTTPException(
@@ -8283,19 +8267,8 @@ async def create_tenant(tenant: TenantCreate, background_tasks: BackgroundTasks,
     
     await db.users.insert_one(admin_doc)
     
-    # إنشاء فرع افتراضي للمستأجر
-    branch_doc = {
-        "id": str(uuid.uuid4()),
-        "name": "الفرع الرئيسي",
-        "address": "",
-        "phone": tenant.owner_phone,
-        "email": tenant.owner_email,
-        "tenant_id": tenant_id,
-        "is_active": True,
-        "created_at": datetime.now(timezone.utc).isoformat()
-    }
-    
-    await db.branches.insert_one(branch_doc)
+    # لا يتم إنشاء فرع افتراضي - العميل يُنشئ فروعه بنفسه من الإعدادات
+    # هذا يمنع التداخل ويعطي العميل تحكماً كاملاً في فروعه
     
     # إنشاء فئات افتراضية للمستأجر الجديد
     default_categories = [
@@ -15398,13 +15371,11 @@ async def get_customer_menu(tenant_id: str):
         {"_id": 0}
     ).to_list(500)
     
-    # جلب الفروع - فقط للعميل المحدد مع إخفاء الفروع الافتراضية
-    default_branch_names = ["الفرع الرئيسي", "Main Branch", "الفرع الثاني", "فرع المالك الرئيسي"]
+    # جلب الفروع - جميع الفروع النشطة للعميل
     branches = await db.branches.find(
         {
             "tenant_id": tid, 
-            "is_active": {"$ne": False},
-            "name": {"$nin": default_branch_names}
+            "is_active": {"$ne": False}
         },
         {"_id": 0}
     ).to_list(50)
