@@ -2132,7 +2132,7 @@ export default function Reports() {
       {/* Report Tabs */}
       <main className="max-w-7xl mx-auto px-6 py-6">
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="flex flex-wrap gap-2 h-auto p-2 mb-6 bg-muted/50">
+          <TabsList className="flex flex-wrap justify-center gap-2 h-auto p-3 mb-6 bg-muted/50 rounded-xl w-full">
             {dashboardSettings.showComprehensiveReport !== false && (
               <TabsTrigger value="comprehensive" className="text-green-500 font-bold">{t('التقرير الشامل')}</TabsTrigger>
             )}
