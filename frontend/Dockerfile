@@ -9,7 +9,7 @@ ARG CACHEBUST=1
 COPY package.json yarn.lock ./
 
 # تثبيت المتطلبات
-RUN yarn install --frozen-lockfile
+RUN yarn install
 
 # نسخ الكود (هذا يجب أن يبطل cache إذا تغيرت الملفات)
 COPY . .
