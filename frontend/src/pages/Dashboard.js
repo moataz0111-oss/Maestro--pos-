@@ -1220,13 +1220,13 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen bg-background" data-testid="dashboard">
-      {/* شريط تنبيه وضع المعاينة */}
+      {/* شريط تنبيه وضع المعاينة - يظهر فقط للـ Super Admin */}
       {isImpersonating && (
         <div className="bg-amber-500 text-black px-4 py-2 text-center font-medium flex items-center justify-center gap-4 sticky top-0 z-[100]">
           <span className="flex items-center gap-2">
             <AlertTriangle className="h-5 w-5" />
             {t('أنت في وضع المعاينة كـ')} <strong>{user?.full_name || user?.username}</strong>
-            {originalUserName && <span className="text-sm opacity-75">({t('بواسطة')} {originalUserName})</span>}
+            {impersonatedTenant?.name && <span className="text-sm opacity-75">({impersonatedTenant.name})</span>}
           </span>
           <Button 
             size="sm" 
