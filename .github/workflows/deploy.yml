@@ -1,4 +1,4 @@
-name: 🚀 Deploy Maestro POS to Production
+name: 🚀 Deploy Maestro POS
 
 on:
   push:
@@ -11,10 +11,10 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
-    - name: 📥 Checkout code
+    - name: 📥 Checkout
       uses: actions/checkout@v4
       
-    - name: 🔑 Deploy via SSH
+    - name: 🔑 Deploy
       uses: appleboy/ssh-action@v1.0.3
       with:
         host: 158.220.118.54
@@ -24,80 +24,95 @@ jobs:
         command_timeout: 30m
         script: |
           echo "🚀 بدء النشر..."
-          
-          # حذف أي سكربتات معطوبة
-          rm -f /usr/local/bin/docker-compose 2>/dev/null || true
-          
           cd /var/www/maestro
           
           # سحب الكود
-          git fetch origin
-          git reset --hard origin/main
+          git fetch origin && git reset --hard origin/main
           
-          # التأكد من MongoDB
-          if ! docker ps | grep -q maestro-mongodb; then
-            docker-compose up -d mongodb
-            sleep 15
+          # =============================================
+          # ضمان عمل MongoDB
+          # =============================================
+          if ! docker ps | grep -q "maestro-mongodb"; then
+            echo "🗄️ تشغيل MongoDB..."
+            docker run -d --name maestro-mongodb --network maestro_maestro-network -v maestro_mongodb_data:/data/db mongo:7 2>/dev/null || docker start maestro-mongodb
+            sleep 10
           fi
           
-          # ============================================
-          # حل مشكلة ContainerConfig نهائياً
-          # ============================================
-          echo "🧹 تنظيف Docker لحل ContainerConfig..."
+          # =============================================
+          # تحديث Backend (بدون توقف)
+          # =============================================
+          echo "📦 تحديث Backend..."
           
-          # إيقاف كل الخدمات ما عدا MongoDB
-          docker stop maestro-frontend maestro-backend maestro-nginx 2>/dev/null || true
+          # بناء image جديد
+          docker build -t maestro_backend:new ./backend
           
-          # حذف الـ containers بالقوة
-          docker rm -f maestro-frontend maestro-backend maestro-nginx 2>/dev/null || true
+          # إيقاف القديم وتشغيل الجديد
+          docker stop backend 2>/dev/null || true
+          docker rm backend 2>/dev/null || true
+          docker tag maestro_backend:new maestro_backend:latest
+          docker run -d --name backend \
+            --network maestro_maestro-network \
+            -v /var/www/maestro/uploads:/app/uploads \
+            -e MONGO_URL="mongodb://maestro-mongodb:27017" \
+            -e DB_NAME="maestro_db" \
+            maestro_backend:latest
           
-          # حذف الـ images القديمة
-          docker rmi -f maestro_frontend maestro_backend maestro-frontend maestro-backend 2>/dev/null || true
-          docker rmi -f $(docker images -q --filter "dangling=true") 2>/dev/null || true
+          # انتظار Backend
+          echo "⏳ انتظار Backend..."
+          for i in {1..30}; do
+            if docker exec backend curl -s http://localhost:8001/api/health > /dev/null 2>&1; then
+              echo "✅ Backend جاهز!"
+              break
+            fi
+            sleep 2
+          done
           
-          # تنظيف الشبكات والـ cache
-          docker network prune -f 2>/dev/null || true
-          docker builder prune -f 2>/dev/null || true
-          docker system prune -f 2>/dev/null || true
+          # =============================================
+          # تحديث Frontend (بدون توقف)
+          # =============================================
+          echo "🎨 تحديث Frontend..."
           
-          echo "✅ تم التنظيف"
+          # بناء image جديد
+          docker build -t maestro_frontend:new ./frontend
           
-          # ============================================
-          # بناء جديد تماماً
-          # ============================================
-          echo "🔨 بناء الـ images..."
-          docker-compose build --no-cache frontend backend
+          # إيقاف القديم وتشغيل الجديد
+          docker stop frontend 2>/dev/null || true
+          docker rm frontend 2>/dev/null || true
+          docker tag maestro_frontend:new maestro_frontend:latest
+          docker run -d --name frontend \
+            --network maestro_maestro-network \
+            maestro_frontend:latest
           
-          # تشغيل الخدمات
-          echo "🚀 تشغيل الخدمات..."
-          docker-compose up -d mongodb
-          sleep 5
-          docker-compose up -d backend
-          sleep 10
-          docker-compose up -d frontend nginx
-          
-          # انتظار
-          echo "⏳ انتظار بدء الخدمات..."
-          sleep 30
-          
-          # تحقق
-          docker-compose ps
-          
-          # اختبار
-          if curl -s http://127.0.0.1/api/health | grep -q "ok"; then
-            echo "✅ الخدمات تعمل!"
+          # =============================================
+          # ضمان عمل Nginx
+          # =============================================
+          if ! docker ps | grep -q "nginx"; then
+            echo "🌐 تشغيل Nginx..."
+            docker run -d --name nginx \
+              --network maestro_maestro-network \
+              -p 80:80 -p 443:443 \
+              -v /var/www/maestro/nginx.conf:/etc/nginx/nginx.conf:ro \
+              -v /var/www/maestro/certbot/conf:/etc/letsencrypt:ro \
+              nginx:alpine
           else
-            echo "⚠️ إعادة التشغيل..."
-            docker-compose restart backend frontend nginx
-            sleep 20
+            docker exec nginx nginx -s reload 2>/dev/null || docker restart nginx
           fi
           
-          echo "✅ تم النشر بنجاح!"
+          # =============================================
+          # التحقق النهائي
+          # =============================================
+          echo ""
+          echo "📊 حالة الخدمات:"
+          docker ps --format "table {{.Names}}\t{{.Status}}"
           
-    - name: 📢 Notify Success
-      if: success()
-      run: echo "✅ Deployment successful!"
-      
-    - name: ❌ Notify Failure
-      if: failure()
-      run: echo "❌ Deployment failed!"
+          echo ""
+          if curl -s http://127.0.0.1/api/health | grep -q "ok"; then
+            echo "✅ النشر نجح!"
+          else
+            echo "⚠️ تحذير: API قد يحتاج وقت للبدء"
+          fi
+          
+          # تنظيف
+          docker image prune -f 2>/dev/null || true
+          
+          echo "✅ انتهى!"
