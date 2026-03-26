@@ -1031,14 +1031,13 @@ const CashRegisterClosingTab = ({ t, formatPrice, selectedBranchId, branches, ge
   });
   const [closingsHistory, setClosingsHistory] = useState([]);
   const [localBranchId, setLocalBranchId] = useState(selectedBranchId || '');
-  const [countedCash, setCountedCash] = useState(''); // النقد المعدود
 
-  // حساب الفرق (Over/Short)
+  // حساب النقد المعدود من الإغلاقات السابقة
+  const totalCountedCash = closingsHistory.reduce((sum, c) => sum + (c.counted_cash || 0), 0);
   const expectedCash = report?.summary?.cash_sales || 0;
-  const countedCashValue = parseFloat(countedCash) || 0;
-  const cashDifference = countedCashValue - expectedCash;
-  const isOverCash = cashDifference > 0;
-  const isShortCash = cashDifference < 0;
+  const cashDifference = totalCountedCash - expectedCash;
+  const isOverCash = cashDifference > 0 && totalCountedCash > 0;
+  const isShortCash = cashDifference < 0 && totalCountedCash > 0;
 
   const fetchReport = async () => {
     setLoading(true);
@@ -1049,18 +1048,22 @@ const CashRegisterClosingTab = ({ t, formatPrice, selectedBranchId, branches, ge
       const branchId = localBranchId || getBranchIdForApi();
       if (branchId && branchId !== 'all') params.append('branch_id', branchId);
       
+      const token = localStorage.getItem('token');
+      const headers = token ? { Authorization: `Bearer ${token}` } : {};
+      
       const [reportRes, historyRes] = await Promise.all([
-        axios.get(`${API_URL}/reports/cash-register-closing?${params}`),
-        axios.get(`${API_URL}/reports/cash-register-closings?${params}&limit=20`)
+        axios.get(`${API_URL}/reports/cash-register-closing?${params}`, { headers }),
+        axios.get(`${API_URL}/reports/cash-register-closings?${params}&limit=20`, { headers })
       ]);
       
       setReport(reportRes.data);
       setClosingsHistory(historyRes.data.closings || []);
-      // مسح النقد المعدود عند جلب تقرير جديد
-      setCountedCash('');
     } catch (error) {
       console.error('Error fetching cash register report:', error);
-      toast.error(t('فشل في جلب تقرير الصندوق'));
+      // لا نظهر رسالة خطأ إذا لم تكن هناك بيانات
+      if (error.response?.status !== 404) {
+        toast.error(t('فشل في جلب تقرير الصندوق'));
+      }
     } finally {
       setLoading(false);
     }
@@ -1248,34 +1251,33 @@ const CashRegisterClosingTab = ({ t, formatPrice, selectedBranchId, branches, ge
       {/* حقل النقد المعدود ومربعات Over/Short */}
       {report && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {/* حقل إدخال النقد المعدود */}
+          {/* النقد المعدود (الفعلي) - من الإغلاقات */}
           <Card className="bg-gradient-to-br from-blue-900/40 to-blue-800/20 border-blue-700/30">
             <CardContent className="p-4">
               <Label className="text-blue-300 mb-2 block">{t('النقد المعدود (الفعلي)')}</Label>
-              <Input
-                type="number"
-                value={countedCash}
-                onChange={(e) => setCountedCash(e.target.value)}
-                placeholder={t('أدخل المبلغ المعدود')}
-                className="bg-gray-900/50 border-blue-700/50 text-white text-lg"
-              />
+              <p className="text-3xl font-bold text-white">{formatPrice(totalCountedCash)}</p>
               <p className="text-blue-300 text-sm mt-2">
                 {t('النقدي المتوقع')}: <span className="font-bold text-white">{formatPrice(expectedCash)}</span>
               </p>
+              {closingsHistory.length > 0 && (
+                <p className="text-blue-400 text-xs mt-1">
+                  {t('من')} {closingsHistory.length} {t('إغلاق')}
+                </p>
+              )}
             </CardContent>
           </Card>
 
           {/* Over Cash - زيادة */}
-          <Card className={`bg-gradient-to-br ${isOverCash && countedCash ? 'from-emerald-900/60 to-emerald-800/40 border-emerald-500' : 'from-emerald-900/20 to-emerald-800/10 border-emerald-700/30'} border-2 transition-all`}>
+          <Card className={`bg-gradient-to-br ${isOverCash ? 'from-emerald-900/60 to-emerald-800/40 border-emerald-500' : 'from-emerald-900/20 to-emerald-800/10 border-emerald-700/30'} border-2 transition-all`}>
             <CardContent className="p-4">
               <div className="flex items-center gap-3">
-                <div className={`p-3 rounded-lg ${isOverCash && countedCash ? 'bg-emerald-500/30' : 'bg-emerald-500/10'}`}>
-                  <TrendingUp className={`h-6 w-6 ${isOverCash && countedCash ? 'text-emerald-400' : 'text-emerald-600'}`} />
+                <div className={`p-3 rounded-lg ${isOverCash ? 'bg-emerald-500/30' : 'bg-emerald-500/10'}`}>
+                  <TrendingUp className={`h-6 w-6 ${isOverCash ? 'text-emerald-400' : 'text-emerald-600'}`} />
                 </div>
                 <div>
                   <p className="text-sm text-emerald-300">{t('زيادة (Over Cash)')}</p>
-                  <p className={`text-2xl font-bold ${isOverCash && countedCash ? 'text-emerald-400' : 'text-emerald-600'}`}>
-                    {isOverCash && countedCash ? '+' + formatPrice(cashDifference) : formatPrice(0)}
+                  <p className={`text-2xl font-bold ${isOverCash ? 'text-emerald-400' : 'text-emerald-600'}`}>
+                    {isOverCash ? '+' + formatPrice(cashDifference) : formatPrice(0)}
                   </p>
                 </div>
               </div>
@@ -1283,16 +1285,16 @@ const CashRegisterClosingTab = ({ t, formatPrice, selectedBranchId, branches, ge
           </Card>
 
           {/* Short Cash - نقص */}
-          <Card className={`bg-gradient-to-br ${isShortCash && countedCash ? 'from-red-900/60 to-red-800/40 border-red-500' : 'from-red-900/20 to-red-800/10 border-red-700/30'} border-2 transition-all`}>
+          <Card className={`bg-gradient-to-br ${isShortCash ? 'from-red-900/60 to-red-800/40 border-red-500' : 'from-red-900/20 to-red-800/10 border-red-700/30'} border-2 transition-all`}>
             <CardContent className="p-4">
               <div className="flex items-center gap-3">
-                <div className={`p-3 rounded-lg ${isShortCash && countedCash ? 'bg-red-500/30' : 'bg-red-500/10'}`}>
-                  <TrendingDown className={`h-6 w-6 ${isShortCash && countedCash ? 'text-red-400' : 'text-red-600'}`} />
+                <div className={`p-3 rounded-lg ${isShortCash ? 'bg-red-500/30' : 'bg-red-500/10'}`}>
+                  <TrendingDown className={`h-6 w-6 ${isShortCash ? 'text-red-400' : 'text-red-600'}`} />
                 </div>
                 <div>
                   <p className="text-sm text-red-300">{t('نقص (Short Cash)')}</p>
-                  <p className={`text-2xl font-bold ${isShortCash && countedCash ? 'text-red-400' : 'text-red-600'}`}>
-                    {isShortCash && countedCash ? formatPrice(Math.abs(cashDifference)) : formatPrice(0)}
+                  <p className={`text-2xl font-bold ${isShortCash ? 'text-red-400' : 'text-red-600'}`}>
+                    {isShortCash ? formatPrice(Math.abs(cashDifference)) : formatPrice(0)}
                   </p>
                 </div>
               </div>
