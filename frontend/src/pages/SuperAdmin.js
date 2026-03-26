@@ -115,6 +115,20 @@ import ImageCropper from '../components/ImageCropper';
 
 const API = API_URL;
 
+// دالة لتحويل الخطأ إلى نص
+const getErrorMessage = (error) => {
+  const detail = error?.response?.data?.detail;
+  if (!detail) return error?.message || 'حدث خطأ';
+  if (typeof detail === 'string') return detail;
+  if (Array.isArray(detail)) {
+    return detail.map(d => d.msg || d.message || JSON.stringify(d)).join(', ');
+  }
+  if (typeof detail === 'object') {
+    return detail.msg || detail.message || JSON.stringify(detail);
+  }
+  return String(detail);
+};
+
 // مفتاح Super Admin السري
 const SUPER_ADMIN_SECRET = "271018";
 
@@ -574,7 +588,7 @@ export default function SuperAdmin() {
       setIsAuthenticated(true);
       toast.success(t('تم تسجيل الدخول بنجاح'));
     } catch (error) {
-      toast.error(error.response?.data?.detail || t('فشل تسجيل الدخول'));
+      toast.error(getErrorMessage(error) || t('فشل تسجيل الدخول'));
     } finally {
       setLoading(false);
     }
@@ -599,7 +613,7 @@ export default function SuperAdmin() {
       setIsAuthenticated(true);
       toast.success(t('تم إنشاء الحساب بنجاح'));
     } catch (error) {
-      toast.error(error.response?.data?.detail || t('فشل إنشاء الحساب'));
+      toast.error(getErrorMessage(error) || t('فشل إنشاء الحساب'));
     } finally {
       setLoading(false);
     }
@@ -723,7 +737,7 @@ export default function SuperAdmin() {
       fetchNotifications();
       fetchSubscriptionsDashboard();
     } catch (error) {
-      toast.error(error.response?.data?.detail || t('حدث خطأ'));
+      toast.error(getErrorMessage(error) || t('حدث خطأ'));
     }
   };
 
@@ -905,7 +919,7 @@ export default function SuperAdmin() {
       });
     } catch (error) {
       console.error('Create tenant error:', error);
-      toast.error(error.response?.data?.detail || t('فشل إنشاء العميل'));
+      toast.error(getErrorMessage(error) || t('فشل إنشاء العميل'));
     } finally {
       setLoading(false);
     }
@@ -963,7 +977,7 @@ export default function SuperAdmin() {
       fetchData();
     } catch (error) {
       console.error('Delete tenant error:', error);
-      toast.error(error.response?.data?.detail || t('فشل في حذف العميل'));
+      toast.error(getErrorMessage(error) || t('فشل في حذف العميل'));
     }
   };
 
@@ -996,7 +1010,7 @@ export default function SuperAdmin() {
       fetchData();
     } catch (error) {
       console.error('Reset sales error:', error);
-      toast.error(error.response?.data?.detail || t('فشل في تصفير المبيعات'));
+      toast.error(getErrorMessage(error) || t('فشل في تصفير المبيعات'));
     }
   };
 
@@ -1010,7 +1024,7 @@ export default function SuperAdmin() {
       setSelectedTenant(null);
       fetchData();
     } catch (error) {
-      toast.error(t('فشل في تصفير المخزون') + ': ' + (error.response?.data?.detail || error.message));
+      toast.error(t('فشل في تصفير المخزون') + ': ' + (getErrorMessage(error) || error.message));
     }
   };
 
@@ -1086,7 +1100,7 @@ export default function SuperAdmin() {
       setLogoPreviewUrl('');
       fetchData();
     } catch (error) {
-      toast.error(error.response?.data?.detail || t('فشل في تحديث البيانات'));
+      toast.error(getErrorMessage(error) || t('فشل في تحديث البيانات'));
     } finally {
       setLoading(false);
     }
@@ -1115,7 +1129,7 @@ export default function SuperAdmin() {
       toast.success(t('تم حفظ إعدادات الفاتورة بنجاح'));
       setShowInvoiceSettings(false);
     } catch (error) {
-      toast.error(error.response?.data?.detail || t('فشل في حفظ الإعدادات'));
+      toast.error(getErrorMessage(error) || t('فشل في حفظ الإعدادات'));
     } finally {
       setLoading(false);
     }
@@ -1170,7 +1184,7 @@ export default function SuperAdmin() {
           toast.success(t('تم رفع الخلفية بنجاح'));
         } catch (error) {
           console.error('Upload background error:', error);
-          toast.error(error.response?.data?.detail || t('فشل في رفع الخلفية'));
+          toast.error(getErrorMessage(error) || t('فشل في رفع الخلفية'));
         } finally {
           setBackgroundsLoading(false);
         }
@@ -1216,7 +1230,7 @@ export default function SuperAdmin() {
       toast.success(t('تم رفع الشعار بنجاح'));
     } catch (error) {
       console.error('Upload error:', error);
-      toast.error(t('فشل في رفع الشعار') + ': ' + (error.response?.data?.detail || error.message));
+      toast.error(t('فشل في رفع الشعار') + ': ' + (getErrorMessage(error) || error.message));
     } finally {
       setUploadingSystemLogo(false);
     }
@@ -1239,7 +1253,7 @@ export default function SuperAdmin() {
       await axios.put(`${API}/system/login-page-settings`, loginPageSettings);
       toast.success(t('تم حفظ إعدادات صفحة الدخول بنجاح'));
     } catch (error) {
-      toast.error(error.response?.data?.detail || t('فشل في حفظ الإعدادات'));
+      toast.error(getErrorMessage(error) || t('فشل في حفظ الإعدادات'));
     } finally {
       setLoading(false);
     }
@@ -1309,7 +1323,7 @@ export default function SuperAdmin() {
       setNewOwnerSecretKey('');
     } catch (error) {
       console.error('Error updating owner settings:', error);
-      const errorMsg = error.response?.data?.detail || t('فشل في تحديث إعدادات المالك');
+      const errorMsg = getErrorMessage(error) || t('فشل في تحديث إعدادات المالك');
       toast.error(errorMsg);
     } finally {
       setSavingOwnerSettings(false);
@@ -1401,7 +1415,7 @@ export default function SuperAdmin() {
       toast.success(t('تم رفع الخلفية بنجاح'));
     } catch (error) {
       console.error('Upload background error:', error);
-      toast.error(error.response?.data?.detail || t('فشل في رفع الخلفية'));
+      toast.error(getErrorMessage(error) || t('فشل في رفع الخلفية'));
     } finally {
       setBackgroundsLoading(false);
     }
@@ -1465,7 +1479,7 @@ export default function SuperAdmin() {
       
       return res.data.logo_url;
     } catch (error) {
-      toast.error(error.response?.data?.detail || t('فشل في رفع الشعار'));
+      toast.error(getErrorMessage(error) || t('فشل في رفع الشعار'));
       return null;
     }
   };
@@ -1500,7 +1514,7 @@ export default function SuperAdmin() {
       return res.data.logo_url;
     } catch (error) {
       console.error('Upload login logo error:', error);
-      toast.error(error.response?.data?.detail || t('فشل في رفع الشعار'));
+      toast.error(getErrorMessage(error) || t('فشل في رفع الشعار'));
       return null;
     } finally {
       setLoginLogoUploading(false);
