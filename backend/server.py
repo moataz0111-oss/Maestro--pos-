@@ -6141,9 +6141,7 @@ async def export_employee_salary_slip_pdf(
     )
 
 # ==================== CASH REGISTER ROUTES ====================
-
-# Note: The main cash register close endpoint is defined above at /api/cash-register/close 
-# with the complete functionality including shift management
+# Note: POST /cash-register/close is in routes/shifts_routes.py
 
 @api_router.get("/cash-register/summary")
 async def get_cash_register_summary(

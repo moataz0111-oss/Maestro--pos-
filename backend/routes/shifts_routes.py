@@ -464,7 +464,7 @@ async def close_cash_register(close_data: CashRegisterClose, current_user: dict 
         if target_branch_id:
             shift_query["branch_id"] = target_branch_id
     
-    shift = await db.shifts.find_one(shift_query)
+    shift = await db.shifts.find_one(shift_query, {"_id": 0})
     
     if not shift:
         raise HTTPException(status_code=404, detail="لا يوجد وردية مفتوحة")
@@ -554,7 +554,8 @@ async def close_cash_register(close_data: CashRegisterClose, current_user: dict 
     total_expenses = sum(e["amount"] for e in expenses)
     
     net_profit = gross_profit - total_expenses
-    expected_cash = shift["opening_cash"] + cash_sales - total_expenses
+    opening_cash = shift.get("opening_cash", shift.get("opening_balance", 0))
+    expected_cash = opening_cash + cash_sales - total_expenses
     cash_difference = closing_cash - expected_cash
     
     update_data = {

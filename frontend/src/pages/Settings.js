@@ -1165,22 +1165,61 @@ export default function Settings() {
   };
 
   const handleTestPrinter = async (printerId) => {
-    setPrinterTestStatus(prev => ({ ...prev, [printerId]: 'testing' }));
+    // البحث عن بيانات الطابعة
+    const printer = printers.find(p => p.id === printerId);
+    if (!printer) return;
+    
+    // إرسال صفحة طباعة تجريبية عبر المتصفح مباشرة
+    // لأن السيرفر في الـ cloud لا يستطيع الوصول للطابعات المحلية
     try {
-      const res = await axios.post(`${API}/printers/${printerId}/test`);
-      setPrinterTestStatus(prev => ({ ...prev, [printerId]: res.data.status }));
-      if (res.data.status === 'online') {
-        toast.success(t('الطابعة متصلة'));
-      } else {
-        toast.error(t('الطابعة غير متصلة'));
+      const printWindow = window.open('', '_blank', 'width=300,height=400');
+      if (!printWindow) {
+        toast.error(t('يرجى السماح بفتح النوافذ المنبثقة'));
+        return;
       }
-      // تحديث البيانات بعد 3 ثواني
+      
+      const now = new Date();
+      printWindow.document.write(`
+        <html dir="rtl">
+        <head>
+          <meta charset="UTF-8">
+          <title>اختبار الطابعة</title>
+          <style>
+            body { font-family: monospace, Arial; text-align: center; padding: 20px; font-size: 14px; }
+            .line { border-top: 1px dashed #000; margin: 10px 0; }
+            h2 { margin: 5px 0; }
+          </style>
+        </head>
+        <body>
+          <h2>*** اختبار الطابعة ***</h2>
+          <div class="line"></div>
+          <p><strong>${printer.name || 'طابعة'}</strong></p>
+          <p>IP: ${printer.ip_address}:${printer.port || 9100}</p>
+          <p>الفرع: ${branches.find(b => b.id === printer.branch_id)?.name || '-'}</p>
+          <div class="line"></div>
+          <p>التاريخ: ${now.toLocaleDateString('ar-IQ')}</p>
+          <p>الوقت: ${now.toLocaleTimeString('ar-IQ')}</p>
+          <div class="line"></div>
+          <p>الطباعة تعمل بنجاح!</p>
+          <p>================================</p>
+        </body>
+        </html>
+      `);
+      printWindow.document.close();
+      printWindow.focus();
       setTimeout(() => {
-        setPrinterTestStatus(prev => ({ ...prev, [printerId]: null }));
-      }, 5000);
+        printWindow.print();
+        setTimeout(() => printWindow.close(), 1000);
+      }, 300);
+      
+      toast.success(t('تم إرسال صفحة اختبار للطابعة'));
+      // تحديث حالة الطابعة كمتصلة (لأن المستخدم اختبرها)
+      await axios.put(`${API}/printers/${printerId}`, { is_online: true }, {
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+      }).catch(() => {});
+      
     } catch (error) {
-      setPrinterTestStatus(prev => ({ ...prev, [printerId]: 'error' }));
-      toast.error(t('فشل اختبار الاتصال'));
+      toast.error(t('فشل في إرسال صفحة الاختبار'));
     }
   };
 
@@ -4817,16 +4856,15 @@ export default function Settings() {
                               {t(printer.printer_type) || t('عام')}
                             </span>
                             
-                            {/* زر اختبار الاتصال */}
+                            {/* زر طباعة تجريبية */}
                             <Button
                               variant="ghost"
                               size="icon"
                               className="text-green-500 hover:bg-green-500/10"
                               onClick={() => handleTestPrinter(printer.id)}
-                              disabled={printerTestStatus[printer.id] === 'testing'}
-                              title={t('اختبار الاتصال')}
+                              title={t('طباعة تجريبية')}
                             >
-                              <RefreshCw className={`h-4 w-4 ${printerTestStatus[printer.id] === 'testing' ? 'animate-spin' : ''}`} />
+                              <RefreshCw className="h-4 w-4" />
                             </Button>
                             
                             <Button
