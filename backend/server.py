@@ -9301,7 +9301,8 @@ async def get_tenant_live_stats(tenant_id: str, current_user: dict = Depends(ver
     for order in today_orders:
         if order.get("status") != "cancelled":
             for item in order.get("items", []):
-                name = item.get("name", "Unknown")
+                # استخدام اسم المنتج (product_name) أو الاسم العادي (name)
+                name = item.get("product_name") or item.get("name") or "غير معروف"
                 if name not in product_sales:
                     product_sales[name] = {"quantity": 0, "total": 0}
                 product_sales[name]["quantity"] += item.get("quantity", 0)

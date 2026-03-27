@@ -1757,9 +1757,28 @@ export default function Dashboard() {
                           <span className="text-sm font-bold text-primary">#{order.order_number}</span>
                         </div>
                         <div>
-                          <p className="font-medium text-foreground">{order.customer_name || t('زبون')}</p>
+                          <p className="font-medium text-foreground">
+                            {/* عرض نوع الزبون بدلاً من كلمة "زبون" */}
+                            {order.order_type === 'dine_in' 
+                              ? (order.customer_name || t('زبون داخلي'))
+                              : order.order_type === 'takeaway' 
+                                ? (order.customer_name || t('زبون سفري'))
+                                : order.delivery_app_name 
+                                  ? `${order.delivery_app_name}${order.customer_name ? ` - ${order.customer_name}` : ''}`
+                                  : (order.customer_name || t('زبون توصيل'))
+                            }
+                          </p>
                           <p className="text-xs text-muted-foreground">
-                            {order.items.length} {t('عناصر')}
+                            {/* عرض أسماء المنتجات بدلاً من عدد العناصر */}
+                            {order.items?.slice(0, 2).map((item, idx) => (
+                              <span key={idx}>
+                                {item.product_name || item.name}
+                                {item.selectedExtras?.length > 0 && ` (+${item.selectedExtras.length})`}
+                                {idx < Math.min(order.items.length, 2) - 1 && '، '}
+                              </span>
+                            ))}
+                            {order.items?.length > 2 && ` +${order.items.length - 2}`}
+                            {order.notes && <span className="text-amber-500"> 📝</span>}
                           </p>
                         </div>
                       </div>
