@@ -1091,8 +1091,8 @@ export default function Dashboard() {
 
         <div class="footer">
           <p>═══════════════════════</p>
-          <p>شكراً لزيارتكم</p>
-          <p>${tenantInfo?.name || tenantInfo?.name_en || 'المطعم'}</p>
+          <p>شكراً لاستخدامكم نظام Maestro</p>
+          <p>www.maestroegp.com</p>
           <p>═══════════════════════</p>
         </div>
       </body>
