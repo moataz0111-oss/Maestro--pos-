@@ -1094,3 +1094,177 @@ async def get_delivery_collections(
         "total_collected": sum(c.get("amount", 0) for c in collections),
         "count": len(collections)
     }
+
+
+# ==================== CARD PAYMENTS REPORT (تقرير مبيعات البطاقة) ====================
+@router.get("/card")
+async def get_card_report(
+    start_date: str,
+    end_date: str,
+    branch_id: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """جلب تقرير مبيعات البطاقة"""
+    db = get_database()
+    tenant_id = get_user_tenant_id(current_user)
+    
+    query = {
+        "payment_method": "card",
+        "created_at": {"$gte": start_date, "$lte": end_date + "T23:59:59"},
+        "status": {"$ne": "cancelled"}
+    }
+    
+    if tenant_id:
+        query["tenant_id"] = tenant_id
+    
+    user_branch_id = current_user.get("branch_id")
+    user_role = current_user.get("role")
+    
+    if user_branch_id and user_role not in [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.MANAGER]:
+        query["branch_id"] = user_branch_id
+    elif branch_id:
+        query["branch_id"] = branch_id
+    
+    orders = await db.orders.find(query, {"_id": 0}).to_list(500)
+    
+    # جلب سجلات التحصيل لهذه الطلبات
+    order_ids = [o.get("id") for o in orders]
+    collections = await db.card_collections.find(
+        {"order_id": {"$in": order_ids}}, {"_id": 0}
+    ).to_list(1000)
+    
+    # حساب المبالغ المحصلة لكل طلب
+    collected_by_order = {}
+    for c in collections:
+        order_id = c.get("order_id")
+        collected_by_order[order_id] = collected_by_order.get(order_id, 0) + c.get("amount", 0)
+    
+    # إضافة معلومات التحصيل لكل طلب
+    total_card = 0
+    collected_amount = 0
+    for order in orders:
+        order_id = order.get("id")
+        order_total = order.get("total", 0)
+        order_collected = collected_by_order.get(order_id, 0)
+        order["collected_amount"] = order_collected
+        order["remaining_amount"] = order_total - order_collected
+        order["is_collected"] = order_collected >= order_total
+        total_card += order_total
+        collected_amount += order_collected
+    
+    return {
+        "total_card": total_card,
+        "total_orders": len(orders),
+        "collected_amount": collected_amount,
+        "remaining_amount": total_card - collected_amount,
+        "orders": orders
+    }
+
+
+class CardCollectionCreate(BaseModel):
+    order_id: str
+    amount: float
+    collected_by: str
+    notes: Optional[str] = None
+
+
+@router.post("/card/collect")
+async def collect_card_payment(
+    collection: CardCollectionCreate,
+    current_user: dict = Depends(get_current_user)
+):
+    """تسجيل تحصيل مبيعات البطاقة (استلام من شركة البطاقات/البنك)"""
+    db = get_database()
+    tenant_id = get_user_tenant_id(current_user)
+    
+    # التحقق من وجود الطلب
+    order = await db.orders.find_one({"id": collection.order_id})
+    if not order:
+        raise HTTPException(status_code=404, detail="الطلب غير موجود")
+    
+    # إنشاء سجل التحصيل
+    now = datetime.now(timezone.utc)
+    collection_record = {
+        "id": f"card_{now.strftime('%Y%m%d%H%M%S')}_{collection.order_id[-6:]}",
+        "order_id": collection.order_id,
+        "order_number": order.get("order_number"),
+        "amount": collection.amount,
+        "collected_by": collection.collected_by,
+        "collected_by_user_id": current_user.get("id"),
+        "collected_at": now.isoformat(),
+        "date": now.strftime("%Y-%m-%d"),
+        "time": now.strftime("%H:%M:%S"),
+        "notes": collection.notes,
+        "tenant_id": tenant_id,
+        "branch_id": order.get("branch_id"),
+        "customer_name": order.get("customer_name"),
+        "customer_phone": order.get("customer_phone"),
+        "collection_type": "card"
+    }
+    
+    await db.card_collections.insert_one(collection_record)
+    
+    # تحديث حالة الطلب إذا تم تحصيل المبلغ بالكامل
+    total_collected = await db.card_collections.aggregate([
+        {"$match": {"order_id": collection.order_id}},
+        {"$group": {"_id": None, "total": {"$sum": "$amount"}}}
+    ]).to_list(1)
+    
+    total_collected_amount = total_collected[0]["total"] if total_collected else 0
+    
+    if total_collected_amount >= order.get("total", 0):
+        await db.orders.update_one(
+            {"id": collection.order_id},
+            {"$set": {"card_collected": True, "card_collected_at": now.isoformat()}}
+        )
+    
+    # حذف _id من السجل قبل الإرجاع
+    collection_record.pop("_id", None)
+    
+    return {
+        "message": "تم تسجيل التحصيل بنجاح",
+        "collection": collection_record,
+        "total_collected": total_collected_amount,
+        "remaining": order.get("total", 0) - total_collected_amount
+    }
+
+
+@router.get("/card/collections")
+async def get_card_collections(
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    order_id: Optional[str] = None,
+    branch_id: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """جلب سجلات تحصيل البطاقة"""
+    db = get_database()
+    tenant_id = get_user_tenant_id(current_user)
+    
+    query = {}
+    if tenant_id:
+        query["tenant_id"] = tenant_id
+    
+    if order_id:
+        query["order_id"] = order_id
+    
+    user_branch_id = current_user.get("branch_id")
+    user_role = current_user.get("role")
+    
+    if user_branch_id and user_role not in [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.MANAGER]:
+        query["branch_id"] = user_branch_id
+    elif branch_id:
+        query["branch_id"] = branch_id
+    
+    if start_date:
+        query["date"] = {"$gte": start_date}
+    if end_date:
+        query.setdefault("date", {})["$lte"] = end_date
+    
+    collections = await db.card_collections.find(query, {"_id": 0}).to_list(1000)
+    
+    return {
+        "collections": collections,
+        "total_collected": sum(c.get("amount", 0) for c in collections),
+        "count": len(collections)
+    }

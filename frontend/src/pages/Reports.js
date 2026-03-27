@@ -1558,6 +1558,246 @@ const CashRegisterClosingTab = ({ t, formatPrice, selectedBranchId, branches, ge
   );
 };
 
+// ===================== Card Report Tab (تبويب البطاقة) =====================
+const CardReportTab = ({ cardReport, t, formatPrice, fetchReports }) => {
+  const [showCollectDialog, setShowCollectDialog] = useState(false);
+  const [selectedOrder, setSelectedOrder] = useState(null);
+  const [collectForm, setCollectForm] = useState({
+    amount: '',
+    collected_by: '',
+    notes: ''
+  });
+  const [collecting, setCollecting] = useState(false);
+
+  const handleOpenCollect = (order) => {
+    setSelectedOrder(order);
+    setCollectForm({
+      amount: order.remaining_amount || order.total,
+      collected_by: '',
+      notes: ''
+    });
+    setShowCollectDialog(true);
+  };
+
+  const handleCollect = async () => {
+    if (!collectForm.amount || !collectForm.collected_by) {
+      toast.error(t('يرجى إدخال المبلغ واسم المستلم'));
+      return;
+    }
+    
+    setCollecting(true);
+    try {
+      await axios.post(`${API}/reports/card/collect`, {
+        order_id: selectedOrder.id,
+        amount: parseFloat(collectForm.amount),
+        collected_by: collectForm.collected_by,
+        notes: collectForm.notes
+      });
+      toast.success(t('تم تسجيل التحصيل بنجاح'));
+      setShowCollectDialog(false);
+      fetchReports();
+    } catch (error) {
+      console.error('Collection error:', error);
+      toast.error(t('فشل في تسجيل التحصيل'));
+    } finally {
+      setCollecting(false);
+    }
+  };
+
+  if (!cardReport) return null;
+
+  return (
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <Card className="border-l-4 border-l-cyan-500">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-muted-foreground">{t('إجمالي البطاقة')}</p>
+                <p className="text-2xl font-bold text-cyan-600">{formatPrice(cardReport.total_card)}</p>
+              </div>
+              <CreditCard className="h-8 w-8 text-cyan-500 opacity-50" />
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="border-l-4 border-l-purple-500">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-muted-foreground">{t('عدد الطلبات')}</p>
+                <p className="text-2xl font-bold text-purple-600">{cardReport.total_orders}</p>
+              </div>
+              <ShoppingCart className="h-8 w-8 text-purple-500 opacity-50" />
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="border-l-4 border-l-green-500">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-muted-foreground">{t('تم التحصيل')}</p>
+                <p className="text-2xl font-bold text-green-600">{formatPrice(cardReport.collected_amount)}</p>
+              </div>
+              <CheckCircle className="h-8 w-8 text-green-500 opacity-50" />
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="border-l-4 border-l-red-500">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-muted-foreground">{t('المتبقي')}</p>
+                <p className="text-2xl font-bold text-red-600">{formatPrice(cardReport.remaining_amount)}</p>
+              </div>
+              <TrendingDown className="h-8 w-8 text-red-500 opacity-50" />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card className="border-border/50 bg-card">
+        <CardHeader>
+          <CardTitle className="text-lg text-foreground flex items-center gap-2">
+            <CreditCard className="h-5 w-5 text-cyan-500" />
+            {t('مبيعات البطاقة')}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border">
+                  <th className="text-right p-3 text-muted-foreground">#</th>
+                  <th className="text-right p-3 text-muted-foreground">{t('التاريخ')}</th>
+                  <th className="text-right p-3 text-muted-foreground">{t('العميل')}</th>
+                  <th className="text-right p-3 text-muted-foreground">{t('النوع')}</th>
+                  <th className="text-right p-3 text-muted-foreground">{t('المبلغ')}</th>
+                  <th className="text-right p-3 text-muted-foreground">{t('المحصل')}</th>
+                  <th className="text-right p-3 text-muted-foreground">{t('المتبقي')}</th>
+                  <th className="text-right p-3 text-muted-foreground">{t('الحالة')}</th>
+                  <th className="text-right p-3 text-muted-foreground">{t('إجراء')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {cardReport.orders?.map(order => (
+                  <tr key={order.id} className="border-b border-border/50 hover:bg-cyan-500/5">
+                    <td className="p-3 font-medium text-foreground">#{order.order_number}</td>
+                    <td className="p-3 text-muted-foreground">
+                      {order.created_at ? new Date(order.created_at).toLocaleDateString('ar-IQ') : '-'}
+                    </td>
+                    <td className="p-3 text-foreground">{order.customer_name || t('زبون')}</td>
+                    <td className="p-3 text-muted-foreground">
+                      {order.order_type === 'dine_in' ? t('داخلي') : 
+                       order.order_type === 'takeaway' ? t('سفري') : t('توصيل')}
+                    </td>
+                    <td className="p-3 font-bold text-cyan-600">{formatPrice(order.total)}</td>
+                    <td className="p-3 text-green-600">{formatPrice(order.collected_amount || 0)}</td>
+                    <td className="p-3 text-red-600">{formatPrice(order.remaining_amount || order.total)}</td>
+                    <td className="p-3">
+                      {order.is_collected ? (
+                        <Badge className="bg-green-500">{t('مُحصّل')}</Badge>
+                      ) : (
+                        <Badge variant="outline" className="border-orange-500 text-orange-500">{t('غير مُحصّل')}</Badge>
+                      )}
+                    </td>
+                    <td className="p-3">
+                      {!order.is_collected && (
+                        <Button 
+                          size="sm" 
+                          variant="outline"
+                          className="border-cyan-500 text-cyan-500 hover:bg-cyan-500 hover:text-white"
+                          onClick={() => handleOpenCollect(order)}
+                        >
+                          <DollarSign className="h-4 w-4 ml-1" />
+                          {t('تحصيل')}
+                        </Button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {(!cardReport.orders || cardReport.orders.length === 0) && (
+              <p className="text-center text-muted-foreground py-8">{t('لا توجد مبيعات بالبطاقة في هذه الفترة')}</p>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* نافذة التحصيل */}
+      <Dialog open={showCollectDialog} onOpenChange={setShowCollectDialog}>
+        <DialogContent className="max-w-md" dir="rtl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <DollarSign className="h-5 w-5 text-cyan-500" />
+              {t('تحصيل مبيعات البطاقة')}
+            </DialogTitle>
+          </DialogHeader>
+          {selectedOrder && (
+            <div className="space-y-4 py-4">
+              <div className="bg-cyan-50 dark:bg-cyan-900/20 p-3 rounded-lg">
+                <p className="text-sm text-muted-foreground">{t('الطلب')}: <span className="font-bold">#{selectedOrder.order_number}</span></p>
+                <p className="text-sm text-muted-foreground">{t('العميل')}: <span className="font-medium">{selectedOrder.customer_name || '-'}</span></p>
+                <p className="text-sm text-muted-foreground">{t('المبلغ الكلي')}: <span className="font-bold text-cyan-600">{formatPrice(selectedOrder.total)}</span></p>
+                <p className="text-sm text-muted-foreground">{t('المتبقي للتحصيل')}: <span className="font-bold text-red-600">{formatPrice(selectedOrder.remaining_amount || selectedOrder.total)}</span></p>
+              </div>
+              
+              <div className="space-y-3">
+                <div>
+                  <Label>{t('المبلغ المحصل')}</Label>
+                  <Input
+                    type="number"
+                    value={collectForm.amount}
+                    onChange={(e) => setCollectForm({...collectForm, amount: e.target.value})}
+                    placeholder={t('أدخل المبلغ')}
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label>{t('اسم المستلم')}</Label>
+                  <Input
+                    value={collectForm.collected_by}
+                    onChange={(e) => setCollectForm({...collectForm, collected_by: e.target.value})}
+                    placeholder={t('من استلم المبلغ')}
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label>{t('ملاحظات')} ({t('اختياري')})</Label>
+                  <Input
+                    value={collectForm.notes}
+                    onChange={(e) => setCollectForm({...collectForm, notes: e.target.value})}
+                    placeholder={t('أي ملاحظات إضافية')}
+                    className="mt-1"
+                  />
+                </div>
+                <div className="bg-gray-100 dark:bg-gray-800 p-3 rounded-lg text-sm">
+                  <p className="flex items-center gap-2">
+                    <Clock className="h-4 w-4" />
+                    {t('التاريخ والوقت')}: {new Date().toLocaleString('ar-IQ')}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+          <DialogFooter className="flex gap-2">
+            <Button variant="outline" onClick={() => setShowCollectDialog(false)}>
+              {t('إلغاء')}
+            </Button>
+            <Button 
+              onClick={handleCollect} 
+              disabled={collecting}
+              className="bg-cyan-600 hover:bg-cyan-700"
+            >
+              {collecting ? t('جاري التحصيل...') : t('تأكيد التحصيل')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+};
+
 // ===================== Delivery Report Tab (تبويب التوصيل) =====================
 const DeliveryReportTab = ({ deliveryCreditsReport, t, formatPrice, fetchReports, handlePrintDeliveryReport }) => {
   const [showCollectDialog, setShowCollectDialog] = useState(false);
@@ -1877,6 +2117,7 @@ export default function Reports() {
   const [discountsReport, setDiscountsReport] = useState(null);
   const [creditReport, setCreditReport] = useState(null);
   const [refundsReport, setRefundsReport] = useState(null);
+  const [cardReport, setCardReport] = useState(null);
 
   // جلب إعدادات لوحة المعلومات للتحقق من الصلاحيات
   useEffect(() => {
@@ -1983,6 +2224,10 @@ export default function Reports() {
         case 'credit':
           const creditRes = await axios.get(`${API}/reports/credit`, { params });
           setCreditReport(creditRes.data);
+          break;
+        case 'card':
+          const cardRes = await axios.get(`${API}/reports/card`, { params });
+          setCardReport(cardRes.data);
           break;
       }
     } catch (error) {
@@ -2244,6 +2489,7 @@ export default function Reports() {
             <TabsTrigger value="discounts" className="text-orange-500">{t('الخصومات')}</TabsTrigger>
             <TabsTrigger value="refunds" className="text-purple-500">{t('الإرجاعات')}</TabsTrigger>
             <TabsTrigger value="credit" className="text-blue-500">{t('الآجل')}</TabsTrigger>
+            <TabsTrigger value="card" className="text-cyan-500">{t('البطاقة')}</TabsTrigger>
             {dashboardSettings.showSmartReports !== false && (
               <TabsTrigger value="smart" className="text-emerald-500">{t('التقرير الذكي')}</TabsTrigger>
             )}
@@ -3085,6 +3331,16 @@ export default function Reports() {
               formatPrice={formatPrice}
               fetchReports={fetchReports}
               handlePrintCreditReport={handlePrintCreditReport}
+            />
+          </TabsContent>
+          
+          {/* Card Report (البطاقة) */}
+          <TabsContent value="card">
+            <CardReportTab
+              cardReport={cardReport}
+              t={t}
+              formatPrice={formatPrice}
+              fetchReports={fetchReports}
             />
           </TabsContent>
         {/* Smart Report (التقرير الذكي) */}
