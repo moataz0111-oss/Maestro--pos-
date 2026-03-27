@@ -585,28 +585,8 @@ async def apply_automatic_updates():
             logger.info(f"   ✅ Updated {tables_tenant_result.modified_count} tables with default tenant_id")
         
         # 7. إنشاء طاولات افتراضية لكل عميل ليس لديه طاولات
-        for tenant in tenants:
-            tenant_tables = await db.tables.count_documents({"tenant_id": tenant["id"]})
-            if tenant_tables == 0:
-                # جلب فرع العميل
-                tenant_branch = await db.branches.find_one({"tenant_id": tenant["id"]})
-                branch_id = tenant_branch["id"] if tenant_branch else None
-                
-                # إنشاء 5 طاولات افتراضية
-                default_tables = []
-                for i in range(1, 6):
-                    default_tables.append({
-                        "id": str(uuid.uuid4()),
-                        "number": i,
-                        "capacity": 4,
-                        "section": "القاعة الرئيسية",
-                        "status": "available",
-                        "current_order_id": None,
-                        "branch_id": branch_id,
-                        "tenant_id": tenant["id"]
-                    })
-                await db.tables.insert_many(default_tables)
-                logger.info(f"   ✅ Created 5 default tables for: {tenant.get('name', tenant['id'][:8])}")
+        # ملاحظة: تم تعطيل هذه الميزة مؤقتاً لتحسين أداء بدء التشغيل
+        # العملاء الجدد سيُنشئون طاولاتهم من خلال واجهة الإعدادات
         
         # 8. تحديث صور الفئات والمنتجات الافتراضية للنظام الرئيسي (إذا لم تكن موجودة)
         category_images = {
