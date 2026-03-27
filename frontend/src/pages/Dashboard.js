@@ -199,6 +199,10 @@ export default function Dashboard() {
   const [isClosing, setIsClosing] = useState(false);
   const [showReport, setShowReport] = useState(false);
   
+  // معاينة الفاتورة (تفاصيل الطلب)
+  const [selectedOrderPreview, setSelectedOrderPreview] = useState(null);
+  const [showOrderPreview, setShowOrderPreview] = useState(false);
+  
   // إشعارات الطلبات الجديدة من تطبيق العملاء
   const [newOrdersCount, setNewOrdersCount] = useState(0);
   const [pendingCustomerOrders, setPendingCustomerOrders] = useState([]);
@@ -1749,8 +1753,12 @@ export default function Dashboard() {
                   {recentOrders.map((order) => (
                     <div 
                       key={order.id} 
-                      className="flex items-center justify-between p-3 bg-muted/30 rounded-lg"
+                      className="flex items-center justify-between p-3 bg-muted/30 rounded-lg cursor-pointer hover:bg-muted/50 transition-colors"
                       data-testid={`order-${order.id}`}
+                      onClick={() => {
+                        setSelectedOrderPreview(order);
+                        setShowOrderPreview(true);
+                      }}
                     >
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
@@ -1758,7 +1766,7 @@ export default function Dashboard() {
                         </div>
                         <div>
                           <p className="font-medium text-foreground">
-                            {/* عرض نوع الزبون بدلاً من كلمة "زبون" */}
+                            {/* عرض نوع الزبون */}
                             {order.order_type === 'dine_in' 
                               ? (order.customer_name || t('زبون داخلي'))
                               : order.order_type === 'takeaway' 
@@ -1769,16 +1777,15 @@ export default function Dashboard() {
                             }
                           </p>
                           <p className="text-xs text-muted-foreground">
-                            {/* عرض أسماء المنتجات بدلاً من عدد العناصر */}
+                            {/* عرض المنتجات مع أعدادها */}
                             {order.items?.slice(0, 2).map((item, idx) => (
                               <span key={idx}>
                                 {item.product_name || item.name}
-                                {item.selectedExtras?.length > 0 && ` (+${item.selectedExtras.length})`}
+                                {item.quantity > 1 && ` ×${item.quantity}`}
                                 {idx < Math.min(order.items.length, 2) - 1 && '، '}
                               </span>
                             ))}
-                            {order.items?.length > 2 && ` +${order.items.length - 2}`}
-                            {order.notes && <span className="text-amber-500"> 📝</span>}
+                            {order.items?.length > 2 && ` +${order.items.length - 2} ${t('أخرى')}`}
                           </p>
                         </div>
                       </div>
@@ -2560,6 +2567,141 @@ export default function Dashboard() {
               {t('تنزيل QR Code')}
             </Button>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* نافذة معاينة الفاتورة */}
+      <Dialog open={showOrderPreview} onOpenChange={setShowOrderPreview}>
+        <DialogContent className="max-w-md" dir="rtl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center justify-between">
+              <span>{t('تفاصيل الطلب')} #{selectedOrderPreview?.order_number}</span>
+              <span className={`text-xs px-2 py-1 rounded-full ${getOrderStatusColor(selectedOrderPreview?.status)}`}>
+                {getOrderStatusText(selectedOrderPreview?.status)}
+              </span>
+            </DialogTitle>
+          </DialogHeader>
+          
+          {selectedOrderPreview && (
+            <div className="space-y-4">
+              {/* معلومات الزبون */}
+              <div className="bg-muted/30 rounded-lg p-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <Users className="h-4 w-4 text-muted-foreground" />
+                  <span className="font-medium">
+                    {selectedOrderPreview.order_type === 'dine_in' 
+                      ? t('طلب داخلي')
+                      : selectedOrderPreview.order_type === 'takeaway' 
+                        ? t('طلب سفري')
+                        : t('طلب توصيل')
+                    }
+                  </span>
+                </div>
+                {selectedOrderPreview.customer_name && (
+                  <p className="text-sm text-muted-foreground">{t('العميل')}: {selectedOrderPreview.customer_name}</p>
+                )}
+                {selectedOrderPreview.customer_phone && (
+                  <p className="text-sm text-muted-foreground">{t('الهاتف')}: {selectedOrderPreview.customer_phone}</p>
+                )}
+                {selectedOrderPreview.delivery_app_name && (
+                  <p className="text-sm text-muted-foreground">{t('شركة التوصيل')}: {selectedOrderPreview.delivery_app_name}</p>
+                )}
+                {selectedOrderPreview.delivery_address && (
+                  <p className="text-sm text-muted-foreground">{t('العنوان')}: {selectedOrderPreview.delivery_address}</p>
+                )}
+                {selectedOrderPreview.table_id && (
+                  <p className="text-sm text-muted-foreground">{t('الطاولة')}: {selectedOrderPreview.table_number || selectedOrderPreview.table_id}</p>
+                )}
+              </div>
+
+              {/* قائمة المنتجات */}
+              <div>
+                <h4 className="font-medium mb-2 flex items-center gap-2">
+                  <ShoppingCart className="h-4 w-4" />
+                  {t('المنتجات')}
+                </h4>
+                <div className="space-y-2 max-h-60 overflow-y-auto">
+                  {selectedOrderPreview.items?.map((item, idx) => (
+                    <div key={idx} className="flex justify-between items-start p-2 bg-muted/20 rounded-lg">
+                      <div className="flex-1">
+                        <p className="font-medium text-sm">
+                          {item.product_name || item.name}
+                          <span className="text-muted-foreground"> ×{item.quantity}</span>
+                        </p>
+                        {/* الإضافات */}
+                        {item.selectedExtras?.length > 0 && (
+                          <div className="text-xs text-muted-foreground mt-1">
+                            {item.selectedExtras.map((extra, i) => (
+                              <span key={i}>+ {extra.name || extra}{i < item.selectedExtras.length - 1 && '، '}</span>
+                            ))}
+                          </div>
+                        )}
+                        {item.extras?.length > 0 && !item.selectedExtras?.length && (
+                          <div className="text-xs text-muted-foreground mt-1">
+                            {item.extras.map((extra, i) => (
+                              <span key={i}>+ {extra.name || extra}{i < item.extras.length - 1 && '، '}</span>
+                            ))}
+                          </div>
+                        )}
+                        {/* الملاحظات */}
+                        {item.notes && (
+                          <p className="text-xs text-amber-500 mt-1">📝 {item.notes}</p>
+                        )}
+                      </div>
+                      <p className="font-medium text-sm tabular-nums">
+                        {formatPrice((item.price + (item.extras_total || 0)) * item.quantity)}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* ملاحظات الطلب */}
+              {selectedOrderPreview.notes && (
+                <div className="bg-amber-50 dark:bg-amber-950/30 rounded-lg p-3">
+                  <p className="text-sm font-medium text-amber-700 dark:text-amber-400">📝 {t('ملاحظات')}:</p>
+                  <p className="text-sm text-amber-600 dark:text-amber-500">{selectedOrderPreview.notes}</p>
+                </div>
+              )}
+
+              {/* ملخص الفاتورة */}
+              <div className="border-t pt-3 space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">{t('المجموع الفرعي')}</span>
+                  <span className="tabular-nums">{formatPrice(selectedOrderPreview.subtotal)}</span>
+                </div>
+                {selectedOrderPreview.discount > 0 && (
+                  <div className="flex justify-between text-sm text-green-600">
+                    <span>{t('الخصم')}</span>
+                    <span className="tabular-nums">-{formatPrice(selectedOrderPreview.discount)}</span>
+                  </div>
+                )}
+                {selectedOrderPreview.tax > 0 && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">{t('الضريبة')}</span>
+                    <span className="tabular-nums">{formatPrice(selectedOrderPreview.tax)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between font-bold text-lg border-t pt-2">
+                  <span>{t('الإجمالي')}</span>
+                  <span className="tabular-nums text-primary">{formatPrice(selectedOrderPreview.total)}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">{t('طريقة الدفع')}</span>
+                  <span>
+                    {selectedOrderPreview.payment_method === 'cash' ? t('نقدي') 
+                      : selectedOrderPreview.payment_method === 'card' ? t('بطاقة') 
+                      : t('آجل')}
+                  </span>
+                </div>
+              </div>
+
+              {/* وقت الطلب */}
+              <div className="text-xs text-muted-foreground text-center pt-2 border-t">
+                {selectedOrderPreview.created_at && new Date(selectedOrderPreview.created_at).toLocaleString('ar-IQ')}
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>
