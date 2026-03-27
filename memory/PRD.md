@@ -758,6 +758,27 @@
 - ✅ طباعة إيصال إغلاق الصندوق تلقائياً عند تأكيد الإغلاق (Fixed - March 27, 2026)
 - ✅ تسجيل خروج إجباري للكاشير بعد إغلاق الصندوق (Fixed - March 27, 2026)
 
+### إصلاح انتحال الشخصية (Admin → Employee Preview) ✅ (March 27, 2026)
+
+**المشكلة**: عند معاينة حساب كاشير من صفحة الإعدادات، لوحة التحكم تعرض جميع صلاحيات المدير بدلاً من صلاحيات الكاشير فقط.
+
+**السبب الجذري**: `Settings.js` كانت تحفظ بيانات المستخدم المنتحَل في مفتاح `user` بينما `AuthContext.js` يقرأ من مفتاح `cached_user`.
+
+**الإصلاحات**:
+1. **Settings.js** - `handlePreviewUser`: تغيير مفتاح التخزين من `user` إلى `cached_user` + مسح `sessionStorage.user_verified`
+2. **Dashboard.js** - `isImpersonating`: يكتشف الآن كلا النوعين (SuperAdmin→Tenant و Admin→Employee)
+3. **POS.js** - إضافة شريط انتحال مع زر "العودة لحسابي"
+
+**الملفات المعدلة**:
+- `/app/frontend/src/pages/Settings.js`
+- `/app/frontend/src/pages/Dashboard.js`
+- `/app/frontend/src/pages/POS.js`
+
+**حالة الاختبار**: ✅ 100% (Backend: 6/6, Frontend: 7/7)
+**التقرير**: `/app/test_reports/iteration_129.json`
+
+---
+
 ## P1 Issues (High Priority)
 - [ ] تكامل بصمة ZKTeco
 
