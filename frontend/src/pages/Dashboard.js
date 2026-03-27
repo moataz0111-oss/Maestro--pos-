@@ -922,6 +922,13 @@ export default function Dashboard() {
             padding-bottom: 10px;
             margin-bottom: 10px;
           }
+          .header .logo {
+            width: 60px;
+            height: 60px;
+            margin: 0 auto 10px;
+            border-radius: 8px;
+            object-fit: contain;
+          }
           .header h1 {
             font-size: 18px;
             font-weight: bold;
@@ -999,7 +1006,15 @@ export default function Dashboard() {
       </head>
       <body>
         <div class="header">
-          <h1>Maestro EGP</h1>
+          ${tenantInfo?.logo_url ? `
+            <img 
+              class="logo" 
+              src="${tenantInfo.logo_url.startsWith('http') ? tenantInfo.logo_url : `${BACKEND_URL}${tenantInfo.logo_url}`}" 
+              alt="شعار المطعم"
+              onerror="this.style.display='none'"
+            />
+          ` : ''}
+          <h1>${tenantInfo?.name || tenantInfo?.name_en || 'المطعم'}</h1>
           <h2>إيصال إغلاق الصندوق</h2>
           <p>التاريخ: ${dateStr}</p>
           <p>الوقت: ${timeStr}</p>
@@ -1076,8 +1091,8 @@ export default function Dashboard() {
 
         <div class="footer">
           <p>═══════════════════════</p>
-          <p>شكراً لاستخدامكم نظام Maestro</p>
-          <p>www.maestroegp.com</p>
+          <p>شكراً لزيارتكم</p>
+          <p>${tenantInfo?.name || tenantInfo?.name_en || 'المطعم'}</p>
           <p>═══════════════════════</p>
         </div>
       </body>
