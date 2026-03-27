@@ -926,8 +926,9 @@ export default function Dashboard() {
             width: 60px;
             height: 60px;
             margin: 0 auto 10px;
-            border-radius: 8px;
-            object-fit: contain;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 2px solid #ddd;
           }
           .header h1 {
             font-size: 18px;
