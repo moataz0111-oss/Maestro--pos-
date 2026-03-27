@@ -91,18 +91,47 @@ async def get_sales_report(
         "pending": "معلق"
     }
     
+    # شركات التوصيل الافتراضية (للتحويل من المعرف للاسم)
+    default_delivery_apps_names = {
+        "toters": "توترز",
+        "talabat": "طلبات",
+        "baly": "بالي",
+        "alsaree3": "عالسريع",
+        "talabati": "طلباتي",
+    }
+    
     for o in orders:
         pm = o["payment_method"]
-        # استخدام الاسم العربي
-        pm_arabic = payment_method_names.get(pm, pm)
-        by_payment[pm_arabic] = by_payment.get(pm_arabic, 0) + o["total"]
+        
+        # التحقق إذا كان الطلب لشركة توصيل
+        has_delivery_app = o.get("delivery_app") or o.get("delivery_app_name") or o.get("is_delivery_company")
+        
+        # تحديد اسم طريقة الدفع
+        if pm == "credit" and has_delivery_app:
+            # آجل شركات توصيل - يظهر باسم الشركة
+            app_name = o.get("delivery_app_name")
+            if not app_name and o.get("delivery_app"):
+                app_name = default_delivery_apps_names.get(o.get("delivery_app"), app_names.get(o.get("delivery_app"), "شركات توصيل"))
+            if not app_name:
+                app_name = "شركات توصيل"
+            pm_display = app_name
+        else:
+            # طريقة دفع عادية
+            pm_display = payment_method_names.get(pm, pm)
+        
+        by_payment[pm_display] = by_payment.get(pm_display, 0) + o["total"]
         
         ot = o["order_type"]
         by_type[ot] = by_type.get(ot, 0) + o["total"]
         
-        if o.get("delivery_app"):
-            app_id = o["delivery_app"]
-            app_name = o.get("delivery_app_name") or app_names.get(app_id, app_id)
+        if o.get("delivery_app") or o.get("delivery_app_name") or o.get("is_delivery_company"):
+            app_id = o.get("delivery_app")
+            app_name = o.get("delivery_app_name")
+            if not app_name and app_id:
+                app_name = default_delivery_apps_names.get(app_id, app_names.get(app_id, app_id))
+            if not app_name:
+                app_name = o.get("customer_name") or "شركة توصيل"
+            
             if app_name not in by_app:
                 by_app[app_name] = {
                     "total_sales": 0, "total_commission": 0, "net_amount": 0,
@@ -468,7 +497,14 @@ async def get_delivery_credits_report(
     db = get_database()
     tenant_id = get_user_tenant_id(current_user)
     
-    query = {"delivery_app": {"$ne": None, "$exists": True}}
+    # البحث عن جميع طلبات شركات التوصيل
+    query = {
+        "$or": [
+            {"delivery_app": {"$ne": None, "$exists": True}},
+            {"delivery_app_name": {"$ne": None, "$exists": True}},
+            {"is_delivery_company": True}
+        ]
+    }
     
     if tenant_id:
         query["tenant_id"] = tenant_id
@@ -513,10 +549,24 @@ async def get_delivery_credits_report(
         app_id = c.get("delivery_app_id")
         collected_by_app[app_id] = collected_by_app.get(app_id, 0) + c.get("amount", 0)
     
+    # شركات التوصيل الافتراضية (للتحويل من المعرف للاسم)
+    default_delivery_apps_names = {
+        "toters": "توترز",
+        "talabat": "طلبات",
+        "baly": "بالي",
+        "alsaree3": "عالسريع",
+        "talabati": "طلباتي",
+    }
+    
     by_app = {}
     for o in orders:
         app_id = o.get("delivery_app")
-        app_name = o.get("delivery_app_name") or app_names.get(app_id, app_id)
+        # استخدام الاسم المحفوظ أو تحويل المعرف للاسم
+        app_name = o.get("delivery_app_name")
+        if not app_name and app_id:
+            app_name = default_delivery_apps_names.get(app_id, app_names.get(app_id, app_id))
+        if not app_name:
+            app_name = o.get("customer_name") or "شركة توصيل"
         
         if app_name not in by_app:
             by_app[app_name] = {
@@ -781,15 +831,22 @@ async def get_credit_report(
     db = get_database()
     tenant_id = get_user_tenant_id(current_user)
     
+    # استثناء طلبات شركات التوصيل من تقرير الآجل العادي
+    # الآجل العادي = طلبات بدون شركة توصيل
     query = {
         "payment_method": "credit",
-        "created_at": {"$gte": start_date, "$lte": end_date + "T23:59:59"}
+        "created_at": {"$gte": start_date, "$lte": end_date + "T23:59:59"},
+        # استثناء طلبات شركات التوصيل
+        "$or": [
+            {"delivery_app": {"$exists": False}},
+            {"delivery_app": None},
+            {"delivery_app": ""}
+        ],
+        "is_delivery_company": {"$ne": True}
     }
     
     if tenant_id:
         query["tenant_id"] = tenant_id
-    else:
-        query["$or"] = [{"tenant_id": {"$exists": False}}, {"tenant_id": None}]
     
     user_branch_id = current_user.get("branch_id")
     user_role = current_user.get("role")

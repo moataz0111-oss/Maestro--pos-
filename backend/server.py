@@ -1260,6 +1260,8 @@ class OrderCreate(BaseModel):
     discount: float = 0.0
     notes: Optional[str] = None
     delivery_app: Optional[str] = None
+    delivery_app_name: Optional[str] = None  # اسم شركة التوصيل (للإدخال المباشر)
+    is_delivery_company: bool = False  # هل الطلب لشركة توصيل
     driver_id: Optional[str] = None
     auto_ready: bool = False  # الطلب جاهز تلقائياً
 
@@ -1287,6 +1289,7 @@ class OrderResponse(BaseModel):
     payment_status: str = "pending"  # Default for legacy orders
     delivery_app: Optional[str] = None
     delivery_app_name: Optional[str] = None  # اسم شركة التوصيل
+    is_delivery_company: bool = False  # هل الطلب لشركة توصيل
     delivery_commission: float = 0.0
     driver_id: Optional[str] = None
     driver_name: Optional[str] = None  # اسم السائق
@@ -4694,14 +4697,37 @@ async def create_order(order: OrderCreate, current_user: dict = Depends(get_curr
         order_status = OrderStatus.READY if order.auto_ready else OrderStatus.PREPARING
     
     # الحصول على اسم شركة التوصيل
-    delivery_app_name = None
-    is_delivery_company = False
+    delivery_app_name = order.delivery_app_name  # أولوية للقيمة المُرسلة
+    is_delivery_company = order.is_delivery_company  # أولوية للقيمة المُرسلة
     customer_id = None
     
-    if order.delivery_app:
-        delivery_app_doc = await db.delivery_apps.find_one({"id": order.delivery_app})
-        if delivery_app_doc:
-            delivery_app_name = delivery_app_doc.get("name")
+    # شركات التوصيل الافتراضية
+    default_delivery_apps = {
+        "toters": "توترز",
+        "talabat": "طلبات",
+        "baly": "بالي",
+        "alsaree3": "عالسريع",
+        "talabati": "طلباتي",
+    }
+    
+    # إذا تم تحديد delivery_app، نجلب اسم الشركة
+    if order.delivery_app and not delivery_app_name:
+        # أولاً نتحقق من الشركات الافتراضية
+        if order.delivery_app in default_delivery_apps:
+            delivery_app_name = default_delivery_apps[order.delivery_app]
+            is_delivery_company = True
+        else:
+            # ثم نبحث في قاعدة البيانات
+            delivery_app_doc = await db.delivery_apps.find_one({"id": order.delivery_app})
+            if delivery_app_doc:
+                delivery_app_name = delivery_app_doc.get("name")
+                is_delivery_company = True
+            else:
+                # نبحث في إعدادات شركات التوصيل
+                app_setting = await db.delivery_app_settings.find_one({"app_id": order.delivery_app})
+                if app_setting:
+                    delivery_app_name = app_setting.get("name", order.delivery_app)
+                    is_delivery_company = True
     
     # التحقق إذا كان العميل شركة توصيل
     if order.customer_phone:
@@ -4710,10 +4736,11 @@ async def create_order(order: OrderCreate, current_user: dict = Depends(get_curr
         })
         if customer:
             customer_id = customer.get("id")
-            is_delivery_company = customer.get("is_delivery_company", False)
-            # إذا كان العميل شركة توصيل، نستخدم اسمه كاسم شركة التوصيل
-            if is_delivery_company and not delivery_app_name:
-                delivery_app_name = customer.get("name")
+            # إذا كان العميل شركة توصيل ولم يتم تحديدها مسبقاً
+            if customer.get("is_delivery_company", False):
+                is_delivery_company = True
+                if not delivery_app_name:
+                    delivery_app_name = customer.get("name")
     
     order_doc = {
         "id": str(uuid.uuid4()),
@@ -11984,6 +12011,15 @@ async def get_sales_report(
     card_orders_count = len([o for o in orders if o.get("payment_method") == "card"])
     credit_orders_count = len([o for o in orders if o.get("payment_method") == "credit" and not o.get("delivery_app") and not o.get("delivery_app_name") and not o.get("delivery_app_id") and not o.get("is_delivery_company") and not (o.get("delivery_commission") and float(o.get("delivery_commission", 0)) > 0)])
     
+    # شركات التوصيل الافتراضية (للتحويل من المعرف للاسم)
+    default_delivery_apps_names = {
+        "toters": "توترز",
+        "talabat": "طلبات",
+        "baly": "بالي",
+        "alsaree3": "عالسريع",
+        "talabati": "طلباتي",
+    }
+    
     # تجميع شركات التوصيل حسب الاسم (في حسب طريقة الدفع)
     delivery_apps_amounts = {}
     for o in orders:
@@ -11992,7 +12028,12 @@ async def get_sales_report(
             continue
         
         # التحقق من وجود شركة توصيل بأي طريقة
-        app_name = o.get("delivery_app_name") or o.get("delivery_app") or o.get("delivery_app_id")
+        app_name = o.get("delivery_app_name")
+        
+        # إذا لم يكن هناك اسم، نحول المعرف للاسم
+        if not app_name and o.get("delivery_app"):
+            app_id = o.get("delivery_app")
+            app_name = default_delivery_apps_names.get(app_id, app_id)
         
         # إذا كان العميل شركة توصيل وليس هناك اسم شركة، نستخدم اسم العميل
         if not app_name and o.get("is_delivery_company"):
