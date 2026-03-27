@@ -216,7 +216,8 @@ async def close_shift(shift_id: str, close_data: ShiftClose, current_user: dict 
     total_expenses = sum(e["amount"] for e in expenses)
     
     net_profit = gross_profit - total_expenses
-    expected_cash = shift["opening_cash"] + cash_sales - total_expenses
+    opening_cash = shift.get("opening_cash", shift.get("opening_balance", 0))
+    expected_cash = opening_cash + cash_sales - total_expenses
     cash_difference = close_data.closing_cash - expected_cash
     
     update_data = {
@@ -630,7 +631,8 @@ async def get_active_shift_details(current_user: dict = Depends(get_current_user
     }).to_list(100)
     total_expenses = sum(e["amount"] for e in expenses)
     
-    expected_cash = shift["opening_cash"] + cash_sales - total_expenses
+    opening_cash = shift.get("opening_cash", shift.get("opening_balance", 0))
+    expected_cash = opening_cash + cash_sales - total_expenses
     
     shift["total_sales"] = total_sales
     shift["total_orders"] = len(orders)
