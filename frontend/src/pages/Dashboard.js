@@ -859,11 +859,238 @@ export default function Dashboard() {
       // تحديث حالة اليوم
       fetchDayStatus();
       
+      // طباعة التقرير تلقائياً بعد ثانية واحدة (لإعطاء وقت لتحميل البيانات)
+      setTimeout(() => {
+        printClosingReceipt(res.data);
+        
+        // تسجيل خروج إجباري للكاشير فقط بعد الطباعة
+        if (user?.role === 'cashier') {
+          setTimeout(() => {
+            toast.info(t('تم تسجيل خروجك تلقائياً بعد إغلاق الصندوق'));
+            setCashRegisterOpen(false);
+            setClosingResult(null);
+            setShowReport(false);
+            logout();
+          }, 2000);
+        }
+      }, 500);
+      
     } catch (error) {
       toast.error(error.response?.data?.detail || t('فشل في إغلاق الصندوق'));
     } finally {
       setIsClosing(false);
     }
+  };
+
+  // طباعة إيصال إغلاق الصندوق (بتنسيق فاتورة الكاشير)
+  const printClosingReceipt = (data) => {
+    if (!data) return;
+    
+    const printWindow = window.open('', '_blank', 'width=300,height=600');
+    const now = new Date();
+    const dateStr = now.toLocaleDateString('ar-IQ');
+    const timeStr = now.toLocaleTimeString('ar-IQ');
+    
+    // حساب الفرق
+    const expectedCash = data.expected_cash || 0;
+    const countedCash = data.counted_cash || 0;
+    const difference = countedCash - expectedCash;
+    const differenceClass = difference >= 0 ? 'positive' : 'negative';
+    const differenceText = difference >= 0 ? '+' : '';
+    
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html dir="rtl" lang="ar">
+      <head>
+        <meta charset="UTF-8">
+        <title>إيصال إغلاق الصندوق</title>
+        <style>
+          * { margin: 0; padding: 0; box-sizing: border-box; }
+          body {
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            width: 80mm;
+            max-width: 80mm;
+            padding: 5mm;
+            direction: rtl;
+            background: white;
+            color: black;
+          }
+          .header {
+            text-align: center;
+            border-bottom: 2px dashed #000;
+            padding-bottom: 10px;
+            margin-bottom: 10px;
+          }
+          .header h1 {
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 5px;
+          }
+          .header h2 {
+            font-size: 14px;
+            font-weight: bold;
+            margin-bottom: 5px;
+          }
+          .header p {
+            font-size: 11px;
+            color: #333;
+          }
+          .section {
+            margin: 10px 0;
+            padding: 8px 0;
+            border-bottom: 1px dashed #ccc;
+          }
+          .section-title {
+            font-weight: bold;
+            font-size: 13px;
+            margin-bottom: 8px;
+            text-align: center;
+            background: #f0f0f0;
+            padding: 3px;
+          }
+          .row {
+            display: flex;
+            justify-content: space-between;
+            padding: 3px 0;
+            font-size: 11px;
+          }
+          .row.total {
+            font-weight: bold;
+            font-size: 13px;
+            border-top: 1px solid #000;
+            padding-top: 8px;
+            margin-top: 5px;
+          }
+          .row.highlight {
+            background: #f5f5f5;
+            padding: 5px;
+            margin: 5px 0;
+          }
+          .positive { color: #006600; }
+          .negative { color: #cc0000; }
+          .value { font-weight: bold; text-align: left; direction: ltr; }
+          .label { text-align: right; }
+          .divider {
+            border-top: 2px dashed #000;
+            margin: 10px 0;
+          }
+          .footer {
+            text-align: center;
+            margin-top: 15px;
+            padding-top: 10px;
+            border-top: 2px dashed #000;
+            font-size: 10px;
+          }
+          .footer p { margin: 3px 0; }
+          .big-total {
+            text-align: center;
+            font-size: 16px;
+            font-weight: bold;
+            padding: 10px;
+            background: #f0f0f0;
+            margin: 10px 0;
+          }
+          @media print {
+            body { width: 80mm; padding: 2mm; }
+            @page { size: 80mm auto; margin: 0; }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <h1>Maestro EGP</h1>
+          <h2>إيصال إغلاق الصندوق</h2>
+          <p>التاريخ: ${dateStr}</p>
+          <p>الوقت: ${timeStr}</p>
+          <p>الفرع: ${data.branch_name || '-'}</p>
+          <p>الكاشير: ${user?.full_name || user?.name || '-'}</p>
+        </div>
+
+        <div class="section">
+          <div class="section-title">ملخص المبيعات</div>
+          <div class="row">
+            <span class="label">إجمالي المبيعات:</span>
+            <span class="value">${formatPrice(data.total_sales || 0)}</span>
+          </div>
+          <div class="row">
+            <span class="label">عدد الطلبات:</span>
+            <span class="value">${data.total_orders || 0}</span>
+          </div>
+        </div>
+
+        <div class="section">
+          <div class="section-title">حسب طريقة الدفع</div>
+          <div class="row">
+            <span class="label">نقدي:</span>
+            <span class="value">${formatPrice(data.cash_sales || 0)}</span>
+          </div>
+          <div class="row">
+            <span class="label">بطاقة:</span>
+            <span class="value">${formatPrice(data.card_sales || 0)}</span>
+          </div>
+          <div class="row">
+            <span class="label">آجل:</span>
+            <span class="value">${formatPrice(data.credit_sales || 0)}</span>
+          </div>
+        </div>
+
+        <div class="section">
+          <div class="section-title">المصاريف والخصومات</div>
+          <div class="row">
+            <span class="label">المصاريف:</span>
+            <span class="value">${formatPrice(data.total_expenses || 0)}</span>
+          </div>
+          <div class="row">
+            <span class="label">الخصومات:</span>
+            <span class="value">${formatPrice(data.total_discounts || 0)}</span>
+          </div>
+        </div>
+
+        <div class="section">
+          <div class="section-title">جرد الصندوق</div>
+          <div class="row">
+            <span class="label">المتوقع في الصندوق:</span>
+            <span class="value">${formatPrice(expectedCash)}</span>
+          </div>
+          <div class="row">
+            <span class="label">الجرد الفعلي:</span>
+            <span class="value">${formatPrice(countedCash)}</span>
+          </div>
+          <div class="row highlight">
+            <span class="label">الفرق:</span>
+            <span class="value ${differenceClass}">${differenceText}${formatPrice(Math.abs(difference))}</span>
+          </div>
+        </div>
+
+        <div class="big-total">
+          صافي النقدي: ${formatPrice(countedCash)}
+        </div>
+
+        ${data.notes ? `
+        <div class="section">
+          <div class="section-title">ملاحظات</div>
+          <p style="font-size: 11px; text-align: center;">${data.notes}</p>
+        </div>
+        ` : ''}
+
+        <div class="footer">
+          <p>═══════════════════════</p>
+          <p>شكراً لاستخدامكم نظام Maestro</p>
+          <p>www.maestroegp.com</p>
+          <p>═══════════════════════</p>
+        </div>
+      </body>
+      </html>
+    `);
+    printWindow.document.close();
+    printWindow.focus();
+    
+    // طباعة تلقائية
+    setTimeout(() => {
+      printWindow.print();
+      printWindow.close();
+    }, 300);
   };
 
   // طباعة التقرير
