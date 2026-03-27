@@ -48,7 +48,7 @@ jobs:
           # تحديث Backend
           # =============================================
           echo "📦 تحديث Backend..."
-          docker build -t maestro_backend:new ./backend
+          docker build --no-cache -t maestro_backend:new ./backend
           docker stop backend 2>/dev/null || true
           docker rm backend 2>/dev/null || true
           docker tag maestro_backend:new maestro_backend:latest
@@ -67,7 +67,7 @@ jobs:
           # تحديث Frontend
           # =============================================
           echo "🎨 تحديث Frontend..."
-          docker build -t maestro_frontend:new ./frontend
+          docker build --no-cache -t maestro_frontend:new ./frontend
           docker stop frontend 2>/dev/null || true
           docker rm frontend 2>/dev/null || true
           docker tag maestro_frontend:new maestro_frontend:latest
