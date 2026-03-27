@@ -1320,14 +1320,16 @@ export default function Settings() {
       const { user: impersonatedUser, token } = res.data;
       
       // حفظ بيانات المستخدم الأصلي للعودة لاحقاً
-      const originalUser = JSON.parse(localStorage.getItem('user') || '{}');
+      const originalUser = localStorage.getItem('cached_user') || localStorage.getItem('user') || '{}';
       const originalToken = localStorage.getItem('token');
-      localStorage.setItem('original_user', JSON.stringify(originalUser));
+      localStorage.setItem('original_user', originalUser);
       localStorage.setItem('original_token', originalToken);
       
-      // تسجيل الدخول كالمستخدم الآخر
-      localStorage.setItem('user', JSON.stringify(impersonatedUser));
+      // تسجيل الدخول كالمستخدم الآخر (cached_user هو المفتاح الذي يقرأه AuthContext)
+      localStorage.setItem('cached_user', JSON.stringify(impersonatedUser));
       localStorage.setItem('token', token);
+      // مسح التحقق السابق لإجبار إعادة التحميل بالبيانات الجديدة
+      sessionStorage.removeItem('user_verified');
       
       toast.success(`✅ ${t('تم تسجيل الدخول كـ')} ${impersonatedUser.full_name || impersonatedUser.username}`);
       

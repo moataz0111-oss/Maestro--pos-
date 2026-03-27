@@ -2027,8 +2027,54 @@ export default function POS() {
     sessionStorage.setItem('pos_ever_loaded', 'true');
   }
 
+  // التحقق من وضع المعاينة (انتحال حساب من Admin)
+  const isImpersonatingUser = !!localStorage.getItem('original_token') || !!localStorage.getItem('original_super_admin_token');
+  
+  const exitImpersonationFromPOS = () => {
+    const originalSuperAdminToken = localStorage.getItem('original_super_admin_token');
+    if (originalSuperAdminToken) {
+      localStorage.setItem('super_admin_token', originalSuperAdminToken);
+      localStorage.removeItem('original_super_admin_token');
+      localStorage.removeItem('token');
+      localStorage.removeItem('cached_user');
+      localStorage.removeItem('impersonated');
+      localStorage.removeItem('impersonated_tenant');
+      localStorage.removeItem('branches');
+      sessionStorage.clear();
+      window.location.href = '/super-admin';
+      return;
+    }
+    const originalUser = localStorage.getItem('original_user');
+    const originalToken = localStorage.getItem('original_token');
+    if (originalUser && originalToken) {
+      localStorage.setItem('cached_user', originalUser);
+      localStorage.setItem('token', originalToken);
+      localStorage.removeItem('original_user');
+      localStorage.removeItem('original_token');
+      localStorage.removeItem('branches');
+      sessionStorage.removeItem('user_verified');
+      window.location.href = '/settings';
+    }
+  };
+
   return (
-    <div className="min-h-screen bg-background flex" dir={isRTL ? 'rtl' : 'ltr'}>
+    <div className="min-h-screen bg-background flex flex-col" dir={isRTL ? 'rtl' : 'ltr'}>
+      {/* شريط تنبيه وضع المعاينة */}
+      {isImpersonatingUser && (
+        <div className="bg-amber-500 text-black px-4 py-2 text-center font-medium flex items-center justify-center gap-4 sticky top-0 z-[100]" data-testid="impersonation-banner">
+          <span className="flex items-center gap-2">
+            <AlertCircle className="h-5 w-5" />
+            {t('أنت في وضع المعاينة كـ')} <strong>{user?.full_name || user?.username}</strong>
+          </span>
+          <button
+            onClick={exitImpersonationFromPOS}
+            className="bg-black/20 hover:bg-black/30 text-black border-0 px-3 py-1 rounded text-sm font-medium"
+          >
+            {t('العودة لحسابي')}
+          </button>
+        </div>
+      )}
+      <div className="flex-1 flex">
       {/* Categories Sidebar - Right */}
       <div className="w-56 border-l border-border bg-card flex flex-col">
         <div className="p-3 border-b border-border">
@@ -3669,6 +3715,7 @@ export default function POS() {
           )}
         </DialogContent>
       </Dialog>
+      </div>{/* end flex-1 flex wrapper */}
     </div>
   );
 }

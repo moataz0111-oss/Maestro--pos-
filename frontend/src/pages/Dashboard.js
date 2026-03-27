@@ -1426,11 +1426,11 @@ export default function Dashboard() {
     );
   }
 
-  // التحقق من وضع المعاينة (انتحال الحساب من Super Admin)
-  // يظهر فقط إذا كان هناك original_super_admin_token (يعني دخول من Super Admin)
+  // التحقق من وضع المعاينة (انتحال الحساب من Super Admin أو Admin)
   const originalSuperAdminToken = localStorage.getItem('original_super_admin_token');
-  const isImpersonating = !!originalSuperAdminToken;
-  const impersonatedTenant = isImpersonating ? JSON.parse(localStorage.getItem('impersonated_tenant') || '{}') : null;
+  const originalAdminToken = localStorage.getItem('original_token');
+  const isImpersonating = !!originalSuperAdminToken || !!originalAdminToken;
+  const impersonatedTenant = originalSuperAdminToken ? JSON.parse(localStorage.getItem('impersonated_tenant') || '{}') : null;
   
   // العودة للحساب الأصلي (للمالك Super Admin فقط)
   const exitImpersonation = () => {
@@ -1467,7 +1467,7 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen bg-background" data-testid="dashboard">
-      {/* شريط تنبيه وضع المعاينة - يظهر فقط للـ Super Admin */}
+      {/* شريط تنبيه وضع المعاينة - يظهر للـ Super Admin أو Admin عند معاينة حساب موظف */}
       {isImpersonating && (
         <div className="bg-amber-500 text-black px-4 py-2 text-center font-medium flex items-center justify-center gap-4 sticky top-0 z-[100]">
           <span className="flex items-center gap-2">

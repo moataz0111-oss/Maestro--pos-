@@ -6,7 +6,7 @@ import pytest
 import requests
 import os
 
-BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://report-zero-fix.preview.emergentagent.com')
+BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://delivery-price-fix.preview.emergentagent.com')
 
 class TestPurchasingAPIs:
     """Test Purchasing and Suppliers APIs"""

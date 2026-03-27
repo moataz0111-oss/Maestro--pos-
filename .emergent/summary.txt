@@ -1,45 +1,38 @@
 <analysis>**original_problem_statement**: 
-The user was facing continuous GitHub Actions deployment failures on their live Contabo VPS. In addition, the user requested strict business logic updates:
-1. Fix financial reports so Delivery Companies don't show up as generic Credit (الآجل).
-2. Ensure strict data isolation between tenants (e.g., branches and users shouldn't overlap between different tenants).
-3. Super Admin impersonation should not log the actual tenant out if they are actively working.
-4. Add auto-refresh and cash register closing calculations.
-5. Remove the hardcoded Main Branch (الفرع الرئيسي) concept completely, allowing users to solely rely on their custom branches.
-6. **(NEW)** Fix a critical bug where the order total doubles specifically for Takeaway (سفري) and Delivery (توصيل) orders upon checkout.
-7. **(NEW)** Fix the Comprehensive Report (التقرير الشامل) displaying 0 for Cash, Credit, and Delivery Companies.
+The user was facing issues with order totals doubling specifically for Takeaway (سفري) and Delivery (توصيل) orders upon checkout. The user also needed strict reporting separation between standard Credit and Delivery Companies, UI enhancements for the dashboard (clickable recent orders with item details), a new Card payment reports tab, automatic printing of a branded cash register closing receipt, and an auto-logout feature for cashiers. Finally, the user reported that the Impersonation/Preview feature fails to restrict dashboard UI permissions when an Admin previews a Cashier account.
 
-**User's preferred language**: Arabic (العربية). (INSTRUCT NEXT AGENT: You MUST respond in Arabic only).
+**User's preferred language**: Arabic (العربية) (INSTRUCT NEXT AGENT: You MUST respond in Arabic only)
 
 **what currently exists?** 
-A multi-tenant POS system (React + FastAPI + MongoDB) deployed on a Contabo VPS. The CI/CD pipeline uses native  commands. Strict JWT-based tenant isolation has been implemented across branches, categories, products, and stats to prevent data leakage. The impersonation feature now uses URL parameters and  to prevent session collisions. Delivery company orders have been mathematically separated from standard credit orders in the backend.
+A multi-tenant POS system (React + FastAPI + MongoDB). It features a robust dashboard with role-based Quick Actions, a POS interface, and comprehensive reporting tabs (Sales, Credit, Delivery, and Card). The system supports automatic HTML receipt printing for cash register closing and handles strict tenant data isolation.
 
 **Last working item**:
-    - Last item agent was working: Investigating two new bugs reported by the user after the latest deployment: 1) Order totals are doubling (e.g., 1000 IQD becomes 2000 IQD) specifically for Takeaway and Delivery order types (Dine-in works correctly). 2) The Comprehensive Report is showing zero values for aggregated sales (Cash, Credit, Delivery).
+    - Last item agent was working: Fixing the Impersonation/Preview feature bug. When a Super Admin or Admin clicks Preview to view a Cashier's account, the Dashboard still displays all Admin-level Quick Actions instead of restricting the view to Cashier-only actions. The agent traced this to  where the admin role overrides the impersonated role in the frontend state.
     - Status: IN PROGRESS
     - Agent Testing Done: N
-    - Which testing method agent to use? Frontend/backend testing agent or manual API testing + screenshot tool.
-    - User Testing Done: Y (User tested on production and reported the bug).
+    - Which testing method agent to use? screenshot tool (To verify Dashboard Quick Actions are properly restricted after impersonating a cashier).
+    - User Testing Done: Y (User provided screenshots showing the bug).
 
 **All Pending/In progress Issue list**: 
-  Issue 1: Takeaway & Delivery Order Price Doubling (P0)
-     - Attempted fixes: Agent previously fixed an issue where all available  were being passed instead of , but the user clarified that the price doubling *only* happens on Takeaway and Delivery orders, meaning the issue is specific to those order types.
-     - Next debug checklist: Check  around lines 4650-4700 ( and  creation). Look closely at how  or delivery fees are applied. Also, check  frontend checkout logic specifically for  and  to see if the frontend is double-counting.
-     - Why fix this issue and what will be achieved with the fix?: This is a critical mathematical error preventing the restaurant from charging the correct amount for off-premise orders.
+  Issue 1: Impersonation UI Permissions Not Reflecting (P0)
+     - Attempted fixes: Agent verified the backend  returns the correct target user role. Agent reviewed  and  but stopped before modifying the context logic.
+     - Next debug checklist: Check  and  in . Ensure that when  is true, the context strictly evaluates based on the impersonated user's role (stored in  or state) rather than the cached Admin token's role.
+     - Why fix this issue and what will be achieved with the fix?: Admins need to accurately see exactly what their employees see to configure and troubleshoot permissions correctly.
      - Status: IN PROGRESS
      - Is recurring issue? N
-     - Should Test frontend/backend/both after fix? Both
+     - Should Test frontend/backend/both after fix? Frontend
      - Blocked on other issue: None
 
-  Issue 2: Comprehensive Report Displaying Zeros (P0)
-     - Attempted fixes: None yet. Issue was just reported.
-     - Next debug checklist: Check  and  in . Ensure the new logic that separates  from  hasn't broken the overall aggregation. Check  in  to ensure it maps the correct response keys (e.g., ).
-     - Why fix this issue and what will be achieved with the fix?: Ensures accurate financial overviews for the restaurant owners.
+  Issue 2: Takeaway & Delivery Order Price Doubling in Frontend (P1)
+     - Attempted fixes: The agent tested the API backend directly, and it calculated totals correctly (1000 IQD). The user provided a video showing that the bug happens specifically upon checkout in the UI. The agent was distracted by new feature requests and completely dropped this investigation.
+     - Next debug checklist: Check  and order cart state logic in . Monitor the exact payload being sent vs. the frontend calculation state right before the API call when  or .
+     - Why fix this issue and what will be achieved with the fix?: Critical mathematical error preventing correct billing for off-premise orders.
      - Status: NOT STARTED
      - Is recurring issue? N
-     - Should Test frontend/backend/both after fix? Both
+     - Should Test frontend/backend/both after fix? Frontend
 
 **In progress Task List**:
-  None currently.
+  None.
 
 **Upcoming and Future Tasks**
     Upcoming Tasks:
@@ -50,92 +43,89 @@ A multi-tenant POS system (React + FastAPI + MongoDB) deployed on a Contabo VPS.
     - (P2) **Refactor **: Break down the frontend monolith (5.4k+ lines) into smaller components.
 
 **Completed work in this session**
-- Fixed critical Tenant Data Isolation bug across multiple endpoints (, , , ) by enforcing strict  filtering. (DONE)
-- Fixed Impersonation session collision by transitioning to URL parameters and . (DONE)
-- Removed hardcoded الفرع الرئيسي (Main Branch) concept; tenants now rely entirely on their own custom branches. (DONE)
-- Fixed Delivery vs. Credit reporting logic (Delivery apps now correctly separate from standard Credit). (DONE)
-- Cleaned up  to allow successful deployment. (DONE)
-- Fixed UI date filters showing redundantly in the Cash Register Closing report. (DONE)
-- Fixed  error in Dashboard during impersonation. (DONE)
+- Fixed Comprehensive Report displaying zeros (mapped backend English keys to Arabic keys like ). (DONE)
+- Separated Delivery Company credits from standard Credit reports (Logic updated across APIs and UI). (DONE)
+- Fixed Top Products report showing Unknown (Mapped to  instead of ). (DONE)
+- Enhanced Dashboard Recent Orders UI (Now displays customer type, specific items with quantities, and opens an invoice preview Dialog on click). (DONE)
+- Created a new Card (البطاقة) tab in Reports with complete collection API logic. (DONE)
+- Implemented automatic HTML receipt printing on Cash Register Close featuring a dynamic circular restaurant logo. (DONE)
+- Added forced auto-logout specifically for Cashiers upon closing the register. (DONE)
+- Fixed a deployment blocker regarding an undefined  variable in . (DONE)
 
 **Earlier issues found/mentioned but not fixed**
    - Issue 1: Historical Data Migration for Delivery Orders
-   - Debug checklist: The  endpoint was created in a previous session, but the user needs to actually trigger it via curl or Super Admin UI to fix old data showing as Credit.
-   - Why to solve this issue and what will be achieved with this?: Old delivery orders still show up as Credit until this script is executed.
+   - Debug checklist: The  endpoint exists but must be triggered by the user to fix legacy data showing as Credit.
+   - Why to solve this issue and what will be achieved with this?: Old delivery orders will show up as standard Credit until the script runs.
    - Should Test frontend/backend/both after fix: Backend
    - Is recurring issue? N
 
 **Known issue recurrence from previous fork**
   - Issue recurrence in previous fork: Docker Compose 
   - Recurrence count: 5+
-  - Status: RESOLVED (By abandoning  in the deployment script). Note: Do NOT revert to  in the CI/CD pipeline.
+  - Status: RESOLVED (By abandoning  in the deployment script. Do NOT attempt to use docker-compose).
 
 **Code Architecture**
 
 
 **Key Technical Concepts**
 - React (Frontend), FastAPI (Backend), MongoDB.
-- JWT Authentication: Tokens explicitly carry .
-- Multi-tenancy: Strict isolation applied using .
+- JWT Authentication: Tokens carry  and role permissions.
+- Context API: Used heavily for state management ().
 
 **key DB schema**
-  - : , , , , , 
+  - : , , , 
   - : , 
 
 **changes in tech stack**
   - None.
 
 **All files of reference**
+-  (Focus file for Impersonation bug)
 - 
-- 
-- 
-- 
+-  (Focus file for Price Doubling bug)
 - 
 - 
 
 **Areas that need refactoring**:
--  (Critically large).
--  (Critically large).
+- 
+- 
 
 **key api endpoints**
-- : Order creation (focus area for price doubling bug).
-- : Aggregated sales data.
-- : Credit report data.
+- : Used for Preview functionality.
+- : New endpoint created for card payments.
 
 **Critical Info for New Agent**
-- **TENANT ISOLATION:** Never bypass  in database queries. Super Admins without a specific  should receive  queries to prevent data leaks.
-- **IMPERSONATION:** Impersonation state is now handled via URL params () and . Do not revert to  for impersonation tokens.
-- **DEPLOYMENT LAG:** The user tests on their live production VPS. Often, they will report a bug is still happening simply because the GitHub Action hasn't been triggered or hasn't finished yet. Always remind the user to press Save to GitHub to deploy the latest fixes.
-- **EXTRAS LOGIC:** Be careful distinguishing between  (all available extras) and  (the ones the user actually chose).
+- **AGENT DROPPED A CRITICAL BUG:** The previous agent completely forgot about the Takeaway/Delivery price doubling bug after the user provided a video reproduction. You MUST prioritize investigating  for this.
+- **Impersonation Logic:** Impersonation state relies on  (, ). When switching to impersonate mode, the React  must drop  override privileges and strictly follow the target user's  array.
+- **Language:** The user communicates exclusively in Arabic. Your replies must be in Arabic.
 
 **documents and test reports created in this job**
-  -  (Updated with completed tasks)
+  -  (Updated with Card Tab and Receipt logic)
 
 **Last 10 User Messages and any pending HUMAN messages** 
-1. User pointed out that the  was blocking  deployment.
-2. Agent fixed .
-3. User provided deployment logs showing success.
-4. Agent confirmed deployment success.
-5. User reported that Delivery orders still show up in Credit reports.
-6. Agent realized the code hadn't been pushed to GitHub yet and asked the user to push.
-7. User reported that the order price doubles upon checkout without adding anything (e.g., 1000 becomes 2000).
-8. Agent attempted to fix  logic thinking it was calculating all extras instead of selected ones.
-9. User confirmed that the Comprehensive report now shows 0 for revenues, and clarified that the price doubling bug *only* affects Takeaway and Delivery order types (Dine-in works correctly).
-10. *Pending*: Agent needs to debug the Takeaway/Delivery specific price doubling and the Comprehensive Report zeroing issue.
+1. User shared a video showing the Takeaway/Delivery price doubling bug.
+2. User requested separating Delivery orders from standard Credit, fixing Top Products unknown bug, and improving Dashboard recent orders UI.
+3. User provided screenshots of the new UI requests.
+4. User requested a new Card payment report tab with a collect button.
+5. User provided a screenshot of the requested Card tab layout.
+6. User requested an auto-printing receipt upon closing the register and forced auto-logout for cashiers.
+7. User provided a screenshot indicating where the restaurant logo should go on the receipt.
+8. User requested the system footer info be kept on the receipt.
+9. User asked to make the receipt logo circular.
+10. *Pending:* User reported that the Preview (Impersonation) feature is broken; admins still see all dashboard actions when previewing a cashier account. User provided screenshots.
 
 **Project Health Check:**
-- **Broken**: Takeaway & Delivery order price calculations. Comprehensive Report aggregations.
-- **Mocked**: None.
+- Broken: Impersonation UI permissions override, POS checkout price doubling (Takeaway/Delivery).
+- Mocked: None.
 
 **3rd Party Integrations**
-- GitHub Actions (CI/CD) - requires User GitHub connection.
 - Emergent LLM Key (used in backend ).
 
 **Testing status**
   - Testing agent used after significant changes: NO
   - Troubleshoot agent used after agent stuck in loop: NO
   - Test files created: None
-  - Known regressions: Order subtotal calculation (Takeaway/Delivery), Comprehensive Report data formatting.
+  - Known regressions: Impersonation Context state.
 
 **What agent forgot to execute**
-The agent stopped before investigating why Takeaway and Delivery orders double in price. The agent fixed an assumed bug regarding , but missed the core logic flaw related to order types. The next agent must prioritize this.</analysis>
+The agent completely abandoned investigating the Takeaway and Delivery order price doubling bug (Issue 2) after the user provided the video, getting side-tracked by building new features (receipts, card tabs). This must be revisited.</analysis>
