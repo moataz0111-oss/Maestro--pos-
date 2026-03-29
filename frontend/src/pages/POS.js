@@ -3039,14 +3039,15 @@ export default function POS() {
 
       {/* Print Bill Dialog - معاينة الفاتورة */}
       <Dialog open={printDialogOpen} onOpenChange={setPrintDialogOpen}>
-        <DialogContent className="max-w-sm no-print print-dialog">
-          <DialogHeader className="no-print">
+        <DialogContent className="max-w-sm no-print print-dialog max-h-[90vh] flex flex-col">
+          <DialogHeader className="no-print shrink-0">
             <DialogTitle className="flex items-center gap-2 text-foreground">
               <Receipt className="h-5 w-5 text-blue-500" />
               {t('معاينة الفاتورة')}
             </DialogTitle>
           </DialogHeader>
           
+          <div className="overflow-y-auto flex-1 min-h-0">
           <div className="print-receipt bg-white text-black p-4 rounded-lg font-mono text-sm" dir={isRTL ? 'rtl' : 'ltr'} id="receipt-to-print">
             {/* ========== أعلى الفاتورة - شعار المطعم واسمه ========== */}
             <div className="text-center mb-3 border-b border-dashed border-gray-400 pb-3">
@@ -3273,8 +3274,9 @@ export default function POS() {
               </div>
             </div>
           </div>
+          </div>{/* end overflow-y-auto */}
           
-          <div className="flex gap-2 no-print">
+          <div className="flex gap-2 no-print shrink-0 pt-2 border-t border-border">
             <Button variant="outline" onClick={() => {
               setPrintDialogOpen(false);
               // إذا تم حفظ الطلب، نظف السلة
@@ -3314,55 +3316,62 @@ export default function POS() {
                       <title>${t('فاتورة')}</title>
                       <style>
                         * { margin: 0; padding: 0; box-sizing: border-box; }
-                        body { 
+                        html, body { 
                           font-family: 'Courier New', monospace; 
                           font-size: 12px; 
-                          padding: 2mm;
+                          padding: 0;
+                          margin: 0;
                           background: white;
                           color: black;
-                          width: 80mm;
-                          max-width: 80mm;
+                          width: 72mm;
+                          max-width: 72mm;
+                          height: auto !important;
+                          min-height: 0 !important;
+                          overflow: hidden;
                         }
                         .text-center { text-align: center; }
                         .text-left { text-align: left; }
                         .text-right { text-align: right; }
                         .font-bold { font-weight: bold; }
-                        .text-lg { font-size: 16px; }
-                        .text-sm { font-size: 11px; }
-                        .text-xs { font-size: 10px; }
-                        .mb-2 { margin-bottom: 6px; }
-                        .mb-3 { margin-bottom: 10px; }
-                        .mt-1 { margin-top: 3px; }
-                        .mt-2 { margin-top: 6px; }
-                        .mt-3 { margin-top: 10px; }
-                        .mt-4 { margin-top: 14px; }
-                        .pt-2 { padding-top: 6px; }
-                        .pt-3 { padding-top: 10px; }
-                        .pb-3 { padding-bottom: 10px; }
-                        .py-1 { padding-top: 3px; padding-bottom: 3px; }
-                        .p-1 { padding: 3px; }
+                        .text-lg { font-size: 14px; }
+                        .text-sm { font-size: 10px; }
+                        .text-xs { font-size: 9px; }
+                        .mb-2 { margin-bottom: 4px; }
+                        .mb-3 { margin-bottom: 6px; }
+                        .mt-1 { margin-top: 2px; }
+                        .mt-2 { margin-top: 4px; }
+                        .mt-3 { margin-top: 6px; }
+                        .mt-4 { margin-top: 8px; }
+                        .pt-2 { padding-top: 4px; }
+                        .pt-3 { padding-top: 6px; }
+                        .pb-3 { padding-bottom: 6px; }
+                        .py-1 { padding-top: 2px; padding-bottom: 2px; }
+                        .p-1 { padding: 2px; }
                         .border-t { border-top: 1px dashed #000; }
                         .border-b { border-bottom: 1px dashed #000; }
                         .border-t-2 { border-top: 2px solid #000; }
                         .border-dashed { border-style: dashed; }
-                        .text-gray-500 { color: #333; }
-                        .text-gray-600 { color: #222; }
-                        .text-red-600 { color: #000; }
+                        .text-gray-500, .text-gray-600, .text-red-600 { color: #000; }
                         .bg-red-50 { background: transparent; }
-                        .rounded { border-radius: 0; }
+                        .rounded, .rounded-lg { border-radius: 0; }
                         .rounded-full { border-radius: 50%; }
                         table { width: 100%; border-collapse: collapse; }
-                        th, td { padding: 2px 1px; font-size: 11px; }
-                        img { max-width: 50px; height: auto; }
+                        th, td { padding: 1px 0; font-size: 10px; }
+                        img { max-width: 40px; height: auto; }
                         .flex { display: flex; }
                         .justify-between { justify-content: space-between; }
-                        .space-y-1 > * + * { margin-top: 3px; }
+                        .space-y-1 > * + * { margin-top: 2px; }
+                        p { margin: 1px 0; }
                         @page { 
-                          size: 80mm auto; 
-                          margin: 0mm;
+                          size: 72mm auto !important; 
+                          margin: 0mm !important;
                         }
                         @media print {
-                          body { width: 80mm; padding: 1mm; }
+                          html, body { 
+                            width: 72mm !important; 
+                            padding: 1mm !important;
+                            height: auto !important;
+                          }
                         }
                       </style>
                     </head>

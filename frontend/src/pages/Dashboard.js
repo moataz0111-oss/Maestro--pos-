@@ -2007,7 +2007,8 @@ export default function Dashboard() {
 
         {/* Recent Orders & Sales by Type */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Recent Orders */}
+          {/* Recent Orders - يُخفى إذا كان المستخدم لديه صلاحية hide_recent_orders */}
+          {!user?.permissions?.includes('hide_recent_orders') && (
           <Card className="border-border/50 bg-card">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-lg font-cairo text-foreground">{t('آخر الطلبات')}</CardTitle>
@@ -2077,6 +2078,7 @@ export default function Dashboard() {
               )}
             </CardContent>
           </Card>
+          )}
 
           {/* Sales by Payment Method */}
           <Card className="border-border/50 bg-card">
@@ -2269,6 +2271,8 @@ export default function Dashboard() {
                         <span>{t('الرصيد الافتتاحي')}:</span>
                         <span>{formatPrice(closingResult.opening_cash)}</span>
                       </div>
+                      {!user?.permissions?.includes('hide_cash_expected') && (
+                      <>
                       <div className="flex justify-between text-green-600">
                         <span>+ {t('المبيعات النقدية')}:</span>
                         <span>{formatPrice(closingResult.cash_sales)}</span>
@@ -2282,10 +2286,14 @@ export default function Dashboard() {
                         <span>{t('المتوقع في الصندوق')} ({t('نقداً')}):</span>
                         <span>{formatPrice(closingResult.expected_cash)}</span>
                       </div>
+                      </>
+                      )}
                       <div className="flex justify-between font-bold">
                         <span>{t('الجرد الفعلي')}:</span>
                         <span>{formatPrice(closingResult.closing_cash)}</span>
                       </div>
+                      {!user?.permissions?.includes('hide_cash_expected') && (
+                      <>
                       <Separator className="my-2" />
                       <div className={`flex justify-between font-bold text-lg ${closingResult.cash_difference >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                         <span>{t('الفرق')}:</span>
@@ -2299,6 +2307,8 @@ export default function Dashboard() {
                           {closingResult.cash_difference >= 0 ? ` ${t('زيادة')}` : ` ${t('نقص')}`}
                         </span>
                       </div>
+                      </>
+                      )}
                     </div>
                   </div>
                   
@@ -2394,18 +2404,22 @@ export default function Dashboard() {
                     <p className="text-xs text-muted-foreground">{t('إجمالي المبيعات')}</p>
                     <p className="text-lg font-bold text-green-600">{formatPrice(cashSummary.total_sales)}</p>
                   </div>
+                  {!user?.permissions?.includes('hide_cash_expected') && (
                   <div className="p-3 bg-blue-500/10 rounded-lg text-center">
                     <p className="text-xs text-muted-foreground">{t('نقدي')}</p>
                     <p className="text-lg font-bold text-blue-600">{formatPrice(cashSummary.cash_sales)}</p>
                   </div>
+                  )}
                   <div className="p-3 bg-yellow-500/10 rounded-lg text-center">
                     <p className="text-xs text-muted-foreground">{t('المصاريف')}</p>
                     <p className="text-lg font-bold text-yellow-600">{formatPrice(cashSummary.total_expenses)}</p>
                   </div>
+                  {!user?.permissions?.includes('hide_cash_expected') && (
                   <div className="p-3 bg-purple-500/10 rounded-lg text-center">
                     <p className="text-xs text-muted-foreground">{t('المتوقع')}</p>
                     <p className="text-lg font-bold text-purple-600">{formatPrice(cashSummary.expected_cash)}</p>
                   </div>
+                  )}
                 </div>
 
                 {/* جرد فئات النقود */}
@@ -2443,8 +2457,8 @@ export default function Dashboard() {
                     <span className="text-2xl font-bold text-primary">{formatPrice(calculateCountedCash())}</span>
                   </div>
 
-                  {/* الفرق */}
-                  {calculateCountedCash() > 0 && (
+                  {/* الفرق - يُخفى مع النقدي والمتوقع */}
+                  {calculateCountedCash() > 0 && !user?.permissions?.includes('hide_cash_expected') && (
                     <div className={`flex items-center justify-between p-4 rounded-lg ${
                       calculateCountedCash() - cashSummary.expected_cash >= 0 
                         ? 'bg-green-500/10' 
