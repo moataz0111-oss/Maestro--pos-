@@ -1,118 +1,136 @@
 <analysis>**original_problem_statement**: 
-Fixing a 500 Internal Server Error on the Cash Register Summary/Close endpoints and Dashboard Stats caused by  values in MongoDB. Fixing the shift calculation logic to bind correctly to the cashier's specific shift time. Implementing auto close day management correctly. Modifying UI to hide Expected Cash and Recent Orders based on user permissions. Additionally, the user requested a new feature to allow users with multiple restaurants to easily switch between them (Tenant/Restaurant Switcher).
+Fixing a series of bugs across the POS system: 
+1. UI permissions (hiding expected cash/recent orders) not working for cashiers.
+2. Thermal printing issues (opening new tabs, no logo, printing 1.5 meters of blank white paper).
+3. Inventory items disappearing after creation due to missing tenant IDs.
+4. Sales reports incorrectly including refunded/pending orders and grouping driver deliveries with company deliveries.
+5. 500 Internal Server Error when closing the cash register with expenses.
+6. Customer Menu App lacking real-time POS notifications, driver visibility, and suffering from a PWA Android infinite reload loop. 
+Additionally, the user requested a Multi-Restaurant (Tenant) Switcher feature (carried over from previous sessions).
 
 **PRODUCT REQUIREMENTS**:
-- Robust handling of MongoDB  values across all math operations in the backend.
-- Shift calculations must be isolated to the individual cashier's opened shift timestamp, not the branch's last closed shift.
-- UI elements (Cash Expected, Cash Difference, Recent Orders, Sales by Payment Method) must strictly respect the assigned permissions and hide themselves for restricted cashiers.
+- Robust thermal printing using hidden iframes that strictly adheres to 72mm paper width without blank trails.
+- Real-time POS notifications for incoming customer menu orders.
+- Strict tenant isolation across all inventory and reporting routes.
+- Robust role-based UI access where toggles correctly persist and apply to cashier accounts.
 - Multi-restaurant support: Users owning multiple restaurants need a UI to view all their restaurants and switch between them seamlessly.
 
 **User's preferred language**: Arabic (العربية) (INSTRUCT NEXT AGENT: You MUST respond in the user's preferred language, Arabic, only)
 
 **what currently exists?** 
-A multi-tenant POS system (React + FastAPI + MongoDB) with robust role-based access, a POS interface, PWA offline support, shift/cash register management, and dynamic thermal printing.
+A multi-tenant POS system (React + FastAPI + MongoDB) with role-based access, offline PWA support, dynamic thermal printing, shift management, inventory tracking, and a customer-facing menu application.
 
 **Last working item**: 
-    - Last item agent was working: Validating the UI visibility of the Cash and Expected Cash summary cards on the Dashboard during the Cash Register Close flow. The agent verified that the logic correctly hides these elements for cashiers lacking permissions, but shows them for Admins.
-    - Status: COMPLETED
-    - Agent Testing Done: Y
-    - Which testing method agent to use? NA (Testing is already done)
-    - User Testing Done: Y
+    - Last item agent was working: Investigating why user permissions (specifically UI hiding toggles like  and ) are not saving or applying correctly from the Settings page for a specific user (يامن). The user's screenshot showed the toggles turned OFF in settings, implying an issue with the  frontend function or the  backend endpoint not persisting the changes.
+    - Status: IN PROGRESS
+    - Agent Testing Done: N
+    - Which testing method agent to use? Both (Frontend screenshot for UI toggle state + Backend curl/python to verify DB persistence).
+    - User Testing Done: N
 
 **All Pending/In progress Issue list**: 
-None currently. The 500 errors and UI hiding bugs were successfully resolved and verified.
+  Issue 1: (P0) User permissions not saving/updating from the Settings panel
+     - Attempted fixes: The agent just started investigating  in  and  in .
+     - Next debug checklist: 
+        - Check  in  to ensure  array is correctly extracted and saved to MongoDB.
+        - Check  ->  to ensure the  payload is constructed properly when saving user edits.
+     - Why fix this issue and what will be achieved with the fix? The user cannot enforce security/privacy rules for their cashiers if the settings don't save.
+     - Status: IN PROGRESS
+     - Is recurring issue? Y (This is the 3rd time UI permissions have caused confusion).
+     - Should Test frontend/backend/both after fix? Both.
+     - Blocked on other issue: None.
 
 **In progress Task List**:
   None.
 
 **Upcoming and Future Tasks**
     Upcoming Tasks:
-    - (P0) **Multi-Restaurant (Tenant) Switcher**: The user requested a feature for users who own multiple different restaurants to view all their restaurants upon login and easily switch between them. (Discussed in messages 94-106; mockups were generated but implementation is pending).
-    - (P1) **ZKTeco Fingerprint Integration**: Implement UI configuration and hardware integration.
+    - (P0) **Multi-Restaurant (Tenant) Switcher**: The user requested a feature for users who own multiple different restaurants to view all their restaurants upon login and easily switch between them. (Deferred multiple times due to critical bugs).
     
     Future Tasks:
+    - (P1) **ZKTeco Fingerprint Integration**: Implement UI configuration and hardware integration.
     - (P2) **Refactor **: Break down the monolithic file (17k+ lines) into modular routes.
     - (P2) **Refactor **: Break down the frontend monolith (5.4k+ lines) into smaller components.
 
 **Completed work in this session**
-- Fixed comprehensive  / 500 Internal Server Errors across  (196+ replacements) and . Implemented  and  to prevent math crashes when MongoDB returns  for numeric fields. (DONE)
-- Fixed Cash Register Summary logic to calculate from the specific cashier's shift open time, instead of the branch's last closed shift. (DONE)
-- Fixed Admin shift lookup logic to correctly use  and fallback timestamps when impersonating/viewing shifts. (DONE)
-- Fixed Auto Close Day logic () to correctly calculate  and register a 0  with accurate short cash differences. (DONE)
-- Implemented frontend UI logic to hide Sales by Payment Method chart, Expected Cash cards, and Recent Orders based on  and  permissions. (DONE)
+- Fixed  and  configurations to pass deployment readiness checks. (DONE)
+- Fixed Inventory API () missing  which caused items to save but not appear. (DONE)
+- Fixed Reports () to exclude refunded/cancelled orders and separated Driver Deliveries from App Company Deliveries. (DONE)
+- Fixed permission scope: Cashiers with Expenses or Delivery permissions can now see the Add Expense and Add Driver buttons. (DONE)
+- Rewrote thermal printing logic ( and ) to use hidden iframes, Base64 logo conversion, and strict  CSS to prevent printing 1.5 meters of blank paper. (DONE)
+- Fixed Customer App Android PWA infinite reload loop by removing conflicting  calls in  and . (DONE)
+- Added real-time full-screen notification modal in  for incoming customer menu orders. (DONE)
+- Fixed 500 error on shift close by adding missing  and  enums in . (DONE)
 
 **Earlier issues found/mentioned but not fixed**
    None.
 
 **Known issue recurrence from previous fork**
-  - Issue recurrence in previous fork: Backend  due to missing or explicit  DB fields (e.g., , ).
-  - Recurrence count: 4
-  - Status: RESOLVED (Mitigated heavily across the app).
-  - Note: Next agent MUST be extremely careful when querying numerical fields from MongoDB. Python's  will return  if the key exists but is explicitly  in the document. Always use the helper functions  (in ) or  (in ).
+  - Issue recurrence in previous fork: UI Hiding Permissions not functioning.
+  - Recurrence count: 3
+  - Status: IN PROGRESS
+  - Note: Previously the frontend rendering was fixed, but now the actual saving/persisting of the permissions from the Settings UI is broken.
 
 **Code Architecture**
 
 
 **Key Technical Concepts**
-React (Frontend), FastAPI (Backend), MongoDB.
+React, FastAPI, MongoDB, PWA Service Workers, Base64 Image Conversion, Thermal Print CSS (), WebSockets/Polling for Notifications.
 
 **key DB schema**
-  - : , , , , , .
-  - : , .
-  - : Logs forced and automatic 24-hour day closures.
+  - :  (array of strings like ).
+  - : , , .
 
 **changes in tech stack**
   - None.
 
 **All files of reference**
-- 
-- 
-- 
-- 
+-  (Needs fix for User Permissions saving)
+-  (Needs fix for User Permissions saving)
+-  (Updated heavily for printing and notifications)
+-  (Updated heavily for printing)
+-  (Enums updated)
+-  (PWA updated)
 
 **Areas that need refactoring**:
 - 
 - 
 
 **key api endpoints**
-- : Generates sales and order stats (Heavily updated for null safety).
-- : Calculates current shift totals.
-- : Finalizes the shift.
-- : Forces day closure for pending shifts.
+- : Update user details and permissions.
+- : Polling for POS notifications.
+- : Shift closure (fixed).
 
 **Critical Info for New Agent**
-- **Null Safety in Backend:** Do not use direct math on  from MongoDB objects. Always use  or .
-- **Tenant Switcher Pending:** The user explicitly requested a Multi-Restaurant Switcher feature. Be prepared to pick this up as the first major feature task. Check  context around messages 94-106.
-- **Admin vs Cashier Logic:** Be mindful that Admins bypassing shift IDs or having different permissions changes how UI elements render. Do not test cashier-specific UI hiding logic while logged in as an Admin.
 - **Language:** The user communicates exclusively in Arabic. Your replies must be in Arabic.
+- **Current Blocker:** Look immediately at why toggling switches in  (Edit User Modal) does not successfully update the  array for the user in the database. The user provided a screenshot showing the toggles are OFF for يامن despite attempting to turn them on.
+- **Thermal Printing:** If touching print logic again, remember the target is a SAM4S thermal printer. Ensure no empty DOM elements push the print height to 1.5 meters.
 
 **documents and test reports created in this job**
-  - /app/memory/PRD.md (Updated)
+  - 
+  - 
+  - 
 
 **Last 10 User Messages and any pending HUMAN messages** 
-1. User asked about a 500 error on the production server despite successful GitHub deployment.
-2. User provided a screenshot of the error.
-3. User provided workflow runner logs showing successful deployment.
-4. User showed that the UI still throws an error.
-5. User asked if they need to save/deploy again from Emergent.
-6. User reported that after the new deployment, Admin could open the shift successfully.
-7. User reported that the Auto Day Close was failing to record short cash properly. User also noted that UI hiding for cash expected/recent orders wasn't hiding everything intended.
-8. User provided screenshots showing the missing short cash in auto-close, and the UI elements still visible.
-9. User asked if the specific colored cards for Expected Cash would hide when the setting is active.
-10. User thanked the agent for their hard work and patience. (Task resolved).
+1. User asked to fix remaining issues.
+2. User provided screenshots showing Expenses failing, Reports miscalculating, and Delivery driver logic failing.
+3. User asked to adjust permissions so cashiers with Expenses access can add expenses (buttons were hidden).
+4. User requested a Deployment Check. (Passed).
+5. User complained agent missed things: 500 error on closing shift, thermal printing wasting 1.5m of paper, and Customer Menu App lacking notifications and infinite reloading on Android.
+6. Agent fixed printing, PWA reload loop, added POS notifications, and fixed the 500 error (missing Enums).
+7. User reported one final bug: The UI hiding permissions for a specific user (يامن) are disabled in settings and don't seem to apply/save correctly. (Agent was investigating this when context ended).
 
 **Project Health Check:**
-- Broken: None
+- Broken: Saving User Permissions in Settings.
 - Mocked: None
 
 **3rd Party Integrations**
 - Emergent LLM Key (used in backend ).
 
 **Testing status**
-  - Testing agent used after significant changes: NO (Agent performed extensive manual testing via bash, curl, and frontend screenshots).
+  - Testing agent used after significant changes: YES (Iterations 133 & 134)
   - Troubleshoot agent used after agent stuck in loop: NO
   - Test files created: None
-  - Known regressions: None currently.
+  - Known regressions: None
 
 **Credentials to test flow:**
 - Admin: hanialdujaili@gmail.com / Hani@2024
@@ -120,4 +138,4 @@ React (Frontend), FastAPI (Backend), MongoDB.
 - Test Cashier: cashier@test.com / Test@1234
 
 **What agent forgot to execute**
-The agent discussed and generated mockups for the **Multi-Restaurant (Tenant) Switcher** requested by the user, but got side-tracked by critical 500 errors in the production environment. This feature was entirely left un-implemented and needs to be picked up.</analysis>
+The **Multi-Restaurant (Tenant) Switcher** feature was deferred again due to the high volume of critical operational bugs reported by the user. Ensure the permission bug is fixed first, then prioritize this switcher.</analysis>

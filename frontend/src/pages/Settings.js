@@ -1443,13 +1443,14 @@ export default function Settings() {
   };
 
   const toggleUserPermission = (permId) => {
-    if (!editUserForm) return;
-    const perms = editUserForm.permissions || [];
-    if (perms.includes(permId)) {
-      setEditUserForm({ ...editUserForm, permissions: perms.filter(p => p !== permId) });
-    } else {
-      setEditUserForm({ ...editUserForm, permissions: [...perms, permId] });
-    }
+    setEditUserForm(prev => {
+      if (!prev) return prev;
+      const perms = prev.permissions || [];
+      const newPerms = perms.includes(permId)
+        ? perms.filter(p => p !== permId)
+        : [...perms, permId];
+      return { ...prev, permissions: newPerms };
+    });
   };
 
   // Category handlers
@@ -2697,7 +2698,7 @@ export default function Settings() {
                                 <TableCell>{branches.find(b => b.id === u.branch_id)?.name || '-'}</TableCell>
                                 <TableCell>
                                   <div className="flex gap-1">
-                                    <Button variant="ghost" size="sm" onClick={() => handleEditUser(u)}>
+                                    <Button variant="ghost" size="sm" onClick={() => handleEditUser(u)} data-testid={`edit-user-btn-${u.id}`}>
                                       <Edit className="h-4 w-4" />
                                     </Button>
                                     <Button variant="ghost" size="sm" className="text-blue-500" onClick={() => handlePreviewUser(u)}>
@@ -2722,21 +2723,23 @@ export default function Settings() {
                           <DialogTitle className="text-foreground">{t('تعديل بيانات المستخدم')}</DialogTitle>
                         </DialogHeader>
                         {editUserForm && (
-                          <form onSubmit={handleUpdateUser} className="space-y-4">
+                          <form onSubmit={handleUpdateUser} className="space-y-4" data-testid="edit-user-form">
                             <div className="grid grid-cols-2 gap-4">
                               <div>
                                 <Label className="text-foreground">{t('اسم المستخدم')}</Label>
                                 <Input
+                                  data-testid="edit-user-username"
                                   value={editUserForm.username}
-                                  onChange={(e) => setEditUserForm({ ...editUserForm, username: e.target.value })}
+                                  onChange={(e) => { const val = e.target.value; setEditUserForm(prev => ({ ...prev, username: val })); }}
                                   className="bg-background border-input"
                                 />
                               </div>
                               <div>
                                 <Label className="text-foreground">{t('الاسم الكامل')}</Label>
                                 <Input
+                                  data-testid="edit-user-fullname"
                                   value={editUserForm.full_name}
-                                  onChange={(e) => setEditUserForm({ ...editUserForm, full_name: e.target.value })}
+                                  onChange={(e) => { const val = e.target.value; setEditUserForm(prev => ({ ...prev, full_name: val })); }}
                                   className="bg-background border-input"
                                   placeholder={t('الاسم بالعربي')}
                                 />
@@ -2744,8 +2747,9 @@ export default function Settings() {
                               <div>
                                 <Label className="text-foreground">{t('الاسم بالإنجليزي')}</Label>
                                 <Input
+                                  data-testid="edit-user-fullname-en"
                                   value={editUserForm.full_name_en || ''}
-                                  onChange={(e) => setEditUserForm({ ...editUserForm, full_name_en: e.target.value })}
+                                  onChange={(e) => { const val = e.target.value; setEditUserForm(prev => ({ ...prev, full_name_en: val })); }}
                                   className="bg-background border-input"
                                   placeholder="English Name"
                                   dir="ltr"
@@ -2755,17 +2759,18 @@ export default function Settings() {
                             <div>
                               <Label className="text-foreground">{t('البريد الإلكتروني')}</Label>
                               <Input
+                                data-testid="edit-user-email"
                                 type="email"
                                 value={editUserForm.email}
-                                onChange={(e) => setEditUserForm({ ...editUserForm, email: e.target.value })}
+                                onChange={(e) => { const val = e.target.value; setEditUserForm(prev => ({ ...prev, email: val })); }}
                                 className="bg-background border-input"
                               />
                             </div>
                             <div className="grid grid-cols-2 gap-4">
                               <div>
                                 <Label className="text-foreground">{t('الدور')}</Label>
-                                <Select value={editUserForm.role} onValueChange={(val) => setEditUserForm({...editUserForm, role: val})}>
-                                  <SelectTrigger className="bg-background border-input">
+                                <Select value={editUserForm.role} onValueChange={(val) => setEditUserForm(prev => ({...prev, role: val}))}>
+                                  <SelectTrigger className="bg-background border-input" data-testid="edit-user-role">
                                     <SelectValue />
                                   </SelectTrigger>
                                   <SelectContent>
@@ -2783,8 +2788,8 @@ export default function Settings() {
                               </div>
                               <div>
                                 <Label className="text-foreground">{t('الفرع')}</Label>
-                                <Select value={editUserForm.branch_id || 'all'} onValueChange={(val) => setEditUserForm({...editUserForm, branch_id: val === 'all' ? '' : val})}>
-                                  <SelectTrigger className="bg-background border-input">
+                                <Select value={editUserForm.branch_id || 'all'} onValueChange={(val) => setEditUserForm(prev => ({...prev, branch_id: val === 'all' ? '' : val}))}>
+                                  <SelectTrigger className="bg-background border-input" data-testid="edit-user-branch">
                                     <SelectValue placeholder={t('جميع الفروع')} />
                                   </SelectTrigger>
                                   <SelectContent>
@@ -2799,17 +2804,19 @@ export default function Settings() {
                             <div>
                               <Label className="text-foreground">{t('كلمة المرور الجديدة (اختياري)')}</Label>
                               <Input
+                                data-testid="edit-user-password"
                                 type="password"
                                 placeholder={t('اتركها فارغة للإبقاء على كلمة المرور الحالية')}
                                 value={editUserForm.new_password || ''}
-                                onChange={(e) => setEditUserForm({ ...editUserForm, new_password: e.target.value })}
+                                onChange={(e) => { const val = e.target.value; setEditUserForm(prev => ({ ...prev, new_password: val })); }}
                                 className="bg-background border-input"
                               />
                             </div>
                             <div className="flex items-center gap-2">
                               <Switch
+                                data-testid="edit-user-active"
                                 checked={editUserForm.is_active !== false}
-                                onCheckedChange={(checked) => setEditUserForm({ ...editUserForm, is_active: checked })}
+                                onCheckedChange={(checked) => setEditUserForm(prev => ({ ...prev, is_active: checked }))}
                               />
                               <Label className="text-foreground">{t('الحساب نشط')}</Label>
                             </div>
@@ -2830,10 +2837,13 @@ export default function Settings() {
                                             <Switch
                                               checked={editUserForm.permissions?.includes(perm.id)}
                                               onCheckedChange={(checked) => {
-                                                const newPerms = checked 
-                                                  ? [...(editUserForm.permissions || []), perm.id]
-                                                  : (editUserForm.permissions || []).filter(p => p !== perm.id);
-                                                setEditUserForm({ ...editUserForm, permissions: newPerms });
+                                                setEditUserForm(prev => {
+                                                  const currentPerms = prev.permissions || [];
+                                                  const newPerms = checked 
+                                                    ? [...currentPerms, perm.id]
+                                                    : currentPerms.filter(p => p !== perm.id);
+                                                  return { ...prev, permissions: newPerms };
+                                                });
                                               }}
                                             />
                                             <span className="text-sm text-foreground">{t(perm.name)}</span>
@@ -2848,8 +2858,8 @@ export default function Settings() {
                             </div>
                             
                             <div className="flex gap-2 pt-4">
-                              <Button type="button" variant="outline" onClick={() => setEditUserDialogOpen(false)} className="flex-1">{t('إلغاء')}</Button>
-                              <Button type="submit" className="flex-1 bg-primary text-primary-foreground">{t('حفظ التعديلات')}</Button>
+                              <Button type="button" variant="outline" onClick={() => setEditUserDialogOpen(false)} className="flex-1" data-testid="edit-user-cancel-btn">{t('إلغاء')}</Button>
+                              <Button type="submit" className="flex-1 bg-primary text-primary-foreground" data-testid="edit-user-save-btn">{t('حفظ التعديلات')}</Button>
                             </div>
                           </form>
                         )}

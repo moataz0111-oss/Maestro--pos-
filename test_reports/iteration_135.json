@@ -1,0 +1,87 @@
+{
+  "summary": "Verified fix for user permission toggle persistence bug (stale closure in React state). All backend API tests (8/8) and UI tests passed. Permission toggles (hide_cash_expected, hide_recent_orders) now correctly persist after save using functional state updates.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "Edit User Dialog",
+        "issues": ["Missing aria-describedby for DialogContent (accessibility warning in console)"]
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_user_permissions.py",
+    "/app/test_reports/pytest/pytest_results_iter135.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "VERIFIED FIX: Settings.js line 1445-1454 toggleUserPermission uses functional state update setEditUserForm(prev => ...) preventing stale closure",
+    "VERIFIED FIX: Settings.js line 2839-2846 inline onCheckedChange also uses functional state update pattern",
+    "Backend PUT /api/users/{id} correctly accepts and persists permissions array",
+    "data-testid attributes properly added: edit-user-form, edit-user-save-btn, edit-user-cancel-btn, edit-user-btn-{id}"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_user_permissions.py"
+  ],
+  "success_rate": {
+    "backend": "100% (8/8 tests passed)",
+    "frontend": "100% (all UI tests passed)"
+  },
+  "test_credentials": {
+    "admin": "hanialdujaili@gmail.com / Hani@2024",
+    "test_cashier": "cashier@test.com / Test@1234"
+  },
+  "seed_data_creation": "None - used existing test cashier user",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Permission toggle persistence bug is FIXED. The fix uses functional state updates (setEditUserForm(prev => ...)) instead of direct state reference to prevent stale closure. Test cashier user ID: 29d01373-293c-4703-8c4f-2f832d9d2abb. Current permissions restored to: pos, tables, orders, hide_cash_expected, hide_recent_orders, expenses, delivery.",
+  "verified_bug_fix": {
+    "bug_description": "Permission toggles (hide_cash_expected, hide_recent_orders) in edit user dialog didn't persist correctly due to stale closure bug in React state management",
+    "root_cause": "Using direct state reference setEditUserForm({...editUserForm, permissions: newPerms}) captured stale state in closure",
+    "fix_applied": "Changed to functional state update setEditUserForm(prev => ({...prev, permissions: newPerms})) which always uses latest state",
+    "fix_location": "/app/frontend/src/pages/Settings.js lines 1445-1454 and 2839-2846",
+    "verification_steps": [
+      "1. Login as admin",
+      "2. Navigate to Settings > المستخدمين tab",
+      "3. Click edit on test cashier user",
+      "4. Toggle OFF hide_cash_expected and hide_recent_orders",
+      "5. Click save - success toast appears",
+      "6. Re-open edit dialog - both toggles are OFF (persisted)",
+      "7. Toggle ON both permissions",
+      "8. Click save - success toast appears",
+      "9. Re-open edit dialog - both toggles are ON (persisted)"
+    ],
+    "status": "FIXED AND VERIFIED"
+  },
+  "test_results": {
+    "backend_tests": {
+      "TestAuthentication::test_admin_login": "PASSED",
+      "TestUserPermissions::test_get_users_list": "PASSED",
+      "TestUserPermissions::test_get_test_cashier_user": "PASSED",
+      "TestUserPermissions::test_update_user_permissions_clear_all": "PASSED",
+      "TestUserPermissions::test_update_user_permissions_add_hide_cash_expected": "PASSED",
+      "TestUserPermissions::test_update_user_permissions_add_multiple": "PASSED",
+      "TestUserPermissions::test_rapid_permission_toggle": "PASSED",
+      "TestUserPermissions::test_restore_original_permissions": "PASSED"
+    },
+    "ui_tests": {
+      "login_as_admin": "PASSED",
+      "navigate_to_settings": "PASSED",
+      "click_staff_tab": "PASSED",
+      "open_edit_dialog": "PASSED",
+      "toggle_permissions_off": "PASSED",
+      "save_and_verify_off": "PASSED",
+      "toggle_permissions_on": "PASSED",
+      "save_and_verify_on": "PASSED"
+    }
+  },
+  "console_warnings": [
+    "IndexedDB is_synced index error (unrelated to this bug)",
+    "Missing aria-describedby for DialogContent (accessibility)"
+  ]
+}

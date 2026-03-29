@@ -115,7 +115,7 @@
   },
   
   "test_credentials": {
-    "api_url": "https://shift-fix-3.preview.emergentagent.com",
+    "api_url": "https://thermal-print-fix-5.preview.emergentagent.com",
     "super_admin": {
       "email": "owner@maestroegp.com",
       "password": "owner123",
