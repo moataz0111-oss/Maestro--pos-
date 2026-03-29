@@ -563,8 +563,9 @@ async def close_cash_register(close_data: CashRegisterClose, current_user: dict 
     
     expenses = await db.expenses.find({
         "branch_id": shift.get("branch_id"),
-        "created_at": {"$gte": shift.get("started_at", shift.get("opened_at", ""))}
-    }).to_list(100)
+        "created_at": {"$gte": shift.get("started_at", shift.get("opened_at", ""))},
+        **({"tenant_id": tenant_id} if tenant_id else {})
+    }, {"_id": 0}).to_list(100)
     total_expenses = sum(_safe_num(e.get("amount")) for e in expenses)
     
     net_profit = gross_profit - total_expenses

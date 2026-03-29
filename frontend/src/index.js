@@ -9,36 +9,38 @@ const registerServiceWorker = async () => {
     try {
       const registration = await navigator.serviceWorker.register('/sw-offline.js', {
         scope: '/',
-        updateViaCache: 'none' // دائماً يتحقق من التحديثات بدون cache
+        updateViaCache: 'none'
       });
-      console.log('✅ Service Worker registered successfully:', registration.scope);
+      console.log('Service Worker registered:', registration.scope);
       
-      // التحقق من التحديثات كل 5 دقائق
+      // التحقق من التحديثات كل 10 دقائق
       setInterval(() => {
         registration.update();
-      }, 5 * 60 * 1000);
+      }, 10 * 60 * 1000);
       
-      // تحديث تلقائي عند وجود نسخة جديدة
+      // عند وجود نسخة جديدة - تفعيلها بدون إعادة تحميل قسري
       registration.addEventListener('updatefound', () => {
         const newWorker = registration.installing;
         if (newWorker) {
           newWorker.addEventListener('statechange', () => {
             if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-              console.log('🔄 New version available, reloading...');
-              // إعادة تحميل الصفحة تلقائياً عند وجود تحديث
-              window.location.reload();
+              // تفعيل النسخة الجديدة بصمت - بدون إعادة تحميل
+              newWorker.postMessage({ type: 'SKIP_WAITING' });
             }
           });
         }
       });
       
-      // إعادة تحميل عند تغيير الـ controller (SW جديد أصبح نشط)
+      // منع إعادة التحميل المتكرر - فقط مرة واحدة
+      let refreshing = false;
       navigator.serviceWorker.addEventListener('controllerchange', () => {
-        console.log('🔄 Service Worker controller changed, reloading...');
-        window.location.reload();
+        if (refreshing) return;
+        refreshing = true;
+        // لا نعيد التحميل تلقائياً - نترك المستخدم يستمر بالعمل
+        console.log('Service Worker updated');
       });
     } catch (error) {
-      console.error('❌ Service Worker registration failed:', error);
+      console.error('Service Worker registration failed:', error);
     }
   }
 };

@@ -902,22 +902,11 @@ export default function Dashboard() {
     const logoUrl = tenantInfo?.logo_url;
     const doActualPrint = (logoDataUrl) => {
     
-    // إنشاء iframe مخفي للطباعة
-    const existingFrame = document.getElementById('print-closing-frame');
-    if (existingFrame) existingFrame.remove();
-    
-    const iframe = document.createElement('iframe');
-    iframe.id = 'print-closing-frame';
-    iframe.style.position = 'fixed';
-    iframe.style.top = '-10000px';
-    iframe.style.left = '-10000px';
-    iframe.style.width = '80mm';
-    iframe.style.height = '0';
-    document.body.appendChild(iframe);
-    
-    const doc = iframe.contentWindow.document;
-    doc.open();
-    doc.write(`
+    // فتح نافذة طباعة صغيرة
+    const printWin = window.open('', '_blank', 'width=302,height=600,menubar=no,toolbar=no,location=no,status=no');
+    if (!printWin) return;
+    printWin.document.open();
+    printWin.document.write(`
       <!DOCTYPE html>
       <html dir="rtl" lang="ar">
       <head>
@@ -925,13 +914,13 @@ export default function Dashboard() {
         <title>إيصال إغلاق الصندوق</title>
         <style>
           * { margin: 0; padding: 0; box-sizing: border-box; }
+          @page { margin: 0mm !important; }
           body {
             font-family: 'Courier New', monospace;
             font-size: 12px;
-            width: 72mm;
-            max-width: 72mm;
+            width: 100%;
             padding: 2mm;
-            margin: 0 auto;
+            margin: 0;
             direction: rtl;
             background: white;
             color: black;
@@ -1025,7 +1014,7 @@ export default function Dashboard() {
           }
         </style>
       </head>
-      <body>
+      <body onload="setTimeout(function(){ window.print(); window.close(); }, 300);">
         <div class="header">
           ${logoDataUrl ? `
             <img 
@@ -1118,21 +1107,8 @@ export default function Dashboard() {
       </body>
       </html>
     `);
-    doc.close();
-    iframe.contentWindow.focus();
-    
-    // طباعة تلقائية - انتظار تحميل الصور
-    const imgs = iframe.contentWindow.document.querySelectorAll('img');
-    const imgPromises = Array.from(imgs).map(img => {
-      if (img.complete) return Promise.resolve();
-      return new Promise(resolve => { img.onload = resolve; img.onerror = resolve; });
-    });
-    Promise.all(imgPromises).then(() => {
-      setTimeout(() => {
-        iframe.contentWindow.print();
-        setTimeout(() => iframe.remove(), 3000);
-      }, 200);
-    });
+    printWin.document.close();
+    // الطباعة تتم تلقائياً عند تحميل الصفحة (onload)
     }; // end doActualPrint
     
     // تحويل الشعار إلى base64 ثم الطباعة
@@ -1153,27 +1129,18 @@ export default function Dashboard() {
     const printContent = printRef.current;
     if (!printContent) return;
     
-    const existingFrame2 = document.getElementById('print-report-frame');
-    if (existingFrame2) existingFrame2.remove();
-    
-    const iframe2 = document.createElement('iframe');
-    iframe2.id = 'print-report-frame';
-    iframe2.style.position = 'fixed';
-    iframe2.style.top = '-10000px';
-    iframe2.style.left = '-10000px';
-    iframe2.style.width = '72mm';
-    iframe2.style.height = '0';
-    document.body.appendChild(iframe2);
-    
-    const doc2 = iframe2.contentWindow.document;
-    doc2.open();
-    doc2.write(`
+    const printWin = window.open('', '_blank', 'width=302,height=600,menubar=no,toolbar=no,location=no,status=no');
+    if (!printWin) return;
+    printWin.document.open();
+    printWin.document.write(`
       <!DOCTYPE html>
       <html dir="rtl">
       <head>
         <title>تقرير إغلاق الصندوق</title>
         <style>
-          body { font-family: 'Courier New', monospace; padding: 1mm; margin: 0 auto; direction: rtl; width: 72mm; max-width: 72mm; background: white; color: black; }
+          * { margin: 0; padding: 0; box-sizing: border-box; }
+          @page { margin: 0mm !important; }
+          body { font-family: 'Courier New', monospace; padding: 2mm; margin: 0; direction: rtl; width: 100%; background: white; color: black; }
           .header { text-align: center; margin-bottom: 10px; }
           .header h1 { font-size: 16px; margin: 0; }
           .header p { color: #333; margin: 3px 0; font-size: 11px; }
@@ -1186,11 +1153,9 @@ export default function Dashboard() {
           .negative { color: #000; }
           .total-row { background: #eee; padding: 5px; margin: 5px 0; font-size: 13px; }
           .footer { text-align: center; margin-top: 10px; font-size: 10px; }
-          @page { size: 72mm auto !important; margin: 0mm !important; }
-          @media print { body { padding: 1mm !important; width: 72mm !important; margin: 0 !important; } }
         </style>
       </head>
-      <body>
+      <body onload="setTimeout(function(){ window.print(); window.close(); }, 300);">
         ${printContent.innerHTML}
         <div class="footer">
           <p>Maestro EGP - ${new Date().toLocaleString('en-GB')}</p>
@@ -1198,12 +1163,7 @@ export default function Dashboard() {
       </body>
       </html>
     `);
-    doc2.close();
-    iframe2.contentWindow.focus();
-    setTimeout(() => {
-      iframe2.contentWindow.print();
-      setTimeout(() => iframe2.remove(), 3000);
-    }, 300);
+    printWin.document.close();
   };
 
   // إغلاق وتسجيل الخروج

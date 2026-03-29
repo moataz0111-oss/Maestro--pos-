@@ -182,15 +182,20 @@ export default function POS() {
   const isCashierRole = user?.role === 'cashier' || user?.role === 'admin' || user?.role === 'owner';
   
   // تفعيل الإشعارات للكاشير فقط
+  const [incomingCustomerOrder, setIncomingCustomerOrder] = useState(null); // طلب قادم من تطبيق العميل
+  
   const { notifications: orderNotifications, unreadCount: unreadOrdersCount } = useOrderNotifications({
     branchId: isCashierRole ? currentBranchIdForNotifications : null,
     enabled: isCashierRole && !isCallCenter && !isCaptain,
     pollingInterval: 5000,
     playSound: true,
-    autoPrint: false, // يمكن تفعيلها من الإعدادات
+    autoPrint: false,
     onNewOrder: (notification) => {
-      // تحديث قائمة الطلبات المعلقة
       fetchPendingOrders();
+      // إذا كان الطلب من تطبيق العميل - عرض نافذة كبيرة
+      if (notification.source === 'customer_app') {
+        setIncomingCustomerOrder(notification);
+      }
     }
   });
 
@@ -2076,8 +2081,100 @@ export default function POS() {
     }
   };
 
+  // قبول أو رفض طلب العميل الخارجي
+  const handleAcceptCustomerOrder = async (orderId) => {
+    try {
+      await axios.post(`${API}/notifications/accept-order/${orderId}`);
+      toast.success(t('تم قبول الطلب'));
+      setIncomingCustomerOrder(null);
+      fetchPendingOrders();
+    } catch { toast.error(t('خطأ في قبول الطلب')); }
+  };
+  const handleRejectCustomerOrder = async (orderId) => {
+    try {
+      await axios.post(`${API}/notifications/reject-order/${orderId}`);
+      toast.success(t('تم رفض الطلب'));
+      setIncomingCustomerOrder(null);
+    } catch { toast.error(t('خطأ في رفض الطلب')); }
+  };
+
   return (
     <div className="min-h-screen bg-background flex flex-col" dir={isRTL ? 'rtl' : 'ltr'}>
+      {/* نافذة الطلب الوارد من تطبيق العميل */}
+      {incomingCustomerOrder && (
+        <div className="fixed inset-0 z-[200] bg-black/60 flex items-center justify-center" data-testid="incoming-order-modal">
+          <div className="bg-background border-2 border-primary rounded-2xl p-6 w-[400px] max-w-[95vw] shadow-2xl animate-pulse-once">
+            <div className="text-center mb-4">
+              <div className="w-16 h-16 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-3">
+                <Phone className="h-8 w-8 text-green-500" />
+              </div>
+              <h2 className="text-xl font-bold text-foreground">{t('طلب جديد من العميل')}</h2>
+              <p className="text-sm text-muted-foreground mt-1">#{incomingCustomerOrder.order_number}</p>
+            </div>
+            
+            <div className="space-y-3 mb-4">
+              {incomingCustomerOrder.customer_name && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">{t('العميل')}:</span>
+                  <span className="font-medium">{incomingCustomerOrder.customer_name}</span>
+                </div>
+              )}
+              {incomingCustomerOrder.customer_phone && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">{t('الهاتف')}:</span>
+                  <span className="font-medium" dir="ltr">{incomingCustomerOrder.customer_phone}</span>
+                </div>
+              )}
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">{t('نوع الطلب')}:</span>
+                <span className="font-medium">{incomingCustomerOrder.order_type === 'delivery' ? t('توصيل') : t('سفري')}</span>
+              </div>
+              {incomingCustomerOrder.delivery_address && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">{t('العنوان')}:</span>
+                  <span className="font-medium text-xs">{incomingCustomerOrder.delivery_address}</span>
+                </div>
+              )}
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">{t('عدد الأصناف')}:</span>
+                <span className="font-medium">{incomingCustomerOrder.items_count}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">{t('طريقة الدفع')}:</span>
+                <span className="font-medium">{
+                  incomingCustomerOrder.payment_method === 'cash' ? t('نقدي') :
+                  incomingCustomerOrder.payment_method === 'card' ? t('بطاقة') : 
+                  incomingCustomerOrder.payment_method === 'credit' ? t('آجل') :
+                  incomingCustomerOrder.payment_method || t('نقدي')
+                }</span>
+              </div>
+              <div className="border-t pt-2 flex justify-between">
+                <span className="font-bold text-lg">{t('المجموع')}:</span>
+                <span className="font-bold text-lg text-primary">{formatPrice(incomingCustomerOrder.total_amount)}</span>
+              </div>
+            </div>
+            
+            <div className="flex gap-3">
+              <Button 
+                className="flex-1 bg-red-500 hover:bg-red-600 text-white h-12 text-lg"
+                onClick={() => handleRejectCustomerOrder(incomingCustomerOrder.order_id)}
+                data-testid="reject-customer-order-btn"
+              >
+                <X className="h-5 w-5 mr-1" />
+                {t('رفض')}
+              </Button>
+              <Button 
+                className="flex-1 bg-green-500 hover:bg-green-600 text-white h-12 text-lg"
+                onClick={() => handleAcceptCustomerOrder(incomingCustomerOrder.order_id)}
+                data-testid="accept-customer-order-btn"
+              >
+                <Check className="h-5 w-5 mr-1" />
+                {t('قبول')}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
       {/* شريط تنبيه وضع المعاينة */}
       {isImpersonatingUser && (
         <div className="bg-amber-500 text-black px-4 py-2 text-center font-medium flex items-center justify-center gap-4 sticky top-0 z-[100]" data-testid="impersonation-banner">
@@ -3309,133 +3406,85 @@ export default function POS() {
             <Button 
               className="flex-1 bg-blue-500 hover:bg-blue-600 text-white"
               onClick={() => {
-                // طباعة باستخدام iframe مخفي - بدون نافذة جديدة
                 const printContent = document.getElementById('receipt-to-print');
                 if (printContent) {
-                  // استنساخ المحتوى واستبدال الصور بـ base64
                   const cloned = printContent.cloneNode(true);
-                  // استبدال شعار المطعم بـ base64 إذا متوفر
                   if (logoBase64) {
                     const imgs = cloned.querySelectorAll('img');
                     imgs.forEach(img => {
                       const alt = img.getAttribute('alt') || '';
-                      if (alt.includes('شعار المطعم') || alt.includes('logo')) {
+                      if (alt.includes('شعار') || alt.includes('logo')) {
                         img.src = logoBase64;
                       }
                     });
                   }
                   const htmlContent = cloned.innerHTML;
                   
-                  // إنشاء iframe مخفي للطباعة
-                  const existingFrame = document.getElementById('print-frame');
-                  if (existingFrame) existingFrame.remove();
-                  
-                  const iframe = document.createElement('iframe');
-                  iframe.id = 'print-frame';
-                  iframe.style.position = 'fixed';
-                  iframe.style.top = '-10000px';
-                  iframe.style.left = '-10000px';
-                  iframe.style.width = '80mm';
-                  iframe.style.height = '0';
-                  document.body.appendChild(iframe);
-                  
-                  const doc = iframe.contentWindow.document;
-                  doc.open();
-                  doc.write(`
-                    <!DOCTYPE html>
-                    <html dir="${isRTL ? 'rtl' : 'ltr'}" lang="${isRTL ? 'ar' : 'en'}">
-                    <head>
-                      <meta charset="UTF-8">
-                      <title>${t('فاتورة')}</title>
-                      <style>
-                        * { margin: 0; padding: 0; box-sizing: border-box; }
-                        html, body { 
-                          font-family: 'Courier New', monospace; 
-                          font-size: 12px; 
-                          padding: 0;
-                          margin: 0 auto;
-                          background: white;
-                          color: black;
-                          width: 72mm;
-                          max-width: 72mm;
-                          height: auto !important;
-                          min-height: 0 !important;
-                          overflow: hidden;
-                        }
-                        .text-center { text-align: center; }
-                        .text-left { text-align: left; }
-                        .text-right { text-align: right; }
-                        .font-bold { font-weight: bold; }
-                        .text-lg { font-size: 14px; }
-                        .text-sm { font-size: 10px; }
-                        .text-xs { font-size: 9px; }
-                        .mb-2 { margin-bottom: 4px; }
-                        .mb-3 { margin-bottom: 6px; }
-                        .mt-1 { margin-top: 2px; }
-                        .mt-2 { margin-top: 4px; }
-                        .mt-3 { margin-top: 6px; }
-                        .mt-4 { margin-top: 8px; }
-                        .pt-2 { padding-top: 4px; }
-                        .pt-3 { padding-top: 6px; }
-                        .pb-3 { padding-bottom: 6px; }
-                        .py-1 { padding-top: 2px; padding-bottom: 2px; }
-                        .p-1 { padding: 2px; }
-                        .border-t { border-top: 1px dashed #000; }
-                        .border-b { border-bottom: 1px dashed #000; }
-                        .border-t-2 { border-top: 2px solid #000; }
-                        .border-dashed { border-style: dashed; }
-                        .text-gray-500, .text-gray-600, .text-red-600 { color: #000; }
-                        .bg-red-50, .bg-gray-100 { background: transparent; }
-                        .rounded, .rounded-lg { border-radius: 0; }
-                        .rounded-full { border-radius: 50%; }
-                        table { width: 100%; border-collapse: collapse; }
-                        th, td { padding: 1px 0; font-size: 10px; }
-                        img.h-16 { width: 50px !important; height: 50px !important; display: block; margin: 0 auto 4px; border-radius: 50%; object-fit: cover; }
-                        img.h-10, img.w-10 { width: 30px !important; height: 30px !important; }
-                        img { max-width: 60px; height: auto; }
-                        .flex { display: flex; }
-                        .justify-between { justify-content: space-between; }
-                        .space-y-1 > * + * { margin-top: 2px; }
-                        p { margin: 1px 0; }
-                        svg { display: block; margin: 0 auto; }
-                        @page { 
-                          size: 72mm auto !important; 
-                          margin: 0mm !important;
-                        }
-                        @media print {
-                          html, body { 
-                            width: 72mm !important; 
-                            padding: 1mm !important;
-                            margin: 0 !important;
-                            height: auto !important;
-                          }
-                        }
-                      </style>
-                    </head>
-                    <body>
-                      ${htmlContent}
-                    </body>
-                    </html>
-                  `);
-                  doc.close();
-                  
-                  // انتظار تحميل المحتوى والصور ثم طباعة
-                  iframe.contentWindow.focus();
-                  const imgs = iframe.contentWindow.document.querySelectorAll('img');
-                  const imgPromises = Array.from(imgs).map(img => {
-                    if (img.complete) return Promise.resolve();
-                    return new Promise(resolve => {
-                      img.onload = resolve;
-                      img.onerror = resolve;
-                    });
-                  });
-                  Promise.all(imgPromises).then(() => {
-                    setTimeout(() => {
-                      iframe.contentWindow.print();
-                      setTimeout(() => iframe.remove(), 3000);
-                    }, 200);
-                  });
-                  
+                  // فتح نافذة صغيرة بحجم الفاتورة - تطبع وتغلق تلقائياً
+                  const printWin = window.open('', '_blank', 'width=302,height=600,menubar=no,toolbar=no,location=no,status=no');
+                  if (!printWin) {
+                    toast.error(t('يرجى السماح بالنوافذ المنبثقة'));
+                    return;
+                  }
+                  printWin.document.open();
+                  printWin.document.write(`<!DOCTYPE html>
+<html dir="${isRTL ? 'rtl' : 'ltr'}">
+<head>
+<meta charset="UTF-8">
+<title>${t('فاتورة')}</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+@page { margin: 0mm !important; padding: 0mm !important; }
+html, body { 
+  font-family: 'Courier New', monospace; 
+  font-size: 12px; 
+  width: 100%; max-width: 100%;
+  margin: 0; padding: 2mm;
+  background: #fff; color: #000;
+}
+.text-center { text-align: center; }
+.text-left { text-align: left; }
+.text-right { text-align: right; }
+.font-bold { font-weight: bold; }
+.text-lg { font-size: 14px; }
+.text-sm { font-size: 10px; }
+.text-xs { font-size: 9px; }
+.mb-2 { margin-bottom: 4px; }
+.mb-3 { margin-bottom: 6px; }
+.mt-1 { margin-top: 2px; }
+.mt-2 { margin-top: 4px; }
+.mt-3 { margin-top: 6px; }
+.mt-4 { margin-top: 8px; }
+.pt-2 { padding-top: 4px; }
+.pt-3 { padding-top: 6px; }
+.pb-3 { padding-bottom: 6px; }
+.py-1 { padding: 2px 0; }
+.p-1 { padding: 2px; }
+.border-t { border-top: 1px dashed #000; }
+.border-b { border-bottom: 1px dashed #000; }
+.border-t-2 { border-top: 2px solid #000; }
+.border-dashed { border-style: dashed; }
+.text-gray-500, .text-gray-600, .text-red-600 { color: #000; }
+.bg-red-50, .bg-gray-100 { background: transparent; }
+.rounded, .rounded-lg { border-radius: 0; }
+.rounded-full { border-radius: 50%; }
+table { width: 100%; border-collapse: collapse; }
+th, td { padding: 1px 0; font-size: 10px; }
+img.h-16 { width: 50px !important; height: 50px !important; display: block; margin: 0 auto 4px; border-radius: 50%; object-fit: cover; }
+img.h-10, img.w-10 { width: 30px !important; height: 30px !important; }
+img { max-width: 60px; height: auto; }
+.flex { display: flex; }
+.justify-between { justify-content: space-between; }
+.space-y-1 > * + * { margin-top: 2px; }
+p { margin: 1px 0; }
+svg { display: block; margin: 0 auto; }
+</style>
+</head>
+<body onload="setTimeout(function(){ window.print(); window.close(); }, 300);">
+${htmlContent}
+</body>
+</html>`);
+                  printWin.document.close();
                   toast.success(t('جاري الطباعة...'));
                   // إغلاق نافذة المعاينة وتنظيف السلة
                   setPrintDialogOpen(false);

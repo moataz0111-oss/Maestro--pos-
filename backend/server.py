@@ -16303,6 +16303,8 @@ async def assign_driver_to_order(
         {"id": order_id, "tenant_id": tenant_id},
         {"$set": {
             "driver_id": driver_id,
+            "driver_name": driver.get("name", ""),
+            "driver_phone": driver.get("phone", ""),
             "driver_assigned_at": datetime.now(timezone.utc).isoformat(),
             "status": "out_for_delivery"
         }}
@@ -17104,6 +17106,62 @@ async def mark_orders_as_seen(
     pending_notifications[viewed_key].update(order_ids)
     
     return {"success": True, "marked_count": len(order_ids)}
+
+
+@api_router.post("/notifications/accept-order/{order_id}")
+async def accept_customer_order(
+    order_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """قبول طلب العميل الخارجي"""
+    tenant_id = get_user_tenant_id(current_user)
+    query = {"id": order_id}
+    if tenant_id:
+        query["tenant_id"] = tenant_id
+    
+    order = await db.orders.find_one(query)
+    if not order:
+        raise HTTPException(status_code=404, detail="الطلب غير موجود")
+    
+    await db.orders.update_one(
+        {"id": order_id},
+        {"$set": {
+            "status": "confirmed",
+            "accepted_by": current_user.get("id"),
+            "accepted_at": datetime.now(timezone.utc).isoformat()
+        }}
+    )
+    
+    # تحديد كمشاهد
+    user_id = current_user.get("id", "")
+    viewed_key = f"{tenant_id or 'default'}_{user_id}"
+    if viewed_key not in pending_notifications:
+        pending_notifications[viewed_key] = set()
+    pending_notifications[viewed_key].add(order_id)
+    
+    return {"success": True, "message": "تم قبول الطلب"}
+
+@api_router.post("/notifications/reject-order/{order_id}")
+async def reject_customer_order(
+    order_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """رفض طلب العميل الخارجي"""
+    tenant_id = get_user_tenant_id(current_user)
+    query = {"id": order_id}
+    if tenant_id:
+        query["tenant_id"] = tenant_id
+    
+    await db.orders.update_one(
+        {"id": order_id},
+        {"$set": {
+            "status": "cancelled",
+            "rejected_by": current_user.get("id"),
+            "rejected_at": datetime.now(timezone.utc).isoformat()
+        }}
+    )
+    
+    return {"success": True, "message": "تم رفض الطلب"}
 
 @api_router.get("/notifications/delayed-orders")
 async def get_delayed_orders(

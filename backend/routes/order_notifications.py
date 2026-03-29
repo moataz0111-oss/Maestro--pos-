@@ -173,8 +173,8 @@ async def get_order_notifications(
     if unread_only:
         query["is_read"] = False
     
-    # جلب آخر 30 ثانية فقط للإشعارات الجديدة
-    cutoff_time = (datetime.now(timezone.utc) - timedelta(seconds=60)).isoformat()
+    # جلب إشعارات الساعة الأخيرة (60 دقيقة بدلاً من 60 ثانية)
+    cutoff_time = (datetime.now(timezone.utc) - timedelta(minutes=60)).isoformat()
     query["created_at"] = {"$gt": cutoff_time}
     
     notifications = await db.order_notifications.find(

@@ -69,9 +69,11 @@ class OrderStatus:
 class PaymentMethod:
     CASH = "cash"
     CARD = "card"
+    CREDIT = "credit"  # آجل
     WALLET = "wallet"
     ONLINE = "online"
     MIXED = "mixed"
+    PENDING = "pending"
 
 # ==================== ORDER TYPE ====================
 class OrderType:

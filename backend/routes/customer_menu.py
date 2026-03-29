@@ -352,6 +352,32 @@ async def get_customer_order_routes(db):
         await db.orders.insert_one(order_doc)
         order_doc.pop("_id", None)
         
+        # إنشاء إشعار للكاشير عند وصول طلب من العميل
+        try:
+            notification_doc = {
+                "id": str(uuid.uuid4()),
+                "type": "new_order_cashier",
+                "order_id": order_doc["id"],
+                "order_number": str(order_number),
+                "branch_id": order.branch_id or "",
+                "order_type": "delivery" if order.delivery_address else "takeaway",
+                "customer_name": order_doc.get("customer_name", ""),
+                "customer_phone": order_doc.get("customer_phone", ""),
+                "delivery_address": order.delivery_address,
+                "total_amount": order_doc["total"],
+                "items_count": len(order_items),
+                "payment_method": order.payment_method,
+                "source": "customer_app",
+                "notes": order.delivery_notes,
+                "tenant_id": tenant_id,
+                "is_read": False,
+                "is_printed": False,
+                "created_at": datetime.now(timezone.utc).isoformat()
+            }
+            await db.order_notifications.insert_one(notification_doc)
+        except Exception:
+            pass  # لا نوقف الطلب بسبب خطأ في الإشعار
+        
         # تحديث إحصائيات العميل
         if customer:
             await db.customers.update_one(
@@ -418,6 +444,7 @@ async def get_customer_order_routes(db):
             "driver": driver_info,
             "status_timeline": [
                 {"status": "pending", "label": "قيد الانتظار", "completed": True},
+                {"status": "confirmed", "label": "تم القبول", "completed": order["status"] in ["confirmed", "preparing", "ready", "out_for_delivery", "delivered"]},
                 {"status": "preparing", "label": "قيد التحضير", "completed": order["status"] in ["preparing", "ready", "out_for_delivery", "delivered"]},
                 {"status": "ready", "label": "جاهز", "completed": order["status"] in ["ready", "out_for_delivery", "delivered"]},
                 {"status": "out_for_delivery", "label": "في الطريق", "completed": order["status"] in ["out_for_delivery", "delivered"]},

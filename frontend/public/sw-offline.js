@@ -56,19 +56,22 @@ self.addEventListener('install', (event) => {
         await cache.addAll(STATIC_ASSETS);
         
         // محاولة تخزين index.html لجميع المسارات
-        const indexResponse = await fetch('/index.html');
-        if (indexResponse.ok) {
-          for (const route of APP_ROUTES) {
-            await cache.put(new Request(route), indexResponse.clone());
+        try {
+          const indexResponse = await fetch('/index.html');
+          if (indexResponse.ok) {
+            for (const route of APP_ROUTES) {
+              await cache.put(new Request(route), indexResponse.clone());
+            }
           }
+        } catch (e) {
+          console.log('[SW-Offline] Could not cache routes:', e);
         }
         
         console.log('[SW-Offline] All routes cached');
       })
       .then(() => {
-        // تفعيل فوري بدون انتظار إغلاق التبويبات
-        console.log('[SW-Offline] Skip waiting - activate immediately');
-        return self.skipWaiting();
+        console.log('[SW-Offline] Installed - waiting for activation');
+        // لا نستخدم skipWaiting لتجنب إعادة التحميل المستمر على Android
       })
       .catch((error) => {
         console.error('[SW-Offline] Install failed:', error);
@@ -94,6 +97,13 @@ self.addEventListener('activate', (event) => {
       return self.clients.claim();
     })
   );
+});
+
+// السماح بالتحديث اليدوي من التطبيق
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
 });
 
 // استراتيجية الجلب
