@@ -816,6 +816,16 @@ async def initialize_database_endpoint():
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
+def _sn(val, default=0):
+    """Safe number: converts None to default for math ops.
+    MongoDB .get('key', 0) returns None if key exists with null value."""
+    if val is None:
+        return default
+    try:
+        return float(val)
+    except (TypeError, ValueError):
+        return default
+
 # ==================== MODELS ====================
 
 class UserRole:
@@ -1883,7 +1893,7 @@ async def calculate_order_cost(items: List[Dict]) -> float:
     for item in items:
         product = await db.products.find_one({"id": item.get("product_id")}, {"_id": 0})
         if product:
-            item_cost = (product.get("cost", 0) + product.get("operating_cost", 0)) * item.get("quantity", 1)
+            item_cost = (_sn(product.get("cost")) + _sn(product.get("operating_cost"))) * item.get("quantity", 1)
             total_cost += item_cost
     return total_cost
 
@@ -2532,7 +2542,7 @@ async def get_products(
     products = await db.products.find(query, {"_id": 0}).skip(skip).limit(limit).to_list(limit)
     # Calculate profit for each product
     for p in products:
-        p["profit"] = p.get("price", 0) - p.get("cost", 0) - p.get("operating_cost", 0)
+        p["profit"] = _sn(p.get("price")) - _sn(p.get("cost")) - _sn(p.get("operating_cost"))
     return products
 
 @api_router.get("/products/{product_id}")
@@ -2541,7 +2551,7 @@ async def get_product(product_id: str, current_user: dict = Depends(get_current_
     product = await db.products.find_one(query, {"_id": 0})
     if not product:
         raise HTTPException(status_code=404, detail="المنتج غير موجود")
-    product["profit"] = product.get("price", 0) - product.get("cost", 0) - product.get("operating_cost", 0)
+    product["profit"] = _sn(product.get("price")) - _sn(product.get("cost")) - _sn(product.get("operating_cost"))
     return product
 
 @api_router.put("/products/{product_id}")
@@ -2661,7 +2671,7 @@ async def create_purchase(purchase: PurchaseCreate, current_user: dict = Depends
         await db.inventory.update_one(
             {"id": item.get("inventory_id")},
             {
-                "$inc": {"quantity": item.get("quantity", 0)},
+                "$inc": {"quantity": _sn(item.get("quantity"))},
                 "$set": {
                     "cost_per_unit": item.get("cost_per_unit", 0),
                     "last_updated": datetime.now(timezone.utc).isoformat()
@@ -3166,12 +3176,12 @@ async def get_employee_ratings(
         
         # جلب الخصومات للشهر (من البيانات المجمعة)
         deductions = deductions_by_emp.get(emp_id, [])
-        total_deductions = sum(d.get("amount", 0) for d in deductions)
+        total_deductions = sum(_sn(d.get("amount")) for d in deductions)
         deduction_count = len(deductions)
         
         # جلب المكافآت للشهر (من البيانات المجمعة)
         bonuses = bonuses_by_emp.get(emp_id, [])
-        total_bonuses = sum(b.get("amount", 0) for b in bonuses)
+        total_bonuses = sum(_sn(b.get("amount")) for b in bonuses)
         bonus_count = len(bonuses)
         
         # ========== حساب التقييم ==========
@@ -3380,18 +3390,18 @@ async def get_payroll_summary_report(
         
         # الخصومات (من البيانات المجمعة)
         deductions = deductions_by_emp.get(emp_id, [])
-        emp_deductions = sum(d.get("amount", 0) for d in deductions)
+        emp_deductions = sum(_sn(d.get("amount")) for d in deductions)
         
         # المكافآت (من البيانات المجمعة)
         bonuses = bonuses_by_emp.get(emp_id, [])
-        emp_bonuses = sum(b.get("amount", 0) for b in bonuses)
+        emp_bonuses = sum(_sn(b.get("amount")) for b in bonuses)
         
         # السلف المعلقة (من البيانات المجمعة)
         advances = advances_by_emp.get(emp_id, [])
         emp_advances = sum(a.get("monthly_deduction", 0) for a in advances)
         pending_advances = sum(a.get("remaining_amount", 0) for a in advances)
         
-        basic_salary = emp.get("salary", 0)
+        basic_salary = _sn(emp.get("salary"))
         net_payable = basic_salary + emp_bonuses - emp_deductions - emp_advances
         
         # جلب اسم الفرع (من البيانات المجمعة)
@@ -3473,7 +3483,7 @@ async def get_employee_salary_slip(
         if dtype not in deductions_by_type:
             deductions_by_type[dtype] = {"items": [], "total": 0}
         deductions_by_type[dtype]["items"].append(d)
-        deductions_by_type[dtype]["total"] += d.get("amount", 0)
+        deductions_by_type[dtype]["total"] += _sn(d.get("amount"))
     
     # المكافآت التفصيلية
     bonuses = await db.bonuses.find({
@@ -3488,7 +3498,7 @@ async def get_employee_salary_slip(
         if btype not in bonuses_by_type:
             bonuses_by_type[btype] = {"items": [], "total": 0}
         bonuses_by_type[btype]["items"].append(b)
-        bonuses_by_type[btype]["total"] += b.get("amount", 0)
+        bonuses_by_type[btype]["total"] += _sn(b.get("amount"))
     
     # السلف
     advances = await db.advances.find({
@@ -3512,12 +3522,12 @@ async def get_employee_salary_slip(
     }
     
     # حساب الإجماليات
-    total_deductions = sum(d.get("amount", 0) for d in deductions)
-    total_bonuses = sum(b.get("amount", 0) for b in bonuses)
+    total_deductions = sum(_sn(d.get("amount")) for d in deductions)
+    total_bonuses = sum(_sn(b.get("amount")) for b in bonuses)
     advance_deduction = sum(a.get("monthly_deduction", 0) for a in advances if a.get("status") == "approved")
     pending_advances = sum(a.get("remaining_amount", 0) for a in advances if a.get("status") == "approved")
     
-    basic_salary = employee.get("salary", 0)
+    basic_salary = _sn(employee.get("salary"))
     net_salary = basic_salary + total_bonuses - total_deductions - advance_deduction
     
     return {
@@ -3629,14 +3639,14 @@ async def export_payroll_excel(
             "employee_id": emp["id"],
             "date": {"$gte": start_date, "$lte": end_date}
         }, {"_id": 0}).to_list(100)
-        emp_deductions = sum(d.get("amount", 0) for d in deductions)
+        emp_deductions = sum(_sn(d.get("amount")) for d in deductions)
         
         # المكافآت
         bonuses = await db.bonuses.find({
             "employee_id": emp["id"],
             "date": {"$gte": start_date, "$lte": end_date}
         }, {"_id": 0}).to_list(100)
-        emp_bonuses = sum(b.get("amount", 0) for b in bonuses)
+        emp_bonuses = sum(_sn(b.get("amount")) for b in bonuses)
         
         # السلف
         advances = await db.advances.find({
@@ -3646,7 +3656,7 @@ async def export_payroll_excel(
         }, {"_id": 0}).to_list(100)
         emp_advances = sum(a.get("monthly_deduction", 0) for a in advances)
         
-        basic_salary = emp.get("salary", 0)
+        basic_salary = _sn(emp.get("salary"))
         net_salary = basic_salary + emp_bonuses - emp_deductions - emp_advances
         
         # جلب اسم الفرع
@@ -3768,7 +3778,7 @@ async def export_employee_salary_slip_excel(
     
     for bonus in slip_data["bonuses"]["items"]:
         ws[f'A{row}'] = bonus.get("reason", bonus.get("bonus_type", ""))
-        ws[f'B{row}'] = bonus.get("amount", 0)
+        ws[f'B{row}'] = _sn(bonus.get("amount"))
         ws[f'B{row}'].number_format = '#,##0'
         row += 1
     
@@ -3786,7 +3796,7 @@ async def export_employee_salary_slip_excel(
     
     for deduction in slip_data["deductions"]["items"]:
         ws[f'A{row}'] = deduction.get("reason", deduction.get("deduction_type", ""))
-        ws[f'B{row}'] = deduction.get("amount", 0)
+        ws[f'B{row}'] = _sn(deduction.get("amount"))
         ws[f'B{row}'].number_format = '#,##0'
         row += 1
     
@@ -4215,7 +4225,7 @@ async def ship_inventory_transfer(transfer_id: str, current_user: dict = Depends
     for item in transfer.get("items", []):
         await db.inventory.update_one(
             {"id": item.get("inventory_id"), "branch_id": transfer["from_branch_id"]},
-            {"$inc": {"quantity": -item.get("quantity", 0)}}
+            {"$inc": {"quantity": -_sn(item.get("quantity"))}}
         )
     
     await db.inventory_transfers.update_one(
@@ -4253,7 +4263,7 @@ async def receive_inventory_transfer(transfer_id: str, current_user: dict = Depe
         if existing:
             await db.inventory.update_one(
                 {"id": item.get("inventory_id"), "branch_id": transfer["to_branch_id"]},
-                {"$inc": {"quantity": item.get("quantity", 0)}}
+                {"$inc": {"quantity": _sn(item.get("quantity"))}}
             )
         else:
             # إنشاء صنف جديد في المخزن المستلم
@@ -4263,7 +4273,7 @@ async def receive_inventory_transfer(transfer_id: str, current_user: dict = Depe
                     **source_item,
                     "id": str(uuid.uuid4()),
                     "branch_id": transfer["to_branch_id"],
-                    "quantity": item.get("quantity", 0),
+                    "quantity": _sn(item.get("quantity")),
                     "last_updated": datetime.now(timezone.utc).isoformat()
                 }
                 await db.inventory.insert_one(new_item)
@@ -4607,7 +4617,7 @@ async def create_order(order: OrderCreate, current_user: dict = Depends(get_curr
         base_price = item.price
         # إضافة سعر الإضافات المختارة (تأتي من Frontend كـ extras)
         # ملاحظة: item.extras هنا هي الإضافات المختارة من العميل وليس كل الإضافات
-        extras_price = sum(extra.get("price", 0) for extra in (item.extras or []))
+        extras_price = sum(_sn(extra.get("price")) for extra in (item.extras or []))
         # المجموع للعنصر الواحد
         return (base_price + extras_price) * item.quantity
     
@@ -4628,7 +4638,7 @@ async def create_order(order: OrderCreate, current_user: dict = Depends(get_curr
         
         if product:
             # حساب تكلفة المنتج الأساسية
-            base_cost = product.get("cost", 0) + product.get("operating_cost", 0)
+            base_cost = _sn(product.get("cost")) + _sn(product.get("operating_cost"))
             
             # إضافة تكلفة التغليف للتوصيل والسفري فقط
             if is_delivery_or_takeaway:
@@ -4643,7 +4653,7 @@ async def create_order(order: OrderCreate, current_user: dict = Depends(get_curr
                     {"_id": 0, "raw_material_cost": 1}
                 )
                 if mfg_product:
-                    base_cost = mfg_product.get("raw_material_cost", 0) + product.get("operating_cost", 0)
+                    base_cost = _sn(mfg_product.get("raw_material_cost")) + _sn(product.get("operating_cost"))
             
             item_cost = base_cost * item.quantity + packaging_cost
         
@@ -4652,7 +4662,7 @@ async def create_order(order: OrderCreate, current_user: dict = Depends(get_curr
         item_dict["cost"] = item_cost
         item_dict["packaging_cost"] = packaging_cost
         # حساب إجمالي سعر الإضافات المختارة للعنصر
-        item_dict["extras_total"] = sum(extra.get("price", 0) for extra in (item.extras or []))
+        item_dict["extras_total"] = sum(_sn(extra.get("price")) for extra in (item.extras or []))
         items_with_cost.append(item_dict)
     
     # Calculate delivery commission if applicable
@@ -4868,7 +4878,7 @@ async def create_order(order: OrderCreate, current_user: dict = Depends(get_curr
                     # خصم من المواد الخام بناءً على الوصفة
                     for ingredient in finished_product["recipe"]:
                         raw_material_id = ingredient.get("raw_material_id")
-                        qty_per_unit = ingredient.get("quantity", 0)
+                        qty_per_unit = _sn(ingredient.get("quantity"))
                         total_to_deduct = qty_per_unit * item.quantity
                         
                         # خصم من مخزون الفرع
@@ -4976,7 +4986,7 @@ async def add_items_to_order(order_id: str, items: List[OrderItemCreate], curren
             "product_name": item.product_name,
             "quantity": item.quantity,
             "price": item.price,
-            "cost": product.get("cost", 0) if product else 0,
+            "cost": _sn(product.get("cost")) if product else 0,
             "notes": item.notes
         })
     
@@ -4986,8 +4996,8 @@ async def add_items_to_order(order_id: str, items: List[OrderItemCreate], curren
     
     # إعادة حساب المجاميع
     subtotal = sum(i["price"] * i["quantity"] for i in all_items)
-    total_cost = sum(i.get("cost", 0) * i["quantity"] for i in all_items)
-    discount = order.get("discount", 0)
+    total_cost = sum(_sn(i.get("cost")) * i["quantity"] for i in all_items)
+    discount = _sn(order.get("discount"))
     tax = 0
     total = subtotal - discount + tax
     profit = total - total_cost - order.get("delivery_commission", 0)
@@ -5317,7 +5327,7 @@ async def create_refund(refund: RefundCreate, current_user: dict = Depends(get_c
         raise HTTPException(status_code=400, detail="تم إرجاع هذا الطلب مسبقاً")
     
     # حساب مبلغ الإرجاع
-    original_total = order.get("total", 0)
+    original_total = _sn(order.get("total"))
     
     if refund.refund_type == "full":
         refund_amount = original_total
@@ -5506,7 +5516,7 @@ async def check_order_refund_status(order_id: str, current_user: dict = Depends(
         "order_id": order["id"],
         "order_number": order.get("order_number"),
         "order_type": order.get("order_type"),
-        "total": order.get("total", 0),
+        "total": _sn(order.get("total")),
         "payment_status": order.get("payment_status"),
         "customer_name": order.get("customer_name"),
         "created_at": order.get("created_at"),
@@ -5684,7 +5694,7 @@ async def export_sales_to_excel(
                 order.get("customer_name", "بدون اسم"),
                 order.get("branch_name", ""),
                 payment_methods.get(order.get("payment_method", ""), order.get("payment_method", "")),
-                order.get("total", 0),
+                _sn(order.get("total")),
                 statuses.get(order.get("status", ""), order.get("status", ""))
             ]
             
@@ -5697,7 +5707,7 @@ async def export_sales_to_excel(
         # Summary row
         summary_row = len(orders) + 3
         ws.cell(row=summary_row, column=7, value="الإجمالي:").font = Font(bold=True)
-        total_cell = ws.cell(row=summary_row, column=8, value=sum(o.get("total", 0) for o in orders))
+        total_cell = ws.cell(row=summary_row, column=8, value=sum(_sn(o.get("total")) for o in orders))
         total_cell.font = Font(bold=True)
         total_cell.number_format = '#,##0'
         
@@ -5717,7 +5727,7 @@ async def export_sales_to_excel(
                 if name not in products:
                     products[name] = {"quantity": 0, "revenue": 0}
                 products[name]["quantity"] += item.get("quantity", 1)
-                products[name]["revenue"] += item.get("price", 0) * item.get("quantity", 1)
+                products[name]["revenue"] += _sn(item.get("price")) * item.get("quantity", 1)
         
         # Headers
         headers = ["المنتج", "الكمية المباعة", "الإيرادات"]
@@ -5760,7 +5770,7 @@ async def export_sales_to_excel(
                 created_at.strftime("%Y-%m-%d"),
                 expense.get("category", ""),
                 expense.get("description", ""),
-                expense.get("amount", 0)
+                _sn(expense.get("amount"))
             ]
             
             for col, value in enumerate(data, 1):
@@ -5772,7 +5782,7 @@ async def export_sales_to_excel(
         # Summary
         summary_row = len(expenses) + 3
         ws.cell(row=summary_row, column=3, value="الإجمالي:").font = Font(bold=True)
-        total_cell = ws.cell(row=summary_row, column=4, value=sum(e.get("amount", 0) for e in expenses))
+        total_cell = ws.cell(row=summary_row, column=4, value=sum(_sn(e.get("amount")) for e in expenses))
         total_cell.font = Font(bold=True)
         total_cell.number_format = '#,##0'
     
@@ -5866,7 +5876,7 @@ async def export_report_to_pdf(
         total_amount = 0
         for idx, order in enumerate(orders, 1):
             created_at = order.get("created_at", "")[:10]
-            amount = order.get("total", 0)
+            amount = _sn(order.get("total"))
             total_amount += amount
             
             data_rows.append([
@@ -5899,7 +5909,7 @@ async def export_report_to_pdf(
         
         total_amount = 0
         for idx, expense in enumerate(expenses, 1):
-            amount = expense.get("amount", 0)
+            amount = _sn(expense.get("amount"))
             total_amount += amount
             
             data_rows.append([
@@ -5928,7 +5938,7 @@ async def export_report_to_pdf(
         
         total_value = 0
         for idx, item in enumerate(items, 1):
-            qty = item.get("quantity", 0)
+            qty = _sn(item.get("quantity"))
             cost = item.get("cost_per_unit", 0)
             value = qty * cost
             total_value += value
@@ -5968,13 +5978,13 @@ async def export_report_to_pdf(
                 "employee_id": emp["id"],
                 "date": {"$gte": month_start, "$lte": month_end}
             }, {"_id": 0}).to_list(100)
-            emp_deductions = sum(d.get("amount", 0) for d in deductions)
+            emp_deductions = sum(_sn(d.get("amount")) for d in deductions)
             
             bonuses = await db.bonuses.find({
                 "employee_id": emp["id"],
                 "date": {"$gte": month_start, "$lte": month_end}
             }, {"_id": 0}).to_list(100)
-            emp_bonuses = sum(b.get("amount", 0) for b in bonuses)
+            emp_bonuses = sum(_sn(b.get("amount")) for b in bonuses)
             
             advances = await db.advances.find({
                 "employee_id": emp["id"],
@@ -5983,7 +5993,7 @@ async def export_report_to_pdf(
             }, {"_id": 0}).to_list(100)
             emp_advances = sum(a.get("monthly_deduction", 0) for a in advances)
             
-            basic = emp.get("salary", 0)
+            basic = _sn(emp.get("salary"))
             net = basic + emp_bonuses - emp_deductions - emp_advances
             
             totals[0] += basic
@@ -6160,7 +6170,7 @@ async def get_today_cash_register(current_user: dict = Depends(get_current_user)
         cash_query["branch_id"] = branch_id
     
     cash_orders = await db.orders.find(cash_query, {"_id": 0, "total": 1, "order_number": 1}).to_list(500)
-    total_cash_sales = sum(o.get("total", 0) for o in cash_orders)
+    total_cash_sales = sum(_sn(o.get("total")) for o in cash_orders)
     
     # مبيعات البطاقة (منفصلة - ليست نقدي)
     card_query = {
@@ -6171,7 +6181,7 @@ async def get_today_cash_register(current_user: dict = Depends(get_current_user)
     if branch_id:
         card_query["branch_id"] = branch_id
     card_orders = await db.orders.find(card_query, {"total": 1}).to_list(500)
-    total_card_sales = sum(o.get("total", 0) for o in card_orders)
+    total_card_sales = sum(_sn(o.get("total")) for o in card_orders)
     
     # الآجل العادي (بدون التوصيل - شركات التوصيل لها قسم منفصل)
     credit_query = {
@@ -6183,7 +6193,7 @@ async def get_today_cash_register(current_user: dict = Depends(get_current_user)
     if branch_id:
         credit_query["branch_id"] = branch_id
     credit_orders = await db.orders.find(credit_query, {"total": 1}).to_list(500)
-    total_credit = sum(o.get("total", 0) for o in credit_orders)
+    total_credit = sum(_sn(o.get("total")) for o in credit_orders)
     
     # آجل شركات التوصيل (منفصل)
     delivery_credit_query = {
@@ -6194,14 +6204,14 @@ async def get_today_cash_register(current_user: dict = Depends(get_current_user)
     if branch_id:
         delivery_credit_query["branch_id"] = branch_id
     delivery_credit_orders = await db.orders.find(delivery_credit_query, {"total": 1, "delivery_app": 1}).to_list(500)
-    total_delivery_credit = sum(o.get("total", 0) for o in delivery_credit_orders)
+    total_delivery_credit = sum(_sn(o.get("total")) for o in delivery_credit_orders)
     
     # المصاريف
     expenses_query = {"date": today}
     if branch_id:
         expenses_query["branch_id"] = branch_id
     expenses = await db.expenses.find(expenses_query, {"_id": 0}).to_list(100)
-    total_expenses = sum(e.get("amount", 0) for e in expenses)
+    total_expenses = sum(_sn(e.get("amount")) for e in expenses)
     
     # آخر إغلاق
     last_close_query = {"branch_id": branch_id} if branch_id else {}
@@ -7224,8 +7234,8 @@ async def get_super_admin_sales_summary(
         result = await db.orders.aggregate(pipeline).to_list(1)
         
         if result:
-            sales_in_tenant_currency = result[0].get("total", 0)
-            orders_count = result[0].get("count", 0)
+            sales_in_tenant_currency = _sn(result[0].get("total"))
+            orders_count = _sn(result[0].get("count"))
             
             if sales_in_tenant_currency > 0:
                 active_tenants += 1
@@ -9203,8 +9213,8 @@ async def get_tenant_live_stats(tenant_id: str, current_user: dict = Depends(ver
                 name = item.get("product_name") or item.get("name") or "غير معروف"
                 if name not in product_sales:
                     product_sales[name] = {"quantity": 0, "total": 0}
-                product_sales[name]["quantity"] += item.get("quantity", 0)
-                product_sales[name]["total"] += item.get("subtotal", 0)
+                product_sales[name]["quantity"] += _sn(item.get("quantity"))
+                product_sales[name]["total"] += _sn(item.get("subtotal"))
     
     top_products = sorted(product_sales.items(), key=lambda x: x[1]["total"], reverse=True)[:5]
     
@@ -9804,7 +9814,7 @@ async def add_packaging_stock(material_id: str, quantity: float, current_user: d
     if not material:
         raise HTTPException(status_code=404, detail="مادة التغليف غير موجودة")
     
-    new_quantity = material.get("quantity", 0) + quantity
+    new_quantity = _sn(material.get("quantity")) + quantity
     total_received = material.get("total_received", 0) + quantity
     
     await db.packaging_materials.update_one(
@@ -9912,12 +9922,12 @@ async def transfer_packaging_to_branch(request_id: str, current_user: dict = Dep
     # تحويل كل صنف
     for item in request.get("items", []):
         material_id = item.get("packaging_material_id")
-        quantity = item.get("quantity", 0)
+        quantity = _sn(item.get("quantity"))
         
         # خصم من المخزن الرئيسي
         material = await db.packaging_materials.find_one({"id": material_id, "tenant_id": tenant_id})
         if material:
-            new_quantity = max(0, material.get("quantity", 0) - quantity)
+            new_quantity = max(0, _sn(material.get("quantity")) - quantity)
             transferred = material.get("transferred_to_branches", 0) + quantity
             
             await db.packaging_materials.update_one(
@@ -10003,7 +10013,7 @@ async def get_branch_packaging_inventory(branch_id: Optional[str] = None, curren
     for item in inventory:
         item["id"] = item.pop("_id", item.get("id"))
         # حساب الكمية المتبقية
-        item["remaining_quantity"] = item.get("quantity", 0) - item.get("used_quantity", 0)
+        item["remaining_quantity"] = _sn(item.get("quantity")) - item.get("used_quantity", 0)
     
     return inventory
 
@@ -10182,7 +10192,7 @@ async def create_purchase_order(order: PurchaseOrderCreate, current_user: dict =
     if not supplier:
         raise HTTPException(status_code=404, detail="المورد غير موجود")
     
-    total_amount = sum(item.get("total", item.get("quantity", 0) * item.get("unit_price", 0)) for item in order.items)
+    total_amount = sum(item.get("total", _sn(item.get("quantity")) * item.get("unit_price", 0)) for item in order.items)
     
     last_order = await db.purchase_orders.find_one(
         {"tenant_id": tenant_id} if tenant_id else {},
@@ -10237,7 +10247,7 @@ async def update_purchase_order_status(order_id: str, update: PurchaseOrderStatu
         
         for item in order.get("items", []):
             material_id = item.get("material_id")
-            quantity = item.get("quantity", 0)
+            quantity = _sn(item.get("quantity"))
             if material_id and quantity > 0:
                 await db.raw_materials.update_one(
                     {"id": material_id},
@@ -10342,7 +10352,7 @@ async def get_low_stock_alerts(current_user: dict = Depends(get_current_user)):
                 "min_stock": min_stock,
                 "unit": material.get("unit", ""),
                 "shortage": min_stock - current_stock,
-                "price": material.get("price", 0)
+                "price": _sn(material.get("price"))
             })
     
     alerts.sort(key=lambda x: x["shortage"], reverse=True)
@@ -10390,7 +10400,7 @@ async def create_finished_product(product: FinishedProductCreate, current_user: 
     
     for ingredient in product.recipe:
         raw_material_id = ingredient.get("raw_material_id")
-        qty = ingredient.get("quantity", 0)
+        qty = _sn(ingredient.get("quantity"))
         
         # جلب المادة الخام من المخزون
         raw_material = await db.inventory.find_one(
@@ -10485,7 +10495,7 @@ async def update_finished_product(
         
         for ingredient in update_data["recipe"]:
             raw_material_id = ingredient.get("raw_material_id")
-            qty = ingredient.get("quantity", 0)
+            qty = _sn(ingredient.get("quantity"))
             
             raw_material = await db.inventory.find_one(
                 {"id": raw_material_id, "item_type": "raw"},
@@ -10564,11 +10574,11 @@ async def manufacture_finished_product(
             })
         else:
             required_qty = ingredient["quantity"] * quantity_to_manufacture
-            if raw_material.get("quantity", 0) < required_qty:
+            if _sn(raw_material.get("quantity")) < required_qty:
                 insufficient_materials.append({
                     "name": raw_material["name"],
                     "required": required_qty,
-                    "available": raw_material.get("quantity", 0)
+                    "available": _sn(raw_material.get("quantity"))
                 })
     
     if insufficient_materials:
@@ -10694,7 +10704,7 @@ async def create_branch_order(order: BranchOrderCreate, current_user: dict = Dep
     
     for item in order.items:
         product_id = item.get("product_id")
-        requested_qty = item.get("quantity", 0)
+        requested_qty = _sn(item.get("quantity"))
         
         if requested_qty <= 0:
             continue
@@ -10717,7 +10727,7 @@ async def create_branch_order(order: BranchOrderCreate, current_user: dict = Dep
         # تجميع المواد الخام المطلوبة من الوصفة
         for ingredient in recipe:
             raw_material_id = ingredient.get("raw_material_id")
-            qty_per_unit = ingredient.get("quantity", 0)
+            qty_per_unit = _sn(ingredient.get("quantity"))
             total_needed = qty_per_unit * requested_qty
             
             if raw_material_id in raw_materials_to_deduct:
@@ -10761,11 +10771,11 @@ async def create_branch_order(order: BranchOrderCreate, current_user: dict = Dep
                 "required": details["quantity"],
                 "available": 0
             })
-        elif raw_material.get("quantity", 0) < details["quantity"]:
+        elif _sn(raw_material.get("quantity")) < details["quantity"]:
             insufficient_materials.append({
                 "name": raw_material["name"],
                 "required": details["quantity"],
-                "available": raw_material.get("quantity", 0),
+                "available": _sn(raw_material.get("quantity")),
                 "unit": raw_material.get("unit", "")
             })
     
@@ -11259,10 +11269,10 @@ async def get_daily_break_even(
         branch_id_val = branch.get("id")
         
         # حساب التكاليف الثابتة اليومية للفرع
-        rent_cost = branch.get("rent_cost", 0) / 30
-        water_cost = branch.get("water_cost", 0) / 30
-        electricity_cost = branch.get("electricity_cost", 0) / 30
-        generator_cost = branch.get("generator_cost", 0) / 30
+        rent_cost = _sn(branch.get("rent_cost")) / 30
+        water_cost = _sn(branch.get("water_cost")) / 30
+        electricity_cost = _sn(branch.get("electricity_cost")) / 30
+        generator_cost = _sn(branch.get("generator_cost")) / 30
         fixed_costs_daily = rent_cost + water_cost + electricity_cost + generator_cost
         
         # حساب رواتب الموظفين في الفرع (شهرياً / 30)
@@ -11272,7 +11282,7 @@ async def get_daily_break_even(
             "is_active": {"$ne": False}
         }, {"_id": 0, "salary": 1}).to_list(1000)
         
-        total_monthly_salaries = sum(emp.get("salary", 0) for emp in employees)
+        total_monthly_salaries = sum(_sn(emp.get("salary")) for emp in employees)
         daily_salaries = total_monthly_salaries / 30
         
         # الهدف اليومي = التكاليف الثابتة + الرواتب
@@ -11292,9 +11302,9 @@ async def get_daily_break_even(
         orders = await db.orders.find(orders_query, {"_id": 0, "total": 1, "total_cost": 1, "profit": 1}).to_list(10000)
         
         # حساب الربح الإجمالي (من المواد الخام فقط)
-        daily_gross_profit = sum(o.get("profit", 0) for o in orders)
-        daily_sales = sum(o.get("total", 0) for o in orders)
-        daily_material_cost = sum(o.get("total_cost", 0) for o in orders)
+        daily_gross_profit = sum(_sn(o.get("profit")) for o in orders)
+        daily_sales = sum(_sn(o.get("total")) for o in orders)
+        daily_material_cost = sum(_sn(o.get("total_cost")) for o in orders)
         
         # نسبة التغطية
         coverage_percentage = (daily_gross_profit / daily_target * 100) if daily_target > 0 else 0
@@ -11346,10 +11356,10 @@ async def get_daily_break_even(
             
             # التكاليف الثابتة اليومية
             "fixed_costs": {
-                "rent": {"monthly": branch.get("rent_cost", 0), "daily": rent_cost, "covered": covered_rent, "remaining": remaining_rent},
-                "water": {"monthly": branch.get("water_cost", 0), "daily": water_cost, "covered": covered_water, "remaining": remaining_water},
-                "electricity": {"monthly": branch.get("electricity_cost", 0), "daily": electricity_cost, "covered": covered_electricity, "remaining": remaining_electricity},
-                "generator": {"monthly": branch.get("generator_cost", 0), "daily": generator_cost, "covered": covered_generator, "remaining": remaining_generator},
+                "rent": {"monthly": _sn(branch.get("rent_cost")), "daily": rent_cost, "covered": covered_rent, "remaining": remaining_rent},
+                "water": {"monthly": _sn(branch.get("water_cost")), "daily": water_cost, "covered": covered_water, "remaining": remaining_water},
+                "electricity": {"monthly": _sn(branch.get("electricity_cost")), "daily": electricity_cost, "covered": covered_electricity, "remaining": remaining_electricity},
+                "generator": {"monthly": _sn(branch.get("generator_cost")), "daily": generator_cost, "covered": covered_generator, "remaining": remaining_generator},
                 "total_daily": fixed_costs_daily
             },
             
@@ -11451,10 +11461,10 @@ async def get_daily_break_even_range(
         branch_id_val = branch.get("id")
         
         # حساب التكاليف الثابتة اليومية للفرع * عدد الأيام
-        rent_cost = (branch.get("rent_cost", 0) / 30) * days_count
-        water_cost = (branch.get("water_cost", 0) / 30) * days_count
-        electricity_cost = (branch.get("electricity_cost", 0) / 30) * days_count
-        generator_cost = (branch.get("generator_cost", 0) / 30) * days_count
+        rent_cost = (_sn(branch.get("rent_cost")) / 30) * days_count
+        water_cost = (_sn(branch.get("water_cost")) / 30) * days_count
+        electricity_cost = (_sn(branch.get("electricity_cost")) / 30) * days_count
+        generator_cost = (_sn(branch.get("generator_cost")) / 30) * days_count
         fixed_costs = rent_cost + water_cost + electricity_cost + generator_cost
         
         # حساب رواتب الموظفين * عدد الأيام
@@ -11464,7 +11474,7 @@ async def get_daily_break_even_range(
             "is_active": {"$ne": False}
         }, {"_id": 0, "salary": 1}).to_list(1000)
         
-        total_monthly_salaries = sum(emp.get("salary", 0) for emp in employees)
+        total_monthly_salaries = sum(_sn(emp.get("salary")) for emp in employees)
         salaries = (total_monthly_salaries / 30) * days_count
         
         # الهدف الإجمالي للفترة
@@ -11484,8 +11494,8 @@ async def get_daily_break_even_range(
         orders = await db.orders.find(orders_query, {"_id": 0, "total": 1, "total_cost": 1, "profit": 1}).to_list(10000)
         
         # حساب الربح الإجمالي
-        branch_profit = sum(o.get("profit", 0) for o in orders)
-        branch_sales = sum(o.get("total", 0) for o in orders)
+        branch_profit = sum(_sn(o.get("profit")) for o in orders)
+        branch_sales = sum(_sn(o.get("total")) for o in orders)
         
         # المستقطع من الربح لتغطية الهدف (الحد الأدنى بين الربح والهدف)
         branch_collected = min(branch_profit, branch_target)
@@ -11587,10 +11597,10 @@ async def get_monthly_break_even_summary(
         branch_id_val = branch.get("id")
         
         # التكاليف الثابتة الشهرية
-        rent_cost = branch.get("rent_cost", 0)
-        water_cost = branch.get("water_cost", 0)
-        electricity_cost = branch.get("electricity_cost", 0)
-        generator_cost = branch.get("generator_cost", 0)
+        rent_cost = _sn(branch.get("rent_cost"))
+        water_cost = _sn(branch.get("water_cost"))
+        electricity_cost = _sn(branch.get("electricity_cost"))
+        generator_cost = _sn(branch.get("generator_cost"))
         total_fixed_costs = rent_cost + water_cost + electricity_cost + generator_cost
         
         # رواتب الموظفين
@@ -11600,7 +11610,7 @@ async def get_monthly_break_even_summary(
             "is_active": {"$ne": False}
         }, {"_id": 0, "salary": 1, "name": 1}).to_list(1000)
         
-        total_salaries = sum(emp.get("salary", 0) for emp in employees)
+        total_salaries = sum(_sn(emp.get("salary")) for emp in employees)
         
         # الهدف الشهري
         monthly_target = total_fixed_costs + total_salaries
@@ -11618,9 +11628,9 @@ async def get_monthly_break_even_summary(
         
         orders = await db.orders.find(orders_query, {"_id": 0}).to_list(100000)
         
-        monthly_sales = sum(o.get("total", 0) for o in orders)
-        monthly_material_cost = sum(o.get("total_cost", 0) for o in orders)
-        monthly_gross_profit = sum(o.get("profit", 0) for o in orders)
+        monthly_sales = sum(_sn(o.get("total")) for o in orders)
+        monthly_material_cost = sum(_sn(o.get("total_cost")) for o in orders)
+        monthly_gross_profit = sum(_sn(o.get("profit")) for o in orders)
         
         # نسبة التغطية
         coverage_percentage = (monthly_gross_profit / monthly_target * 100) if monthly_target > 0 else 0
@@ -11709,10 +11719,10 @@ async def get_break_even_alerts(
         branch_name = branch.get("name")
         
         # حساب التكاليف الثابتة اليومية
-        rent_cost = branch.get("rent_cost", 0) / 30
-        water_cost = branch.get("water_cost", 0) / 30
-        electricity_cost = branch.get("electricity_cost", 0) / 30
-        generator_cost = branch.get("generator_cost", 0) / 30
+        rent_cost = _sn(branch.get("rent_cost")) / 30
+        water_cost = _sn(branch.get("water_cost")) / 30
+        electricity_cost = _sn(branch.get("electricity_cost")) / 30
+        generator_cost = _sn(branch.get("generator_cost")) / 30
         fixed_costs_daily = rent_cost + water_cost + electricity_cost + generator_cost
         
         # حساب رواتب الموظفين اليومية
@@ -11722,7 +11732,7 @@ async def get_break_even_alerts(
             "is_active": {"$ne": False}
         }, {"_id": 0, "salary": 1}).to_list(1000)
         
-        daily_salaries = sum(emp.get("salary", 0) for emp in employees) / 30
+        daily_salaries = sum(_sn(emp.get("salary")) for emp in employees) / 30
         
         # الهدف اليومي
         daily_target = fixed_costs_daily + daily_salaries
@@ -11742,7 +11752,7 @@ async def get_break_even_alerts(
             }
         }, {"_id": 0, "profit": 1}).to_list(10000)
         
-        daily_profit = sum(o.get("profit", 0) for o in orders)
+        daily_profit = sum(_sn(o.get("profit")) for o in orders)
         coverage_percentage = (daily_profit / daily_target * 100) if daily_target > 0 else 0
         
         # إنشاء التنبيهات
@@ -11812,7 +11822,7 @@ async def get_break_even_alerts(
         "has_permission": True,
         "date": target_date.strftime("%Y-%m-%d"),
         "total_branches": len(branches),
-        "branches_with_costs": len([b for b in branches if (b.get("rent_cost", 0) + b.get("electricity_cost", 0) + b.get("water_cost", 0) + b.get("generator_cost", 0)) > 0])
+        "branches_with_costs": len([b for b in branches if (_sn(b.get("rent_cost")) + _sn(b.get("electricity_cost")) + _sn(b.get("water_cost")) + _sn(b.get("generator_cost"))) > 0])
     }
 
 # ==================== SMART REPORTS - التقارير الذكية ====================
@@ -11853,25 +11863,25 @@ async def get_sales_report(
     orders = await db.orders.find(query, {"_id": 0}).to_list(10000)
     
     # إجمالي المبيعات (كل شيء)
-    total_sales = sum(o.get("total", 0) for o in orders)
+    total_sales = sum(_sn(o.get("total")) for o in orders)
     total_orders = len(orders)
     avg_order_value = total_sales / total_orders if total_orders > 0 else 0
     
     # المبيعات النقدية (فقط الكاش المحصّل باليد - بدون التوصيل وبدون البطاقة)
     cash_amount = sum(
-        o.get("total", 0) for o in orders 
+        _sn(o.get("total")) for o in orders 
         if o.get("payment_method") == "cash" and o.get("order_type") != "delivery"
     )
     
     # مبيعات البطاقة (منفصلة - ليست نقدي)
     card_amount = sum(
-        o.get("total", 0) for o in orders 
+        _sn(o.get("total")) for o in orders 
         if o.get("payment_method") == "card"
     )
     
     # الآجل العادي (بدون شركة توصيل بأي شكل)
     credit_amount = sum(
-        o.get("total", 0) for o in orders 
+        _sn(o.get("total")) for o in orders 
         if o.get("payment_method") == "credit" 
         and not o.get("delivery_app") 
         and not o.get("delivery_app_name")
@@ -11881,9 +11891,9 @@ async def get_sales_report(
     )
     
     # تقسيم حسب نوع الطلب
-    dine_in_amount = sum(o.get("total", 0) for o in orders if o.get("order_type") == "dine_in")
-    takeaway_amount = sum(o.get("total", 0) for o in orders if o.get("order_type") == "takeaway")
-    delivery_amount = sum(o.get("total", 0) for o in orders if o.get("order_type") == "delivery" or o.get("delivery_app") or o.get("delivery_app_name") or o.get("is_delivery_company"))
+    dine_in_amount = sum(_sn(o.get("total")) for o in orders if o.get("order_type") == "dine_in")
+    takeaway_amount = sum(_sn(o.get("total")) for o in orders if o.get("order_type") == "takeaway")
+    delivery_amount = sum(_sn(o.get("total")) for o in orders if o.get("order_type") == "delivery" or o.get("delivery_app") or o.get("delivery_app_name") or o.get("is_delivery_company"))
     
     # عدد الطلبات حسب طريقة الدفع
     cash_orders_count = len([o for o in orders if o.get("payment_method") == "cash" and o.get("order_type") != "delivery" and not o.get("delivery_app")])
@@ -11926,7 +11936,7 @@ async def get_sales_report(
             # له شركة توصيل - يظهر باسم الشركة
             if app_name not in delivery_apps_amounts:
                 delivery_apps_amounts[app_name] = 0
-            delivery_apps_amounts[app_name] += o.get("total", 0)
+            delivery_apps_amounts[app_name] += _sn(o.get("total"))
     
     # بناء by_payment_method مع أسماء شركات التوصيل
     by_payment_method = {}
@@ -12027,7 +12037,7 @@ async def get_credit_report(
         # الطلب ليس له شركة توصيل - يُضاف للآجل العادي
         orders.append(o)
     
-    total_credit = sum(o.get("total", 0) for o in orders)
+    total_credit = sum(_sn(o.get("total")) for o in orders)
     collected_amount = sum(o.get("collected_amount", 0) for o in orders)
     remaining_amount = total_credit - collected_amount
     
@@ -12035,14 +12045,14 @@ async def get_credit_report(
     order_list = []
     for order in orders:
         collected = order.get("collected_amount", 0)
-        remaining = order.get("total", 0) - collected
+        remaining = _sn(order.get("total")) - collected
         order_list.append({
             "id": order.get("id"),
             "order_number": order.get("order_number"),
             "created_at": order.get("created_at"),
             "customer_name": order.get("customer_name"),
             "customer_phone": order.get("customer_phone"),
-            "total": order.get("total", 0),
+            "total": _sn(order.get("total")),
             "collected_amount": collected,
             "remaining_amount": remaining,
             "is_fully_collected": remaining <= 0
@@ -12063,7 +12073,7 @@ async def collect_credit_payment(
 ):
     """تسجيل تحصيل آجل"""
     order_id = data.get("order_id")
-    amount = data.get("amount", 0)
+    amount = _sn(data.get("amount"))
     collected_by = data.get("collected_by", "")
     notes = data.get("notes", "")
     
@@ -12151,14 +12161,14 @@ async def get_cash_register_closing_report(
     # ==================== حساب المبيعات ====================
     
     # حسب نوع الطلب
-    dine_in_total = sum(o.get("total", 0) for o in orders if o.get("order_type") == "dine_in")
-    takeaway_total = sum(o.get("total", 0) for o in orders if o.get("order_type") == "takeaway")
-    delivery_total = sum(o.get("total", 0) for o in orders if o.get("order_type") == "delivery" or o.get("delivery_app"))
+    dine_in_total = sum(_sn(o.get("total")) for o in orders if o.get("order_type") == "dine_in")
+    takeaway_total = sum(_sn(o.get("total")) for o in orders if o.get("order_type") == "takeaway")
+    delivery_total = sum(_sn(o.get("total")) for o in orders if o.get("order_type") == "delivery" or o.get("delivery_app"))
     
     # حسب طريقة الدفع
-    cash_total = sum(o.get("total", 0) for o in orders if o.get("payment_method") == "cash" and not o.get("delivery_app"))
-    card_total = sum(o.get("total", 0) for o in orders if o.get("payment_method") == "card")
-    credit_total = sum(o.get("total", 0) for o in orders if o.get("payment_method") == "credit" and not o.get("delivery_app") and o.get("order_type") != "delivery")
+    cash_total = sum(_sn(o.get("total")) for o in orders if o.get("payment_method") == "cash" and not o.get("delivery_app"))
+    card_total = sum(_sn(o.get("total")) for o in orders if o.get("payment_method") == "card")
+    credit_total = sum(_sn(o.get("total")) for o in orders if o.get("payment_method") == "credit" and not o.get("delivery_app") and o.get("order_type") != "delivery")
     
     # شركات التوصيل
     delivery_apps_total = {}
@@ -12167,13 +12177,13 @@ async def get_cash_register_closing_report(
         if app_name:
             if app_name not in delivery_apps_total:
                 delivery_apps_total[app_name] = {"total": 0, "count": 0, "commission": 0}
-            delivery_apps_total[app_name]["total"] += o.get("total", 0)
+            delivery_apps_total[app_name]["total"] += _sn(o.get("total"))
             delivery_apps_total[app_name]["count"] += 1
             delivery_apps_total[app_name]["commission"] += o.get("delivery_commission", 0)
     
     # ==================== حساب المصروفات ====================
     
-    total_expenses = sum(e.get("amount", 0) for e in expenses)
+    total_expenses = sum(_sn(e.get("amount")) for e in expenses)
     
     # تجميع المصروفات حسب الكاشير
     expenses_by_cashier = {}
@@ -12181,11 +12191,11 @@ async def get_cash_register_closing_report(
         cashier_name = e.get("created_by_name") or e.get("created_by") or "غير محدد"
         if cashier_name not in expenses_by_cashier:
             expenses_by_cashier[cashier_name] = {"total": 0, "count": 0, "items": []}
-        expenses_by_cashier[cashier_name]["total"] += e.get("amount", 0)
+        expenses_by_cashier[cashier_name]["total"] += _sn(e.get("amount"))
         expenses_by_cashier[cashier_name]["count"] += 1
         expenses_by_cashier[cashier_name]["items"].append({
             "description": e.get("description"),
-            "amount": e.get("amount", 0),
+            "amount": _sn(e.get("amount")),
             "category": e.get("category"),
             "created_at": e.get("created_at")
         })
@@ -12211,25 +12221,25 @@ async def get_cash_register_closing_report(
                 "takeaway": 0
             }
         
-        by_cashier[cashier_id]["total_sales"] += o.get("total", 0)
+        by_cashier[cashier_id]["total_sales"] += _sn(o.get("total"))
         by_cashier[cashier_id]["orders_count"] += 1
         
         # حسب طريقة الدفع
         if o.get("payment_method") == "cash" and not o.get("delivery_app"):
-            by_cashier[cashier_id]["cash"] += o.get("total", 0)
+            by_cashier[cashier_id]["cash"] += _sn(o.get("total"))
         elif o.get("payment_method") == "card":
-            by_cashier[cashier_id]["card"] += o.get("total", 0)
+            by_cashier[cashier_id]["card"] += _sn(o.get("total"))
         elif o.get("payment_method") == "credit" and not o.get("delivery_app"):
-            by_cashier[cashier_id]["credit"] += o.get("total", 0)
+            by_cashier[cashier_id]["credit"] += _sn(o.get("total"))
         
         if o.get("delivery_app") or o.get("order_type") == "delivery":
-            by_cashier[cashier_id]["delivery"] += o.get("total", 0)
+            by_cashier[cashier_id]["delivery"] += _sn(o.get("total"))
         
         # حسب نوع الطلب
         if o.get("order_type") == "dine_in":
-            by_cashier[cashier_id]["dine_in"] += o.get("total", 0)
+            by_cashier[cashier_id]["dine_in"] += _sn(o.get("total"))
         elif o.get("order_type") == "takeaway":
-            by_cashier[cashier_id]["takeaway"] += o.get("total", 0)
+            by_cashier[cashier_id]["takeaway"] += _sn(o.get("total"))
     
     # ==================== تجميع حسب الفرع ====================
     
@@ -12250,21 +12260,21 @@ async def get_cash_register_closing_report(
                 "delivery": 0
             }
         
-        by_branch[branch_id]["total_sales"] += o.get("total", 0)
+        by_branch[branch_id]["total_sales"] += _sn(o.get("total"))
         by_branch[branch_id]["orders_count"] += 1
         
         if o.get("payment_method") == "cash" and not o.get("delivery_app"):
-            by_branch[branch_id]["cash"] += o.get("total", 0)
+            by_branch[branch_id]["cash"] += _sn(o.get("total"))
         elif o.get("payment_method") == "card":
-            by_branch[branch_id]["card"] += o.get("total", 0)
+            by_branch[branch_id]["card"] += _sn(o.get("total"))
         elif o.get("payment_method") == "credit" and not o.get("delivery_app"):
-            by_branch[branch_id]["credit"] += o.get("total", 0)
+            by_branch[branch_id]["credit"] += _sn(o.get("total"))
         if o.get("delivery_app") or o.get("order_type") == "delivery":
-            by_branch[branch_id]["delivery"] += o.get("total", 0)
+            by_branch[branch_id]["delivery"] += _sn(o.get("total"))
     
     # ==================== حساب مطابقة الصندوق ====================
     
-    total_sales = sum(o.get("total", 0) for o in orders)
+    total_sales = sum(_sn(o.get("total")) for o in orders)
     expected_cash = cash_total - total_expenses  # النقدي المتوقع = المبيعات النقدية - المصروفات
     
     # الإجمالي
@@ -12298,7 +12308,7 @@ async def get_cash_register_closing_report(
         "expenses": {
             "total": total_expenses,
             "by_cashier": expenses_by_cashier,
-            "items": [{"description": e.get("description"), "amount": e.get("amount", 0), "category": e.get("category"), "created_by": e.get("created_by_name") or e.get("created_by"), "created_at": e.get("created_at")} for e in expenses]
+            "items": [{"description": e.get("description"), "amount": _sn(e.get("amount")), "category": e.get("category"), "created_by": e.get("created_by_name") or e.get("created_by"), "created_at": e.get("created_at")} for e in expenses]
         },
         "closings": closings
     }
@@ -12422,7 +12432,7 @@ async def get_delivery_credits_report(
     
     orders = await db.orders.find(query, {"_id": 0}).to_list(1000)
     
-    total_sales = sum(o.get("total", 0) for o in orders)
+    total_sales = sum(_sn(o.get("total")) for o in orders)
     total_commission = sum(o.get("delivery_commission", 0) for o in orders)
     net_receivable = total_sales - total_commission
     total_collected = sum(o.get("collected_amount", 0) for o in orders)
@@ -12440,9 +12450,9 @@ async def get_delivery_credits_report(
                 "orders_count": 0,
                 "collected": 0
             }
-        by_delivery_app[app_name]["total_sales"] += order.get("total", 0)
+        by_delivery_app[app_name]["total_sales"] += _sn(order.get("total"))
         by_delivery_app[app_name]["total_commission"] += order.get("delivery_commission", 0)
-        by_delivery_app[app_name]["net_receivable"] += order.get("total", 0) - order.get("delivery_commission", 0)
+        by_delivery_app[app_name]["net_receivable"] += _sn(order.get("total")) - order.get("delivery_commission", 0)
         by_delivery_app[app_name]["orders_count"] += 1
         by_delivery_app[app_name]["collected"] += order.get("collected_amount", 0)
     
@@ -12451,7 +12461,7 @@ async def get_delivery_credits_report(
     for order in orders:
         collected = order.get("collected_amount", 0)
         commission = order.get("delivery_commission", 0)
-        net = order.get("total", 0) - commission
+        net = _sn(order.get("total")) - commission
         remaining = net - collected
         order_list.append({
             "id": order.get("id"),
@@ -12459,7 +12469,7 @@ async def get_delivery_credits_report(
             "created_at": order.get("created_at"),
             "delivery_app_name": order.get("delivery_app_name") or order.get("delivery_app") or "غير محدد",
             "customer_name": order.get("customer_name"),
-            "total": order.get("total", 0),
+            "total": _sn(order.get("total")),
             "commission": commission,
             "net_amount": net,
             "collected_amount": collected,
@@ -12513,7 +12523,7 @@ async def get_products_report(
             product_id = item.get("product_id", item.get("name", "unknown"))
             product_name = item.get("name", "Unknown")
             quantity = item.get("quantity", 1)
-            total = item.get("total", 0)
+            total = _sn(item.get("total"))
             
             if product_id not in product_sales:
                 product_sales[product_id] = {
@@ -12574,7 +12584,7 @@ async def get_hourly_report(
             
             if hour in hourly_data:
                 hourly_data[hour]["orders"] += 1
-                hourly_data[hour]["sales"] += order.get("total", 0)
+                hourly_data[hour]["sales"] += _sn(order.get("total"))
         except:
             pass
     
@@ -12662,14 +12672,14 @@ async def export_smart_report_excel(
         row_num = 4
         total = 0
         for idx, order in enumerate(orders, 1):
-            total += order.get("total", 0)
+            total += _sn(order.get("total"))
             data = [
                 idx,
                 order.get("order_number", ""),
                 order.get("created_at", "")[:10],
                 order_types.get(order.get("order_type"), order.get("order_type", "")),
                 payment_methods.get(order.get("payment_method"), order.get("payment_method", "")),
-                order.get("total", 0)
+                _sn(order.get("total"))
             ]
             for col, value in enumerate(data, 1):
                 cell = ws.cell(row=row_num, column=col, value=value)
@@ -12695,8 +12705,8 @@ async def export_smart_report_excel(
                 name = item.get("name", "Unknown")
                 if pid not in product_sales:
                     product_sales[pid] = {"name": name, "qty": 0, "revenue": 0}
-                product_sales[pid]["qty"] += item.get("quantity", 0)
-                product_sales[pid]["revenue"] += item.get("price", 0) * item.get("quantity", 0)
+                product_sales[pid]["qty"] += _sn(item.get("quantity"))
+                product_sales[pid]["revenue"] += _sn(item.get("price")) * _sn(item.get("quantity"))
         
         # ترتيب حسب الكمية
         sorted_products = sorted(product_sales.values(), key=lambda x: x["qty"], reverse=True)[:20]
@@ -12741,7 +12751,7 @@ async def export_smart_report_excel(
                     hour = "00"
                 if hour in hourly_data:
                     hourly_data[hour]["orders"] += 1
-                    hourly_data[hour]["sales"] += order.get("total", 0)
+                    hourly_data[hour]["sales"] += _sn(order.get("total"))
             except:
                 pass
         
@@ -12855,7 +12865,7 @@ async def export_smart_report_pdf(
         
         total = 0
         for idx, order in enumerate(orders[:100], 1):  # Limit to 100 for PDF
-            total += order.get("total", 0)
+            total += _sn(order.get("total"))
             data_rows.append([
                 str(idx),
                 order.get("order_number", ""),
@@ -12878,8 +12888,8 @@ async def export_smart_report_pdf(
                 name = item.get("name", "Unknown")
                 if pid not in product_sales:
                     product_sales[pid] = {"name": name, "qty": 0, "revenue": 0}
-                product_sales[pid]["qty"] += item.get("quantity", 0)
-                product_sales[pid]["revenue"] += item.get("price", 0) * item.get("quantity", 0)
+                product_sales[pid]["qty"] += _sn(item.get("quantity"))
+                product_sales[pid]["revenue"] += _sn(item.get("price")) * _sn(item.get("quantity"))
         
         sorted_products = sorted(product_sales.values(), key=lambda x: x["qty"], reverse=True)[:20]
         
@@ -12904,7 +12914,7 @@ async def export_smart_report_pdf(
                     hour = "00"
                 if hour in hourly_data:
                     hourly_data[hour]["orders"] += 1
-                    hourly_data[hour]["sales"] += order.get("total", 0)
+                    hourly_data[hour]["sales"] += _sn(order.get("total"))
             except:
                 pass
         
@@ -14012,19 +14022,19 @@ async def create_recipe(recipe: RecipeCreate, current_user: dict = Depends(get_c
     for ing in recipe.ingredients:
         mat = materials_dict.get(ing.get("material_id"))
         if mat:
-            ing_cost = ing.get("quantity", 0) * mat.get("unit_cost", 0)
+            ing_cost = _sn(ing.get("quantity")) * mat.get("unit_cost", 0)
             total_cost += ing_cost
             ingredients_list.append({
                 "material_id": mat["id"],
                 "material_name": mat["name"],
-                "quantity": ing.get("quantity", 0),
+                "quantity": _sn(ing.get("quantity")),
                 "unit": mat["unit"],
                 "unit_cost": mat["unit_cost"],
                 "total_cost": round(ing_cost, 3)
             })
     
     final_cost = total_cost + recipe.labor_cost + recipe.overhead_cost
-    selling_price = product.get("price", 0)
+    selling_price = _sn(product.get("price"))
     profit_margin = ((selling_price - final_cost) / selling_price * 100) if selling_price > 0 else 0
     
     new_recipe = {
@@ -14237,8 +14247,8 @@ async def print_invoice(order_id: str, print_type: str = "customer", printer_id:
         
         # إضافة الأسعار فقط إذا كان مسموحاً
         if show_prices:
-            processed_item["price"] = item.get("price", 0)
-            processed_item["total"] = item.get("price", 0) * item.get("quantity", 1)
+            processed_item["price"] = _sn(item.get("price"))
+            processed_item["total"] = _sn(item.get("price")) * item.get("quantity", 1)
         
         processed_items.append(processed_item)
     
@@ -14258,10 +14268,10 @@ async def print_invoice(order_id: str, print_type: str = "customer", printer_id:
     
     # إضافة المعلومات المالية فقط للفاتورة الكاملة وإذا كان عرض الأسعار مسموحاً
     if print_mode == "full_receipt" and show_prices:
-        print_data["subtotal"] = order.get("subtotal", 0)
-        print_data["discount"] = order.get("discount", 0)
+        print_data["subtotal"] = _sn(order.get("subtotal"))
+        print_data["discount"] = _sn(order.get("discount"))
         print_data["tax"] = order.get("tax", 0)
-        print_data["total"] = order.get("total", 0)
+        print_data["total"] = _sn(order.get("total"))
         print_data["payment_method"] = order.get("payment_method", "cash")
     
     # إذا كانت طباعة كل صنف على حدة، نجهز مصفوفة من الطباعات
@@ -14337,8 +14347,8 @@ async def get_auto_print_data(order_id: str, branch_id: Optional[str] = None, cu
             }
             
             if show_prices:
-                processed_item["price"] = item.get("price", 0)
-                processed_item["total"] = item.get("price", 0) * item.get("quantity", 1)
+                processed_item["price"] = _sn(item.get("price"))
+                processed_item["total"] = _sn(item.get("price")) * item.get("quantity", 1)
             
             processed_items.append(processed_item)
         
@@ -14355,10 +14365,10 @@ async def get_auto_print_data(order_id: str, branch_id: Optional[str] = None, cu
         
         # إضافة المعلومات المالية للفاتورة الكاملة فقط
         if print_mode == "full_receipt" and show_prices:
-            print_data["subtotal"] = order.get("subtotal", 0)
-            print_data["discount"] = order.get("discount", 0)
+            print_data["subtotal"] = _sn(order.get("subtotal"))
+            print_data["discount"] = _sn(order.get("discount"))
             print_data["tax"] = order.get("tax", 0)
-            print_data["total"] = order.get("total", 0)
+            print_data["total"] = _sn(order.get("total"))
             print_data["payment_method"] = order.get("payment_method", "cash")
         
         # تجهيز الطباعات
@@ -14567,10 +14577,10 @@ async def get_dashboard_stats(
     branches = await db.branches.find(branches_query, {"_id": 0}).to_list(100)
     
     # حساب التكاليف الثابتة الشهرية
-    total_rent = sum(b.get("rent_cost", 0) for b in branches)
-    total_electricity = sum(b.get("electricity_cost", 0) for b in branches)
-    total_water = sum(b.get("water_cost", 0) for b in branches)
-    total_generator = sum(b.get("generator_cost", 0) for b in branches)
+    total_rent = sum(_sn(b.get("rent_cost")) for b in branches)
+    total_electricity = sum(_sn(b.get("electricity_cost")) for b in branches)
+    total_water = sum(_sn(b.get("water_cost")) for b in branches)
+    total_generator = sum(_sn(b.get("generator_cost")) for b in branches)
     total_fixed_costs = total_rent + total_electricity + total_water + total_generator
     daily_fixed_costs = total_fixed_costs / 30
     
@@ -14582,7 +14592,7 @@ async def get_dashboard_stats(
         employees_query["branch_id"] = user_branch_id
     
     employees = await db.employees.find(employees_query, {"_id": 0, "salary": 1}).to_list(1000)
-    total_salaries = sum(e.get("salary", 0) for e in employees)
+    total_salaries = sum(_sn(e.get("salary")) for e in employees)
     daily_salaries = total_salaries / 30
     
     # الهدف اليومي من التكاليف التشغيلية
@@ -14596,10 +14606,10 @@ async def get_dashboard_stats(
         
         orders = await db.orders.find(query, {"_id": 0, "total": 1, "total_cost": 1, "profit": 1, "payment_method": 1}).to_list(10000)
         
-        total_sales = sum(o.get("total", 0) for o in orders)
+        total_sales = sum(_sn(o.get("total")) for o in orders)
         total_orders = len(orders)
         avg_order = total_sales / total_orders if total_orders > 0 else 0
-        gross_profit = sum(o.get("profit", 0) for o in orders)  # الربح قبل التكاليف التشغيلية
+        gross_profit = sum(_sn(o.get("profit")) for o in orders)  # الربح قبل التكاليف التشغيلية
         
         # حساب التكاليف التشغيلية للفترة
         period_operating_costs = daily_operating_costs * days
@@ -14613,7 +14623,7 @@ async def get_dashboard_stats(
             pm = o.get("payment_method", "cash")
             # ترجمة اسم طريقة الدفع للعربية
             translated_pm = payment_translations.get(pm, pm)
-            by_payment[translated_pm] = by_payment.get(translated_pm, 0) + o.get("total", 0)
+            by_payment[translated_pm] = by_payment.get(translated_pm, 0) + _sn(o.get("total"))
         
         return {
             "total_sales": total_sales,
@@ -14765,14 +14775,14 @@ async def close_day(
             "status": {"$ne": OrderStatus.CANCELLED}
         }).to_list(1000)
         
-        shift_sales = sum(o.get("total", 0) for o in orders)
-        shift_profit = sum(o.get("profit", 0) for o in orders)
+        shift_sales = sum(_sn(o.get("total")) for o in orders)
+        shift_profit = sum(_sn(o.get("profit")) for o in orders)
         
         expenses = await db.expenses.find({
             "branch_id": shift.get("branch_id"),
             "created_at": {"$gte": shift["started_at"]}
         }).to_list(100)
-        shift_expenses = sum(e.get("amount", 0) for e in expenses)
+        shift_expenses = sum(_sn(e.get("amount")) for e in expenses)
         
         # تحديث الوردية كمغلقة
         await db.shifts.update_one(
@@ -14876,8 +14886,8 @@ async def auto_close_old_shifts():
                 "status": {"$ne": OrderStatus.CANCELLED}
             }).to_list(1000)
             
-            total_sales = sum(o.get("total", 0) for o in orders)
-            total_profit = sum(o.get("profit", 0) for o in orders)
+            total_sales = sum(_sn(o.get("total")) for o in orders)
+            total_profit = sum(_sn(o.get("profit")) for o in orders)
             
             # إغلاق الوردية تلقائياً
             await db.shifts.update_one(
@@ -14951,9 +14961,9 @@ async def send_daily_report_email(
             expenses_query["tenant_id"] = tenant_id
         expenses = await db.expenses.find(expenses_query, {"_id": 0, "amount": 1}).to_list(1000)
         
-        branch_sales = sum(o.get("total", 0) for o in orders)
-        branch_expenses = sum(e.get("amount", 0) for e in expenses)
-        branch_profit = sum(o.get("profit", 0) for o in orders) - branch_expenses
+        branch_sales = sum(_sn(o.get("total")) for o in orders)
+        branch_expenses = sum(_sn(e.get("amount")) for e in expenses)
+        branch_profit = sum(_sn(o.get("profit")) for o in orders) - branch_expenses
         
         branches_data.append({
             "name": branch["name"],
@@ -15044,9 +15054,9 @@ async def get_daily_report_preview(
         expenses_query["branch_id"] = branch_id
     expenses = await db.expenses.find(expenses_query, {"_id": 0}).to_list(1000)
     
-    total_sales = sum(o.get("total", 0) for o in orders)
-    total_profit = sum(o.get("profit", 0) for o in orders)
-    total_expenses = sum(e.get("amount", 0) for e in expenses)
+    total_sales = sum(_sn(o.get("total")) for o in orders)
+    total_profit = sum(_sn(o.get("profit")) for o in orders)
+    total_expenses = sum(_sn(e.get("amount")) for e in expenses)
     
     return {
         "date": today,
@@ -15329,7 +15339,7 @@ async def get_customer_menu(tenant_id: str):
             "description": tenant.get("description", ""),
             "phone": tenant.get("phone", ""),
             "address": tenant.get("address", ""),
-            "delivery_fee": settings.get("delivery_fee", 0),
+            "delivery_fee": _sn(settings.get("delivery_fee")),
             "min_order": settings.get("min_order", 0),
             "payment_methods": settings.get("payment_methods", ["cash"]),
             "menu_slug": tenant.get("menu_slug", tid)
@@ -15454,15 +15464,15 @@ async def create_customer_order(
         if not product:
             raise HTTPException(status_code=400, detail=f"المنتج غير موجود: {item.product_id}")
         
-        item_total = product.get("price", 0) * item.quantity
-        item_cost = product.get("cost", 0) * item.quantity
+        item_total = _sn(product.get("price")) * item.quantity
+        item_cost = _sn(product.get("cost")) * item.quantity
         
         order_items.append({
             "product_id": item.product_id,
             "product_name": product.get("name"),
             "name": product.get("name"),
             "name_en": product.get("name_en"),
-            "price": product.get("price", 0),
+            "price": _sn(product.get("price")),
             "quantity": item.quantity,
             "total": item_total,
             "notes": item.notes
@@ -15473,7 +15483,7 @@ async def create_customer_order(
     
     # جلب رسوم التوصيل
     settings = await db.tenant_settings.find_one({"tenant_id": tenant_id}) or {}
-    delivery_fee = settings.get("delivery_fee", 0)
+    delivery_fee = _sn(settings.get("delivery_fee"))
     
     # إنشاء رقم الطلب
     today = datetime.now(timezone.utc).strftime('%Y%m%d')
