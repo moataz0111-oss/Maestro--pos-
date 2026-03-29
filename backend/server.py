@@ -4936,6 +4936,17 @@ async def get_orders(
     # فلترة حسب tenant_id و branch_id للمستخدم
     query = build_branch_query(current_user)
     
+    # المستخدمون غير المدراء يرون فقط طلباتهم الخاصة لليوم الحالي
+    user_role = current_user.get("role", "")
+    is_manager = user_role in [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.MANAGER]
+    
+    if not is_manager:
+        query["cashier_id"] = current_user["id"]
+        # إذا لم يتم تحديد تاريخ، نعرض فقط طلبات اليوم
+        if not date:
+            today = datetime.now(timezone.utc).strftime('%Y-%m-%d')
+            query["created_at"] = {"$regex": f"^{today}"}
+    
     # إذا تم تحديد فرع في الطلب، تحقق من صلاحية الوصول
     if branch_id:
         if not user_can_access_branch(current_user, branch_id):
@@ -14608,11 +14619,16 @@ async def get_dashboard_stats(
     # فلترة الفرع
     user_branch_id = current_user.get("branch_id")
     user_role = current_user.get("role")
+    is_manager = user_role in [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.MANAGER]
     
-    if user_branch_id and user_role not in [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.MANAGER]:
+    if user_branch_id and not is_manager:
         base_query["branch_id"] = user_branch_id
     elif branch_id:
         base_query["branch_id"] = branch_id
+    
+    # المستخدمون غير المدراء يرون فقط طلباتهم الخاصة
+    if not is_manager:
+        base_query["cashier_id"] = current_user["id"]
     
     # حساب التواريخ
     now = datetime.now(timezone.utc)
@@ -14624,7 +14640,7 @@ async def get_dashboard_stats(
     branches_query = {"tenant_id": tenant_id, "is_active": {"$ne": False}}
     if branch_id:
         branches_query["id"] = branch_id
-    elif user_branch_id and user_role not in [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.MANAGER]:
+    elif user_branch_id and not is_manager:
         branches_query["id"] = user_branch_id
     
     branches = await db.branches.find(branches_query, {"_id": 0}).to_list(100)
@@ -14641,7 +14657,7 @@ async def get_dashboard_stats(
     employees_query = {"tenant_id": tenant_id, "is_active": {"$ne": False}}
     if branch_id:
         employees_query["branch_id"] = branch_id
-    elif user_branch_id and user_role not in [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.MANAGER]:
+    elif user_branch_id and not is_manager:
         employees_query["branch_id"] = user_branch_id
     
     employees = await db.employees.find(employees_query, {"_id": 0, "salary": 1}).to_list(1000)
