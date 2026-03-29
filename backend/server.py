@@ -14770,19 +14770,34 @@ async def close_day(
     
     for shift in open_shifts:
         # حساب إحصائيات الوردية
+        shift_start = shift.get("started_at") or shift.get("opened_at") or ""
+        
         orders = await db.orders.find({
             "shift_id": shift["id"],
             "status": {"$ne": OrderStatus.CANCELLED}
         }).to_list(1000)
         
+        # fallback: إذا لم توجد طلبات بـ shift_id
+        if not orders and shift_start:
+            orders = await db.orders.find({
+                "cashier_id": shift.get("cashier_id", ""),
+                "created_at": {"$gte": shift_start},
+                "status": {"$ne": OrderStatus.CANCELLED}
+            }).to_list(1000)
+        
         shift_sales = sum(_sn(o.get("total")) for o in orders)
         shift_profit = sum(_sn(o.get("profit")) for o in orders)
+        cash_sales = sum(_sn(o.get("total")) for o in orders if o.get("payment_method") == "cash")
         
-        expenses = await db.expenses.find({
-            "branch_id": shift.get("branch_id"),
-            "created_at": {"$gte": shift["started_at"]}
-        }).to_list(100)
+        expense_query = {"branch_id": shift.get("branch_id")}
+        if shift_start:
+            expense_query["created_at"] = {"$gte": shift_start}
+        expenses = await db.expenses.find(expense_query).to_list(100)
         shift_expenses = sum(_sn(e.get("amount")) for e in expenses)
+        
+        # حساب النقد المتوقع - الإغلاق الإجباري = closing_cash صفر = short cash
+        opening_cash = _sn(shift.get("opening_cash") or shift.get("opening_balance") or 0)
+        expected_cash = opening_cash + cash_sales - shift_expenses
         
         # تحديث الوردية كمغلقة
         await db.shifts.update_one(
@@ -14796,7 +14811,11 @@ async def close_day(
                 "total_sales": shift_sales,
                 "total_expenses": shift_expenses,
                 "net_profit": shift_profit - shift_expenses,
-                "notes": request.notes or "إغلاق يومي تلقائي"
+                "closing_cash": 0,
+                "expected_cash": expected_cash,
+                "difference": 0 - expected_cash,
+                "cash_sales": cash_sales,
+                "notes": request.notes or "إغلاق يومي إجباري - short cash"
             }}
         )
         
@@ -14880,16 +14899,35 @@ async def auto_close_old_shifts():
         }).to_list(100)
         
         for shift in old_shifts:
+            shift_start = shift.get("started_at") or shift.get("opened_at") or ""
+            
             # حساب الإحصائيات
             orders = await db.orders.find({
                 "shift_id": shift["id"],
                 "status": {"$ne": OrderStatus.CANCELLED}
             }).to_list(1000)
             
+            if not orders and shift_start:
+                orders = await db.orders.find({
+                    "cashier_id": shift.get("cashier_id", ""),
+                    "created_at": {"$gte": shift_start},
+                    "status": {"$ne": OrderStatus.CANCELLED}
+                }).to_list(1000)
+            
             total_sales = sum(_sn(o.get("total")) for o in orders)
             total_profit = sum(_sn(o.get("profit")) for o in orders)
+            cash_sales = sum(_sn(o.get("total")) for o in orders if o.get("payment_method") == "cash")
             
-            # إغلاق الوردية تلقائياً
+            expense_query = {"branch_id": shift.get("branch_id")}
+            if shift_start:
+                expense_query["created_at"] = {"$gte": shift_start}
+            expenses = await db.expenses.find(expense_query).to_list(100)
+            total_expenses = sum(_sn(e.get("amount")) for e in expenses)
+            
+            opening_cash = _sn(shift.get("opening_cash") or shift.get("opening_balance") or 0)
+            expected_cash = opening_cash + cash_sales - total_expenses
+            
+            # إغلاق الوردية تلقائياً - closing_cash = 0 = short cash
             await db.shifts.update_one(
                 {"id": shift["id"]},
                 {"$set": {
@@ -14897,8 +14935,13 @@ async def auto_close_old_shifts():
                     "ended_at": datetime.now(timezone.utc).isoformat(),
                     "auto_closed": True,
                     "total_sales": total_sales,
-                    "net_profit": total_profit,
-                    "notes": "إغلاق تلقائي بعد 24 ساعة"
+                    "total_expenses": total_expenses,
+                    "net_profit": total_profit - total_expenses,
+                    "closing_cash": 0,
+                    "expected_cash": expected_cash,
+                    "difference": 0 - expected_cash,
+                    "cash_sales": cash_sales,
+                    "notes": "إغلاق تلقائي بعد 24 ساعة - short cash"
                 }}
             )
             

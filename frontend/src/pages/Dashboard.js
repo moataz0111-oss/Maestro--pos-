@@ -2080,7 +2080,8 @@ export default function Dashboard() {
           </Card>
           )}
 
-          {/* Sales by Payment Method */}
+          {/* Sales by Payment Method - يُخفى إذا كان المستخدم لديه صلاحية hide_cash_expected */}
+          {!user?.permissions?.includes('hide_cash_expected') && (
           <Card className="border-border/50 bg-card">
             <CardHeader>
               <CardTitle className="text-lg font-cairo text-foreground">{t('المبيعات حسب طريقة الدفع')}</CardTitle>
@@ -2109,6 +2110,7 @@ export default function Dashboard() {
               </div>
             </CardContent>
           </Card>
+          )}
         </div>
 
         {/* Delivery Apps Stats */}
