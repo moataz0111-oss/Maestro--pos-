@@ -349,7 +349,7 @@ export default function Expenses() {
               ))}
             </select>
 
-            {hasRole(['admin', 'manager', 'supervisor']) && (
+            {(hasRole(['admin', 'manager', 'supervisor']) || user?.permissions?.includes('expenses')) && (
               <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
                 <DialogTrigger asChild>
                   <Button className="bg-primary text-primary-foreground" data-testid="add-expense-btn">
