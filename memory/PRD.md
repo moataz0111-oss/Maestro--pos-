@@ -27,27 +27,34 @@ Multi-tenant POS system (React + FastAPI + MongoDB) with role-based access, POS 
 - PWA offline support
 - Customer menu app with order tracking
 - Incoming customer order notifications on POS (accept/reject modal)
+- **Data isolation**: Non-admin users only see their own orders/stats
 
 ## Recent Fixes
 
 ### March 29, 2026 (Session 1)
-1. Cash Register 500 Error: PaymentMethod.CREDIT missing from shared.py
-2. Inventory tenant_id: Raw materials via /raw-materials-new now include tenant_id
-3. Sales report: Refunded/cancelled orders excluded, pending shown separately
-4. Permissions: Cashiers with expenses/delivery permission can create items
-5. Printing: Switched from iframe to popup window
-6. Customer order notifications: 60min cutoff, accept/reject endpoints
-7. Android PWA reload: Removed aggressive skipWaiting + auto-reload loop
-8. Driver assignment: Includes driver_name and driver_phone
-9. Customer order timeline: Added "confirmed" step
+1. Cash Register 500 Error: PaymentMethod.CREDIT missing
+2. Inventory tenant_id fix
+3. Sales report: Refunded/cancelled orders excluded
+4. Permissions: Cashiers with expenses/delivery permission see buttons
+5. Printing: popup window approach
+6. Customer order notifications
+7. Android PWA reload fix
+8. Driver assignment fix
+9. Customer order timeline
 
 ### March 29, 2026 (Session 2)
-10. User Permissions Stale Closure Bug (P0): Fixed all form handlers to use functional state updates
+10. User Permissions Stale Closure Bug fix
 
 ### March 30, 2026 (Session 3 - Current)
-11. **Cash Register Calculation Fix (P0)**: Fixed orders without shift_id (customer app orders) not being counted. Now combines shift_id based orders + unlinked orders from same branch/period with deduplication. Applied to both get_cash_register_summary and close_cash_register endpoints.
-12. **User Permissions Hide UI (P0)**: Verified permission checks in Dashboard.js correctly hide: 'النقدي' and 'المتوقع' cards in cash register dialog (hide_cash_expected), 'آخر الطلبات' section (hide_recent_orders), 'المبيعات حسب طريقة الدفع' section (hide_cash_expected).
-13. **Thermal Printing Rewrite (P1)**: Rewrote printing for POS receipts and cash register close reports. Changed from popup window to hidden iframe for direct one-click printing. CSS: @page { size: 80mm auto; margin: 0; }, fonts: Arial/Tahoma (not Courier New) for clarity, increased font sizes, proper 76mm content width. Applied to both POS.js and Dashboard.js.
+11. **Cash Register Calculation Fix (P0)**: Orders without shift_id now counted via combined queries
+12. **User Permissions Hide UI (P0)**: Verified working in Dashboard/close dialog
+13. **Thermal Printing Rewrite (P1)**: Hidden iframe, 80mm CSS, Arial/Tahoma fonts
+14. **Data Isolation for Non-Admin Users (P0)**: 
+    - `get_orders` adds `cashier_id` filter for non-admin users
+    - `get_dashboard_stats` adds `cashier_id` to base_query for non-admin users  
+    - Non-admin users default to today's orders only
+    - Admin/manager/super_admin bypass all filters
+    - Verified: Backend 11/11, Frontend 100%
 
 ## Pending Issues
 - None currently blocking
@@ -58,7 +65,7 @@ Multi-tenant POS system (React + FastAPI + MongoDB) with role-based access, POS 
 - P2: Refactor SuperAdmin.js (5.4k+ lines into smaller components)
 
 ## Deferred Tasks
-- Multi-Restaurant Tenant Switcher (deferred by user - not wanted currently)
+- Multi-Restaurant Tenant Switcher (deferred by user)
 
 ## Key Credentials
 - Admin: hanialdujaili@gmail.com / Hani@2024
