@@ -9188,7 +9188,7 @@ async def get_tenant_live_stats(tenant_id: str, current_user: dict = Depends(ver
     today_orders = await db.orders.find(today_query, {"_id": 0}).to_list(500)
     
     # حساب الإحصائيات
-    total_today = sum(o["total"] for o in today_orders if o.get("status") != "cancelled")
+    total_today = sum((o.get("total") or 0) for o in today_orders if o.get("status") != "cancelled")
     pending_orders = len([o for o in today_orders if o.get("status") == "pending"])
     preparing_orders = len([o for o in today_orders if o.get("status") == "preparing"])
     delivered_orders = len([o for o in today_orders if o.get("status") == "delivered"])
@@ -16013,7 +16013,7 @@ async def get_menu_link(request: Request, current_user: dict = Depends(get_curre
         base_url = f"{parsed.scheme}://{parsed.netloc}"
     else:
         # fallback للـ environment variable
-        base_url = os.environ.get('REACT_APP_BACKEND_URL', 'https://delivery-price-fix.preview.emergentagent.com')
+        base_url = os.environ.get('REACT_APP_BACKEND_URL', 'https://null-handler-patch.preview.emergentagent.com')
     
     menu_url = f"{base_url}/menu/{tenant.get('menu_slug', tenant_id)}"
     

@@ -16,6 +16,16 @@ from .shared import (
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Shifts"])
 
+def _safe_num(val, default=0):
+    """Convert None/non-numeric values to a safe default for math operations.
+    dict.get('key', 0) returns None when key exists with null value in MongoDB."""
+    if val is None:
+        return default
+    try:
+        return float(val)
+    except (TypeError, ValueError):
+        return default
+
 # ==================== MODELS ====================
 class ShiftCreate(BaseModel):
     cashier_id: str
@@ -194,12 +204,12 @@ async def close_shift(shift_id: str, close_data: ShiftClose, current_user: dict 
         "status": {"$ne": OrderStatus.CANCELLED}
     }).to_list(1000)
     
-    total_sales = sum(o["total"] for o in orders)
-    total_cost = sum(o.get("total_cost", 0) for o in orders)
+    total_sales = sum(_safe_num(o.get("total")) for o in orders)
+    total_cost = sum(_safe_num(o.get("total_cost")) for o in orders)
     gross_profit = total_sales - total_cost
-    cash_sales = sum(o["total"] for o in orders if o["payment_method"] == PaymentMethod.CASH)
-    card_sales = sum(o["total"] for o in orders if o["payment_method"] == PaymentMethod.CARD)
-    credit_sales = sum(o["total"] for o in orders if o["payment_method"] == PaymentMethod.CREDIT)
+    cash_sales = sum(_safe_num(o.get("total")) for o in orders if o.get("payment_method") == PaymentMethod.CASH)
+    card_sales = sum(_safe_num(o.get("total")) for o in orders if o.get("payment_method") == PaymentMethod.CARD)
+    credit_sales = sum(_safe_num(o.get("total")) for o in orders if o.get("payment_method") == PaymentMethod.CREDIT)
     
     delivery_app_sales = {}
     for o in orders:
@@ -207,16 +217,16 @@ async def close_shift(shift_id: str, close_data: ShiftClose, current_user: dict 
             app = o["delivery_app"]
             if app not in delivery_app_sales:
                 delivery_app_sales[app] = 0
-            delivery_app_sales[app] += o["total"]
+            delivery_app_sales[app] += _safe_num(o.get("total"))
     
     expenses = await db.expenses.find({
         "branch_id": shift["branch_id"],
         "created_at": {"$gte": shift["started_at"]}
     }).to_list(100)
-    total_expenses = sum(e["amount"] for e in expenses)
+    total_expenses = sum(_safe_num(e.get("amount")) for e in expenses)
     
     net_profit = gross_profit - total_expenses
-    opening_cash = shift.get("opening_cash", shift.get("opening_balance", 0))
+    opening_cash = _safe_num(shift.get("opening_cash", shift.get("opening_balance", 0)))
     expected_cash = opening_cash + cash_sales - total_expenses
     cash_difference = close_data.closing_cash - expected_cash
     
@@ -360,12 +370,12 @@ async def get_cash_register_summary(
     
     cancelled_orders = await db.orders.find(cancelled_query).to_list(1000)
     
-    total_sales = sum(o.get("total", 0) for o in orders)
-    total_cost = sum(o.get("total_cost", 0) for o in orders)
+    total_sales = sum(_safe_num(o.get("total")) for o in orders)
+    total_cost = sum(_safe_num(o.get("total_cost")) for o in orders)
     gross_profit = total_sales - total_cost
-    cash_sales = sum(o.get("total", 0) for o in orders if o.get("payment_method") == PaymentMethod.CASH)
-    card_sales = sum(o.get("total", 0) for o in orders if o.get("payment_method") == PaymentMethod.CARD)
-    credit_sales = sum(o.get("total", 0) for o in orders if o.get("payment_method") == PaymentMethod.CREDIT)
+    cash_sales = sum(_safe_num(o.get("total")) for o in orders if o.get("payment_method") == PaymentMethod.CASH)
+    card_sales = sum(_safe_num(o.get("total")) for o in orders if o.get("payment_method") == PaymentMethod.CARD)
+    credit_sales = sum(_safe_num(o.get("total")) for o in orders if o.get("payment_method") == PaymentMethod.CREDIT)
     
     delivery_app_sales = {}
     for o in orders:
@@ -373,15 +383,15 @@ async def get_cash_register_summary(
             app = o["delivery_app"]
             if app not in delivery_app_sales:
                 delivery_app_sales[app] = 0
-            delivery_app_sales[app] += o.get("total", 0)
+            delivery_app_sales[app] += _safe_num(o.get("total"))
     
-    driver_sales = sum(o.get("total", 0) for o in orders if o.get("order_type") == OrderType.DELIVERY and o.get("driver_id"))
-    discounts_total = sum(o.get("discount", 0) for o in orders)
+    driver_sales = sum(_safe_num(o.get("total")) for o in orders if o.get("order_type") == OrderType.DELIVERY and o.get("driver_id"))
+    discounts_total = sum(_safe_num(o.get("discount")) for o in orders)
     
     cancelled_by = {}
     cancelled_amount = 0
     for o in cancelled_orders:
-        cancelled_amount += o.get("total", 0)
+        cancelled_amount += _safe_num(o.get("total"))
         cancelled_by_id = o.get("cancelled_by", o.get("cashier_id"))
         if cancelled_by_id and cancelled_by_id not in cancelled_by:
             user = await db.users.find_one({"id": cancelled_by_id}, {"_id": 0, "full_name": 1})
@@ -393,7 +403,7 @@ async def get_cash_register_summary(
             }
         if cancelled_by_id and cancelled_by_id in cancelled_by:
             cancelled_by[cancelled_by_id]["count"] += 1
-            cancelled_by[cancelled_by_id]["total"] += o.get("total", 0)
+            cancelled_by[cancelled_by_id]["total"] += _safe_num(o.get("total"))
     
     # جلب المصروفات منذ آخر إغلاق (نفس نطاق المبيعات)
     expense_query = {
@@ -404,9 +414,9 @@ async def get_cash_register_summary(
         expense_query["tenant_id"] = tenant_id
     
     expenses = await db.expenses.find(expense_query).to_list(100)
-    total_expenses = sum(e.get("amount", 0) for e in expenses)
+    total_expenses = sum(_safe_num(e.get("amount")) for e in expenses)
     
-    opening_cash = shift.get("opening_cash", shift.get("opening_balance", 0))
+    opening_cash = _safe_num(shift.get("opening_cash", shift.get("opening_balance", 0)))
     net_profit = gross_profit - total_expenses
     expected_cash = opening_cash + cash_sales - total_expenses
     non_cash_amount = card_sales + credit_sales
@@ -514,12 +524,12 @@ async def close_cash_register(close_data: CashRegisterClose, current_user: dict 
             cancelled_fallback["tenant_id"] = tenant_id
         cancelled_orders = await db.orders.find(cancelled_fallback).to_list(1000)
     
-    total_sales = sum(o.get("total", 0) for o in orders)
-    total_cost = sum(o.get("total_cost", 0) for o in orders)
+    total_sales = sum(_safe_num(o.get("total")) for o in orders)
+    total_cost = sum(_safe_num(o.get("total_cost")) for o in orders)
     gross_profit = total_sales - total_cost
-    cash_sales = sum(o.get("total", 0) for o in orders if o.get("payment_method") == PaymentMethod.CASH)
-    card_sales = sum(o.get("total", 0) for o in orders if o.get("payment_method") == PaymentMethod.CARD)
-    credit_sales = sum(o.get("total", 0) for o in orders if o.get("payment_method") == PaymentMethod.CREDIT)
+    cash_sales = sum(_safe_num(o.get("total")) for o in orders if o.get("payment_method") == PaymentMethod.CASH)
+    card_sales = sum(_safe_num(o.get("total")) for o in orders if o.get("payment_method") == PaymentMethod.CARD)
+    credit_sales = sum(_safe_num(o.get("total")) for o in orders if o.get("payment_method") == PaymentMethod.CREDIT)
     
     delivery_app_sales = {}
     for o in orders:
@@ -527,15 +537,15 @@ async def close_cash_register(close_data: CashRegisterClose, current_user: dict 
             app = o["delivery_app"]
             if app not in delivery_app_sales:
                 delivery_app_sales[app] = 0
-            delivery_app_sales[app] += o.get("total", 0)
+            delivery_app_sales[app] += _safe_num(o.get("total"))
     
-    driver_sales = sum(o.get("total", 0) for o in orders if o.get("order_type") == OrderType.DELIVERY and o.get("driver_id"))
-    discounts_total = sum(o.get("discount", 0) for o in orders)
+    driver_sales = sum(_safe_num(o.get("total")) for o in orders if o.get("order_type") == OrderType.DELIVERY and o.get("driver_id"))
+    discounts_total = sum(_safe_num(o.get("discount")) for o in orders)
     
     cancelled_by = {}
     cancelled_amount = 0
     for o in cancelled_orders:
-        cancelled_amount += o.get("total", 0)
+        cancelled_amount += _safe_num(o.get("total"))
         cancelled_by_id = o.get("cancelled_by", o.get("cashier_id"))
         if cancelled_by_id and cancelled_by_id not in cancelled_by:
             user = await db.users.find_one({"id": cancelled_by_id}, {"_id": 0, "full_name": 1})
@@ -547,16 +557,16 @@ async def close_cash_register(close_data: CashRegisterClose, current_user: dict 
             }
         if cancelled_by_id and cancelled_by_id in cancelled_by:
             cancelled_by[cancelled_by_id]["count"] += 1
-            cancelled_by[cancelled_by_id]["total"] += o.get("total", 0)
+            cancelled_by[cancelled_by_id]["total"] += _safe_num(o.get("total"))
     
     expenses = await db.expenses.find({
         "branch_id": shift.get("branch_id"),
         "created_at": {"$gte": shift.get("started_at", shift.get("opened_at", ""))}
     }).to_list(100)
-    total_expenses = sum(e.get("amount", 0) for e in expenses)
+    total_expenses = sum(_safe_num(e.get("amount")) for e in expenses)
     
     net_profit = gross_profit - total_expenses
-    opening_cash = shift.get("opening_cash", shift.get("opening_balance", 0))
+    opening_cash = _safe_num(shift.get("opening_cash", shift.get("opening_balance", 0)))
     expected_cash = opening_cash + cash_sales - total_expenses
     cash_difference = closing_cash - expected_cash
     
@@ -623,16 +633,16 @@ async def get_active_shift_details(current_user: dict = Depends(get_current_user
             fallback_query["tenant_id"] = tenant_id
         orders = await db.orders.find(fallback_query).to_list(1000)
     
-    total_sales = sum(o.get("total", 0) for o in orders)
-    cash_sales = sum(o.get("total", 0) for o in orders if o.get("payment_method") == PaymentMethod.CASH)
+    total_sales = sum(_safe_num(o.get("total")) for o in orders)
+    cash_sales = sum(_safe_num(o.get("total")) for o in orders if o.get("payment_method") == PaymentMethod.CASH)
     
     expenses = await db.expenses.find({
         "branch_id": shift.get("branch_id"),
         "created_at": {"$gte": shift.get("started_at", shift.get("opened_at", ""))}
     }).to_list(100)
-    total_expenses = sum(e.get("amount", 0) for e in expenses)
+    total_expenses = sum(_safe_num(e.get("amount")) for e in expenses)
     
-    opening_cash = shift.get("opening_cash", shift.get("opening_balance", 0))
+    opening_cash = _safe_num(shift.get("opening_cash", shift.get("opening_balance", 0)))
     expected_cash = opening_cash + cash_sales - total_expenses
     
     shift["total_sales"] = total_sales

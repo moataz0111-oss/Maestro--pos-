@@ -84,7 +84,7 @@
   },
   
   "test_credentials": {
-    "api_url": "https://delivery-price-fix.preview.emergentagent.com",
+    "api_url": "https://null-handler-patch.preview.emergentagent.com",
     "admin_email": "admin@maestroegp.com",
     "admin_password": "admin123",
     "super_admin_email": "owner@maestroegp.com",

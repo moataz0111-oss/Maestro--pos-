@@ -132,7 +132,7 @@
   },
   
   "test_credentials": {
-    "api_url": "https://delivery-price-fix.preview.emergentagent.com",
+    "api_url": "https://null-handler-patch.preview.emergentagent.com",
     "owner": {
       "email": "owner@maestroegp.com",
       "password": "owner123",

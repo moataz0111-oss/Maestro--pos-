@@ -845,6 +845,25 @@
 
 ---
 
+### إصلاح خطأ 500 في إغلاق/ملخص صندوق النقد ✅ (March 29, 2026)
+
+**المشكلة**: خطأ `TypeError` عند إغلاق الصندوق بسبب قيم `null` في حقول `total` و `amount` في MongoDB.
+
+**السبب الجذري**: `dict.get("total", 0)` في Python يُرجع `None` عندما يكون المفتاح موجوداً بقيمة `null` في MongoDB (القيمة الافتراضية `0` لا تُستخدم لأن المفتاح موجود). هذا يسبب `TypeError: unsupported operand type(s) for +: 'int' and 'NoneType'` عند الجمع.
+
+**الإصلاحات**:
+1. **shifts_routes.py** - إضافة دالة `_safe_num(val, default=0)` لتحويل `None` إلى `0` بأمان
+2. **shifts_routes.py** - استبدال كل `o.get("total", 0)` و `e.get("amount", 0)` و `o["total"]` بـ `_safe_num(o.get("total"))`
+3. **server.py** - إصلاح `o["total"]` في حساب إحصائيات اليوم (سطر 9191)
+
+**الملفات المعدلة**:
+- `/app/backend/routes/shifts_routes.py`
+- `/app/backend/server.py`
+
+**حالة الاختبار**: ✅ (Backend curl tests + Python unit tests)
+
+---
+
 ## P1 Issues (High Priority)
 - [ ] تكامل بصمة ZKTeco
 
