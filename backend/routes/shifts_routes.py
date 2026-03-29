@@ -335,40 +335,72 @@ async def get_cash_register_summary(
     shift_start = shift.get("started_at") or shift.get("opened_at") or datetime.now(timezone.utc).isoformat()
     shift_cashier_id = shift.get("cashier_id") or current_user.get("id")
     
-    # جلب طلبات هذه الوردية تحديداً (بـ shift_id أولاً)
-    order_query = {"shift_id": shift_id, "status": {"$ne": OrderStatus.CANCELLED}}
+    # جلب جميع طلبات الوردية - بالـ shift_id + الطلبات بدون shift_id في نفس الفترة والفرع
+    # هذا يضمن احتساب طلبات تطبيق الزبائن والطلبات غير المرتبطة بوردية
+    base_status_filter = {"$ne": OrderStatus.CANCELLED}
+    
+    # 1. طلبات مرتبطة بالـ shift_id مباشرة
+    shift_order_query = {"shift_id": shift_id, "status": base_status_filter}
     if tenant_id:
-        order_query["tenant_id"] = tenant_id
+        shift_order_query["tenant_id"] = tenant_id
     
-    orders = await db.orders.find(order_query).to_list(1000)
+    shift_orders = await db.orders.find(shift_order_query).to_list(1000)
     
-    # fallback: إذا لم تُربط الطلبات بـ shift_id، نبحث بـ cashier_id + وقت فتح الوردية
+    # 2. طلبات في نفس الفرع خلال فترة الوردية بدون shift_id (طلبات تطبيق الزبائن وغيرها)
+    unlinked_query = {
+        "created_at": {"$gte": shift_start},
+        "status": base_status_filter,
+        "$or": [{"shift_id": {"$exists": False}}, {"shift_id": None}, {"shift_id": ""}]
+    }
+    if tenant_id:
+        unlinked_query["tenant_id"] = tenant_id
+    if shift.get("branch_id"):
+        unlinked_query["branch_id"] = shift["branch_id"]
+    
+    unlinked_orders = await db.orders.find(unlinked_query).to_list(1000)
+    
+    # 3. دمج الطلبات مع إزالة التكرار
+    seen_ids = set(o.get("id") for o in shift_orders if o.get("id"))
+    for o in unlinked_orders:
+        if o.get("id") and o["id"] not in seen_ids:
+            shift_orders.append(o)
+            seen_ids.add(o["id"])
+    
+    orders = shift_orders
+    
+    # fallback: إذا لم تُوجد أي طلبات، نبحث بـ cashier_id + وقت الوردية
     if not orders:
         fallback_query = {
             "cashier_id": shift_cashier_id,
             "created_at": {"$gte": shift_start},
-            "status": {"$ne": OrderStatus.CANCELLED}
+            "status": base_status_filter
         }
         if tenant_id:
             fallback_query["tenant_id"] = tenant_id
         orders = await db.orders.find(fallback_query).to_list(1000)
     
-    # الطلبات الملغاة لهذه الوردية
-    cancelled_query = {"shift_id": shift_id, "status": OrderStatus.CANCELLED}
+    # الطلبات الملغاة لهذه الوردية (نفس المنطق: shift_id + بدون shift_id)
+    cancelled_shift = {"shift_id": shift_id, "status": OrderStatus.CANCELLED}
     if tenant_id:
-        cancelled_query["tenant_id"] = tenant_id
+        cancelled_shift["tenant_id"] = tenant_id
+    cancelled_orders = await db.orders.find(cancelled_shift).to_list(1000)
     
-    cancelled_orders = await db.orders.find(cancelled_query).to_list(1000)
+    cancelled_unlinked_query = {
+        "created_at": {"$gte": shift_start},
+        "status": OrderStatus.CANCELLED,
+        "$or": [{"shift_id": {"$exists": False}}, {"shift_id": None}, {"shift_id": ""}]
+    }
+    if tenant_id:
+        cancelled_unlinked_query["tenant_id"] = tenant_id
+    if shift.get("branch_id"):
+        cancelled_unlinked_query["branch_id"] = shift["branch_id"]
+    cancelled_unlinked = await db.orders.find(cancelled_unlinked_query).to_list(1000)
     
-    if not cancelled_orders:
-        cancelled_fallback = {
-            "cashier_id": shift_cashier_id,
-            "created_at": {"$gte": shift_start},
-            "status": OrderStatus.CANCELLED
-        }
-        if tenant_id:
-            cancelled_fallback["tenant_id"] = tenant_id
-        cancelled_orders = await db.orders.find(cancelled_fallback).to_list(1000)
+    seen_cancelled = set(o.get("id") for o in cancelled_orders if o.get("id"))
+    for o in cancelled_unlinked:
+        if o.get("id") and o["id"] not in seen_cancelled:
+            cancelled_orders.append(o)
+            seen_cancelled.add(o["id"])
     
     total_sales = sum(_safe_num(o.get("total")) for o in orders)
     total_cost = sum(_safe_num(o.get("total_cost")) for o in orders)
@@ -494,37 +526,66 @@ async def close_cash_register(close_data: CashRegisterClose, current_user: dict 
         for denom, count in close_data.denominations.items()
     )
     
-    order_query = {"shift_id": shift_id, "status": {"$ne": OrderStatus.CANCELLED}}
-    if tenant_id:
-        order_query["tenant_id"] = tenant_id
+    # جلب جميع طلبات الوردية - بالـ shift_id + الطلبات بدون shift_id في نفس الفترة والفرع
+    base_status_filter = {"$ne": OrderStatus.CANCELLED}
     
-    orders = await db.orders.find(order_query).to_list(1000)
+    shift_order_query = {"shift_id": shift_id, "status": base_status_filter}
+    if tenant_id:
+        shift_order_query["tenant_id"] = tenant_id
+    
+    shift_orders = await db.orders.find(shift_order_query).to_list(1000)
+    
+    unlinked_query = {
+        "created_at": {"$gte": shift_start},
+        "status": base_status_filter,
+        "$or": [{"shift_id": {"$exists": False}}, {"shift_id": None}, {"shift_id": ""}]
+    }
+    if tenant_id:
+        unlinked_query["tenant_id"] = tenant_id
+    if shift.get("branch_id"):
+        unlinked_query["branch_id"] = shift["branch_id"]
+    
+    unlinked_orders = await db.orders.find(unlinked_query).to_list(1000)
+    
+    seen_ids = set(o.get("id") for o in shift_orders if o.get("id"))
+    for o in unlinked_orders:
+        if o.get("id") and o["id"] not in seen_ids:
+            shift_orders.append(o)
+            seen_ids.add(o["id"])
+    
+    orders = shift_orders
     
     if not orders:
         fallback_query = {
             "cashier_id": shift_cashier_id,
             "created_at": {"$gte": shift_start},
-            "status": {"$ne": OrderStatus.CANCELLED}
+            "status": base_status_filter
         }
         if tenant_id:
             fallback_query["tenant_id"] = tenant_id
         orders = await db.orders.find(fallback_query).to_list(1000)
     
-    cancelled_query = {"shift_id": shift_id, "status": OrderStatus.CANCELLED}
+    cancelled_shift = {"shift_id": shift_id, "status": OrderStatus.CANCELLED}
     if tenant_id:
-        cancelled_query["tenant_id"] = tenant_id
+        cancelled_shift["tenant_id"] = tenant_id
+    cancelled_orders = await db.orders.find(cancelled_shift).to_list(1000)
     
-    cancelled_orders = await db.orders.find(cancelled_query).to_list(1000)
+    cancelled_unlinked_query = {
+        "created_at": {"$gte": shift_start},
+        "status": OrderStatus.CANCELLED,
+        "$or": [{"shift_id": {"$exists": False}}, {"shift_id": None}, {"shift_id": ""}]
+    }
+    if tenant_id:
+        cancelled_unlinked_query["tenant_id"] = tenant_id
+    if shift.get("branch_id"):
+        cancelled_unlinked_query["branch_id"] = shift["branch_id"]
+    cancelled_unlinked = await db.orders.find(cancelled_unlinked_query).to_list(1000)
     
-    if not cancelled_orders:
-        cancelled_fallback = {
-            "cashier_id": shift_cashier_id,
-            "created_at": {"$gte": shift_start},
-            "status": OrderStatus.CANCELLED
-        }
-        if tenant_id:
-            cancelled_fallback["tenant_id"] = tenant_id
-        cancelled_orders = await db.orders.find(cancelled_fallback).to_list(1000)
+    seen_cancelled = set(o.get("id") for o in cancelled_orders if o.get("id"))
+    for o in cancelled_unlinked:
+        if o.get("id") and o["id"] not in seen_cancelled:
+            cancelled_orders.append(o)
+            seen_cancelled.add(o["id"])
     
     total_sales = sum(_safe_num(o.get("total")) for o in orders)
     total_cost = sum(_safe_num(o.get("total_cost")) for o in orders)

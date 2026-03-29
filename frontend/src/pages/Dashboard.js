@@ -902,119 +902,139 @@ export default function Dashboard() {
     const logoUrl = tenantInfo?.logo_url;
     const doActualPrint = (logoDataUrl) => {
     
-    // فتح نافذة طباعة صغيرة
-    const printWin = window.open('', '_blank', 'width=302,height=600,menubar=no,toolbar=no,location=no,status=no');
-    if (!printWin) return;
-    printWin.document.open();
-    printWin.document.write(`
+    // إزالة أي iframe سابق
+    const oldIframes = document.querySelectorAll('.thermal-print-frame');
+    oldIframes.forEach(f => f.remove());
+    
+    // إنشاء iframe مخفي للطباعة المباشرة
+    const iframe = document.createElement('iframe');
+    iframe.className = 'thermal-print-frame';
+    iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:none;visibility:hidden;';
+    document.body.appendChild(iframe);
+    
+    const doc = iframe.contentDocument || iframe.contentWindow.document;
+    doc.open();
+    doc.write(`
       <!DOCTYPE html>
       <html dir="rtl" lang="ar">
       <head>
         <meta charset="UTF-8">
         <title>إيصال إغلاق الصندوق</title>
         <style>
+          @page { 
+            size: 80mm auto !important;
+            margin: 0mm !important;
+          }
           * { margin: 0; padding: 0; box-sizing: border-box; }
-          @page { margin: 0mm !important; }
+          html { width: 80mm; height: auto; overflow: hidden; }
           body {
-            font-family: 'Courier New', monospace;
-            font-size: 12px;
-            width: 100%;
+            font-family: 'Arial', 'Tahoma', 'Helvetica', sans-serif;
+            font-size: 14px;
+            font-weight: 500;
+            width: 76mm;
+            max-width: 76mm;
+            margin: 0 auto;
             padding: 2mm;
-            margin: 0;
             direction: rtl;
             background: white;
             color: black;
+            line-height: 1.4;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
           }
           .header {
             text-align: center;
             border-bottom: 2px dashed #000;
-            padding-bottom: 10px;
-            margin-bottom: 10px;
+            padding-bottom: 8px;
+            margin-bottom: 8px;
           }
           .header .logo {
-            width: 60px;
-            height: 60px;
-            margin: 0 auto 10px;
+            width: 55px;
+            height: 55px;
+            margin: 0 auto 8px;
             border-radius: 50%;
             object-fit: cover;
-            border: 2px solid #ddd;
+            border: 2px solid #000;
           }
           .header h1 {
             font-size: 18px;
-            font-weight: bold;
-            margin-bottom: 5px;
+            font-weight: 700;
+            margin-bottom: 4px;
           }
           .header h2 {
-            font-size: 14px;
-            font-weight: bold;
-            margin-bottom: 5px;
+            font-size: 15px;
+            font-weight: 700;
+            margin-bottom: 4px;
           }
           .header p {
-            font-size: 11px;
-            color: #333;
+            font-size: 12px;
+            color: #000;
+            margin: 2px 0;
           }
           .section {
-            margin: 10px 0;
-            padding: 8px 0;
-            border-bottom: 1px dashed #ccc;
+            margin: 8px 0;
+            padding: 6px 0;
+            border-bottom: 1px dashed #000;
           }
           .section-title {
-            font-weight: bold;
-            font-size: 13px;
-            margin-bottom: 8px;
+            font-weight: 700;
+            font-size: 14px;
+            margin-bottom: 6px;
             text-align: center;
-            background: #f0f0f0;
+            background: #eee;
             padding: 3px;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
           }
           .row {
             display: flex;
             justify-content: space-between;
             padding: 3px 0;
-            font-size: 11px;
+            font-size: 13px;
           }
           .row.total {
-            font-weight: bold;
-            font-size: 13px;
-            border-top: 1px solid #000;
-            padding-top: 8px;
-            margin-top: 5px;
+            font-weight: 700;
+            font-size: 15px;
+            border-top: 2px solid #000;
+            padding-top: 6px;
+            margin-top: 4px;
           }
           .row.highlight {
-            background: #f5f5f5;
-            padding: 5px;
-            margin: 5px 0;
+            background: #eee;
+            padding: 4px;
+            margin: 4px 0;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
           }
-          .positive { color: #006600; }
-          .negative { color: #cc0000; }
-          .value { font-weight: bold; text-align: left; direction: ltr; }
+          .positive { color: #000; font-weight: 700; }
+          .negative { color: #000; font-weight: 700; }
+          .value { font-weight: 600; text-align: left; direction: ltr; }
           .label { text-align: right; }
           .divider {
             border-top: 2px dashed #000;
-            margin: 10px 0;
+            margin: 8px 0;
           }
           .footer {
             text-align: center;
-            margin-top: 15px;
-            padding-top: 10px;
+            margin-top: 10px;
+            padding-top: 8px;
             border-top: 2px dashed #000;
-            font-size: 10px;
+            font-size: 11px;
           }
-          .footer p { margin: 3px 0; }
+          .footer p { margin: 2px 0; }
           .big-total {
             text-align: center;
-            font-size: 16px;
-            font-weight: bold;
-            padding: 10px;
-            background: #f0f0f0;
-            margin: 10px 0;
-          }
-          @media print {
-            body { width: 72mm !important; padding: 1mm !important; margin: 0 !important; }
-            @page { size: 72mm auto !important; margin: 0mm !important; }
+            font-size: 18px;
+            font-weight: 700;
+            padding: 8px;
+            background: #eee;
+            margin: 8px 0;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
           }
         </style>
       </head>
-      <body onload="setTimeout(function(){ window.print(); window.close(); }, 300);">
+      <body>
         <div class="header">
           ${logoDataUrl ? `
             <img 
@@ -1094,21 +1114,31 @@ export default function Dashboard() {
         ${data.notes ? `
         <div class="section">
           <div class="section-title">ملاحظات</div>
-          <p style="font-size: 11px; text-align: center;">${data.notes}</p>
+          <p style="font-size: 12px; text-align: center;">${data.notes}</p>
         </div>
         ` : ''}
 
         <div class="footer">
-          <p>═══════════════════════</p>
-          <p>شكراً لاستخدامكم نظام Maestro</p>
+          <p>════════════════════</p>
+          <p style="font-weight:700;">شكراً لاستخدامكم نظام Maestro</p>
           <p>www.maestroegp.com</p>
-          <p>═══════════════════════</p>
+          <p>════════════════════</p>
         </div>
       </body>
       </html>
     `);
-    printWin.document.close();
-    // الطباعة تتم تلقائياً عند تحميل الصفحة (onload)
+    doc.close();
+    
+    // طباعة مباشرة من الـ iframe
+    setTimeout(() => {
+      try {
+        iframe.contentWindow.focus();
+        iframe.contentWindow.print();
+      } catch(e) {
+        console.error('Print error:', e);
+      }
+      setTimeout(() => iframe.remove(), 3000);
+    }, 200);
     }; // end doActualPrint
     
     // تحويل الشعار إلى base64 ثم الطباعة
@@ -1129,41 +1159,101 @@ export default function Dashboard() {
     const printContent = printRef.current;
     if (!printContent) return;
     
-    const printWin = window.open('', '_blank', 'width=302,height=600,menubar=no,toolbar=no,location=no,status=no');
-    if (!printWin) return;
-    printWin.document.open();
-    printWin.document.write(`
+    // إزالة أي iframe سابق
+    const oldIframes = document.querySelectorAll('.thermal-print-frame');
+    oldIframes.forEach(f => f.remove());
+    
+    const iframe = document.createElement('iframe');
+    iframe.className = 'thermal-print-frame';
+    iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:none;visibility:hidden;';
+    document.body.appendChild(iframe);
+    
+    const doc = iframe.contentDocument || iframe.contentWindow.document;
+    doc.open();
+    doc.write(`
       <!DOCTYPE html>
       <html dir="rtl">
       <head>
         <title>تقرير إغلاق الصندوق</title>
         <style>
+          @page { 
+            size: 80mm auto !important;
+            margin: 0mm !important;
+          }
           * { margin: 0; padding: 0; box-sizing: border-box; }
-          @page { margin: 0mm !important; }
-          body { font-family: 'Courier New', monospace; padding: 2mm; margin: 0; direction: rtl; width: 100%; background: white; color: black; }
-          .header { text-align: center; margin-bottom: 10px; }
-          .header h1 { font-size: 16px; margin: 0; }
-          .header p { color: #333; margin: 3px 0; font-size: 11px; }
-          .section { margin-bottom: 8px; }
-          .section-title { font-weight: bold; font-size: 12px; border-bottom: 1px dashed #000; padding-bottom: 3px; margin-bottom: 5px; }
-          .row { display: flex; justify-content: space-between; padding: 2px 0; font-size: 11px; }
-          .label { color: #333; }
-          .value { font-weight: bold; }
-          .positive { color: #000; }
-          .negative { color: #000; }
-          .total-row { background: #eee; padding: 5px; margin: 5px 0; font-size: 13px; }
-          .footer { text-align: center; margin-top: 10px; font-size: 10px; }
+          html { width: 80mm; height: auto; overflow: hidden; }
+          body { 
+            font-family: 'Arial', 'Tahoma', 'Helvetica', sans-serif;
+            font-size: 13px;
+            font-weight: 500;
+            width: 76mm;
+            max-width: 76mm;
+            margin: 0 auto;
+            padding: 2mm;
+            direction: rtl;
+            background: white;
+            color: black;
+            line-height: 1.4;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+          }
+          .header { text-align: center; margin-bottom: 8px; }
+          .header h1 { font-size: 16px; margin: 0; font-weight: 700; }
+          .header p { color: #000; margin: 2px 0; font-size: 12px; }
+          .section { margin-bottom: 6px; }
+          .section-title { font-weight: 700; font-size: 13px; border-bottom: 1px dashed #000; padding-bottom: 2px; margin-bottom: 4px; }
+          .row { display: flex; justify-content: space-between; padding: 2px 0; font-size: 12px; }
+          .label { color: #000; }
+          .value { font-weight: 600; }
+          .total-row { background: #eee; padding: 4px; margin: 4px 0; font-size: 14px; font-weight: 700; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+          .footer { text-align: center; margin-top: 8px; font-size: 11px; }
+          strong { font-weight: 700; }
+          p { margin: 2px 0; }
+          .grid { display: grid; gap: 4px; }
+          .grid-cols-2 { grid-template-columns: 1fr 1fr; }
+          .text-sm { font-size: 12px; }
+          .mb-2, .mb-4 { margin-bottom: 6px; }
+          .p-4 { padding: 4px; }
+          .rounded-lg { border-radius: 0; }
+          .bg-muted\\/30, .bg-green-500\\/10, .bg-yellow-500\\/10, .bg-purple-500\\/10, .bg-blue-500\\/10, .bg-gray-500\\/10, .bg-red-500\\/10 { background: transparent; }
+          .text-green-600, .text-yellow-600, .text-purple-600, .text-blue-600, .text-red-600 { color: #000; }
+          .text-muted-foreground { color: #000; }
+          .text-foreground { color: #000; }
+          .space-y-2 > * + * { margin-top: 3px; }
+          .space-y-1 > * + * { margin-top: 2px; }
+          .flex { display: flex; }
+          .justify-between { justify-content: space-between; }
+          .items-center { align-items: center; }
+          .gap-1 { gap: 2px; }
+          .gap-2 { gap: 4px; }
+          .text-lg { font-size: 15px; }
+          .text-2xl { font-size: 18px; }
+          .font-bold { font-weight: 700; }
+          .font-medium { font-weight: 600; }
+          .my-2 { margin: 4px 0; }
+          .text-xs { font-size: 10px; }
+          img, svg { display: none; }
         </style>
       </head>
-      <body onload="setTimeout(function(){ window.print(); window.close(); }, 300);">
+      <body>
         ${printContent.innerHTML}
         <div class="footer">
-          <p>Maestro EGP - ${new Date().toLocaleString('en-GB')}</p>
+          <p style="font-weight:700;">Maestro EGP - ${new Date().toLocaleString('en-GB')}</p>
         </div>
       </body>
       </html>
     `);
-    printWin.document.close();
+    doc.close();
+    
+    setTimeout(() => {
+      try {
+        iframe.contentWindow.focus();
+        iframe.contentWindow.print();
+      } catch(e) {
+        console.error('Print error:', e);
+      }
+      setTimeout(() => iframe.remove(), 3000);
+    }, 200);
   };
 
   // إغلاق وتسجيل الخروج

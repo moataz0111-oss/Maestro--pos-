@@ -3405,6 +3405,7 @@ export default function POS() {
             </Button>
             <Button 
               className="flex-1 bg-blue-500 hover:bg-blue-600 text-white"
+              data-testid="print-receipt-btn"
               onClick={() => {
                 const printContent = document.getElementById('receipt-to-print');
                 if (printContent) {
@@ -3420,35 +3421,53 @@ export default function POS() {
                   }
                   const htmlContent = cloned.innerHTML;
                   
-                  // فتح نافذة صغيرة بحجم الفاتورة - تطبع وتغلق تلقائياً
-                  const printWin = window.open('', '_blank', 'width=302,height=600,menubar=no,toolbar=no,location=no,status=no');
-                  if (!printWin) {
-                    toast.error(t('يرجى السماح بالنوافذ المنبثقة'));
-                    return;
-                  }
-                  printWin.document.open();
-                  printWin.document.write(`<!DOCTYPE html>
+                  // استخدام iframe مخفي للطباعة المباشرة بدون فتح نافذة جديدة
+                  const oldIframes = document.querySelectorAll('.thermal-print-frame');
+                  oldIframes.forEach(f => f.remove());
+                  
+                  const iframe = document.createElement('iframe');
+                  iframe.className = 'thermal-print-frame';
+                  iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:none;visibility:hidden;';
+                  document.body.appendChild(iframe);
+                  
+                  const doc = iframe.contentDocument || iframe.contentWindow.document;
+                  doc.open();
+                  doc.write(`<!DOCTYPE html>
 <html dir="${isRTL ? 'rtl' : 'ltr'}">
 <head>
 <meta charset="UTF-8">
 <title>${t('فاتورة')}</title>
 <style>
+@page { 
+  size: 80mm auto !important;
+  margin: 0mm !important;
+  padding: 0mm !important;
+}
 * { margin: 0; padding: 0; box-sizing: border-box; }
-@page { margin: 0mm !important; padding: 0mm !important; }
-html, body { 
-  font-family: 'Courier New', monospace; 
-  font-size: 12px; 
-  width: 100%; max-width: 100%;
-  margin: 0; padding: 2mm;
-  background: #fff; color: #000;
+html { width: 80mm; height: auto; overflow: hidden; }
+body { 
+  font-family: 'Arial', 'Tahoma', 'Helvetica', sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  width: 76mm;
+  max-width: 76mm;
+  margin: 0 auto;
+  padding: 2mm;
+  background: #fff;
+  color: #000;
+  line-height: 1.4;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
 }
 .text-center { text-align: center; }
 .text-left { text-align: left; }
 .text-right { text-align: right; }
-.font-bold { font-weight: bold; }
-.text-lg { font-size: 14px; }
-.text-sm { font-size: 10px; }
-.text-xs { font-size: 9px; }
+.font-bold { font-weight: 700; }
+.text-lg { font-size: 16px; font-weight: 700; }
+.text-sm { font-size: 12px; }
+.text-xs { font-size: 11px; }
+.text-\\[10px\\] { font-size: 10px; }
+.mb-1 { margin-bottom: 2px; }
 .mb-2 { margin-bottom: 4px; }
 .mb-3 { margin-bottom: 6px; }
 .mt-1 { margin-top: 2px; }
@@ -3459,34 +3478,54 @@ html, body {
 .pt-3 { padding-top: 6px; }
 .pb-3 { padding-bottom: 6px; }
 .py-1 { padding: 2px 0; }
-.p-1 { padding: 2px; }
+.py-2 { padding: 4px 0; }
+.p-1 { padding: 3px; }
 .border-t { border-top: 1px dashed #000; }
 .border-b { border-bottom: 1px dashed #000; }
 .border-t-2 { border-top: 2px solid #000; }
 .border-dashed { border-style: dashed; }
-.text-gray-500, .text-gray-600, .text-red-600 { color: #000; }
+.text-gray-500, .text-gray-600, .text-gray-700, .text-gray-300 { color: #000; }
+.text-red-600 { color: #000; font-weight: 700; }
 .bg-red-50, .bg-gray-100 { background: transparent; }
 .rounded, .rounded-lg { border-radius: 0; }
 .rounded-full { border-radius: 50%; }
 table { width: 100%; border-collapse: collapse; }
-th, td { padding: 1px 0; font-size: 10px; }
-img.h-16 { width: 50px !important; height: 50px !important; display: block; margin: 0 auto 4px; border-radius: 50%; object-fit: cover; }
-img.h-10, img.w-10 { width: 30px !important; height: 30px !important; }
-img { max-width: 60px; height: auto; }
+th, td { padding: 2px 0; font-size: 12px; font-weight: 500; }
+th { font-weight: 700; }
+img.h-16 { width: 55px !important; height: 55px !important; display: block; margin: 0 auto 5px; border-radius: 50%; object-fit: cover; }
+img.h-10, img.w-10 { width: 35px !important; height: 35px !important; display: block; margin: 0 auto; }
+img { max-width: 65px; height: auto; }
 .flex { display: flex; }
+.flex-col { flex-direction: column; }
+.items-center { align-items: center; }
 .justify-between { justify-content: space-between; }
-.space-y-1 > * + * { margin-top: 2px; }
-p { margin: 1px 0; }
-svg { display: block; margin: 0 auto; }
+.space-y-1 > * + * { margin-top: 3px; }
+p { margin: 2px 0; }
+svg { display: block; margin: 4px auto; max-width: 80px; }
+.tabular-nums { font-variant-numeric: tabular-nums; font-weight: 600; }
+.no-print { display: none !important; }
+.border-gray-300 { border-color: #000; }
+.border-gray-400 { border-color: #000; }
 </style>
 </head>
-<body onload="setTimeout(function(){ window.print(); window.close(); }, 300);">
+<body>
 ${htmlContent}
 </body>
 </html>`);
-                  printWin.document.close();
+                  doc.close();
+                  
+                  // طباعة مباشرة من الـ iframe
+                  setTimeout(() => {
+                    try {
+                      iframe.contentWindow.focus();
+                      iframe.contentWindow.print();
+                    } catch(e) {
+                      window.print();
+                    }
+                    setTimeout(() => iframe.remove(), 3000);
+                  }, 200);
+                  
                   toast.success(t('جاري الطباعة...'));
-                  // إغلاق نافذة المعاينة وتنظيف السلة
                   setPrintDialogOpen(false);
                   if (lastOrderNumber && !editingOrder) {
                     clearCart();
