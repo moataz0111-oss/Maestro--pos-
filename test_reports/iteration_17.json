@@ -83,7 +83,7 @@
   },
   
   "test_credentials": {
-    "api_url": "https://null-handler-patch.preview.emergentagent.com",
+    "api_url": "https://shift-fix-3.preview.emergentagent.com",
     "admin_email": "admin@maestroegp.com",
     "admin_password": "admin123"
   },
