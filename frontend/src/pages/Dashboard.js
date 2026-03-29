@@ -898,6 +898,10 @@ export default function Dashboard() {
     const differenceClass = difference >= 0 ? 'positive' : 'negative';
     const differenceText = difference >= 0 ? '+' : '';
     
+    // تحويل شعار المطعم إلى base64 ثم الطباعة
+    const logoUrl = tenantInfo?.logo_url;
+    const doActualPrint = (logoDataUrl) => {
+    
     // إنشاء iframe مخفي للطباعة
     const existingFrame = document.getElementById('print-closing-frame');
     if (existingFrame) existingFrame.remove();
@@ -924,9 +928,10 @@ export default function Dashboard() {
           body {
             font-family: 'Courier New', monospace;
             font-size: 12px;
-            width: 80mm;
-            max-width: 80mm;
-            padding: 5mm;
+            width: 72mm;
+            max-width: 72mm;
+            padding: 2mm;
+            margin: 0 auto;
             direction: rtl;
             background: white;
             color: black;
@@ -1015,19 +1020,18 @@ export default function Dashboard() {
             margin: 10px 0;
           }
           @media print {
-            body { width: 80mm; padding: 2mm; }
-            @page { size: 80mm auto; margin: 0; }
+            body { width: 72mm !important; padding: 1mm !important; margin: 0 !important; }
+            @page { size: 72mm auto !important; margin: 0mm !important; }
           }
         </style>
       </head>
       <body>
         <div class="header">
-          ${tenantInfo?.logo_url ? `
+          ${logoDataUrl ? `
             <img 
               class="logo" 
-              src="${tenantInfo.logo_url.startsWith('http') ? tenantInfo.logo_url : `${BACKEND_URL}${tenantInfo.logo_url}`}" 
+              src="${logoDataUrl}" 
               alt="شعار المطعم"
-              onerror="this.style.display='none'"
             />
           ` : ''}
           <h1>${tenantInfo?.name || tenantInfo?.name_en || 'المطعم'}</h1>
@@ -1117,14 +1121,31 @@ export default function Dashboard() {
     doc.close();
     iframe.contentWindow.focus();
     
-    // طباعة تلقائية
-    setTimeout(() => {
-      iframe.contentWindow.print();
-      // تنظيف بعد الطباعة
+    // طباعة تلقائية - انتظار تحميل الصور
+    const imgs = iframe.contentWindow.document.querySelectorAll('img');
+    const imgPromises = Array.from(imgs).map(img => {
+      if (img.complete) return Promise.resolve();
+      return new Promise(resolve => { img.onload = resolve; img.onerror = resolve; });
+    });
+    Promise.all(imgPromises).then(() => {
       setTimeout(() => {
-        iframe.remove();
-      }, 2000);
-    }, 300);
+        iframe.contentWindow.print();
+        setTimeout(() => iframe.remove(), 3000);
+      }, 200);
+    });
+    }; // end doActualPrint
+    
+    // تحويل الشعار إلى base64 ثم الطباعة
+    if (logoUrl) {
+      const fullUrl = logoUrl.startsWith('http') ? logoUrl : `${BACKEND_URL}${logoUrl}`;
+      fetch(fullUrl).then(r => r.blob()).then(blob => {
+        const reader = new FileReader();
+        reader.onloadend = () => doActualPrint(reader.result);
+        reader.readAsDataURL(blob);
+      }).catch(() => doActualPrint(null));
+    } else {
+      doActualPrint(null);
+    }
   };
 
   // طباعة التقرير
@@ -1140,7 +1161,7 @@ export default function Dashboard() {
     iframe2.style.position = 'fixed';
     iframe2.style.top = '-10000px';
     iframe2.style.left = '-10000px';
-    iframe2.style.width = '80mm';
+    iframe2.style.width = '72mm';
     iframe2.style.height = '0';
     document.body.appendChild(iframe2);
     
@@ -1152,7 +1173,7 @@ export default function Dashboard() {
       <head>
         <title>تقرير إغلاق الصندوق</title>
         <style>
-          body { font-family: 'Segoe UI', Tahoma, sans-serif; padding: 2mm; direction: rtl; width: 80mm; }
+          body { font-family: 'Courier New', monospace; padding: 1mm; margin: 0 auto; direction: rtl; width: 72mm; max-width: 72mm; background: white; color: black; }
           .header { text-align: center; margin-bottom: 10px; }
           .header h1 { font-size: 16px; margin: 0; }
           .header p { color: #333; margin: 3px 0; font-size: 11px; }
@@ -1165,8 +1186,8 @@ export default function Dashboard() {
           .negative { color: #000; }
           .total-row { background: #eee; padding: 5px; margin: 5px 0; font-size: 13px; }
           .footer { text-align: center; margin-top: 10px; font-size: 10px; }
-          @page { size: 80mm auto; margin: 0; }
-          @media print { body { padding: 1mm; width: 80mm; } }
+          @page { size: 72mm auto !important; margin: 0mm !important; }
+          @media print { body { padding: 1mm !important; width: 72mm !important; margin: 0 !important; } }
         </style>
       </head>
       <body>
@@ -1181,7 +1202,7 @@ export default function Dashboard() {
     iframe2.contentWindow.focus();
     setTimeout(() => {
       iframe2.contentWindow.print();
-      setTimeout(() => iframe2.remove(), 2000);
+      setTimeout(() => iframe2.remove(), 3000);
     }, 300);
   };
 

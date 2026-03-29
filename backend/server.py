@@ -6350,19 +6350,25 @@ async def get_restaurant_settings(current_user: dict = Depends(get_current_user)
         return {
             "name": tenant.get("name"),
             "name_ar": tenant.get("name_ar"),
+            "name_en": tenant.get("name_en"),
             "logo_url": tenant.get("logo_url")
         }
     
-    # محاولة جلب من settings
-    settings = await db.settings.find_one({"type": "restaurant"}, {"_id": 0})
+    # محاولة جلب من settings مع فلترة tenant_id
+    settings = await db.settings.find_one({"type": "restaurant", "tenant_id": tenant_id}, {"_id": 0})
+    if not settings:
+        settings = await db.settings.find_one({"type": "restaurant"}, {"_id": 0})
     if settings:
+        val = settings.get("value", settings)
         return {
-            "name": settings.get("name", ""),
-            "name_ar": settings.get("name_ar", ""),
-            "logo_url": settings.get("logo_url", "")
+            "name": val.get("name", ""),
+            "name_ar": val.get("name_ar", ""),
+            "name_en": val.get("name_en", ""),
+            "logo_url": val.get("logo_url", "")
         }
     
-    return {"name": "", "name_ar": "", "logo_url": ""}
+    # fallback: use tenant name from user
+    return {"name": tenant.get("name", "") if tenant else "", "name_ar": "", "name_en": "", "logo_url": ""}
 
 @api_router.put("/settings/dashboard")
 async def set_dashboard_settings(settings: Dict[str, Any], current_user: dict = Depends(get_current_user)):
@@ -10286,15 +10292,26 @@ async def get_raw_materials(
     category: Optional[str] = None,
     current_user: dict = Depends(get_current_user)
 ):
-    """جلب المواد الخام من جدول inventory"""
-    query = build_tenant_query(current_user, {"item_type": "raw"})
+    """جلب المواد الخام من جدول raw_materials"""
+    query = build_tenant_query(current_user)
     
     if branch_id:
         query["branch_id"] = branch_id
     if category:
         query["category"] = category
     
-    materials = await db.inventory.find(query, {"_id": 0}).sort("name", 1).to_list(500)
+    # البحث في raw_materials أولاً (الجدول الصحيح)
+    materials = await db.raw_materials.find(query, {"_id": 0}).sort("name", 1).to_list(500)
+    
+    # إذا لم نجد شيء، نبحث أيضاً في inventory بنوع raw (للتوافقية القديمة)
+    if not materials:
+        old_query = build_tenant_query(current_user, {"item_type": "raw"})
+        if branch_id:
+            old_query["branch_id"] = branch_id
+        if category:
+            old_query["category"] = category
+        materials = await db.inventory.find(old_query, {"_id": 0}).sort("name", 1).to_list(500)
+    
     return materials
 
 @api_router.post("/raw-materials")
@@ -11860,45 +11877,54 @@ async def get_sales_report(
     if end_date:
         query["created_at"]["$lte"] = end_date
     
+    # استبعاد الطلبات الملغية والمرتجعة من التقارير
+    query["status"] = {"$nin": ["cancelled", "refunded"]}
+    query["is_refunded"] = {"$ne": True}
+    
     orders = await db.orders.find(query, {"_id": 0}).to_list(10000)
     
-    # إجمالي المبيعات (كل شيء)
-    total_sales = sum(_sn(o.get("total")) for o in orders)
-    total_orders = len(orders)
+    # فصل الطلبات المدفوعة عن المعلقة
+    paid_orders = [o for o in orders if o.get("payment_status") in ["paid", "credit", None]]
+    pending_orders = [o for o in orders if o.get("payment_status") == "pending"]
+    
+    # إجمالي المبيعات (فقط الطلبات المدفوعة/الآجلة - بدون المعلقة)
+    total_sales = sum(_sn(o.get("total")) for o in paid_orders)
+    total_orders = len(paid_orders)
     avg_order_value = total_sales / total_orders if total_orders > 0 else 0
     
-    # المبيعات النقدية (فقط الكاش المحصّل باليد - بدون التوصيل وبدون البطاقة)
+    # المبيعات النقدية (فقط الكاش المحصّل باليد - بدون التوصيل وبدون بطاقة)
     cash_amount = sum(
-        _sn(o.get("total")) for o in orders 
+        _sn(o.get("total")) for o in paid_orders 
         if o.get("payment_method") == "cash" and o.get("order_type") != "delivery"
     )
     
     # مبيعات البطاقة (منفصلة - ليست نقدي)
     card_amount = sum(
-        _sn(o.get("total")) for o in orders 
+        _sn(o.get("total")) for o in paid_orders 
         if o.get("payment_method") == "card"
     )
     
-    # الآجل العادي (بدون شركة توصيل بأي شكل)
+    # الآجل العادي (بدون شركة توصيل وبدون سائقين)
     credit_amount = sum(
-        _sn(o.get("total")) for o in orders 
+        _sn(o.get("total")) for o in paid_orders 
         if o.get("payment_method") == "credit" 
         and not o.get("delivery_app") 
         and not o.get("delivery_app_name")
         and not o.get("delivery_app_id")
         and not o.get("is_delivery_company")
         and not (o.get("delivery_commission") and float(o.get("delivery_commission", 0)) > 0)
+        and not (o.get("order_type") == "delivery" and o.get("driver_id") and not o.get("is_delivery_company"))
     )
     
     # تقسيم حسب نوع الطلب
-    dine_in_amount = sum(_sn(o.get("total")) for o in orders if o.get("order_type") == "dine_in")
-    takeaway_amount = sum(_sn(o.get("total")) for o in orders if o.get("order_type") == "takeaway")
-    delivery_amount = sum(_sn(o.get("total")) for o in orders if o.get("order_type") == "delivery" or o.get("delivery_app") or o.get("delivery_app_name") or o.get("is_delivery_company"))
+    dine_in_amount = sum(_sn(o.get("total")) for o in paid_orders if o.get("order_type") == "dine_in")
+    takeaway_amount = sum(_sn(o.get("total")) for o in paid_orders if o.get("order_type") == "takeaway")
+    delivery_amount = sum(_sn(o.get("total")) for o in paid_orders if o.get("order_type") == "delivery" or o.get("delivery_app") or o.get("delivery_app_name") or o.get("is_delivery_company"))
     
     # عدد الطلبات حسب طريقة الدفع
-    cash_orders_count = len([o for o in orders if o.get("payment_method") == "cash" and o.get("order_type") != "delivery" and not o.get("delivery_app")])
-    card_orders_count = len([o for o in orders if o.get("payment_method") == "card"])
-    credit_orders_count = len([o for o in orders if o.get("payment_method") == "credit" and not o.get("delivery_app") and not o.get("delivery_app_name") and not o.get("delivery_app_id") and not o.get("is_delivery_company") and not (o.get("delivery_commission") and float(o.get("delivery_commission", 0)) > 0)])
+    cash_orders_count = len([o for o in paid_orders if o.get("payment_method") == "cash" and o.get("order_type") != "delivery" and not o.get("delivery_app")])
+    card_orders_count = len([o for o in paid_orders if o.get("payment_method") == "card"])
+    credit_orders_count = len([o for o in paid_orders if o.get("payment_method") == "credit" and not o.get("delivery_app") and not o.get("delivery_app_name") and not o.get("delivery_app_id") and not o.get("is_delivery_company") and not (o.get("delivery_commission") and float(o.get("delivery_commission", 0)) > 0)])
     
     # شركات التوصيل الافتراضية (للتحويل من المعرف للاسم)
     default_delivery_apps_names = {
@@ -11909,34 +11935,42 @@ async def get_sales_report(
         "talabati": "طلباتي",
     }
     
-    # تجميع شركات التوصيل حسب الاسم (في حسب طريقة الدفع)
+    # تجميع شركات التوصيل والسائقين حسب الاسم (في حسب طريقة الدفع)
     delivery_apps_amounts = {}
-    for o in orders:
-        # فقط طلبات الآجل التي لها شركة توصيل
+    driver_delivery_amount = 0  # مجموع توصيل السائقين (ليس شركات)
+    
+    for o in paid_orders:
+        # فقط طلبات الآجل/التوصيل
         if o.get("payment_method") != "credit":
             continue
         
-        # التحقق من وجود شركة توصيل بأي طريقة
+        # التحقق هل هي شركة توصيل أم سائق عادي
+        is_company = o.get("is_delivery_company", False)
         app_name = o.get("delivery_app_name")
         
         # إذا لم يكن هناك اسم، نحول المعرف للاسم
         if not app_name and o.get("delivery_app"):
             app_id = o.get("delivery_app")
             app_name = default_delivery_apps_names.get(app_id, app_id)
+            is_company = True  # إذا له delivery_app فهو شركة توصيل
         
-        # إذا كان العميل شركة توصيل وليس هناك اسم شركة، نستخدم اسم العميل
-        if not app_name and o.get("is_delivery_company"):
+        # إذا كان العميل شركة توصيل
+        if not app_name and is_company:
             app_name = o.get("customer_name") or "شركة توصيل"
         
-        # إذا كان لديه عمولة توصيل ولكن بدون اسم، نستخدم "شركة توصيل"
+        # إذا كان لديه عمولة توصيل ولكن بدون اسم
         if not app_name and o.get("delivery_commission") and float(o.get("delivery_commission", 0)) > 0:
             app_name = o.get("customer_name") or "شركة توصيل"
+            is_company = True
         
-        if app_name:
-            # له شركة توصيل - يظهر باسم الشركة
+        if app_name and is_company:
+            # شركة توصيل - يظهر باسم الشركة
             if app_name not in delivery_apps_amounts:
                 delivery_apps_amounts[app_name] = 0
             delivery_apps_amounts[app_name] += _sn(o.get("total"))
+        elif o.get("order_type") == "delivery" and o.get("driver_id") and not is_company:
+            # توصيل بسائق عادي (ليس شركة توصيل) - يجمع تحت "توصيل سائقين"
+            driver_delivery_amount += _sn(o.get("total"))
     
     # بناء by_payment_method مع أسماء شركات التوصيل
     by_payment_method = {}
@@ -11957,6 +11991,15 @@ async def get_sales_report(
     for app_name, amount in delivery_apps_amounts.items():
         if amount > 0:
             by_payment_method[app_name] = amount
+    
+    # إضافة توصيل السائقين (إذا وجد)
+    if driver_delivery_amount > 0:
+        by_payment_method["توصيل سائقين"] = driver_delivery_amount
+    
+    # إضافة الطلبات المعلقة (منفصلة)
+    pending_amount = sum(_sn(o.get("total")) for o in pending_orders)
+    if pending_amount > 0:
+        by_payment_method["معلق"] = pending_amount
     
     return {
         "period": period,
@@ -12414,11 +12457,21 @@ async def get_delivery_credits_report(
     branch_id: Optional[str] = None,
     current_user: dict = Depends(get_current_user)
 ):
-    """تقرير آجل شركات التوصيل - منفصل عن الآجل العادي"""
+    """تقرير آجل شركات التوصيل - فقط شركات التوصيل (بدون توصيل السائقين العاديين)"""
     query = build_tenant_query(current_user)
     
-    # فقط طلبات التوصيل
+    # فقط طلبات التوصيل التي تنتمي لشركة توصيل
     query["order_type"] = "delivery"
+    # استبعاد الملغية والمرتجعة
+    query["status"] = {"$nin": ["cancelled", "refunded"]}
+    
+    # فقط شركات التوصيل: لديها delivery_app أو delivery_app_name أو is_delivery_company
+    query["$or"] = [
+        {"delivery_app": {"$exists": True, "$nin": [None, ""]}},
+        {"delivery_app_name": {"$exists": True, "$nin": [None, ""]}},
+        {"is_delivery_company": True},
+        {"delivery_commission": {"$gt": 0}}
+    ]
     
     if branch_id:
         query["branch_id"] = branch_id

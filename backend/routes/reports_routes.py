@@ -28,7 +28,8 @@ async def get_sales_report(
     db = get_database()
     tenant_id = get_user_tenant_id(current_user)
     
-    query = {"status": {"$ne": OrderStatus.CANCELLED}}
+    # استبعاد الملغية والمرتجعة
+    query = {"status": {"$nin": ["cancelled", "refunded"]}, "is_refunded": {"$ne": True}}
     
     if tenant_id:
         query["tenant_id"] = tenant_id
@@ -60,7 +61,11 @@ async def get_sales_report(
         "delivery_app": 1,
         "delivery_app_name": 1,
         "delivery_commission": 1,
-        "packaging_cost": 1,  # تكلفة التغليف
+        "is_delivery_company": 1,
+        "driver_id": 1,
+        "driver_name": 1,
+        "packaging_cost": 1,
+        "customer_name": 1,
         "created_at": 1,
         "items": 1
     }
@@ -69,12 +74,24 @@ async def get_sales_report(
     delivery_apps = await db.delivery_apps.find({}, {"_id": 0}).to_list(100)
     app_names = {app["id"]: app["name"] for app in delivery_apps}
     
-    total_sales = sum(o["total"] for o in orders)
-    total_cost = sum(o.get("total_cost", 0) for o in orders)
-    total_packaging_cost = sum(o.get("packaging_cost", 0) for o in orders)  # إجمالي تكلفة التغليف
-    total_materials_cost = total_cost - total_packaging_cost  # تكلفة المواد بدون التغليف
-    total_profit = sum(o.get("profit", 0) for o in orders)
-    total_orders = len(orders)
+    def _sn(val):
+        if val is None:
+            return 0
+        try:
+            return float(val)
+        except (TypeError, ValueError):
+            return 0
+    
+    # فصل الطلبات المدفوعة/الآجلة عن المعلقة
+    paid_orders = [o for o in orders if o.get("payment_status") in ["paid", "credit", None]]
+    pending_orders = [o for o in orders if o.get("payment_status") == "pending"]
+    
+    total_sales = sum(_sn(o.get("total")) for o in paid_orders)
+    total_cost = sum(_sn(o.get("total_cost")) for o in paid_orders)
+    total_packaging_cost = sum(_sn(o.get("packaging_cost")) for o in paid_orders)
+    total_materials_cost = total_cost - total_packaging_cost
+    total_profit = sum(_sn(o.get("profit")) for o in paid_orders)
+    total_orders = len(paid_orders)
     avg_order_value = total_sales / total_orders if total_orders > 0 else 0
     
     by_payment = {}
@@ -88,7 +105,6 @@ async def get_sales_report(
         "cash": "نقدي",
         "card": "بطاقة",
         "credit": "آجل",
-        "pending": "معلق"
     }
     
     # شركات التوصيل الافتراضية (للتحويل من المعرف للاسم)
@@ -100,31 +116,36 @@ async def get_sales_report(
         "talabati": "طلباتي",
     }
     
-    for o in orders:
-        pm = o["payment_method"]
+    for o in paid_orders:
+        pm = o.get("payment_method", "cash")
+        order_total = _sn(o.get("total"))
         
         # التحقق إذا كان الطلب لشركة توصيل
-        has_delivery_app = o.get("delivery_app") or o.get("delivery_app_name") or o.get("is_delivery_company")
+        is_company = o.get("is_delivery_company", False) or o.get("delivery_app") or o.get("delivery_app_name")
+        has_driver = o.get("driver_id") and o.get("order_type") == "delivery" and not is_company
         
         # تحديد اسم طريقة الدفع
-        if pm == "credit" and has_delivery_app:
+        if pm == "credit" and is_company:
             # آجل شركات توصيل - يظهر باسم الشركة
             app_name = o.get("delivery_app_name")
             if not app_name and o.get("delivery_app"):
                 app_name = default_delivery_apps_names.get(o.get("delivery_app"), app_names.get(o.get("delivery_app"), "شركات توصيل"))
             if not app_name:
-                app_name = "شركات توصيل"
+                app_name = o.get("customer_name") or "شركات توصيل"
             pm_display = app_name
+        elif pm == "credit" and has_driver:
+            # توصيل سائقين عاديين (ليس شركة)
+            pm_display = "توصيل سائقين"
         else:
             # طريقة دفع عادية
             pm_display = payment_method_names.get(pm, pm)
         
-        by_payment[pm_display] = by_payment.get(pm_display, 0) + o["total"]
+        by_payment[pm_display] = by_payment.get(pm_display, 0) + order_total
         
-        ot = o["order_type"]
-        by_type[ot] = by_type.get(ot, 0) + o["total"]
+        ot = o.get("order_type", "unknown")
+        by_type[ot] = by_type.get(ot, 0) + order_total
         
-        if o.get("delivery_app") or o.get("delivery_app_name") or o.get("is_delivery_company"):
+        if is_company:
             app_id = o.get("delivery_app")
             app_name = o.get("delivery_app_name")
             if not app_name and app_id:
@@ -137,30 +158,35 @@ async def get_sales_report(
                     "total_sales": 0, "total_commission": 0, "net_amount": 0,
                     "orders_count": 0, "paid_orders": 0, "credit_orders": 0
                 }
-            by_app[app_name]["total_sales"] += o["total"]
-            by_app[app_name]["total_commission"] += o.get("delivery_commission", 0)
-            by_app[app_name]["net_amount"] += o["total"] - o.get("delivery_commission", 0)
+            by_app[app_name]["total_sales"] += order_total
+            by_app[app_name]["total_commission"] += _sn(o.get("delivery_commission"))
+            by_app[app_name]["net_amount"] += order_total - _sn(o.get("delivery_commission"))
             by_app[app_name]["orders_count"] += 1
             if o.get("payment_status") == "paid":
                 by_app[app_name]["paid_orders"] += 1
             else:
                 by_app[app_name]["credit_orders"] += 1
         
-        date = o["created_at"][:10]
-        if date not in by_date:
+        date = (o.get("created_at") or "")[:10]
+        if date and date not in by_date:
             by_date[date] = {"sales": 0, "orders": 0, "profit": 0, "packaging_cost": 0}
-        by_date[date]["sales"] += o["total"]
-        by_date[date]["orders"] += 1
-        by_date[date]["profit"] += o.get("profit", 0)
-        by_date[date]["packaging_cost"] += o.get("packaging_cost", 0)
+        if date:
+            by_date[date]["sales"] += order_total
+            by_date[date]["orders"] += 1
+            by_date[date]["profit"] += _sn(o.get("profit"))
+            by_date[date]["packaging_cost"] += _sn(o.get("packaging_cost"))
         
         for item in o.get("items", []):
-            # استخدام اسم المنتج (product_name) أو الاسم العادي (name)
             pid = item.get("product_name") or item.get("name") or "غير معروف"
             if pid not in by_product:
                 by_product[pid] = {"quantity": 0, "revenue": 0}
             by_product[pid]["quantity"] += item.get("quantity", 0)
-            by_product[pid]["revenue"] += item.get("price", 0) * item.get("quantity", 0)
+            by_product[pid]["revenue"] += _sn(item.get("price")) * item.get("quantity", 0)
+    
+    # إضافة المعلقة كبند منفصل
+    pending_total = sum(_sn(o.get("total")) for o in pending_orders)
+    if pending_total > 0:
+        by_payment["معلق"] = pending_total
     
     total_delivery_sales = sum(app["total_sales"] for app in by_app.values())
     total_delivery_commission = sum(app["total_commission"] for app in by_app.values())
@@ -498,19 +524,24 @@ async def get_delivery_credits_report(
     db = get_database()
     tenant_id = get_user_tenant_id(current_user)
     
-    # البحث عن جميع طلبات شركات التوصيل
-    query = {
+    # البحث عن جميع طلبات شركات التوصيل فقط (بدون السائقين العاديين)
+    delivery_filter = {
         "$or": [
             {"delivery_app": {"$ne": None, "$exists": True}},
             {"delivery_app_name": {"$ne": None, "$exists": True}},
-            {"is_delivery_company": True}
+            {"is_delivery_company": True},
+            {"delivery_commission": {"$gt": 0}}
         ]
     }
     
+    query = {"$and": [delivery_filter]}
+    # استبعاد الملغية والمرتجعة
+    query["$and"].append({"status": {"$nin": ["cancelled", "refunded"]}})
+    
     if tenant_id:
-        query["tenant_id"] = tenant_id
+        query["$and"].append({"tenant_id": tenant_id})
     else:
-        query["$or"] = [{"tenant_id": {"$exists": False}}, {"tenant_id": None}]
+        query["$and"].append({"$or": [{"tenant_id": {"$exists": False}}, {"tenant_id": None}]})
     
     user_branch_id = current_user.get("branch_id")
     user_role = current_user.get("role")

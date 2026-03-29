@@ -1,0 +1,82 @@
+{
+  "summary": "Backend testing for multi-tenant POS bug fixes: inventory tenant_id, sales report exclusions, delivery credits filtering. All 13 tests passed.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_inventory_and_reports.py",
+    "/app/test_reports/pytest/pytest_results_iter133.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "inventory_system.py raw-materials-new endpoints correctly include tenant_id via get_user_tenant_id() at lines 606, 632, 675, 700",
+    "reports_routes.py sales report correctly excludes cancelled/refunded orders at line 32: status $nin [cancelled, refunded] AND is_refunded $ne True",
+    "reports_routes.py correctly labels driver deliveries as 'توصيل سائقين' at lines 137-138",
+    "reports_routes.py delivery-credits correctly filters for delivery companies only using $or with delivery_app, delivery_app_name, is_delivery_company, delivery_commission",
+    "server.py delivery-credits at line 12466 also excludes cancelled/refunded orders",
+    "_sn() helper function properly handles null values converting to 0 for safe math operations"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_inventory_and_reports.py"
+  ],
+  "success_rate": {
+    "backend": "100% (13/13 tests passed)",
+    "frontend": "N/A (backend only testing)"
+  },
+  "test_credentials": {
+    "admin": "hanialdujaili@gmail.com / Hani@2024",
+    "super_admin": "owner@maestroegp.com / owner123 (Secret: 271018)"
+  },
+  "seed_data_creation": "Created TEST_Material and TEST_VerifyTenantId raw materials for testing",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "All bug fixes verified working: 1) Raw materials created with tenant_id field, 2) Sales report excludes refunded/cancelled orders, 3) Driver deliveries labeled 'توصيل سائقين', 4) Delivery credits report only shows delivery companies. Current tenant has no orders so payment method breakdown is empty but code logic verified correct.",
+  "verified_bug_fixes": {
+    "inventory_tenant_id": {
+      "status": "FIXED",
+      "evidence": "POST /api/raw-materials-new returns tenant_id: 47b57008-b561-41ab-b3b0-6f30a513f633",
+      "code_location": "/app/backend/routes/inventory_system.py lines 602-720"
+    },
+    "sales_report_exclusions": {
+      "status": "FIXED",
+      "evidence": "Query includes status $nin [cancelled, refunded] AND is_refunded $ne True",
+      "code_location": "/app/backend/routes/reports_routes.py line 32"
+    },
+    "driver_deliveries_label": {
+      "status": "FIXED",
+      "evidence": "Code sets pm_display = 'توصيل سائقين' for driver deliveries",
+      "code_location": "/app/backend/routes/reports_routes.py lines 137-138"
+    },
+    "delivery_credits_company_only": {
+      "status": "FIXED",
+      "evidence": "Query uses $or to filter for delivery_app, delivery_app_name, is_delivery_company, or delivery_commission > 0",
+      "code_location": "/app/backend/routes/reports_routes.py lines 527-535"
+    },
+    "pending_orders_separate": {
+      "status": "FIXED",
+      "evidence": "Code separates paid_orders from pending_orders at lines 86-87 and adds 'معلق' to by_payment at lines 187-189",
+      "code_location": "/app/backend/routes/reports_routes.py lines 86-89, 187-189"
+    }
+  },
+  "test_results": {
+    "TestAuthentication::test_admin_login": "PASSED",
+    "TestRawMaterialsNew::test_create_raw_material_with_tenant_id": "PASSED",
+    "TestRawMaterialsNew::test_get_raw_materials_filtered_by_tenant": "PASSED",
+    "TestRawMaterialsNew::test_get_raw_materials_from_db_raw_materials": "PASSED",
+    "TestRawMaterialsNew::test_add_stock_requires_authentication": "PASSED",
+    "TestSalesReportExclusions::test_sales_report_endpoint_works": "PASSED",
+    "TestSalesReportExclusions::test_sales_report_has_payment_method_breakdown": "PASSED",
+    "TestSalesReportExclusions::test_sales_report_separates_pending_orders": "PASSED",
+    "TestDeliveryCreditsReport::test_delivery_credits_report_endpoint_works": "PASSED",
+    "TestDeliveryCreditsReport::test_delivery_credits_only_shows_delivery_companies": "PASSED",
+    "TestBranchRequests::test_get_branch_requests_with_tenant_filtering": "PASSED",
+    "TestReportsRoutesSalesExclusion::test_reports_sales_endpoint": "PASSED",
+    "TestReportsRoutesSalesExclusion::test_reports_delivery_credits_endpoint": "PASSED"
+  }
+}

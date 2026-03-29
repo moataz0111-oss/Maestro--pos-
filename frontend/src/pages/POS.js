@@ -165,6 +165,7 @@ export default function POS() {
   const [invoiceSettings, setInvoiceSettings] = useState({});
   const [restaurantSettings, setRestaurantSettings] = useState({});
   const [systemInvoiceSettings, setSystemInvoiceSettings] = useState({});
+  const [logoBase64, setLogoBase64] = useState(null); // شعار المطعم بصيغة base64 للطباعة
   
   // حالات الإرجاع
   const [refundDialogOpen, setRefundDialogOpen] = useState(false);
@@ -437,8 +438,26 @@ export default function POS() {
       setCategories(catRes.data);
       setProducts(prodRes.data);
       setDeliveryApps(appsRes.data);
-      setInvoiceSettings(invoiceRes.data || {});
-      setRestaurantSettings(restaurantRes.data || {});
+      const invoiceData = invoiceRes.data || {};
+      const restaurantData = restaurantRes.data || {};
+      setInvoiceSettings(invoiceData);
+      setRestaurantSettings(restaurantData);
+      
+      // تحويل شعار المطعم إلى base64 للطباعة المباشرة
+      const logoUrl = invoiceData.invoice_logo || restaurantData.logo_url;
+      if (logoUrl) {
+        try {
+          const fullUrl = logoUrl.startsWith('http') ? logoUrl 
+            : logoUrl.startsWith('/api') ? `${API}${logoUrl.replace('/api', '')}`
+            : logoUrl.startsWith('/uploads') ? `${API}${logoUrl}`
+            : logoUrl;
+          const imgResp = await fetch(fullUrl);
+          const blob = await imgResp.blob();
+          const reader = new FileReader();
+          reader.onloadend = () => setLogoBase64(reader.result);
+          reader.readAsDataURL(blob);
+        } catch (e) { console.log('Could not preload logo'); }
+      }
       
       // حفظ البيانات محلياً للاستخدام Offline
       try {
@@ -3052,11 +3071,11 @@ export default function POS() {
             {/* ========== أعلى الفاتورة - شعار المطعم واسمه ========== */}
             <div className="text-center mb-3 border-b border-dashed border-gray-400 pb-3">
               {/* شعار المطعم (الخاص بالعميل) - دائري */}
-              {invoiceSettings.invoice_logo && (
+              {(logoBase64 || invoiceSettings.invoice_logo || restaurantSettings.logo_url) && (
                 <div className="mb-2">
                   <img 
-                    src={(() => {
-                      const logoUrl = invoiceSettings.invoice_logo;
+                    src={logoBase64 || (() => {
+                      const logoUrl = invoiceSettings.invoice_logo || restaurantSettings.logo_url;
                       if (logoUrl?.startsWith('/api')) {
                         return `${API}${logoUrl.replace('/api', '')}`;
                       }
@@ -3073,7 +3092,7 @@ export default function POS() {
               )}
               
               {/* اسم المطعم */}
-              <h2 className="text-lg font-bold">{restaurantSettings.name || restaurantSettings.name_ar || t('اسم المطعم')}</h2>
+              <h2 className="text-lg font-bold">{restaurantSettings.name || restaurantSettings.name_ar || invoiceSettings.restaurant_name || user?.tenant_name || t('اسم المطعم')}</h2>
               
               {/* عنوان المطعم */}
               {invoiceSettings.address && (
@@ -3293,6 +3312,20 @@ export default function POS() {
                 // طباعة باستخدام iframe مخفي - بدون نافذة جديدة
                 const printContent = document.getElementById('receipt-to-print');
                 if (printContent) {
+                  // استنساخ المحتوى واستبدال الصور بـ base64
+                  const cloned = printContent.cloneNode(true);
+                  // استبدال شعار المطعم بـ base64 إذا متوفر
+                  if (logoBase64) {
+                    const imgs = cloned.querySelectorAll('img');
+                    imgs.forEach(img => {
+                      const alt = img.getAttribute('alt') || '';
+                      if (alt.includes('شعار المطعم') || alt.includes('logo')) {
+                        img.src = logoBase64;
+                      }
+                    });
+                  }
+                  const htmlContent = cloned.innerHTML;
+                  
                   // إنشاء iframe مخفي للطباعة
                   const existingFrame = document.getElementById('print-frame');
                   if (existingFrame) existingFrame.remove();
@@ -3320,7 +3353,7 @@ export default function POS() {
                           font-family: 'Courier New', monospace; 
                           font-size: 12px; 
                           padding: 0;
-                          margin: 0;
+                          margin: 0 auto;
                           background: white;
                           color: black;
                           width: 72mm;
@@ -3352,16 +3385,19 @@ export default function POS() {
                         .border-t-2 { border-top: 2px solid #000; }
                         .border-dashed { border-style: dashed; }
                         .text-gray-500, .text-gray-600, .text-red-600 { color: #000; }
-                        .bg-red-50 { background: transparent; }
+                        .bg-red-50, .bg-gray-100 { background: transparent; }
                         .rounded, .rounded-lg { border-radius: 0; }
                         .rounded-full { border-radius: 50%; }
                         table { width: 100%; border-collapse: collapse; }
                         th, td { padding: 1px 0; font-size: 10px; }
-                        img { max-width: 40px; height: auto; }
+                        img.h-16 { width: 50px !important; height: 50px !important; display: block; margin: 0 auto 4px; border-radius: 50%; object-fit: cover; }
+                        img.h-10, img.w-10 { width: 30px !important; height: 30px !important; }
+                        img { max-width: 60px; height: auto; }
                         .flex { display: flex; }
                         .justify-between { justify-content: space-between; }
                         .space-y-1 > * + * { margin-top: 2px; }
                         p { margin: 1px 0; }
+                        svg { display: block; margin: 0 auto; }
                         @page { 
                           size: 72mm auto !important; 
                           margin: 0mm !important;
@@ -3370,27 +3406,35 @@ export default function POS() {
                           html, body { 
                             width: 72mm !important; 
                             padding: 1mm !important;
+                            margin: 0 !important;
                             height: auto !important;
                           }
                         }
                       </style>
                     </head>
                     <body>
-                      ${printContent.innerHTML}
+                      ${htmlContent}
                     </body>
                     </html>
                   `);
                   doc.close();
                   
-                  // انتظار تحميل المحتوى ثم طباعة
+                  // انتظار تحميل المحتوى والصور ثم طباعة
                   iframe.contentWindow.focus();
-                  setTimeout(() => {
-                    iframe.contentWindow.print();
-                    // تنظيف بعد الطباعة
+                  const imgs = iframe.contentWindow.document.querySelectorAll('img');
+                  const imgPromises = Array.from(imgs).map(img => {
+                    if (img.complete) return Promise.resolve();
+                    return new Promise(resolve => {
+                      img.onload = resolve;
+                      img.onerror = resolve;
+                    });
+                  });
+                  Promise.all(imgPromises).then(() => {
                     setTimeout(() => {
-                      iframe.remove();
-                    }, 2000);
-                  }, 300);
+                      iframe.contentWindow.print();
+                      setTimeout(() => iframe.remove(), 3000);
+                    }, 200);
+                  });
                   
                   toast.success(t('جاري الطباعة...'));
                   // إغلاق نافذة المعاينة وتنظيف السلة

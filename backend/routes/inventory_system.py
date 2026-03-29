@@ -600,9 +600,10 @@ async def update_warehouse_purchase_request_status(request_id: str, status: str)
 # ==================== RAW MATERIALS (المواد الخام - المخزن) ====================
 
 @router.post("/raw-materials-new")
-async def create_raw_material(material: RawMaterialCreate):
+async def create_raw_material(material: RawMaterialCreate, current_user: dict = Depends(get_current_user)):
     """إضافة مادة خام جديدة"""
     db = get_db()
+    tenant_id = get_user_tenant_id(current_user)
     
     # حساب التكلفة الفعلية بعد الهدر
     waste_percentage = material.waste_percentage or 0
@@ -613,6 +614,7 @@ async def create_raw_material(material: RawMaterialCreate):
     material_doc = {
         "id": str(uuid.uuid4()),
         **material.model_dump(),
+        "tenant_id": tenant_id,
         "effective_cost_per_unit": round(effective_cost, 2),
         "total_value": material.quantity * material.cost_per_unit,
         "last_updated": datetime.now(timezone.utc).isoformat(),
@@ -624,10 +626,16 @@ async def create_raw_material(material: RawMaterialCreate):
     return material_doc
 
 @router.get("/raw-materials-new")
-async def get_raw_materials():
+async def get_raw_materials(current_user: dict = Depends(get_current_user)):
     """جلب جميع المواد الخام"""
     db = get_db()
-    materials = await db.raw_materials.find({}, {"_id": 0}).to_list(1000)
+    tenant_id = get_user_tenant_id(current_user)
+    
+    query = {}
+    if tenant_id:
+        query["tenant_id"] = tenant_id
+    
+    materials = await db.raw_materials.find(query, {"_id": 0}).to_list(1000)
     
     # حساب القيمة الإجمالية والتكلفة الفعلية والإحصائيات لكل مادة
     for material in materials:
@@ -647,19 +655,24 @@ async def get_raw_materials():
     return materials
 
 @router.get("/raw-materials-new/{material_id}")
-async def get_raw_material(material_id: str):
+async def get_raw_material(material_id: str, current_user: dict = Depends(get_current_user)):
     """جلب مادة خام محددة"""
     db = get_db()
-    material = await db.raw_materials.find_one({"id": material_id}, {"_id": 0})
+    tenant_id = get_user_tenant_id(current_user)
+    query = {"id": material_id}
+    if tenant_id:
+        query["tenant_id"] = tenant_id
+    material = await db.raw_materials.find_one(query, {"_id": 0})
     if not material:
         raise HTTPException(status_code=404, detail="المادة غير موجودة")
     material["total_value"] = material.get("quantity", 0) * material.get("cost_per_unit", 0)
     return material
 
 @router.put("/raw-materials-new/{material_id}")
-async def update_raw_material(material_id: str, material: RawMaterialCreate):
+async def update_raw_material(material_id: str, material: RawMaterialCreate, current_user: dict = Depends(get_current_user)):
     """تحديث مادة خام"""
     db = get_db()
+    tenant_id = get_user_tenant_id(current_user)
     
     # حساب التكلفة الفعلية بعد الهدر
     waste_percentage = material.waste_percentage or 0
@@ -673,7 +686,7 @@ async def update_raw_material(material_id: str, material: RawMaterialCreate):
     update_data["last_updated"] = datetime.now(timezone.utc).isoformat()
     
     await db.raw_materials.update_one(
-        {"id": material_id},
+        {"id": material_id, "tenant_id": tenant_id} if tenant_id else {"id": material_id},
         {"$set": update_data}
     )
     
@@ -681,11 +694,15 @@ async def update_raw_material(material_id: str, material: RawMaterialCreate):
 
 
 @router.post("/raw-materials-new/{material_id}/add-stock")
-async def add_raw_material_stock(material_id: str, quantity: float = 1):
+async def add_raw_material_stock(material_id: str, quantity: float = 1, current_user: dict = Depends(get_current_user)):
     """زيادة كمية المادة الخام مباشرة (للتعديل اليدوي)"""
     db = get_db()
+    tenant_id = get_user_tenant_id(current_user)
     
-    material = await db.raw_materials.find_one({"id": material_id})
+    query = {"id": material_id}
+    if tenant_id:
+        query["tenant_id"] = tenant_id
+    material = await db.raw_materials.find_one(query)
     if not material:
         raise HTTPException(status_code=404, detail="المادة غير موجودة")
     
@@ -991,9 +1008,10 @@ async def create_warehouse_transfer(transfer_data: dict):
 # ==================== BRANCH REQUESTS (طلبات الفروع من التصنيع) ====================
 
 @router.post("/branch-requests")
-async def create_branch_request(request_data: dict):
+async def create_branch_request(request_data: dict, current_user: dict = Depends(get_current_user)):
     """إنشاء طلب فرع من التصنيع"""
     db = get_db()
+    tenant_id = get_user_tenant_id(current_user)
     
     to_branch_id = request_data.get("to_branch_id")
     items = request_data.get("items", [])
@@ -1053,6 +1071,7 @@ async def create_branch_request(request_data: dict):
         "notes": notes,
         "requested_by": requested_by,
         "requested_by_name": requested_by_name,
+        "tenant_id": tenant_id,
         "created_at": datetime.now(timezone.utc).isoformat(),
         "approved_at": None,
         "shipped_at": None,
@@ -1064,11 +1083,14 @@ async def create_branch_request(request_data: dict):
     return request_doc
 
 @router.get("/branch-requests")
-async def get_branch_requests(status: Optional[str] = None, branch_id: Optional[str] = None):
+async def get_branch_requests(status: Optional[str] = None, branch_id: Optional[str] = None, current_user: dict = Depends(get_current_user)):
     """جلب طلبات الفروع"""
     db = get_db()
+    tenant_id = get_user_tenant_id(current_user)
     
     query = {}
+    if tenant_id:
+        query["tenant_id"] = tenant_id
     if status:
         query["status"] = status
     if branch_id:
