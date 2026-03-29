@@ -192,15 +192,19 @@ async def auto_open_shift(current_user: dict = Depends(get_current_user)):
 async def close_shift(shift_id: str, close_data: ShiftClose, current_user: dict = Depends(get_current_user)):
     """إغلاق الوردية"""
     db = get_database()
-    shift = await db.shifts.find_one({"id": shift_id})
+    shift = await db.shifts.find_one({"id": shift_id}, {"_id": 0})
     if not shift:
         raise HTTPException(status_code=404, detail="الشفت غير موجود")
-    if shift["status"] == "closed":
+    if shift.get("status") == "closed":
         raise HTTPException(status_code=400, detail="الشفت مغلق بالفعل")
     
+    shift_start = shift.get("started_at") or shift.get("opened_at") or ""
+    shift_cashier = shift.get("cashier_id") or ""
+    shift_branch = shift.get("branch_id") or ""
+    
     orders = await db.orders.find({
-        "cashier_id": shift["cashier_id"],
-        "created_at": {"$gte": shift["started_at"]},
+        "cashier_id": shift_cashier,
+        "created_at": {"$gte": shift_start},
         "status": {"$ne": OrderStatus.CANCELLED}
     }).to_list(1000)
     
@@ -220,8 +224,8 @@ async def close_shift(shift_id: str, close_data: ShiftClose, current_user: dict 
             delivery_app_sales[app] += _safe_num(o.get("total"))
     
     expenses = await db.expenses.find({
-        "branch_id": shift["branch_id"],
-        "created_at": {"$gte": shift["started_at"]}
+        "branch_id": shift_branch,
+        "created_at": {"$gte": shift_start}
     }).to_list(100)
     total_expenses = sum(_safe_num(e.get("amount")) for e in expenses)
     
@@ -328,7 +332,8 @@ async def get_cash_register_summary(
     branch = await db.branches.find_one({"id": shift.get("branch_id", "")}, {"_id": 0, "name": 1})
     
     shift_id = shift["id"]
-    shift_start = shift.get("started_at", shift.get("opened_at", ""))
+    shift_start = shift.get("started_at") or shift.get("opened_at") or datetime.now(timezone.utc).isoformat()
+    shift_cashier_id = shift.get("cashier_id") or current_user.get("id")
     
     # جلب طلبات هذه الوردية تحديداً (بـ shift_id أولاً)
     order_query = {"shift_id": shift_id, "status": {"$ne": OrderStatus.CANCELLED}}
@@ -340,7 +345,7 @@ async def get_cash_register_summary(
     # fallback: إذا لم تُربط الطلبات بـ shift_id، نبحث بـ cashier_id + وقت فتح الوردية
     if not orders:
         fallback_query = {
-            "cashier_id": shift.get("cashier_id"),
+            "cashier_id": shift_cashier_id,
             "created_at": {"$gte": shift_start},
             "status": {"$ne": OrderStatus.CANCELLED}
         }
@@ -357,7 +362,7 @@ async def get_cash_register_summary(
     
     if not cancelled_orders:
         cancelled_fallback = {
-            "cashier_id": shift.get("cashier_id"),
+            "cashier_id": shift_cashier_id,
             "created_at": {"$gte": shift_start},
             "status": OrderStatus.CANCELLED
         }
@@ -476,7 +481,9 @@ async def close_cash_register(close_data: CashRegisterClose, current_user: dict 
         raise HTTPException(status_code=404, detail="لا يوجد وردية مفتوحة")
     
     shift_id = shift["id"]
-    branch = await db.branches.find_one({"id": shift["branch_id"]}, {"_id": 0, "name": 1})
+    shift_start = shift.get("started_at") or shift.get("opened_at") or datetime.now(timezone.utc).isoformat()
+    shift_cashier_id = shift.get("cashier_id") or current_user.get("id")
+    branch = await db.branches.find_one({"id": shift.get("branch_id", "")}, {"_id": 0, "name": 1})
     
     denomination_values = {
         "250": 250, "500": 500, "1000": 1000, "5000": 5000,
@@ -495,8 +502,8 @@ async def close_cash_register(close_data: CashRegisterClose, current_user: dict 
     
     if not orders:
         fallback_query = {
-            "cashier_id": shift.get("cashier_id"),
-            "created_at": {"$gte": shift.get("started_at", shift.get("opened_at", ""))},
+            "cashier_id": shift_cashier_id,
+            "created_at": {"$gte": shift_start},
             "status": {"$ne": OrderStatus.CANCELLED}
         }
         if tenant_id:
@@ -511,8 +518,8 @@ async def close_cash_register(close_data: CashRegisterClose, current_user: dict 
     
     if not cancelled_orders:
         cancelled_fallback = {
-            "cashier_id": shift.get("cashier_id"),
-            "created_at": {"$gte": shift.get("started_at", shift.get("opened_at", ""))},
+            "cashier_id": shift_cashier_id,
+            "created_at": {"$gte": shift_start},
             "status": OrderStatus.CANCELLED
         }
         if tenant_id:
@@ -619,9 +626,10 @@ async def get_active_shift_details(current_user: dict = Depends(get_current_user
     orders = await db.orders.find(order_query).to_list(1000)
     
     if not orders:
+        shift_start = shift.get("started_at") or shift.get("opened_at") or ""
         fallback_query = {
-            "cashier_id": shift.get("cashier_id"),
-            "created_at": {"$gte": shift.get("started_at", shift.get("opened_at", ""))},
+            "cashier_id": shift.get("cashier_id") or current_user.get("id"),
+            "created_at": {"$gte": shift_start},
             "status": {"$ne": OrderStatus.CANCELLED}
         }
         if tenant_id:
@@ -631,9 +639,10 @@ async def get_active_shift_details(current_user: dict = Depends(get_current_user
     total_sales = sum(_safe_num(o.get("total")) for o in orders)
     cash_sales = sum(_safe_num(o.get("total")) for o in orders if o.get("payment_method") == PaymentMethod.CASH)
     
+    shift_start_for_expenses = shift.get("started_at") or shift.get("opened_at") or ""
     expenses = await db.expenses.find({
         "branch_id": shift.get("branch_id"),
-        "created_at": {"$gte": shift.get("started_at", shift.get("opened_at", ""))}
+        "created_at": {"$gte": shift_start_for_expenses}
     }).to_list(100)
     total_expenses = sum(_safe_num(e.get("amount")) for e in expenses)
     
