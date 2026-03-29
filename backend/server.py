@@ -17638,6 +17638,70 @@ app.include_router(external_branches_router, prefix="/api")
 from routes.order_notifications import router as order_notifications_router
 app.include_router(order_notifications_router, prefix="/api")
 
+# ==================== SALES LEADERBOARD (لوحة تنافس المبيعات) ====================
+
+@api_router.get("/sales-leaderboard")
+async def get_sales_leaderboard(
+    period: str = "today",
+    current_user: dict = Depends(get_current_user)
+):
+    """لوحة ترتيب المبيعات اليومية - تنافس بين الكاشيرية"""
+    tenant_id = current_user.get("tenant_id")
+    
+    now = datetime.now(timezone.utc)
+    if period == "today":
+        start_date = now.strftime('%Y-%m-%d')
+    elif period == "week":
+        start_date = (now - timedelta(days=7)).strftime('%Y-%m-%d')
+    elif period == "month":
+        start_date = (now - timedelta(days=30)).strftime('%Y-%m-%d')
+    else:
+        start_date = now.strftime('%Y-%m-%d')
+    
+    query = {
+        "status": {"$nin": [OrderStatus.CANCELLED, "refunded"]},
+        "created_at": {"$gte": start_date}
+    }
+    if tenant_id:
+        query["tenant_id"] = tenant_id
+    else:
+        query["tenant_id"] = "default"
+    
+    user_role = current_user.get("role")
+    user_branch_id = current_user.get("branch_id")
+    if user_branch_id and user_role not in [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.MANAGER]:
+        query["branch_id"] = user_branch_id
+    
+    orders = await db.orders.find(query, {
+        "_id": 0, "cashier_id": 1, "cashier_name": 1, "total": 1
+    }).to_list(10000)
+    
+    cashier_stats = {}
+    for order in orders:
+        cid = order.get("cashier_id", "unknown")
+        if cid not in cashier_stats:
+            cashier_stats[cid] = {
+                "cashier_id": cid,
+                "cashier_name": order.get("cashier_name", "غير معروف"),
+                "total_sales": 0,
+                "order_count": 0
+            }
+        cashier_stats[cid]["total_sales"] += _sn(order.get("total"))
+        cashier_stats[cid]["order_count"] += 1
+    
+    leaderboard = sorted(cashier_stats.values(), key=lambda x: x["total_sales"], reverse=True)
+    
+    for i, entry in enumerate(leaderboard):
+        entry["rank"] = i + 1
+        entry["average_order"] = entry["total_sales"] / entry["order_count"] if entry["order_count"] > 0 else 0
+    
+    return {
+        "period": period,
+        "date": now.strftime('%Y-%m-%d'),
+        "leaderboard": leaderboard,
+        "total_cashiers": len(leaderboard)
+    }
+
 # Include router and middleware
 app.include_router(api_router)
 

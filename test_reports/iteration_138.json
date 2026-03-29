@@ -1,0 +1,114 @@
+{
+  "summary": "Tested Sales Competition Leaderboard feature and INVERTED permission toggle logic. Backend: 9/12 tests passed (3 failures due to missing GET /api/users/{id} endpoint - not critical). Frontend: All UI tests passed. Leaderboard shows cashier rankings with Trophy icon, period buttons (اليوم, الأسبوع, الشهر), and entry details. Permission toggle logic verified: toggle ON = feature VISIBLE, toggle OFF = feature HIDDEN.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {
+        "endpoint": "GET /api/users/{user_id}",
+        "issue": "Endpoint returns 405 Method Not Allowed - single user GET not implemented",
+        "priority": "LOW",
+        "note": "Not critical - can use GET /api/users list endpoint instead"
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "console_errors": [
+      {
+        "error": "Error accessing index 'is_synced' in store 'orders': DataError",
+        "description": "IndexedDB error when accessing is_synced index - pre-existing offline sync issue",
+        "priority": "LOW"
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_sales_leaderboard_iter138.py",
+    "/app/test_reports/pytest/pytest_results_iter138.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "VERIFIED: GET /api/sales-leaderboard endpoint returns correct structure with period, date, leaderboard, total_cashiers",
+    "VERIFIED: Leaderboard entries include cashier_id, cashier_name, total_sales, order_count, rank, average_order",
+    "VERIFIED: Leaderboard is sorted by total_sales descending with correct rank assignment",
+    "VERIFIED: Period filters (today, week, month) work correctly",
+    "VERIFIED: Permission toggle logic INVERTED - user?.permissions?.includes('hide_cash_expected') shows element (toggle ON = visible)",
+    "VERIFIED: Dashboard.js line 2243 uses user?.permissions?.includes('hide_cash_expected') WITHOUT '!' prefix"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_sales_leaderboard_iter138.py"
+  ],
+  "success_rate": {
+    "backend": "75% (9/12 tests passed - 3 failures due to missing single-user GET endpoint)",
+    "frontend": "100% (all UI tests passed)"
+  },
+  "test_credentials": {
+    "admin": "hanialdujaili@gmail.com / Hani@2024",
+    "test_cashier": "cashier@test.com / Test@1234 (ID: 29d01373-293c-4703-8c4f-2f832d9d2abb)"
+  },
+  "seed_data_creation": "None - used existing test cashier user",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Sales Leaderboard feature verified working. Permission toggle logic INVERTED and working correctly. Cashier has permissions: ['hide_recent_orders', 'delivery', 'expenses', 'orders', 'hide_cash_expected', 'pos', 'tables']. The leaderboard shows 'غير معروف' as cashier name because orders were created without cashier_name field.",
+  "verified_features": [
+    {
+      "feature": "Sales Competition Leaderboard",
+      "description": "Daily cashier rankings by total sales with Trophy icon",
+      "backend_verification": {
+        "endpoint": "GET /api/sales-leaderboard",
+        "periods_tested": ["today", "week", "month"],
+        "response_structure": "period, date, leaderboard[], total_cashiers",
+        "entry_fields": "cashier_id, cashier_name, total_sales, order_count, rank, average_order"
+      },
+      "frontend_verification": {
+        "card_visible": "Yes - data-testid='sales-leaderboard'",
+        "trophy_icon": "Yes",
+        "period_buttons": "اليوم, الأسبوع, الشهر with data-testid='leaderboard-period-today/week/month'",
+        "entry_details": "rank, name, sales amount, order count"
+      },
+      "status": "VERIFIED"
+    },
+    {
+      "feature": "INVERTED Permission Toggle Logic",
+      "description": "Toggle ON = feature VISIBLE, Toggle OFF = feature HIDDEN",
+      "test_cases": [
+        {
+          "scenario": "hide_cash_expected ON (in permissions)",
+          "expected": "المبيعات حسب طريقة الدفع card VISIBLE",
+          "result": "PASS"
+        },
+        {
+          "scenario": "hide_cash_expected OFF (not in permissions)",
+          "expected": "المبيعات حسب طريقة الدفع card HIDDEN",
+          "result": "PASS"
+        }
+      ],
+      "code_location": "Dashboard.js line 2243: user?.permissions?.includes('hide_cash_expected')",
+      "status": "VERIFIED"
+    }
+  ],
+  "test_results": {
+    "backend_tests": {
+      "TestAuthentication::test_admin_login": "PASSED",
+      "TestAuthentication::test_cashier_login": "PASSED",
+      "TestSalesLeaderboard::test_leaderboard_today": "PASSED",
+      "TestSalesLeaderboard::test_leaderboard_week": "PASSED",
+      "TestSalesLeaderboard::test_leaderboard_month": "PASSED",
+      "TestSalesLeaderboard::test_leaderboard_entry_structure": "PASSED",
+      "TestSalesLeaderboard::test_leaderboard_ranking_order": "PASSED",
+      "TestCashierPermissions::test_cashier_can_access_leaderboard": "PASSED",
+      "TestCashierPermissions::test_cashier_permissions_structure": "PASSED",
+      "TestUserPermissionsAPI::test_get_cashier_user": "FAILED - 405 Method Not Allowed",
+      "TestUserPermissionsAPI::test_update_cashier_permissions_add": "FAILED - depends on GET",
+      "TestUserPermissionsAPI::test_update_cashier_permissions_remove": "FAILED - depends on GET"
+    },
+    "ui_tests": {
+      "admin_dashboard_leaderboard": "PASSED - Leaderboard visible with Trophy icon",
+      "leaderboard_period_buttons": "PASSED - اليوم, الأسبوع, الشهر buttons work",
+      "leaderboard_entries": "PASSED - Shows rank, name, sales, order count",
+      "cashier_permission_on": "PASSED - Card visible when hide_cash_expected ON",
+      "cashier_permission_off": "PASSED - Card hidden when hide_cash_expected OFF"
+    }
+  }
+}

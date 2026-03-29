@@ -68,7 +68,9 @@ import {
   Target,
   AlertTriangle,
   Bell,
-  Phone
+  Phone,
+  Trophy,
+  Medal
 } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 import { toast } from 'sonner';
@@ -216,6 +218,10 @@ export default function Dashboard() {
   
   // إشعارات الطلبات المتأخرة
   const [delayedOrders, setDelayedOrders] = useState([]);
+  
+  // لوحة تنافس المبيعات
+  const [leaderboard, setLeaderboard] = useState([]);
+  const [leaderboardPeriod, setLeaderboardPeriod] = useState('today');
   const [delayedStats, setDelayedStats] = useState(null);
   const [showDelayedAlert, setShowDelayedAlert] = useState(false);
   const delayedAudioRef = useRef(null);
@@ -688,6 +694,14 @@ export default function Dashboard() {
         }
       } catch (alertErr) {
         console.log('Break-even alerts not available');
+      }
+      
+      // جلب لوحة تنافس المبيعات
+      try {
+        const lbRes = await axios.get(`${API}/sales-leaderboard`, { params: { period: leaderboardPeriod } });
+        setLeaderboard(lbRes.data.leaderboard || []);
+      } catch (lbErr) {
+        console.log('Leaderboard not available');
       }
     } catch (error) {
       console.error('Failed to fetch data:', error);
@@ -2076,10 +2090,84 @@ export default function Dashboard() {
         </section>
         )}
 
+        {/* لوحة تنافس المبيعات */}
+        {leaderboard.length > 0 && (
+        <Card className="border-border/50 bg-card" data-testid="sales-leaderboard">
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-lg font-cairo text-foreground flex items-center gap-2">
+              <Trophy className="h-5 w-5 text-yellow-500" />
+              {t('تنافس المبيعات')}
+            </CardTitle>
+            <div className="flex gap-1">
+              {['today', 'week', 'month'].map(p => (
+                <Button
+                  key={p}
+                  size="sm"
+                  variant={leaderboardPeriod === p ? 'default' : 'outline'}
+                  className={`text-xs h-7 px-2 ${leaderboardPeriod === p ? 'bg-yellow-500 hover:bg-yellow-600 text-black' : ''}`}
+                  onClick={async () => {
+                    setLeaderboardPeriod(p);
+                    try {
+                      const res = await axios.get(`${API}/sales-leaderboard`, { params: { period: p } });
+                      setLeaderboard(res.data.leaderboard || []);
+                    } catch(e) { console.log('Leaderboard error'); }
+                  }}
+                  data-testid={`leaderboard-period-${p}`}
+                >
+                  {p === 'today' ? t('اليوم') : p === 'week' ? t('الأسبوع') : t('الشهر')}
+                </Button>
+              ))}
+            </div>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <div className="space-y-2">
+              {leaderboard.map((entry, index) => {
+                const isCurrentUser = entry.cashier_id === user?.id;
+                const rankColors = ['bg-yellow-500', 'bg-gray-400', 'bg-amber-600'];
+                const rankBg = index < 3 ? rankColors[index] : 'bg-muted';
+                
+                return (
+                  <div
+                    key={entry.cashier_id}
+                    className={`flex items-center gap-3 p-3 rounded-lg transition-all ${
+                      isCurrentUser ? 'bg-yellow-500/15 border border-yellow-500/30 ring-1 ring-yellow-500/20' : 'bg-muted/30 hover:bg-muted/50'
+                    }`}
+                    data-testid={`leaderboard-entry-${index}`}
+                  >
+                    {/* الترتيب */}
+                    <div className={`w-8 h-8 rounded-full ${rankBg} flex items-center justify-center text-white font-bold text-sm flex-shrink-0`}>
+                      {index === 0 ? <Trophy className="h-4 w-4" /> : index < 3 ? <Medal className="h-4 w-4" /> : entry.rank}
+                    </div>
+                    
+                    {/* اسم الكاشير */}
+                    <div className="flex-1 min-w-0">
+                      <p className={`font-bold text-sm truncate ${isCurrentUser ? 'text-yellow-600' : 'text-foreground'}`}>
+                        {entry.cashier_name}
+                        {isCurrentUser && <span className="text-xs text-yellow-500 mr-1"> (أنت)</span>}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {entry.order_count} {t('طلب')} · {t('متوسط')} {formatPrice(entry.average_order)}
+                      </p>
+                    </div>
+                    
+                    {/* المبيعات */}
+                    <div className="text-left flex-shrink-0">
+                      <p className={`font-bold text-sm ${index === 0 ? 'text-yellow-600' : 'text-foreground'}`}>
+                        {formatPrice(entry.total_sales)}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+        )}
+
         {/* Recent Orders & Sales by Type */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Recent Orders - يُخفى إذا كان المستخدم لديه صلاحية hide_recent_orders */}
-          {!user?.permissions?.includes('hide_recent_orders') && (
+          {/* Recent Orders - يظهر عند تفعيل الصلاحية */}
+          {user?.permissions?.includes('hide_recent_orders') && (
           <Card className="border-border/50 bg-card">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-lg font-cairo text-foreground">{t('آخر الطلبات')}</CardTitle>
@@ -2151,8 +2239,8 @@ export default function Dashboard() {
           </Card>
           )}
 
-          {/* Sales by Payment Method - يُخفى إذا كان المستخدم لديه صلاحية hide_cash_expected */}
-          {!user?.permissions?.includes('hide_cash_expected') && (
+          {/* Sales by Payment Method - يظهر عند تفعيل الصلاحية */}
+          {user?.permissions?.includes('hide_cash_expected') && (
           <Card className="border-border/50 bg-card">
             <CardHeader>
               <CardTitle className="text-lg font-cairo text-foreground">{t('المبيعات حسب طريقة الدفع')}</CardTitle>
@@ -2344,7 +2432,7 @@ export default function Dashboard() {
                         <span>{t('الرصيد الافتتاحي')}:</span>
                         <span>{formatPrice(closingResult.opening_cash)}</span>
                       </div>
-                      {!user?.permissions?.includes('hide_cash_expected') && (
+                      {user?.permissions?.includes('hide_cash_expected') && (
                       <>
                       <div className="flex justify-between text-green-600">
                         <span>+ {t('المبيعات النقدية')}:</span>
@@ -2365,7 +2453,7 @@ export default function Dashboard() {
                         <span>{t('الجرد الفعلي')}:</span>
                         <span>{formatPrice(closingResult.closing_cash)}</span>
                       </div>
-                      {!user?.permissions?.includes('hide_cash_expected') && (
+                      {user?.permissions?.includes('hide_cash_expected') && (
                       <>
                       <Separator className="my-2" />
                       <div className={`flex justify-between font-bold text-lg ${closingResult.cash_difference >= 0 ? 'text-green-600' : 'text-red-600'}`}>
@@ -2477,7 +2565,7 @@ export default function Dashboard() {
                     <p className="text-xs text-muted-foreground">{t('إجمالي المبيعات')}</p>
                     <p className="text-lg font-bold text-green-600">{formatPrice(cashSummary.total_sales)}</p>
                   </div>
-                  {!user?.permissions?.includes('hide_cash_expected') && (
+                  {user?.permissions?.includes('hide_cash_expected') && (
                   <div className="p-3 bg-blue-500/10 rounded-lg text-center">
                     <p className="text-xs text-muted-foreground">{t('نقدي')}</p>
                     <p className="text-lg font-bold text-blue-600">{formatPrice(cashSummary.cash_sales)}</p>
@@ -2487,7 +2575,7 @@ export default function Dashboard() {
                     <p className="text-xs text-muted-foreground">{t('المصاريف')}</p>
                     <p className="text-lg font-bold text-yellow-600">{formatPrice(cashSummary.total_expenses)}</p>
                   </div>
-                  {!user?.permissions?.includes('hide_cash_expected') && (
+                  {user?.permissions?.includes('hide_cash_expected') && (
                   <div className="p-3 bg-purple-500/10 rounded-lg text-center">
                     <p className="text-xs text-muted-foreground">{t('المتوقع')}</p>
                     <p className="text-lg font-bold text-purple-600">{formatPrice(cashSummary.expected_cash)}</p>
@@ -2530,8 +2618,8 @@ export default function Dashboard() {
                     <span className="text-2xl font-bold text-primary">{formatPrice(calculateCountedCash())}</span>
                   </div>
 
-                  {/* الفرق - يُخفى مع النقدي والمتوقع */}
-                  {calculateCountedCash() > 0 && !user?.permissions?.includes('hide_cash_expected') && (
+                  {/* الفرق - يظهر عند تفعيل النقدي والمتوقع */}
+                  {calculateCountedCash() > 0 && user?.permissions?.includes('hide_cash_expected') && (
                     <div className={`flex items-center justify-between p-4 rounded-lg ${
                       calculateCountedCash() - cashSummary.expected_cash >= 0 
                         ? 'bg-green-500/10' 
