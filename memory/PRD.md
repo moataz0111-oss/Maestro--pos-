@@ -28,7 +28,8 @@ Multi-tenant POS system (React + FastAPI + MongoDB) with role-based access, POS 
 - Customer menu app with order tracking
 - Incoming customer order notifications on POS (accept/reject modal)
 
-## Recent Fixes (March 29, 2026)
+## Recent Fixes
+### March 29, 2026 (Session 1)
 1. **Cash Register 500 Error**: PaymentMethod.CREDIT was missing from shared.py + expenses query missing tenant_id
 2. **Inventory tenant_id**: Raw materials via /raw-materials-new now include tenant_id
 3. **Sales report**: Refunded/cancelled orders excluded, pending shown separately, "توصيل سائقين" label
@@ -39,11 +40,14 @@ Multi-tenant POS system (React + FastAPI + MongoDB) with role-based access, POS 
 8. **Driver assignment**: Includes driver_name and driver_phone in order update
 9. **Customer order timeline**: Added "confirmed" step between pending and preparing
 
+### March 29, 2026 (Session 2 - Current)
+10. **User Permissions Stale Closure Bug (P0)**: Fixed permission toggle not persisting in Settings > Edit User. Root cause: React stale closure in `onCheckedChange` handler. Changed all form handlers to use functional state updates `setEditUserForm(prev => ...)` instead of direct state reference `{...editUserForm, ...}`. Added `data-testid` attributes for testing. **VERIFIED by testing agent (8/8 backend, all UI tests passed)**.
+
 ## Pending Issues
-- Production deployment needs latest code push
+- None currently blocking
 
 ## Upcoming Tasks (P0-P2)
-- P0: Multi-Restaurant Tenant Switcher
+- P0: Multi-Restaurant Tenant Switcher (deferred by user - not wanted currently)
 - P1: ZKTeco Fingerprint Integration
 - P2: Refactor server.py (17k+ lines)
 - P2: Refactor SuperAdmin.js (5.4k+ lines)
