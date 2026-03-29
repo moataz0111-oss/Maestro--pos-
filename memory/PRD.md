@@ -9,32 +9,38 @@ Multi-tenant POS system (React + FastAPI + MongoDB) with role-based access, POS 
 ├── frontend/ (React + Shadcn UI + Tailwind)
 │   ├── src/pages/ (Dashboard, Reports, POS, Settings, Expenses, Delivery, etc.)
 │   ├── src/context/ (AuthContext.js)
+│   ├── src/utils/ (orderNotifications.js)
+│   ├── public/ (sw-offline.js, manifest.json)
 ├── backend/
 │   ├── server.py (Main monolith ~17k lines)
-│   ├── routes/ (shifts_routes.py, reports_routes.py, inventory_system.py, etc.)
+│   ├── routes/ (shifts_routes.py, reports_routes.py, inventory_system.py, customer_menu.py, order_notifications.py)
 ```
 
 ## Completed Features
 - Multi-tenant POS system with role-based access
 - Cash register / shift management
 - Dashboard with configurable permissions
-- Thermal printing (72mm paper, base64 logo)
+- Thermal printing (popup window approach, base64 logo)
 - Delivery management with driver/company differentiation
 - Inventory system (raw materials, packaging, manufacturing)
 - Reports (sales, delivery credits, expenses, profit/loss)
 - PWA offline support
+- Customer menu app with order tracking
+- Incoming customer order notifications on POS (accept/reject modal)
 
 ## Recent Fixes (March 29, 2026)
-1. **Inventory tenant_id bug**: Raw materials created via `/raw-materials-new` now include `tenant_id`
-2. **Sales report exclusions**: Refunded/cancelled orders excluded; pending orders shown separately
-3. **Delivery driver vs company**: Driver deliveries labeled "توصيل سائقين" in reports; delivery credits report shows only companies
-4. **Permissions for expenses/delivery**: Cashiers with `expenses` or `delivery` permissions can now create items
-5. **Print improvements**: Logo base64, 72mm paper, centered content, image preloading
-6. **Branch requests tenant_id**: Branch requests now include tenant_id filtering
+1. **Cash Register 500 Error**: PaymentMethod.CREDIT was missing from shared.py + expenses query missing tenant_id
+2. **Inventory tenant_id**: Raw materials via /raw-materials-new now include tenant_id
+3. **Sales report**: Refunded/cancelled orders excluded, pending shown separately, "توصيل سائقين" label
+4. **Permissions**: Cashiers with expenses/delivery permission can create items
+5. **Printing**: Switched from iframe to popup window (fixes 1.5m blank paper), base64 logo, proper sizing
+6. **Customer order notifications**: customer_menu.py now creates notifications, 60min cutoff, accept/reject endpoints
+7. **Android PWA reload**: Removed aggressive skipWaiting + auto-reload loop from service worker
+8. **Driver assignment**: Includes driver_name and driver_phone in order update
+9. **Customer order timeline**: Added "confirmed" step between pending and preparing
 
 ## Pending Issues
-- User reported closing expenses error (need screenshot to reproduce)
-- Production deployment may need update for permission hiding to work
+- Production deployment needs latest code push
 
 ## Upcoming Tasks (P0-P2)
 - P0: Multi-Restaurant Tenant Switcher
