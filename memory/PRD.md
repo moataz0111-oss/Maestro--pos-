@@ -847,20 +847,15 @@
 
 ### إصلاح خطأ 500 في إغلاق/ملخص صندوق النقد ✅ (March 29, 2026)
 
-**المشكلة**: خطأ `TypeError` عند إغلاق الصندوق بسبب قيم `null` في حقول `total` و `amount` في MongoDB.
+**المشكلة 1 - TypeError**: خطأ `TypeError` عند إغلاق الصندوق بسبب قيم `null` في حقول `total` و `amount` في MongoDB.
+**الحل**: إضافة دالة `_safe_num()` واستبدال كل العمليات الحسابية غير الآمنة.
 
-**السبب الجذري**: `dict.get("total", 0)` في Python يُرجع `None` عندما يكون المفتاح موجوداً بقيمة `null` في MongoDB (القيمة الافتراضية `0` لا تُستخدم لأن المفتاح موجود). هذا يسبب `TypeError: unsupported operand type(s) for +: 'int' and 'NoneType'` عند الجمع.
-
-**الإصلاحات**:
-1. **shifts_routes.py** - إضافة دالة `_safe_num(val, default=0)` لتحويل `None` إلى `0` بأمان
-2. **shifts_routes.py** - استبدال كل `o.get("total", 0)` و `e.get("amount", 0)` و `o["total"]` بـ `_safe_num(o.get("total"))`
-3. **server.py** - إصلاح `o["total"]` في حساب إحصائيات اليوم (سطر 9191)
+**المشكلة 2 - منطق الاحتساب خاطئ**: ملخص الصندوق كان يحسب من آخر وردية مغلقة لأي موظف بالفرع ويشمل كل طلبات الفرع، بدلاً من حساب طلبات الموظف الحالي فقط خلال ورديته.
+**الحل**: تعديل `get_cash_register_summary` ليبحث بـ `shift_id` أولاً ثم `cashier_id` + `started_at` (نفس منطق `close_cash_register`).
 
 **الملفات المعدلة**:
 - `/app/backend/routes/shifts_routes.py`
 - `/app/backend/server.py`
-
-**حالة الاختبار**: ✅ (Backend curl tests + Python unit tests)
 
 ---
 
