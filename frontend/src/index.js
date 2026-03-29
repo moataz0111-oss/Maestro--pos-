@@ -8,20 +8,34 @@ const registerServiceWorker = async () => {
   if ('serviceWorker' in navigator) {
     try {
       const registration = await navigator.serviceWorker.register('/sw-offline.js', {
-        scope: '/'
+        scope: '/',
+        updateViaCache: 'none' // دائماً يتحقق من التحديثات بدون cache
       });
       console.log('✅ Service Worker registered successfully:', registration.scope);
       
-      // تحديث تلقائي
+      // التحقق من التحديثات كل 5 دقائق
+      setInterval(() => {
+        registration.update();
+      }, 5 * 60 * 1000);
+      
+      // تحديث تلقائي عند وجود نسخة جديدة
       registration.addEventListener('updatefound', () => {
         const newWorker = registration.installing;
         if (newWorker) {
           newWorker.addEventListener('statechange', () => {
             if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-              console.log('🔄 New Service Worker available, refresh to update');
+              console.log('🔄 New version available, reloading...');
+              // إعادة تحميل الصفحة تلقائياً عند وجود تحديث
+              window.location.reload();
             }
           });
         }
+      });
+      
+      // إعادة تحميل عند تغيير الـ controller (SW جديد أصبح نشط)
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        console.log('🔄 Service Worker controller changed, reloading...');
+        window.location.reload();
       });
     } catch (error) {
       console.error('❌ Service Worker registration failed:', error);

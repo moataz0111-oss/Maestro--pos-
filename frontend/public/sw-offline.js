@@ -1,7 +1,7 @@
-// Service Worker for Offline Support - V4
-// يدعم العمل بدون إنترنت لجميع الصفحات
+// Service Worker for Offline Support - V5 (Auto-Update)
+// يدعم العمل بدون إنترنت لجميع الصفحات مع تحديث تلقائي
 
-const CACHE_VERSION = 'v4';
+const CACHE_VERSION = 'v5';
 const CACHE_NAME = `maestro-offline-${CACHE_VERSION}`;
 const STATIC_CACHE = `maestro-static-${CACHE_VERSION}`;
 const DATA_CACHE = `maestro-data-${CACHE_VERSION}`;
@@ -46,7 +46,7 @@ const APP_ROUTES = [
 
 // تثبيت Service Worker - تخزين جميع الملفات الأساسية
 self.addEventListener('install', (event) => {
-  console.log('[SW-Offline] Installing V3...');
+  console.log(`[SW-Offline] Installing ${CACHE_VERSION}...`);
   event.waitUntil(
     caches.open(STATIC_CACHE)
       .then(async (cache) => {
@@ -65,7 +65,11 @@ self.addEventListener('install', (event) => {
         
         console.log('[SW-Offline] All routes cached');
       })
-      .then(() => self.skipWaiting())
+      .then(() => {
+        // تفعيل فوري بدون انتظار إغلاق التبويبات
+        console.log('[SW-Offline] Skip waiting - activate immediately');
+        return self.skipWaiting();
+      })
       .catch((error) => {
         console.error('[SW-Offline] Install failed:', error);
       })

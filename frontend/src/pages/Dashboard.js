@@ -810,7 +810,8 @@ export default function Dashboard() {
       } else if (error.response?.status === 401) {
         toast.error(t('يرجى تسجيل الدخول مرة أخرى'));
       } else {
-        toast.error(t('فشل في جلب بيانات الصندوق'));
+        const errMsg = error.response?.data?.detail || error.message || t('فشل في جلب بيانات الصندوق');
+        toast.error(errMsg);
       }
     } finally {
       setLoadingSummary(false);
@@ -886,7 +887,6 @@ export default function Dashboard() {
   const printClosingReceipt = (data) => {
     if (!data) return;
     
-    const printWindow = window.open('', '_blank', 'width=300,height=600');
     const now = new Date();
     const dateStr = now.toLocaleDateString('ar-IQ');
     const timeStr = now.toLocaleTimeString('ar-IQ');
@@ -898,7 +898,22 @@ export default function Dashboard() {
     const differenceClass = difference >= 0 ? 'positive' : 'negative';
     const differenceText = difference >= 0 ? '+' : '';
     
-    printWindow.document.write(`
+    // إنشاء iframe مخفي للطباعة
+    const existingFrame = document.getElementById('print-closing-frame');
+    if (existingFrame) existingFrame.remove();
+    
+    const iframe = document.createElement('iframe');
+    iframe.id = 'print-closing-frame';
+    iframe.style.position = 'fixed';
+    iframe.style.top = '-10000px';
+    iframe.style.left = '-10000px';
+    iframe.style.width = '80mm';
+    iframe.style.height = '0';
+    document.body.appendChild(iframe);
+    
+    const doc = iframe.contentWindow.document;
+    doc.open();
+    doc.write(`
       <!DOCTYPE html>
       <html dir="rtl" lang="ar">
       <head>
@@ -1099,13 +1114,16 @@ export default function Dashboard() {
       </body>
       </html>
     `);
-    printWindow.document.close();
-    printWindow.focus();
+    doc.close();
+    iframe.contentWindow.focus();
     
     // طباعة تلقائية
     setTimeout(() => {
-      printWindow.print();
-      printWindow.close();
+      iframe.contentWindow.print();
+      // تنظيف بعد الطباعة
+      setTimeout(() => {
+        iframe.remove();
+      }, 2000);
     }, 300);
   };
 
@@ -1114,28 +1132,41 @@ export default function Dashboard() {
     const printContent = printRef.current;
     if (!printContent) return;
     
-    const printWindow = window.open('', '_blank');
-    printWindow.document.write(`
+    const existingFrame2 = document.getElementById('print-report-frame');
+    if (existingFrame2) existingFrame2.remove();
+    
+    const iframe2 = document.createElement('iframe');
+    iframe2.id = 'print-report-frame';
+    iframe2.style.position = 'fixed';
+    iframe2.style.top = '-10000px';
+    iframe2.style.left = '-10000px';
+    iframe2.style.width = '80mm';
+    iframe2.style.height = '0';
+    document.body.appendChild(iframe2);
+    
+    const doc2 = iframe2.contentWindow.document;
+    doc2.open();
+    doc2.write(`
       <!DOCTYPE html>
       <html dir="rtl">
       <head>
         <title>تقرير إغلاق الصندوق</title>
         <style>
-          body { font-family: 'Segoe UI', Tahoma, sans-serif; padding: 20px; direction: rtl; }
-          .header { text-align: center; margin-bottom: 20px; }
-          .header h1 { font-size: 24px; margin: 0; }
-          .header p { color: #666; margin: 5px 0; }
-          .section { margin-bottom: 15px; }
-          .section-title { font-weight: bold; font-size: 14px; color: #333; border-bottom: 1px solid #ddd; padding-bottom: 5px; margin-bottom: 10px; }
-          .row { display: flex; justify-content: space-between; padding: 5px 0; border-bottom: 1px dotted #eee; }
-          .row:last-child { border-bottom: none; }
-          .label { color: #666; }
+          body { font-family: 'Segoe UI', Tahoma, sans-serif; padding: 2mm; direction: rtl; width: 80mm; }
+          .header { text-align: center; margin-bottom: 10px; }
+          .header h1 { font-size: 16px; margin: 0; }
+          .header p { color: #333; margin: 3px 0; font-size: 11px; }
+          .section { margin-bottom: 8px; }
+          .section-title { font-weight: bold; font-size: 12px; border-bottom: 1px dashed #000; padding-bottom: 3px; margin-bottom: 5px; }
+          .row { display: flex; justify-content: space-between; padding: 2px 0; font-size: 11px; }
+          .label { color: #333; }
           .value { font-weight: bold; }
-          .positive { color: #10B981; }
-          .negative { color: #EF4444; }
-          .total-row { background: #f5f5f5; padding: 10px; margin: 10px 0; font-size: 16px; }
-          .footer { text-align: center; margin-top: 20px; color: #999; font-size: 12px; }
-          @media print { body { padding: 0; } }
+          .positive { color: #000; }
+          .negative { color: #000; }
+          .total-row { background: #eee; padding: 5px; margin: 5px 0; font-size: 13px; }
+          .footer { text-align: center; margin-top: 10px; font-size: 10px; }
+          @page { size: 80mm auto; margin: 0; }
+          @media print { body { padding: 1mm; width: 80mm; } }
         </style>
       </head>
       <body>
@@ -1146,10 +1177,12 @@ export default function Dashboard() {
       </body>
       </html>
     `);
-    printWindow.document.close();
-    printWindow.focus();
-    printWindow.print();
-    printWindow.close();
+    doc2.close();
+    iframe2.contentWindow.focus();
+    setTimeout(() => {
+      iframe2.contentWindow.print();
+      setTimeout(() => iframe2.remove(), 2000);
+    }, 300);
   };
 
   // إغلاق وتسجيل الخروج

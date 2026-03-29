@@ -4820,11 +4820,11 @@ export default function Settings() {
                             <div className="relative">
                               <Printer className="h-8 w-8 text-muted-foreground" />
                               {/* حالة الاتصال */}
-                              {printerTestStatus[printer.id] === 'online' || printer.is_online ? (
-                                <span className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full border-2 border-background" title={t('متصلة')}></span>
-                              ) : printerTestStatus[printer.id] === 'offline' || printer.is_online === false ? (
-                                <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full border-2 border-background" title={t('غير متصلة')}></span>
-                              ) : null}
+                              {printer.ip_address && printer.port ? (
+                                <span className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full border-2 border-background" title={t('مُعدّة')}></span>
+                              ) : (
+                                <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full border-2 border-background" title={t('غير مُعدّة')}></span>
+                              )}
                             </div>
                             <div>
                               <p className="font-medium text-foreground">{t(printer.name)}</p>

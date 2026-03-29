@@ -3288,22 +3288,36 @@ export default function POS() {
             <Button 
               className="flex-1 bg-blue-500 hover:bg-blue-600 text-white"
               onClick={() => {
-                // طباعة باستخدام نافذة جديدة
+                // طباعة باستخدام iframe مخفي - بدون نافذة جديدة
                 const printContent = document.getElementById('receipt-to-print');
                 if (printContent) {
-                  const printWindow = window.open('', '_blank', 'width=400,height=600');
-                  printWindow.document.write(`
+                  // إنشاء iframe مخفي للطباعة
+                  const existingFrame = document.getElementById('print-frame');
+                  if (existingFrame) existingFrame.remove();
+                  
+                  const iframe = document.createElement('iframe');
+                  iframe.id = 'print-frame';
+                  iframe.style.position = 'fixed';
+                  iframe.style.top = '-10000px';
+                  iframe.style.left = '-10000px';
+                  iframe.style.width = '80mm';
+                  iframe.style.height = '0';
+                  document.body.appendChild(iframe);
+                  
+                  const doc = iframe.contentWindow.document;
+                  doc.open();
+                  doc.write(`
                     <!DOCTYPE html>
                     <html dir="${isRTL ? 'rtl' : 'ltr'}" lang="${isRTL ? 'ar' : 'en'}">
                     <head>
                       <meta charset="UTF-8">
-                      <title>${t('طباعة الفاتورة')}</title>
+                      <title>${t('فاتورة')}</title>
                       <style>
                         * { margin: 0; padding: 0; box-sizing: border-box; }
                         body { 
                           font-family: 'Courier New', monospace; 
                           font-size: 12px; 
-                          padding: 10px;
+                          padding: 2mm;
                           background: white;
                           color: black;
                           width: 80mm;
@@ -3316,54 +3330,60 @@ export default function POS() {
                         .text-lg { font-size: 16px; }
                         .text-sm { font-size: 11px; }
                         .text-xs { font-size: 10px; }
-                        .mb-2 { margin-bottom: 8px; }
-                        .mb-3 { margin-bottom: 12px; }
-                        .mt-1 { margin-top: 4px; }
-                        .mt-2 { margin-top: 8px; }
-                        .mt-3 { margin-top: 12px; }
-                        .mt-4 { margin-top: 16px; }
-                        .pt-2 { padding-top: 8px; }
-                        .pt-3 { padding-top: 12px; }
-                        .pb-3 { padding-bottom: 12px; }
-                        .py-1 { padding-top: 4px; padding-bottom: 4px; }
-                        .p-1 { padding: 4px; }
-                        .border-t { border-top: 1px dashed #ccc; }
-                        .border-b { border-bottom: 1px dashed #ccc; }
-                        .border-t-2 { border-top: 2px solid #666; }
+                        .mb-2 { margin-bottom: 6px; }
+                        .mb-3 { margin-bottom: 10px; }
+                        .mt-1 { margin-top: 3px; }
+                        .mt-2 { margin-top: 6px; }
+                        .mt-3 { margin-top: 10px; }
+                        .mt-4 { margin-top: 14px; }
+                        .pt-2 { padding-top: 6px; }
+                        .pt-3 { padding-top: 10px; }
+                        .pb-3 { padding-bottom: 10px; }
+                        .py-1 { padding-top: 3px; padding-bottom: 3px; }
+                        .p-1 { padding: 3px; }
+                        .border-t { border-top: 1px dashed #000; }
+                        .border-b { border-bottom: 1px dashed #000; }
+                        .border-t-2 { border-top: 2px solid #000; }
                         .border-dashed { border-style: dashed; }
-                        .text-gray-500 { color: #666; }
-                        .text-gray-600 { color: #555; }
-                        .text-red-600 { color: #dc2626; }
-                        .bg-red-50 { background: #fef2f2; }
-                        .rounded { border-radius: 4px; }
+                        .text-gray-500 { color: #333; }
+                        .text-gray-600 { color: #222; }
+                        .text-red-600 { color: #000; }
+                        .bg-red-50 { background: transparent; }
+                        .rounded { border-radius: 0; }
                         .rounded-full { border-radius: 50%; }
                         table { width: 100%; border-collapse: collapse; }
-                        th, td { padding: 4px 2px; }
-                        img { max-width: 60px; height: auto; }
+                        th, td { padding: 2px 1px; font-size: 11px; }
+                        img { max-width: 50px; height: auto; }
                         .flex { display: flex; }
                         .justify-between { justify-content: space-between; }
-                        .space-y-1 > * + * { margin-top: 4px; }
+                        .space-y-1 > * + * { margin-top: 3px; }
+                        @page { 
+                          size: 80mm auto; 
+                          margin: 0mm;
+                        }
                         @media print {
-                          body { width: 80mm; }
-                          @page { size: 80mm auto; margin: 2mm; }
+                          body { width: 80mm; padding: 1mm; }
                         }
                       </style>
                     </head>
                     <body>
                       ${printContent.innerHTML}
-                      <script>
-                        window.onload = function() {
-                          window.print();
-                          window.onafterprint = function() {
-                            window.close();
-                          };
-                        };
-                      </script>
                     </body>
                     </html>
                   `);
-                  printWindow.document.close();
-                  toast.success(t('تم فتح نافذة الطباعة'));
+                  doc.close();
+                  
+                  // انتظار تحميل المحتوى ثم طباعة
+                  iframe.contentWindow.focus();
+                  setTimeout(() => {
+                    iframe.contentWindow.print();
+                    // تنظيف بعد الطباعة
+                    setTimeout(() => {
+                      iframe.remove();
+                    }, 2000);
+                  }, 300);
+                  
+                  toast.success(t('جاري الطباعة...'));
                   // إغلاق نافذة المعاينة وتنظيف السلة
                   setPrintDialogOpen(false);
                   if (lastOrderNumber && !editingOrder) {
