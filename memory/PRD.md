@@ -42,17 +42,17 @@ Multi-tenant POS system (React + FastAPI + MongoDB) with role-based access, POS 
 16. Sales Competition Leaderboard
 17. Cash Register Close Smart Button
 18. **Daily Sales Target System** - POST/GET /api/sales-target, progress bar, animated celebration
+19. **Packaging Materials 500 Error Fix** - Removed duplicate route from server.py, now uses modular route in inventory_system.py
+20. **Customizable Daily Target Message** - Admin can set custom motivational message via target dialog, stored in DB and displayed on dashboard
 
 ## Pending Issues
 - None
 
 ## Upcoming Tasks
+- P0: Multi-Restaurant Tenant Switcher (deferred by user but top priority backlog)
 - P1: ZKTeco Fingerprint Integration
-- P2: Refactor server.py (18k+ lines)
+- P2: Refactor server.py (18k+ lines) - duplicate routes still exist for packaging-requests
 - P2: Refactor SuperAdmin.js (5.4k+ lines)
-
-## Deferred
-- Multi-Restaurant Tenant Switcher
 
 ## Key Credentials
 - Admin: hanialdujaili@gmail.com / Hani@2024

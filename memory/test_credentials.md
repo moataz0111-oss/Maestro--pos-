@@ -1,15 +1,14 @@
 # Test Credentials
 
-## Admin
+## Admin Account
 - Email: hanialdujaili@gmail.com
 - Password: Hani@2024
 
-## Super Admin
+## Super Admin Account
 - Email: owner@maestroegp.com
 - Password: owner123
 - Secret: 271018
 
-## Test Cashier
+## Test Cashier Account
 - Email: cashier@test.com
 - Password: Test@1234
-- User ID: 29d01373-293c-4703-8c4f-2f832d9d2abb
