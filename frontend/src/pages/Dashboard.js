@@ -108,6 +108,10 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const printRef = useRef();
   
+  // المدير/المالك/المشرف يرون كل شيء - الكاشير يحتاج صلاحية مفعلة
+  const isManagerRole = ['admin', 'super_admin', 'manager'].includes(user?.role);
+  const canSee = (permKey) => isManagerRole || user?.permissions?.includes(permKey);
+  
   // دالة للتحقق من صلاحيات لوحة التحكم
   const hasDashboardPermission = (permissionId) => {
     // المدير والسوبر أدمن لديهم جميع الصلاحيات
@@ -2167,7 +2171,7 @@ export default function Dashboard() {
         {/* Recent Orders & Sales by Type */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Recent Orders - يظهر عند تفعيل الصلاحية */}
-          {user?.permissions?.includes('hide_recent_orders') && (
+          {canSee('hide_recent_orders') && (
           <Card className="border-border/50 bg-card">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-lg font-cairo text-foreground">{t('آخر الطلبات')}</CardTitle>
@@ -2240,7 +2244,7 @@ export default function Dashboard() {
           )}
 
           {/* Sales by Payment Method - يظهر عند تفعيل الصلاحية */}
-          {user?.permissions?.includes('hide_cash_expected') && (
+          {canSee('hide_cash_expected') && (
           <Card className="border-border/50 bg-card">
             <CardHeader>
               <CardTitle className="text-lg font-cairo text-foreground">{t('المبيعات حسب طريقة الدفع')}</CardTitle>
@@ -2432,7 +2436,7 @@ export default function Dashboard() {
                         <span>{t('الرصيد الافتتاحي')}:</span>
                         <span>{formatPrice(closingResult.opening_cash)}</span>
                       </div>
-                      {user?.permissions?.includes('hide_cash_expected') && (
+                      {canSee('hide_cash_expected') && (
                       <>
                       <div className="flex justify-between text-green-600">
                         <span>+ {t('المبيعات النقدية')}:</span>
@@ -2453,7 +2457,7 @@ export default function Dashboard() {
                         <span>{t('الجرد الفعلي')}:</span>
                         <span>{formatPrice(closingResult.closing_cash)}</span>
                       </div>
-                      {user?.permissions?.includes('hide_cash_expected') && (
+                      {canSee('hide_cash_expected') && (
                       <>
                       <Separator className="my-2" />
                       <div className={`flex justify-between font-bold text-lg ${closingResult.cash_difference >= 0 ? 'text-green-600' : 'text-red-600'}`}>
@@ -2565,7 +2569,7 @@ export default function Dashboard() {
                     <p className="text-xs text-muted-foreground">{t('إجمالي المبيعات')}</p>
                     <p className="text-lg font-bold text-green-600">{formatPrice(cashSummary.total_sales)}</p>
                   </div>
-                  {user?.permissions?.includes('hide_cash_expected') && (
+                  {canSee('hide_cash_expected') && (
                   <div className="p-3 bg-blue-500/10 rounded-lg text-center">
                     <p className="text-xs text-muted-foreground">{t('نقدي')}</p>
                     <p className="text-lg font-bold text-blue-600">{formatPrice(cashSummary.cash_sales)}</p>
@@ -2575,7 +2579,7 @@ export default function Dashboard() {
                     <p className="text-xs text-muted-foreground">{t('المصاريف')}</p>
                     <p className="text-lg font-bold text-yellow-600">{formatPrice(cashSummary.total_expenses)}</p>
                   </div>
-                  {user?.permissions?.includes('hide_cash_expected') && (
+                  {canSee('hide_cash_expected') && (
                   <div className="p-3 bg-purple-500/10 rounded-lg text-center">
                     <p className="text-xs text-muted-foreground">{t('المتوقع')}</p>
                     <p className="text-lg font-bold text-purple-600">{formatPrice(cashSummary.expected_cash)}</p>
@@ -2585,6 +2589,13 @@ export default function Dashboard() {
 
                 {/* جرد فئات النقود */}
                 <div className="space-y-3">
+                  {(cashSummary?.expected_cash || 0) <= 0 ? (
+                    <div className="p-4 bg-yellow-500/10 border border-yellow-500/30 rounded-lg text-center">
+                      <p className="font-bold text-yellow-600 mb-1">{t('لا يوجد نقدي متبقي في الصندوق')}</p>
+                      <p className="text-sm text-muted-foreground">{t('المصاريف تساوي أو أكبر من المبيعات النقدية - يمكنك تأكيد الإغلاق مباشرة')}</p>
+                    </div>
+                  ) : (
+                  <>
                   <h3 className="font-bold flex items-center gap-2">
                     <Banknote className="h-5 w-5 text-green-500" />
                     {t('جرد الصندوق')} ({t('فئات النقود')})
@@ -2619,7 +2630,7 @@ export default function Dashboard() {
                   </div>
 
                   {/* الفرق - يظهر عند تفعيل النقدي والمتوقع */}
-                  {calculateCountedCash() > 0 && user?.permissions?.includes('hide_cash_expected') && (
+                  {calculateCountedCash() > 0 && canSee('hide_cash_expected') && (
                     <div className={`flex items-center justify-between p-4 rounded-lg ${
                       calculateCountedCash() - cashSummary.expected_cash >= 0 
                         ? 'bg-green-500/10' 
@@ -2640,6 +2651,8 @@ export default function Dashboard() {
                       </span>
                     </div>
                   )}
+                  </>
+                  )}
                 </div>
 
                 {/* ملاحظات */}
@@ -2657,7 +2670,7 @@ export default function Dashboard() {
                 <Button 
                   onClick={handleCloseRegister} 
                   className="w-full h-12 text-lg gap-2"
-                  disabled={isClosing || calculateCountedCash() === 0}
+                  disabled={isClosing || (calculateCountedCash() === 0 && (cashSummary?.expected_cash || 0) > 0)}
                   data-testid="confirm-close-btn"
                 >
                   {isClosing ? (
