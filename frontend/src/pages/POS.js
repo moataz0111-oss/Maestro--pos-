@@ -440,7 +440,7 @@ export default function POS() {
         axios.get(`${API}/delivery-apps`),
         axios.get(`${API}/shifts/current`).catch(() => ({ data: null })),
         axios.get(`${API}/tenant/invoice-settings`).catch(() => ({ data: {} })),
-        axios.get(`${API}/restaurant-settings`).catch(() => ({ data: {} })),
+        axios.get(`${API}/settings/restaurant`).catch(() => ({ data: {} })),
         axios.get(`${API}/system/invoice-settings`).catch(() => ({ data: {} })),
         axios.get(`${API}/login-backgrounds`).catch(() => ({ data: {} })),
         axios.get(`${API}/printers`).catch(() => ({ data: [] }))
@@ -481,7 +481,11 @@ export default function POS() {
       
       // دمج شعار صفحة الدخول مع إعدادات الفاتورة للنظام
       const sysInvoice = sysInvoiceRes.data || {};
-      // لا نستخدم شعار صفحة الدخول كبديل لشعار النظام - يبقون منفصلين
+      const loginBg = loginBgRes.data || {};
+      // إذا لم يوجد شعار نظام مخصص، استخدم شعار صفحة الدخول (شعار النظام فقط - ليس المطعم)
+      if (!sysInvoice.system_logo_url && loginBg.logo_url) {
+        sysInvoice.system_logo_url = loginBg.logo_url;
+      }
       setSystemInvoiceSettings(sysInvoice);
       
       // إذا لم تكن هناك وردية مفتوحة، افتح واحدة تلقائياً
@@ -1808,7 +1812,7 @@ export default function POS() {
         delivery_app: orderType === 'delivery' && deliveryApp ? deliveryApp : null,
         discount: discount || 0,
         branch_id: currentBranchId,
-        payment_method: 'pending',
+        payment_method: paymentMethod || 'pending',
         auto_ready: true
       };
       
@@ -3322,6 +3326,15 @@ export default function POS() {
                   )}
                 </div>
               )}
+              
+              {/* اسم الفرع + الكاشير */}
+              {(() => {
+                const branchId = getBranchIdForApi() || user?.branch_id;
+                const branch = branches.find(b => b.id === branchId);
+                return branch?.name ? (
+                  <p className="text-center text-xs mt-1">{t('الفرع')}: {branch.name}</p>
+                ) : null;
+              })()}
             </div>
             
             {/* نص أعلى الفاتورة المخصص */}
