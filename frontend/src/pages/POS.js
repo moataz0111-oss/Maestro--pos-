@@ -3252,6 +3252,15 @@ export default function POS() {
                 <p className="text-xs text-gray-600 mt-0.5">{invoiceSettings.address}</p>
               )}
               
+              {/* اسم الفرع */}
+              {(() => {
+                const branchId = getBranchIdForApi() || user?.branch_id;
+                const branch = branches.find(b => b.id === branchId);
+                return branch?.name ? (
+                  <p className="text-xs text-gray-600 mt-0.5">{branch.name}</p>
+                ) : null;
+              })()}
+              
               {/* الرقم الضريبي - إذا كان المستخدم يريد إظهاره */}
               {invoiceSettings.tax_number && invoiceSettings.show_tax !== false && (
                 <p className="text-xs text-gray-500 mt-1">{t('الرقم الضريبي')}: <span dir="ltr">{invoiceSettings.tax_number}</span></p>
@@ -3266,10 +3275,13 @@ export default function POS() {
                   {t('فاتورة رقم')}: <span dir="ltr">#{editingOrder?.order_number || lastOrderNumber}</span>
                 </p>
               )}
-              {/* التاريخ والوقت */}
+              {/* التاريخ والوقت + اسم الكاشير */}
               <p className="text-xs text-gray-500" dir="ltr">
                 {new Date().toLocaleDateString('en-US')} - {new Date().toLocaleTimeString('en-US', {hour: '2-digit', minute: '2-digit', hour12: true})}
               </p>
+              {(user?.name || user?.full_name) && (
+                <p className="text-xs text-gray-500">{t('الكاشير')}: {user?.full_name || user?.name}</p>
+              )}
             </div>
             
             {/* معلومات الطلب - متغيرة حسب نوع الطلب */}
