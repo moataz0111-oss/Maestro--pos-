@@ -18,25 +18,27 @@ Multi-tenant POS system (React + FastAPI + MongoDB) with role-based access, POS 
 
 ## Completed Features
 - Multi-tenant POS system with role-based access
-- Cash register / shift management with correct calculation (including customer app orders)
-- Dashboard with configurable permissions (toggle ON = show, toggle OFF = hide)
-- Thermal printing (hidden iframe, 80mm width, auto height, Arial/Tahoma fonts)
+- Cash register / shift management with correct calculation
+- Dashboard with configurable permissions (canSee helper: admin always sees all, others need toggle ON)
+- Thermal printing (hidden iframe, 80mm width, auto height)
 - Delivery management with driver/company differentiation
 - Inventory system (raw materials, packaging, manufacturing)
 - Reports (sales, delivery credits, expenses, profit/loss)
 - PWA offline support
 - Customer menu app with order tracking
-- Incoming customer order notifications on POS (accept/reject modal)
+- Incoming customer order notifications on POS
 - Data isolation: Non-admin users only see their own orders/stats
-- **Sales Competition Leaderboard**: Daily/weekly/monthly cashier rankings by total sales
+- Sales Competition Leaderboard: Daily/weekly/monthly cashier rankings
+- Smart cash register close: auto-enable confirm when expenses >= cash
 
 ## Recent Fixes (March 30, 2026 - Session 3)
 11. Cash Register Calculation Fix: Orders without shift_id now counted
-12. User Permissions Hide UI: Verified working
+12. User Permissions Stale Closure Fix: Functional state updates
 13. Thermal Printing Rewrite: Hidden iframe, 80mm CSS, clear fonts
 14. Data Isolation: Non-admin users see only their own orders
-15. **Permission Toggle Logic Fix**: Inverted logic so toggle ON = show, toggle OFF = hide
-16. **Sales Competition Leaderboard**: New feature - daily cashier rankings with Trophy icon, period filters (today/week/month), rank badges, average order calculation
+15. Permission Toggle Logic Fix + canSee() helper: admin/manager/super_admin always see everything
+16. Sales Competition Leaderboard: New API + UI widget
+17. Cash Register Close Smart Button: Confirm enabled when expenses >= cash (no cash to count), yellow info message shown
 
 ## Pending Issues
 - None currently blocking
