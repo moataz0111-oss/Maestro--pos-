@@ -3235,21 +3235,21 @@ export default function POS() {
                 </div>
               )}
               
-              {/* اسم المطعم */}
-              <h2 className="text-lg font-bold">{invoiceSettings.restaurant_name || restaurantSettings.name || restaurantSettings.name_ar || user?.tenant_name || t('اسم المطعم')}</h2>
+              {/* اسم المطعم - يجلب تلقائياً من إعدادات المطعم */}
+              <h2 className="text-lg font-bold">{restaurantSettings.name_ar || restaurantSettings.name || user?.tenant_name || t('اسم المطعم')}</h2>
               
-              {/* عنوان المطعم */}
-              {invoiceSettings.address && (
-                <p className="text-xs text-gray-600 mt-1">{invoiceSettings.address}</p>
-              )}
-              
-              {/* أرقام هاتف المطعم */}
+              {/* أرقام هاتف المطعم - تظهر تحت اسم المطعم مباشرة */}
               {(invoiceSettings.phone || invoiceSettings.phone2) && (
-                <div className="text-xs mt-1" dir="ltr">
-                  {invoiceSettings.phone && <span>📞 {invoiceSettings.phone}</span>}
+                <div className="text-xs mt-0.5" dir="ltr">
+                  {invoiceSettings.phone && <span>{invoiceSettings.phone}</span>}
                   {invoiceSettings.phone && invoiceSettings.phone2 && <span> - </span>}
                   {invoiceSettings.phone2 && <span>{invoiceSettings.phone2}</span>}
                 </div>
+              )}
+              
+              {/* عنوان المطعم */}
+              {invoiceSettings.address && (
+                <p className="text-xs text-gray-600 mt-0.5">{invoiceSettings.address}</p>
               )}
               
               {/* الرقم الضريبي - إذا كان المستخدم يريد إظهاره */}
