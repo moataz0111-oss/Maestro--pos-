@@ -481,11 +481,7 @@ export default function POS() {
       
       // دمج شعار صفحة الدخول مع إعدادات الفاتورة للنظام
       const sysInvoice = sysInvoiceRes.data || {};
-      const loginBg = loginBgRes.data || {};
-      // إذا لم يوجد شعار مخصص للفاتورة، استخدم شعار صفحة الدخول
-      if (!sysInvoice.system_logo_url && loginBg.logo_url) {
-        sysInvoice.system_logo_url = loginBg.logo_url;
-      }
+      // لا نستخدم شعار صفحة الدخول كبديل لشعار النظام - يبقون منفصلين
       setSystemInvoiceSettings(sysInvoice);
       
       // إذا لم تكن هناك وردية مفتوحة، افتح واحدة تلقائياً
@@ -3240,7 +3236,7 @@ export default function POS() {
               )}
               
               {/* اسم المطعم */}
-              <h2 className="text-lg font-bold">{restaurantSettings.name || restaurantSettings.name_ar || invoiceSettings.restaurant_name || user?.tenant_name || t('اسم المطعم')}</h2>
+              <h2 className="text-lg font-bold">{invoiceSettings.restaurant_name || restaurantSettings.name || restaurantSettings.name_ar || user?.tenant_name || t('اسم المطعم')}</h2>
               
               {/* عنوان المطعم */}
               {invoiceSettings.address && (
@@ -3399,8 +3395,8 @@ export default function POS() {
               
               {/* قسم النظام - شعار + اسم + QR */}
               <div className="flex flex-col items-center mt-2">
-                {/* شعار النظام */}
-                {systemInvoiceSettings.system_logo_url && (
+                {/* شعار النظام - ثابت ومميز */}
+                {systemInvoiceSettings.system_logo_url ? (
                   <img 
                     src={(() => {
                       const logoUrl = systemInvoiceSettings.system_logo_url;
@@ -3416,6 +3412,10 @@ export default function POS() {
                     className="h-10 w-10 object-contain rounded-full mb-1"
                     onError={(e) => e.target.style.display = 'none'}
                   />
+                ) : (
+                  <div className="flex items-center justify-center h-10 w-10 rounded-full bg-black mb-1" style={{border: '2px solid #333'}}>
+                    <span className="text-white font-bold text-sm" style={{fontFamily: 'Arial, sans-serif'}}>M</span>
+                  </div>
                 )}
                 
                 {/* اسم النظام */}

@@ -6455,6 +6455,22 @@ export default function Settings() {
                     <p className="text-sm text-muted-foreground">{t('تخصيص معلومات المطعم التي تظهر على الفواتير المطبوعة')}</p>
                   </CardHeader>
                   <CardContent className="space-y-6">
+                    {/* اسم المطعم في الفاتورة */}
+                    <div className="p-4 border rounded-lg bg-primary/10 border-primary/30">
+                      <Label className="text-foreground font-bold mb-4 flex items-center gap-2">
+                        <Store className="h-5 w-5 text-primary" />{t('اسم المطعم (يظهر أعلى الفاتورة)')}
+                      </Label>
+                      <Input
+                        value={invoiceSettings.restaurant_name || ''}
+                        onChange={(e) => setInvoiceSettings(prev => ({...prev, restaurant_name: e.target.value}))}
+                        placeholder={t('مثال: مطعم الشام')}
+                        className="mt-3 text-lg font-bold"
+                        dir="rtl"
+                        data-testid="invoice-restaurant-name-input"
+                      />
+                      <p className="text-xs text-muted-foreground mt-1">{t('هذا الاسم سيظهر في أعلى كل فاتورة مطبوعة')}</p>
+                    </div>
+
                     {/* شعار المطعم للفاتورة */}
                     <div className="p-4 border rounded-lg bg-amber-500/10 border-amber-500/30">
                       <Label className="text-foreground font-bold mb-4 flex items-center gap-2">

@@ -6855,6 +6855,7 @@ class SystemInvoiceSettings(BaseModel):
 
 class TenantInvoiceSettings(BaseModel):
     """إعدادات الفاتورة للعميل (المطعم)"""
+    restaurant_name: Optional[str] = None  # اسم المطعم في الفاتورة
     show_logo: bool = True  # عرض الشعار
     invoice_logo: Optional[str] = None  # شعار الفاتورة المخصص
     phone: Optional[str] = None  # رقم الهاتف
