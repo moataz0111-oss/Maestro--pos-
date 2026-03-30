@@ -8027,14 +8027,14 @@ async def test_printer_connection(printer_id: str, current_user: dict = Depends(
 
 @api_router.get("/download-print-agent")
 async def download_print_agent():
-    """تحميل وسيط الطباعة المحلي"""
+    """تحميل وسيط الطباعة المحلي - ملف bat لويندوز"""
     from fastapi.responses import FileResponse
-    agent_path = ROOT_DIR / "static" / "maestro_print_agent.py"
+    agent_path = ROOT_DIR / "static" / "MaestroPrintAgent.bat"
     if not agent_path.exists():
         raise HTTPException(status_code=404, detail="ملف وسيط الطباعة غير موجود")
     return FileResponse(
         path=str(agent_path),
-        filename="maestro_print_agent.py",
+        filename="MaestroPrintAgent.bat",
         media_type="application/octet-stream"
     )
 

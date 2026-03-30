@@ -4892,7 +4892,7 @@ export default function Settings() {
                           className="border-primary text-primary"
                           onClick={() => {
                             window.open(`${API}/download-print-agent`, '_blank');
-                            toast.success(t('جاري تحميل وسيط الطباعة - شغله على جهاز نقطة البيع'));
+                            toast.success(t('جاري تحميل وسيط الطباعة - افتح الملف بضغطة واحدة ويشتغل تلقائياً'));
                           }}
                           data-testid="download-agent-btn"
                         >
