@@ -8035,7 +8035,11 @@ async def download_print_agent():
     return FileResponse(
         path=str(agent_path),
         filename="MaestroPrintAgent.bat",
-        media_type="application/octet-stream"
+        media_type="application/x-msdos-program",
+        headers={
+            "Content-Disposition": "attachment; filename=MaestroPrintAgent.bat",
+            "Content-Type": "application/x-msdos-program"
+        }
     )
 
 # ==================== SUPER ADMIN & TENANT MANAGEMENT ====================
