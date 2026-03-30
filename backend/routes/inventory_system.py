@@ -230,16 +230,18 @@ class PackagingMaterialResponse(BaseModel):
     name: str
     name_en: Optional[str] = None
     unit: str
-    quantity: float
-    min_quantity: float
-    cost_per_unit: float
+    quantity: float = 0.0
+    min_quantity: float = 0.0
+    cost_per_unit: float = 0.0
     total_value: float = 0.0
     category: Optional[str] = None
     total_received: float = 0.0
     transferred_to_branches: float = 0.0
     remaining_quantity: float = 0.0
-    last_updated: str
-    created_at: str
+    tenant_id: Optional[str] = None
+    last_updated: Optional[str] = None
+    updated_at: Optional[str] = None
+    created_at: Optional[str] = None
 
 # --- طلبات مواد التغليف من الفروع ---
 class PackagingRequestCreate(BaseModel):
@@ -2378,7 +2380,7 @@ async def receive_from_notification(notification_id: str):
 
 # ==================== مواد التغليف (الورقيات) ====================
 
-@router.get("/packaging-materials", response_model=List[PackagingMaterialResponse])
+@router.get("/packaging-materials")
 async def get_packaging_materials(
     category: Optional[str] = None,
     current_user: dict = Depends(get_current_user)
@@ -2395,7 +2397,8 @@ async def get_packaging_materials(
     
     materials = await db.packaging_materials.find(query, {"_id": 0}).to_list(500)
     
-    # حساب الكميات
+    # حساب الكميات وتنظيف البيانات
+    result = []
     for material in materials:
         total_received = material.get("total_received", material.get("quantity", 0))
         transferred = material.get("transferred_to_branches", 0)
@@ -2403,8 +2406,11 @@ async def get_packaging_materials(
         material["transferred_to_branches"] = transferred
         material["remaining_quantity"] = total_received - transferred
         material["total_value"] = material.get("quantity", 0) * material.get("cost_per_unit", 0)
+        result.append(material)
     
-    return materials
+    from fastapi.responses import JSONResponse
+    import json
+    return JSONResponse(content=json.loads(json.dumps(result, default=str)))
 
 @router.post("/packaging-materials")
 async def create_packaging_material(

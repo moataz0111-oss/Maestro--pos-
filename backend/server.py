@@ -9784,70 +9784,7 @@ class PackagingRequestCreate(BaseModel):
     priority: str = "normal"
     notes: Optional[str] = None
 
-# الحصول على مواد التغليف
-@api_router.get("/packaging-materials")
-async def get_packaging_materials(current_user: dict = Depends(get_current_user)):
-    """الحصول على جميع مواد التغليف"""
-    tenant_id = current_user.get("tenant_id")
-    if not tenant_id:
-        raise HTTPException(status_code=400, detail="Tenant ID required")
-    
-    materials = await db.packaging_materials.find({"tenant_id": tenant_id}).to_list(500)
-    for m in materials:
-        m["id"] = m.pop("_id", m.get("id"))
-    return materials
-
-# إضافة مادة تغليف جديدة
-@api_router.post("/packaging-materials")
-async def create_packaging_material(material: PackagingMaterialCreate, current_user: dict = Depends(get_current_user)):
-    """إضافة مادة تغليف جديدة"""
-    tenant_id = current_user.get("tenant_id")
-    if not tenant_id:
-        raise HTTPException(status_code=400, detail="Tenant ID required")
-    
-    material_doc = {
-        "id": str(uuid.uuid4()),
-        "tenant_id": tenant_id,
-        **material.dict(),
-        "total_received": material.quantity,
-        "transferred_to_branches": 0,
-        "remaining_quantity": material.quantity,
-        "total_value": material.quantity * material.cost_per_unit,
-        "created_at": datetime.now(timezone.utc).isoformat(),
-        "updated_at": datetime.now(timezone.utc).isoformat()
-    }
-    
-    await db.packaging_materials.insert_one(material_doc)
-    material_doc.pop("_id", None)
-    return material_doc
-
-# إضافة كمية لمادة تغليف
-@api_router.post("/packaging-materials/{material_id}/add-stock")
-async def add_packaging_stock(material_id: str, quantity: float, current_user: dict = Depends(get_current_user)):
-    """إضافة كمية لمادة تغليف موجودة"""
-    tenant_id = current_user.get("tenant_id")
-    
-    material = await db.packaging_materials.find_one({"id": material_id, "tenant_id": tenant_id})
-    if not material:
-        raise HTTPException(status_code=404, detail="مادة التغليف غير موجودة")
-    
-    new_quantity = _sn(material.get("quantity")) + quantity
-    total_received = material.get("total_received", 0) + quantity
-    
-    await db.packaging_materials.update_one(
-        {"id": material_id},
-        {
-            "$set": {
-                "quantity": new_quantity,
-                "total_received": total_received,
-                "remaining_quantity": new_quantity,
-                "total_value": new_quantity * material.get("cost_per_unit", 0),
-                "updated_at": datetime.now(timezone.utc).isoformat()
-            }
-        }
-    )
-    
-    return {"message": "تمت إضافة الكمية بنجاح", "new_quantity": new_quantity}
+# --- مواد التغليف (CRUD) محذوفة من هنا - موجودة في routes/inventory_system.py ---
 
 # الحصول على طلبات التغليف
 @api_router.get("/packaging-requests")
@@ -16135,7 +16072,7 @@ async def get_menu_link(request: Request, current_user: dict = Depends(get_curre
         base_url = f"{parsed.scheme}://{parsed.netloc}"
     else:
         # fallback للـ environment variable
-        base_url = os.environ.get('REACT_APP_BACKEND_URL', 'https://thermal-print-fix-5.preview.emergentagent.com')
+        base_url = os.environ.get('REACT_APP_BACKEND_URL', 'https://leaderboard-games.preview.emergentagent.com')
     
     menu_url = f"{base_url}/menu/{tenant.get('menu_slug', tenant_id)}"
     
@@ -17722,16 +17659,22 @@ async def set_sales_target(
     tenant_id = current_user.get("tenant_id", "default")
     today = datetime.now(timezone.utc).strftime('%Y-%m-%d')
     
+    motivational_message = body.get("motivational_message", "").strip()
+    
+    update_data = {
+        "tenant_id": tenant_id,
+        "date": today,
+        "target_amount": float(target_amount),
+        "set_by": current_user.get("id"),
+        "set_by_name": current_user.get("full_name") or current_user.get("username"),
+        "updated_at": datetime.now(timezone.utc).isoformat()
+    }
+    if motivational_message:
+        update_data["motivational_message"] = motivational_message
+    
     await db.sales_targets.update_one(
         {"tenant_id": tenant_id, "date": today},
-        {"$set": {
-            "tenant_id": tenant_id,
-            "date": today,
-            "target_amount": float(target_amount),
-            "set_by": current_user.get("id"),
-            "set_by_name": current_user.get("full_name") or current_user.get("username"),
-            "updated_at": datetime.now(timezone.utc).isoformat()
-        }},
+        {"$set": update_data},
         upsert=True
     )
     
@@ -17782,6 +17725,7 @@ async def get_sales_target(
         "progress": round(progress, 1),
         "achieved": achieved,
         "set_by_name": target.get("set_by_name"),
+        "motivational_message": target.get("motivational_message", ""),
         "date": today
     }
 

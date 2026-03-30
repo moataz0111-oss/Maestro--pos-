@@ -233,6 +233,7 @@ export default function Dashboard() {
   const [showTargetCelebration, setShowTargetCelebration] = useState(false);
   const [targetCelebrated, setTargetCelebrated] = useState(false);
   const [targetInput, setTargetInput] = useState('');
+  const [targetMessage, setTargetMessage] = useState('');
   const [showTargetDialog, setShowTargetDialog] = useState(false);
   const [delayedStats, setDelayedStats] = useState(null);
   const [showDelayedAlert, setShowDelayedAlert] = useState(false);
@@ -1201,10 +1202,11 @@ export default function Dashboard() {
       return;
     }
     try {
-      await axios.post(`${API}/sales-target`, { target_amount: amount });
+      await axios.post(`${API}/sales-target`, { target_amount: amount, motivational_message: targetMessage });
       toast.success(t('تم تحديد هدف المبيعات بنجاح'));
       setShowTargetDialog(false);
       setTargetInput('');
+      setTargetMessage('');
       setTargetCelebrated(false);
       // إعادة جلب الهدف
       const tRes = await axios.get(`${API}/sales-target`);
@@ -1659,6 +1661,19 @@ export default function Dashboard() {
                 dir="ltr"
                 data-testid="target-amount-input"
               />
+            </div>
+            <div>
+              <Label className="text-foreground">{t('الرسالة التحفيزية')}</Label>
+              <Input
+                type="text"
+                placeholder={t('يالله نحقق الهدف!')}
+                value={targetMessage}
+                onChange={(e) => setTargetMessage(e.target.value)}
+                className="mt-1 bg-background border-input"
+                dir="rtl"
+                data-testid="target-message-input"
+              />
+              <p className="text-xs text-muted-foreground mt-1">{t('اتركه فارغاً لاستخدام الرسالة الافتراضية')}</p>
             </div>
             <p className="text-sm text-muted-foreground text-center">
               {t('هذا الهدف سيظهر لجميع الكاشيرية اليوم')}
@@ -2202,7 +2217,7 @@ export default function Dashboard() {
             {isManagerRole && (
               <Button 
                 size="sm" variant="outline" className="text-xs h-7"
-                onClick={() => { setTargetInput(String(salesTarget.target_amount || '')); setShowTargetDialog(true); }}
+                onClick={() => { setTargetInput(String(salesTarget.target_amount || '')); setTargetMessage(salesTarget.motivational_message || ''); setShowTargetDialog(true); }}
                 data-testid="edit-target-btn"
               >
                 {t('تعديل الهدف')}
@@ -2253,7 +2268,7 @@ export default function Dashboard() {
                   ? t('قريب جداً! استمر!') + ' 💪'
                   : salesTarget.progress >= 50 
                   ? t('في منتصف الطريق! أحسنت') + ' 👏'
-                  : t('يالله نحقق الهدف!') + ' 🚀'}
+                  : (salesTarget.motivational_message || t('يالله نحقق الهدف!')) + ' 🚀'}
               </p>
             </div>
           </CardContent>
