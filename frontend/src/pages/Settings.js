@@ -6,6 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { formatPrice, setCurrency } from '../utils/currency';
 import { useTranslation } from '../hooks/useTranslation';
+import { checkAgentStatus, sendTestPrint, checkPrinterOnline } from '../utils/printService';
 import { 
   playClick, 
   playSuccess, 
@@ -100,7 +101,8 @@ import {
   Calendar,
   Gift,
   Ticket,
-  Filter
+  Filter,
+  Download
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -431,6 +433,7 @@ export default function Settings() {
   const [editPrinterDialogOpen, setEditPrinterDialogOpen] = useState(false);
   const [printerTestStatus, setPrinterTestStatus] = useState({}); // حالة اختبار الطابعات
   const [printerTypes, setPrinterTypes] = useState([]);
+  const [printAgentOnline, setPrintAgentOnline] = useState(false);
   const [categoryForm, setCategoryForm] = useState({
     name: '', name_en: '', icon: '', image: '', color: '#D4AF37', sort_order: 0, kitchen_section_id: ''
   });
@@ -513,6 +516,9 @@ export default function Settings() {
       setPushPermission(getNotificationPermission());
       setPushEnabled(getNotificationPermission() === 'granted');
     }
+    
+    // فحص حالة وسيط الطباعة المحلي
+    checkAgentStatus().then(online => setPrintAgentOnline(online));
   }, []);
 
   // دالة حساب التكلفة مع تحويل الوحدات (غرام/كغم/قطعة/مل/لتر)
@@ -1171,58 +1177,94 @@ export default function Settings() {
     const printer = printers.find(p => p.id === printerId);
     if (!printer) return;
     
-    // إرسال صفحة طباعة تجريبية عبر المتصفح مباشرة
-    // لأن السيرفر في الـ cloud لا يستطيع الوصول للطابعات المحلية
-    try {
-      const printWindow = window.open('', '_blank', 'width=300,height=400');
-      if (!printWindow) {
-        toast.error(t('يرجى السماح بفتح النوافذ المنبثقة'));
-        return;
+    setPrinterTestStatus(prev => ({ ...prev, [printerId]: 'testing' }));
+    
+    // محاولة الطباعة عبر وسيط الطباعة المحلي (مباشر لـ IP الطابعة)
+    const agentOnline = await checkAgentStatus();
+    setPrintAgentOnline(agentOnline);
+    
+    if (agentOnline) {
+      try {
+        const branchName = branches.find(b => b.id === printer.branch_id)?.name || '';
+        const result = await sendTestPrint(printer, branchName);
+        
+        if (result.success) {
+          toast.success(t('تم إرسال صفحة اختبار للطابعة مباشرة') + ` (${printer.name})`);
+          setPrinterTestStatus(prev => ({ ...prev, [printerId]: 'success' }));
+          // تحديث حالة الطابعة كمتصلة
+          await axios.put(`${API}/printers/${printerId}`, { is_online: true }, {
+            headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+          }).catch(() => {});
+        } else {
+          toast.error(t('فشل الطباعة المباشرة') + `: ${result.message}`);
+          setPrinterTestStatus(prev => ({ ...prev, [printerId]: 'error' }));
+        }
+      } catch (error) {
+        toast.error(t('خطأ في الاتصال بوسيط الطباعة'));
+        setPrinterTestStatus(prev => ({ ...prev, [printerId]: 'error' }));
       }
-      
-      const now = new Date();
-      printWindow.document.write(`
-        <html dir="rtl">
-        <head>
-          <meta charset="UTF-8">
-          <title>اختبار الطابعة</title>
-          <style>
-            body { font-family: monospace, Arial; text-align: center; padding: 20px; font-size: 14px; }
-            .line { border-top: 1px dashed #000; margin: 10px 0; }
-            h2 { margin: 5px 0; }
-          </style>
-        </head>
-        <body>
-          <h2>*** اختبار الطابعة ***</h2>
-          <div class="line"></div>
-          <p><strong>${printer.name || 'طابعة'}</strong></p>
-          <p>IP: ${printer.ip_address}:${printer.port || 9100}</p>
-          <p>الفرع: ${branches.find(b => b.id === printer.branch_id)?.name || '-'}</p>
-          <div class="line"></div>
-          <p>التاريخ: ${now.toLocaleDateString('ar-IQ')}</p>
-          <p>الوقت: ${now.toLocaleTimeString('ar-IQ')}</p>
-          <div class="line"></div>
-          <p>الطباعة تعمل بنجاح!</p>
-          <p>================================</p>
-        </body>
-        </html>
-      `);
-      printWindow.document.close();
-      printWindow.focus();
-      setTimeout(() => {
-        printWindow.print();
-        setTimeout(() => printWindow.close(), 1000);
-      }, 300);
-      
-      toast.success(t('تم إرسال صفحة اختبار للطابعة'));
-      // تحديث حالة الطابعة كمتصلة (لأن المستخدم اختبرها)
-      await axios.put(`${API}/printers/${printerId}`, { is_online: true }, {
-        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
-      }).catch(() => {});
-      
-    } catch (error) {
-      toast.error(t('فشل في إرسال صفحة الاختبار'));
+    } else {
+      // الرجوع للطباعة عبر المتصفح إذا الوسيط غير متوفر
+      try {
+        const printWindow = window.open('', '_blank', 'width=300,height=400');
+        if (!printWindow) {
+          toast.error(t('يرجى السماح بفتح النوافذ المنبثقة'));
+          setPrinterTestStatus(prev => ({ ...prev, [printerId]: 'error' }));
+          return;
+        }
+        
+        const now = new Date();
+        printWindow.document.write(`
+          <html dir="rtl">
+          <head>
+            <meta charset="UTF-8">
+            <title>اختبار الطابعة</title>
+            <style>
+              body { font-family: monospace, Arial; text-align: center; padding: 20px; font-size: 14px; }
+              .line { border-top: 1px dashed #000; margin: 10px 0; }
+              h2 { margin: 5px 0; }
+              .warn { background: #fff3cd; padding: 8px; border-radius: 5px; font-size: 12px; margin-top: 10px; }
+            </style>
+          </head>
+          <body>
+            <h2>*** اختبار الطابعة ***</h2>
+            <div class="line"></div>
+            <p><strong>${printer.name || 'طابعة'}</strong></p>
+            <p>IP: ${printer.ip_address}:${printer.port || 9100}</p>
+            <p>الفرع: ${branches.find(b => b.id === printer.branch_id)?.name || '-'}</p>
+            <div class="line"></div>
+            <p>التاريخ: ${now.toLocaleDateString('ar-IQ')}</p>
+            <p>الوقت: ${now.toLocaleTimeString('ar-IQ')}</p>
+            <div class="line"></div>
+            <p>الطباعة تعمل بنجاح!</p>
+            <p>================================</p>
+            <div class="warn">تنبيه: وسيط الطباعة غير متصل - الطباعة عبر المتصفح فقط<br/>قم بتشغيل وسيط الطباعة للطباعة المباشرة</div>
+          </body>
+          </html>
+        `);
+        printWindow.document.close();
+        printWindow.focus();
+        setTimeout(() => {
+          printWindow.print();
+          setTimeout(() => printWindow.close(), 1000);
+        }, 300);
+        
+        toast.success(t('تم إرسال صفحة اختبار عبر المتصفح (وسيط الطباعة غير متصل)'));
+        setPrinterTestStatus(prev => ({ ...prev, [printerId]: 'success' }));
+        await axios.put(`${API}/printers/${printerId}`, { is_online: true }, {
+          headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+        }).catch(() => {});
+        
+      } catch (error) {
+        toast.error(t('فشل في إرسال صفحة الاختبار'));
+        setPrinterTestStatus(prev => ({ ...prev, [printerId]: 'error' }));
+      }
     }
+    
+    // Reset status after 5 seconds
+    setTimeout(() => {
+      setPrinterTestStatus(prev => ({ ...prev, [printerId]: null }));
+    }, 5000);
   };
 
   const handleAddEmail = async () => {
@@ -4822,6 +4864,44 @@ export default function Settings() {
                   </Dialog>
                 </CardHeader>
                 <CardContent>
+                  {/* حالة وسيط الطباعة المحلي */}
+                  <div className={`flex items-center justify-between p-3 rounded-lg mb-4 ${printAgentOnline ? 'bg-green-500/10 border border-green-500/30' : 'bg-orange-500/10 border border-orange-500/30'}`}>
+                    <div className="flex items-center gap-2">
+                      <div className={`w-2.5 h-2.5 rounded-full ${printAgentOnline ? 'bg-green-500 animate-pulse' : 'bg-orange-500'}`}></div>
+                      <span className={`text-sm font-medium ${printAgentOnline ? 'text-green-500' : 'text-orange-500'}`}>
+                        {printAgentOnline ? t('وسيط الطباعة متصل - الطباعة المباشرة مفعلة') : t('وسيط الطباعة غير متصل - يتطلب تشغيل الوسيط للطباعة المباشرة')}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={async () => {
+                          const online = await checkAgentStatus();
+                          setPrintAgentOnline(online);
+                          toast[online ? 'success' : 'error'](online ? t('وسيط الطباعة متصل') : t('وسيط الطباعة غير متصل'));
+                        }}
+                        data-testid="check-agent-status-btn"
+                      >
+                        <RefreshCw className="h-3.5 w-3.5 ml-1" />{t('فحص')}
+                      </Button>
+                      {!printAgentOnline && (
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          className="border-primary text-primary"
+                          onClick={() => {
+                            window.open(`${API}/download-print-agent`, '_blank');
+                            toast.success(t('جاري تحميل وسيط الطباعة - شغله على جهاز نقطة البيع'));
+                          }}
+                          data-testid="download-agent-btn"
+                        >
+                          <Download className="h-3.5 w-3.5 ml-1" />{t('تحميل الوسيط')}
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                  
                   {printers.length === 0 ? (
                     <p className="text-center text-muted-foreground py-8">{t('لا توجد طابعات مضافة')}</p>
                   ) : (

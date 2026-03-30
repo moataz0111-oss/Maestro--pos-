@@ -9,6 +9,7 @@ import { useTranslation } from '../hooks/useTranslation';
 import { formatPrice } from '../utils/currency';
 import { playClick, playSuccess } from '../utils/sound';
 import { useOrderNotifications, sendOrderNotification } from '../utils/orderNotifications';
+import { checkAgentStatus, printOrderToAllPrinters, routeOrderToPrinters, sendReceiptPrint } from '../utils/printService';
 import offlineStorage from '../lib/offlineStorage';
 import db, { STORES } from '../lib/offlineDB';
 import { QRCodeSVG } from 'qrcode.react';
@@ -160,6 +161,10 @@ export default function POS() {
   const [showCustomerInfo, setShowCustomerInfo] = useState(false);
   const [printDialogOpen, setPrintDialogOpen] = useState(false);
   const [lastOrderNumber, setLastOrderNumber] = useState(null); // آخر رقم فاتورة
+  
+  // الطابعات المتعددة
+  const [availablePrinters, setAvailablePrinters] = useState([]);
+  const [printAgentOnline, setPrintAgentOnline] = useState(false);
   
   // إعدادات الفاتورة والمطعم والنظام
   const [invoiceSettings, setInvoiceSettings] = useState({});
@@ -429,7 +434,7 @@ export default function POS() {
         setLoading(false);
         return;
       }
-      const [catRes, prodRes, appsRes, shiftRes, invoiceRes, restaurantRes, sysInvoiceRes, loginBgRes] = await Promise.all([
+      const [catRes, prodRes, appsRes, shiftRes, invoiceRes, restaurantRes, sysInvoiceRes, loginBgRes, printersRes] = await Promise.all([
         axios.get(`${API}/categories`),
         axios.get(`${API}/products`),
         axios.get(`${API}/delivery-apps`),
@@ -437,12 +442,14 @@ export default function POS() {
         axios.get(`${API}/tenant/invoice-settings`).catch(() => ({ data: {} })),
         axios.get(`${API}/restaurant-settings`).catch(() => ({ data: {} })),
         axios.get(`${API}/system/invoice-settings`).catch(() => ({ data: {} })),
-        axios.get(`${API}/login-backgrounds`).catch(() => ({ data: {} }))
+        axios.get(`${API}/login-backgrounds`).catch(() => ({ data: {} })),
+        axios.get(`${API}/printers`).catch(() => ({ data: [] }))
       ]);
 
       setCategories(catRes.data);
       setProducts(prodRes.data);
       setDeliveryApps(appsRes.data);
+      setAvailablePrinters(printersRes.data || []);
       const invoiceData = invoiceRes.data || {};
       const restaurantData = restaurantRes.data || {};
       setInvoiceSettings(invoiceData);
@@ -658,15 +665,17 @@ export default function POS() {
       }
       
       // في وضع Online - جلب من API
-      const [catRes, prodRes, tablesRes] = await Promise.all([
+      const [catRes, prodRes, tablesRes, printersRes] = await Promise.all([
         axios.get(`${API}/categories`),
         axios.get(`${API}/products`),
-        axios.get(`${API}/tables`, { params: activeBranchId ? { branch_id: activeBranchId } : {} }).catch(() => ({ data: [] }))
+        axios.get(`${API}/tables`, { params: activeBranchId ? { branch_id: activeBranchId } : {} }).catch(() => ({ data: [] })),
+        axios.get(`${API}/printers`).catch(() => ({ data: [] }))
       ]);
 
       setCategories(catRes.data);
       setProducts(prodRes.data);
       setTables(tablesRes.data);
+      setAvailablePrinters(printersRes.data || []);
       
       // جلب الطلبات المعلقة
       await fetchPendingOrders();
@@ -1841,9 +1850,51 @@ export default function POS() {
       }
       
       playSuccess();
-      toast.success(`✅ ${t('تم حفظ الطلب')} #${savedOrder.order_number}`);
+      toast.success(`${t('تم حفظ الطلب')} #${savedOrder.order_number}`);
       
-      // فتح نافذة الطباعة
+      // طباعة مباشرة لكل الطابعات المتعددة (إذا وسيط الطباعة متصل)
+      if (availablePrinters.length > 0) {
+        try {
+          const agentOk = await checkAgentStatus();
+          setPrintAgentOnline(agentOk);
+          if (agentOk) {
+            const restaurantName = restaurantSettings?.name || invoiceSettings?.restaurant_name || '';
+            const orderForPrint = {
+              order_number: savedOrder.order_number,
+              order_type: orderType,
+              customer_name: customerName || '',
+              table_number: orderType === 'dine_in' ? selectedTable : '',
+              discount: discount || 0
+            };
+            const itemsForPrint = cart.map(item => ({
+              product_id: item.product_id || item.id,
+              product_name: item.product_name || item.name,
+              name: item.product_name || item.name,
+              price: item.price,
+              quantity: item.quantity,
+              notes: item.notes || '',
+              extras: item.selectedExtras || []
+            }));
+            
+            const result = await printOrderToAllPrinters(
+              orderForPrint, itemsForPrint, products, availablePrinters, restaurantName
+            );
+            
+            if (result.success) {
+              toast.success(t('تم الطباعة على جميع الطابعات'));
+            } else if (result.results && result.results.length > 0) {
+              const failed = result.results.filter(r => !r.success);
+              const succeeded = result.results.filter(r => r.success);
+              if (succeeded.length > 0) toast.success(`${t('تم الطباعة على')} ${succeeded.length} ${t('طابعات')}`);
+              failed.forEach(f => toast.error(`${t('فشل الطباعة على')} ${f.printer_name}: ${f.message}`));
+            }
+          }
+        } catch (printError) {
+          console.log('Multi-printer print error:', printError);
+        }
+      }
+      
+      // فتح نافذة الطباعة (للكاشير USB أو كاحتياط)
       setPrintDialogOpen(true);
       
     } catch (error) {

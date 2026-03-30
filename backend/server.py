@@ -8025,6 +8025,19 @@ async def test_printer_connection(printer_id: str, current_user: dict = Depends(
         )
         return {"status": "error", "message": f"خطأ في الاتصال: {str(e)}"}
 
+@api_router.get("/download-print-agent")
+async def download_print_agent():
+    """تحميل وسيط الطباعة المحلي"""
+    from fastapi.responses import FileResponse
+    agent_path = ROOT_DIR / "static" / "maestro_print_agent.py"
+    if not agent_path.exists():
+        raise HTTPException(status_code=404, detail="ملف وسيط الطباعة غير موجود")
+    return FileResponse(
+        path=str(agent_path),
+        filename="maestro_print_agent.py",
+        media_type="application/octet-stream"
+    )
+
 # ==================== SUPER ADMIN & TENANT MANAGEMENT ====================
 # نظام إدارة المستأجرين - لوحة تحكم المالك الرئيسي
 
