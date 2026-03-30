@@ -73,6 +73,7 @@ import {
   Medal
 } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
+import TargetCelebration from '../components/TargetCelebration';
 import { toast } from 'sonner';
 import {
   Dialog,
@@ -226,6 +227,13 @@ export default function Dashboard() {
   // لوحة تنافس المبيعات
   const [leaderboard, setLeaderboard] = useState([]);
   const [leaderboardPeriod, setLeaderboardPeriod] = useState('today');
+  
+  // هدف المبيعات اليومي
+  const [salesTarget, setSalesTarget] = useState(null);
+  const [showTargetCelebration, setShowTargetCelebration] = useState(false);
+  const [targetCelebrated, setTargetCelebrated] = useState(false);
+  const [targetInput, setTargetInput] = useState('');
+  const [showTargetDialog, setShowTargetDialog] = useState(false);
   const [delayedStats, setDelayedStats] = useState(null);
   const [showDelayedAlert, setShowDelayedAlert] = useState(false);
   const delayedAudioRef = useRef(null);
@@ -707,6 +715,19 @@ export default function Dashboard() {
       } catch (lbErr) {
         console.log('Leaderboard not available');
       }
+      
+      // جلب هدف المبيعات اليومي
+      try {
+        const tRes = await axios.get(`${API}/sales-target`);
+        setSalesTarget(tRes.data);
+        // إظهار الاحتفال إذا تحقق الهدف لأول مرة
+        if (tRes.data.achieved && !targetCelebrated) {
+          setShowTargetCelebration(true);
+          setTargetCelebrated(true);
+        }
+      } catch (tErr) {
+        console.log('Sales target not available');
+      }
     } catch (error) {
       console.error('Failed to fetch data:', error);
       // محاولة استخدام البيانات المحلية عند الخطأ
@@ -1172,6 +1193,28 @@ export default function Dashboard() {
     }
   };
 
+  // حفظ هدف المبيعات اليومي
+  const handleSetTarget = async () => {
+    const amount = parseFloat(targetInput);
+    if (!amount || amount <= 0) {
+      toast.error(t('يجب إدخال قيمة صحيحة للهدف'));
+      return;
+    }
+    try {
+      await axios.post(`${API}/sales-target`, { target_amount: amount });
+      toast.success(t('تم تحديد هدف المبيعات بنجاح'));
+      setShowTargetDialog(false);
+      setTargetInput('');
+      setTargetCelebrated(false);
+      // إعادة جلب الهدف
+      const tRes = await axios.get(`${API}/sales-target`);
+      setSalesTarget(tRes.data);
+    } catch (err) {
+      toast.error(err.response?.data?.detail || t('فشل في تحديد الهدف'));
+    }
+  };
+
+
   // طباعة التقرير
   const handlePrintReport = () => {
     const printContent = printRef.current;
@@ -1589,7 +1632,52 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen bg-background" data-testid="dashboard">
-      {/* شريط تنبيه وضع المعاينة - يظهر للـ Super Admin أو Admin عند معاينة حساب موظف */}
+      {/* احتفال تحقيق الهدف */}
+      <TargetCelebration 
+        show={showTargetCelebration} 
+        onComplete={() => setShowTargetCelebration(false)} 
+      />
+      
+      {/* Dialog تحديد هدف المبيعات */}
+      <Dialog open={showTargetDialog} onOpenChange={setShowTargetDialog}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="font-cairo text-foreground flex items-center gap-2">
+              <span className="text-2xl">🎯</span>
+              {t('تحديد هدف المبيعات اليومي')}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div>
+              <Label className="text-foreground">{t('قيمة الهدف')} ({t('IQD')})</Label>
+              <Input
+                type="number"
+                placeholder={t('مثال: 100000')}
+                value={targetInput}
+                onChange={(e) => setTargetInput(e.target.value)}
+                className="text-lg font-bold mt-1 bg-background border-input"
+                dir="ltr"
+                data-testid="target-amount-input"
+              />
+            </div>
+            <p className="text-sm text-muted-foreground text-center">
+              {t('هذا الهدف سيظهر لجميع الكاشيرية اليوم')}
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <Button variant="outline" className="flex-1" onClick={() => setShowTargetDialog(false)}>
+              {t('إلغاء')}
+            </Button>
+            <Button 
+              className="flex-1 bg-yellow-500 hover:bg-yellow-600 text-black font-bold"
+              onClick={handleSetTarget}
+              data-testid="save-target-btn"
+            >
+              🎯 {t('تحديد الهدف')}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>      {/* شريط تنبيه وضع المعاينة - يظهر للـ Super Admin أو Admin عند معاينة حساب موظف */}
       {isImpersonating && (
         <div className="bg-amber-500 text-black px-4 py-2 text-center font-medium flex items-center justify-center gap-4 sticky top-0 z-[100]">
           <span className="flex items-center gap-2">
@@ -2092,6 +2180,103 @@ export default function Dashboard() {
             ))}
           </div>
         </section>
+        )}
+
+        {/* هدف المبيعات اليومي */}
+        {salesTarget && salesTarget.has_target && (
+        <Card className="border-border/50 bg-card overflow-hidden" data-testid="sales-target-card">
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-lg font-cairo text-foreground flex items-center gap-2">
+              <div className="relative">
+                <div className={`w-8 h-8 rounded-full border-2 flex items-center justify-center ${salesTarget.achieved ? 'border-yellow-500 bg-yellow-500/20' : 'border-primary bg-primary/10'}`}>
+                  <span className="text-sm">🎯</span>
+                </div>
+                {salesTarget.achieved && (
+                  <div className="absolute -top-1 -right-1 w-4 h-4 bg-green-500 rounded-full flex items-center justify-center">
+                    <Check className="h-3 w-3 text-white" />
+                  </div>
+                )}
+              </div>
+              {t('هدف المبيعات اليومي')}
+            </CardTitle>
+            {isManagerRole && (
+              <Button 
+                size="sm" variant="outline" className="text-xs h-7"
+                onClick={() => { setTargetInput(String(salesTarget.target_amount || '')); setShowTargetDialog(true); }}
+                data-testid="edit-target-btn"
+              >
+                {t('تعديل الهدف')}
+              </Button>
+            )}
+          </CardHeader>
+          <CardContent className="pt-0">
+            {/* شريط التقدم */}
+            <div className="space-y-3">
+              <div className="flex justify-between items-end">
+                <div>
+                  <p className="text-2xl font-bold text-foreground">{formatPrice(salesTarget.current_sales)}</p>
+                  <p className="text-xs text-muted-foreground">{t('المبيعات الحالية')}</p>
+                </div>
+                <div className="text-left">
+                  <p className="text-lg font-bold text-muted-foreground">{formatPrice(salesTarget.target_amount)}</p>
+                  <p className="text-xs text-muted-foreground">{t('الهدف')}</p>
+                </div>
+              </div>
+              
+              {/* Progress Bar */}
+              <div className="relative h-6 bg-muted rounded-full overflow-hidden">
+                <div 
+                  className={`h-full rounded-full transition-all duration-1000 ease-out ${
+                    salesTarget.achieved 
+                      ? 'bg-gradient-to-r from-yellow-500 to-green-500' 
+                      : salesTarget.progress >= 75 
+                      ? 'bg-gradient-to-r from-blue-500 to-green-500'
+                      : salesTarget.progress >= 50
+                      ? 'bg-gradient-to-r from-blue-500 to-blue-400'
+                      : 'bg-blue-500'
+                  }`}
+                  style={{ width: `${Math.min(salesTarget.progress, 100)}%` }}
+                  data-testid="target-progress-bar"
+                />
+                <span className="absolute inset-0 flex items-center justify-center text-xs font-bold text-white drop-shadow-md">
+                  {salesTarget.progress}%
+                </span>
+              </div>
+              
+              {/* رسالة تحفيزية */}
+              <p className={`text-center text-sm font-bold ${
+                salesTarget.achieved ? 'text-yellow-500' : salesTarget.progress >= 75 ? 'text-green-500' : salesTarget.progress >= 50 ? 'text-blue-500' : 'text-muted-foreground'
+              }`}>
+                {salesTarget.achieved 
+                  ? '🎯 ' + t('تم تحقيق الهدف! ممتاز!') + ' 🎯'
+                  : salesTarget.progress >= 75 
+                  ? t('قريب جداً! استمر!') + ' 💪'
+                  : salesTarget.progress >= 50 
+                  ? t('في منتصف الطريق! أحسنت') + ' 👏'
+                  : t('يالله نحقق الهدف!') + ' 🚀'}
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+        )}
+
+        {/* زر إعداد هدف جديد - للمدراء فقط إذا لم يوجد هدف */}
+        {isManagerRole && (!salesTarget || !salesTarget.has_target) && (
+          <Card 
+            className="border-dashed border-2 border-primary/30 bg-primary/5 cursor-pointer hover:bg-primary/10 transition-colors"
+            onClick={() => setShowTargetDialog(true)}
+            data-testid="set-target-card"
+          >
+            <CardContent className="flex items-center justify-center gap-3 py-8">
+              <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
+                <span className="text-xl">🎯</span>
+              </div>
+              <div>
+                <p className="font-bold text-foreground">{t('حدد هدف المبيعات اليومي')}</p>
+                <p className="text-sm text-muted-foreground">{t('حفّز فريقك لتحقيق أهداف المبيعات')}</p>
+              </div>
+            </CardContent>
+          </Card>
         )}
 
         {/* لوحة تنافس المبيعات */}
