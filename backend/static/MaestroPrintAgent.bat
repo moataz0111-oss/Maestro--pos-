@@ -4,256 +4,270 @@ title Maestro EGP - Print Agent
 color 0A
 
 echo.
-echo  ══════════════════════════════════════════
-echo  ║   Maestro EGP - وسيط الطباعة المحلي  ║
-echo  ║          الإصدار: 1.0.0               ║
-echo  ══════════════════════════════════════════
+echo  ══════════════════════════════════════
+echo  ║  Maestro EGP - Print Agent v1.1   ║
+echo  ══════════════════════════════════════
 echo.
 
 :: Check if already running
-netstat -an | findstr ":9999 " | findstr "LISTENING" >nul 2>&1
+netstat -an 2>nul | findstr ":9999 " | findstr "LISTENING" >nul 2>&1
 if %errorlevel%==0 (
-    echo  [!] وسيط الطباعة يعمل بالفعل على المنفذ 9999
-    echo  [!] أغلق النافذة الأخرى أولاً
+    echo  [!] Agent already running on port 9999
+    echo  [!] Close the other window first
     pause
     exit /b
 )
 
-:: Ask to add to Windows startup (only if not already there)
+:: Auto-start setup
 if not exist "%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\MaestroPrintAgent.bat" (
-    echo.
-    echo  هل تريد تشغيل الوسيط تلقائياً عند بدء ويندوز؟
-    echo  [1] نعم - تشغيل تلقائي ^(موصى به^)
-    echo  [2] لا - تشغيل يدوي فقط
-    echo.
-    set /p choice="  اختيارك (1 أو 2): "
+    echo  Auto-start with Windows?
+    echo  [1] Yes (recommended)
+    echo  [2] No
+    set /p choice="  Choice (1 or 2): "
     if "%choice%"=="1" (
         copy "%~f0" "%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\MaestroPrintAgent.bat" >nul 2>&1
-        echo  [✓] تمت إضافة الوسيط للتشغيل التلقائي
+        echo  [OK] Added to Windows startup
     )
+    echo.
 )
 
-echo.
-echo  ══════════════════════════════════════════
-echo  ║  جاري التشغيل على المنفذ 9999...      ║
-echo  ║  لا تغلق هذه النافذة أثناء العمل!     ║
-echo  ══════════════════════════════════════════
-echo.
+:: Write PowerShell script to temp file
+set "PS_SCRIPT=%TEMP%\maestro_print_agent.ps1"
 
-powershell -ExecutionPolicy Bypass -NoProfile -Command ^
-$ErrorActionPreference = 'SilentlyContinue'; ^
-$ESC = [byte]0x1b; ^
-$GS = [byte]0x1d; ^
-$LF = [byte]0x0a; ^
-function Send-ToPrinter($ip, $port, [byte[]]$data) { ^
-    try { ^
-        $client = New-Object System.Net.Sockets.TcpClient; ^
-        $client.Connect($ip, [int]$port); ^
-        $stream = $client.GetStream(); ^
-        $stream.Write($data, 0, $data.Length); ^
-        $stream.Flush(); ^
-        Start-Sleep -Milliseconds 500; ^
-        $stream.Close(); ^
-        $client.Close(); ^
-        return @{success=$true; message='OK'}; ^
-    } catch { ^
-        return @{success=$false; message=$_.Exception.Message}; ^
-    } ^
-}; ^
-function Build-TestPage($name, $ip, $port) { ^
-    $enc = [System.Text.Encoding]::UTF8; ^
-    $now = Get-Date -Format 'yyyy/MM/dd HH:mm:ss'; ^
-    $lines = @(); ^
-    $lines += [byte[]]@($ESC, 0x40); ^
-    $lines += [byte[]]@($ESC, 0x61, 0x01); ^
-    $lines += [byte[]]@($ESC, 0x45, 0x01); ^
-    $lines += [byte[]]@($ESC, 0x21, 0x10); ^
-    $lines += $enc.GetBytes('*** Test Print ***'); ^
-    $lines += [byte[]]@($LF); ^
-    $lines += [byte[]]@($ESC, 0x21, 0x00); ^
-    $lines += [byte[]]@($ESC, 0x45, 0x00); ^
-    $lines += $enc.GetBytes('--------------------------------'); ^
-    $lines += [byte[]]@($LF); ^
-    $lines += [byte[]]@($ESC, 0x61, 0x02); ^
-    $lines += $enc.GetBytes($name); ^
-    $lines += [byte[]]@($LF); ^
-    $lines += $enc.GetBytes('IP: ' + $ip + ':' + $port); ^
-    $lines += [byte[]]@($LF); ^
-    $lines += $enc.GetBytes('--------------------------------'); ^
-    $lines += [byte[]]@($LF); ^
-    $lines += $enc.GetBytes($now); ^
-    $lines += [byte[]]@($LF); ^
-    $lines += $enc.GetBytes('--------------------------------'); ^
-    $lines += [byte[]]@($LF); ^
-    $lines += [byte[]]@($ESC, 0x61, 0x01); ^
-    $lines += [byte[]]@($ESC, 0x45, 0x01); ^
-    $lines += $enc.GetBytes('Print OK!'); ^
-    $lines += [byte[]]@($LF); ^
-    $lines += [byte[]]@($ESC, 0x45, 0x00); ^
-    $lines += $enc.GetBytes('Maestro EGP v1.0'); ^
-    $lines += [byte[]]@($LF, $LF, $LF, $LF, $LF); ^
-    $lines += [byte[]]@($GS, 0x56, 0x42, 0x00); ^
-    $all = [System.Collections.Generic.List[byte]]::new(); ^
-    foreach ($b in $lines) { if ($b -is [byte[]]) { $all.AddRange($b) } else { $all.Add($b) } }; ^
-    return $all.ToArray(); ^
-}; ^
-function Build-Receipt($orderJson, $configJson) { ^
-    $enc = [System.Text.Encoding]::UTF8; ^
-    $order = $orderJson; ^
-    $showPrices = $configJson.show_prices -ne $false; ^
-    $all = [System.Collections.Generic.List[byte]]::new(); ^
-    $all.AddRange([byte[]]@($ESC, 0x40)); ^
-    $all.AddRange([byte[]]@($ESC, 0x61, 0x01)); ^
-    if ($order.restaurant_name) { ^
-        $all.AddRange([byte[]]@($ESC, 0x45, 0x01)); ^
-        $all.AddRange([byte[]]@($ESC, 0x21, 0x10)); ^
-        $all.AddRange($enc.GetBytes($order.restaurant_name)); ^
-        $all.AddRange([byte[]]@($LF)); ^
-        $all.AddRange([byte[]]@($ESC, 0x21, 0x00)); ^
-        $all.AddRange([byte[]]@($ESC, 0x45, 0x00)); ^
-    }; ^
-    $sep = $enc.GetBytes('--------------------------------'); ^
-    $all.AddRange($sep); $all.Add($LF); ^
-    $all.AddRange([byte[]]@($ESC, 0x61, 0x02)); ^
-    if ($order.order_number) { ^
-        $all.AddRange([byte[]]@($ESC, 0x45, 0x01)); ^
-        $all.AddRange($enc.GetBytes('#' + $order.order_number)); ^
-        $all.Add($LF); ^
-        $all.AddRange([byte[]]@($ESC, 0x45, 0x00)); ^
-    }; ^
-    $all.AddRange($enc.GetBytes((Get-Date -Format 'yyyy/MM/dd HH:mm'))); ^
-    $all.Add($LF); ^
-    if ($order.customer_name) { $all.AddRange($enc.GetBytes($order.customer_name)); $all.Add($LF); }; ^
-    $all.AddRange($sep); $all.Add($LF); ^
-    foreach ($item in $order.items) { ^
-        $n = if ($item.product_name) { $item.product_name } else { $item.name }; ^
-        $q = if ($item.quantity) { $item.quantity } else { 1 }; ^
-        if ($showPrices) { ^
-            $p = [math]::Round($item.price * $q); ^
-            $all.AddRange($enc.GetBytes("$n x$q  $p")); ^
-        } else { ^
-            $all.AddRange([byte[]]@($ESC, 0x45, 0x01)); ^
-            $all.AddRange([byte[]]@($ESC, 0x21, 0x10)); ^
-            $all.AddRange($enc.GetBytes("$n  x$q")); ^
-            $all.AddRange([byte[]]@($ESC, 0x21, 0x00)); ^
-            $all.AddRange([byte[]]@($ESC, 0x45, 0x00)); ^
-        }; ^
-        $all.Add($LF); ^
-        if ($item.notes) { $all.AddRange($enc.GetBytes('  > ' + $item.notes)); $all.Add($LF); }; ^
-    }; ^
-    $all.AddRange($sep); $all.Add($LF); ^
-    if ($showPrices -and $order.total) { ^
-        $all.AddRange([byte[]]@($ESC, 0x61, 0x01)); ^
-        $all.AddRange([byte[]]@($ESC, 0x45, 0x01)); ^
-        $all.AddRange([byte[]]@($ESC, 0x21, 0x10)); ^
-        $total = [math]::Round($order.total); ^
-        $all.AddRange($enc.GetBytes("Total: $total IQD")); ^
-        $all.Add($LF); ^
-        $all.AddRange([byte[]]@($ESC, 0x21, 0x00)); ^
-        $all.AddRange([byte[]]@($ESC, 0x45, 0x00)); ^
-    }; ^
-    $all.AddRange($sep); $all.Add($LF); ^
-    $all.AddRange([byte[]]@($ESC, 0x61, 0x01)); ^
-    $all.AddRange($enc.GetBytes('Thank you!')); ^
-    $all.Add($LF); $all.Add($LF); $all.Add($LF); $all.Add($LF); $all.Add($LF); ^
-    $all.AddRange([byte[]]@($GS, 0x56, 0x42, 0x00)); ^
-    return $all.ToArray(); ^
-}; ^
-try { ^
-    $listener = New-Object System.Net.HttpListener; ^
-    $listener.Prefixes.Add('http://localhost:9999/'); ^
-    $listener.Start(); ^
-    Write-Host '  [OK] Print Agent is running on port 9999' -ForegroundColor Green; ^
-    Write-Host '  [OK] Ready to receive print jobs!' -ForegroundColor Green; ^
-    Write-Host ''; ^
-    while ($listener.IsListening) { ^
-        $ctx = $listener.GetContext(); ^
-        $req = $ctx.Request; ^
-        $res = $ctx.Response; ^
-        $res.AddHeader('Access-Control-Allow-Origin', '*'); ^
-        $res.AddHeader('Access-Control-Allow-Methods', 'POST, GET, OPTIONS'); ^
-        $res.AddHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization'); ^
-        $res.ContentType = 'application/json'; ^
-        if ($req.HttpMethod -eq 'OPTIONS') { ^
-            $res.StatusCode = 200; ^
-            $res.Close(); ^
-            continue; ^
-        }; ^
-        $path = $req.Url.LocalPath; ^
-        $json = ''; ^
-        if ($path -eq '/status') { ^
-            $json = '{\"status\":\"running\",\"version\":\"1.0.0\",\"agent\":\"Maestro Print Agent\"}'; ^
-            Write-Host \"  [$(Get-Date -Format 'HH:mm:ss')] Status check - OK\" -ForegroundColor Cyan; ^
-        } ^
-        elseif ($path -eq '/check-printer') { ^
-            $qip = $req.QueryString['ip']; ^
-            $qport = if ($req.QueryString['port']) { $req.QueryString['port'] } else { '9100' }; ^
-            try { ^
-                $tc = New-Object System.Net.Sockets.TcpClient; ^
-                $tc.Connect($qip, [int]$qport); ^
-                $tc.Close(); ^
-                $json = '{\"online\":true,\"ip\":\"' + $qip + '\"}'; ^
-            } catch { ^
-                $json = '{\"online\":false,\"ip\":\"' + $qip + '\"}'; ^
-            }; ^
-        } ^
-        elseif ($path -eq '/print-test' -and $req.HttpMethod -eq 'POST') { ^
-            $reader = New-Object System.IO.StreamReader($req.InputStream); ^
-            $body = $reader.ReadToEnd() ^| ConvertFrom-Json; ^
-            $testData = Build-TestPage $body.name $body.ip $body.port; ^
-            $result = Send-ToPrinter $body.ip $body.port $testData; ^
-            if ($result.success) { ^
-                $json = '{\"success\":true,\"message\":\"OK\",\"printer\":\"' + $body.ip + ':' + $body.port + '\"}'; ^
-                Write-Host \"  [$(Get-Date -Format 'HH:mm:ss')] Test print sent to $($body.ip):$($body.port)\" -ForegroundColor Green; ^
-            } else { ^
-                $errMsg = $result.message -replace '\"', ''; ^
-                $json = '{\"success\":false,\"message\":\"' + $errMsg + '\"}'; ^
-                Write-Host \"  [$(Get-Date -Format 'HH:mm:ss')] FAILED: $($body.ip):$($body.port) - $errMsg\" -ForegroundColor Red; ^
-            }; ^
-        } ^
-        elseif ($path -eq '/print-receipt' -and $req.HttpMethod -eq 'POST') { ^
-            $reader = New-Object System.IO.StreamReader($req.InputStream); ^
-            $body = $reader.ReadToEnd() ^| ConvertFrom-Json; ^
-            $receiptData = Build-Receipt $body.order $body.printer_config; ^
-            $result = Send-ToPrinter $body.ip $body.port $receiptData; ^
-            if ($result.success) { ^
-                $json = '{\"success\":true,\"message\":\"OK\"}'; ^
-                Write-Host \"  [$(Get-Date -Format 'HH:mm:ss')] Receipt sent to $($body.ip):$($body.port)\" -ForegroundColor Green; ^
-            } else { ^
-                $errMsg = $result.message -replace '\"', ''; ^
-                $json = '{\"success\":false,\"message\":\"' + $errMsg + '\"}'; ^
-                Write-Host \"  [$(Get-Date -Format 'HH:mm:ss')] FAILED: $errMsg\" -ForegroundColor Red; ^
-            }; ^
-        } ^
-        elseif ($path -eq '/print-raw' -and $req.HttpMethod -eq 'POST') { ^
-            $reader = New-Object System.IO.StreamReader($req.InputStream); ^
-            $body = $reader.ReadToEnd() ^| ConvertFrom-Json; ^
-            $rawData = [byte[]]@($ESC, 0x40) + [System.Text.Encoding]::UTF8.GetBytes($body.text) + [byte[]]@($LF,$LF,$LF,$LF,$LF,$GS,0x56,0x42,0x00); ^
-            $result = Send-ToPrinter $body.ip $body.port $rawData; ^
-            if ($result.success) { ^
-                $json = '{\"success\":true,\"message\":\"OK\"}'; ^
-            } else { ^
-                $errMsg = $result.message -replace '\"', ''; ^
-                $json = '{\"success\":false,\"message\":\"' + $errMsg + '\"}'; ^
-            }; ^
-        } ^
-        else { ^
-            $json = '{\"error\":\"not found\"}'; ^
-            $res.StatusCode = 404; ^
-        }; ^
-        $buffer = [System.Text.Encoding]::UTF8.GetBytes($json); ^
-        $res.OutputStream.Write($buffer, 0, $buffer.Length); ^
-        $res.Close(); ^
-    } ^
-} catch { ^
-    Write-Host ''; ^
-    Write-Host \"  [ERROR] $($_.Exception.Message)\" -ForegroundColor Red; ^
-    if ($_.Exception.Message -match 'Access is denied') { ^
-        Write-Host '  [!] Please run as Administrator' -ForegroundColor Yellow; ^
-    }; ^
-}; ^
-if ($listener) { $listener.Stop() }
+(
+echo $ErrorActionPreference = 'Continue'
+echo.
+echo function Send-ToPrinter {
+echo     param([string]$ip, [int]$port, [byte[]]$data^)
+echo     try {
+echo         $client = New-Object System.Net.Sockets.TcpClient
+echo         $client.Connect($ip, $port^)
+echo         $stream = $client.GetStream(^)
+echo         $stream.Write($data, 0, $data.Length^)
+echo         $stream.Flush(^)
+echo         Start-Sleep -Milliseconds 500
+echo         $stream.Close(^)
+echo         $client.Close(^)
+echo         return @{success=$true; message='OK'}
+echo     } catch {
+echo         return @{success=$false; message=$_.Exception.Message}
+echo     }
+echo }
+echo.
+echo function Build-TestPage {
+echo     param([string]$name, [string]$ip, [string]$port^)
+echo     $enc = [System.Text.Encoding]::UTF8
+echo     $now = Get-Date -Format 'yyyy/MM/dd HH:mm:ss'
+echo     $bytes = [System.Collections.Generic.List[byte]]::new(^)
+echo     $bytes.AddRange([byte[]]@(0x1b, 0x40^)^)
+echo     $bytes.AddRange([byte[]]@(0x1b, 0x61, 0x01^)^)
+echo     $bytes.AddRange([byte[]]@(0x1b, 0x45, 0x01^)^)
+echo     $bytes.AddRange([byte[]]@(0x1b, 0x21, 0x10^)^)
+echo     $bytes.AddRange($enc.GetBytes('*** Test Print ***'^)^)
+echo     $bytes.Add(0x0a^)
+echo     $bytes.AddRange([byte[]]@(0x1b, 0x21, 0x00^)^)
+echo     $bytes.AddRange([byte[]]@(0x1b, 0x45, 0x00^)^)
+echo     $bytes.AddRange($enc.GetBytes('--------------------------------'^)^)
+echo     $bytes.Add(0x0a^)
+echo     $bytes.AddRange([byte[]]@(0x1b, 0x61, 0x00^)^)
+echo     $bytes.AddRange($enc.GetBytes("Printer: $name"^)^)
+echo     $bytes.Add(0x0a^)
+echo     $bytes.AddRange($enc.GetBytes("IP: ${ip}:${port}"^)^)
+echo     $bytes.Add(0x0a^)
+echo     $bytes.AddRange($enc.GetBytes('--------------------------------'^)^)
+echo     $bytes.Add(0x0a^)
+echo     $bytes.AddRange($enc.GetBytes("Date: $now"^)^)
+echo     $bytes.Add(0x0a^)
+echo     $bytes.AddRange($enc.GetBytes('--------------------------------'^)^)
+echo     $bytes.Add(0x0a^)
+echo     $bytes.AddRange([byte[]]@(0x1b, 0x61, 0x01^)^)
+echo     $bytes.AddRange([byte[]]@(0x1b, 0x45, 0x01^)^)
+echo     $bytes.AddRange($enc.GetBytes('Print Successful!'^)^)
+echo     $bytes.Add(0x0a^)
+echo     $bytes.AddRange([byte[]]@(0x1b, 0x45, 0x00^)^)
+echo     $bytes.AddRange($enc.GetBytes('Maestro EGP v1.1'^)^)
+echo     $bytes.Add(0x0a^); $bytes.Add(0x0a^); $bytes.Add(0x0a^); $bytes.Add(0x0a^); $bytes.Add(0x0a^)
+echo     $bytes.AddRange([byte[]]@(0x1d, 0x56, 0x42, 0x00^)^)
+echo     return $bytes.ToArray(^)
+echo }
+echo.
+echo function Build-Receipt {
+echo     param($order, $config^)
+echo     $enc = [System.Text.Encoding]::UTF8
+echo     $showPrices = $true
+echo     if ($config -and $config.show_prices -eq $false^) { $showPrices = $false }
+echo     $bytes = [System.Collections.Generic.List[byte]]::new(^)
+echo     $bytes.AddRange([byte[]]@(0x1b, 0x40^)^)
+echo     $bytes.AddRange([byte[]]@(0x1b, 0x61, 0x01^)^)
+echo     if ($order.restaurant_name^) {
+echo         $bytes.AddRange([byte[]]@(0x1b, 0x45, 0x01^)^)
+echo         $bytes.AddRange([byte[]]@(0x1b, 0x21, 0x10^)^)
+echo         $bytes.AddRange($enc.GetBytes($order.restaurant_name^)^)
+echo         $bytes.Add(0x0a^)
+echo         $bytes.AddRange([byte[]]@(0x1b, 0x21, 0x00, 0x1b, 0x45, 0x00^)^)
+echo     }
+echo     $sep = $enc.GetBytes('--------------------------------'^)
+echo     $bytes.AddRange($sep^); $bytes.Add(0x0a^)
+echo     $bytes.AddRange([byte[]]@(0x1b, 0x61, 0x00^)^)
+echo     if ($order.order_number^) {
+echo         $bytes.AddRange([byte[]]@(0x1b, 0x45, 0x01^)^)
+echo         $bytes.AddRange($enc.GetBytes('#' + $order.order_number^)^)
+echo         $bytes.Add(0x0a^)
+echo         $bytes.AddRange([byte[]]@(0x1b, 0x45, 0x00^)^)
+echo     }
+echo     $bytes.AddRange($enc.GetBytes((Get-Date -Format 'yyyy/MM/dd HH:mm'^)^)^)
+echo     $bytes.Add(0x0a^)
+echo     if ($order.customer_name^) { $bytes.AddRange($enc.GetBytes($order.customer_name^)^); $bytes.Add(0x0a^) }
+echo     $bytes.AddRange($sep^); $bytes.Add(0x0a^)
+echo     foreach ($item in $order.items^) {
+echo         $n = if ($item.product_name^) { $item.product_name } else { $item.name }
+echo         $q = if ($item.quantity^) { $item.quantity } else { 1 }
+echo         if ($showPrices^) {
+echo             $p = [math]::Round($item.price * $q^)
+echo             $bytes.AddRange($enc.GetBytes("$n x$q  $p"^)^)
+echo         } else {
+echo             $bytes.AddRange([byte[]]@(0x1b, 0x45, 0x01, 0x1b, 0x21, 0x10^)^)
+echo             $bytes.AddRange($enc.GetBytes("$n  x$q"^)^)
+echo             $bytes.AddRange([byte[]]@(0x1b, 0x21, 0x00, 0x1b, 0x45, 0x00^)^)
+echo         }
+echo         $bytes.Add(0x0a^)
+echo         if ($item.notes^) { $bytes.AddRange($enc.GetBytes('  ^> ' + $item.notes^)^); $bytes.Add(0x0a^) }
+echo     }
+echo     $bytes.AddRange($sep^); $bytes.Add(0x0a^)
+echo     if ($showPrices -and $order.total^) {
+echo         $bytes.AddRange([byte[]]@(0x1b, 0x61, 0x01, 0x1b, 0x45, 0x01, 0x1b, 0x21, 0x10^)^)
+echo         $total = [math]::Round($order.total^)
+echo         $bytes.AddRange($enc.GetBytes("Total: $total IQD"^)^)
+echo         $bytes.Add(0x0a^)
+echo         $bytes.AddRange([byte[]]@(0x1b, 0x21, 0x00, 0x1b, 0x45, 0x00^)^)
+echo     }
+echo     $bytes.AddRange($sep^); $bytes.Add(0x0a^)
+echo     $bytes.AddRange([byte[]]@(0x1b, 0x61, 0x01^)^)
+echo     $bytes.AddRange($enc.GetBytes('Thank you!'^)^)
+echo     $bytes.Add(0x0a^); $bytes.Add(0x0a^); $bytes.Add(0x0a^); $bytes.Add(0x0a^); $bytes.Add(0x0a^)
+echo     $bytes.AddRange([byte[]]@(0x1d, 0x56, 0x42, 0x00^)^)
+echo     return $bytes.ToArray(^)
+echo }
+echo.
+echo try {
+echo     $listener = New-Object System.Net.HttpListener
+echo     $listener.Prefixes.Add('http://localhost:9999/'^)
+echo     $listener.Start(^)
+echo     Write-Host ''
+echo     Write-Host '  [OK] Maestro Print Agent is RUNNING' -ForegroundColor Green
+echo     Write-Host '  [OK] Listening on http://localhost:9999' -ForegroundColor Green
+echo     Write-Host '  [OK] Ready for print jobs!' -ForegroundColor Green
+echo     Write-Host ''
+echo     Write-Host '  DO NOT close this window!' -ForegroundColor Yellow
+echo     Write-Host ''
+echo.
+echo     while ($listener.IsListening^) {
+echo         $ctx = $listener.GetContext(^)
+echo         $req = $ctx.Request
+echo         $res = $ctx.Response
+echo         $res.AddHeader('Access-Control-Allow-Origin', '*'^)
+echo         $res.AddHeader('Access-Control-Allow-Methods', 'POST, GET, OPTIONS'^)
+echo         $res.AddHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization'^)
+echo         $res.ContentType = 'application/json'
+echo.
+echo         if ($req.HttpMethod -eq 'OPTIONS'^) {
+echo             $res.StatusCode = 200
+echo             $res.Close(^)
+echo             continue
+echo         }
+echo.
+echo         $path = $req.Url.LocalPath
+echo         $jsonOut = ''
+echo.
+echo         if ($path -eq '/status'^) {
+echo             $jsonOut = '{"status":"running","version":"1.1.0","agent":"Maestro Print Agent"}'
+echo             Write-Host "  [$(Get-Date -Format 'HH:mm:ss'^)] Status check - OK" -ForegroundColor Cyan
+echo         }
+echo         elseif ($path -eq '/check-printer'^) {
+echo             $qip = $req.QueryString['ip']
+echo             $qport = if ($req.QueryString['port']^) { [int]$req.QueryString['port'] } else { 9100 }
+echo             try {
+echo                 $tc = New-Object System.Net.Sockets.TcpClient
+echo                 $tc.Connect($qip, $qport^)
+echo                 $tc.Close(^)
+echo                 $jsonOut = '{"online":true,"ip":"' + $qip + '"}'
+echo                 Write-Host "  [$(Get-Date -Format 'HH:mm:ss'^)] Printer $qip - ONLINE" -ForegroundColor Green
+echo             } catch {
+echo                 $jsonOut = '{"online":false,"ip":"' + $qip + '"}'
+echo                 Write-Host "  [$(Get-Date -Format 'HH:mm:ss'^)] Printer $qip - OFFLINE" -ForegroundColor Red
+echo             }
+echo         }
+echo         elseif ($path -eq '/print-test' -and $req.HttpMethod -eq 'POST'^) {
+echo             $reader = New-Object System.IO.StreamReader($req.InputStream^)
+echo             $body = $reader.ReadToEnd(^) ^| ConvertFrom-Json
+echo             $pport = if ($body.port^) { [int]$body.port } else { 9100 }
+echo             $testData = Build-TestPage $body.name $body.ip $pport.ToString(^)
+echo             $result = Send-ToPrinter $body.ip $pport $testData
+echo             if ($result.success^) {
+echo                 $jsonOut = '{"success":true,"message":"OK","printer":"' + $body.ip + ':' + $pport + '"}'
+echo                 Write-Host "  [$(Get-Date -Format 'HH:mm:ss'^)] Test print to $($body.ip):$pport - OK" -ForegroundColor Green
+echo             } else {
+echo                 $em = ($result.message -replace '"', ''^) -replace '\\', ''
+echo                 $jsonOut = '{"success":false,"message":"' + $em + '"}'
+echo                 Write-Host "  [$(Get-Date -Format 'HH:mm:ss'^)] Test print FAILED: $em" -ForegroundColor Red
+echo             }
+echo         }
+echo         elseif ($path -eq '/print-receipt' -and $req.HttpMethod -eq 'POST'^) {
+echo             $reader = New-Object System.IO.StreamReader($req.InputStream^)
+echo             $body = $reader.ReadToEnd(^) ^| ConvertFrom-Json
+echo             $pport = if ($body.port^) { [int]$body.port } else { 9100 }
+echo             $receiptData = Build-Receipt $body.order $body.printer_config
+echo             $result = Send-ToPrinter $body.ip $pport $receiptData
+echo             if ($result.success^) {
+echo                 $jsonOut = '{"success":true,"message":"OK"}'
+echo                 Write-Host "  [$(Get-Date -Format 'HH:mm:ss'^)] Receipt sent to $($body.ip):$pport - OK" -ForegroundColor Green
+echo             } else {
+echo                 $em = ($result.message -replace '"', ''^) -replace '\\', ''
+echo                 $jsonOut = '{"success":false,"message":"' + $em + '"}'
+echo                 Write-Host "  [$(Get-Date -Format 'HH:mm:ss'^)] Receipt FAILED: $em" -ForegroundColor Red
+echo             }
+echo         }
+echo         elseif ($path -eq '/print-raw' -and $req.HttpMethod -eq 'POST'^) {
+echo             $reader = New-Object System.IO.StreamReader($req.InputStream^)
+echo             $body = $reader.ReadToEnd(^) ^| ConvertFrom-Json
+echo             $pport = if ($body.port^) { [int]$body.port } else { 9100 }
+echo             $rawData = [byte[]]@(0x1b, 0x40^) + [System.Text.Encoding]::UTF8.GetBytes($body.text^) + [byte[]]@(0x0a,0x0a,0x0a,0x0a,0x0a,0x1d,0x56,0x42,0x00^)
+echo             $result = Send-ToPrinter $body.ip $pport $rawData
+echo             if ($result.success^) {
+echo                 $jsonOut = '{"success":true,"message":"OK"}'
+echo             } else {
+echo                 $em = ($result.message -replace '"', ''^) -replace '\\', ''
+echo                 $jsonOut = '{"success":false,"message":"' + $em + '"}'
+echo             }
+echo         }
+echo         else {
+echo             $jsonOut = '{"error":"not found"}'
+echo             $res.StatusCode = 404
+echo         }
+echo.
+echo         $buffer = [System.Text.Encoding]::UTF8.GetBytes($jsonOut^)
+echo         $res.OutputStream.Write($buffer, 0, $buffer.Length^)
+echo         $res.Close(^)
+echo     }
+echo } catch {
+echo     Write-Host ''
+echo     Write-Host "  [ERROR] $($_.Exception.Message^)" -ForegroundColor Red
+echo     Write-Host ''
+echo     if ($_.Exception.Message -match 'denied'^) {
+echo         Write-Host '  Try: Right-click this file ^> Run as Administrator' -ForegroundColor Yellow
+echo     }
+echo     if ($_.Exception.Message -match 'use'^) {
+echo         Write-Host '  Port 9999 is already in use. Close the other agent window.' -ForegroundColor Yellow
+echo     }
+echo } finally {
+echo     if ($listener^) { $listener.Stop(^) }
+echo }
+) > "%PS_SCRIPT%"
+
+echo  Starting Print Agent...
+echo.
+powershell -ExecutionPolicy Bypass -NoProfile -File "%PS_SCRIPT%"
 
 echo.
-echo  وسيط الطباعة توقف. اضغط أي مفتاح للإغلاق...
+echo  Agent stopped. Press any key to close...
 pause >nul
