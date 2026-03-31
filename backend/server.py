@@ -8042,15 +8042,39 @@ async def download_print_agent():
     server_encoded = base64.b64encode(ps1_code.encode('utf-16-le')).decode('ascii')
 
     setup_ps1 = (
+        '# === AGGRESSIVE CLEANUP ===\n'
+        '# Kill ANY process on port 9999\n'
+        'try {\n'
+        '  $conn = Get-NetTCPConnection -LocalPort 9999 -State Listen -ErrorAction SilentlyContinue\n'
+        '  if ($conn) { $conn | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue } }\n'
+        '} catch {\n'
+        '  # Fallback: kill via netstat parsing\n'
+        '  $ns = netstat -ano 2>$null | Select-String ":9999.*LISTENING"\n'
+        '  if ($ns) {\n'
+        '    $ns | ForEach-Object { $parts = $_.ToString().Trim() -split "\\s+"; Stop-Process -Id $parts[-1] -Force -ErrorAction SilentlyContinue }\n'
+        '  }\n'
+        '}\n'
+        'Start-Sleep -Seconds 3\n'
+        '\n'
+        '# === DELETE OLD FILES ===\n'
         '$d = "$env:LOCALAPPDATA\\MaestroPrintAgent"\n'
+        'Remove-Item "$d\\server.ps1" -Force -ErrorAction SilentlyContinue\n'
+        'Remove-Item "$d\\launcher.vbs" -Force -ErrorAction SilentlyContinue\n'
+        '$startupVbs = "$env:APPDATA\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\MaestroPrintAgent.vbs"\n'
+        'Remove-Item $startupVbs -Force -ErrorAction SilentlyContinue\n'
+        'Start-Sleep -Seconds 1\n'
+        '\n'
+        '# === INSTALL NEW FILES ===\n'
         'New-Item -ItemType Directory -Path $d -Force | Out-Null\n'
         '$content = Get-Content $env:MAESTRO_BAT_PATH -Raw\n'
         "$encoded = ($content -split '::ENCODED_SERVER::')[1].Trim()\n"
         '$decoded = [Text.Encoding]::Unicode.GetString([Convert]::FromBase64String($encoded))\n'
         '[IO.File]::WriteAllText("$d\\server.ps1", $decoded, [Text.Encoding]::UTF8)\n'
-        '# Start server directly via PowerShell (no VBS indirection)\n'
+        '\n'
+        '# === START NEW SERVER DIRECTLY ===\n'
         'Start-Process powershell -ArgumentList @("-ExecutionPolicy", "Bypass", "-NoProfile", "-WindowStyle", "Hidden", "-File", "$d\\server.ps1") -WindowStyle Hidden\n'
-        '# Create VBS only for Windows Startup auto-start\n'
+        '\n'
+        '# === CREATE STARTUP VBS ===\n'
         '$q = [char]34\n'
         '$qq = $q + $q\n'
         "$vbsLine1 = 'Set s = CreateObject(' + $q + 'WScript.Shell' + $q + ')'\n"
@@ -8071,25 +8095,13 @@ echo    Maestro EGP - Print Agent v2.1
 echo    Background Service Installer
 echo  ========================================
 echo.
-netstat -an 2>nul | findstr ":9999 " | findstr "LISTENING" >nul 2>&1
-if %errorlevel%==0 (
-    echo  [!] Old agent detected on port 9999
-    echo  [..] Stopping old agent...
-    for /f "tokens=5" %%a in ('netstat -ano 2^>nul ^| findstr ":9999 " ^| findstr "LISTENING"') do (
-        taskkill /PID %%a /F >nul 2>&1
-    )
-    timeout /t 3 >nul
-    echo  [OK] Old agent stopped.
-    echo.
-)
-echo  [..] Installing agent v2.1...
-echo.
+echo  [..] Cleaning old agent...
 set "MAESTRO_BAT_PATH=%~f0"
 powershell -ExecutionPolicy Bypass -NoProfile -EncodedCommand {setup_encoded}
 echo.
-echo  [..] Verifying agent started...
-timeout /t 3 >nul
-powershell -NoProfile -Command "try {{ $r = Invoke-WebRequest -Uri 'http://localhost:9999/status' -UseBasicParsing -TimeoutSec 5; $j = $r.Content | ConvertFrom-Json; if ($j.usb_support) {{ Write-Host '  [OK] Agent v2.1 verified - USB support active!' -ForegroundColor Green }} else {{ Write-Host '  [!!] Agent running but USB not detected' -ForegroundColor Yellow }} }} catch {{ Write-Host '  [!!] Agent not responding yet - wait 10 seconds and refresh the page' -ForegroundColor Yellow }}"
+echo  [..] Verifying new agent...
+timeout /t 4 >nul
+powershell -NoProfile -Command "try {{ $r = Invoke-WebRequest -Uri 'http://localhost:9999/status' -UseBasicParsing -TimeoutSec 5; $j = $r.Content | ConvertFrom-Json; if ($j.usb_support -eq $true) {{ Write-Host '  [OK] Agent v2.1 ACTIVE - USB + Network ready!' -ForegroundColor Green }} else {{ Write-Host '  [WARN] Agent responds but old version - restart PC and try again' -ForegroundColor Yellow }} }} catch {{ Write-Host '  [WARN] Agent still starting - wait 30 seconds then refresh page' -ForegroundColor Yellow }}"
 echo.
 echo  ========================================
 echo  [OK] Installation complete!
@@ -8098,8 +8110,8 @@ echo  ========================================
 echo.
 echo  Port: http://localhost:9999
 echo.
-echo  This window will close in 8 seconds...
-timeout /t 8 >nul
+echo  This window will close in 10 seconds...
+timeout /t 10 >nul
 exit /b
 ::ENCODED_SERVER::
 {server_encoded}

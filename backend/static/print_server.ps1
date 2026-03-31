@@ -2,7 +2,7 @@ $ErrorActionPreference = 'Continue'
 
 # === RAW USB PRINTER SUPPORT via Windows Print Spooler ===
 try {
-Add-Type -TypeDefinition @"
+$csharpCode = @'
 using System;
 using System.Runtime.InteropServices;
 
@@ -58,9 +58,10 @@ public class RawPrinterHelper {
         return success;
     }
 }
-"@
+'@
+Add-Type -TypeDefinition $csharpCode -ErrorAction Stop
 } catch {
-    # Type already added - ignore
+    # Type already added or compilation failed - continue without USB raw printing
 }
 
 # === NETWORK PRINTER: Send via TCP ===
@@ -129,7 +130,7 @@ function Build-TestPage {
     $bytes.AddRange($enc.GetBytes('Print Successful!'))
     $bytes.Add(0x0a)
     $bytes.AddRange([byte[]]@(0x1b, 0x45, 0x00))
-    $bytes.AddRange($enc.GetBytes('Maestro EGP v2.0'))
+    $bytes.AddRange($enc.GetBytes('Maestro EGP v2.1'))
     $bytes.Add(0x0a); $bytes.Add(0x0a); $bytes.Add(0x0a); $bytes.Add(0x0a); $bytes.Add(0x0a)
     $bytes.AddRange([byte[]]@(0x1d, 0x56, 0x42, 0x00))
     return $bytes.ToArray()
@@ -219,7 +220,6 @@ try {
             $jsonOut = '{"status":"running","version":"2.1.0","agent":"Maestro Print Agent","usb_support":true}'
         }
         elseif ($path -eq '/list-printers') {
-            # List all Windows printers - try modern CimInstance first, fallback to WMI
             try {
                 $wmiPrinters = $null
                 try {
@@ -270,7 +270,6 @@ try {
             $body = $reader.ReadToEnd() | ConvertFrom-Json
 
             if ($body.usb_printer_name) {
-                # USB printer test
                 $testData = Build-TestPage $body.name $body.usb_printer_name 'USB'
                 $result = Send-ToUsbPrinter $body.usb_printer_name $testData
                 if ($result.success) {
@@ -280,7 +279,6 @@ try {
                     $jsonOut = '{"success":false,"message":"' + $em + '","type":"usb"}'
                 }
             } else {
-                # Network printer test
                 $pport = if ($body.port) { [int]$body.port } else { 9100 }
                 $testData = Build-TestPage $body.name ($body.ip + ':' + $pport) 'Network'
                 $result = Send-ToPrinter $body.ip $pport $testData
@@ -298,10 +296,8 @@ try {
             $receiptData = Build-Receipt $body.order $body.printer_config
 
             if ($body.usb_printer_name) {
-                # USB printer receipt
                 $result = Send-ToUsbPrinter $body.usb_printer_name $receiptData
             } else {
-                # Network printer receipt
                 $pport = if ($body.port) { [int]$body.port } else { 9100 }
                 $result = Send-ToPrinter $body.ip $pport $receiptData
             }
