@@ -8,74 +8,47 @@ Multi-tenant POS system (React + FastAPI + MongoDB) with role-based access, POS 
 /app
 ├── frontend/ (React + Shadcn UI + Tailwind)
 │   ├── src/pages/ (Dashboard, Reports, POS, Settings, Expenses, Delivery, etc.)
-│   ├── src/components/ (TargetCelebration.js)
-│   ├── src/context/ (AuthContext.js)
-│   ├── src/utils/ (orderNotifications.js, printService.js)
-│   ├── public/ (sw-offline.js, manifest.json)
+│   ├── src/utils/ (printService.js v2.1 - USB + Ethernet support)
 ├── backend/
 │   ├── server.py (Main monolith ~18k lines)
-│   ├── routes/ (shifts_routes.py, reports_routes.py, inventory_system.py, customer_menu.py, order_notifications.py)
-│   ├── static/ (print_server.ps1, MaestroPrintAgent.bat [legacy])
+│   ├── static/ (print_server.ps1 v2.1 - USB via Windows Spooler + Ethernet via TCP)
 ```
 
-## Completed Features
-- Multi-tenant POS system with role-based access
-- Cash register / shift management with correct calculation
-- Dashboard with configurable permissions (canSee helper)
-- Thermal printing (hidden iframe, 80mm width, auto height)
-- Delivery management with driver/company differentiation
-- Inventory system (raw materials, packaging, manufacturing)
-- Reports (sales, delivery credits, expenses, profit/loss)
-- PWA offline support
-- Customer menu app with order tracking
-- Incoming customer order notifications on POS
-- Data isolation: Non-admin users only see their own orders/stats
-- Sales Competition Leaderboard: Daily/weekly/monthly cashier rankings
-- Smart cash register close: auto-enable confirm when expenses >= cash
-- **Daily Sales Target System**: Admin sets target, all see progress bar, animated celebration on achievement
-- **Multi-Printer System**: Complete multi-printer routing architecture (USB + Ethernet)
+## Completed Features (Latest Session - March 31, 2026)
+23. **USB Silent Printing via Print Agent** - Major printing architecture upgrade:
+    - Print Agent (print_server.ps1 v2.1) now handles BOTH USB and Ethernet printers
+    - USB printers: Uses Windows Print Spooler (RawPrinterHelper via Win32 API winspool.drv)
+    - Ethernet printers: Uses direct TCP connection (unchanged)
+    - New endpoint `/list-printers`: Lists available Windows printers
+    - `/print-test`, `/print-receipt`, `/print-raw` all accept `usb_printer_name` parameter
+    - POS.js routes ALL printers through Print Agent (no browser dialog needed)
+    - Browser dialog only appears as fallback when Print Agent is offline
+    - Settings: USB printer form shows `usb_printer_name` field with auto-discovery from Windows
+    - Backend model: Added `usb_printer_name` field to PrinterCreate
 
-## Session 4 Fixes (March 31, 2026)
-22. **Print Agent Background Service (v2.0)** - Converted MaestroPrintAgent.bat from visible CMD window to hidden background service:
-    - Dynamic BAT generation from endpoint (not static file)
-    - Setup PowerShell extracts server code, saves as PS1, creates VBS launcher
-    - VBS runs PowerShell with `-WindowStyle Hidden` (completely invisible)
-    - Auto-copies VBS to Windows Startup folder for boot persistence
-    - User sees brief 5-second setup window then it auto-closes
-    - Server runs on localhost:9999 completely hidden
+22. **Print Agent Background Service (v2.0)** - Hidden Windows background service
+21. **Printer Connection Type (USB vs Network)** - connection_type field in printer config
 
-23. **Printer Connection Type (USB vs Network)** - Added connection_type field to printer configuration:
-    - Dropdown selector in add/edit printer forms: "USB" or "Network (Ethernet/IP)"
-    - When USB is selected, IP/Port fields are hidden (not needed)
-    - When Network is selected, IP/Port fields are shown and required
-    - Printer list shows connection type (USB icon or IP address)
-    - USB printers show blue status dot, network printers show green/red
-    - Test print for USB opens browser print dialog directly
-    - Test print for Network uses the print agent (localhost:9999)
-    - Backend model updated: `connection_type` field with "network" default, `ip_address` now optional
+## Key Technical Flow
+### Printing Architecture v2.1:
+1. **Order placed** → POS.js sends to ALL configured printers via Print Agent
+2. **USB Printer** → Print Agent → `RawPrinterHelper.SendBytesToPrinter()` → Windows Spooler → USB printer (SILENT)
+3. **Ethernet Printer** → Print Agent → TCP Socket → IP:Port → Ethernet printer (SILENT)
+4. **Fallback** (Agent offline) → Browser `window.print()` dialog
 
 ## Pending Issues
 - None
 
 ## Upcoming Tasks
-- P0: Multi-Restaurant Tenant Switcher (deferred by user but top priority backlog)
+- P0: Multi-Restaurant Tenant Switcher
 - P1: ZKTeco Fingerprint Integration
-- P2: Refactor server.py (18k+ lines) - duplicate routes still exist for packaging-requests
-- P2: Refactor SuperAdmin.js (5.4k+ lines)
-- P2: Refactor Settings.js (7.1k+ lines)
+- P2: Refactor server.py (18k+ lines)
+- P2: Refactor SuperAdmin.js / Settings.js
 
 ## Key Credentials
 - Admin: hanialdujaili@gmail.com / Hani@2024
 - Super Admin: owner@maestroegp.com / owner123 (Secret: 271018)
 - Test Cashier: cashier@test.com / Test@1234
 
-## Key Endpoints
-- `GET /api/download-print-agent` - Dynamically generates BAT installer for hidden print agent
-- `POST /api/printers` - Create printer (accepts connection_type: "usb" | "network")
-- `PUT /api/printers/{id}` - Update printer
-- `GET /api/settings/restaurant` - Fetches tenant restaurant data
-
 ## Key DB Schema
-- `printers`: name, ip_address (optional), port, connection_type ("usb"|"network"), branch_id, printer_type, print_mode, show_prices
-- `tenant_invoice_settings`: show_logo, invoice_logo, restaurant_name
-- `settings`: Handles restaurant and system configurations
+- `printers`: name, ip_address, port, connection_type, usb_printer_name, branch_id, printer_type, print_mode, show_prices

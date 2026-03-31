@@ -7881,6 +7881,7 @@ class PrinterCreate(BaseModel):
     branch_id: str
     printer_type: str = "receipt"  # النوع: receipt, kitchen, bar, packaging, label, custom
     connection_type: str = "network"  # network أو usb
+    usb_printer_name: Optional[str] = ""  # اسم الطابعة في Windows للطباعة USB
     custom_type_name: Optional[str] = None  # اسم مخصص للنوع إذا كان custom
     # صلاحيات الطباعة
     print_mode: str = "full_receipt"  # full_receipt, orders_only, selected_products

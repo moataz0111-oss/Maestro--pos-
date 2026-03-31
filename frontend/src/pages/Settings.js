@@ -6,7 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { formatPrice, setCurrency } from '../utils/currency';
 import { useTranslation } from '../hooks/useTranslation';
-import { checkAgentStatus, sendTestPrint, checkPrinterOnline } from '../utils/printService';
+import { checkAgentStatus, sendTestPrint, checkPrinterOnline, listAgentPrinters } from '../utils/printService';
 import { 
   playClick, 
   playSuccess, 
@@ -427,13 +427,14 @@ export default function Settings() {
   const [editBranchForm, setEditBranchForm] = useState(null);
   const [printerForm, setPrinterForm] = useState({
     name: '', ip_address: '', port: 9100, branch_id: '', printer_type: 'receipt',
-    connection_type: 'network', print_mode: 'full_receipt', show_prices: true, print_individual_items: false, auto_print_on_order: true
+    connection_type: 'network', usb_printer_name: '', print_mode: 'full_receipt', show_prices: true, print_individual_items: false, auto_print_on_order: true
   });
   const [editPrinterForm, setEditPrinterForm] = useState(null);
   const [editPrinterDialogOpen, setEditPrinterDialogOpen] = useState(false);
   const [printerTestStatus, setPrinterTestStatus] = useState({}); // حالة اختبار الطابعات
   const [printerTypes, setPrinterTypes] = useState([]);
   const [printAgentOnline, setPrintAgentOnline] = useState(false);
+  const [windowsPrinters, setWindowsPrinters] = useState([]);
   const [categoryForm, setCategoryForm] = useState({
     name: '', name_en: '', icon: '', image: '', color: '#D4AF37', sort_order: 0, kitchen_section_id: ''
   });
@@ -1112,7 +1113,7 @@ export default function Settings() {
       setPrinterDialogOpen(false);
       setPrinterForm({ 
         name: '', ip_address: '', port: 9100, branch_id: '', printer_type: 'receipt',
-        connection_type: 'network', print_mode: 'full_receipt', show_prices: true, print_individual_items: false, auto_print_on_order: true
+        connection_type: 'network', usb_printer_name: '', print_mode: 'full_receipt', show_prices: true, print_individual_items: false, auto_print_on_order: true
       });
       fetchData();
     } catch (error) {
@@ -1129,12 +1130,17 @@ export default function Settings() {
       branch_id: printer.branch_id,
       printer_type: printer.printer_type || 'receipt',
       connection_type: printer.connection_type || 'network',
+      usb_printer_name: printer.usb_printer_name || '',
       print_mode: printer.print_mode || 'full_receipt',
       show_prices: printer.show_prices !== false,
       print_individual_items: printer.print_individual_items || false,
       auto_print_on_order: printer.auto_print_on_order !== false
     });
     setEditPrinterDialogOpen(true);
+    // جلب طابعات Windows عند فتح التعديل
+    if (printer.connection_type === 'usb') {
+      listAgentPrinters().then(p => setWindowsPrinters(p));
+    }
   };
 
   const handleUpdatePrinter = async (e) => {
@@ -1147,6 +1153,7 @@ export default function Settings() {
         branch_id: editPrinterForm.branch_id,
         printer_type: editPrinterForm.printer_type,
         connection_type: editPrinterForm.connection_type,
+        usb_printer_name: editPrinterForm.connection_type === 'usb' ? editPrinterForm.usb_printer_name : '',
         print_mode: editPrinterForm.print_mode,
         show_prices: editPrinterForm.show_prices,
         print_individual_items: editPrinterForm.print_individual_items,
@@ -1181,54 +1188,32 @@ export default function Settings() {
     
     setPrinterTestStatus(prev => ({ ...prev, [printerId]: 'testing' }));
     
-    // طابعات USB تطبع عبر المتصفح مباشرة
+    // طابعات USB تطبع عبر وسيط الطباعة (صامت بدون نافذة)
     if (printer.connection_type === 'usb') {
-      try {
-        const printWindow = window.open('', '_blank', 'width=300,height=400');
-        if (!printWindow) {
-          toast.error(t('يرجى السماح بفتح النوافذ المنبثقة'));
+      if (!printer.usb_printer_name) {
+        toast.error(t('لم يتم تحديد اسم الطابعة في Windows - عدّل الطابعة وأضف الاسم'));
+        setPrinterTestStatus(prev => ({ ...prev, [printerId]: 'error' }));
+        return;
+      }
+      const agentOnline = await checkAgentStatus();
+      setPrintAgentOnline(agentOnline);
+      if (agentOnline) {
+        try {
+          const branchName = branches.find(b => b.id === printer.branch_id)?.name || '';
+          const result = await sendTestPrint(printer, branchName);
+          if (result.success) {
+            toast.success(t('تم الطباعة بنجاح على') + ` ${printer.name} (USB)`);
+            setPrinterTestStatus(prev => ({ ...prev, [printerId]: 'success' }));
+          } else {
+            toast.error(t('فشل الطباعة USB') + `: ${result.message}`);
+            setPrinterTestStatus(prev => ({ ...prev, [printerId]: 'error' }));
+          }
+        } catch (error) {
+          toast.error(t('خطأ في الاتصال بوسيط الطباعة'));
           setPrinterTestStatus(prev => ({ ...prev, [printerId]: 'error' }));
-          return;
         }
-        const now = new Date();
-        printWindow.document.write(`
-          <html dir="rtl">
-          <head>
-            <meta charset="UTF-8">
-            <title>اختبار الطابعة</title>
-            <style>
-              body { font-family: monospace, Arial; text-align: center; padding: 20px; font-size: 14px; }
-              .line { border-top: 1px dashed #000; margin: 10px 0; }
-              h2 { margin: 5px 0; }
-              .info { background: #d4edda; padding: 8px; border-radius: 5px; font-size: 12px; margin-top: 10px; }
-            </style>
-          </head>
-          <body>
-            <h2>*** اختبار الطابعة ***</h2>
-            <div class="line"></div>
-            <p><strong>${printer.name || 'طابعة'}</strong></p>
-            <p>نوع الاتصال: USB</p>
-            <p>الفرع: ${branches.find(b => b.id === printer.branch_id)?.name || '-'}</p>
-            <div class="line"></div>
-            <p>التاريخ: ${now.toLocaleDateString('ar-IQ')}</p>
-            <p>الوقت: ${now.toLocaleTimeString('ar-IQ')}</p>
-            <div class="line"></div>
-            <p>الطباعة تعمل بنجاح!</p>
-            <p>================================</p>
-            <div class="info">طابعة USB - تطبع عبر المتصفح مباشرة</div>
-          </body>
-          </html>
-        `);
-        printWindow.document.close();
-        printWindow.focus();
-        setTimeout(() => {
-          printWindow.print();
-          setTimeout(() => printWindow.close(), 2000);
-        }, 500);
-        toast.success(t('اختبار طباعة USB - اختر الطابعة من نافذة المتصفح'));
-        setPrinterTestStatus(prev => ({ ...prev, [printerId]: 'success' }));
-      } catch (error) {
-        toast.error(t('فشل في فتح نافذة الطباعة'));
+      } else {
+        toast.error(t('وسيط الطباعة غير متصل - شغّل الوسيط أولاً للطباعة USB بدون نافذة'));
         setPrinterTestStatus(prev => ({ ...prev, [printerId]: 'error' }));
       }
       return;
@@ -4830,11 +4815,41 @@ export default function Settings() {
                           </Select>
                           <p className="text-xs text-muted-foreground mt-1">
                             {printerForm.connection_type === 'usb' 
-                              ? t('طابعة USB تطبع عبر المتصفح مباشرة - لا تحتاج IP أو وسيط الطباعة')
+                              ? t('طابعة USB تطبع عبر وسيط الطباعة مباشرة بدون نافذة - اختر اسم الطابعة من Windows')
                               : t('طابعة الشبكة تحتاج IP ومنفذ ووسيط الطباعة')
                             }
                           </p>
                         </div>
+                        {printerForm.connection_type === 'usb' && (
+                        <div>
+                          <Label className="text-foreground">{t('اسم الطابعة في Windows')}</Label>
+                          <div className="flex gap-2 mt-1">
+                            <Input
+                              value={printerForm.usb_printer_name}
+                              onChange={(e) => setPrinterForm({ ...printerForm, usb_printer_name: e.target.value })}
+                              placeholder={t('مثال: SAM4S GIANT-100')}
+                              required
+                              className="flex-1"
+                              list="windows-printers-list"
+                              data-testid="usb-printer-name"
+                            />
+                            <Button type="button" variant="outline" size="sm" onClick={async () => {
+                              const prts = await listAgentPrinters();
+                              setWindowsPrinters(prts);
+                              if (prts.length === 0) toast.error(t('لم يتم العثور على طابعات - تأكد من تشغيل وسيط الطباعة'));
+                              else toast.success(`${t('تم العثور على')} ${prts.length} ${t('طابعات')}`);
+                            }} data-testid="fetch-printers-btn">
+                              <RefreshCw className="h-4 w-4" />
+                            </Button>
+                          </div>
+                          <datalist id="windows-printers-list">
+                            {windowsPrinters.map((p, i) => (
+                              <option key={i} value={p.name}>{p.name}{p.is_default ? ' (افتراضية)' : ''}</option>
+                            ))}
+                          </datalist>
+                          <p className="text-xs text-muted-foreground mt-1">{t('اضغط زر التحديث لجلب الطابعات المتوفرة أو اكتب الاسم يدوياً')}</p>
+                        </div>
+                        )}
                         {printerForm.connection_type === 'network' && (
                         <div className="grid grid-cols-2 gap-4">
                           <div>
@@ -4999,7 +5014,7 @@ export default function Settings() {
                               <p className="font-medium text-foreground">{t(printer.name)}</p>
                               <p className="text-sm text-muted-foreground">
                                 {printer.connection_type === 'usb' 
-                                  ? '🔌 USB' 
+                                  ? `🔌 USB: ${printer.usb_printer_name || t('لم يُحدد اسم الطابعة')}` 
                                   : `🌐 ${printer.ip_address}:${printer.port}`
                                 }
                               </p>
@@ -5097,11 +5112,41 @@ export default function Settings() {
                         </Select>
                         <p className="text-xs text-muted-foreground mt-1">
                           {editPrinterForm.connection_type === 'usb' 
-                            ? t('طابعة USB تطبع عبر المتصفح مباشرة - لا تحتاج IP أو وسيط الطباعة')
+                            ? t('طابعة USB تطبع عبر وسيط الطباعة مباشرة بدون نافذة - اختر اسم الطابعة من Windows')
                             : t('طابعة الشبكة تحتاج IP ومنفذ ووسيط الطباعة')
                           }
                         </p>
                       </div>
+                      {(editPrinterForm.connection_type || 'network') === 'usb' && (
+                      <div>
+                        <Label className="text-foreground">{t('اسم الطابعة في Windows')}</Label>
+                        <div className="flex gap-2 mt-1">
+                          <Input
+                            value={editPrinterForm.usb_printer_name || ''}
+                            onChange={(e) => setEditPrinterForm({ ...editPrinterForm, usb_printer_name: e.target.value })}
+                            placeholder={t('مثال: SAM4S GIANT-100')}
+                            required
+                            className="flex-1"
+                            list="edit-windows-printers-list"
+                            data-testid="edit-usb-printer-name"
+                          />
+                          <Button type="button" variant="outline" size="sm" onClick={async () => {
+                            const prts = await listAgentPrinters();
+                            setWindowsPrinters(prts);
+                            if (prts.length === 0) toast.error(t('لم يتم العثور على طابعات - تأكد من تشغيل وسيط الطباعة'));
+                            else toast.success(`${t('تم العثور على')} ${prts.length} ${t('طابعات')}`);
+                          }}>
+                            <RefreshCw className="h-4 w-4" />
+                          </Button>
+                        </div>
+                        <datalist id="edit-windows-printers-list">
+                          {windowsPrinters.map((p, i) => (
+                            <option key={i} value={p.name}>{p.name}{p.is_default ? ' (افتراضية)' : ''}</option>
+                          ))}
+                        </datalist>
+                        <p className="text-xs text-muted-foreground mt-1">{t('اضغط زر التحديث لجلب الطابعات المتوفرة أو اكتب الاسم يدوياً')}</p>
+                      </div>
+                      )}
                       {(editPrinterForm.connection_type || 'network') !== 'usb' && (
                       <div className="grid grid-cols-2 gap-4">
                         <div>

@@ -1852,13 +1852,13 @@ export default function POS() {
       playSuccess();
       toast.success(`${t('تم حفظ الطلب')} #${savedOrder.order_number}`);
       
-      // طباعة مباشرة للطابعات الشبكية فقط (Ethernet) عبر الوسيط
-      // طابعات USB تعمل عبر المتصفح فقط - لا تتأثر بالوسيط
-      const networkPrinters = availablePrinters.filter(p => 
-        p.connection_type !== 'usb' && p.ip_address
+      // طباعة مباشرة لجميع الطابعات (USB + Ethernet) عبر وسيط الطباعة
+      const allConfiguredPrinters = availablePrinters.filter(p => 
+        (p.connection_type === 'usb' && p.usb_printer_name) ||
+        (p.connection_type !== 'usb' && p.ip_address)
       );
       
-      if (networkPrinters.length > 0) {
+      if (allConfiguredPrinters.length > 0) {
         try {
           const agentOk = await checkAgentStatus();
           setPrintAgentOnline(agentOk);
@@ -1882,7 +1882,7 @@ export default function POS() {
             }));
             
             const result = await printOrderToAllPrinters(
-              orderForPrint, itemsForPrint, products, networkPrinters, restaurantName
+              orderForPrint, itemsForPrint, products, allConfiguredPrinters, restaurantName
             );
             
             if (result.success) {
@@ -1893,14 +1893,18 @@ export default function POS() {
               if (succeeded.length > 0) toast.success(`${t('تم الطباعة على')} ${succeeded.length} ${t('طابعات')}`);
               failed.forEach(f => toast.error(`${t('فشل الطباعة على')} ${f.printer_name}: ${f.message}`));
             }
+          } else {
+            // الوسيط غير متصل - فتح نافذة المتصفح كحل بديل
+            setPrintDialogOpen(true);
           }
         } catch (printError) {
-          console.log('Network printer error:', printError);
+          console.log('Print error:', printError);
+          setPrintDialogOpen(true);
         }
+      } else {
+        // لا توجد طابعات مُعدّة - فتح نافذة المتصفح
+        setPrintDialogOpen(true);
       }
-      
-      // فتح نافذة الطباعة عبر المتصفح (لطابعة USB الكاشير)
-      setPrintDialogOpen(true);
       
     } catch (error) {
       console.error('Failed to save order:', error);

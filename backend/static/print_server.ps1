@@ -1,5 +1,69 @@
 $ErrorActionPreference = 'Continue'
 
+# === RAW USB PRINTER SUPPORT via Windows Print Spooler ===
+try {
+Add-Type -TypeDefinition @"
+using System;
+using System.Runtime.InteropServices;
+
+public class RawPrinterHelper {
+    [StructLayout(LayoutKind.Sequential)]
+    public struct DOCINFOA {
+        [MarshalAs(UnmanagedType.LPStr)] public string pDocName;
+        [MarshalAs(UnmanagedType.LPStr)] public string pOutputFile;
+        [MarshalAs(UnmanagedType.LPStr)] public string pDataType;
+    }
+
+    [DllImport("winspool.drv", SetLastError = true, CharSet = CharSet.Ansi)]
+    public static extern bool OpenPrinter(string szPrinter, out IntPtr hPrinter, IntPtr pd);
+
+    [DllImport("winspool.drv", SetLastError = true, CharSet = CharSet.Ansi)]
+    public static extern bool StartDocPrinter(IntPtr hPrinter, int level, ref DOCINFOA di);
+
+    [DllImport("winspool.drv", SetLastError = true)]
+    public static extern bool StartPagePrinter(IntPtr hPrinter);
+
+    [DllImport("winspool.drv", SetLastError = true)]
+    public static extern bool WritePrinter(IntPtr hPrinter, IntPtr pBytes, int dwCount, out int dwWritten);
+
+    [DllImport("winspool.drv", SetLastError = true)]
+    public static extern bool EndPagePrinter(IntPtr hPrinter);
+
+    [DllImport("winspool.drv", SetLastError = true)]
+    public static extern bool EndDocPrinter(IntPtr hPrinter);
+
+    [DllImport("winspool.drv", SetLastError = true)]
+    public static extern bool ClosePrinter(IntPtr hPrinter);
+
+    public static bool SendBytesToPrinter(string printerName, byte[] data) {
+        IntPtr hPrinter;
+        if (!OpenPrinter(printerName, out hPrinter, IntPtr.Zero)) return false;
+
+        DOCINFOA di = new DOCINFOA();
+        di.pDocName = "Maestro POS Receipt";
+        di.pDataType = "RAW";
+
+        if (!StartDocPrinter(hPrinter, 1, ref di)) { ClosePrinter(hPrinter); return false; }
+        if (!StartPagePrinter(hPrinter)) { EndDocPrinter(hPrinter); ClosePrinter(hPrinter); return false; }
+
+        IntPtr pUnmanagedBytes = Marshal.AllocCoTaskMem(data.Length);
+        Marshal.Copy(data, 0, pUnmanagedBytes, data.Length);
+        int written;
+        bool success = WritePrinter(hPrinter, pUnmanagedBytes, data.Length, out written);
+        Marshal.FreeCoTaskMem(pUnmanagedBytes);
+
+        EndPagePrinter(hPrinter);
+        EndDocPrinter(hPrinter);
+        ClosePrinter(hPrinter);
+        return success;
+    }
+}
+"@
+} catch {
+    # Type already added - ignore
+}
+
+# === NETWORK PRINTER: Send via TCP ===
 function Send-ToPrinter {
     param([string]$ip, [int]$port, [byte[]]$data)
     try {
@@ -17,8 +81,23 @@ function Send-ToPrinter {
     }
 }
 
+# === USB PRINTER: Send via Windows Spooler ===
+function Send-ToUsbPrinter {
+    param([string]$printerName, [byte[]]$data)
+    try {
+        $result = [RawPrinterHelper]::SendBytesToPrinter($printerName, $data)
+        if ($result) {
+            return @{success=$true; message='OK'}
+        } else {
+            return @{success=$false; message="Failed to send to printer: $printerName"}
+        }
+    } catch {
+        return @{success=$false; message=$_.Exception.Message}
+    }
+}
+
 function Build-TestPage {
-    param([string]$name, [string]$ip, [string]$port)
+    param([string]$name, [string]$info, [string]$connType)
     $enc = [System.Text.Encoding]::UTF8
     $now = Get-Date -Format 'yyyy/MM/dd HH:mm:ss'
     $bytes = [System.Collections.Generic.List[byte]]::new()
@@ -35,7 +114,9 @@ function Build-TestPage {
     $bytes.AddRange([byte[]]@(0x1b, 0x61, 0x00))
     $bytes.AddRange($enc.GetBytes("Printer: $name"))
     $bytes.Add(0x0a)
-    $bytes.AddRange($enc.GetBytes("IP: ${ip}:${port}"))
+    $bytes.AddRange($enc.GetBytes("Connection: $connType"))
+    $bytes.Add(0x0a)
+    $bytes.AddRange($enc.GetBytes("Info: $info"))
     $bytes.Add(0x0a)
     $bytes.AddRange($enc.GetBytes('--------------------------------'))
     $bytes.Add(0x0a)
@@ -135,7 +216,27 @@ try {
         $jsonOut = ''
 
         if ($path -eq '/status') {
-            $jsonOut = '{"status":"running","version":"2.0.0","agent":"Maestro Print Agent"}'
+            $jsonOut = '{"status":"running","version":"2.1.0","agent":"Maestro Print Agent","usb_support":true}'
+        }
+        elseif ($path -eq '/list-printers') {
+            # List all Windows printers
+            try {
+                $wmiPrinters = Get-WmiObject -Class Win32_Printer | Select-Object Name, Default, PrinterStatus, PortName
+                $printerList = @()
+                foreach ($p in $wmiPrinters) {
+                    $printerList += @{
+                        name = $p.Name
+                        is_default = $p.Default
+                        status = $p.PrinterStatus
+                        port = $p.PortName
+                    }
+                }
+                $jsonOut = ($printerList | ConvertTo-Json -Compress)
+                if (-not $jsonOut -or $jsonOut -eq 'null') { $jsonOut = '[]' }
+                if ($jsonOut[0] -ne '[') { $jsonOut = "[$jsonOut]" }
+            } catch {
+                $jsonOut = '[]'
+            }
         }
         elseif ($path -eq '/check-printer') {
             $qip = $req.QueryString['ip']
@@ -152,22 +253,44 @@ try {
         elseif ($path -eq '/print-test' -and $req.HttpMethod -eq 'POST') {
             $reader = New-Object System.IO.StreamReader($req.InputStream)
             $body = $reader.ReadToEnd() | ConvertFrom-Json
-            $pport = if ($body.port) { [int]$body.port } else { 9100 }
-            $testData = Build-TestPage $body.name $body.ip $pport.ToString()
-            $result = Send-ToPrinter $body.ip $pport $testData
-            if ($result.success) {
-                $jsonOut = '{"success":true,"message":"OK","printer":"' + $body.ip + ':' + $pport + '"}'
+
+            if ($body.usb_printer_name) {
+                # USB printer test
+                $testData = Build-TestPage $body.name $body.usb_printer_name 'USB'
+                $result = Send-ToUsbPrinter $body.usb_printer_name $testData
+                if ($result.success) {
+                    $jsonOut = '{"success":true,"message":"OK","printer":"' + ($body.usb_printer_name -replace '"','') + '","type":"usb"}'
+                } else {
+                    $em = $result.message -replace '"', '' -replace '\\', ''
+                    $jsonOut = '{"success":false,"message":"' + $em + '","type":"usb"}'
+                }
             } else {
-                $em = $result.message -replace '"', '' -replace '\\', ''
-                $jsonOut = '{"success":false,"message":"' + $em + '"}'
+                # Network printer test
+                $pport = if ($body.port) { [int]$body.port } else { 9100 }
+                $testData = Build-TestPage $body.name ($body.ip + ':' + $pport) 'Network'
+                $result = Send-ToPrinter $body.ip $pport $testData
+                if ($result.success) {
+                    $jsonOut = '{"success":true,"message":"OK","printer":"' + $body.ip + ':' + $pport + '","type":"network"}'
+                } else {
+                    $em = $result.message -replace '"', '' -replace '\\', ''
+                    $jsonOut = '{"success":false,"message":"' + $em + '","type":"network"}'
+                }
             }
         }
         elseif ($path -eq '/print-receipt' -and $req.HttpMethod -eq 'POST') {
             $reader = New-Object System.IO.StreamReader($req.InputStream)
             $body = $reader.ReadToEnd() | ConvertFrom-Json
-            $pport = if ($body.port) { [int]$body.port } else { 9100 }
             $receiptData = Build-Receipt $body.order $body.printer_config
-            $result = Send-ToPrinter $body.ip $pport $receiptData
+
+            if ($body.usb_printer_name) {
+                # USB printer receipt
+                $result = Send-ToUsbPrinter $body.usb_printer_name $receiptData
+            } else {
+                # Network printer receipt
+                $pport = if ($body.port) { [int]$body.port } else { 9100 }
+                $result = Send-ToPrinter $body.ip $pport $receiptData
+            }
+
             if ($result.success) {
                 $jsonOut = '{"success":true,"message":"OK"}'
             } else {
@@ -178,9 +301,15 @@ try {
         elseif ($path -eq '/print-raw' -and $req.HttpMethod -eq 'POST') {
             $reader = New-Object System.IO.StreamReader($req.InputStream)
             $body = $reader.ReadToEnd() | ConvertFrom-Json
-            $pport = if ($body.port) { [int]$body.port } else { 9100 }
             $rawBytes = [byte[]]@(0x1b, 0x40) + [System.Text.Encoding]::UTF8.GetBytes($body.text) + [byte[]]@(0x0a,0x0a,0x0a,0x0a,0x0a,0x1d,0x56,0x42,0x00)
-            $result = Send-ToPrinter $body.ip $pport $rawBytes
+
+            if ($body.usb_printer_name) {
+                $result = Send-ToUsbPrinter $body.usb_printer_name $rawBytes
+            } else {
+                $pport = if ($body.port) { [int]$body.port } else { 9100 }
+                $result = Send-ToPrinter $body.ip $pport $rawBytes
+            }
+
             if ($result.success) {
                 $jsonOut = '{"success":true,"message":"OK"}'
             } else {
