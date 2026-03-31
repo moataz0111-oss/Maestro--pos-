@@ -8048,6 +8048,9 @@ async def download_print_agent():
         "$encoded = ($content -split '::ENCODED_SERVER::')[1].Trim()\n"
         '$decoded = [Text.Encoding]::Unicode.GetString([Convert]::FromBase64String($encoded))\n'
         '[IO.File]::WriteAllText("$d\\server.ps1", $decoded, [Text.Encoding]::UTF8)\n'
+        '# Start server directly via PowerShell (no VBS indirection)\n'
+        'Start-Process powershell -ArgumentList @("-ExecutionPolicy", "Bypass", "-NoProfile", "-WindowStyle", "Hidden", "-File", "$d\\server.ps1") -WindowStyle Hidden\n'
+        '# Create VBS only for Windows Startup auto-start\n'
         '$q = [char]34\n'
         '$qq = $q + $q\n'
         "$vbsLine1 = 'Set s = CreateObject(' + $q + 'WScript.Shell' + $q + ')'\n"
@@ -8055,7 +8058,6 @@ async def download_print_agent():
         '[IO.File]::WriteAllLines("$d\\launcher.vbs", @($vbsLine1, $vbsLine2))\n'
         '$startup = "$env:APPDATA\\Microsoft\\Windows\\Start Menu\\Programs\\Startup"\n'
         'Copy-Item "$d\\launcher.vbs" "$startup\\MaestroPrintAgent.vbs" -Force\n'
-        "Start-Process wscript -ArgumentList ('\"' + $d + '\\launcher.vbs\"') -WindowStyle Hidden\n"
     )
     setup_encoded = base64.b64encode(setup_ps1.strip().encode('utf-16-le')).decode('ascii')
 
@@ -8076,7 +8078,7 @@ if %errorlevel%==0 (
     for /f "tokens=5" %%a in ('netstat -ano 2^>nul ^| findstr ":9999 " ^| findstr "LISTENING"') do (
         taskkill /PID %%a /F >nul 2>&1
     )
-    timeout /t 2 >nul
+    timeout /t 3 >nul
     echo  [OK] Old agent stopped.
     echo.
 )
@@ -8085,16 +8087,19 @@ echo.
 set "MAESTRO_BAT_PATH=%~f0"
 powershell -ExecutionPolicy Bypass -NoProfile -EncodedCommand {setup_encoded}
 echo.
+echo  [..] Verifying agent started...
+timeout /t 3 >nul
+powershell -NoProfile -Command "try {{ $r = Invoke-WebRequest -Uri 'http://localhost:9999/status' -UseBasicParsing -TimeoutSec 5; $j = $r.Content | ConvertFrom-Json; if ($j.usb_support) {{ Write-Host '  [OK] Agent v2.1 verified - USB support active!' -ForegroundColor Green }} else {{ Write-Host '  [!!] Agent running but USB not detected' -ForegroundColor Yellow }} }} catch {{ Write-Host '  [!!] Agent not responding yet - wait 10 seconds and refresh the page' -ForegroundColor Yellow }}"
+echo.
 echo  ========================================
-echo  [OK] Agent v2.1 is running in background!
+echo  [OK] Installation complete!
 echo  [OK] Auto-start with Windows enabled.
-echo  [OK] USB + Network printing supported.
 echo  ========================================
 echo.
 echo  Port: http://localhost:9999
 echo.
-echo  This window will close in 5 seconds...
-timeout /t 5 >nul
+echo  This window will close in 8 seconds...
+timeout /t 8 >nul
 exit /b
 ::ENCODED_SERVER::
 {server_encoded}
