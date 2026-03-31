@@ -3453,39 +3453,63 @@ export default function POS() {
               </div>
             )}
             
-            {/* ========== أسفل الفاتورة - شعار المطعم ========== */}
+            {/* ========== أسفل الفاتورة - شعار النظام وQR Code ========== */}
             <div className="text-center mt-4 pt-3 border-t-2 border-gray-400">
               {/* رسالة الشكر من المطعم */}
               <p className="text-xs font-bold mb-3">
                 {invoiceSettings.thank_you_message || t('شكراً لزيارتكم') + ' ❤️'}
               </p>
               
-              {/* شعار المطعم في الأسفل */}
-              {(logoBase64 || invoiceSettings.invoice_logo || restaurantSettings.logo_url) && (
-                <div className="mt-2">
+              {/* خط فاصل */}
+              <div className="border-t border-dashed border-gray-300 my-2"></div>
+              
+              {/* قسم النظام - شعار + اسم + QR */}
+              <div className="flex flex-col items-center mt-2">
+                {/* شعار النظام - ثابت ومميز */}
+                {systemInvoiceSettings.system_logo_url ? (
                   <img 
-                    src={logoBase64 || (() => {
-                      const logoUrl = invoiceSettings.invoice_logo || restaurantSettings.logo_url;
-                      if (logoUrl?.startsWith('/api')) return `${API}${logoUrl.replace('/api', '')}`;
-                      if (logoUrl?.startsWith('/uploads')) return `${API}${logoUrl}`;
+                    src={(() => {
+                      const logoUrl = systemInvoiceSettings.system_logo_url;
+                      if (logoUrl?.startsWith('/api')) {
+                        return `${API}${logoUrl.replace('/api', '')}`;
+                      }
+                      if (logoUrl?.startsWith('/uploads')) {
+                        return `${API}${logoUrl}`;
+                      }
                       return logoUrl;
                     })()}
-                    alt={t('شعار المطعم')} 
-                    className="h-10 w-10 mx-auto object-cover rounded-full"
+                    alt="system-logo"
+                    data-system-logo="true"
+                    className="h-10 w-10 object-contain rounded-full mb-1"
                     onError={(e) => e.target.style.display = 'none'}
                   />
-                </div>
-              )}
-              <p className="text-xs font-bold text-gray-700 mt-1">
-                {restaurantSettings.name_ar || restaurantSettings.name || ''}
-              </p>
-              
-              {/* أرقام التواصل */}
-              {(invoiceSettings.phone || invoiceSettings.phone2) && (
-                <p className="text-[10px] text-gray-500 mt-1" dir="ltr">
-                  {invoiceSettings.phone}{invoiceSettings.phone && invoiceSettings.phone2 ? ' - ' : ''}{invoiceSettings.phone2 || ''}
+                ) : (
+                  <div className="flex items-center justify-center h-10 w-10 rounded-full bg-black mb-1" style={{border: '2px solid #333'}}>
+                    <span className="text-white font-bold text-sm" style={{fontFamily: 'Arial, sans-serif'}}>M</span>
+                  </div>
+                )}
+                
+                {/* اسم النظام */}
+                <p className="text-xs font-bold text-gray-700">
+                  {systemInvoiceSettings.system_name || 'Maestro EGP'}
                 </p>
-              )}
+                
+                {/* نص التواصل */}
+                <p className="text-[10px] text-gray-500 mt-1">
+                  {t('للتواصل معنا لشراء نسخة امسح الكود')}
+                </p>
+                
+                {/* QR Code يفتح صفحة التواصل */}
+                <div className="mt-2">
+                  <QRCodeSVG 
+                    value={`${window.location.origin}/contact`}
+                    size={70}
+                    level="L"
+                    bgColor="#ffffff"
+                    fgColor="#000000"
+                  />
+                </div>
+              </div>
             </div>
           </div>
           </div>{/* end overflow-y-auto */}
@@ -3554,7 +3578,9 @@ export default function POS() {
                     const imgs = cloned.querySelectorAll('img');
                     imgs.forEach(img => {
                       const alt = img.getAttribute('alt') || '';
-                      if (alt.includes('شعار') || alt.includes('logo')) {
+                      const isSystemLogo = img.getAttribute('data-system-logo') === 'true';
+                      // استبدال شعار المطعم فقط - عدم لمس شعار النظام
+                      if (!isSystemLogo && (alt.includes('شعار المطعم') || alt.includes('restaurant'))) {
                         img.src = logoBase64;
                       }
                     });
