@@ -44,6 +44,16 @@ Multi-tenant POS system (React + FastAPI + MongoDB) with role-based access, POS 
     - User sees brief 5-second setup window then it auto-closes
     - Server runs on localhost:9999 completely hidden
 
+23. **Printer Connection Type (USB vs Network)** - Added connection_type field to printer configuration:
+    - Dropdown selector in add/edit printer forms: "USB" or "Network (Ethernet/IP)"
+    - When USB is selected, IP/Port fields are hidden (not needed)
+    - When Network is selected, IP/Port fields are shown and required
+    - Printer list shows connection type (USB icon or IP address)
+    - USB printers show blue status dot, network printers show green/red
+    - Test print for USB opens browser print dialog directly
+    - Test print for Network uses the print agent (localhost:9999)
+    - Backend model updated: `connection_type` field with "network" default, `ip_address` now optional
+
 ## Pending Issues
 - None
 
@@ -61,9 +71,11 @@ Multi-tenant POS system (React + FastAPI + MongoDB) with role-based access, POS 
 
 ## Key Endpoints
 - `GET /api/download-print-agent` - Dynamically generates BAT installer for hidden print agent
+- `POST /api/printers` - Create printer (accepts connection_type: "usb" | "network")
+- `PUT /api/printers/{id}` - Update printer
 - `GET /api/settings/restaurant` - Fetches tenant restaurant data
 
 ## Key DB Schema
-- `printers`: name, ip_address, port, connection_type, print_mode, show_prices
+- `printers`: name, ip_address (optional), port, connection_type ("usb"|"network"), branch_id, printer_type, print_mode, show_prices
 - `tenant_invoice_settings`: show_logo, invoice_logo, restaurant_name
 - `settings`: Handles restaurant and system configurations

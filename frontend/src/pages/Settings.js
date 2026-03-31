@@ -427,7 +427,7 @@ export default function Settings() {
   const [editBranchForm, setEditBranchForm] = useState(null);
   const [printerForm, setPrinterForm] = useState({
     name: '', ip_address: '', port: 9100, branch_id: '', printer_type: 'receipt',
-    print_mode: 'full_receipt', show_prices: true, print_individual_items: false, auto_print_on_order: true
+    connection_type: 'network', print_mode: 'full_receipt', show_prices: true, print_individual_items: false, auto_print_on_order: true
   });
   const [editPrinterForm, setEditPrinterForm] = useState(null);
   const [editPrinterDialogOpen, setEditPrinterDialogOpen] = useState(false);
@@ -1112,7 +1112,7 @@ export default function Settings() {
       setPrinterDialogOpen(false);
       setPrinterForm({ 
         name: '', ip_address: '', port: 9100, branch_id: '', printer_type: 'receipt',
-        print_mode: 'full_receipt', show_prices: true, print_individual_items: false, auto_print_on_order: true
+        connection_type: 'network', print_mode: 'full_receipt', show_prices: true, print_individual_items: false, auto_print_on_order: true
       });
       fetchData();
     } catch (error) {
@@ -1128,6 +1128,7 @@ export default function Settings() {
       port: printer.port || 9100,
       branch_id: printer.branch_id,
       printer_type: printer.printer_type || 'receipt',
+      connection_type: printer.connection_type || 'network',
       print_mode: printer.print_mode || 'full_receipt',
       show_prices: printer.show_prices !== false,
       print_individual_items: printer.print_individual_items || false,
@@ -1141,10 +1142,11 @@ export default function Settings() {
     try {
       await axios.put(`${API}/printers/${editPrinterForm.id}`, {
         name: editPrinterForm.name,
-        ip_address: editPrinterForm.ip_address,
-        port: editPrinterForm.port,
+        ip_address: editPrinterForm.connection_type === 'usb' ? '' : editPrinterForm.ip_address,
+        port: editPrinterForm.connection_type === 'usb' ? 0 : editPrinterForm.port,
         branch_id: editPrinterForm.branch_id,
         printer_type: editPrinterForm.printer_type,
+        connection_type: editPrinterForm.connection_type,
         print_mode: editPrinterForm.print_mode,
         show_prices: editPrinterForm.show_prices,
         print_individual_items: editPrinterForm.print_individual_items,
@@ -1179,7 +1181,60 @@ export default function Settings() {
     
     setPrinterTestStatus(prev => ({ ...prev, [printerId]: 'testing' }));
     
-    // محاولة الطباعة عبر وسيط الطباعة المحلي (مباشر لـ IP الطابعة)
+    // طابعات USB تطبع عبر المتصفح مباشرة
+    if (printer.connection_type === 'usb') {
+      try {
+        const printWindow = window.open('', '_blank', 'width=300,height=400');
+        if (!printWindow) {
+          toast.error(t('يرجى السماح بفتح النوافذ المنبثقة'));
+          setPrinterTestStatus(prev => ({ ...prev, [printerId]: 'error' }));
+          return;
+        }
+        const now = new Date();
+        printWindow.document.write(`
+          <html dir="rtl">
+          <head>
+            <meta charset="UTF-8">
+            <title>اختبار الطابعة</title>
+            <style>
+              body { font-family: monospace, Arial; text-align: center; padding: 20px; font-size: 14px; }
+              .line { border-top: 1px dashed #000; margin: 10px 0; }
+              h2 { margin: 5px 0; }
+              .info { background: #d4edda; padding: 8px; border-radius: 5px; font-size: 12px; margin-top: 10px; }
+            </style>
+          </head>
+          <body>
+            <h2>*** اختبار الطابعة ***</h2>
+            <div class="line"></div>
+            <p><strong>${printer.name || 'طابعة'}</strong></p>
+            <p>نوع الاتصال: USB</p>
+            <p>الفرع: ${branches.find(b => b.id === printer.branch_id)?.name || '-'}</p>
+            <div class="line"></div>
+            <p>التاريخ: ${now.toLocaleDateString('ar-IQ')}</p>
+            <p>الوقت: ${now.toLocaleTimeString('ar-IQ')}</p>
+            <div class="line"></div>
+            <p>الطباعة تعمل بنجاح!</p>
+            <p>================================</p>
+            <div class="info">طابعة USB - تطبع عبر المتصفح مباشرة</div>
+          </body>
+          </html>
+        `);
+        printWindow.document.close();
+        printWindow.focus();
+        setTimeout(() => {
+          printWindow.print();
+          setTimeout(() => printWindow.close(), 2000);
+        }, 500);
+        toast.success(t('اختبار طباعة USB - اختر الطابعة من نافذة المتصفح'));
+        setPrinterTestStatus(prev => ({ ...prev, [printerId]: 'success' }));
+      } catch (error) {
+        toast.error(t('فشل في فتح نافذة الطباعة'));
+        setPrinterTestStatus(prev => ({ ...prev, [printerId]: 'error' }));
+      }
+      return;
+    }
+    
+    // طابعات الشبكة - عبر وسيط الطباعة المحلي
     const agentOnline = await checkAgentStatus();
     setPrintAgentOnline(agentOnline);
     
@@ -4762,6 +4817,25 @@ export default function Settings() {
                             className="mt-1"
                           />
                         </div>
+                        <div>
+                          <Label className="text-foreground">{t('نوع الاتصال')}</Label>
+                          <Select value={printerForm.connection_type} onValueChange={(v) => setPrinterForm({ ...printerForm, connection_type: v })}>
+                            <SelectTrigger className="mt-1" data-testid="printer-connection-type">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="usb">{t('USB - متصلة بالجهاز مباشرة')}</SelectItem>
+                              <SelectItem value="network">{t('شبكة (Ethernet/IP) - عبر وسيط الطباعة')}</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            {printerForm.connection_type === 'usb' 
+                              ? t('طابعة USB تطبع عبر المتصفح مباشرة - لا تحتاج IP أو وسيط الطباعة')
+                              : t('طابعة الشبكة تحتاج IP ومنفذ ووسيط الطباعة')
+                            }
+                          </p>
+                        </div>
+                        {printerForm.connection_type === 'network' && (
                         <div className="grid grid-cols-2 gap-4">
                           <div>
                             <Label className="text-foreground">{t('عنوان IP')}</Label>
@@ -4783,6 +4857,7 @@ export default function Settings() {
                             />
                           </div>
                         </div>
+                        )}
                         <div className="grid grid-cols-2 gap-4">
                           <div>
                             <Label className="text-foreground">{t('الفرع')}</Label>
@@ -4912,7 +4987,9 @@ export default function Settings() {
                             <div className="relative">
                               <Printer className="h-8 w-8 text-muted-foreground" />
                               {/* حالة الاتصال */}
-                              {printer.ip_address && printer.port ? (
+                              {printer.connection_type === 'usb' ? (
+                                <span className="absolute -top-1 -right-1 w-3 h-3 bg-blue-500 rounded-full border-2 border-background" title={t('USB')}></span>
+                              ) : printer.ip_address && printer.port ? (
                                 <span className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full border-2 border-background" title={t('مُعدّة')}></span>
                               ) : (
                                 <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full border-2 border-background" title={t('غير مُعدّة')}></span>
@@ -4920,7 +4997,12 @@ export default function Settings() {
                             </div>
                             <div>
                               <p className="font-medium text-foreground">{t(printer.name)}</p>
-                              <p className="text-sm text-muted-foreground">{printer.ip_address}:{printer.port}</p>
+                              <p className="text-sm text-muted-foreground">
+                                {printer.connection_type === 'usb' 
+                                  ? '🔌 USB' 
+                                  : `🌐 ${printer.ip_address}:${printer.port}`
+                                }
+                              </p>
                               {/* عرض صلاحيات الطباعة */}
                               <div className="flex flex-wrap gap-1 mt-1">
                                 <span className="text-xs text-muted-foreground">
@@ -5002,6 +5084,25 @@ export default function Settings() {
                           className="mt-1"
                         />
                       </div>
+                      <div>
+                        <Label className="text-foreground">{t('نوع الاتصال')}</Label>
+                        <Select value={editPrinterForm.connection_type || 'network'} onValueChange={(v) => setEditPrinterForm({ ...editPrinterForm, connection_type: v })}>
+                          <SelectTrigger className="mt-1" data-testid="edit-printer-connection-type">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="usb">{t('USB - متصلة بالجهاز مباشرة')}</SelectItem>
+                            <SelectItem value="network">{t('شبكة (Ethernet/IP) - عبر وسيط الطباعة')}</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {editPrinterForm.connection_type === 'usb' 
+                            ? t('طابعة USB تطبع عبر المتصفح مباشرة - لا تحتاج IP أو وسيط الطباعة')
+                            : t('طابعة الشبكة تحتاج IP ومنفذ ووسيط الطباعة')
+                          }
+                        </p>
+                      </div>
+                      {(editPrinterForm.connection_type || 'network') !== 'usb' && (
                       <div className="grid grid-cols-2 gap-4">
                         <div>
                           <Label className="text-foreground">{t('عنوان IP')}</Label>
@@ -5023,6 +5124,7 @@ export default function Settings() {
                           />
                         </div>
                       </div>
+                      )}
                       <div>
                         <Label className="text-foreground">{t('الفرع')}</Label>
                         <Select value={editPrinterForm.branch_id} onValueChange={(v) => setEditPrinterForm({ ...editPrinterForm, branch_id: v })}>

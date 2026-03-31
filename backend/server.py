@@ -7876,10 +7876,11 @@ async def upload_category_image(
 
 class PrinterCreate(BaseModel):
     name: str
-    ip_address: str
+    ip_address: Optional[str] = ""
     port: int = 9100
     branch_id: str
     printer_type: str = "receipt"  # النوع: receipt, kitchen, bar, packaging, label, custom
+    connection_type: str = "network"  # network أو usb
     custom_type_name: Optional[str] = None  # اسم مخصص للنوع إذا كان custom
     # صلاحيات الطباعة
     print_mode: str = "full_receipt"  # full_receipt, orders_only, selected_products
