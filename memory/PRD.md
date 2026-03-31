@@ -42,6 +42,11 @@ Multi-tenant POS system (React + FastAPI + MongoDB) with role-based access, POS 
     - Deletes entire MaestroPrintAgent directory (`rd /s /q`)
     - Waits for port 9999 to be free with retry loop before installing
     - Solves PID 4 (System/HTTP.SYS) issue that made old approach impossible
+25. **Print Agent Path Space Fix** - Fixed Start-Process ArgumentList to properly quote paths with spaces (e.g., "Graffiti zeona" username)
+26. **Auto Kitchen Printing on Order Submit** - `handleSubmitOrder` now triggers print routing to kitchen/receipt printers via Print Agent
+27. **Silent Invoice Printing** - Print button in invoice dialog uses Print Agent for one-step silent printing (falls back to browser if agent offline)
+28. **Receipt Footer: Restaurant Logo** - Replaced Maestro EGP system logo with restaurant's own logo in receipt footer
+29. **Branch Name Above Order Type** - Moved branch name and phone to appear above order type in receipt template
 
 ## Pending Issues
 - None

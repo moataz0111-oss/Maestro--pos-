@@ -1716,6 +1716,48 @@ export default function POS() {
       
       playSuccess();
       
+      // === طباعة تلقائية للطابعات المربوطة (مطبخ + كاشير) ===
+      try {
+        const allConfiguredPrinters = availablePrinters.filter(p => 
+          (p.connection_type === 'usb' && p.usb_printer_name) ||
+          (p.connection_type !== 'usb' && p.ip_address)
+        );
+        if (allConfiguredPrinters.length > 0) {
+          const agentOk = await checkAgentStatus();
+          setPrintAgentOnline(agentOk);
+          if (agentOk) {
+            const restaurantName = restaurantSettings?.name_ar || restaurantSettings?.name || '';
+            const orderForPrint = {
+              order_number: orderNumber,
+              order_type: orderType,
+              customer_name: customerName || '',
+              table_number: orderType === 'dine_in' ? (tables.find(t => t.id === selectedTable)?.number || selectedTable) : '',
+              buzzer_number: buzzerNumber || '',
+              discount: discount || 0
+            };
+            const itemsForPrint = cart.map(item => ({
+              product_id: item.product_id || item.id,
+              product_name: item.product_name || item.name,
+              name: item.product_name || item.name,
+              price: item.price,
+              quantity: item.quantity,
+              notes: item.notes || '',
+              extras: item.selectedExtras || []
+            }));
+            const result = await printOrderToAllPrinters(
+              orderForPrint, itemsForPrint, products, allConfiguredPrinters, restaurantName
+            );
+            if (result.success) {
+              console.log('Print success:', result);
+            } else {
+              console.log('Print partial:', result);
+            }
+          }
+        }
+      } catch (printErr) {
+        console.log('Print error (non-blocking):', printErr);
+      }
+      
       // رسالة مناسبة حسب نوع الطلب
       if (orderType === 'dine_in') {
         toast.success(`✅ ${t('تم إتمام الطلب')} #${orderNumber} ${t('وإغلاق الطاولة')}`);
@@ -3299,6 +3341,18 @@ export default function POS() {
             
             {/* معلومات الطلب - متغيرة حسب نوع الطلب */}
             <div className="border-t border-dashed border-gray-300 pt-2 mb-2 text-sm">
+              {/* === اسم الفرع والأرقام أولاً === */}
+              {(() => {
+                const branchId = getBranchIdForApi() || user?.branch_id;
+                const branch = branches.find(b => b.id === branchId);
+                return branch?.name ? (
+                  <div className="text-center mb-1">
+                    <p className="font-bold text-base">{branch.name}</p>
+                    {branch.phone && <p className="text-xs" dir="ltr">{branch.phone}</p>}
+                  </div>
+                ) : null;
+              })()}
+              
               {/* === نوع الطلب === */}
               <p className="font-bold text-center text-base mb-1">
                 {orderType === 'dine_in' ? t('طلب داخلي') 
@@ -3335,15 +3389,6 @@ export default function POS() {
                   )}
                 </div>
               )}
-              
-              {/* اسم الفرع + الكاشير */}
-              {(() => {
-                const branchId = getBranchIdForApi() || user?.branch_id;
-                const branch = branches.find(b => b.id === branchId);
-                return branch?.name ? (
-                  <p className="text-center text-xs mt-1">{t('الفرع')}: {branch.name}</p>
-                ) : null;
-              })()}
             </div>
             
             {/* نص أعلى الفاتورة المخصص */}
@@ -3408,62 +3453,39 @@ export default function POS() {
               </div>
             )}
             
-            {/* ========== أسفل الفاتورة - شعار النظام وQR Code ========== */}
+            {/* ========== أسفل الفاتورة - شعار المطعم ========== */}
             <div className="text-center mt-4 pt-3 border-t-2 border-gray-400">
               {/* رسالة الشكر من المطعم */}
               <p className="text-xs font-bold mb-3">
                 {invoiceSettings.thank_you_message || t('شكراً لزيارتكم') + ' ❤️'}
               </p>
               
-              {/* خط فاصل */}
-              <div className="border-t border-dashed border-gray-300 my-2"></div>
-              
-              {/* قسم النظام - شعار + اسم + QR */}
-              <div className="flex flex-col items-center mt-2">
-                {/* شعار النظام - ثابت ومميز */}
-                {systemInvoiceSettings.system_logo_url ? (
+              {/* شعار المطعم في الأسفل */}
+              {(logoBase64 || invoiceSettings.invoice_logo || restaurantSettings.logo_url) && (
+                <div className="mt-2">
                   <img 
-                    src={(() => {
-                      const logoUrl = systemInvoiceSettings.system_logo_url;
-                      if (logoUrl?.startsWith('/api')) {
-                        return `${API}${logoUrl.replace('/api', '')}`;
-                      }
-                      if (logoUrl?.startsWith('/uploads')) {
-                        return `${API}${logoUrl}`;
-                      }
+                    src={logoBase64 || (() => {
+                      const logoUrl = invoiceSettings.invoice_logo || restaurantSettings.logo_url;
+                      if (logoUrl?.startsWith('/api')) return `${API}${logoUrl.replace('/api', '')}`;
+                      if (logoUrl?.startsWith('/uploads')) return `${API}${logoUrl}`;
                       return logoUrl;
                     })()}
-                    alt={t('شعار النظام')} 
-                    className="h-10 w-10 object-contain rounded-full mb-1"
+                    alt={t('شعار المطعم')} 
+                    className="h-10 w-10 mx-auto object-cover rounded-full"
                     onError={(e) => e.target.style.display = 'none'}
                   />
-                ) : (
-                  <div className="flex items-center justify-center h-10 w-10 rounded-full bg-black mb-1" style={{border: '2px solid #333'}}>
-                    <span className="text-white font-bold text-sm" style={{fontFamily: 'Arial, sans-serif'}}>M</span>
-                  </div>
-                )}
-                
-                {/* اسم النظام */}
-                <p className="text-xs font-bold text-gray-700">
-                  {systemInvoiceSettings.system_name || 'Maestro EGP'}
-                </p>
-                
-                {/* نص التواصل */}
-                <p className="text-[10px] text-gray-500 mt-1">
-                  {t('للتواصل معنا لشراء نسخة امسح الكود')}
-                </p>
-                
-                {/* QR Code يفتح صفحة التواصل */}
-                <div className="mt-2">
-                  <QRCodeSVG 
-                    value={`${window.location.origin}/contact`}
-                    size={70}
-                    level="L"
-                    bgColor="#ffffff"
-                    fgColor="#000000"
-                  />
                 </div>
-              </div>
+              )}
+              <p className="text-xs font-bold text-gray-700 mt-1">
+                {restaurantSettings.name_ar || restaurantSettings.name || ''}
+              </p>
+              
+              {/* أرقام التواصل */}
+              {(invoiceSettings.phone || invoiceSettings.phone2) && (
+                <p className="text-[10px] text-gray-500 mt-1" dir="ltr">
+                  {invoiceSettings.phone}{invoiceSettings.phone && invoiceSettings.phone2 ? ' - ' : ''}{invoiceSettings.phone2 || ''}
+                </p>
+              )}
             </div>
           </div>
           </div>{/* end overflow-y-auto */}
@@ -3482,7 +3504,49 @@ export default function POS() {
             <Button 
               className="flex-1 bg-blue-500 hover:bg-blue-600 text-white"
               data-testid="print-receipt-btn"
-              onClick={() => {
+              onClick={async () => {
+                // محاولة الطباعة الصامتة عبر وسيط الطباعة أولاً
+                try {
+                  const agentOk = await checkAgentStatus();
+                  if (agentOk) {
+                    const cashierPrinter = availablePrinters.find(p => p.printer_type === 'receipt') || availablePrinters[0];
+                    if (cashierPrinter) {
+                      const restaurantName = restaurantSettings?.name_ar || restaurantSettings?.name || '';
+                      const orderForPrint = {
+                        restaurant_name: restaurantName,
+                        order_number: editingOrder?.order_number || lastOrderNumber || '',
+                        order_type: orderType,
+                        customer_name: customerName || '',
+                        table_number: orderType === 'dine_in' ? (tables.find(t => t.id === selectedTable)?.number || selectedTable) : '',
+                        buzzer_number: buzzerNumber || '',
+                        items: cart.map(item => ({
+                          product_name: item.product_name || item.name,
+                          name: item.product_name || item.name,
+                          price: item.price,
+                          quantity: item.quantity,
+                          notes: item.notes || '',
+                          extras: item.selectedExtras || []
+                        })),
+                        total: cart.reduce((sum, item) => sum + ((item.price + (item.selectedExtras || []).reduce((s, e) => s + e.price, 0)) * item.quantity), 0) - (discount || 0),
+                        discount: discount || 0
+                      };
+                      const result = await sendReceiptPrint(cashierPrinter, orderForPrint);
+                      if (result.success) {
+                        toast.success(t('تم الطباعة بنجاح'));
+                        setPrintDialogOpen(false);
+                        if (lastOrderNumber && !editingOrder) {
+                          clearCart();
+                          setLastOrderNumber(null);
+                        }
+                        return;
+                      }
+                    }
+                  }
+                } catch (e) {
+                  console.log('Agent print failed, falling back to browser:', e);
+                }
+
+                // Fallback: طباعة عبر المتصفح
                 const printContent = document.getElementById('receipt-to-print');
                 if (printContent) {
                   const cloned = printContent.cloneNode(true);
