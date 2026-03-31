@@ -15,7 +15,7 @@ Multi-tenant POS system (React + FastAPI + MongoDB) with role-based access, POS 
 ├── backend/
 │   ├── server.py (Main monolith ~18k lines)
 │   ├── routes/ (shifts_routes.py, reports_routes.py, inventory_system.py, customer_menu.py, order_notifications.py)
-│   ├── static/ (maestro_print_agent.py)
+│   ├── static/ (print_server.ps1, MaestroPrintAgent.bat [legacy])
 ```
 
 ## Completed Features
@@ -32,25 +32,17 @@ Multi-tenant POS system (React + FastAPI + MongoDB) with role-based access, POS 
 - Data isolation: Non-admin users only see their own orders/stats
 - Sales Competition Leaderboard: Daily/weekly/monthly cashier rankings
 - Smart cash register close: auto-enable confirm when expenses >= cash
-- **Daily Sales Target System**: Admin sets target, all see progress bar, animated 🎯 celebration on achievement
+- **Daily Sales Target System**: Admin sets target, all see progress bar, animated celebration on achievement
+- **Multi-Printer System**: Complete multi-printer routing architecture (USB + Ethernet)
 
-## Session 3 Fixes (March 30, 2026)
-11. Cash Register Calculation Fix
-12. User Permissions Stale Closure Fix  
-13. Thermal Printing Rewrite (80mm, hidden iframe)
-14. Data Isolation for non-admin users
-15. Permission Toggle Logic Fix + canSee() helper
-16. Sales Competition Leaderboard
-17. Cash Register Close Smart Button
-18. **Daily Sales Target System** - POST/GET /api/sales-target, progress bar, animated celebration
-19. **Packaging Materials 500 Error Fix** - Removed duplicate route from server.py, now uses modular route in inventory_system.py
-20. **Customizable Daily Target Message** - Admin can set custom motivational message via target dialog, stored in DB and displayed on dashboard
-21. **Multi-Printer System** - Complete multi-printer routing architecture:
-    - Local Print Agent (Python) for direct TCP printing to network printers
-    - Frontend printService.js utility for agent communication
-    - Settings: agent status bar (online/offline), download button, direct test print via IP
-    - POS: automatic order routing - items sent to assigned printers via printer_ids
-    - Download endpoint: GET /api/download-print-agent
+## Session 4 Fixes (March 31, 2026)
+22. **Print Agent Background Service (v2.0)** - Converted MaestroPrintAgent.bat from visible CMD window to hidden background service:
+    - Dynamic BAT generation from endpoint (not static file)
+    - Setup PowerShell extracts server code, saves as PS1, creates VBS launcher
+    - VBS runs PowerShell with `-WindowStyle Hidden` (completely invisible)
+    - Auto-copies VBS to Windows Startup folder for boot persistence
+    - User sees brief 5-second setup window then it auto-closes
+    - Server runs on localhost:9999 completely hidden
 
 ## Pending Issues
 - None
@@ -60,8 +52,18 @@ Multi-tenant POS system (React + FastAPI + MongoDB) with role-based access, POS 
 - P1: ZKTeco Fingerprint Integration
 - P2: Refactor server.py (18k+ lines) - duplicate routes still exist for packaging-requests
 - P2: Refactor SuperAdmin.js (5.4k+ lines)
+- P2: Refactor Settings.js (7.1k+ lines)
 
 ## Key Credentials
 - Admin: hanialdujaili@gmail.com / Hani@2024
 - Super Admin: owner@maestroegp.com / owner123 (Secret: 271018)
 - Test Cashier: cashier@test.com / Test@1234
+
+## Key Endpoints
+- `GET /api/download-print-agent` - Dynamically generates BAT installer for hidden print agent
+- `GET /api/settings/restaurant` - Fetches tenant restaurant data
+
+## Key DB Schema
+- `printers`: name, ip_address, port, connection_type, print_mode, show_prices
+- `tenant_invoice_settings`: show_logo, invoice_logo, restaurant_name
+- `settings`: Handles restaurant and system configurations

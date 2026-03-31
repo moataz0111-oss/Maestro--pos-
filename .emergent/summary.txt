@@ -1,137 +1,122 @@
 <analysis>**original_problem_statement**: 
-Fixing a series of bugs across the POS system and adding new operational features. 
-Recent requests include:
-1. Fixing cash register closure calculations (including orders without shift IDs).
-2. Data Isolation: Cashiers should only see their own orders for the current day, while Admins/Owners see everything.
-3. Inverting UI Permission toggle logic (Toggle ON = Visible/Enabled, Toggle OFF = Hidden/Disabled).
-4. Subtracting expenses from counted cash in the register closure and auto-enabling the confirm button if Expenses >= Cash.
-5. Adding a Sales Competition Leaderboard for cashiers.
-6. Adding a Daily Sales Target with a celebratory animation.
-7. **(PENDING)** Making the Daily Target motivational message customizable by the Admin.
-8. **(PENDING)** Fixing the Packaging Materials (الورقيات) inventory page where items save but do not display (500 Error).
+Fixing bugs and adding operational features to a POS system. Initial goals included fixing a 500 error on the Packaging Materials page and making the Daily Target motivational message customizable. 
+Later shifted to a major architectural requirement: The user has multiple printers (1 USB for cashier, 2 Ethernet for kitchen). The browser cannot send raw TCP commands to Ethernet printers directly. The user also requested extensive formatting fixes to the printed invoice (logos, branch name, cashier, payment method, dynamic restaurant names) and requested that the local print agent run entirely in the background as a hidden service.
 
 **PRODUCT REQUIREMENTS**:
-- Robust thermal printing using hidden iframes that strictly adheres to 80mm x 150mm paper width in one step.
-- Strict data isolation based on roles (Cashiers isolated to their own daily data; Admins see all).
-- Gamification elements: Sales Leaderboard and Daily Targets to motivate staff.
-- Seamless cash register closure flows that handle high expenses gracefully.
+- Robust multi-printer support: System must route print jobs to USB printers (via browser) and Ethernet printers (via IP/Port).
+- Data Isolation based on roles.
+- Accurate and dynamic thermal printing layouts (80mm).
+- Seamless setup for end-users on Windows POS machines without requiring external dependencies like Python.
 
 **User's preferred language**: Arabic (العربية) (INSTRUCT NEXT AGENT: You MUST respond in the user's preferred language, Arabic, only)
 
 **what currently exists?** 
-A multi-tenant POS system (React + FastAPI + MongoDB) with role-based access, strict data isolation for cashiers, offline PWA support, dynamic thermal printing, shift management, gamification (Leaderboard & Daily Targets), inventory tracking, and a customer-facing menu application.
+A multi-tenant POS system (React + FastAPI + MongoDB). Printing uses a hybrid approach: USB printers trigger via the browser's native , while Ethernet (Kitchen) printers receive print jobs via a downloadable local Windows Batch/PowerShell script () that runs a local server on  to forward TCP packets.
 
 **Last working item**: 
-    - Last item agent was working: Fixing the 500 Internal Server Error on the  endpoint. The agent discovered that a legacy, duplicated route in the massive  file (around line 9788) was overriding the correct modular route in . The legacy route was failing due to an  JSON serialization error. The agent *just* used  to delete the legacy route from .
-    - Status: IN PROGRESS / VERIFICATION PENDING
-    - Agent Testing Done: N (Context ended right after the code deletion).
-    - Which testing method agent to use? Both (Backend curl to verify  returns 200 OK, and Frontend screenshot of the Packaging Materials page).
+    - Last item agent was working: Converting the local print agent () into a hidden Windows background process.
+    - Reason: The user successfully downloaded and ran the  file, but closing the visible CMD window kills the server, breaking Ethernet printing. The user requested it to run permanently in the background without a visible window. The agent was just starting to execute bash commands to rewrite the batch script.
+    - Status: IN PROGRESS
+    - Agent Testing Done: N
+    - Which testing method agent to use? manual testing by curl to download the file and verify the script contents contain logic to hide the window (e.g., using  or a  wrapper).
     - User Testing Done: N
 
 **All Pending/In progress Issue list**: 
-  Issue 1: (P0) Packaging Materials (الورقيات) Not Displaying (500 Error)
-     - Attempted fixes: Agent deleted the duplicated  route from  so the app routes to the correct function in .
-     - Next debug checklist: 
-        - Verify if  now returns a 200 response with data instead of a 500 error.
-        - Check if any other inventory routes (POST, PUT, DELETE for packaging materials) are also duplicated in  and overriding .
-     - Why fix this issue and what will be achieved with the fix? Users cannot view or manage packaging inventory.
-     - Status: TESTING PENDING
+  Issue 1: (P0) Local Print Agent runs in a visible CMD window and dies when closed.
+     - Attempted fixes: Agent created a PowerShell-based  script. It works, but the terminal window stays open. 
+     - Next debug checklist: Modify  (or the endpoint generating it) to ensure the script launches the local server silently/hidden in the background, and optionally adds itself to the Windows Startup folder silently.
+     - Why fix this issue and what will be achieved with the fix? Prevents cashiers from accidentally closing the print agent, ensuring reliable kitchen printing.
+     - Status: IN PROGRESS
      - Is recurring issue? N
-     - Should Test frontend/backend/both after fix? Both.
+     - Should Test frontend/backend/both after fix? Backend (curl  to check script contents).
      - Blocked on other issue: None.
 
-**In progress Task List**:
-  Task 1: (P1) Customizable Daily Target Motivational Message
-     - Where to resume: Modify the Daily Target feature created in  and . 
-     - What will be achieved with this? The user (Admin/Owner) requested the ability to change the default يالله نحقق الهدف! (Let's achieve the target!) message to a custom text of their choice.
-     - Status: NOT STARTED
-     - Should Test frontend/backend/both after fix? Both (Need to update DB schema/endpoint and Frontend UI).
-     - Blocked on something: Should finish verifying the Packaging Materials bug (Issue 1) first.
+**In progress Task List**: 
+  (None. The issue above encompasses the current task).
 
 **Upcoming and Future Tasks**
     Upcoming Tasks:
-    - (P0) **Multi-Restaurant (Tenant) Switcher**: The user requested a feature for users who own multiple different restaurants to view all their restaurants upon login and easily switch between them. *(Note: User explicitly deferred this in the current session, but it remains the top priority backlog item).*
+    - (P0) **Multi-Restaurant (Tenant) Switcher**: Feature for users who own multiple different restaurants to view all their restaurants upon login and easily switch between them. (Deferred by user in previous sessions).
     
     Future Tasks:
     - (P1) **ZKTeco Fingerprint Integration**: Implement UI configuration and hardware integration.
-    - (P2) **Refactor **: Break down the monolithic file (17.8k+ lines) into modular routes. The recent bug with duplicated inventory routes proves this is becoming a critical technical debt issue.
+    - (P2) **Refactor **: Break down the monolithic file (17.8k+ lines) into modular routes to prevent further routing conflicts.
     - (P2) **Refactor **: Break down the frontend monolith (5.4k+ lines) into smaller components.
 
 **Completed work in this session**
-- Fixed Stale Closure bug in  causing User Permissions not to save. (DONE)
-- Fixed Cash Register calculation to include orders without a  (e.g., app orders). (DONE)
-- Rewrote Thermal Printing (, ) using hidden iframes and 80mm CSS. (DONE)
-- Implemented Data Isolation: Non-admin users now only see their own orders for the current day across Dashboard stats, Recent Orders, and the Orders page. (DONE)
-- Fixed  to allow  files for deployment readiness. (DONE)
-- Inverted UI Permissions logic (): Toggle ON (Yellow) = Show element, Toggle OFF = Hide element. Added  helper so Admins always see everything. (DONE)
-- Updated Cash Register UI logic: Expected now equals Cash - Expenses. If Expenses >= Cash, a warning shows and the Confirm button is auto-enabled. (DONE)
-- Built Sales Competition Leaderboard (, ). (DONE)
-- Built Daily Sales Target with 🎯 animation (, ). (DONE)
+- Fixed 500 error on Packaging Materials by resolving a leftover  in  (lines 9789-9799). (DONE)
+- Made Daily Target motivational message customizable ( and ). (DONE)
+- Built  and  to bypass browser TCP restrictions and route jobs to Ethernet kitchen printers. (DONE)
+- Fixed  blocking  files for deployment. (DONE)
+- Fixed Invoice/Receipt formatting: Added dynamic restaurant name, distinct System vs Restaurant logos, branch name, cashier name, payment method, order type, and increased font sizes (). (DONE)
+- Fixed bug where  was always saving as  instead of 'cash'/'card'. (DONE)
+- Fixed API route mismatch for restaurant settings ( to ). (DONE)
 
 **Earlier issues found/mentioned but not fixed**
-   None.
+   - None
 
 **Known issue recurrence from previous fork**
-  - Issue recurrence in previous fork: Monolithic  causing route conflicts.
-  - Recurrence count: 2 (Previously caused 500 errors on shift closure, now causing 500 errors on inventory routes).
+  - Issue recurrence in previous fork: Monolithic  causing route conflicts and syntax errors.
+  - Recurrence count: 3 (Previously 500 errors on shift closure, then inventory routes, then an indentation error from partial deletion).
   - Status: IN PROGRESS (Needs refactoring eventually).
 
 **Code Architecture**
 
 
 **Key Technical Concepts**
-React, FastAPI, MongoDB, Stale Closures (React State), Data Isolation by Role/Tenant, Thermal Print CSS (), Gamification UI (Leaderboards, Progress Bars).
+Hybrid Printing Architecture:
+1.  **USB Printers**: Executed natively via browser's hidden iframe -> .
+2.  **Ethernet/Network Printers**: Executed via API calls to  (The local print agent). The backend provides a  script for the user to download and run on their Windows POS machine. The script uses PowerShell to open a local TCP listener that forwards payloads directly to printer IPs.
 
 **key DB schema**
-  - :  (array of strings).
-  - : , , , etc.
-  -  (New via server.py): , , Mon Mar 30 00:40:18 UTC 2026, .
+  - : , , , , , .
+  - : , , .
+  - : Handles  and  configurations.
 
 **changes in tech stack**
   - None.
 
 **All files of reference**
--  (Deleted duplicate packaging route; added Leaderboard/Target routes).
--  (Contains the correct Packaging routes).
--  (Heavily modified with Gamification, new Register logic, and Data Isolation).
--  (New component created).
+-  (The script the user downloads. MUST be modified to run silently).
+-  (Contains  endpoint and settings routes).
+-  (Receipt printing layout and routing logic).
+-  (Handles communicating with  for network printing).
 
 **Areas that need refactoring**:
--  (URGENT: Route duplications are causing bugs).
-- 
+-  (URGENT: Monolithic structure is a constant risk).
+-  (7.1k+ lines, handles too many config types).
 
 **key api endpoints**
-- : Fetch packaging inventory (Recently fixed/needs verification).
-- : Fetch cashier competition stats.
-- : Set daily sales target.
+- : Serves the  file to the user.
+- : Fetches tenant restaurant data.
 
 **Critical Info for New Agent**
 - **Language:** The user communicates exclusively in Arabic. Your replies must be in Arabic.
-- **Current Blocker:** Verify if deleting the duplicate  route in  resolved the 500 error. Check if  or  routes for packaging materials are also duplicated in  and remove them if they exist, to rely solely on .
-- **Missed User Request:** The user explicitly asked to make the target motivational message (يالله نحقق الهدف) customizable. You must add a DB field for this message and a UI input in the Target Settings dialog.
+- **Current Blocker:** The user likes the  print agent, but complains that it leaves a black CMD window open. If they close the window, network printing stops. Your immediate task is to modify the script generation in the backend so the downloaded Windows script runs completely hidden in the background (e.g., using a  wrapper script, or PowerShell ).
+- **USB vs Ethernet:** Make sure the user understands that the print agent is ONLY for Ethernet printers. USB printers continue to print normally via the browser popup.
 
 **documents and test reports created in this job**
-  -  through  (Extensive testing done)
+  -  
+  - 
   - 
 
 **Last 10 User Messages and any pending HUMAN messages** 
-1. User confirmed plan but deferred Multi-Restaurant Switcher.
-2. User reported: Cash register math wrong, UI permissions logic inverted, and Thermal printing wasting paper.
-3. User requested: Cashiers should strictly only see their own orders (Data Isolation).
-4. User asked if ready for GitHub deployment.
-5. User noted UI toggles are working backwards (should be ON=Show, OFF=Hide) and requested a Sales Leaderboard.
-6. User requested: In Register closure, subtract expenses from cash, and if expenses >= cash, auto-enable confirm button. Also agreed to the Daily Target suggestion.
-7. User requested: Make the Daily Target motivational message customizable by the Admin. Also reported Packaging Materials (الورقيات) save but don't show up. (Agent was fixing the inventory bug when context ended).
+1. User shared images of printer IP configurations (SAM4S printers).
+2. Agent analyzed IPs, provided setup steps, and explained how to map them in the system.
+3. User said they want to solve the problem on the machine first.
+4. Agent gave steps to assign a static IP to the printer with missing IP.
+5. User reported: When closing the CMD window for the print agent, connection is lost. Also claimed USB loses connection. Requested the command to be saved once and run permanently in the background when the window is closed.
+6. Agent acknowledged, clarified that USB is not affected by the script, and started executing bash commands to convert the print agent into a hidden Windows service. (Context ended here).
 
 **Project Health Check:**
-- Broken: Packaging Materials API (Potentially fixed, needs verification).
+- Broken: None (The print agent works, but the UX of leaving a CMD window open is unacceptable to the user).
 - Mocked: None
 
 **3rd Party Integrations**
 - Emergent LLM Key (used in backend ).
 
 **Testing status**
-  - Testing agent used after significant changes: YES (Iterations 135 to 140)
+  - Testing agent used after significant changes: YES (Iterations 141, 142)
   - Troubleshoot agent used after agent stuck in loop: NO
   - Test files created: None
   - Known regressions: None
@@ -142,4 +127,4 @@ React, FastAPI, MongoDB, Stale Closures (React State), Data Isolation by Role/Te
 - Test Cashier: cashier@test.com / Test@1234
 
 **What agent forgot to execute**
-The agent did not implement the user's request: اريد امكنية التحكم برسالة يا الله نحقق الهدف لتكون متغيرة (I want the ability to control/change the 'Let's achieve the target' message). This must be implemented next.</analysis>
+None. The agent was actively working on the user's request to hide the Windows CMD window when the context window closed.</analysis>

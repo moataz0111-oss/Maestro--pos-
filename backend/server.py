@@ -8028,14 +8028,78 @@ async def test_printer_connection(printer_id: str, current_user: dict = Depends(
 
 @api_router.get("/download-print-agent")
 async def download_print_agent():
-    """تحميل وسيط الطباعة المحلي - ملف bat لويندوز"""
-    from fastapi.responses import FileResponse
-    agent_path = ROOT_DIR / "static" / "MaestroPrintAgent.bat"
-    if not agent_path.exists():
+    """تحميل وسيط الطباعة المحلي - ملف bat لويندوز يعمل في الخلفية"""
+    from fastapi.responses import Response
+    import base64
+
+    ps1_path = ROOT_DIR / "static" / "print_server.ps1"
+    if not ps1_path.exists():
         raise HTTPException(status_code=404, detail="ملف وسيط الطباعة غير موجود")
-    return FileResponse(
-        path=str(agent_path),
-        filename="MaestroPrintAgent.bat",
+
+    ps1_code = ps1_path.read_text(encoding='utf-8')
+    server_encoded = base64.b64encode(ps1_code.encode('utf-16-le')).decode('ascii')
+
+    setup_ps1 = (
+        '$d = "$env:LOCALAPPDATA\\MaestroPrintAgent"\n'
+        'New-Item -ItemType Directory -Path $d -Force | Out-Null\n'
+        '$content = Get-Content $env:MAESTRO_BAT_PATH -Raw\n'
+        "$encoded = ($content -split '::ENCODED_SERVER::')[1].Trim()\n"
+        '$decoded = [Text.Encoding]::Unicode.GetString([Convert]::FromBase64String($encoded))\n'
+        '[IO.File]::WriteAllText("$d\\server.ps1", $decoded, [Text.Encoding]::UTF8)\n'
+        '$q = [char]34\n'
+        '$qq = $q + $q\n'
+        "$vbsLine1 = 'Set s = CreateObject(' + $q + 'WScript.Shell' + $q + ')'\n"
+        "$vbsLine2 = 's.Run ' + $q + 'powershell -ExecutionPolicy Bypass -NoProfile -WindowStyle Hidden -File ' + $qq + $d + '\\server.ps1' + $qq + $q + ', 0, False'\n"
+        '[IO.File]::WriteAllLines("$d\\launcher.vbs", @($vbsLine1, $vbsLine2))\n'
+        '$startup = "$env:APPDATA\\Microsoft\\Windows\\Start Menu\\Programs\\Startup"\n'
+        'Copy-Item "$d\\launcher.vbs" "$startup\\MaestroPrintAgent.vbs" -Force\n'
+        "Start-Process wscript -ArgumentList ('\"' + $d + '\\launcher.vbs\"') -WindowStyle Hidden\n"
+    )
+    setup_encoded = base64.b64encode(setup_ps1.strip().encode('utf-16-le')).decode('ascii')
+
+    bat_content = f"""@echo off
+chcp 65001 >nul 2>&1
+title Maestro EGP - Print Agent
+color 0A
+echo.
+echo  ========================================
+echo    Maestro EGP - Print Agent v2.0
+echo    Background Service Installer
+echo  ========================================
+echo.
+netstat -an 2>nul | findstr ":9999 " | findstr "LISTENING" >nul 2>&1
+if %errorlevel%==0 (
+    echo  [!] Agent already running on port 9999
+    echo.
+    timeout /t 3 >nul
+    exit /b
+)
+echo  [..] Installing agent...
+echo.
+set "MAESTRO_BAT_PATH=%~f0"
+powershell -ExecutionPolicy Bypass -NoProfile -EncodedCommand {setup_encoded}
+echo.
+echo  ========================================
+echo  [OK] Agent is running in the background!
+echo  [OK] Auto-start with Windows enabled.
+echo  ========================================
+echo.
+echo  Port: http://localhost:9999
+echo.
+echo  To stop: Task Manager ^> End PowerShell
+echo  To remove auto-start: Delete file from
+echo    %%APPDATA%%\\Microsoft\\Windows\\Start Menu
+echo    \\Programs\\Startup\\MaestroPrintAgent.vbs
+echo.
+echo  This window will close in 5 seconds...
+timeout /t 5 >nul
+exit /b
+::ENCODED_SERVER::
+{server_encoded}
+"""
+
+    return Response(
+        content=bat_content,
         media_type="application/x-msdos-program",
         headers={
             "Content-Disposition": "attachment; filename=MaestroPrintAgent.bat",
@@ -16090,7 +16154,7 @@ async def get_menu_link(request: Request, current_user: dict = Depends(get_curre
         base_url = f"{parsed.scheme}://{parsed.netloc}"
     else:
         # fallback للـ environment variable
-        base_url = os.environ.get('REACT_APP_BACKEND_URL', 'https://leaderboard-games.preview.emergentagent.com')
+        base_url = os.environ.get('REACT_APP_BACKEND_URL', 'https://maestro-pos-printing.preview.emergentagent.com')
     
     menu_url = f"{base_url}/menu/{tenant.get('menu_slug', tenant_id)}"
     

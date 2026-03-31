@@ -82,7 +82,7 @@
   },
   
   "test_credentials": {
-    "api_url": "https://leaderboard-games.preview.emergentagent.com",
+    "api_url": "https://maestro-pos-printing.preview.emergentagent.com",
     "client_graffiti": {
       "email": "hanialdujaili@gmail.com",
       "password": "graffiti123",

@@ -9,7 +9,7 @@ import pytest
 import requests
 import os
 
-BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://leaderboard-games.preview.emergentagent.com')
+BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://maestro-pos-printing.preview.emergentagent.com')
 
 class TestSystemSettings:
     """Test system settings APIs - Currency, Language, Country"""
