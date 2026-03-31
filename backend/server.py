@@ -8042,16 +8042,30 @@ async def download_print_agent():
     server_encoded = base64.b64encode(ps1_code.encode('utf-16-le')).decode('ascii')
 
     setup_ps1 = (
-        '# === INSTALL NEW FILES ===\n'
+        '# === INSTALL LOG ===\n'
         '$d = "$env:LOCALAPPDATA\\MaestroPrintAgent"\n'
         'New-Item -ItemType Directory -Path $d -Force | Out-Null\n'
-        '$content = Get-Content $env:MAESTRO_BAT_PATH -Raw\n'
-        "$encoded = ($content -split '::ENCODED_SERVER::')[1].Trim()\n"
-        '$decoded = [Text.Encoding]::Unicode.GetString([Convert]::FromBase64String($encoded))\n'
-        '[IO.File]::WriteAllText("$d\\server.ps1", $decoded, [Text.Encoding]::UTF8)\n'
+        '$log = "$d\\install.log"\n'
+        '"$(Get-Date) - Setup started" | Out-File $log\n'
         '\n'
-        '# === START NEW SERVER DIRECTLY ===\n'
-        'Start-Process powershell -ArgumentList @("-ExecutionPolicy", "Bypass", "-NoProfile", "-WindowStyle", "Hidden", "-File", "$d\\server.ps1") -WindowStyle Hidden\n'
+        '# === EXTRACT SERVER FILE ===\n'
+        'try {\n'
+        '  $content = Get-Content $env:MAESTRO_BAT_PATH -Raw\n'
+        "  $encoded = ($content -split '::ENCODED_SERVER::')[1].Trim()\n"
+        '  $decoded = [Text.Encoding]::Unicode.GetString([Convert]::FromBase64String($encoded))\n'
+        '  [IO.File]::WriteAllText("$d\\server.ps1", $decoded, [Text.Encoding]::UTF8)\n'
+        '  "$(Get-Date) - server.ps1 written OK (size: $($decoded.Length))" | Out-File $log -Append\n'
+        '} catch {\n'
+        '  "$(Get-Date) - ERROR extracting server: $_" | Out-File $log -Append\n'
+        '}\n'
+        '\n'
+        '# === START NEW SERVER ===\n'
+        'if (Test-Path "$d\\server.ps1") {\n'
+        '  Start-Process powershell -ArgumentList @("-ExecutionPolicy", "Bypass", "-NoProfile", "-WindowStyle", "Hidden", "-File", "$d\\server.ps1") -WindowStyle Hidden\n'
+        '  "$(Get-Date) - Server process started" | Out-File $log -Append\n'
+        '} else {\n'
+        '  "$(Get-Date) - ERROR: server.ps1 not found!" | Out-File $log -Append\n'
+        '}\n'
         '\n'
         '# === CREATE STARTUP VBS ===\n'
         '$q = [char]34\n'
@@ -8061,6 +8075,7 @@ async def download_print_agent():
         '[IO.File]::WriteAllLines("$d\\launcher.vbs", @($vbsLine1, $vbsLine2))\n'
         '$startup = "$env:APPDATA\\Microsoft\\Windows\\Start Menu\\Programs\\Startup"\n'
         'Copy-Item "$d\\launcher.vbs" "$startup\\MaestroPrintAgent.vbs" -Force\n'
+        '"$(Get-Date) - Setup complete" | Out-File $log -Append\n'
     )
     setup_encoded = base64.b64encode(setup_ps1.strip().encode('utf-16-le')).decode('ascii')
 
@@ -8110,9 +8125,17 @@ echo  [..] Installing new agent...
 set "MAESTRO_BAT_PATH=%~f0"
 powershell -ExecutionPolicy Bypass -NoProfile -EncodedCommand {setup_encoded}
 echo.
-echo  [..] Verifying new agent...
-timeout /t 4 >nul
-powershell -NoProfile -Command "try {{ $r = Invoke-WebRequest -Uri 'http://localhost:9999/status' -UseBasicParsing -TimeoutSec 5; $j = $r.Content | ConvertFrom-Json; if ($j.usb_support -eq $true) {{ Write-Host '  [OK] Agent v2.1 ACTIVE - USB + Network ready!' -ForegroundColor Green }} else {{ Write-Host '  [WARN] Agent responds but old version - restart PC and try again' -ForegroundColor Yellow }} }} catch {{ Write-Host '  [WARN] Agent still starting - wait 30 seconds then refresh page' -ForegroundColor Yellow }}"
+REM === Verify server.ps1 was extracted ===
+if exist "%LOCALAPPDATA%\\MaestroPrintAgent\\server.ps1" (
+    echo  [OK] server.ps1 extracted successfully.
+) else (
+    echo  [ERROR] server.ps1 extraction FAILED!
+    echo  [ERROR] Check: %LOCALAPPDATA%\\MaestroPrintAgent\\install.log
+)
+echo.
+echo  [..] Verifying new agent (waiting 10s for startup)...
+timeout /t 10 >nul
+powershell -NoProfile -Command "try {{ $r = Invoke-WebRequest -Uri 'http://localhost:9999/status' -UseBasicParsing -TimeoutSec 5; $j = $r.Content | ConvertFrom-Json; if ($j.usb_support -eq $true) {{ Write-Host '  [OK] Agent v2.1 ACTIVE - USB + Network ready!' -ForegroundColor Green }} else {{ Write-Host '  [WARN] Agent responds but old version - restart PC' -ForegroundColor Yellow }} }} catch {{ Write-Host '  [..] First check failed, retrying in 10s...' -ForegroundColor Yellow; Start-Sleep -Seconds 10; try {{ $r2 = Invoke-WebRequest -Uri 'http://localhost:9999/status' -UseBasicParsing -TimeoutSec 5; $j2 = $r2.Content | ConvertFrom-Json; if ($j2.usb_support -eq $true) {{ Write-Host '  [OK] Agent v2.1 ACTIVE!' -ForegroundColor Green }} else {{ Write-Host '  [WARN] Old version detected' -ForegroundColor Yellow }} }} catch {{ Write-Host '  [ERROR] Agent failed to start. Check logs:' -ForegroundColor Red; Write-Host '  %LOCALAPPDATA%\\MaestroPrintAgent\\install.log' -ForegroundColor Red; Write-Host '  %LOCALAPPDATA%\\MaestroPrintAgent\\agent.log' -ForegroundColor Red }} }}"
 echo.
 echo  ========================================
 echo  [OK] Installation complete!

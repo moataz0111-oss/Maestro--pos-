@@ -1,4 +1,6 @@
 $ErrorActionPreference = 'Continue'
+$agentLog = "$PSScriptRoot\agent.log"
+"$(Get-Date) - Agent v2.1 starting..." | Out-File $agentLog
 
 # === RAW USB PRINTER SUPPORT via Windows Print Spooler ===
 try {
@@ -60,8 +62,9 @@ public class RawPrinterHelper {
 }
 '@
 Add-Type -TypeDefinition $csharpCode -ErrorAction Stop
+"$(Get-Date) - C# RawPrinterHelper compiled OK" | Out-File $agentLog -Append
 } catch {
-    # Type already added or compilation failed - continue without USB raw printing
+    "$(Get-Date) - C# compile warning: $_" | Out-File $agentLog -Append
 }
 
 # === NETWORK PRINTER: Send via TCP ===
@@ -197,6 +200,7 @@ try {
     $listener = New-Object System.Net.HttpListener
     $listener.Prefixes.Add('http://localhost:9999/')
     $listener.Start()
+    "$(Get-Date) - HttpListener started on port 9999" | Out-File $agentLog -Append
 
     while ($listener.IsListening) {
         $ctx = $listener.GetContext()
@@ -338,7 +342,8 @@ try {
         $res.Close()
     }
 } catch {
-    # Silent error handling for hidden mode
+    "$(Get-Date) - FATAL ERROR: $_" | Out-File $agentLog -Append
 } finally {
     if ($listener) { $listener.Stop() }
+    "$(Get-Date) - Agent stopped" | Out-File $agentLog -Append
 }
