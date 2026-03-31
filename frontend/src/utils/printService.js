@@ -6,6 +6,7 @@
 
 const PRINT_AGENT_URL = 'http://localhost:9999';
 let _agentAvailable = null;
+let _agentSupportsUsb = false;
 let _lastCheck = 0;
 const CHECK_INTERVAL = 10000;
 
@@ -19,25 +20,47 @@ export const checkAgentStatus = async () => {
     const timeout = setTimeout(() => controller.abort(), 2000);
     const res = await fetch(`${PRINT_AGENT_URL}/status`, { mode: 'cors', signal: controller.signal });
     clearTimeout(timeout);
+    if (res.ok) {
+      const data = await res.json();
+      _agentSupportsUsb = data.usb_support === true;
+    }
     _agentAvailable = res.ok;
     _lastCheck = now;
     return _agentAvailable;
   } catch {
     _agentAvailable = false;
+    _agentSupportsUsb = false;
     _lastCheck = now;
     return false;
   }
 };
 
+export const agentSupportsUsb = () => _agentSupportsUsb;
+
 /**
  * جلب قائمة الطابعات المتوفرة في Windows
+ * يرجع { printers: [], needsUpdate: false, agentOffline: false }
  */
 export const listAgentPrinters = async () => {
+  const agentOk = await checkAgentStatus();
+  if (!agentOk) {
+    return { printers: [], needsUpdate: false, agentOffline: true };
+  }
+  if (!_agentSupportsUsb) {
+    return { printers: [], needsUpdate: true, agentOffline: false };
+  }
   try {
-    const res = await fetch(`${PRINT_AGENT_URL}/list-printers`, { mode: 'cors' });
-    return await res.json();
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+    const res = await fetch(`${PRINT_AGENT_URL}/list-printers`, { mode: 'cors', signal: controller.signal });
+    clearTimeout(timeout);
+    if (res.ok) {
+      const data = await res.json();
+      return { printers: Array.isArray(data) ? data : [], needsUpdate: false, agentOffline: false };
+    }
+    return { printers: [], needsUpdate: true, agentOffline: false };
   } catch {
-    return [];
+    return { printers: [], needsUpdate: true, agentOffline: false };
   }
 };
 
@@ -215,6 +238,7 @@ export const printOrderToAllPrinters = async (order, orderItems, products, print
 
 export default {
   checkAgentStatus,
+  agentSupportsUsb,
   listAgentPrinters,
   checkPrinterOnline,
   sendTestPrint,

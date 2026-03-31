@@ -219,23 +219,38 @@ try {
             $jsonOut = '{"status":"running","version":"2.1.0","agent":"Maestro Print Agent","usb_support":true}'
         }
         elseif ($path -eq '/list-printers') {
-            # List all Windows printers
+            # List all Windows printers - try modern CimInstance first, fallback to WMI
             try {
-                $wmiPrinters = Get-WmiObject -Class Win32_Printer | Select-Object Name, Default, PrinterStatus, PortName
+                $wmiPrinters = $null
+                try {
+                    $wmiPrinters = Get-CimInstance -ClassName Win32_Printer -ErrorAction Stop | Select-Object Name, Default, PrinterStatus, PortName
+                } catch {
+                    $wmiPrinters = Get-WmiObject -Class Win32_Printer -ErrorAction Stop | Select-Object Name, Default, PrinterStatus, PortName
+                }
                 $printerList = @()
                 foreach ($p in $wmiPrinters) {
                     $printerList += @{
-                        name = $p.Name
-                        is_default = $p.Default
-                        status = $p.PrinterStatus
-                        port = $p.PortName
+                        name = [string]$p.Name
+                        is_default = [bool]$p.Default
+                        status = if ($p.PrinterStatus) { [int]$p.PrinterStatus } else { 0 }
+                        port = [string]$p.PortName
                     }
                 }
-                $jsonOut = ($printerList | ConvertTo-Json -Compress)
-                if (-not $jsonOut -or $jsonOut -eq 'null') { $jsonOut = '[]' }
-                if ($jsonOut[0] -ne '[') { $jsonOut = "[$jsonOut]" }
+                if ($printerList.Count -eq 0) {
+                    $jsonOut = '[]'
+                } elseif ($printerList.Count -eq 1) {
+                    $single = $printerList[0]
+                    $jsonOut = '[{"name":"' + ($single.name -replace '"','\"') + '","is_default":' + $single.is_default.ToString().ToLower() + ',"status":' + $single.status + ',"port":"' + ($single.port -replace '"','\"') + '"}]'
+                } else {
+                    $items = @()
+                    foreach ($pr in $printerList) {
+                        $items += '{"name":"' + ($pr.name -replace '"','\"') + '","is_default":' + $pr.is_default.ToString().ToLower() + ',"status":' + $pr.status + ',"port":"' + ($pr.port -replace '"','\"') + '"}'
+                    }
+                    $jsonOut = '[' + ($items -join ',') + ']'
+                }
             } catch {
-                $jsonOut = '[]'
+                $em = $_.Exception.Message -replace '"', '' -replace '\\', ''
+                $jsonOut = '{"error":"' + $em + '","printers":[]}'
             }
         }
         elseif ($path -eq '/check-printer') {

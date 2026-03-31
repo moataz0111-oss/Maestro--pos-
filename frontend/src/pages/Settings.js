@@ -6,7 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { formatPrice, setCurrency } from '../utils/currency';
 import { useTranslation } from '../hooks/useTranslation';
-import { checkAgentStatus, sendTestPrint, checkPrinterOnline, listAgentPrinters } from '../utils/printService';
+import { checkAgentStatus, sendTestPrint, checkPrinterOnline, listAgentPrinters, agentSupportsUsb } from '../utils/printService';
 import { 
   playClick, 
   playSuccess, 
@@ -1139,7 +1139,9 @@ export default function Settings() {
     setEditPrinterDialogOpen(true);
     // جلب طابعات Windows عند فتح التعديل
     if (printer.connection_type === 'usb') {
-      listAgentPrinters().then(p => setWindowsPrinters(p));
+      listAgentPrinters().then(result => {
+        if (result.printers.length > 0) setWindowsPrinters(result.printers);
+      });
     }
   };
 
@@ -4834,10 +4836,17 @@ export default function Settings() {
                               data-testid="usb-printer-name"
                             />
                             <Button type="button" variant="outline" size="sm" onClick={async () => {
-                              const prts = await listAgentPrinters();
-                              setWindowsPrinters(prts);
-                              if (prts.length === 0) toast.error(t('لم يتم العثور على طابعات - تأكد من تشغيل وسيط الطباعة'));
-                              else toast.success(`${t('تم العثور على')} ${prts.length} ${t('طابعات')}`);
+                              const result = await listAgentPrinters();
+                              if (result.agentOffline) {
+                                toast.error(t('وسيط الطباعة غير متصل - شغّل وسيط الطباعة أولاً'));
+                              } else if (result.needsUpdate) {
+                                toast.error(t('يجب تحديث وسيط الطباعة! حمّل النسخة الجديدة من زر "تحميل الوسيط" وشغّلها'));
+                              } else if (result.printers.length === 0) {
+                                toast.error(t('لا توجد طابعات معرّفة في Windows'));
+                              } else {
+                                setWindowsPrinters(result.printers);
+                                toast.success(`${t('تم العثور على')} ${result.printers.length} ${t('طابعات')}`);
+                              }
                             }} data-testid="fetch-printers-btn">
                               <RefreshCw className="h-4 w-4" />
                             </Button>
@@ -5131,10 +5140,17 @@ export default function Settings() {
                             data-testid="edit-usb-printer-name"
                           />
                           <Button type="button" variant="outline" size="sm" onClick={async () => {
-                            const prts = await listAgentPrinters();
-                            setWindowsPrinters(prts);
-                            if (prts.length === 0) toast.error(t('لم يتم العثور على طابعات - تأكد من تشغيل وسيط الطباعة'));
-                            else toast.success(`${t('تم العثور على')} ${prts.length} ${t('طابعات')}`);
+                            const result = await listAgentPrinters();
+                            if (result.agentOffline) {
+                              toast.error(t('وسيط الطباعة غير متصل - شغّل وسيط الطباعة أولاً'));
+                            } else if (result.needsUpdate) {
+                              toast.error(t('يجب تحديث وسيط الطباعة! حمّل النسخة الجديدة من زر "تحميل الوسيط" وشغّلها'));
+                            } else if (result.printers.length === 0) {
+                              toast.error(t('لا توجد طابعات معرّفة في Windows'));
+                            } else {
+                              setWindowsPrinters(result.printers);
+                              toast.success(`${t('تم العثور على')} ${result.printers.length} ${t('طابعات')}`);
+                            }
                           }}>
                             <RefreshCw className="h-4 w-4" />
                           </Button>
