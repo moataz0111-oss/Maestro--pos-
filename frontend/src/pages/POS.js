@@ -3266,7 +3266,7 @@ export default function POS() {
           </DialogHeader>
           
           <div className="overflow-y-auto flex-1 min-h-0">
-          <div className="print-receipt bg-white text-black p-4 rounded-lg font-mono text-sm" dir={isRTL ? 'rtl' : 'ltr'} id="receipt-to-print">
+          <div className="print-receipt bg-white text-black p-4 rounded-lg font-mono text-base" dir={isRTL ? 'rtl' : 'ltr'} id="receipt-to-print">
             {/* ========== أعلى الفاتورة - شعار المطعم واسمه ========== */}
             <div className="text-center mb-3 border-b border-dashed border-gray-400 pb-3">
               {/* شعار المطعم (الخاص بالعميل) - دائري */}
@@ -3291,7 +3291,7 @@ export default function POS() {
               )}
               
               {/* اسم المطعم - يجلب تلقائياً من إعدادات المطعم */}
-              <h2 className="text-lg font-bold">{restaurantSettings.name_ar || restaurantSettings.name || user?.tenant_name || t('اسم المطعم')}</h2>
+              <h2 className="text-xl font-bold">{restaurantSettings.name_ar || restaurantSettings.name || user?.tenant_name || t('اسم المطعم')}</h2>
               
               {/* أرقام هاتف المطعم - تظهر تحت اسم المطعم مباشرة */}
               {(invoiceSettings.phone || invoiceSettings.phone2) && (
@@ -3340,21 +3340,21 @@ export default function POS() {
             </div>
             
             {/* معلومات الطلب - متغيرة حسب نوع الطلب */}
-            <div className="border-t border-dashed border-gray-300 pt-2 mb-2 text-sm">
+            <div className="border-t border-dashed border-gray-300 pt-2 mb-2 text-base">
               {/* === اسم الفرع والأرقام أولاً === */}
               {(() => {
                 const branchId = getBranchIdForApi() || user?.branch_id;
                 const branch = branches.find(b => b.id === branchId);
                 return branch?.name ? (
                   <div className="text-center mb-1">
-                    <p className="font-bold text-base">{branch.name}</p>
-                    {branch.phone && <p className="text-xs" dir="ltr">{branch.phone}</p>}
+                    <p className="font-bold text-lg">{branch.name}</p>
+                    {branch.phone && <p className="text-sm" dir="ltr">{branch.phone}</p>}
                   </div>
                 ) : null;
               })()}
               
               {/* === نوع الطلب === */}
-              <p className="font-bold text-center text-base mb-1">
+              <p className="font-bold text-center text-lg mb-1">
                 {orderType === 'dine_in' ? t('طلب داخلي') 
                   : orderType === 'takeaway' ? t('طلب سفري')
                   : orderType === 'delivery' ? (deliveryApp ? t('شركة توصيل') : t('طلب توصيل'))
@@ -3400,7 +3400,7 @@ export default function POS() {
             
             {/* ========== الأصناف ========== */}
             <div className="border-t border-dashed border-gray-300 py-2">
-              <table className="w-full text-sm">
+              <table className="w-full text-base">
                 <thead>
                   <tr className="border-b border-gray-300">
                     <th className={`py-1 font-bold ${isRTL ? 'text-right' : 'text-left'}`}>{t('الصنف')}</th>
@@ -3422,24 +3422,24 @@ export default function POS() {
             
             {/* ========== المجاميع ========== */}
             <div className="border-t border-dashed border-gray-300 pt-2 space-y-1">
-              <div className="flex justify-between text-sm">
+              <div className="flex justify-between text-base">
                 <span>{t('المجموع الفرعي')}:</span>
                 <span className="tabular-nums font-medium" dir="ltr">{formatPrice(subtotal)}</span>
               </div>
               {/* حقل الخصم */}
               {discount > 0 && (
-                <div className="flex justify-between text-sm p-1 rounded text-red-600 bg-red-50">
+                <div className="flex justify-between text-base p-1 rounded text-red-600 bg-red-50">
                   <span>{t('الخصم')}:</span>
                   <span className="tabular-nums font-bold" dir="ltr">-{formatPrice(discount)}</span>
                 </div>
               )}
-              <div className="flex justify-between font-bold text-base border-t-2 border-gray-400 pt-2 mt-2">
+              <div className="flex justify-between font-bold text-lg border-t-2 border-gray-400 pt-2 mt-2">
                 <span>{t('الإجمالي النهائي')}:</span>
                 <span className="tabular-nums" dir="ltr">{formatPrice(totalBeforeCommission)}</span>
               </div>
               {/* طريقة الدفع */}
               {paymentMethod && paymentMethod !== 'pending' && (
-                <div className="flex justify-between text-sm font-bold bg-gray-100 p-1.5 rounded mt-1">
+                <div className="flex justify-between text-base font-bold bg-gray-100 p-1.5 rounded mt-1">
                   <span>{t('طريقة الدفع')}:</span>
                   <span>{paymentMethod === 'cash' ? t('نقدي') : paymentMethod === 'credit' ? t('آجل') : paymentMethod === 'card' ? t('بطاقة') : paymentMethod === 'delivery_company' ? t('شركة توصيل') : paymentMethod}</span>
                 </div>
@@ -3613,7 +3613,7 @@ export default function POS() {
 html { width: 80mm; height: auto; overflow: hidden; }
 body { 
   font-family: 'Arial', 'Tahoma', 'Helvetica', sans-serif;
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 500;
   width: 76mm;
   max-width: 76mm;
@@ -3621,7 +3621,7 @@ body {
   padding: 2mm;
   background: #fff;
   color: #000;
-  line-height: 1.4;
+  line-height: 1.5;
   -webkit-print-color-adjust: exact;
   print-color-adjust: exact;
 }
@@ -3629,10 +3629,11 @@ body {
 .text-left { text-align: left; }
 .text-right { text-align: right; }
 .font-bold { font-weight: 700; }
-.text-lg { font-size: 16px; font-weight: 700; }
-.text-sm { font-size: 12px; }
-.text-xs { font-size: 11px; }
-.text-\\[10px\\] { font-size: 10px; }
+.text-lg { font-size: 20px; font-weight: 700; }
+.text-base { font-size: 16px; }
+.text-sm { font-size: 14px; }
+.text-xs { font-size: 13px; }
+.text-\\[10px\\] { font-size: 12px; }
 .mb-1 { margin-bottom: 2px; }
 .mb-2 { margin-bottom: 4px; }
 .mb-3 { margin-bottom: 6px; }
@@ -3656,11 +3657,11 @@ body {
 .rounded, .rounded-lg { border-radius: 0; }
 .rounded-full { border-radius: 50%; }
 table { width: 100%; border-collapse: collapse; }
-th, td { padding: 2px 0; font-size: 12px; font-weight: 500; }
-th { font-weight: 700; }
-img.h-16 { width: 55px !important; height: 55px !important; display: block; margin: 0 auto 5px; border-radius: 50%; object-fit: cover; }
-img.h-10, img.w-10 { width: 35px !important; height: 35px !important; display: block; margin: 0 auto; }
-img { max-width: 65px; height: auto; }
+th, td { padding: 3px 0; font-size: 14px; font-weight: 500; }
+th { font-weight: 700; font-size: 15px; }
+img.h-16 { width: 60px !important; height: 60px !important; display: block; margin: 0 auto 5px; border-radius: 50%; object-fit: cover; }
+img.h-10, img.w-10 { width: 40px !important; height: 40px !important; display: block; margin: 0 auto; }
+img { max-width: 70px; height: auto; }
 .flex { display: flex; }
 .flex-col { flex-direction: column; }
 .items-center { align-items: center; }

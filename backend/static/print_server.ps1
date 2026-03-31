@@ -148,49 +148,95 @@ function Build-Receipt {
     $bytes.AddRange([byte[]]@(0x1b, 0x40))
     $bytes.AddRange([byte[]]@(0x1b, 0x61, 0x01))
     if ($order.restaurant_name) {
-        $bytes.AddRange([byte[]]@(0x1b, 0x45, 0x01, 0x1b, 0x21, 0x10))
+        # Double width+height + Bold for restaurant name
+        $bytes.AddRange([byte[]]@(0x1b, 0x45, 0x01, 0x1b, 0x21, 0x30))
         $bytes.AddRange($enc.GetBytes($order.restaurant_name))
         $bytes.Add(0x0a)
         $bytes.AddRange([byte[]]@(0x1b, 0x21, 0x00, 0x1b, 0x45, 0x00))
     }
-    $sep = $enc.GetBytes('--------------------------------')
+    $sep = $enc.GetBytes('================================')
     $bytes.AddRange($sep); $bytes.Add(0x0a)
     $bytes.AddRange([byte[]]@(0x1b, 0x61, 0x00))
     if ($order.order_number) {
-        $bytes.AddRange([byte[]]@(0x1b, 0x45, 0x01))
+        # Double height + Bold for order number
+        $bytes.AddRange([byte[]]@(0x1b, 0x45, 0x01, 0x1b, 0x21, 0x10))
         $bytes.AddRange($enc.GetBytes('#' + $order.order_number))
+        $bytes.Add(0x0a)
+        $bytes.AddRange([byte[]]@(0x1b, 0x21, 0x00, 0x1b, 0x45, 0x00))
+    }
+    # Double height for order type
+    if ($order.order_type) {
+        $bytes.AddRange([byte[]]@(0x1b, 0x61, 0x01, 0x1b, 0x45, 0x01, 0x1b, 0x21, 0x10))
+        $typeText = switch ($order.order_type) {
+            'dine_in' { 'Dine In' }
+            'takeaway' { 'Takeaway' }
+            'delivery' { 'Delivery' }
+            default { $order.order_type }
+        }
+        $bytes.AddRange($enc.GetBytes($typeText))
+        $bytes.Add(0x0a)
+        $bytes.AddRange([byte[]]@(0x1b, 0x21, 0x00, 0x1b, 0x45, 0x00, 0x1b, 0x61, 0x00))
+    }
+    if ($order.table_number) {
+        $bytes.AddRange([byte[]]@(0x1b, 0x45, 0x01, 0x1b, 0x21, 0x10))
+        $bytes.AddRange($enc.GetBytes('Table: ' + $order.table_number))
+        $bytes.Add(0x0a)
+        $bytes.AddRange([byte[]]@(0x1b, 0x21, 0x00, 0x1b, 0x45, 0x00))
+    }
+    $bytes.AddRange([byte[]]@(0x1b, 0x45, 0x01))
+    $bytes.AddRange($enc.GetBytes((Get-Date -Format 'yyyy/MM/dd HH:mm')))
+    $bytes.Add(0x0a)
+    $bytes.AddRange([byte[]]@(0x1b, 0x45, 0x00))
+    if ($order.customer_name) {
+        $bytes.AddRange([byte[]]@(0x1b, 0x45, 0x01))
+        $bytes.AddRange($enc.GetBytes($order.customer_name))
         $bytes.Add(0x0a)
         $bytes.AddRange([byte[]]@(0x1b, 0x45, 0x00))
     }
-    $bytes.AddRange($enc.GetBytes((Get-Date -Format 'yyyy/MM/dd HH:mm')))
-    $bytes.Add(0x0a)
-    if ($order.customer_name) { $bytes.AddRange($enc.GetBytes($order.customer_name)); $bytes.Add(0x0a) }
     $bytes.AddRange($sep); $bytes.Add(0x0a)
     foreach ($item in $order.items) {
         $n = if ($item.product_name) { $item.product_name } else { $item.name }
         $q = if ($item.quantity) { $item.quantity } else { 1 }
         if ($showPrices) {
             $p = [math]::Round($item.price * $q)
-            $bytes.AddRange($enc.GetBytes("$n x$q  $p"))
-        } else {
+            # Double height + Bold for items with prices
             $bytes.AddRange([byte[]]@(0x1b, 0x45, 0x01, 0x1b, 0x21, 0x10))
+            $bytes.AddRange($enc.GetBytes("$n x$q  $p"))
+            $bytes.AddRange([byte[]]@(0x1b, 0x21, 0x00, 0x1b, 0x45, 0x00))
+        } else {
+            # Double width+height for kitchen items (no prices)
+            $bytes.AddRange([byte[]]@(0x1b, 0x45, 0x01, 0x1b, 0x21, 0x30))
             $bytes.AddRange($enc.GetBytes("$n  x$q"))
             $bytes.AddRange([byte[]]@(0x1b, 0x21, 0x00, 0x1b, 0x45, 0x00))
         }
         $bytes.Add(0x0a)
-        if ($item.notes) { $bytes.AddRange($enc.GetBytes('  > ' + $item.notes)); $bytes.Add(0x0a) }
+        if ($item.notes) {
+            $bytes.AddRange([byte[]]@(0x1b, 0x45, 0x01))
+            $bytes.AddRange($enc.GetBytes('  >> ' + $item.notes))
+            $bytes.Add(0x0a)
+            $bytes.AddRange([byte[]]@(0x1b, 0x45, 0x00))
+        }
     }
     $bytes.AddRange($sep); $bytes.Add(0x0a)
     if ($showPrices -and $order.total) {
-        $bytes.AddRange([byte[]]@(0x1b, 0x61, 0x01, 0x1b, 0x45, 0x01, 0x1b, 0x21, 0x10))
+        $bytes.AddRange([byte[]]@(0x1b, 0x61, 0x01, 0x1b, 0x45, 0x01, 0x1b, 0x21, 0x30))
         $total = [math]::Round($order.total)
         $bytes.AddRange($enc.GetBytes("Total: $total IQD"))
         $bytes.Add(0x0a)
         $bytes.AddRange([byte[]]@(0x1b, 0x21, 0x00, 0x1b, 0x45, 0x00))
     }
+    if ($order.discount -and $order.discount -gt 0) {
+        $bytes.AddRange([byte[]]@(0x1b, 0x61, 0x01, 0x1b, 0x45, 0x01))
+        $bytes.AddRange($enc.GetBytes("Discount: -$([math]::Round($order.discount)) IQD"))
+        $bytes.Add(0x0a)
+        $bytes.AddRange([byte[]]@(0x1b, 0x45, 0x00))
+    }
     $bytes.AddRange($sep); $bytes.Add(0x0a)
     $bytes.AddRange([byte[]]@(0x1b, 0x61, 0x01))
+    $bytes.AddRange([byte[]]@(0x1b, 0x45, 0x01))
     $bytes.AddRange($enc.GetBytes('Thank you!'))
+    $bytes.Add(0x0a)
+    $bytes.AddRange([byte[]]@(0x1b, 0x45, 0x00))
     $bytes.Add(0x0a); $bytes.Add(0x0a); $bytes.Add(0x0a); $bytes.Add(0x0a); $bytes.Add(0x0a)
     $bytes.AddRange([byte[]]@(0x1d, 0x56, 0x42, 0x00))
     return $bytes.ToArray()
