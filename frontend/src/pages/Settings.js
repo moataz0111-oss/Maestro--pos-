@@ -434,6 +434,7 @@ export default function Settings() {
   const [printerTestStatus, setPrinterTestStatus] = useState({}); // حالة اختبار الطابعات
   const [printerTypes, setPrinterTypes] = useState([]);
   const [printAgentOnline, setPrintAgentOnline] = useState(false);
+  const [agentNeedsUpdate, setAgentNeedsUpdate] = useState(false);
   const [windowsPrinters, setWindowsPrinters] = useState([]);
   const [categoryForm, setCategoryForm] = useState({
     name: '', name_en: '', icon: '', image: '', color: '#D4AF37', sort_order: 0, kitchen_section_id: ''
@@ -518,8 +519,13 @@ export default function Settings() {
       setPushEnabled(getNotificationPermission() === 'granted');
     }
     
-    // فحص حالة وسيط الطباعة المحلي
-    checkAgentStatus().then(online => setPrintAgentOnline(online));
+    // فحص حالة وسيط الطباعة المحلي وكشف إذا يحتاج تحديث
+    checkAgentStatus().then(online => {
+      setPrintAgentOnline(online);
+      if (online) {
+        setAgentNeedsUpdate(!agentSupportsUsb());
+      }
+    });
   }, []);
 
   // دالة حساب التكلفة مع تحويل الوحدات (غرام/كغم/قطعة/مل/لتر)
@@ -4964,11 +4970,41 @@ export default function Settings() {
                 </CardHeader>
                 <CardContent>
                   {/* حالة وسيط الطباعة المحلي */}
-                  <div className={`flex items-center justify-between p-3 rounded-lg mb-4 ${printAgentOnline ? 'bg-green-500/10 border border-green-500/30' : 'bg-orange-500/10 border border-orange-500/30'}`}>
+                  {/* بانر تحديث الوسيط - يظهر بشكل بارز عندما يحتاج تحديث */}
+                  {printAgentOnline && agentNeedsUpdate && (
+                    <div className="flex items-center justify-between p-4 rounded-lg mb-3 bg-amber-500/15 border-2 border-amber-500/50 animate-pulse-slow">
+                      <div className="flex items-center gap-3">
+                        <div className="flex items-center justify-center w-10 h-10 rounded-full bg-amber-500/20">
+                          <Download className="h-5 w-5 text-amber-600" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-bold text-amber-700">{t('تحديث متوفر لوسيط الطباعة!')}</p>
+                          <p className="text-xs text-amber-600">{t('النسخة الجديدة تدعم طابعات USB بدون نافذة متصفح - حمّل وشغّل الوسيط الجديد')}</p>
+                        </div>
+                      </div>
+                      <Button 
+                        size="sm"
+                        className="bg-amber-500 hover:bg-amber-600 text-white font-bold px-4"
+                        onClick={() => {
+                          window.open(`${API}/download-print-agent`, '_blank');
+                          toast.success(t('جاري تحميل الوسيط الجديد v2.1 - شغّل الملف بعد التحميل'));
+                        }}
+                        data-testid="update-agent-btn"
+                      >
+                        <Download className="h-4 w-4 ml-2" />{t('تحديث الوسيط')}
+                      </Button>
+                    </div>
+                  )}
+                  <div className={`flex items-center justify-between p-3 rounded-lg mb-4 ${printAgentOnline ? (agentNeedsUpdate ? 'bg-yellow-500/10 border border-yellow-500/30' : 'bg-green-500/10 border border-green-500/30') : 'bg-orange-500/10 border border-orange-500/30'}`}>
                     <div className="flex items-center gap-2">
-                      <div className={`w-2.5 h-2.5 rounded-full ${printAgentOnline ? 'bg-green-500 animate-pulse' : 'bg-orange-500'}`}></div>
-                      <span className={`text-sm font-medium ${printAgentOnline ? 'text-green-500' : 'text-orange-500'}`}>
-                        {printAgentOnline ? t('وسيط الطباعة متصل - الطباعة المباشرة مفعلة') : t('وسيط الطباعة غير متصل - يتطلب تشغيل الوسيط للطباعة المباشرة')}
+                      <div className={`w-2.5 h-2.5 rounded-full ${printAgentOnline ? (agentNeedsUpdate ? 'bg-yellow-500' : 'bg-green-500 animate-pulse') : 'bg-orange-500'}`}></div>
+                      <span className={`text-sm font-medium ${printAgentOnline ? (agentNeedsUpdate ? 'text-yellow-600' : 'text-green-500') : 'text-orange-500'}`}>
+                        {!printAgentOnline 
+                          ? t('وسيط الطباعة غير متصل - يتطلب تشغيل الوسيط للطباعة المباشرة')
+                          : agentNeedsUpdate
+                            ? t('وسيط الطباعة متصل - نسخة قديمة (لا تدعم USB)')
+                            : t('وسيط الطباعة متصل - الطباعة المباشرة مفعلة (USB + شبكة)')
+                        }
                       </span>
                     </div>
                     <div className="flex items-center gap-2">
@@ -4978,7 +5014,17 @@ export default function Settings() {
                         onClick={async () => {
                           const online = await checkAgentStatus();
                           setPrintAgentOnline(online);
-                          toast[online ? 'success' : 'error'](online ? t('وسيط الطباعة متصل') : t('وسيط الطباعة غير متصل'));
+                          if (online) {
+                            const needsUpdate = !agentSupportsUsb();
+                            setAgentNeedsUpdate(needsUpdate);
+                            if (needsUpdate) {
+                              toast.error(t('الوسيط يحتاج تحديث! حمّل النسخة الجديدة'));
+                            } else {
+                              toast.success(t('وسيط الطباعة متصل ومحدّث'));
+                            }
+                          } else {
+                            toast.error(t('وسيط الطباعة غير متصل'));
+                          }
                         }}
                         data-testid="check-agent-status-btn"
                       >
@@ -4991,7 +5037,7 @@ export default function Settings() {
                           className="border-primary text-primary"
                           onClick={() => {
                             window.open(`${API}/download-print-agent`, '_blank');
-                            toast.success(t('جاري تحميل وسيط الطباعة v2.0 - شغّل الملف وسيعمل تلقائياً في الخلفية'));
+                            toast.success(t('جاري تحميل وسيط الطباعة v2.1 - شغّل الملف وسيعمل تلقائياً في الخلفية'));
                           }}
                           data-testid="download-agent-btn"
                         >
