@@ -8065,33 +8065,33 @@ title Maestro EGP - Print Agent
 color 0A
 echo.
 echo  ========================================
-echo    Maestro EGP - Print Agent v2.0
+echo    Maestro EGP - Print Agent v2.1
 echo    Background Service Installer
 echo  ========================================
 echo.
 netstat -an 2>nul | findstr ":9999 " | findstr "LISTENING" >nul 2>&1
 if %errorlevel%==0 (
-    echo  [!] Agent already running on port 9999
+    echo  [!] Old agent detected on port 9999
+    echo  [..] Stopping old agent...
+    for /f "tokens=5" %%a in ('netstat -ano 2^>nul ^| findstr ":9999 " ^| findstr "LISTENING"') do (
+        taskkill /PID %%a /F >nul 2>&1
+    )
+    timeout /t 2 >nul
+    echo  [OK] Old agent stopped.
     echo.
-    timeout /t 3 >nul
-    exit /b
 )
-echo  [..] Installing agent...
+echo  [..] Installing agent v2.1...
 echo.
 set "MAESTRO_BAT_PATH=%~f0"
 powershell -ExecutionPolicy Bypass -NoProfile -EncodedCommand {setup_encoded}
 echo.
 echo  ========================================
-echo  [OK] Agent is running in the background!
+echo  [OK] Agent v2.1 is running in background!
 echo  [OK] Auto-start with Windows enabled.
+echo  [OK] USB + Network printing supported.
 echo  ========================================
 echo.
 echo  Port: http://localhost:9999
-echo.
-echo  To stop: Task Manager ^> End PowerShell
-echo  To remove auto-start: Delete file from
-echo    %%APPDATA%%\\Microsoft\\Windows\\Start Menu
-echo    \\Programs\\Startup\\MaestroPrintAgent.vbs
 echo.
 echo  This window will close in 5 seconds...
 timeout /t 5 >nul
