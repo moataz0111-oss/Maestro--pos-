@@ -37,7 +37,11 @@ Multi-tenant POS system (React + FastAPI + MongoDB) with role-based access, POS 
 4. **Fallback** (Agent offline) → Browser `window.print()` dialog
 
 ## Completed Features (April 2026)
-24. **Print Agent Installer Kill Fix** - Replaced PowerShell `Get-NetTCPConnection`/`Stop-Process` with native CMD `netstat`+`taskkill` to reliably kill old agent on port 9999 before update.
+24. **Print Agent Installer Kill Fix v2** - Complete rewrite of kill logic:
+    - Uses WMIC to kill PowerShell/WScript processes by command line match (not port PID)
+    - Deletes entire MaestroPrintAgent directory (`rd /s /q`)
+    - Waits for port 9999 to be free with retry loop before installing
+    - Solves PID 4 (System/HTTP.SYS) issue that made old approach impossible
 
 ## Pending Issues
 - None

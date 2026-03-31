@@ -8042,15 +8042,8 @@ async def download_print_agent():
     server_encoded = base64.b64encode(ps1_code.encode('utf-16-le')).decode('ascii')
 
     setup_ps1 = (
-        '# === DELETE OLD FILES ===\n'
-        '$d = "$env:LOCALAPPDATA\\MaestroPrintAgent"\n'
-        'Remove-Item "$d\\server.ps1" -Force -ErrorAction SilentlyContinue\n'
-        'Remove-Item "$d\\launcher.vbs" -Force -ErrorAction SilentlyContinue\n'
-        '$startupVbs = "$env:APPDATA\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\MaestroPrintAgent.vbs"\n'
-        'Remove-Item $startupVbs -Force -ErrorAction SilentlyContinue\n'
-        'Start-Sleep -Seconds 1\n'
-        '\n'
         '# === INSTALL NEW FILES ===\n'
+        '$d = "$env:LOCALAPPDATA\\MaestroPrintAgent"\n'
         'New-Item -ItemType Directory -Path $d -Force | Out-Null\n'
         '$content = Get-Content $env:MAESTRO_BAT_PATH -Raw\n'
         "$encoded = ($content -split '::ENCODED_SERVER::')[1].Trim()\n"
@@ -8081,19 +8074,37 @@ echo    Maestro EGP - Print Agent v2.1
 echo    Background Service Installer
 echo  ========================================
 echo.
-echo  [..] Killing old agent on port 9999...
-REM === FORCE KILL old process on port 9999 using native CMD ===
-FOR /F "tokens=5" %%a IN ('netstat -aon ^| findstr ":9999" ^| findstr "LISTENING"') DO (
-    echo  [..] Found PID %%a on port 9999 - killing...
-    taskkill /F /PID %%a >nul 2>&1
+echo  [..] Stopping old agent processes...
+REM === Kill PowerShell processes running MaestroPrintAgent by command line ===
+wmic process where "name='powershell.exe' and commandline like '%%server.ps1%%'" call terminate >nul 2>&1
+wmic process where "name='powershell.exe' and commandline like '%%MaestroPrintAgent%%'" call terminate >nul 2>&1
+wmic process where "name='powershell.exe' and commandline like '%%print_server%%'" call terminate >nul 2>&1
+wmic process where "name='wscript.exe' and commandline like '%%MaestroPrintAgent%%'" call terminate >nul 2>&1
+timeout /t 3 >nul
+echo  [OK] Processes terminated.
+echo.
+echo  [..] Deleting old agent files completely...
+REM === Delete the entire old agent directory ===
+if exist "%LOCALAPPDATA%\\MaestroPrintAgent" (
+    rd /s /q "%LOCALAPPDATA%\\MaestroPrintAgent" >nul 2>&1
 )
-timeout /t 2 >nul
-REM === Double check - kill again if still alive ===
-FOR /F "tokens=5" %%a IN ('netstat -aon ^| findstr ":9999" ^| findstr "LISTENING"') DO (
-    taskkill /F /PID %%a >nul 2>&1
-)
-timeout /t 1 >nul
-echo  [OK] Port 9999 cleared.
+REM === Delete startup VBS ===
+del /F /Q "%APPDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\MaestroPrintAgent.vbs" >nul 2>&1
+echo  [OK] Old files deleted.
+echo.
+echo  [..] Waiting for port 9999 to be free...
+REM === Simple wait loop using goto (avoids delayed expansion issues) ===
+set RETRIES=0
+:waitport
+netstat -aon 2>nul | findstr ":9999" | findstr "LISTENING" >nul 2>&1
+if errorlevel 1 goto portfree
+echo  [..] Port 9999 still in use, waiting 3s...
+timeout /t 3 >nul
+set /a RETRIES+=1
+if %RETRIES% GEQ 5 goto portfree
+goto waitport
+:portfree
+echo  [OK] Port 9999 ready.
 echo.
 echo  [..] Installing new agent...
 set "MAESTRO_BAT_PATH=%~f0"
