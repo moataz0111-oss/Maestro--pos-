@@ -36,6 +36,9 @@ Multi-tenant POS system (React + FastAPI + MongoDB) with role-based access, POS 
 3. **Ethernet Printer** → Print Agent → TCP Socket → IP:Port → Ethernet printer (SILENT)
 4. **Fallback** (Agent offline) → Browser `window.print()` dialog
 
+## Completed Features (April 2026)
+24. **Print Agent Installer Kill Fix** - Replaced PowerShell `Get-NetTCPConnection`/`Stop-Process` with native CMD `netstat`+`taskkill` to reliably kill old agent on port 9999 before update.
+
 ## Pending Issues
 - None
 

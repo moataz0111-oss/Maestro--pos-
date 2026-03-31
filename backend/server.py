@@ -8042,20 +8042,6 @@ async def download_print_agent():
     server_encoded = base64.b64encode(ps1_code.encode('utf-16-le')).decode('ascii')
 
     setup_ps1 = (
-        '# === AGGRESSIVE CLEANUP ===\n'
-        '# Kill ANY process on port 9999\n'
-        'try {\n'
-        '  $conn = Get-NetTCPConnection -LocalPort 9999 -State Listen -ErrorAction SilentlyContinue\n'
-        '  if ($conn) { $conn | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue } }\n'
-        '} catch {\n'
-        '  # Fallback: kill via netstat parsing\n'
-        '  $ns = netstat -ano 2>$null | Select-String ":9999.*LISTENING"\n'
-        '  if ($ns) {\n'
-        '    $ns | ForEach-Object { $parts = $_.ToString().Trim() -split "\\s+"; Stop-Process -Id $parts[-1] -Force -ErrorAction SilentlyContinue }\n'
-        '  }\n'
-        '}\n'
-        'Start-Sleep -Seconds 3\n'
-        '\n'
         '# === DELETE OLD FILES ===\n'
         '$d = "$env:LOCALAPPDATA\\MaestroPrintAgent"\n'
         'Remove-Item "$d\\server.ps1" -Force -ErrorAction SilentlyContinue\n'
@@ -8095,7 +8081,21 @@ echo    Maestro EGP - Print Agent v2.1
 echo    Background Service Installer
 echo  ========================================
 echo.
-echo  [..] Cleaning old agent...
+echo  [..] Killing old agent on port 9999...
+REM === FORCE KILL old process on port 9999 using native CMD ===
+FOR /F "tokens=5" %%a IN ('netstat -aon ^| findstr ":9999" ^| findstr "LISTENING"') DO (
+    echo  [..] Found PID %%a on port 9999 - killing...
+    taskkill /F /PID %%a >nul 2>&1
+)
+timeout /t 2 >nul
+REM === Double check - kill again if still alive ===
+FOR /F "tokens=5" %%a IN ('netstat -aon ^| findstr ":9999" ^| findstr "LISTENING"') DO (
+    taskkill /F /PID %%a >nul 2>&1
+)
+timeout /t 1 >nul
+echo  [OK] Port 9999 cleared.
+echo.
+echo  [..] Installing new agent...
 set "MAESTRO_BAT_PATH=%~f0"
 powershell -ExecutionPolicy Bypass -NoProfile -EncodedCommand {setup_encoded}
 echo.
