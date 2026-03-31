@@ -1,34 +1,59 @@
-<analysis>**original_problem_statement**: 
-Fixing bugs and adding operational features to a POS system. Initial goals included fixing a 500 error on the Packaging Materials page and making the Daily Target motivational message customizable. 
-Later shifted to a major architectural requirement: The user has multiple printers (1 USB for cashier, 2 Ethernet for kitchen). The browser cannot send raw TCP commands to Ethernet printers directly. The user also requested extensive formatting fixes to the printed invoice (logos, branch name, cashier, payment method, dynamic restaurant names) and requested that the local print agent run entirely in the background as a hidden service.
+<analysis>Here is the handover summary based on the LLM message history:
+
+**original_problem_statement**: 
+Fixing bugs and adding operational features to a multi-tenant POS system. The user requires robust multi-printer support (USB for the cashier, Ethernet for the kitchen). The main request evolved into making the local Print Agent run entirely in the background as a hidden service, supporting silent USB printing (without triggering a browser popup), and ensuring the agent installer automatically kills and replaces older versions.
 
 **PRODUCT REQUIREMENTS**:
-- Robust multi-printer support: System must route print jobs to USB printers (via browser) and Ethernet printers (via IP/Port).
-- Data Isolation based on roles.
+- Robust multi-printer support: System must route print jobs to USB printers (via Win32 API) and Ethernet printers (via IP/Port) silently.
+- Background execution: The Windows print agent must run invisibly without a lingering CMD window.
+- Seamless updates: The agent installer must automatically force-kill older versions running on port 9999 before installing the new one.
 - Accurate and dynamic thermal printing layouts (80mm).
-- Seamless setup for end-users on Windows POS machines without requiring external dependencies like Python.
 
-**User's preferred language**: Arabic (العربية) (INSTRUCT NEXT AGENT: You MUST respond in the user's preferred language, Arabic, only)
+**User's preferred language**: Arabic (العربية) (INSTRUCT NEXT AGENT: You MUST respond in the user's preferred language, Arabic, only. This is critical.)
 
 **what currently exists?** 
-A multi-tenant POS system (React + FastAPI + MongoDB). Printing uses a hybrid approach: USB printers trigger via the browser's native , while Ethernet (Kitchen) printers receive print jobs via a downloadable local Windows Batch/PowerShell script () that runs a local server on  to forward TCP packets.
+A multi-tenant POS system (React + FastAPI + MongoDB). Printing uses a local hidden Windows background process ( running via PowerShell on ). The agent receives print jobs and routes them natively to Ethernet (TCP) or directly to USB printers using the C#  () API. The installer () is generated dynamically by the backend, but it is currently failing to cleanly kill the older running versions during updates.
 
 **Last working item**: 
-    - Last item agent was working: Converting the local print agent () into a hidden Windows background process.
-    - Reason: The user successfully downloaded and ran the  file, but closing the visible CMD window kills the server, breaking Ethernet printing. The user requested it to run permanently in the background without a visible window. The agent was just starting to execute bash commands to rewrite the batch script.
+    - Last item agent was working: Fixing the  payload inside  to correctly kill the old print agent process on port 9999 before installing the v2.1 update.
+    - Reason: The user attempted to update to the new USB-supported agent, but the PowerShell  command inside the script failed to kill the existing agent. As a result, the new agent cannot bind to port 9999. The agent attempted to rewrite the kill logic using native batch Active Internet connections (w/o servers)
+Proto Recv-Q Send-Q Local Address           Foreign Address         State      
+tcp        0      0 agent-env-53ac7c7b:8010 10.64.130.10:34266      ESTABLISHED
+tcp        0      0 localhost:35002         localhost:8010          ESTABLISHED
+tcp        0      0 localhost:27017         localhost:55402         ESTABLISHED
+tcp        0      0 localhost:27017         localhost:55398         ESTABLISHED
+tcp        0      0 localhost:55390         localhost:27017         ESTABLISHED
+tcp        0      0 localhost:27017         localhost:55390         ESTABLISHED
+tcp        0      0 agent-env-53ac7c7b:8010 10.64.130.89:45848      ESTABLISHED
+tcp        0      0 localhost:55398         localhost:27017         ESTABLISHED
+tcp        0      0 localhost:55402         localhost:27017         ESTABLISHED
+tcp        0      0 agent-env-53ac7c7:34362 0.203.102.34.bc.g:https ESTABLISHED
+tcp        0      0 localhost:8010          localhost:35002         ESTABLISHED
+Active UNIX domain sockets (w/o servers)
+Proto RefCnt Flags       Type       State         I-Node   Path
+unix  3      [ ]         STREAM     CONNECTED     3919936  
+unix  3      [ ]         STREAM     CONNECTED     3919137  
+unix  3      [ ]         STREAM     CONNECTED     3919923  
+unix  3      [ ]         STREAM     CONNECTED     3919935  
+unix  3      [ ]         STREAM     CONNECTED     3919138  
+unix  3      [ ]         STREAM     CONNECTED     3919922   and  directly in , but the  tool failed due to a string mismatch just before the context window ended.
     - Status: IN PROGRESS
     - Agent Testing Done: N
-    - Which testing method agent to use? manual testing by curl to download the file and verify the script contents contain logic to hide the window (e.g., using  or a  wrapper).
+    - Which testing method agent to use? manual testing by curl (e.g.,  to verify the generated  file content has the native CMD  loop at the top).
     - User Testing Done: N
 
 **All Pending/In progress Issue list**: 
-  Issue 1: (P0) Local Print Agent runs in a visible CMD window and dies when closed.
-     - Attempted fixes: Agent created a PowerShell-based  script. It works, but the terminal window stays open. 
-     - Next debug checklist: Modify  (or the endpoint generating it) to ensure the script launches the local server silently/hidden in the background, and optionally adds itself to the Windows Startup folder silently.
-     - Why fix this issue and what will be achieved with the fix? Prevents cashiers from accidentally closing the print agent, ensuring reliable kitchen printing.
+  Issue 1: (P0) Print Agent installer fails to kill the old running process on port 9999.
+     - Attempted fixes: Agent tried using PowerShell's  and  inside the installer script, but it failed to forcefully terminate the existing background task on the user's machine. The last attempt to replace it with pure Batch  failed via .
+     - Next debug checklist: 
+       1. View  around line 8029 ().
+       2. In the  string generation, add a pure CMD loop at the very top (after ) to kill the process holding port 9999:
+          
+       3. Remove the redundant PowerShell-based kill commands from the script generation.
+     - Why fix this issue and what will be achieved with the fix? It is a hard blocker. The user cannot use the new USB silent printing feature because the new agent cannot start while the old one is holding the port.
      - Status: IN PROGRESS
-     - Is recurring issue? N
-     - Should Test frontend/backend/both after fix? Backend (curl  to check script contents).
+     - Is recurring issue? Y
+     - Should Test frontend/backend/both after fix? Backend (curl ).
      - Blocked on other issue: None.
 
 **In progress Task List**: 
@@ -36,87 +61,106 @@ A multi-tenant POS system (React + FastAPI + MongoDB). Printing uses a hybrid ap
 
 **Upcoming and Future Tasks**
     Upcoming Tasks:
-    - (P0) **Multi-Restaurant (Tenant) Switcher**: Feature for users who own multiple different restaurants to view all their restaurants upon login and easily switch between them. (Deferred by user in previous sessions).
+    - (P0) **Multi-Restaurant (Tenant) Switcher**: Feature for users who own multiple different restaurants to view all their restaurants upon login and easily switch between them.
     
     Future Tasks:
     - (P1) **ZKTeco Fingerprint Integration**: Implement UI configuration and hardware integration.
-    - (P2) **Refactor **: Break down the monolithic file (17.8k+ lines) into modular routes to prevent further routing conflicts.
-    - (P2) **Refactor **: Break down the frontend monolith (5.4k+ lines) into smaller components.
+    - (P2) **Refactor **: Break down the monolithic file (17.9k+ lines) into modular routes to prevent  and routing conflicts.
+    - (P2) **Refactor  & **: Break down the frontend monoliths into smaller components.
 
 **Completed work in this session**
-- Fixed 500 error on Packaging Materials by resolving a leftover  in  (lines 9789-9799). (DONE)
-- Made Daily Target motivational message customizable ( and ). (DONE)
-- Built  and  to bypass browser TCP restrictions and route jobs to Ethernet kitchen printers. (DONE)
-- Fixed  blocking  files for deployment. (DONE)
-- Fixed Invoice/Receipt formatting: Added dynamic restaurant name, distinct System vs Restaurant logos, branch name, cashier name, payment method, order type, and increased font sizes (). (DONE)
-- Fixed bug where  was always saving as  instead of 'cash'/'card'. (DONE)
-- Fixed API route mismatch for restaurant settings ( to ). (DONE)
+- Converted  to a hidden background service that runs via PowerShell automatically at Windows Startup. (DONE)
+- Added  (usb/network) to Printer settings in the frontend and backend. (DONE)
+- Implemented **Silent USB Printing**: Updated  with C# Win32 API () to route print jobs directly to USB printers without triggering a browser print popup. (DONE)
+- Added  endpoint to the local print agent to fetch Windows USB printers dynamically. (DONE)
+- Implemented UI Banners in  to detect legacy print agents and prompt the user to download the update. (DONE)
+- Fixed  deployment blocker (removed quotes around  in backend). (DONE)
 
 **Earlier issues found/mentioned but not fixed**
    - None
 
 **Known issue recurrence from previous fork**
-  - Issue recurrence in previous fork: Monolithic  causing route conflicts and syntax errors.
-  - Recurrence count: 3 (Previously 500 errors on shift closure, then inventory routes, then an indentation error from partial deletion).
+  - Issue recurrence in previous fork: Monolithic  (17.9k lines) causing string replacement failures and route conflicts.
+  - Recurrence count: 4 (Agent just failed a  because of file size/exact string matching issues).
   - Status: IN PROGRESS (Needs refactoring eventually).
 
 **Code Architecture**
 
 
 **Key Technical Concepts**
-Hybrid Printing Architecture:
-1.  **USB Printers**: Executed natively via browser's hidden iframe -> .
-2.  **Ethernet/Network Printers**: Executed via API calls to  (The local print agent). The backend provides a  script for the user to download and run on their Windows POS machine. The script uses PowerShell to open a local TCP listener that forwards payloads directly to printer IPs.
+- **Print Agent Architecture**: The backend dynamically generates . When the user runs it, it extracts an embedded  script to , creates a  wrapper in the Windows Startup folder for persistence, and runs the server hidden in the background on . 
+- **Silent USB Support**: The PowerShell server script dynamically compiles a C# class  using  to interface with the Windows Spooler API, allowing it to send raw byte arrays to USB printers directly bypassing browser restrictions.
 
 **key DB schema**
-  - : , , , , , .
-  - : , , .
-  - : Handles  and  configurations.
+  - : , , ,  (usb/network),  (Name of the target printer in Windows OS).
 
 **changes in tech stack**
   - None.
 
 **All files of reference**
--  (The script the user downloads. MUST be modified to run silently).
--  (Contains  endpoint and settings routes).
--  (Receipt printing layout and routing logic).
--  (Handles communicating with  for network printing).
+-  (Contains the  endpoint that needs the process killing fix).
+-  (The actual Print Server code).
+-  (UI logic for selecting USB vs Network printers).
+-  (Frontend print routing logic).
 
 **Areas that need refactoring**:
--  (URGENT: Monolithic structure is a constant risk).
--  (7.1k+ lines, handles too many config types).
+-  (Critical monolith issue).
+-  (Over 7k lines).
 
 **key api endpoints**
 - : Serves the  file to the user.
-- : Fetches tenant restaurant data.
+- Local Agent Endpoints: , , .
 
 **Critical Info for New Agent**
-- **Language:** The user communicates exclusively in Arabic. Your replies must be in Arabic.
-- **Current Blocker:** The user likes the  print agent, but complains that it leaves a black CMD window open. If they close the window, network printing stops. Your immediate task is to modify the script generation in the backend so the downloaded Windows script runs completely hidden in the background (e.g., using a  wrapper script, or PowerShell ).
-- **USB vs Ethernet:** Make sure the user understands that the print agent is ONLY for Ethernet printers. USB printers continue to print normally via the browser popup.
+- **Language:** The user communicates exclusively in **Arabic**. You must reply in Arabic. Be empathetic, as the user apologized for the repeated printing issues.
+- **Immediate Blocker:** The  endpoint generates a batch script that *must* kill any existing process holding port 9999 before attempting to launch the new background PowerShell script. The current PowerShell-based kill approach is failing on the user's system. Use raw CMD commands (Active Internet connections (w/o servers)
+Proto Recv-Q Send-Q Local Address           Foreign Address         State      
+tcp        0      0 agent-env-53ac7c7b:8010 10.64.130.10:34266      ESTABLISHED
+tcp        0      0 localhost:35002         localhost:8010          ESTABLISHED
+tcp        0      0 localhost:27017         localhost:55402         ESTABLISHED
+tcp        0      0 localhost:27017         localhost:55398         ESTABLISHED
+tcp        0      0 localhost:55390         localhost:27017         ESTABLISHED
+tcp        0      0 localhost:27017         localhost:55390         ESTABLISHED
+tcp        0      0 agent-env-53ac7c7b:8010 10.64.130.89:45848      ESTABLISHED
+tcp        0      0 localhost:55398         localhost:27017         ESTABLISHED
+tcp        0      0 localhost:55402         localhost:27017         ESTABLISHED
+tcp        0      0 agent-env-53ac7c7:34362 0.203.102.34.bc.g:https ESTABLISHED
+tcp        0      0 localhost:8010          localhost:35002         ESTABLISHED
+Active UNIX domain sockets (w/o servers)
+Proto RefCnt Flags       Type       State         I-Node   Path
+unix  3      [ ]         STREAM     CONNECTED     3919936  
+unix  3      [ ]         STREAM     CONNECTED     3919137  
+unix  3      [ ]         STREAM     CONNECTED     3919923  
+unix  3      [ ]         STREAM     CONNECTED     3919935  
+unix  3      [ ]         STREAM     CONNECTED     3919138  
+unix  3      [ ]         STREAM     CONNECTED     3919922   and ) at the very top of the  script.
+- **Monolith Editing:** Be very careful when using  in  (17.9k lines). Ensure you provide enough context lines, or use /regex if necessary, as the previous agent failed its last edit due to a string mismatch.
 
 **documents and test reports created in this job**
-  -  
   - 
   - 
 
 **Last 10 User Messages and any pending HUMAN messages** 
-1. User shared images of printer IP configurations (SAM4S printers).
-2. Agent analyzed IPs, provided setup steps, and explained how to map them in the system.
-3. User said they want to solve the problem on the machine first.
-4. Agent gave steps to assign a static IP to the printer with missing IP.
-5. User reported: When closing the CMD window for the print agent, connection is lost. Also claimed USB loses connection. Requested the command to be saved once and run permanently in the background when the window is closed.
-6. Agent acknowledged, clarified that USB is not affected by the script, and started executing bash commands to convert the print agent into a hidden Windows service. (Context ended here).
+1. User asked how to add an IP for one printer and fix the USB connection for another.
+2. Agent clarified USB printers don't need IPs and configured UI to hide IP for USB.
+3. User complained that USB printing opens an extra browser popup window, whereas network printers print silently in one step.
+4. Agent rewrote the local print agent () to support direct Win32 USB printing and updated the frontend to route USB jobs to the agent.
+5. User reported the system doesn't see the USB ports and asks to turn on the agent, even though it's running.
+6. Agent realized the user is running the *old* agent version. Added a UI banner asking the user to update the agent.
+7. User reported downloading the update but showed screenshots that it fails because port 9999 is in use.
+8. Agent updated the BAT file payload to kill the old agent using PowerShell.
+9. User shared screenshots showing Agent running but USB not detected - meaning the kill command failed and the old agent is still running.
+10. Agent apologized and was in the middle of replacing the PowerShell kill commands with robust CMD  commands in , but the  tool failed. (Context ended).
 
 **Project Health Check:**
-- Broken: None (The print agent works, but the UX of leaving a CMD window open is unacceptable to the user).
+- Broken: The print agent installer update mechanism ( in ).
 - Mocked: None
 
 **3rd Party Integrations**
-- Emergent LLM Key (used in backend ).
+- Emergent LLM Key (Backend  - configured).
 
 **Testing status**
-  - Testing agent used after significant changes: YES (Iterations 141, 142)
+  - Testing agent used after significant changes: NO (relied on screenshot and curl).
   - Troubleshoot agent used after agent stuck in loop: NO
   - Test files created: None
   - Known regressions: None
@@ -127,4 +171,4 @@ Hybrid Printing Architecture:
 - Test Cashier: cashier@test.com / Test@1234
 
 **What agent forgot to execute**
-None. The agent was actively working on the user's request to hide the Windows CMD window when the context window closed.</analysis>
+The agent forgot to double-check the   accuracy for  on its last action, causing the process kill fix to fail right before the context window closed. Needs immediate resolution.</analysis>
