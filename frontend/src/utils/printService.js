@@ -160,7 +160,14 @@ export const printOrderToAllPrinters = async (order, orderItems, products, print
     return { success: false, message: 'AGENT_NOT_RUNNING', results: [] };
   }
   
-  const printerJobs = routeOrderToPrinters(orderItems, products, printers);
+  // فقط الطابعات الشبكية (Ethernet) - طابعات USB تعمل عبر المتصفح
+  const networkPrinters = printers.filter(p => p.connection_type !== 'usb' && p.ip_address);
+  
+  if (networkPrinters.length === 0) {
+    return { success: true, message: 'No network printers', results: [] };
+  }
+  
+  const printerJobs = routeOrderToPrinters(orderItems, products, networkPrinters);
   const results = [];
   
   for (const [printerId, items] of Object.entries(printerJobs)) {

@@ -1852,13 +1852,18 @@ export default function POS() {
       playSuccess();
       toast.success(`${t('تم حفظ الطلب')} #${savedOrder.order_number}`);
       
-      // طباعة مباشرة لكل الطابعات المتعددة (إذا وسيط الطباعة متصل)
-      if (availablePrinters.length > 0) {
+      // طباعة مباشرة للطابعات الشبكية فقط (Ethernet) عبر الوسيط
+      // طابعات USB تعمل عبر المتصفح فقط - لا تتأثر بالوسيط
+      const networkPrinters = availablePrinters.filter(p => 
+        p.connection_type !== 'usb' && p.ip_address
+      );
+      
+      if (networkPrinters.length > 0) {
         try {
           const agentOk = await checkAgentStatus();
           setPrintAgentOnline(agentOk);
           if (agentOk) {
-            const restaurantName = restaurantSettings?.name || invoiceSettings?.restaurant_name || '';
+            const restaurantName = restaurantSettings?.name_ar || restaurantSettings?.name || '';
             const orderForPrint = {
               order_number: savedOrder.order_number,
               order_type: orderType,
@@ -1877,7 +1882,7 @@ export default function POS() {
             }));
             
             const result = await printOrderToAllPrinters(
-              orderForPrint, itemsForPrint, products, availablePrinters, restaurantName
+              orderForPrint, itemsForPrint, products, networkPrinters, restaurantName
             );
             
             if (result.success) {
@@ -1890,11 +1895,11 @@ export default function POS() {
             }
           }
         } catch (printError) {
-          console.log('Multi-printer print error:', printError);
+          console.log('Network printer error:', printError);
         }
       }
       
-      // فتح نافذة الطباعة (للكاشير USB أو كاحتياط)
+      // فتح نافذة الطباعة عبر المتصفح (لطابعة USB الكاشير)
       setPrintDialogOpen(true);
       
     } catch (error) {
