@@ -1,6 +1,6 @@
 $ErrorActionPreference = 'Continue'
 $agentLog = "$PSScriptRoot\agent.log"
-"$(Get-Date) - Agent v2.1 starting..." | Out-File $agentLog
+"$(Get-Date) - Agent v2.2 starting..." | Out-File $agentLog
 
 # === RAW USB PRINTER SUPPORT via Windows Print Spooler ===
 try {
@@ -451,9 +451,10 @@ try {
 
         $path = $req.Url.LocalPath
         $jsonOut = ''
+        "$(Get-Date) - $($req.HttpMethod) $path" | Out-File $agentLog -Append
 
         if ($path -eq '/status') {
-            $jsonOut = '{"status":"running","version":"2.1.0","agent":"Maestro Print Agent","usb_support":true}'
+            $jsonOut = '{"status":"running","version":"2.2.0","agent":"Maestro Print Agent","usb_support":true}'
         }
         elseif ($path -eq '/list-printers') {
             try {
@@ -527,33 +528,65 @@ try {
             }
         }
         elseif ($path -eq '/print-receipt' -and $req.HttpMethod -eq 'POST') {
-            $reader = New-Object System.IO.StreamReader($req.InputStream)
-            $body = $reader.ReadToEnd() | ConvertFrom-Json
+            # قراءة الجسم بالكامل مع دعم الأحجام الكبيرة
+            $bodyText = ''
+            try {
+                $ms = New-Object System.IO.MemoryStream
+                $req.InputStream.CopyTo($ms)
+                $bodyText = [System.Text.Encoding]::UTF8.GetString($ms.ToArray())
+                $ms.Dispose()
+                "$(Get-Date) - Received print-receipt body: $($bodyText.Length) chars" | Out-File $agentLog -Append
+            } catch {
+                "$(Get-Date) - Error reading request body: $_" | Out-File $agentLog -Append
+                $jsonOut = '{"success":false,"message":"Failed to read request body"}'
+                $buffer = [System.Text.Encoding]::UTF8.GetBytes($jsonOut)
+                $res.OutputStream.Write($buffer, 0, $buffer.Length)
+                $res.Close()
+                continue
+            }
+
+            $body = $null
+            try {
+                $body = $bodyText | ConvertFrom-Json
+            } catch {
+                "$(Get-Date) - JSON parse error: $_" | Out-File $agentLog -Append
+                $jsonOut = '{"success":false,"message":"Invalid JSON in request"}'
+                $buffer = [System.Text.Encoding]::UTF8.GetBytes($jsonOut)
+                $res.OutputStream.Write($buffer, 0, $buffer.Length)
+                $res.Close()
+                continue
+            }
 
             # إذا كانت البيانات مُجهزة من السيرفر (bitmap مسبق)
             $receiptData = $null
             if ($body.raw_data) {
                 try {
                     $receiptData = [System.Convert]::FromBase64String($body.raw_data)
-                    "$(Get-Date) - Using server-rendered bitmap receipt" | Out-File $agentLog -Append
+                    "$(Get-Date) - Using server-rendered bitmap ($($receiptData.Length) bytes)" | Out-File $agentLog -Append
                 } catch {
                     "$(Get-Date) - Base64 decode error: $_ - falling back to local build" | Out-File $agentLog -Append
                 }
+            } else {
+                "$(Get-Date) - No raw_data in payload, using local Build-Receipt" | Out-File $agentLog -Append
             }
             if (-not $receiptData) {
                 $receiptData = Build-Receipt $body.order $body.printer_config
             }
 
             if ($body.usb_printer_name) {
+                "$(Get-Date) - Sending to USB: $($body.usb_printer_name) ($($receiptData.Length) bytes)" | Out-File $agentLog -Append
                 $result = Send-ToUsbPrinter $body.usb_printer_name $receiptData
             } else {
                 $pport = if ($body.port) { [int]$body.port } else { 9100 }
+                "$(Get-Date) - Sending to Network: $($body.ip):$pport ($($receiptData.Length) bytes)" | Out-File $agentLog -Append
                 $result = Send-ToPrinter $body.ip $pport $receiptData
             }
 
             if ($result.success) {
+                "$(Get-Date) - Print OK" | Out-File $agentLog -Append
                 $jsonOut = '{"success":true,"message":"OK"}'
             } else {
+                "$(Get-Date) - Print FAILED: $($result.message)" | Out-File $agentLog -Append
                 $em = $result.message -replace '"', '' -replace '\\', ''
                 $jsonOut = '{"success":false,"message":"' + $em + '"}'
             }
