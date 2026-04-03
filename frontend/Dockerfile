@@ -9,7 +9,7 @@ ARG CACHEBUST=1
 COPY package.json yarn.lock ./
 
 # تثبيت المتطلبات
-RUN yarn install
+RUN yarn install --network-timeout 100000 2>&1 | grep -v "Workspaces can only"
 
 # نسخ الكود (هذا يجب أن يبطل cache إذا تغيرت الملفات)
 COPY . .
