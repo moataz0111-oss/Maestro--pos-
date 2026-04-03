@@ -223,7 +223,7 @@ function Build-TestPage {
     $bytes.AddRange($enc.GetBytes('Print Successful!'))
     $bytes.Add(0x0a)
     $bytes.AddRange([byte[]]@(0x1b, 0x45, 0x00))
-    $bytes.AddRange($enc.GetBytes('Maestro EGP v2.1'))
+    $bytes.AddRange($enc.GetBytes('Maestro EGP v2.3'))
     $bytes.Add(0x0a); $bytes.Add(0x0a); $bytes.Add(0x0a); $bytes.Add(0x0a); $bytes.Add(0x0a)
     $bytes.AddRange([byte[]]@(0x1d, 0x56, 0x42, 0x00))
     return $bytes.ToArray()

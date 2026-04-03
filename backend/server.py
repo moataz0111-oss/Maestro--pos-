@@ -8103,7 +8103,7 @@ title Maestro EGP - Print Agent
 color 0A
 echo.
 echo  ========================================
-echo    Maestro EGP - Print Agent v2.1
+echo    Maestro EGP - Print Agent v2.3
 echo    Background Service Installer
 echo  ========================================
 echo.
@@ -8153,7 +8153,7 @@ if exist "%LOCALAPPDATA%\\MaestroPrintAgent\\server.ps1" (
 echo.
 echo  [..] Verifying new agent (waiting 10s for startup)...
 timeout /t 10 >nul
-powershell -NoProfile -Command "try {{ $r = Invoke-WebRequest -Uri 'http://localhost:9999/status' -UseBasicParsing -TimeoutSec 5; $j = $r.Content | ConvertFrom-Json; if ($j.usb_support -eq $true) {{ Write-Host '  [OK] Agent v2.1 ACTIVE - USB + Network ready!' -ForegroundColor Green }} else {{ Write-Host '  [WARN] Agent responds but old version - restart PC' -ForegroundColor Yellow }} }} catch {{ Write-Host '  [..] First check failed, retrying in 10s...' -ForegroundColor Yellow; Start-Sleep -Seconds 10; try {{ $r2 = Invoke-WebRequest -Uri 'http://localhost:9999/status' -UseBasicParsing -TimeoutSec 5; $j2 = $r2.Content | ConvertFrom-Json; if ($j2.usb_support -eq $true) {{ Write-Host '  [OK] Agent v2.1 ACTIVE!' -ForegroundColor Green }} else {{ Write-Host '  [WARN] Old version detected' -ForegroundColor Yellow }} }} catch {{ Write-Host '  [ERROR] Agent failed to start. Check logs:' -ForegroundColor Red; Write-Host '  %LOCALAPPDATA%\\MaestroPrintAgent\\install.log' -ForegroundColor Red; Write-Host '  %LOCALAPPDATA%\\MaestroPrintAgent\\agent.log' -ForegroundColor Red }} }}"
+powershell -NoProfile -Command "try {{ $r = Invoke-WebRequest -Uri 'http://localhost:9999/status' -UseBasicParsing -TimeoutSec 5; $j = $r.Content | ConvertFrom-Json; if ($j.usb_support -eq $true) {{ Write-Host '  [OK] Agent v2.3 ACTIVE - USB + Network ready!' -ForegroundColor Green }} else {{ Write-Host '  [WARN] Agent responds but old version - restart PC' -ForegroundColor Yellow }} }} catch {{ Write-Host '  [..] First check failed, retrying in 10s...' -ForegroundColor Yellow; Start-Sleep -Seconds 10; try {{ $r2 = Invoke-WebRequest -Uri 'http://localhost:9999/status' -UseBasicParsing -TimeoutSec 5; $j2 = $r2.Content | ConvertFrom-Json; if ($j2.usb_support -eq $true) {{ Write-Host '  [OK] Agent v2.3 ACTIVE!' -ForegroundColor Green }} else {{ Write-Host '  [WARN] Old version detected' -ForegroundColor Yellow }} }} catch {{ Write-Host '  [ERROR] Agent failed to start. Check logs:' -ForegroundColor Red; Write-Host '  %LOCALAPPDATA%\\MaestroPrintAgent\\install.log' -ForegroundColor Red; Write-Host '  %LOCALAPPDATA%\\MaestroPrintAgent\\agent.log' -ForegroundColor Red }} }}"
 echo.
 echo  ========================================
 echo  [OK] Installation complete!
