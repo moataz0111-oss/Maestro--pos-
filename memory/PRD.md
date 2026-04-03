@@ -1,43 +1,26 @@
 # Maestro POS - PRD
 
-## Print System v4.0 - Browser Canvas Rendering
+## Print System v4.1 - Single GS v 0 Image (Fixed)
 
 ### Architecture:
 ```
-Browser Canvas → ESC/POS Bitmap → Print Agent (localhost:9999) → Printer
+Browser Canvas → ESC/POS (single GS v 0) → Print Agent (localhost:9999) → Printer
 ```
 
+### Critical Fix (Apr 2026):
+- **Before**: Image split into 24px strips, each as separate GS v 0 command → SAM4S printer overwrites each strip (only footer visible)
+- **After**: Entire image sent as ONE GS v 0 command → Complete receipt prints correctly
+
 ### Files:
-- `receiptBitmap.js` - Canvas-based receipt renderer v2 + test page renderer (Arabic native)
-- `printService.js` - v3.1: Passes all invoice settings, USB test uses bitmap
-- `AgentUpdateChecker.js` - v4: Flexible semver-like version comparison
-- `print_server.ps1` - v2.2: Accepts raw_data base64, improved logging
+- `receiptBitmap.js` - Canvas renderer v2, ESC/POS single-image encoder, test page renderer
+- `printService.js` - v3.1: USB test uses bitmap, all invoice settings passed
+- `AgentUpdateChecker.js` - v4: Flexible semver comparison
+- `print_server.ps1` - v2.2: Accepts raw_data base64
 
-### Kitchen Dialog (NEW):
-- Shows each cart item individually with quantity
-- Under each item: printer badge showing linked kitchen printer name
-- On "Save & Send": printer badges animate (orange → green/red)
-- Dialog stays 30 seconds after completion to show print status
-- "Done" button appears after print to close immediately
-- Items with no assigned printer show "لا توجد طابعة" badge
-
-### USB Test Print:
-- Uses Canvas bitmap (large Arabic page) via `/print-receipt` instead of plain text `/print-test`
-- Uses `renderTestBitmap()` from `receiptBitmap.js`
-
-### Receipt Layout (matches POS preview):
-1. Restaurant name, Phone, Address, Branch, Tax number
-2. Invoice/Order number, Date/Time, Cashier
-3. Order type + details (table/buzzer/delivery)
-4. Items table (Name | Qty | Price) with extras and notes
-5. Subtotal, Discount, Total, Payment method
-6. Custom header/footer, Thank you message
-
-### Kitchen Routing:
-- Products have `printer_ids[]` linking to kitchen printers
-- `routeOrderToPrinters()` maps items to printers
-- `getCartItemPrinterMap()` resolves printer names for display
-- Each printer gets its own receipt with only assigned items
+### Kitchen Dialog:
+- Shows each cart item with its linked kitchen printer badge
+- Real-time status: orange=sending → green=success / red=error
+- Dialog stays 30 seconds after completion, with "Done" button for immediate close
 
 ## Credentials
 - Admin: hanialdujaili@gmail.com / Hani@2024
@@ -45,14 +28,12 @@ Browser Canvas → ESC/POS Bitmap → Print Agent (localhost:9999) → Printer
 - Test Cashier: cashier@test.com / Test@1234
 
 ## Completed
-- [x] Browser Canvas receipt renderer v2 (matches POS preview exactly) - Apr 2026
-- [x] ESC/POS bitmap conversion in JavaScript
-- [x] Print agent auto-update banner (semver comparison)
-- [x] Complete printService.js rewrite (v3.1)
-- [x] Kitchen printer routing with real-time status feedback
+- [x] Browser Canvas receipt renderer (matches POS preview)
+- [x] Single GS v 0 ESC/POS encoding (fixes strip overlap) - Apr 2026
 - [x] USB test print uses full Arabic bitmap - Apr 2026
-- [x] Kitchen Dialog redesign: shows items + printers + status - Apr 2026
-- [x] buildPrintOrderData includes all invoice settings
+- [x] Kitchen dialog with per-item printer status - Apr 2026
+- [x] AgentUpdateChecker semver comparison - Apr 2026
+- [x] buildPrintOrderData includes all invoice settings - Apr 2026
 
 ## Upcoming Tasks
 - P0: Multi-Restaurant (Tenant) Switcher

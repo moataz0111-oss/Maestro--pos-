@@ -415,7 +415,8 @@ function renderReceiptCanvas(order, config = {}) {
 
 /**
  * تحويل Canvas إلى ESC/POS bitmap bytes
- * يقسم الصورة لشرائح صغيرة (24 سطر) لتجنب تجاوز ذاكرة الطابعة
+ * إرسال الصورة كاملة في أمر GS v 0 واحد (بدون تقسيم لشرائح)
+ * هذا يضمن عمل جميع أنواع الطابعات الحرارية بشكل صحيح
  */
 function canvasToEscPos(canvas) {
   const ctx = canvas.getContext('2d');
@@ -424,52 +425,68 @@ function canvasToEscPos(canvas) {
   const imgData = ctx.getImageData(0, 0, w, h);
   const pixels = imgData.data;
   
-  const bytes = [];
-  // ESC @ - Initialize printer
-  bytes.push(0x1B, 0x40);
-  // Set line spacing to 0 for seamless strips
-  bytes.push(0x1B, 0x33, 0x00);
-  
   const bytesPerRow = Math.ceil(w / 8);
-  const STRIP_HEIGHT = 24;
   
-  for (let stripStart = 0; stripStart < h; stripStart += STRIP_HEIGHT) {
-    const stripEnd = Math.min(stripStart + STRIP_HEIGHT, h);
-    const stripH = stripEnd - stripStart;
-    
-    // GS v 0 - Print raster bit image for this strip
-    bytes.push(0x1D, 0x76, 0x30, 0x00);
-    bytes.push(bytesPerRow & 0xFF, (bytesPerRow >> 8) & 0xFF);
-    bytes.push(stripH & 0xFF, (stripH >> 8) & 0xFF);
-    
-    for (let row = stripStart; row < stripEnd; row++) {
-      for (let colByte = 0; colByte < bytesPerRow; colByte++) {
-        let byteVal = 0;
-        for (let bit = 0; bit < 8; bit++) {
-          const px = colByte * 8 + bit;
-          if (px < w) {
-            const idx = (row * w + px) * 4;
-            const r = pixels[idx];
-            const g = pixels[idx + 1];
-            const b = pixels[idx + 2];
-            const gray = (r * 0.299 + g * 0.587 + b * 0.114);
-            if (gray < 128) {
-              byteVal |= (0x80 >> bit);
-            }
+  // بناء مصفوفة البايتات
+  const headerBytes = [
+    0x1B, 0x40,                   // ESC @ - Initialize printer
+    0x1D, 0x76, 0x30, 0x00,      // GS v 0 - Print raster bit image
+    bytesPerRow & 0xFF, (bytesPerRow >> 8) & 0xFF,  // xL xH - عرض الصورة بالبايت
+    h & 0xFF, (h >> 8) & 0xFF    // yL yH - ارتفاع الصورة بالبكسل
+  ];
+  
+  // بيانات البكسل
+  const pixelData = new Uint8Array(bytesPerRow * h);
+  let pIdx = 0;
+  
+  for (let row = 0; row < h; row++) {
+    for (let colByte = 0; colByte < bytesPerRow; colByte++) {
+      let byteVal = 0;
+      for (let bit = 0; bit < 8; bit++) {
+        const px = colByte * 8 + bit;
+        if (px < w) {
+          const idx = (row * w + px) * 4;
+          const r = pixels[idx];
+          const g = pixels[idx + 1];
+          const b = pixels[idx + 2];
+          const gray = (r * 0.299 + g * 0.587 + b * 0.114);
+          if (gray < 128) {
+            byteVal |= (0x80 >> bit);
           }
         }
-        bytes.push(byteVal);
       }
+      pixelData[pIdx++] = byteVal;
     }
   }
   
-  // Reset line spacing
-  bytes.push(0x1B, 0x32);
-  // تغذية ورق + قطع
-  bytes.push(0x0A, 0x0A, 0x0A, 0x0A);
-  bytes.push(0x1D, 0x56, 0x42, 0x00); // GS V B - Partial cut
+  // تغذية ورق + قطع جزئي
+  const footerBytes = [
+    0x0A, 0x0A, 0x0A, 0x0A,      // 4 line feeds
+    0x1D, 0x56, 0x42, 0x00       // GS V B 0 - Partial cut
+  ];
   
-  return new Uint8Array(bytes);
+  // دمج كل الأجزاء في مصفوفة واحدة
+  const total = headerBytes.length + pixelData.length + footerBytes.length;
+  const result = new Uint8Array(total);
+  result.set(headerBytes, 0);
+  result.set(pixelData, headerBytes.length);
+  result.set(footerBytes, headerBytes.length + pixelData.length);
+  
+  return result;
+}
+
+/**
+ * تحويل Uint8Array إلى base64 بكفاءة عالية
+ */
+function uint8ToBase64(uint8Array) {
+  // تقسيم المصفوفة لأجزاء صغيرة لتجنب تجاوز حد الذاكرة في String.fromCharCode
+  const CHUNK = 8192;
+  let binary = '';
+  for (let i = 0; i < uint8Array.length; i += CHUNK) {
+    const slice = uint8Array.subarray(i, Math.min(i + CHUNK, uint8Array.length));
+    binary += String.fromCharCode.apply(null, slice);
+  }
+  return btoa(binary);
 }
 
 /**
@@ -479,14 +496,9 @@ export function renderReceiptBitmap(order, config = {}) {
   try {
     const canvas = renderReceiptCanvas(order, config);
     const escposBytes = canvasToEscPos(canvas);
+    const base64 = uint8ToBase64(escposBytes);
     
-    let binary = '';
-    for (let i = 0; i < escposBytes.length; i++) {
-      binary += String.fromCharCode(escposBytes[i]);
-    }
-    const base64 = btoa(binary);
-    
-    console.log(`[ReceiptBitmap] Rendered OK: ${canvas.width}x${canvas.height}px, ${escposBytes.length} bytes, kitchen=${config.printer_type === 'kitchen'}`);
+    console.log(`[ReceiptBitmap] Rendered OK: ${canvas.width}x${canvas.height}px, ${escposBytes.length} bytes, base64=${base64.length} chars`);
     return { success: true, raw_data: base64, size: escposBytes.length };
   } catch (err) {
     console.error('[ReceiptBitmap] Render failed:', err);
@@ -584,12 +596,7 @@ export function renderTestBitmap(printerInfo = {}) {
   try {
     const canvas = renderTestPageCanvas(printerInfo);
     const escposBytes = canvasToEscPos(canvas);
-    
-    let binary = '';
-    for (let i = 0; i < escposBytes.length; i++) {
-      binary += String.fromCharCode(escposBytes[i]);
-    }
-    const base64 = btoa(binary);
+    const base64 = uint8ToBase64(escposBytes);
     
     console.log(`[TestBitmap] Rendered OK: ${canvas.width}x${canvas.height}px, ${escposBytes.length} bytes`);
     return { success: true, raw_data: base64, size: escposBytes.length };
