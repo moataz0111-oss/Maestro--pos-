@@ -443,13 +443,15 @@ export default function POS() {
         axios.get(`${API}/settings/restaurant`).catch(() => ({ data: {} })),
         axios.get(`${API}/system/invoice-settings`).catch(() => ({ data: {} })),
         axios.get(`${API}/login-backgrounds`).catch(() => ({ data: {} })),
-        axios.get(`${API}/printers`).catch(() => ({ data: [] }))
+        axios.get(`${API}/printers`).catch(err => { console.error('[POS] Failed to load printers:', err.message); return { data: [] }; })
       ]);
 
       setCategories(catRes.data);
       setProducts(prodRes.data);
       setDeliveryApps(appsRes.data);
-      setAvailablePrinters(printersRes.data || []);
+      const loadedPrinters = printersRes.data || [];
+      console.log('[POS] Loaded printers:', loadedPrinters.length, loadedPrinters.map(p => ({name: p.name, type: p.printer_type, conn: p.connection_type})));
+      setAvailablePrinters(loadedPrinters);
       const invoiceData = invoiceRes.data || {};
       const restaurantData = restaurantRes.data || {};
       setInvoiceSettings(invoiceData);
@@ -669,13 +671,15 @@ export default function POS() {
         axios.get(`${API}/categories`),
         axios.get(`${API}/products`),
         axios.get(`${API}/tables`, { params: activeBranchId ? { branch_id: activeBranchId } : {} }).catch(() => ({ data: [] })),
-        axios.get(`${API}/printers`).catch(() => ({ data: [] }))
+        axios.get(`${API}/printers`).catch(err => { console.error('[POS] Failed to reload printers:', err.message); return { data: [] }; })
       ]);
 
       setCategories(catRes.data);
       setProducts(prodRes.data);
       setTables(tablesRes.data);
-      setAvailablePrinters(printersRes.data || []);
+      const reloadedPrinters = printersRes.data || [];
+      console.log('[POS] Reloaded printers:', reloadedPrinters.length, reloadedPrinters.map(p => ({name: p.name, type: p.printer_type, conn: p.connection_type})));
+      setAvailablePrinters(reloadedPrinters);
       
       // جلب الطلبات المعلقة
       await fetchPendingOrders();
@@ -1845,7 +1849,9 @@ export default function POS() {
           }));
           
           // 1. طباعة الفاتورة على طابعة الكاشير USB فقط
-          const cashierPrinter = availablePrinters.find(p => p.printer_type === 'receipt');
+          let cashierPrinter = availablePrinters.find(p => p.printer_type === 'receipt');
+          if (!cashierPrinter) cashierPrinter = availablePrinters.find(p => p.connection_type === 'usb' && p.usb_printer_name);
+          console.log('[Submit] Cashier printer:', cashierPrinter?.name || 'NOT FOUND', 'Total printers:', availablePrinters.length);
           if (cashierPrinter) {
             const subtotalCalc = cart.reduce((sum, item) => sum + ((item.price + (item.selectedExtras || []).reduce((s, e) => s + e.price, 0)) * item.quantity), 0);
             const cashierOrderData = {
@@ -3604,16 +3610,29 @@ export default function POS() {
               onClick={async () => {
                 // === طباعة صامتة عبر وسيط الطباعة على طابعة الكاشير USB فقط ===
                 try {
+                  console.log('[Print] Available printers:', availablePrinters.length, availablePrinters.map(p => ({name: p.name, type: p.printer_type, conn: p.connection_type, usb: p.usb_printer_name})));
                   const agentOk = await checkAgentStatus();
+                  console.log('[Print] Agent status:', agentOk);
                   if (!agentOk) {
                     toast.error(t('وسيط الطباعة غير متصل! تأكد من تشغيل برنامج الطباعة على الجهاز'));
                     return;
                   }
-                  const cashierPrinter = availablePrinters.find(p => p.printer_type === 'receipt');
+                  // البحث عن طابعة الكاشير: أولاً بالنوع receipt ثم أي طابعة USB
+                  let cashierPrinter = availablePrinters.find(p => p.printer_type === 'receipt');
                   if (!cashierPrinter) {
-                    toast.error(t('لا توجد طابعة كاشير مُعرّفة في الإعدادات'));
+                    cashierPrinter = availablePrinters.find(p => p.connection_type === 'usb' && p.usb_printer_name);
+                  }
+                  if (!cashierPrinter && availablePrinters.length > 0) {
+                    // فشلنا نجد طابعة كاشير أو USB - نستخدم أول طابعة
+                    cashierPrinter = availablePrinters[0];
+                    console.log('[Print] Using first available printer as fallback:', cashierPrinter.name);
+                  }
+                  if (!cashierPrinter) {
+                    console.error('[Print] No printers at all! availablePrinters:', availablePrinters);
+                    toast.error(t('لا توجد طابعات في الإعدادات - أضف طابعة من صفحة الإعدادات'));
                     return;
                   }
+                  console.log('[Print] Using printer:', cashierPrinter.name, cashierPrinter.printer_type, cashierPrinter.connection_type);
                   const printData = buildPrintOrderData(editingOrder?.order_number || lastOrderNumber || '');
                   const subtotalCalc = cart.reduce((sum, item) => sum + ((item.price + (item.selectedExtras || []).reduce((s, e) => s + e.price, 0)) * item.quantity), 0);
                   const orderForPrint = {
