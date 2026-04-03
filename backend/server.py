@@ -4732,11 +4732,19 @@ async def create_order(order: OrderCreate, current_user: dict = Depends(get_curr
                 if not delivery_app_name:
                     delivery_app_name = customer.get("name")
     
+    # البحث عن رقم الطاولة
+    table_number = None
+    if order.table_id:
+        table_doc = await db.tables.find_one({"id": order.table_id}, {"_id": 0, "number": 1})
+        if table_doc:
+            table_number = table_doc.get("number")
+    
     order_doc = {
         "id": str(uuid.uuid4()),
         "order_number": order_number,
         "order_type": order.order_type,
         "table_id": order.table_id,
+        "table_number": table_number,
         "customer_name": order.customer_name,
         "customer_phone": order.customer_phone,
         "delivery_address": order.delivery_address,
