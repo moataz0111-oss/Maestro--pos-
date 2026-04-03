@@ -206,105 +206,226 @@ function Build-TestPage {
 
 function Build-Receipt {
     param($order, $config)
-    $enc = [System.Text.Encoding]::UTF8
     $showPrices = $true
     if ($config -and $config.show_prices -eq $false) { $showPrices = $false }
     $lang = if ($order.language) { $order.language } else { 'ar' }
-    $bytes = [System.Collections.Generic.List[byte]]::new()
-    $bytes.AddRange([byte[]]@(0x1b, 0x40))
-    $bytes.AddRange([byte[]]@(0x1b, 0x61, 0x01))
+    $paperWidth = 384
+
+    # بناء مصفوفات النص لتحويلها لصورة bitmap عبر ReceiptRenderer
+    $lines = [System.Collections.Generic.List[string]]::new()
+    $sizes = [System.Collections.Generic.List[int]]::new()
+    $bolds = [System.Collections.Generic.List[bool]]::new()
+    $aligns = [System.Collections.Generic.List[string]]::new()
+
+    # اسم المطعم
     if ($order.restaurant_name) {
-        $bytes.AddRange([byte[]]@(0x1b, 0x45, 0x01, 0x1b, 0x21, 0x30))
-        $bytes.AddRange($enc.GetBytes($order.restaurant_name))
-        $bytes.Add(0x0a)
-        $bytes.AddRange([byte[]]@(0x1b, 0x21, 0x00, 0x1b, 0x45, 0x00))
+        $lines.Add([string]$order.restaurant_name)
+        $sizes.Add(20)
+        $bolds.Add($true)
+        $aligns.Add('center')
     }
-    $sep = $enc.GetBytes('================================')
-    $bytes.AddRange($sep); $bytes.Add(0x0a)
-    $bytes.AddRange([byte[]]@(0x1b, 0x61, 0x00))
+
+    # خط فاصل
+    $lines.Add('================================')
+    $sizes.Add(10)
+    $bolds.Add($false)
+    $aligns.Add('center')
+
+    # رقم الطلب
     if ($order.order_number) {
-        $bytes.AddRange([byte[]]@(0x1b, 0x45, 0x01, 0x1b, 0x21, 0x10))
-        $bytes.AddRange($enc.GetBytes('#' + $order.order_number))
-        $bytes.Add(0x0a)
-        $bytes.AddRange([byte[]]@(0x1b, 0x21, 0x00, 0x1b, 0x45, 0x00))
+        $lines.Add('#' + [string]$order.order_number)
+        $sizes.Add(16)
+        $bolds.Add($true)
+        $aligns.Add('left')
     }
+
+    # نوع الطلب
     if ($order.order_type) {
-        $bytes.AddRange([byte[]]@(0x1b, 0x61, 0x01, 0x1b, 0x45, 0x01, 0x1b, 0x21, 0x10))
         $typeText = switch ($order.order_type) {
-            'dine_in' { if ($lang -eq 'ar') { [char]0x0637 + [char]0x0644 + [char]0x0628 + ' ' + [char]0x062F + [char]0x0627 + [char]0x062E + [char]0x0644 + [char]0x064A } else { 'Dine In' } }
-            'takeaway' { if ($lang -eq 'ar') { [char]0x0637 + [char]0x0644 + [char]0x0628 + ' ' + [char]0x0633 + [char]0x0641 + [char]0x0631 + [char]0x064A } else { 'Takeaway' } }
-            'delivery' { if ($lang -eq 'ar') { [char]0x062A + [char]0x0648 + [char]0x0635 + [char]0x064A + [char]0x0644 } else { 'Delivery' } }
+            'dine_in' { if ($lang -eq 'ar') { "$([char]0x0637)$([char]0x0644)$([char]0x0628) $([char]0x062F)$([char]0x0627)$([char]0x062E)$([char]0x0644)$([char]0x064A)" } else { 'Dine In' } }
+            'takeaway' { if ($lang -eq 'ar') { "$([char]0x0637)$([char]0x0644)$([char]0x0628) $([char]0x0633)$([char]0x0641)$([char]0x0631)$([char]0x064A)" } else { 'Takeaway' } }
+            'delivery' { if ($lang -eq 'ar') { "$([char]0x062A)$([char]0x0648)$([char]0x0635)$([char]0x064A)$([char]0x0644)" } else { 'Delivery' } }
             default { $order.order_type }
         }
-        $bytes.AddRange($enc.GetBytes($typeText))
-        $bytes.Add(0x0a)
-        $bytes.AddRange([byte[]]@(0x1b, 0x21, 0x00, 0x1b, 0x45, 0x00, 0x1b, 0x61, 0x00))
+        $lines.Add([string]$typeText)
+        $sizes.Add(16)
+        $bolds.Add($true)
+        $aligns.Add('center')
     }
+
+    # رقم الطاولة
     if ($order.table_number) {
-        $tableLabel = if ($lang -eq 'ar') { [char]0x0637 + [char]0x0627 + [char]0x0648 + [char]0x0644 + [char]0x0629 + ': ' } else { 'Table: ' }
-        $bytes.AddRange([byte[]]@(0x1b, 0x45, 0x01, 0x1b, 0x21, 0x10))
-        $bytes.AddRange($enc.GetBytes($tableLabel + $order.table_number))
-        $bytes.Add(0x0a)
-        $bytes.AddRange([byte[]]@(0x1b, 0x21, 0x00, 0x1b, 0x45, 0x00))
+        $tableLabel = if ($lang -eq 'ar') { "$([char]0x0637)$([char]0x0627)$([char]0x0648)$([char]0x0644)$([char]0x0629): " } else { 'Table: ' }
+        $lines.Add([string]($tableLabel + $order.table_number))
+        $sizes.Add(14)
+        $bolds.Add($true)
+        $aligns.Add('center')
     }
-    $bytes.AddRange([byte[]]@(0x1b, 0x45, 0x01))
-    $bytes.AddRange($enc.GetBytes((Get-Date -Format 'yyyy/MM/dd HH:mm')))
-    $bytes.Add(0x0a)
-    $bytes.AddRange([byte[]]@(0x1b, 0x45, 0x00))
+
+    # رقم البزون
+    if ($order.buzzer_number) {
+        $buzzerLabel = if ($lang -eq 'ar') { "$([char]0x0628)$([char]0x0632)$([char]0x0648)$([char]0x0646): " } else { 'Buzzer: ' }
+        $lines.Add([string]($buzzerLabel + $order.buzzer_number))
+        $sizes.Add(14)
+        $bolds.Add($true)
+        $aligns.Add('center')
+    }
+
+    # التاريخ
+    $lines.Add((Get-Date -Format 'yyyy/MM/dd HH:mm'))
+    $sizes.Add(10)
+    $bolds.Add($false)
+    $aligns.Add('center')
+
+    # اسم العميل
     if ($order.customer_name) {
-        $bytes.AddRange([byte[]]@(0x1b, 0x45, 0x01))
-        $bytes.AddRange($enc.GetBytes($order.customer_name))
-        $bytes.Add(0x0a)
-        $bytes.AddRange([byte[]]@(0x1b, 0x45, 0x00))
+        $lines.Add([string]$order.customer_name)
+        $sizes.Add(12)
+        $bolds.Add($true)
+        $aligns.Add('center')
     }
-    $bytes.AddRange($sep); $bytes.Add(0x0a)
+
+    # خط فاصل قبل العناصر
+    $lines.Add('================================')
+    $sizes.Add(10)
+    $bolds.Add($false)
+    $aligns.Add('center')
+
+    # عناصر الطلب
     foreach ($item in $order.items) {
-        $n = if ($item.product_name) { $item.product_name } else { $item.name }
+        $n = if ($item.product_name) { [string]$item.product_name } else { [string]$item.name }
         $q = if ($item.quantity) { $item.quantity } else { 1 }
         if ($showPrices) {
             $p = [math]::Round($item.price * $q)
-            $bytes.AddRange([byte[]]@(0x1b, 0x45, 0x01, 0x1b, 0x21, 0x10))
-            $bytes.AddRange($enc.GetBytes("$n x$q  $p"))
-            $bytes.AddRange([byte[]]@(0x1b, 0x21, 0x00, 0x1b, 0x45, 0x00))
+            $lines.Add("$n x$q  $p")
+            $sizes.Add(13)
+            $bolds.Add($true)
+            $aligns.Add('left')
         } else {
-            $bytes.AddRange([byte[]]@(0x1b, 0x45, 0x01, 0x1b, 0x21, 0x30))
-            $bytes.AddRange($enc.GetBytes("$n  x$q"))
-            $bytes.AddRange([byte[]]@(0x1b, 0x21, 0x00, 0x1b, 0x45, 0x00))
+            $lines.Add("$n  x$q")
+            $sizes.Add(18)
+            $bolds.Add($true)
+            $aligns.Add('left')
         }
-        $bytes.Add(0x0a)
+        # ملاحظات
         if ($item.notes) {
-            $bytes.AddRange([byte[]]@(0x1b, 0x45, 0x01))
-            $bytes.AddRange($enc.GetBytes('  >> ' + $item.notes))
-            $bytes.Add(0x0a)
-            $bytes.AddRange([byte[]]@(0x1b, 0x45, 0x00))
+            $lines.Add('  >> ' + [string]$item.notes)
+            $sizes.Add(10)
+            $bolds.Add($false)
+            $aligns.Add('left')
+        }
+        # إضافات
+        if ($item.extras) {
+            foreach ($extra in $item.extras) {
+                $eName = if ($extra.name) { [string]$extra.name } else { '' }
+                if ($eName) {
+                    if ($showPrices -and $extra.price) {
+                        $lines.Add("  + $eName  $([math]::Round($extra.price))")
+                    } else {
+                        $lines.Add("  + $eName")
+                    }
+                    $sizes.Add(10)
+                    $bolds.Add($false)
+                    $aligns.Add('left')
+                }
+            }
         }
     }
-    $bytes.AddRange($sep); $bytes.Add(0x0a)
+
+    # خط فاصل بعد العناصر
+    $lines.Add('================================')
+    $sizes.Add(10)
+    $bolds.Add($false)
+    $aligns.Add('center')
+
+    # الخصم
+    if ($showPrices -and $order.discount -and $order.discount -gt 0) {
+        $discLabel = if ($lang -eq 'ar') { "$([char]0x062E)$([char]0x0635)$([char]0x0645): -" } else { 'Discount: -' }
+        $lines.Add([string]($discLabel + [math]::Round($order.discount)))
+        $sizes.Add(13)
+        $bolds.Add($true)
+        $aligns.Add('center')
+    }
+
+    # الإجمالي
     if ($showPrices -and $order.total) {
-        $totalLabel = if ($lang -eq 'ar') { [char]0x0627 + [char]0x0644 + [char]0x0625 + [char]0x062C + [char]0x0645 + [char]0x0627 + [char]0x0644 + [char]0x064A + ': ' } else { 'Total: ' }
-        $bytes.AddRange([byte[]]@(0x1b, 0x61, 0x01, 0x1b, 0x45, 0x01, 0x1b, 0x21, 0x30))
+        $totalLabel = if ($lang -eq 'ar') { "$([char]0x0627)$([char]0x0644)$([char]0x0625)$([char]0x062C)$([char]0x0645)$([char]0x0627)$([char]0x0644)$([char]0x064A): " } else { 'Total: ' }
         $total = [math]::Round($order.total)
-        $bytes.AddRange($enc.GetBytes("$totalLabel$total"))
-        $bytes.Add(0x0a)
-        $bytes.AddRange([byte[]]@(0x1b, 0x21, 0x00, 0x1b, 0x45, 0x00))
+        $lines.Add([string]($totalLabel + $total))
+        $sizes.Add(18)
+        $bolds.Add($true)
+        $aligns.Add('center')
     }
-    if ($order.discount -and $order.discount -gt 0) {
-        $discLabel = if ($lang -eq 'ar') { [char]0x062E + [char]0x0635 + [char]0x0645 + ': -' } else { 'Discount: -' }
-        $bytes.AddRange([byte[]]@(0x1b, 0x61, 0x01, 0x1b, 0x45, 0x01))
-        $bytes.AddRange($enc.GetBytes("$discLabel$([math]::Round($order.discount))"))
-        $bytes.Add(0x0a)
-        $bytes.AddRange([byte[]]@(0x1b, 0x45, 0x00))
+
+    # طريقة الدفع (للفاتورة فقط)
+    if ($showPrices -and $order.payment_method) {
+        $pmText = switch ($order.payment_method) {
+            'cash' { if ($lang -eq 'ar') { "$([char]0x0646)$([char]0x0642)$([char]0x062F)$([char]0x064A)" } else { 'Cash' } }
+            'card' { if ($lang -eq 'ar') { "$([char]0x0628)$([char]0x0637)$([char]0x0627)$([char]0x0642)$([char]0x0629)" } else { 'Card' } }
+            'credit' { if ($lang -eq 'ar') { "$([char]0x0622)$([char]0x062C)$([char]0x0644)" } else { 'Credit' } }
+            default { [string]$order.payment_method }
+        }
+        $pmLabel = if ($lang -eq 'ar') { "$([char]0x0627)$([char]0x0644)$([char]0x062F)$([char]0x0641)$([char]0x0639): " } else { 'Payment: ' }
+        $lines.Add([string]($pmLabel + $pmText))
+        $sizes.Add(12)
+        $bolds.Add($true)
+        $aligns.Add('center')
     }
-    $bytes.AddRange($sep); $bytes.Add(0x0a)
-    $bytes.AddRange([byte[]]@(0x1b, 0x61, 0x01))
-    $bytes.AddRange([byte[]]@(0x1b, 0x45, 0x01))
-    $thankText = if ($lang -eq 'ar') { [char]0x0634 + [char]0x0643 + [char]0x0631 + [char]0x0627 + [char]0x064B + ' ' + [char]0x0644 + [char]0x0632 + [char]0x064A + [char]0x0627 + [char]0x0631 + [char]0x062A + [char]0x0643 + [char]0x0645 } else { 'Thank you!' }
-    $bytes.AddRange($enc.GetBytes($thankText))
-    $bytes.Add(0x0a)
-    $bytes.AddRange([byte[]]@(0x1b, 0x45, 0x00))
-    $bytes.Add(0x0a); $bytes.Add(0x0a); $bytes.Add(0x0a); $bytes.Add(0x0a); $bytes.Add(0x0a)
-    $bytes.AddRange([byte[]]@(0x1d, 0x56, 0x42, 0x00))
-    return $bytes.ToArray()
+
+    # اسم الكاشير (للفاتورة فقط)
+    if ($showPrices -and $order.cashier_name) {
+        $cashierLabel = if ($lang -eq 'ar') { "$([char]0x0627)$([char]0x0644)$([char]0x0643)$([char]0x0627)$([char]0x0634)$([char]0x064A)$([char]0x0631): " } else { 'Cashier: ' }
+        $lines.Add([string]($cashierLabel + $order.cashier_name))
+        $sizes.Add(10)
+        $bolds.Add($false)
+        $aligns.Add('center')
+    }
+
+    # خط فاصل نهائي
+    $lines.Add('================================')
+    $sizes.Add(10)
+    $bolds.Add($false)
+    $aligns.Add('center')
+
+    # شكراً لزيارتكم
+    $thankText = if ($lang -eq 'ar') { "$([char]0x0634)$([char]0x0643)$([char]0x0631)$([char]0x0627)$([char]0x064B) $([char]0x0644)$([char]0x0632)$([char]0x064A)$([char]0x0627)$([char]0x0631)$([char]0x062A)$([char]0x0643)$([char]0x0645)" } else { 'Thank you!' }
+    $lines.Add([string]$thankText)
+    $sizes.Add(14)
+    $bolds.Add($true)
+    $aligns.Add('center')
+
+    # Maestro
+    $lines.Add('Maestro EGP')
+    $sizes.Add(9)
+    $bolds.Add($false)
+    $aligns.Add('center')
+
+    # تحويل النص لصورة bitmap عبر ReceiptRenderer (يدعم العربية)
+    try {
+        $result = [ReceiptRenderer]::RenderTextToEscPos(
+            [string[]]$lines.ToArray(),
+            [int[]]$sizes.ToArray(),
+            [bool[]]$bolds.ToArray(),
+            [string[]]$aligns.ToArray(),
+            $paperWidth
+        )
+        return $result
+    } catch {
+        "$(Get-Date) - ReceiptRenderer error: $_ - falling back to UTF8" | Out-File $agentLog -Append
+        # Fallback: استخدام UTF-8 العادي (قد لا يدعم العربية)
+        $enc = [System.Text.Encoding]::UTF8
+        $bytes = [System.Collections.Generic.List[byte]]::new()
+        $bytes.AddRange([byte[]]@(0x1b, 0x40))
+        foreach ($i in 0..($lines.Count - 1)) {
+            if ($bolds[$i]) { $bytes.AddRange([byte[]]@(0x1b, 0x45, 0x01)) }
+            $bytes.AddRange($enc.GetBytes($lines[$i]))
+            $bytes.Add(0x0a)
+            if ($bolds[$i]) { $bytes.AddRange([byte[]]@(0x1b, 0x45, 0x00)) }
+        }
+        $bytes.Add(0x0a); $bytes.Add(0x0a); $bytes.Add(0x0a); $bytes.Add(0x0a)
+        $bytes.AddRange([byte[]]@(0x1d, 0x56, 0x42, 0x00))
+        return $bytes.ToArray()
+    }
 }
 
 try {

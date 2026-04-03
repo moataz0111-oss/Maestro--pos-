@@ -1757,13 +1757,68 @@ export default function POS() {
       
       playSuccess();
       
+      // === طباعة الفاتورة على الكاشير وإرسال الطلبات للمطبخ ===
+      try {
+        const agentOk = await checkAgentStatus();
+        if (agentOk) {
+          const restaurantName = restaurantSettings?.name_ar || restaurantSettings?.name || '';
+          const lang = localStorage.getItem('language') || 'ar';
+          const orderForPrint = {
+            restaurant_name: restaurantName,
+            order_number: orderNumber,
+            order_type: orderType,
+            customer_name: customerName || '',
+            table_number: orderType === 'dine_in' ? (tables.find(t => t.id === selectedTable)?.number || selectedTable) : '',
+            buzzer_number: buzzerNumber || '',
+            discount: discount || 0,
+            language: lang
+          };
+          const itemsForPrint = cart.map(item => ({
+            product_id: item.product_id || item.id,
+            product_name: item.product_name || item.name,
+            name: item.product_name || item.name,
+            price: item.price,
+            quantity: item.quantity,
+            notes: item.notes || '',
+            extras: item.selectedExtras || []
+          }));
+          
+          // 1. طباعة الفاتورة على طابعة الكاشير
+          const cashierPrinter = availablePrinters.find(p => p.printer_type === 'receipt');
+          if (cashierPrinter) {
+            const subtotal = cart.reduce((sum, item) => sum + ((item.price + (item.selectedExtras || []).reduce((s, e) => s + e.price, 0)) * item.quantity), 0);
+            const cashierOrderData = {
+              ...orderForPrint,
+              items: itemsForPrint,
+              total: subtotal - (discount || 0),
+              subtotal: subtotal,
+              payment_method: paymentMethod || '',
+              branch_phone: invoiceSettings?.phone || '',
+              cashier_name: user?.name || user?.full_name || ''
+            };
+            await sendReceiptPrint(cashierPrinter, cashierOrderData);
+          }
+          
+          // 2. إرسال الطلبات لطابعات المطبخ حسب ربط المنتجات
+          const kitchenPrinters = availablePrinters.filter(p => 
+            p.printer_type === 'kitchen' &&
+            ((p.connection_type === 'usb' && p.usb_printer_name) || (p.connection_type !== 'usb' && p.ip_address))
+          );
+          if (kitchenPrinters.length > 0) {
+            await printOrderToAllPrinters(orderForPrint, itemsForPrint, products, kitchenPrinters, restaurantName);
+          }
+        }
+      } catch (printErr) {
+        console.log('Print error (non-blocking):', printErr);
+      }
+      
       // رسالة مناسبة حسب نوع الطلب
       if (orderType === 'dine_in') {
-        toast.success(`✅ ${t('تم إتمام الطلب')} #${orderNumber} ${t('وإغلاق الطاولة')}`);
+        toast.success(`${t('تم إتمام الطلب')} #${orderNumber} ${t('وإغلاق الطاولة')}`);
       } else if (orderType === 'takeaway') {
-        toast.success(`✅ ${t('تم إتمام الطلب السفري')} #${orderNumber}`);
+        toast.success(`${t('تم إتمام الطلب السفري')} #${orderNumber}`);
       } else {
-        toast.success(`✅ ${t('تم إتمام طلب التوصيل')} #${orderNumber}`);
+        toast.success(`${t('تم إتمام طلب التوصيل')} #${orderNumber}`);
       }
       
       // تنظيف وتحديث
@@ -3484,6 +3539,7 @@ export default function POS() {
                     const cashierPrinter = availablePrinters.find(p => p.printer_type === 'receipt') || availablePrinters[0];
                     if (cashierPrinter) {
                       const restaurantName = restaurantSettings?.name_ar || restaurantSettings?.name || '';
+                      const subtotalCalc = cart.reduce((sum, item) => sum + ((item.price + (item.selectedExtras || []).reduce((s, e) => s + e.price, 0)) * item.quantity), 0);
                       const orderForPrint = {
                         restaurant_name: restaurantName,
                         order_number: editingOrder?.order_number || lastOrderNumber || '',
@@ -3499,8 +3555,13 @@ export default function POS() {
                           notes: item.notes || '',
                           extras: item.selectedExtras || []
                         })),
-                        total: cart.reduce((sum, item) => sum + ((item.price + (item.selectedExtras || []).reduce((s, e) => s + e.price, 0)) * item.quantity), 0) - (discount || 0),
-                        discount: discount || 0
+                        total: subtotalCalc - (discount || 0),
+                        subtotal: subtotalCalc,
+                        discount: discount || 0,
+                        payment_method: paymentMethod || '',
+                        branch_phone: invoiceSettings?.phone || '',
+                        cashier_name: user?.name || user?.full_name || '',
+                        language: localStorage.getItem('language') || 'ar'
                       };
                       const result = await sendReceiptPrint(cashierPrinter, orderForPrint);
                       if (result.success) {

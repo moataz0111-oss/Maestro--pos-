@@ -159,16 +159,25 @@ export const sendRawPrint = async (ip, port, text, usbPrinterName = null) => {
  */
 export const routeOrderToPrinters = (orderItems, products, printers) => {
   const printerJobs = {};
-  const defaultPrinter = printers.find(p => p.printer_type === 'receipt') || printers[0];
+  const defaultPrinter = printers.find(p => p.printer_type === 'kitchen') || printers[0];
 
   for (const item of orderItems) {
     const product = products.find(p => p.id === item.product_id || p.id === item.id);
-    const productPrinterIds = product?.printer_ids || [];
+    // تأكد من أن printer_ids مصفوفة صالحة وليست null أو undefined
+    const productPrinterIds = Array.isArray(product?.printer_ids) ? product.printer_ids.filter(id => id) : [];
 
     if (productPrinterIds.length > 0) {
       for (const printerId of productPrinterIds) {
-        if (!printerJobs[printerId]) printerJobs[printerId] = [];
-        printerJobs[printerId].push(item);
+        // تحقق أن الطابعة موجودة في قائمة الطابعات المتاحة
+        const targetPrinter = printers.find(p => p.id === printerId);
+        if (targetPrinter) {
+          if (!printerJobs[printerId]) printerJobs[printerId] = [];
+          printerJobs[printerId].push(item);
+        } else if (defaultPrinter) {
+          // إذا لم تُوجد الطابعة المعينة، أرسل للافتراضية
+          if (!printerJobs[defaultPrinter.id]) printerJobs[defaultPrinter.id] = [];
+          printerJobs[defaultPrinter.id].push(item);
+        }
       }
     } else if (defaultPrinter) {
       if (!printerJobs[defaultPrinter.id]) printerJobs[defaultPrinter.id] = [];
