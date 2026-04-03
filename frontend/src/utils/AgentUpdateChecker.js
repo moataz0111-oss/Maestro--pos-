@@ -1,60 +1,59 @@
 /**
- * Maestro POS - Agent Update Checker v2
+ * Maestro POS - Agent Update Checker v3
  * يفحص إصدار وسيط الطباعة ويظهر زر تحديث عند توفر نسخة جديدة
- * الإصدار المطلوب مخزّن في الفرونتند مباشرة - لا يعتمد على endpoint
+ * يختفي تلقائياً بعد التحديث
  */
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Button } from '../components/ui/button';
 import { API_URL } from './api';
 import { Download, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 
 const PRINT_AGENT_URL = 'http://localhost:9999';
-const REQUIRED_AGENT_VERSION = '2.2.0';
+const REQUIRED_VERSION = '2.2.0';
 
 export function AgentUpdateBanner({ t = (s) => s }) {
   const [needsUpdate, setNeedsUpdate] = useState(false);
-  const [agentVersion, setAgentVersion] = useState(null);
-  const [isUpdating, setIsUpdating] = useState(false);
-  const [checked, setChecked] = useState(false);
+  const [localVer, setLocalVer] = useState(null);
+  const [downloading, setDownloading] = useState(false);
+  const intervalRef = useRef(null);
 
-  const checkVersion = useCallback(async () => {
+  const check = useCallback(async () => {
     try {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 3000);
-      const res = await fetch(`${PRINT_AGENT_URL}/status`, { signal: controller.signal });
-      clearTimeout(timeout);
-      const data = await res.json();
-      
-      if (data.status === 'running') {
-        const ver = data.version || null;
-        setAgentVersion(ver);
-        // إذا لا يوجد إصدار أو الإصدار مختلف = يحتاج تحديث
-        setNeedsUpdate(!ver || ver !== REQUIRED_AGENT_VERSION);
+      const ctrl = new AbortController();
+      setTimeout(() => ctrl.abort(), 2500);
+      const r = await fetch(`${PRINT_AGENT_URL}/status`, { signal: ctrl.signal });
+      const d = await r.json();
+      if (d.status === 'running') {
+        const v = d.version || null;
+        setLocalVer(v);
+        const upToDate = v === REQUIRED_VERSION;
+        setNeedsUpdate(!upToDate);
+        // إذا تم التحديث — نوقف الفحص السريع
+        if (upToDate && intervalRef.current) {
+          clearInterval(intervalRef.current);
+          intervalRef.current = setInterval(check, 120000); // فحص عادي كل دقيقتين
+        }
       }
-      setChecked(true);
     } catch {
-      // الوسيط غير متصل - لا نعرض شيء
       setNeedsUpdate(false);
-      setChecked(true);
     }
   }, []);
 
   useEffect(() => {
-    checkVersion();
-    const interval = setInterval(checkVersion, 60000);
-    return () => clearInterval(interval);
-  }, [checkVersion]);
+    check();
+    intervalRef.current = setInterval(check, 30000);
+    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
+  }, [check]);
 
-  const handleUpdate = async () => {
-    setIsUpdating(true);
+  const handleDownload = async () => {
+    setDownloading(true);
     try {
       const token = localStorage.getItem('token');
       const res = await fetch(`${API_URL}/download-print-agent`, {
         headers: token ? { 'Authorization': `Bearer ${token}` } : {}
       });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      
+      if (!res.ok) throw new Error(`${res.status}`);
       const blob = await res.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -64,39 +63,32 @@ export function AgentUpdateBanner({ t = (s) => s }) {
       a.click();
       a.remove();
       window.URL.revokeObjectURL(url);
+      toast.success(t('تم تحميل التحديث — شغّل الملف على الجهاز'));
       
-      toast.success(t('تم تحميل ملف التحديث - شغّله على جهاز الكاشير'));
-      setTimeout(checkVersion, 30000);
-    } catch (err) {
-      toast.error(t('فشل تحميل التحديث'));
+      // فحص سريع كل 5 ثواني لمعرفة إذا تم التحديث
+      if (intervalRef.current) clearInterval(intervalRef.current);
+      intervalRef.current = setInterval(check, 5000);
+    } catch {
+      toast.error(t('فشل التحميل'));
     }
-    setIsUpdating(false);
+    setDownloading(false);
   };
 
-  if (!checked || !needsUpdate) return null;
+  if (!needsUpdate) return null;
 
   return (
-    <div 
-      data-testid="agent-update-banner"
-      className="flex items-center gap-3 bg-amber-50 border-2 border-amber-400 rounded-lg px-4 py-3 mb-3"
-      dir="rtl"
-    >
-      <Download className="w-5 h-5 text-amber-600 flex-shrink-0" />
-      <span className="text-sm font-medium text-amber-800 flex-1">
-        {t('تحديث وسيط الطباعة متاح')} ({agentVersion || t('قديم')} → {REQUIRED_AGENT_VERSION})
+    <div data-testid="agent-update-banner" dir="rtl"
+      className="flex items-center gap-3 bg-amber-50 border-2 border-amber-400 rounded-lg px-4 py-3 mb-3 shadow-sm">
+      <Download className="w-5 h-5 text-amber-600 shrink-0" />
+      <span className="text-sm font-semibold text-amber-800 flex-1">
+        {t('تحديث وسيط الطباعة متاح')} ({localVer || t('قديم')} → {REQUIRED_VERSION})
       </span>
-      <Button
-        data-testid="update-agent-btn"
-        size="sm"
-        className="bg-amber-500 hover:bg-amber-600 text-white"
-        onClick={handleUpdate}
-        disabled={isUpdating}
-      >
-        {isUpdating ? (
-          <><RefreshCw className="w-4 h-4 ml-2 animate-spin" />{t('جاري التحميل...')}</>
-        ) : (
-          <><Download className="w-4 h-4 ml-2" />{t('تحديث الوسيط')}</>
-        )}
+      <Button data-testid="update-agent-btn" size="sm"
+        className="bg-amber-500 hover:bg-amber-600 text-white font-bold"
+        onClick={handleDownload} disabled={downloading}>
+        {downloading
+          ? <><RefreshCw className="w-4 h-4 ml-1 animate-spin" />{t('جاري...')}</>
+          : <><Download className="w-4 h-4 ml-1" />{t('تحديث')}</>}
       </Button>
     </div>
   );

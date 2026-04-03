@@ -285,6 +285,7 @@ function renderReceiptCanvas(order, config = {}) {
 
 /**
  * تحويل Canvas إلى ESC/POS bitmap bytes
+ * يقسم الصورة لشرائح صغيرة (24 سطر) لتجنب تجاوز ذاكرة الطابعة
  */
 function canvasToEscPos(canvas) {
   const ctx = canvas.getContext('2d');
@@ -296,34 +297,44 @@ function canvasToEscPos(canvas) {
   const bytes = [];
   // ESC @ - Initialize printer
   bytes.push(0x1B, 0x40);
+  // Set line spacing to 0 for seamless strips
+  bytes.push(0x1B, 0x33, 0x00);
   
-  // GS v 0 - Print raster bit image
   const bytesPerRow = Math.ceil(w / 8);
-  bytes.push(0x1D, 0x76, 0x30, 0x00);
-  bytes.push(bytesPerRow & 0xFF, (bytesPerRow >> 8) & 0xFF);
-  bytes.push(h & 0xFF, (h >> 8) & 0xFF);
+  const STRIP_HEIGHT = 24; // 24 سطر لكل شريحة (معيار ESC/POS)
   
-  for (let row = 0; row < h; row++) {
-    for (let colByte = 0; colByte < bytesPerRow; colByte++) {
-      let byteVal = 0;
-      for (let bit = 0; bit < 8; bit++) {
-        const px = colByte * 8 + bit;
-        if (px < w) {
-          const idx = (row * w + px) * 4;
-          const r = pixels[idx];
-          const g = pixels[idx + 1];
-          const b = pixels[idx + 2];
-          // أسود إذا كان الـ pixel أغمق من 128
-          const gray = (r * 0.299 + g * 0.587 + b * 0.114);
-          if (gray < 128) {
-            byteVal |= (0x80 >> bit);
+  for (let stripStart = 0; stripStart < h; stripStart += STRIP_HEIGHT) {
+    const stripEnd = Math.min(stripStart + STRIP_HEIGHT, h);
+    const stripH = stripEnd - stripStart;
+    
+    // GS v 0 - Print raster bit image for this strip
+    bytes.push(0x1D, 0x76, 0x30, 0x00);
+    bytes.push(bytesPerRow & 0xFF, (bytesPerRow >> 8) & 0xFF);
+    bytes.push(stripH & 0xFF, (stripH >> 8) & 0xFF);
+    
+    for (let row = stripStart; row < stripEnd; row++) {
+      for (let colByte = 0; colByte < bytesPerRow; colByte++) {
+        let byteVal = 0;
+        for (let bit = 0; bit < 8; bit++) {
+          const px = colByte * 8 + bit;
+          if (px < w) {
+            const idx = (row * w + px) * 4;
+            const r = pixels[idx];
+            const g = pixels[idx + 1];
+            const b = pixels[idx + 2];
+            const gray = (r * 0.299 + g * 0.587 + b * 0.114);
+            if (gray < 128) {
+              byteVal |= (0x80 >> bit);
+            }
           }
         }
+        bytes.push(byteVal);
       }
-      bytes.push(byteVal);
     }
   }
   
+  // Reset line spacing
+  bytes.push(0x1B, 0x32);
   // تغذية ورق + قطع
   bytes.push(0x0A, 0x0A, 0x0A, 0x0A);
   bytes.push(0x1D, 0x56, 0x42, 0x00); // GS V B - Partial cut
