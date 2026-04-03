@@ -1,8 +1,10 @@
 /**
- * Maestro EGP - خدمة الطباعة v2.1
+ * Maestro EGP - خدمة الطباعة v2.2
  * تتواصل مع وسيط الطباعة المحلي لإرسال أوامر الطباعة
  * يدعم طابعات الشبكة (Ethernet/IP) وطابعات USB عبر Windows Spooler
  */
+
+import { API_URL } from './api';
 
 const PRINT_AGENT_URL = 'http://localhost:9999';
 let _agentAvailable = null;
@@ -108,12 +110,15 @@ export const sendTestPrint = async (printer, branchName = '') => {
  */
 export const sendReceiptPrint = async (printer, orderData) => {
   try {
-    const API = window.location.origin;
+    // تحديد إذا كانت طابعة مطبخ - لا تعرض الأسعار
+    const isKitchen = printer.printer_type === 'kitchen';
+    const showPrices = isKitchen ? false : (printer.show_prices !== false);
+
     const payload = {
       order: orderData,
       printer_config: {
-        show_prices: printer.show_prices !== false,
-        print_mode: printer.print_mode || 'full_receipt',
+        show_prices: showPrices,
+        print_mode: printer.print_mode || (isKitchen ? 'kitchen' : 'full_receipt'),
         printer_type: printer.printer_type || 'receipt'
       }
     };
@@ -122,7 +127,7 @@ export const sendReceiptPrint = async (printer, orderData) => {
     let rawData = null;
     try {
       const token = localStorage.getItem('token');
-      const renderRes = await fetch(`${API}/api/print/render-receipt`, {
+      const renderRes = await fetch(`${API_URL}/print/render-receipt`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -130,19 +135,31 @@ export const sendReceiptPrint = async (printer, orderData) => {
         },
         body: JSON.stringify(payload)
       });
-      const renderResult = await renderRes.json();
-      if (renderResult.success && renderResult.raw_data) {
-        rawData = renderResult.raw_data;
+      if (!renderRes.ok) {
+        console.error('Render receipt HTTP error:', renderRes.status);
+      } else {
+        const renderResult = await renderRes.json();
+        if (renderResult.success && renderResult.raw_data) {
+          rawData = renderResult.raw_data;
+          console.log(`Receipt rendered OK (${renderResult.size} bytes) for ${printer.name}`);
+        } else {
+          console.error('Render receipt failed:', renderResult.error);
+        }
       }
     } catch (renderErr) {
-      console.log('Server render unavailable, using local agent rendering:', renderErr.message);
+      console.error('Server render unavailable:', renderErr.message);
     }
 
-    // الخطوة 2: إرسال للطابعة عبر الوكيل المحلي
-    const printPayload = { ...payload };
-    if (rawData) {
-      printPayload.raw_data = rawData;
+    // إذا فشل التوليد من السيرفر، لا نطبع نص مشوه
+    if (!rawData) {
+      console.error('No raw_data from server - cannot print without bitmap');
+      return { success: false, message: 'RENDER_FAILED' };
     }
+
+    // الخطوة 2: إرسال البيانات الخام للطابعة عبر الوكيل المحلي
+    const printPayload = {
+      raw_data: rawData
+    };
 
     if (printer.connection_type === 'usb' && printer.usb_printer_name) {
       printPayload.usb_printer_name = printer.usb_printer_name;
