@@ -1,11 +1,19 @@
 """
 Professional thermal receipt renderer.
-HarfBuzz/raqm for Arabic shaping. Two-column layout.
+Uses arabic_reshaper + python-bidi for Arabic shaping (no libraqm needed).
+Two-column layout.
 """
 import os
 import io
 from PIL import Image, ImageDraw, ImageFont
 from datetime import datetime
+
+try:
+    import arabic_reshaper
+    from bidi.algorithm import get_display
+    HAS_ARABIC = True
+except ImportError:
+    HAS_ARABIC = False
 
 FONT_DIR = os.path.join(os.path.dirname(__file__), "static", "fonts")
 CAIRO_FONT = os.path.join(FONT_DIR, "Cairo-Variable.ttf")
@@ -27,29 +35,35 @@ def _ar(t):
     return False
 
 
+def _reshape(text):
+    """Reshape Arabic text for correct rendering without libraqm."""
+    text = str(text)
+    if not _ar(text) or not HAS_ARABIC:
+        return text
+    try:
+        reshaped = arabic_reshaper.reshape(text)
+        return get_display(reshaped)
+    except Exception:
+        return text
+
+
 def _tw(draw, text, font):
     """Get text width and height."""
+    display_text = _reshape(text)
     try:
-        if _ar(text):
-            bb = draw.textbbox((0, 0), text, font=font, direction='rtl')
-        else:
-            bb = draw.textbbox((0, 0), text, font=font)
+        bb = draw.textbbox((0, 0), display_text, font=font)
         return bb[2] - bb[0], bb[3] - bb[1]
     except:
-        bb = draw.textbbox((0, 0), text, font=font)
-        return bb[2] - bb[0], bb[3] - bb[1]
+        return 100, 16
 
 
 def _txt(draw, text, x, y, font, anchor='lt'):
-    """Draw text with auto RTL detection."""
-    text = str(text)
+    """Draw text with Arabic reshaping."""
+    display_text = _reshape(str(text))
     try:
-        if _ar(text):
-            draw.text((x, y), text, font=font, fill=0, anchor=anchor, direction='rtl')
-        else:
-            draw.text((x, y), text, font=font, fill=0, anchor=anchor)
+        draw.text((x, y), display_text, font=font, fill=0, anchor=anchor)
     except:
-        draw.text((x, y), text, font=font, fill=0, anchor=anchor)
+        draw.text((x, y), display_text, font=font, fill=0)
 
 
 def _center(draw, text, y, sz):
