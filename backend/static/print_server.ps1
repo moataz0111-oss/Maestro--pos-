@@ -1,6 +1,6 @@
 $ErrorActionPreference = 'Continue'
 $agentLog = "$PSScriptRoot\agent.log"
-"$(Get-Date) - Agent v2.2 starting..." | Out-File $agentLog
+"$(Get-Date) - Agent v2.3.0 starting..." | Out-File $agentLog
 
 # === RAW USB PRINTER SUPPORT via Windows Print Spooler ===
 try {
@@ -31,6 +31,9 @@ public class RawPrinterHelper {
     [DllImport("winspool.drv", SetLastError = true)]
     public static extern bool WritePrinter(IntPtr hPrinter, IntPtr pBytes, int dwCount, out int dwWritten);
 
+    [DllImport("kernel32.dll")]
+    public static extern void Sleep(int milliseconds);
+
     [DllImport("winspool.drv", SetLastError = true)]
     public static extern bool EndPagePrinter(IntPtr hPrinter);
 
@@ -51,11 +54,25 @@ public class RawPrinterHelper {
         if (!StartDocPrinter(hPrinter, 1, ref di)) { ClosePrinter(hPrinter); return false; }
         if (!StartPagePrinter(hPrinter)) { EndDocPrinter(hPrinter); ClosePrinter(hPrinter); return false; }
 
-        IntPtr pUnmanagedBytes = Marshal.AllocCoTaskMem(data.Length);
-        Marshal.Copy(data, 0, pUnmanagedBytes, data.Length);
-        int written;
-        bool success = WritePrinter(hPrinter, pUnmanagedBytes, data.Length, out written);
-        Marshal.FreeCoTaskMem(pUnmanagedBytes);
+        bool success = true;
+        int chunkSize = 1024;
+        int offset = 0;
+
+        while (offset < data.Length) {
+            int remaining = data.Length - offset;
+            int currentSize = remaining < chunkSize ? remaining : chunkSize;
+
+            IntPtr pChunk = Marshal.AllocCoTaskMem(currentSize);
+            Marshal.Copy(data, offset, pChunk, currentSize);
+            int written;
+            bool ok = WritePrinter(hPrinter, pChunk, currentSize, out written);
+            Marshal.FreeCoTaskMem(pChunk);
+
+            if (!ok) { success = false; break; }
+            offset += currentSize;
+
+            if (offset < data.Length) Sleep(15);
+        }
 
         EndPagePrinter(hPrinter);
         EndDocPrinter(hPrinter);
@@ -132,16 +149,24 @@ Add-Type -TypeDefinition $csharpCode -ReferencedAssemblies System.Drawing -Error
     "$(Get-Date) - C# compile warning: $_" | Out-File $agentLog -Append
 }
 
-# === NETWORK PRINTER: Send via TCP ===
+# === NETWORK PRINTER: Send via TCP (chunked) ===
 function Send-ToPrinter {
     param([string]$ip, [int]$port, [byte[]]$data)
     try {
         $client = New-Object System.Net.Sockets.TcpClient
         $client.Connect($ip, $port)
         $stream = $client.GetStream()
-        $stream.Write($data, 0, $data.Length)
-        $stream.Flush()
-        Start-Sleep -Milliseconds 500
+        $chunkSize = 1024
+        $offset = 0
+        while ($offset -lt $data.Length) {
+            $remaining = $data.Length - $offset
+            $currentSize = [Math]::Min($chunkSize, $remaining)
+            $stream.Write($data, $offset, $currentSize)
+            $stream.Flush()
+            $offset += $currentSize
+            if ($offset -lt $data.Length) { Start-Sleep -Milliseconds 10 }
+        }
+        Start-Sleep -Milliseconds 300
         $stream.Close()
         $client.Close()
         return @{success=$true; message='OK'}
@@ -454,7 +479,7 @@ try {
         "$(Get-Date) - $($req.HttpMethod) $path" | Out-File $agentLog -Append
 
         if ($path -eq '/status') {
-            $jsonOut = '{"status":"running","version":"2.2.0","agent":"Maestro Print Agent","usb_support":true}'
+            $jsonOut = '{"status":"running","version":"2.3.0","agent":"Maestro Print Agent","usb_support":true}'
         }
         elseif ($path -eq '/list-printers') {
             try {

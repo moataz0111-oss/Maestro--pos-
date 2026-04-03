@@ -1,40 +1,27 @@
 # Maestro POS - PRD
 
-## Print System v5.0 - ESC * Column-Mode (Fixed SAM4S)
+## Print System v5.1 - Chunked WritePrinter Fix
+
+### Root Cause Found:
+- `WritePrinter` Win32 API sends 40KB+ data in ONE call
+- SAM4S GIANT-100 USB printer has ~4KB internal buffer
+- Buffer overflows → printer only processes LAST chunk → only footer prints
+- Same issue for Ethernet printers via TCP Write
+
+### Fix (Agent v2.3.0):
+- **USB**: `SendBytesToPrinter` now sends in 1024-byte chunks with 15ms delay between each
+- **Ethernet**: `Send-ToPrinter` now sends in 1024-byte chunks with 10ms delay
+- This gives the printer time to process each chunk before receiving the next one
+
+### Files Modified:
+- `print_server.ps1` v2.3.0 - Chunked USB + TCP writes
+- `AgentUpdateChecker.js` - Now requires v2.3+
+- `POS.js` - Fixed pending orders showing table UUID instead of number
 
 ### Architecture:
 ```
-Browser Canvas → ESC * 33 (24-dot column) → Print Agent (localhost:9999) → Printer
+Browser Canvas → ESC * 33 → base64 → Agent v2.3.0 → Chunked Write → Printer
 ```
-
-### Critical Fix (Apr 2026):
-- **GS v 0 (raster) failed**: SAM4S GIANT-100 has small image buffer, overwrites previous data → only footer prints
-- **ESC * 33 (column-mode) fix**: Sends image 24 rows at a time with explicit line feeds → works on ALL thermal printers
-- Each strip: `ESC * 33 nL nH [3 bytes per column × 384 columns]` + LF
-- Line spacing set to 24 dots (`ESC 3 24`) for seamless strips
-
-### Files:
-- `receiptBitmap.js` - Canvas renderer + ESC * column-mode encoder + test page renderer
-- `printService.js` - v3.1: USB test uses bitmap, all invoice settings passed
-- `AgentUpdateChecker.js` - v4: Flexible semver comparison
-- `print_server.ps1` - v2.2: Accepts raw_data base64
-
-### Kitchen Dialog:
-- Shows each cart item with its linked kitchen printer badge
-- Real-time status: orange=sending → green=success / red=error
-- Dialog stays 30 seconds, with "Done" button for immediate close
-
-### Printer Settings:
-- Each printer card shows count of linked products ("X منتج مربوط")
-- Products link to printers via `printer_ids[]` in product edit form
-
-### Receipt Layout (matches POS preview):
-1. Restaurant name, Phone, Address, Branch, Tax number
-2. Invoice/Order number, Date/Time, Cashier
-3. Order type + details
-4. Items table with extras and notes
-5. Subtotal, Discount, Total, Payment method
-6. Custom header/footer, Thank you message
 
 ## Credentials
 - Admin: hanialdujaili@gmail.com / Hani@2024
@@ -42,13 +29,13 @@ Browser Canvas → ESC * 33 (24-dot column) → Print Agent (localhost:9999) →
 - Test Cashier: cashier@test.com / Test@1234
 
 ## Completed
-- [x] Browser Canvas receipt renderer (matches POS preview)
-- [x] ESC * 33 column-mode encoding (fixes SAM4S buffer issue) - Apr 2026
-- [x] USB test print uses full Arabic bitmap - Apr 2026
-- [x] Kitchen dialog with per-item printer status - Apr 2026
-- [x] Printer settings show linked product count - Apr 2026
-- [x] AgentUpdateChecker semver comparison - Apr 2026
-- [x] buildPrintOrderData includes all invoice settings
+- [x] ESC * 33 column-mode encoding
+- [x] Agent v2.3.0 with chunked USB WritePrinter (1KB chunks, 15ms delay)
+- [x] Agent v2.3.0 with chunked TCP Write (1KB chunks, 10ms delay)
+- [x] Fixed pending orders showing table UUID → now shows table number
+- [x] Kitchen dialog with per-item printer status
+- [x] Printer settings show linked product count
+- [x] AgentUpdateChecker semver comparison (requires 2.3+)
 
 ## Upcoming Tasks
 - P0: Multi-Restaurant (Tenant) Switcher

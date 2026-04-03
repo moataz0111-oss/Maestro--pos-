@@ -4240,7 +4240,7 @@ function OrderCard({ order, onSelect }) {
                 {/* إظهار رقم الطاولة للطلبات الداخلية */}
                 {order.order_type === 'dine_in' && (order.table_number || order.table_id) && (
                   <span className="text-xs px-2 py-0.5 bg-blue-500/10 text-blue-500 rounded font-medium">
-                    {t('طاولة')} #{order.table_number || order.table_id}
+                    {t('طاولة')} #{order.table_number || tables.find(t => t.id === order.table_id)?.number || ''}
                   </span>
                 )}
               </div>
