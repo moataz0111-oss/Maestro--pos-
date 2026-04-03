@@ -8104,103 +8104,49 @@ color 0A
 echo.
 echo  ========================================
 echo    Maestro EGP - Print Agent v2.3
-echo    Background Service Installer
 echo  ========================================
 echo.
 
-REM ========== الخطوة 1: حذف التشغيل التلقائي أولاً لمنع إعادة التشغيل ==========
-echo  [1/6] Removing auto-start entry...
+echo  [1/5] Removing auto-start...
 del /F /Q "%APPDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\MaestroPrintAgent.vbs" >nul 2>&1
-del /F /Q "%APPDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\Maestro*.vbs" >nul 2>&1
-echo  [OK] Auto-start removed.
+echo  [OK]
 echo.
 
-REM ========== الخطوة 2: قتل جميع العمليات القديمة بشكل عنيف ==========
-echo  [2/6] Force-killing ALL old agent processes...
-taskkill /F /IM wscript.exe /FI "WINDOWTITLE eq MaestroPrintAgent*" >nul 2>&1
+echo  [2/5] Stopping old agent...
 taskkill /F /IM wscript.exe >nul 2>&1
-
-REM قتل كل PowerShell يشغّل الوكيل
-for /f "tokens=2" %%i in ('wmic process where "name='powershell.exe' and commandline like '%%server.ps1%%'" get processid 2^>nul ^| findstr /r "[0-9]"') do (
-    taskkill /F /PID %%i >nul 2>&1
-)
-for /f "tokens=2" %%i in ('wmic process where "name='powershell.exe' and commandline like '%%MaestroPrintAgent%%'" get processid 2^>nul ^| findstr /r "[0-9]"') do (
-    taskkill /F /PID %%i >nul 2>&1
-)
-REM طريقة بديلة باستخدام taskkill مباشرة
-taskkill /F /FI "IMAGENAME eq powershell.exe" /FI "WINDOWTITLE eq *MaestroPrintAgent*" >nul 2>&1
-taskkill /F /FI "IMAGENAME eq powershell.exe" /FI "WINDOWTITLE eq *server.ps1*" >nul 2>&1
-
-REM قتل أي عملية تستمع على المنفذ 9999
-for /f "tokens=5" %%p in ('netstat -aon 2^>nul ^| findstr ":9999" ^| findstr "LISTENING"') do (
-    taskkill /F /PID %%p >nul 2>&1
-)
-echo  [OK] All old processes killed.
-echo.
-
-REM ========== الخطوة 3: انتظار تحرير المنفذ ==========
-echo  [3/6] Waiting for port 9999 to be free...
+powershell -NoProfile -Command "Get-Process powershell | Where-Object {{$_.CommandLine -like '*server.ps1*' -or $_.CommandLine -like '*MaestroPrintAgent*'}} | Stop-Process -Force -ErrorAction SilentlyContinue" >nul 2>&1
+powershell -NoProfile -Command "$p = Get-NetTCPConnection -LocalPort 9999 -ErrorAction SilentlyContinue | Select-Object -First 1; if ($p) {{ Stop-Process -Id $p.OwningProcess -Force -ErrorAction SilentlyContinue }}" >nul 2>&1
 timeout /t 5 >nul
-set RETRIES=0
-:waitport
-netstat -aon 2>nul | findstr ":9999" | findstr "LISTENING" >nul 2>&1
-if errorlevel 1 goto portfree
-echo  [..] Port 9999 still in use, force-killing again...
-for /f "tokens=5" %%p in ('netstat -aon 2^>nul ^| findstr ":9999" ^| findstr "LISTENING"') do (
-    taskkill /F /PID %%p >nul 2>&1
-)
-timeout /t 3 >nul
-set /a RETRIES+=1
-if %RETRIES% GEQ 5 goto portfree
-goto waitport
-:portfree
-echo  [OK] Port 9999 ready.
+echo  [OK]
 echo.
 
-REM ========== الخطوة 4: حذف جميع الملفات القديمة بالكامل ==========
-echo  [4/6] Deleting ALL old agent files...
-if exist "%LOCALAPPDATA%\\MaestroPrintAgent" (
-    rd /s /q "%LOCALAPPDATA%\\MaestroPrintAgent" >nul 2>&1
-    timeout /t 2 >nul
-    if exist "%LOCALAPPDATA%\\MaestroPrintAgent" (
-        rd /s /q "%LOCALAPPDATA%\\MaestroPrintAgent" >nul 2>&1
-    )
-)
-echo  [OK] Old files completely deleted.
+echo  [3/5] Deleting old files...
+if exist "%LOCALAPPDATA%\\MaestroPrintAgent" rd /s /q "%LOCALAPPDATA%\\MaestroPrintAgent" >nul 2>&1
+timeout /t 2 >nul
+if exist "%LOCALAPPDATA%\\MaestroPrintAgent" rd /s /q "%LOCALAPPDATA%\\MaestroPrintAgent" >nul 2>&1
+echo  [OK]
 echo.
 
-REM ========== الخطوة 5: تثبيت الوكيل الجديد ==========
-echo  [5/6] Installing NEW agent v2.3...
+echo  [4/5] Installing v2.3...
 set "MAESTRO_BAT_PATH=%~f0"
 powershell -ExecutionPolicy Bypass -NoProfile -EncodedCommand {setup_encoded}
-echo.
-
-REM التحقق من استخراج الملف
 if exist "%LOCALAPPDATA%\\MaestroPrintAgent\\server.ps1" (
-    echo  [OK] server.ps1 v2.3 extracted successfully.
+    echo  [OK] Installed successfully
 ) else (
-    echo  [ERROR] server.ps1 extraction FAILED!
-    echo  [ERROR] Check: %LOCALAPPDATA%\\MaestroPrintAgent\\install.log
-    echo.
+    echo  [ERROR] Installation failed
     pause
     exit /b 1
 )
 echo.
 
-REM ========== الخطوة 6: التحقق من التشغيل ==========
-echo  [6/6] Starting and verifying new agent v2.3...
-timeout /t 10 >nul
-powershell -NoProfile -Command "try {{ $r = Invoke-WebRequest -Uri 'http://localhost:9999/status' -UseBasicParsing -TimeoutSec 5; $j = $r.Content | ConvertFrom-Json; Write-Host ('  Agent Version: ' + $j.version) -ForegroundColor Cyan; if ($j.version -match '2\\.3') {{ Write-Host '  [OK] Agent v2.3 ACTIVE - USB + Network ready!' -ForegroundColor Green }} elseif ($j.usb_support -eq $true) {{ Write-Host '  [WARN] Agent running but version mismatch - restart PC' -ForegroundColor Yellow }} else {{ Write-Host '  [WARN] Old agent version detected' -ForegroundColor Yellow }} }} catch {{ Write-Host '  [..] First check failed, retrying in 10s...' -ForegroundColor Yellow; Start-Sleep -Seconds 10; try {{ $r2 = Invoke-WebRequest -Uri 'http://localhost:9999/status' -UseBasicParsing -TimeoutSec 5; $j2 = $r2.Content | ConvertFrom-Json; Write-Host ('  Agent Version: ' + $j2.version) -ForegroundColor Cyan; if ($j2.version -match '2\\.3') {{ Write-Host '  [OK] Agent v2.3 ACTIVE!' -ForegroundColor Green }} else {{ Write-Host ('  [WARN] Version: ' + $j2.version) -ForegroundColor Yellow }} }} catch {{ Write-Host '  [ERROR] Agent failed to start.' -ForegroundColor Red; Write-Host '  Try: Restart your PC then run this installer again.' -ForegroundColor Red }} }}"
+echo  [5/5] Verifying...
+timeout /t 12 >nul
+powershell -NoProfile -Command "try {{ $r = Invoke-WebRequest -Uri 'http://localhost:9999/status' -UseBasicParsing -TimeoutSec 5; $j = $r.Content | ConvertFrom-Json; Write-Host ('  Version: ' + $j.version) -ForegroundColor Cyan; if ($j.version -like '2.3*') {{ Write-Host '  [OK] v2.3 ACTIVE!' -ForegroundColor Green }} else {{ Write-Host '  [WARN] Wrong version - restart PC' -ForegroundColor Yellow }} }} catch {{ Start-Sleep 10; try {{ $r2 = Invoke-WebRequest -Uri 'http://localhost:9999/status' -UseBasicParsing -TimeoutSec 5; $j2 = $r2.Content | ConvertFrom-Json; Write-Host ('  Version: ' + $j2.version) -ForegroundColor Cyan }} catch {{ Write-Host '  [ERROR] Agent not started - restart PC' -ForegroundColor Red }} }}"
 echo.
 echo  ========================================
-echo    Installation Complete - v2.3
-echo    Chunked printing enabled
+echo    Done! Refresh the POS page.
 echo  ========================================
 echo.
-echo  Port: http://localhost:9999
-echo  Refresh the POS page to verify the banner is gone.
-echo.
-echo  This window will close in 15 seconds...
 timeout /t 15 >nul
 exit /b
 ::ENCODED_SERVER::
