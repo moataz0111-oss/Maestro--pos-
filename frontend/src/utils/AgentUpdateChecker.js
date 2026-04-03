@@ -22,6 +22,7 @@ export function useAgentUpdateChecker() {
     try {
       // فحص إصدار الوسيط المحلي
       let localVer = null;
+      let isOnline = false;
       try {
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), 3000);
@@ -29,11 +30,13 @@ export function useAgentUpdateChecker() {
         clearTimeout(timeout);
         const agentData = await agentRes.json();
         localVer = agentData.version || null;
+        isOnline = agentData.status === 'running';
         setAgentVersion(localVer);
-        setAgentOnline(true);
+        setAgentOnline(isOnline);
       } catch {
         setAgentOnline(false);
         setAgentVersion(null);
+        return; // الوسيط مش شغال - لا نعرض شيء
       }
 
       // فحص آخر إصدار على السيرفر
@@ -46,11 +49,14 @@ export function useAgentUpdateChecker() {
         const srvVer = serverData.version || null;
         setServerVersion(srvVer);
 
-        // مقارنة الإصدارات
-        if (localVer && srvVer && localVer !== srvVer) {
-          setNeedsUpdate(true);
-        } else {
-          setNeedsUpdate(false);
+        // الوسيط شغال لكن بدون إصدار = نسخة قديمة جداً = يحتاج تحديث
+        // أو الإصدار مختلف عن السيرفر = يحتاج تحديث
+        if (isOnline && srvVer) {
+          if (!localVer || localVer !== srvVer) {
+            setNeedsUpdate(true);
+          } else {
+            setNeedsUpdate(false);
+          }
         }
       } catch {
         setServerVersion(null);
@@ -133,7 +139,7 @@ export function AgentUpdateBanner({ t = (s) => s }) {
     >
       <Download className="w-5 h-5 text-amber-600 flex-shrink-0" />
       <span className="text-sm text-amber-800 flex-1">
-        تحديث وسيط الطباعة متاح ({agentVersion} → {serverVersion})
+        تحديث وسيط الطباعة متاح ({agentVersion || 'قديم'} → {serverVersion})
       </span>
       <Button
         data-testid="update-agent-btn"
