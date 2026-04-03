@@ -1340,29 +1340,34 @@ export default function POS() {
             ((p.connection_type === 'usb' && p.usb_printer_name) || (p.connection_type !== 'usb' && p.ip_address))
           );
           if (kitchenPrinters.length > 0) {
-            const agentOk = await checkAgentStatus();
-            if (agentOk) {
-              const restaurantName = restaurantSettings?.name_ar || restaurantSettings?.name || '';
-              const lang = localStorage.getItem('language') || 'ar';
-              const orderForPrint = {
-                order_number: res.data.order_number,
-                order_type: orderType,
-                customer_name: customerName || '',
-                table_number: orderType === 'dine_in' ? (tables.find(t => t.id === selectedTable)?.number || selectedTable) : '',
-                buzzer_number: buzzerNumber || '',
-                discount: discount || 0,
-                language: lang
-              };
-              const itemsForPrint = cart.map(item => ({
-                product_id: item.product_id || item.id,
-                product_name: item.product_name || item.name,
-                name: item.product_name || item.name,
-                price: item.price,
-                quantity: item.quantity,
-                notes: item.notes || '',
-                extras: item.selectedExtras || []
-              }));
-              await routeOrderToPrinters(orderForPrint, itemsForPrint, products, kitchenPrinters, restaurantName);
+            const restaurantName = restaurantSettings?.name_ar || restaurantSettings?.name || '';
+            const lang = localStorage.getItem('language') || 'ar';
+            const orderForPrint = {
+              order_number: res.data.order_number,
+              order_type: orderType,
+              customer_name: customerName || '',
+              table_number: orderType === 'dine_in' ? (tables.find(t => t.id === selectedTable)?.number || selectedTable) : '',
+              buzzer_number: buzzerNumber || '',
+              discount: discount || 0,
+              language: lang
+            };
+            const itemsForPrint = cart.map(item => ({
+              product_id: item.product_id || item.id,
+              product_name: item.product_name || item.name,
+              name: item.product_name || item.name,
+              price: item.price,
+              quantity: item.quantity,
+              notes: item.notes || '',
+              extras: item.selectedExtras || []
+            }));
+            const result = await printOrderToAllPrinters(orderForPrint, itemsForPrint, products, kitchenPrinters, restaurantName);
+            if (result.success) {
+              toast.success(t('تم إرسال الطلب للمطبخ'));
+            } else if (result.results?.length > 0) {
+              const failed = result.results.filter(r => !r.success);
+              if (failed.length > 0) {
+                failed.forEach(f => toast.error(`${f.printer_name}: ${f.message}`));
+              }
             }
           }
         } catch (printErr) {

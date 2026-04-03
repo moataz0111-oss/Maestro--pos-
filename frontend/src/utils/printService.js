@@ -200,9 +200,10 @@ export const printOrderToAllPrinters = async (order, orderItems, products, print
   const printerJobs = routeOrderToPrinters(orderItems, products, activePrinters);
   const results = [];
 
-  for (const [printerId, items] of Object.entries(printerJobs)) {
+  // إرسال جميع الطلبات بالتوازي لتسريع الطباعة
+  const printPromises = Object.entries(printerJobs).map(async ([printerId, items]) => {
     const printer = printers.find(p => p.id === printerId);
-    if (!printer) continue;
+    if (!printer) return null;
 
     const orderData = {
       restaurant_name: restaurantName,
@@ -220,20 +221,23 @@ export const printOrderToAllPrinters = async (order, orderItems, products, print
     };
 
     const result = await sendReceiptPrint(printer, orderData);
-    results.push({
+    return {
       printer_id: printerId,
       printer_name: printer.name,
       printer_type: printer.printer_type,
       connection_type: printer.connection_type,
       ...result
-    });
-  }
+    };
+  });
 
-  const allSuccess = results.every(r => r.success);
+  const printResults = await Promise.all(printPromises);
+  const validResults = printResults.filter(r => r !== null);
+
+  const allSuccess = validResults.every(r => r.success);
   return {
     success: allSuccess,
     message: allSuccess ? 'All printers done' : 'Some printers failed',
-    results
+    results: validResults
   };
 };
 
