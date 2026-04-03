@@ -1301,6 +1301,42 @@ export default function POS() {
           await axios.put(`${API}/orders/${editingOrder.id}/add-items`, newItems);
         }
         
+        // إرسال العناصر الجديدة لطابعات المطبخ
+        try {
+          const agentOk = await checkAgentStatus();
+          if (agentOk && newItems.length > 0) {
+            const kitchenPrinters = availablePrinters.filter(p => 
+              p.printer_type === 'kitchen' &&
+              ((p.connection_type === 'usb' && p.usb_printer_name) || (p.connection_type !== 'usb' && p.ip_address))
+            );
+            if (kitchenPrinters.length > 0) {
+              const restaurantName = restaurantSettings?.name_ar || restaurantSettings?.name || '';
+              const lang = localStorage.getItem('language') || 'ar';
+              const orderForPrint = {
+                order_number: editingOrder.order_number,
+                order_type: orderType,
+                customer_name: customerName || '',
+                table_number: orderType === 'dine_in' ? (tables.find(t => t.id === selectedTable)?.number || selectedTable) : '',
+                buzzer_number: buzzerNumber || '',
+                discount: 0,
+                language: lang
+              };
+              const itemsForPrint = newItems.map(item => ({
+                product_id: item.product_id || item.id,
+                product_name: item.product_name || item.name,
+                name: item.product_name || item.name,
+                price: item.price,
+                quantity: item.quantity,
+                notes: item.notes || '',
+                extras: item.selectedExtras || []
+              }));
+              await printOrderToAllPrinters(orderForPrint, itemsForPrint, products, kitchenPrinters, restaurantName);
+            }
+          }
+        } catch (printErr) {
+          console.log('Kitchen print error for edit (non-blocking):', printErr);
+        }
+        
         toast.success(t('تم تحديث الطلب وإرساله للمطبخ'));
       } else {
         // طلب جديد - معلق للسفري والطاولات، جاهز للتوصيل
@@ -1360,6 +1396,8 @@ export default function POS() {
               notes: item.notes || '',
               extras: item.selectedExtras || []
             }));
+            console.log('[Kitchen Print] Routing', itemsForPrint.length, 'items to', kitchenPrinters.length, 'kitchen printers');
+            console.log('[Kitchen Print] Products with printer_ids:', products.filter(p => p.printer_ids?.length > 0).map(p => ({name: p.name, printer_ids: p.printer_ids})));
             const result = await printOrderToAllPrinters(orderForPrint, itemsForPrint, products, kitchenPrinters, restaurantName);
             if (result.success) {
               toast.success(t('تم إرسال الطلب للمطبخ'));

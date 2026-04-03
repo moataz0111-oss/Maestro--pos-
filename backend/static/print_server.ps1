@@ -529,7 +529,20 @@ try {
         elseif ($path -eq '/print-receipt' -and $req.HttpMethod -eq 'POST') {
             $reader = New-Object System.IO.StreamReader($req.InputStream)
             $body = $reader.ReadToEnd() | ConvertFrom-Json
-            $receiptData = Build-Receipt $body.order $body.printer_config
+
+            # إذا كانت البيانات مُجهزة من السيرفر (bitmap مسبق)
+            $receiptData = $null
+            if ($body.raw_data) {
+                try {
+                    $receiptData = [System.Convert]::FromBase64String($body.raw_data)
+                    "$(Get-Date) - Using server-rendered bitmap receipt" | Out-File $agentLog -Append
+                } catch {
+                    "$(Get-Date) - Base64 decode error: $_ - falling back to local build" | Out-File $agentLog -Append
+                }
+            }
+            if (-not $receiptData) {
+                $receiptData = Build-Receipt $body.order $body.printer_config
+            }
 
             if ($body.usb_printer_name) {
                 $result = Send-ToUsbPrinter $body.usb_printer_name $receiptData

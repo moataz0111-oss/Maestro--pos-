@@ -104,9 +104,11 @@ export const sendTestPrint = async (printer, branchName = '') => {
 
 /**
  * طباعة فاتورة - تدعم USB و Ethernet
+ * تولد صورة bitmap من السيرفر (تدعم العربية) ثم ترسلها للطابعة
  */
 export const sendReceiptPrint = async (printer, orderData) => {
   try {
+    const API = window.location.origin;
     const payload = {
       order: orderData,
       printer_config: {
@@ -116,17 +118,43 @@ export const sendReceiptPrint = async (printer, orderData) => {
       }
     };
 
+    // الخطوة 1: توليد بيانات الإيصال كـ bitmap من السيرفر
+    let rawData = null;
+    try {
+      const token = localStorage.getItem('token');
+      const renderRes = await fetch(`${API}/api/print/render-receipt`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(payload)
+      });
+      const renderResult = await renderRes.json();
+      if (renderResult.success && renderResult.raw_data) {
+        rawData = renderResult.raw_data;
+      }
+    } catch (renderErr) {
+      console.log('Server render unavailable, using local agent rendering:', renderErr.message);
+    }
+
+    // الخطوة 2: إرسال للطابعة عبر الوكيل المحلي
+    const printPayload = { ...payload };
+    if (rawData) {
+      printPayload.raw_data = rawData;
+    }
+
     if (printer.connection_type === 'usb' && printer.usb_printer_name) {
-      payload.usb_printer_name = printer.usb_printer_name;
+      printPayload.usb_printer_name = printer.usb_printer_name;
     } else {
-      payload.ip = printer.ip_address;
-      payload.port = printer.port || 9100;
+      printPayload.ip = printer.ip_address;
+      printPayload.port = printer.port || 9100;
     }
 
     const res = await fetch(`${PRINT_AGENT_URL}/print-receipt`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
+      body: JSON.stringify(printPayload)
     });
     return await res.json();
   } catch (e) {

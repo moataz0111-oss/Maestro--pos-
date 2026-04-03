@@ -8,55 +8,63 @@ Multi-tenant POS system (React + FastAPI + MongoDB) with role-based access, POS 
 /app
 ├── frontend/ (React + Shadcn UI + Tailwind)
 │   ├── src/pages/ (Dashboard, Reports, POS, Settings, Expenses, Delivery, etc.)
-│   ├── src/utils/ (printService.js v2.2 - USB + Ethernet + routing fix)
+│   ├── src/utils/ (printService.js v3.0 - Server-side bitmap + USB/Ethernet routing)
 ├── backend/
 │   ├── server.py (Main monolith ~18k lines)
-│   ├── static/ (print_server.ps1 v2.2 - Arabic bitmap rendering via ReceiptRenderer)
+│   ├── receipt_renderer.py (Python Pillow bitmap receipt generator - Arabic support)
+│   ├── static/ 
+│   │   ├── print_server.ps1 v3.0 (Accepts pre-rendered base64 bitmap data)
+│   │   ├── fonts/ (Cairo-Variable.ttf, NotoSansArabic-Bold.ttf)
 ```
 
-## Completed Features (Latest Session - April 3, 2026)
-34. **Arabic Bitmap Receipt Rendering** - Complete rewrite of Build-Receipt:
-    - Uses ReceiptRenderer C# class to render ALL text as bitmap images (ESC/POS GS v 0)
-    - Fixes garbled Arabic text on thermal printers (bypasses codepage limitations)
-    - Fixed critical PowerShell bug: `[char]+[char]` integer addition replaced with `"$([char]0xXXXX)"` string interpolation
-    - Supports both receipt (with prices) and kitchen (without prices, larger font) formats
-    - Includes extras, notes, payment method, cashier name, buzzer number in receipt
+## Completed Features (April 3, 2026 - Current Session)
 
-35. **handleSubmitOrder Printing** - Submit button (checkmark) now prints:
-    - Invoice to cashier printer (printer_type='receipt') with full details
-    - Kitchen items routed to assigned kitchen printers based on product-printer mapping
-    - Payment method, cashier name, branch phone included in cashier receipt
+### Arabic Receipt Bitmap Rendering (SERVER-SIDE)
+- **NEW: Python Pillow receipt renderer** (`receipt_renderer.py`):
+  - Generates ESC/POS raster bitmap (GS v 0) from order data
+  - Uses Cairo font (supports Arabic + Latin + Numbers)
+  - `arabic_reshaper` + `python-bidi` for proper Arabic text shaping & RTL
+  - Two modes: Invoice (show_prices=true) and Kitchen ticket (show_prices=false, larger font)
+  - Includes: restaurant name, order#, type, table, buzzer, items, extras, notes, discount, total, payment method, cashier name
+  
+- **NEW API endpoint**: `POST /api/print/render-receipt` → Returns base64 ESC/POS bytes
 
-36. **Kitchen Routing Fix (routeOrderToPrinters v2)** - Robust product-to-printer routing:
-    - Handles null/undefined/invalid printer_ids gracefully
-    - Validates printer exists in available list before routing
-    - Falls back to default kitchen printer if assigned printer not found
-    - Default printer changed from 'receipt' to 'kitchen' type for kitchen routing context
+- **Updated `printService.js` v3.0**:
+  - `sendReceiptPrint()` now calls server first to generate bitmap, then sends to print agent
+  - Fallback: if server render fails, print agent builds receipt locally (UTF-8)
+
+- **Updated `print_server.ps1` v3.0**:
+  - `/print-receipt` now checks for `raw_data` (base64 bitmap) in payload
+  - If present: decodes and sends directly to printer (guaranteed Arabic support)
+  - If absent: falls back to local Build-Receipt (C# ReceiptRenderer or UTF-8)
+
+### handleSubmitOrder Now Prints
+- Submit button (checkmark) now triggers:
+  1. Invoice to cashier printer (printer_type='receipt')
+  2. Kitchen items routed to assigned printers based on product-printer mapping
+  
+### Kitchen Routing Fix
+- `routeOrderToPrinters` handles null/undefined/invalid printer_ids
+- Validates target printer exists before routing
+- Default printer changed from 'receipt' to 'kitchen' for kitchen context
+- Editing existing orders now also prints new items to kitchen
+
+### .gitignore Fix
+- Removed 100+ malformed entries blocking .env files
+- Added test_credentials.md to .gitignore
 
 ## Previous Completed Features
-23. **USB Silent Printing via Print Agent** - Major printing architecture upgrade
-22. **Print Agent Background Service (v2.0)** - Hidden Windows background service
-21. **Printer Connection Type (USB vs Network)** - connection_type field in printer config
-24. **Print Agent Installer Kill Fix v2** - WMIC kill logic
-25. **Print Agent Path Space Fix** - Quoted paths for spaces
-26. **Auto Kitchen Printing on Order Submit** - handleSaveAndSendToKitchen
-27. **Silent Invoice Printing** - Print Agent for one-step silent printing
-28. **Receipt Footer: Restaurant Logo** - Restaurant logo in receipt footer
-29. **Branch Name Above Order Type** - Branch name/phone above order type
-30. **Silent Invoice Print (No Second Page)** - @media print CSS overlay
-31. **Invoice = Cashier Only** - Invoice prints only to cashier printer
-32. **Kitchen Print via ChefHat Button** - Product-printer routing in kitchen dialog
-33. **Kitchen Receipt Language** - Arabic/English based on system language
+23-33. USB Silent Printing, Print Agent Background Service, Printer Connection Types, Kill Fix, Path Fix, Kitchen Printing, Receipt Layout, Font Sizes, Silent Invoice, etc.
 
-## Key Technical Flow
-### Printing Architecture v2.2:
-1. **Order placed via Submit (checkmark)** -> Cashier receipt + Kitchen items routed per product
-2. **Order placed via Chef Hat** -> Kitchen items routed per product (no cashier receipt)
-3. **Print Bill button** -> Opens preview dialog, prints to cashier only
-4. **Arabic text** -> ReceiptRenderer converts text to bitmap -> ESC/POS raster image commands
-5. **USB Printer** -> RawPrinterHelper.SendBytesToPrinter() -> Windows Spooler
-6. **Ethernet Printer** -> TCP Socket -> IP:Port
-7. **Fallback** (Agent offline) -> Browser window.print() dialog
+## Key Technical Flow - Printing v3.0
+```
+1. User clicks Print/Submit/Chef → Frontend builds order data
+2. Frontend → POST /api/print/render-receipt (server generates bitmap)
+3. Server: Python Pillow renders Arabic text → ESC/POS raster bytes → base64
+4. Frontend → POST localhost:9999/print-receipt (with raw_data base64)
+5. Print Agent: Decodes base64 → sends raw bytes to printer (USB or TCP)
+6. Printer: Receives raster image → prints bitmap (Arabic is an IMAGE, not text)
+```
 
 ## Pending Issues
 - None
@@ -72,6 +80,8 @@ Multi-tenant POS system (React + FastAPI + MongoDB) with role-based access, POS 
 - Super Admin: owner@maestroegp.com / owner123 (Secret: 271018)
 - Test Cashier: cashier@test.com / Test@1234
 
-## Key DB Schema
-- `printers`: name, ip_address, port, connection_type, usb_printer_name, branch_id, printer_type, print_mode, show_prices
-- `products`: name, price, category_id, printer_ids (List of printer IDs for kitchen routing)
+## Dependencies Added
+- Pillow (PIL) - Image generation
+- arabic_reshaper - Arabic character shaping
+- python-bidi - Bidirectional text algorithm
+- Cairo font (Cairo-Variable.ttf) - Arabic+Latin+Numbers support

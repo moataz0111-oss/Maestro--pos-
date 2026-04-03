@@ -17977,6 +17977,24 @@ async def fix_delivery_orders(current_user: dict = Depends(verify_super_admin)):
 
 
 
+# === RECEIPT BITMAP RENDERING (Arabic support) ===
+@app.post("/api/print/render-receipt")
+async def render_receipt_endpoint(request: Request):
+    """Generate ESC/POS bitmap bytes for thermal printer receipt with Arabic support."""
+    import base64
+    try:
+        from receipt_renderer import render_receipt_image
+        data = await request.json()
+        order = data.get("order", {})
+        config = data.get("printer_config", {})
+        raw_bytes = render_receipt_image(order, config)
+        b64 = base64.b64encode(raw_bytes).decode("ascii")
+        return {"success": True, "raw_data": b64, "size": len(raw_bytes)}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+
 @app.on_event("shutdown")
 async def shutdown_db_client():
     client.close()
