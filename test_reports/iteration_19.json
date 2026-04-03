@@ -98,7 +98,7 @@
   },
   
   "test_credentials": {
-    "api_url": "https://arabic-receipts.preview.emergentagent.com",
+    "api_url": "https://arabic-pos-agent.preview.emergentagent.com",
     "admin_email": "admin@maestroegp.com",
     "admin_password": "admin123"
   },
