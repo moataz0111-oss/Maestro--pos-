@@ -6,7 +6,7 @@
  * التدفق: Browser Canvas → ESC/POS Bitmap → Print Agent → Printer
  */
 
-import { renderReceiptBitmap } from './receiptBitmap';
+import { renderReceiptBitmap, renderTestBitmap } from './receiptBitmap';
 
 const PRINT_AGENT_URL = 'http://localhost:9999';
 
@@ -72,19 +72,44 @@ export const checkPrinterOnline = async (ip, port = 9100) => {
 
 /**
  * إرسال طباعة تجريبية
+ * للـ USB: يولد صفحة اختبار كاملة بالعربية عبر Canvas/bitmap ثم يرسلها عبر /print-receipt
+ * للشبكة: يرسل عبر /print-test العادي (يولد صفحة عربية كاملة من الوكيل)
  */
-export const sendTestPrint = async (printer) => {
+export const sendTestPrint = async (printer, branchName = '') => {
   try {
+    // USB: توليد صفحة اختبار كبيرة عبر Canvas bitmap (مثل طابعات الشبكة)
+    if (printer.connection_type === 'usb' && printer.usb_printer_name) {
+      const renderResult = renderTestBitmap({
+        name: printer.name || '',
+        connection_type: 'usb',
+        usb_printer_name: printer.usb_printer_name,
+        branch_name: branchName || ''
+      });
+      
+      if (!renderResult.success || !renderResult.raw_data) {
+        return { success: false, message: 'RENDER_FAILED: ' + (renderResult.error || 'Unknown') };
+      }
+      
+      const res = await fetch(`${PRINT_AGENT_URL}/print-receipt`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          raw_data: renderResult.raw_data,
+          usb_printer_name: printer.usb_printer_name
+        })
+      });
+      return await res.json();
+    }
+    
+    // شبكة: يستخدم /print-test من الوكيل (يولد صفحة عربية كبيرة)
     const payload = {
       printer_name: printer.name || 'Test',
       connection_type: printer.connection_type || 'network'
     };
-    if (printer.connection_type === 'usb' && printer.usb_printer_name) {
-      payload.usb_printer_name = printer.usb_printer_name;
-    } else {
-      payload.ip = printer.ip_address;
-      payload.port = printer.port || 9100;
-    }
+    payload.ip = printer.ip_address;
+    payload.port = printer.port || 9100;
+    if (branchName) payload.branch_name = branchName;
+    
     const res = await fetch(`${PRINT_AGENT_URL}/print-test`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

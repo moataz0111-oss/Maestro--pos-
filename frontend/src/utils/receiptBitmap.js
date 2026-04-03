@@ -493,3 +493,108 @@ export function renderReceiptBitmap(order, config = {}) {
     return { success: false, error: err.message };
   }
 }
+
+/**
+ * توليد صفحة اختبار الطابعة كـ Canvas bitmap
+ * تطابق شكل صفحة اختبار طابعات الشبكة (الورقة الكبيرة مع العربية)
+ */
+function renderTestPageCanvas(printerInfo = {}) {
+  const canvas = document.createElement('canvas');
+  canvas.width = PW;
+  canvas.height = 2000;
+  const ctx = canvas.getContext('2d');
+  
+  ctx.fillStyle = '#FFFFFF';
+  ctx.fillRect(0, 0, PW, 2000);
+  ctx.fillStyle = '#000000';
+  
+  let y = 15;
+
+  // التاريخ والوقت أعلى الصفحة
+  y += drawCenter(ctx, `اختبار الطابعة          ${dateStr()} ${time12()}`, y, 11, false);
+  y += 8;
+
+  // فاصل متقطع
+  y += drawDashedSep(ctx, y);
+
+  // عنوان الاختبار
+  y += drawCenter(ctx, '*** اختبار الطابعة ***', y, 20, true);
+  y += 8;
+
+  // فاصل متقطع
+  y += drawDashedSep(ctx, y);
+
+  // اسم الطابعة
+  if (printerInfo.name) {
+    y += drawCenter(ctx, printerInfo.name, y, 16, true);
+    y += 4;
+  }
+
+  // نوع الاتصال
+  if (printerInfo.connection_type === 'usb') {
+    y += drawCenter(ctx, `USB: ${printerInfo.usb_printer_name || ''}`, y, 13, false);
+  } else {
+    y += drawCenter(ctx, 'IP:', y, 13, false);
+    y += drawCenter(ctx, `${printerInfo.ip_address || ''}:${printerInfo.port || 9100}`, y, 13, false);
+  }
+  y += 4;
+
+  // اسم الفرع
+  if (printerInfo.branch_name) {
+    y += drawCenter(ctx, `الفرع: ${printerInfo.branch_name}`, y, 14, false);
+  }
+  y += 4;
+
+  // فاصل متقطع
+  y += drawDashedSep(ctx, y);
+
+  // التاريخ والوقت
+  y += drawCenter(ctx, `التاريخ: ${dateStr()}`, y, 14, false);
+  y += drawCenter(ctx, `الوقت: ${time12()}`, y, 14, false);
+  y += 4;
+
+  // فاصل متقطع
+  y += drawDashedSep(ctx, y);
+
+  // رسالة النجاح
+  y += drawCenter(ctx, 'الطباعة تعمل بنجاح!', y, 18, true);
+  y += 8;
+
+  // فاصل مزدوج
+  y += drawDoubleSep(ctx, y);
+
+  // تحذير الوكيل
+  y += drawCenter(ctx, 'Maestro EGP', y, 12, true);
+  y += 15;
+
+  // قص الكانفس
+  const finalCanvas = document.createElement('canvas');
+  finalCanvas.width = PW;
+  finalCanvas.height = y;
+  const fctx = finalCanvas.getContext('2d');
+  fctx.drawImage(canvas, 0, 0);
+  
+  return finalCanvas;
+}
+
+/**
+ * توليد صفحة اختبار ESC/POS كـ base64
+ */
+export function renderTestBitmap(printerInfo = {}) {
+  try {
+    const canvas = renderTestPageCanvas(printerInfo);
+    const escposBytes = canvasToEscPos(canvas);
+    
+    let binary = '';
+    for (let i = 0; i < escposBytes.length; i++) {
+      binary += String.fromCharCode(escposBytes[i]);
+    }
+    const base64 = btoa(binary);
+    
+    console.log(`[TestBitmap] Rendered OK: ${canvas.width}x${canvas.height}px, ${escposBytes.length} bytes`);
+    return { success: true, raw_data: base64, size: escposBytes.length };
+  } catch (err) {
+    console.error('[TestBitmap] Render failed:', err);
+    return { success: false, error: err.message };
+  }
+}
