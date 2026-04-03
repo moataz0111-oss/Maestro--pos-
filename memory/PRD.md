@@ -1,6 +1,6 @@
 # Maestro POS - PRD
 
-## Print Receipt Format v4.0 (Professional Two-Column Layout)
+## Print Receipt Format v5.0 (Professional Two-Column Layout)
 
 ### Layout:
 ```
@@ -47,12 +47,35 @@ Printed On 03-04-2026 1:31:29 PM
 ## Architecture
 - `receipt_renderer.py` - Server-side Pillow bitmap generator
 - `POST /api/print/render-receipt` - Returns base64 ESC/POS bytes
-- `printService.js` - Fetches bitmap from server, sends to print agent
-- `print_server.ps1` - Accepts `raw_data` base64 or local fallback
+- `printService.js` - Fetches bitmap from server using API_URL, sends to print agent
+- `print_server.ps1` - Accepts `raw_data` base64 for printing
 - `buildPrintOrderData()` - POS.js helper with all fields
+
+## Print Flow (Fixed 2026-04-03)
+1. Frontend calls backend `/api/print/render-receipt` with order data + printer_config
+2. Backend renders Arabic receipt as ESC/POS bitmap using Pillow+HarfBuzz
+3. Returns base64 `raw_data` to frontend
+4. Frontend sends `raw_data` to local print agent (localhost:9999/print-receipt)
+5. Print agent decodes base64 and sends bytes directly to printer
+6. Kitchen printers: `show_prices=false` (auto-detected by printer_type)
+7. If render fails: returns RENDER_FAILED error (NO fallback to garbled text)
 
 ## Credentials
 - Admin: hanialdujaili@gmail.com / Hani@2024
 - Super Admin: owner@maestroegp.com / owner123 (Secret: 271018)
+- Test Cashier: cashier@test.com / Test@1234
 
-## Upcoming: P0 Multi-Restaurant Switcher | P1 ZKTeco | P2 Refactoring
+## Completed
+- [x] Receipt renderer with Arabic HarfBuzz support
+- [x] Professional two-column receipt layout v5
+- [x] Kitchen receipts without prices
+- [x] Print agent accepts base64 raw data
+- [x] Fixed printService.js API URL (window.location.origin → API_URL)
+- [x] Fixed kitchen printer auto show_prices:false
+- [x] Removed garbled text fallback
+
+## Upcoming Tasks
+- P0: Multi-Restaurant (Tenant) Switcher
+- P1: ZKTeco Fingerprint Integration
+- P2: Refactor server.py (18K+ lines)
+- P2: Refactor SuperAdmin.js & Settings.js
