@@ -125,9 +125,11 @@ export const sendReceiptPrint = async (printer, orderData) => {
 
     // الخطوة 1: توليد بيانات الإيصال كـ bitmap من السيرفر
     let rawData = null;
+    const renderUrl = `${API_URL}/print/render-receipt`;
     try {
       const token = localStorage.getItem('token');
-      const renderRes = await fetch(`${API_URL}/print/render-receipt`, {
+      console.log(`[Print] Calling render: ${renderUrl}`);
+      const renderRes = await fetch(renderUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -135,31 +137,35 @@ export const sendReceiptPrint = async (printer, orderData) => {
         },
         body: JSON.stringify(payload)
       });
+      console.log(`[Print] Render response: ${renderRes.status} ${renderRes.statusText}`);
       if (!renderRes.ok) {
-        console.error('Render receipt HTTP error:', renderRes.status);
+        const errText = await renderRes.text().catch(() => 'no body');
+        console.error(`[Print] Render HTTP error ${renderRes.status}: ${errText.substring(0, 200)}`);
       } else {
         const renderResult = await renderRes.json();
         if (renderResult.success && renderResult.raw_data) {
           rawData = renderResult.raw_data;
-          console.log(`Receipt rendered OK (${renderResult.size} bytes) for ${printer.name}`);
+          console.log(`[Print] Receipt rendered OK (${renderResult.size} bytes) for ${printer.name}`);
         } else {
-          console.error('Render receipt failed:', renderResult.error);
+          console.error('[Print] Render returned error:', renderResult.error || renderResult);
         }
       }
     } catch (renderErr) {
-      console.error('Server render unavailable:', renderErr.message);
+      console.error(`[Print] Server render failed for ${renderUrl}:`, renderErr.message);
     }
 
-    // إذا فشل التوليد من السيرفر، لا نطبع نص مشوه
-    if (!rawData) {
-      console.error('No raw_data from server - cannot print without bitmap');
-      return { success: false, message: 'RENDER_FAILED' };
-    }
+    // الخطوة 2: إرسال للطابعة عبر الوكيل المحلي
+    const printPayload = {};
 
-    // الخطوة 2: إرسال البيانات الخام للطابعة عبر الوكيل المحلي
-    const printPayload = {
-      raw_data: rawData
-    };
+    if (rawData) {
+      // بيانات bitmap جاهزة من السيرفر
+      printPayload.raw_data = rawData;
+    } else {
+      // السيرفر فشل - نرسل بيانات الطلب للوكيل ليطبع محلياً
+      console.warn('[Print] Falling back to local agent rendering');
+      printPayload.order = payload.order;
+      printPayload.printer_config = payload.printer_config;
+    }
 
     if (printer.connection_type === 'usb' && printer.usb_printer_name) {
       printPayload.usb_printer_name = printer.usb_printer_name;
@@ -173,8 +179,13 @@ export const sendReceiptPrint = async (printer, orderData) => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(printPayload)
     });
-    return await res.json();
+    const result = await res.json();
+    if (!rawData && result.success) {
+      result.warning = 'PRINTED_LOCAL_FALLBACK';
+    }
+    return result;
   } catch (e) {
+    console.error('[Print] Complete failure:', e.message);
     return { success: false, message: e.message };
   }
 };
