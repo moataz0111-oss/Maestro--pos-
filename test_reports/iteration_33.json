@@ -115,7 +115,7 @@
   },
   
   "test_credentials": {
-    "api_url": "https://usb-print-agent.preview.emergentagent.com",
+    "api_url": "https://pos-print-fix-1.preview.emergentagent.com",
     "super_admin": {
       "email": "owner@maestroegp.com",
       "password": "owner123",

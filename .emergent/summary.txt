@@ -1,63 +1,49 @@
-<analysis>Here is the handover summary based on the LLM message history:
-
-**original_problem_statement**: 
-Fixing bugs and adding operational features to a multi-tenant POS system. The user requires robust multi-printer support (USB for the cashier, Ethernet for the kitchen). The main request evolved into making the local Print Agent run entirely in the background as a hidden service, supporting silent USB printing (without triggering a browser popup), and ensuring the agent installer automatically kills and replaces older versions.
+<analysis>**original_problem_statement**: 
+Fixing bugs and adding operational features to a multi-tenant POS system. The user requires robust multi-printer support (USB for the cashier, Ethernet for the kitchen). The main request evolved into making the local Print Agent run entirely in the background as a hidden service, supporting silent USB printing (without triggering a browser popup), accurately routing orders to respective kitchen printers, and correctly printing Arabic characters on thermal printers.
 
 **PRODUCT REQUIREMENTS**:
 - Robust multi-printer support: System must route print jobs to USB printers (via Win32 API) and Ethernet printers (via IP/Port) silently.
-- Background execution: The Windows print agent must run invisibly without a lingering CMD window.
+- Arabic text support: The thermal printers must print Arabic characters correctly (currently appearing as gibberish, requires rendering text to bitmap/image before printing).
+- Accurate kitchen routing: Specific products must print to their assigned kitchen printers automatically upon saving/sending the order.
 - Seamless updates: The agent installer must automatically force-kill older versions running on port 9999 before installing the new one.
-- Accurate and dynamic thermal printing layouts (80mm).
 
 **User's preferred language**: Arabic (العربية) (INSTRUCT NEXT AGENT: You MUST respond in the user's preferred language, Arabic, only. This is critical.)
 
 **what currently exists?** 
-A multi-tenant POS system (React + FastAPI + MongoDB). Printing uses a local hidden Windows background process ( running via PowerShell on ). The agent receives print jobs and routes them natively to Ethernet (TCP) or directly to USB printers using the C#  () API. The installer () is generated dynamically by the backend, but it is currently failing to cleanly kill the older running versions during updates.
+A multi-tenant POS system (React + FastAPI + MongoDB). Printing uses a local hidden Windows background process ( running via PowerShell on ). The agent receives print jobs and routes them natively to Ethernet (TCP) or directly to USB printers using the C# . The frontend handles the receipt generation and product-to-printer routing logic. 
 
 **Last working item**: 
-    - Last item agent was working: Fixing the  payload inside  to correctly kill the old print agent process on port 9999 before installing the v2.1 update.
-    - Reason: The user attempted to update to the new USB-supported agent, but the PowerShell  command inside the script failed to kill the existing agent. As a result, the new agent cannot bind to port 9999. The agent attempted to rewrite the kill logic using native batch Active Internet connections (w/o servers)
-Proto Recv-Q Send-Q Local Address           Foreign Address         State      
-tcp        0      0 agent-env-53ac7c7b:8010 10.64.130.10:34266      ESTABLISHED
-tcp        0      0 localhost:35002         localhost:8010          ESTABLISHED
-tcp        0      0 localhost:27017         localhost:55402         ESTABLISHED
-tcp        0      0 localhost:27017         localhost:55398         ESTABLISHED
-tcp        0      0 localhost:55390         localhost:27017         ESTABLISHED
-tcp        0      0 localhost:27017         localhost:55390         ESTABLISHED
-tcp        0      0 agent-env-53ac7c7b:8010 10.64.130.89:45848      ESTABLISHED
-tcp        0      0 localhost:55398         localhost:27017         ESTABLISHED
-tcp        0      0 localhost:55402         localhost:27017         ESTABLISHED
-tcp        0      0 agent-env-53ac7c7:34362 0.203.102.34.bc.g:https ESTABLISHED
-tcp        0      0 localhost:8010          localhost:35002         ESTABLISHED
-Active UNIX domain sockets (w/o servers)
-Proto RefCnt Flags       Type       State         I-Node   Path
-unix  3      [ ]         STREAM     CONNECTED     3919936  
-unix  3      [ ]         STREAM     CONNECTED     3919137  
-unix  3      [ ]         STREAM     CONNECTED     3919923  
-unix  3      [ ]         STREAM     CONNECTED     3919935  
-unix  3      [ ]         STREAM     CONNECTED     3919138  
-unix  3      [ ]         STREAM     CONNECTED     3919922   and  directly in , but the  tool failed due to a string mismatch just before the context window ended.
+    - Last item agent was working: Fixing garbled Arabic text on thermal receipts by implementing a C#  class within  to render Arabic text as bitmap images before sending ESC/POS commands. Also, debugging why kitchen orders are not being routed to kitchen printers when the user clicks Save and Send in the POS.
     - Status: IN PROGRESS
     - Agent Testing Done: N
-    - Which testing method agent to use? manual testing by curl (e.g.,  to verify the generated  file content has the native CMD  loop at the top).
+    - Which testing method agent to use? manual testing by curl and backend/frontend testing agent (Print routing logic).
     - User Testing Done: N
 
 **All Pending/In progress Issue list**: 
-  Issue 1: (P0) Print Agent installer fails to kill the old running process on port 9999.
-     - Attempted fixes: Agent tried using PowerShell's  and  inside the installer script, but it failed to forcefully terminate the existing background task on the user's machine. The last attempt to replace it with pure Batch  failed via .
+  Issue 1: (P0) Arabic text prints as unintelligible symbols on thermal printers.
+     - Attempted fixes: The agent just injected a C#  class into  to render text as an image.
      - Next debug checklist: 
-       1. View  around line 8029 ().
-       2. In the  string generation, add a pure CMD loop at the very top (after ) to kill the process holding port 9999:
-          
-       3. Remove the redundant PowerShell-based kill commands from the script generation.
-     - Why fix this issue and what will be achieved with the fix? It is a hard blocker. The user cannot use the new USB silent printing feature because the new agent cannot start while the old one is holding the port.
+       1. View .
+       2. Integrate the new  class into the  logic so that incoming JSON text is actually converted to ESC/POS image byte arrays instead of plain text bytes.
+     - Why fix this issue and what will be achieved with the fix? Standard thermal printers lack UTF-8 Arabic codepages; rendering text to an image is the only reliable way to print Arabic receipts.
      - Status: IN PROGRESS
-     - Is recurring issue? Y
-     - Should Test frontend/backend/both after fix? Backend (curl ).
+     - Is recurring issue? N
+     - Should Test frontend/backend/both after fix? Backend (curl to the local agent endpoint to verify byte array output).
      - Blocked on other issue: None.
 
+  Issue 2: (P0) Kitchen orders do not print on assigned internal printers when clicking the Chef / Save and Send button.
+     - Attempted fixes: Agent updated POS.js to use  instead of just routing it, and implemented  for parallel printing. However, the user reports it is still not sending commands to the kitchen printers.
+     - Next debug checklist: 
+       1. View  around the Chef dialog submission flow ( or the kitchen dialog accept button).
+       2. Check if the  array passed to the routing function actually contains the  (Agent verified the DB schema has it, but it might be missing in the POS context/state).
+       3. Verify the payload sent to  for kitchen printers.
+     - Why fix this issue and what will be achieved with the fix? Core functionality for restaurant operations; kitchen staff must receive tickets automatically.
+     - Status: IN PROGRESS
+     - Is recurring issue? Y
+     - Should Test frontend/backend/both after fix? Frontend.
+
 **In progress Task List**: 
-  (None. The issue above encompasses the current task).
+  (None. The issues above encompass the current tasks).
 
 **Upcoming and Future Tasks**
     Upcoming Tasks:
@@ -69,98 +55,80 @@ unix  3      [ ]         STREAM     CONNECTED     3919922   and  directly in , b
     - (P2) **Refactor  & **: Break down the frontend monoliths into smaller components.
 
 **Completed work in this session**
-- Converted  to a hidden background service that runs via PowerShell automatically at Windows Startup. (DONE)
-- Added  (usb/network) to Printer settings in the frontend and backend. (DONE)
-- Implemented **Silent USB Printing**: Updated  with C# Win32 API () to route print jobs directly to USB printers without triggering a browser print popup. (DONE)
-- Added  endpoint to the local print agent to fetch Windows USB printers dynamically. (DONE)
-- Implemented UI Banners in  to detect legacy print agents and prompt the user to download the update. (DONE)
-- Fixed  deployment blocker (removed quotes around  in backend). (DONE)
+- Fixed Print Agent Installer to correctly kill the old process using WMIC instead of PID 4 (System) and fixed file path spaces bug by quoting the PowerShell execution argument. (DONE)
+- Reconfigured POS Print Layout to display Restaurant Logo at the top, Branch Name/Phone above Order Type, and System Logo (Maestro) at the bottom. (DONE)
+- Scaled up font sizes for POS receipt iframe and kitchen ESC/POS templates. (DONE)
+- Prevented printer test from falling back to browser window print if network agent test fails. (DONE)
+- Prevented the browser print dialog (page redirect) from opening when local Print Agent is connected. (DONE)
 
 **Earlier issues found/mentioned but not fixed**
    - None
 
 **Known issue recurrence from previous fork**
-  - Issue recurrence in previous fork: Monolithic  (17.9k lines) causing string replacement failures and route conflicts.
-  - Recurrence count: 4 (Agent just failed a  because of file size/exact string matching issues).
-  - Status: IN PROGRESS (Needs refactoring eventually).
+  - Issue recurrence in previous fork: Monolithic files ( and ) causing string replacement failures.
+  - Recurrence count: 5+ 
+  - Status: IN PROGRESS (Requires careful use of  and precise ).
 
 **Code Architecture**
 
 
 **Key Technical Concepts**
-- **Print Agent Architecture**: The backend dynamically generates . When the user runs it, it extracts an embedded  script to , creates a  wrapper in the Windows Startup folder for persistence, and runs the server hidden in the background on . 
-- **Silent USB Support**: The PowerShell server script dynamically compiles a C# class  using  to interface with the Windows Spooler API, allowing it to send raw byte arrays to USB printers directly bypassing browser restrictions.
+- **Print Agent Architecture**: Local background PowerShell service () compiling C# classes ( and newly added ) dynamically via  to send raw byte arrays to printers.
+- **ESC/POS Image Printing**: Converting Arabic text to a bitmap image, then generating ESC/POS raster bit-image commands () to bypass thermal printer character encoding limitations.
 
 **key DB schema**
-  - : , , ,  (usb/network),  (Name of the target printer in Windows OS).
+  - : , , ,  (usb/network), 
+  - :  (List of printer IDs assigned to a product for kitchen routing)
 
 **changes in tech stack**
   - None.
 
 **All files of reference**
--  (Contains the  endpoint that needs the process killing fix).
--  (The actual Print Server code).
--  (UI logic for selecting USB vs Network printers).
--  (Frontend print routing logic).
+-  (Added C# BitmapHelper for Arabic text support).
+-  (Installer fixed).
+-  (UI logic for receipt generation and kitchen routing).
+-  (Printer testing logic).
+-  (Print routing logic).
 
 **Areas that need refactoring**:
--  (Critical monolith issue).
+-  (Critical monolith issue, >17k lines).
 -  (Over 7k lines).
+-  (Over 4k lines).
 
 **key api endpoints**
-- : Serves the  file to the user.
 - Local Agent Endpoints: , , .
 
 **Critical Info for New Agent**
-- **Language:** The user communicates exclusively in **Arabic**. You must reply in Arabic. Be empathetic, as the user apologized for the repeated printing issues.
-- **Immediate Blocker:** The  endpoint generates a batch script that *must* kill any existing process holding port 9999 before attempting to launch the new background PowerShell script. The current PowerShell-based kill approach is failing on the user's system. Use raw CMD commands (Active Internet connections (w/o servers)
-Proto Recv-Q Send-Q Local Address           Foreign Address         State      
-tcp        0      0 agent-env-53ac7c7b:8010 10.64.130.10:34266      ESTABLISHED
-tcp        0      0 localhost:35002         localhost:8010          ESTABLISHED
-tcp        0      0 localhost:27017         localhost:55402         ESTABLISHED
-tcp        0      0 localhost:27017         localhost:55398         ESTABLISHED
-tcp        0      0 localhost:55390         localhost:27017         ESTABLISHED
-tcp        0      0 localhost:27017         localhost:55390         ESTABLISHED
-tcp        0      0 agent-env-53ac7c7b:8010 10.64.130.89:45848      ESTABLISHED
-tcp        0      0 localhost:55398         localhost:27017         ESTABLISHED
-tcp        0      0 localhost:55402         localhost:27017         ESTABLISHED
-tcp        0      0 agent-env-53ac7c7:34362 0.203.102.34.bc.g:https ESTABLISHED
-tcp        0      0 localhost:8010          localhost:35002         ESTABLISHED
-Active UNIX domain sockets (w/o servers)
-Proto RefCnt Flags       Type       State         I-Node   Path
-unix  3      [ ]         STREAM     CONNECTED     3919936  
-unix  3      [ ]         STREAM     CONNECTED     3919137  
-unix  3      [ ]         STREAM     CONNECTED     3919923  
-unix  3      [ ]         STREAM     CONNECTED     3919935  
-unix  3      [ ]         STREAM     CONNECTED     3919138  
-unix  3      [ ]         STREAM     CONNECTED     3919922   and ) at the very top of the  script.
-- **Monolith Editing:** Be very careful when using  in  (17.9k lines). Ensure you provide enough context lines, or use /regex if necessary, as the previous agent failed its last edit due to a string mismatch.
+- **Language:** The user communicates exclusively in **Arabic**. You must reply in Arabic. 
+- The agent *did not* use the testing subagent.
+- **Immediate Blocker 1:** The C#  class was *just* injected into  at the end of the previous session. You MUST complete the implementation by updating the PowerShell logic (specifically the  and ESC/POS generation sections) to actually utilize this class for Arabic text lines.
+- **Immediate Blocker 2:** The user explicitly noted that kitchen orders are still not being routed. Check the  payload being sent to . The  list might be missing the  mappings, or the Chef dialog accept button is failing to trigger the print job.
 
 **documents and test reports created in this job**
   - 
   - 
 
 **Last 10 User Messages and any pending HUMAN messages** 
-1. User asked how to add an IP for one printer and fix the USB connection for another.
-2. Agent clarified USB printers don't need IPs and configured UI to hide IP for USB.
-3. User complained that USB printing opens an extra browser popup window, whereas network printers print silently in one step.
-4. Agent rewrote the local print agent () to support direct Win32 USB printing and updated the frontend to route USB jobs to the agent.
-5. User reported the system doesn't see the USB ports and asks to turn on the agent, even though it's running.
-6. Agent realized the user is running the *old* agent version. Added a UI banner asking the user to update the agent.
-7. User reported downloading the update but showed screenshots that it fails because port 9999 is in use.
-8. Agent updated the BAT file payload to kill the old agent using PowerShell.
-9. User shared screenshots showing Agent running but USB not detected - meaning the kill command failed and the old agent is still running.
-10. Agent apologized and was in the middle of replacing the PowerShell kill commands with robust CMD  commands in , but the  tool failed. (Context ended).
+1. User asked to fix the process kill issue. (Resolved)
+2. User reported agent not connecting due to path spaces. (Resolved)
+3. User reported receipt logos are swapped, branch name missing, and printing opens a new page. (Resolved)
+4. User asked to enlarge the fonts on the thermal receipts. (Resolved)
+5. User asked to confirm if real logos will appear instead of placeholder letters. (Resolved)
+6. User reported kitchen routing not working, and receipt still opening a new page.
+7. Agent updated code to use parallel printing and .
+8. User reported Settings test prints to the wrong printer if network printer fails. (Resolved)
+9. User provided screenshots showing Arabic text printing as gibberish on thermal paper, and reiterated that kitchen orders are still not routing to the internal printers.
+10. Agent injected C#  into  to handle the text-to-image conversion. (Pending completion).
 
 **Project Health Check:**
-- Broken: The print agent installer update mechanism ( in ).
+- Broken: Print Agent text encoding (Arabic), Kitchen order routing logic.
 - Mocked: None
 
 **3rd Party Integrations**
 - Emergent LLM Key (Backend  - configured).
 
 **Testing status**
-  - Testing agent used after significant changes: NO (relied on screenshot and curl).
+  - Testing agent used after significant changes: NO
   - Troubleshoot agent used after agent stuck in loop: NO
   - Test files created: None
   - Known regressions: None
@@ -171,4 +139,4 @@ unix  3      [ ]         STREAM     CONNECTED     3919922   and ) at the very to
 - Test Cashier: cashier@test.com / Test@1234
 
 **What agent forgot to execute**
-The agent forgot to double-check the   accuracy for  on its last action, causing the process kill fix to fail right before the context window closed. Needs immediate resolution.</analysis>
+The agent injected the C#  class into  but ran out of context before integrating it into the actual PowerShell  print rendering logic. The text is still being treated as plain text bytes. Furthermore, the agent didn't successfully debug *why* the kitchen routing failed in the frontend, assuming calling the print function was enough without checking the state payload.</analysis>

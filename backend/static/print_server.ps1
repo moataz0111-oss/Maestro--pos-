@@ -7,6 +7,9 @@ try {
 $csharpCode = @'
 using System;
 using System.Runtime.InteropServices;
+using System.Drawing;
+using System.Drawing.Imaging;
+using System.Collections.Generic;
 
 public class RawPrinterHelper {
     [StructLayout(LayoutKind.Sequential)]
@@ -60,8 +63,70 @@ public class RawPrinterHelper {
         return success;
     }
 }
+
+public class ReceiptRenderer {
+    public static byte[] RenderTextToEscPos(string[] lines, int[] sizes, bool[] bolds, string[] aligns, int paperWidth) {
+        var bmp = new Bitmap(paperWidth, 3000);
+        var g = Graphics.FromImage(bmp);
+        g.Clear(Color.White);
+        g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
+        float y = 5;
+        for (int i = 0; i < lines.Length; i++) {
+            var style = bolds[i] ? FontStyle.Bold : FontStyle.Regular;
+            var font = new Font("Arial", sizes[i], style);
+            var brush = Brushes.Black;
+            var sf = new StringFormat();
+            if (aligns[i] == "center") sf.Alignment = StringAlignment.Center;
+            else if (aligns[i] == "right") sf.Alignment = StringAlignment.Far;
+            else sf.Alignment = StringAlignment.Near;
+            foreach (char c in lines[i]) {
+                if (c >= 0x0600 && c <= 0x06FF) { sf.FormatFlags = StringFormatFlags.DirectionRightToLeft; break; }
+            }
+            var rect = new RectangleF(3, y, paperWidth - 6, 200);
+            var measured = g.MeasureString(lines[i], font, paperWidth - 6, sf);
+            g.DrawString(lines[i], font, brush, rect, sf);
+            y += measured.Height + 1;
+            font.Dispose();
+            sf.Dispose();
+        }
+        g.Dispose();
+        int height = (int)y + 20;
+        if (height > 2999) height = 2999;
+        var result = new List<byte>();
+        result.AddRange(new byte[] { 0x1b, 0x40 });
+        int bytesPerRow = (paperWidth + 7) / 8;
+        result.AddRange(new byte[] { 0x1d, 0x76, 0x30, 0x00 });
+        result.Add((byte)(bytesPerRow & 0xFF));
+        result.Add((byte)((bytesPerRow >> 8) & 0xFF));
+        result.Add((byte)(height & 0xFF));
+        result.Add((byte)((height >> 8) & 0xFF));
+        var bmpData = bmp.LockBits(new Rectangle(0, 0, paperWidth, height), ImageLockMode.ReadOnly, PixelFormat.Format24bppRgb);
+        int stride = bmpData.Stride;
+        byte[] rgb = new byte[stride * height];
+        Marshal.Copy(bmpData.Scan0, rgb, 0, rgb.Length);
+        bmp.UnlockBits(bmpData);
+        for (int row = 0; row < height; row++) {
+            for (int col = 0; col < bytesPerRow; col++) {
+                byte b = 0;
+                for (int bit = 0; bit < 8; bit++) {
+                    int px = col * 8 + bit;
+                    if (px < paperWidth) {
+                        int idx = row * stride + px * 3;
+                        float brightness = rgb[idx + 2] * 0.299f + rgb[idx + 1] * 0.587f + rgb[idx] * 0.114f;
+                        if (brightness < 128) b |= (byte)(0x80 >> bit);
+                    }
+                }
+                result.Add(b);
+            }
+        }
+        bmp.Dispose();
+        result.Add(0x0a); result.Add(0x0a); result.Add(0x0a); result.Add(0x0a);
+        result.AddRange(new byte[] { 0x1d, 0x56, 0x42, 0x00 });
+        return result.ToArray();
+    }
+}
 '@
-Add-Type -TypeDefinition $csharpCode -ErrorAction Stop
+Add-Type -TypeDefinition $csharpCode -ReferencedAssemblies System.Drawing -ErrorAction Stop
 "$(Get-Date) - C# RawPrinterHelper compiled OK" | Out-File $agentLog -Append
 } catch {
     "$(Get-Date) - C# compile warning: $_" | Out-File $agentLog -Append
