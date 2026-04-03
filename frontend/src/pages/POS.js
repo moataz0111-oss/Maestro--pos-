@@ -1325,38 +1325,51 @@ export default function POS() {
         
         // إرسال العناصر الجديدة لطابعات المطبخ
         try {
-          const agentOk = await checkAgentStatus();
-          if (agentOk && newItems.length > 0) {
-            const kitchenPrinters = availablePrinters.filter(p => 
-              p.printer_type === 'kitchen' &&
-              ((p.connection_type === 'usb' && p.usb_printer_name) || (p.connection_type !== 'usb' && p.ip_address))
-            );
-            if (kitchenPrinters.length > 0) {
-              const restaurantName = restaurantSettings?.name_ar || restaurantSettings?.name || '';
-              const lang = localStorage.getItem('language') || 'ar';
-              const orderForPrint = {
-                order_number: editingOrder.order_number,
-                order_type: orderType,
-                customer_name: customerName || '',
-                table_number: orderType === 'dine_in' ? (tables.find(t => t.id === selectedTable)?.number || selectedTable) : '',
-                buzzer_number: buzzerNumber || '',
-                discount: 0,
-                language: lang
-              };
-              const itemsForPrint = newItems.map(item => ({
-                product_id: item.product_id || item.id,
-                product_name: item.product_name || item.name,
-                name: item.product_name || item.name,
-                price: item.price,
-                quantity: item.quantity,
-                notes: item.notes || '',
-                extras: item.selectedExtras || []
-              }));
-              await printOrderToAllPrinters(orderForPrint, itemsForPrint, products, kitchenPrinters, restaurantName);
+          if (newItems.length > 0) {
+            const agentOk = await checkAgentStatus();
+            if (!agentOk) {
+              toast.error(t('وسيط الطباعة غير متصل - لم تتم طباعة الطلب للمطبخ'));
+            } else {
+              const kitchenPrinters = availablePrinters.filter(p => 
+                p.printer_type === 'kitchen' &&
+                ((p.connection_type === 'usb' && p.usb_printer_name) || (p.connection_type !== 'usb' && p.ip_address))
+              );
+              if (kitchenPrinters.length > 0) {
+                const restaurantName = restaurantSettings?.name_ar || restaurantSettings?.name || '';
+                const lang = localStorage.getItem('language') || 'ar';
+                const orderForPrint = {
+                  order_number: editingOrder.order_number,
+                  order_type: orderType,
+                  customer_name: customerName || '',
+                  table_number: orderType === 'dine_in' ? (tables.find(t => t.id === selectedTable)?.number || selectedTable) : '',
+                  buzzer_number: buzzerNumber || '',
+                  discount: 0,
+                  language: lang
+                };
+                const itemsForPrint = newItems.map(item => ({
+                  product_id: item.product_id || item.id,
+                  product_name: item.product_name || item.name,
+                  name: item.product_name || item.name,
+                  price: item.price,
+                  quantity: item.quantity,
+                  notes: item.notes || '',
+                  extras: item.selectedExtras || []
+                }));
+                const result = await printOrderToAllPrinters(orderForPrint, itemsForPrint, products, kitchenPrinters, restaurantName);
+                if (!result.success) {
+                  toast.error(t('فشل طباعة الطلب على طابعات المطبخ'));
+                  result.results?.filter(r => !r.success).forEach(f => {
+                    toast.error(`${f.printer_name}: ${f.message}`);
+                  });
+                }
+              } else {
+                toast.warning && toast.warning(t('لا توجد طابعات مطبخ مُعرّفة'));
+              }
             }
           }
         } catch (printErr) {
-          console.log('Kitchen print error for edit (non-blocking):', printErr);
+          console.error('Kitchen print error for edit:', printErr);
+          toast.error(t('خطأ في طباعة المطبخ: ') + printErr.message);
         }
         
         toast.success(t('تم تحديث الطلب وإرساله للمطبخ'));
@@ -1393,36 +1406,41 @@ export default function POS() {
         
         // === إرسال الطلبات لطابعات المطبخ حسب ربط المنتجات ===
         try {
-          const kitchenPrinters = availablePrinters.filter(p => 
-            p.printer_type === 'kitchen' &&
-            ((p.connection_type === 'usb' && p.usb_printer_name) || (p.connection_type !== 'usb' && p.ip_address))
-          );
-          if (kitchenPrinters.length > 0) {
-            const restaurantName = restaurantSettings?.name_ar || restaurantSettings?.name || '';
-            const orderForPrint = buildPrintOrderData(res.data.order_number);
-            const itemsForPrint = cart.map(item => ({
-              product_id: item.product_id || item.id,
-              product_name: item.product_name || item.name,
-              name: item.product_name || item.name,
-              price: item.price,
-              quantity: item.quantity,
-              notes: item.notes || '',
-              extras: item.selectedExtras || []
-            }));
-            console.log('[Kitchen Print] Routing', itemsForPrint.length, 'items to', kitchenPrinters.length, 'kitchen printers');
-            console.log('[Kitchen Print] Products with printer_ids:', products.filter(p => p.printer_ids?.length > 0).map(p => ({name: p.name, printer_ids: p.printer_ids})));
-            const result = await printOrderToAllPrinters(orderForPrint, itemsForPrint, products, kitchenPrinters, restaurantName);
-            if (result.success) {
-              toast.success(t('تم إرسال الطلب للمطبخ'));
-            } else if (result.results?.length > 0) {
-              const failed = result.results.filter(r => !r.success);
-              if (failed.length > 0) {
-                failed.forEach(f => toast.error(`${f.printer_name}: ${f.message}`));
+          const agentOk = await checkAgentStatus();
+          if (!agentOk) {
+            toast.error(t('وسيط الطباعة غير متصل - لم تتم طباعة الطلب للمطبخ'));
+          } else {
+            const kitchenPrinters = availablePrinters.filter(p => 
+              p.printer_type === 'kitchen' &&
+              ((p.connection_type === 'usb' && p.usb_printer_name) || (p.connection_type !== 'usb' && p.ip_address))
+            );
+            if (kitchenPrinters.length > 0) {
+              const restaurantName = restaurantSettings?.name_ar || restaurantSettings?.name || '';
+              const orderForPrint = buildPrintOrderData(res.data.order_number);
+              const itemsForPrint = cart.map(item => ({
+                product_id: item.product_id || item.id,
+                product_name: item.product_name || item.name,
+                name: item.product_name || item.name,
+                price: item.price,
+                quantity: item.quantity,
+                notes: item.notes || '',
+                extras: item.selectedExtras || []
+              }));
+              console.log('[Kitchen Print] Routing', itemsForPrint.length, 'items to', kitchenPrinters.length, 'kitchen printers');
+              const result = await printOrderToAllPrinters(orderForPrint, itemsForPrint, products, kitchenPrinters, restaurantName);
+              if (result.success) {
+                toast.success(t('تم إرسال الطلب للمطبخ'));
+              } else {
+                toast.error(t('فشل طباعة طلبات المطبخ'));
+                result.results?.filter(r => !r.success).forEach(f => {
+                  toast.error(`${f.printer_name}: ${f.message}`);
+                });
               }
             }
           }
         } catch (printErr) {
-          console.log('Kitchen print error (non-blocking):', printErr);
+          console.error('Kitchen print error:', printErr);
+          toast.error(t('خطأ في طباعة المطبخ: ') + printErr.message);
         }
         
         // إذا كان طلب توصيل مع سائق، نعين السائق مباشرة
@@ -1811,7 +1829,9 @@ export default function POS() {
       // === طباعة الفاتورة على الكاشير وإرسال الطلبات للمطبخ ===
       try {
         const agentOk = await checkAgentStatus();
-        if (agentOk) {
+        if (!agentOk) {
+          toast.error(t('وسيط الطباعة غير متصل - لم تتم الطباعة'));
+        } else {
           const restaurantName = restaurantSettings?.name_ar || restaurantSettings?.name || '';
           const orderForPrint = buildPrintOrderData(orderNumber);
           const itemsForPrint = cart.map(item => ({
@@ -1824,7 +1844,7 @@ export default function POS() {
             extras: item.selectedExtras || []
           }));
           
-          // 1. طباعة الفاتورة على طابعة الكاشير
+          // 1. طباعة الفاتورة على طابعة الكاشير USB فقط
           const cashierPrinter = availablePrinters.find(p => p.printer_type === 'receipt');
           if (cashierPrinter) {
             const subtotalCalc = cart.reduce((sum, item) => sum + ((item.price + (item.selectedExtras || []).reduce((s, e) => s + e.price, 0)) * item.quantity), 0);
@@ -1836,7 +1856,10 @@ export default function POS() {
               payment_method: paymentMethod || '',
               cashier_name: user?.name || user?.full_name || ''
             };
-            await sendReceiptPrint(cashierPrinter, cashierOrderData);
+            const cashierResult = await sendReceiptPrint(cashierPrinter, cashierOrderData);
+            if (!cashierResult.success) {
+              toast.error(t('فشل طباعة فاتورة الكاشير: ') + (cashierResult.message || ''));
+            }
           }
           
           // 2. إرسال الطلبات لطابعات المطبخ حسب ربط المنتجات
@@ -1845,11 +1868,18 @@ export default function POS() {
             ((p.connection_type === 'usb' && p.usb_printer_name) || (p.connection_type !== 'usb' && p.ip_address))
           );
           if (kitchenPrinters.length > 0) {
-            await printOrderToAllPrinters(orderForPrint, itemsForPrint, products, kitchenPrinters, restaurantName);
+            const kitchenResult = await printOrderToAllPrinters(orderForPrint, itemsForPrint, products, kitchenPrinters, restaurantName);
+            if (!kitchenResult.success) {
+              toast.error(t('فشل طباعة طلبات المطبخ'));
+              kitchenResult.results?.filter(r => !r.success).forEach(f => {
+                toast.error(`${f.printer_name}: ${f.message}`);
+              });
+            }
           }
         }
       } catch (printErr) {
-        console.log('Print error (non-blocking):', printErr);
+        console.error('Print error:', printErr);
+        toast.error(t('خطأ في الطباعة: ') + printErr.message);
       }
       
       // رسالة مناسبة حسب نوع الطلب
@@ -3572,112 +3602,49 @@ export default function POS() {
               className="flex-1 bg-blue-500 hover:bg-blue-600 text-white"
               data-testid="print-receipt-btn"
               onClick={async () => {
-                // === محاولة 1: طباعة صامتة عبر وسيط الطباعة (كاشير فقط) ===
+                // === طباعة صامتة عبر وسيط الطباعة على طابعة الكاشير USB فقط ===
                 try {
                   const agentOk = await checkAgentStatus();
-                  if (agentOk) {
-                    const cashierPrinter = availablePrinters.find(p => p.printer_type === 'receipt') || availablePrinters[0];
-                    if (cashierPrinter) {
-                      const printData = buildPrintOrderData(editingOrder?.order_number || lastOrderNumber || '');
-                      const subtotalCalc = cart.reduce((sum, item) => sum + ((item.price + (item.selectedExtras || []).reduce((s, e) => s + e.price, 0)) * item.quantity), 0);
-                      const orderForPrint = {
-                        ...printData,
-                        items: cart.map(item => ({
-                          product_name: item.product_name || item.name,
-                          name: item.product_name || item.name,
-                          price: item.price,
-                          quantity: item.quantity,
-                          notes: item.notes || '',
-                          extras: item.selectedExtras || []
-                        })),
-                        total: subtotalCalc - (discount || 0),
-                        subtotal: subtotalCalc,
-                        payment_method: paymentMethod || '',
-                        cashier_name: user?.name || user?.full_name || ''
-                      };
-                      const result = await sendReceiptPrint(cashierPrinter, orderForPrint);
-                      if (result.success) {
-                        toast.success(t('تم الطباعة بنجاح'));
-                        setPrintDialogOpen(false);
-                        if (lastOrderNumber && !editingOrder) {
-                          clearCart();
-                          setLastOrderNumber(null);
-                        }
-                        return;
-                      }
+                  if (!agentOk) {
+                    toast.error(t('وسيط الطباعة غير متصل! تأكد من تشغيل برنامج الطباعة على الجهاز'));
+                    return;
+                  }
+                  const cashierPrinter = availablePrinters.find(p => p.printer_type === 'receipt');
+                  if (!cashierPrinter) {
+                    toast.error(t('لا توجد طابعة كاشير مُعرّفة في الإعدادات'));
+                    return;
+                  }
+                  const printData = buildPrintOrderData(editingOrder?.order_number || lastOrderNumber || '');
+                  const subtotalCalc = cart.reduce((sum, item) => sum + ((item.price + (item.selectedExtras || []).reduce((s, e) => s + e.price, 0)) * item.quantity), 0);
+                  const orderForPrint = {
+                    ...printData,
+                    items: cart.map(item => ({
+                      product_name: item.product_name || item.name,
+                      name: item.product_name || item.name,
+                      price: item.price,
+                      quantity: item.quantity,
+                      notes: item.notes || '',
+                      extras: item.selectedExtras || []
+                    })),
+                    total: subtotalCalc - (discount || 0),
+                    subtotal: subtotalCalc,
+                    payment_method: paymentMethod || '',
+                    cashier_name: user?.name || user?.full_name || ''
+                  };
+                  const result = await sendReceiptPrint(cashierPrinter, orderForPrint);
+                  if (result.success) {
+                    toast.success(t('تم الطباعة بنجاح'));
+                    setPrintDialogOpen(false);
+                    if (lastOrderNumber && !editingOrder) {
+                      clearCart();
+                      setLastOrderNumber(null);
                     }
+                  } else {
+                    toast.error(t('فشل الطباعة: ') + (result.message === 'RENDER_FAILED' ? t('فشل توليد الفاتورة من السيرفر') : result.message));
                   }
                 } catch (e) {
-                  console.log('Agent print failed, falling back:', e);
-                }
-
-                // === محاولة 2: طباعة عبر المتصفح (نفس الصفحة - بدون فتح صفحة ثانية) ===
-                const printContent = document.getElementById('receipt-to-print');
-                if (printContent) {
-                  const cloned = printContent.cloneNode(true);
-                  if (logoBase64) {
-                    const imgs = cloned.querySelectorAll('img');
-                    imgs.forEach(img => {
-                      const alt = img.getAttribute('alt') || '';
-                      const isSystemLogo = img.getAttribute('data-system-logo') === 'true';
-                      if (!isSystemLogo && (alt.includes('شعار المطعم') || alt.includes('restaurant'))) {
-                        img.src = logoBase64;
-                      }
-                    });
-                  }
-                  
-                  // إنشاء عنصر طباعة مؤقت في نفس الصفحة
-                  const printOverlay = document.createElement('div');
-                  printOverlay.id = 'thermal-print-overlay';
-                  printOverlay.innerHTML = cloned.innerHTML;
-                  document.body.appendChild(printOverlay);
-                  
-                  // إضافة أنماط طباعة مؤقتة
-                  const printStyle = document.createElement('style');
-                  printStyle.id = 'thermal-print-style';
-                  printStyle.textContent = `
-                    @media print {
-                      body > *:not(#thermal-print-overlay) { display: none !important; visibility: hidden !important; height: 0 !important; overflow: hidden !important; }
-                      #thermal-print-overlay { display: block !important; visibility: visible !important; position: absolute; top: 0; left: 0; width: 80mm; }
-                      @page { size: 80mm auto !important; margin: 0mm !important; }
-                      #thermal-print-overlay * { color: #000 !important; }
-                      #thermal-print-overlay .text-gray-500, #thermal-print-overlay .text-gray-600, #thermal-print-overlay .text-gray-700 { color: #000 !important; }
-                      #thermal-print-overlay .text-red-600 { color: #000 !important; font-weight: 700 !important; }
-                      #thermal-print-overlay .bg-red-50, #thermal-print-overlay .bg-gray-100 { background: transparent !important; }
-                      #thermal-print-overlay img.h-16 { width: 60px !important; height: 60px !important; }
-                      #thermal-print-overlay img.h-10 { width: 40px !important; height: 40px !important; }
-                      #thermal-print-overlay table { width: 100% !important; }
-                      #thermal-print-overlay th, #thermal-print-overlay td { font-size: 14px !important; padding: 3px 0 !important; }
-                      #thermal-print-overlay th { font-weight: 700 !important; font-size: 15px !important; }
-                      #thermal-print-overlay .font-bold { font-weight: 700 !important; }
-                      #thermal-print-overlay .text-lg { font-size: 20px !important; }
-                      #thermal-print-overlay .text-base { font-size: 16px !important; }
-                      #thermal-print-overlay .text-sm { font-size: 14px !important; }
-                      #thermal-print-overlay .text-xs { font-size: 13px !important; }
-                      #thermal-print-overlay .tabular-nums { font-variant-numeric: tabular-nums; font-weight: 600 !important; }
-                    }
-                    #thermal-print-overlay { display: none; }
-                  `;
-                  document.head.appendChild(printStyle);
-                  
-                  // طباعة مباشرة من نفس الصفحة
-                  setTimeout(() => {
-                    window.print();
-                    // تنظيف بعد الطباعة
-                    setTimeout(() => {
-                      document.getElementById('thermal-print-overlay')?.remove();
-                      document.getElementById('thermal-print-style')?.remove();
-                    }, 1000);
-                  }, 100);
-                  
-                  toast.success(t('جاري الطباعة...'));
-                  setPrintDialogOpen(false);
-                  if (lastOrderNumber && !editingOrder) {
-                    clearCart();
-                    setLastOrderNumber(null);
-                  }
-                } else {
-                  toast.error(t('فشل في تحميل الفاتورة'));
+                  console.error('Print error:', e);
+                  toast.error(t('خطأ في الطباعة: ') + e.message);
                 }
               }}
             >

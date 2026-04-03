@@ -59,6 +59,13 @@ Printed On 03-04-2026 1:31:29 PM
 5. Print agent decodes base64 and sends bytes directly to printer
 6. Kitchen printers: `show_prices=false` (auto-detected by printer_type)
 7. If render fails: returns RENDER_FAILED error (NO fallback to garbled text)
+8. If agent not connected: Shows clear Arabic error message (NO window.print fallback)
+
+## Error Messages (Arabic):
+- Agent offline: "وسيط الطباعة غير متصل! تأكد من تشغيل برنامج الطباعة على الجهاز"
+- Render failed: "فشل توليد الفاتورة من السيرفر"
+- Cashier print failed: "فشل طباعة فاتورة الكاشير"
+- Kitchen print failed: "فشل طباعة طلبات المطبخ"
 
 ## Credentials
 - Admin: hanialdujaili@gmail.com / Hani@2024
@@ -73,6 +80,9 @@ Printed On 03-04-2026 1:31:29 PM
 - [x] Fixed printService.js API URL (window.location.origin → API_URL)
 - [x] Fixed kitchen printer auto show_prices:false
 - [x] Removed garbled text fallback
+- [x] Removed window.print() fallback (was causing blank pages)
+- [x] Added clear Arabic error messages for all print failures
+- [x] Invoice prints ONLY to USB cashier printer (no browser dialog)
 
 ## Upcoming Tasks
 - P0: Multi-Restaurant (Tenant) Switcher
