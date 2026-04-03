@@ -1285,12 +1285,24 @@ export default function POS() {
       order_number: orderNumber,
       order_type: orderType,
       customer_name: customerName || '',
+      customer_phone: customerPhone || '',
+      delivery_address: deliveryAddress || '',
       table_number: orderType === 'dine_in' ? (tables.find(t => t.id === selectedTable)?.number || selectedTable) : '',
       buzzer_number: buzzerNumber || '',
       discount: discount || 0,
       driver_name: driverObj?.name || '',
       delivery_company: deliveryAppObj?.name || '',
-      language: localStorage.getItem('language') || 'ar'
+      language: localStorage.getItem('language') || 'ar',
+      // بيانات الفاتورة من الإعدادات
+      phone: invoiceSettings?.phone || '',
+      phone2: invoiceSettings?.phone2 || '',
+      address: invoiceSettings?.address || '',
+      tax_number: invoiceSettings?.tax_number || '',
+      show_tax: invoiceSettings?.show_tax !== false,
+      custom_header: invoiceSettings?.custom_header || '',
+      custom_footer: invoiceSettings?.custom_footer || '',
+      thank_you_message: invoiceSettings?.thank_you_message || '',
+      system_name: systemInvoiceSettings?.system_name || 'Maestro EGP'
     };
   };
 
@@ -1341,16 +1353,7 @@ export default function POS() {
               );
               if (kitchenPrinters.length > 0) {
                 const restaurantName = restaurantSettings?.name_ar || restaurantSettings?.name || '';
-                const lang = localStorage.getItem('language') || 'ar';
-                const orderForPrint = {
-                  order_number: editingOrder.order_number,
-                  order_type: orderType,
-                  customer_name: customerName || '',
-                  table_number: orderType === 'dine_in' ? (tables.find(t => t.id === selectedTable)?.number || selectedTable) : '',
-                  buzzer_number: buzzerNumber || '',
-                  discount: 0,
-                  language: lang
-                };
+                const orderForPrint = buildPrintOrderData(editingOrder.order_number);
                 const itemsForPrint = newItems.map(item => ({
                   product_id: item.product_id || item.id,
                   product_name: item.product_name || item.name,

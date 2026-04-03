@@ -241,6 +241,8 @@ export const printOrderToAllPrinters = async (order, orderItems, products, print
       order_number: order.order_number || order.id,
       order_type: order.order_type || order.orderType,
       customer_name: order.customer_name || '',
+      customer_phone: order.customer_phone || '',
+      delivery_address: order.delivery_address || '',
       table_number: order.table_number || order.table_id || '',
       buzzer_number: order.buzzer_number || '',
       driver_name: order.driver_name || '',
@@ -248,6 +250,17 @@ export const printOrderToAllPrinters = async (order, orderItems, products, print
       cashier_name: order.cashier_name || '',
       section_name: printer.name || '',
       language: order.language || localStorage.getItem('language') || 'ar',
+      // بيانات الفاتورة
+      phone: order.phone || '',
+      phone2: order.phone2 || '',
+      address: order.address || '',
+      tax_number: order.tax_number || '',
+      show_tax: order.show_tax,
+      custom_header: order.custom_header || '',
+      custom_footer: order.custom_footer || '',
+      thank_you_message: order.thank_you_message || '',
+      system_name: order.system_name || 'Maestro EGP',
+      branch_name: order.branch_name || '',
       items: items,
       total: items.reduce((sum, item) => {
         const extras = (item.extras || item.selectedExtras || []).reduce((s, e) => s + (e.price || 0), 0);
