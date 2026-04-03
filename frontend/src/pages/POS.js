@@ -151,6 +151,7 @@ export default function POS() {
   const [currentShift, setCurrentShift] = useState(null);
   const [kitchenDialogOpen, setKitchenDialogOpen] = useState(false);
   const [orderNotes, setOrderNotes] = useState('');
+  const [kitchenPrintStatus, setKitchenPrintStatus] = useState({}); // {itemIndex: 'pending'|'sending'|'success'|'error'}
   
   // حالات جديدة للطلبات المعلقة والعملاء
   const [pendingOrders, setPendingOrders] = useState([]);
@@ -1273,6 +1274,29 @@ export default function POS() {
   const netTotal = totalBeforeCommission - commissionAmount;
 
 
+  // دالة مساعدة لربط عناصر السلة بطابعاتها
+  const getCartItemPrinterMap = () => {
+    return cart.map((item) => {
+      const product = products.find(p => p.id === item.product_id);
+      const printerIds = Array.isArray(product?.printer_ids) ? product.printer_ids.filter(id => id) : [];
+      const printerNames = printerIds
+        .map(pid => availablePrinters.find(p => p.id === pid))
+        .filter(Boolean)
+        .map(p => ({ id: p.id, name: p.name }));
+      // إذا لا يوجد طابعة مربوطة، استخدم الطابعة الافتراضية
+      if (printerNames.length === 0) {
+        const defaultKitchen = availablePrinters.find(p => p.printer_type === 'kitchen');
+        if (defaultKitchen) {
+          printerNames.push({ id: defaultKitchen.id, name: defaultKitchen.name });
+        }
+      }
+      return {
+        ...item,
+        printerNames
+      };
+    });
+  };
+
   // دالة مساعدة لبناء بيانات الطباعة مع معلومات الفرع والتوصيل
   const buildPrintOrderData = (orderNumber) => {
     const currentBranch = branches?.find(b => b.id === (getBranchIdForApi() || localStorage.getItem('selectedBranchId') || user?.branch_id));
@@ -1306,7 +1330,7 @@ export default function POS() {
     };
   };
 
-  // حفظ الطلب وإرسال للمطبخ (بدون دفع)
+  // حفظ الطلب وإرسال للمطبخ (بدون دفع) - مع تحديث حالة الطباعة لكل منتج
   const handleSaveAndSendToKitchen = async () => {
     if (cart.length === 0) {
       toast.error(t('السلة فارغة'));
@@ -1328,7 +1352,12 @@ export default function POS() {
     const savedBranchIdForKitchen = localStorage.getItem('selectedBranchId');
     const currentBranchId = getBranchIdForApi() || savedBranchIdForKitchen || user?.branch_id;
 
+    // تحديث حالة جميع العناصر لـ "إرسال"
+    const initialStatus = {};
+    cart.forEach((_, idx) => { initialStatus[idx] = 'sending'; });
+    setKitchenPrintStatus(initialStatus);
     setSubmitting(true);
+
     try {
       // إذا كنا نعدل طلب موجود - إضافة العناصر الجديدة فقط
       if (editingOrder) {
@@ -1346,6 +1375,9 @@ export default function POS() {
             const agentOk = await checkAgentStatus();
             if (!agentOk) {
               toast.error(t('وسيط الطباعة غير متصل - لم تتم طباعة الطلب للمطبخ'));
+              const errorStatus = {};
+              cart.forEach((_, idx) => { errorStatus[idx] = 'error'; });
+              setKitchenPrintStatus(errorStatus);
             } else {
               const kitchenPrinters = availablePrinters.filter(p => 
                 p.printer_type === 'kitchen' &&
@@ -1364,20 +1396,40 @@ export default function POS() {
                   extras: item.selectedExtras || []
                 }));
                 const result = await printOrderToAllPrinters(orderForPrint, itemsForPrint, products, kitchenPrinters, restaurantName);
-                if (!result.success) {
-                  toast.error(t('فشل طباعة الطلب على طابعات المطبخ'));
-                  result.results?.filter(r => !r.success).forEach(f => {
-                    toast.error(`${f.printer_name}: ${f.message}`);
-                  });
-                }
+                
+                // تحديث حالة كل عنصر حسب نتيجة الطباعة
+                const updatedStatus = {};
+                cart.forEach((item, idx) => {
+                  const isNew = !existingProductIds.includes(item.product_id);
+                  if (isNew) {
+                    // للعناصر الجديدة - تحقق من نتيجة الطابعة
+                    const product = products.find(p => p.id === item.product_id);
+                    const pIds = product?.printer_ids?.filter(id => id) || [];
+                    const hasPrinterResult = result.results?.some(r => pIds.includes(r.printer_id) && r.success);
+                    const allDefaultSuccess = pIds.length === 0 && result.success;
+                    updatedStatus[idx] = (hasPrinterResult || allDefaultSuccess || result.success) ? 'success' : 'error';
+                  } else {
+                    updatedStatus[idx] = 'success'; // العناصر القديمة - موجودة بالفعل
+                  }
+                });
+                setKitchenPrintStatus(updatedStatus);
               } else {
-                toast.warning && toast.warning(t('لا توجد طابعات مطبخ مُعرّفة'));
+                const successStatus = {};
+                cart.forEach((_, idx) => { successStatus[idx] = 'success'; });
+                setKitchenPrintStatus(successStatus);
               }
             }
+          } else {
+            // لا توجد عناصر جديدة
+            const successStatus = {};
+            cart.forEach((_, idx) => { successStatus[idx] = 'success'; });
+            setKitchenPrintStatus(successStatus);
           }
         } catch (printErr) {
           console.error('Kitchen print error for edit:', printErr);
-          toast.error(t('خطأ في طباعة المطبخ: ') + printErr.message);
+          const errorStatus = {};
+          cart.forEach((_, idx) => { errorStatus[idx] = 'error'; });
+          setKitchenPrintStatus(errorStatus);
         }
         
         toast.success(t('تم تحديث الطلب وإرساله للمطبخ'));
@@ -1417,6 +1469,9 @@ export default function POS() {
           const agentOk = await checkAgentStatus();
           if (!agentOk) {
             toast.error(t('وسيط الطباعة غير متصل - لم تتم طباعة الطلب للمطبخ'));
+            const errorStatus = {};
+            cart.forEach((_, idx) => { errorStatus[idx] = 'error'; });
+            setKitchenPrintStatus(errorStatus);
           } else {
             const kitchenPrinters = availablePrinters.filter(p => 
               p.printer_type === 'kitchen' &&
@@ -1436,18 +1491,35 @@ export default function POS() {
               }));
               console.log('[Kitchen Print] Routing', itemsForPrint.length, 'items to', kitchenPrinters.length, 'kitchen printers');
               const result = await printOrderToAllPrinters(orderForPrint, itemsForPrint, products, kitchenPrinters, restaurantName);
-              if (result.success) {
-                toast.success(t('تم إرسال الطلب للمطبخ'));
-              } else {
-                toast.error(t('فشل طباعة طلبات المطبخ'));
+              
+              // تحديث حالة كل عنصر حسب نتيجة الطباعة
+              const updatedStatus = {};
+              cart.forEach((item, idx) => {
+                const product = products.find(p => p.id === item.product_id);
+                const pIds = product?.printer_ids?.filter(id => id) || [];
+                const hasPrinterResult = result.results?.some(r => pIds.includes(r.printer_id) && r.success);
+                const allDefaultSuccess = pIds.length === 0 && result.success;
+                updatedStatus[idx] = (hasPrinterResult || allDefaultSuccess || result.success) ? 'success' : 'error';
+              });
+              setKitchenPrintStatus(updatedStatus);
+              
+              if (!result.success) {
                 result.results?.filter(r => !r.success).forEach(f => {
                   toast.error(`${f.printer_name}: ${f.message}`);
                 });
               }
+            } else {
+              // لا توجد طابعات مطبخ
+              const successStatus = {};
+              cart.forEach((_, idx) => { successStatus[idx] = 'success'; });
+              setKitchenPrintStatus(successStatus);
             }
           }
         } catch (printErr) {
           console.error('Kitchen print error:', printErr);
+          const errorStatus = {};
+          cart.forEach((_, idx) => { errorStatus[idx] = 'error'; });
+          setKitchenPrintStatus(errorStatus);
           toast.error(t('خطأ في طباعة المطبخ: ') + printErr.message);
         }
         
@@ -1460,9 +1532,17 @@ export default function POS() {
         }
       }
       
-      setKitchenDialogOpen(false);
-      clearCart();
-      await fetchPendingOrders();
+      setSubmitting(false);
+      
+      // إبقاء القائمة مفتوحة 30 ثانية لعرض حالة الطباعة ثم إغلاق
+      setTimeout(() => {
+        setKitchenDialogOpen(false);
+        setKitchenPrintStatus({});
+        clearCart();
+      }, 30000);
+      
+      // تحديث في الخلفية
+      fetchPendingOrders();
       
       // تحديث الطاولات إذا كان طلب داخلي
       if (orderType === 'dine_in') {
@@ -3132,7 +3212,7 @@ export default function POS() {
             <Button
               variant="outline"
               className="h-12 border-orange-500 text-orange-500 hover:bg-orange-500/10"
-              onClick={() => setKitchenDialogOpen(true)}
+              onClick={() => { setKitchenPrintStatus({}); setKitchenDialogOpen(true); }}
               disabled={cart.length === 0}
               data-testid="save-to-kitchen"
             >
@@ -3271,70 +3351,157 @@ export default function POS() {
         </DialogContent>
       </Dialog>
 
-      {/* Kitchen Dialog - حفظ وإرسال للمطبخ */}
-      <Dialog open={kitchenDialogOpen} onOpenChange={setKitchenDialogOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
+      {/* Kitchen Dialog - حفظ وإرسال للمطبخ مع عرض المنتجات وطابعاتها */}
+      <Dialog open={kitchenDialogOpen} onOpenChange={(open) => {
+        if (!open && !submitting) {
+          setKitchenDialogOpen(false);
+          setKitchenPrintStatus({});
+        }
+      }}>
+        <DialogContent className="max-w-md max-h-[85vh] flex flex-col">
+          <DialogHeader className="shrink-0">
             <DialogTitle className="flex items-center gap-2 text-foreground">
               <ChefHat className="h-5 w-5 text-orange-500" />
               {editingOrder ? t('تحديث الطلب وإرسال للمطبخ') : t('حفظ وإرسال للمطبخ')}
             </DialogTitle>
           </DialogHeader>
-          <div className="space-y-4">
-            <div className="bg-muted/50 p-4 rounded-lg">
-              <div className="flex justify-between mb-2">
-                <span className="text-muted-foreground">{t('عدد العناصر')}:</span>
-                <span className="font-bold text-foreground">{cart.reduce((sum, item) => sum + item.quantity, 0)}</span>
+          <div className="space-y-3 overflow-y-auto flex-1 min-h-0">
+            {/* قائمة المنتجات مع طابعاتها */}
+            <div className="space-y-2">
+              {getCartItemPrinterMap().map((item, idx) => {
+                const status = kitchenPrintStatus[idx];
+                return (
+                  <div key={idx} data-testid={`kitchen-item-${idx}`}
+                    className={`p-3 rounded-lg border transition-all duration-500 ${
+                      status === 'success' ? 'border-green-500 bg-green-500/10' :
+                      status === 'error' ? 'border-red-500 bg-red-500/10' :
+                      status === 'sending' ? 'border-orange-400 bg-orange-500/10' :
+                      'border-border bg-muted/30'
+                    }`}>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2 flex-1">
+                        {status === 'success' && <Check className="h-4 w-4 text-green-500 shrink-0" />}
+                        {status === 'error' && <X className="h-4 w-4 text-red-500 shrink-0" />}
+                        {status === 'sending' && (
+                          <svg className="animate-spin h-4 w-4 text-orange-500 shrink-0" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                          </svg>
+                        )}
+                        <span className="font-bold text-foreground text-sm">{item.product_name || item.name}</span>
+                      </div>
+                      <span className="text-xs font-bold text-muted-foreground" dir="ltr">x{item.quantity}</span>
+                    </div>
+                    {/* اسم الطابعة المربوطة */}
+                    <div className="mt-1.5 flex flex-wrap gap-1">
+                      {item.printerNames.length > 0 ? (
+                        item.printerNames.map((p, pi) => (
+                          <span key={pi} data-testid={`printer-badge-${idx}-${pi}`}
+                            className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium transition-all duration-500 ${
+                              status === 'success' ? 'bg-green-500 text-white' :
+                              status === 'error' ? 'bg-red-500 text-white' :
+                              status === 'sending' ? 'bg-orange-400 text-white animate-pulse' :
+                              'bg-muted text-muted-foreground'
+                            }`}>
+                            <Printer className="h-3 w-3" />
+                            {p.name}
+                          </span>
+                        ))
+                      ) : (
+                        <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium ${
+                          status === 'success' ? 'bg-green-500 text-white' :
+                          status === 'error' ? 'bg-red-500 text-white' :
+                          'bg-muted text-muted-foreground'
+                        }`}>
+                          <Printer className="h-3 w-3" />
+                          {t('لا توجد طابعة')}
+                        </span>
+                      )}
+                    </div>
+                    {item.notes && (
+                      <p className="text-xs text-muted-foreground mt-1">{item.notes}</p>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* الإجمالي */}
+            <div className="bg-muted/50 p-3 rounded-lg flex justify-between items-center">
+              <span className="text-muted-foreground text-sm">{t('الإجمالي')}:</span>
+              <span className="font-bold text-primary">{formatPrice(totalBeforeCommission)}</span>
+            </div>
+
+            {/* ملاحظات المطبخ */}
+            {!Object.values(kitchenPrintStatus).some(s => s === 'success' || s === 'error') && (
+              <div>
+                <label className="text-sm text-muted-foreground mb-1 block">{t('ملاحظات للمطبخ')}:</label>
+                <Input
+                  value={orderNotes}
+                  onChange={(e) => setOrderNotes(e.target.value)}
+                  placeholder={t('ملاحظات خاصة...')}
+                  className="h-10"
+                  data-testid="kitchen-notes-input"
+                />
               </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">{t('الإجمالي')}:</span>
-                <span className="font-bold text-primary">{formatPrice(totalBeforeCommission)}</span>
+            )}
+
+            {/* رسالة الحالة */}
+            {Object.values(kitchenPrintStatus).every(s => s === 'success') && Object.keys(kitchenPrintStatus).length > 0 && (
+              <div className="bg-green-500/10 p-3 rounded-lg text-sm text-green-600 text-center font-bold">
+                {t('تم إرسال جميع العناصر للمطبخ بنجاح')}
               </div>
-              {commissionAmount > 0 && (
-                <div className="flex justify-between text-amber-500">
-                  <span>{t('عمولة التوصيل')}:</span>
-                  <span className="font-bold">-{formatPrice(commissionAmount)}</span>
-                </div>
-              )}
-            </div>
+            )}
 
-            <div>
-              <label className="text-sm text-muted-foreground mb-2 block">{t('ملاحظات للمطبخ')}:</label>
-              <Input
-                value={orderNotes}
-                onChange={(e) => setOrderNotes(e.target.value)}
-                placeholder={t('ملاحظات خاصة...')}
-                className="h-12"
-              />
-            </div>
+            {!Object.keys(kitchenPrintStatus).length && (
+              <div className="bg-orange-500/10 p-3 rounded-lg text-sm text-orange-600">
+                <p>{t('سيتم حفظ الطلب وإرساله للمطبخ للتحضير')}</p>
+                <p>{t('الدفع سيتم لاحقاً عند التسليم')}</p>
+              </div>
+            )}
+          </div>
 
-            <div className="bg-orange-500/10 p-3 rounded-lg text-sm text-orange-600">
-              <p>{t('سيتم حفظ الطلب وإرساله للمطبخ للتحضير')}</p>
-              <p>{t('الدفع سيتم لاحقاً عند التسليم')}</p>
-            </div>
-
-            <div className="flex gap-2 pt-2">
-              <Button variant="outline" onClick={() => setKitchenDialogOpen(false)} className="flex-1">
-                {t('إلغاء')}
-              </Button>
-              <Button
-                onClick={handleSaveAndSendToKitchen}
-                disabled={submitting}
-                className="flex-1 bg-orange-500 hover:bg-orange-600 text-white"
+          {/* الأزرار */}
+          <div className="flex gap-2 pt-2 shrink-0 border-t border-border">
+            {Object.values(kitchenPrintStatus).some(s => s === 'success' || s === 'error') ? (
+              <Button 
+                onClick={() => {
+                  setKitchenDialogOpen(false);
+                  setKitchenPrintStatus({});
+                  clearCart();
+                }}
+                className="flex-1 bg-green-600 hover:bg-green-700 text-white"
+                data-testid="kitchen-close-btn"
               >
-                {submitting ? (
-                  <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                  </svg>
-                ) : (
-                  <>
-                    <Send className="h-4 w-4 ml-2" />
-                    {t('حفظ وإرسال')}
-                  </>
-                )}
+                <Check className="h-4 w-4 ml-2" />
+                {t('تم')}
               </Button>
-            </div>
+            ) : (
+              <>
+                <Button variant="outline" onClick={() => setKitchenDialogOpen(false)} className="flex-1"
+                  disabled={submitting} data-testid="kitchen-cancel-btn">
+                  {t('إلغاء')}
+                </Button>
+                <Button
+                  onClick={handleSaveAndSendToKitchen}
+                  disabled={submitting}
+                  className="flex-1 bg-orange-500 hover:bg-orange-600 text-white"
+                  data-testid="kitchen-send-btn"
+                >
+                  {submitting ? (
+                    <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                    </svg>
+                  ) : (
+                    <>
+                      <Send className="h-4 w-4 ml-2" />
+                      {t('حفظ وإرسال')}
+                    </>
+                  )}
+                </Button>
+              </>
+            )}
           </div>
         </DialogContent>
       </Dialog>

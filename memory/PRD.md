@@ -1,6 +1,6 @@
 # Maestro POS - PRD
 
-## Print System v4.0 - Browser Canvas Rendering (Fixed)
+## Print System v4.0 - Browser Canvas Rendering
 
 ### Architecture:
 ```
@@ -13,23 +13,17 @@ Browser Canvas → ESC/POS Bitmap → Print Agent (localhost:9999) → Printer
 - `AgentUpdateChecker.js` - v4: Flexible semver-like version comparison
 - `print_server.ps1` - v2.2: Accepts raw_data base64, improved logging
 
+### Kitchen Dialog (NEW):
+- Shows each cart item individually with quantity
+- Under each item: printer badge showing linked kitchen printer name
+- On "Save & Send": printer badges animate (orange → green/red)
+- Dialog stays 30 seconds after completion to show print status
+- "Done" button appears after print to close immediately
+- Items with no assigned printer show "لا توجد طابعة" badge
+
 ### USB Test Print:
-- Previously: Small English text via `/print-test` (plain ESC/POS text commands)
-- Now: Full Arabic bitmap test page via Canvas → `/print-receipt` (same as kitchen test)
-- Shows: Printer name, USB name, branch, date/time, success message in Arabic
+- Uses Canvas bitmap (large Arabic page) via `/print-receipt` instead of plain text `/print-test`
 - Uses `renderTestBitmap()` from `receiptBitmap.js`
-
-### Agent Auto-Update System:
-- Frontend: Checks agent version using semver >= comparison (major.minor)
-- Handles version formats: "2.2.0", "2.2", "v2.2.0" etc.
-- Banner hidden when agent unreachable (correct behavior)
-
-### Print Flow:
-1. POS calls `sendReceiptPrint(printer, orderData)`
-2. `renderReceiptBitmap()` renders on Canvas with RTL Arabic
-3. Canvas → 1-bit bitmap → ESC/POS GS v 0 → base64
-4. Sends `{raw_data, usb_printer_name/ip/port}` to agent
-5. Agent sends raw bytes to printer
 
 ### Receipt Layout (matches POS preview):
 1. Restaurant name, Phone, Address, Branch, Tax number
@@ -38,13 +32,12 @@ Browser Canvas → ESC/POS Bitmap → Print Agent (localhost:9999) → Printer
 4. Items table (Name | Qty | Price) with extras and notes
 5. Subtotal, Discount, Total, Payment method
 6. Custom header/footer, Thank you message
-7. System name
 
 ### Kitchen Routing:
 - Products have `printer_ids[]` linking to kitchen printers
 - `routeOrderToPrinters()` maps items to printers
+- `getCartItemPrinterMap()` resolves printer names for display
 - Each printer gets its own receipt with only assigned items
-- `buildPrintOrderData` passes all invoice settings
 
 ## Credentials
 - Admin: hanialdujaili@gmail.com / Hani@2024
@@ -52,20 +45,17 @@ Browser Canvas → ESC/POS Bitmap → Print Agent (localhost:9999) → Printer
 - Test Cashier: cashier@test.com / Test@1234
 
 ## Completed
-- [x] Browser Canvas receipt renderer v1
+- [x] Browser Canvas receipt renderer v2 (matches POS preview exactly) - Apr 2026
 - [x] ESC/POS bitmap conversion in JavaScript
-- [x] Print agent auto-update banner
-- [x] Complete printService.js rewrite (v3.0)
-- [x] Kitchen printer routing
-- [x] Print agent v2.2 with logging
-- [x] Receipt Canvas rewrite to match POS preview exactly (v2) - Apr 2026
-- [x] buildPrintOrderData includes all invoice settings - Apr 2026
-- [x] AgentUpdateChecker flexible version comparison (semver) - Apr 2026
-- [x] printOrderToAllPrinters passes invoice settings to kitchen printers - Apr 2026
-- [x] USB test print now uses full Arabic bitmap (same as kitchen) - Apr 2026
+- [x] Print agent auto-update banner (semver comparison)
+- [x] Complete printService.js rewrite (v3.1)
+- [x] Kitchen printer routing with real-time status feedback
+- [x] USB test print uses full Arabic bitmap - Apr 2026
+- [x] Kitchen Dialog redesign: shows items + printers + status - Apr 2026
+- [x] buildPrintOrderData includes all invoice settings
 
 ## Upcoming Tasks
 - P0: Multi-Restaurant (Tenant) Switcher
 - P1: ZKTeco Fingerprint Integration
 - P2: Refactor server.py (18K+ lines)
-- P2: Refactor SuperAdmin.js & Settings.js & POS.js
+- P2: Refactor SuperAdmin.js, Settings.js, POS.js
