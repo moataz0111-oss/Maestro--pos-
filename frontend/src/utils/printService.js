@@ -85,7 +85,7 @@ export const sendTestPrint = async (printer) => {
       payload.ip = printer.ip_address;
       payload.port = printer.port || 9100;
     }
-    const res = await fetch(`${PRINT_AGENT_URL}/test-print`, {
+    const res = await fetch(`${PRINT_AGENT_URL}/print-test`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)

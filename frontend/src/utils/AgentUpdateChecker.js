@@ -1,92 +1,60 @@
 /**
- * Maestro POS - Agent Update Checker
+ * Maestro POS - Agent Update Checker v2
  * يفحص إصدار وسيط الطباعة ويظهر زر تحديث عند توفر نسخة جديدة
+ * الإصدار المطلوب مخزّن في الفرونتند مباشرة - لا يعتمد على endpoint
  */
 import { useState, useEffect, useCallback } from 'react';
 import { Button } from '../components/ui/button';
 import { API_URL } from './api';
-import { Download, RefreshCw, CheckCircle2 } from 'lucide-react';
+import { Download, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 
 const PRINT_AGENT_URL = 'http://localhost:9999';
-const CHECK_INTERVAL = 60000; // فحص كل 60 ثانية
+const REQUIRED_AGENT_VERSION = '2.2.0';
 
-export function useAgentUpdateChecker() {
-  const [agentVersion, setAgentVersion] = useState(null);
-  const [serverVersion, setServerVersion] = useState(null);
+export function AgentUpdateBanner({ t = (s) => s }) {
   const [needsUpdate, setNeedsUpdate] = useState(false);
+  const [agentVersion, setAgentVersion] = useState(null);
   const [isUpdating, setIsUpdating] = useState(false);
-  const [agentOnline, setAgentOnline] = useState(false);
+  const [checked, setChecked] = useState(false);
 
-  const checkVersions = useCallback(async () => {
+  const checkVersion = useCallback(async () => {
     try {
-      // فحص إصدار الوسيط المحلي
-      let localVer = null;
-      let isOnline = false;
-      try {
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 3000);
-        const agentRes = await fetch(`${PRINT_AGENT_URL}/status`, { signal: controller.signal });
-        clearTimeout(timeout);
-        const agentData = await agentRes.json();
-        localVer = agentData.version || null;
-        isOnline = agentData.status === 'running';
-        setAgentVersion(localVer);
-        setAgentOnline(isOnline);
-      } catch {
-        setAgentOnline(false);
-        setAgentVersion(null);
-        return; // الوسيط مش شغال - لا نعرض شيء
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 3000);
+      const res = await fetch(`${PRINT_AGENT_URL}/status`, { signal: controller.signal });
+      clearTimeout(timeout);
+      const data = await res.json();
+      
+      if (data.status === 'running') {
+        const ver = data.version || null;
+        setAgentVersion(ver);
+        // إذا لا يوجد إصدار أو الإصدار مختلف = يحتاج تحديث
+        setNeedsUpdate(!ver || ver !== REQUIRED_AGENT_VERSION);
       }
-
-      // فحص آخر إصدار على السيرفر
-      try {
-        const token = localStorage.getItem('token');
-        const serverRes = await fetch(`${API_URL}/print-agent-version`, {
-          headers: token ? { 'Authorization': `Bearer ${token}` } : {}
-        });
-        const serverData = await serverRes.json();
-        const srvVer = serverData.version || null;
-        setServerVersion(srvVer);
-
-        // الوسيط شغال لكن بدون إصدار = نسخة قديمة جداً = يحتاج تحديث
-        // أو الإصدار مختلف عن السيرفر = يحتاج تحديث
-        if (isOnline && srvVer) {
-          if (!localVer || localVer !== srvVer) {
-            setNeedsUpdate(true);
-          } else {
-            setNeedsUpdate(false);
-          }
-        }
-      } catch {
-        setServerVersion(null);
-      }
+      setChecked(true);
     } catch {
-      // تجاهل
+      // الوسيط غير متصل - لا نعرض شيء
+      setNeedsUpdate(false);
+      setChecked(true);
     }
   }, []);
 
   useEffect(() => {
-    checkVersions();
-    const interval = setInterval(checkVersions, CHECK_INTERVAL);
+    checkVersion();
+    const interval = setInterval(checkVersion, 60000);
     return () => clearInterval(interval);
-  }, [checkVersions]);
+  }, [checkVersion]);
 
-  const triggerUpdate = useCallback(async () => {
+  const handleUpdate = async () => {
     setIsUpdating(true);
     try {
-      // تحميل الملف الجديد عبر المتصفح
       const token = localStorage.getItem('token');
-      const downloadUrl = `${API_URL}/download-print-agent`;
-      
-      const res = await fetch(downloadUrl, {
+      const res = await fetch(`${API_URL}/download-print-agent`, {
         headers: token ? { 'Authorization': `Bearer ${token}` } : {}
       });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       
-      if (!res.ok) {
-        throw new Error(`HTTP ${res.status}`);
-      }
-
       const blob = await res.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -96,97 +64,40 @@ export function useAgentUpdateChecker() {
       a.click();
       a.remove();
       window.URL.revokeObjectURL(url);
-
-      toast.success('تم تحميل ملف التحديث - شغّله على جهاز الكاشير');
       
-      // إعادة فحص بعد 30 ثانية
-      setTimeout(() => {
-        checkVersions();
-        setIsUpdating(false);
-      }, 30000);
+      toast.success(t('تم تحميل ملف التحديث - شغّله على جهاز الكاشير'));
+      setTimeout(checkVersion, 30000);
     } catch (err) {
-      console.error('[AgentUpdate] Download failed:', err);
-      toast.error('فشل تحميل التحديث: ' + err.message);
-      setIsUpdating(false);
+      toast.error(t('فشل تحميل التحديث'));
     }
-  }, [checkVersions]);
-
-  return {
-    agentVersion,
-    serverVersion,
-    needsUpdate,
-    isUpdating,
-    agentOnline,
-    triggerUpdate,
-    checkVersions
+    setIsUpdating(false);
   };
-}
 
-/**
- * مكوّن زر التحديث - يظهر فقط عند توفر تحديث جديد
- */
-export function AgentUpdateBanner({ t = (s) => s }) {
-  const { needsUpdate, isUpdating, agentOnline, agentVersion, serverVersion, triggerUpdate } = useAgentUpdateChecker();
-
-  // لا يظهر شيء إذا لا يوجد تحديث
-  if (!needsUpdate) return null;
+  if (!checked || !needsUpdate) return null;
 
   return (
     <div 
       data-testid="agent-update-banner"
-      className="flex items-center gap-3 bg-amber-50 border border-amber-300 rounded-lg px-4 py-2 mb-2"
+      className="flex items-center gap-3 bg-amber-50 border-2 border-amber-400 rounded-lg px-4 py-3 mb-3"
       dir="rtl"
     >
       <Download className="w-5 h-5 text-amber-600 flex-shrink-0" />
-      <span className="text-sm text-amber-800 flex-1">
-        تحديث وسيط الطباعة متاح ({agentVersion || 'قديم'} → {serverVersion})
+      <span className="text-sm font-medium text-amber-800 flex-1">
+        {t('تحديث وسيط الطباعة متاح')} ({agentVersion || t('قديم')} → {REQUIRED_AGENT_VERSION})
       </span>
       <Button
         data-testid="update-agent-btn"
         size="sm"
-        variant="outline"
-        className="border-amber-500 text-amber-700 hover:bg-amber-100"
-        onClick={triggerUpdate}
+        className="bg-amber-500 hover:bg-amber-600 text-white"
+        onClick={handleUpdate}
         disabled={isUpdating}
       >
         {isUpdating ? (
-          <><RefreshCw className="w-4 h-4 ml-2 animate-spin" /> جاري التحديث...</>
+          <><RefreshCw className="w-4 h-4 ml-2 animate-spin" />{t('جاري التحميل...')}</>
         ) : (
-          <><Download className="w-4 h-4 ml-2" /> تحديث الوسيط</>
+          <><Download className="w-4 h-4 ml-2" />{t('تحديث الوسيط')}</>
         )}
       </Button>
     </div>
-  );
-}
-
-/**
- * مكوّن حالة الوسيط المختصر - للعرض في شريط الأدوات
- */
-export function AgentStatusBadge() {
-  const { agentOnline, needsUpdate, agentVersion } = useAgentUpdateChecker();
-
-  if (!agentOnline) {
-    return (
-      <span className="inline-flex items-center gap-1 text-xs text-red-500" data-testid="agent-status-offline">
-        <span className="w-2 h-2 rounded-full bg-red-500" />
-        الوسيط غير متصل
-      </span>
-    );
-  }
-
-  if (needsUpdate) {
-    return (
-      <span className="inline-flex items-center gap-1 text-xs text-amber-600" data-testid="agent-status-update">
-        <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
-        تحديث متاح
-      </span>
-    );
-  }
-
-  return (
-    <span className="inline-flex items-center gap-1 text-xs text-green-600" data-testid="agent-status-online">
-      <CheckCircle2 className="w-3 h-3" />
-      الوسيط v{agentVersion}
-    </span>
   );
 }
