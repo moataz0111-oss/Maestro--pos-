@@ -47,6 +47,10 @@ Multi-tenant POS system (React + FastAPI + MongoDB) with role-based access, POS 
 27. **Silent Invoice Printing** - Print button in invoice dialog uses Print Agent for one-step silent printing (falls back to browser if agent offline)
 28. **Receipt Footer: Restaurant Logo** - Replaced Maestro EGP system logo with restaurant's own logo in receipt footer
 29. **Branch Name Above Order Type** - Moved branch name and phone to appear above order type in receipt template
+30. **Silent Invoice Print (No Second Page)** - Replaced iframe.contentWindow.print() with same-page window.print() using @media print CSS overlay. Agent route prints only to cashier printer.
+31. **Invoice = Cashier Only** - Removed kitchen printing from handlePrintBill. Invoice button now ONLY prints to cashier printer.
+32. **Kitchen Print via ChefHat Button** - Added product-printer routing in kitchen dialog handler. Each product prints to its assigned kitchen printer.
+33. **Kitchen Receipt Language** - Build-Receipt in print_server.ps1 now supports Arabic/English based on system language setting.
 
 ## Pending Issues
 - None

@@ -210,6 +210,7 @@ export const printOrderToAllPrinters = async (order, orderItems, products, print
       order_type: order.order_type || order.orderType,
       customer_name: order.customer_name || '',
       table_number: order.table_number || order.table_id || '',
+      language: order.language || localStorage.getItem('language') || 'ar',
       items: items,
       total: items.reduce((sum, item) => {
         const extras = (item.extras || item.selectedExtras || []).reduce((s, e) => s + (e.price || 0), 0);

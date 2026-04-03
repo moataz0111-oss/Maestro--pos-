@@ -1333,6 +1333,42 @@ export default function POS() {
         const res = await axios.post(`${API}/orders`, orderData);
         playSuccess();
         
+        // === إرسال الطلبات لطابعات المطبخ حسب ربط المنتجات ===
+        try {
+          const kitchenPrinters = availablePrinters.filter(p => 
+            p.printer_type === 'kitchen' &&
+            ((p.connection_type === 'usb' && p.usb_printer_name) || (p.connection_type !== 'usb' && p.ip_address))
+          );
+          if (kitchenPrinters.length > 0) {
+            const agentOk = await checkAgentStatus();
+            if (agentOk) {
+              const restaurantName = restaurantSettings?.name_ar || restaurantSettings?.name || '';
+              const lang = localStorage.getItem('language') || 'ar';
+              const orderForPrint = {
+                order_number: res.data.order_number,
+                order_type: orderType,
+                customer_name: customerName || '',
+                table_number: orderType === 'dine_in' ? (tables.find(t => t.id === selectedTable)?.number || selectedTable) : '',
+                buzzer_number: buzzerNumber || '',
+                discount: discount || 0,
+                language: lang
+              };
+              const itemsForPrint = cart.map(item => ({
+                product_id: item.product_id || item.id,
+                product_name: item.product_name || item.name,
+                name: item.product_name || item.name,
+                price: item.price,
+                quantity: item.quantity,
+                notes: item.notes || '',
+                extras: item.selectedExtras || []
+              }));
+              await routeOrderToPrinters(orderForPrint, itemsForPrint, products, kitchenPrinters, restaurantName);
+            }
+          }
+        } catch (printErr) {
+          console.log('Kitchen print error (non-blocking):', printErr);
+        }
+        
         // إذا كان طلب توصيل مع سائق، نعين السائق مباشرة
         if (orderType === 'delivery' && selectedDriver) {
           await axios.put(`${API}/drivers/${selectedDriver}/assign?order_id=${res.data.id}`);
@@ -1716,48 +1752,6 @@ export default function POS() {
       
       playSuccess();
       
-      // === طباعة تلقائية للطابعات المربوطة (مطبخ + كاشير) ===
-      try {
-        const allConfiguredPrinters = availablePrinters.filter(p => 
-          (p.connection_type === 'usb' && p.usb_printer_name) ||
-          (p.connection_type !== 'usb' && p.ip_address)
-        );
-        if (allConfiguredPrinters.length > 0) {
-          const agentOk = await checkAgentStatus();
-          setPrintAgentOnline(agentOk);
-          if (agentOk) {
-            const restaurantName = restaurantSettings?.name_ar || restaurantSettings?.name || '';
-            const orderForPrint = {
-              order_number: orderNumber,
-              order_type: orderType,
-              customer_name: customerName || '',
-              table_number: orderType === 'dine_in' ? (tables.find(t => t.id === selectedTable)?.number || selectedTable) : '',
-              buzzer_number: buzzerNumber || '',
-              discount: discount || 0
-            };
-            const itemsForPrint = cart.map(item => ({
-              product_id: item.product_id || item.id,
-              product_name: item.product_name || item.name,
-              name: item.product_name || item.name,
-              price: item.price,
-              quantity: item.quantity,
-              notes: item.notes || '',
-              extras: item.selectedExtras || []
-            }));
-            const result = await printOrderToAllPrinters(
-              orderForPrint, itemsForPrint, products, allConfiguredPrinters, restaurantName
-            );
-            if (result.success) {
-              console.log('Print success:', result);
-            } else {
-              console.log('Print partial:', result);
-            }
-          }
-        }
-      } catch (printErr) {
-        console.log('Print error (non-blocking):', printErr);
-      }
-      
       // رسالة مناسبة حسب نوع الطلب
       if (orderType === 'dine_in') {
         toast.success(`✅ ${t('تم إتمام الطلب')} #${orderNumber} ${t('وإغلاق الطاولة')}`);
@@ -1894,59 +1888,8 @@ export default function POS() {
       playSuccess();
       toast.success(`${t('تم حفظ الطلب')} #${savedOrder.order_number}`);
       
-      // طباعة مباشرة لجميع الطابعات (USB + Ethernet) عبر وسيط الطباعة
-      const allConfiguredPrinters = availablePrinters.filter(p => 
-        (p.connection_type === 'usb' && p.usb_printer_name) ||
-        (p.connection_type !== 'usb' && p.ip_address)
-      );
-      
-      if (allConfiguredPrinters.length > 0) {
-        try {
-          const agentOk = await checkAgentStatus();
-          setPrintAgentOnline(agentOk);
-          if (agentOk) {
-            const restaurantName = restaurantSettings?.name_ar || restaurantSettings?.name || '';
-            const orderForPrint = {
-              order_number: savedOrder.order_number,
-              order_type: orderType,
-              customer_name: customerName || '',
-              table_number: orderType === 'dine_in' ? selectedTable : '',
-              discount: discount || 0
-            };
-            const itemsForPrint = cart.map(item => ({
-              product_id: item.product_id || item.id,
-              product_name: item.product_name || item.name,
-              name: item.product_name || item.name,
-              price: item.price,
-              quantity: item.quantity,
-              notes: item.notes || '',
-              extras: item.selectedExtras || []
-            }));
-            
-            const result = await printOrderToAllPrinters(
-              orderForPrint, itemsForPrint, products, allConfiguredPrinters, restaurantName
-            );
-            
-            if (result.success) {
-              toast.success(t('تم الطباعة على جميع الطابعات'));
-            } else if (result.results && result.results.length > 0) {
-              const failed = result.results.filter(r => !r.success);
-              const succeeded = result.results.filter(r => r.success);
-              if (succeeded.length > 0) toast.success(`${t('تم الطباعة على')} ${succeeded.length} ${t('طابعات')}`);
-              failed.forEach(f => toast.error(`${t('فشل الطباعة على')} ${f.printer_name}: ${f.message}`));
-            }
-          } else {
-            // الوسيط غير متصل - فتح نافذة المتصفح كحل بديل
-            setPrintDialogOpen(true);
-          }
-        } catch (printError) {
-          console.log('Print error:', printError);
-          setPrintDialogOpen(true);
-        }
-      } else {
-        // لا توجد طابعات مُعدّة - فتح نافذة المتصفح
-        setPrintDialogOpen(true);
-      }
+      // فتح معاينة الفاتورة فقط (بدون إرسال للمطبخ)
+      setPrintDialogOpen(true);
       
     } catch (error) {
       console.error('Failed to save order:', error);
@@ -3529,7 +3472,7 @@ export default function POS() {
               className="flex-1 bg-blue-500 hover:bg-blue-600 text-white"
               data-testid="print-receipt-btn"
               onClick={async () => {
-                // محاولة الطباعة الصامتة عبر وسيط الطباعة أولاً
+                // === محاولة 1: طباعة صامتة عبر وسيط الطباعة (كاشير فقط) ===
                 try {
                   const agentOk = await checkAgentStatus();
                   if (agentOk) {
@@ -3567,10 +3510,10 @@ export default function POS() {
                     }
                   }
                 } catch (e) {
-                  console.log('Agent print failed, falling back to browser:', e);
+                  console.log('Agent print failed, falling back:', e);
                 }
 
-                // Fallback: طباعة عبر المتصفح
+                // === محاولة 2: طباعة عبر المتصفح (نفس الصفحة - بدون فتح صفحة ثانية) ===
                 const printContent = document.getElementById('receipt-to-print');
                 if (printContent) {
                   const cloned = printContent.cloneNode(true);
@@ -3579,118 +3522,55 @@ export default function POS() {
                     imgs.forEach(img => {
                       const alt = img.getAttribute('alt') || '';
                       const isSystemLogo = img.getAttribute('data-system-logo') === 'true';
-                      // استبدال شعار المطعم فقط - عدم لمس شعار النظام
                       if (!isSystemLogo && (alt.includes('شعار المطعم') || alt.includes('restaurant'))) {
                         img.src = logoBase64;
                       }
                     });
                   }
-                  const htmlContent = cloned.innerHTML;
                   
-                  // استخدام iframe مخفي للطباعة المباشرة بدون فتح نافذة جديدة
-                  const oldIframes = document.querySelectorAll('.thermal-print-frame');
-                  oldIframes.forEach(f => f.remove());
+                  // إنشاء عنصر طباعة مؤقت في نفس الصفحة
+                  const printOverlay = document.createElement('div');
+                  printOverlay.id = 'thermal-print-overlay';
+                  printOverlay.innerHTML = cloned.innerHTML;
+                  document.body.appendChild(printOverlay);
                   
-                  const iframe = document.createElement('iframe');
-                  iframe.className = 'thermal-print-frame';
-                  iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:none;visibility:hidden;';
-                  document.body.appendChild(iframe);
-                  
-                  const doc = iframe.contentDocument || iframe.contentWindow.document;
-                  doc.open();
-                  doc.write(`<!DOCTYPE html>
-<html dir="${isRTL ? 'rtl' : 'ltr'}">
-<head>
-<meta charset="UTF-8">
-<title>${t('فاتورة')}</title>
-<style>
-@page { 
-  size: 80mm auto !important;
-  margin: 0mm !important;
-  padding: 0mm !important;
-}
-* { margin: 0; padding: 0; box-sizing: border-box; }
-html { width: 80mm; height: auto; overflow: hidden; }
-body { 
-  font-family: 'Arial', 'Tahoma', 'Helvetica', sans-serif;
-  font-size: 16px;
-  font-weight: 500;
-  width: 76mm;
-  max-width: 76mm;
-  margin: 0 auto;
-  padding: 2mm;
-  background: #fff;
-  color: #000;
-  line-height: 1.5;
-  -webkit-print-color-adjust: exact;
-  print-color-adjust: exact;
-}
-.text-center { text-align: center; }
-.text-left { text-align: left; }
-.text-right { text-align: right; }
-.font-bold { font-weight: 700; }
-.text-lg { font-size: 20px; font-weight: 700; }
-.text-base { font-size: 16px; }
-.text-sm { font-size: 14px; }
-.text-xs { font-size: 13px; }
-.text-\\[10px\\] { font-size: 12px; }
-.mb-1 { margin-bottom: 2px; }
-.mb-2 { margin-bottom: 4px; }
-.mb-3 { margin-bottom: 6px; }
-.mt-1 { margin-top: 2px; }
-.mt-2 { margin-top: 4px; }
-.mt-3 { margin-top: 6px; }
-.mt-4 { margin-top: 8px; }
-.pt-2 { padding-top: 4px; }
-.pt-3 { padding-top: 6px; }
-.pb-3 { padding-bottom: 6px; }
-.py-1 { padding: 2px 0; }
-.py-2 { padding: 4px 0; }
-.p-1 { padding: 3px; }
-.border-t { border-top: 1px dashed #000; }
-.border-b { border-bottom: 1px dashed #000; }
-.border-t-2 { border-top: 2px solid #000; }
-.border-dashed { border-style: dashed; }
-.text-gray-500, .text-gray-600, .text-gray-700, .text-gray-300 { color: #000; }
-.text-red-600 { color: #000; font-weight: 700; }
-.bg-red-50, .bg-gray-100 { background: transparent; }
-.rounded, .rounded-lg { border-radius: 0; }
-.rounded-full { border-radius: 50%; }
-table { width: 100%; border-collapse: collapse; }
-th, td { padding: 3px 0; font-size: 14px; font-weight: 500; }
-th { font-weight: 700; font-size: 15px; }
-img.h-16 { width: 60px !important; height: 60px !important; display: block; margin: 0 auto 5px; border-radius: 50%; object-fit: cover; }
-img.h-10, img.w-10 { width: 40px !important; height: 40px !important; display: block; margin: 0 auto; }
-img { max-width: 70px; height: auto; }
-.flex { display: flex; }
-.flex-col { flex-direction: column; }
-.items-center { align-items: center; }
-.justify-between { justify-content: space-between; }
-.space-y-1 > * + * { margin-top: 3px; }
-p { margin: 2px 0; }
-svg { display: block; margin: 4px auto; max-width: 80px; }
-.tabular-nums { font-variant-numeric: tabular-nums; font-weight: 600; }
-.no-print { display: none !important; }
-.border-gray-300 { border-color: #000; }
-.border-gray-400 { border-color: #000; }
-</style>
-</head>
-<body>
-${htmlContent}
-</body>
-</html>`);
-                  doc.close();
-                  
-                  // طباعة مباشرة من الـ iframe
-                  setTimeout(() => {
-                    try {
-                      iframe.contentWindow.focus();
-                      iframe.contentWindow.print();
-                    } catch(e) {
-                      window.print();
+                  // إضافة أنماط طباعة مؤقتة
+                  const printStyle = document.createElement('style');
+                  printStyle.id = 'thermal-print-style';
+                  printStyle.textContent = `
+                    @media print {
+                      body > *:not(#thermal-print-overlay) { display: none !important; visibility: hidden !important; height: 0 !important; overflow: hidden !important; }
+                      #thermal-print-overlay { display: block !important; visibility: visible !important; position: absolute; top: 0; left: 0; width: 80mm; }
+                      @page { size: 80mm auto !important; margin: 0mm !important; }
+                      #thermal-print-overlay * { color: #000 !important; }
+                      #thermal-print-overlay .text-gray-500, #thermal-print-overlay .text-gray-600, #thermal-print-overlay .text-gray-700 { color: #000 !important; }
+                      #thermal-print-overlay .text-red-600 { color: #000 !important; font-weight: 700 !important; }
+                      #thermal-print-overlay .bg-red-50, #thermal-print-overlay .bg-gray-100 { background: transparent !important; }
+                      #thermal-print-overlay img.h-16 { width: 60px !important; height: 60px !important; }
+                      #thermal-print-overlay img.h-10 { width: 40px !important; height: 40px !important; }
+                      #thermal-print-overlay table { width: 100% !important; }
+                      #thermal-print-overlay th, #thermal-print-overlay td { font-size: 14px !important; padding: 3px 0 !important; }
+                      #thermal-print-overlay th { font-weight: 700 !important; font-size: 15px !important; }
+                      #thermal-print-overlay .font-bold { font-weight: 700 !important; }
+                      #thermal-print-overlay .text-lg { font-size: 20px !important; }
+                      #thermal-print-overlay .text-base { font-size: 16px !important; }
+                      #thermal-print-overlay .text-sm { font-size: 14px !important; }
+                      #thermal-print-overlay .text-xs { font-size: 13px !important; }
+                      #thermal-print-overlay .tabular-nums { font-variant-numeric: tabular-nums; font-weight: 600 !important; }
                     }
-                    setTimeout(() => iframe.remove(), 3000);
-                  }, 200);
+                    #thermal-print-overlay { display: none; }
+                  `;
+                  document.head.appendChild(printStyle);
+                  
+                  // طباعة مباشرة من نفس الصفحة
+                  setTimeout(() => {
+                    window.print();
+                    // تنظيف بعد الطباعة
+                    setTimeout(() => {
+                      document.getElementById('thermal-print-overlay')?.remove();
+                      document.getElementById('thermal-print-style')?.remove();
+                    }, 1000);
+                  }, 100);
                   
                   toast.success(t('جاري الطباعة...'));
                   setPrintDialogOpen(false);
