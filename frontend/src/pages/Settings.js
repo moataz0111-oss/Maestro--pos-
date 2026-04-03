@@ -5031,6 +5031,17 @@ export default function Settings() {
                                 </span>
                                 {!printer.show_prices && <span className="text-xs text-orange-400">{t('• بدون أسعار')}</span>}
                                 {printer.print_individual_items && <span className="text-xs text-purple-400">{t('• جميع الطلبات')}</span>}
+                                {/* عدد المنتجات المربوطة */}
+                                {(() => {
+                                  const linkedCount = products.filter(p => Array.isArray(p.printer_ids) && p.printer_ids.includes(printer.id)).length;
+                                  return linkedCount > 0 ? (
+                                    <span className="text-xs px-1.5 py-0.5 rounded-full bg-blue-500/10 text-blue-500 font-medium">
+                                      {linkedCount} {t('منتج مربوط')}
+                                    </span>
+                                  ) : (
+                                    <span className="text-xs text-muted-foreground/50">{t('• لا منتجات مربوطة')}</span>
+                                  );
+                                })()}
                               </div>
                             </div>
                           </div>

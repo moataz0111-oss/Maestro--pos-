@@ -415,8 +415,9 @@ function renderReceiptCanvas(order, config = {}) {
 
 /**
  * تحويل Canvas إلى ESC/POS bitmap bytes
- * إرسال الصورة كاملة في أمر GS v 0 واحد (بدون تقسيم لشرائح)
- * هذا يضمن عمل جميع أنواع الطابعات الحرارية بشكل صحيح
+ * يستخدم ESC * 33 (24-dot double-density) بدل GS v 0
+ * يرسل الصورة سطر بسطر (24 بكسل لكل شريحة) مع تقدم الورقة
+ * هذا الأسلوب يعمل على جميع الطابعات الحرارية بما فيها SAM4S
  */
 function canvasToEscPos(canvas) {
   const ctx = canvas.getContext('2d');
@@ -425,54 +426,96 @@ function canvasToEscPos(canvas) {
   const imgData = ctx.getImageData(0, 0, w, h);
   const pixels = imgData.data;
   
-  const bytesPerRow = Math.ceil(w / 8);
-  
-  // بناء مصفوفة البايتات
-  const headerBytes = [
-    0x1B, 0x40,                   // ESC @ - Initialize printer
-    0x1D, 0x76, 0x30, 0x00,      // GS v 0 - Print raster bit image
-    bytesPerRow & 0xFF, (bytesPerRow >> 8) & 0xFF,  // xL xH - عرض الصورة بالبايت
-    h & 0xFF, (h >> 8) & 0xFF    // yL yH - ارتفاع الصورة بالبكسل
-  ];
-  
-  // بيانات البكسل
-  const pixelData = new Uint8Array(bytesPerRow * h);
-  let pIdx = 0;
-  
-  for (let row = 0; row < h; row++) {
-    for (let colByte = 0; colByte < bytesPerRow; colByte++) {
-      let byteVal = 0;
-      for (let bit = 0; bit < 8; bit++) {
-        const px = colByte * 8 + bit;
-        if (px < w) {
-          const idx = (row * w + px) * 4;
-          const r = pixels[idx];
-          const g = pixels[idx + 1];
-          const b = pixels[idx + 2];
-          const gray = (r * 0.299 + g * 0.587 + b * 0.114);
-          if (gray < 128) {
-            byteVal |= (0x80 >> bit);
-          }
-        }
-      }
-      pixelData[pIdx++] = byteVal;
-    }
+  // حساب بت واحد لبكسل (أسود=1، أبيض=0)
+  function getPixel(x, y) {
+    if (x >= w || y >= h) return 0;
+    const idx = (y * w + x) * 4;
+    const r = pixels[idx];
+    const g = pixels[idx + 1];
+    const b = pixels[idx + 2];
+    return (r * 0.299 + g * 0.587 + b * 0.114) < 128 ? 1 : 0;
   }
   
-  // تغذية ورق + قطع جزئي
-  const footerBytes = [
-    0x0A, 0x0A, 0x0A, 0x0A,      // 4 line feeds
-    0x1D, 0x56, 0x42, 0x00       // GS V B 0 - Partial cut
-  ];
+  const STRIP_H = 24; // 24-dot mode
+  const nCols = w;     // عدد الأعمدة (384)
+  const nL = nCols & 0xFF;
+  const nH = (nCols >> 8) & 0xFF;
   
-  // دمج كل الأجزاء في مصفوفة واحدة
-  const total = headerBytes.length + pixelData.length + footerBytes.length;
-  const result = new Uint8Array(total);
-  result.set(headerBytes, 0);
-  result.set(pixelData, headerBytes.length);
-  result.set(footerBytes, headerBytes.length + pixelData.length);
+  // حساب الحجم التقريبي
+  const numStrips = Math.ceil(h / STRIP_H);
+  // لكل شريحة: 3 bytes header (ESC * 33) + 2 bytes (nL nH) + nCols*3 bytes data + 1 byte LF
+  const stripDataSize = 5 + nCols * 3 + 1;
+  const totalEstimate = 2 + 3 + (numStrips * stripDataSize) + 3 + 8;
+  const bytes = new Uint8Array(totalEstimate);
+  let pos = 0;
   
-  return result;
+  // ESC @ - Initialize printer
+  bytes[pos++] = 0x1B;
+  bytes[pos++] = 0x40;
+  
+  // ESC 3 n - Set line spacing to 24 dots (لضمان عدم وجود فراغات بين الشرائح)
+  bytes[pos++] = 0x1B;
+  bytes[pos++] = 0x33;
+  bytes[pos++] = STRIP_H;
+  
+  // معالجة كل شريحة (24 سطر)
+  for (let stripStart = 0; stripStart < h; stripStart += STRIP_H) {
+    // ESC * 33 nL nH - Select 24-dot double-density bit image mode
+    bytes[pos++] = 0x1B;
+    bytes[pos++] = 0x2A;
+    bytes[pos++] = 33;   // m=33: 24-dot double-density
+    bytes[pos++] = nL;
+    bytes[pos++] = nH;
+    
+    // بيانات الأعمدة - كل عمود 3 بايت (24 بت عمودي)
+    for (let col = 0; col < nCols; col++) {
+      // بايت 0: الصفوف 0-7
+      let b0 = 0;
+      for (let bit = 0; bit < 8; bit++) {
+        if (getPixel(col, stripStart + bit)) {
+          b0 |= (0x80 >> bit);
+        }
+      }
+      // بايت 1: الصفوف 8-15
+      let b1 = 0;
+      for (let bit = 0; bit < 8; bit++) {
+        if (getPixel(col, stripStart + 8 + bit)) {
+          b1 |= (0x80 >> bit);
+        }
+      }
+      // بايت 2: الصفوف 16-23
+      let b2 = 0;
+      for (let bit = 0; bit < 8; bit++) {
+        if (getPixel(col, stripStart + 16 + bit)) {
+          b2 |= (0x80 >> bit);
+        }
+      }
+      bytes[pos++] = b0;
+      bytes[pos++] = b1;
+      bytes[pos++] = b2;
+    }
+    
+    // LF - تقدم الورقة بمقدار 24 نقطة (كما حددنا في ESC 3)
+    bytes[pos++] = 0x0A;
+  }
+  
+  // ESC 2 - Reset line spacing to default
+  bytes[pos++] = 0x1B;
+  bytes[pos++] = 0x32;
+  
+  // تغذية ورق
+  bytes[pos++] = 0x0A;
+  bytes[pos++] = 0x0A;
+  bytes[pos++] = 0x0A;
+  bytes[pos++] = 0x0A;
+  
+  // GS V B 0 - Partial cut
+  bytes[pos++] = 0x1D;
+  bytes[pos++] = 0x56;
+  bytes[pos++] = 0x42;
+  bytes[pos++] = 0x00;
+  
+  return bytes.subarray(0, pos);
 }
 
 /**
