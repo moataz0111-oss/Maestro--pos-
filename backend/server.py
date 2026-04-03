@@ -8173,8 +8173,11 @@ exit /b
         content=bat_content,
         media_type="application/x-msdos-program",
         headers={
-            "Content-Disposition": "attachment; filename=MaestroPrintAgent.bat",
-            "Content-Type": "application/x-msdos-program"
+            "Content-Disposition": "attachment; filename=MaestroPrintAgent_v2.3.bat",
+            "Content-Type": "application/x-msdos-program",
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+            "Pragma": "no-cache",
+            "Expires": "0"
         }
     )
 
