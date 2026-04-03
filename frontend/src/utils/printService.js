@@ -1,99 +1,91 @@
 /**
- * Maestro EGP - خدمة الطباعة v2.2
- * تتواصل مع وسيط الطباعة المحلي لإرسال أوامر الطباعة
- * يدعم طابعات الشبكة (Ethernet/IP) وطابعات USB عبر Windows Spooler
+ * Maestro POS - Print Service v3.0
+ * يولد الإيصال كصورة bitmap مباشرة في المتصفح (يدعم العربية)
+ * ثم يرسله للوكيل المحلي (localhost:9999)
+ * 
+ * التدفق: Browser Canvas → ESC/POS Bitmap → Print Agent → Printer
  */
 
-import { API_URL } from './api';
+import { renderReceiptBitmap } from './receiptBitmap';
 
 const PRINT_AGENT_URL = 'http://localhost:9999';
-let _agentAvailable = null;
-let _agentSupportsUsb = false;
-let _lastCheck = 0;
-const CHECK_INTERVAL = 10000;
 
+/**
+ * فحص حالة وكيل الطباعة
+ */
 export const checkAgentStatus = async () => {
-  const now = Date.now();
-  if (_agentAvailable !== null && (now - _lastCheck) < CHECK_INTERVAL) {
-    return _agentAvailable;
-  }
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 2000);
-    const res = await fetch(`${PRINT_AGENT_URL}/status`, { mode: 'cors', signal: controller.signal });
+    const timeout = setTimeout(() => controller.abort(), 3000);
+    const res = await fetch(`${PRINT_AGENT_URL}/status`, {
+      mode: 'cors',
+      signal: controller.signal
+    });
     clearTimeout(timeout);
-    if (res.ok) {
-      const data = await res.json();
-      _agentSupportsUsb = data.usb_support === true;
-    }
-    _agentAvailable = res.ok;
-    _lastCheck = now;
-    return _agentAvailable;
+    const data = await res.json();
+    return data.status === 'running';
   } catch {
-    _agentAvailable = false;
-    _agentSupportsUsb = false;
-    _lastCheck = now;
     return false;
   }
 };
 
-export const agentSupportsUsb = () => _agentSupportsUsb;
+/**
+ * فحص دعم USB
+ */
+export const agentSupportsUsb = async () => {
+  try {
+    const res = await fetch(`${PRINT_AGENT_URL}/status`);
+    const data = await res.json();
+    return data.usb_support === true;
+  } catch {
+    return false;
+  }
+};
 
 /**
- * جلب قائمة الطابعات المتوفرة في Windows
- * يرجع { printers: [], needsUpdate: false, agentOffline: false }
+ * جلب قائمة الطابعات من الوكيل
  */
 export const listAgentPrinters = async () => {
-  const agentOk = await checkAgentStatus();
-  if (!agentOk) {
-    return { printers: [], needsUpdate: false, agentOffline: true };
-  }
-  if (!_agentSupportsUsb) {
-    return { printers: [], needsUpdate: true, agentOffline: false };
-  }
   try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 5000);
-    const res = await fetch(`${PRINT_AGENT_URL}/list-printers`, { mode: 'cors', signal: controller.signal });
-    clearTimeout(timeout);
-    if (res.ok) {
-      const data = await res.json();
-      return { printers: Array.isArray(data) ? data : [], needsUpdate: false, agentOffline: false };
-    }
-    return { printers: [], needsUpdate: true, agentOffline: false };
-  } catch {
-    return { printers: [], needsUpdate: true, agentOffline: false };
-  }
-};
-
-export const checkPrinterOnline = async (ip, port = 9100) => {
-  try {
-    const res = await fetch(`${PRINT_AGENT_URL}/check-printer?ip=${ip}&port=${port}`, { mode: 'cors' });
-    const data = await res.json();
-    return data.online;
-  } catch {
-    return false;
+    const res = await fetch(`${PRINT_AGENT_URL}/list-printers`);
+    return await res.json();
+  } catch (e) {
+    return { success: false, message: e.message };
   }
 };
 
 /**
- * طباعة تجريبية - تدعم USB و Ethernet
+ * فحص طابعة شبكية
  */
-export const sendTestPrint = async (printer, branchName = '') => {
-  const agentOk = await checkAgentStatus();
-  if (!agentOk) return { success: false, message: 'AGENT_NOT_RUNNING' };
-
+export const checkPrinterOnline = async (ip, port = 9100) => {
   try {
-    const payload = { name: printer.name, branch_name: branchName };
+    const res = await fetch(`${PRINT_AGENT_URL}/check-printer`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ip, port })
+    });
+    return await res.json();
+  } catch (e) {
+    return { success: false, message: e.message };
+  }
+};
 
+/**
+ * إرسال طباعة تجريبية
+ */
+export const sendTestPrint = async (printer) => {
+  try {
+    const payload = {
+      printer_name: printer.name || 'Test',
+      connection_type: printer.connection_type || 'network'
+    };
     if (printer.connection_type === 'usb' && printer.usb_printer_name) {
       payload.usb_printer_name = printer.usb_printer_name;
     } else {
       payload.ip = printer.ip_address;
       payload.port = printer.port || 9100;
     }
-
-    const res = await fetch(`${PRINT_AGENT_URL}/print-test`, {
+    const res = await fetch(`${PRINT_AGENT_URL}/test-print`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
@@ -105,91 +97,8 @@ export const sendTestPrint = async (printer, branchName = '') => {
 };
 
 /**
- * طباعة فاتورة - تدعم USB و Ethernet
- * تولد صورة bitmap من السيرفر (تدعم العربية) ثم ترسلها للطابعة
+ * طباعة نص خام
  */
-export const sendReceiptPrint = async (printer, orderData) => {
-  try {
-    // تحديد إذا كانت طابعة مطبخ - لا تعرض الأسعار
-    const isKitchen = printer.printer_type === 'kitchen';
-    const showPrices = isKitchen ? false : (printer.show_prices !== false);
-
-    const payload = {
-      order: orderData,
-      printer_config: {
-        show_prices: showPrices,
-        print_mode: printer.print_mode || (isKitchen ? 'kitchen' : 'full_receipt'),
-        printer_type: printer.printer_type || 'receipt'
-      }
-    };
-
-    // الخطوة 1: توليد بيانات الإيصال كـ bitmap من السيرفر
-    let rawData = null;
-    const renderUrl = `${API_URL}/print/render-receipt`;
-    try {
-      const token = localStorage.getItem('token');
-      console.log(`[Print] Calling render: ${renderUrl}`);
-      const renderRes = await fetch(renderUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify(payload)
-      });
-      console.log(`[Print] Render response: ${renderRes.status} ${renderRes.statusText}`);
-      if (!renderRes.ok) {
-        const errText = await renderRes.text().catch(() => 'no body');
-        console.error(`[Print] Render HTTP error ${renderRes.status}: ${errText.substring(0, 200)}`);
-      } else {
-        const renderResult = await renderRes.json();
-        if (renderResult.success && renderResult.raw_data) {
-          rawData = renderResult.raw_data;
-          console.log(`[Print] Receipt rendered OK (${renderResult.size} bytes) for ${printer.name}`);
-        } else {
-          console.error('[Print] Render returned error:', renderResult.error || renderResult);
-        }
-      }
-    } catch (renderErr) {
-      console.error(`[Print] Server render failed for ${renderUrl}:`, renderErr.message);
-    }
-
-    // الخطوة 2: إرسال للطابعة عبر الوكيل المحلي
-    const printPayload = {};
-
-    if (rawData) {
-      // بيانات bitmap جاهزة من السيرفر
-      printPayload.raw_data = rawData;
-    } else {
-      // السيرفر فشل - نرسل بيانات الطلب للوكيل ليطبع محلياً
-      console.warn('[Print] Falling back to local agent rendering');
-      printPayload.order = payload.order;
-      printPayload.printer_config = payload.printer_config;
-    }
-
-    if (printer.connection_type === 'usb' && printer.usb_printer_name) {
-      printPayload.usb_printer_name = printer.usb_printer_name;
-    } else {
-      printPayload.ip = printer.ip_address;
-      printPayload.port = printer.port || 9100;
-    }
-
-    const res = await fetch(`${PRINT_AGENT_URL}/print-receipt`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(printPayload)
-    });
-    const result = await res.json();
-    if (!rawData && result.success) {
-      result.warning = 'PRINTED_LOCAL_FALLBACK';
-    }
-    return result;
-  } catch (e) {
-    console.error('[Print] Complete failure:', e.message);
-    return { success: false, message: e.message };
-  }
-};
-
 export const sendRawPrint = async (ip, port, text, usbPrinterName = null) => {
   try {
     const payload = { text };
@@ -211,7 +120,62 @@ export const sendRawPrint = async (ip, port, text, usbPrinterName = null) => {
 };
 
 /**
- * توزيع الطلبات على الطابعات المناسبة
+ * طباعة إيصال - الدالة الرئيسية
+ * 1. يولد صورة ESC/POS في المتصفح (Canvas)
+ * 2. يرسلها كـ raw_data للوكيل المحلي
+ */
+export const sendReceiptPrint = async (printer, orderData) => {
+  try {
+    // تحديد إعدادات الطابعة
+    const isKitchen = printer.printer_type === 'kitchen';
+    const printerConfig = {
+      show_prices: isKitchen ? false : (printer.show_prices !== false),
+      print_mode: printer.print_mode || (isKitchen ? 'kitchen' : 'full_receipt'),
+      printer_type: printer.printer_type || 'receipt'
+    };
+
+    // الخطوة 1: توليد ESC/POS bitmap في المتصفح
+    console.log(`[Print] Rendering receipt for ${printer.name} (${printer.printer_type})`);
+    const renderResult = renderReceiptBitmap(orderData, printerConfig);
+    
+    if (!renderResult.success || !renderResult.raw_data) {
+      console.error('[Print] Browser render failed:', renderResult.error);
+      return { success: false, message: 'RENDER_FAILED: ' + (renderResult.error || 'Unknown') };
+    }
+
+    console.log(`[Print] Bitmap ready: ${renderResult.size} bytes for ${printer.name}`);
+
+    // الخطوة 2: إرسال البيانات الخام للطابعة عبر الوكيل
+    const printPayload = {
+      raw_data: renderResult.raw_data
+    };
+
+    if (printer.connection_type === 'usb' && printer.usb_printer_name) {
+      printPayload.usb_printer_name = printer.usb_printer_name;
+    } else {
+      printPayload.ip = printer.ip_address;
+      printPayload.port = printer.port || 9100;
+    }
+
+    console.log(`[Print] Sending to agent: ${printer.connection_type === 'usb' ? printer.usb_printer_name : printer.ip_address}`);
+    
+    const res = await fetch(`${PRINT_AGENT_URL}/print-receipt`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(printPayload)
+    });
+    
+    const result = await res.json();
+    console.log(`[Print] Agent response:`, result);
+    return result;
+  } catch (e) {
+    console.error('[Print] Error:', e.message);
+    return { success: false, message: e.message };
+  }
+};
+
+/**
+ * توزيع العناصر على الطابعات حسب ربط المنتجات
  */
 export const routeOrderToPrinters = (orderItems, products, printers) => {
   const printerJobs = {};
@@ -219,18 +183,15 @@ export const routeOrderToPrinters = (orderItems, products, printers) => {
 
   for (const item of orderItems) {
     const product = products.find(p => p.id === item.product_id || p.id === item.id);
-    // تأكد من أن printer_ids مصفوفة صالحة وليست null أو undefined
     const productPrinterIds = Array.isArray(product?.printer_ids) ? product.printer_ids.filter(id => id) : [];
 
     if (productPrinterIds.length > 0) {
       for (const printerId of productPrinterIds) {
-        // تحقق أن الطابعة موجودة في قائمة الطابعات المتاحة
         const targetPrinter = printers.find(p => p.id === printerId);
         if (targetPrinter) {
           if (!printerJobs[printerId]) printerJobs[printerId] = [];
           printerJobs[printerId].push(item);
         } else if (defaultPrinter) {
-          // إذا لم تُوجد الطابعة المعينة، أرسل للافتراضية
           if (!printerJobs[defaultPrinter.id]) printerJobs[defaultPrinter.id] = [];
           printerJobs[defaultPrinter.id].push(item);
         }
@@ -244,7 +205,7 @@ export const routeOrderToPrinters = (orderItems, products, printers) => {
 };
 
 /**
- * طباعة الطلب على جميع الطابعات (USB + Ethernet)
+ * طباعة الطلب على جميع طابعات المطبخ
  */
 export const printOrderToAllPrinters = async (order, orderItems, products, printers, restaurantName = '') => {
   const agentOk = await checkAgentStatus();
@@ -252,7 +213,6 @@ export const printOrderToAllPrinters = async (order, orderItems, products, print
     return { success: false, message: 'AGENT_NOT_RUNNING', results: [] };
   }
 
-  // تضمين جميع الطابعات: الشبكية (لها IP) و USB (لها usb_printer_name)
   const activePrinters = printers.filter(p =>
     (p.connection_type === 'usb' && p.usb_printer_name) ||
     (p.connection_type !== 'usb' && p.ip_address)
@@ -263,9 +223,9 @@ export const printOrderToAllPrinters = async (order, orderItems, products, print
   }
 
   const printerJobs = routeOrderToPrinters(orderItems, products, activePrinters);
-  const results = [];
+  
+  console.log(`[Print] Kitchen routing: ${Object.keys(printerJobs).length} printers, ${orderItems.length} items`);
 
-  // إرسال جميع الطلبات بالتوازي لتسريع الطباعة
   const printPromises = Object.entries(printerJobs).map(async ([printerId, items]) => {
     const printer = printers.find(p => p.id === printerId);
     if (!printer) return null;
@@ -277,7 +237,6 @@ export const printOrderToAllPrinters = async (order, orderItems, products, print
       customer_name: order.customer_name || '',
       table_number: order.table_number || order.table_id || '',
       buzzer_number: order.buzzer_number || '',
-      branch_name: order.branch_name || '',
       driver_name: order.driver_name || '',
       delivery_company: order.delivery_company || '',
       cashier_name: order.cashier_name || '',
@@ -303,8 +262,8 @@ export const printOrderToAllPrinters = async (order, orderItems, products, print
 
   const printResults = await Promise.all(printPromises);
   const validResults = printResults.filter(r => r !== null);
-
   const allSuccess = validResults.every(r => r.success);
+
   return {
     success: allSuccess,
     message: allSuccess ? 'All printers done' : 'Some printers failed',

@@ -1,25 +1,46 @@
 # Maestro POS - PRD
 
-## Print Receipt Format v5.0 (Professional Two-Column Layout)
+## Print System v3.0 - Browser Canvas Rendering
 
-### Technical Architecture:
-- `receipt_renderer.py` - Server-side bitmap generator using Pillow + arabic_reshaper + python-bidi
-- `POST /api/print/render-receipt` - Returns base64 ESC/POS bytes
-- `printService.js` - Fetches bitmap from backend API_URL, sends to print agent
-- `print_server.ps1` v2.2 - Local agent accepts raw_data base64 + improved logging
+### Architecture (Complete Rewrite 2026-04-03):
+```
+Browser Canvas → ESC/POS Bitmap → Print Agent → Printer
+```
+
+### Files:
+- `receiptBitmap.js` - NEW: Canvas-based receipt renderer (Arabic native support)
+- `printService.js` - REWRITTEN: Uses browser rendering, sends raw bytes to agent
+- `print_server.ps1` - v2.2: Accepts raw_data base64, improved logging
+- `receipt_renderer.py` - BACKUP: Server-side renderer (no longer primary)
 
 ### Print Flow:
-1. Frontend calls `/api/print/render-receipt` with order data
-2. Backend reshapes Arabic text (arabic_reshaper + python-bidi) and renders bitmap
-3. Returns base64 ESC/POS data
-4. Frontend sends to local print agent (localhost:9999/print-receipt)
-5. If server render fails → falls back to local agent rendering + warning
-6. Kitchen printers: auto show_prices=false
+1. User clicks Print/Save&Send in POS
+2. `sendReceiptPrint()` calls `renderReceiptBitmap()` 
+3. Canvas renders receipt with Arabic text (browser native RTL)
+4. Canvas → 1-bit bitmap → ESC/POS GS v 0 commands → base64
+5. Sends `{raw_data, usb_printer_name/ip/port}` to localhost:9999/print-receipt
+6. Print agent decodes base64 and sends bytes to printer
 
-### Arabic Text Fix (2026-04-03):
-- **Root cause**: Production server lacked libraqm OS package
-- **Fix**: Switched from libraqm to pure Python arabic_reshaper + python-bidi
-- No OS-level dependencies needed anymore
+### Why Canvas (not Server):
+- Browser natively supports Arabic text rendering
+- No server dependencies (libraqm, fonts, packages)
+- Works offline
+- Same code in preview and production
+- Instant rendering (no network round-trip)
+
+### Receipt Layout:
+- Restaurant name (centered, bold)
+- Section name for kitchen (centered)
+- Order number + type (two columns)
+- Cashier + date/time
+- Table/Buzzer/Driver info
+- Items with price or qty only
+- Total + payment method (cashier only)
+- Footer: شكرا لزيارتكم
+
+### Kitchen vs Cashier:
+- Kitchen: show_prices=false, larger font, section_name shown
+- Cashier: show_prices=true, total, payment method, full receipt
 
 ## Credentials
 - Admin: hanialdujaili@gmail.com / Hani@2024
@@ -27,15 +48,13 @@
 - Test Cashier: cashier@test.com / Test@1234
 
 ## Completed
-- [x] Receipt renderer with Arabic support (arabic_reshaper + python-bidi)
-- [x] Professional two-column receipt layout v5
-- [x] Kitchen receipts without prices
-- [x] Print agent v2.2 with improved logging
-- [x] Fixed API URL in printService.js
-- [x] Removed window.print() fallback
-- [x] Smart printer lookup (receipt → USB → any)
-- [x] Detailed console logging for debugging
-- [x] Fallback to local agent rendering when server fails
+- [x] Browser Canvas receipt renderer (receiptBitmap.js)
+- [x] Complete printService.js rewrite (v3.0)
+- [x] Arabic text via Canvas RTL direction
+- [x] ESC/POS bitmap conversion in JavaScript
+- [x] Kitchen printer routing by product.printer_ids
+- [x] Print agent v2.2 with MemoryStream + logging
+- [x] Error messages in Arabic for all failure cases
 
 ## Upcoming Tasks
 - P0: Multi-Restaurant (Tenant) Switcher

@@ -1865,8 +1865,6 @@ export default function POS() {
             const cashierResult = await sendReceiptPrint(cashierPrinter, cashierOrderData);
             if (!cashierResult.success) {
               toast.error(t('فشل طباعة فاتورة الكاشير: ') + (cashierResult.message || ''));
-            } else if (cashierResult.warning === 'PRINTED_LOCAL_FALLBACK') {
-              toast.warning(t('طُبعت الفاتورة محلياً - النص العربي قد يكون غير واضح'));
             }
           }
           
@@ -3654,11 +3652,7 @@ export default function POS() {
                   };
                   const result = await sendReceiptPrint(cashierPrinter, orderForPrint);
                   if (result.success) {
-                    if (result.warning === 'PRINTED_LOCAL_FALLBACK') {
-                      toast.warning(t('تم الطباعة محلياً - النص العربي قد يكون غير واضح'));
-                    } else {
-                      toast.success(t('تم الطباعة بنجاح'));
-                    }
+                    toast.success(t('تم الطباعة بنجاح'));
                     setPrintDialogOpen(false);
                     if (lastOrderNumber && !editingOrder) {
                       clearCart();
