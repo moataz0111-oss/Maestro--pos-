@@ -12,7 +12,7 @@ import requests
 import os
 import uuid
 
-BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://arabic-pos-agent.preview.emergentagent.com').rstrip('/')
+BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://pos-printer-fix-1.preview.emergentagent.com').rstrip('/')
 
 class TestAuth:
     """Authentication tests"""

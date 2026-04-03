@@ -82,7 +82,7 @@
   },
   
   "test_credentials": {
-    "api_url": "https://arabic-pos-agent.preview.emergentagent.com",
+    "api_url": "https://pos-printer-fix-1.preview.emergentagent.com",
     "client_graffiti": {
       "email": "hanialdujaili@gmail.com",
       "password": "graffiti123",

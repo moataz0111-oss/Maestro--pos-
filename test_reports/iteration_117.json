@@ -113,7 +113,7 @@
     ]
   },
   "pwa_features": {
-    "service_worker": "Registered and active at https://arabic-pos-agent.preview.emergentagent.com/",
+    "service_worker": "Registered and active at https://pos-printer-fix-1.preview.emergentagent.com/",
     "manifest": "Loaded with name 'Maestro EGP - نظام إدارة المطاعم', 4 icons, standalone display mode",
     "offline_storage": "IndexedDB and localStorage configured for offline data persistence"
   },

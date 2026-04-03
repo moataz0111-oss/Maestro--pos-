@@ -8099,6 +8099,14 @@ async def download_print_agent():
 
     bat_content = f"""@echo off
 chcp 65001 >nul 2>&1
+
+REM === طلب صلاحيات المسؤول تلقائياً ===
+net session >nul 2>&1
+if %errorlevel% neq 0 (
+    powershell -Command "Start-Process cmd -ArgumentList '/c \"%~f0\"' -Verb RunAs"
+    exit /b
+)
+
 title Maestro EGP - Print Agent v2.3
 color 0A
 echo.
@@ -8112,11 +8120,9 @@ del /F /Q "%APPDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\Maestro
 echo  [OK]
 echo.
 
-echo  [2/5] Stopping old agent...
-taskkill /F /IM wscript.exe >nul 2>&1
-powershell -NoProfile -Command "Get-Process powershell | Where-Object {{$_.CommandLine -like '*server.ps1*' -or $_.CommandLine -like '*MaestroPrintAgent*'}} | Stop-Process -Force -ErrorAction SilentlyContinue" >nul 2>&1
-powershell -NoProfile -Command "$p = Get-NetTCPConnection -LocalPort 9999 -ErrorAction SilentlyContinue | Select-Object -First 1; if ($p) {{ Stop-Process -Id $p.OwningProcess -Force -ErrorAction SilentlyContinue }}" >nul 2>&1
-timeout /t 5 >nul
+echo  [2/5] Force-killing old agent on port 9999...
+powershell -NoProfile -ExecutionPolicy Bypass -Command "netstat -aon | Select-String ':9999.*LISTENING' | ForEach-Object {{ $parts = ($_ -split '\\s+'); $pid = $parts[$parts.Length-1]; if ($pid -match '^\\d+$') {{ Write-Host ('  Killing PID: ' + $pid); Stop-Process -Id ([int]$pid) -Force -ErrorAction SilentlyContinue }} }}; Start-Sleep 2; taskkill /F /IM wscript.exe 2>$null; Get-Process powershell -ErrorAction SilentlyContinue | Where-Object {{ $_.Id -ne $PID }} | ForEach-Object {{ try {{ if ((Get-CimInstance Win32_Process -Filter ('ProcessId=' + $_.Id)).CommandLine -like '*server.ps1*') {{ Write-Host ('  Killing PowerShell PID: ' + $_.Id); Stop-Process -Id $_.Id -Force }} }} catch {{}} }}"
+timeout /t 3 >nul
 echo  [OK]
 echo.
 
@@ -8139,9 +8145,9 @@ if exist "%LOCALAPPDATA%\\MaestroPrintAgent\\server.ps1" (
 )
 echo.
 
-echo  [5/5] Verifying...
+echo  [5/5] Waiting for new agent to start...
 timeout /t 12 >nul
-powershell -NoProfile -Command "try {{ $r = Invoke-WebRequest -Uri 'http://localhost:9999/status' -UseBasicParsing -TimeoutSec 5; $j = $r.Content | ConvertFrom-Json; Write-Host ('  Version: ' + $j.version) -ForegroundColor Cyan; if ($j.version -like '2.3*') {{ Write-Host '  [OK] v2.3 ACTIVE!' -ForegroundColor Green }} else {{ Write-Host '  [WARN] Wrong version - restart PC' -ForegroundColor Yellow }} }} catch {{ Start-Sleep 10; try {{ $r2 = Invoke-WebRequest -Uri 'http://localhost:9999/status' -UseBasicParsing -TimeoutSec 5; $j2 = $r2.Content | ConvertFrom-Json; Write-Host ('  Version: ' + $j2.version) -ForegroundColor Cyan }} catch {{ Write-Host '  [ERROR] Agent not started - restart PC' -ForegroundColor Red }} }}"
+powershell -NoProfile -Command "try {{ $r = Invoke-WebRequest -Uri 'http://localhost:9999/status' -UseBasicParsing -TimeoutSec 5; $j = $r.Content | ConvertFrom-Json; Write-Host ('  Version: ' + $j.version) -ForegroundColor Cyan; if ($j.version -like '2.3*') {{ Write-Host '  [OK] v2.3 ACTIVE!' -ForegroundColor Green }} else {{ Write-Host '  [WARN] Wrong version - restart PC and run again' -ForegroundColor Yellow }} }} catch {{ Start-Sleep 10; try {{ $r2 = Invoke-WebRequest -Uri 'http://localhost:9999/status' -UseBasicParsing -TimeoutSec 5; $j2 = $r2.Content | ConvertFrom-Json; Write-Host ('  Version: ' + $j2.version) -ForegroundColor Cyan }} catch {{ Write-Host '  [ERROR] Agent not started - restart PC' -ForegroundColor Red }} }}"
 echo.
 echo  ========================================
 echo    Done! Refresh the POS page.
@@ -16212,7 +16218,7 @@ async def get_menu_link(request: Request, current_user: dict = Depends(get_curre
         base_url = f"{parsed.scheme}://{parsed.netloc}"
     else:
         # fallback للـ environment variable
-        base_url = os.environ.get('REACT_APP_BACKEND_URL', 'https://arabic-pos-agent.preview.emergentagent.com')
+        base_url = os.environ.get('REACT_APP_BACKEND_URL', 'https://pos-printer-fix-1.preview.emergentagent.com')
     
     menu_url = f"{base_url}/menu/{tenant.get('menu_slug', tenant_id)}"
     
