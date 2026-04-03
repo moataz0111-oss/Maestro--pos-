@@ -8028,6 +8028,15 @@ async def test_printer_connection(printer_id: str, current_user: dict = Depends(
         )
         return {"status": "error", "message": f"خطأ في الاتصال: {str(e)}"}
 
+
+PRINT_AGENT_VERSION = "2.2.0"
+
+@api_router.get("/print-agent-version")
+async def get_print_agent_version():
+    """إرجاع آخر إصدار متاح للوسيط"""
+    return {"version": PRINT_AGENT_VERSION}
+
+
 @api_router.get("/download-print-agent")
 async def download_print_agent():
     """تحميل وسيط الطباعة المحلي - ملف bat لويندوز يعمل في الخلفية"""

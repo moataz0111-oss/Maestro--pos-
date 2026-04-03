@@ -10,6 +10,7 @@ import { formatPrice } from '../utils/currency';
 import { playClick, playSuccess } from '../utils/sound';
 import { useOrderNotifications, sendOrderNotification } from '../utils/orderNotifications';
 import { checkAgentStatus, printOrderToAllPrinters, routeOrderToPrinters, sendReceiptPrint } from '../utils/printService';
+import { AgentUpdateBanner } from '../utils/AgentUpdateChecker';
 import offlineStorage from '../lib/offlineStorage';
 import db, { STORES } from '../lib/offlineDB';
 import { QRCodeSVG } from 'qrcode.react';
@@ -2371,6 +2372,7 @@ export default function POS() {
           </button>
         </div>
       )}
+      <AgentUpdateBanner t={t} />
       <div className="flex-1 flex">
       {/* Categories Sidebar - Right */}
       <div className="w-56 border-l border-border bg-card flex flex-col">

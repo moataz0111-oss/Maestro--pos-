@@ -7,6 +7,7 @@ import { useTheme } from '../context/ThemeContext';
 import { formatPrice, setCurrency } from '../utils/currency';
 import { useTranslation } from '../hooks/useTranslation';
 import { checkAgentStatus, sendTestPrint, checkPrinterOnline, listAgentPrinters, agentSupportsUsb } from '../utils/printService';
+import { AgentUpdateBanner } from '../utils/AgentUpdateChecker';
 import { 
   playClick, 
   playSuccess, 
@@ -4734,6 +4735,7 @@ export default function Settings() {
           {/* Printers */}
           {hasRole(['admin', 'super_admin', 'manager', 'branch_manager']) && (
             <TabsContent value="printers">
+              <AgentUpdateBanner t={t} />
               <Card className="border-border/50 bg-card">
                 <CardHeader className="flex flex-row items-center justify-between">
                   <CardTitle className="flex items-center gap-2 text-foreground">
