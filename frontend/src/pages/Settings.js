@@ -1239,12 +1239,11 @@ export default function Settings() {
         if (result.success) {
           toast.success(t('تم إرسال صفحة اختبار للطابعة مباشرة') + ` (${printer.name})`);
           setPrinterTestStatus(prev => ({ ...prev, [printerId]: 'success' }));
-          // تحديث حالة الطابعة كمتصلة
           await axios.put(`${API}/printers/${printerId}`, { is_online: true }, {
             headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
           }).catch(() => {});
         } else {
-          toast.error(t('فشل الطباعة المباشرة') + `: ${result.message}`);
+          toast.error(`${printer.name}: ${t('الطابعة لا تستجيب - تأكد من عنوان IP')} (${printer.ip_address}:${printer.port || 9100})`);
           setPrinterTestStatus(prev => ({ ...prev, [printerId]: 'error' }));
         }
       } catch (error) {
@@ -1252,61 +1251,9 @@ export default function Settings() {
         setPrinterTestStatus(prev => ({ ...prev, [printerId]: 'error' }));
       }
     } else {
-      // الرجوع للطباعة عبر المتصفح إذا الوسيط غير متوفر
-      try {
-        const printWindow = window.open('', '_blank', 'width=300,height=400');
-        if (!printWindow) {
-          toast.error(t('يرجى السماح بفتح النوافذ المنبثقة'));
-          setPrinterTestStatus(prev => ({ ...prev, [printerId]: 'error' }));
-          return;
-        }
-        
-        const now = new Date();
-        printWindow.document.write(`
-          <html dir="rtl">
-          <head>
-            <meta charset="UTF-8">
-            <title>اختبار الطابعة</title>
-            <style>
-              body { font-family: monospace, Arial; text-align: center; padding: 20px; font-size: 14px; }
-              .line { border-top: 1px dashed #000; margin: 10px 0; }
-              h2 { margin: 5px 0; }
-              .warn { background: #fff3cd; padding: 8px; border-radius: 5px; font-size: 12px; margin-top: 10px; }
-            </style>
-          </head>
-          <body>
-            <h2>*** اختبار الطابعة ***</h2>
-            <div class="line"></div>
-            <p><strong>${printer.name || 'طابعة'}</strong></p>
-            <p>IP: ${printer.ip_address}:${printer.port || 9100}</p>
-            <p>الفرع: ${branches.find(b => b.id === printer.branch_id)?.name || '-'}</p>
-            <div class="line"></div>
-            <p>التاريخ: ${now.toLocaleDateString('ar-IQ')}</p>
-            <p>الوقت: ${now.toLocaleTimeString('ar-IQ')}</p>
-            <div class="line"></div>
-            <p>الطباعة تعمل بنجاح!</p>
-            <p>================================</p>
-            <div class="warn">تنبيه: وسيط الطباعة غير متصل - الطباعة عبر المتصفح فقط<br/>قم بتشغيل وسيط الطباعة للطباعة المباشرة</div>
-          </body>
-          </html>
-        `);
-        printWindow.document.close();
-        printWindow.focus();
-        setTimeout(() => {
-          printWindow.print();
-          setTimeout(() => printWindow.close(), 1000);
-        }, 300);
-        
-        toast.success(t('تم إرسال صفحة اختبار عبر المتصفح (وسيط الطباعة غير متصل)'));
-        setPrinterTestStatus(prev => ({ ...prev, [printerId]: 'success' }));
-        await axios.put(`${API}/printers/${printerId}`, { is_online: true }, {
-          headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
-        }).catch(() => {});
-        
-      } catch (error) {
-        toast.error(t('فشل في إرسال صفحة الاختبار'));
-        setPrinterTestStatus(prev => ({ ...prev, [printerId]: 'error' }));
-      }
+      // الوسيط غير متصل - لا يمكن اختبار طابعة الشبكة بدون الوسيط
+      toast.error(t('وسيط الطباعة غير متصل - شغّل الوسيط أولاً لاختبار طابعات الشبكة'));
+      setPrinterTestStatus(prev => ({ ...prev, [printerId]: 'error' }));
     }
     
     // Reset status after 5 seconds
