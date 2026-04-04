@@ -244,15 +244,21 @@ export const printOrderToAllPrinters = async (order, orderItems, products, print
   );
 
   if (activePrinters.length === 0) {
-    return { success: true, message: 'No configured printers', results: [] };
+    console.warn('[Print] No active printers found!');
+    return { success: false, message: 'No configured printers', results: [] };
   }
 
   const printerJobs = routeOrderToPrinters(orderItems, products, activePrinters);
   
-  console.log(`[Print] Kitchen routing: ${Object.keys(printerJobs).length} printers for ${orderItems.length} items`);
+  console.log(`[Print] Kitchen routing: ${Object.keys(printerJobs).length} printer jobs for ${orderItems.length} items`);
+  if (Object.keys(printerJobs).length === 0) {
+    console.warn('[Print] No printer jobs created! Products may not be linked to kitchen printers.');
+    console.log('[Print] Products:', orderItems.map(i => ({id: i.product_id, name: i.name || i.product_name})));
+    console.log('[Print] Available printers:', activePrinters.map(p => ({id: p.id, name: p.name, type: p.printer_type})));
+  }
   Object.entries(printerJobs).forEach(([pid, items]) => {
     const p = printers.find(pr => pr.id === pid);
-    console.log(`  → ${p?.name || pid}: ${items.map(i => i.name || i.product_name).join(', ')}`);
+    console.log(`  -> ${p?.name || pid} (${p?.connection_type}:${p?.ip_address || p?.usb_printer_name}): ${items.map(i => i.name || i.product_name).join(', ')}`);
   });
 
   // طباعة تسلسلية (واحدة تلو الأخرى) لتجنب تضارب الوكيل
@@ -307,11 +313,11 @@ export const printOrderToAllPrinters = async (order, orderItems, products, print
     });
   }
 
-  const allSuccess = validResults.every(r => r.success);
+  const allSuccess = validResults.length > 0 && validResults.every(r => r.success);
 
   return {
     success: allSuccess,
-    message: allSuccess ? 'All printers done' : 'Some printers failed',
+    message: validResults.length === 0 ? 'NO_PRINTERS_MATCHED' : (allSuccess ? 'All printers done' : 'Some printers failed'),
     results: validResults
   };
 };

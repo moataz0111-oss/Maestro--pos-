@@ -1430,8 +1430,8 @@ export default function POS() {
                     const product = products.find(p => p.id === item.product_id);
                     const pIds = product?.printer_ids?.filter(id => id) || [];
                     const hasPrinterResult = result.results?.some(r => pIds.includes(r.printer_id) && r.success);
-                    const allDefaultSuccess = pIds.length === 0 && result.success;
-                    updatedStatus[idx] = (hasPrinterResult || allDefaultSuccess || result.success) ? 'success' : 'error';
+                    const allDefaultSuccess = pIds.length === 0 && result.results?.length > 0 && result.success;
+                    updatedStatus[idx] = (hasPrinterResult || allDefaultSuccess) ? 'success' : 'error';
                   } else {
                     updatedStatus[idx] = 'success'; // العناصر القديمة - موجودة بالفعل
                   }
@@ -1522,8 +1522,8 @@ export default function POS() {
                 const product = products.find(p => p.id === item.product_id);
                 const pIds = product?.printer_ids?.filter(id => id) || [];
                 const hasPrinterResult = result.results?.some(r => pIds.includes(r.printer_id) && r.success);
-                const allDefaultSuccess = pIds.length === 0 && result.success;
-                updatedStatus[idx] = (hasPrinterResult || allDefaultSuccess || result.success) ? 'success' : 'error';
+                const allDefaultSuccess = pIds.length === 0 && result.results?.length > 0 && result.success;
+                updatedStatus[idx] = (hasPrinterResult || allDefaultSuccess) ? 'success' : 'error';
               });
               setKitchenPrintStatus(updatedStatus);
               
