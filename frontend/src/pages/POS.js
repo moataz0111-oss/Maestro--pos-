@@ -1303,6 +1303,26 @@ export default function POS() {
     const driverObj = selectedDriver ? drivers.find(d => d.id === selectedDriver) : null;
     const deliveryAppObj = deliveryApp ? deliveryApps.find(a => a.id === deliveryApp) : null;
     
+    // Build logo URL for print
+    const rawLogoUrl = invoiceSettings?.invoice_logo || restaurantSettings?.logo_url;
+    let resolvedLogoUrl = null;
+    if (rawLogoUrl) {
+      if (rawLogoUrl.startsWith('http')) resolvedLogoUrl = rawLogoUrl;
+      else if (rawLogoUrl.startsWith('/api')) resolvedLogoUrl = `${API}${rawLogoUrl.replace('/api', '')}`;
+      else if (rawLogoUrl.startsWith('/uploads')) resolvedLogoUrl = `${API}${rawLogoUrl}`;
+      else resolvedLogoUrl = rawLogoUrl;
+    }
+
+    // Build system logo URL
+    const rawSysLogo = systemInvoiceSettings?.system_logo_url;
+    let resolvedSysLogoUrl = null;
+    if (rawSysLogo) {
+      if (rawSysLogo.startsWith('http')) resolvedSysLogoUrl = rawSysLogo;
+      else if (rawSysLogo.startsWith('/api')) resolvedSysLogoUrl = `${API}${rawSysLogo.replace('/api', '')}`;
+      else if (rawSysLogo.startsWith('/uploads')) resolvedSysLogoUrl = `${API}${rawSysLogo}`;
+      else resolvedSysLogoUrl = rawSysLogo;
+    }
+
     return {
       restaurant_name: restaurantSettings?.name_ar || restaurantSettings?.name || '',
       branch_name: currentBranch?.name || user?.branch_name || '',
@@ -1317,7 +1337,7 @@ export default function POS() {
       driver_name: driverObj?.name || '',
       delivery_company: deliveryAppObj?.name || '',
       language: localStorage.getItem('language') || 'ar',
-      // بيانات الفاتورة من الإعدادات
+      // Invoice settings
       phone: invoiceSettings?.phone || '',
       phone2: invoiceSettings?.phone2 || '',
       address: invoiceSettings?.address || '',
@@ -1326,7 +1346,11 @@ export default function POS() {
       custom_header: invoiceSettings?.custom_header || '',
       custom_footer: invoiceSettings?.custom_footer || '',
       thank_you_message: invoiceSettings?.thank_you_message || '',
-      system_name: systemInvoiceSettings?.system_name || 'Maestro EGP'
+      system_name: systemInvoiceSettings?.system_name || 'Maestro EGP',
+      // Logo data for receipt bitmap
+      logo_base64: logoBase64 || null,
+      logo_url: resolvedLogoUrl,
+      system_logo_url: resolvedSysLogoUrl
     };
   };
 

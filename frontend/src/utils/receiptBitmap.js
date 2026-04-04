@@ -1,12 +1,12 @@
 /**
  * Maestro POS - Receipt Bitmap Generator (Browser-side)
- * يولد صورة ESC/POS bitmap مباشرة في المتصفح
- * يدعم العربية أصلاً عبر Canvas API
- * يطابق تماماً معاينة الفاتورة في POS
+ * 80mm thermal receipt (576px width at 8 dots/mm)
+ * Supports Arabic natively via Canvas API
+ * Matches POS preview exactly
  */
 
-const PW = 384; // عرض الإيصال (48mm * 8 dots/mm)
-const MARGIN = 10;
+const PW = 576; // 80mm printer = 72mm print area = 576 dots at 8dpi
+const MARGIN = 16;
 const CONTENT_W = PW - MARGIN * 2;
 const FONT_AR = '"Cairo", "Noto Sans Arabic", "Segoe UI", "Tahoma", sans-serif';
 const FONT_EN = '"Courier New", monospace';
@@ -30,7 +30,6 @@ function drawText(ctx, text, x, y, fontSize, align = 'right', bold = false) {
   return fontSize + 4;
 }
 
-/** رسم نص مع التفاف تلقائي */
 function drawWrappedText(ctx, text, x, y, maxWidth, fontSize, align = 'center', bold = false) {
   const fontFamily = isArabic(text) ? FONT_AR : FONT_EN;
   ctx.font = `${bold ? 'bold ' : ''}${fontSize}px ${fontFamily}`;
@@ -61,17 +60,17 @@ function drawWrappedText(ctx, text, x, y, maxWidth, fontSize, align = 'center', 
   return totalH;
 }
 
-function drawRow(ctx, rightText, leftText, y, fontSize = 14) {
+function drawRow(ctx, rightText, leftText, y, fontSize = 18) {
   if (rightText) drawText(ctx, rightText, PW - MARGIN, y, fontSize, 'right');
   if (leftText) drawText(ctx, leftText, MARGIN, y, fontSize, 'left');
-  return fontSize + 5;
+  return fontSize + 6;
 }
 
-function drawCenter(ctx, text, y, fontSize = 14, bold = false) {
+function drawCenter(ctx, text, y, fontSize = 18, bold = false) {
   return drawWrappedText(ctx, text, PW / 2, y, CONTENT_W, fontSize, 'center', bold);
 }
 
-/** خط فاصل سميك مزدوج (=====) */
+/** Double separator (=====) */
 function drawDoubleSep(ctx, y) {
   ctx.strokeStyle = '#000';
   ctx.lineWidth = 2;
@@ -80,23 +79,48 @@ function drawDoubleSep(ctx, y) {
   ctx.lineTo(PW - MARGIN, y + 2);
   ctx.stroke();
   ctx.beginPath();
-  ctx.moveTo(MARGIN, y + 6);
-  ctx.lineTo(PW - MARGIN, y + 6);
+  ctx.moveTo(MARGIN, y + 7);
+  ctx.lineTo(PW - MARGIN, y + 7);
   ctx.stroke();
-  return 14;
+  return 16;
 }
 
-/** خط فاصل رفيع متقطع (-----) */
+/** Dashed separator (-----) */
 function drawDashedSep(ctx, y) {
   ctx.strokeStyle = '#000';
   ctx.lineWidth = 1;
-  ctx.setLineDash([3, 3]);
+  ctx.setLineDash([4, 4]);
   ctx.beginPath();
-  ctx.moveTo(MARGIN, y + 3);
-  ctx.lineTo(PW - MARGIN, y + 3);
+  ctx.moveTo(MARGIN, y + 4);
+  ctx.lineTo(PW - MARGIN, y + 4);
   ctx.stroke();
   ctx.setLineDash([]);
-  return 10;
+  return 12;
+}
+
+/** Inverse header - black bg with white text */
+function drawInverseHeader(ctx, text, y, fontSize = 22) {
+  const fontFamily = isArabic(text) ? FONT_AR : FONT_EN;
+  ctx.font = `bold ${fontSize}px ${fontFamily}`;
+  const textWidth = ctx.measureText(text).width;
+  const padH = 12;
+  const padV = 6;
+  const boxW = Math.min(textWidth + padH * 2, CONTENT_W);
+  const boxH = fontSize + padV * 2;
+  const boxX = (PW - boxW) / 2;
+
+  ctx.fillStyle = '#000';
+  ctx.fillRect(boxX, y, boxW, boxH);
+
+  ctx.fillStyle = '#FFF';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'top';
+  if (isArabic(text)) ctx.direction = 'rtl';
+  ctx.fillText(text, PW / 2, y + padV);
+  ctx.direction = 'ltr';
+
+  ctx.fillStyle = '#000';
+  return boxH + 6;
 }
 
 function formatNum(n) {
@@ -120,290 +144,339 @@ function dateStr() {
   return `${d}/${mo}/${now.getFullYear()}`;
 }
 
+/** Load image from URL/base64 */
+function loadImage(src) {
+  return new Promise((resolve) => {
+    if (!src) { resolve(null); return; }
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => resolve(img);
+    img.onerror = () => resolve(null);
+    img.src = src;
+  });
+}
+
 /**
- * توليد صورة الإيصال كـ Canvas - يطابق معاينة POS بالضبط
+ * Main receipt canvas renderer - matches POS preview
+ * Now async to support logo loading
  */
-function renderReceiptCanvas(order, config = {}) {
+async function renderReceiptCanvas(order, config = {}) {
   const showPrices = config.show_prices !== false;
   const isKitchen = config.printer_type === 'kitchen';
   
+  // Pre-load images
+  const [logoImg, sysLogoImg] = await Promise.all([
+    !isKitchen ? loadImage(order.logo_base64 || order.logo_url) : Promise.resolve(null),
+    !isKitchen ? loadImage(order.system_logo_base64 || order.system_logo_url) : Promise.resolve(null)
+  ]);
+
   const canvas = document.createElement('canvas');
   canvas.width = PW;
-  canvas.height = 4000; // ارتفاع مؤقت كبير
+  canvas.height = 6000;
   const ctx = canvas.getContext('2d');
   
   ctx.fillStyle = '#FFFFFF';
-  ctx.fillRect(0, 0, PW, 4000);
+  ctx.fillRect(0, 0, PW, 6000);
   ctx.fillStyle = '#000000';
   
-  let y = 15;
+  let y = 20;
 
-  // ========== رأس الإيصال ==========
+  // ========== HEADER ==========
   
-  // اسم المطعم
+  // Restaurant logo (circular)
+  if (!isKitchen && logoImg) {
+    const logoSize = 90;
+    const logoX = (PW - logoSize) / 2;
+    // Draw circular clip
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(logoX + logoSize / 2, y + logoSize / 2, logoSize / 2, 0, Math.PI * 2);
+    ctx.closePath();
+    ctx.clip();
+    ctx.drawImage(logoImg, logoX, y, logoSize, logoSize);
+    ctx.restore();
+    // Circle border
+    ctx.strokeStyle = '#000';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(logoX + logoSize / 2, y + logoSize / 2, logoSize / 2, 0, Math.PI * 2);
+    ctx.stroke();
+    y += logoSize + 10;
+  }
+
+  // Restaurant name
   const restName = order.restaurant_name || '';
   if (restName) {
-    y += drawCenter(ctx, restName, y, isKitchen ? 22 : 20, true);
+    y += drawCenter(ctx, restName, y, isKitchen ? 30 : 28, true);
     y += 2;
   }
 
-  // أرقام الهاتف (غير المطبخ)
+  // Phone numbers
   if (!isKitchen) {
     const phones = [];
     if (order.phone) phones.push(order.phone);
     if (order.phone2) phones.push(order.phone2);
     if (phones.length > 0) {
-      y += drawCenter(ctx, phones.join(' - '), y, 11, false);
+      y += drawCenter(ctx, phones.join(' - '), y, 15, false);
     }
     
-    // عنوان المطعم
+    // Restaurant address
     if (order.address) {
-      y += drawCenter(ctx, order.address, y, 11, false);
+      y += drawCenter(ctx, order.address, y, 15, false);
     }
   }
 
-  // اسم الفرع
+  // Branch name
   if (order.branch_name) {
-    y += drawCenter(ctx, order.branch_name, y, 13, true);
-    y += 1;
+    y += drawCenter(ctx, order.branch_name, y, 17, true);
+    y += 2;
   }
 
-  // اسم القسم (للمطبخ فقط)
+  // Kitchen section name
   if (isKitchen && order.section_name) {
-    y += drawCenter(ctx, `[ ${order.section_name} ]`, y, 18, true);
-    y += 2;
+    y += drawCenter(ctx, `[ ${order.section_name} ]`, y, 26, true);
+    y += 4;
   }
 
-  // الرقم الضريبي (غير المطبخ)
+  // Tax number
   if (!isKitchen && order.tax_number && order.show_tax !== false) {
-    y += drawCenter(ctx, `الرقم الضريبي: ${order.tax_number}`, y, 10, false);
+    y += drawCenter(ctx, `${order.tax_number} :TIN`, y, 13, false);
   }
 
-  // فاصل متقطع
+  // Dashed separator
   y += drawDashedSep(ctx, y);
 
-  // ========== معلومات الفاتورة ==========
+  // ========== INVOICE INFO ==========
   
-  // رقم الفاتورة
+  // Invoice number - inverse header (black bg, white text)
   if (order.order_number) {
-    const invoiceLabel = isKitchen ? `طلب #${order.order_number}` : `فاتورة رقم: #${order.order_number}`;
-    y += drawCenter(ctx, invoiceLabel, y, 14, true);
-    y += 2;
+    const invoiceLabel = isKitchen ? `#${order.order_number} :` : `#${order.order_number} :`;
+    if (isKitchen) {
+      y += drawInverseHeader(ctx, invoiceLabel, y, 24);
+    } else {
+      y += drawInverseHeader(ctx, invoiceLabel, y, 22);
+    }
   }
 
-  // التاريخ والوقت
-  y += drawCenter(ctx, `${dateStr()} - ${time12()}`, y, 11, false);
+  // Date and time
+  y += drawCenter(ctx, `${dateStr()} - ${time12()}`, y, 15, false);
 
-  // اسم الكاشير (غير المطبخ)
+  // Cashier name
   if (!isKitchen && order.cashier_name) {
-    y += drawCenter(ctx, `الكاشير: ${order.cashier_name}`, y, 11, false);
+    y += drawCenter(ctx, `${order.cashier_name} :`, y, 15, false);
   }
 
-  // فاصل متقطع
+  // Dashed separator
   y += drawDashedSep(ctx, y);
 
-  // ========== نوع الطلب ==========
+  // ========== ORDER TYPE ==========
   const orderTypes = {
-    'dine_in': 'طلب داخلي',
-    'takeaway': 'طلب سفري',
-    'delivery': 'طلب توصيل',
-    'delivery_company': 'شركة توصيل'
+    'dine_in': '\u0637\u0644\u0628 \u062F\u0627\u062E\u0644\u064A',
+    'takeaway': '\u0637\u0644\u0628 \u0633\u0641\u0631\u064A',
+    'delivery': '\u0637\u0644\u0628 \u062A\u0648\u0635\u064A\u0644',
+    'delivery_company': '\u0634\u0631\u0643\u0629 \u062A\u0648\u0635\u064A\u0644'
   };
   const orderTypeText = orderTypes[order.order_type] || order.order_type || '';
   if (orderTypeText) {
-    y += drawCenter(ctx, orderTypeText, y, 16, true);
+    y += drawCenter(ctx, orderTypeText, y, 22, true);
     y += 2;
   }
 
-  // تفاصيل حسب نوع الطلب
+  // Order details by type
   if (order.order_type === 'dine_in' && order.table_number) {
-    y += drawCenter(ctx, `طاولة: ${order.table_number}`, y, 15, true);
+    y += drawCenter(ctx, `${order.table_number} :`, y, 20, true);
   }
 
   if (order.order_type === 'takeaway') {
     if (order.buzzer_number) {
-      y += drawCenter(ctx, `رقم الجهاز: ${order.buzzer_number}`, y, 14, true);
+      y += drawCenter(ctx, `${order.buzzer_number} :`, y, 18, true);
     }
     if (order.customer_name) {
-      y += drawCenter(ctx, order.customer_name, y, 13, false);
+      y += drawCenter(ctx, order.customer_name, y, 17, false);
     }
   }
 
   if (order.order_type === 'delivery') {
     if (order.customer_name) {
-      y += drawRow(ctx, `العميل: ${order.customer_name}`, '', y, 13);
+      y += drawRow(ctx, `${order.customer_name} :`, '', y, 17);
     }
     if (order.customer_phone) {
-      y += drawRow(ctx, `الهاتف: ${order.customer_phone}`, '', y, 12);
+      y += drawRow(ctx, `${order.customer_phone} :`, '', y, 16);
     }
     if (order.delivery_address) {
-      y += drawRow(ctx, `العنوان: ${order.delivery_address}`, '', y, 12);
+      y += drawRow(ctx, `${order.delivery_address} :`, '', y, 16);
     }
     if (order.driver_name) {
-      y += drawRow(ctx, `السائق: ${order.driver_name}`, '', y, 13);
+      y += drawRow(ctx, `${order.driver_name} :`, '', y, 17);
     }
     if (order.delivery_company) {
-      y += drawRow(ctx, `شركة التوصيل: ${order.delivery_company}`, '', y, 13);
+      y += drawRow(ctx, `${order.delivery_company} :`, '', y, 17);
     }
   }
 
-  // نص أعلى الفاتورة المخصص
+  // Custom header text
   if (!isKitchen && order.custom_header) {
-    y += 2;
-    y += drawCenter(ctx, order.custom_header, y, 11, false);
+    y += 4;
+    y += drawCenter(ctx, order.custom_header, y, 14, false);
   }
 
-  // ========== فاصل سميك مزدوج ==========
+  // ========== DOUBLE SEPARATOR ==========
   y += drawDoubleSep(ctx, y);
 
-  // ========== عناوين جدول الأصناف ==========
+  // ========== ITEMS TABLE HEADER ==========
   if (!isKitchen) {
-    const headerFontSize = 12;
+    const headerFontSize = 16;
     ctx.font = `bold ${headerFontSize}px ${FONT_AR}`;
     ctx.textBaseline = 'top';
     
-    // رأس الجدول: الصنف | الكمية | السعر
     ctx.direction = 'rtl';
     ctx.textAlign = 'right';
-    ctx.fillText('الصنف', PW - MARGIN, y);
+    ctx.fillText('\u0627\u0644\u0635\u0646\u0641', PW - MARGIN, y);
     ctx.textAlign = 'center';
-    ctx.fillText('الكمية', PW / 2, y);
+    ctx.fillText('\u0627\u0644\u0643\u0645\u064A\u0629', PW / 2, y);
     ctx.direction = 'ltr';
     ctx.textAlign = 'left';
-    ctx.fillText('السعر', MARGIN, y);
+    ctx.fillText('\u0627\u0644\u0633\u0639\u0631', MARGIN, y);
     ctx.direction = 'ltr';
-    y += headerFontSize + 4;
+    y += headerFontSize + 6;
     
-    // خط تحت العناوين
+    // Line under headers
     ctx.strokeStyle = '#000';
-    ctx.lineWidth = 1;
+    ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.moveTo(MARGIN, y);
     ctx.lineTo(PW - MARGIN, y);
     ctx.stroke();
-    y += 4;
+    y += 6;
   }
 
-  // ========== الأصناف ==========
+  // ========== ITEMS ==========
   const items = order.items || [];
-  const itemFontSize = isKitchen ? 18 : 13;
+  const itemFontSize = isKitchen ? 24 : 18;
   
   for (const item of items) {
     const name = item.product_name || item.name || '';
     const qty = item.quantity || 1;
     
     if (isKitchen) {
-      // مطبخ: خط كبير، اسم + كمية
       drawText(ctx, name, PW - MARGIN, y, itemFontSize, 'right', true);
       drawText(ctx, `x${qty}`, MARGIN, y, itemFontSize, 'left', true);
-      y += itemFontSize + 8;
+      y += itemFontSize + 10;
     } else {
-      // فاتورة: صنف | كمية | السعر
       const linePrice = (item.price || 0) * qty;
       
-      // اسم الصنف يمين
+      // Item name - right
       drawText(ctx, name, PW - MARGIN, y, itemFontSize, 'right');
-      // الكمية وسط
+      // Quantity - center
       ctx.font = `bold ${itemFontSize}px ${FONT_EN}`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'top';
       ctx.direction = 'ltr';
       ctx.fillText(`${qty}`, PW / 2, y);
-      // السعر يسار
+      // Price - left
       drawText(ctx, formatNum(linePrice), MARGIN, y, itemFontSize, 'left');
-      y += itemFontSize + 6;
+      y += itemFontSize + 8;
     }
     
-    // ملاحظات العنصر
+    // Item notes
     if (item.notes) {
-      y += drawRow(ctx, `>> ${item.notes}`, '', y, 10);
+      y += drawRow(ctx, `>> ${item.notes}`, '', y, 14);
     }
     
-    // الإضافات
+    // Extras
     const extras = item.extras || item.selectedExtras || [];
     if (extras.length > 0) {
       for (const extra of extras) {
         const extraName = extra.name || '';
         if (showPrices && extra.price) {
-          y += drawRow(ctx, `  + ${extraName}`, `${formatNum(extra.price)}`, y, 10);
+          y += drawRow(ctx, `  + ${extraName}`, `${formatNum(extra.price)}`, y, 14);
         } else if (extraName) {
-          y += drawRow(ctx, `  + ${extraName}`, '', y, 10);
+          y += drawRow(ctx, `  + ${extraName}`, '', y, 14);
         }
       }
     }
   }
 
-  // ========== فاصل سميك مزدوج ==========
+  // ========== DOUBLE SEPARATOR ==========
   y += drawDoubleSep(ctx, y);
 
-  // ========== المجاميع (فاتورة الكاشير فقط) ==========
+  // ========== TOTALS (receipt only) ==========
   if (showPrices && !isKitchen) {
-    // المجموع الفرعي
+    // Subtotal
     if (order.subtotal !== undefined && order.subtotal !== order.total) {
-      y += drawRow(ctx, 'المجموع الفرعي:', formatNum(order.subtotal), y, 13);
+      y += drawRow(ctx, '\u0627\u0644\u0645\u062C\u0645\u0648\u0639 \u0627\u0644\u0641\u0631\u0639\u064A:', formatNum(order.subtotal), y, 18);
     }
 
-    // الخصم
+    // Discount
     const discount = order.discount || 0;
     if (discount > 0) {
-      y += drawRow(ctx, 'الخصم:', `-${formatNum(discount)}`, y, 13);
+      y += drawRow(ctx, '\u0627\u0644\u062E\u0635\u0645:', `-${formatNum(discount)}`, y, 18);
     }
 
-    // فاصل رفيع قبل الإجمالي
+    // Thick line before total
     ctx.strokeStyle = '#000';
-    ctx.lineWidth = 2;
+    ctx.lineWidth = 3;
     ctx.beginPath();
     ctx.moveTo(MARGIN, y + 2);
     ctx.lineTo(PW - MARGIN, y + 2);
     ctx.stroke();
-    y += 8;
+    y += 10;
 
-    // الإجمالي النهائي - خط كبير وعريض
+    // Grand total - large bold
     const total = order.total || 0;
-    drawText(ctx, 'الإجمالي النهائي:', PW - MARGIN, y, 18, 'right', true);
-    drawText(ctx, formatNum(total), MARGIN, y, 18, 'left', true);
-    y += 24;
+    drawText(ctx, '\u0627\u0644\u0625\u062C\u0645\u0627\u0644\u064A \u0627\u0644\u0646\u0647\u0627\u0626\u064A:', PW - MARGIN, y, 24, 'right', true);
+    drawText(ctx, formatNum(total), MARGIN, y, 24, 'left', true);
+    y += 32;
 
-    // طريقة الدفع
+    // Payment method
     const payMethods = {
-      'cash': 'نقدي',
-      'card': 'بطاقة',
-      'credit': 'آجل',
-      'delivery_company': 'شركة توصيل',
+      'cash': '\u0646\u0642\u062F\u064A',
+      'card': '\u0628\u0637\u0627\u0642\u0629',
+      'credit': '\u0622\u062C\u0644',
+      'delivery_company': '\u0634\u0631\u0643\u0629 \u062A\u0648\u0635\u064A\u0644',
       'pending': ''
     };
     const payText = payMethods[order.payment_method] || order.payment_method || '';
     if (payText) {
-      y += drawRow(ctx, 'طريقة الدفع:', payText, y, 13);
+      y += drawRow(ctx, '\u0637\u0631\u064A\u0642\u0629 \u0627\u0644\u062F\u0641\u0639:', payText, y, 17);
     }
   }
 
-  // ========== نص أسفل الفاتورة المخصص ==========
+  // ========== CUSTOM FOOTER ==========
   if (!isKitchen && order.custom_footer) {
     y += drawDashedSep(ctx, y);
-    y += drawCenter(ctx, order.custom_footer, y, 11, false);
+    y += drawCenter(ctx, order.custom_footer, y, 14, false);
   }
 
-  // ========== فاصل متقطع ==========
+  // ========== DASHED SEPARATOR ==========
   y += drawDashedSep(ctx, y);
 
-  // ========== التذييل ==========
+  // ========== FOOTER ==========
   if (!isKitchen) {
-    // رسالة الشكر
-    const thankMsg = order.thank_you_message || 'شكراً لزيارتكم';
-    y += drawCenter(ctx, thankMsg, y, 13, true);
-    y += 4;
+    // Thank you message
+    const thankMsg = order.thank_you_message || '\u0634\u0643\u0631\u0627\u064B \u0644\u0632\u064A\u0627\u0631\u062A\u0643\u0645';
+    y += drawCenter(ctx, thankMsg, y, 18, true);
+    y += 6;
   }
 
-  // وقت الطباعة
-  y += drawCenter(ctx, `${dateStr()} ${time12()}`, y, 10, false);
+  // Print time
+  y += drawCenter(ctx, `${dateStr()} ${time12()}`, y, 13, false);
+  y += 6;
 
-  // اسم النظام
+  // System logo
+  if (!isKitchen && sysLogoImg) {
+    const sLogoSize = 50;
+    const sLogoX = (PW - sLogoSize) / 2;
+    ctx.drawImage(sysLogoImg, sLogoX, y, sLogoSize, sLogoSize);
+    y += sLogoSize + 4;
+  }
+
+  // System name
   const sysName = order.system_name || 'Maestro EGP';
-  y += drawCenter(ctx, sysName, y, 10, true);
-  y += 15;
+  y += drawCenter(ctx, sysName, y, 14, true);
+  y += 20;
 
-  // قص الكانفس للحجم الفعلي
+  // Trim canvas to actual height
   const finalCanvas = document.createElement('canvas');
   finalCanvas.width = PW;
   finalCanvas.height = y;
@@ -414,10 +487,8 @@ function renderReceiptCanvas(order, config = {}) {
 }
 
 /**
- * تحويل Canvas إلى ESC/POS bitmap bytes
- * يستخدم ESC * 33 (24-dot double-density) بدل GS v 0
- * يرسل الصورة سطر بسطر (24 بكسل لكل شريحة) مع تقدم الورقة
- * هذا الأسلوب يعمل على جميع الطابعات الحرارية بما فيها SAM4S
+ * Convert Canvas to ESC/POS bitmap bytes
+ * Uses ESC * 33 (24-dot double-density) column mode
  */
 function canvasToEscPos(canvas) {
   const ctx = canvas.getContext('2d');
@@ -426,7 +497,6 @@ function canvasToEscPos(canvas) {
   const imgData = ctx.getImageData(0, 0, w, h);
   const pixels = imgData.data;
   
-  // حساب بت واحد لبكسل (أسود=1، أبيض=0)
   function getPixel(x, y) {
     if (x >= w || y >= h) return 0;
     const idx = (y * w + x) * 4;
@@ -436,14 +506,12 @@ function canvasToEscPos(canvas) {
     return (r * 0.299 + g * 0.587 + b * 0.114) < 128 ? 1 : 0;
   }
   
-  const STRIP_H = 24; // 24-dot mode
-  const nCols = w;     // عدد الأعمدة (384)
+  const STRIP_H = 24;
+  const nCols = w;
   const nL = nCols & 0xFF;
   const nH = (nCols >> 8) & 0xFF;
   
-  // حساب الحجم التقريبي
   const numStrips = Math.ceil(h / STRIP_H);
-  // لكل شريحة: 3 bytes header (ESC * 33) + 2 bytes (nL nH) + nCols*3 bytes data + 1 byte LF
   const stripDataSize = 5 + nCols * 3 + 1;
   const totalEstimate = 2 + 3 + (numStrips * stripDataSize) + 3 + 8;
   const bytes = new Uint8Array(totalEstimate);
@@ -453,57 +521,45 @@ function canvasToEscPos(canvas) {
   bytes[pos++] = 0x1B;
   bytes[pos++] = 0x40;
   
-  // ESC 3 n - Set line spacing to 24 dots (لضمان عدم وجود فراغات بين الشرائح)
+  // ESC 3 n - Set line spacing to 24 dots
   bytes[pos++] = 0x1B;
   bytes[pos++] = 0x33;
   bytes[pos++] = STRIP_H;
   
-  // معالجة كل شريحة (24 سطر)
   for (let stripStart = 0; stripStart < h; stripStart += STRIP_H) {
-    // ESC * 33 nL nH - Select 24-dot double-density bit image mode
+    // ESC * 33 nL nH
     bytes[pos++] = 0x1B;
     bytes[pos++] = 0x2A;
-    bytes[pos++] = 33;   // m=33: 24-dot double-density
+    bytes[pos++] = 33;
     bytes[pos++] = nL;
     bytes[pos++] = nH;
     
-    // بيانات الأعمدة - كل عمود 3 بايت (24 بت عمودي)
     for (let col = 0; col < nCols; col++) {
-      // بايت 0: الصفوف 0-7
       let b0 = 0;
       for (let bit = 0; bit < 8; bit++) {
-        if (getPixel(col, stripStart + bit)) {
-          b0 |= (0x80 >> bit);
-        }
+        if (getPixel(col, stripStart + bit)) b0 |= (0x80 >> bit);
       }
-      // بايت 1: الصفوف 8-15
       let b1 = 0;
       for (let bit = 0; bit < 8; bit++) {
-        if (getPixel(col, stripStart + 8 + bit)) {
-          b1 |= (0x80 >> bit);
-        }
+        if (getPixel(col, stripStart + 8 + bit)) b1 |= (0x80 >> bit);
       }
-      // بايت 2: الصفوف 16-23
       let b2 = 0;
       for (let bit = 0; bit < 8; bit++) {
-        if (getPixel(col, stripStart + 16 + bit)) {
-          b2 |= (0x80 >> bit);
-        }
+        if (getPixel(col, stripStart + 16 + bit)) b2 |= (0x80 >> bit);
       }
       bytes[pos++] = b0;
       bytes[pos++] = b1;
       bytes[pos++] = b2;
     }
     
-    // LF - تقدم الورقة بمقدار 24 نقطة (كما حددنا في ESC 3)
     bytes[pos++] = 0x0A;
   }
   
-  // ESC 2 - Reset line spacing to default
+  // ESC 2 - Reset line spacing
   bytes[pos++] = 0x1B;
   bytes[pos++] = 0x32;
   
-  // تغذية ورق
+  // Feed paper
   bytes[pos++] = 0x0A;
   bytes[pos++] = 0x0A;
   bytes[pos++] = 0x0A;
@@ -519,10 +575,9 @@ function canvasToEscPos(canvas) {
 }
 
 /**
- * تحويل Uint8Array إلى base64 بكفاءة عالية
+ * Convert Uint8Array to base64
  */
 function uint8ToBase64(uint8Array) {
-  // تقسيم المصفوفة لأجزاء صغيرة لتجنب تجاوز حد الذاكرة في String.fromCharCode
   const CHUNK = 8192;
   let binary = '';
   for (let i = 0; i < uint8Array.length; i += CHUNK) {
@@ -533,11 +588,12 @@ function uint8ToBase64(uint8Array) {
 }
 
 /**
- * توليد بيانات ESC/POS جاهزة للطباعة كـ base64
+ * Generate ESC/POS print-ready data as base64
+ * NOW ASYNC to support logo loading
  */
-export function renderReceiptBitmap(order, config = {}) {
+export async function renderReceiptBitmap(order, config = {}) {
   try {
-    const canvas = renderReceiptCanvas(order, config);
+    const canvas = await renderReceiptCanvas(order, config);
     const escposBytes = canvasToEscPos(canvas);
     const base64 = uint8ToBase64(escposBytes);
     
@@ -550,8 +606,7 @@ export function renderReceiptBitmap(order, config = {}) {
 }
 
 /**
- * توليد صفحة اختبار الطابعة كـ Canvas bitmap
- * تطابق شكل صفحة اختبار طابعات الشبكة (الورقة الكبيرة مع العربية)
+ * Test page canvas renderer
  */
 function renderTestPageCanvas(printerInfo = {}) {
   const canvas = document.createElement('canvas');
@@ -563,66 +618,47 @@ function renderTestPageCanvas(printerInfo = {}) {
   ctx.fillRect(0, 0, PW, 2000);
   ctx.fillStyle = '#000000';
   
-  let y = 15;
+  let y = 20;
 
-  // التاريخ والوقت أعلى الصفحة
-  y += drawCenter(ctx, `اختبار الطابعة          ${dateStr()} ${time12()}`, y, 11, false);
-  y += 8;
-
-  // فاصل متقطع
+  y += drawCenter(ctx, `${dateStr()} ${time12()}          `, y, 14, false);
+  y += 10;
   y += drawDashedSep(ctx, y);
 
-  // عنوان الاختبار
-  y += drawCenter(ctx, '*** اختبار الطابعة ***', y, 20, true);
-  y += 8;
-
-  // فاصل متقطع
+  y += drawCenter(ctx, '*** \u0627\u062E\u062A\u0628\u0627\u0631 \u0627\u0644\u0637\u0627\u0628\u0639\u0629 ***', y, 26, true);
+  y += 10;
   y += drawDashedSep(ctx, y);
 
-  // اسم الطابعة
   if (printerInfo.name) {
-    y += drawCenter(ctx, printerInfo.name, y, 16, true);
-    y += 4;
+    y += drawCenter(ctx, printerInfo.name, y, 22, true);
+    y += 6;
   }
 
-  // نوع الاتصال
   if (printerInfo.connection_type === 'usb') {
-    y += drawCenter(ctx, `USB: ${printerInfo.usb_printer_name || ''}`, y, 13, false);
+    y += drawCenter(ctx, `USB: ${printerInfo.usb_printer_name || ''}`, y, 17, false);
   } else {
-    y += drawCenter(ctx, 'IP:', y, 13, false);
-    y += drawCenter(ctx, `${printerInfo.ip_address || ''}:${printerInfo.port || 9100}`, y, 13, false);
+    y += drawCenter(ctx, 'IP:', y, 17, false);
+    y += drawCenter(ctx, `${printerInfo.ip_address || ''}:${printerInfo.port || 9100}`, y, 17, false);
   }
-  y += 4;
+  y += 6;
 
-  // اسم الفرع
   if (printerInfo.branch_name) {
-    y += drawCenter(ctx, `الفرع: ${printerInfo.branch_name}`, y, 14, false);
+    y += drawCenter(ctx, `${printerInfo.branch_name} :`, y, 18, false);
   }
-  y += 4;
-
-  // فاصل متقطع
+  y += 6;
   y += drawDashedSep(ctx, y);
 
-  // التاريخ والوقت
-  y += drawCenter(ctx, `التاريخ: ${dateStr()}`, y, 14, false);
-  y += drawCenter(ctx, `الوقت: ${time12()}`, y, 14, false);
-  y += 4;
-
-  // فاصل متقطع
+  y += drawCenter(ctx, `${dateStr()} :`, y, 18, false);
+  y += drawCenter(ctx, `${time12()} :`, y, 18, false);
+  y += 6;
   y += drawDashedSep(ctx, y);
 
-  // رسالة النجاح
-  y += drawCenter(ctx, 'الطباعة تعمل بنجاح!', y, 18, true);
-  y += 8;
-
-  // فاصل مزدوج
+  y += drawCenter(ctx, '\u0627\u0644\u0637\u0628\u0627\u0639\u0629 \u062A\u0639\u0645\u0644 \u0628\u0646\u062C\u0627\u062D!', y, 24, true);
+  y += 10;
   y += drawDoubleSep(ctx, y);
 
-  // تحذير الوكيل
-  y += drawCenter(ctx, 'Maestro EGP', y, 12, true);
-  y += 15;
+  y += drawCenter(ctx, 'Maestro EGP', y, 16, true);
+  y += 20;
 
-  // قص الكانفس
   const finalCanvas = document.createElement('canvas');
   finalCanvas.width = PW;
   finalCanvas.height = y;
@@ -633,7 +669,7 @@ function renderTestPageCanvas(printerInfo = {}) {
 }
 
 /**
- * توليد صفحة اختبار ESC/POS كـ base64
+ * Generate test page ESC/POS as base64
  */
 export function renderTestBitmap(printerInfo = {}) {
   try {

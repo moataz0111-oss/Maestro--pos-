@@ -159,9 +159,9 @@ export const sendReceiptPrint = async (printer, orderData) => {
       printer_type: printer.printer_type || 'receipt'
     };
 
-    // الخطوة 1: توليد ESC/POS bitmap في المتصفح
+    // الخطوة 1: توليد ESC/POS bitmap في المتصفح (async for logo loading)
     console.log(`[Print] Rendering receipt for ${printer.name} (${printer.printer_type})`);
-    const renderResult = renderReceiptBitmap(orderData, printerConfig);
+    const renderResult = await renderReceiptBitmap(orderData, printerConfig);
     
     if (!renderResult.success || !renderResult.raw_data) {
       console.error('[Print] Browser render failed:', renderResult.error);
