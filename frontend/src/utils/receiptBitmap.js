@@ -67,10 +67,10 @@ function drawR(ctx, text, y, size = 18, bold = false, maxW = CW) {
   return h;
 }
 
-// Draw left=value right=label row
+// Draw left=value right=label row (always bold)
 function drawRow(ctx, label, value, y, size = 18) {
-  if (label) { ctx.font = font(size, false, label); ctx.textAlign = 'right'; ctx.textBaseline = 'top'; ctx.direction = isAr(label)?'rtl':'ltr'; ctx.fillText(label, PW-MARGIN, y); ctx.direction = 'ltr'; }
-  if (value) { ctx.font = font(size, false, value); ctx.textAlign = 'left'; ctx.textBaseline = 'top'; ctx.direction = 'ltr'; ctx.fillText(value, MARGIN, y); }
+  if (label) { ctx.font = font(size, true, label); ctx.textAlign = 'right'; ctx.textBaseline = 'top'; ctx.direction = isAr(label)?'rtl':'ltr'; ctx.fillText(label, PW-MARGIN, y); ctx.direction = 'ltr'; }
+  if (value) { ctx.font = font(size, true, value); ctx.textAlign = 'left'; ctx.textBaseline = 'top'; ctx.direction = 'ltr'; ctx.fillText(value, MARGIN, y); }
   return size + 8;
 }
 
@@ -106,7 +106,7 @@ function invH(ctx, text, y, size = 26) {
   return bh + 8;
 }
 
-// Load image with SHORT timeout (500ms max)
+// Load image with timeout (2s for logos)
 function loadImg(src) {
   return new Promise(r => {
     if (!src) return r(null);
@@ -114,7 +114,7 @@ function loadImg(src) {
     img.crossOrigin = 'anonymous';
     img.onload = () => r(img);
     img.onerror = () => r(null);
-    setTimeout(() => r(null), 500);
+    setTimeout(() => r(null), 2000);
     img.src = src;
   });
 }
@@ -170,17 +170,17 @@ async function renderReceipt(order) {
 
   // Phone
   const phones = [order.phone, order.phone2].filter(Boolean);
-  if (phones.length) y += drawC(x, phones.join(' - '), y, 18);
+  if (phones.length) y += drawC(x, phones.join(' - '), y, 18, true);
 
   // Address
-  if (order.address) y += drawC(x, order.address, y, 18);
+  if (order.address) y += drawC(x, order.address, y, 18, true);
 
   // Branch
-  if (order.branch_name) { y += 2; y += drawC(x, order.branch_name, y, 18); }
+  if (order.branch_name) { y += 2; y += drawC(x, order.branch_name, y, 18, true); }
 
   // Tax
   if (order.tax_number && order.show_tax !== false)
-    y += drawC(x, `${order.tax_number} :TIN`, y, 14);
+    y += drawC(x, `${order.tax_number} :TIN`, y, 14, true);
 
   y += dash(x, y);
   y += 4;
@@ -191,11 +191,11 @@ async function renderReceipt(order) {
 
   // Date + Time
   const { date, time } = nowStr();
-  y += drawC(x, `${date}  -  ${time}`, y, 18);
+  y += drawC(x, `${date}  -  ${time}`, y, 18, true);
 
   // Cashier
   if (order.cashier_name)
-    y += drawC(x, `${order.cashier_name} :الكاشير`, y, 18);
+    y += drawC(x, `${order.cashier_name} :الكاشير`, y, 18, true);
 
   y += dash(x, y);
 
@@ -209,7 +209,7 @@ async function renderReceipt(order) {
     y += drawC(x, `${order.table_number} : طاولة`, y, 22, true);
   if (order.order_type === 'takeaway') {
     if (order.buzzer_number) y += drawC(x, `${order.buzzer_number} :رقم الجهاز`, y, 20, true);
-    if (order.customer_name) y += drawC(x, order.customer_name, y, 18);
+    if (order.customer_name) y += drawC(x, order.customer_name, y, 18, true);
   }
   if (order.order_type === 'delivery') {
     if (order.customer_name) y += drawRow(x, `${order.customer_name} :العميل`, '', y, 18);
@@ -220,7 +220,7 @@ async function renderReceipt(order) {
   }
 
   // Custom header (greeting)
-  if (order.custom_header) { y += 4; y += drawC(x, order.custom_header, y, 16); }
+  if (order.custom_header) { y += 4; y += drawC(x, order.custom_header, y, 16, true); }
 
   y += dash(x, y);
   y += 4;
@@ -288,7 +288,7 @@ async function renderReceipt(order) {
     }
 
     // Draw quantity (center, on first line)
-    x.font = font(itemSize, false, String(qty));
+    x.font = font(itemSize, true, String(qty));
     x.textAlign = 'center'; x.direction = 'ltr';
     x.fillText(String(qty), colQtyX, firstLineY);
 
@@ -303,7 +303,7 @@ async function renderReceipt(order) {
 
     // Notes
     if (item.notes) {
-      y += drawR(x, `** ${item.notes} **`, y, 16);
+      y += drawR(x, `** ${item.notes} **`, y, 16, true);
     }
 
     // Extras
@@ -312,15 +312,15 @@ async function renderReceipt(order) {
       if (ext.name) {
         const extName = `  + ${ext.name}`;
         if (ext.price) {
-          x.font = font(16, false, extName);
+          x.font = font(16, true, extName);
           x.textAlign = 'right'; x.textBaseline = 'top'; x.direction = 'rtl';
           x.fillText(extName, colNameX, y);
           x.direction = 'ltr'; x.textAlign = 'left';
-          x.font = font(16, false, fmt(ext.price));
+          x.font = font(16, true, fmt(ext.price));
           x.fillText(fmt(ext.price), colPriceX, y);
           y += 24;
         } else {
-          y += drawR(x, extName, y, 16);
+          y += drawR(x, extName, y, 16, true);
         }
       }
     }
@@ -375,7 +375,7 @@ async function renderReceipt(order) {
   if (payT && payT !== 'pending') y += drawRow(x, 'طريقة الدفع:', payT, y, 18);
 
   // Custom footer
-  if (order.custom_footer) { y += dash(x, y); y += drawC(x, order.custom_footer, y, 16); y += 4; }
+  if (order.custom_footer) { y += dash(x, y); y += drawC(x, order.custom_footer, y, 16, true); y += 4; }
 
   y += dash(x, y);
   y += 6;
@@ -383,13 +383,9 @@ async function renderReceipt(order) {
   // ===== THANK YOU =====
   const thank = order.thank_you_message || 'شكراً لزيارتكم';
   y += drawC(x, thank, y, 22, true);
-  y += 8;
+  y += 10;
 
-  // Date/time at bottom
-  y += drawC(x, `${date} ${time}`, y, 14);
-  y += 8;
-
-  // ===== SYSTEM LOGO (bottom center) =====
+  // ===== SYSTEM LOGO (right after thank you - no date/time) =====
   if (sysLogo) {
     const sz = 80;
     x.drawImage(sysLogo, (PW-sz)/2, y, sz, sz);
@@ -402,7 +398,7 @@ async function renderReceipt(order) {
   // Contact message
   const contactMsg = order.contact_message || 'للتواصل معنا لشراء نسخة امسح الكود';
   y += 2;
-  y += drawC(x, contactMsg, y, 11);
+  y += drawC(x, contactMsg, y, 11, true);
   y += 4;
 
   // ===== QR CODE =====

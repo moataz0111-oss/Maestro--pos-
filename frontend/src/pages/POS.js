@@ -173,6 +173,7 @@ export default function POS() {
   const [restaurantSettings, setRestaurantSettings] = useState({});
   const [systemInvoiceSettings, setSystemInvoiceSettings] = useState({});
   const [logoBase64, setLogoBase64] = useState(null); // شعار المطعم بصيغة base64 للطباعة
+  const [sysLogoBase64, setSysLogoBase64] = useState(null); // شعار النظام بصيغة base64 للطباعة
   
   // حالات الإرجاع
   const [refundDialogOpen, setRefundDialogOpen] = useState(false);
@@ -491,6 +492,22 @@ export default function POS() {
         sysInvoice.system_logo_url = loginBg.logo_url;
       }
       setSystemInvoiceSettings(sysInvoice);
+
+      // Pre-load system logo as base64
+      if (sysInvoice.system_logo_url) {
+        try {
+          const sysLogoUrl = sysInvoice.system_logo_url;
+          const fullSysUrl = sysLogoUrl.startsWith('http') ? sysLogoUrl
+            : sysLogoUrl.startsWith('/api') ? `${API}${sysLogoUrl.replace('/api', '')}`
+            : sysLogoUrl.startsWith('/uploads') ? `${API}${sysLogoUrl}`
+            : sysLogoUrl;
+          const sysImgResp = await fetch(fullSysUrl);
+          const sysBlob = await sysImgResp.blob();
+          const sysReader = new FileReader();
+          sysReader.onloadend = () => setSysLogoBase64(sysReader.result);
+          sysReader.readAsDataURL(sysBlob);
+        } catch (e) { console.log('Could not preload system logo'); }
+      }
       
       // إذا لم تكن هناك وردية مفتوحة، افتح واحدة تلقائياً
       if (!shiftRes.data) {
@@ -1352,6 +1369,7 @@ export default function POS() {
       // Logo data for receipt bitmap
       logo_base64: logoBase64 || null,
       logo_url: resolvedLogoUrl,
+      system_logo_base64: sysLogoBase64 || null,
       system_logo_url: resolvedSysLogoUrl
     };
   };
