@@ -8037,7 +8037,7 @@ async def test_printer_connection(printer_id: str, current_user: dict = Depends(
         return {"status": "error", "message": f"خطأ في الاتصال: {str(e)}"}
 
 
-PRINT_AGENT_VERSION = "2.2.0"
+PRINT_AGENT_VERSION = "2.3.0"
 
 @api_router.get("/print-agent-version")
 async def get_print_agent_version():
@@ -8045,119 +8045,143 @@ async def get_print_agent_version():
     return {"version": PRINT_AGENT_VERSION}
 
 
-@api_router.get("/download-print-agent")
-async def download_print_agent():
-    """تحميل وسيط الطباعة المحلي - ملف bat لويندوز يعمل في الخلفية"""
+@api_router.get("/print-agent-script")
+async def get_print_agent_script():
+    """إرجاع ملف server.ps1 مباشرة للتحميل من المثبّت"""
     from fastapi.responses import Response
-    import base64
+    ps1_path = ROOT_DIR / "static" / "print_server.ps1"
+    if not ps1_path.exists():
+        raise HTTPException(status_code=404, detail="ملف وسيط الطباعة غير موجود")
+    ps1_code = ps1_path.read_text(encoding='utf-8')
+    return Response(
+        content=ps1_code,
+        media_type="text/plain",
+        headers={"Content-Type": "text/plain; charset=utf-8"}
+    )
+
+
+@api_router.get("/download-print-agent")
+async def download_print_agent(request: Request):
+    """تحميل وسيط الطباعة المحلي - ملف bat بسيط يحمّل من الإنترنت"""
+    from fastapi.responses import Response
 
     ps1_path = ROOT_DIR / "static" / "print_server.ps1"
     if not ps1_path.exists():
         raise HTTPException(status_code=404, detail="ملف وسيط الطباعة غير موجود")
 
-    ps1_code = ps1_path.read_text(encoding='utf-8')
-    server_encoded = base64.b64encode(ps1_code.encode('utf-16-le')).decode('ascii')
+    # Build the download URL from request headers
+    host = request.headers.get('x-forwarded-host') or request.headers.get('host', 'localhost:8001')
+    scheme = request.headers.get('x-forwarded-proto', 'https')
+    script_url = f"{scheme}://{host}/api/print-agent-script"
 
-    setup_ps1 = (
-        '# === INSTALL LOG ===\n'
-        '$d = "$env:LOCALAPPDATA\\MaestroPrintAgent"\n'
-        'New-Item -ItemType Directory -Path $d -Force | Out-Null\n'
-        '$log = "$d\\install.log"\n'
-        '"$(Get-Date) - Setup started" | Out-File $log\n'
-        '\n'
-        '# === EXTRACT SERVER FILE ===\n'
-        'try {\n'
-        '  $content = Get-Content $env:MAESTRO_BAT_PATH -Raw\n'
-        "  $encoded = ($content -split '::ENCODED_SERVER::')[1].Trim()\n"
-        '  $decoded = [Text.Encoding]::Unicode.GetString([Convert]::FromBase64String($encoded))\n'
-        '  [IO.File]::WriteAllText("$d\\server.ps1", $decoded, [Text.Encoding]::UTF8)\n'
-        '  "$(Get-Date) - server.ps1 written OK (size: $($decoded.Length))" | Out-File $log -Append\n'
-        '} catch {\n'
-        '  "$(Get-Date) - ERROR extracting server: $_" | Out-File $log -Append\n'
-        '}\n'
-        '\n'
-        '# === START NEW SERVER ===\n'
-        'if (Test-Path "$d\\server.ps1") {\n'
-        '  $startArgs = \'-ExecutionPolicy Bypass -NoProfile -WindowStyle Hidden -File "{0}\\server.ps1"\' -f $d\n'
-        '  Start-Process powershell -ArgumentList $startArgs -WindowStyle Hidden\n'
-        '  "$(Get-Date) - Server process started with: $startArgs" | Out-File $log -Append\n'
-        '} else {\n'
-        '  "$(Get-Date) - ERROR: server.ps1 not found!" | Out-File $log -Append\n'
-        '}\n'
-        '\n'
-        '# === CREATE STARTUP VBS ===\n'
-        '$q = [char]34\n'
-        '$qq = $q + $q\n'
-        "$vbsLine1 = 'Set s = CreateObject(' + $q + 'WScript.Shell' + $q + ')'\n"
-        "$vbsLine2 = 's.Run ' + $q + 'powershell -ExecutionPolicy Bypass -NoProfile -WindowStyle Hidden -File ' + $qq + $d + '\\server.ps1' + $qq + $q + ', 0, False'\n"
-        '[IO.File]::WriteAllLines("$d\\launcher.vbs", @($vbsLine1, $vbsLine2))\n'
-        '$startup = "$env:APPDATA\\Microsoft\\Windows\\Start Menu\\Programs\\Startup"\n'
-        'Copy-Item "$d\\launcher.vbs" "$startup\\MaestroPrintAgent.vbs" -Force\n'
-        '"$(Get-Date) - Setup complete" | Out-File $log -Append\n'
-    )
-    setup_encoded = base64.b64encode(setup_ps1.strip().encode('utf-16-le')).decode('ascii')
-
-    bat_content = f"""@echo off
-chcp 65001 >nul 2>&1
-
-REM === طلب صلاحيات المسؤول تلقائياً ===
-net session >nul 2>&1
-if %errorlevel% neq 0 (
-    powershell -Command "Start-Process cmd -ArgumentList '/c \"%~f0\"' -Verb RunAs"
-    exit /b
-)
-
-title Maestro EGP - Print Agent v2.3
-color 0A
-echo.
-echo  ========================================
-echo    Maestro EGP - Print Agent v2.3
-echo  ========================================
-echo.
-
-echo  [1/5] Removing auto-start...
-del /F /Q "%APPDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\MaestroPrintAgent.vbs" >nul 2>&1
-echo  [OK]
-echo.
-
-echo  [2/5] Force-killing old agent on port 9999...
-powershell -NoProfile -ExecutionPolicy Bypass -Command "netstat -aon | Select-String ':9999.*LISTENING' | ForEach-Object {{ $parts = ($_ -split '\\s+'); $pid = $parts[$parts.Length-1]; if ($pid -match '^\\d+$') {{ Write-Host ('  Killing PID: ' + $pid); Stop-Process -Id ([int]$pid) -Force -ErrorAction SilentlyContinue }} }}; Start-Sleep 2; taskkill /F /IM wscript.exe 2>$null; Get-Process powershell -ErrorAction SilentlyContinue | Where-Object {{ $_.Id -ne $PID }} | ForEach-Object {{ try {{ if ((Get-CimInstance Win32_Process -Filter ('ProcessId=' + $_.Id)).CommandLine -like '*server.ps1*') {{ Write-Host ('  Killing PowerShell PID: ' + $_.Id); Stop-Process -Id $_.Id -Force }} }} catch {{}} }}"
-timeout /t 3 >nul
-echo  [OK]
-echo.
-
-echo  [3/5] Deleting old files...
-if exist "%LOCALAPPDATA%\\MaestroPrintAgent" rd /s /q "%LOCALAPPDATA%\\MaestroPrintAgent" >nul 2>&1
-timeout /t 2 >nul
-if exist "%LOCALAPPDATA%\\MaestroPrintAgent" rd /s /q "%LOCALAPPDATA%\\MaestroPrintAgent" >nul 2>&1
-echo  [OK]
-echo.
-
-echo  [4/5] Installing v2.3...
-set "MAESTRO_BAT_PATH=%~f0"
-powershell -ExecutionPolicy Bypass -NoProfile -EncodedCommand {setup_encoded}
-if exist "%LOCALAPPDATA%\\MaestroPrintAgent\\server.ps1" (
-    echo  [OK] Installed successfully
-) else (
-    echo  [ERROR] Installation failed
-    pause
-    exit /b 1
-)
-echo.
-
-echo  [5/5] Waiting for new agent to start...
-timeout /t 12 >nul
-powershell -NoProfile -Command "try {{ $r = Invoke-WebRequest -Uri 'http://localhost:9999/status' -UseBasicParsing -TimeoutSec 5; $j = $r.Content | ConvertFrom-Json; Write-Host ('  Version: ' + $j.version) -ForegroundColor Cyan; if ($j.version -like '2.3*') {{ Write-Host '  [OK] v2.3 ACTIVE!' -ForegroundColor Green }} else {{ Write-Host '  [WARN] Wrong version - restart PC and run again' -ForegroundColor Yellow }} }} catch {{ Start-Sleep 10; try {{ $r2 = Invoke-WebRequest -Uri 'http://localhost:9999/status' -UseBasicParsing -TimeoutSec 5; $j2 = $r2.Content | ConvertFrom-Json; Write-Host ('  Version: ' + $j2.version) -ForegroundColor Cyan }} catch {{ Write-Host '  [ERROR] Agent not started - restart PC' -ForegroundColor Red }} }}"
-echo.
-echo  ========================================
-echo    Done! Refresh the POS page.
-echo  ========================================
-echo.
-timeout /t 15 >nul
-exit /b
-::ENCODED_SERVER::
-{server_encoded}
-"""
+    bat_lines = [
+        '@echo off',
+        'chcp 65001 >nul 2>&1',
+        '',
+        'REM ======================================================',
+        'REM   Maestro Print Agent v2.3.0 - Installer',
+        'REM ======================================================',
+        '',
+        'REM === Request Admin ===',
+        'net session >nul 2>&1',
+        'if %errorlevel% neq 0 (',
+        '    powershell -Command "Start-Process \'%~f0\' -Verb RunAs"',
+        '    exit /b',
+        ')',
+        '',
+        'title Maestro Print Agent v2.3.0',
+        'color 0A',
+        'echo.',
+        'echo  ========================================',
+        'echo    Maestro Print Agent v2.3.0',
+        'echo  ========================================',
+        'echo.',
+        '',
+        'set "D=%LOCALAPPDATA%\\MaestroPrintAgent"',
+        'set "S=%APPDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\Startup"',
+        '',
+        'REM === STEP 1: Kill old agent ===',
+        'echo  [1/5] Stopping old agent...',
+        'taskkill /F /IM wscript.exe >nul 2>&1',
+        'del /F /Q "%S%\\MaestroPrintAgent.vbs" >nul 2>&1',
+        '',
+        'REM Kill process on port 9999',
+        'for /f "tokens=5" %%p in (\'netstat -aon 2^>nul ^| findstr ":9999 " ^| findstr /i "LISTEN"\') do (',
+        '    echo    - Killing PID %%p',
+        '    taskkill /F /PID %%p >nul 2>&1',
+        ')',
+        '',
+        'REM Kill PowerShell running server.ps1',
+        'wmic process where "name=\'powershell.exe\' and commandline like \'%%server.ps1%%\'" call terminate >nul 2>&1',
+        '',
+        'echo    Waiting for processes to stop...',
+        'timeout /t 5 /nobreak >nul',
+        '',
+        'REM Double-check port 9999',
+        'for /f "tokens=5" %%p in (\'netstat -aon 2^>nul ^| findstr ":9999 " ^| findstr /i "LISTEN"\') do (',
+        '    echo    - Still running PID %%p - force killing...',
+        '    taskkill /F /PID %%p >nul 2>&1',
+        '    timeout /t 3 /nobreak >nul',
+        ')',
+        'echo    [OK]',
+        'echo.',
+        '',
+        'REM === STEP 2: Delete old files ===',
+        'echo  [2/5] Removing old files...',
+        'if exist "%D%" rd /s /q "%D%" >nul 2>&1',
+        'timeout /t 2 /nobreak >nul',
+        'if exist "%D%" (',
+        '    del /F /S /Q "%D%\\*" >nul 2>&1',
+        '    rd /s /q "%D%" >nul 2>&1',
+        '    timeout /t 2 /nobreak >nul',
+        ')',
+        'if exist "%D%" (',
+        '    echo    - Using PowerShell to force remove...',
+        '    powershell -NoProfile -Command "Remove-Item \'%D%\' -Recurse -Force -ErrorAction SilentlyContinue"',
+        '    timeout /t 2 /nobreak >nul',
+        ')',
+        'mkdir "%D%" >nul 2>&1',
+        'echo    [OK]',
+        'echo.',
+        '',
+        'REM === STEP 3: Download server.ps1 ===',
+        'echo  [3/5] Downloading v2.3.0...',
+        'powershell -NoProfile -Command "[Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -Uri \'' + script_url + '\' -OutFile \'%D%\\server.ps1\' -UseBasicParsing"',
+        '',
+        'if not exist "%D%\\server.ps1" (',
+        '    echo    [ERROR] Download failed!',
+        '    echo    Please check your internet connection.',
+        '    pause',
+        '    exit /b 1',
+        ')',
+        'echo    [OK]',
+        'echo.',
+        '',
+        'REM === STEP 4: Start agent ===',
+        'echo  [4/5] Starting agent...',
+        'start "" powershell -ExecutionPolicy Bypass -NoProfile -WindowStyle Hidden -File "%D%\\server.ps1"',
+        'echo    [OK]',
+        'echo.',
+        '',
+        'REM === STEP 5: Auto-start + VBS launcher ===',
+        'echo  [5/5] Setting auto-start...',
+        'powershell -NoProfile -Command "$d=$env:LOCALAPPDATA+\'\\MaestroPrintAgent\'; $q=[char]34; $vbs=\'Set s=CreateObject(\'+$q+\'WScript.Shell\'+$q+\')\'+[char]13+[char]10+\'s.Run \'+$q+\'powershell -ExecutionPolicy Bypass -NoProfile -WindowStyle Hidden -File \'+$q+$q+$d+\'\\server.ps1\'+$q+$q+$q+\', 0, False\'; [IO.File]::WriteAllText(($d+\'\\launcher.vbs\'),$vbs); Copy-Item ($d+\'\\launcher.vbs\') ($env:APPDATA+\'\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\MaestroPrintAgent.vbs\') -Force"',
+        'echo    [OK]',
+        '',
+        'REM === Verify ===',
+        'echo.',
+        'echo  Verifying...',
+        'timeout /t 10 /nobreak >nul',
+        'powershell -NoProfile -Command "try { $r=Invoke-WebRequest -Uri \'http://localhost:9999/status\' -UseBasicParsing -TimeoutSec 5; $j=$r.Content|ConvertFrom-Json; Write-Host (\'  Version: \'+$j.version) -ForegroundColor Green } catch { Write-Host \'  Agent starting... please wait or restart PC\' -ForegroundColor Yellow }"',
+        'echo.',
+        'echo  ========================================',
+        'echo    Done! Refresh the POS page.',
+        'echo  ========================================',
+        'echo.',
+        'timeout /t 15 /nobreak >nul',
+        'exit /b',
+    ]
+    bat_content = '\r\n'.join(bat_lines) + '\r\n'
 
     return Response(
         content=bat_content,
