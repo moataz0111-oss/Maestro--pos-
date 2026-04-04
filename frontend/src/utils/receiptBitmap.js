@@ -153,7 +153,7 @@ async function renderReceipt(order) {
 
   // ===== RESTAURANT LOGO (circular, centered) =====
   if (logo) {
-    const sz = 130;
+    const sz = 100;
     const lx = (PW-sz)/2;
     x.save();
     x.beginPath(); x.arc(lx+sz/2, y+sz/2, sz/2, 0, Math.PI*2); x.clip();
@@ -161,7 +161,7 @@ async function renderReceipt(order) {
     x.restore();
     x.strokeStyle='#000'; x.lineWidth=2;
     x.beginPath(); x.arc(lx+sz/2, y+sz/2, sz/2, 0, Math.PI*2); x.stroke();
-    y += sz + 14;
+    y += sz + 10;
   }
 
   // ===== RESTAURANT NAME =====
@@ -391,33 +391,30 @@ async function renderReceipt(order) {
 
   // ===== SYSTEM LOGO (bottom center) =====
   if (sysLogo) {
-    const sz = 60;
+    const sz = 50;
     x.drawImage(sysLogo, (PW-sz)/2, y, sz, sz);
-    y += sz + 6;
+    y += sz + 4;
   }
 
   // System name
-  y += drawC(x, order.system_name || 'Maestro EGP', y, 18, true);
+  y += drawC(x, order.system_name || 'Maestro EGP', y, 16, true);
 
   // Contact message
   const contactMsg = order.contact_message || 'للتواصل معنا لشراء نسخة امسح الكود';
+  y += 2;
+  y += drawC(x, contactMsg, y, 11);
   y += 4;
-  y += drawC(x, contactMsg, y, 12);
-  y += 6;
 
   // ===== QR CODE =====
   if (qrCanvas) {
-    const qrSize = 90;
+    const qrSize = 80;
     x.drawImage(qrCanvas, (PW - qrSize) / 2, y, qrSize, qrSize);
-    y += qrSize + 10;
+    y += qrSize + 6;
   }
 
-  y += 40; // Extra space at bottom for cut
+  y += 30; // Space for cut
 
-  // Ensure minimum height of ~20cm (1600px at 8 dots/mm)
-  if (y < 1600) y = 1600;
-
-  // Trim canvas to actual content
+  // Trim canvas to actual content (no padding)
   const f = document.createElement('canvas');
   f.width = PW; f.height = y;
   f.getContext('2d').drawImage(c, 0, 0);
@@ -534,7 +531,7 @@ function renderKitchen(order) {
   return f;
 }
 
-// ======== ESC/POS ENCODER (column mode ESC * 33) ========
+// ======== ESC/POS ENCODER (column mode ESC * 33, skip blank strips) ========
 function toEscPos(canvas) {
   const ctx = canvas.getContext('2d');
   const w = canvas.width, h = canvas.height;
@@ -547,6 +544,7 @@ function toEscPos(canvas) {
 
   const S=24, nL=w&0xFF, nH=(w>>8)&0xFF;
   const strips=Math.ceil(h/S);
+  // Max possible size (will use less with blank strip optimization)
   const buf=new Uint8Array(8 + strips*(5+w*3+1) + 12);
   let p=0;
 
@@ -558,21 +556,35 @@ function toEscPos(canvas) {
   buf[p++]=0x1B; buf[p++]=0x33; buf[p++]=S;
 
   for (let sy=0; sy<h; sy+=S) {
-    buf[p++]=0x1B; buf[p++]=0x2A; buf[p++]=33; buf[p++]=nL; buf[p++]=nH;
-    for (let col=0; col<w; col++) {
-      let b0=0,b1=0,b2=0;
-      for(let b=0;b<8;b++){if(dark(col,sy+b))b0|=(0x80>>b);}
-      for(let b=0;b<8;b++){if(dark(col,sy+8+b))b1|=(0x80>>b);}
-      for(let b=0;b<8;b++){if(dark(col,sy+16+b))b2|=(0x80>>b);}
-      buf[p++]=b0; buf[p++]=b1; buf[p++]=b2;
+    // Check if this strip is entirely blank (white)
+    let blank = true;
+    for (let col=0; col<w && blank; col++) {
+      for (let b=0; b<S && blank; b++) {
+        if (dark(col, sy+b)) blank = false;
+      }
     }
-    buf[p++]=0x0A;
+
+    if (blank) {
+      // Skip blank strip - just send line feed (1 byte instead of ~1560)
+      buf[p++]=0x0A;
+    } else {
+      // Send actual bitmap data
+      buf[p++]=0x1B; buf[p++]=0x2A; buf[p++]=33; buf[p++]=nL; buf[p++]=nH;
+      for (let col=0; col<w; col++) {
+        let b0=0,b1=0,b2=0;
+        for(let b=0;b<8;b++){if(dark(col,sy+b))b0|=(0x80>>b);}
+        for(let b=0;b<8;b++){if(dark(col,sy+8+b))b1|=(0x80>>b);}
+        for(let b=0;b<8;b++){if(dark(col,sy+16+b))b2|=(0x80>>b);}
+        buf[p++]=b0; buf[p++]=b1; buf[p++]=b2;
+      }
+      buf[p++]=0x0A;
+    }
   }
 
   // ESC 2 = reset line spacing
   buf[p++]=0x1B; buf[p++]=0x32;
   // Feed + FULL CUT
-  buf[p++]=0x0A; buf[p++]=0x0A; buf[p++]=0x0A; buf[p++]=0x0A;
+  buf[p++]=0x0A; buf[p++]=0x0A; buf[p++]=0x0A;
   // GS V A 0 = FULL CUT
   buf[p++]=0x1D; buf[p++]=0x56; buf[p++]=0x41; buf[p++]=0x00;
 
