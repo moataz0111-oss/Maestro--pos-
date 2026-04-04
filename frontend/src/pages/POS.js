@@ -9,7 +9,7 @@ import { useTranslation } from '../hooks/useTranslation';
 import { formatPrice } from '../utils/currency';
 import { playClick, playSuccess } from '../utils/sound';
 import { useOrderNotifications, sendOrderNotification } from '../utils/orderNotifications';
-import { checkAgentStatus, printOrderToAllPrinters, routeOrderToPrinters, sendReceiptPrint } from '../utils/printService';
+import { printOrderToAllPrinters, sendReceiptPrint } from '../utils/printService';
 import { AgentUpdateBanner } from '../utils/AgentUpdateChecker';
 import offlineStorage from '../lib/offlineStorage';
 import db, { STORES } from '../lib/offlineDB';
@@ -1393,67 +1393,57 @@ export default function POS() {
           await axios.put(`${API}/orders/${editingOrder.id}/add-items`, newItems);
         }
         
-        // إرسال العناصر الجديدة لطابعات المطبخ
+        // إرسال جميع العناصر لطابعات المطبخ (الجديدة والقديمة)
         try {
-          if (newItems.length > 0) {
-            const agentOk = await checkAgentStatus();
-            if (!agentOk) {
-              toast.error(t('وسيط الطباعة غير متصل - لم تتم طباعة الطلب للمطبخ'));
-              const errorStatus = {};
-              cart.forEach((_, idx) => { errorStatus[idx] = 'error'; });
-              setKitchenPrintStatus(errorStatus);
-            } else {
-              const kitchenPrinters = availablePrinters.filter(p => 
-                p.printer_type === 'kitchen' &&
-                ((p.connection_type === 'usb' && p.usb_printer_name) || (p.connection_type !== 'usb' && p.ip_address))
-              );
-              if (kitchenPrinters.length > 0) {
-                const restaurantName = restaurantSettings?.name_ar || restaurantSettings?.name || '';
-                const orderForPrint = buildPrintOrderData(editingOrder.order_number);
-                const itemsForPrint = newItems.map(item => ({
-                  product_id: item.product_id || item.id,
-                  product_name: item.product_name || item.name,
-                  name: item.product_name || item.name,
-                  price: item.price,
-                  quantity: item.quantity,
-                  notes: item.notes || '',
-                  extras: item.selectedExtras || []
-                }));
-                const result = await printOrderToAllPrinters(orderForPrint, itemsForPrint, products, kitchenPrinters, restaurantName);
-                
-                // تحديث حالة كل عنصر حسب نتيجة الطباعة
-                const updatedStatus = {};
-                cart.forEach((item, idx) => {
-                  const isNew = !existingProductIds.includes(item.product_id);
-                  if (isNew) {
-                    // للعناصر الجديدة - تحقق من نتيجة الطابعة
-                    const product = products.find(p => p.id === item.product_id);
-                    const pIds = product?.printer_ids?.filter(id => id) || [];
-                    const hasPrinterResult = result.results?.some(r => pIds.includes(r.printer_id) && r.success);
-                    const allDefaultSuccess = pIds.length === 0 && result.results?.length > 0 && result.success;
-                    updatedStatus[idx] = (hasPrinterResult || allDefaultSuccess) ? 'success' : 'error';
-                  } else {
-                    updatedStatus[idx] = 'success'; // العناصر القديمة - موجودة بالفعل
-                  }
-                });
-                setKitchenPrintStatus(updatedStatus);
-              } else {
-                const successStatus = {};
-                cart.forEach((_, idx) => { successStatus[idx] = 'success'; });
-                setKitchenPrintStatus(successStatus);
-              }
+          const kitchenPrinters = availablePrinters.filter(p => 
+            p.printer_type === 'kitchen' &&
+            ((p.connection_type === 'usb' && p.usb_printer_name) || (p.connection_type !== 'usb' && p.ip_address))
+          );
+          if (kitchenPrinters.length > 0) {
+            const restaurantName = restaurantSettings?.name_ar || restaurantSettings?.name || '';
+            const orderForPrint = buildPrintOrderData(editingOrder.order_number);
+            // إرسال جميع العناصر في السلة للمطبخ (ليس فقط الجديدة)
+            const itemsForPrint = cart.map(item => ({
+              product_id: item.product_id || item.id,
+              product_name: item.product_name || item.name,
+              name: item.product_name || item.name,
+              price: item.price,
+              quantity: item.quantity,
+              notes: item.notes || '',
+              extras: item.selectedExtras || []
+            }));
+            console.log('[Kitchen Print] Edit mode: sending ALL', itemsForPrint.length, 'items to', kitchenPrinters.length, 'printers');
+            const result = await printOrderToAllPrinters(orderForPrint, itemsForPrint, products, kitchenPrinters, restaurantName);
+            
+            // تحديث حالة كل عنصر حسب نتيجة الطباعة الفعلية
+            const updatedStatus = {};
+            cart.forEach((item, idx) => {
+              const product = products.find(p => p.id === item.product_id);
+              const pIds = product?.printer_ids?.filter(id => id) || [];
+              const hasPrinterResult = result.results?.some(r => pIds.includes(r.printer_id) && r.success);
+              const allDefaultSuccess = pIds.length === 0 && result.results?.length > 0 && result.success;
+              updatedStatus[idx] = (hasPrinterResult || allDefaultSuccess) ? 'success' : 'error';
+            });
+            setKitchenPrintStatus(updatedStatus);
+            
+            if (!result.success) {
+              result.results?.filter(r => !r.success).forEach(f => {
+                toast.error(`${f.printer_name}: ${f.message}`);
+              });
             }
           } else {
-            // لا توجد عناصر جديدة
-            const successStatus = {};
-            cart.forEach((_, idx) => { successStatus[idx] = 'success'; });
-            setKitchenPrintStatus(successStatus);
+            console.warn('[Kitchen Print] No kitchen printers configured!');
+            toast.error(t('لا توجد طابعات مطبخ مفعّلة'));
+            const errorStatus = {};
+            cart.forEach((_, idx) => { errorStatus[idx] = 'error'; });
+            setKitchenPrintStatus(errorStatus);
           }
         } catch (printErr) {
           console.error('Kitchen print error for edit:', printErr);
           const errorStatus = {};
           cart.forEach((_, idx) => { errorStatus[idx] = 'error'; });
           setKitchenPrintStatus(errorStatus);
+          toast.error(t('خطأ في طباعة المطبخ: ') + printErr.message);
         }
         
         toast.success(t('تم تحديث الطلب وإرساله للمطبخ'));
@@ -1488,56 +1478,49 @@ export default function POS() {
         const res = await axios.post(`${API}/orders`, orderData);
         playSuccess();
         
-        // === إرسال الطلبات لطابعات المطبخ حسب ربط المنتجات ===
+        // === إرسال الطلبات لطابعات المطبخ مباشرة (بدون checkAgentStatus) ===
         try {
-          const agentOk = await checkAgentStatus();
-          if (!agentOk) {
-            toast.error(t('وسيط الطباعة غير متصل - لم تتم طباعة الطلب للمطبخ'));
+          const kitchenPrinters = availablePrinters.filter(p => 
+            p.printer_type === 'kitchen' &&
+            ((p.connection_type === 'usb' && p.usb_printer_name) || (p.connection_type !== 'usb' && p.ip_address))
+          );
+          if (kitchenPrinters.length > 0) {
+            const restaurantName = restaurantSettings?.name_ar || restaurantSettings?.name || '';
+            const orderForPrint = buildPrintOrderData(res.data.order_number);
+            const itemsForPrint = cart.map(item => ({
+              product_id: item.product_id || item.id,
+              product_name: item.product_name || item.name,
+              name: item.product_name || item.name,
+              price: item.price,
+              quantity: item.quantity,
+              notes: item.notes || '',
+              extras: item.selectedExtras || []
+            }));
+            console.log('[Kitchen Print] New order: sending', itemsForPrint.length, 'items to', kitchenPrinters.length, 'printers');
+            const result = await printOrderToAllPrinters(orderForPrint, itemsForPrint, products, kitchenPrinters, restaurantName);
+            
+            // تحديث حالة كل عنصر حسب نتيجة الطباعة الفعلية
+            const updatedStatus = {};
+            cart.forEach((item, idx) => {
+              const product = products.find(p => p.id === item.product_id);
+              const pIds = product?.printer_ids?.filter(id => id) || [];
+              const hasPrinterResult = result.results?.some(r => pIds.includes(r.printer_id) && r.success);
+              const allDefaultSuccess = pIds.length === 0 && result.results?.length > 0 && result.success;
+              updatedStatus[idx] = (hasPrinterResult || allDefaultSuccess) ? 'success' : 'error';
+            });
+            setKitchenPrintStatus(updatedStatus);
+            
+            if (!result.success) {
+              result.results?.filter(r => !r.success).forEach(f => {
+                toast.error(`${f.printer_name}: ${f.message}`);
+              });
+            }
+          } else {
+            console.warn('[Kitchen Print] No kitchen printers configured!');
+            toast.error(t('لا توجد طابعات مطبخ مفعّلة'));
             const errorStatus = {};
             cart.forEach((_, idx) => { errorStatus[idx] = 'error'; });
             setKitchenPrintStatus(errorStatus);
-          } else {
-            const kitchenPrinters = availablePrinters.filter(p => 
-              p.printer_type === 'kitchen' &&
-              ((p.connection_type === 'usb' && p.usb_printer_name) || (p.connection_type !== 'usb' && p.ip_address))
-            );
-            if (kitchenPrinters.length > 0) {
-              const restaurantName = restaurantSettings?.name_ar || restaurantSettings?.name || '';
-              const orderForPrint = buildPrintOrderData(res.data.order_number);
-              const itemsForPrint = cart.map(item => ({
-                product_id: item.product_id || item.id,
-                product_name: item.product_name || item.name,
-                name: item.product_name || item.name,
-                price: item.price,
-                quantity: item.quantity,
-                notes: item.notes || '',
-                extras: item.selectedExtras || []
-              }));
-              console.log('[Kitchen Print] Routing', itemsForPrint.length, 'items to', kitchenPrinters.length, 'kitchen printers');
-              const result = await printOrderToAllPrinters(orderForPrint, itemsForPrint, products, kitchenPrinters, restaurantName);
-              
-              // تحديث حالة كل عنصر حسب نتيجة الطباعة
-              const updatedStatus = {};
-              cart.forEach((item, idx) => {
-                const product = products.find(p => p.id === item.product_id);
-                const pIds = product?.printer_ids?.filter(id => id) || [];
-                const hasPrinterResult = result.results?.some(r => pIds.includes(r.printer_id) && r.success);
-                const allDefaultSuccess = pIds.length === 0 && result.results?.length > 0 && result.success;
-                updatedStatus[idx] = (hasPrinterResult || allDefaultSuccess) ? 'success' : 'error';
-              });
-              setKitchenPrintStatus(updatedStatus);
-              
-              if (!result.success) {
-                result.results?.filter(r => !r.success).forEach(f => {
-                  toast.error(`${f.printer_name}: ${f.message}`);
-                });
-              }
-            } else {
-              // لا توجد طابعات مطبخ
-              const successStatus = {};
-              cart.forEach((_, idx) => { successStatus[idx] = 'success'; });
-              setKitchenPrintStatus(successStatus);
-            }
           }
         } catch (printErr) {
           console.error('Kitchen print error:', printErr);
@@ -1940,10 +1923,6 @@ export default function POS() {
       
       // === طباعة الفاتورة على الكاشير وإرسال الطلبات للمطبخ ===
       try {
-        const agentOk = await checkAgentStatus();
-        if (!agentOk) {
-          toast.error(t('وسيط الطباعة غير متصل - لم تتم الطباعة'));
-        } else {
           const restaurantName = restaurantSettings?.name_ar || restaurantSettings?.name || '';
           const orderForPrint = buildPrintOrderData(orderNumber);
           const itemsForPrint = cart.map(item => ({
@@ -1990,7 +1969,6 @@ export default function POS() {
               });
             }
           }
-        }
       } catch (printErr) {
         console.error('Print error:', printErr);
         toast.error(t('خطأ في الطباعة: ') + printErr.message);

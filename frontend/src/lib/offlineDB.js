@@ -217,19 +217,9 @@ export const getItemsByIndex = async (storeName, indexName, value) => {
       const transaction = database.transaction([storeName], 'readonly');
       const store = transaction.objectStore(storeName);
       
-      // التحقق من وجود الفهرس
-      if (!store.indexNames.contains(indexName)) {
-        // إذا لم يكن الفهرس موجوداً، نرجع مصفوفة فارغة
-        console.warn(`Index '${indexName}' not found in store '${storeName}'`);
-        resolve([]);
-        return;
-      }
-      
-      const index = store.index(indexName);
-      
-      // معالجة خاصة للقيم المنطقية (boolean)
-      // IndexedDB لا تدعم boolean كمفتاح - نستخدم fallback مباشرة
-      if (typeof value === 'boolean') {
+      // IndexedDB لا تدعم boolean أو null أو undefined كمفتاح فهرس
+      // نستخدم getAll + filter مباشرة لهذه القيم
+      if (value === null || value === undefined || typeof value === 'boolean') {
         const fallbackRequest = store.getAll();
         fallbackRequest.onsuccess = () => {
           const allItems = fallbackRequest.result || [];
@@ -240,11 +230,18 @@ export const getItemsByIndex = async (storeName, indexName, value) => {
         return;
       }
       
+      // التحقق من وجود الفهرس
+      if (!store.indexNames.contains(indexName)) {
+        console.warn(`Index '${indexName}' not found in store '${storeName}'`);
+        resolve([]);
+        return;
+      }
+      
+      const index = store.index(indexName);
       const request = index.getAll(value);
 
       request.onsuccess = () => resolve(request.result || []);
-      request.onerror = (event) => {
-        console.error(`Error in getAll for index '${indexName}':`, event.target.error);
+      request.onerror = () => {
         // في حالة الفشل، نحاول جلب جميع العناصر وفلترتها يدوياً
         const fallbackRequest = store.getAll();
         fallbackRequest.onsuccess = () => {
@@ -255,8 +252,20 @@ export const getItemsByIndex = async (storeName, indexName, value) => {
         fallbackRequest.onerror = () => resolve([]);
       };
     } catch (error) {
-      console.error(`Error accessing index '${indexName}' in store '${storeName}':`, error);
-      resolve([]);
+      // Fallback: getAll + filter
+      try {
+        const transaction = database.transaction([storeName], 'readonly');
+        const store = transaction.objectStore(storeName);
+        const fallbackRequest = store.getAll();
+        fallbackRequest.onsuccess = () => {
+          const allItems = fallbackRequest.result || [];
+          const filtered = allItems.filter(item => item[indexName] === value);
+          resolve(filtered);
+        };
+        fallbackRequest.onerror = () => resolve([]);
+      } catch {
+        resolve([]);
+      }
     }
   });
 };
