@@ -2132,8 +2132,50 @@ export default function POS() {
       playSuccess();
       toast.success(`${t('تم حفظ الطلب')} #${savedOrder.order_number}`);
       
-      // فتح معاينة الفاتورة فقط (بدون إرسال للمطبخ)
+      // فتح معاينة الفاتورة
       setPrintDialogOpen(true);
+      
+      // === طباعة تلقائية فورية عند فتح المعاينة (قبل الدفع) ===
+      try {
+        const agentOk = await checkAgentStatus();
+        if (agentOk) {
+          let cashierPrinter = availablePrinters.find(p => p.printer_type === 'receipt');
+          if (!cashierPrinter) cashierPrinter = availablePrinters.find(p => p.connection_type === 'usb' && p.usb_printer_name);
+          if (!cashierPrinter && availablePrinters.length > 0) cashierPrinter = availablePrinters[0];
+          
+          if (cashierPrinter) {
+            const printData = buildPrintOrderData(savedOrder.order_number);
+            const subtotalCalc = cart.reduce((sum, item) => sum + ((item.price + (item.selectedExtras || []).reduce((s, e) => s + e.price, 0)) * item.quantity), 0);
+            const orderForPrint = {
+              ...printData,
+              items: cart.map(item => ({
+                product_name: item.product_name || item.name,
+                name: item.product_name || item.name,
+                price: item.price,
+                quantity: item.quantity,
+                notes: item.notes || '',
+                extras: item.selectedExtras || []
+              })),
+              total: subtotalCalc - (discount || 0),
+              subtotal: subtotalCalc,
+              payment_method: 'pending',
+              cashier_name: user?.name || user?.full_name || ''
+            };
+            console.log('[AutoPrint] Printing receipt for order #' + savedOrder.order_number);
+            const printResult = await sendReceiptPrint(cashierPrinter, orderForPrint);
+            if (printResult.success) {
+              console.log('[AutoPrint] Receipt printed successfully');
+            } else {
+              console.error('[AutoPrint] Print failed:', printResult.message);
+              toast.error(t('فشل الطباعة: ') + (printResult.message || ''));
+            }
+          }
+        } else {
+          console.warn('[AutoPrint] Agent not connected, skip auto-print');
+        }
+      } catch (autoPrintErr) {
+        console.error('[AutoPrint] Error:', autoPrintErr);
+      }
       
     } catch (error) {
       console.error('Failed to save order:', error);
@@ -3849,11 +3891,7 @@ export default function POS() {
                   const result = await sendReceiptPrint(cashierPrinter, orderForPrint);
                   if (result.success) {
                     toast.success(t('تم الطباعة بنجاح'));
-                    setPrintDialogOpen(false);
-                    if (lastOrderNumber && !editingOrder) {
-                      clearCart();
-                      setLastOrderNumber(null);
-                    }
+                    // لا نغلق الحوار ولا نمسح السلة - المستخدم يحتاج يكمل الدفع
                   } else {
                     toast.error(t('فشل الطباعة: ') + (result.message || t('خطأ غير معروف')));
                   }
