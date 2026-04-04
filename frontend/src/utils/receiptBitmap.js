@@ -311,45 +311,112 @@ async function renderReceipt(order) {
   return f;
 }
 
-// ======== KITCHEN TICKET (instant, no images) ========
+// ======== KITCHEN TICKET (smaller width for TCP reliability) ========
 function renderKitchen(order) {
+  const KW = 384; // 48mm width - smaller data for TCP printers
+  const KM = 6;
+  const KC = KW - KM * 2;
   const c = document.createElement('canvas');
-  c.width = PW; c.height = 4000;
+  c.width = KW; c.height = 3000;
   const x = c.getContext('2d');
-  x.fillStyle='#FFF'; x.fillRect(0,0,PW,4000);
+  x.fillStyle='#FFF'; x.fillRect(0,0,KW,3000);
   x.fillStyle='#000';
-  let y = 16;
+  let y = 12;
 
-  if (order.section_name) { y += invH(x, order.section_name, y, 32); y += 4; }
-  if (order.order_number) y += invH(x, `#${order.order_number} :طلب`, y, 34);
+  // Helper: kitchen centered text
+  function kC(text, yy, size, bold) {
+    if (!text) return 0;
+    x.font = font(size, bold, text);
+    x.textAlign = 'center'; x.textBaseline = 'top';
+    x.direction = isAr(text) ? 'rtl' : 'ltr';
+    const words = text.split(' ');
+    let line = '', h = 0, lh = size + 5;
+    for (const w of words) {
+      const t = line ? line + ' ' + w : w;
+      if (x.measureText(t).width > KC && line) {
+        x.fillText(line, KW/2, yy+h); h += lh; line = w;
+      } else line = t;
+    }
+    if (line) { x.fillText(line, KW/2, yy+h); h += lh; }
+    x.direction = 'ltr';
+    return h;
+  }
+  
+  // Helper: kitchen right-aligned text
+  function kR(text, yy, size, bold) {
+    if (!text) return 0;
+    x.font = font(size, bold, text);
+    x.textAlign = 'right'; x.textBaseline = 'top';
+    x.direction = 'rtl';
+    const words = text.split(' ');
+    let line = '', h = 0, lh = size + 5;
+    for (const w of words) {
+      const t = line ? line + ' ' + w : w;
+      if (x.measureText(t).width > KC && line) {
+        x.fillText(line, KW-KM, yy+h); h += lh; line = w;
+      } else line = t;
+    }
+    if (line) { x.fillText(line, KW-KM, yy+h); h += lh; }
+    x.direction = 'ltr';
+    return h;
+  }
+
+  // Helper: kitchen inverse header
+  function kInv(text, yy, size) {
+    x.font = font(size, true, text);
+    const tw = x.measureText(text).width;
+    const bw = Math.min(tw + 20, KC);
+    const bh = size + 12;
+    const bx = (KW - bw) / 2;
+    x.fillStyle = '#000'; x.fillRect(bx, yy, bw, bh);
+    x.fillStyle = '#FFF';
+    x.textAlign = 'center'; x.textBaseline = 'top';
+    x.direction = isAr(text)?'rtl':'ltr';
+    x.fillText(text, KW/2, yy + 6);
+    x.direction = 'ltr'; x.fillStyle = '#000';
+    return bh + 6;
+  }
+
+  // Helper: kitchen dashed line
+  function kDash(yy) {
+    x.strokeStyle='#000'; x.lineWidth=2;
+    x.beginPath(); x.moveTo(KM, yy+2); x.lineTo(KW-KM, yy+2); x.stroke();
+    x.beginPath(); x.moveTo(KM, yy+6); x.lineTo(KW-KM, yy+6); x.stroke();
+    return 12;
+  }
+
+  if (order.section_name) { y += kInv(order.section_name, y, 22); y += 2; }
+  if (order.order_number) y += kInv(`#${order.order_number} :طلب`, y, 24);
 
   const types = {'dine_in':'داخلي','takeaway':'سفري','delivery':'توصيل','delivery_company':'شركة توصيل'};
-  y += drawC(x, types[order.order_type] || '', y, 28, true);
-  if (order.table_number) y += drawC(x, `${order.table_number} :الطاولة`, y, 28, true);
-  y += drawC(x, `${nowStr().date} - ${nowStr().time}`, y, 18);
-  y += dbl(x, y);
+  y += kC(types[order.order_type] || '', y, 20, true);
+  if (order.table_number) y += kC(`${order.table_number} :الطاولة`, y, 20, true);
+  y += kC(`${nowStr().date} - ${nowStr().time}`, y, 14);
+  y += kDash(y);
 
   const items = order.items || [];
   for (let i = 0; i < items.length; i++) {
     const name = items[i].product_name || items[i].name || '';
     const qty = items[i].quantity || 1;
-    y += drawR(x, name, y, 30, true);
-    x.font = font(28, true, 'x1'); x.textAlign='left'; x.textBaseline='top'; x.direction='ltr';
-    x.fillText(`x${qty}`, MARGIN, y - 34);
-    if (items[i].notes) y += drawC(x, `** ${items[i].notes} **`, y, 22, true);
+    // Name on full line
+    y += kR(name, y, 22, true);
+    // Quantity on left
+    x.font = font(20, true, 'x1'); x.textAlign='left'; x.textBaseline='top'; x.direction='ltr';
+    x.fillText(`x${qty}`, KM, y - 26);
+    if (items[i].notes) y += kC(`** ${items[i].notes} **`, y, 16, true);
     const extras = items[i].extras || items[i].selectedExtras || [];
-    for (const e of extras) { if (e.name) y += drawR(x, `  + ${e.name}`, y, 22); }
-    if (i < items.length-1) { x.setLineDash([2,4]); x.beginPath(); x.moveTo(MARGIN+20,y); x.lineTo(PW-MARGIN-20,y); x.stroke(); x.setLineDash([]); y+=8; }
+    for (const e of extras) { if (e.name) y += kR(`  + ${e.name}`, y, 16); }
+    if (i < items.length-1) { x.setLineDash([2,3]); x.beginPath(); x.moveTo(KM+15,y); x.lineTo(KW-KM-15,y); x.stroke(); x.setLineDash([]); y+=6; }
   }
 
-  y += dbl(x, y);
-  if (order.customer_name) y += drawC(x, order.customer_name, y, 24, true);
-  if (order.buzzer_number) y += drawC(x, `جهاز: ${order.buzzer_number}`, y, 24, true);
-  y += drawC(x, `${nowStr().date} ${nowStr().time}`, y, 14);
-  y += 30;
+  y += kDash(y);
+  if (order.customer_name) y += kC(order.customer_name, y, 18, true);
+  if (order.buzzer_number) y += kC(`جهاز: ${order.buzzer_number}`, y, 18, true);
+  y += kC(`${nowStr().date} ${nowStr().time}`, y, 12);
+  y += 20;
 
   const f = document.createElement('canvas');
-  f.width = PW; f.height = y;
+  f.width = KW; f.height = y;
   f.getContext('2d').drawImage(c, 0, 0);
   return f;
 }

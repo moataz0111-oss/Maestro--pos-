@@ -103,7 +103,7 @@
   },
   
   "test_credentials": {
-    "api_url": "https://pos-printer-fix-1.preview.emergentagent.com",
+    "api_url": "https://thermal-print-agent.preview.emergentagent.com",
     "owner": {
       "email": "owner@maestroegp.com",
       "password": "owner123",

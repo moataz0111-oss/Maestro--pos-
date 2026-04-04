@@ -115,7 +115,7 @@
   },
   
   "test_credentials": {
-    "api_url": "https://pos-printer-fix-1.preview.emergentagent.com",
+    "api_url": "https://thermal-print-agent.preview.emergentagent.com",
     "customer_admin_email": "ahmed@albait.com",
     "customer_admin_password": "123456",
     "super_admin_email": "owner@maestroegp.com",

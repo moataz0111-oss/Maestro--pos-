@@ -15,7 +15,7 @@ import pytest
 import requests
 import os
 
-BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://pos-printer-fix-1.preview.emergentagent.com')
+BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://thermal-print-agent.preview.emergentagent.com')
 
 # Test credentials
 OWNER_EMAIL = "owner@maestroegp.com"
