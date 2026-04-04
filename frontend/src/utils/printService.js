@@ -151,7 +151,6 @@ export const sendRawPrint = async (ip, port, text, usbPrinterName = null) => {
  */
 export const sendReceiptPrint = async (printer, orderData) => {
   try {
-    // تحديد إعدادات الطابعة
     const isKitchen = printer.print_mode === 'orders_only' || printer.print_mode === 'selected_products';
     const printerConfig = {
       show_prices: isKitchen ? false : (printer.show_prices !== false),
@@ -159,21 +158,15 @@ export const sendReceiptPrint = async (printer, orderData) => {
       printer_type: isKitchen ? 'kitchen' : 'receipt'
     };
 
-    // الخطوة 1: توليد ESC/POS bitmap في المتصفح (async for logo loading)
-    console.log(`[Print] Rendering receipt for ${printer.name} (${printer.printer_type})`);
+    // توليد ESC/POS bitmap
     const renderResult = await renderReceiptBitmap(orderData, printerConfig);
     
     if (!renderResult.success || !renderResult.raw_data) {
-      console.error('[Print] Browser render failed:', renderResult.error);
       return { success: false, message: 'RENDER_FAILED: ' + (renderResult.error || 'Unknown') };
     }
 
-    console.log(`[Print] Bitmap ready: ${renderResult.size} bytes for ${printer.name}`);
-
-    // الخطوة 2: إرسال البيانات الخام للطابعة عبر الوكيل
-    const printPayload = {
-      raw_data: renderResult.raw_data
-    };
+    // إرسال البيانات للطابعة عبر الوكيل - بدون انتظار طويل
+    const printPayload = { raw_data: renderResult.raw_data };
 
     if (printer.connection_type === 'usb' && printer.usb_printer_name) {
       printPayload.usb_printer_name = printer.usb_printer_name;
@@ -182,19 +175,20 @@ export const sendReceiptPrint = async (printer, orderData) => {
       printPayload.port = printer.port || 9100;
     }
 
-    console.log(`[Print] Sending to agent: ${printer.connection_type === 'usb' ? printer.usb_printer_name : printer.ip_address}`);
-    
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 sec max
+
     const res = await fetch(`${PRINT_AGENT_URL}/print-receipt`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(printPayload)
+      body: JSON.stringify(printPayload),
+      signal: controller.signal
     });
+    clearTimeout(timeoutId);
     
     const result = await res.json();
-    console.log(`[Print] Agent response:`, result);
     return result;
   } catch (e) {
-    console.error('[Print] Error:', e.message);
     return { success: false, message: e.message };
   }
 };
@@ -246,22 +240,14 @@ export const printOrderToAllPrinters = async (order, orderItems, products, print
 
   const printerJobs = routeOrderToPrinters(orderItems, products, activePrinters);
   
-  console.log(`[Print] Kitchen routing: ${Object.keys(printerJobs).length} printer jobs for ${orderItems.length} items`);
   if (Object.keys(printerJobs).length === 0) {
-    console.warn('[Print] No printer jobs created! Products may not be linked to kitchen printers.');
-    console.log('[Print] Products:', orderItems.map(i => ({id: i.product_id, name: i.name || i.product_name})));
-    console.log('[Print] Available printers:', activePrinters.map(p => ({id: p.id, name: p.name, type: p.printer_type})));
+    return { success: false, message: 'NO_PRINTERS_MATCHED', results: [] };
   }
-  Object.entries(printerJobs).forEach(([pid, items]) => {
-    const p = printers.find(pr => pr.id === pid);
-    console.log(`  -> ${p?.name || pid} (${p?.connection_type}:${p?.ip_address || p?.usb_printer_name}): ${items.map(i => i.name || i.product_name).join(', ')}`);
-  });
 
-  // طباعة تسلسلية (واحدة تلو الأخرى) لتجنب تضارب الوكيل
-  const validResults = [];
-  for (const [printerId, items] of Object.entries(printerJobs)) {
+  // طباعة متوازية (كل الطابعات في نفس الوقت) لأقصى سرعة
+  const printJobs = Object.entries(printerJobs).map(([printerId, items]) => {
     const printer = printers.find(p => p.id === printerId);
-    if (!printer) continue;
+    if (!printer) return null;
 
     const orderData = {
       restaurant_name: restaurantName,
@@ -277,7 +263,6 @@ export const printOrderToAllPrinters = async (order, orderItems, products, print
       cashier_name: order.cashier_name || '',
       section_name: printer.name || '',
       language: order.language || localStorage.getItem('language') || 'ar',
-      // بيانات المطعم
       logo_base64: order.logo_base64 || null,
       logo_url: order.logo_url || null,
       phone: order.phone || '',
@@ -298,18 +283,21 @@ export const printOrderToAllPrinters = async (order, orderItems, products, print
       discount: order.discount || 0
     };
 
-    console.log(`[Print] Sending to ${printer.name} (${printer.connection_type}: ${printer.ip_address || printer.usb_printer_name})`);
-    const result = await sendReceiptPrint(printer, orderData);
-    console.log(`[Print] ${printer.name} result:`, result.success, result.message || '');
-    
-    validResults.push({
+    return sendReceiptPrint(printer, orderData).then(result => ({
       printer_id: printerId,
       printer_name: printer.name,
       printer_type: printer.printer_type,
       connection_type: printer.connection_type,
       ...result
-    });
-  }
+    })).catch(err => ({
+      printer_id: printerId,
+      printer_name: printer.name,
+      success: false,
+      message: err.message
+    }));
+  }).filter(Boolean);
+
+  const validResults = await Promise.all(printJobs);
 
   const allSuccess = validResults.length > 0 && validResults.every(r => r.success);
 

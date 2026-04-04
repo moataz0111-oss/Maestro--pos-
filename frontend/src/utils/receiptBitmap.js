@@ -106,7 +106,7 @@ function invH(ctx, text, y, size = 26) {
   return bh + 8;
 }
 
-// Load image with timeout (2s for logos)
+// Load image - instant for base64, fast timeout for URLs
 function loadImg(src) {
   return new Promise(r => {
     if (!src) return r(null);
@@ -114,7 +114,9 @@ function loadImg(src) {
     img.crossOrigin = 'anonymous';
     img.onload = () => r(img);
     img.onerror = () => r(null);
-    setTimeout(() => r(null), 2000);
+    // base64 data URLs load instantly, HTTP URLs get 800ms max
+    const timeout = src.startsWith('data:') ? 100 : 800;
+    setTimeout(() => r(null), timeout);
     img.src = src;
   });
 }
