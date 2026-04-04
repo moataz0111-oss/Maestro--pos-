@@ -228,14 +228,19 @@ export const getItemsByIndex = async (storeName, indexName, value) => {
       const index = store.index(indexName);
       
       // معالجة خاصة للقيم المنطقية (boolean)
-      // IndexedDB قد لا يتعامل جيداً مع false مباشرة
-      let queryValue = value;
+      // IndexedDB لا تدعم boolean كمفتاح - نستخدم fallback مباشرة
       if (typeof value === 'boolean') {
-        // استخدام IDBKeyRange للقيم المنطقية
-        queryValue = IDBKeyRange.only(value);
+        const fallbackRequest = store.getAll();
+        fallbackRequest.onsuccess = () => {
+          const allItems = fallbackRequest.result || [];
+          const filtered = allItems.filter(item => item[indexName] === value);
+          resolve(filtered);
+        };
+        fallbackRequest.onerror = () => resolve([]);
+        return;
       }
       
-      const request = index.getAll(queryValue);
+      const request = index.getAll(value);
 
       request.onsuccess = () => resolve(request.result || []);
       request.onerror = (event) => {

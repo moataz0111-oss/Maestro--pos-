@@ -2137,41 +2137,34 @@ export default function POS() {
       
       // === طباعة تلقائية فورية عند فتح المعاينة (قبل الدفع) ===
       try {
-        const agentOk = await checkAgentStatus();
-        if (agentOk) {
-          let cashierPrinter = availablePrinters.find(p => p.printer_type === 'receipt');
-          if (!cashierPrinter) cashierPrinter = availablePrinters.find(p => p.connection_type === 'usb' && p.usb_printer_name);
-          if (!cashierPrinter && availablePrinters.length > 0) cashierPrinter = availablePrinters[0];
-          
-          if (cashierPrinter) {
-            const printData = buildPrintOrderData(savedOrder.order_number);
-            const subtotalCalc = cart.reduce((sum, item) => sum + ((item.price + (item.selectedExtras || []).reduce((s, e) => s + e.price, 0)) * item.quantity), 0);
-            const orderForPrint = {
-              ...printData,
-              items: cart.map(item => ({
-                product_name: item.product_name || item.name,
-                name: item.product_name || item.name,
-                price: item.price,
-                quantity: item.quantity,
-                notes: item.notes || '',
-                extras: item.selectedExtras || []
-              })),
-              total: subtotalCalc - (discount || 0),
-              subtotal: subtotalCalc,
-              payment_method: 'pending',
-              cashier_name: user?.name || user?.full_name || ''
-            };
-            console.log('[AutoPrint] Printing receipt for order #' + savedOrder.order_number);
-            const printResult = await sendReceiptPrint(cashierPrinter, orderForPrint);
-            if (printResult.success) {
-              console.log('[AutoPrint] Receipt printed successfully');
-            } else {
-              console.error('[AutoPrint] Print failed:', printResult.message);
-              toast.error(t('فشل الطباعة: ') + (printResult.message || ''));
-            }
+        // نطبع مباشرة بدون checkAgentStatus لسرعة أكبر
+        let cashierPrinter = availablePrinters.find(p => p.printer_type === 'receipt');
+        if (!cashierPrinter) cashierPrinter = availablePrinters.find(p => p.connection_type === 'usb' && p.usb_printer_name);
+        if (!cashierPrinter && availablePrinters.length > 0) cashierPrinter = availablePrinters[0];
+        
+        if (cashierPrinter) {
+          const printData = buildPrintOrderData(savedOrder.order_number);
+          const subtotalCalc = cart.reduce((sum, item) => sum + ((item.price + (item.selectedExtras || []).reduce((s, e) => s + e.price, 0)) * item.quantity), 0);
+          const orderForPrint = {
+            ...printData,
+            items: cart.map(item => ({
+              product_name: item.product_name || item.name,
+              name: item.product_name || item.name,
+              price: item.price,
+              quantity: item.quantity,
+              notes: item.notes || '',
+              extras: item.selectedExtras || []
+            })),
+            total: subtotalCalc - (discount || 0),
+            subtotal: subtotalCalc,
+            payment_method: 'pending',
+            cashier_name: user?.name || user?.full_name || ''
+          };
+          console.log('[AutoPrint] Printing receipt #' + savedOrder.order_number);
+          const printResult = await sendReceiptPrint(cashierPrinter, orderForPrint);
+          if (!printResult.success) {
+            console.error('[AutoPrint] Failed:', printResult.message);
           }
-        } else {
-          console.warn('[AutoPrint] Agent not connected, skip auto-print');
         }
       } catch (autoPrintErr) {
         console.error('[AutoPrint] Error:', autoPrintErr);
@@ -3846,25 +3839,11 @@ export default function POS() {
               className="flex-1 bg-blue-500 hover:bg-blue-600 text-white"
               data-testid="print-receipt-btn"
               onClick={async () => {
-                // === طباعة صامتة عبر وسيط الطباعة على طابعة الكاشير USB فقط ===
+                // === طباعة فورية بدون فحص الاتصال (أسرع) ===
                 try {
-                  console.log('[Print] Available printers:', availablePrinters.length, availablePrinters.map(p => ({name: p.name, type: p.printer_type, conn: p.connection_type, usb: p.usb_printer_name})));
-                  const agentOk = await checkAgentStatus();
-                  console.log('[Print] Agent status:', agentOk);
-                  if (!agentOk) {
-                    toast.error(t('وسيط الطباعة غير متصل! تأكد من تشغيل برنامج الطباعة على الجهاز'));
-                    return;
-                  }
-                  // البحث عن طابعة الكاشير: أولاً بالنوع receipt ثم أي طابعة USB
                   let cashierPrinter = availablePrinters.find(p => p.printer_type === 'receipt');
-                  if (!cashierPrinter) {
-                    cashierPrinter = availablePrinters.find(p => p.connection_type === 'usb' && p.usb_printer_name);
-                  }
-                  if (!cashierPrinter && availablePrinters.length > 0) {
-                    // فشلنا نجد طابعة كاشير أو USB - نستخدم أول طابعة
-                    cashierPrinter = availablePrinters[0];
-                    console.log('[Print] Using first available printer as fallback:', cashierPrinter.name);
-                  }
+                  if (!cashierPrinter) cashierPrinter = availablePrinters.find(p => p.connection_type === 'usb' && p.usb_printer_name);
+                  if (!cashierPrinter && availablePrinters.length > 0) cashierPrinter = availablePrinters[0];
                   if (!cashierPrinter) {
                     console.error('[Print] No printers at all! availablePrinters:', availablePrinters);
                     toast.error(t('لا توجد طابعات في الإعدادات - أضف طابعة من صفحة الإعدادات'));
