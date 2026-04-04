@@ -1285,7 +1285,7 @@ export default function POS() {
         .map(p => ({ id: p.id, name: p.name }));
       // إذا لا يوجد طابعة مربوطة، استخدم الطابعة الافتراضية
       if (printerNames.length === 0) {
-        const defaultKitchen = availablePrinters.find(p => p.printer_type === 'kitchen');
+        const defaultKitchen = availablePrinters.find(p => p.print_mode === 'orders_only' || p.print_mode === 'selected_products');
         if (defaultKitchen) {
           printerNames.push({ id: defaultKitchen.id, name: defaultKitchen.name });
         }
@@ -1396,7 +1396,7 @@ export default function POS() {
         // إرسال جميع العناصر لطابعات المطبخ (الجديدة والقديمة)
         try {
           const kitchenPrinters = availablePrinters.filter(p => 
-            p.printer_type === 'kitchen' &&
+            (p.print_mode === 'orders_only' || p.print_mode === 'selected_products') &&
             ((p.connection_type === 'usb' && p.usb_printer_name) || (p.connection_type !== 'usb' && p.ip_address))
           );
           if (kitchenPrinters.length > 0) {
@@ -1481,7 +1481,7 @@ export default function POS() {
         // === إرسال الطلبات لطابعات المطبخ مباشرة (بدون checkAgentStatus) ===
         try {
           const kitchenPrinters = availablePrinters.filter(p => 
-            p.printer_type === 'kitchen' &&
+            (p.print_mode === 'orders_only' || p.print_mode === 'selected_products') &&
             ((p.connection_type === 'usb' && p.usb_printer_name) || (p.connection_type !== 'usb' && p.ip_address))
           );
           if (kitchenPrinters.length > 0) {
@@ -1936,7 +1936,7 @@ export default function POS() {
           }));
           
           // 1. طباعة الفاتورة على طابعة الكاشير USB فقط
-          let cashierPrinter = availablePrinters.find(p => p.printer_type === 'receipt');
+          let cashierPrinter = availablePrinters.find(p => p.print_mode === 'full_receipt');
           if (!cashierPrinter) cashierPrinter = availablePrinters.find(p => p.connection_type === 'usb' && p.usb_printer_name);
           console.log('[Submit] Cashier printer:', cashierPrinter?.name || 'NOT FOUND', 'Total printers:', availablePrinters.length);
           if (cashierPrinter) {
@@ -1957,7 +1957,7 @@ export default function POS() {
           
           // 2. إرسال الطلبات لطابعات المطبخ حسب ربط المنتجات
           const kitchenPrinters = availablePrinters.filter(p => 
-            p.printer_type === 'kitchen' &&
+            (p.print_mode === 'orders_only' || p.print_mode === 'selected_products') &&
             ((p.connection_type === 'usb' && p.usb_printer_name) || (p.connection_type !== 'usb' && p.ip_address))
           );
           if (kitchenPrinters.length > 0) {
@@ -2116,7 +2116,7 @@ export default function POS() {
       // === طباعة تلقائية فورية عند فتح المعاينة (قبل الدفع) ===
       try {
         // نطبع مباشرة بدون checkAgentStatus لسرعة أكبر
-        let cashierPrinter = availablePrinters.find(p => p.printer_type === 'receipt');
+        let cashierPrinter = availablePrinters.find(p => p.print_mode === 'full_receipt');
         if (!cashierPrinter) cashierPrinter = availablePrinters.find(p => p.connection_type === 'usb' && p.usb_printer_name);
         if (!cashierPrinter && availablePrinters.length > 0) cashierPrinter = availablePrinters[0];
         
@@ -3819,7 +3819,7 @@ export default function POS() {
               onClick={async () => {
                 // === طباعة فورية بدون فحص الاتصال (أسرع) ===
                 try {
-                  let cashierPrinter = availablePrinters.find(p => p.printer_type === 'receipt');
+                  let cashierPrinter = availablePrinters.find(p => p.print_mode === 'full_receipt');
                   if (!cashierPrinter) cashierPrinter = availablePrinters.find(p => p.connection_type === 'usb' && p.usb_printer_name);
                   if (!cashierPrinter && availablePrinters.length > 0) cashierPrinter = availablePrinters[0];
                   if (!cashierPrinter) {

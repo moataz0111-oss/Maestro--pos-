@@ -152,11 +152,11 @@ export const sendRawPrint = async (ip, port, text, usbPrinterName = null) => {
 export const sendReceiptPrint = async (printer, orderData) => {
   try {
     // تحديد إعدادات الطابعة
-    const isKitchen = printer.printer_type === 'kitchen';
+    const isKitchen = printer.print_mode === 'orders_only' || printer.print_mode === 'selected_products';
     const printerConfig = {
       show_prices: isKitchen ? false : (printer.show_prices !== false),
       print_mode: printer.print_mode || (isKitchen ? 'kitchen' : 'full_receipt'),
-      printer_type: printer.printer_type || 'receipt'
+      printer_type: isKitchen ? 'kitchen' : 'receipt'
     };
 
     // الخطوة 1: توليد ESC/POS bitmap في المتصفح (async for logo loading)
@@ -204,7 +204,7 @@ export const sendReceiptPrint = async (printer, orderData) => {
  */
 export const routeOrderToPrinters = (orderItems, products, printers) => {
   const printerJobs = {};
-  const defaultPrinter = printers.find(p => p.printer_type === 'kitchen') || printers[0];
+  const defaultPrinter = printers.find(p => p.print_mode === 'orders_only' || p.print_mode === 'selected_products') || printers[0];
 
   for (const item of orderItems) {
     const product = products.find(p => p.id === item.product_id || p.id === item.id);
