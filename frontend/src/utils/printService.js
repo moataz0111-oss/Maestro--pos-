@@ -233,10 +233,8 @@ export const routeOrderToPrinters = (orderItems, products, printers) => {
  * طباعة الطلب على جميع طابعات المطبخ
  */
 export const printOrderToAllPrinters = async (order, orderItems, products, printers, restaurantName = '') => {
-  const agentOk = await checkAgentStatus();
-  if (!agentOk) {
-    return { success: false, message: 'AGENT_NOT_RUNNING', results: [] };
-  }
+  // نطبع مباشرة بدون checkAgentStatus لسرعة أكبر
+  // الأخطاء تُعالج في sendReceiptPrint لكل طابعة
 
   const activePrinters = printers.filter(p =>
     (p.connection_type === 'usb' && p.usb_printer_name) ||
