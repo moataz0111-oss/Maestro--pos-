@@ -153,7 +153,7 @@ async function renderReceipt(order) {
 
   // ===== RESTAURANT LOGO (circular, centered) =====
   if (logo) {
-    const sz = 100;
+    const sz = 80;
     const lx = (PW-sz)/2;
     x.save();
     x.beginPath(); x.arc(lx+sz/2, y+sz/2, sz/2, 0, Math.PI*2); x.clip();
@@ -391,7 +391,7 @@ async function renderReceipt(order) {
 
   // ===== SYSTEM LOGO (bottom center) =====
   if (sysLogo) {
-    const sz = 50;
+    const sz = 80;
     x.drawImage(sysLogo, (PW-sz)/2, y, sz, sz);
     y += sz + 4;
   }
