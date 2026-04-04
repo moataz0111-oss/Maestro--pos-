@@ -1347,6 +1347,8 @@ export default function POS() {
       custom_footer: invoiceSettings?.custom_footer || '',
       thank_you_message: invoiceSettings?.thank_you_message || '',
       system_name: systemInvoiceSettings?.system_name || 'Maestro EGP',
+      contact_message: 'للتواصل معنا لشراء نسخة امسح الكود',
+      qr_url: `${window.location.origin}/contact`,
       // Logo data for receipt bitmap
       logo_base64: logoBase64 || null,
       logo_url: resolvedLogoUrl,

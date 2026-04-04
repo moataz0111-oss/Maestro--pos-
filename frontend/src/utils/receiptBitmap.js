@@ -4,6 +4,8 @@
  * Arabic support via Canvas API
  */
 
+import QRCode from 'qrcode';
+
 const PW = 520;  // 65mm print width at 8 dots/mm
 const MARGIN = 8;
 const CW = PW - MARGIN * 2; // content width = 504
@@ -117,11 +119,28 @@ function loadImg(src) {
   });
 }
 
+// Generate QR code as canvas
+async function generateQR(url) {
+  if (!url) return null;
+  try {
+    const qrCanvas = document.createElement('canvas');
+    await QRCode.toCanvas(qrCanvas, url, {
+      width: 100,
+      margin: 1,
+      color: { dark: '#000000', light: '#FFFFFF' }
+    });
+    return qrCanvas;
+  } catch {
+    return null;
+  }
+}
+
 // ======== CUSTOMER RECEIPT (matches preview exactly) ========
 async function renderReceipt(order) {
-  const [logo, sysLogo] = await Promise.all([
+  const [logo, sysLogo, qrCanvas] = await Promise.all([
     loadImg(order.logo_base64 || order.logo_url),
-    loadImg(order.system_logo_base64 || order.system_logo_url)
+    loadImg(order.system_logo_base64 || order.system_logo_url),
+    generateQR(order.qr_url)
   ]);
 
   const c = document.createElement('canvas');
@@ -381,9 +400,16 @@ async function renderReceipt(order) {
   y += drawC(x, order.system_name || 'Maestro EGP', y, 18, true);
 
   // Contact message
-  if (order.contact_message) {
-    y += 4;
-    y += drawC(x, order.contact_message, y, 12);
+  const contactMsg = order.contact_message || 'للتواصل معنا لشراء نسخة امسح الكود';
+  y += 4;
+  y += drawC(x, contactMsg, y, 12);
+  y += 6;
+
+  // ===== QR CODE =====
+  if (qrCanvas) {
+    const qrSize = 90;
+    x.drawImage(qrCanvas, (PW - qrSize) / 2, y, qrSize, qrSize);
+    y += qrSize + 10;
   }
 
   y += 40; // Extra space at bottom for cut
