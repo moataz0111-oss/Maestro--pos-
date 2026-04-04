@@ -423,17 +423,20 @@ function ctx_measureW(ctx, text, size, bold) {
   return ctx.measureText(text).width;
 }
 
-// ======== KITCHEN TICKET ========
-function renderKitchen(order) {
-  const KW = 384;
-  const KM = 6;
-  const KC = KW - KM * 2;
+// ======== KITCHEN TICKET (65mm = 520px, with restaurant header) ========
+async function renderKitchen(order) {
+  // Load restaurant logo
+  const logo = await loadImg(order.logo_base64 || order.logo_url);
+  
+  const KW = PW; // Same width as receipt (520px = 65mm)
+  const KM = MARGIN;
+  const KC = CW;
   const c = document.createElement('canvas');
-  c.width = KW; c.height = 3000;
+  c.width = KW; c.height = 6000;
   const x = c.getContext('2d');
-  x.fillStyle='#FFF'; x.fillRect(0,0,KW,3000);
+  x.fillStyle='#FFF'; x.fillRect(0,0,KW,6000);
   x.fillStyle='#000';
-  let y = 12;
+  let y = 16;
 
   function kC(text, yy, size, bold) {
     if (!text) return 0;
@@ -474,51 +477,114 @@ function renderKitchen(order) {
   function kInv(text, yy, size) {
     x.font = font(size, true, text);
     const tw = x.measureText(text).width;
-    const bw = Math.min(tw + 20, KC);
-    const bh = size + 12;
+    const bw = Math.min(tw + 24, KC);
+    const bh = size + 14;
     const bx = (KW - bw) / 2;
     x.fillStyle = '#000'; x.fillRect(bx, yy, bw, bh);
     x.fillStyle = '#FFF';
     x.textAlign = 'center'; x.textBaseline = 'top';
     x.direction = isAr(text)?'rtl':'ltr';
-    x.fillText(text, KW/2, yy + 6);
+    x.fillText(text, KW/2, yy + 7);
     x.direction = 'ltr'; x.fillStyle = '#000';
     return bh + 6;
   }
 
   function kDash(yy) {
+    x.strokeStyle='#000'; x.lineWidth=1; x.setLineDash([5,3]);
+    x.beginPath(); x.moveTo(KM, yy+4); x.lineTo(KW-KM, yy+4); x.stroke();
+    x.setLineDash([]); return 12;
+  }
+
+  function kDbl(yy) {
     x.strokeStyle='#000'; x.lineWidth=2;
     x.beginPath(); x.moveTo(KM, yy+2); x.lineTo(KW-KM, yy+2); x.stroke();
-    x.beginPath(); x.moveTo(KM, yy+6); x.lineTo(KW-KM, yy+6); x.stroke();
+    x.beginPath(); x.moveTo(KM, yy+7); x.lineTo(KW-KM, yy+7); x.stroke();
     return 12;
   }
 
-  if (order.section_name) { y += kInv(order.section_name, y, 22); y += 2; }
-  if (order.order_number) y += kInv(`#${order.order_number} :طلب`, y, 24);
+  // ===== RESTAURANT LOGO =====
+  if (logo) {
+    const sz = 70;
+    const lx = (KW-sz)/2;
+    x.save();
+    x.beginPath(); x.arc(lx+sz/2, y+sz/2, sz/2, 0, Math.PI*2); x.clip();
+    x.drawImage(logo, lx, y, sz, sz);
+    x.restore();
+    x.strokeStyle='#000'; x.lineWidth=2;
+    x.beginPath(); x.arc(lx+sz/2, y+sz/2, sz/2, 0, Math.PI*2); x.stroke();
+    y += sz + 8;
+  }
 
-  const types = {'dine_in':'داخلي','takeaway':'سفري','delivery':'توصيل','delivery_company':'شركة توصيل'};
-  y += kC(types[order.order_type] || '', y, 20, true);
-  if (order.table_number) y += kC(`${order.table_number} :الطاولة`, y, 20, true);
-  y += kC(`${nowStr().date} - ${nowStr().time}`, y, 14);
+  // ===== RESTAURANT NAME =====
+  if (order.restaurant_name) y += kC(order.restaurant_name, y, 26, true);
+
+  // ===== BRANCH NAME =====
+  if (order.branch_name) y += kC(order.branch_name, y, 18, true);
+
+  // ===== CASHIER NAME =====
+  if (order.cashier_name) y += kC(`${order.cashier_name} :الكاشير`, y, 18, true);
+
   y += kDash(y);
 
+  // ===== SECTION NAME (printer name) =====
+  if (order.section_name) { y += kInv(order.section_name, y, 24); y += 2; }
+
+  // ===== ORDER NUMBER =====
+  if (order.order_number) y += kInv(`#${order.order_number} :طلب`, y, 24);
+
+  // ===== ORDER TYPE =====
+  const types = {'dine_in':'داخلي','takeaway':'سفري','delivery':'توصيل','delivery_company':'شركة توصيل'};
+  y += kC(types[order.order_type] || '', y, 22, true);
+
+  // ===== TABLE NUMBER =====
+  if (order.table_number) y += kC(`${order.table_number} :الطاولة`, y, 22, true);
+
+  // ===== DATE/TIME =====
+  const { date, time } = nowStr();
+  y += kC(`${date} - ${time}`, y, 16, true);
+
+  y += kDbl(y);
+
+  // ===== ITEMS =====
   const items = order.items || [];
   for (let i = 0; i < items.length; i++) {
     const name = items[i].product_name || items[i].name || '';
     const qty = items[i].quantity || 1;
+    
+    // Item name (right, bold)
     y += kR(name, y, 22, true);
-    x.font = font(20, true, 'x1'); x.textAlign='left'; x.textBaseline='top'; x.direction='ltr';
-    x.fillText(`x${qty}`, KM, y - 26);
+    
+    // Quantity (left, on same line as name)
+    x.font = font(20, true, `x${qty}`);
+    x.textAlign='left'; x.textBaseline='top'; x.direction='ltr';
+    x.fillText(`x${qty}`, KM, y - 27);
+    
+    // Notes
     if (items[i].notes) y += kC(`** ${items[i].notes} **`, y, 16, true);
+    
+    // Extras
     const extras = items[i].extras || items[i].selectedExtras || [];
-    for (const e of extras) { if (e.name) y += kR(`  + ${e.name}`, y, 16); }
-    if (i < items.length-1) { x.setLineDash([2,3]); x.beginPath(); x.moveTo(KM+15,y); x.lineTo(KW-KM-15,y); x.stroke(); x.setLineDash([]); y+=6; }
+    for (const e of extras) { if (e.name) y += kR(`  + ${e.name}`, y, 16, true); }
+    
+    // Separator between items
+    if (i < items.length-1) {
+      y += 2;
+      x.setLineDash([2,4]); x.strokeStyle='#000'; x.lineWidth=1;
+      x.beginPath(); x.moveTo(KM+20,y); x.lineTo(KW-KM-20,y); x.stroke();
+      x.setLineDash([]); y+=6;
+    }
   }
 
-  y += kDash(y);
+  y += kDbl(y);
+
+  // ===== CUSTOMER INFO =====
   if (order.customer_name) y += kC(order.customer_name, y, 18, true);
   if (order.buzzer_number) y += kC(`جهاز: ${order.buzzer_number}`, y, 18, true);
-  y += kC(`${nowStr().date} ${nowStr().time}`, y, 12);
+
+  y += kDash(y);
+
+  // ===== SYSTEM NAME (footer) =====
+  y += kC(order.system_name || 'Maestro EGP', y, 16, true);
   y += 20;
 
   const f = document.createElement('canvas');
@@ -597,7 +663,7 @@ function toB64(arr) {
 export async function renderReceiptBitmap(order, config = {}) {
   try {
     const isK = config.printer_type === 'kitchen';
-    const canvas = isK ? renderKitchen(order) : await renderReceipt(order);
+    const canvas = isK ? await renderKitchen(order) : await renderReceipt(order);
     const bytes = toEscPos(canvas);
     const b64 = toB64(bytes);
     console.log(`[Receipt] ${isK?'Kitchen':'Receipt'}: ${canvas.width}x${canvas.height}px, ${bytes.length}b`);

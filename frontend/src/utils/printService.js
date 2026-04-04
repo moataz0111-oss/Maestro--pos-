@@ -201,14 +201,16 @@ export const sendReceiptPrint = async (printer, orderData) => {
 
 /**
  * توزيع العناصر على الطابعات حسب ربط المنتجات
+ * العناصر تظهر فقط في الطابعة المخصصة لها - لا يوجد طابعة افتراضية
  */
 export const routeOrderToPrinters = (orderItems, products, printers) => {
   const printerJobs = {};
-  const defaultPrinter = printers.find(p => p.print_mode === 'orders_only' || p.print_mode === 'selected_products') || printers[0];
 
   for (const item of orderItems) {
     const product = products.find(p => p.id === item.product_id || p.id === item.id);
-    const productPrinterIds = Array.isArray(product?.printer_ids) ? product.printer_ids.filter(id => id) : [];
+    // إزالة التكرارات من printer_ids باستخدام Set
+    const rawIds = Array.isArray(product?.printer_ids) ? product.printer_ids.filter(id => id) : [];
+    const productPrinterIds = [...new Set(rawIds)];
 
     if (productPrinterIds.length > 0) {
       for (const printerId of productPrinterIds) {
@@ -216,15 +218,11 @@ export const routeOrderToPrinters = (orderItems, products, printers) => {
         if (targetPrinter) {
           if (!printerJobs[printerId]) printerJobs[printerId] = [];
           printerJobs[printerId].push(item);
-        } else if (defaultPrinter) {
-          if (!printerJobs[defaultPrinter.id]) printerJobs[defaultPrinter.id] = [];
-          printerJobs[defaultPrinter.id].push(item);
         }
+        // لا نرسل للطابعة الافتراضية - فقط الطابعة المخصصة
       }
-    } else if (defaultPrinter) {
-      if (!printerJobs[defaultPrinter.id]) printerJobs[defaultPrinter.id] = [];
-      printerJobs[defaultPrinter.id].push(item);
     }
+    // إذا لا يوجد printer_ids = لا يتم طباعة هذا العنصر في أي مطبخ
   }
   return printerJobs;
 };
@@ -279,7 +277,9 @@ export const printOrderToAllPrinters = async (order, orderItems, products, print
       cashier_name: order.cashier_name || '',
       section_name: printer.name || '',
       language: order.language || localStorage.getItem('language') || 'ar',
-      // بيانات الفاتورة
+      // بيانات المطعم
+      logo_base64: order.logo_base64 || null,
+      logo_url: order.logo_url || null,
       phone: order.phone || '',
       phone2: order.phone2 || '',
       address: order.address || '',
