@@ -5,8 +5,8 @@ Multi-tenant POS system (React + FastAPI + MongoDB) with printing, ZKTeco biomet
 
 ## Architecture
 ```
-Print:     Browser Canvas -> ESC/POS -> localhost:9999 -> Agent v2.4 -> Printer
-Biometric: Browser -> localhost:9999/zk-* -> Agent v2.4 -> UDP ZK Protocol -> ZKTeco Device
+Print:     Browser Canvas -> ESC/POS -> localhost:9999 -> Agent v2.5 -> Printer
+Biometric: Browser -> localhost:9999/zk-* -> Agent v2.5 -> UDP ZK Protocol (with 50508273 header) -> ZKTeco Device
 Auto-Sync: Agent polls ZKTeco every 5min -> Frontend relays -> Backend auto-processes
 ```
 
@@ -25,8 +25,11 @@ Auto-Sync: Agent polls ZKTeco every 5min -> Frontend relays -> Backend auto-proc
 - [x] Extras quantity counter (+/-) with receipt separation
 
 ### ZKTeco Biometric (2026-04-05)
-- [x] Agent v2.4.0 with ZK Protocol (UDP C# ZKHelper)
+- [x] Agent v2.5.0 with ZK Protocol (UDP C# ZKHelper + transport header fix)
 - [x] /zk-test, /zk-sync, /zk-users, /zk-push-user, /zk-delete-user
+- [x] Transport header (50 50 82 7D) added to all packets (was missing in v2.4.0)
+- [x] ExtractPayload strips transport header from device responses
+- [x] HexDump debug logging for connection troubleshooting
 - [x] Auto-kill old agent on startup
 - [x] Frontend BiometricDevices routes through localhost:9999
 - [x] Agent status card (online/offline)
@@ -53,7 +56,7 @@ Auto-Sync: Agent polls ZKTeco every 5min -> Frontend relays -> Backend auto-proc
 - `/app/frontend/src/utils/receiptBitmap.js` - Receipt Canvas -> ESC/POS
 - `/app/backend/server.py` - Backend (18K+ lines)
 - `/app/backend/routes/payroll_routes.py` - Payroll calculations
-- `/app/backend/static/print_server.ps1` - Local agent v2.4.0
+- `/app/backend/static/print_server.ps1` - Local agent v2.5.0 (with ZK transport header fix)
 
 ## Key API Endpoints
 - POST /api/orders, PUT /api/orders/{id}/update-items

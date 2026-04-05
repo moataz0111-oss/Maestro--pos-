@@ -1,6 +1,6 @@
 $ErrorActionPreference = 'Continue'
 $agentLog = "$PSScriptRoot\agent.log"
-"$(Get-Date) - Agent v2.4.0 starting..." | Out-File $agentLog
+"$(Get-Date) - Agent v2.5.0 starting..." | Out-File $agentLog
 
 # ============================================
 # === AUTO-CLEANUP: Kill old agent & files ===
@@ -228,34 +228,61 @@ public class ZKHelper {
 
     private static byte[] BuildPacket(ushort command, ushort sessionId, ushort replyId, byte[] data) {
         int payloadLen = 8 + (data != null ? data.Length : 0);
-        byte[] buf = new byte[payloadLen];
-        // command
-        buf[0] = (byte)(command & 0xFF);
-        buf[1] = (byte)((command >> 8) & 0xFF);
-        // checksum placeholder
-        buf[2] = 0; buf[3] = 0;
-        // session_id
-        buf[4] = (byte)(sessionId & 0xFF);
-        buf[5] = (byte)((sessionId >> 8) & 0xFF);
-        // reply_id
-        buf[6] = (byte)(replyId & 0xFF);
-        buf[7] = (byte)((replyId >> 8) & 0xFF);
-        // data
+        byte[] payload = new byte[payloadLen];
+        payload[0] = (byte)(command & 0xFF);
+        payload[1] = (byte)((command >> 8) & 0xFF);
+        payload[2] = 0; payload[3] = 0;
+        payload[4] = (byte)(sessionId & 0xFF);
+        payload[5] = (byte)((sessionId >> 8) & 0xFF);
+        payload[6] = (byte)(replyId & 0xFF);
+        payload[7] = (byte)((replyId >> 8) & 0xFF);
         if (data != null && data.Length > 0) {
-            Array.Copy(data, 0, buf, 8, data.Length);
+            Array.Copy(data, 0, payload, 8, data.Length);
         }
-        // calculate checksum
-        ushort chk = CreateChecksum(buf);
-        buf[2] = (byte)(chk & 0xFF);
-        buf[3] = (byte)((chk >> 8) & 0xFF);
-        return buf;
+        ushort chk = CreateChecksum(payload);
+        payload[2] = (byte)(chk & 0xFF);
+        payload[3] = (byte)((chk >> 8) & 0xFF);
+        // Wrap with ZK transport header: 50 50 82 7D + payload_size(LE)
+        byte[] packet = new byte[8 + payloadLen];
+        packet[0] = 0x50; packet[1] = 0x50; packet[2] = 0x82; packet[3] = 0x7D;
+        packet[4] = (byte)(payloadLen & 0xFF);
+        packet[5] = (byte)((payloadLen >> 8) & 0xFF);
+        packet[6] = (byte)((payloadLen >> 16) & 0xFF);
+        packet[7] = (byte)((payloadLen >> 24) & 0xFF);
+        Array.Copy(payload, 0, packet, 8, payloadLen);
+        return packet;
+    }
+
+    private static byte[] ExtractPayload(byte[] raw) {
+        if (raw != null && raw.Length >= 8 && raw[0] == 0x50 && raw[1] == 0x50 && raw[2] == 0x82 && raw[3] == 0x7D) {
+            int pSize = BitConverter.ToInt32(raw, 4);
+            if (pSize > 0 && raw.Length >= 8 + pSize) {
+                byte[] p = new byte[pSize];
+                Array.Copy(raw, 8, p, 0, pSize);
+                return p;
+            }
+        }
+        return raw;
+    }
+
+    private static string HexDump(byte[] data, int maxLen) {
+        if (data == null) return "null";
+        int len = Math.Min(data.Length, maxLen);
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < len; i++) {
+            sb.Append(data[i].ToString("X2"));
+            if (i < len - 1) sb.Append(" ");
+        }
+        if (data.Length > maxLen) sb.Append("...");
+        return "[" + data.Length + "B] " + sb.ToString();
     }
 
     private static byte[] SendAndReceive(UdpClient client, string ip, int port, byte[] packet, int timeout) {
         client.Client.ReceiveTimeout = timeout;
         client.Send(packet, packet.Length, ip, port);
         IPEndPoint ep = new IPEndPoint(IPAddress.Any, 0);
-        return client.Receive(ref ep);
+        byte[] raw = client.Receive(ref ep);
+        return ExtractPayload(raw);
     }
 
     private static string DecodeTime(uint t) {
@@ -285,7 +312,11 @@ public class ZKHelper {
             client.Send(connectPkt, connectPkt.Length, ip, port);
 
             IPEndPoint ep = new IPEndPoint(IPAddress.Any, 0);
-            byte[] resp = client.Receive(ref ep);
+            byte[] rawResp = client.Receive(ref ep);
+            byte[] resp = ExtractPayload(rawResp);
+
+            string dbgSent = HexDump(connectPkt, 32);
+            string dbgRecv = HexDump(rawResp, 32);
 
             if (resp.Length >= 8) {
                 ushort cmd = BitConverter.ToUInt16(resp, 0);
@@ -323,15 +354,16 @@ public class ZKHelper {
             }
 
             client.Close();
-            return "{\"success\":false,\"message\":\"Device rejected connection\"}";
+            string cmdHex = resp.Length >= 2 ? BitConverter.ToUInt16(resp, 0).ToString("X4") : "??";
+            return "{\"success\":false,\"message\":\"Device response cmd=0x" + cmdHex + "\",\"debug_sent\":\"" + EscJson(dbgSent) + "\",\"debug_recv\":\"" + EscJson(dbgRecv) + "\"}";
         } catch (SocketException ex) {
             if (client != null) try { client.Close(); } catch {}
             if (ex.SocketErrorCode == SocketError.TimedOut)
                 return "{\"success\":false,\"message\":\"Connection timeout - device not reachable\"}";
-            return "{\"success\":false,\"message\":\"" + EscJson(ex.Message) + "\"}";
+            return "{\"success\":false,\"message\":\"Socket: " + EscJson(ex.Message) + " (code:" + ex.SocketErrorCode + ")\"}";
         } catch (Exception ex) {
             if (client != null) try { client.Close(); } catch {}
-            return "{\"success\":false,\"message\":\"" + EscJson(ex.Message) + "\"}";
+            return "{\"success\":false,\"message\":\"Error: " + EscJson(ex.Message) + "\"}";
         }
     }
 
@@ -371,7 +403,8 @@ public class ZKHelper {
                 while (allData.Count < dataSize) {
                     try {
                         IPEndPoint ep2 = new IPEndPoint(IPAddress.Any, 0);
-                        byte[] dataPkt = client.Receive(ref ep2);
+                        byte[] rawPkt = client.Receive(ref ep2);
+                        byte[] dataPkt = ExtractPayload(rawPkt);
                         if (dataPkt.Length > 0) {
                             ushort dCmd = BitConverter.ToUInt16(dataPkt, 0);
                             if (dCmd == CMD_DATA) {
@@ -479,7 +512,8 @@ public class ZKHelper {
                 while (allData.Count < dataSize && (DateTime.Now - start).TotalMilliseconds < maxWait) {
                     try {
                         IPEndPoint ep2 = new IPEndPoint(IPAddress.Any, 0);
-                        byte[] dataPkt = client.Receive(ref ep2);
+                        byte[] rawPkt = client.Receive(ref ep2);
+                        byte[] dataPkt = ExtractPayload(rawPkt);
                         if (dataPkt.Length > 0) {
                             ushort dCmd = BitConverter.ToUInt16(dataPkt, 0);
                             if (dCmd == CMD_DATA) {
@@ -971,7 +1005,7 @@ try {
     $listener = New-Object System.Net.HttpListener
     $listener.Prefixes.Add('http://localhost:9999/')
     $listener.Start()
-    "$(Get-Date) - HttpListener started on port 9999 (v2.4.0)" | Out-File $agentLog -Append
+    "$(Get-Date) - HttpListener started on port 9999 (v2.5.0)" | Out-File $agentLog -Append
 
     while ($listener.IsListening) {
         $ctx = $listener.GetContext()
@@ -993,7 +1027,7 @@ try {
         "$(Get-Date) - $($req.HttpMethod) $path" | Out-File $agentLog -Append
 
         if ($path -eq '/status') {
-            $jsonOut = '{"status":"running","version":"2.4.0","agent":"Maestro Print Agent","usb_support":true,"zk_support":true}'
+            $jsonOut = '{"status":"running","version":"2.5.0","agent":"Maestro Print Agent","usb_support":true,"zk_support":true}'
         }
         elseif ($path -eq '/list-printers') {
             try {
