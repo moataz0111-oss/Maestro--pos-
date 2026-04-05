@@ -1,26 +1,19 @@
 # Maestro POS - PRD
 
+## Original Problem Statement
+Multi-tenant POS system (React + FastAPI + MongoDB) requiring:
+- Multi-printer support (USB cashier, Ethernet kitchen)
+- Arabic text via Canvas -> ESC/POS
+- 65mm receipt formatting (bold fonts, logo, QR code, no blank spaces)
+- Kitchen routing: products print to assigned printers
+- Order/Product notes saving and printing
+- Offline mode, order modifications
+
 ## Print System v5.1 - Chunked WritePrinter Fix
-
-### Root Cause Found:
-- `WritePrinter` Win32 API sends 40KB+ data in ONE call
-- SAM4S GIANT-100 USB printer has ~4KB internal buffer
-- Buffer overflows → printer only processes LAST chunk → only footer prints
-- Same issue for Ethernet printers via TCP Write
-
-### Fix (Agent v2.3.0):
-- **USB**: `SendBytesToPrinter` now sends in 1024-byte chunks with 15ms delay between each
-- **Ethernet**: `Send-ToPrinter` now sends in 1024-byte chunks with 10ms delay
-- This gives the printer time to process each chunk before receiving the next one
-
-### Files Modified:
-- `print_server.ps1` v2.3.0 - Chunked USB + TCP writes
-- `AgentUpdateChecker.js` - Now requires v2.3+
-- `POS.js` - Fixed pending orders showing table UUID instead of number
 
 ### Architecture:
 ```
-Browser Canvas → ESC * 33 → base64 → Agent v2.3.0 → Chunked Write → Printer
+Browser Canvas -> ESC * 33 -> base64 -> Agent v2.3.0 -> Chunked Write -> Printer
 ```
 
 ## Credentials
@@ -32,10 +25,37 @@ Browser Canvas → ESC * 33 → base64 → Agent v2.3.0 → Chunked Write → Pr
 - [x] ESC * 33 column-mode encoding
 - [x] Agent v2.3.0 with chunked USB WritePrinter (1KB chunks, 15ms delay)
 - [x] Agent v2.3.0 with chunked TCP Write (1KB chunks, 10ms delay)
-- [x] Fixed pending orders showing table UUID → now shows table number
+- [x] Fixed pending orders showing table UUID -> now shows table number
 - [x] Kitchen dialog with per-item printer status
 - [x] Printer settings show linked product count
 - [x] AgentUpdateChecker semver comparison (requires 2.3+)
+- [x] Fixed false success in kitchen printing on existing orders
+- [x] Fixed printer_type mismatch (use print_mode instead)
+- [x] Fixed IndexedDB boolean key error in offlineDB.js
+- [x] Redesigned receipt to 65mm, ALL bold fonts, QR Code + System Logo
+- [x] Optimized print speed (skip blank lines, parallel requests)
+- [x] Fixed kitchen ticket repeating/wrong items
+- [x] Fixed loadOrderForEditing extras loading
+- [x] (2026-04-05) Fixed Product Notes and Order Notes not saving to DB
+- [x] (2026-04-05) Fixed handlePrintBill missing notes:orderNotes in payload
+- [x] (2026-04-05) Fixed editing path to use new update-items endpoint
+- [x] (2026-04-05) Fixed add-items endpoint missing extras field
+- [x] (2026-04-05) Fixed loadOrderForEditing missing product_name field
+- [x] (2026-04-05) Added PUT /api/orders/{id}/update-items endpoint
+
+## Key Files
+- `/app/frontend/src/pages/POS.js` - Main POS page (4.3K+ lines)
+- `/app/frontend/src/utils/receiptBitmap.js` - Receipt rendering (Canvas -> ESC/POS)
+- `/app/frontend/src/utils/printService.js` - Print routing to kitchen/cashier printers
+- `/app/backend/server.py` - Backend monolith (18K+ lines)
+
+## Key API Endpoints
+- POST /api/orders - Create order
+- GET /api/orders/{id} - Fetch order
+- PUT /api/orders/{id}/update-items - Update all items, notes, discount
+- PUT /api/orders/{id}/add-items - Add new items to existing order
+- PUT /api/orders/{id}/status - Update order status
+- PUT /api/orders/{id}/payment - Set payment method
 
 ## Upcoming Tasks
 - P0: Multi-Restaurant (Tenant) Switcher
