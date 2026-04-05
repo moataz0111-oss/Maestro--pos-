@@ -4617,7 +4617,7 @@ async def create_order(order: OrderCreate, current_user: dict = Depends(get_curr
         base_price = item.price
         # إضافة سعر الإضافات المختارة (تأتي من Frontend كـ extras)
         # ملاحظة: item.extras هنا هي الإضافات المختارة من العميل وليس كل الإضافات
-        extras_price = sum(_sn(extra.get("price")) for extra in (item.extras or []))
+        extras_price = sum(_sn(extra.get("price")) * int(extra.get("quantity", 1)) for extra in (item.extras or []))
         # المجموع للعنصر الواحد
         return (base_price + extras_price) * item.quantity
     
@@ -4662,7 +4662,7 @@ async def create_order(order: OrderCreate, current_user: dict = Depends(get_curr
         item_dict["cost"] = item_cost
         item_dict["packaging_cost"] = packaging_cost
         # حساب إجمالي سعر الإضافات المختارة للعنصر
-        item_dict["extras_total"] = sum(_sn(extra.get("price")) for extra in (item.extras or []))
+        item_dict["extras_total"] = sum(_sn(extra.get("price")) * int(extra.get("quantity", 1)) for extra in (item.extras or []))
         items_with_cost.append(item_dict)
     
     # Calculate delivery commission if applicable
@@ -5000,7 +5000,7 @@ async def add_items_to_order(order_id: str, items: List[OrderItemCreate], curren
     for item in items:
         product_query["id"] = item.product_id
         product = await db.products.find_one(product_query)
-        extras_total = sum(_sn(extra.get("price")) for extra in (item.extras or []))
+        extras_total = sum(_sn(extra.get("price")) * int(extra.get("quantity", 1)) for extra in (item.extras or []))
         new_items.append({
             "product_id": item.product_id,
             "product_name": item.product_name,
@@ -5072,7 +5072,7 @@ async def update_order_items(order_id: str, request: UpdateOrderItemsRequest, cu
             item_cost = base_cost * item.quantity
         
         total_cost += item_cost
-        extras_total = sum(_sn(extra.get("price")) for extra in (item.extras or []))
+        extras_total = sum(_sn(extra.get("price")) * int(extra.get("quantity", 1)) for extra in (item.extras or []))
         updated_items.append({
             "product_id": item.product_id,
             "product_name": item.product_name,

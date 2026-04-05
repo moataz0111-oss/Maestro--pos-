@@ -1280,7 +1280,7 @@ export default function POS() {
   }, []);
 
   const subtotal = cart.reduce((sum, item) => {
-    const extrasTotal = (item.selectedExtras || []).reduce((extSum, ext) => extSum + ext.price, 0);
+    const extrasTotal = (item.selectedExtras || []).reduce((extSum, ext) => extSum + (ext.price * (ext.quantity || 1)), 0);
     return sum + ((item.price + extrasTotal) * item.quantity);
   }, 0);
   
@@ -1613,8 +1613,8 @@ export default function POS() {
               notes: item.notes || '',
               extras: item.selectedExtras || []
             })),
-            subtotal: cart.reduce((sum, item) => sum + ((item.price + (item.selectedExtras || []).reduce((s, e) => s + e.price, 0)) * item.quantity), 0),
-            total: cart.reduce((sum, item) => sum + ((item.price + (item.selectedExtras || []).reduce((s, e) => s + e.price, 0)) * item.quantity), 0) - discount,
+            subtotal: cart.reduce((sum, item) => sum + ((item.price + (item.selectedExtras || []).reduce((s, e) => s + (e.price * (e.quantity || 1)), 0)) * item.quantity), 0),
+            total: cart.reduce((sum, item) => sum + ((item.price + (item.selectedExtras || []).reduce((s, e) => s + (e.price * (e.quantity || 1)), 0)) * item.quantity), 0) - discount,
             discount: discount,
             branch_id: currentBranchId,
             payment_method: 'pending',
@@ -1779,8 +1779,8 @@ export default function POS() {
           notes: item.notes || '',
           extras: item.selectedExtras || []
         })),
-        subtotal: cart.reduce((sum, item) => sum + ((item.price + (item.selectedExtras || []).reduce((s, e) => s + e.price, 0)) * item.quantity), 0),
-        total: cart.reduce((sum, item) => sum + ((item.price + (item.selectedExtras || []).reduce((s, e) => s + e.price, 0)) * item.quantity), 0) - discount,
+        subtotal: cart.reduce((sum, item) => sum + ((item.price + (item.selectedExtras || []).reduce((s, e) => s + (e.price * (e.quantity || 1)), 0)) * item.quantity), 0),
+        total: cart.reduce((sum, item) => sum + ((item.price + (item.selectedExtras || []).reduce((s, e) => s + (e.price * (e.quantity || 1)), 0)) * item.quantity), 0) - discount,
         discount: discount,
         discount_type: discountType,
         discount_value: discount,
@@ -1939,7 +1939,7 @@ export default function POS() {
           customer_phone: customerPhone || null,
           delivery_address: deliveryAddress || null,
           driver_id: selectedDriver || null,
-          total_amount: res.data.total_amount || cart.reduce((sum, item) => sum + ((item.price + (item.selectedExtras || []).reduce((s, e) => s + e.price, 0)) * item.quantity), 0),
+          total_amount: res.data.total_amount || cart.reduce((sum, item) => sum + ((item.price + (item.selectedExtras || []).reduce((s, e) => s + (e.price * (e.quantity || 1)), 0)) * item.quantity), 0),
           items: cart.map(item => ({
             ...item,
             extras: item.selectedExtras || []
@@ -1983,7 +1983,7 @@ export default function POS() {
           if (!cashierPrinter) cashierPrinter = availablePrinters.find(p => p.connection_type === 'usb' && p.usb_printer_name);
           console.log('[Submit] Cashier printer:', cashierPrinter?.name || 'NOT FOUND', 'Total printers:', availablePrinters.length);
           if (cashierPrinter) {
-            const subtotalCalc = cart.reduce((sum, item) => sum + ((item.price + (item.selectedExtras || []).reduce((s, e) => s + e.price, 0)) * item.quantity), 0);
+            const subtotalCalc = cart.reduce((sum, item) => sum + ((item.price + (item.selectedExtras || []).reduce((s, e) => s + (e.price * (e.quantity || 1)), 0)) * item.quantity), 0);
             const cashierOrderData = {
               ...orderForPrint,
               items: itemsForPrint,
@@ -2134,7 +2134,7 @@ export default function POS() {
         customer_phone: customerPhone || null,
         delivery_address: deliveryAddress || null,
         driver_id: selectedDriver || null,
-        total_amount: savedOrder.total_amount || cart.reduce((sum, item) => sum + ((item.price + (item.selectedExtras || []).reduce((s, e) => s + e.price, 0)) * item.quantity), 0),
+        total_amount: savedOrder.total_amount || cart.reduce((sum, item) => sum + ((item.price + (item.selectedExtras || []).reduce((s, e) => s + (e.price * (e.quantity || 1)), 0)) * item.quantity), 0),
         items: cart.map(item => ({
           ...item,
           extras: item.selectedExtras || []
@@ -2166,7 +2166,7 @@ export default function POS() {
         
         if (cashierPrinter) {
           const printData = buildPrintOrderData(savedOrder.order_number);
-          const subtotalCalc = cart.reduce((sum, item) => sum + ((item.price + (item.selectedExtras || []).reduce((s, e) => s + e.price, 0)) * item.quantity), 0);
+          const subtotalCalc = cart.reduce((sum, item) => sum + ((item.price + (item.selectedExtras || []).reduce((s, e) => s + (e.price * (e.quantity || 1)), 0)) * item.quantity), 0);
           const orderForPrint = {
             ...printData,
             items: cart.map(item => ({
@@ -2215,8 +2215,8 @@ export default function POS() {
               notes: item.notes || '',
               extras: item.selectedExtras || []
             })),
-            subtotal: cart.reduce((sum, item) => sum + ((item.price + (item.selectedExtras || []).reduce((s, e) => s + e.price, 0)) * item.quantity), 0),
-            total: cart.reduce((sum, item) => sum + ((item.price + (item.selectedExtras || []).reduce((s, e) => s + e.price, 0)) * item.quantity), 0) - discount,
+            subtotal: cart.reduce((sum, item) => sum + ((item.price + (item.selectedExtras || []).reduce((s, e) => s + (e.price * (e.quantity || 1)), 0)) * item.quantity), 0),
+            total: cart.reduce((sum, item) => sum + ((item.price + (item.selectedExtras || []).reduce((s, e) => s + (e.price * (e.quantity || 1)), 0)) * item.quantity), 0) - discount,
             discount: discount,
             branch_id: currentBranchId,
             payment_method: 'pending',
@@ -3113,7 +3113,7 @@ export default function POS() {
                   <div className="flex items-center justify-between">
                     <div className="flex-1 min-w-0">
                       <p className="font-medium text-sm text-foreground truncate">{lang === 'en' ? (item.product_name_en || item.product_name || item.name || t('منتج')) : (item.product_name || item.name || t('منتج'))}</p>
-                      <p className="text-primary text-sm tabular-nums">{formatPrice((item.price + (item.selectedExtras || []).reduce((sum, ext) => sum + ext.price, 0)) * item.quantity)}</p>
+                      <p className="text-primary text-sm tabular-nums">{formatPrice((item.price + (item.selectedExtras || []).reduce((sum, ext) => sum + (ext.price * (ext.quantity || 1)), 0)) * item.quantity)}</p>
                     </div>
                     <div className="flex items-center gap-1">
                       <Button
@@ -3170,8 +3170,8 @@ export default function POS() {
                     <div className="mt-2 space-y-1">
                       {item.selectedExtras.map((ext, extIdx) => (
                         <div key={extIdx} className="flex justify-between text-xs text-green-500 bg-green-500/10 px-2 py-1 rounded">
-                          <span>+ {ext.name}</span>
-                          <span>+{formatPrice(ext.price)}</span>
+                          <span>+ {ext.name}{(ext.quantity || 1) > 1 ? ` ×${ext.quantity}` : ''}</span>
+                          <span>+{formatPrice(ext.price * (ext.quantity || 1))}</span>
                         </div>
                       ))}
                     </div>
@@ -3873,7 +3873,7 @@ export default function POS() {
                   }
                   console.log('[Print] Using printer:', cashierPrinter.name, cashierPrinter.printer_type, cashierPrinter.connection_type);
                   const printData = buildPrintOrderData(editingOrder?.order_number || lastOrderNumber || '');
-                  const subtotalCalc = cart.reduce((sum, item) => sum + ((item.price + (item.selectedExtras || []).reduce((s, e) => s + e.price, 0)) * item.quantity), 0);
+                  const subtotalCalc = cart.reduce((sum, item) => sum + ((item.price + (item.selectedExtras || []).reduce((s, e) => s + (e.price * (e.quantity || 1)), 0)) * item.quantity), 0);
                   const orderForPrint = {
                     ...printData,
                     items: cart.map(item => ({
@@ -4131,9 +4131,16 @@ export default function POS() {
           </DialogHeader>
           {selectedCartItem && (
             <div className="space-y-4">
-              {/* اسم المنتج */}
+              {/* اسم المنتج مع الكمية */}
               <div className="p-3 bg-muted/30 rounded-lg">
-                <p className="font-medium">{selectedCartItem.product_name}</p>
+                <div className="flex items-center justify-between">
+                  <p className="font-medium">{selectedCartItem.product_name || selectedCartItem.name}</p>
+                  {selectedCartItem.quantity > 1 && (
+                    <span className="bg-primary text-primary-foreground text-sm font-bold px-2.5 py-0.5 rounded-full" data-testid="extras-product-qty">
+                      ×{selectedCartItem.quantity}
+                    </span>
+                  )}
+                </div>
                 <p className="text-sm text-muted-foreground">{formatPrice(selectedCartItem.price)}</p>
               </div>
               
@@ -4147,43 +4154,75 @@ export default function POS() {
                 />
               </div>
               
-              {/* الإضافات المتاحة */}
+              {/* الإضافات المتاحة مع عدّاد الكمية */}
               {(selectedCartItem.extras || []).length > 0 && (
                 <div>
                   <label className="text-sm font-medium mb-2 block">{t('الإضافات المتاحة')}</label>
                   <div className="space-y-2 max-h-48 overflow-y-auto">
-                    {(selectedCartItem.extras || []).map((extra, idx) => (
-                      <div
-                        key={idx}
-                        className={`flex items-center justify-between p-3 rounded-lg border cursor-pointer transition-all ${
-                          tempSelectedExtras.find(e => e.id === extra.id)
-                            ? 'bg-green-500/20 border-green-500'
-                            : 'bg-muted/30 border-border hover:bg-muted/50'
-                        }`}
-                        onClick={() => {
-                          const isSelected = tempSelectedExtras.find(e => e.id === extra.id);
-                          if (isSelected) {
-                            setTempSelectedExtras(tempSelectedExtras.filter(e => e.id !== extra.id));
-                          } else {
-                            setTempSelectedExtras([...tempSelectedExtras, extra]);
-                          }
-                        }}
-                      >
-                        <div className="flex items-center gap-2">
-                          <div className={`w-5 h-5 rounded-full flex items-center justify-center ${
-                            tempSelectedExtras.find(e => e.id === extra.id)
-                              ? 'bg-green-500 text-white'
-                              : 'bg-muted border'
-                          }`}>
-                            {tempSelectedExtras.find(e => e.id === extra.id) && (
-                              <Check className="h-3 w-3" />
-                            )}
+                    {(selectedCartItem.extras || []).map((extra, idx) => {
+                      const selectedExtra = tempSelectedExtras.find(e => e.id === extra.id);
+                      const extraQty = selectedExtra?.quantity || 0;
+                      return (
+                        <div
+                          key={idx}
+                          className={`flex items-center justify-between p-3 rounded-lg border transition-all ${
+                            extraQty > 0
+                              ? 'bg-green-500/20 border-green-500'
+                              : 'bg-muted/30 border-border'
+                          }`}
+                          data-testid={`extra-item-${idx}`}
+                        >
+                          <div className="flex items-center gap-2 flex-1 min-w-0">
+                            <div className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 ${
+                              extraQty > 0 ? 'bg-green-500 text-white' : 'bg-muted border'
+                            }`}>
+                              {extraQty > 0 && <Check className="h-3 w-3" />}
+                            </div>
+                            <span className="truncate">{extra.name}</span>
                           </div>
-                          <span>{extra.name}</span>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <span className="text-green-500 font-medium text-sm ml-2">+{formatPrice(extra.price)}</span>
+                            <Button
+                              variant="outline"
+                              size="icon"
+                              className="h-7 w-7 rounded-full"
+                              data-testid={`extra-minus-${idx}`}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (extraQty <= 1) {
+                                  setTempSelectedExtras(tempSelectedExtras.filter(e => e.id !== extra.id));
+                                } else {
+                                  setTempSelectedExtras(tempSelectedExtras.map(e => 
+                                    e.id === extra.id ? { ...e, quantity: e.quantity - 1 } : e
+                                  ));
+                                }
+                              }}
+                            >
+                              <Minus className="h-3 w-3" />
+                            </Button>
+                            <span className="w-6 text-center font-bold text-sm" data-testid={`extra-qty-${idx}`}>{extraQty}</span>
+                            <Button
+                              variant="outline"
+                              size="icon"
+                              className="h-7 w-7 rounded-full"
+                              data-testid={`extra-plus-${idx}`}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (extraQty === 0) {
+                                  setTempSelectedExtras([...tempSelectedExtras, { ...extra, quantity: 1 }]);
+                                } else {
+                                  setTempSelectedExtras(tempSelectedExtras.map(e => 
+                                    e.id === extra.id ? { ...e, quantity: e.quantity + 1 } : e
+                                  ));
+                                }
+                              }}
+                            >
+                              <Plus className="h-3 w-3" />
+                            </Button>
+                          </div>
                         </div>
-                        <span className="text-green-500 font-medium">+{formatPrice(extra.price)}</span>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               )}
@@ -4198,13 +4237,13 @@ export default function POS() {
                   <>
                     {tempSelectedExtras.map((ext, idx) => (
                       <div key={idx} className="flex justify-between text-sm text-green-500">
-                        <span>+ {ext.name}</span>
-                        <span>+{formatPrice(ext.price)}</span>
+                        <span>+ {ext.name}{(ext.quantity || 1) > 1 ? ` ×${ext.quantity}` : ''}</span>
+                        <span>+{formatPrice(ext.price * (ext.quantity || 1))}</span>
                       </div>
                     ))}
                     <div className="flex justify-between font-bold mt-2 pt-2 border-t">
                       <span>{t('الإجمالي')}</span>
-                      <span>{formatPrice(selectedCartItem.price + tempSelectedExtras.reduce((sum, e) => sum + e.price, 0))}</span>
+                      <span>{formatPrice(selectedCartItem.price + tempSelectedExtras.reduce((sum, e) => sum + (e.price * (e.quantity || 1)), 0))}</span>
                     </div>
                   </>
                 )}

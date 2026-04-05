@@ -278,7 +278,7 @@ export const printOrderToAllPrinters = async (order, orderItems, products, print
       order_notes: order.order_notes || '',
       items: items,
       total: items.reduce((sum, item) => {
-        const extras = (item.extras || item.selectedExtras || []).reduce((s, e) => s + (e.price || 0), 0);
+        const extras = (item.extras || item.selectedExtras || []).reduce((s, e) => s + ((e.price || 0) * (e.quantity || 1)), 0);
         return sum + ((item.price + extras) * (item.quantity || 1));
       }, 0),
       discount: order.discount || 0

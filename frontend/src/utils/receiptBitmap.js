@@ -271,8 +271,8 @@ async function renderReceipt(order) {
     const name = item.product_name || item.name || '';
     const qty = item.quantity || 1;
     const unitPrice = item.price || 0;
-    const extrasTotal = (item.extras || item.selectedExtras || []).reduce((s, e) => s + (e.price || 0), 0);
-    const totalPrice = (unitPrice + extrasTotal) * qty;
+    // سعر المنتج الأساسي فقط (بدون الإضافات)
+    const basePrice = unitPrice * qty;
 
     // Draw item name (right, may wrap)
     x.font = font(itemSize, true, name);
@@ -302,8 +302,8 @@ async function renderReceipt(order) {
     x.textAlign = 'center'; x.direction = 'ltr';
     x.fillText(String(qty), colQtyX, firstLineY);
 
-    // Draw price (left, on first line)
-    const priceStr = `${fmt(totalPrice)} IQD`;
+    // Draw base price only (left, on first line) - بدون الإضافات
+    const priceStr = `${fmt(basePrice)} IQD`;
     x.font = font(itemSize, true, priceStr);
     x.textAlign = 'left'; x.direction = 'ltr';
     x.fillText(priceStr, colPriceX, firstLineY);
@@ -316,18 +316,20 @@ async function renderReceipt(order) {
       y += drawR(x, `** ${item.notes} **`, y, 16, true);
     }
 
-    // Extras
+    // Extras - مع دعم الكمية
     const extras = item.extras || item.selectedExtras || [];
     for (const ext of extras) {
       if (ext.name) {
-        const extName = `  + ${ext.name}`;
-        if (ext.price) {
+        const extQty = ext.quantity || 1;
+        const extName = extQty > 1 ? `  + ${ext.name} ×${extQty}` : `  + ${ext.name}`;
+        const extTotal = (ext.price || 0) * extQty;
+        if (extTotal) {
           x.font = font(16, true, extName);
           x.textAlign = 'right'; x.textBaseline = 'top'; x.direction = 'rtl';
           x.fillText(extName, colNameX, y);
           x.direction = 'ltr'; x.textAlign = 'left';
-          x.font = font(16, true, fmt(ext.price));
-          x.fillText(fmt(ext.price), colPriceX, y);
+          x.font = font(16, true, fmt(extTotal));
+          x.fillText(fmt(extTotal), colPriceX, y);
           y += 24;
         } else {
           y += drawR(x, extName, y, 16, true);
@@ -579,9 +581,15 @@ async function renderKitchen(order) {
     // Notes
     if (items[i].notes) y += kC(`** ${items[i].notes} **`, y, 16, true);
     
-    // Extras
+    // Extras - مع دعم الكمية
     const extras = items[i].extras || items[i].selectedExtras || [];
-    for (const e of extras) { if (e.name) y += kR(`  + ${e.name}`, y, 16, true); }
+    for (const e of extras) {
+      if (e.name) {
+        const eQty = e.quantity || 1;
+        const eName = eQty > 1 ? `  + ${e.name} ×${eQty}` : `  + ${e.name}`;
+        y += kR(eName, y, 16, true);
+      }
+    }
     
     // Separator between items
     if (i < items.length-1) {
