@@ -132,7 +132,7 @@
   },
   
   "test_credentials": {
-    "api_url": "https://kitchen-routing-fix.preview.emergentagent.com",
+    "api_url": "https://zk-attendance-sync.preview.emergentagent.com",
     "owner": {
       "email": "owner@maestroegp.com",
       "password": "owner123",
