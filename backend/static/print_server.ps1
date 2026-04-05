@@ -1,6 +1,6 @@
 $ErrorActionPreference = 'Continue'
 $agentLog = "$PSScriptRoot\agent.log"
-"$(Get-Date) - Agent v2.8.0 starting..." | Out-File $agentLog
+"$(Get-Date) - Agent v2.9.0 starting..." | Out-File $agentLog
 
 # ============================================
 # === AUTO-CLEANUP: Kill old agent & files ===
@@ -456,31 +456,33 @@ public class ZKHelper {
                     client.Send(freePkt, freePkt.Length, ip, port);
                 } catch {}
 
-                // Parse user records (72 bytes per user for newer devices, 28 for older)
+                // Parse user records - pyzk format
                 byte[] userData = allData.ToArray();
                 int recordSize = 72;
                 if (userData.Length > 0 && userData.Length % 72 != 0) {
-                    recordSize = 28;
+                    if (userData.Length % 28 == 0) recordSize = 28;
                 }
                 int userCount = userData.Length / recordSize;
                 for (int i = 0; i < userCount; i++) {
                     int offset = i * recordSize;
                     if (offset + recordSize > userData.Length) break;
                     try {
-                        // Privilege at offset 2
+                        int uidNum = BitConverter.ToUInt16(userData, offset);
                         int privilege = userData[offset + 2];
-                        // User ID string starting at offset 8 (24 chars for 72-byte records)
-                        int uidLen = recordSize == 72 ? 24 : 9;
-                        string uid = Encoding.UTF8.GetString(userData, offset + 8, uidLen).TrimEnd('\0');
-                        // Name starting after UID
-                        int nameOffset = offset + 8 + uidLen;
-                        int nameLen = recordSize == 72 ? 24 : 0;
                         string name = "";
-                        if (nameLen > 0 && nameOffset + nameLen <= userData.Length) {
-                            name = Encoding.UTF8.GetString(userData, nameOffset, nameLen).TrimEnd('\0');
+                        string userId = "";
+                        if (recordSize == 72) {
+                            // pyzk 72-byte: uid(2)+priv(1)+pass(8)+name(24)+card(4)+...+group(1)+userId(23)
+                            name = Encoding.UTF8.GetString(userData, offset + 11, 24).Split('\0')[0];
+                            userId = Encoding.UTF8.GetString(userData, offset + 48, 24).Split('\0')[0];
+                            if (string.IsNullOrEmpty(userId)) userId = uidNum.ToString();
+                        } else {
+                            // 28-byte: uid(2)+priv(1)+pass(8)+name(8)+card(4)+...+userId(?)
+                            name = Encoding.UTF8.GetString(userData, offset + 11, Math.Min(8, recordSize - 11)).Split('\0')[0];
+                            userId = uidNum.ToString();
                         }
-                        if (!string.IsNullOrEmpty(uid)) {
-                            users.Add("{\"uid\":\"" + EscJson(uid) + "\",\"name\":\"" + EscJson(name) + "\",\"privilege\":" + privilege + "}");
+                        if (uidNum > 0) {
+                            users.Add("{\"uid\":\"" + userId + "\",\"uid_num\":" + uidNum + ",\"name\":\"" + EscJson(name) + "\",\"privilege\":" + privilege + "}");
                         }
                     } catch {}
                 }
@@ -498,7 +500,7 @@ public class ZKHelper {
             } catch {}
 
             client.Close();
-            return "{\"success\":true,\"users\":[" + string.Join(",", users.ToArray()) + "],\"count\":" + users.Count + "}";
+            return "{\"success\":true,\"users\":[" + string.Join(",", users.ToArray()) + "],\"count\":" + users.Count + ",\"raw_bytes\":" + (users.Count > 0 ? "0" : allData.Count.ToString()) + ",\"record_size\":" + (users.Count > 0 ? "72" : "0") + "}";
         } catch (Exception ex) {
             if (client != null) try { client.Close(); } catch {}
             return "{\"success\":false,\"message\":\"" + EscJson(ex.Message) + "\"}";
@@ -563,13 +565,14 @@ public class ZKHelper {
                     client.Send(freePkt, freePkt.Length, ip, port);
                 } catch {}
 
-                // Parse attendance records (16 bytes per record for most ZK devices)
+                // Parse attendance records - pyzk format
                 byte[] attData = allData.ToArray();
-                int recordSize = 16;
-                // Some devices use 40 bytes per record
+                int recordSize = 40;
+                // pyzk: <H24sB4sB8s = 40 bytes per record
                 if (attData.Length > 0) {
-                    if (attData.Length % 40 == 0 && attData.Length % 16 != 0) recordSize = 40;
-                    else if (attData.Length % 16 != 0 && attData.Length % 40 == 0) recordSize = 40;
+                    if (attData.Length % 40 == 0) recordSize = 40;
+                    else if (attData.Length % 8 == 0) recordSize = 8;
+                    else if (attData.Length % 16 == 0) recordSize = 16;
                 }
                 int recCount = attData.Length / recordSize;
                 for (int i = 0; i < recCount; i++) {
@@ -582,13 +585,21 @@ public class ZKHelper {
                         int punchType;
 
                         if (recordSize == 40) {
-                            // 40-byte format: uid(9) + padding(15) + timestamp(4) + status(1) + punch(1) + reserved(10)
-                            uid = Encoding.UTF8.GetString(attData, offset, 9).TrimEnd('\0');
-                            timestamp = BitConverter.ToUInt32(attData, offset + 24);
-                            status = attData[offset + 28];
-                            punchType = attData[offset + 29];
+                            // pyzk 40-byte: uid(2)+user_id(24)+status(1)+timestamp(4)+punch(1)+space(8)
+                            int uidNum = BitConverter.ToUInt16(attData, offset);
+                            string userId = Encoding.UTF8.GetString(attData, offset + 2, 24).Split('\0')[0];
+                            uid = string.IsNullOrEmpty(userId) ? uidNum.ToString() : userId;
+                            status = attData[offset + 26];
+                            timestamp = BitConverter.ToUInt32(attData, offset + 27);
+                            punchType = attData[offset + 31];
+                        } else if (recordSize == 8) {
+                            // pyzk 8-byte: uid(2)+status(1)+punch(1)+timestamp(4)
+                            uid = BitConverter.ToUInt16(attData, offset).ToString();
+                            status = attData[offset + 2];
+                            punchType = attData[offset + 3];
+                            timestamp = BitConverter.ToUInt32(attData, offset + 4);
                         } else {
-                            // 16-byte format: uid(2) + padding(6) + timestamp(4) + status(1) + punch(1) + reserved(2)
+                            // 16-byte fallback
                             uid = BitConverter.ToUInt16(attData, offset).ToString();
                             timestamp = BitConverter.ToUInt32(attData, offset + 4);
                             status = attData[offset + 8];
@@ -613,7 +624,7 @@ public class ZKHelper {
             } catch {}
 
             client.Close();
-            return "{\"success\":true,\"records\":[" + string.Join(",", records.ToArray()) + "],\"count\":" + records.Count + "}";
+            return "{\"success\":true,\"records\":[" + string.Join(",", records.ToArray()) + "],\"count\":" + records.Count + ",\"raw_bytes\":" + (records.Count > 0 ? "0" : allData.Count.ToString()) + "}";
         } catch (Exception ex) {
             if (client != null) try { client.Close(); } catch {}
             return "{\"success\":false,\"message\":\"" + EscJson(ex.Message) + "\"}";
@@ -1032,7 +1043,7 @@ try {
     $listener = New-Object System.Net.HttpListener
     $listener.Prefixes.Add('http://localhost:9999/')
     $listener.Start()
-    "$(Get-Date) - HttpListener started on port 9999 (v2.8.0)" | Out-File $agentLog -Append
+    "$(Get-Date) - HttpListener started on port 9999 (v2.9.0)" | Out-File $agentLog -Append
 
     while ($listener.IsListening) {
         $ctx = $listener.GetContext()
@@ -1054,7 +1065,7 @@ try {
         "$(Get-Date) - $($req.HttpMethod) $path" | Out-File $agentLog -Append
 
         if ($path -eq '/status') {
-            $jsonOut = '{"status":"running","version":"2.8.0","agent":"Maestro Print Agent","usb_support":true,"zk_support":true}'
+            $jsonOut = '{"status":"running","version":"2.9.0","agent":"Maestro Print Agent","usb_support":true,"zk_support":true}'
         }
         elseif ($path -eq '/list-printers') {
             try {

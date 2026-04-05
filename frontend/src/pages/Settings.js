@@ -5001,11 +5001,11 @@ export default function Settings() {
                           className="bg-amber-500 hover:bg-amber-600 text-white font-bold"
                           onClick={() => {
                             window.open(`${API}/download-print-agent`, '_blank');
-                            toast.success(t('جاري تحميل التحديث v2.8 - شغّل الملف كمسؤول'));
+                            toast.success(t('جاري تحميل التحديث v2.9 - شغّل الملف كمسؤول'));
                           }}
                           data-testid="update-agent-inline-btn"
                         >
-                          <Download className="h-3.5 w-3.5 ml-1" />{t('تحديث v2.8')}
+                          <Download className="h-3.5 w-3.5 ml-1" />{t('تحديث v2.9')}
                         </Button>
                       )}
                     </div>

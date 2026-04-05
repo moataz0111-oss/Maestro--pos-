@@ -42,7 +42,7 @@ export const agentSupportsUsb = async () => {
     const parts = ver.split('.').map(Number);
     const major = parts[0] || 0;
     const minor = parts[1] || 0;
-    return (major > 2) || (major === 2 && minor >= 8);
+    return (major > 2) || (major === 2 && minor >= 9);
   } catch {
     return false;
   }

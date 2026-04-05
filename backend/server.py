@@ -8120,7 +8120,7 @@ async def test_printer_connection(printer_id: str, current_user: dict = Depends(
         return {"status": "error", "message": f"خطأ في الاتصال: {str(e)}"}
 
 
-PRINT_AGENT_VERSION = "2.8.0"
+PRINT_AGENT_VERSION = "2.9.0"
 
 @api_router.get("/print-agent-version")
 async def get_print_agent_version():
@@ -8167,7 +8167,7 @@ async def download_print_agent(request: Request):
         'chcp 65001 >nul 2>&1',
         '',
         'REM ======================================================',
-        'REM   Maestro Print Agent v2.8.0 - Full Clean Install',
+        'REM   Maestro Print Agent v2.9.0 - Full Clean Install',
         'REM ======================================================',
         '',
         'REM === Request Admin ===',
@@ -8177,11 +8177,11 @@ async def download_print_agent(request: Request):
         '    exit /b',
         ')',
         '',
-        'title Maestro Print Agent v2.8.0 - Clean Install',
+        'title Maestro Print Agent v2.9.0 - Clean Install',
         'color 0A',
         'echo.',
         'echo  ========================================',
-        'echo    Maestro Print Agent v2.8.0',
+        'echo    Maestro Print Agent v2.9.0',
         'echo    Full Clean Install',
         'echo  ========================================',
         'echo.',
@@ -8265,9 +8265,9 @@ async def download_print_agent(request: Request):
         'echo.',
         '',
         'REM ========================================',
-        'REM   STEP 3: DOWNLOAD FRESH v2.8.0',
+        'REM   STEP 3: DOWNLOAD FRESH v2.9.0',
         'REM ========================================',
-        'echo  [3/5] Downloading v2.8.0 (no cache)...',
+        'echo  [3/5] Downloading v2.9.0 (no cache)...',
         'powershell -NoProfile -Command "[Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; $headers=@{\'Cache-Control\'=\'no-cache\';\'Pragma\'=\'no-cache\'}; Invoke-WebRequest -Uri \'' + script_url + '\' -OutFile \'%D%\\server.ps1\' -UseBasicParsing -Headers $headers"',
         '',
         'if not exist "%D%\\server.ps1" (',
@@ -8284,14 +8284,14 @@ async def download_print_agent(request: Request):
         ')',
         '',
         'REM Verify downloaded version',
-        'powershell -NoProfile -Command "$c=Get-Content \'%D%\\server.ps1\' -Head 5 -Raw; if($c -match \'v2\\.5\\.0\'){Write-Host \'    Downloaded: v2.8.0\' -ForegroundColor Green}else{Write-Host \'    WARNING: Version mismatch!\' -ForegroundColor Red}"',
+        'powershell -NoProfile -Command "$c=Get-Content \'%D%\\server.ps1\' -Head 5 -Raw; if($c -match \'v2\\.5\\.0\'){Write-Host \'    Downloaded: v2.9.0\' -ForegroundColor Green}else{Write-Host \'    WARNING: Version mismatch!\' -ForegroundColor Red}"',
         'echo    [OK]',
         'echo.',
         '',
         'REM ========================================',
         'REM   STEP 4: START NEW AGENT',
         'REM ========================================',
-        'echo  [4/5] Starting new agent v2.8.0...',
+        'echo  [4/5] Starting new agent v2.9.0...',
         'start "" powershell -ExecutionPolicy Bypass -NoProfile -WindowStyle Hidden -File "%D%\\server.ps1"',
         'echo    [OK]',
         'echo.',
@@ -8307,11 +8307,11 @@ async def download_print_agent(request: Request):
         'echo.',
         'echo  Verifying agent is running...',
         'timeout /t 10 /nobreak >nul',
-        'powershell -NoProfile -Command "try { $r=Invoke-WebRequest -Uri \'http://localhost:9999/status\' -UseBasicParsing -TimeoutSec 10; $j=$r.Content|ConvertFrom-Json; Write-Host (\'  Agent Version: \'+$j.version) -ForegroundColor Green; if($j.version -eq \'2.6.0\'){Write-Host \'  v2.8.0 OK!\' -ForegroundColor Green}else{Write-Host \'  WARNING: Expected 2.6.0 got \'+$j.version -ForegroundColor Red} } catch { Write-Host \'  Agent starting... wait 30 sec and refresh browser\' -ForegroundColor Yellow }"',
+        'powershell -NoProfile -Command "try { $r=Invoke-WebRequest -Uri \'http://localhost:9999/status\' -UseBasicParsing -TimeoutSec 10; $j=$r.Content|ConvertFrom-Json; Write-Host (\'  Agent Version: \'+$j.version) -ForegroundColor Green; if($j.version -eq \'2.6.0\'){Write-Host \'  v2.9.0 OK!\' -ForegroundColor Green}else{Write-Host \'  WARNING: Expected 2.6.0 got \'+$j.version -ForegroundColor Red} } catch { Write-Host \'  Agent starting... wait 30 sec and refresh browser\' -ForegroundColor Yellow }"',
         'echo.',
         'echo  ========================================',
         'echo    DONE! Refresh the POS page.',
-        'echo    Agent v2.8.0 installed.',
+        'echo    Agent v2.9.0 installed.',
         'echo  ========================================',
         'echo.',
         'pause',
@@ -8323,7 +8323,7 @@ async def download_print_agent(request: Request):
         content=bat_content,
         media_type="application/x-msdos-program",
         headers={
-            "Content-Disposition": "attachment; filename=MaestroPrintAgent_v2.8.bat",
+            "Content-Disposition": "attachment; filename=MaestroPrintAgent_v2.9.bat",
             "Content-Type": "application/x-msdos-program",
             "Cache-Control": "no-cache, no-store, must-revalidate",
             "Pragma": "no-cache",
