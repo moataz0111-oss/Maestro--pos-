@@ -242,15 +242,9 @@ public class ZKHelper {
         ushort chk = CreateChecksum(payload);
         payload[2] = (byte)(chk & 0xFF);
         payload[3] = (byte)((chk >> 8) & 0xFF);
-        // Wrap with ZK transport header: 50 50 82 7D + payload_size(LE)
-        byte[] packet = new byte[8 + payloadLen];
-        packet[0] = 0x50; packet[1] = 0x50; packet[2] = 0x82; packet[3] = 0x7D;
-        packet[4] = (byte)(payloadLen & 0xFF);
-        packet[5] = (byte)((payloadLen >> 8) & 0xFF);
-        packet[6] = (byte)((payloadLen >> 16) & 0xFF);
-        packet[7] = (byte)((payloadLen >> 24) & 0xFF);
-        Array.Copy(payload, 0, packet, 8, payloadLen);
-        return packet;
+        // UDP: send raw payload without transport header
+        // TCP needs 50 50 82 7D header, but UDP does not
+        return payload;
     }
 
     private static byte[] ExtractPayload(byte[] raw) {
