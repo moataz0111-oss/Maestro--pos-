@@ -48,6 +48,7 @@ export default function BiometricDevices({ branches = [] }) {
 
   const AGENT_URL = 'http://localhost:9999';
   const [agentOnline, setAgentOnline] = useState(null);
+  const [agentVersion, setAgentVersion] = useState('');
   const [autoSyncActive, setAutoSyncActive] = useState(false);
   const [lastAutoSync, setLastAutoSync] = useState(null);
   const autoSyncRef = useRef(null);
@@ -58,9 +59,11 @@ export default function BiometricDevices({ branches = [] }) {
       const res = await axios.get(`${AGENT_URL}/status`, { timeout: 3000 });
       const isOnline = res.data?.status === 'running' && res.data?.zk_support === true;
       setAgentOnline(isOnline);
+      setAgentVersion(res.data?.version || '');
       return isOnline;
     } catch {
       setAgentOnline(false);
+      setAgentVersion('');
       return false;
     }
   };
@@ -160,7 +163,7 @@ export default function BiometricDevices({ branches = [] }) {
         toast.error(
           <div>
             <p className="font-bold">{t('الوكيل المحلي غير متصل!')}</p>
-            <p className="text-sm">{t('يجب تشغيل وكيل Maestro v2.4+ على جهاز الكمبيوتر')}</p>
+            <p className="text-sm">{t('يجب تشغيل وكيل Maestro على جهاز الكمبيوتر')}</p>
           </div>
         );
         return;
@@ -208,7 +211,7 @@ export default function BiometricDevices({ branches = [] }) {
         toast.error(
           <div>
             <p className="font-bold">{t('الوكيل المحلي غير متصل!')}</p>
-            <p className="text-sm">{t('يجب تشغيل وكيل Maestro v2.4+ على جهاز الكمبيوتر')}</p>
+            <p className="text-sm">{t('يجب تشغيل وكيل Maestro على جهاز الكمبيوتر')}</p>
           </div>
         );
         return;
@@ -312,11 +315,11 @@ export default function BiometricDevices({ branches = [] }) {
               <div className="flex items-center gap-2">
                 <h4 className="font-medium text-foreground">{t('وكيل Maestro المحلي')}</h4>
                 <Badge className={agentOnline ? 'bg-green-500/10 text-green-500' : 'bg-red-500/10 text-red-500'}>
-                  {agentOnline ? t('متصل v2.4') : t('غير متصل')}
+                  {agentOnline ? t('متصل') + (agentVersion ? ` v${agentVersion}` : '') : t('غير متصل')}
                 </Badge>
               </div>
               {!agentOnline && (
-                <p className="text-sm text-red-400 mt-1">{t('يجب تشغيل ملف print_server.ps1 (الإصدار 2.4+) على جهاز الكمبيوتر للتواصل مع أجهزة البصمة')}</p>
+                <p className="text-sm text-red-400 mt-1">{t('يجب تشغيل وكيل Maestro على جهاز الكمبيوتر للتواصل مع أجهزة البصمة')}</p>
               )}
             </div>
             <Button variant="outline" size="sm" onClick={checkAgent} data-testid="check-agent-btn">
@@ -373,7 +376,7 @@ export default function BiometricDevices({ branches = [] }) {
                 <li>{t('تأكد من أن جهاز البصمة متصل بنفس الشبكة المحلية')}</li>
                 <li>{t('استخدم عنوان IP الخاص بالجهاز')} ({t('مثال')}: 192.168.1.100)</li>
                 <li>{t('المنفذ الافتراضي لأجهزة ZKTeco هو 4370')}</li>
-                <li>{t('شغّل وكيل Maestro v2.4+ على نفس جهاز الكمبيوتر المتصل بالشبكة')}</li>
+                <li>{t('شغّل وكيل Maestro على نفس جهاز الكمبيوتر المتصل بالشبكة')}</li>
                 <li>{t('بعد إضافة الجهاز، اختبر الاتصال ثم قم بالمزامنة')}</li>
               </ul>
             </div>
