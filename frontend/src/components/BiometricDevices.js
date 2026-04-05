@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { useTranslation } from '../hooks/useTranslation';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
@@ -48,6 +48,9 @@ export default function BiometricDevices({ branches = [] }) {
 
   const AGENT_URL = 'http://localhost:9999';
   const [agentOnline, setAgentOnline] = useState(null);
+  const [autoSyncActive, setAutoSyncActive] = useState(false);
+  const [lastAutoSync, setLastAutoSync] = useState(null);
+  const autoSyncRef = useRef(null);
 
   // Check if local agent is running
   const checkAgent = async () => {
@@ -66,6 +69,48 @@ export default function BiometricDevices({ branches = [] }) {
     fetchDevices();
     checkAgent();
   }, []);
+
+  // Auto-sync polling - كل 5 دقائق
+  useEffect(() => {
+    if (!autoSyncActive) {
+      if (autoSyncRef.current) clearInterval(autoSyncRef.current);
+      return;
+    }
+    const runAutoSync = async () => {
+      try {
+        const agentOk = await checkAgent();
+        if (!agentOk || devices.length === 0) return;
+        const token = localStorage.getItem('token');
+        
+        for (const device of devices) {
+          try {
+            // 1. جلب البيانات من الجهاز عبر الوكيل
+            const agentRes = await axios.post(`${AGENT_URL}/zk-sync`, {
+              ip: device.ip_address, port: device.port || 4370, timeout: 15000
+            }, { timeout: 30000 });
+            
+            if (!agentRes.data.success || !agentRes.data.records?.length) continue;
+            
+            // 2. إرسال للسيرفر
+            await axios.post(`${API}/biometric/devices/${device.id}/sync-from-agent`, {
+              records: agentRes.data.records
+            }, { headers: { Authorization: `Bearer ${token}` } });
+          } catch {}
+        }
+        
+        // 3. معالجة تلقائية - تحويل بصمات → حضور + خصومات
+        await axios.post(`${API}/attendance/auto-process`, null, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        
+        setLastAutoSync(new Date().toLocaleTimeString('ar'));
+      } catch {}
+    };
+    
+    runAutoSync(); // First run immediately
+    autoSyncRef.current = setInterval(runAutoSync, 5 * 60 * 1000); // Every 5 min
+    return () => { if (autoSyncRef.current) clearInterval(autoSyncRef.current); };
+  }, [autoSyncActive, devices]);
 
   const fetchDevices = async () => {
     setLoading(true);
@@ -276,6 +321,40 @@ export default function BiometricDevices({ branches = [] }) {
             </div>
             <Button variant="outline" size="sm" onClick={checkAgent} data-testid="check-agent-btn">
               <RefreshCw className="h-4 w-4" />
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Auto-Sync Control */}
+      <Card className={`border-${autoSyncActive ? 'blue' : 'orange'}-500/30 bg-${autoSyncActive ? 'blue' : 'orange'}-500/5`}>
+        <CardContent className="p-4">
+          <div className="flex items-center gap-3">
+            <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${autoSyncActive ? 'bg-blue-500/20 animate-pulse' : 'bg-orange-500/20'}`}>
+              <RefreshCw className={`h-5 w-5 ${autoSyncActive ? 'text-blue-500' : 'text-orange-500'}`} />
+            </div>
+            <div className="flex-1">
+              <div className="flex items-center gap-2">
+                <h4 className="font-medium">{t('المزامنة التلقائية')}</h4>
+                <Badge className={autoSyncActive ? 'bg-blue-500/10 text-blue-500' : 'bg-orange-500/10 text-orange-500'}>
+                  {autoSyncActive ? t('مفعّلة - كل 5 دقائق') : t('متوقفة')}
+                </Badge>
+              </div>
+              {lastAutoSync && (
+                <p className="text-sm text-muted-foreground mt-1">{t('آخر مزامنة')}: {lastAutoSync}</p>
+              )}
+              {autoSyncActive && (
+                <p className="text-sm text-blue-400 mt-1">{t('يتم جلب سجلات الحضور من البصمة ومعالجتها تلقائياً')}</p>
+              )}
+            </div>
+            <Button 
+              variant={autoSyncActive ? 'destructive' : 'default'} 
+              size="sm" 
+              onClick={() => setAutoSyncActive(!autoSyncActive)}
+              disabled={!agentOnline}
+              data-testid="auto-sync-toggle"
+            >
+              {autoSyncActive ? t('إيقاف') : t('تشغيل')}
             </Button>
           </div>
         </CardContent>

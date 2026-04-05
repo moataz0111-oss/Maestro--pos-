@@ -99,7 +99,8 @@ export default function HR() {
   // Forms
   const [employeeForm, setEmployeeForm] = useState({
     name: '', phone: '', email: '', national_id: '', position: '', department: '',
-    branch_id: '', hire_date: '', salary: '', salary_type: 'monthly', work_hours_per_day: 8
+    branch_id: '', hire_date: '', salary: '', salary_type: 'monthly', work_hours_per_day: 8,
+    shift_start: '09:00', shift_end: '17:00', work_days: [0, 1, 2, 3, 4, 5]
   });
   const [attendanceForm, setAttendanceForm] = useState({
     employee_id: '', date: new Date().toISOString().slice(0, 10), check_in: '', check_out: '', status: 'present', notes: ''
@@ -252,7 +253,10 @@ export default function HR() {
       await axios.post(`${API}/employees`, {
         ...employeeForm,
         salary: parseFloat(employeeForm.salary),
-        work_hours_per_day: parseFloat(employeeForm.work_hours_per_day)
+        work_hours_per_day: parseFloat(employeeForm.work_hours_per_day),
+        shift_start: employeeForm.shift_start || null,
+        shift_end: employeeForm.shift_end || null,
+        work_days: employeeForm.work_days || [0,1,2,3,4,5]
       }, { headers: { Authorization: `Bearer ${token}` } });
       toast.success(t('تم إضافة الموظف'));
       setEmployeeDialogOpen(false);
@@ -270,7 +274,10 @@ export default function HR() {
       await axios.put(`${API}/employees/${editingEmployee.id}`, {
         ...employeeForm,
         salary: parseFloat(employeeForm.salary),
-        work_hours_per_day: parseFloat(employeeForm.work_hours_per_day)
+        work_hours_per_day: parseFloat(employeeForm.work_hours_per_day),
+        shift_start: employeeForm.shift_start || null,
+        shift_end: employeeForm.shift_end || null,
+        work_days: employeeForm.work_days || [0,1,2,3,4,5]
       }, { headers: { Authorization: `Bearer ${token}` } });
       toast.success(t('تم تحديث الموظف'));
       setEditingEmployee(null);
@@ -297,7 +304,8 @@ export default function HR() {
   const resetEmployeeForm = () => {
     setEmployeeForm({
       name: '', phone: '', email: '', national_id: '', position: '', department: '',
-      branch_id: '', hire_date: '', salary: '', salary_type: 'monthly', work_hours_per_day: 8
+      branch_id: '', hire_date: '', salary: '', salary_type: 'monthly', work_hours_per_day: 8,
+    shift_start: '09:00', shift_end: '17:00', work_days: [0, 1, 2, 3, 4, 5]
     });
   };
 
@@ -1157,6 +1165,34 @@ export default function HR() {
                             <Input type="number" value={employeeForm.work_hours_per_day} onChange={(e) => setEmployeeForm({...employeeForm, work_hours_per_day: e.target.value})} />
                           </div>
                         </div>
+                        {/* حقول الشفت */}
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <Label>{t('بداية الشفت')}</Label>
+                            <Input type="time" value={employeeForm.shift_start} onChange={(e) => setEmployeeForm({...employeeForm, shift_start: e.target.value})} data-testid="shift-start-input" />
+                          </div>
+                          <div>
+                            <Label>{t('نهاية الشفت')}</Label>
+                            <Input type="time" value={employeeForm.shift_end} onChange={(e) => setEmployeeForm({...employeeForm, shift_end: e.target.value})} data-testid="shift-end-input" />
+                          </div>
+                        </div>
+                        <div>
+                          <Label className="mb-2 block">{t('أيام العمل')}</Label>
+                          <div className="flex flex-wrap gap-2">
+                            {[
+                              { day: 0, label: 'الأحد' }, { day: 1, label: 'الإثنين' }, { day: 2, label: 'الثلاثاء' },
+                              { day: 3, label: 'الأربعاء' }, { day: 4, label: 'الخميس' }, { day: 5, label: 'الجمعة' }, { day: 6, label: 'السبت' }
+                            ].map(({ day, label }) => (
+                              <Button key={day} type="button" size="sm" variant={(employeeForm.work_days || []).includes(day) ? 'default' : 'outline'}
+                                data-testid={`work-day-${day}`}
+                                onClick={() => {
+                                  const days = employeeForm.work_days || [];
+                                  setEmployeeForm({...employeeForm, work_days: days.includes(day) ? days.filter(d => d !== day) : [...days, day]});
+                                }}
+                              >{t(label)}</Button>
+                            ))}
+                          </div>
+                        </div>
                         <div className="flex justify-end gap-2">
                           <Button type="button" variant="outline" onClick={() => setEmployeeDialogOpen(false)}>{t('إلغاء')}</Button>
                           <Button type="submit">{editingEmployee ? t('تحديث') : t('إضافة')}</Button>
@@ -1220,7 +1256,9 @@ export default function HR() {
                                   name: emp.name, phone: emp.phone, email: emp.email || '', national_id: emp.national_id || '',
                                   position: emp.position, department: emp.department || '', branch_id: emp.branch_id,
                                   hire_date: emp.hire_date, salary: emp.salary, salary_type: emp.salary_type,
-                                  work_hours_per_day: emp.work_hours_per_day
+                                  work_hours_per_day: emp.work_hours_per_day,
+                                  shift_start: emp.shift_start || '09:00', shift_end: emp.shift_end || '17:00',
+                                  work_days: emp.work_days || [0,1,2,3,4,5]
                                 });
                                 setEmployeeDialogOpen(true);
                               }} title={t('تعديل')}>

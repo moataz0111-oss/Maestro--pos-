@@ -1398,6 +1398,9 @@ class EmployeeCreate(BaseModel):
     work_hours_per_day: float = 8.0  # ساعات العمل اليومية
     user_id: Optional[str] = None  # ربط بحساب مستخدم
     biometric_uid: Optional[str] = None  # رقم البصمة على الجهاز
+    shift_start: Optional[str] = None  # وقت بداية الشفت HH:MM
+    shift_end: Optional[str] = None    # وقت نهاية الشفت HH:MM
+    work_days: Optional[list] = None   # أيام العمل [0=الأحد, 1=الإثنين, ..., 6=السبت]
 
 class EmployeeResponse(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -1415,6 +1418,9 @@ class EmployeeResponse(BaseModel):
     work_hours_per_day: float
     user_id: Optional[str] = None
     biometric_uid: Optional[str] = None
+    shift_start: Optional[str] = None
+    shift_end: Optional[str] = None
+    work_days: Optional[list] = None
     is_active: bool = True
     created_at: str
     tenant_id: Optional[str] = None
@@ -1432,6 +1438,9 @@ class EmployeeUpdate(BaseModel):
     work_hours_per_day: Optional[float] = None
     is_active: Optional[bool] = None
     biometric_uid: Optional[str] = None
+    shift_start: Optional[str] = None
+    shift_end: Optional[str] = None
+    work_days: Optional[list] = None
 
 # نموذج الحضور والانصراف
 class AttendanceCreate(BaseModel):
@@ -13820,6 +13829,281 @@ async def sync_from_agent(device_id: str, request: SyncFromAgentRequest, current
         "records_count": len(synced_records),
         "total_received": len(request.records),
         "duplicates_skipped": len(request.records) - len(synced_records)
+    }
+
+
+
+@api_router.post("/attendance/auto-process")
+async def auto_process_attendance(current_user: dict = Depends(get_current_user)):
+    """
+    معالجة تلقائية: تحويل سجلات البصمة الخام إلى حضور/انصراف + خصومات
+    يجلب سجلات البصمة غير المعالجة ويحولها لسجلات حضور مع حساب التأخير والغياب
+    """
+    tenant_id = get_user_tenant_id(current_user)
+    
+    # 1. جلب جميع الموظفين النشطين مع أرقام البصمة
+    emp_query = {"is_active": True, "biometric_uid": {"$ne": None, "$exists": True}}
+    if tenant_id:
+        emp_query["tenant_id"] = tenant_id
+    employees = await db.employees.find(emp_query, {"_id": 0}).to_list(500)
+    
+    if not employees:
+        return {"message": "لا يوجد موظفين مسجلين بالبصمة", "processed": 0}
+    
+    # خريطة biometric_uid → employee
+    uid_to_emp = {}
+    for emp in employees:
+        uid_to_emp[str(emp.get("biometric_uid", ""))] = emp
+    
+    # 2. جلب سجلات البصمة غير المعالجة
+    bio_query = {"processed": {"$ne": True}}
+    if tenant_id:
+        bio_query["tenant_id"] = tenant_id
+    raw_records = await db.biometric_attendance.find(bio_query, {"_id": 0}).to_list(10000)
+    
+    if not raw_records:
+        return {"message": "لا توجد سجلات جديدة للمعالجة", "processed": 0}
+    
+    # 3. تجميع السجلات حسب (employee_code, date)
+    from collections import defaultdict
+    daily_punches = defaultdict(list)
+    
+    for rec in raw_records:
+        uid = str(rec.get("employee_code", ""))
+        if uid not in uid_to_emp:
+            continue
+        # استخراج التاريخ والوقت
+        ts = rec.get("punch_time", "")
+        if "T" in ts:
+            date_part = ts.split("T")[0]
+            time_part = ts.split("T")[1][:5]  # HH:MM
+        else:
+            continue
+        daily_punches[(uid, date_part)].append(time_part)
+    
+    # 4. تحويل لسجلات حضور
+    created_attendance = 0
+    created_deductions = 0
+    
+    for (uid, date_str), times in daily_punches.items():
+        emp = uid_to_emp.get(uid)
+        if not emp:
+            continue
+        
+        # ترتيب الأوقات
+        times.sort()
+        check_in = times[0]    # أول بصمة = حضور
+        check_out = times[-1] if len(times) > 1 else None  # آخر بصمة = انصراف
+        
+        # التحقق من عدم وجود سجل مسبق لنفس اليوم
+        existing = await db.attendance.find_one({
+            "employee_id": emp["id"],
+            "date": date_str,
+            "source": "fingerprint"
+        })
+        if existing:
+            continue
+        
+        # حساب ساعات العمل
+        worked_hours = 0
+        if check_in and check_out and check_in != check_out:
+            try:
+                ci = datetime.strptime(check_in, "%H:%M")
+                co = datetime.strptime(check_out, "%H:%M")
+                worked_hours = round((co - ci).seconds / 3600, 2)
+            except:
+                pass
+        
+        # حساب التأخير
+        late_minutes = 0
+        shift_start = emp.get("shift_start")
+        shift_end = emp.get("shift_end")
+        required_hours = emp.get("work_hours_per_day", 8)
+        
+        if shift_start and check_in:
+            try:
+                scheduled = datetime.strptime(shift_start, "%H:%M")
+                actual = datetime.strptime(check_in, "%H:%M")
+                if actual > scheduled:
+                    late_minutes = (actual - scheduled).seconds // 60
+            except:
+                pass
+        
+        # حساب الخروج المبكر
+        early_leave_minutes = 0
+        if shift_end and check_out:
+            try:
+                scheduled_end = datetime.strptime(shift_end, "%H:%M")
+                actual_end = datetime.strptime(check_out, "%H:%M")
+                if actual_end < scheduled_end:
+                    early_leave_minutes = (scheduled_end - actual_end).seconds // 60
+            except:
+                pass
+        
+        # تحديد الحالة
+        status = "present"
+        if late_minutes > 0:
+            status = "late"
+        
+        # حساب الوقت الإضافي
+        overtime_hours = 0
+        if worked_hours > required_hours:
+            overtime_hours = round(worked_hours - required_hours, 2)
+        
+        # إنشاء سجل الحضور
+        att_doc = {
+            "id": str(uuid.uuid4()),
+            "employee_id": emp["id"],
+            "employee_name": emp.get("name"),
+            "date": date_str,
+            "check_in": check_in,
+            "check_out": check_out,
+            "worked_hours": worked_hours,
+            "late_minutes": late_minutes,
+            "early_leave_minutes": early_leave_minutes,
+            "overtime_hours": overtime_hours,
+            "status": status,
+            "source": "fingerprint",
+            "notes": None,
+            "tenant_id": tenant_id,
+            "created_by": current_user["id"],
+            "created_at": datetime.now(timezone.utc).isoformat()
+        }
+        await db.attendance.insert_one(att_doc)
+        created_attendance += 1
+        
+        # إنشاء خصم تلقائي للتأخير (أكثر من 15 دقيقة)
+        if late_minutes > 15:
+            late_hours = round(late_minutes / 60, 2)
+            hourly_rate = emp.get("salary", 0) / 30 / required_hours if required_hours > 0 else 0
+            deduction_amount = round(hourly_rate * late_hours)
+            
+            if deduction_amount > 0:
+                ded_doc = {
+                    "id": str(uuid.uuid4()),
+                    "employee_id": emp["id"],
+                    "employee_name": emp.get("name"),
+                    "deduction_type": "late",
+                    "amount": deduction_amount,
+                    "hours": late_hours,
+                    "days": None,
+                    "reason": f"تأخير {late_minutes} دقيقة - تلقائي من البصمة",
+                    "date": date_str,
+                    "tenant_id": tenant_id,
+                    "created_by": "system",
+                    "created_at": datetime.now(timezone.utc).isoformat()
+                }
+                await db.deductions.insert_one(ded_doc)
+                created_deductions += 1
+        
+        # إنشاء خصم للخروج المبكر (أكثر من 15 دقيقة)
+        if early_leave_minutes > 15:
+            el_hours = round(early_leave_minutes / 60, 2)
+            hourly_rate = emp.get("salary", 0) / 30 / required_hours if required_hours > 0 else 0
+            el_amount = round(hourly_rate * el_hours)
+            
+            if el_amount > 0:
+                ded_doc = {
+                    "id": str(uuid.uuid4()),
+                    "employee_id": emp["id"],
+                    "employee_name": emp.get("name"),
+                    "deduction_type": "early_leave",
+                    "amount": el_amount,
+                    "hours": el_hours,
+                    "days": None,
+                    "reason": f"خروج مبكر {early_leave_minutes} دقيقة - تلقائي من البصمة",
+                    "date": date_str,
+                    "tenant_id": tenant_id,
+                    "created_by": "system",
+                    "created_at": datetime.now(timezone.utc).isoformat()
+                }
+                await db.deductions.insert_one(ded_doc)
+                created_deductions += 1
+    
+    # 5. معالجة الغياب: فحص أيام العمل بدون بصمة
+    today = datetime.now(timezone.utc)
+    yesterday = (today - __import__('datetime').timedelta(days=1)).strftime("%Y-%m-%d")
+    
+    for emp in employees:
+        work_days = emp.get("work_days")
+        if not work_days:
+            continue
+        
+        # فحص يوم أمس
+        from datetime import timedelta
+        yesterday_dt = today - timedelta(days=1)
+        day_of_week = yesterday_dt.weekday()  # 0=Monday
+        # تحويل لصيغة 0=Sunday
+        day_of_week_sun = (day_of_week + 1) % 7
+        
+        if day_of_week_sun not in work_days:
+            continue  # يوم عطلة
+        
+        # هل يوجد حضور ليوم أمس؟
+        existing = await db.attendance.find_one({
+            "employee_id": emp["id"],
+            "date": yesterday
+        })
+        if existing:
+            continue
+        
+        # تسجيل غياب
+        required_hours = emp.get("work_hours_per_day", 8)
+        daily_rate = emp.get("salary", 0) / 30
+        
+        att_doc = {
+            "id": str(uuid.uuid4()),
+            "employee_id": emp["id"],
+            "employee_name": emp.get("name"),
+            "date": yesterday,
+            "check_in": None,
+            "check_out": None,
+            "worked_hours": 0,
+            "late_minutes": 0,
+            "early_leave_minutes": 0,
+            "overtime_hours": 0,
+            "status": "absent",
+            "source": "system",
+            "notes": "غياب تلقائي - لم يتم تسجيل بصمة",
+            "tenant_id": tenant_id,
+            "created_by": "system",
+            "created_at": datetime.now(timezone.utc).isoformat()
+        }
+        await db.attendance.insert_one(att_doc)
+        created_attendance += 1
+        
+        # خصم غياب يوم كامل
+        if daily_rate > 0:
+            ded_doc = {
+                "id": str(uuid.uuid4()),
+                "employee_id": emp["id"],
+                "employee_name": emp.get("name"),
+                "deduction_type": "absence",
+                "amount": round(daily_rate),
+                "hours": None,
+                "days": 1,
+                "reason": f"غياب يوم كامل {yesterday} - تلقائي",
+                "date": yesterday,
+                "tenant_id": tenant_id,
+                "created_by": "system",
+                "created_at": datetime.now(timezone.utc).isoformat()
+            }
+            await db.deductions.insert_one(ded_doc)
+            created_deductions += 1
+    
+    # 6. تحديث السجلات كمعالجة
+    record_ids = [r.get("id") for r in raw_records if r.get("id")]
+    if record_ids:
+        await db.biometric_attendance.update_many(
+            {"id": {"$in": record_ids}},
+            {"$set": {"processed": True}}
+        )
+    
+    return {
+        "message": "تمت المعالجة التلقائية",
+        "attendance_created": created_attendance,
+        "deductions_created": created_deductions,
+        "raw_records_processed": len(raw_records)
     }
 
 
