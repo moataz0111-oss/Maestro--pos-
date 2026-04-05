@@ -1,6 +1,6 @@
 $ErrorActionPreference = 'Continue'
 $agentLog = "$PSScriptRoot\agent.log"
-"$(Get-Date) - Agent v2.9.0 starting..." | Out-File $agentLog
+"$(Get-Date) - Agent v3.0.0 starting..." | Out-File $agentLog
 
 # ============================================
 # === AUTO-CLEANUP: Kill old agent & files ===
@@ -426,12 +426,12 @@ public class ZKHelper {
             byte[] userResp = SendAndReceive(client, ip, port, userPkt, timeoutMs * 2);
 
             List<string> users = new List<string>();
+            List<byte> allData = new List<byte>();
             ushort respCmd = BitConverter.ToUInt16(userResp, 0);
 
             if (respCmd == CMD_PREPARE_DATA && userResp.Length >= 12) {
                 uint dataSize = BitConverter.ToUInt32(userResp, 8);
                 // Read data packets
-                List<byte> allData = new List<byte>();
                 while (allData.Count < dataSize) {
                     try {
                         IPEndPoint ep2 = new IPEndPoint(IPAddress.Any, 0);
@@ -532,13 +532,13 @@ public class ZKHelper {
             byte[] attResp = SendAndReceive(client, ip, port, attPkt, timeoutMs * 3);
 
             List<string> records = new List<string>();
+            List<byte> allData = new List<byte>();
             ushort respCmd = BitConverter.ToUInt16(attResp, 0);
 
             if (respCmd == CMD_PREPARE_DATA && attResp.Length >= 12) {
                 uint dataSize = BitConverter.ToUInt32(attResp, 8);
 
                 // Read data packets
-                List<byte> allData = new List<byte>();
                 int maxWait = 30000;
                 DateTime start = DateTime.Now;
                 while (allData.Count < dataSize && (DateTime.Now - start).TotalMilliseconds < maxWait) {
@@ -1043,7 +1043,7 @@ try {
     $listener = New-Object System.Net.HttpListener
     $listener.Prefixes.Add('http://localhost:9999/')
     $listener.Start()
-    "$(Get-Date) - HttpListener started on port 9999 (v2.9.0)" | Out-File $agentLog -Append
+    "$(Get-Date) - HttpListener started on port 9999 (v3.0.0)" | Out-File $agentLog -Append
 
     while ($listener.IsListening) {
         $ctx = $listener.GetContext()
@@ -1065,7 +1065,7 @@ try {
         "$(Get-Date) - $($req.HttpMethod) $path" | Out-File $agentLog -Append
 
         if ($path -eq '/status') {
-            $jsonOut = '{"status":"running","version":"2.9.0","agent":"Maestro Print Agent","usb_support":true,"zk_support":true}'
+            $jsonOut = '{"status":"running","version":"3.0.0","agent":"Maestro Print Agent","usb_support":true,"zk_support":true}'
         }
         elseif ($path -eq '/list-printers') {
             try {
