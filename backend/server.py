@@ -8139,7 +8139,12 @@ async def get_print_agent_script():
     return Response(
         content=ps1_code,
         media_type="text/plain",
-        headers={"Content-Type": "text/plain; charset=utf-8"}
+        headers={
+            "Content-Type": "text/plain; charset=utf-8",
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+            "Pragma": "no-cache",
+            "Expires": "0"
+        }
     )
 
 
@@ -8162,7 +8167,7 @@ async def download_print_agent(request: Request):
         'chcp 65001 >nul 2>&1',
         '',
         'REM ======================================================',
-        'REM   Maestro Print Agent v2.3.0 - Installer',
+        'REM   Maestro Print Agent v2.5.0 - Installer',
         'REM ======================================================',
         '',
         'REM === Request Admin ===',
@@ -8172,11 +8177,11 @@ async def download_print_agent(request: Request):
         '    exit /b',
         ')',
         '',
-        'title Maestro Print Agent v2.3.0',
+        'title Maestro Print Agent v2.5.0',
         'color 0A',
         'echo.',
         'echo  ========================================',
-        'echo    Maestro Print Agent v2.3.0',
+        'echo    Maestro Print Agent v2.5.0',
         'echo  ========================================',
         'echo.',
         '',
@@ -8194,8 +8199,9 @@ async def download_print_agent(request: Request):
         '    taskkill /F /PID %%p >nul 2>&1',
         ')',
         '',
-        'REM Kill PowerShell running server.ps1',
+        'REM Kill PowerShell running server.ps1 or print_server',
         'wmic process where "name=\'powershell.exe\' and commandline like \'%%server.ps1%%\'" call terminate >nul 2>&1',
+        'wmic process where "name=\'powershell.exe\' and commandline like \'%%print_server%%\'" call terminate >nul 2>&1',
         '',
         'echo    Waiting for processes to stop...',
         'timeout /t 5 /nobreak >nul',
@@ -8228,7 +8234,7 @@ async def download_print_agent(request: Request):
         'echo.',
         '',
         'REM === STEP 3: Download server.ps1 ===',
-        'echo  [3/5] Downloading v2.3.0...',
+        'echo  [3/5] Downloading v2.5.0...',
         'powershell -NoProfile -Command "[Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -Uri \'' + script_url + '\' -OutFile \'%D%\\server.ps1\' -UseBasicParsing"',
         '',
         'if not exist "%D%\\server.ps1" (',
@@ -8270,7 +8276,7 @@ async def download_print_agent(request: Request):
         content=bat_content,
         media_type="application/x-msdos-program",
         headers={
-            "Content-Disposition": "attachment; filename=MaestroPrintAgent_v2.3.bat",
+            "Content-Disposition": "attachment; filename=MaestroPrintAgent_v2.5.bat",
             "Content-Type": "application/x-msdos-program",
             "Cache-Control": "no-cache, no-store, must-revalidate",
             "Pragma": "no-cache",
