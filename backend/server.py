@@ -5000,13 +5000,16 @@ async def add_items_to_order(order_id: str, items: List[OrderItemCreate], curren
     for item in items:
         product_query["id"] = item.product_id
         product = await db.products.find_one(product_query)
+        extras_total = sum(_sn(extra.get("price")) for extra in (item.extras or []))
         new_items.append({
             "product_id": item.product_id,
             "product_name": item.product_name,
             "quantity": item.quantity,
             "price": item.price,
             "cost": _sn(product.get("cost")) if product else 0,
-            "notes": item.notes
+            "notes": item.notes,
+            "extras": item.extras or [],
+            "extras_total": extras_total
         })
     
     # دمج العناصر الجديدة مع القديمة
@@ -5014,7 +5017,7 @@ async def add_items_to_order(order_id: str, items: List[OrderItemCreate], curren
     all_items = existing_items + new_items
     
     # إعادة حساب المجاميع
-    subtotal = sum(i["price"] * i["quantity"] for i in all_items)
+    subtotal = sum((i["price"] + _sn(i.get("extras_total"))) * i["quantity"] for i in all_items)
     total_cost = sum(_sn(i.get("cost")) * i["quantity"] for i in all_items)
     discount = _sn(order.get("discount"))
     tax = 0
@@ -5032,6 +5035,74 @@ async def add_items_to_order(order_id: str, items: List[OrderItemCreate], curren
             "updated_at": datetime.now(timezone.utc).isoformat()
         }}
     )
+    
+    query = build_tenant_query(current_user, {"id": order_id})
+    return await db.orders.find_one(query, {"_id": 0})
+
+
+class UpdateOrderItemsRequest(BaseModel):
+    items: List[OrderItemCreate]
+    notes: Optional[str] = None
+    discount: float = 0.0
+
+
+@api_router.put("/orders/{order_id}/update-items")
+async def update_order_items(order_id: str, request: UpdateOrderItemsRequest, current_user: dict = Depends(get_current_user)):
+    """تحديث جميع عناصر الطلب والملاحظات"""
+    query = build_tenant_query(current_user, {"id": order_id})
+    order = await db.orders.find_one(query)
+    if not order:
+        raise HTTPException(status_code=404, detail="الطلب غير موجود")
+    
+    tenant_id = get_user_tenant_id(current_user)
+    
+    # بناء العناصر المحدّثة مع التكاليف
+    updated_items = []
+    total_cost = 0
+    for item in request.items:
+        product = await db.products.find_one({"id": item.product_id}, {"_id": 0})
+        item_cost = 0
+        if product:
+            base_cost = _sn(product.get("cost")) + _sn(product.get("operating_cost"))
+            manufactured_product_id = product.get("manufactured_product_id")
+            if manufactured_product_id:
+                mfg_product = await db.manufactured_products.find_one({"id": manufactured_product_id}, {"_id": 0, "raw_material_cost": 1})
+                if mfg_product:
+                    base_cost = _sn(mfg_product.get("raw_material_cost")) + _sn(product.get("operating_cost"))
+            item_cost = base_cost * item.quantity
+        
+        total_cost += item_cost
+        extras_total = sum(_sn(extra.get("price")) for extra in (item.extras or []))
+        updated_items.append({
+            "product_id": item.product_id,
+            "product_name": item.product_name,
+            "quantity": item.quantity,
+            "price": item.price,
+            "cost": item_cost,
+            "notes": item.notes,
+            "extras": item.extras or [],
+            "extras_total": extras_total
+        })
+    
+    # إعادة حساب المجاميع
+    subtotal = sum((i["price"] + _sn(i.get("extras_total"))) * i["quantity"] for i in updated_items)
+    discount = request.discount
+    tax = 0
+    total = subtotal - discount + tax
+    profit = total - total_cost - order.get("delivery_commission", 0)
+    
+    update_data = {
+        "items": updated_items,
+        "subtotal": subtotal,
+        "discount": discount,
+        "total_cost": total_cost,
+        "total": total,
+        "profit": profit,
+        "notes": request.notes,
+        "updated_at": datetime.now(timezone.utc).isoformat()
+    }
+    
+    await db.orders.update_one({"id": order_id}, {"$set": update_data})
     
     query = build_tenant_query(current_user, {"id": order_id})
     return await db.orders.find_one(query, {"_id": 0})
@@ -16242,7 +16313,7 @@ async def get_menu_link(request: Request, current_user: dict = Depends(get_curre
         base_url = f"{parsed.scheme}://{parsed.netloc}"
     else:
         # fallback للـ environment variable
-        base_url = os.environ.get('REACT_APP_BACKEND_URL', 'https://thermal-print-agent.preview.emergentagent.com')
+        base_url = os.environ.get('REACT_APP_BACKEND_URL', 'https://kitchen-routing-fix.preview.emergentagent.com')
     
     menu_url = f"{base_url}/menu/{tenant.get('menu_slug', tenant_id)}"
     

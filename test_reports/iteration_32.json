@@ -82,7 +82,7 @@
   },
   
   "test_credentials": {
-    "api_url": "https://thermal-print-agent.preview.emergentagent.com",
+    "api_url": "https://kitchen-routing-fix.preview.emergentagent.com",
     "client_graffiti": {
       "email": "hanialdujaili@gmail.com",
       "password": "graffiti123",

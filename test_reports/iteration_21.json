@@ -102,7 +102,7 @@
   },
   
   "test_credentials": {
-    "api_url": "https://thermal-print-agent.preview.emergentagent.com",
+    "api_url": "https://kitchen-routing-fix.preview.emergentagent.com",
     "admin_email": "admin@maestroegp.com",
     "admin_password": "admin123",
     "super_admin_email": "owner@maestroegp.com",

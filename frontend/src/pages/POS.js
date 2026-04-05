@@ -1029,6 +1029,7 @@ export default function POS() {
         
         return {
           product_id: item.product_id,
+          product_name: productName || t('منتج غير معروف'),
           name: productName || t('منتج غير معروف'),
           price: item.price,
           quantity: item.quantity,
@@ -1408,15 +1409,23 @@ export default function POS() {
     setSubmitting(true);
 
     try {
-      // إذا كنا نعدل طلب موجود - إضافة العناصر الجديدة فقط
+      // إذا كنا نعدل طلب موجود - تحديث جميع العناصر والملاحظات
       if (editingOrder) {
-        const existingProductIds = editingOrder.items.map(i => i.product_id);
-        const newItems = cart.filter(item => !existingProductIds.includes(item.product_id));
+        const updatedItems = cart.map(item => ({
+          product_id: item.product_id || item.id,
+          product_name: item.product_name || item.name,
+          price: item.price,
+          quantity: item.quantity,
+          cost: item.cost || 0,
+          notes: item.notes || '',
+          extras: item.selectedExtras || []
+        }));
         
-        // تحقق إذا كانت هناك عناصر جديدة
-        if (newItems.length > 0) {
-          await axios.put(`${API}/orders/${editingOrder.id}/add-items`, newItems);
-        }
+        await axios.put(`${API}/orders/${editingOrder.id}/update-items`, {
+          items: updatedItems,
+          notes: orderNotes || null,
+          discount: discount || 0
+        });
         
         // إرسال جميع العناصر لطابعات المطبخ (الجديدة والقديمة)
         try {
@@ -1873,13 +1882,22 @@ export default function POS() {
         orderId = editingOrder.id;
         orderNumber = editingOrder.order_number;
         
-        // إضافة أي عناصر جديدة
-        const existingProductIds = editingOrder.items.map(i => i.product_id);
-        const newItems = cart.filter(item => !existingProductIds.includes(item.product_id));
+        // تحديث جميع عناصر الطلب والملاحظات
+        const updatedItems = cart.map(item => ({
+          product_id: item.product_id || item.id,
+          product_name: item.product_name || item.name,
+          price: item.price,
+          quantity: item.quantity,
+          cost: item.cost || 0,
+          notes: item.notes || '',
+          extras: item.selectedExtras || []
+        }));
         
-        if (newItems.length > 0) {
-          await axios.put(`${API}/orders/${editingOrder.id}/add-items`, newItems);
-        }
+        await axios.put(`${API}/orders/${editingOrder.id}/update-items`, {
+          items: updatedItems,
+          notes: orderNotes || null,
+          discount: discount || 0
+        });
       } else {
         // إنشاء طلب جديد أولاً
         const orderData = {
@@ -2096,6 +2114,7 @@ export default function POS() {
         discount: discount || 0,
         branch_id: currentBranchId,
         payment_method: paymentMethod || 'pending',
+        notes: orderNotes || null,
         auto_ready: true
       };
       
