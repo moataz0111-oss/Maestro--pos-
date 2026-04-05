@@ -36,13 +36,13 @@ export const agentSupportsUsb = async () => {
   try {
     const res = await fetch(`${PRINT_AGENT_URL}/status`);
     const data = await res.json();
-    // Check both USB support and version >= 2.5
+    // Check both USB support and version >= 2.6
     if (data.usb_support !== true) return false;
     const ver = String(data.version || '').replace(/^v/i, '').trim();
     const parts = ver.split('.').map(Number);
     const major = parts[0] || 0;
     const minor = parts[1] || 0;
-    return (major > 2) || (major === 2 && minor >= 5);
+    return (major > 2) || (major === 2 && minor >= 6);
   } catch {
     return false;
   }

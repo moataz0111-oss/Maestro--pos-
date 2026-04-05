@@ -4937,7 +4937,7 @@ export default function Settings() {
                         className="bg-amber-500 hover:bg-amber-600 text-white font-bold px-4"
                         onClick={() => {
                           window.open(`${API}/download-print-agent`, '_blank');
-                          toast.success(t('جاري تحميل الوسيط الجديد v2.5 - شغّل الملف بعد التحميل'));
+                          toast.success(t('جاري تحميل الوسيط الجديد v2.6 - شغّل الملف بعد التحميل'));
                         }}
                         data-testid="update-agent-btn"
                       >
@@ -4988,7 +4988,7 @@ export default function Settings() {
                           className="border-primary text-primary"
                           onClick={() => {
                             window.open(`${API}/download-print-agent`, '_blank');
-                            toast.success(t('جاري تحميل وسيط الطباعة v2.5 - شغّل الملف وسيعمل تلقائياً في الخلفية'));
+                            toast.success(t('جاري تحميل وسيط الطباعة v2.6 - شغّل الملف وسيعمل تلقائياً في الخلفية'));
                           }}
                           data-testid="download-agent-btn"
                         >
@@ -5001,11 +5001,11 @@ export default function Settings() {
                           className="bg-amber-500 hover:bg-amber-600 text-white font-bold"
                           onClick={() => {
                             window.open(`${API}/download-print-agent`, '_blank');
-                            toast.success(t('جاري تحميل التحديث v2.5 - شغّل الملف كمسؤول'));
+                            toast.success(t('جاري تحميل التحديث v2.6 - شغّل الملف كمسؤول'));
                           }}
                           data-testid="update-agent-inline-btn"
                         >
-                          <Download className="h-3.5 w-3.5 ml-1" />{t('تحديث v2.5')}
+                          <Download className="h-3.5 w-3.5 ml-1" />{t('تحديث v2.6')}
                         </Button>
                       )}
                     </div>
