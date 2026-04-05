@@ -225,8 +225,9 @@ export default function BiometricDevices({ branches = [] }) {
       }, { timeout: 60000 });
 
       if (!agentRes.data.success) {
+        const msg = agentRes.data.message || t('فشل في جلب البيانات من الجهاز');
         const dbg = agentRes.data.debug ? ` (${agentRes.data.debug})` : '';
-        toast.error(agentRes.data.message + dbg || t('فشل في جلب البيانات من الجهاز'));
+        toast.error(msg + dbg);
         return;
       }
 
