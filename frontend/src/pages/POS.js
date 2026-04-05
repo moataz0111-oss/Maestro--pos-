@@ -1021,9 +1021,9 @@ export default function POS() {
       const cartItems = (order.items || []).map(item => {
         // محاولة إيجاد اسم المنتج من قائمة المنتجات
         let productName = item.product_name || item.name;
+        const product = products.find(p => p.id === item.product_id);
         
         if (!productName && item.product_id && products.length > 0) {
-          const product = products.find(p => p.id === item.product_id);
           productName = product?.name || product?.product_name;
         }
         
@@ -1032,7 +1032,9 @@ export default function POS() {
           name: productName || t('منتج غير معروف'),
           price: item.price,
           quantity: item.quantity,
-          notes: item.notes || ''
+          notes: item.notes || '',
+          selectedExtras: item.extras || [],
+          extras: product?.extras || []
         };
       });
       setCart(cartItems);
@@ -1370,7 +1372,10 @@ export default function POS() {
       logo_base64: logoBase64 || null,
       logo_url: resolvedLogoUrl,
       system_logo_base64: sysLogoBase64 || null,
-      system_logo_url: resolvedSysLogoUrl
+      system_logo_url: resolvedSysLogoUrl,
+      // ملاحظات الفاتورة (من نموذج الحفظ والإرسال)
+      order_notes: orderNotes || '',
+      cashier_name: user?.username || user?.name || ''
     };
   };
 

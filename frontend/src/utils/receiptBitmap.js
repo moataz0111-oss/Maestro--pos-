@@ -191,6 +191,13 @@ async function renderReceipt(order) {
   if (order.order_number)
     y += invH(x, `#${order.order_number} :فاتورة رقم`, y, 24);
 
+  // ===== ORDER NOTES (ملاحظات الفاتورة - تحت رقم الفاتورة) =====
+  if (order.order_notes) {
+    y += 4;
+    y += drawC(x, order.order_notes, y, 16, true);
+    y += 2;
+  }
+
   // Date + Time
   const { date, time } = nowStr();
   y += drawC(x, `${date}  -  ${time}`, y, 18, true);
@@ -264,7 +271,8 @@ async function renderReceipt(order) {
     const name = item.product_name || item.name || '';
     const qty = item.quantity || 1;
     const unitPrice = item.price || 0;
-    const totalPrice = unitPrice * qty;
+    const extrasTotal = (item.extras || item.selectedExtras || []).reduce((s, e) => s + (e.price || 0), 0);
+    const totalPrice = (unitPrice + extrasTotal) * qty;
 
     // Draw item name (right, may wrap)
     x.font = font(itemSize, true, name);
@@ -533,6 +541,13 @@ async function renderKitchen(order) {
 
   // ===== ORDER NUMBER =====
   if (order.order_number) y += kInv(`#${order.order_number} :طلب`, y, 24);
+
+  // ===== ORDER NOTES (ملاحظات الفاتورة) =====
+  if (order.order_notes) {
+    y += 4;
+    y += kC(order.order_notes, y, 16, true);
+    y += 2;
+  }
 
   // ===== ORDER TYPE =====
   const types = {'dine_in':'داخلي','takeaway':'سفري','delivery':'توصيل','delivery_company':'شركة توصيل'};
