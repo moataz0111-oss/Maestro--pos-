@@ -42,9 +42,26 @@ Browser Canvas -> ESC * 33 -> base64 -> Agent v2.3.0 -> Chunked Write -> Printer
 - [x] (2026-04-05) Fixed add-items endpoint missing extras field
 - [x] (2026-04-05) Fixed loadOrderForEditing missing product_name field
 - [x] (2026-04-05) Added PUT /api/orders/{id}/update-items endpoint
+- [x] (2026-04-05) Extras quantity counter: +/- buttons in extras modal
+- [x] (2026-04-05) Product quantity badge in extras modal header (×N)
+- [x] (2026-04-05) Receipt: base product price only, extras listed separately with quantity
+- [x] (2026-04-05) Backend extras_total calculation supports quantity field
+
+## Extras Data Structure
+```json
+{
+  "id": "ext1",
+  "name": "بيبسي كومبو",
+  "price": 750,
+  "quantity": 2
+}
+```
+- `price` = unit price per extra
+- `quantity` = how many of this extra (default 1)
+- `extras_total` = sum(ext.price * ext.quantity) per item
 
 ## Key Files
-- `/app/frontend/src/pages/POS.js` - Main POS page (4.3K+ lines)
+- `/app/frontend/src/pages/POS.js` - Main POS page (4.4K+ lines)
 - `/app/frontend/src/utils/receiptBitmap.js` - Receipt rendering (Canvas -> ESC/POS)
 - `/app/frontend/src/utils/printService.js` - Print routing to kitchen/cashier printers
 - `/app/backend/server.py` - Backend monolith (18K+ lines)
