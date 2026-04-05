@@ -1,6 +1,6 @@
 $ErrorActionPreference = 'Continue'
 $agentLog = "$PSScriptRoot\agent.log"
-"$(Get-Date) - Agent v2.7.0 starting..." | Out-File $agentLog
+"$(Get-Date) - Agent v2.8.0 starting..." | Out-File $agentLog
 
 # ============================================
 # === AUTO-CLEANUP: Kill old agent & files ===
@@ -201,6 +201,8 @@ public class ZKHelper {
     const ushort CMD_ACK_OK = 2000;
     const ushort CMD_ACK_ERROR = 2001;
     const ushort CMD_ACK_DATA = 2002;
+    const ushort CMD_ACK_UNAUTH = 2005;
+    const ushort CMD_AUTH = 29;
     const ushort CMD_PREPARE_DATA = 1500;
     const ushort CMD_DATA = 1501;
     const ushort CMD_FREE_DATA = 1502;
@@ -279,6 +281,54 @@ public class ZKHelper {
         return ExtractPayload(raw);
     }
 
+    // ZKTeco comm key scramble (from pyzk make_commkey)
+    private static byte[] MakeCommKey(int commKey, ushort sessionId) {
+        uint k = 0;
+        for (int i = 0; i < 32; i++) {
+            if ((commKey & (1 << i)) != 0)
+                k = (k << 1) | 1;
+            else
+                k = k << 1;
+        }
+        k += sessionId;
+        byte[] kb = BitConverter.GetBytes(k);
+        kb[0] ^= (byte)'Z';
+        kb[1] ^= (byte)'K';
+        kb[2] ^= (byte)'S';
+        kb[3] ^= (byte)'O';
+        uint v = BitConverter.ToUInt32(kb, 0);
+        byte[] result = new byte[4];
+        result[0] = (byte)((v >> 24) & 0xFF);
+        result[1] = (byte)((v >> 16) & 0xFF);
+        result[2] = (byte)((v >> 8) & 0xFF);
+        result[3] = (byte)(v & 0xFF);
+        return result;
+    }
+
+    // Connect + Auth helper - returns [sessionId, success]
+    private static ushort ConnectAndAuth(UdpClient client, string ip, int port, int timeoutMs, int commKey, out bool success) {
+        success = false;
+        byte[] connectPkt = BuildPacket(CMD_CONNECT, 0, 0, null);
+        byte[] resp = SendAndReceive(client, ip, port, connectPkt, timeoutMs);
+        if (resp.Length < 8) return 0;
+        ushort cmd = BitConverter.ToUInt16(resp, 0);
+        ushort sessionId = BitConverter.ToUInt16(resp, 4);
+        if (cmd == CMD_ACK_OK) {
+            success = true;
+            return sessionId;
+        }
+        if (cmd == CMD_ACK_UNAUTH) {
+            byte[] authData = MakeCommKey(commKey, sessionId);
+            byte[] authPkt = BuildPacket(CMD_AUTH, sessionId, 1, authData);
+            byte[] authResp = SendAndReceive(client, ip, port, authPkt, timeoutMs);
+            if (authResp.Length >= 8 && BitConverter.ToUInt16(authResp, 0) == CMD_ACK_OK) {
+                success = true;
+                return sessionId;
+            }
+        }
+        return sessionId;
+    }
+
     private static string DecodeTime(uint t) {
         int second = (int)(t % 60); t /= 60;
         int minute = (int)(t % 60); t /= 60;
@@ -302,54 +352,44 @@ public class ZKHelper {
             client.Client.ReceiveTimeout = timeoutMs;
             client.Client.SendTimeout = timeoutMs;
 
-            byte[] connectPkt = BuildPacket(CMD_CONNECT, 0, 0, null);
-            client.Send(connectPkt, connectPkt.Length, ip, port);
+            bool ok;
+            ushort sessionId = ConnectAndAuth(client, ip, port, timeoutMs, 0, out ok);
 
-            IPEndPoint ep = new IPEndPoint(IPAddress.Any, 0);
-            byte[] rawResp = client.Receive(ref ep);
-            byte[] resp = ExtractPayload(rawResp);
+            if (ok) {
+                ushort replyId = 2;
 
-            string dbgSent = HexDump(connectPkt, 32);
-            string dbgRecv = HexDump(rawResp, 32);
+                // Get serial number
+                string serial = "N/A";
+                try {
+                    byte[] snPkt = BuildPacket(CMD_GET_SERIALNUMBER, sessionId, replyId++, null);
+                    byte[] snResp = SendAndReceive(client, ip, port, snPkt, timeoutMs);
+                    if (snResp.Length > 8) {
+                        serial = Encoding.UTF8.GetString(snResp, 8, snResp.Length - 8).TrimEnd('\0');
+                    }
+                } catch {}
 
-            if (resp.Length >= 8) {
-                ushort cmd = BitConverter.ToUInt16(resp, 0);
-                ushort sessionId = BitConverter.ToUInt16(resp, 4);
-                if (cmd == CMD_ACK_OK) {
-                    // Get serial number
-                    string serial = "N/A";
-                    try {
-                        byte[] snPkt = BuildPacket(CMD_GET_SERIALNUMBER, sessionId, 1, null);
-                        byte[] snResp = SendAndReceive(client, ip, port, snPkt, timeoutMs);
-                        if (snResp.Length > 8) {
-                            serial = Encoding.UTF8.GetString(snResp, 8, snResp.Length - 8).TrimEnd('\0');
-                        }
-                    } catch {}
+                // Get device name
+                string deviceName = "ZKTeco";
+                try {
+                    byte[] dnPkt = BuildPacket(CMD_GET_DEVICE_NAME, sessionId, replyId++, null);
+                    byte[] dnResp = SendAndReceive(client, ip, port, dnPkt, timeoutMs);
+                    if (dnResp.Length > 8) {
+                        deviceName = Encoding.UTF8.GetString(dnResp, 8, dnResp.Length - 8).TrimEnd('\0');
+                    }
+                } catch {}
 
-                    // Get device name
-                    string deviceName = "ZKTeco";
-                    try {
-                        byte[] dnPkt = BuildPacket(CMD_GET_DEVICE_NAME, sessionId, 2, null);
-                        byte[] dnResp = SendAndReceive(client, ip, port, dnPkt, timeoutMs);
-                        if (dnResp.Length > 8) {
-                            deviceName = Encoding.UTF8.GetString(dnResp, 8, dnResp.Length - 8).TrimEnd('\0');
-                        }
-                    } catch {}
+                // Disconnect
+                try {
+                    byte[] exitPkt = BuildPacket(CMD_EXIT, sessionId, replyId++, null);
+                    client.Send(exitPkt, exitPkt.Length, ip, port);
+                } catch {}
 
-                    // Disconnect
-                    try {
-                        byte[] exitPkt = BuildPacket(CMD_EXIT, sessionId, 3, null);
-                        client.Send(exitPkt, exitPkt.Length, ip, port);
-                    } catch {}
-
-                    client.Close();
-                    return "{\"success\":true,\"message\":\"Connected\",\"serial_number\":\"" + EscJson(serial) + "\",\"device_name\":\"" + EscJson(deviceName) + "\",\"session_id\":" + sessionId + "}";
-                }
+                client.Close();
+                return "{\"success\":true,\"message\":\"Connected + Authenticated\",\"serial_number\":\"" + EscJson(serial) + "\",\"device_name\":\"" + EscJson(deviceName) + "\",\"session_id\":" + sessionId + "}";
             }
 
             client.Close();
-            string cmdHex = resp.Length >= 2 ? BitConverter.ToUInt16(resp, 0).ToString("X4") : "??";
-            return "{\"success\":false,\"message\":\"Device response cmd=0x" + cmdHex + "\",\"debug_sent\":\"" + EscJson(dbgSent) + "\",\"debug_recv\":\"" + EscJson(dbgRecv) + "\"}";
+            return "{\"success\":false,\"message\":\"Authentication failed\"}";
         } catch (SocketException ex) {
             if (client != null) try { client.Close(); } catch {}
             if (ex.SocketErrorCode == SocketError.TimedOut)
@@ -369,15 +409,13 @@ public class ZKHelper {
             client.Client.ReceiveTimeout = timeoutMs;
             client.Client.SendTimeout = timeoutMs;
 
-            // Connect
-            byte[] connectPkt = BuildPacket(CMD_CONNECT, 0, 0, null);
-            byte[] connResp = SendAndReceive(client, ip, port, connectPkt, timeoutMs);
-            if (connResp.Length < 8 || BitConverter.ToUInt16(connResp, 0) != CMD_ACK_OK) {
+            bool ok;
+            ushort sessionId = ConnectAndAuth(client, ip, port, timeoutMs, 0, out ok);
+            if (!ok) {
                 client.Close();
-                return "{\"success\":false,\"message\":\"Connection failed\"}";
+                return "{\"success\":false,\"message\":\"Connection/Auth failed\"}";
             }
-            ushort sessionId = BitConverter.ToUInt16(connResp, 4);
-            ushort replyId = 1;
+            ushort replyId = 2;
 
             // Disable device (prevent interference)
             byte[] disablePkt = BuildPacket(CMD_DISABLEDEVICE, sessionId, replyId++, null);
@@ -475,15 +513,13 @@ public class ZKHelper {
             client.Client.ReceiveTimeout = timeoutMs;
             client.Client.SendTimeout = timeoutMs;
 
-            // Connect
-            byte[] connectPkt = BuildPacket(CMD_CONNECT, 0, 0, null);
-            byte[] connResp = SendAndReceive(client, ip, port, connectPkt, timeoutMs);
-            if (connResp.Length < 8 || BitConverter.ToUInt16(connResp, 0) != CMD_ACK_OK) {
+            bool ok;
+            ushort sessionId = ConnectAndAuth(client, ip, port, timeoutMs, 0, out ok);
+            if (!ok) {
                 client.Close();
-                return "{\"success\":false,\"message\":\"Connection failed\"}";
+                return "{\"success\":false,\"message\":\"Connection/Auth failed\"}";
             }
-            ushort sessionId = BitConverter.ToUInt16(connResp, 4);
-            ushort replyId = 1;
+            ushort replyId = 2;
 
             // Disable device
             byte[] disablePkt = BuildPacket(CMD_DISABLEDEVICE, sessionId, replyId++, null);
@@ -591,15 +627,13 @@ public class ZKHelper {
             client.Client.ReceiveTimeout = timeoutMs;
             client.Client.SendTimeout = timeoutMs;
 
-            // Connect
-            byte[] connectPkt = BuildPacket(CMD_CONNECT, 0, 0, null);
-            byte[] connResp = SendAndReceive(client, ip, port, connectPkt, timeoutMs);
-            if (connResp.Length < 8 || BitConverter.ToUInt16(connResp, 0) != CMD_ACK_OK) {
+            bool ok;
+            ushort sessionId = ConnectAndAuth(client, ip, port, timeoutMs, 0, out ok);
+            if (!ok) {
                 client.Close();
-                return "{\"success\":false,\"message\":\"Connection failed\"}";
+                return "{\"success\":false,\"message\":\"Connection/Auth failed\"}";
             }
-            ushort sessionId = BitConverter.ToUInt16(connResp, 4);
-            ushort replyId = 1;
+            ushort replyId = 2;
 
             // Build user data (72 bytes for modern devices)
             byte[] userData = new byte[72];
@@ -658,14 +692,13 @@ public class ZKHelper {
             client.Client.ReceiveTimeout = timeoutMs;
             client.Client.SendTimeout = timeoutMs;
 
-            byte[] connectPkt = BuildPacket(CMD_CONNECT, 0, 0, null);
-            byte[] connResp = SendAndReceive(client, ip, port, connectPkt, timeoutMs);
-            if (connResp.Length < 8 || BitConverter.ToUInt16(connResp, 0) != CMD_ACK_OK) {
+            bool ok;
+            ushort sessionId = ConnectAndAuth(client, ip, port, timeoutMs, 0, out ok);
+            if (!ok) {
                 client.Close();
-                return "{\"success\":false,\"message\":\"Connection failed\"}";
+                return "{\"success\":false,\"message\":\"Connection/Auth failed\"}";
             }
-            ushort sessionId = BitConverter.ToUInt16(connResp, 4);
-            ushort replyId = 1;
+            ushort replyId = 2;
 
             // CMD_DELETE_USER = 18, data = uid (2 bytes)
             byte[] uidData = new byte[2];
@@ -999,7 +1032,7 @@ try {
     $listener = New-Object System.Net.HttpListener
     $listener.Prefixes.Add('http://localhost:9999/')
     $listener.Start()
-    "$(Get-Date) - HttpListener started on port 9999 (v2.7.0)" | Out-File $agentLog -Append
+    "$(Get-Date) - HttpListener started on port 9999 (v2.8.0)" | Out-File $agentLog -Append
 
     while ($listener.IsListening) {
         $ctx = $listener.GetContext()
@@ -1021,7 +1054,7 @@ try {
         "$(Get-Date) - $($req.HttpMethod) $path" | Out-File $agentLog -Append
 
         if ($path -eq '/status') {
-            $jsonOut = '{"status":"running","version":"2.7.0","agent":"Maestro Print Agent","usb_support":true,"zk_support":true}'
+            $jsonOut = '{"status":"running","version":"2.8.0","agent":"Maestro Print Agent","usb_support":true,"zk_support":true}'
         }
         elseif ($path -eq '/list-printers') {
             try {
