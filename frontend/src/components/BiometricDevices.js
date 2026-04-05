@@ -205,58 +205,57 @@ export default function BiometricDevices({ branches = [] }) {
   const handleSyncAttendance = async (device) => {
     setSyncingDevice(device.id);
     try {
-      // Route through local agent
       const agentOk = await checkAgent();
       if (!agentOk) {
-        toast.error(
-          <div>
-            <p className="font-bold">{t('الوكيل المحلي غير متصل!')}</p>
-            <p className="text-sm">{t('يجب تشغيل وكيل Maestro على جهاز الكمبيوتر')}</p>
-          </div>
-        );
+        toast.error(t('الوكيل المحلي غير متصل! شغّل وسيط الطباعة'));
         return;
       }
 
-      // 1. Get attendance data from local agent (connects to ZKTeco device)
-      const agentRes = await axios.post(`${AGENT_URL}/zk-sync`, {
-        ip: device.ip_address,
-        port: device.port || 4370,
-        timeout: 30000
-      }, { timeout: 60000 });
-
-      if (!agentRes.data.success) {
-        const msg = agentRes.data.message || t('فشل في جلب البيانات من الجهاز');
-        const dbg = agentRes.data.debug ? ` (${agentRes.data.debug})` : '';
-        toast.error(msg + dbg);
+      // 1. Get attendance data from local agent
+      let agentRes;
+      try {
+        agentRes = await axios.post(`${AGENT_URL}/zk-sync`, {
+          ip: device.ip_address,
+          port: device.port || 4370,
+          timeout: 30000
+        }, { timeout: 60000 });
+      } catch (agentErr) {
+        toast.error(t('فشل الاتصال بالوكيل') + ': ' + (agentErr.message || 'Network error'));
         return;
       }
 
+      console.log('Agent sync response:', JSON.stringify(agentRes.data));
+
+      if (!agentRes.data || !agentRes.data.success) {
+        const msg = agentRes.data?.message || t('فشل في جلب البيانات');
+        const dbg = agentRes.data?.debug || '';
+        const raw = agentRes.data?.raw_bytes || '';
+        toast.error(`${msg}${dbg ? ' | debug: ' + dbg : ''}${raw ? ' | bytes: ' + raw : ''}`);
+        return;
+      }
+
+      const recordCount = agentRes.data.records?.length || 0;
+      
       // 2. Send synced records to backend for storage
       const token = localStorage.getItem('token');
-      const backendRes = await axios.post(`${API}/biometric/devices/${device.id}/sync-from-agent`, {
-        records: agentRes.data.records || []
-      }, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const deviceId = device.id || device._id;
       
-      toast.success(
-        <div>
-          <p className="font-bold">{t('تمت المزامنة بنجاح!')}</p>
-          <p className="text-sm">{t('عدد السجلات')}: {backendRes.data.records_count || agentRes.data.count || 0}</p>
-        </div>
-      );
+      try {
+        const backendRes = await axios.post(`${API}/biometric/devices/${deviceId}/sync-from-agent`, {
+          records: agentRes.data.records || []
+        }, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        toast.success(t('تمت المزامنة!') + ` (${backendRes.data?.records_count || recordCount} ${t('سجل')})`);
+      } catch (backendErr) {
+        const backendMsg = backendErr.response?.data?.detail || backendErr.message || 'Backend error';
+        toast.error(t('جلب البيانات نجح لكن الحفظ فشل') + ': ' + backendMsg);
+      }
+      
       fetchDevices();
     } catch (error) {
-      if (error.code === 'ERR_NETWORK' || error.message?.includes('Network')) {
-        toast.error(
-          <div>
-            <p className="font-bold">{t('الوكيل المحلي غير متصل!')}</p>
-            <p className="text-sm">{t('شغّل ملف print_server.ps1 الإصدار 2.4')}</p>
-          </div>
-        );
-      } else {
-        toast.error(error.response?.data?.detail || t('فشل في المزامنة'));
-      }
+      console.error('Sync error:', error);
+      toast.error(t('خطأ غير متوقع') + ': ' + (error.message || String(error)));
     } finally {
       setSyncingDevice(null);
     }
