@@ -1397,6 +1397,7 @@ class EmployeeCreate(BaseModel):
     salary_type: str = "monthly"  # monthly, daily, hourly
     work_hours_per_day: float = 8.0  # ساعات العمل اليومية
     user_id: Optional[str] = None  # ربط بحساب مستخدم
+    biometric_uid: Optional[str] = None  # رقم البصمة على الجهاز
 
 class EmployeeResponse(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -1413,6 +1414,7 @@ class EmployeeResponse(BaseModel):
     salary_type: str
     work_hours_per_day: float
     user_id: Optional[str] = None
+    biometric_uid: Optional[str] = None
     is_active: bool = True
     created_at: str
     tenant_id: Optional[str] = None
@@ -1429,6 +1431,7 @@ class EmployeeUpdate(BaseModel):
     salary_type: Optional[str] = None
     work_hours_per_day: Optional[float] = None
     is_active: Optional[bool] = None
+    biometric_uid: Optional[str] = None
 
 # نموذج الحضور والانصراف
 class AttendanceCreate(BaseModel):
@@ -13754,6 +13757,71 @@ async def sync_biometric_attendance(device_id: str, current_user: dict = Depends
         "message": "تمت المزامنة بنجاح",
         "records_count": len(synced_records)
     }
+
+
+class SyncFromAgentRequest(BaseModel):
+    records: list = []
+
+
+@api_router.post("/biometric/devices/{device_id}/sync-from-agent")
+async def sync_from_agent(device_id: str, request: SyncFromAgentRequest, current_user: dict = Depends(get_current_user)):
+    """استقبال سجلات الحضور من الوكيل المحلي وحفظها"""
+    device = await db.biometric_devices.find_one({
+        "id": device_id,
+        "tenant_id": current_user.get("tenant_id")
+    }, {"_id": 0})
+    
+    if not device:
+        raise HTTPException(status_code=404, detail="الجهاز غير موجود")
+    
+    synced_records = []
+    tenant_id = current_user.get("tenant_id")
+    
+    for record in request.records:
+        uid = str(record.get("uid", ""))
+        timestamp = record.get("timestamp", "")
+        punch_type = record.get("punch_type", "in")
+        
+        if not uid or not timestamp:
+            continue
+        
+        existing = await db.biometric_attendance.find_one({
+            "device_id": device_id,
+            "employee_code": uid,
+            "punch_time": timestamp,
+            "tenant_id": tenant_id
+        })
+        
+        if existing:
+            continue
+        
+        att_record = {
+            "id": str(uuid.uuid4()),
+            "device_id": device_id,
+            "employee_code": uid,
+            "punch_time": timestamp,
+            "punch_type": punch_type,
+            "verify_type": "fingerprint",
+            "tenant_id": tenant_id,
+            "synced_at": datetime.now(timezone.utc).isoformat()
+        }
+        synced_records.append(att_record)
+    
+    if synced_records:
+        await db.biometric_attendance.insert_many(synced_records)
+    
+    await db.biometric_devices.update_one(
+        {"id": device_id},
+        {"$set": {"last_sync": datetime.now(timezone.utc).isoformat()}}
+    )
+    
+    return {
+        "message": "تمت المزامنة بنجاح",
+        "records_count": len(synced_records),
+        "total_received": len(request.records),
+        "duplicates_skipped": len(request.records) - len(synced_records)
+    }
+
 
 @api_router.post("/biometric/push")
 async def receive_biometric_push(request: Request):

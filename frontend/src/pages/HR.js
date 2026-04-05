@@ -118,6 +118,14 @@ export default function HR() {
   const [selectedEmployee, setSelectedEmployee] = useState(null);
   const [payrollPreview, setPayrollPreview] = useState(null);
 
+  // Biometric push states
+  const [biometricDialogOpen, setBiometricDialogOpen] = useState(false);
+  const [biometricDevices, setBiometricDevices] = useState([]);
+  const [selectedDevice, setSelectedDevice] = useState('');
+  const [pushingEmployee, setPushingEmployee] = useState(null);
+  const [pushingAll, setPushingAll] = useState(false);
+  const AGENT_URL = 'http://localhost:9999';
+
   useEffect(() => {
     fetchData();
   }, [selectedBranchId, selectedMonth, isOffline]);
@@ -764,6 +772,144 @@ export default function HR() {
     );
   }
 
+
+  // Fetch biometric devices
+  const fetchBiometricDevices = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await axios.get(`${API}/biometric/devices`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setBiometricDevices(res.data || []);
+    } catch { setBiometricDevices([]); }
+  };
+
+  // Open biometric push dialog for employee
+  const openBiometricPush = (emp) => {
+    setPushingEmployee(emp);
+    fetchBiometricDevices();
+    setBiometricDialogOpen(true);
+  };
+
+  // Generate next available UID
+  const getNextBiometricUid = () => {
+    const existingUids = employees.filter(e => e.biometric_uid).map(e => parseInt(e.biometric_uid) || 0);
+    return existingUids.length > 0 ? Math.max(...existingUids) + 1 : 1;
+  };
+
+  // Push single employee to device
+  const handlePushToDevice = async () => {
+    if (!pushingEmployee || !selectedDevice) return;
+    const device = biometricDevices.find(d => d.id === selectedDevice);
+    if (!device) return;
+
+    try {
+      // Check agent
+      const agentRes = await axios.get(`${AGENT_URL}/status`, { timeout: 3000 });
+      if (!agentRes.data?.zk_support) {
+        toast.error(t('الوكيل المحلي لا يدعم البصمة - حدّث إلى v2.4'));
+        return;
+      }
+    } catch {
+      toast.error(t('الوكيل المحلي غير متصل! شغّل print_server.ps1 v2.4'));
+      return;
+    }
+
+    const uid = pushingEmployee.biometric_uid ? parseInt(pushingEmployee.biometric_uid) : getNextBiometricUid();
+    
+    try {
+      const res = await axios.post(`${AGENT_URL}/zk-push-user`, {
+        ip: device.ip_address,
+        port: device.port || 4370,
+        timeout: 5000,
+        uid: uid,
+        user_id: String(uid),
+        name: pushingEmployee.name,
+        privilege: 0
+      }, { timeout: 10000 });
+
+      if (res.data.success) {
+        // Update employee biometric_uid in backend
+        const token = localStorage.getItem('token');
+        await axios.put(`${API}/employees/${pushingEmployee.id}`, 
+          { biometric_uid: String(uid) },
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        toast.success(
+          <div>
+            <p className="font-bold">{t('تم إصدار الموظف للبصمة!')}</p>
+            <p className="text-sm">{pushingEmployee.name} → UID: {uid}</p>
+          </div>
+        );
+        setBiometricDialogOpen(false);
+        fetchData();
+      } else {
+        toast.error(res.data.message || t('فشل في إرسال الموظف للجهاز'));
+      }
+    } catch (error) {
+      toast.error(t('فشل الاتصال بجهاز البصمة'));
+    }
+  };
+
+  // Push ALL employees to device
+  const handlePushAllToDevice = async () => {
+    if (!selectedDevice) return;
+    const device = biometricDevices.find(d => d.id === selectedDevice);
+    if (!device) return;
+    
+    setPushingAll(true);
+    let successCount = 0;
+    let failCount = 0;
+
+    try {
+      await axios.get(`${AGENT_URL}/status`, { timeout: 3000 });
+    } catch {
+      toast.error(t('الوكيل المحلي غير متصل!'));
+      setPushingAll(false);
+      return;
+    }
+
+    const activeEmployees = employees.filter(e => e.is_active);
+    for (const emp of activeEmployees) {
+      const uid = emp.biometric_uid ? parseInt(emp.biometric_uid) : getNextBiometricUid() + successCount + failCount;
+      try {
+        const res = await axios.post(`${AGENT_URL}/zk-push-user`, {
+          ip: device.ip_address,
+          port: device.port || 4370,
+          timeout: 5000,
+          uid: uid,
+          user_id: String(uid),
+          name: emp.name,
+          privilege: 0
+        }, { timeout: 10000 });
+        
+        if (res.data.success) {
+          if (!emp.biometric_uid) {
+            const token = localStorage.getItem('token');
+            await axios.put(`${API}/employees/${emp.id}`, 
+              { biometric_uid: String(uid) },
+              { headers: { Authorization: `Bearer ${token}` } }
+            );
+          }
+          successCount++;
+        } else {
+          failCount++;
+        }
+      } catch { failCount++; }
+      // Small delay between pushes
+      await new Promise(r => setTimeout(r, 500));
+    }
+
+    setPushingAll(false);
+    toast.success(
+      <div>
+        <p className="font-bold">{t('تم إصدار الموظفين')}</p>
+        <p className="text-sm">{t('نجح')}: {successCount} | {t('فشل')}: {failCount}</p>
+      </div>
+    );
+    fetchData();
+  };
+
   return (
     <div className="min-h-screen bg-background" dir="rtl">
       <Toaster position="top-center" richColors />
@@ -928,6 +1074,11 @@ export default function HR() {
               <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle>{t('قائمة الموظفين')}</CardTitle>
                 <div className="flex items-center gap-3">
+                  <Button variant="outline" size="sm" onClick={() => { 
+                    setPushingEmployee(null); fetchBiometricDevices(); setBiometricDialogOpen(true); 
+                  }} data-testid="push-all-biometric-btn">
+                    <Fingerprint className="h-4 w-4 ml-1" /> {t('إصدار الكل للبصمة')}
+                  </Button>
                   <div className="relative">
                     <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input
@@ -1025,6 +1176,7 @@ export default function HR() {
                         <th className="text-right p-3">{t('المسمى')}</th>
                         <th className="text-right p-3">{t('الفرع')}</th>
                         <th className="text-right p-3">{t('الراتب')}</th>
+                        <th className="text-right p-3">{t('البصمة')}</th>
                         <th className="text-right p-3">{t('الحالة')}</th>
                         <th className="text-right p-3">{t('الإجراءات')}</th>
                       </tr>
@@ -1038,12 +1190,24 @@ export default function HR() {
                           <td className="p-3">{branches.find(b => b.id === emp.branch_id)?.name || '-'}</td>
                           <td className="p-3">{formatPrice(emp.salary)}</td>
                           <td className="p-3">
+                            {emp.biometric_uid ? (
+                              <Badge className="bg-green-500/10 text-green-500">#{emp.biometric_uid}</Badge>
+                            ) : (
+                              <Badge variant="outline" className="text-muted-foreground">{t('غير مسجل')}</Badge>
+                            )}
+                          </td>
+                          <td className="p-3">
                             <Badge className={emp.is_active ? 'bg-green-500' : 'bg-red-500'}>
                               {emp.is_active ? t('نشط') : t('معطل')}
                             </Badge>
                           </td>
                           <td className="p-3">
                             <div className="flex items-center gap-2">
+                              <Button size="sm" variant="outline" onClick={() => openBiometricPush(emp)} title={t('إصدار للبصمة')}
+                                className={emp.biometric_uid ? 'border-green-500 text-green-500' : ''} data-testid={`push-biometric-${emp.id}`}>
+                                <Fingerprint className="h-4 w-4" />
+                                {emp.biometric_uid && <span className="text-[10px] mr-1">#{emp.biometric_uid}</span>}
+                              </Button>
                               <Button size="sm" variant="outline" onClick={() => window.open(`/payroll/print/${emp.id}`, '_blank')} title={t('طباعة مفردات المرتب')}>
                                 <Printer className="h-4 w-4" />
                               </Button>
@@ -1925,6 +2089,65 @@ export default function HR() {
                 </div>
               </div>
             )}
+          </DialogContent>
+        </Dialog>
+
+        {/* Biometric Push Dialog */}
+        <Dialog open={biometricDialogOpen} onOpenChange={setBiometricDialogOpen}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Fingerprint className="h-5 w-5 text-blue-500" />
+                {pushingEmployee ? t('إصدار موظف للبصمة') : t('إصدار جميع الموظفين للبصمة')}
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              {pushingEmployee && (
+                <div className="p-3 bg-muted/30 rounded-lg">
+                  <p className="font-bold">{pushingEmployee.name}</p>
+                  <p className="text-sm text-muted-foreground">{pushingEmployee.position} - {branches.find(b => b.id === pushingEmployee.branch_id)?.name}</p>
+                  {pushingEmployee.biometric_uid && (
+                    <Badge className="mt-1 bg-green-500/10 text-green-500">{t('رقم البصمة الحالي')}: #{pushingEmployee.biometric_uid}</Badge>
+                  )}
+                </div>
+              )}
+              {!pushingEmployee && (
+                <div className="p-3 bg-blue-500/10 rounded-lg">
+                  <p className="text-sm">{t('سيتم إصدار جميع الموظفين النشطين للجهاز المختار')}</p>
+                  <p className="text-sm font-bold mt-1">{t('عدد الموظفين')}: {employees.filter(e => e.is_active).length}</p>
+                </div>
+              )}
+              <div>
+                <Label>{t('جهاز البصمة')} *</Label>
+                <Select value={selectedDevice} onValueChange={setSelectedDevice}>
+                  <SelectTrigger data-testid="select-biometric-device">
+                    <SelectValue placeholder={t('اختر جهاز البصمة')} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {biometricDevices.map(dev => (
+                      <SelectItem key={dev.id} value={dev.id}>
+                        {dev.name} ({dev.ip_address}:{dev.port || 4370})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              {biometricDevices.length === 0 && (
+                <p className="text-sm text-red-400">{t('لا توجد أجهزة بصمة. أضف جهاز من تبويب "أجهزة البصمة"')}</p>
+              )}
+              <div className="flex gap-2">
+                {pushingEmployee ? (
+                  <Button className="flex-1" onClick={handlePushToDevice} disabled={!selectedDevice} data-testid="confirm-push-btn">
+                    <Fingerprint className="h-4 w-4 ml-2" /> {t('إصدار للجهاز')}
+                  </Button>
+                ) : (
+                  <Button className="flex-1" onClick={handlePushAllToDevice} disabled={!selectedDevice || pushingAll} data-testid="confirm-push-all-btn">
+                    <Fingerprint className="h-4 w-4 ml-2" /> 
+                    {pushingAll ? t('جاري الإرسال...') : t('إصدار الكل للجهاز')}
+                  </Button>
+                )}
+              </div>
+            </div>
           </DialogContent>
         </Dialog>
       </div>

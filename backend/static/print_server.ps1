@@ -1,6 +1,42 @@
 $ErrorActionPreference = 'Continue'
 $agentLog = "$PSScriptRoot\agent.log"
-"$(Get-Date) - Agent v2.3.0 starting..." | Out-File $agentLog
+"$(Get-Date) - Agent v2.4.0 starting..." | Out-File $agentLog
+
+# ============================================
+# === AUTO-CLEANUP: Kill old agent & files ===
+# ============================================
+try {
+    # Kill any process still listening on port 9999 (old agent)
+    $netstat = netstat -ano 2>$null | Select-String 'LISTENING' | Select-String ':9999 '
+    if ($netstat) {
+        $pids = $netstat | ForEach-Object {
+            ($_.ToString().Trim() -split '\s+')[-1]
+        } | Sort-Object -Unique | Where-Object { $_ -ne '0' -and $_ -ne $PID }
+        foreach ($oldPid in $pids) {
+            try {
+                Stop-Process -Id ([int]$oldPid) -Force -ErrorAction SilentlyContinue
+                "$(Get-Date) - Killed old agent process PID: $oldPid" | Out-File $agentLog -Append
+            } catch {}
+        }
+        Start-Sleep -Seconds 1
+    }
+    # Delete old/backup agent files
+    $cleanupFiles = @(
+        "$PSScriptRoot\print_server_old.ps1",
+        "$PSScriptRoot\print_server_v2.3.ps1",
+        "$PSScriptRoot\print_server_backup.ps1",
+        "$PSScriptRoot\agent_old.log"
+    )
+    foreach ($f in $cleanupFiles) {
+        if (Test-Path $f) {
+            Remove-Item $f -Force -ErrorAction SilentlyContinue
+            "$(Get-Date) - Cleaned up old file: $f" | Out-File $agentLog -Append
+        }
+    }
+    "$(Get-Date) - Old agent cleanup complete" | Out-File $agentLog -Append
+} catch {
+    "$(Get-Date) - Cleanup warning: $_" | Out-File $agentLog -Append
+}
 
 # === RAW USB PRINTER SUPPORT via Windows Print Spooler ===
 try {
@@ -10,6 +46,9 @@ using System.Runtime.InteropServices;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.Collections.Generic;
+using System.Net;
+using System.Net.Sockets;
+using System.Text;
 
 public class RawPrinterHelper {
     [StructLayout(LayoutKind.Sequential)]
@@ -142,9 +181,494 @@ public class ReceiptRenderer {
         return result.ToArray();
     }
 }
+
+// =============================================
+// === ZKTeco Protocol Handler (UDP + TCP)   ===
+// =============================================
+public class ZKHelper {
+    // ZK Protocol Commands
+    const ushort CMD_CONNECT = 1000;
+    const ushort CMD_EXIT = 1001;
+    const ushort CMD_ENABLEDEVICE = 1002;
+    const ushort CMD_DISABLEDEVICE = 1003;
+    const ushort CMD_RESTART = 1004;
+    const ushort CMD_USERTEMP_RRQ = 9;
+    const ushort CMD_ATTLOG_RRQ = 13;
+    const ushort CMD_CLEAR_ATTLOG = 14;
+    const ushort CMD_GET_FREE_SIZES = 50;
+    const ushort CMD_GET_SERIALNUMBER = 67;
+    const ushort CMD_GET_DEVICE_NAME = 68;
+    const ushort CMD_ACK_OK = 2000;
+    const ushort CMD_ACK_ERROR = 2001;
+    const ushort CMD_ACK_DATA = 2002;
+    const ushort CMD_PREPARE_DATA = 1500;
+    const ushort CMD_DATA = 1501;
+    const ushort CMD_FREE_DATA = 1502;
+
+    private static ushort CreateChecksum(byte[] p) {
+        int l = p.Length;
+        if (l % 2 != 0) {
+            byte[] padded = new byte[l + 1];
+            Array.Copy(p, padded, l);
+            p = padded;
+            l++;
+        }
+        uint chksum = 0;
+        int idx = 0;
+        while (l > 1) {
+            chksum += (uint)BitConverter.ToUInt16(p, idx);
+            idx += 2;
+            l -= 2;
+        }
+        while (chksum > 0xFFFF) {
+            chksum = (chksum & 0xFFFF) + (chksum >> 16);
+        }
+        return (ushort)(~chksum & 0xFFFF);
+    }
+
+    private static byte[] BuildPacket(ushort command, ushort sessionId, ushort replyId, byte[] data) {
+        int payloadLen = 8 + (data != null ? data.Length : 0);
+        byte[] buf = new byte[payloadLen];
+        // command
+        buf[0] = (byte)(command & 0xFF);
+        buf[1] = (byte)((command >> 8) & 0xFF);
+        // checksum placeholder
+        buf[2] = 0; buf[3] = 0;
+        // session_id
+        buf[4] = (byte)(sessionId & 0xFF);
+        buf[5] = (byte)((sessionId >> 8) & 0xFF);
+        // reply_id
+        buf[6] = (byte)(replyId & 0xFF);
+        buf[7] = (byte)((replyId >> 8) & 0xFF);
+        // data
+        if (data != null && data.Length > 0) {
+            Array.Copy(data, 0, buf, 8, data.Length);
+        }
+        // calculate checksum
+        ushort chk = CreateChecksum(buf);
+        buf[2] = (byte)(chk & 0xFF);
+        buf[3] = (byte)((chk >> 8) & 0xFF);
+        return buf;
+    }
+
+    private static byte[] SendAndReceive(UdpClient client, string ip, int port, byte[] packet, int timeout) {
+        client.Client.ReceiveTimeout = timeout;
+        client.Send(packet, packet.Length, ip, port);
+        IPEndPoint ep = new IPEndPoint(IPAddress.Any, 0);
+        return client.Receive(ref ep);
+    }
+
+    private static string DecodeTime(uint t) {
+        int second = (int)(t % 60); t /= 60;
+        int minute = (int)(t % 60); t /= 60;
+        int hour = (int)(t % 24); t /= 24;
+        int day = (int)(t % 31) + 1; t /= 31;
+        int month = (int)(t % 12) + 1; t /= 12;
+        int year = (int)(t + 2000);
+        return string.Format("{0:D4}-{1:D2}-{2:D2}T{3:D2}:{4:D2}:{5:D2}", year, month, day, hour, minute, second);
+    }
+
+    private static string EscJson(string s) {
+        if (s == null) return "";
+        return s.Replace("\\", "\\\\").Replace("\"", "\\\"").Replace("\r","").Replace("\n","");
+    }
+
+    // ===== Test Connection =====
+    public static string TestConnection(string ip, int port, int timeoutMs) {
+        UdpClient client = null;
+        try {
+            client = new UdpClient();
+            client.Client.ReceiveTimeout = timeoutMs;
+            client.Client.SendTimeout = timeoutMs;
+
+            byte[] connectPkt = BuildPacket(CMD_CONNECT, 0, 0, null);
+            client.Send(connectPkt, connectPkt.Length, ip, port);
+
+            IPEndPoint ep = new IPEndPoint(IPAddress.Any, 0);
+            byte[] resp = client.Receive(ref ep);
+
+            if (resp.Length >= 8) {
+                ushort cmd = BitConverter.ToUInt16(resp, 0);
+                ushort sessionId = BitConverter.ToUInt16(resp, 4);
+                if (cmd == CMD_ACK_OK) {
+                    // Get serial number
+                    string serial = "N/A";
+                    try {
+                        byte[] snPkt = BuildPacket(CMD_GET_SERIALNUMBER, sessionId, 1, null);
+                        byte[] snResp = SendAndReceive(client, ip, port, snPkt, timeoutMs);
+                        if (snResp.Length > 8) {
+                            serial = Encoding.UTF8.GetString(snResp, 8, snResp.Length - 8).TrimEnd('\0');
+                        }
+                    } catch {}
+
+                    // Get device name
+                    string deviceName = "ZKTeco";
+                    try {
+                        byte[] dnPkt = BuildPacket(CMD_GET_DEVICE_NAME, sessionId, 2, null);
+                        byte[] dnResp = SendAndReceive(client, ip, port, dnPkt, timeoutMs);
+                        if (dnResp.Length > 8) {
+                            deviceName = Encoding.UTF8.GetString(dnResp, 8, dnResp.Length - 8).TrimEnd('\0');
+                        }
+                    } catch {}
+
+                    // Disconnect
+                    try {
+                        byte[] exitPkt = BuildPacket(CMD_EXIT, sessionId, 3, null);
+                        client.Send(exitPkt, exitPkt.Length, ip, port);
+                    } catch {}
+
+                    client.Close();
+                    return "{\"success\":true,\"message\":\"Connected\",\"serial_number\":\"" + EscJson(serial) + "\",\"device_name\":\"" + EscJson(deviceName) + "\",\"session_id\":" + sessionId + "}";
+                }
+            }
+
+            client.Close();
+            return "{\"success\":false,\"message\":\"Device rejected connection\"}";
+        } catch (SocketException ex) {
+            if (client != null) try { client.Close(); } catch {}
+            if (ex.SocketErrorCode == SocketError.TimedOut)
+                return "{\"success\":false,\"message\":\"Connection timeout - device not reachable\"}";
+            return "{\"success\":false,\"message\":\"" + EscJson(ex.Message) + "\"}";
+        } catch (Exception ex) {
+            if (client != null) try { client.Close(); } catch {}
+            return "{\"success\":false,\"message\":\"" + EscJson(ex.Message) + "\"}";
+        }
+    }
+
+    // ===== Get Users =====
+    public static string GetUsers(string ip, int port, int timeoutMs) {
+        UdpClient client = null;
+        try {
+            client = new UdpClient();
+            client.Client.ReceiveTimeout = timeoutMs;
+            client.Client.SendTimeout = timeoutMs;
+
+            // Connect
+            byte[] connectPkt = BuildPacket(CMD_CONNECT, 0, 0, null);
+            byte[] connResp = SendAndReceive(client, ip, port, connectPkt, timeoutMs);
+            if (connResp.Length < 8 || BitConverter.ToUInt16(connResp, 0) != CMD_ACK_OK) {
+                client.Close();
+                return "{\"success\":false,\"message\":\"Connection failed\"}";
+            }
+            ushort sessionId = BitConverter.ToUInt16(connResp, 4);
+            ushort replyId = 1;
+
+            // Disable device (prevent interference)
+            byte[] disablePkt = BuildPacket(CMD_DISABLEDEVICE, sessionId, replyId++, null);
+            try { SendAndReceive(client, ip, port, disablePkt, timeoutMs); } catch {}
+
+            // Request user data
+            byte[] userPkt = BuildPacket(CMD_USERTEMP_RRQ, sessionId, replyId++, null);
+            byte[] userResp = SendAndReceive(client, ip, port, userPkt, timeoutMs * 2);
+
+            List<string> users = new List<string>();
+            ushort respCmd = BitConverter.ToUInt16(userResp, 0);
+
+            if (respCmd == CMD_PREPARE_DATA && userResp.Length >= 12) {
+                uint dataSize = BitConverter.ToUInt32(userResp, 8);
+                // Read data packets
+                List<byte> allData = new List<byte>();
+                while (allData.Count < dataSize) {
+                    try {
+                        IPEndPoint ep2 = new IPEndPoint(IPAddress.Any, 0);
+                        byte[] dataPkt = client.Receive(ref ep2);
+                        if (dataPkt.Length > 0) {
+                            ushort dCmd = BitConverter.ToUInt16(dataPkt, 0);
+                            if (dCmd == CMD_DATA) {
+                                byte[] chunk = new byte[dataPkt.Length - 8];
+                                Array.Copy(dataPkt, 8, chunk, 0, chunk.Length);
+                                allData.AddRange(chunk);
+                            } else if (dCmd == CMD_ACK_OK) {
+                                break;
+                            }
+                        }
+                    } catch { break; }
+                }
+
+                // Free data buffer
+                try {
+                    byte[] freePkt = BuildPacket(CMD_FREE_DATA, sessionId, replyId++, null);
+                    client.Send(freePkt, freePkt.Length, ip, port);
+                } catch {}
+
+                // Parse user records (72 bytes per user for newer devices, 28 for older)
+                byte[] userData = allData.ToArray();
+                int recordSize = 72;
+                if (userData.Length > 0 && userData.Length % 72 != 0) {
+                    recordSize = 28;
+                }
+                int userCount = userData.Length / recordSize;
+                for (int i = 0; i < userCount; i++) {
+                    int offset = i * recordSize;
+                    if (offset + recordSize > userData.Length) break;
+                    try {
+                        // Privilege at offset 2
+                        int privilege = userData[offset + 2];
+                        // User ID string starting at offset 8 (24 chars for 72-byte records)
+                        int uidLen = recordSize == 72 ? 24 : 9;
+                        string uid = Encoding.UTF8.GetString(userData, offset + 8, uidLen).TrimEnd('\0');
+                        // Name starting after UID
+                        int nameOffset = offset + 8 + uidLen;
+                        int nameLen = recordSize == 72 ? 24 : 0;
+                        string name = "";
+                        if (nameLen > 0 && nameOffset + nameLen <= userData.Length) {
+                            name = Encoding.UTF8.GetString(userData, nameOffset, nameLen).TrimEnd('\0');
+                        }
+                        if (!string.IsNullOrEmpty(uid)) {
+                            users.Add("{\"uid\":\"" + EscJson(uid) + "\",\"name\":\"" + EscJson(name) + "\",\"privilege\":" + privilege + "}");
+                        }
+                    } catch {}
+                }
+            } else if (respCmd == CMD_ACK_DATA && userResp.Length > 8) {
+                // Small data - inline in response
+                // Similar parsing for inline data
+            }
+
+            // Enable device & disconnect
+            try {
+                byte[] enablePkt = BuildPacket(CMD_ENABLEDEVICE, sessionId, replyId++, null);
+                client.Send(enablePkt, enablePkt.Length, ip, port);
+                byte[] exitPkt = BuildPacket(CMD_EXIT, sessionId, replyId++, null);
+                client.Send(exitPkt, exitPkt.Length, ip, port);
+            } catch {}
+
+            client.Close();
+            return "{\"success\":true,\"users\":[" + string.Join(",", users.ToArray()) + "],\"count\":" + users.Count + "}";
+        } catch (Exception ex) {
+            if (client != null) try { client.Close(); } catch {}
+            return "{\"success\":false,\"message\":\"" + EscJson(ex.Message) + "\"}";
+        }
+    }
+
+    // ===== Sync Attendance =====
+    public static string SyncAttendance(string ip, int port, int timeoutMs) {
+        UdpClient client = null;
+        try {
+            client = new UdpClient();
+            client.Client.ReceiveTimeout = timeoutMs;
+            client.Client.SendTimeout = timeoutMs;
+
+            // Connect
+            byte[] connectPkt = BuildPacket(CMD_CONNECT, 0, 0, null);
+            byte[] connResp = SendAndReceive(client, ip, port, connectPkt, timeoutMs);
+            if (connResp.Length < 8 || BitConverter.ToUInt16(connResp, 0) != CMD_ACK_OK) {
+                client.Close();
+                return "{\"success\":false,\"message\":\"Connection failed\"}";
+            }
+            ushort sessionId = BitConverter.ToUInt16(connResp, 4);
+            ushort replyId = 1;
+
+            // Disable device
+            byte[] disablePkt = BuildPacket(CMD_DISABLEDEVICE, sessionId, replyId++, null);
+            try { SendAndReceive(client, ip, port, disablePkt, timeoutMs); } catch {}
+
+            // Request attendance data
+            byte[] attPkt = BuildPacket(CMD_ATTLOG_RRQ, sessionId, replyId++, null);
+            byte[] attResp = SendAndReceive(client, ip, port, attPkt, timeoutMs * 3);
+
+            List<string> records = new List<string>();
+            ushort respCmd = BitConverter.ToUInt16(attResp, 0);
+
+            if (respCmd == CMD_PREPARE_DATA && attResp.Length >= 12) {
+                uint dataSize = BitConverter.ToUInt32(attResp, 8);
+
+                // Read data packets
+                List<byte> allData = new List<byte>();
+                int maxWait = 30000;
+                DateTime start = DateTime.Now;
+                while (allData.Count < dataSize && (DateTime.Now - start).TotalMilliseconds < maxWait) {
+                    try {
+                        IPEndPoint ep2 = new IPEndPoint(IPAddress.Any, 0);
+                        byte[] dataPkt = client.Receive(ref ep2);
+                        if (dataPkt.Length > 0) {
+                            ushort dCmd = BitConverter.ToUInt16(dataPkt, 0);
+                            if (dCmd == CMD_DATA) {
+                                byte[] chunk = new byte[dataPkt.Length - 8];
+                                Array.Copy(dataPkt, 8, chunk, 0, chunk.Length);
+                                allData.AddRange(chunk);
+                            } else if (dCmd == CMD_ACK_OK) {
+                                break;
+                            }
+                        }
+                    } catch { break; }
+                }
+
+                // Free data buffer
+                try {
+                    byte[] freePkt = BuildPacket(CMD_FREE_DATA, sessionId, replyId++, null);
+                    client.Send(freePkt, freePkt.Length, ip, port);
+                } catch {}
+
+                // Parse attendance records (16 bytes per record for most ZK devices)
+                byte[] attData = allData.ToArray();
+                int recordSize = 16;
+                // Some devices use 40 bytes per record
+                if (attData.Length > 0) {
+                    if (attData.Length % 40 == 0 && attData.Length % 16 != 0) recordSize = 40;
+                    else if (attData.Length % 16 != 0 && attData.Length % 40 == 0) recordSize = 40;
+                }
+                int recCount = attData.Length / recordSize;
+                for (int i = 0; i < recCount; i++) {
+                    int offset = i * recordSize;
+                    if (offset + recordSize > attData.Length) break;
+                    try {
+                        string uid;
+                        uint timestamp;
+                        int status;
+                        int punchType;
+
+                        if (recordSize == 40) {
+                            // 40-byte format: uid(9) + padding(15) + timestamp(4) + status(1) + punch(1) + reserved(10)
+                            uid = Encoding.UTF8.GetString(attData, offset, 9).TrimEnd('\0');
+                            timestamp = BitConverter.ToUInt32(attData, offset + 24);
+                            status = attData[offset + 28];
+                            punchType = attData[offset + 29];
+                        } else {
+                            // 16-byte format: uid(2) + padding(6) + timestamp(4) + status(1) + punch(1) + reserved(2)
+                            uid = BitConverter.ToUInt16(attData, offset).ToString();
+                            timestamp = BitConverter.ToUInt32(attData, offset + 4);
+                            status = attData[offset + 8];
+                            punchType = attData[offset + 10];
+                        }
+
+                        string time = DecodeTime(timestamp);
+                        string pType = status == 0 ? "in" : "out";
+                        if (!string.IsNullOrEmpty(uid) && uid != "0") {
+                            records.Add("{\"uid\":\"" + EscJson(uid) + "\",\"timestamp\":\"" + time + "\",\"status\":" + status + ",\"punch_type\":\"" + pType + "\"}");
+                        }
+                    } catch {}
+                }
+            }
+
+            // Enable device & disconnect
+            try {
+                byte[] enablePkt = BuildPacket(CMD_ENABLEDEVICE, sessionId, replyId++, null);
+                client.Send(enablePkt, enablePkt.Length, ip, port);
+                byte[] exitPkt = BuildPacket(CMD_EXIT, sessionId, replyId++, null);
+                client.Send(exitPkt, exitPkt.Length, ip, port);
+            } catch {}
+
+            client.Close();
+            return "{\"success\":true,\"records\":[" + string.Join(",", records.ToArray()) + "],\"count\":" + records.Count + "}";
+        } catch (Exception ex) {
+            if (client != null) try { client.Close(); } catch {}
+            return "{\"success\":false,\"message\":\"" + EscJson(ex.Message) + "\"}";
+        }
+    }
+    // ===== Push User to Device =====
+    public static string SetUser(string ip, int port, int timeoutMs, int uid, string userId, string name, int privilege) {
+        UdpClient client = null;
+        try {
+            client = new UdpClient();
+            client.Client.ReceiveTimeout = timeoutMs;
+            client.Client.SendTimeout = timeoutMs;
+
+            // Connect
+            byte[] connectPkt = BuildPacket(CMD_CONNECT, 0, 0, null);
+            byte[] connResp = SendAndReceive(client, ip, port, connectPkt, timeoutMs);
+            if (connResp.Length < 8 || BitConverter.ToUInt16(connResp, 0) != CMD_ACK_OK) {
+                client.Close();
+                return "{\"success\":false,\"message\":\"Connection failed\"}";
+            }
+            ushort sessionId = BitConverter.ToUInt16(connResp, 4);
+            ushort replyId = 1;
+
+            // Build user data (72 bytes for modern devices)
+            byte[] userData = new byte[72];
+            // uid (2 bytes at offset 0)
+            userData[0] = (byte)(uid & 0xFF);
+            userData[1] = (byte)((uid >> 8) & 0xFF);
+            // privilege (1 byte at offset 2)
+            userData[2] = (byte)privilege;
+            // password (8 bytes at offset 3) - empty
+            // user_id string (9 bytes at offset 8)
+            byte[] uidBytes = Encoding.UTF8.GetBytes(userId ?? uid.ToString());
+            int uidCopyLen = Math.Min(uidBytes.Length, 9);
+            Array.Copy(uidBytes, 0, userData, 8, uidCopyLen);
+            // name (24 bytes at offset 24)
+            if (!string.IsNullOrEmpty(name)) {
+                byte[] nameBytes = Encoding.UTF8.GetBytes(name);
+                int nameCopyLen = Math.Min(nameBytes.Length, 24);
+                Array.Copy(nameBytes, 0, userData, 24, nameCopyLen);
+            }
+
+            // Send CMD_USER_WRQ (8)
+            byte[] userPkt = BuildPacket(8, sessionId, replyId++, userData);
+            byte[] userResp = SendAndReceive(client, ip, port, userPkt, timeoutMs);
+
+            bool success = false;
+            if (userResp.Length >= 8) {
+                ushort respCmd = BitConverter.ToUInt16(userResp, 0);
+                success = (respCmd == CMD_ACK_OK);
+            }
+
+            // Enable device & disconnect
+            try {
+                byte[] enablePkt = BuildPacket(CMD_ENABLEDEVICE, sessionId, replyId++, null);
+                client.Send(enablePkt, enablePkt.Length, ip, port);
+                byte[] exitPkt = BuildPacket(CMD_EXIT, sessionId, replyId++, null);
+                client.Send(exitPkt, exitPkt.Length, ip, port);
+            } catch {}
+
+            client.Close();
+            if (success) {
+                return "{\"success\":true,\"message\":\"User pushed to device\",\"uid\":" + uid + "}";
+            } else {
+                return "{\"success\":false,\"message\":\"Device rejected user data\"}";
+            }
+        } catch (Exception ex) {
+            if (client != null) try { client.Close(); } catch {}
+            return "{\"success\":false,\"message\":\"" + EscJson(ex.Message) + "\"}";
+        }
+    }
+
+    // ===== Delete User from Device =====
+    public static string DeleteUser(string ip, int port, int timeoutMs, int uid) {
+        UdpClient client = null;
+        try {
+            client = new UdpClient();
+            client.Client.ReceiveTimeout = timeoutMs;
+            client.Client.SendTimeout = timeoutMs;
+
+            byte[] connectPkt = BuildPacket(CMD_CONNECT, 0, 0, null);
+            byte[] connResp = SendAndReceive(client, ip, port, connectPkt, timeoutMs);
+            if (connResp.Length < 8 || BitConverter.ToUInt16(connResp, 0) != CMD_ACK_OK) {
+                client.Close();
+                return "{\"success\":false,\"message\":\"Connection failed\"}";
+            }
+            ushort sessionId = BitConverter.ToUInt16(connResp, 4);
+            ushort replyId = 1;
+
+            // CMD_DELETE_USER = 18, data = uid (2 bytes)
+            byte[] uidData = new byte[2];
+            uidData[0] = (byte)(uid & 0xFF);
+            uidData[1] = (byte)((uid >> 8) & 0xFF);
+            byte[] delPkt = BuildPacket(18, sessionId, replyId++, uidData);
+            byte[] delResp = SendAndReceive(client, ip, port, delPkt, timeoutMs);
+
+            bool success = false;
+            if (delResp.Length >= 8) {
+                success = (BitConverter.ToUInt16(delResp, 0) == CMD_ACK_OK);
+            }
+
+            try {
+                byte[] exitPkt = BuildPacket(CMD_EXIT, sessionId, replyId++, null);
+                client.Send(exitPkt, exitPkt.Length, ip, port);
+            } catch {}
+
+            client.Close();
+            return success
+                ? "{\"success\":true,\"message\":\"User deleted from device\"}"
+                : "{\"success\":false,\"message\":\"Failed to delete user\"}";
+        } catch (Exception ex) {
+            if (client != null) try { client.Close(); } catch {}
+            return "{\"success\":false,\"message\":\"" + EscJson(ex.Message) + "\"}";
+        }
+    }
+}
 '@
 Add-Type -TypeDefinition $csharpCode -ReferencedAssemblies System.Drawing -ErrorAction Stop
-"$(Get-Date) - C# RawPrinterHelper compiled OK" | Out-File $agentLog -Append
+"$(Get-Date) - C# RawPrinterHelper + ZKHelper compiled OK" | Out-File $agentLog -Append
 } catch {
     "$(Get-Date) - C# compile warning: $_" | Out-File $agentLog -Append
 }
@@ -223,7 +747,7 @@ function Build-TestPage {
     $bytes.AddRange($enc.GetBytes('Print Successful!'))
     $bytes.Add(0x0a)
     $bytes.AddRange([byte[]]@(0x1b, 0x45, 0x00))
-    $bytes.AddRange($enc.GetBytes('Maestro EGP v2.3'))
+    $bytes.AddRange($enc.GetBytes('Maestro EGP v2.4'))
     $bytes.Add(0x0a); $bytes.Add(0x0a); $bytes.Add(0x0a); $bytes.Add(0x0a); $bytes.Add(0x0a)
     $bytes.AddRange([byte[]]@(0x1d, 0x56, 0x42, 0x00))
     return $bytes.ToArray()
@@ -236,13 +760,11 @@ function Build-Receipt {
     $lang = if ($order.language) { $order.language } else { 'ar' }
     $paperWidth = 384
 
-    # بناء مصفوفات النص لتحويلها لصورة bitmap عبر ReceiptRenderer
     $lines = [System.Collections.Generic.List[string]]::new()
     $sizes = [System.Collections.Generic.List[int]]::new()
     $bolds = [System.Collections.Generic.List[bool]]::new()
     $aligns = [System.Collections.Generic.List[string]]::new()
 
-    # اسم المطعم
     if ($order.restaurant_name) {
         $lines.Add([string]$order.restaurant_name)
         $sizes.Add(20)
@@ -250,13 +772,11 @@ function Build-Receipt {
         $aligns.Add('center')
     }
 
-    # خط فاصل
     $lines.Add('================================')
     $sizes.Add(10)
     $bolds.Add($false)
     $aligns.Add('center')
 
-    # رقم الطلب
     if ($order.order_number) {
         $lines.Add('#' + [string]$order.order_number)
         $sizes.Add(16)
@@ -264,7 +784,6 @@ function Build-Receipt {
         $aligns.Add('left')
     }
 
-    # نوع الطلب
     if ($order.order_type) {
         $typeText = switch ($order.order_type) {
             'dine_in' { if ($lang -eq 'ar') { "$([char]0x0637)$([char]0x0644)$([char]0x0628) $([char]0x062F)$([char]0x0627)$([char]0x062E)$([char]0x0644)$([char]0x064A)" } else { 'Dine In' } }
@@ -278,7 +797,6 @@ function Build-Receipt {
         $aligns.Add('center')
     }
 
-    # رقم الطاولة
     if ($order.table_number) {
         $tableLabel = if ($lang -eq 'ar') { "$([char]0x0637)$([char]0x0627)$([char]0x0648)$([char]0x0644)$([char]0x0629): " } else { 'Table: ' }
         $lines.Add([string]($tableLabel + $order.table_number))
@@ -287,7 +805,6 @@ function Build-Receipt {
         $aligns.Add('center')
     }
 
-    # رقم البزون
     if ($order.buzzer_number) {
         $buzzerLabel = if ($lang -eq 'ar') { "$([char]0x0628)$([char]0x0632)$([char]0x0648)$([char]0x0646): " } else { 'Buzzer: ' }
         $lines.Add([string]($buzzerLabel + $order.buzzer_number))
@@ -296,13 +813,11 @@ function Build-Receipt {
         $aligns.Add('center')
     }
 
-    # التاريخ
     $lines.Add((Get-Date -Format 'yyyy/MM/dd HH:mm'))
     $sizes.Add(10)
     $bolds.Add($false)
     $aligns.Add('center')
 
-    # اسم العميل
     if ($order.customer_name) {
         $lines.Add([string]$order.customer_name)
         $sizes.Add(12)
@@ -310,13 +825,11 @@ function Build-Receipt {
         $aligns.Add('center')
     }
 
-    # خط فاصل قبل العناصر
     $lines.Add('================================')
     $sizes.Add(10)
     $bolds.Add($false)
     $aligns.Add('center')
 
-    # عناصر الطلب
     foreach ($item in $order.items) {
         $n = if ($item.product_name) { [string]$item.product_name } else { [string]$item.name }
         $q = if ($item.quantity) { $item.quantity } else { 1 }
@@ -332,22 +845,30 @@ function Build-Receipt {
             $bolds.Add($true)
             $aligns.Add('left')
         }
-        # ملاحظات
         if ($item.notes) {
             $lines.Add('  >> ' + [string]$item.notes)
             $sizes.Add(10)
             $bolds.Add($false)
             $aligns.Add('left')
         }
-        # إضافات
         if ($item.extras) {
             foreach ($extra in $item.extras) {
                 $eName = if ($extra.name) { [string]$extra.name } else { '' }
                 if ($eName) {
+                    $eQty = if ($extra.quantity) { [int]$extra.quantity } else { 1 }
                     if ($showPrices -and $extra.price) {
-                        $lines.Add("  + $eName  $([math]::Round($extra.price))")
+                        $eTotal = [math]::Round($extra.price * $eQty)
+                        if ($eQty -gt 1) {
+                            $lines.Add("  + $eName x$eQty  $eTotal")
+                        } else {
+                            $lines.Add("  + $eName  $eTotal")
+                        }
                     } else {
-                        $lines.Add("  + $eName")
+                        if ($eQty -gt 1) {
+                            $lines.Add("  + $eName x$eQty")
+                        } else {
+                            $lines.Add("  + $eName")
+                        }
                     }
                     $sizes.Add(10)
                     $bolds.Add($false)
@@ -357,13 +878,11 @@ function Build-Receipt {
         }
     }
 
-    # خط فاصل بعد العناصر
     $lines.Add('================================')
     $sizes.Add(10)
     $bolds.Add($false)
     $aligns.Add('center')
 
-    # الخصم
     if ($showPrices -and $order.discount -and $order.discount -gt 0) {
         $discLabel = if ($lang -eq 'ar') { "$([char]0x062E)$([char]0x0635)$([char]0x0645): -" } else { 'Discount: -' }
         $lines.Add([string]($discLabel + [math]::Round($order.discount)))
@@ -372,7 +891,6 @@ function Build-Receipt {
         $aligns.Add('center')
     }
 
-    # الإجمالي
     if ($showPrices -and $order.total) {
         $totalLabel = if ($lang -eq 'ar') { "$([char]0x0627)$([char]0x0644)$([char]0x0625)$([char]0x062C)$([char]0x0645)$([char]0x0627)$([char]0x0644)$([char]0x064A): " } else { 'Total: ' }
         $total = [math]::Round($order.total)
@@ -382,7 +900,6 @@ function Build-Receipt {
         $aligns.Add('center')
     }
 
-    # طريقة الدفع (للفاتورة فقط)
     if ($showPrices -and $order.payment_method) {
         $pmText = switch ($order.payment_method) {
             'cash' { if ($lang -eq 'ar') { "$([char]0x0646)$([char]0x0642)$([char]0x062F)$([char]0x064A)" } else { 'Cash' } }
@@ -397,7 +914,6 @@ function Build-Receipt {
         $aligns.Add('center')
     }
 
-    # اسم الكاشير (للفاتورة فقط)
     if ($showPrices -and $order.cashier_name) {
         $cashierLabel = if ($lang -eq 'ar') { "$([char]0x0627)$([char]0x0644)$([char]0x0643)$([char]0x0627)$([char]0x0634)$([char]0x064A)$([char]0x0631): " } else { 'Cashier: ' }
         $lines.Add([string]($cashierLabel + $order.cashier_name))
@@ -406,26 +922,22 @@ function Build-Receipt {
         $aligns.Add('center')
     }
 
-    # خط فاصل نهائي
     $lines.Add('================================')
     $sizes.Add(10)
     $bolds.Add($false)
     $aligns.Add('center')
 
-    # شكراً لزيارتكم
     $thankText = if ($lang -eq 'ar') { "$([char]0x0634)$([char]0x0643)$([char]0x0631)$([char]0x0627)$([char]0x064B) $([char]0x0644)$([char]0x0632)$([char]0x064A)$([char]0x0627)$([char]0x0631)$([char]0x062A)$([char]0x0643)$([char]0x0645)" } else { 'Thank you!' }
     $lines.Add([string]$thankText)
     $sizes.Add(14)
     $bolds.Add($true)
     $aligns.Add('center')
 
-    # Maestro
     $lines.Add('Maestro EGP')
     $sizes.Add(9)
     $bolds.Add($false)
     $aligns.Add('center')
 
-    # تحويل النص لصورة bitmap عبر ReceiptRenderer (يدعم العربية)
     try {
         $result = [ReceiptRenderer]::RenderTextToEscPos(
             [string[]]$lines.ToArray(),
@@ -437,7 +949,6 @@ function Build-Receipt {
         return $result
     } catch {
         "$(Get-Date) - ReceiptRenderer error: $_ - falling back to UTF8" | Out-File $agentLog -Append
-        # Fallback: استخدام UTF-8 العادي (قد لا يدعم العربية)
         $enc = [System.Text.Encoding]::UTF8
         $bytes = [System.Collections.Generic.List[byte]]::new()
         $bytes.AddRange([byte[]]@(0x1b, 0x40))
@@ -453,11 +964,14 @@ function Build-Receipt {
     }
 }
 
+# ============================================
+# === HTTP LISTENER (port 9999)            ===
+# ============================================
 try {
     $listener = New-Object System.Net.HttpListener
     $listener.Prefixes.Add('http://localhost:9999/')
     $listener.Start()
-    "$(Get-Date) - HttpListener started on port 9999" | Out-File $agentLog -Append
+    "$(Get-Date) - HttpListener started on port 9999 (v2.4.0)" | Out-File $agentLog -Append
 
     while ($listener.IsListening) {
         $ctx = $listener.GetContext()
@@ -479,7 +993,7 @@ try {
         "$(Get-Date) - $($req.HttpMethod) $path" | Out-File $agentLog -Append
 
         if ($path -eq '/status') {
-            $jsonOut = '{"status":"running","version":"2.3.0","agent":"Maestro Print Agent","usb_support":true}'
+            $jsonOut = '{"status":"running","version":"2.4.0","agent":"Maestro Print Agent","usb_support":true,"zk_support":true}'
         }
         elseif ($path -eq '/list-printers') {
             try {
@@ -553,7 +1067,6 @@ try {
             }
         }
         elseif ($path -eq '/print-receipt' -and $req.HttpMethod -eq 'POST') {
-            # قراءة الجسم بالكامل مع دعم الأحجام الكبيرة
             $bodyText = ''
             try {
                 $ms = New-Object System.IO.MemoryStream
@@ -582,7 +1095,6 @@ try {
                 continue
             }
 
-            # إذا كانت البيانات مُجهزة من السيرفر (bitmap مسبق)
             $receiptData = $null
             if ($body.raw_data) {
                 try {
@@ -633,6 +1145,94 @@ try {
             } else {
                 $em = $result.message -replace '"', '' -replace '\\', ''
                 $jsonOut = '{"success":false,"message":"' + $em + '"}'
+            }
+        }
+        # ============================================
+        # === ZKTeco Biometric Endpoints           ===
+        # ============================================
+        elseif ($path -eq '/zk-test' -and $req.HttpMethod -eq 'POST') {
+            $reader = New-Object System.IO.StreamReader($req.InputStream)
+            $body = $reader.ReadToEnd() | ConvertFrom-Json
+            $zkIp = $body.ip
+            $zkPort = if ($body.port) { [int]$body.port } else { 4370 }
+            $zkTimeout = if ($body.timeout) { [int]$body.timeout } else { 5000 }
+            "$(Get-Date) - ZK Test: $zkIp`:$zkPort (timeout: ${zkTimeout}ms)" | Out-File $agentLog -Append
+            try {
+                $jsonOut = [ZKHelper]::TestConnection($zkIp, $zkPort, $zkTimeout)
+                "$(Get-Date) - ZK Test result: $jsonOut" | Out-File $agentLog -Append
+            } catch {
+                $em = $_.Exception.Message -replace '"', '' -replace '\\', ''
+                $jsonOut = '{"success":false,"message":"' + $em + '"}'
+                "$(Get-Date) - ZK Test error: $em" | Out-File $agentLog -Append
+            }
+        }
+        elseif ($path -eq '/zk-users' -and $req.HttpMethod -eq 'POST') {
+            $reader = New-Object System.IO.StreamReader($req.InputStream)
+            $body = $reader.ReadToEnd() | ConvertFrom-Json
+            $zkIp = $body.ip
+            $zkPort = if ($body.port) { [int]$body.port } else { 4370 }
+            $zkTimeout = if ($body.timeout) { [int]$body.timeout } else { 10000 }
+            "$(Get-Date) - ZK Users: $zkIp`:$zkPort" | Out-File $agentLog -Append
+            try {
+                $jsonOut = [ZKHelper]::GetUsers($zkIp, $zkPort, $zkTimeout)
+                "$(Get-Date) - ZK Users result: $($jsonOut.Substring(0, [Math]::Min(200, $jsonOut.Length)))..." | Out-File $agentLog -Append
+            } catch {
+                $em = $_.Exception.Message -replace '"', '' -replace '\\', ''
+                $jsonOut = '{"success":false,"message":"' + $em + '"}'
+                "$(Get-Date) - ZK Users error: $em" | Out-File $agentLog -Append
+            }
+        }
+        elseif ($path -eq '/zk-sync' -and $req.HttpMethod -eq 'POST') {
+            $reader = New-Object System.IO.StreamReader($req.InputStream)
+            $body = $reader.ReadToEnd() | ConvertFrom-Json
+            $zkIp = $body.ip
+            $zkPort = if ($body.port) { [int]$body.port } else { 4370 }
+            $zkTimeout = if ($body.timeout) { [int]$body.timeout } else { 15000 }
+            "$(Get-Date) - ZK Sync: $zkIp`:$zkPort" | Out-File $agentLog -Append
+            try {
+                $jsonOut = [ZKHelper]::SyncAttendance($zkIp, $zkPort, $zkTimeout)
+                "$(Get-Date) - ZK Sync result: $($jsonOut.Substring(0, [Math]::Min(200, $jsonOut.Length)))..." | Out-File $agentLog -Append
+            } catch {
+                $em = $_.Exception.Message -replace '"', '' -replace '\\', ''
+                $jsonOut = '{"success":false,"message":"' + $em + '"}'
+                "$(Get-Date) - ZK Sync error: $em" | Out-File $agentLog -Append
+            }
+        }
+        elseif ($path -eq '/zk-push-user' -and $req.HttpMethod -eq 'POST') {
+            $reader = New-Object System.IO.StreamReader($req.InputStream)
+            $body = $reader.ReadToEnd() | ConvertFrom-Json
+            $zkIp = $body.ip
+            $zkPort = if ($body.port) { [int]$body.port } else { 4370 }
+            $zkTimeout = if ($body.timeout) { [int]$body.timeout } else { 5000 }
+            $uid = [int]$body.uid
+            $userId = if ($body.user_id) { [string]$body.user_id } else { [string]$uid }
+            $userName = if ($body.name) { [string]$body.name } else { '' }
+            $privilege = if ($body.privilege) { [int]$body.privilege } else { 0 }
+            "$(Get-Date) - ZK Push User: $zkIp`:$zkPort uid=$uid name=$userName" | Out-File $agentLog -Append
+            try {
+                $jsonOut = [ZKHelper]::SetUser($zkIp, $zkPort, $zkTimeout, $uid, $userId, $userName, $privilege)
+                "$(Get-Date) - ZK Push User result: $jsonOut" | Out-File $agentLog -Append
+            } catch {
+                $em = $_.Exception.Message -replace '"', '' -replace '\\', ''
+                $jsonOut = '{"success":false,"message":"' + $em + '"}'
+                "$(Get-Date) - ZK Push User error: $em" | Out-File $agentLog -Append
+            }
+        }
+        elseif ($path -eq '/zk-delete-user' -and $req.HttpMethod -eq 'POST') {
+            $reader = New-Object System.IO.StreamReader($req.InputStream)
+            $body = $reader.ReadToEnd() | ConvertFrom-Json
+            $zkIp = $body.ip
+            $zkPort = if ($body.port) { [int]$body.port } else { 4370 }
+            $zkTimeout = if ($body.timeout) { [int]$body.timeout } else { 5000 }
+            $uid = [int]$body.uid
+            "$(Get-Date) - ZK Delete User: $zkIp`:$zkPort uid=$uid" | Out-File $agentLog -Append
+            try {
+                $jsonOut = [ZKHelper]::DeleteUser($zkIp, $zkPort, $zkTimeout, $uid)
+                "$(Get-Date) - ZK Delete User result: $jsonOut" | Out-File $agentLog -Append
+            } catch {
+                $em = $_.Exception.Message -replace '"', '' -replace '\\', ''
+                $jsonOut = '{"success":false,"message":"' + $em + '"}'
+                "$(Get-Date) - ZK Delete User error: $em" | Out-File $agentLog -Append
             }
         }
         else {

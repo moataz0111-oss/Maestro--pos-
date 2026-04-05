@@ -46,8 +46,25 @@ export default function BiometricDevices({ branches = [] }) {
     device_type: 'fingerprint'
   });
 
+  const AGENT_URL = 'http://localhost:9999';
+  const [agentOnline, setAgentOnline] = useState(null);
+
+  // Check if local agent is running
+  const checkAgent = async () => {
+    try {
+      const res = await axios.get(`${AGENT_URL}/status`, { timeout: 3000 });
+      const isOnline = res.data?.status === 'running' && res.data?.zk_support === true;
+      setAgentOnline(isOnline);
+      return isOnline;
+    } catch {
+      setAgentOnline(false);
+      return false;
+    }
+  };
+
   useEffect(() => {
     fetchDevices();
+    checkAgent();
   }, []);
 
   const fetchDevices = async () => {
@@ -60,7 +77,6 @@ export default function BiometricDevices({ branches = [] }) {
       setDevices(res.data);
     } catch (error) {
       console.error('Error fetching devices:', error);
-      // Mock data for development
       setDevices([]);
     } finally {
       setLoading(false);
@@ -93,24 +109,46 @@ export default function BiometricDevices({ branches = [] }) {
   const handleTestConnection = async (device) => {
     setTestingDevice(device.id);
     try {
-      const token = localStorage.getItem('token');
-      const res = await axios.post(`${API}/biometric/devices/${device.id}/test`, null, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      // Route through local agent (same network as ZKTeco device)
+      const agentOk = await checkAgent();
+      if (!agentOk) {
+        toast.error(
+          <div>
+            <p className="font-bold">{t('الوكيل المحلي غير متصل!')}</p>
+            <p className="text-sm">{t('يجب تشغيل وكيل Maestro v2.4+ على جهاز الكمبيوتر')}</p>
+          </div>
+        );
+        return;
+      }
+
+      const res = await axios.post(`${AGENT_URL}/zk-test`, {
+        ip: device.ip_address,
+        port: device.port || 4370,
+        timeout: 5000
+      }, { timeout: 10000 });
       
       if (res.data.success) {
         toast.success(
           <div>
             <p className="font-bold">{t('تم الاتصال بنجاح!')}</p>
-            <p className="text-sm">{t('الرقم التسلسلي')}: {res.data.device_info?.serial_number}</p>
-            <p className="text-sm">{t('المستخدمين')}: {res.data.device_info?.users_count}</p>
+            {res.data.serial_number && <p className="text-sm">{t('الرقم التسلسلي')}: {res.data.serial_number}</p>}
+            {res.data.device_name && <p className="text-sm">{t('الجهاز')}: {res.data.device_name}</p>}
           </div>
         );
       } else {
         toast.error(res.data.message || t('فشل الاتصال بالجهاز'));
       }
     } catch (error) {
-      toast.error(t('فشل في اختبار الاتصال'));
+      if (error.code === 'ERR_NETWORK' || error.message?.includes('Network')) {
+        toast.error(
+          <div>
+            <p className="font-bold">{t('الوكيل المحلي غير متصل!')}</p>
+            <p className="text-sm">{t('شغّل ملف print_server.ps1 الإصدار 2.4')}</p>
+          </div>
+        );
+      } else {
+        toast.error(t('فشل في اختبار الاتصال'));
+      }
     } finally {
       setTestingDevice(null);
     }
@@ -119,20 +157,56 @@ export default function BiometricDevices({ branches = [] }) {
   const handleSyncAttendance = async (device) => {
     setSyncingDevice(device.id);
     try {
+      // Route through local agent
+      const agentOk = await checkAgent();
+      if (!agentOk) {
+        toast.error(
+          <div>
+            <p className="font-bold">{t('الوكيل المحلي غير متصل!')}</p>
+            <p className="text-sm">{t('يجب تشغيل وكيل Maestro v2.4+ على جهاز الكمبيوتر')}</p>
+          </div>
+        );
+        return;
+      }
+
+      // 1. Get attendance data from local agent (connects to ZKTeco device)
+      const agentRes = await axios.post(`${AGENT_URL}/zk-sync`, {
+        ip: device.ip_address,
+        port: device.port || 4370,
+        timeout: 15000
+      }, { timeout: 30000 });
+
+      if (!agentRes.data.success) {
+        toast.error(agentRes.data.message || t('فشل في جلب البيانات من الجهاز'));
+        return;
+      }
+
+      // 2. Send synced records to backend for storage
       const token = localStorage.getItem('token');
-      const res = await axios.post(`${API}/biometric/devices/${device.id}/sync`, null, {
+      const backendRes = await axios.post(`${API}/biometric/devices/${device.id}/sync-from-agent`, {
+        records: agentRes.data.records || []
+      }, {
         headers: { Authorization: `Bearer ${token}` }
       });
       
       toast.success(
         <div>
           <p className="font-bold">{t('تمت المزامنة بنجاح!')}</p>
-          <p className="text-sm">{t('عدد السجلات')}: {res.data.records_count}</p>
+          <p className="text-sm">{t('عدد السجلات')}: {backendRes.data.records_count || agentRes.data.count || 0}</p>
         </div>
       );
       fetchDevices();
     } catch (error) {
-      toast.error(error.response?.data?.detail || t('فشل في المزامنة'));
+      if (error.code === 'ERR_NETWORK' || error.message?.includes('Network')) {
+        toast.error(
+          <div>
+            <p className="font-bold">{t('الوكيل المحلي غير متصل!')}</p>
+            <p className="text-sm">{t('شغّل ملف print_server.ps1 الإصدار 2.4')}</p>
+          </div>
+        );
+      } else {
+        toast.error(error.response?.data?.detail || t('فشل في المزامنة'));
+      }
     } finally {
       setSyncingDevice(null);
     }
@@ -182,6 +256,31 @@ export default function BiometricDevices({ branches = [] }) {
         </Button>
       </div>
 
+      {/* Agent Status */}
+      <Card className={`border-${agentOnline ? 'green' : 'red'}-500/30 bg-${agentOnline ? 'green' : 'red'}-500/5`}>
+        <CardContent className="p-4">
+          <div className="flex items-center gap-3">
+            <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${agentOnline ? 'bg-green-500/20' : 'bg-red-500/20'}`}>
+              <Wifi className={`h-5 w-5 ${agentOnline ? 'text-green-500' : 'text-red-500'}`} />
+            </div>
+            <div className="flex-1">
+              <div className="flex items-center gap-2">
+                <h4 className="font-medium text-foreground">{t('وكيل Maestro المحلي')}</h4>
+                <Badge className={agentOnline ? 'bg-green-500/10 text-green-500' : 'bg-red-500/10 text-red-500'}>
+                  {agentOnline ? t('متصل v2.4') : t('غير متصل')}
+                </Badge>
+              </div>
+              {!agentOnline && (
+                <p className="text-sm text-red-400 mt-1">{t('يجب تشغيل ملف print_server.ps1 (الإصدار 2.4+) على جهاز الكمبيوتر للتواصل مع أجهزة البصمة')}</p>
+              )}
+            </div>
+            <Button variant="outline" size="sm" onClick={checkAgent} data-testid="check-agent-btn">
+              <RefreshCw className="h-4 w-4" />
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Info Card */}
       <Card className="border-blue-500/30 bg-blue-500/5">
         <CardContent className="p-4">
@@ -192,9 +291,10 @@ export default function BiometricDevices({ branches = [] }) {
             <div className="flex-1">
               <h4 className="font-medium text-foreground">{t('تعليمات الربط')}</h4>
               <ul className="text-sm text-muted-foreground mt-2 space-y-1 list-disc list-inside">
-                <li>{t('تأكد من أن جهاز البصمة متصل بنفس الشبكة')}</li>
+                <li>{t('تأكد من أن جهاز البصمة متصل بنفس الشبكة المحلية')}</li>
                 <li>{t('استخدم عنوان IP الخاص بالجهاز')} ({t('مثال')}: 192.168.1.100)</li>
                 <li>{t('المنفذ الافتراضي لأجهزة ZKTeco هو 4370')}</li>
+                <li>{t('شغّل وكيل Maestro v2.4+ على نفس جهاز الكمبيوتر المتصل بالشبكة')}</li>
                 <li>{t('بعد إضافة الجهاز، اختبر الاتصال ثم قم بالمزامنة')}</li>
               </ul>
             </div>
