@@ -1,19 +1,13 @@
 # Maestro POS - PRD
 
 ## Original Problem Statement
-Multi-tenant POS system (React + FastAPI + MongoDB) requiring:
-- Multi-printer support (USB cashier, Ethernet kitchen)
-- Arabic text via Canvas -> ESC/POS
-- 65mm receipt formatting (bold fonts, logo, QR code, no blank spaces)
-- Kitchen routing: products print to assigned printers
-- Order/Product notes saving and printing
-- Offline mode, order modifications
-- ZKTeco fingerprint device integration
+Multi-tenant POS system (React + FastAPI + MongoDB) with printing, ZKTeco biometric, and HR automation.
 
 ## Architecture
 ```
-Browser Canvas -> ESC * 33 -> base64 -> Agent v2.4.0 -> Chunked Write -> Printer
-Browser -> localhost:9999/zk-* -> Agent v2.4.0 -> UDP ZK Protocol -> ZKTeco Device
+Print:     Browser Canvas -> ESC/POS -> localhost:9999 -> Agent v2.4 -> Printer
+Biometric: Browser -> localhost:9999/zk-* -> Agent v2.4 -> UDP ZK Protocol -> ZKTeco Device
+Auto-Sync: Agent polls ZKTeco every 5min -> Frontend relays -> Backend auto-processes
 ```
 
 ## Credentials
@@ -21,55 +15,51 @@ Browser -> localhost:9999/zk-* -> Agent v2.4.0 -> UDP ZK Protocol -> ZKTeco Devi
 - Super Admin: owner@maestroegp.com / owner123 (Secret: 271018)
 - Test Cashier: cashier@test.com / Test@1234
 
-## Completed
-- [x] ESC * 33 column-mode encoding
-- [x] Agent v2.3.0 with chunked USB/TCP WritePrinter
-- [x] Fixed false success in kitchen printing
-- [x] Fixed printer_type mismatch (use print_mode)
-- [x] Redesigned receipt to 65mm, ALL bold fonts, QR Code + System Logo
-- [x] Optimized print speed (skip blank lines, parallel requests)
-- [x] Fixed kitchen ticket repeating/wrong items
-- [x] Fixed loadOrderForEditing extras loading
-- [x] (2026-04-05) Fixed Product Notes and Order Notes not saving to DB
-- [x] (2026-04-05) Fixed handlePrintBill missing notes:orderNotes
-- [x] (2026-04-05) Added PUT /api/orders/{id}/update-items endpoint
-- [x] (2026-04-05) Extras quantity counter: +/- buttons in modal
-- [x] (2026-04-05) Product quantity badge in extras modal
-- [x] (2026-04-05) Receipt: base product price only, extras listed separately
-- [x] (2026-04-05) **Agent v2.4.0**: ZKTeco support via local agent
-  - ZK Protocol over UDP (C# ZKHelper class)
-  - /zk-test: Test connection to device
-  - /zk-sync: Download attendance logs
-  - /zk-users: Get registered users
-  - /zk-push-user: Push employee to device
-  - /zk-delete-user: Delete user from device
-  - Auto-kill old agent on startup
-- [x] (2026-04-05) Frontend BiometricDevices: Routes through localhost:9999
-- [x] (2026-04-05) Agent status card with online/offline indicator
-- [x] (2026-04-05) POST /api/biometric/devices/{id}/sync-from-agent endpoint
-- [x] (2026-04-05) Employee biometric_uid field + push to device UI
-- [x] (2026-04-05) "إصدار للبصمة" per employee + "إصدار الكل للبصمة" bulk push
+## Completed Features
+### Printing
+- [x] ESC * 33 column-mode encoding with Arabic Canvas
+- [x] Agent v2.4.0 chunked USB/TCP printing
+- [x] 65mm receipt: bold fonts, QR, logos, skip blank lines
+- [x] Kitchen routing by print_mode
+- [x] Product/Order notes saving and printing
+- [x] Extras quantity counter (+/-) with receipt separation
 
-## Extras Data Structure
-```json
-{ "id": "ext1", "name": "بيبسي كومبو", "price": 750, "quantity": 2 }
-```
+### ZKTeco Biometric (2026-04-05)
+- [x] Agent v2.4.0 with ZK Protocol (UDP C# ZKHelper)
+- [x] /zk-test, /zk-sync, /zk-users, /zk-push-user, /zk-delete-user
+- [x] Auto-kill old agent on startup
+- [x] Frontend BiometricDevices routes through localhost:9999
+- [x] Agent status card (online/offline)
+- [x] Push employee to device + Push all employees
+- [x] sync-from-agent backend endpoint
+
+### Attendance Auto-Processing (2026-04-05)
+- [x] Employee shift fields: shift_start, shift_end, work_days
+- [x] Auto-sync polling (every 5 minutes) with toggle
+- [x] POST /api/attendance/auto-process:
+  - Converts raw biometric punches → attendance records
+  - First punch = check-in, last punch = check-out
+  - Calculates worked_hours, late_minutes, early_leave_minutes, overtime
+  - Auto-creates deductions for late >15min
+  - Auto-creates deductions for early_leave >15min
+  - Auto-creates absence records for missing work days
+  - Marks raw records as processed (dedup)
+- [x] Payroll integrates with auto-calculated attendance + deductions
 
 ## Key Files
-- `/app/frontend/src/pages/POS.js` - Main POS (4.4K+ lines)
-- `/app/frontend/src/pages/HR.js` - HR with biometric push (2.1K+ lines)
-- `/app/frontend/src/components/BiometricDevices.js` - Biometric device management
+- `/app/frontend/src/pages/POS.js` - POS (4.4K+ lines)
+- `/app/frontend/src/pages/HR.js` - HR with biometric push (2.2K+ lines)
+- `/app/frontend/src/components/BiometricDevices.js` - Device management + auto-sync
 - `/app/frontend/src/utils/receiptBitmap.js` - Receipt Canvas -> ESC/POS
-- `/app/frontend/src/utils/printService.js` - Print routing
-- `/app/backend/server.py` - Backend monolith (18K+ lines)
+- `/app/backend/server.py` - Backend (18K+ lines)
+- `/app/backend/routes/payroll_routes.py` - Payroll calculations
 - `/app/backend/static/print_server.ps1` - Local agent v2.4.0
 
 ## Key API Endpoints
-- POST /api/orders - Create order
-- PUT /api/orders/{id}/update-items - Update items, notes, discount
-- POST /api/biometric/devices - Create biometric device
-- POST /api/biometric/devices/{id}/sync-from-agent - Sync attendance from agent
-- PUT /api/employees/{id} - Update employee (incl. biometric_uid)
+- POST /api/orders, PUT /api/orders/{id}/update-items
+- POST /api/biometric/devices, POST /api/biometric/devices/{id}/sync-from-agent
+- POST /api/attendance/auto-process
+- PUT /api/employees/{id} (incl. biometric_uid, shift_start, shift_end, work_days)
 
 ## Upcoming Tasks
 - P0: Multi-Restaurant (Tenant) Switcher
