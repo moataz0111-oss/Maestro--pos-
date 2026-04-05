@@ -11,7 +11,7 @@ import { toast } from 'sonner';
 
 const PRINT_AGENT_URL = 'http://localhost:9999';
 const REQUIRED_MAJOR = 3;
-const REQUIRED_MINOR = 0;
+const REQUIRED_MINOR = 1;
 
 /** مقارنة مرنة للإصدارات: هل الإصدار المحلي يساوي أو أحدث من المطلوب */
 function isVersionOk(version) {

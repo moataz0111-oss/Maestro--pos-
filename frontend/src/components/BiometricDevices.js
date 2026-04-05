@@ -221,11 +221,12 @@ export default function BiometricDevices({ branches = [] }) {
       const agentRes = await axios.post(`${AGENT_URL}/zk-sync`, {
         ip: device.ip_address,
         port: device.port || 4370,
-        timeout: 15000
-      }, { timeout: 30000 });
+        timeout: 30000
+      }, { timeout: 60000 });
 
       if (!agentRes.data.success) {
-        toast.error(agentRes.data.message || t('فشل في جلب البيانات من الجهاز'));
+        const dbg = agentRes.data.debug ? ` (${agentRes.data.debug})` : '';
+        toast.error(agentRes.data.message + dbg || t('فشل في جلب البيانات من الجهاز'));
         return;
       }
 

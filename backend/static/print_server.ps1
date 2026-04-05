@@ -1,6 +1,6 @@
 $ErrorActionPreference = 'Continue'
 $agentLog = "$PSScriptRoot\agent.log"
-"$(Get-Date) - Agent v3.0.0 starting..." | Out-File $agentLog
+"$(Get-Date) - Agent v3.1.0 starting..." | Out-File $agentLog
 
 # ============================================
 # === AUTO-CLEANUP: Kill old agent & files ===
@@ -523,25 +523,42 @@ public class ZKHelper {
             }
             ushort replyId = 2;
 
-            // Disable device
-            byte[] disablePkt = BuildPacket(CMD_DISABLEDEVICE, sessionId, replyId++, null);
-            try { SendAndReceive(client, ip, port, disablePkt, timeoutMs); } catch {}
+            // Disable device to get exclusive access
+            try {
+                byte[] disablePkt = BuildPacket(CMD_DISABLEDEVICE, sessionId, replyId++, null);
+                SendAndReceive(client, ip, port, disablePkt, timeoutMs);
+            } catch {}
 
             // Request attendance data
             byte[] attPkt = BuildPacket(CMD_ATTLOG_RRQ, sessionId, replyId++, null);
-            byte[] attResp = SendAndReceive(client, ip, port, attPkt, timeoutMs * 3);
+            byte[] attResp;
+            try {
+                attResp = SendAndReceive(client, ip, port, attPkt, timeoutMs * 3);
+            } catch (Exception rex) {
+                // Re-enable and disconnect
+                try {
+                    byte[] enPkt = BuildPacket(CMD_ENABLEDEVICE, sessionId, replyId++, null);
+                    client.Send(enPkt, enPkt.Length, ip, port);
+                    byte[] exPkt = BuildPacket(CMD_EXIT, sessionId, replyId++, null);
+                    client.Send(exPkt, exPkt.Length, ip, port);
+                } catch {}
+                client.Close();
+                return "{\"success\":false,\"message\":\"Attendance request failed: " + EscJson(rex.Message) + "\"}";
+            }
 
             List<string> records = new List<string>();
             List<byte> allData = new List<byte>();
-            ushort respCmd = BitConverter.ToUInt16(attResp, 0);
+            ushort respCmd = (attResp.Length >= 2) ? BitConverter.ToUInt16(attResp, 0) : (ushort)0;
+            string debugInfo = "cmd=0x" + respCmd.ToString("X4") + " len=" + attResp.Length;
 
             if (respCmd == CMD_PREPARE_DATA && attResp.Length >= 12) {
                 uint dataSize = BitConverter.ToUInt32(attResp, 8);
+                debugInfo += " dataSize=" + dataSize;
 
                 // Read data packets
-                int maxWait = 30000;
+                int maxWait = 60000;
                 DateTime start = DateTime.Now;
-                while (allData.Count < dataSize && (DateTime.Now - start).TotalMilliseconds < maxWait) {
+                while (allData.Count < (int)dataSize && (DateTime.Now - start).TotalMilliseconds < maxWait) {
                     try {
                         IPEndPoint ep2 = new IPEndPoint(IPAddress.Any, 0);
                         byte[] rawPkt = client.Receive(ref ep2);
@@ -624,7 +641,7 @@ public class ZKHelper {
             } catch {}
 
             client.Close();
-            return "{\"success\":true,\"records\":[" + string.Join(",", records.ToArray()) + "],\"count\":" + records.Count + ",\"raw_bytes\":" + (records.Count > 0 ? "0" : allData.Count.ToString()) + "}";
+            return "{\"success\":true,\"records\":[" + string.Join(",", records.ToArray()) + "],\"count\":" + records.Count + ",\"raw_bytes\":" + allData.Count + ",\"debug\":\"" + EscJson(debugInfo) + "\"}";
         } catch (Exception ex) {
             if (client != null) try { client.Close(); } catch {}
             return "{\"success\":false,\"message\":\"" + EscJson(ex.Message) + "\"}";
@@ -1043,7 +1060,7 @@ try {
     $listener = New-Object System.Net.HttpListener
     $listener.Prefixes.Add('http://localhost:9999/')
     $listener.Start()
-    "$(Get-Date) - HttpListener started on port 9999 (v3.0.0)" | Out-File $agentLog -Append
+    "$(Get-Date) - HttpListener started on port 9999 (v3.1.0)" | Out-File $agentLog -Append
 
     while ($listener.IsListening) {
         $ctx = $listener.GetContext()
@@ -1065,7 +1082,7 @@ try {
         "$(Get-Date) - $($req.HttpMethod) $path" | Out-File $agentLog -Append
 
         if ($path -eq '/status') {
-            $jsonOut = '{"status":"running","version":"3.0.0","agent":"Maestro Print Agent","usb_support":true,"zk_support":true}'
+            $jsonOut = '{"status":"running","version":"3.1.0","agent":"Maestro Print Agent","usb_support":true,"zk_support":true}'
         }
         elseif ($path -eq '/list-printers') {
             try {
