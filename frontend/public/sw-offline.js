@@ -1,7 +1,7 @@
 // Service Worker for Offline Support - V5 (Auto-Update)
 // يدعم العمل بدون إنترنت لجميع الصفحات مع تحديث تلقائي
 
-const CACHE_VERSION = 'v5';
+const CACHE_VERSION = 'v6';
 const CACHE_NAME = `maestro-offline-${CACHE_VERSION}`;
 const STATIC_CACHE = `maestro-static-${CACHE_VERSION}`;
 const DATA_CACHE = `maestro-data-${CACHE_VERSION}`;
