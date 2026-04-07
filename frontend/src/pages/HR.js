@@ -87,6 +87,23 @@ export default function HR() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7));
+  const [dateMode, setDateMode] = useState('month'); // month, year, custom
+  const [startDate, setStartDate] = useState(new Date().toISOString().slice(0, 7) + '-01');
+  const [endDate, setEndDate] = useState(new Date().toISOString().slice(0, 7) + '-31');
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear().toString());
+
+  // حساب تواريخ البداية والنهاية حسب وضع التاريخ
+  const getDateRange = () => {
+    if (dateMode === 'year') {
+      return { start: `${selectedYear}-01-01`, end: `${selectedYear}-12-31`, monthParam: selectedYear };
+    } else if (dateMode === 'custom') {
+      return { start: startDate, end: endDate, monthParam: startDate.slice(0, 7) };
+    } else {
+      return { start: `${selectedMonth}-01`, end: `${selectedMonth}-31`, monthParam: selectedMonth };
+    }
+  };
+
+  const dateLabel = dateMode === 'year' ? selectedYear : dateMode === 'custom' ? `${startDate} → ${endDate}` : selectedMonth;
 
   // Dialogs
   const [employeeDialogOpen, setEmployeeDialogOpen] = useState(false);
@@ -129,7 +146,7 @@ export default function HR() {
 
   useEffect(() => {
     fetchData();
-  }, [selectedBranchId, selectedMonth, isOffline]);
+  }, [selectedBranchId, selectedMonth, dateMode, startDate, endDate, selectedYear, isOffline]);
 
   const fetchData = async () => {
     setLoading(true);
@@ -163,15 +180,16 @@ export default function HR() {
       const headers = { Authorization: `Bearer ${token}` };
       const branchId = getBranchIdForApi();
       
+      const dateRange = getDateRange();
       const [empRes, branchRes, attRes, advRes, dedRes, bonRes, payRes, summaryRes] = await Promise.all([
         axios.get(`${API}/employees${branchId ? `?branch_id=${branchId}` : ''}`, { headers }),
         axios.get(`${API}/branches`, { headers }),
-        axios.get(`${API}/attendance?start_date=${selectedMonth}-01&end_date=${selectedMonth}-31`, { headers }),
+        axios.get(`${API}/attendance?start_date=${dateRange.start}&end_date=${dateRange.end}`, { headers }),
         axios.get(`${API}/advances`, { headers }),
-        axios.get(`${API}/deductions?start_date=${selectedMonth}-01&end_date=${selectedMonth}-31`, { headers }),
-        axios.get(`${API}/bonuses?start_date=${selectedMonth}-01&end_date=${selectedMonth}-31`, { headers }),
-        axios.get(`${API}/payroll?month=${selectedMonth}`, { headers }),
-        axios.get(`${API}/reports/payroll-summary?month=${selectedMonth}${branchId ? `&branch_id=${branchId}` : ''}`, { headers }).catch(() => ({ data: null }))
+        axios.get(`${API}/deductions?start_date=${dateRange.start}&end_date=${dateRange.end}`, { headers }),
+        axios.get(`${API}/bonuses?start_date=${dateRange.start}&end_date=${dateRange.end}`, { headers }),
+        axios.get(`${API}/payroll?month=${dateRange.monthParam}`, { headers }),
+        axios.get(`${API}/reports/payroll-summary?month=${dateRange.monthParam}&start_date=${dateRange.start}&end_date=${dateRange.end}${branchId ? `&branch_id=${branchId}` : ''}`, { headers }).catch(() => ({ data: null }))
       ]);
       
       setEmployees(empRes.data);
@@ -243,7 +261,7 @@ export default function HR() {
     if (activeTab === 'ratings') {
       fetchEmployeeRatings();
     }
-  }, [activeTab, selectedMonth, selectedBranchId]);
+  }, [activeTab, selectedMonth, dateMode, startDate, endDate, selectedYear, selectedBranchId]);
 
   // Employee handlers
   const handleCreateEmployee = async (e) => {
@@ -983,13 +1001,68 @@ export default function HR() {
               </div>
             </div>
             
-            <div className="flex items-center gap-3">
-              <Input
-                type="month"
-                value={selectedMonth}
-                onChange={(e) => setSelectedMonth(e.target.value)}
-                className="w-40"
-              />
+            <div className="flex items-center gap-2 flex-wrap">
+              {/* وضع التاريخ */}
+              <Select value={dateMode} onValueChange={(v) => setDateMode(v)}>
+                <SelectTrigger className="w-28 h-10" data-testid="date-mode-select">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="month">{t('شهر')}</SelectItem>
+                  <SelectItem value="year">{t('سنة')}</SelectItem>
+                  <SelectItem value="custom">{t('مخصص')}</SelectItem>
+                </SelectContent>
+              </Select>
+
+              {dateMode === 'month' && (
+                <Input
+                  type="month"
+                  value={selectedMonth}
+                  onChange={(e) => setSelectedMonth(e.target.value)}
+                  className="w-40 h-10"
+                  data-testid="month-picker"
+                />
+              )}
+
+              {dateMode === 'year' && (
+                <Select value={selectedYear} onValueChange={(v) => setSelectedYear(v)}>
+                  <SelectTrigger className="w-28 h-10" data-testid="year-picker">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Array.from({ length: 5 }, (_, i) => {
+                      const y = String(new Date().getFullYear() - 2 + i);
+                      return <SelectItem key={y} value={y}>{y}</SelectItem>;
+                    })}
+                  </SelectContent>
+                </Select>
+              )}
+
+              {dateMode === 'custom' && (
+                <>
+                  <div className="flex items-center gap-1">
+                    <span className="text-xs text-muted-foreground">{t('من')}</span>
+                    <Input
+                      type="date"
+                      value={startDate}
+                      onChange={(e) => setStartDate(e.target.value)}
+                      className="w-36 h-10"
+                      data-testid="start-date-picker"
+                    />
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <span className="text-xs text-muted-foreground">{t('إلى')}</span>
+                    <Input
+                      type="date"
+                      value={endDate}
+                      onChange={(e) => setEndDate(e.target.value)}
+                      className="w-36 h-10"
+                      data-testid="end-date-picker"
+                    />
+                  </div>
+                </>
+              )}
+
               <BranchSelector />
               
               {/* زر طباعة التقرير */}
@@ -1305,7 +1378,7 @@ export default function HR() {
               <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle className="flex items-center gap-2">
                   <BarChart3 className="h-5 w-5" />
-                  {t('تقرير الرواتب الشامل')} - {selectedMonth}
+                  {t('تقرير الرواتب الشامل')} - {dateMode === 'year' ? selectedYear : dateMode === 'custom' ? `${startDate} → ${endDate}` : selectedMonth}
                 </CardTitle>
                 <div className="flex gap-2">
                   <Button onClick={() => window.print()}>
@@ -1422,7 +1495,7 @@ export default function HR() {
           <TabsContent value="attendance">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between">
-                <CardTitle>{t('سجل الحضور')} - {selectedMonth}</CardTitle>
+                <CardTitle>{t('سجل الحضور')} - {dateLabel}</CardTitle>
                 <Dialog open={attendanceDialogOpen} onOpenChange={setAttendanceDialogOpen}>
                   <DialogTrigger asChild>
                     <Button><Plus className="h-4 w-4 ml-2" /> {t('تسجيل حضور')}</Button>
@@ -1593,7 +1666,7 @@ export default function HR() {
           <TabsContent value="deductions">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between">
-                <CardTitle>{t('الخصومات')} - {selectedMonth}</CardTitle>
+                <CardTitle>{t('الخصومات')} - {dateLabel}</CardTitle>
                 <Dialog open={deductionDialogOpen} onOpenChange={setDeductionDialogOpen}>
                   <DialogTrigger asChild>
                     <Button variant="destructive"><Plus className="h-4 w-4 ml-2" /> {t('خصم جديد')}</Button>
@@ -1708,7 +1781,7 @@ export default function HR() {
           <TabsContent value="bonuses">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between">
-                <CardTitle>{t('المكافآت')} - {selectedMonth}</CardTitle>
+                <CardTitle>{t('المكافآت')} - {dateLabel}</CardTitle>
                 <Dialog open={bonusDialogOpen} onOpenChange={setBonusDialogOpen}>
                   <DialogTrigger asChild>
                     <Button className="bg-green-600 hover:bg-green-700"><Plus className="h-4 w-4 ml-2" /> {t('مكافأة جديدة')}</Button>
@@ -1804,7 +1877,7 @@ export default function HR() {
           <TabsContent value="payroll">
             <Card>
               <CardHeader>
-                <CardTitle>{t('كشوفات الرواتب')} - {selectedMonth}</CardTitle>
+                <CardTitle>{t('كشوفات الرواتب')} - {dateLabel}</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="overflow-x-auto">

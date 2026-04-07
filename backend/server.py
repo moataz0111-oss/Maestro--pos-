@@ -3299,11 +3299,13 @@ async def get_employee_ratings(
 
 @api_router.get("/reports/payroll-summary")
 async def get_payroll_summary_report(
-    month: str,  # YYYY-MM
+    month: str,  # YYYY-MM or YYYY for yearly
     branch_id: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
     current_user: dict = Depends(get_current_user)
 ):
-    """تقرير شامل للرواتب - إجمالي الرواتب، الخصومات، المكافآت، السلف، المستحقات"""
+    """تقرير شامل للرواتب - يدعم شهر/سنة/فترة مخصصة"""
     tenant_id = get_user_tenant_id(current_user)
     
     # بناء استعلام الموظفين
@@ -3328,11 +3330,19 @@ async def get_payroll_summary_report(
             "month": month,
             "employee_count": 0,
             "employees": [],
-            "totals": {"basic_salary": 0, "total_deductions": 0, "total_bonuses": 0, "total_advances": 0, "net_payable": 0}
+            "totals": {"basic_salary": 0, "total_deductions": 0, "total_bonuses": 0, "total_advances": 0, "overtime_pay": 0, "net_payable": 0}
         }
     
-    start_date = f"{month}-01"
-    end_date = f"{month}-31"
+    # حساب تواريخ البداية والنهاية
+    if start_date and end_date:
+        q_start = start_date
+        q_end = end_date
+    elif len(month) == 4:  # سنة فقط YYYY
+        q_start = f"{month}-01-01"
+        q_end = f"{month}-12-31"
+    else:
+        q_start = f"{month}-01"
+        q_end = f"{month}-31"
     
     # === تحسين الأداء: Batch fetch بدلاً من N+1 queries ===
     employee_ids = [emp["id"] for emp in employees]
@@ -3341,13 +3351,13 @@ async def get_payroll_summary_report(
     # جلب جميع الخصومات دفعة واحدة
     all_deductions = await db.deductions.find({
         "employee_id": {"$in": employee_ids},
-        "date": {"$gte": start_date, "$lte": end_date}
+        "date": {"$gte": q_start, "$lte": q_end}
     }, {"_id": 0}).to_list(5000)
     
     # جلب جميع المكافآت دفعة واحدة
     all_bonuses = await db.bonuses.find({
         "employee_id": {"$in": employee_ids},
-        "date": {"$gte": start_date, "$lte": end_date}
+        "date": {"$gte": q_start, "$lte": q_end}
     }, {"_id": 0}).to_list(5000)
     
     # جلب جميع السلف دفعة واحدة
@@ -3360,13 +3370,13 @@ async def get_payroll_summary_report(
     # جلب جميع الحضور دفعة واحدة
     all_attendance = await db.attendance.find({
         "employee_id": {"$in": employee_ids},
-        "date": {"$gte": start_date, "$lte": end_date}
+        "date": {"$gte": q_start, "$lte": q_end}
     }, {"_id": 0}).to_list(10000)
     
     # جلب الوقت الإضافي الموافق عليه
     all_overtime = await db.overtime_requests.find({
         "employee_id": {"$in": employee_ids},
-        "date": {"$gte": start_date, "$lte": end_date},
+        "date": {"$gte": q_start, "$lte": q_end},
         "status": "approved"
     }, {"_id": 0}).to_list(5000)
     
