@@ -37,6 +37,8 @@ export default function BiometricDevices({ branches = [] }) {
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [syncingDevice, setSyncingDevice] = useState(null);
   const [testingDevice, setTestingDevice] = useState(null);
+  const [fetchingUsers, setFetchingUsers] = useState(null);
+  const [deviceUsers, setDeviceUsers] = useState({});
   
   const [deviceForm, setDeviceForm] = useState({
     name: '',
@@ -262,6 +264,35 @@ export default function BiometricDevices({ branches = [] }) {
   };
 
   const handleDeleteDevice = async (device) => {
+
+  // Fetch users registered on the device
+  const handleFetchDeviceUsers = async (device) => {
+    setFetchingUsers(device.id);
+    try {
+      const agentOk = await checkAgent();
+      if (!agentOk) {
+        toast.error(t('الوكيل المحلي غير متصل!'));
+        return;
+      }
+      const res = await axios.post(`${AGENT_URL}/zk-users`, {
+        ip: device.ip_address,
+        port: device.port || 4370,
+        timeout: 10000
+      }, { timeout: 15000 });
+
+      if (res.data?.success) {
+        const users = res.data.users || [];
+        setDeviceUsers(prev => ({ ...prev, [device.id]: users }));
+        toast.success(t('تم جلب المستخدمين') + ` (${users.length})`);
+      } else {
+        toast.error(res.data?.message || t('فشل جلب المستخدمين'));
+      }
+    } catch (err) {
+      toast.error(t('فشل الاتصال') + ': ' + (err.message || ''));
+    } finally {
+      setFetchingUsers(null);
+    }
+  };
     if (!window.confirm(t('هل أنت متأكد من حذف') + ` "${device.name}"؟`)) return;
     
     try {
@@ -473,12 +504,53 @@ export default function BiometricDevices({ branches = [] }) {
                   <Button
                     variant="outline"
                     size="sm"
+                    onClick={() => handleFetchDeviceUsers(device)}
+                    disabled={fetchingUsers === device.id}
+                    data-testid={`fetch-users-${device.id}`}
+                  >
+                    {fetchingUsers === device.id ? (
+                      <RefreshCw className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Users className="h-4 w-4" />
+                    )}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
                     className="text-red-500 hover:text-red-600"
                     onClick={() => handleDeleteDevice(device)}
                   >
                     <Trash2 className="h-4 w-4" />
                   </Button>
                 </div>
+
+                {/* Device Users List */}
+                {deviceUsers[device.id] && deviceUsers[device.id].length > 0 && (
+                  <div className="mt-3 border border-border/50 rounded-lg p-3 bg-muted/30">
+                    <div className="flex items-center justify-between mb-2">
+                      <h5 className="text-sm font-bold text-foreground flex items-center gap-1">
+                        <Users className="h-4 w-4" />
+                        {t('مستخدمو الجهاز')} ({deviceUsers[device.id].length})
+                      </h5>
+                      <Button variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={() => setDeviceUsers(prev => {const n = {...prev}; delete n[device.id]; return n;})}>
+                        <XCircle className="h-3 w-3" />
+                      </Button>
+                    </div>
+                    <div className="space-y-1 max-h-40 overflow-y-auto">
+                      {deviceUsers[device.id].map((u, idx) => (
+                        <div key={idx} className="flex items-center justify-between text-xs bg-background rounded px-2 py-1.5">
+                          <div className="flex items-center gap-2">
+                            <Badge variant="outline" className="text-[10px] px-1.5">{u.uid_num || u.uid}</Badge>
+                            <span className="text-foreground font-medium">{u.name || t('بدون اسم')}</span>
+                          </div>
+                          <Badge className={u.privilege > 0 ? 'bg-amber-500/10 text-amber-500 text-[10px]' : 'bg-blue-500/10 text-blue-500 text-[10px]'}>
+                            {u.privilege > 0 ? t('مدير') : t('مستخدم')}
+                          </Badge>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
           ))}

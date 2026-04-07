@@ -799,10 +799,26 @@ export default function HR() {
     setBiometricDialogOpen(true);
   };
 
-  // Generate next available UID
-  const getNextBiometricUid = () => {
-    const existingUids = employees.filter(e => e.biometric_uid).map(e => parseInt(e.biometric_uid) || 0);
-    return existingUids.length > 0 ? Math.max(...existingUids) + 1 : 1;
+  // Generate next available UID - checks device users first
+  const getNextBiometricUid = (deviceUsers = []) => {
+    // Combine UIDs from database employees AND device users
+    const dbUids = employees.filter(e => e.biometric_uid).map(e => parseInt(e.biometric_uid) || 0);
+    const deviceUids = deviceUsers.map(u => parseInt(u.uid_num) || parseInt(u.uid) || 0);
+    const allUids = [...dbUids, ...deviceUids];
+    return allUids.length > 0 ? Math.max(...allUids) + 1 : 1;
+  };
+
+  // Fetch users from device via agent
+  const fetchDeviceUsersForPush = async (device) => {
+    try {
+      const res = await axios.post(`${AGENT_URL}/zk-users`, {
+        ip: device.ip_address,
+        port: device.port || 4370,
+        timeout: 10000
+      }, { timeout: 15000 });
+      if (res.data?.success) return res.data.users || [];
+    } catch {}
+    return [];
   };
 
   // Push single employee to device
@@ -823,7 +839,7 @@ export default function HR() {
       return;
     }
 
-    const uid = pushingEmployee.biometric_uid ? parseInt(pushingEmployee.biometric_uid) : getNextBiometricUid();
+    const uid = pushingEmployee.biometric_uid ? parseInt(pushingEmployee.biometric_uid) : getNextBiometricUid(await fetchDeviceUsersForPush(device));
     
     try {
       const res = await axios.post(`${AGENT_URL}/zk-push-user`, {
@@ -878,8 +894,13 @@ export default function HR() {
     }
 
     const activeEmployees = employees.filter(e => e.is_active);
+    
+    // Fetch existing device users to find max UID
+    const deviceUsers = await fetchDeviceUsersForPush(device);
+    let nextUid = getNextBiometricUid(deviceUsers);
+    
     for (const emp of activeEmployees) {
-      const uid = emp.biometric_uid ? parseInt(emp.biometric_uid) : getNextBiometricUid() + successCount + failCount;
+      const uid = emp.biometric_uid ? parseInt(emp.biometric_uid) : nextUid++;
       try {
         const res = await axios.post(`${AGENT_URL}/zk-push-user`, {
           ip: device.ip_address,
