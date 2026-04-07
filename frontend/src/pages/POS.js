@@ -1281,7 +1281,7 @@ export default function POS() {
 
   const subtotal = cart.reduce((sum, item) => {
     const extrasTotal = (item.selectedExtras || []).reduce((extSum, ext) => extSum + (ext.price * (ext.quantity || 1)), 0);
-    return sum + ((item.price + extrasTotal) * item.quantity);
+    return sum + (item.price * item.quantity) + extrasTotal;
   }, 0);
   
   // حساب عمولة شركة التوصيل
@@ -1613,8 +1613,8 @@ export default function POS() {
               notes: item.notes || '',
               extras: item.selectedExtras || []
             })),
-            subtotal: cart.reduce((sum, item) => sum + ((item.price + (item.selectedExtras || []).reduce((s, e) => s + (e.price * (e.quantity || 1)), 0)) * item.quantity), 0),
-            total: cart.reduce((sum, item) => sum + ((item.price + (item.selectedExtras || []).reduce((s, e) => s + (e.price * (e.quantity || 1)), 0)) * item.quantity), 0) - discount,
+            subtotal: cart.reduce((sum, item) => sum + ((item.price * item.quantity) + (item.selectedExtras || []).reduce((s, e) => s + (e.price * (e.quantity || 1)), 0)), 0),
+            total: cart.reduce((sum, item) => sum + ((item.price * item.quantity) + (item.selectedExtras || []).reduce((s, e) => s + (e.price * (e.quantity || 1)), 0)), 0) - discount,
             discount: discount,
             branch_id: currentBranchId,
             payment_method: 'pending',
@@ -1779,8 +1779,8 @@ export default function POS() {
           notes: item.notes || '',
           extras: item.selectedExtras || []
         })),
-        subtotal: cart.reduce((sum, item) => sum + ((item.price + (item.selectedExtras || []).reduce((s, e) => s + (e.price * (e.quantity || 1)), 0)) * item.quantity), 0),
-        total: cart.reduce((sum, item) => sum + ((item.price + (item.selectedExtras || []).reduce((s, e) => s + (e.price * (e.quantity || 1)), 0)) * item.quantity), 0) - discount,
+        subtotal: cart.reduce((sum, item) => sum + ((item.price * item.quantity) + (item.selectedExtras || []).reduce((s, e) => s + (e.price * (e.quantity || 1)), 0)), 0),
+        total: cart.reduce((sum, item) => sum + ((item.price * item.quantity) + (item.selectedExtras || []).reduce((s, e) => s + (e.price * (e.quantity || 1)), 0)), 0) - discount,
         discount: discount,
         discount_type: discountType,
         discount_value: discount,
@@ -1939,7 +1939,7 @@ export default function POS() {
           customer_phone: customerPhone || null,
           delivery_address: deliveryAddress || null,
           driver_id: selectedDriver || null,
-          total_amount: res.data.total_amount || cart.reduce((sum, item) => sum + ((item.price + (item.selectedExtras || []).reduce((s, e) => s + (e.price * (e.quantity || 1)), 0)) * item.quantity), 0),
+          total_amount: res.data.total_amount || cart.reduce((sum, item) => sum + ((item.price * item.quantity) + (item.selectedExtras || []).reduce((s, e) => s + (e.price * (e.quantity || 1)), 0)), 0),
           items: cart.map(item => ({
             ...item,
             extras: item.selectedExtras || []
@@ -1983,7 +1983,7 @@ export default function POS() {
           if (!cashierPrinter) cashierPrinter = availablePrinters.find(p => p.connection_type === 'usb' && p.usb_printer_name);
           console.log('[Submit] Cashier printer:', cashierPrinter?.name || 'NOT FOUND', 'Total printers:', availablePrinters.length);
           if (cashierPrinter) {
-            const subtotalCalc = cart.reduce((sum, item) => sum + ((item.price + (item.selectedExtras || []).reduce((s, e) => s + (e.price * (e.quantity || 1)), 0)) * item.quantity), 0);
+            const subtotalCalc = cart.reduce((sum, item) => sum + ((item.price * item.quantity) + (item.selectedExtras || []).reduce((s, e) => s + (e.price * (e.quantity || 1)), 0)), 0);
             const cashierOrderData = {
               ...orderForPrint,
               items: itemsForPrint,
@@ -2134,7 +2134,7 @@ export default function POS() {
         customer_phone: customerPhone || null,
         delivery_address: deliveryAddress || null,
         driver_id: selectedDriver || null,
-        total_amount: savedOrder.total_amount || cart.reduce((sum, item) => sum + ((item.price + (item.selectedExtras || []).reduce((s, e) => s + (e.price * (e.quantity || 1)), 0)) * item.quantity), 0),
+        total_amount: savedOrder.total_amount || cart.reduce((sum, item) => sum + ((item.price * item.quantity) + (item.selectedExtras || []).reduce((s, e) => s + (e.price * (e.quantity || 1)), 0)), 0),
         items: cart.map(item => ({
           ...item,
           extras: item.selectedExtras || []
@@ -2166,7 +2166,7 @@ export default function POS() {
         
         if (cashierPrinter) {
           const printData = buildPrintOrderData(savedOrder.order_number);
-          const subtotalCalc = cart.reduce((sum, item) => sum + ((item.price + (item.selectedExtras || []).reduce((s, e) => s + (e.price * (e.quantity || 1)), 0)) * item.quantity), 0);
+          const subtotalCalc = cart.reduce((sum, item) => sum + ((item.price * item.quantity) + (item.selectedExtras || []).reduce((s, e) => s + (e.price * (e.quantity || 1)), 0)), 0);
           const orderForPrint = {
             ...printData,
             items: cart.map(item => ({
@@ -2215,8 +2215,8 @@ export default function POS() {
               notes: item.notes || '',
               extras: item.selectedExtras || []
             })),
-            subtotal: cart.reduce((sum, item) => sum + ((item.price + (item.selectedExtras || []).reduce((s, e) => s + (e.price * (e.quantity || 1)), 0)) * item.quantity), 0),
-            total: cart.reduce((sum, item) => sum + ((item.price + (item.selectedExtras || []).reduce((s, e) => s + (e.price * (e.quantity || 1)), 0)) * item.quantity), 0) - discount,
+            subtotal: cart.reduce((sum, item) => sum + ((item.price * item.quantity) + (item.selectedExtras || []).reduce((s, e) => s + (e.price * (e.quantity || 1)), 0)), 0),
+            total: cart.reduce((sum, item) => sum + ((item.price * item.quantity) + (item.selectedExtras || []).reduce((s, e) => s + (e.price * (e.quantity || 1)), 0)), 0) - discount,
             discount: discount,
             branch_id: currentBranchId,
             payment_method: 'pending',
@@ -3113,7 +3113,7 @@ export default function POS() {
                   <div className="flex items-center justify-between">
                     <div className="flex-1 min-w-0">
                       <p className="font-medium text-sm text-foreground truncate">{lang === 'en' ? (item.product_name_en || item.product_name || item.name || t('منتج')) : (item.product_name || item.name || t('منتج'))}</p>
-                      <p className="text-primary text-sm tabular-nums">{formatPrice((item.price + (item.selectedExtras || []).reduce((sum, ext) => sum + (ext.price * (ext.quantity || 1)), 0)) * item.quantity)}</p>
+                      <p className="text-primary text-sm tabular-nums">{formatPrice((item.price * item.quantity) + (item.selectedExtras || []).reduce((sum, ext) => sum + (ext.price * (ext.quantity || 1)), 0))}</p>
                     </div>
                     <div className="flex items-center gap-1">
                       <Button
@@ -3873,7 +3873,7 @@ export default function POS() {
                   }
                   console.log('[Print] Using printer:', cashierPrinter.name, cashierPrinter.printer_type, cashierPrinter.connection_type);
                   const printData = buildPrintOrderData(editingOrder?.order_number || lastOrderNumber || '');
-                  const subtotalCalc = cart.reduce((sum, item) => sum + ((item.price + (item.selectedExtras || []).reduce((s, e) => s + (e.price * (e.quantity || 1)), 0)) * item.quantity), 0);
+                  const subtotalCalc = cart.reduce((sum, item) => sum + ((item.price * item.quantity) + (item.selectedExtras || []).reduce((s, e) => s + (e.price * (e.quantity || 1)), 0)), 0);
                   const orderForPrint = {
                     ...printData,
                     items: cart.map(item => ({
