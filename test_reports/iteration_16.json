@@ -103,7 +103,7 @@
   },
   
   "test_credentials": {
-    "api_url": "https://zk-attendance-sync.preview.emergentagent.com",
+    "api_url": "https://zk-sync-agent.preview.emergentagent.com",
     "customer_menu_url": "/menu/default"
   },
   

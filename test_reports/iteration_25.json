@@ -87,7 +87,7 @@
   },
   
   "test_credentials": {
-    "api_url": "https://zk-attendance-sync.preview.emergentagent.com",
+    "api_url": "https://zk-sync-agent.preview.emergentagent.com",
     "admin_email": "admin@maestroegp.com",
     "admin_password": "admin123",
     "super_admin_email": "owner@maestroegp.com",

@@ -11,7 +11,7 @@ import pytest
 import requests
 import os
 
-BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://zk-attendance-sync.preview.emergentagent.com')
+BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://zk-sync-agent.preview.emergentagent.com')
 
 # Test credentials
 SUPER_ADMIN_EMAIL = "owner@maestroegp.com"

@@ -11,7 +11,7 @@ from datetime import datetime
 from typing import Dict, List, Optional
 
 # Use the public endpoint from frontend .env
-BASE_URL = "https://zk-attendance-sync.preview.emergentagent.com/api"
+BASE_URL = "https://zk-sync-agent.preview.emergentagent.com/api"
 
 class MaestroAPITester:
     def __init__(self):
