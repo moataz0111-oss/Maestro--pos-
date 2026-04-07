@@ -1,6 +1,6 @@
 $ErrorActionPreference = 'Continue'
 $agentLog = "$PSScriptRoot\agent.log"
-"$(Get-Date) - Agent v3.1.0 starting..." | Out-File $agentLog
+"$(Get-Date) - Agent v3.2.0 starting..." | Out-File $agentLog
 
 # ============================================
 # === AUTO-CLEANUP: Kill old agent & files ===
@@ -457,15 +457,25 @@ public class ZKHelper {
                 } catch {}
 
                 // Parse user records - pyzk format
+                // ZKTeco data often has 4-byte header before actual records
                 byte[] userData = allData.ToArray();
+                int uDataLen = userData.Length;
+                int uHeaderSize = 0;
                 int recordSize = 72;
-                if (userData.Length > 0 && userData.Length % 72 != 0) {
-                    if (userData.Length % 28 == 0) recordSize = 28;
+
+                // Detect 4-byte header
+                if (uDataLen > 4) {
+                    if ((uDataLen - 4) % 72 == 0 && uDataLen % 72 != 0) uHeaderSize = 4;
+                    else if (uDataLen % 72 == 0) uHeaderSize = 0;
+                    else if ((uDataLen - 4) % 28 == 0 && uDataLen % 28 != 0) { uHeaderSize = 4; recordSize = 28; }
+                    else if (uDataLen % 28 == 0) { uHeaderSize = 0; recordSize = 28; }
                 }
-                int userCount = userData.Length / recordSize;
+
+                int uParseLen = uDataLen - uHeaderSize;
+                int userCount = uParseLen / recordSize;
                 for (int i = 0; i < userCount; i++) {
-                    int offset = i * recordSize;
-                    if (offset + recordSize > userData.Length) break;
+                    int offset = uHeaderSize + (i * recordSize);
+                    if (offset + recordSize > uDataLen) break;
                     try {
                         int uidNum = BitConverter.ToUInt16(userData, offset);
                         int privilege = userData[offset + 2];
@@ -500,7 +510,7 @@ public class ZKHelper {
             } catch {}
 
             client.Close();
-            return "{\"success\":true,\"users\":[" + string.Join(",", users.ToArray()) + "],\"count\":" + users.Count + ",\"raw_bytes\":" + (users.Count > 0 ? "0" : allData.Count.ToString()) + ",\"record_size\":" + (users.Count > 0 ? "72" : "0") + "}";
+            return "{\"success\":true,\"users\":[" + string.Join(",", users.ToArray()) + "],\"count\":" + users.Count + ",\"raw_bytes\":" + allData.Count + ",\"header\":" + uHeaderSize + ",\"record_size\":" + recordSize + "}";
         } catch (Exception ex) {
             if (client != null) try { client.Close(); } catch {}
             return "{\"success\":false,\"message\":\"" + EscJson(ex.Message) + "\"}";
@@ -583,18 +593,29 @@ public class ZKHelper {
                 } catch {}
 
                 // Parse attendance records - pyzk format
+                // ZKTeco data often has 4-byte header before actual records
                 byte[] attData = allData.ToArray();
+                int dataLen = attData.Length;
+                int headerSize = 0;
                 int recordSize = 40;
-                // pyzk: <H24sB4sB8s = 40 bytes per record
-                if (attData.Length > 0) {
-                    if (attData.Length % 40 == 0) recordSize = 40;
-                    else if (attData.Length % 8 == 0) recordSize = 8;
-                    else if (attData.Length % 16 == 0) recordSize = 16;
+
+                // Detect 4-byte header: (len-4) divisible by record size but len isn't
+                if (dataLen > 4) {
+                    if ((dataLen - 4) % 40 == 0 && dataLen % 40 != 0) headerSize = 4;
+                    else if (dataLen % 40 == 0) headerSize = 0;
+                    else if ((dataLen - 4) % 16 == 0 && dataLen % 16 != 0) { headerSize = 4; recordSize = 16; }
+                    else if (dataLen % 16 == 0) { headerSize = 0; recordSize = 16; }
+                    else if ((dataLen - 4) % 8 == 0 && dataLen % 8 != 0) { headerSize = 4; recordSize = 8; }
+                    else if (dataLen % 8 == 0) { headerSize = 0; recordSize = 8; }
                 }
-                int recCount = attData.Length / recordSize;
+
+                int parseLen = dataLen - headerSize;
+                int recCount = parseLen / recordSize;
+                debugInfo += " header=" + headerSize + " recSize=" + recordSize + " recs=" + recCount;
+
                 for (int i = 0; i < recCount; i++) {
-                    int offset = i * recordSize;
-                    if (offset + recordSize > attData.Length) break;
+                    int offset = headerSize + (i * recordSize);
+                    if (offset + recordSize > dataLen) break;
                     try {
                         string uid;
                         uint timestamp;
@@ -1060,7 +1081,7 @@ try {
     $listener = New-Object System.Net.HttpListener
     $listener.Prefixes.Add('http://localhost:9999/')
     $listener.Start()
-    "$(Get-Date) - HttpListener started on port 9999 (v3.1.0)" | Out-File $agentLog -Append
+    "$(Get-Date) - HttpListener started on port 9999 (v3.2.0)" | Out-File $agentLog -Append
 
     while ($listener.IsListening) {
         $ctx = $listener.GetContext()
@@ -1082,7 +1103,7 @@ try {
         "$(Get-Date) - $($req.HttpMethod) $path" | Out-File $agentLog -Append
 
         if ($path -eq '/status') {
-            $jsonOut = '{"status":"running","version":"3.1.0","agent":"Maestro Print Agent","usb_support":true,"zk_support":true}'
+            $jsonOut = '{"status":"running","version":"3.2.0","agent":"Maestro Print Agent","usb_support":true,"zk_support":true}'
         }
         elseif ($path -eq '/list-printers') {
             try {
