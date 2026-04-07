@@ -1,6 +1,6 @@
 $ErrorActionPreference = 'Continue'
 $agentLog = "$PSScriptRoot\agent.log"
-"$(Get-Date) - Agent v3.2.0 starting..." | Out-File $agentLog
+"$(Get-Date) - Agent v3.2.1 starting..." | Out-File $agentLog
 
 # ============================================
 # === AUTO-CLEANUP: Kill old agent & files ===
@@ -427,6 +427,8 @@ public class ZKHelper {
 
             List<string> users = new List<string>();
             List<byte> allData = new List<byte>();
+            int uHeaderSize = 0;
+            int recordSize = 72;
             ushort respCmd = BitConverter.ToUInt16(userResp, 0);
 
             if (respCmd == CMD_PREPARE_DATA && userResp.Length >= 12) {
@@ -460,8 +462,6 @@ public class ZKHelper {
                 // ZKTeco data often has 4-byte header before actual records
                 byte[] userData = allData.ToArray();
                 int uDataLen = userData.Length;
-                int uHeaderSize = 0;
-                int recordSize = 72;
 
                 // Detect 4-byte header
                 if (uDataLen > 4) {
@@ -1081,7 +1081,7 @@ try {
     $listener = New-Object System.Net.HttpListener
     $listener.Prefixes.Add('http://localhost:9999/')
     $listener.Start()
-    "$(Get-Date) - HttpListener started on port 9999 (v3.2.0)" | Out-File $agentLog -Append
+    "$(Get-Date) - HttpListener started on port 9999 (v3.2.1)" | Out-File $agentLog -Append
 
     while ($listener.IsListening) {
         $ctx = $listener.GetContext()
@@ -1103,7 +1103,7 @@ try {
         "$(Get-Date) - $($req.HttpMethod) $path" | Out-File $agentLog -Append
 
         if ($path -eq '/status') {
-            $jsonOut = '{"status":"running","version":"3.2.0","agent":"Maestro Print Agent","usb_support":true,"zk_support":true}'
+            $jsonOut = '{"status":"running","version":"3.2.1","agent":"Maestro Print Agent","usb_support":true,"zk_support":true}'
         }
         elseif ($path -eq '/list-printers') {
             try {

@@ -5,8 +5,8 @@ Multi-tenant POS system (React + FastAPI + MongoDB) with printing, ZKTeco biomet
 
 ## Architecture
 ```
-Print:     Browser Canvas -> ESC/POS -> localhost:9999 -> Agent v2.5 -> Printer
-Biometric: Browser -> localhost:9999/zk-* -> Agent v2.5 -> UDP ZK Protocol (with 50508273 header) -> ZKTeco Device
+Print:     Browser Canvas -> ESC/POS -> localhost:9999 -> Agent v3.2.1 -> Printer
+Biometric: Browser -> localhost:9999/zk-* -> Agent v3.2.1 -> UDP ZK Protocol -> ZKTeco Device
 Auto-Sync: Agent polls ZKTeco every 5min -> Frontend relays -> Backend auto-processes
 ```
 
@@ -24,11 +24,12 @@ Auto-Sync: Agent polls ZKTeco every 5min -> Frontend relays -> Backend auto-proc
 - [x] Product/Order notes saving and printing
 - [x] Extras quantity counter (+/-) with receipt separation
 
-### ZKTeco Biometric (2026-04-05)
-- [x] Agent v2.5.0 with ZK Protocol (UDP C# ZKHelper + transport header fix)
+### ZKTeco Biometric
+- [x] Agent v3.2.1 with ZK Protocol (UDP C# ZKHelper)
 - [x] /zk-test, /zk-sync, /zk-users, /zk-push-user, /zk-delete-user
-- [x] Transport header (50 50 82 7D) added to all packets (was missing in v2.4.0)
-- [x] ExtractPayload strips transport header from device responses
+- [x] Transport header (50 50 82 7D) handling via ExtractPayload
+- [x] CMD_AUTH handshake for authenticated devices
+- [x] 4-byte data header auto-detection in GetUsers and SyncAttendance
 - [x] HexDump debug logging for connection troubleshooting
 - [x] Auto-kill old agent on startup
 - [x] Frontend BiometricDevices routes through localhost:9999
@@ -36,35 +37,35 @@ Auto-Sync: Agent polls ZKTeco every 5min -> Frontend relays -> Backend auto-proc
 - [x] Push employee to device + Push all employees
 - [x] sync-from-agent backend endpoint
 
-### Attendance Auto-Processing (2026-04-05)
+### Attendance Auto-Processing
 - [x] Employee shift fields: shift_start, shift_end, work_days
 - [x] Auto-sync polling (every 5 minutes) with toggle
-- [x] POST /api/attendance/auto-process:
-  - Converts raw biometric punches → attendance records
-  - First punch = check-in, last punch = check-out
-  - Calculates worked_hours, late_minutes, early_leave_minutes, overtime
-  - Auto-creates deductions for late >15min
-  - Auto-creates deductions for early_leave >15min
-  - Auto-creates absence records for missing work days
-  - Marks raw records as processed (dedup)
-- [x] Payroll integrates with auto-calculated attendance + deductions
+- [x] POST /api/attendance/auto-process with full calculation
+
+### POS Calculations
+- [x] Fixed extras calculation: (item.price * item.quantity) + extrasTotal
+
+### Agent Bug Fixes (2026-04-07)
+- [x] Fixed C# compilation error (uHeaderSize/recordSize scope bug) - v3.2.1
+- [x] Fixed BAT installer version check regex (was checking v2.5.0, now v3.2.1)
+- [x] Fixed status endpoint version verification (was checking 2.6.0, now 3.2.1)
 
 ## Key Files
 - `/app/frontend/src/pages/POS.js` - POS (4.4K+ lines)
-- `/app/frontend/src/pages/HR.js` - HR with biometric push (2.2K+ lines)
+- `/app/frontend/src/pages/HR.js` - HR with biometric push
 - `/app/frontend/src/components/BiometricDevices.js` - Device management + auto-sync
 - `/app/frontend/src/utils/receiptBitmap.js` - Receipt Canvas -> ESC/POS
 - `/app/backend/server.py` - Backend (18K+ lines)
 - `/app/backend/routes/payroll_routes.py` - Payroll calculations
-- `/app/backend/static/print_server.ps1` - Local agent v2.5.0 (with ZK transport header fix)
+- `/app/backend/static/print_server.ps1` - Local agent v3.2.1
 
 ## Key API Endpoints
 - POST /api/orders, PUT /api/orders/{id}/update-items
 - POST /api/biometric/devices, POST /api/biometric/devices/{id}/sync-from-agent
 - POST /api/attendance/auto-process
-- PUT /api/employees/{id} (incl. biometric_uid, shift_start, shift_end, work_days)
+- GET /api/print-agent-version, GET /api/print-agent-script, GET /api/download-print-agent
 
 ## Upcoming Tasks
-- P0: Multi-Restaurant (Tenant) Switcher
+- P1: Verify ZKTeco SyncAttendance data parsing with real device
 - P2: Refactor server.py (18K+ lines)
 - P2: Refactor POS.js, Settings.js, SuperAdmin.js
