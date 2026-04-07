@@ -160,6 +160,7 @@ export default function SuperAdmin() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showResetSalesConfirm, setShowResetSalesConfirm] = useState(false);
   const [showResetInventoryConfirm, setShowResetInventoryConfirm] = useState(false);
+  const [showResetHRConfirm, setShowResetHRConfirm] = useState(false);
   const [showEditTenant, setShowEditTenant] = useState(false);
   const [showInvoiceSettings, setShowInvoiceSettings] = useState(false);
   
@@ -1061,6 +1062,22 @@ export default function SuperAdmin() {
       fetchData();
     } catch (error) {
       toast.error(t('فشل في تصفير المخزون') + ': ' + (getErrorMessage(error) || error.message));
+    }
+  };
+
+  const resetTenantHR = async () => {
+    try {
+      const token = localStorage.getItem('super_admin_token');
+      const headers = { Authorization: `Bearer ${token}` };
+      const res = await axios.post(`${API}/super-admin/tenants/${selectedTenant.id}/reset-hr?confirm=true`, null, { headers });
+      const counts = res.data?.reset_counts || {};
+      const total = Object.values(counts).reduce((s, v) => s + v, 0);
+      toast.success(t('تم تصفير الموارد البشرية بنجاح') + ` (${total} سجل)`);
+      setShowResetHRConfirm(false);
+      setSelectedTenant(null);
+      fetchData();
+    } catch (error) {
+      toast.error(t('فشل في تصفير الموارد البشرية') + ': ' + (getErrorMessage(error) || error.message));
     }
   };
 
@@ -2078,6 +2095,10 @@ export default function SuperAdmin() {
           {/* تصفير المخزون */}
           <Button variant="ghost" size="icon" onClick={() => { setSelectedTenant(tenant); setShowResetInventoryConfirm(true); }} className="hover:bg-gray-600" title={t('تصفير المخزون')}>
             <Package className="h-4 w-4 text-purple-400" />
+          </Button>
+          {/* تصفير الموارد البشرية */}
+          <Button variant="ghost" size="icon" onClick={() => { setSelectedTenant(tenant); setShowResetHRConfirm(true); }} className="hover:bg-gray-600" title={t('تصفير الموارد البشرية')} data-testid={`reset-hr-${tenant.id}`}>
+            <Users className="h-4 w-4 text-teal-400" />
           </Button>
           {/* حذف */}
           <Button variant="ghost" size="icon" onClick={() => { setSelectedTenant(tenant); setShowDeleteConfirm(true); }} className="hover:bg-red-600" title={t('حذف')}>
@@ -3728,6 +3749,32 @@ export default function SuperAdmin() {
             <Button onClick={resetTenantInventory} className="bg-purple-600 hover:bg-purple-700">
               <Package className="h-4 w-4 ml-2" />
               {t('تصفير المخزون')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal: تأكيد تصفير الموارد البشرية */}
+      <Dialog open={showResetHRConfirm} onOpenChange={setShowResetHRConfirm}>
+        <DialogContent className="bg-gray-800 border-gray-700 text-white">
+          <DialogHeader>
+            <DialogTitle className="text-xl text-teal-400">{t('تأكيد تصفير الموارد البشرية')}</DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            <p className="text-gray-300">
+              {t('هل أنت متأكد من تصفير الموارد البشرية لـ')} <span className="font-bold text-white">{selectedTenant?.name}</span>؟
+            </p>
+            <p className="text-teal-400 text-sm mt-2">
+              {t('سيتم حذف: الموظفين، الخصومات، المكافآت، السلف، الحضور، كشوف الرواتب، أجهزة البصمة. هذا الإجراء لا يمكن التراجع عنه.')}
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowResetHRConfirm(false)} className="border-gray-600">
+              {t('إلغاء')}
+            </Button>
+            <Button onClick={resetTenantHR} className="bg-teal-600 hover:bg-teal-700" data-testid="confirm-reset-hr-btn">
+              <Users className="h-4 w-4 ml-2" />
+              {t('تصفير الموارد البشرية')}
             </Button>
           </DialogFooter>
         </DialogContent>

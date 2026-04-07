@@ -9971,6 +9971,65 @@ async def reset_tenant_inventory(tenant_id: str, confirm: bool = False, delete_a
         **results
     }
 
+# ==================== تصفير الموارد البشرية ====================
+@api_router.post("/super-admin/tenants/{tenant_id}/reset-hr")
+async def reset_tenant_hr(tenant_id: str, confirm: bool = False, current_user: dict = Depends(verify_super_admin)):
+    """تصفير بيانات الموارد البشرية لعميل معين - للمالك فقط"""
+    if not confirm:
+        raise HTTPException(status_code=400, detail="يجب تأكيد التصفير بإرسال confirm=true")
+    
+    if tenant_id == "main":
+        query = {"$or": [{"tenant_id": {"$exists": False}}, {"tenant_id": None}, {"tenant_id": ""}]}
+    else:
+        tenant = await db.tenants.find_one({"id": tenant_id})
+        if not tenant:
+            raise HTTPException(status_code=404, detail="العميل غير موجود")
+        query = {"tenant_id": tenant_id}
+    
+    results = {"reset_counts": {}}
+    
+    # حذف الموظفين
+    deleted_employees = await db.employees.delete_many(query)
+    results["reset_counts"]["employees"] = deleted_employees.deleted_count
+    
+    # حذف الخصومات
+    deleted_deductions = await db.deductions.delete_many(query)
+    results["reset_counts"]["deductions"] = deleted_deductions.deleted_count
+    
+    # حذف المكافآت
+    deleted_bonuses = await db.bonuses.delete_many(query)
+    results["reset_counts"]["bonuses"] = deleted_bonuses.deleted_count
+    
+    # حذف السلف
+    deleted_advances = await db.advances.delete_many(query)
+    results["reset_counts"]["advances"] = deleted_advances.deleted_count
+    
+    # حذف سجلات الحضور
+    deleted_attendance = await db.attendance.delete_many(query)
+    results["reset_counts"]["attendance"] = deleted_attendance.deleted_count
+    
+    # حذف سجلات البصمة الخام
+    deleted_biometric = await db.biometric_attendance.delete_many(query)
+    results["reset_counts"]["biometric_attendance"] = deleted_biometric.deleted_count
+    
+    # حذف طلبات الوقت الإضافي
+    deleted_overtime = await db.overtime_requests.delete_many(query)
+    results["reset_counts"]["overtime_requests"] = deleted_overtime.deleted_count
+    
+    # حذف كشوف الرواتب
+    deleted_payroll = await db.payroll.delete_many(query)
+    results["reset_counts"]["payroll"] = deleted_payroll.deleted_count
+    
+    # حذف أجهزة البصمة
+    deleted_devices = await db.biometric_devices.delete_many(query)
+    results["reset_counts"]["biometric_devices"] = deleted_devices.deleted_count
+    
+    return {
+        "message": "تم تصفير بيانات الموارد البشرية بنجاح",
+        "success": True,
+        **results
+    }
+
 # ==================== SUPPLIERS & PURCHASING ====================
 
 class SupplierCreate(BaseModel):
