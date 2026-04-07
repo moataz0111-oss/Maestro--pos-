@@ -197,6 +197,69 @@ async def get_bonuses(
     bonuses = await db.bonuses.find(query, {"_id": 0}).sort("date", -1).to_list(500)
     return bonuses
 
+# ==================== OVERTIME APPROVAL ====================
+class OvertimeRequestResponse(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str
+    employee_id: str
+    employee_name: Optional[str] = None
+    date: str
+    hours: float
+    status: str  # pending, approved, rejected
+    approved_by: Optional[str] = None
+    approved_at: Optional[str] = None
+    notes: Optional[str] = None
+    created_at: str
+
+@router.get("/overtime-requests")
+async def get_overtime_requests(
+    status: Optional[str] = None,
+    employee_id: Optional[str] = None,
+    month: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """جلب طلبات الوقت الإضافي"""
+    db = get_database()
+    query = build_tenant_query(current_user)
+    if status:
+        query["status"] = status
+    if employee_id:
+        query["employee_id"] = employee_id
+    if month:
+        query["date"] = {"$regex": f"^{month}"}
+    requests = await db.overtime_requests.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
+    return requests
+
+@router.put("/overtime-requests/{request_id}/approve")
+async def approve_overtime(request_id: str, current_user: dict = Depends(get_current_user)):
+    """موافقة على الوقت الإضافي"""
+    db = get_database()
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.MANAGER, UserRole.SUPER_ADMIN]:
+        raise HTTPException(status_code=403, detail="غير مصرح")
+    req = await db.overtime_requests.find_one({"id": request_id})
+    if not req:
+        raise HTTPException(status_code=404, detail="الطلب غير موجود")
+    await db.overtime_requests.update_one(
+        {"id": request_id},
+        {"$set": {"status": "approved", "approved_by": current_user["id"], "approved_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    return {"message": "تمت الموافقة على الوقت الإضافي"}
+
+@router.put("/overtime-requests/{request_id}/reject")
+async def reject_overtime(request_id: str, current_user: dict = Depends(get_current_user)):
+    """رفض الوقت الإضافي"""
+    db = get_database()
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.MANAGER, UserRole.SUPER_ADMIN]:
+        raise HTTPException(status_code=403, detail="غير مصرح")
+    req = await db.overtime_requests.find_one({"id": request_id})
+    if not req:
+        raise HTTPException(status_code=404, detail="الطلب غير موجود")
+    await db.overtime_requests.update_one(
+        {"id": request_id},
+        {"$set": {"status": "rejected", "approved_by": current_user["id"], "approved_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    return {"message": "تم رفض الوقت الإضافي"}
+
 # ==================== PAYROLL CALCULATION ====================
 @router.post("/payroll/calculate")
 async def calculate_payroll(
@@ -204,59 +267,90 @@ async def calculate_payroll(
     month: str,  # YYYY-MM
     current_user: dict = Depends(get_current_user)
 ):
-    """حساب الراتب للموظف"""
+    """حساب الراتب للموظف بناء على نوع الراتب وبيانات البصمة"""
     db = get_database()
     employee = await db.employees.find_one({"id": employee_id}, {"_id": 0})
     if not employee:
         raise HTTPException(status_code=404, detail="الموظف غير موجود")
     
     basic_salary = employee.get("salary", 0)
+    salary_type = employee.get("salary_type", "monthly")
+    work_hours_per_day = employee.get("work_hours_per_day", 8)
+    work_days = employee.get("work_days", [0, 1, 2, 3, 4, 5])
     
-    # جلب الحضور
+    hourly_rate = basic_salary / (30 * work_hours_per_day) if work_hours_per_day > 0 else 0
+    daily_rate = basic_salary / 30
+    
+    # جلب سجلات الحضور للشهر
     attendance = await db.attendance.find({
         "employee_id": employee_id,
         "date": {"$regex": f"^{month}"}
-    }).to_list(31)
+    }, {"_id": 0}).to_list(31)
     
-    worked_days = len([a for a in attendance if a.get("status") == "present"])
+    worked_days = len([a for a in attendance if a.get("status") in ["present", "late"]])
     absent_days = len([a for a in attendance if a.get("status") == "absent"])
-    late_hours = sum(a.get("late_hours", 0) for a in attendance)
-    overtime_hours = sum(a.get("overtime_hours", 0) for a in attendance)
+    total_worked_hours = sum(a.get("worked_hours", 0) for a in attendance)
+    late_hours = round(sum(a.get("late_minutes", 0) for a in attendance) / 60, 2)
+    total_overtime_hours = sum(a.get("overtime_hours", 0) for a in attendance)
     
-    # جلب الخصومات
+    # حساب الراتب الأساسي المستحق حسب نوع الراتب
+    if salary_type == "hourly":
+        earned_salary = round(total_worked_hours * hourly_rate, 2)
+    elif salary_type == "daily":
+        earned_salary = round(worked_days * daily_rate, 2)
+    else:
+        # شهري: الراتب كامل - خصم أيام الغياب
+        earned_salary = round(basic_salary - (absent_days * daily_rate), 2)
+    
+    # جلب الوقت الإضافي الموافق عليه فقط
+    approved_overtime = await db.overtime_requests.find({
+        "employee_id": employee_id,
+        "date": {"$regex": f"^{month}"},
+        "status": "approved"
+    }, {"_id": 0}).to_list(100)
+    approved_ot_hours = sum(o.get("hours", 0) for o in approved_overtime)
+    overtime_pay = round(approved_ot_hours * hourly_rate * 1.5, 2)
+    
+    # جلب الخصومات (عقابية + تأخير + غياب)
     deductions = await db.deductions.find({
         "employee_id": employee_id,
         "date": {"$regex": f"^{month}"}
-    }).to_list(100)
+    }, {"_id": 0}).to_list(100)
     total_deductions = sum(d.get("amount", 0) for d in deductions)
     
     # جلب المكافآت
     bonuses = await db.bonuses.find({
         "employee_id": employee_id,
         "date": {"$regex": f"^{month}"}
-    }).to_list(100)
+    }, {"_id": 0}).to_list(100)
     total_bonuses = sum(b.get("amount", 0) for b in bonuses)
     
-    # جلب السلف
+    # جلب السلف المعتمدة
     advances = await db.advances.find({
         "employee_id": employee_id,
         "date": {"$regex": f"^{month}"},
         "status": "approved"
-    }).to_list(100)
+    }, {"_id": 0}).to_list(100)
     advance_deduction = sum(a.get("amount", 0) for a in advances)
     
-    # حساب صافي الراتب
-    net_salary = basic_salary + total_bonuses - total_deductions - advance_deduction
+    # صافي الراتب = الراتب المستحق + وقت إضافي موافق + مكافآت - خصومات - سلف
+    net_salary = round(earned_salary + overtime_pay + total_bonuses - total_deductions - advance_deduction, 2)
     
     return {
         "employee_id": employee_id,
         "employee_name": employee.get("name"),
         "month": month,
+        "salary_type": salary_type,
         "basic_salary": basic_salary,
+        "earned_salary": earned_salary,
         "worked_days": worked_days,
         "absent_days": absent_days,
+        "total_worked_hours": total_worked_hours,
         "late_hours": late_hours,
-        "overtime_hours": overtime_hours,
+        "overtime_hours_total": total_overtime_hours,
+        "overtime_hours_approved": approved_ot_hours,
+        "overtime_hours_pending": round(total_overtime_hours - approved_ot_hours, 2),
+        "overtime_pay": overtime_pay,
         "total_deductions": total_deductions,
         "deductions_breakdown": deductions,
         "total_bonuses": total_bonuses,
@@ -333,7 +427,7 @@ async def pay_payroll(payroll_id: str, current_user: dict = Depends(get_current_
 
 @router.post("/payroll/generate-all")
 async def generate_all_payrolls(month: str, current_user: dict = Depends(get_current_user)):
-    """إنشاء كشوف الرواتب لجميع الموظفين"""
+    """إنشاء كشوف الرواتب لجميع الموظفين بناء على بيانات الحضور"""
     db = get_database()
     if current_user["role"] not in [UserRole.ADMIN, UserRole.SUPER_ADMIN]:
         raise HTTPException(status_code=403, detail="غير مصرح")
@@ -351,21 +445,56 @@ async def generate_all_payrolls(month: str, current_user: dict = Depends(get_cur
         })
         
         if not existing:
-            # حساب الراتب
             basic_salary = emp.get("salary", 0)
+            salary_type = emp.get("salary_type", "monthly")
+            work_hours_per_day = emp.get("work_hours_per_day", 8)
+            hourly_rate = basic_salary / (30 * work_hours_per_day) if work_hours_per_day > 0 else 0
+            daily_rate = basic_salary / 30
             
+            # جلب الحضور
+            attendance = await db.attendance.find({
+                "employee_id": emp["id"],
+                "date": {"$regex": f"^{month}"}
+            }, {"_id": 0}).to_list(31)
+            
+            worked_days = len([a for a in attendance if a.get("status") in ["present", "late"]])
+            absent_days = len([a for a in attendance if a.get("status") == "absent"])
+            total_worked_hours = sum(a.get("worked_hours", 0) for a in attendance)
+            late_hours = round(sum(a.get("late_minutes", 0) for a in attendance) / 60, 2)
+            total_overtime = sum(a.get("overtime_hours", 0) for a in attendance)
+            
+            # حساب الراتب المستحق
+            if salary_type == "hourly":
+                earned_salary = round(total_worked_hours * hourly_rate, 2)
+            elif salary_type == "daily":
+                earned_salary = round(worked_days * daily_rate, 2)
+            else:
+                earned_salary = round(basic_salary - (absent_days * daily_rate), 2)
+            
+            # وقت إضافي موافق عليه فقط
+            approved_ot = await db.overtime_requests.find({
+                "employee_id": emp["id"],
+                "date": {"$regex": f"^{month}"},
+                "status": "approved"
+            }, {"_id": 0}).to_list(100)
+            approved_ot_hours = sum(o.get("hours", 0) for o in approved_ot)
+            overtime_pay = round(approved_ot_hours * hourly_rate * 1.5, 2)
+            
+            # خصومات
             deductions = await db.deductions.find({
                 "employee_id": emp["id"],
                 "date": {"$regex": f"^{month}"}
             }).to_list(100)
             total_deductions = sum(d.get("amount", 0) for d in deductions)
             
+            # مكافآت
             bonuses = await db.bonuses.find({
                 "employee_id": emp["id"],
                 "date": {"$regex": f"^{month}"}
             }).to_list(100)
             total_bonuses = sum(b.get("amount", 0) for b in bonuses)
             
+            # سلف
             advances = await db.advances.find({
                 "employee_id": emp["id"],
                 "date": {"$regex": f"^{month}"},
@@ -373,14 +502,23 @@ async def generate_all_payrolls(month: str, current_user: dict = Depends(get_cur
             }).to_list(100)
             advance_deduction = sum(a.get("amount", 0) for a in advances)
             
-            net_salary = basic_salary + total_bonuses - total_deductions - advance_deduction
+            net_salary = round(earned_salary + overtime_pay + total_bonuses - total_deductions - advance_deduction, 2)
             
             payroll_doc = {
                 "id": str(uuid.uuid4()),
                 "employee_id": emp["id"],
                 "employee_name": emp.get("name"),
                 "month": month,
+                "salary_type": salary_type,
                 "basic_salary": basic_salary,
+                "earned_salary": earned_salary,
+                "worked_days": worked_days,
+                "absent_days": absent_days,
+                "total_worked_hours": total_worked_hours,
+                "late_hours": late_hours,
+                "overtime_hours": total_overtime,
+                "approved_overtime_hours": approved_ot_hours,
+                "overtime_pay": overtime_pay,
                 "total_deductions": total_deductions,
                 "total_bonuses": total_bonuses,
                 "advance_deduction": advance_deduction,
@@ -517,20 +655,48 @@ async def get_employee_salary_slip(
     advance_deduction = sum(a.get("amount", 0) for a in advances)
     
     basic_salary = employee.get("salary", 0)
-    net_salary = basic_salary + total_bonuses - total_deductions - advance_deduction
+    salary_type = employee.get("salary_type", "monthly")
+    work_hours_per_day = employee.get("work_hours_per_day", 8)
+    hourly_rate = basic_salary / (30 * work_hours_per_day) if work_hours_per_day > 0 else 0
+    daily_rate = basic_salary / 30
+    total_worked_hours = sum(a.get("worked_hours", 0) for a in attendance)
+    
+    # حساب الراتب المستحق حسب النوع
+    if salary_type == "hourly":
+        earned_salary = round(total_worked_hours * hourly_rate, 2)
+    elif salary_type == "daily":
+        earned_salary = round(worked_days * daily_rate, 2)
+    else:
+        earned_salary = round(basic_salary - (absent_days * daily_rate), 2)
+    
+    # وقت إضافي موافق عليه فقط
+    approved_overtime = await db.overtime_requests.find({
+        "employee_id": employee_id,
+        "date": {"$regex": f"^{month}"},
+        "status": "approved"
+    }, {"_id": 0}).to_list(100)
+    approved_ot_hours = sum(o.get("hours", 0) for o in approved_overtime)
+    overtime_pay = round(approved_ot_hours * hourly_rate * 1.5, 2)
+    
+    net_salary = round(earned_salary + overtime_pay + total_bonuses - total_deductions - advance_deduction, 2)
     
     return {
         "employee": employee,
         "month": month,
+        "salary_type": salary_type,
         "attendance_summary": {
             "worked_days": worked_days,
             "absent_days": absent_days,
+            "total_worked_hours": total_worked_hours,
             "late_count": late_count,
             "late_minutes": late_minutes,
-            "overtime_hours": overtime_hours
+            "overtime_hours": overtime_hours,
+            "approved_overtime_hours": approved_ot_hours,
+            "overtime_pay": overtime_pay
         },
         "earnings": {
             "basic_salary": basic_salary,
+            "earned_salary": earned_salary,
             "bonuses": bonuses,
             "total_bonuses": total_bonuses
         },

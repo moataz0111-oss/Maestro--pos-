@@ -13998,7 +13998,7 @@ async def auto_process_attendance(current_user: dict = Depends(get_current_user)
         if late_minutes > 0:
             status = "late"
         
-        # حساب الوقت الإضافي
+        # حساب الوقت الإضافي - يسجل كطلب بانتظار موافقة المدير
         overtime_hours = 0
         if worked_hours > required_hours:
             overtime_hours = round(worked_hours - required_hours, 2)
@@ -14024,6 +14024,28 @@ async def auto_process_attendance(current_user: dict = Depends(get_current_user)
         }
         await db.attendance.insert_one(att_doc)
         created_attendance += 1
+        
+        # إنشاء طلب وقت إضافي بانتظار موافقة المدير (لا يُضاف للراتب تلقائياً)
+        if overtime_hours > 0:
+            existing_ot = await db.overtime_requests.find_one({
+                "employee_id": emp["id"],
+                "date": date_str
+            })
+            if not existing_ot:
+                ot_doc = {
+                    "id": str(uuid.uuid4()),
+                    "employee_id": emp["id"],
+                    "employee_name": emp.get("name"),
+                    "date": date_str,
+                    "hours": overtime_hours,
+                    "status": "pending",
+                    "approved_by": None,
+                    "approved_at": None,
+                    "notes": f"وقت إضافي {overtime_hours} ساعة - تلقائي من البصمة",
+                    "tenant_id": tenant_id,
+                    "created_at": datetime.now(timezone.utc).isoformat()
+                }
+                await db.overtime_requests.insert_one(ot_doc)
         
         # إنشاء خصم تلقائي للتأخير (أكثر من 15 دقيقة)
         if late_minutes > 15:
