@@ -1,6 +1,6 @@
 $ErrorActionPreference = 'Continue'
 $agentLog = "$PSScriptRoot\agent.log"
-"$(Get-Date) - Agent v3.3.0 starting..." | Out-File $agentLog
+"$(Get-Date) - Agent v3.3.1 starting..." | Out-File $agentLog
 
 # ============================================
 # === AUTO-CLEANUP: Kill old agent & files ===
@@ -684,7 +684,14 @@ public class ZKHelper {
             }
             ushort replyId = 2;
 
+            // Disable device for exclusive access during write
+            try {
+                byte[] disablePkt = BuildPacket(CMD_DISABLEDEVICE, sessionId, replyId++, null);
+                SendAndReceive(client, ip, port, disablePkt, timeoutMs);
+            } catch {}
+
             // Build user data (72 bytes for modern devices)
+            // pyzk 72-byte format: uid(2)+priv(1)+pass(8)+name(24)+card(4)+...+userId(24@offset48)
             byte[] userData = new byte[72];
             // uid (2 bytes at offset 0)
             userData[0] = (byte)(uid & 0xFF);
@@ -692,16 +699,16 @@ public class ZKHelper {
             // privilege (1 byte at offset 2)
             userData[2] = (byte)privilege;
             // password (8 bytes at offset 3) - empty
-            // user_id string (9 bytes at offset 8)
-            byte[] uidBytes = Encoding.UTF8.GetBytes(userId ?? uid.ToString());
-            int uidCopyLen = Math.Min(uidBytes.Length, 9);
-            Array.Copy(uidBytes, 0, userData, 8, uidCopyLen);
-            // name (24 bytes at offset 24)
+            // name (24 bytes at offset 11)
             if (!string.IsNullOrEmpty(name)) {
                 byte[] nameBytes = Encoding.UTF8.GetBytes(name);
                 int nameCopyLen = Math.Min(nameBytes.Length, 24);
-                Array.Copy(nameBytes, 0, userData, 24, nameCopyLen);
+                Array.Copy(nameBytes, 0, userData, 11, nameCopyLen);
             }
+            // userId string (24 bytes at offset 48)
+            byte[] uidBytes = Encoding.UTF8.GetBytes(userId ?? uid.ToString());
+            int uidCopyLen = Math.Min(uidBytes.Length, 24);
+            Array.Copy(uidBytes, 0, userData, 48, uidCopyLen);
 
             // Send CMD_USER_WRQ (8)
             byte[] userPkt = BuildPacket(8, sessionId, replyId++, userData);
@@ -1081,7 +1088,7 @@ try {
     $listener = New-Object System.Net.HttpListener
     $listener.Prefixes.Add('http://localhost:9999/')
     $listener.Start()
-    "$(Get-Date) - HttpListener started on port 9999 (v3.3.0)" | Out-File $agentLog -Append
+    "$(Get-Date) - HttpListener started on port 9999 (v3.3.1)" | Out-File $agentLog -Append
 
     while ($listener.IsListening) {
         $ctx = $listener.GetContext()
@@ -1103,7 +1110,7 @@ try {
         "$(Get-Date) - $($req.HttpMethod) $path" | Out-File $agentLog -Append
 
         if ($path -eq '/status') {
-            $jsonOut = '{"status":"running","version":"3.3.0","agent":"Maestro Print Agent","usb_support":true,"zk_support":true}'
+            $jsonOut = '{"status":"running","version":"3.3.1","agent":"Maestro Print Agent","usb_support":true,"zk_support":true}'
         }
         elseif ($path -eq '/list-printers') {
             try {
