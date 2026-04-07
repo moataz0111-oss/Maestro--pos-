@@ -6,7 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { formatPrice, setCurrency } from '../utils/currency';
 import { useTranslation } from '../hooks/useTranslation';
-import { checkAgentStatus, sendTestPrint, checkPrinterOnline, listAgentPrinters, agentSupportsUsb } from '../utils/printService';
+import { checkAgentStatus, sendTestPrint, checkPrinterOnline, listAgentPrinters, agentSupportsUsb, checkAgentVersionMatch } from '../utils/printService';
 import { AgentUpdateBanner } from '../utils/AgentUpdateChecker';
 import { 
   playClick, 
@@ -525,7 +525,8 @@ export default function Settings() {
       setPrintAgentOnline(online);
       if (online) {
         const supportsUsb = await agentSupportsUsb();
-        setAgentNeedsUpdate(!supportsUsb);
+        const versionCheck = await checkAgentVersionMatch(process.env.REACT_APP_BACKEND_URL);
+        setAgentNeedsUpdate(!supportsUsb || !versionCheck.match);
       }
     });
   }, []);
@@ -4966,12 +4967,13 @@ export default function Settings() {
                           setPrintAgentOnline(online);
                           if (online) {
                             const supportsUsb = await agentSupportsUsb();
-                            const needsUpdate = !supportsUsb;
+                            const versionCheck = await checkAgentVersionMatch(process.env.REACT_APP_BACKEND_URL);
+                            const needsUpdate = !supportsUsb || !versionCheck.match;
                             setAgentNeedsUpdate(needsUpdate);
                             if (needsUpdate) {
-                              toast.error(t('الوسيط يحتاج تحديث! حمّل النسخة الجديدة'));
+                              toast.error(t('الوسيط يحتاج تحديث!') + (versionCheck.latestVersion !== '?' ? ` (${versionCheck.agentVersion} → ${versionCheck.latestVersion})` : ''));
                             } else {
-                              toast.success(t('وسيط الطباعة متصل ومحدّث'));
+                              toast.success(t('وسيط الطباعة متصل ومحدّث') + ` v${versionCheck.agentVersion}`);
                             }
                           } else {
                             toast.error(t('وسيط الطباعة غير متصل'));

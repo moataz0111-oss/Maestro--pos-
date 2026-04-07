@@ -36,15 +36,30 @@ export const agentSupportsUsb = async () => {
   try {
     const res = await fetch(`${PRINT_AGENT_URL}/status`);
     const data = await res.json();
-    // Check both USB support and version >= 2.7
     if (data.usb_support !== true) return false;
-    const ver = String(data.version || '').replace(/^v/i, '').trim();
-    const parts = ver.split('.').map(Number);
-    const major = parts[0] || 0;
-    const minor = parts[1] || 0;
+    const major = parseInt(String(data.version || '0').split('.')[0]) || 0;
     return (major >= 3);
   } catch {
     return false;
+  }
+};
+
+/**
+ * فحص إذا الوكيل يحتاج تحديث بمقارنة الإصدار مع السيرفر
+ */
+export const checkAgentVersionMatch = async (backendUrl) => {
+  try {
+    const agentRes = await fetch(`${PRINT_AGENT_URL}/status`);
+    const agentData = await agentRes.json();
+    const agentVersion = String(agentData.version || '0').trim();
+
+    const serverRes = await fetch(`${backendUrl}/api/print-agent-version`);
+    const serverData = await serverRes.json();
+    const latestVersion = String(serverData.version || '0').trim();
+
+    return { match: agentVersion === latestVersion, agentVersion, latestVersion };
+  } catch {
+    return { match: true, agentVersion: '?', latestVersion: '?' };
   }
 };
 
@@ -318,6 +333,7 @@ export const printOrderToAllPrinters = async (order, orderItems, products, print
 export default {
   checkAgentStatus,
   agentSupportsUsb,
+  checkAgentVersionMatch,
   listAgentPrinters,
   checkPrinterOnline,
   sendTestPrint,
