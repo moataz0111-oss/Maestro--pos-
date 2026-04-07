@@ -3357,6 +3357,19 @@ async def get_payroll_summary_report(
         "remaining_amount": {"$gt": 0}
     }, {"_id": 0}).to_list(5000)
     
+    # جلب جميع الحضور دفعة واحدة
+    all_attendance = await db.attendance.find({
+        "employee_id": {"$in": employee_ids},
+        "date": {"$gte": start_date, "$lte": end_date}
+    }, {"_id": 0}).to_list(10000)
+    
+    # جلب الوقت الإضافي الموافق عليه
+    all_overtime = await db.overtime_requests.find({
+        "employee_id": {"$in": employee_ids},
+        "date": {"$gte": start_date, "$lte": end_date},
+        "status": "approved"
+    }, {"_id": 0}).to_list(5000)
+    
     # جلب جميع الفروع دفعة واحدة
     all_branches = await db.branches.find(
         {"id": {"$in": branch_ids}},
@@ -3385,6 +3398,20 @@ async def get_payroll_summary_report(
             advances_by_emp[emp_id] = []
         advances_by_emp[emp_id].append(a)
     
+    attendance_by_emp = {}
+    for a in all_attendance:
+        emp_id = a.get("employee_id")
+        if emp_id not in attendance_by_emp:
+            attendance_by_emp[emp_id] = []
+        attendance_by_emp[emp_id].append(a)
+    
+    overtime_by_emp = {}
+    for o in all_overtime:
+        emp_id = o.get("employee_id")
+        if emp_id not in overtime_by_emp:
+            overtime_by_emp[emp_id] = []
+        overtime_by_emp[emp_id].append(o)
+    
     branches_by_id = {b["id"]: b for b in all_branches}
     
     # بناء بيانات التقرير لكل موظف
@@ -3394,29 +3421,52 @@ async def get_payroll_summary_report(
         "total_deductions": 0,
         "total_bonuses": 0,
         "total_advances": 0,
+        "overtime_pay": 0,
         "net_payable": 0
     }
     
     for emp in employees:
         emp_id = emp["id"]
+        basic_salary = _sn(emp.get("salary"))
+        salary_type = emp.get("salary_type", "monthly")
+        work_hours_per_day = _sn(emp.get("work_hours_per_day", 8))
+        hourly_rate = basic_salary / (30 * work_hours_per_day) if work_hours_per_day > 0 else 0
+        daily_rate = basic_salary / 30 if basic_salary > 0 else 0
         
-        # الخصومات (من البيانات المجمعة)
+        # الحضور
+        emp_attendance = attendance_by_emp.get(emp_id, [])
+        worked_days = len([a for a in emp_attendance if a.get("status") in ["present", "late"]])
+        absent_days = len([a for a in emp_attendance if a.get("status") == "absent"])
+        total_worked_hours = sum(_sn(a.get("worked_hours")) for a in emp_attendance)
+        
+        # حساب الراتب المستحق حسب النوع
+        if salary_type == "hourly":
+            earned_salary = round(total_worked_hours * hourly_rate, 2)
+        elif salary_type == "daily":
+            earned_salary = round(worked_days * daily_rate, 2)
+        else:
+            earned_salary = round(basic_salary - (absent_days * daily_rate), 2)
+        
+        # الخصومات
         deductions = deductions_by_emp.get(emp_id, [])
         emp_deductions = sum(_sn(d.get("amount")) for d in deductions)
         
-        # المكافآت (من البيانات المجمعة)
+        # المكافآت
         bonuses = bonuses_by_emp.get(emp_id, [])
         emp_bonuses = sum(_sn(b.get("amount")) for b in bonuses)
         
-        # السلف المعلقة (من البيانات المجمعة)
+        # السلف
         advances = advances_by_emp.get(emp_id, [])
-        emp_advances = sum(a.get("monthly_deduction", 0) for a in advances)
-        pending_advances = sum(a.get("remaining_amount", 0) for a in advances)
+        emp_advances = sum(_sn(a.get("monthly_deduction", 0)) for a in advances)
+        pending_advances = sum(_sn(a.get("remaining_amount", 0)) for a in advances)
         
-        basic_salary = _sn(emp.get("salary"))
-        net_payable = basic_salary + emp_bonuses - emp_deductions - emp_advances
+        # الوقت الإضافي الموافق عليه
+        emp_overtime = overtime_by_emp.get(emp_id, [])
+        approved_ot_hours = sum(_sn(o.get("hours")) for o in emp_overtime)
+        emp_overtime_pay = round(approved_ot_hours * hourly_rate * 1.5, 2)
         
-        # جلب اسم الفرع (من البيانات المجمعة)
+        net_payable = round(earned_salary + emp_overtime_pay + emp_bonuses - emp_deductions - emp_advances, 2)
+        
         branch = branches_by_id.get(emp.get("branch_id"), {})
         
         employee_data.append({
@@ -3425,13 +3475,20 @@ async def get_payroll_summary_report(
             "position": emp.get("position"),
             "branch_id": emp.get("branch_id"),
             "branch_name": branch.get("name", "-"),
+            "salary_type": salary_type,
             "basic_salary": basic_salary,
+            "earned_salary": earned_salary,
+            "worked_days": worked_days,
+            "absent_days": absent_days,
+            "total_worked_hours": total_worked_hours,
             "deductions": emp_deductions,
             "deductions_details": deductions,
             "bonuses": emp_bonuses,
             "bonuses_details": bonuses,
             "advances_deduction": emp_advances,
             "pending_advances": pending_advances,
+            "overtime_hours": approved_ot_hours,
+            "overtime_pay": emp_overtime_pay,
             "net_payable": net_payable
         })
         
@@ -3439,6 +3496,7 @@ async def get_payroll_summary_report(
         totals["total_deductions"] += emp_deductions
         totals["total_bonuses"] += emp_bonuses
         totals["total_advances"] += emp_advances
+        totals["overtime_pay"] += emp_overtime_pay
         totals["net_payable"] += net_payable
     
     return {
