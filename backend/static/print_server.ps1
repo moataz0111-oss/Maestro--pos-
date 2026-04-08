@@ -1,6 +1,6 @@
 $ErrorActionPreference = 'Continue'
 $agentLog = "$PSScriptRoot\agent.log"
-"$(Get-Date) - Agent v3.5.0 starting..." | Out-File $agentLog
+"$(Get-Date) - Agent v3.6.0 starting..." | Out-File $agentLog
 
 # ============================================
 # === AUTO-CLEANUP: Kill old agent & files ===
@@ -483,12 +483,32 @@ public class ZKHelper {
                         string userId = "";
                         if (recordSize == 72) {
                             // pyzk 72-byte: uid(2)+priv(1)+pass(8)+name(24)+card(4)+...+group(1)+userId(23)
-                            name = Encoding.UTF8.GetString(userData, offset + 11, 24).Split('\0')[0];
-                            userId = Encoding.UTF8.GetString(userData, offset + 48, 24).Split('\0')[0];
+                            // Try UTF-8 first, then Unicode for Arabic/Chinese names
+                            byte[] nameRaw = new byte[24];
+                            Array.Copy(userData, offset + 11, nameRaw, 0, 24);
+                            name = Encoding.UTF8.GetString(nameRaw).Split('\0')[0].Trim();
+                            // If UTF-8 gives garbage (control chars), try UTF-16LE
+                            if (name.Length > 0) {
+                                bool hasControlChars = false;
+                                foreach (char c in name) { if (c > 0 && c < 32 && c != 10 && c != 13) { hasControlChars = true; break; } }
+                                if (hasControlChars) {
+                                    name = Encoding.Unicode.GetString(nameRaw).Split('\0')[0].Trim();
+                                }
+                            }
+                            userId = Encoding.UTF8.GetString(userData, offset + 48, 24).Split('\0')[0].Trim();
                             if (string.IsNullOrEmpty(userId)) userId = uidNum.ToString();
                         } else {
                             // 28-byte: uid(2)+priv(1)+pass(8)+name(8)+card(4)+...+userId(?)
-                            name = Encoding.UTF8.GetString(userData, offset + 11, Math.Min(8, recordSize - 11)).Split('\0')[0];
+                            byte[] nameRaw = new byte[Math.Min(8, recordSize - 11)];
+                            Array.Copy(userData, offset + 11, nameRaw, 0, nameRaw.Length);
+                            name = Encoding.UTF8.GetString(nameRaw).Split('\0')[0].Trim();
+                            if (name.Length > 0) {
+                                bool hasControlChars = false;
+                                foreach (char c in name) { if (c > 0 && c < 32 && c != 10 && c != 13) { hasControlChars = true; break; } }
+                                if (hasControlChars) {
+                                    name = Encoding.Unicode.GetString(nameRaw).Split('\0')[0].Trim();
+                                }
+                            }
                             userId = uidNum.ToString();
                         }
                         if (uidNum > 0) {
@@ -510,7 +530,7 @@ public class ZKHelper {
             } catch {}
 
             client.Close();
-            return "{\"success\":true,\"users\":[" + string.Join(",", users.ToArray()) + "],\"count\":" + users.Count + ",\"raw_bytes\":" + allData.Count + ",\"header\":" + uHeaderSize + ",\"record_size\":" + recordSize + "}";
+            return "{\"success\":true,\"users\":[" + string.Join(",", users.ToArray()) + "],\"count\":" + users.Count + ",\"raw_bytes\":" + allData.Count + ",\"header\":" + uHeaderSize + ",\"record_size\":" + recordSize + ",\"resp_cmd\":" + respCmd + ",\"debug\":\"dataLen=" + allData.Count + " hdr=" + uHeaderSize + " recSz=" + recordSize + "\"}";
         } catch (Exception ex) {
             if (client != null) try { client.Close(); } catch {}
             return "{\"success\":false,\"message\":\"" + EscJson(ex.Message) + "\"}";
@@ -699,13 +719,21 @@ public class ZKHelper {
             // privilege (1 byte at offset 2)
             userData[2] = (byte)privilege;
             // password (8 bytes at offset 3) - empty
-            // name (24 bytes at offset 11)
+            // name (24 bytes at offset 11) - try Unicode for Arabic/Chinese, fallback UTF8
             if (!string.IsNullOrEmpty(name)) {
-                byte[] nameBytes = Encoding.UTF8.GetBytes(name);
+                byte[] nameBytes;
+                bool hasNonAscii = false;
+                foreach (char c in name) { if (c > 127) { hasNonAscii = true; break; } }
+                if (hasNonAscii) {
+                    // Unicode UTF-16LE for non-ASCII (Arabic, Chinese, etc)
+                    nameBytes = Encoding.Unicode.GetBytes(name);
+                } else {
+                    nameBytes = Encoding.UTF8.GetBytes(name);
+                }
                 int nameCopyLen = Math.Min(nameBytes.Length, 24);
                 Array.Copy(nameBytes, 0, userData, 11, nameCopyLen);
             }
-            // userId string (24 bytes at offset 48)
+            // userId string (24 bytes at offset 48) - always ASCII
             byte[] uidBytes = Encoding.UTF8.GetBytes(userId ?? uid.ToString());
             int uidCopyLen = Math.Min(uidBytes.Length, 24);
             Array.Copy(uidBytes, 0, userData, 48, uidCopyLen);
@@ -1088,7 +1116,7 @@ try {
     $listener = New-Object System.Net.HttpListener
     $listener.Prefixes.Add('http://localhost:9999/')
     $listener.Start()
-    "$(Get-Date) - HttpListener started on port 9999 (v3.5.0)" | Out-File $agentLog -Append
+    "$(Get-Date) - HttpListener started on port 9999 (v3.6.0)" | Out-File $agentLog -Append
 
     while ($listener.IsListening) {
         $ctx = $listener.GetContext()
@@ -1110,7 +1138,7 @@ try {
         "$(Get-Date) - $($req.HttpMethod) $path" | Out-File $agentLog -Append
 
         if ($path -eq '/status') {
-            $jsonOut = '{"status":"running","version":"3.5.0","agent":"Maestro Print Agent","usb_support":true,"zk_support":true}'
+            $jsonOut = '{"status":"running","version":"3.6.0","agent":"Maestro Print Agent","usb_support":true,"zk_support":true}'
         }
         elseif ($path -eq '/list-printers') {
             try {
