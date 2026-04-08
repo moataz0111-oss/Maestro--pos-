@@ -532,9 +532,32 @@ export default function BiometricDevices({ branches = [] }) {
                         <Users className="h-4 w-4" />
                         {t('مستخدمو الجهاز')} ({deviceUsers[device.id].length})
                       </h5>
-                      <Button variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={() => setDeviceUsers(prev => {const n = {...prev}; delete n[device.id]; return n;})}>
-                        <XCircle className="h-3 w-3" />
-                      </Button>
+                      <div className="flex gap-1">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-6 px-2 text-xs bg-green-500/10 text-green-500 hover:bg-green-500/20"
+                          onClick={async () => {
+                            try {
+                              const token = localStorage.getItem('token');
+                              const res = await axios.post(`${API}/biometric/import-device-users`, {
+                                users: deviceUsers[device.id],
+                                device_id: device.id
+                              }, { headers: { Authorization: `Bearer ${token}` } });
+                              toast.success(res.data?.message || t('تم الاستيراد'));
+                            } catch (err) {
+                              toast.error(t('فشل الاستيراد') + ': ' + (err.response?.data?.detail || err.message));
+                            }
+                          }}
+                          data-testid={`import-users-${device.id}`}
+                        >
+                          <Download className="h-3 w-3 ml-1" />
+                          {t('استيراد كموظفين')}
+                        </Button>
+                        <Button variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={() => setDeviceUsers(prev => {const n = {...prev}; delete n[device.id]; return n;})}>
+                          <XCircle className="h-3 w-3" />
+                        </Button>
+                      </div>
                     </div>
                     <div className="space-y-1 max-h-40 overflow-y-auto">
                       {deviceUsers[device.id].map((u, idx) => (

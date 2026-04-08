@@ -14004,11 +14004,91 @@ async def sync_from_agent(device_id: str, request: SyncFromAgentRequest, current
         {"$set": {"last_sync": datetime.now(timezone.utc).isoformat()}}
     )
     
+    # معالجة تلقائية للحضور بعد المزامنة
+    auto_result = {"processed": 0}
+    try:
+        auto_result = await _auto_process_attendance_internal(current_user)
+    except Exception as e:
+        logging.error(f"Auto-process after sync failed: {e}")
+    
     return {
         "message": "تمت المزامنة بنجاح",
         "records_count": len(synced_records),
         "total_received": len(request.records),
-        "duplicates_skipped": len(request.records) - len(synced_records)
+        "duplicates_skipped": len(request.records) - len(synced_records),
+        "auto_processed": auto_result.get("processed", 0)
+    }
+
+@api_router.post("/biometric/import-device-users")
+async def import_device_users(request: Request, current_user: dict = Depends(get_current_user)):
+    """استيراد مستخدمي جهاز البصمة كموظفين في النظام"""
+    body = await request.json()
+    users = body.get("users", [])
+    device_id = body.get("device_id", "")
+    
+    if not users:
+        raise HTTPException(status_code=400, detail="لا يوجد مستخدمين للاستيراد")
+    
+    tenant_id = get_user_tenant_id(current_user)
+    imported = 0
+    skipped = 0
+    
+    for user in users:
+        uid_num = user.get("uid_num") or user.get("uid")
+        name = user.get("name", "").strip()
+        privilege = user.get("privilege", 0)
+        
+        if not uid_num:
+            continue
+        
+        uid_str = str(uid_num)
+        
+        # تحقق إذا الموظف موجود بالفعل (بنفس biometric_uid)
+        existing = await db.employees.find_one({
+            "biometric_uid": uid_str,
+            "tenant_id": tenant_id
+        })
+        
+        if existing:
+            # تحديث الاسم إذا فاضي
+            if not existing.get("name") and name:
+                await db.employees.update_one(
+                    {"id": existing["id"]},
+                    {"$set": {"name": name}}
+                )
+            skipped += 1
+            continue
+        
+        # إنشاء موظف جديد
+        emp_doc = {
+            "id": str(uuid.uuid4()),
+            "name": name or f"موظف {uid_str}",
+            "phone": "",
+            "position": "",
+            "department": "",
+            "salary": 0,
+            "salary_type": "monthly",
+            "work_hours_per_day": 8,
+            "biometric_uid": uid_str,
+            "biometric_device_id": device_id,
+            "is_active": True,
+            "shift_start": "09:00",
+            "shift_end": "17:00",
+            "work_days": [0, 1, 2, 3, 4, 5],
+            "hire_date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+            "tenant_id": tenant_id or "",
+            "branch_id": current_user.get("branch_id") or "",
+            "created_by": current_user.get("id"),
+            "created_at": datetime.now(timezone.utc).isoformat()
+        }
+        await db.employees.insert_one(emp_doc)
+        imported += 1
+    
+    return {
+        "message": f"تم استيراد {imported} موظف ({skipped} موجود مسبقاً)",
+        "imported": imported,
+        "skipped": skipped,
+        "total": len(users)
     }
 
 
@@ -14017,7 +14097,12 @@ async def sync_from_agent(device_id: str, request: SyncFromAgentRequest, current
 async def auto_process_attendance(current_user: dict = Depends(get_current_user)):
     """
     معالجة تلقائية: تحويل سجلات البصمة الخام إلى حضور/انصراف + خصومات
-    يجلب سجلات البصمة غير المعالجة ويحولها لسجلات حضور مع حساب التأخير والغياب
+    """
+    return await _auto_process_attendance_internal(current_user)
+
+async def _auto_process_attendance_internal(current_user: dict):
+    """
+    دالة داخلية للمعالجة التلقائية - تستدعى من auto-process و sync-from-agent
     """
     tenant_id = get_user_tenant_id(current_user)
     
