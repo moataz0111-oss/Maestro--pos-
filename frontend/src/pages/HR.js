@@ -139,10 +139,26 @@ export default function HR() {
   // Biometric push states
   const [biometricDialogOpen, setBiometricDialogOpen] = useState(false);
   const [biometricDevices, setBiometricDevices] = useState([]);
-  const [selectedDevice, setSelectedDevice] = useState('');
+  const [selectedDevice, setSelectedDevice] = useState(null);
   const [pushingEmployee, setPushingEmployee] = useState(null);
   const [pushingAll, setPushingAll] = useState(false);
   const AGENT_URL = 'http://localhost:9999';
+
+  // جلب أول جهاز بصمة تلقائياً
+  useEffect(() => {
+    const fetchDevices = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        const res = await axios.get(`${API}/biometric/devices`, { headers: { Authorization: `Bearer ${token}` } });
+        const devices = res.data || [];
+        setBiometricDevices(devices);
+        if (devices.length > 0 && !selectedDevice) {
+          setSelectedDevice(devices[0]);
+        }
+      } catch {}
+    };
+    fetchDevices();
+  }, []);
 
   useEffect(() => {
     fetchData();
@@ -268,15 +284,39 @@ export default function HR() {
     e.preventDefault();
     try {
       const token = localStorage.getItem('token');
-      await axios.post(`${API}/employees`, {
+      const res = await axios.post(`${API}/employees`, {
         ...employeeForm,
         salary: parseFloat(employeeForm.salary),
         work_hours_per_day: parseFloat(employeeForm.work_hours_per_day),
         shift_start: employeeForm.shift_start || null,
         shift_end: employeeForm.shift_end || null,
-        work_days: employeeForm.work_days || [0,1,2,3,4,5]
+        work_days: employeeForm.work_days || [0,1,2,3,4,5],
+        biometric_uid: employeeForm.biometric_uid || ''
       }, { headers: { Authorization: `Bearer ${token}` } });
       toast.success(t('تم إضافة الموظف'));
+
+      // تصدير تلقائي للبصمة إذا وكيل متصل وعنده biometric_uid
+      const uid = employeeForm.biometric_uid;
+      if (uid && selectedDevice) {
+        try {
+          const agentRes = await axios.get(`${AGENT_URL}/status`, { timeout: 3000 });
+          if (agentRes.data?.status === 'running') {
+            await axios.post(`${AGENT_URL}/zk-push-user`, {
+              ip: selectedDevice.ip_address,
+              port: selectedDevice.port || 4370,
+              timeout: 10000,
+              uid: parseInt(uid),
+              name: employeeForm.name,
+              privilege: 0,
+              user_id: uid.toString()
+            }, { timeout: 15000 });
+            toast.success(t('تم تصدير الموظف للبصمة') + ` UID#${uid}`);
+          }
+        } catch (pushErr) {
+          console.warn('Auto-push failed:', pushErr);
+        }
+      }
+
       setEmployeeDialogOpen(false);
       resetEmployeeForm();
       fetchData();
@@ -289,15 +329,40 @@ export default function HR() {
     e.preventDefault();
     try {
       const token = localStorage.getItem('token');
-      await axios.put(`${API}/employees/${editingEmployee.id}`, {
+      const updateData = {
         ...employeeForm,
         salary: parseFloat(employeeForm.salary),
         work_hours_per_day: parseFloat(employeeForm.work_hours_per_day),
         shift_start: employeeForm.shift_start || null,
         shift_end: employeeForm.shift_end || null,
-        work_days: employeeForm.work_days || [0,1,2,3,4,5]
-      }, { headers: { Authorization: `Bearer ${token}` } });
+        work_days: employeeForm.work_days || [0,1,2,3,4,5],
+        biometric_uid: employeeForm.biometric_uid || editingEmployee.biometric_uid || ''
+      };
+      await axios.put(`${API}/employees/${editingEmployee.id}`, updateData, { headers: { Authorization: `Bearer ${token}` } });
       toast.success(t('تم تحديث الموظف'));
+
+      // تصدير تلقائي للبصمة إذا الوكيل متصل وعنده biometric_uid
+      const uid = employeeForm.biometric_uid || editingEmployee.biometric_uid;
+      if (uid && selectedDevice) {
+        try {
+          const agentRes = await axios.get(`${AGENT_URL}/status`, { timeout: 3000 });
+          if (agentRes.data?.status === 'running') {
+            await axios.post(`${AGENT_URL}/zk-push-user`, {
+              ip: selectedDevice.ip_address,
+              port: selectedDevice.port || 4370,
+              timeout: 10000,
+              uid: parseInt(uid),
+              name: employeeForm.name,
+              privilege: 0,
+              user_id: uid.toString()
+            }, { timeout: 15000 });
+            toast.success(t('تم تصدير التعديلات للبصمة') + ` UID#${uid}`);
+          }
+        } catch (pushErr) {
+          console.warn('Auto-push failed:', pushErr);
+        }
+      }
+
       setEditingEmployee(null);
       setEmployeeDialogOpen(false);
       resetEmployeeForm();
@@ -323,7 +388,8 @@ export default function HR() {
     setEmployeeForm({
       name: '', phone: '', email: '', national_id: '', position: '', department: '',
       branch_id: '', hire_date: '', salary: '', salary_type: 'monthly', work_hours_per_day: 8,
-    shift_start: '09:00', shift_end: '17:00', work_days: [0, 1, 2, 3, 4, 5]
+      shift_start: '09:00', shift_end: '17:00', work_days: [0, 1, 2, 3, 4, 5],
+      biometric_uid: ''
     });
   };
 
@@ -1258,6 +1324,10 @@ export default function HR() {
                             <Label>{t('ساعات العمل اليومية')}</Label>
                             <Input type="number" value={employeeForm.work_hours_per_day} onChange={(e) => setEmployeeForm({...employeeForm, work_hours_per_day: e.target.value})} />
                           </div>
+                          <div>
+                            <Label>{t('رقم البصمة (UID)')}</Label>
+                            <Input type="number" value={employeeForm.biometric_uid || ''} onChange={(e) => setEmployeeForm({...employeeForm, biometric_uid: e.target.value})} placeholder={t('يتم تعيينه تلقائياً عند التصدير')} data-testid="biometric-uid-input" />
+                          </div>
                         </div>
                         {/* حقول الشفت */}
                         <div className="grid grid-cols-2 gap-4">
@@ -1352,7 +1422,8 @@ export default function HR() {
                                   hire_date: emp.hire_date, salary: emp.salary, salary_type: emp.salary_type,
                                   work_hours_per_day: emp.work_hours_per_day,
                                   shift_start: emp.shift_start || '09:00', shift_end: emp.shift_end || '17:00',
-                                  work_days: emp.work_days || [0,1,2,3,4,5]
+                                  work_days: emp.work_days || [0,1,2,3,4,5],
+                                  biometric_uid: emp.biometric_uid || ''
                                 });
                                 setEmployeeDialogOpen(true);
                               }} title={t('تعديل')}>

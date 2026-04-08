@@ -1433,6 +1433,7 @@ class EmployeeUpdate(BaseModel):
     position: Optional[str] = None
     department: Optional[str] = None
     branch_id: Optional[str] = None
+    hire_date: Optional[str] = None
     salary: Optional[float] = None
     salary_type: Optional[str] = None
     work_hours_per_day: Optional[float] = None
