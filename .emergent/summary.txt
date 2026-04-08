@@ -1,0 +1,144 @@
+<analysis>**original_problem_statement**: 
+Fixing bugs and adding operational features to a multi-tenant POS system. The system requires complete ZKTeco Fingerprint device integration (syncing attendance, pushing/fetching employees, and fetching face photos) via the Local Print Agent. Additionally, the HR system needed comprehensive payroll calculation based on actual attendance, date-range filtering, and the ability to reset HR data.
+
+**User's preferred language**: Arabic (العربية)
+(INSTRUCT NEXT AGENT: You MUST automatically detect the user's primary language from their messages and INSTRUCT next agent to respond in the user's preferred language, Arabic, only.)
+
+**what currently exists?** 
+A multi-tenant POS system (React + FastAPI + MongoDB). A local print agent runs via a Windows PowerShell script ( currently at v3.6.0) utilizing a custom embedded C# class () for ESC/POS printing and local ZKTeco hardware communication via UDP/HTTP. An HR module that auto-processes attendance into payroll deductions and salary slips.
+
+**Last working item**: 
+    - Last item agent was working: Implementing Face Photo fetching from the ZKTeco device. The user requested the ability to fetch the biometric face photo of employees. The agent added a  method to the embedded C#  class and a  endpoint in . The agent was just about to run a compilation test () on the extracted C# block when the session ended.
+    - Status: IN PROGRESS
+    - Agent Testing Done: N
+    - Which testing method agent to use? manual testing by  (Extract the C# block from  into a temporary  file and compile using  to verify syntax before asking the user to update their agent).
+    - User Testing Done: N
+
+**All Pending/In progress Issue list**: 
+  Issue 1: (P0) Implement ZKTeco Face Photo Fetching ()
+     - Attempted fixes: Modified  to include  in the embedded C# code and added a route .
+     - Next debug checklist: Check  for C# syntax errors. Test the compilation using  locally. If it compiles, implement the frontend UI in  or  to call the local agent endpoint, fetch the photo, and display/save it in the employee profile. Note: Face photos on ZKTeco usually require HTTP (port 80) or PUSH protocol, ensure the C# implementation correctly addresses the device's capability.
+     - Why fix this issue and what will be achieved with the fix? The restaurant owner wants to visually verify employee faces directly from the HR dashboard.
+     - Status: IN PROGRESS
+     - Is recurring issue? N
+     - Should Test frontend/backend/both after fix? Both
+     - Blocked on other issue: None
+
+  Issue 2: (P1) Overtime Approval/Rejection UI
+     - Attempted fixes: The backend now auto-generates overtime requests during  attendance.
+     - Next debug checklist: Create a frontend UI in  (perhaps an Overtime Requests tab) for managers to approve or reject these pending requests so they apply to the final payroll.
+     - Why fix this issue and what will be achieved with the fix? Completes the automated HR payroll workflow.
+     - Status: NOT STARTED
+     - Is recurring issue? N
+     - Should Test frontend/backend/both after fix? Frontend
+     - Blocked on other issue: None
+
+**In progress Task List**: 
+  None
+
+**Upcoming and Future Tasks**:
+    Future Tasks:
+    - (P2) Refactor : Break down the monolithic file (18k+ lines) into modular routes.
+    - (P2) Refactor , , & : Break down frontend monoliths into smaller components.
+    
+    *CRITICAL WARNING*: The user explicitly stated in Arabic: لاز اريد مبدل المطاعم في الوقت الحالي صديقي من اريدة اقول لك ف ما اريدك تجيب سيرته ثاني الا من اطلب منك (Do NOT build or mention the multi-restaurant switcher until explicitly requested). Keep it in the backlog but do NOT propose it in your plan.
+
+**Completed work in this session**:
+- Fixed C# compilation error  in  by correcting variable scopes (DONE).
+- Updated ZKTeco local agent iteratively up to , enforcing version matching checks in the React frontend (DONE).
+- Fixed ZKTeco  payload byte offsets (name at 11, userId at 48) and implemented Unicode (UTF-16LE) fallback for Arabic names (DONE).
+- Added  endpoint to fetch existing users from the biometric device and UI to Import as Employees directly to the HR system (DONE).
+- Connected Employee updates/creation to automatically push changes to the ZKTeco device (DONE).
+- Removed duplicate  route that was returning zeros for payroll totals (DONE).
+- Upgraded HR date filtering to support custom ranges (day/month/year) and full-year views (DONE).
+- Built automated attendance processing () to calculate late/early/absent deductions and update net salaries (DONE).
+- Implemented Reset HR Data inside SuperAdmin (wipes employees, attendance, deductions, payroll) (DONE).
+- Fixed Sales Leaderboard displaying Unknown for cashier names, and added  permission to hide it from cashiers (DONE).
+- Fixed Expense creation bug where checking role overrode standard permissions (DONE).
+
+**Earlier issues found/mentioned but not fixed**:
+  None
+
+**Known issue recurrence from previous fork**:
+  - Issue recurrence in previous fork: C# compilation error inside .
+  - Recurrence count: 3
+  - Status: RESOLVED (But high risk of recurring).
+  Note: Be extremely careful when using  on the embedded C# code. ALWAYS extract the C# code to a local  file and compile with  to verify before completing the fix.
+
+**Code Architecture**:
+
+
+**Key Technical Concepts**:
+- React, FastAPI, MongoDB
+- Custom C# UDP/HTTP implementation inside Windows PowerShell for ZKTeco Biometric device integration (pyzk byte formatting).
+
+**key DB schema**:
+  - : , , , , , .
+  - : , , .
+  - : , , .
+
+**changes in tech stack**:
+  -  (Mono C# compiler) installed locally to test C# syntax within the container.
+
+**All files of reference**: 
+-  (Contains the  C# class, WIP on )
+- 
+- 
+- 
+
+**Areas that need refactoring**:
+-  (18k+ lines).
+-  (Getting very large).
+
+**key api endpoints**:
+- Local Agent: , ,  (WIP).
+- Backend: , , , 
+
+**Critical Info for New Agent**:
+- **Language:** The user communicates exclusively in **Arabic**. You must reply in Arabic.
+- **Hardware constraints:** You cannot test the ZKTeco connection yourself.
+- **Current Blocker:** You are in the middle of implementing  in . Extract the C# code and test it using  to ensure it compiles before handing the PS script back to the user. Remember that ZKTeco face photos are usually requested over HTTP (port 80) rather than UDP port 4370.
+
+**documents and test reports created in this job**:
+  - /app/memory/PRD.md updated with the latest fixes.
+
+**Last 10 User Messages and any pending HUMAN messages**: 
+1. (User) Make the agent update version to 3.4.0.
+2. (User) It synced but didnt fetch the users, and it overwrote the admin. Make it fetch existing users."
+3. (User) "Update agent to 3.5.0."
+4. (User) "It needs to calculate exact salary based on attendance hours and days, and overtime needs manager approval."
+5. (User) "Uploaded Image: Salary report shows 0 for everything but the top cards are correct. Please fix before publishing."
+6. (User) "Make the HR date filter support day/month/year, not just month, and allow full-year view."
+7. (User) "Add a button to reset HR Data (employees, salary, deductions) next to Reset Sales in Super Admin."
+8. (User) "Uploaded Images: Sync succeeded but users werent added to HR. Pushing user with Arabic name shows as symbols in the biometric.
+9. (User) Is it broken? What do we do? (Agent fixed frontend function scope error).
+10. (PENDING HUMAN) Uploaded Images: 1. I want the system to fetch the face/fingerprint photos from the device so the owner can see them. 2. Leaderboard shows Unknown. Hide it from Cashiers. 3. Expenses give unauthorized.
+
+**Project Health Check:**
+- Broken: None at the moment, but  C# code is actively being modified and needs compilation checks.
+- Mocked: ZKTeco devices
+
+**3rd Party Integrations**
+- ZKTeco Biometrics (Via Local PowerShell Agent).
+
+**Testing status**:
+  - Testing agent used after significant changes: NO (Iterative debugging directly with the user).
+  - Troubleshoot agent used after agent stuck in loop: NO
+  - Test files created: None
+  - Known regressions: None
+
+**Credentials to test flow**:
+- Admin: hanialdujaili@gmail.com / Hani@2024
+- Super Admin: owner@maestroegp.com / owner123 (Secret: 271018)
+
+**What agent forgot to execute**:
+- The Overtime approval UI was discussed but not implemented yet in the frontend.
+
+**Debugging checklist for current issue**:
+    Issue: Face Photo Fetching (WIP in )
+    Backend files to check:
+    - :
+      1. Extract the C# code starting at  and ending before .
+      2. Save it to .
+      3. Run  to verify compilation.
+      4. Ensure the  method handles the correct byte commands or HTTP requests needed for ZKTeco biophotos.</analysis>

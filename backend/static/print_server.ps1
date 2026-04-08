@@ -810,6 +810,111 @@ public class ZKHelper {
             return "{\"success\":false,\"message\":\"" + EscJson(ex.Message) + "\"}";
         }
     }
+
+    // ===== Get Face Photo from Device via HTTP =====
+    public static string GetFacePhoto(string ip, int port, int timeoutMs, int uid) {
+        try {
+            // طريقة 1: جلب الصورة عبر HTTP من السيرفر الداخلي للجهاز
+            string[] urlPatterns = new string[] {
+                "http://" + ip + "/auth_files/biophoto/" + uid + ".jpg",
+                "http://" + ip + "/files/photo/" + uid + ".jpg",
+                "http://" + ip + ":8088/auth_files/biophoto/" + uid + ".jpg",
+                "http://" + ip + "/iclock/biophoto?Pin=" + uid
+            };
+
+            foreach (string url in urlPatterns) {
+                try {
+                    System.Net.HttpWebRequest req = (System.Net.HttpWebRequest)System.Net.WebRequest.Create(url);
+                    req.Timeout = 5000;
+                    req.Method = "GET";
+                    using (System.Net.HttpWebResponse resp = (System.Net.HttpWebResponse)req.GetResponse()) {
+                        if (resp.StatusCode == System.Net.HttpStatusCode.OK) {
+                            using (System.IO.Stream stream = resp.GetResponseStream()) {
+                                using (System.IO.MemoryStream ms = new System.IO.MemoryStream()) {
+                                    byte[] buffer = new byte[8192];
+                                    int read;
+                                    while ((read = stream.Read(buffer, 0, buffer.Length)) > 0) {
+                                        ms.Write(buffer, 0, read);
+                                    }
+                                    byte[] imgBytes = ms.ToArray();
+                                    if (imgBytes.Length > 100) {
+                                        string base64 = Convert.ToBase64String(imgBytes);
+                                        return "{\"success\":true,\"uid\":" + uid + ",\"photo\":\"data:image/jpeg;base64," + base64 + "\",\"source\":\"http\",\"size\":" + imgBytes.Length + "}";
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } catch {}
+            }
+
+            // طريقة 2: جلب عبر بروتوكول UDP الثنائي (CMD_DATA_WRRQ مع biophoto)
+            UdpClient client = null;
+            try {
+                client = new UdpClient();
+                client.Client.ReceiveTimeout = timeoutMs;
+                client.Client.SendTimeout = timeoutMs;
+
+                bool ok;
+                ushort sessionId = ConnectAndAuth(client, ip, port, timeoutMs, 0, out ok);
+                if (!ok) {
+                    client.Close();
+                    return "{\"success\":false,\"message\":\"Connection/Auth failed\"}";
+                }
+                ushort replyId = 2;
+
+                // CMD_DISABLEDEVICE
+                try {
+                    byte[] disablePkt = BuildPacket(CMD_DISABLEDEVICE, sessionId, replyId++, null);
+                    SendAndReceive(client, ip, port, disablePkt, timeoutMs);
+                } catch {}
+
+                // أرسل طلب بيانات biophoto عبر CMD_DATA_WRRQ (0x000D)
+                const ushort CMD_DATA_WRRQ = 0x000D;
+                string queryStr = "biophoto Pin=" + uid + "\0";
+                byte[] queryBytes = System.Text.Encoding.UTF8.GetBytes(queryStr);
+                byte[] wrrqPkt = BuildPacket(CMD_DATA_WRRQ, sessionId, replyId++, queryBytes);
+                byte[] wrrqResp = SendAndReceive(client, ip, port, wrrqPkt, timeoutMs);
+
+                // Enable device
+                try {
+                    byte[] enablePkt = BuildPacket(CMD_ENABLEDEVICE, sessionId, replyId++, null);
+                    SendAndReceive(client, ip, port, enablePkt, timeoutMs);
+                } catch {}
+
+                // Disconnect
+                try {
+                    byte[] exitPkt = BuildPacket(CMD_EXIT, sessionId, replyId++, null);
+                    client.Send(exitPkt, exitPkt.Length, ip, port);
+                } catch {}
+                client.Close();
+
+                if (wrrqResp != null && wrrqResp.Length > 20) {
+                    // محاولة استخراج بيانات الصورة
+                    string respStr = System.Text.Encoding.UTF8.GetString(wrrqResp);
+                    if (respStr.Contains("content=")) {
+                        int idx = respStr.IndexOf("content=") + 8;
+                        string b64 = respStr.Substring(idx).Trim('\0', '\r', '\n');
+                        if (b64.Length > 100) {
+                            return "{\"success\":true,\"uid\":" + uid + ",\"photo\":\"data:image/jpeg;base64," + b64 + "\",\"source\":\"udp_query\",\"size\":" + b64.Length + "}";
+                        }
+                    }
+                    // قد يكون الرد بيانات ثنائية مباشرة (JPEG)
+                    if (wrrqResp[0] == 0xFF && wrrqResp[1] == 0xD8) {
+                        string base64 = Convert.ToBase64String(wrrqResp);
+                        return "{\"success\":true,\"uid\":" + uid + ",\"photo\":\"data:image/jpeg;base64," + base64 + "\",\"source\":\"udp_raw\",\"size\":" + wrrqResp.Length + "}";
+                    }
+                }
+
+                return "{\"success\":false,\"message\":\"No photo found for UID " + uid + "\",\"resp_len\":" + (wrrqResp != null ? wrrqResp.Length : 0) + "}";
+            } catch (Exception ex2) {
+                if (client != null) try { client.Close(); } catch {}
+                return "{\"success\":false,\"message\":\"UDP query failed: " + EscJson(ex2.Message) + "\"}";
+            }
+        } catch (Exception ex) {
+            return "{\"success\":false,\"message\":\"" + EscJson(ex.Message) + "\"}";
+        }
+    }
 }
 '@
 Add-Type -TypeDefinition $csharpCode -ReferencedAssemblies System.Drawing -ErrorAction Stop
@@ -1378,6 +1483,23 @@ try {
                 $em = $_.Exception.Message -replace '"', '' -replace '\\', ''
                 $jsonOut = '{"success":false,"message":"' + $em + '"}'
                 "$(Get-Date) - ZK Delete User error: $em" | Out-File $agentLog -Append
+            }
+        }
+        elseif ($path -eq '/zk-face-photo' -and $req.HttpMethod -eq 'POST') {
+            $reader = New-Object System.IO.StreamReader($req.InputStream)
+            $body = $reader.ReadToEnd() | ConvertFrom-Json
+            $zkIp = $body.ip
+            $zkPort = if ($body.port) { [int]$body.port } else { 4370 }
+            $zkTimeout = if ($body.timeout) { [int]$body.timeout } else { 10000 }
+            $uid = [int]$body.uid
+            "$(Get-Date) - ZK Face Photo: $zkIp`:$zkPort uid=$uid" | Out-File $agentLog -Append
+            try {
+                $jsonOut = [ZKHelper]::GetFacePhoto($zkIp, $zkPort, $zkTimeout, $uid)
+                "$(Get-Date) - ZK Face Photo result: $($jsonOut.Substring(0, [Math]::Min(200, $jsonOut.Length)))" | Out-File $agentLog -Append
+            } catch {
+                $em = $_.Exception.Message -replace '"', '' -replace '\\', ''
+                $jsonOut = '{"success":false,"message":"' + $em + '"}'
+                "$(Get-Date) - ZK Face Photo error: $em" | Out-File $agentLog -Append
             }
         }
         else {
