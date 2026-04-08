@@ -263,8 +263,6 @@ export default function BiometricDevices({ branches = [] }) {
     }
   };
 
-  const handleDeleteDevice = async (device) => {
-
   // Fetch users registered on the device
   const handleFetchDeviceUsers = async (device) => {
     setFetchingUsers(device.id);
@@ -293,6 +291,8 @@ export default function BiometricDevices({ branches = [] }) {
       setFetchingUsers(null);
     }
   };
+
+  const handleDeleteDevice = async (device) => {
     if (!window.confirm(t('هل أنت متأكد من حذف') + ` "${device.name}"؟`)) return;
     
     try {
