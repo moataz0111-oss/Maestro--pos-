@@ -359,6 +359,7 @@ export default function Settings() {
     { id: 'view_statistics', name: 'عرض الإحصائيات', description: 'عرض إحصائيات المبيعات في الصفحة الرئيسية', group: 'الميزات الخاصة' },
     { id: 'hide_cash_expected', name: 'إخفاء النقدي والمتوقع', description: 'إخفاء حقول النقدي والمتوقع في حوار إغلاق الصندوق', group: 'الميزات الخاصة' },
     { id: 'hide_recent_orders', name: 'إخفاء آخر الطلبات', description: 'إخفاء قائمة آخر الطلبات في الشاشة الرئيسية', group: 'الميزات الخاصة' },
+    { id: 'show_leaderboard', name: 'لوحة تنافس المبيعات', description: 'عرض ترتيب الكاشيرية حسب المبيعات', group: 'الميزات الخاصة' },
     
     // صلاحيات عرض المبيعات (فلاتر الوقت)
     { id: 'sales_view_today', name: 'عرض اليوم', description: 'عرض مبيعات اليوم فقط', group: 'عرض المبيعات' },

@@ -2294,8 +2294,8 @@ export default function Dashboard() {
           </Card>
         )}
 
-        {/* لوحة تنافس المبيعات */}
-        {leaderboard.length > 0 && (
+        {/* لوحة تنافس المبيعات - تظهر فقط للمدير أو بصلاحية */}
+        {canSee('show_leaderboard') && leaderboard.length > 0 && (
         <Card className="border-border/50 bg-card" data-testid="sales-leaderboard">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-lg font-cairo text-foreground flex items-center gap-2">

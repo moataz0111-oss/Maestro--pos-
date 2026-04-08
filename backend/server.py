@@ -2717,7 +2717,8 @@ async def get_purchases(
 
 @api_router.post("/expenses")
 async def create_expense(expense: ExpenseCreate, current_user: dict = Depends(get_current_user)):
-    if current_user["role"] not in [UserRole.ADMIN, UserRole.MANAGER, UserRole.SUPERVISOR, UserRole.SUPER_ADMIN]:
+    user_permissions = current_user.get("permissions", [])
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.MANAGER, UserRole.SUPERVISOR, UserRole.SUPER_ADMIN] and "expenses" not in user_permissions:
         raise HTTPException(status_code=403, detail="غير مصرح")
     
     expense_doc = {
@@ -18494,13 +18495,21 @@ async def get_sales_leaderboard(
         "_id": 0, "cashier_id": 1, "cashier_name": 1, "total": 1
     }).to_list(10000)
     
+    # جلب أسماء الكاشيرية من قاعدة البيانات
+    cashier_ids = list(set(o.get("cashier_id") for o in orders if o.get("cashier_id")))
+    users_list = await db.users.find(
+        {"id": {"$in": cashier_ids}},
+        {"_id": 0, "id": 1, "name": 1}
+    ).to_list(500)
+    user_names = {u["id"]: u["name"] for u in users_list}
+    
     cashier_stats = {}
     for order in orders:
         cid = order.get("cashier_id", "unknown")
         if cid not in cashier_stats:
             cashier_stats[cid] = {
                 "cashier_id": cid,
-                "cashier_name": order.get("cashier_name", "غير معروف"),
+                "cashier_name": order.get("cashier_name") or user_names.get(cid, "غير معروف"),
                 "total_sales": 0,
                 "order_count": 0
             }
