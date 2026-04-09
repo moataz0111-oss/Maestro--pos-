@@ -5,9 +5,9 @@ Multi-tenant POS system (React + FastAPI + MongoDB) with printing, ZKTeco biomet
 
 ## Architecture
 ```
-Print:     Browser Canvas -> ESC/POS -> localhost:9999 -> Agent v3.2.1 -> Printer
-Biometric: Browser -> localhost:9999/zk-* -> Agent v3.2.1 -> UDP ZK Protocol -> ZKTeco Device
-Auto-Sync: Agent polls ZKTeco every 5min -> Frontend relays -> Backend auto-processes
+Print:     Browser Canvas -> ESC/POS -> localhost:9999 -> Agent v3.7.0 -> Printer
+Biometric: Browser -> localhost:9999/zk-* -> Agent v3.7.0 -> UDP ZK Protocol -> ZKTeco Device
+Auto-Sync: Agent polls ZKTeco every 1min -> Frontend relays -> Backend auto-processes
 ```
 
 ## Credentials
@@ -25,8 +25,9 @@ Auto-Sync: Agent polls ZKTeco every 5min -> Frontend relays -> Backend auto-proc
 - [x] Extras quantity counter (+/-) with receipt separation
 
 ### ZKTeco Biometric
-- [x] Agent v3.2.1 with ZK Protocol (UDP C# ZKHelper)
+- [x] Agent v3.7.0 with ZK Protocol (UDP C# ZKHelper)
 - [x] /zk-test, /zk-sync, /zk-users, /zk-push-user, /zk-delete-user
+- [x] /zk-face-photo (HTTP + UDP biophoto retrieval)
 - [x] Transport header (50 50 82 7D) handling via ExtractPayload
 - [x] CMD_AUTH handshake for authenticated devices
 - [x] 4-byte data header auto-detection in GetUsers and SyncAttendance
@@ -36,36 +37,53 @@ Auto-Sync: Agent polls ZKTeco every 5min -> Frontend relays -> Backend auto-proc
 - [x] Agent status card (online/offline)
 - [x] Push employee to device + Push all employees
 - [x] sync-from-agent backend endpoint
+- [x] GetFacePhoto via HTTP URL patterns + UDP CMD_DATA_WRRQ (C# compiles OK)
 
 ### Attendance Auto-Processing
 - [x] Employee shift fields: shift_start, shift_end, work_days
-- [x] Auto-sync polling (every 5 minutes) with toggle
+- [x] Auto-sync polling (every 1 minute) with toggle
 - [x] POST /api/attendance/auto-process with full calculation
+
+### HR Data Integrity (2026-04-09)
+- [x] Employee name enrichment: All GET endpoints return current names from employees collection
+- [x] Fixed garbled/stale names in attendance, deductions, bonuses, advances, payroll, overtime
+- [x] Push/sync preserves biometric data (fingerprints, face photos) on device
+- [x] Reset HR returns biometric_uids_to_delete for device cleanup (skips admin uid=1)
+
+### Overtime Approval System (2026-04-09)
+- [x] Auto-generated overtime requests during attendance processing
+- [x] GET /api/overtime-requests with name enrichment
+- [x] PUT /api/overtime-requests/{id}/approve
+- [x] PUT /api/overtime-requests/{id}/reject
+- [x] Frontend Overtime tab with approve/reject buttons in HR page
 
 ### POS Calculations
 - [x] Fixed extras calculation: (item.price * item.quantity) + extrasTotal
 
-### Agent Bug Fixes (2026-04-07)
+### Agent Bug Fixes
 - [x] Fixed C# compilation error (uHeaderSize/recordSize scope bug) - v3.2.1
-- [x] Fixed BAT installer version check regex (was checking v2.5.0, now v3.2.1)
-- [x] Fixed status endpoint version verification (was checking 2.6.0, now 3.2.1)
+- [x] Fixed BAT installer version check regex
+- [x] Fixed status endpoint version verification
+- [x] Updated to v3.7.0 with GetFacePhoto
 
 ## Key Files
 - `/app/frontend/src/pages/POS.js` - POS (4.4K+ lines)
-- `/app/frontend/src/pages/HR.js` - HR with biometric push
-- `/app/frontend/src/components/BiometricDevices.js` - Device management + auto-sync
+- `/app/frontend/src/pages/HR.js` - HR with biometric push + overtime tab
+- `/app/frontend/src/components/BiometricDevices.js` - Device management + auto-sync (1min)
 - `/app/frontend/src/utils/receiptBitmap.js` - Receipt Canvas -> ESC/POS
 - `/app/backend/server.py` - Backend (18K+ lines)
-- `/app/backend/routes/payroll_routes.py` - Payroll calculations
-- `/app/backend/static/print_server.ps1` - Local agent v3.2.1
+- `/app/backend/routes/payroll_routes.py` - Payroll calculations + overtime approval
+- `/app/backend/static/print_server.ps1` - Local agent v3.7.0
 
 ## Key API Endpoints
 - POST /api/orders, PUT /api/orders/{id}/update-items
 - POST /api/biometric/devices, POST /api/biometric/devices/{id}/sync-from-agent
 - POST /api/attendance/auto-process
-- GET /api/print-agent-version, GET /api/print-agent-script, GET /api/download-print-agent
+- GET /api/overtime-requests, PUT /api/overtime-requests/{id}/approve, PUT /api/overtime-requests/{id}/reject
+- POST /api/super-admin/tenants/{id}/reset-hr (returns biometric_uids_to_delete)
+- GET /api/print-agent-version (3.7.0), GET /api/print-agent-script, GET /api/download-print-agent
 
 ## Upcoming Tasks
-- P1: Verify ZKTeco SyncAttendance data parsing with real device
+- P1: Face Photo UI - Frontend to display face photos from ZKTeco device
 - P2: Refactor server.py (18K+ lines)
 - P2: Refactor POS.js, Settings.js, SuperAdmin.js
