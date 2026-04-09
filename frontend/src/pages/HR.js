@@ -82,6 +82,7 @@ export default function HR() {
   const [bonuses, setBonuses] = useState([]);
   const [payrolls, setPayrolls] = useState([]);
   const [payrollSummary, setPayrollSummary] = useState(null);
+  const [overtimeRequests, setOvertimeRequests] = useState([]);
   const [employeeRatings, setEmployeeRatings] = useState({ ratings: [], summary: {} });
   const [ratingsLoading, setRatingsLoading] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -197,7 +198,7 @@ export default function HR() {
       const branchId = getBranchIdForApi();
       
       const dateRange = getDateRange();
-      const [empRes, branchRes, attRes, advRes, dedRes, bonRes, payRes, summaryRes] = await Promise.all([
+      const [empRes, branchRes, attRes, advRes, dedRes, bonRes, payRes, summaryRes, otRes] = await Promise.all([
         axios.get(`${API}/employees${branchId ? `?branch_id=${branchId}` : ''}`, { headers }),
         axios.get(`${API}/branches`, { headers }),
         axios.get(`${API}/attendance?start_date=${dateRange.start}&end_date=${dateRange.end}`, { headers }),
@@ -205,7 +206,8 @@ export default function HR() {
         axios.get(`${API}/deductions?start_date=${dateRange.start}&end_date=${dateRange.end}`, { headers }),
         axios.get(`${API}/bonuses?start_date=${dateRange.start}&end_date=${dateRange.end}`, { headers }),
         axios.get(`${API}/payroll?month=${dateRange.monthParam}`, { headers }),
-        axios.get(`${API}/reports/payroll-summary?month=${dateRange.monthParam}&start_date=${dateRange.start}&end_date=${dateRange.end}${branchId ? `&branch_id=${branchId}` : ''}`, { headers }).catch(() => ({ data: null }))
+        axios.get(`${API}/reports/payroll-summary?month=${dateRange.monthParam}&start_date=${dateRange.start}&end_date=${dateRange.end}${branchId ? `&branch_id=${branchId}` : ''}`, { headers }).catch(() => ({ data: null })),
+        axios.get(`${API}/overtime-requests?month=${dateRange.monthParam}`, { headers }).catch(() => ({ data: [] }))
       ]);
       
       setEmployees(empRes.data);
@@ -216,6 +218,7 @@ export default function HR() {
       setBonuses(bonRes.data);
       setPayrolls(payRes.data);
       setPayrollSummary(summaryRes.data);
+      setOvertimeRequests(otRes.data || []);
       
       // حفظ البيانات محلياً للاستخدام Offline
       try {
@@ -424,6 +427,30 @@ export default function HR() {
   };
 
   // Advance handlers
+  
+  // Overtime handlers
+  const handleApproveOvertime = async (requestId) => {
+    try {
+      const token = localStorage.getItem('token');
+      await axios.put(`${API}/overtime-requests/${requestId}/approve`, null, { headers: { Authorization: `Bearer ${token}` } });
+      toast.success(t('تمت الموافقة على الوقت الإضافي'));
+      fetchData();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || t('فشل في الموافقة'));
+    }
+  };
+  
+  const handleRejectOvertime = async (requestId) => {
+    try {
+      const token = localStorage.getItem('token');
+      await axios.put(`${API}/overtime-requests/${requestId}/reject`, null, { headers: { Authorization: `Bearer ${token}` } });
+      toast.success(t('تم رفض الوقت الإضافي'));
+      fetchData();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || t('فشل في الرفض'));
+    }
+  };
+
   const handleCreateAdvance = async (e) => {
     e.preventDefault();
     try {
@@ -1225,6 +1252,12 @@ export default function HR() {
             <TabsTrigger value="bonuses" className="flex items-center gap-2">
               <Gift className="h-4 w-4" /> {t('المكافآت')}
             </TabsTrigger>
+            <TabsTrigger value="overtime" className="flex items-center gap-2" data-testid="overtime-tab">
+              <Timer className="h-4 w-4" /> {t('الأوقات الإضافية')}
+              {overtimeRequests.filter(r => r.status === 'pending').length > 0 && (
+                <Badge className="bg-orange-500/20 text-orange-500 text-xs">{overtimeRequests.filter(r => r.status === 'pending').length}</Badge>
+              )}
+            </TabsTrigger>
             <TabsTrigger value="payroll" className="flex items-center gap-2">
               <FileText className="h-4 w-4" /> {t('كشوفات الرواتب')}
             </TabsTrigger>
@@ -1940,6 +1973,70 @@ export default function HR() {
                     </tbody>
                   </table>
                 </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+
+          {/* Overtime Tab */}
+          <TabsContent value="overtime">
+            <Card>
+              <CardHeader>
+                <CardTitle>{t('طلبات الأوقات الإضافية')} - {dateLabel}</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {overtimeRequests.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <Timer className="h-12 w-12 mx-auto mb-3 opacity-30" />
+                    <p>{t('لا توجد طلبات أوقات إضافية')}</p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead>
+                        <tr className="border-b">
+                          <th className="text-right p-3">{t('الموظف')}</th>
+                          <th className="text-right p-3">{t('التاريخ')}</th>
+                          <th className="text-right p-3">{t('الساعات')}</th>
+                          <th className="text-right p-3">{t('الحالة')}</th>
+                          <th className="text-right p-3">{t('ملاحظات')}</th>
+                          <th className="text-right p-3">{t('الإجراءات')}</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {overtimeRequests.map(ot => {
+                          const emp = employees.find(e => e.id === ot.employee_id);
+                          return (
+                            <tr key={ot.id} className="border-b hover:bg-muted/50">
+                              <td className="p-3 font-medium">{emp?.name || ot.employee_name}</td>
+                              <td className="p-3">{ot.date}</td>
+                              <td className="p-3">{ot.hours?.toFixed(1)}</td>
+                              <td className="p-3">
+                                {ot.status === 'pending' && <Badge className="bg-orange-500/10 text-orange-500">{t('بانتظار الموافقة')}</Badge>}
+                                {ot.status === 'approved' && <Badge className="bg-green-500/10 text-green-500">{t('تمت الموافقة')}</Badge>}
+                                {ot.status === 'rejected' && <Badge className="bg-red-500/10 text-red-500">{t('مرفوض')}</Badge>}
+                              </td>
+                              <td className="p-3 text-sm text-muted-foreground">{ot.notes || '-'}</td>
+                              <td className="p-3">
+                                {ot.status === 'pending' && (
+                                  <div className="flex gap-2">
+                                    <Button size="sm" variant="outline" className="text-green-500 border-green-500/30 hover:bg-green-500/10" onClick={() => handleApproveOvertime(ot.id)} data-testid={`approve-overtime-${ot.id}`}>
+                                      <CheckCircle className="h-4 w-4 ml-1" /> {t('موافقة')}
+                                    </Button>
+                                    <Button size="sm" variant="outline" className="text-red-500 border-red-500/30 hover:bg-red-500/10" onClick={() => handleRejectOvertime(ot.id)} data-testid={`reject-overtime-${ot.id}`}>
+                                      <XCircle className="h-4 w-4 ml-1" /> {t('رفض')}
+                                    </Button>
+                                  </div>
+                                )}
+                                {ot.status !== 'pending' && <span className="text-sm text-muted-foreground">-</span>}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>

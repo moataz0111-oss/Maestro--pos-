@@ -113,7 +113,7 @@ export default function BiometricDevices({ branches = [] }) {
     };
     
     runAutoSync(); // First run immediately
-    autoSyncRef.current = setInterval(runAutoSync, 5 * 60 * 1000); // Every 5 min
+    autoSyncRef.current = setInterval(runAutoSync, 1 * 60 * 1000); // Every 1 min
     return () => { if (autoSyncRef.current) clearInterval(autoSyncRef.current); };
   }, [autoSyncActive, devices]);
 
@@ -372,7 +372,7 @@ export default function BiometricDevices({ branches = [] }) {
               <div className="flex items-center gap-2">
                 <h4 className="font-medium">{t('المزامنة التلقائية')}</h4>
                 <Badge className={autoSyncActive ? 'bg-blue-500/10 text-blue-500' : 'bg-orange-500/10 text-orange-500'}>
-                  {autoSyncActive ? t('مفعّلة - كل 5 دقائق') : t('متوقفة')}
+                  {autoSyncActive ? t('مفعّلة - كل دقيقة') : t('متوقفة')}
                 </Badge>
               </div>
               {lastAutoSync && (

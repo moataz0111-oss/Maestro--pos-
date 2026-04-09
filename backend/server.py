@@ -2972,6 +2972,20 @@ async def get_attendance(
         query.setdefault("date", {})["$lte"] = end_date
     
     records = await db.attendance.find(query, {"_id": 0}).sort("date", -1).to_list(1000)
+    
+    # تحديث أسماء الموظفين من البيانات الحالية (لحل مشكلة الأسماء المشفرة)
+    if records:
+        emp_ids = list(set(r.get("employee_id") for r in records if r.get("employee_id")))
+        if emp_ids:
+            current_employees = await db.employees.find(
+                {"id": {"$in": emp_ids}}, {"_id": 0, "id": 1, "name": 1}
+            ).to_list(1000)
+            emp_name_map = {e["id"]: e.get("name", "") for e in current_employees}
+            for record in records:
+                eid = record.get("employee_id")
+                if eid and eid in emp_name_map:
+                    record["employee_name"] = emp_name_map[eid]
+    
     return records
 
 @api_router.put("/attendance/{attendance_id}")
@@ -3065,6 +3079,18 @@ async def get_advances(
         query["status"] = status
     
     advances = await db.advances.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
+    
+    # تحديث أسماء الموظفين من البيانات الحالية
+    if advances:
+        emp_ids = list(set(a.get("employee_id") for a in advances if a.get("employee_id")))
+        if emp_ids:
+            emps = await db.employees.find({"id": {"$in": emp_ids}}, {"_id": 0, "id": 1, "name": 1}).to_list(500)
+            name_map = {e["id"]: e.get("name", "") for e in emps}
+            for a in advances:
+                eid = a.get("employee_id")
+                if eid and eid in name_map:
+                    a["employee_name"] = name_map[eid]
+    
     return advances
 
 # ==================== EMPLOYEE RATINGS - تقييم الموظفين التلقائي ====================
@@ -8190,7 +8216,7 @@ async def test_printer_connection(printer_id: str, current_user: dict = Depends(
         return {"status": "error", "message": f"خطأ في الاتصال: {str(e)}"}
 
 
-PRINT_AGENT_VERSION = "3.6.0"
+PRINT_AGENT_VERSION = "3.7.0"
 
 @api_router.get("/print-agent-version")
 async def get_print_agent_version():
@@ -8237,7 +8263,7 @@ async def download_print_agent(request: Request):
         'chcp 65001 >nul 2>&1',
         '',
         'REM ======================================================',
-        'REM   Maestro Print Agent v3.6.0 - Full Clean Install',
+        'REM   Maestro Print Agent v3.7.0 - Full Clean Install',
         'REM ======================================================',
         '',
         'REM === Request Admin ===',
@@ -8247,11 +8273,11 @@ async def download_print_agent(request: Request):
         '    exit /b',
         ')',
         '',
-        'title Maestro Print Agent v3.6.0 - Clean Install',
+        'title Maestro Print Agent v3.7.0 - Clean Install',
         'color 0A',
         'echo.',
         'echo  ========================================',
-        'echo    Maestro Print Agent v3.6.0',
+        'echo    Maestro Print Agent v3.7.0',
         'echo    Full Clean Install',
         'echo  ========================================',
         'echo.',
@@ -8335,9 +8361,9 @@ async def download_print_agent(request: Request):
         'echo.',
         '',
         'REM ========================================',
-        'REM   STEP 3: DOWNLOAD FRESH v3.6.0',
+        'REM   STEP 3: DOWNLOAD FRESH v3.7.0',
         'REM ========================================',
-        'echo  [3/5] Downloading v3.6.0 (no cache)...',
+        'echo  [3/5] Downloading v3.7.0 (no cache)...',
         'powershell -NoProfile -Command "[Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; $headers=@{\'Cache-Control\'=\'no-cache\';\'Pragma\'=\'no-cache\'}; Invoke-WebRequest -Uri \'' + script_url + '\' -OutFile \'%D%\\server.ps1\' -UseBasicParsing -Headers $headers"',
         '',
         'if not exist "%D%\\server.ps1" (',
@@ -8354,14 +8380,14 @@ async def download_print_agent(request: Request):
         ')',
         '',
         'REM Verify downloaded version',
-        'powershell -NoProfile -Command "$c=Get-Content \'%D%\\server.ps1\' -Head 5 -Raw; if($c -match \'v3\\.2\\.1\'){Write-Host \'    Downloaded: v3.6.0\' -ForegroundColor Green}else{Write-Host \'    WARNING: Version mismatch!\' -ForegroundColor Red}"',
+        'powershell -NoProfile -Command "$c=Get-Content \'%D%\\server.ps1\' -Head 5 -Raw; if($c -match \'v3\\.7\\.0\'){Write-Host \'    Downloaded: v3.7.0\' -ForegroundColor Green}else{Write-Host \'    WARNING: Version mismatch!\' -ForegroundColor Red}"',
         'echo    [OK]',
         'echo.',
         '',
         'REM ========================================',
         'REM   STEP 4: START NEW AGENT',
         'REM ========================================',
-        'echo  [4/5] Starting new agent v3.6.0...',
+        'echo  [4/5] Starting new agent v3.7.0...',
         'start "" powershell -ExecutionPolicy Bypass -NoProfile -WindowStyle Hidden -File "%D%\\server.ps1"',
         'echo    [OK]',
         'echo.',
@@ -8377,11 +8403,11 @@ async def download_print_agent(request: Request):
         'echo.',
         'echo  Verifying agent is running...',
         'timeout /t 10 /nobreak >nul',
-        'powershell -NoProfile -Command "try { $r=Invoke-WebRequest -Uri \'http://localhost:9999/status\' -UseBasicParsing -TimeoutSec 10; $j=$r.Content|ConvertFrom-Json; Write-Host (\'  Agent Version: \'+$j.version) -ForegroundColor Green; if($j.version -eq \'3.6.0\'){Write-Host \'  v3.6.0 OK!\' -ForegroundColor Green}else{Write-Host \'  WARNING: Expected 3.6.0 got \'+$j.version -ForegroundColor Red} } catch { Write-Host \'  Agent starting... wait 30 sec and refresh browser\' -ForegroundColor Yellow }"',
+        'powershell -NoProfile -Command "try { $r=Invoke-WebRequest -Uri \'http://localhost:9999/status\' -UseBasicParsing -TimeoutSec 10; $j=$r.Content|ConvertFrom-Json; Write-Host (\'  Agent Version: \'+$j.version) -ForegroundColor Green; if($j.version -eq \'3.6.0\'){Write-Host \'  v3.7.0 OK!\' -ForegroundColor Green}else{Write-Host \'  WARNING: Expected 3.6.0 got \'+$j.version -ForegroundColor Red} } catch { Write-Host \'  Agent starting... wait 30 sec and refresh browser\' -ForegroundColor Yellow }"',
         'echo.',
         'echo  ========================================',
         'echo    DONE! Refresh the POS page.',
-        'echo    Agent v3.6.0 installed.',
+        'echo    Agent v3.7.0 installed.',
         'echo  ========================================',
         'echo.',
         'pause',
@@ -9990,6 +10016,17 @@ async def reset_tenant_hr(tenant_id: str, confirm: bool = False, current_user: d
     
     results = {"reset_counts": {}}
     
+    # جلب أرقام البصمة للموظفين قبل الحذف (لحذفهم من جهاز البصمة)
+    employees_to_delete = await db.employees.find(
+        {**query, "biometric_uid": {"$ne": None, "$exists": True}},
+        {"_id": 0, "biometric_uid": 1, "name": 1}
+    ).to_list(1000)
+    biometric_uids_to_delete = [
+        {"uid": int(e["biometric_uid"]), "name": e.get("name", "")}
+        for e in employees_to_delete
+        if e.get("biometric_uid") and str(e["biometric_uid"]).isdigit()
+    ]
+    
     # حذف الموظفين
     deleted_employees = await db.employees.delete_many(query)
     results["reset_counts"]["employees"] = deleted_employees.deleted_count
@@ -10029,6 +10066,7 @@ async def reset_tenant_hr(tenant_id: str, confirm: bool = False, current_user: d
     return {
         "message": "تم تصفير بيانات الموارد البشرية بنجاح",
         "success": True,
+        "biometric_uids_to_delete": biometric_uids_to_delete,
         **results
     }
 

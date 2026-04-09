@@ -144,6 +144,18 @@ async def get_deductions(
         query.setdefault("date", {})["$lte"] = end_date
     
     deductions = await db.deductions.find(query, {"_id": 0}).sort("date", -1).to_list(500)
+    
+    # تحديث أسماء الموظفين من البيانات الحالية
+    if deductions:
+        emp_ids = list(set(d.get("employee_id") for d in deductions if d.get("employee_id")))
+        if emp_ids:
+            emps = await db.employees.find({"id": {"$in": emp_ids}}, {"_id": 0, "id": 1, "name": 1}).to_list(500)
+            name_map = {e["id"]: e.get("name", "") for e in emps}
+            for d in deductions:
+                eid = d.get("employee_id")
+                if eid and eid in name_map:
+                    d["employee_name"] = name_map[eid]
+    
     return deductions
 
 # ==================== BONUSES ====================
@@ -195,6 +207,18 @@ async def get_bonuses(
         query.setdefault("date", {})["$lte"] = end_date
     
     bonuses = await db.bonuses.find(query, {"_id": 0}).sort("date", -1).to_list(500)
+    
+    # تحديث أسماء الموظفين من البيانات الحالية
+    if bonuses:
+        emp_ids = list(set(b.get("employee_id") for b in bonuses if b.get("employee_id")))
+        if emp_ids:
+            emps = await db.employees.find({"id": {"$in": emp_ids}}, {"_id": 0, "id": 1, "name": 1}).to_list(500)
+            name_map = {e["id"]: e.get("name", "") for e in emps}
+            for b in bonuses:
+                eid = b.get("employee_id")
+                if eid and eid in name_map:
+                    b["employee_name"] = name_map[eid]
+    
     return bonuses
 
 # ==================== OVERTIME APPROVAL ====================
@@ -228,6 +252,18 @@ async def get_overtime_requests(
     if month:
         query["date"] = {"$regex": f"^{month}"}
     requests = await db.overtime_requests.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
+    
+    # تحديث أسماء الموظفين من البيانات الحالية
+    if requests:
+        emp_ids = list(set(r.get("employee_id") for r in requests if r.get("employee_id")))
+        if emp_ids:
+            emps = await db.employees.find({"id": {"$in": emp_ids}}, {"_id": 0, "id": 1, "name": 1}).to_list(500)
+            name_map = {e["id"]: e.get("name", "") for e in emps}
+            for r in requests:
+                eid = r.get("employee_id")
+                if eid and eid in name_map:
+                    r["employee_name"] = name_map[eid]
+    
     return requests
 
 @router.put("/overtime-requests/{request_id}/approve")
@@ -402,6 +438,18 @@ async def get_payroll(
         query["status"] = status
     
     payrolls = await db.payroll.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
+    
+    # تحديث أسماء الموظفين من البيانات الحالية
+    if payrolls:
+        emp_ids = list(set(p.get("employee_id") for p in payrolls if p.get("employee_id")))
+        if emp_ids:
+            emps = await db.employees.find({"id": {"$in": emp_ids}}, {"_id": 0, "id": 1, "name": 1}).to_list(500)
+            name_map = {e["id"]: e.get("name", "") for e in emps}
+            for p in payrolls:
+                eid = p.get("employee_id")
+                if eid and eid in name_map:
+                    p["employee_name"] = name_map[eid]
+    
     return payrolls
 
 @router.put("/payroll/{payroll_id}/pay")

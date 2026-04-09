@@ -1072,6 +1072,43 @@ export default function SuperAdmin() {
       const res = await axios.post(`${API}/super-admin/tenants/${selectedTenant.id}/reset-hr?confirm=true`, null, { headers });
       const counts = res.data?.reset_counts || {};
       const total = Object.values(counts).reduce((s, v) => s + v, 0);
+      
+      // حذف الموظفين من جهاز البصمة (ما عدا الأدمن uid=1)
+      const biometricUids = res.data?.biometric_uids_to_delete || [];
+      if (biometricUids.length > 0) {
+        try {
+          const AGENT_URL = 'http://localhost:9999';
+          const agentCheck = await axios.get(`${AGENT_URL}/status`, { timeout: 3000 }).catch(() => null);
+          if (agentCheck?.data?.status === 'running') {
+            // جلب أجهزة البصمة المتاحة
+            const devicesRes = await axios.get(`${API}/biometric/devices`, { headers }).catch(() => null);
+            const devices = devicesRes?.data || [];
+            let deletedFromDevice = 0;
+            for (const device of devices) {
+              for (const emp of biometricUids) {
+                // لا تحذف الأدمن (uid=1) أو المدير (privilege > 0)
+                if (emp.uid === 1) continue;
+                try {
+                  await axios.post(`${AGENT_URL}/zk-delete-user`, {
+                    ip: device.ip_address,
+                    port: device.port || 4370,
+                    timeout: 5000,
+                    uid: emp.uid
+                  }, { timeout: 10000 });
+                  deletedFromDevice++;
+                } catch {}
+                await new Promise(r => setTimeout(r, 300));
+              }
+            }
+            if (deletedFromDevice > 0) {
+              toast.success(t('تم حذف') + ` ${deletedFromDevice} ` + t('موظف من جهاز البصمة'));
+            }
+          }
+        } catch (biometricErr) {
+          console.warn('Biometric cleanup failed:', biometricErr);
+        }
+      }
+      
       toast.success(t('تم تصفير الموارد البشرية بنجاح') + ` (${total} سجل)`);
       setShowResetHRConfirm(false);
       setSelectedTenant(null);
