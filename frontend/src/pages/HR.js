@@ -59,7 +59,8 @@ import {
   BarChart3,
   WifiOff,
   CloudOff,
-  Cloud
+  Cloud,
+  Camera
 } from 'lucide-react';
 import { toast, Toaster } from 'sonner';
 import BiometricDevices from '../components/BiometricDevices';
@@ -144,6 +145,12 @@ export default function HR() {
   const [pushingEmployee, setPushingEmployee] = useState(null);
   const [pushingAll, setPushingAll] = useState(false);
   const AGENT_URL = 'http://localhost:9999';
+
+  // Face photo states
+  const [facePhotoDialogOpen, setFacePhotoDialogOpen] = useState(false);
+  const [facePhotoEmployee, setFacePhotoEmployee] = useState(null);
+  const [facePhotoData, setFacePhotoData] = useState(null);
+  const [facePhotoLoading, setFacePhotoLoading] = useState(false);
 
   // جلب أول جهاز بصمة تلقائياً
   useEffect(() => {
@@ -428,6 +435,69 @@ export default function HR() {
 
   // Advance handlers
   
+  // Face Photo handlers
+  const handleFetchFacePhoto = async (emp) => {
+    if (!emp.biometric_uid) {
+      toast.error(t('الموظف غير مسجل في البصمة'));
+      return;
+    }
+    
+    setFacePhotoEmployee(emp);
+    setFacePhotoData(emp.face_photo || null);
+    setFacePhotoDialogOpen(true);
+    setFacePhotoLoading(true);
+    
+    // جلب الصورة من جهاز البصمة عبر الوكيل المحلي
+    const device = biometricDevices.length > 0 ? (biometricDevices.find(d => d.id === (selectedDevice?.id || selectedDevice)) || biometricDevices[0]) : null;
+    if (!device) {
+      toast.error(t('لا يوجد جهاز بصمة مسجل'));
+      setFacePhotoLoading(false);
+      return;
+    }
+    
+    try {
+      const agentCheck = await axios.get(`${AGENT_URL}/status`, { timeout: 3000 });
+      if (agentCheck.data?.status !== 'running') {
+        toast.error(t('الوكيل المحلي غير متصل'));
+        setFacePhotoLoading(false);
+        return;
+      }
+      
+      const res = await axios.post(`${AGENT_URL}/zk-face-photo`, {
+        ip: device.ip_address,
+        port: device.port || 4370,
+        timeout: 15000,
+        uid: parseInt(emp.biometric_uid)
+      }, { timeout: 20000 });
+      
+      if (res.data?.success && res.data?.photo) {
+        setFacePhotoData(res.data.photo);
+        
+        // حفظ الصورة في قاعدة البيانات
+        try {
+          const token = localStorage.getItem('token');
+          await axios.post(`${API}/employees/${emp.id}/face-photo`, {
+            face_photo: res.data.photo
+          }, { headers: { Authorization: `Bearer ${token}` } });
+          toast.success(t('تم جلب وحفظ صورة الوجه'));
+          fetchData();
+        } catch (saveErr) {
+          toast.warning(t('تم جلب الصورة لكن فشل الحفظ'));
+        }
+      } else {
+        toast.info(res.data?.message || t('لا توجد صورة وجه لهذا الموظف في الجهاز'));
+      }
+    } catch (err) {
+      if (err.code === 'ECONNABORTED' || err.message?.includes('timeout')) {
+        toast.error(t('انتهت مهلة الاتصال بجهاز البصمة'));
+      } else {
+        toast.error(t('فشل الاتصال بالوكيل المحلي'));
+      }
+    } finally {
+      setFacePhotoLoading(false);
+    }
+  };
+
   // Overtime handlers
   const handleApproveOvertime = async (requestId) => {
     try {
@@ -1417,7 +1487,18 @@ export default function HR() {
                     <tbody>
                       {filteredEmployees.map(emp => (
                         <tr key={emp.id} className="border-b hover:bg-muted/50">
-                          <td className="p-3 font-medium">{emp.name}</td>
+                          <td className="p-3 font-medium">
+                            <div className="flex items-center gap-2">
+                              {emp.face_photo ? (
+                                <img src={emp.face_photo} alt="" className="w-8 h-8 rounded-full object-cover border border-primary/30" />
+                              ) : (
+                                <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center text-xs font-bold text-muted-foreground">
+                                  {(emp.name || '?').charAt(0)}
+                                </div>
+                              )}
+                              {emp.name}
+                            </div>
+                          </td>
                           <td className="p-3">{emp.phone}</td>
                           <td className="p-3">{emp.position}</td>
                           <td className="p-3">{branches.find(b => b.id === emp.branch_id)?.name || '-'}</td>
@@ -1440,6 +1521,12 @@ export default function HR() {
                                 className={emp.biometric_uid ? 'border-green-500 text-green-500' : ''} data-testid={`push-biometric-${emp.id}`}>
                                 <Fingerprint className="h-4 w-4" />
                                 {emp.biometric_uid && <span className="text-[10px] mr-1">#{emp.biometric_uid}</span>}
+                              </Button>
+                              <Button size="sm" variant="outline" onClick={() => handleFetchFacePhoto(emp)} 
+                                title={t('صورة الوجه')}
+                                className={emp.face_photo ? 'border-blue-500 text-blue-500' : ''}
+                                data-testid={`face-photo-${emp.id}`}>
+                                <Camera className="h-4 w-4" />
                               </Button>
                               <Button size="sm" variant="outline" onClick={() => window.open(`/payroll/print/${emp.id}`, '_blank')} title={t('طباعة مفردات المرتب')}>
                                 <Printer className="h-4 w-4" />
@@ -2444,6 +2531,64 @@ export default function HR() {
                   <Button className="flex-1" onClick={handlePushAllToDevice} disabled={!selectedDevice || pushingAll} data-testid="confirm-push-all-btn">
                     <Fingerprint className="h-4 w-4 ml-2" /> 
                     {pushingAll ? t('جاري الإرسال...') : t('إصدار الكل للجهاز')}
+                  </Button>
+                )}
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Face Photo Dialog */}
+        <Dialog open={facePhotoDialogOpen} onOpenChange={setFacePhotoDialogOpen}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Camera className="h-5 w-5" />
+                {t('صورة الوجه')} - {facePhotoEmployee?.name}
+              </DialogTitle>
+            </DialogHeader>
+            <div className="flex flex-col items-center gap-4">
+              {facePhotoLoading ? (
+                <div className="w-48 h-48 rounded-full bg-muted flex items-center justify-center">
+                  <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+                </div>
+              ) : facePhotoData ? (
+                <div className="relative">
+                  <img
+                    src={facePhotoData}
+                    alt={facePhotoEmployee?.name}
+                    className="w-48 h-48 rounded-full object-cover border-4 border-primary/30 shadow-lg"
+                    data-testid="face-photo-image"
+                  />
+                  <Badge className="absolute -bottom-2 left-1/2 -translate-x-1/2 bg-green-500">
+                    {t('محفوظة')}
+                  </Badge>
+                </div>
+              ) : (
+                <div className="w-48 h-48 rounded-full bg-muted/50 border-2 border-dashed border-muted-foreground/30 flex flex-col items-center justify-center gap-2">
+                  <Camera className="h-12 w-12 text-muted-foreground/30" />
+                  <p className="text-sm text-muted-foreground text-center px-4">{t('لا توجد صورة وجه')}</p>
+                </div>
+              )}
+              
+              <div className="text-center space-y-1">
+                <p className="font-medium">{facePhotoEmployee?.name}</p>
+                {facePhotoEmployee?.biometric_uid && (
+                  <p className="text-sm text-muted-foreground">UID: #{facePhotoEmployee.biometric_uid}</p>
+                )}
+                {facePhotoEmployee?.position && (
+                  <p className="text-sm text-muted-foreground">{facePhotoEmployee.position}</p>
+                )}
+              </div>
+              
+              <div className="flex gap-2 w-full">
+                <Button className="flex-1" variant="outline" onClick={() => setFacePhotoDialogOpen(false)}>
+                  {t('إغلاق')}
+                </Button>
+                {facePhotoEmployee?.biometric_uid && (
+                  <Button className="flex-1" onClick={() => handleFetchFacePhoto(facePhotoEmployee)} disabled={facePhotoLoading} data-testid="refresh-face-photo-btn">
+                    <Camera className="h-4 w-4 ml-2" />
+                    {facePhotoLoading ? t('جاري الجلب...') : t('تحديث الصورة')}
                   </Button>
                 )}
               </div>

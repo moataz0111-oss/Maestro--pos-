@@ -86,6 +86,7 @@ export default function BiometricDevices({ branches = [] }) {
         const agentOk = await checkAgent();
         if (!agentOk || devices.length === 0) return;
         const token = localStorage.getItem('token');
+        let totalNewRecords = 0;
         
         for (const device of devices) {
           try {
@@ -97,16 +98,33 @@ export default function BiometricDevices({ branches = [] }) {
             if (!agentRes.data.success || !agentRes.data.records?.length) continue;
             
             // 2. إرسال للسيرفر
-            await axios.post(`${API}/biometric/devices/${device.id}/sync-from-agent`, {
+            const syncRes = await axios.post(`${API}/biometric/devices/${device.id}/sync-from-agent`, {
               records: agentRes.data.records
             }, { headers: { Authorization: `Bearer ${token}` } });
+            
+            const newCount = syncRes.data?.records_count || 0;
+            totalNewRecords += newCount;
           } catch {}
         }
         
         // 3. معالجة تلقائية - تحويل بصمات → حضور + خصومات
-        await axios.post(`${API}/attendance/auto-process`, null, {
+        const processRes = await axios.post(`${API}/attendance/auto-process`, null, {
           headers: { Authorization: `Bearer ${token}` }
         });
+        
+        const processed = processRes.data?.processed || 0;
+        
+        // إشعار فوري عند وصول بصمات جديدة
+        if (totalNewRecords > 0 || processed > 0) {
+          toast.success(
+            <div>
+              <p className="font-bold">{t('مزامنة جديدة!')}</p>
+              {totalNewRecords > 0 && <p className="text-sm">{totalNewRecords} {t('بصمة جديدة')}</p>}
+              {processed > 0 && <p className="text-sm">{processed} {t('سجل حضور تم معالجته')}</p>}
+            </div>,
+            { duration: 5000 }
+          );
+        }
         
         setLastAutoSync(new Date().toLocaleTimeString('ar'));
       } catch {}

@@ -1424,6 +1424,8 @@ class EmployeeResponse(BaseModel):
     is_active: bool = True
     created_at: str
     tenant_id: Optional[str] = None
+    face_photo: Optional[str] = None
+    face_photo_updated_at: Optional[str] = None
 
 class EmployeeUpdate(BaseModel):
     name: Optional[str] = None
@@ -1442,6 +1444,7 @@ class EmployeeUpdate(BaseModel):
     shift_start: Optional[str] = None
     shift_end: Optional[str] = None
     work_days: Optional[list] = None
+    face_photo: Optional[str] = None
 
 # نموذج الحضور والانصراف
 class AttendanceCreate(BaseModel):
@@ -2912,6 +2915,31 @@ async def delete_employee(employee_id: str, current_user: dict = Depends(get_cur
     # تعطيل بدلاً من الحذف للحفاظ على السجلات
     await db.employees.update_one({"id": employee_id}, {"$set": {"is_active": False}})
     return {"message": "تم تعطيل الموظف"}
+
+@api_router.post("/employees/{employee_id}/face-photo")
+async def save_employee_face_photo(employee_id: str, request: Request, current_user: dict = Depends(get_current_user)):
+    """حفظ صورة الوجه للموظف من جهاز البصمة"""
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.MANAGER, UserRole.SUPER_ADMIN]:
+        raise HTTPException(status_code=403, detail="غير مصرح")
+    
+    query = build_tenant_query(current_user, {"id": employee_id})
+    employee = await db.employees.find_one(query)
+    if not employee:
+        raise HTTPException(status_code=404, detail="الموظف غير موجود")
+    
+    body = await request.json()
+    face_photo = body.get("face_photo", "")
+    
+    if not face_photo:
+        raise HTTPException(status_code=400, detail="لا توجد صورة")
+    
+    await db.employees.update_one(
+        {"id": employee_id},
+        {"$set": {"face_photo": face_photo, "face_photo_updated_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    
+    return {"message": "تم حفظ صورة الوجه", "success": True}
+
 
 # --- الحضور والانصراف ---
 
