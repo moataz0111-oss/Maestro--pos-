@@ -865,9 +865,11 @@ async def get_credit_report(
     
     # استثناء طلبات شركات التوصيل من تقرير الآجل العادي
     # الآجل العادي = طلبات بدون شركة توصيل
+    # استثناء المرتجعات والملغية
     query = {
         "payment_method": "credit",
         "created_at": {"$gte": start_date, "$lte": end_date + "T23:59:59"},
+        "status": {"$nin": ["cancelled", "refunded"]},  # استثناء المرتجعات والملغية
         # استثناء طلبات شركات التوصيل
         "$or": [
             {"delivery_app": {"$exists": False}},

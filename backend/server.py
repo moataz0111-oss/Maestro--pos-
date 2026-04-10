@@ -6478,7 +6478,7 @@ async def get_today_cash_register(current_user: dict = Depends(get_current_user)
     cash_query = {
         "created_at": {"$regex": f"^{today}"},
         "payment_method": "cash",
-        "status": {"$ne": "cancelled"},
+        "status": {"$nin": ["cancelled", "refunded"]},
         "order_type": {"$nin": ["delivery"]}  # استثناء التوصيل من النقدي
     }
     if branch_id:
@@ -6491,7 +6491,7 @@ async def get_today_cash_register(current_user: dict = Depends(get_current_user)
     card_query = {
         "created_at": {"$regex": f"^{today}"},
         "payment_method": "card",
-        "status": {"$ne": "cancelled"}
+        "status": {"$nin": ["cancelled", "refunded"]}
     }
     if branch_id:
         card_query["branch_id"] = branch_id
@@ -6501,7 +6501,7 @@ async def get_today_cash_register(current_user: dict = Depends(get_current_user)
     # الآجل العادي (بدون التوصيل - شركات التوصيل لها قسم منفصل)
     credit_query = {
         "created_at": {"$regex": f"^{today}"},
-        "status": {"$ne": "cancelled"},
+        "status": {"$nin": ["cancelled", "refunded"]},
         "payment_method": "credit",
         "order_type": {"$ne": "delivery"}  # استثناء التوصيل
     }
@@ -6513,7 +6513,7 @@ async def get_today_cash_register(current_user: dict = Depends(get_current_user)
     # آجل شركات التوصيل (منفصل)
     delivery_credit_query = {
         "created_at": {"$regex": f"^{today}"},
-        "status": {"$ne": "cancelled"},
+        "status": {"$nin": ["cancelled", "refunded"]},
         "order_type": "delivery"
     }
     if branch_id:
@@ -12595,9 +12595,12 @@ async def get_credit_report(
     delivery_customers = await db.customers.find(delivery_customers_query, {"id": 1}).to_list(1000)
     delivery_customer_ids = {c.get("id") for c in delivery_customers}
     
-    # فلترة يدوية - استبعاد طلبات شركات التوصيل بكل الطرق الممكنة
+    # فلترة يدوية - استبعاد طلبات شركات التوصيل والمرتجعات بكل الطرق الممكنة
     orders = []
     for o in all_orders:
+        # استبعاد المرتجعات والملغية
+        if o.get("status") in ("refunded", "cancelled", "canceled"):
+            continue
         # استبعاد إذا كان له شركة توصيل بأي شكل
         if o.get("delivery_app") or o.get("delivery_app_name") or o.get("delivery_app_id"):
             continue

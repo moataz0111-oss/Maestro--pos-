@@ -337,7 +337,7 @@ async def get_cash_register_summary(
     
     # جلب جميع طلبات الوردية - بالـ shift_id + الطلبات بدون shift_id في نفس الفترة والفرع
     # هذا يضمن احتساب طلبات تطبيق الزبائن والطلبات غير المرتبطة بوردية
-    base_status_filter = {"$ne": OrderStatus.CANCELLED}
+    base_status_filter = {"$nin": [OrderStatus.CANCELLED, "refunded"]}
     
     # 1. طلبات مرتبطة بالـ shift_id مباشرة
     shift_order_query = {"shift_id": shift_id, "status": base_status_filter}
@@ -401,6 +401,32 @@ async def get_cash_register_summary(
         if o.get("id") and o["id"] not in seen_cancelled:
             cancelled_orders.append(o)
             seen_cancelled.add(o["id"])
+    
+    # جلب المرتجعات بشكل منفصل
+    refunded_shift_q = {"shift_id": shift_id, "status": "refunded"}
+    if tenant_id:
+        refunded_shift_q["tenant_id"] = tenant_id
+    refunded_orders_list = await db.orders.find(refunded_shift_q).to_list(1000)
+    
+    refunded_unlinked_q = {
+        "created_at": {"$gte": shift_start},
+        "status": "refunded",
+        "$or": [{"shift_id": {"$exists": False}}, {"shift_id": None}, {"shift_id": ""}]
+    }
+    if tenant_id:
+        refunded_unlinked_q["tenant_id"] = tenant_id
+    if shift.get("branch_id"):
+        refunded_unlinked_q["branch_id"] = shift["branch_id"]
+    refunded_unlinked_list = await db.orders.find(refunded_unlinked_q).to_list(1000)
+    
+    seen_refunded = set(o.get("id") for o in refunded_orders_list if o.get("id"))
+    for o in refunded_unlinked_list:
+        if o.get("id") and o["id"] not in seen_refunded:
+            refunded_orders_list.append(o)
+            seen_refunded.add(o["id"])
+    
+    total_refunds_amount = sum(_safe_num(o.get("total")) for o in refunded_orders_list)
+    refund_count_val = len(refunded_orders_list)
     
     total_sales = sum(_safe_num(o.get("total")) for o in orders)
     total_cost = sum(_safe_num(o.get("total_cost")) for o in orders)
@@ -477,7 +503,9 @@ async def get_cash_register_summary(
         "cancelled_by": list(cancelled_by.values()),
         "total_expenses": total_expenses,
         "net_profit": net_profit,
-        "expected_cash": expected_cash
+        "expected_cash": expected_cash,
+        "total_refunds": total_refunds_amount,
+        "refund_count": refund_count_val
     }
 
 @router.post("/cash-register/close")

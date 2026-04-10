@@ -291,12 +291,12 @@ export const printOrderToAllPrinters = async (order, orderItems, products, print
       address: order.address || '',
       tax_number: order.tax_number || '',
       show_tax: order.show_tax,
-      custom_header: order.custom_header || '',
+      custom_header: order.is_refund ? '*** مرتجع ***' : order.is_cancel ? '*** تم الحذف ***' : (order.custom_header || ''),
       custom_footer: order.custom_footer || '',
       thank_you_message: order.thank_you_message || '',
       system_name: order.system_name || 'Maestro EGP',
       branch_name: order.branch_name || '',
-      order_notes: order.order_notes || '',
+      order_notes: order.notes || order.order_notes || '',
       items: items,
       total: items.reduce((sum, item) => {
         const extras = (item.extras || item.selectedExtras || []).reduce((s, e) => s + ((e.price || 0) * (e.quantity || 1)), 0);
