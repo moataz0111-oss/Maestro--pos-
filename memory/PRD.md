@@ -1,53 +1,49 @@
-# Maestro POS - PRD
+# Maestro EGP - POS System PRD
 
 ## Original Problem Statement
-Multi-tenant POS system (React + FastAPI + MongoDB) with printing, ZKTeco biometric, and HR automation.
+Multi-tenant POS system (React + FastAPI + MongoDB) with ZKTeco biometric integration, HR/payroll module, and comprehensive restaurant management. The system includes a local print agent (PowerShell + C#) for thermal printing and biometric device communication.
 
 ## Architecture
-```
-Print:     Browser Canvas -> ESC/POS -> localhost:9999 -> Agent v3.7.0 -> USB/TCP Printer
-Biometric: Browser -> localhost:9999/zk-* -> Agent v3.7.0 -> UDP ZK Protocol -> ZKTeco Device
-Auto-Sync: Agent polls ZKTeco every 1min -> Toast notification on new punches
-Audit:     Login/Logout/Impersonation -> audit_logs -> Auto-delete after 30 days
-```
+- **Frontend**: React (port 3000) - Dashboard.js, POS.js, HR.js, SuperAdmin.js, Settings.js
+- **Backend**: FastAPI (port 8001) - server.py (monolith) + routes/ (partial refactor)
+- **Database**: MongoDB
+- **Local Agent**: PowerShell print_server.ps1 v3.7.0 with embedded C# ZKHelper
 
-## Credentials
-- Admin: hanialdujaili@gmail.com / Hani@2024
-- Super Admin: owner@maestroegp.com / owner123 (Secret: 271018)
-- Test Cashier: cashier@test.com / Test@1234
+## Core Modules
+1. **POS**: Orders, payments (cash/card/credit), kitchen printing, delivery management
+2. **HR**: Attendance (ZKTeco), payroll, shifts, overtime, breaks
+3. **Dashboard**: Cash register open/close, closing reports, daily statistics
+4. **Admin**: Multi-tenant, branches, users, roles, permissions
 
-## Completed Features
+## Completed Features (All Sessions)
+- ZKTeco fingerprint device integration (sync, push/fetch employees, face photos)
+- HR payroll with attendance-based deductions, overtime approval, break times
+- 12-hour AM/PM time format
+- Audit logs for all login/logout activities with 30-day auto-delete
+- POS refund handling (excluded from active sales, credit, cash)
+- Kitchen printing for refunded/cancelled items
+- Fixed "Unknown" cashier name in closing reports
+- Local Print Agent v3.7.0
 
-### POS Core & Refund System (2026-04-10)
-- [x] Orders with cash, card, credit, delivery payments
-- [x] **Refunded orders completely excluded** from: credit_sales, cash_sales, card_sales, total_sales
-- [x] Refunded orders appear ONLY in المرتجعات report
-- [x] Close receipt shows المرتجعات section with count + total
-- [x] Close receipt shows الإلغاءات section (info only)
-- [x] Refund prints "[مرتجع]" to kitchen printers
-- [x] Cancel prints "[تم حذف]" to kitchen printers
-- [x] Payment for existing order does NOT resend to kitchen
-- [x] All queries use $nin: [cancelled, refunded] filter
+### Completed - April 10, 2026
+- **Fixed Counted Cash showing 0 in closing receipt**: Frontend was reading `data.counted_cash` but backend returns `closing_cash`. Fixed to use `data.closing_cash || data.counted_cash`.
+- **Separated Delivery App Sales in printed receipt**: Added delivery app sales section (grouped by company name) to both HTML receipt and USB ESC/POS receipt. Backend now uses `delivery_app_name` as key instead of `delivery_app` ID.
+- **Receipt formatting 70mm centered auto-height**: Updated `@page` from `65mm 250mm` to `70mm auto`, body width from 61mm to 66mm. Content auto-sizes to fit.
 
-### Printing & Receipt
-- [x] ESC/POS 65mm receipt, close receipt 65mm x 25cm via USB
-- [x] Net cash indicators: ✅/+/-
+## Backlog (Prioritized)
+### P2 - Refactoring
+- Break down `server.py` (18k+ lines) into modular route files
+- Break down `SuperAdmin.js`, `Settings.js`, `POS.js` into smaller components
 
-### ZKTeco Biometric (Agent v3.7.0)
-- [x] Full ZK Protocol, face photo, auto-sync 1min
-
-### HR System
-- [x] 12-hour format, break time, overtime, name enrichment
-
-### Audit Log
-- [x] All login/logout/impersonation events, clear button, auto-delete 30 days
+### Deferred (Do NOT implement until explicitly requested)
+- Multi-restaurant switcher
 
 ## Key API Endpoints
-- POST /api/refunds (creates refund, marks order as "refunded")
-- GET /api/cash-register/summary (total_refunds, refund_count excluded from sales)
-- POST /api/cash-register/close (total_refunds, refund_count in response)
-- GET /api/reports/credit (excludes refunded orders)
+- `/api/cash-register/close` - Close cash register with denominations
+- `/api/cash-register/summary` - Get current shift summary
+- `/api/cash-register/today` - Today's cash register data
+- Local Agent: `http://localhost:9999/print-receipt`, `/zk-face-photo`
 
-## Upcoming Tasks
-- P2: Refactor server.py (18K+ lines) into modular routes
-- P2: Refactor POS.js, Settings.js, SuperAdmin.js
+## Test Credentials
+- Admin: hanialdujaili@gmail.com / Hani@2024
+- Super Admin: owner@maestroegp.com / owner123 (Secret: 271018)
