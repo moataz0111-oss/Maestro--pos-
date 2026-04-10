@@ -1133,9 +1133,43 @@ function Build-Receipt {
     $bolds.Add($false)
     $aligns.Add('center')
 
+    # إشعار الإلغاء أو الارجاع بشكل بارز
+    if ($order.is_refund -or $order.is_cancel) {
+        $statusLabel = if ($order.is_refund) { '*** مرتجع ***' } else { '*** تم الإلغاء ***' }
+        $lines.Add('')
+        $sizes.Add(10)
+        $bolds.Add($false)
+        $aligns.Add('center')
+        $lines.Add([string]$statusLabel)
+        $sizes.Add(18)
+        $bolds.Add($true)
+        $aligns.Add('center')
+        $lines.Add('')
+        $sizes.Add(10)
+        $bolds.Add($false)
+        $aligns.Add('center')
+    }
+
+    # عرض custom_header إذا موجود
+    if ($order.custom_header) {
+        $lines.Add([string]$order.custom_header)
+        $sizes.Add(16)
+        $bolds.Add($true)
+        $aligns.Add('center')
+    }
+
     foreach ($item in $order.items) {
         $n = if ($item.product_name) { [string]$item.product_name } else { [string]$item.name }
         $q = if ($item.quantity) { $item.quantity } else { 1 }
+
+        # خط فوق المنتج الملغى/المرتجع
+        if ($order.is_refund -or $order.is_cancel) {
+            $lines.Add('XXXXXXXXXXXXXXXXXXXXXXX')
+            $sizes.Add(10)
+            $bolds.Add($false)
+            $aligns.Add('center')
+        }
+
         if ($showPrices) {
             $p = [math]::Round($item.price * $q)
             $lines.Add("$n x$q  $p")
@@ -1147,6 +1181,19 @@ function Build-Receipt {
             $sizes.Add(18)
             $bolds.Add($true)
             $aligns.Add('left')
+        }
+
+        # خط تحت المنتج + علامة الإلغاء/الارجاع
+        if ($order.is_refund -or $order.is_cancel) {
+            $itemStatus = if ($order.is_refund) { '>> تم الارجاع <<' } else { '>> تم الإلغاء <<' }
+            $lines.Add([string]$itemStatus)
+            $sizes.Add(13)
+            $bolds.Add($true)
+            $aligns.Add('center')
+            $lines.Add('XXXXXXXXXXXXXXXXXXXXXXX')
+            $sizes.Add(10)
+            $bolds.Add($false)
+            $aligns.Add('center')
         }
         if ($item.notes) {
             $lines.Add('  >> ' + [string]$item.notes)

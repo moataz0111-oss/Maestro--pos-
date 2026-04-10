@@ -298,6 +298,8 @@ export const printOrderToAllPrinters = async (order, orderItems, products, print
       system_name: order.system_name || 'Maestro EGP',
       branch_name: order.branch_name || '',
       order_notes: order.notes || order.order_notes || '',
+      is_refund: order.is_refund || false,
+      is_cancel: order.is_cancel || false,
       items: items,
       total: items.reduce((sum, item) => {
         const extras = (item.extras || item.selectedExtras || []).reduce((s, e) => s + ((e.price || 0) * (e.quantity || 1)), 0);
