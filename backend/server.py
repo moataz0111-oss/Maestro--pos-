@@ -1993,6 +1993,20 @@ async def login(credentials: UserLogin):
     if "password_hash" in user:
         del user["password_hash"]
     token = create_token(user["id"], user["role"], user.get("branch_id"), user.get("tenant_id"))
+    
+    # تسجيل حدث الدخول في سجل المراقبة
+    user_name = user.get("full_name") or user.get("username") or user.get("email")
+    await db.audit_logs.insert_one({
+        "id": str(uuid.uuid4()),
+        "event_type": "login",
+        "user_id": user.get("id"),
+        "user_name": user_name,
+        "user_email": user.get("email"),
+        "user_role": user.get("role"),
+        "tenant_id": user.get("tenant_id"),
+        "created_at": datetime.now(timezone.utc).isoformat()
+    })
+    
     return {"user": user, "token": token}
 
 @api_router.get("/auth/me")
@@ -2001,6 +2015,23 @@ async def get_me(current_user: dict = Depends(get_current_user)):
     if "password" in user:
         del user["password"]
     return user
+
+@api_router.post("/auth/logout")
+async def logout(current_user: dict = Depends(get_current_user)):
+    """تسجيل خروج المستخدم مع تسجيل الحدث في سجل المراقبة"""
+    user_name = current_user.get("full_name") or current_user.get("username") or current_user.get("email")
+    await db.audit_logs.insert_one({
+        "id": str(uuid.uuid4()),
+        "event_type": "logout",
+        "user_id": current_user.get("id"),
+        "user_name": user_name,
+        "user_email": current_user.get("email"),
+        "user_role": current_user.get("role"),
+        "tenant_id": current_user.get("tenant_id"),
+        "created_at": datetime.now(timezone.utc).isoformat()
+    })
+    return {"message": "تم تسجيل الخروج", "success": True}
+
 
 # معاينة حساب مستخدم (تسجيل الدخول كمستخدم آخر)
 @api_router.post("/auth/impersonate/{user_id}")
@@ -2061,6 +2092,20 @@ async def impersonate_user(user_id: str, current_user: dict = Depends(get_curren
     }
     await db.impersonation_logs.insert_one(audit_log)
     
+    # تسجيل في سجل المراقبة الموحد أيضاً
+    await db.audit_logs.insert_one({
+        "id": str(uuid.uuid4()),
+        "event_type": "impersonation",
+        "user_id": current_user.get("id"),
+        "user_name": admin_name,
+        "user_email": current_user.get("email"),
+        "user_role": current_user.get("role"),
+        "target_user_name": target_name,
+        "target_user_role": target_user.get("role"),
+        "tenant_id": current_user.get("tenant_id"),
+        "created_at": datetime.now(timezone.utc).isoformat()
+    })
+    
     # إنشاء توكن للمستخدم المنتحل
     token = create_token(target_user["id"], target_user["role"], target_user.get("branch_id"), target_user.get("tenant_id"))
     
@@ -2105,6 +2150,44 @@ async def get_impersonation_logs(
         "limit": limit,
         "skip": actual_skip
     }
+
+@api_router.get("/auth/audit-logs")
+async def get_audit_logs(
+    current_user: dict = Depends(get_current_user),
+    limit: int = 50,
+    page: int = 1
+):
+    """جلب سجل المراقبة الشامل - جميع عمليات الدخول/الخروج/الانتحال"""
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.SUPER_ADMIN]:
+        raise HTTPException(status_code=403, detail="غير مصرح")
+    
+    query = build_tenant_query(current_user)
+    actual_skip = (page - 1) * limit
+    
+    # حذف السجلات الأقدم من شهر تلقائياً
+    one_month_ago = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
+    await db.audit_logs.delete_many({**query, "created_at": {"$lt": one_month_ago}})
+    
+    logs = await db.audit_logs.find(query, {"_id": 0}).sort("created_at", -1).skip(actual_skip).limit(limit).to_list(limit)
+    total = await db.audit_logs.count_documents(query)
+    
+    return {
+        "logs": logs,
+        "total": total,
+        "total_pages": (total + limit - 1) // limit,
+        "page": page
+    }
+
+@api_router.delete("/auth/audit-logs")
+async def clear_audit_logs(current_user: dict = Depends(get_current_user)):
+    """إفراغ سجل المراقبة"""
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.SUPER_ADMIN]:
+        raise HTTPException(status_code=403, detail="غير مصرح")
+    
+    query = build_tenant_query(current_user)
+    result = await db.audit_logs.delete_many(query)
+    return {"message": f"تم حذف {result.deleted_count} سجل", "success": True, "deleted_count": result.deleted_count}
+
 
 # ==================== USER ROUTES ====================
 
@@ -12700,10 +12783,33 @@ async def get_cash_register_closing_report(
     
     # ==================== تجميع حسب الكاشير ====================
     
+    # جلب أسماء المستخدمين لحل مشكلة "غير محدد"
+    cashier_ids_set = set()
+    for o in orders:
+        cid = o.get("cashier_id") or o.get("created_by")
+        if cid:
+            cashier_ids_set.add(cid)
+    
+    users_lookup = {}
+    if cashier_ids_set:
+        cashier_users = await db.users.find(
+            {"id": {"$in": list(cashier_ids_set)}},
+            {"_id": 0, "id": 1, "full_name": 1, "username": 1, "email": 1}
+        ).to_list(100)
+        for u in cashier_users:
+            users_lookup[u["id"]] = u.get("full_name") or u.get("username") or u.get("email", "")
+    
     by_cashier = {}
     for o in orders:
-        cashier_name = o.get("cashier_name") or o.get("created_by_name") or o.get("created_by") or "غير محدد"
         cashier_id = o.get("cashier_id") or o.get("created_by")
+        cashier_name = o.get("cashier_name") or o.get("created_by_name") or ""
+        
+        # البحث في قاعدة المستخدمين إذا الاسم فارغ
+        if (not cashier_name or cashier_name == "غير محدد") and cashier_id and cashier_id in users_lookup:
+            cashier_name = users_lookup[cashier_id]
+        
+        if not cashier_name:
+            cashier_name = "غير محدد"
         
         if cashier_id not in by_cashier:
             by_cashier[cashier_id] = {

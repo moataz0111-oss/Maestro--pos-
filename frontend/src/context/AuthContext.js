@@ -355,13 +355,21 @@ export const AuthProvider = ({ children }) => {
   };
 
   const logout = () => {
+    // تسجيل حدث الخروج في سجل المراقبة
+    const currentToken = localStorage.getItem('token');
+    if (currentToken) {
+      axios.post(`${API}/auth/logout`, null, {
+        headers: { Authorization: `Bearer ${currentToken}` }
+      }).catch(() => {}); // لا نتوقف إذا فشل التسجيل
+    }
+    
     // حذف جميع البيانات المخزنة (بما فيها بيانات الفروع لضمان عزل البيانات)
     localStorage.removeItem('token');
     localStorage.removeItem('offline_user');
     localStorage.removeItem('cached_user');
     localStorage.removeItem('currentShift');
     localStorage.removeItem('selectedBranchId');
-    localStorage.removeItem('branches');  // مسح بيانات الفروع المخزنة
+    localStorage.removeItem('branches');
     sessionStorage.clear();
     
     delete axios.defaults.headers.common['Authorization'];

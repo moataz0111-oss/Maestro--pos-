@@ -900,9 +900,9 @@ export default function Dashboard() {
       // تحديث حالة اليوم
       fetchDayStatus();
       
-      // طباعة التقرير تلقائياً بعد ثانية واحدة (لإعطاء وقت لتحميل البيانات)
-      setTimeout(() => {
-        printClosingReceipt(res.data);
+      // طباعة الإيصال عبر USB مباشرة (بدون نافذة طباعة)
+      setTimeout(async () => {
+        await printClosingReceiptViaUSB(res.data);
         
         // تسجيل خروج إجباري للكاشير فقط بعد الطباعة
         if (user?.role === 'cashier') {
@@ -962,17 +962,17 @@ export default function Dashboard() {
         <title>إيصال إغلاق الصندوق</title>
         <style>
           @page { 
-            size: 80mm auto !important;
+            size: 65mm 250mm !important;
             margin: 0mm !important;
           }
           * { margin: 0; padding: 0; box-sizing: border-box; }
-          html { width: 80mm; height: auto; overflow: hidden; }
+          html { width: 65mm; height: auto; overflow: hidden; }
           body {
             font-family: 'Arial', 'Tahoma', 'Helvetica', sans-serif;
-            font-size: 14px;
+            font-size: 13px;
             font-weight: 500;
-            width: 76mm;
-            max-width: 76mm;
+            width: 61mm;
+            max-width: 61mm;
             margin: 0 auto;
             padding: 2mm;
             direction: rtl;
@@ -1198,6 +1198,130 @@ export default function Dashboard() {
       doActualPrint(null);
     }
   };
+
+  // طباعة إيصال إغلاق الصندوق عبر USB مباشرة (بدون نافذة طباعة)
+  const printClosingReceiptViaUSB = async (data) => {
+    if (!data) return;
+    
+    const AGENT_URL = 'http://localhost:9999';
+    const now = new Date();
+    const dateStr = now.toLocaleDateString('ar-IQ');
+    const timeStr = now.toLocaleTimeString('ar-IQ', { hour: '2-digit', minute: '2-digit' });
+    const formatPrice = (v) => `${(v || 0).toLocaleString()} IQD`;
+    
+    const expectedCash = data.expected_cash || 0;
+    const countedCash = data.counted_cash || 0;
+    const difference = countedCash - expectedCash;
+    
+    let netCashLine = '';
+    if (difference === 0) netCashLine = `صافي النقدي: ${formatPrice(countedCash)} ✓`;
+    else if (difference > 0) netCashLine = `صافي النقدي: +${formatPrice(Math.abs(difference))} (زيادة)`;
+    else netCashLine = `صافي النقدي: -${formatPrice(Math.abs(difference))} (نقص)`;
+    
+    const restaurantName = tenantInfo?.restaurant_name || 'المطعم';
+    const branchName = tenantInfo?.branch_name || '';
+    const cashierName = user?.full_name || user?.username || '';
+    
+    // بناء نص الإيصال
+    const lines = [
+      { text: restaurantName, bold: true, align: 'center', size: 2 },
+      { text: 'إيصال إغلاق الصندوق', bold: true, align: 'center' },
+      { text: `التاريخ: ${dateStr}`, align: 'center' },
+      { text: `الوقت: ${timeStr}`, align: 'center' },
+      ...(branchName ? [{ text: `الفرع: ${branchName}`, align: 'center' }] : []),
+      { text: `الكاشير: ${cashierName}`, align: 'center' },
+      { text: '--------------------------------', align: 'center' },
+      { text: 'ملخص المبيعات', bold: true, align: 'center' },
+      { text: `إجمالي المبيعات:  ${formatPrice(data.total_sales)}`, align: 'right' },
+      { text: `عدد الطلبات:  ${data.total_orders || 0}`, align: 'right' },
+      { text: '--------------------------------', align: 'center' },
+      { text: 'حسب طريقة الدفع', bold: true, align: 'center' },
+      { text: `نقدي:  ${formatPrice(data.cash_sales)}`, align: 'right' },
+      { text: `بطاقة:  ${formatPrice(data.card_sales)}`, align: 'right' },
+      { text: `آجل:  ${formatPrice(data.credit_sales)}`, align: 'right' },
+      { text: '--------------------------------', align: 'center' },
+      { text: 'المصاريف والخصومات', bold: true, align: 'center' },
+      { text: `المصاريف:  ${formatPrice(data.total_expenses)}`, align: 'right' },
+      { text: `الخصومات:  ${formatPrice(data.total_discounts || 0)}`, align: 'right' },
+      { text: '--------------------------------', align: 'center' },
+      { text: 'جرد الصندوق', bold: true, align: 'center' },
+      { text: `المتوقع في الصندوق:  ${formatPrice(expectedCash)}`, align: 'right' },
+      { text: `الجرد الفعلي:  ${formatPrice(countedCash)}`, align: 'right' },
+      { text: `الفرق:  ${difference >= 0 ? '+' : ''}${formatPrice(difference)}`, align: 'right' },
+      { text: '================================', align: 'center' },
+      { text: netCashLine, bold: true, align: 'center', size: 2 },
+      { text: '================================', align: 'center' },
+      ...(data.notes ? [{ text: `ملاحظات: ${data.notes}`, align: 'center' }] : []),
+      { text: 'شكراً لاستخدامكم نظام Maestro', align: 'center' },
+      { text: 'www.maestroegp.com', align: 'center' },
+      { text: '\n\n\n', align: 'center' }
+    ];
+    
+    // تحويل النص إلى ESC/POS
+    const ESC = 0x1B, GS = 0x1D;
+    const encoder = new TextEncoder();
+    let commands = [];
+    
+    // Initialize printer
+    commands.push(ESC, 0x40); // Reset
+    commands.push(ESC, 0x74, 22); // Arabic codepage
+    
+    for (const line of lines) {
+      // Alignment
+      if (line.align === 'center') commands.push(ESC, 0x61, 1);
+      else if (line.align === 'left') commands.push(ESC, 0x61, 0);
+      else commands.push(ESC, 0x61, 2); // right
+      
+      // Bold
+      if (line.bold) commands.push(ESC, 0x45, 1);
+      
+      // Size
+      if (line.size === 2) commands.push(GS, 0x21, 0x11);
+      
+      // Text
+      const textBytes = encoder.encode(line.text + '\n');
+      commands.push(...textBytes);
+      
+      // Reset formatting
+      if (line.bold) commands.push(ESC, 0x45, 0);
+      if (line.size === 2) commands.push(GS, 0x21, 0x00);
+    }
+    
+    // Cut paper
+    commands.push(GS, 0x56, 0x42, 3);
+    
+    const rawData = btoa(String.fromCharCode(...new Uint8Array(commands)));
+    
+    try {
+      // محاولة الطباعة عبر USB أولاً
+      const agentCheck = await fetch(`${AGENT_URL}/status`, { signal: AbortSignal.timeout(2000) }).then(r => r.json()).catch(() => null);
+      
+      if (agentCheck?.status === 'running') {
+        // جلب الطابعات
+        const token = localStorage.getItem('token');
+        const printersRes = await axios.get(`${API}/printers`, { headers: { Authorization: `Bearer ${token}` } }).catch(() => ({ data: [] }));
+        const printers = printersRes.data || [];
+        const usbPrinter = printers.find(p => p.connection_type === 'usb' && p.print_mode !== 'orders_only' && p.print_mode !== 'selected_products');
+        
+        if (usbPrinter?.usb_printer_name) {
+          await fetch(`${AGENT_URL}/print-receipt`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ raw_data: rawData, usb_printer_name: usbPrinter.usb_printer_name }),
+            signal: AbortSignal.timeout(5000)
+          });
+          toast.success(t('تم طباعة إيصال الإغلاق'));
+          return;
+        }
+      }
+    } catch (agentErr) {
+      console.warn('USB print failed, falling back to browser print:', agentErr);
+    }
+    
+    // Fallback: طباعة عبر المتصفح
+    printClosingReceipt(data);
+  };
+
 
   // حفظ هدف المبيعات اليومي
   const handleSetTarget = async () => {

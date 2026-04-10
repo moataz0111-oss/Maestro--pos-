@@ -103,7 +103,9 @@ import {
   Gift,
   Ticket,
   Filter,
-  Download
+  Download,
+  LogIn,
+  LogOut
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -971,17 +973,30 @@ export default function Settings() {
     try {
       setLogsLoading(true);
       const token = localStorage.getItem('token');
-      const res = await axios.get(`${API}/auth/impersonation-logs?page=${page}&limit=20`, {
+      const res = await axios.get(`${API}/auth/audit-logs?page=${page}&limit=50`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setImpersonationLogs(res.data.logs || []);
       setLogsTotalPages(res.data.total_pages || 1);
       setLogsPage(page);
     } catch (error) {
-      console.error('Failed to fetch impersonation logs:', error);
+      console.error('Failed to fetch audit logs:', error);
       toast.error(t('فشل في تحميل سجلات المراقبة'));
     } finally {
       setLogsLoading(false);
+    }
+  };
+
+  const handleClearAuditLogs = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await axios.delete(`${API}/auth/audit-logs`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      toast.success(t('تم إفراغ السجل') + ` (${res.data.deleted_count || 0})`);
+      setImpersonationLogs([]);
+    } catch (error) {
+      toast.error(t('فشل في إفراغ السجل'));
     }
   };
 
@@ -7236,14 +7251,14 @@ export default function Settings() {
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-foreground">
                     <Shield className="h-5 w-5" />
-                    {t('سجلات انتحال الهوية')}
+                    {t('سجل المراقبة')}
                   </CardTitle>
                   <p className="text-sm text-muted-foreground">
-                    {t('سجل بجميع عمليات الدخول كمستخدم آخر')}
+                    {t('سجل بجميع عمليات الدخول والخروج - يُحذف تلقائياً بعد 30 يوم')}
                   </p>
                 </CardHeader>
                 <CardContent>
-                  <div className="mb-4">
+                  <div className="mb-4 flex gap-2">
                     <Button 
                       variant="outline" 
                       onClick={() => fetchImpersonationLogs(1)}
@@ -7251,6 +7266,16 @@ export default function Settings() {
                     >
                       <RefreshCw className={`h-4 w-4 mr-2 ${logsLoading ? 'animate-spin' : ''}`} />
                       {t('تحديث')}
+                    </Button>
+                    <Button 
+                      variant="destructive" 
+                      size="sm"
+                      onClick={handleClearAuditLogs}
+                      disabled={logsLoading || impersonationLogs.length === 0}
+                      data-testid="clear-audit-logs-btn"
+                    >
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      {t('إفراغ السجل')}
                     </Button>
                   </div>
                   
@@ -7270,8 +7295,9 @@ export default function Settings() {
                         <Table>
                           <TableHeader>
                             <TableRow className="bg-muted/50">
-                              <TableHead className="text-right">{t('المدير')}</TableHead>
-                              <TableHead className="text-right">{t('دخل كـ')}</TableHead>
+                              <TableHead className="text-right">{t('الحدث')}</TableHead>
+                              <TableHead className="text-right">{t('المستخدم')}</TableHead>
+                              <TableHead className="text-right">{t('الدور')}</TableHead>
                               <TableHead className="text-right">{t('التاريخ والوقت')}</TableHead>
                             </TableRow>
                           </TableHeader>
@@ -7280,19 +7306,39 @@ export default function Settings() {
                               <TableRow key={log.id || idx} className="hover:bg-muted/30">
                                 <TableCell>
                                   <div className="flex items-center gap-2">
-                                    <div className="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center">
-                                      <UserCog className="h-4 w-4 text-red-600" />
-                                    </div>
-                                    <span className="font-medium">{log.admin_name}</span>
+                                    {log.event_type === 'login' && (
+                                      <div className="w-8 h-8 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center">
+                                        <LogIn className="h-4 w-4 text-green-600" />
+                                      </div>
+                                    )}
+                                    {log.event_type === 'logout' && (
+                                      <div className="w-8 h-8 bg-orange-100 dark:bg-orange-900/30 rounded-full flex items-center justify-center">
+                                        <LogOut className="h-4 w-4 text-orange-600" />
+                                      </div>
+                                    )}
+                                    {log.event_type === 'impersonation' && (
+                                      <div className="w-8 h-8 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center">
+                                        <UserCog className="h-4 w-4 text-red-600" />
+                                      </div>
+                                    )}
+                                    <span className="font-medium text-sm">
+                                      {log.event_type === 'login' && t('تسجيل دخول')}
+                                      {log.event_type === 'logout' && t('تسجيل خروج')}
+                                      {log.event_type === 'impersonation' && (
+                                        <span>{t('دخل كـ')} <strong>{log.target_user_name}</strong></span>
+                                      )}
+                                    </span>
                                   </div>
                                 </TableCell>
                                 <TableCell>
-                                  <div className="flex items-center gap-2">
-                                    <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-                                      <User className="h-4 w-4 text-blue-600" />
-                                    </div>
-                                    <span>{log.target_user_name}</span>
-                                  </div>
+                                  <span className="font-medium">{log.user_name || log.admin_name}</span>
+                                </TableCell>
+                                <TableCell className="text-sm text-muted-foreground">
+                                  {(log.user_role || log.admin_role) === 'admin' && t('مدير')}
+                                  {(log.user_role || log.admin_role) === 'manager' && t('مدير فرع')}
+                                  {(log.user_role || log.admin_role) === 'cashier' && t('كاشير')}
+                                  {(log.user_role || log.admin_role) === 'super_admin' && t('مالك')}
+                                  {(log.user_role || log.admin_role) === 'waiter' && t('نادل')}
                                 </TableCell>
                                 <TableCell className="text-muted-foreground text-sm">
                                   {new Date(log.created_at || log.timestamp).toLocaleString('ar-EG', {
