@@ -1400,6 +1400,8 @@ class EmployeeCreate(BaseModel):
     biometric_uid: Optional[str] = None  # رقم البصمة على الجهاز
     shift_start: Optional[str] = None  # وقت بداية الشفت HH:MM
     shift_end: Optional[str] = None    # وقت نهاية الشفت HH:MM
+    break_start: Optional[str] = None  # وقت بداية الاستراحة HH:MM
+    break_end: Optional[str] = None    # وقت نهاية الاستراحة HH:MM
     work_days: Optional[list] = None   # أيام العمل [0=الأحد, 1=الإثنين, ..., 6=السبت]
 
 class EmployeeResponse(BaseModel):
@@ -1420,6 +1422,8 @@ class EmployeeResponse(BaseModel):
     biometric_uid: Optional[str] = None
     shift_start: Optional[str] = None
     shift_end: Optional[str] = None
+    break_start: Optional[str] = None
+    break_end: Optional[str] = None
     work_days: Optional[list] = None
     is_active: bool = True
     created_at: str
@@ -1443,6 +1447,8 @@ class EmployeeUpdate(BaseModel):
     biometric_uid: Optional[str] = None
     shift_start: Optional[str] = None
     shift_end: Optional[str] = None
+    break_start: Optional[str] = None
+    break_end: Optional[str] = None
     work_days: Optional[list] = None
     face_photo: Optional[str] = None
 
@@ -14244,6 +14250,18 @@ async def _auto_process_attendance_internal(current_user: dict):
                 ci = datetime.strptime(check_in, "%H:%M")
                 co = datetime.strptime(check_out, "%H:%M")
                 worked_hours = round((co - ci).seconds / 3600, 2)
+                
+                # خصم وقت الاستراحة إن وجد
+                break_start = emp.get("break_start")
+                break_end = emp.get("break_end")
+                if break_start and break_end:
+                    try:
+                        bs = datetime.strptime(break_start, "%H:%M")
+                        be = datetime.strptime(break_end, "%H:%M")
+                        break_hours = round((be - bs).seconds / 3600, 2)
+                        worked_hours = max(0, round(worked_hours - break_hours, 2))
+                    except:
+                        pass
             except:
                 pass
         

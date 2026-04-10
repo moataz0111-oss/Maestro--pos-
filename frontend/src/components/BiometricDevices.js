@@ -30,7 +30,7 @@ import { toast } from 'sonner';
 import { API_URL } from '../utils/api';
 const API = API_URL;
 
-export default function BiometricDevices({ branches = [] }) {
+export default function BiometricDevices({ branches = [], onDataRefresh }) {
   const { t } = useTranslation();
   const [devices, setDevices] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -124,6 +124,8 @@ export default function BiometricDevices({ branches = [] }) {
             </div>,
             { duration: 5000 }
           );
+          // تحديث البيانات فوراً في الصفحة الأم
+          if (onDataRefresh) onDataRefresh();
         }
         
         setLastAutoSync(new Date().toLocaleTimeString('ar'));

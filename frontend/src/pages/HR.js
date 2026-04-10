@@ -68,6 +68,63 @@ import { useTranslation } from '../hooks/useTranslation';
 
 const API = API_URL;
 
+// مكون اختيار الوقت 12 ساعة مع AM/PM
+const TimePickerAmPm = ({ value, onChange, testId, placeholder }) => {
+  // تحويل من 24h إلى 12h
+  const parse24To12 = (val) => {
+    if (!val) return { hours: '', minutes: '', period: 'AM' };
+    const [h, m] = val.split(':').map(Number);
+    if (isNaN(h)) return { hours: '', minutes: '', period: 'AM' };
+    const period = h >= 12 ? 'PM' : 'AM';
+    const h12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
+    return { hours: String(h12), minutes: String(m).padStart(2, '0'), period };
+  };
+  
+  // تحويل من 12h إلى 24h
+  const to24 = (hours, minutes, period) => {
+    let h = parseInt(hours) || 0;
+    const m = parseInt(minutes) || 0;
+    if (period === 'AM') { if (h === 12) h = 0; }
+    else { if (h !== 12) h += 12; }
+    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+  };
+  
+  const parsed = parse24To12(value);
+  
+  return (
+    <div className="flex gap-1 items-center" data-testid={testId}>
+      <select 
+        className="flex-1 h-9 rounded-md border border-input bg-background px-2 text-sm"
+        value={parsed.hours}
+        onChange={(e) => onChange(to24(e.target.value, parsed.minutes, parsed.period))}
+      >
+        <option value="">{placeholder || '--'}</option>
+        {[12,1,2,3,4,5,6,7,8,9,10,11].map(h => (
+          <option key={h} value={h}>{h}</option>
+        ))}
+      </select>
+      <span className="text-lg font-bold">:</span>
+      <select 
+        className="w-16 h-9 rounded-md border border-input bg-background px-2 text-sm"
+        value={parsed.minutes}
+        onChange={(e) => onChange(to24(parsed.hours || '12', e.target.value, parsed.period))}
+      >
+        {['00','15','30','45'].map(m => (
+          <option key={m} value={m}>{m}</option>
+        ))}
+      </select>
+      <select 
+        className="w-16 h-9 rounded-md border border-input bg-background px-2 text-sm font-bold"
+        value={parsed.period}
+        onChange={(e) => onChange(to24(parsed.hours || '12', parsed.minutes || '00', e.target.value))}
+      >
+        <option value="AM">ص</option>
+        <option value="PM">م</option>
+      </select>
+    </div>
+  );
+};
+
 export default function HR() {
   const navigate = useNavigate();
   const { user, hasRole } = useAuth();
@@ -119,7 +176,7 @@ export default function HR() {
   const [employeeForm, setEmployeeForm] = useState({
     name: '', phone: '', email: '', national_id: '', position: '', department: '',
     branch_id: '', hire_date: '', salary: '', salary_type: 'monthly', work_hours_per_day: 8,
-    shift_start: '09:00', shift_end: '17:00', work_days: [0, 1, 2, 3, 4, 5]
+    shift_start: '09:00', shift_end: '17:00', break_start: '', break_end: '', work_days: [0, 1, 2, 3, 4, 5]
   });
   const [attendanceForm, setAttendanceForm] = useState({
     employee_id: '', date: new Date().toISOString().slice(0, 10), check_in: '', check_out: '', status: 'present', notes: ''
@@ -171,6 +228,14 @@ export default function HR() {
   useEffect(() => {
     fetchData();
   }, [selectedBranchId, selectedMonth, dateMode, startDate, endDate, selectedYear, isOffline]);
+
+  // تحديث تلقائي للبيانات كل دقيقة
+  useEffect(() => {
+    const autoRefreshInterval = setInterval(() => {
+      fetchData();
+    }, 60 * 1000);
+    return () => clearInterval(autoRefreshInterval);
+  }, [selectedBranchId, selectedMonth, dateMode, startDate, endDate, selectedYear]);
 
   const fetchData = async () => {
     setLoading(true);
@@ -300,6 +365,8 @@ export default function HR() {
         work_hours_per_day: parseFloat(employeeForm.work_hours_per_day),
         shift_start: employeeForm.shift_start || null,
         shift_end: employeeForm.shift_end || null,
+        break_start: employeeForm.break_start || null,
+        break_end: employeeForm.break_end || null,
         work_days: employeeForm.work_days || [0,1,2,3,4,5],
         biometric_uid: employeeForm.biometric_uid || ''
       }, { headers: { Authorization: `Bearer ${token}` } });
@@ -345,6 +412,8 @@ export default function HR() {
         work_hours_per_day: parseFloat(employeeForm.work_hours_per_day),
         shift_start: employeeForm.shift_start || null,
         shift_end: employeeForm.shift_end || null,
+        break_start: employeeForm.break_start || null,
+        break_end: employeeForm.break_end || null,
         work_days: employeeForm.work_days || [0,1,2,3,4,5],
         biometric_uid: employeeForm.biometric_uid || editingEmployee.biometric_uid || ''
       };
@@ -398,7 +467,7 @@ export default function HR() {
     setEmployeeForm({
       name: '', phone: '', email: '', national_id: '', position: '', department: '',
       branch_id: '', hire_date: '', salary: '', salary_type: 'monthly', work_hours_per_day: 8,
-      shift_start: '09:00', shift_end: '17:00', work_days: [0, 1, 2, 3, 4, 5],
+      shift_start: '09:00', shift_end: '17:00', break_start: '', break_end: '', work_days: [0, 1, 2, 3, 4, 5],
       biometric_uid: ''
     });
   };
@@ -1432,15 +1501,26 @@ export default function HR() {
                             <Input type="number" value={employeeForm.biometric_uid || ''} onChange={(e) => setEmployeeForm({...employeeForm, biometric_uid: e.target.value})} placeholder={t('يتم تعيينه تلقائياً عند التصدير')} data-testid="biometric-uid-input" />
                           </div>
                         </div>
-                        {/* حقول الشفت */}
+                        {/* حقول الشفت مع AM/PM */}
                         <div className="grid grid-cols-2 gap-4">
                           <div>
                             <Label>{t('بداية الشفت')}</Label>
-                            <Input type="time" value={employeeForm.shift_start} onChange={(e) => setEmployeeForm({...employeeForm, shift_start: e.target.value})} data-testid="shift-start-input" />
+                            <TimePickerAmPm value={employeeForm.shift_start} onChange={(v) => setEmployeeForm({...employeeForm, shift_start: v})} testId="shift-start-input" />
                           </div>
                           <div>
                             <Label>{t('نهاية الشفت')}</Label>
-                            <Input type="time" value={employeeForm.shift_end} onChange={(e) => setEmployeeForm({...employeeForm, shift_end: e.target.value})} data-testid="shift-end-input" />
+                            <TimePickerAmPm value={employeeForm.shift_end} onChange={(v) => setEmployeeForm({...employeeForm, shift_end: v})} testId="shift-end-input" />
+                          </div>
+                        </div>
+                        {/* حقول الاستراحة */}
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <Label>{t('بداية الاستراحة')}</Label>
+                            <TimePickerAmPm value={employeeForm.break_start} onChange={(v) => setEmployeeForm({...employeeForm, break_start: v})} testId="break-start-input" placeholder={t('اختياري')} />
+                          </div>
+                          <div>
+                            <Label>{t('نهاية الاستراحة')}</Label>
+                            <TimePickerAmPm value={employeeForm.break_end} onChange={(v) => setEmployeeForm({...employeeForm, break_end: v})} testId="break-end-input" placeholder={t('اختياري')} />
                           </div>
                         </div>
                         <div>
@@ -1542,6 +1622,7 @@ export default function HR() {
                                   hire_date: emp.hire_date, salary: emp.salary, salary_type: emp.salary_type,
                                   work_hours_per_day: emp.work_hours_per_day,
                                   shift_start: emp.shift_start || '09:00', shift_end: emp.shift_end || '17:00',
+                                  break_start: emp.break_start || '', break_end: emp.break_end || '',
                                   work_days: emp.work_days || [0,1,2,3,4,5],
                                   biometric_uid: emp.biometric_uid || ''
                                 });
@@ -1758,16 +1839,27 @@ export default function HR() {
                       </tr>
                     </thead>
                     <tbody>
-                      {attendance.map(att => (
+                      {attendance.map(att => {
+                        // تحويل الوقت إلى 12 ساعة
+                        const formatTime12 = (t) => {
+                          if (!t || t === '-') return '-';
+                          const [h, m] = t.split(':').map(Number);
+                          if (isNaN(h)) return t;
+                          const period = h >= 12 ? 'م' : 'ص';
+                          const h12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
+                          return `${h12}:${String(m).padStart(2, '0')} ${period}`;
+                        };
+                        return (
                         <tr key={att.id} className="border-b hover:bg-muted/50">
                           <td className="p-3 font-medium">{att.employee_name}</td>
                           <td className="p-3">{att.date}</td>
-                          <td className="p-3">{att.check_in || '-'}</td>
-                          <td className="p-3">{att.check_out || '-'}</td>
+                          <td className="p-3">{formatTime12(att.check_in)}</td>
+                          <td className="p-3">{formatTime12(att.check_out)}</td>
                           <td className="p-3">{att.worked_hours?.toFixed(1) || '-'}</td>
                           <td className="p-3">{getStatusBadge(att.status)}</td>
                         </tr>
-                      ))}
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -2188,7 +2280,7 @@ export default function HR() {
           <TabsContent value="biometric">
             <Card>
               <CardContent className="p-6">
-                <BiometricDevices branches={branches} />
+                <BiometricDevices branches={branches} onDataRefresh={fetchData} />
               </CardContent>
             </Card>
           </TabsContent>

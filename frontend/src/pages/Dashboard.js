@@ -1148,7 +1148,12 @@ export default function Dashboard() {
         </div>
 
         <div class="big-total">
-          صافي النقدي: ${formatPrice(countedCash)}
+          ${difference === 0 
+            ? `صافي النقدي: ${formatPrice(countedCash)} ✅` 
+            : difference > 0 
+              ? `صافي النقدي: +${formatPrice(Math.abs(difference))} (زيادة)` 
+              : `صافي النقدي: -${formatPrice(Math.abs(difference))} (نقص)`
+          }
         </div>
 
         ${data.notes ? `

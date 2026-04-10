@@ -819,7 +819,10 @@ public class ZKHelper {
                 "http://" + ip + "/auth_files/biophoto/" + uid + ".jpg",
                 "http://" + ip + "/files/photo/" + uid + ".jpg",
                 "http://" + ip + ":8088/auth_files/biophoto/" + uid + ".jpg",
-                "http://" + ip + "/iclock/biophoto?Pin=" + uid
+                "http://" + ip + "/iclock/biophoto?Pin=" + uid,
+                "http://" + ip + ":80/files/photo/" + uid + ".jpg",
+                "http://" + ip + "/cust-files/data/biophoto/" + uid + ".jpg",
+                "http://" + ip + ":8088/files/photo/" + uid + ".jpg"
             };
 
             foreach (string url in urlPatterns) {
