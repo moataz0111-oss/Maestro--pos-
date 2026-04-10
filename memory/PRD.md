@@ -25,10 +25,16 @@ Multi-tenant POS system (React + FastAPI + MongoDB) with ZKTeco biometric integr
 - Fixed "Unknown" cashier name in closing reports
 - Local Print Agent v3.7.0
 
-### Completed - April 10, 2026
+### Completed - April 10, 2026 (Session 1)
 - **Fixed Counted Cash showing 0 in closing receipt**: Frontend was reading `data.counted_cash` but backend returns `closing_cash`. Fixed to use `data.closing_cash || data.counted_cash`.
-- **Separated Delivery App Sales in printed receipt**: Added delivery app sales section (grouped by company name) to both HTML receipt and USB ESC/POS receipt. Backend now uses `delivery_app_name` as key instead of `delivery_app` ID.
-- **Receipt formatting 70mm centered auto-height**: Updated `@page` from `65mm 250mm` to `70mm auto`, body width from 61mm to 66mm. Content auto-sizes to fit.
+- **Separated Delivery App Sales in printed receipt**: Added delivery app sales section (grouped by company name) to both HTML receipt and USB ESC/POS receipt.
+- **Receipt formatting 70mm centered auto-height**: Updated `@page` from `65mm 250mm` to `70mm auto`, body width from 61mm to 66mm.
+
+### Completed - April 10, 2026 (Session 2) 
+- **Delivery company credit tracking for ALL companies**: Fixed to track all 5 delivery companies (توترز, طلبات, بالي, عالسريع, طلباتي) not just one. Frontend now sends `delivery_app_name` alongside `delivery_app` in all 5 order creation paths.
+- **Excluded delivery orders from normal credit (آجل)**: Updated `credit_sales` in all 3 closing report calculations to exclude orders with `delivery_app` or `is_delivery_company`. Delivery orders now only appear in `delivery_app_sales`.
+- **Delivery company on kitchen print**: Added delivery company name display to print_server.ps1 right after order type.
+- **Delivery info persistence**: delivery_app and delivery_app_name saved with orders, restored when loading pending orders for payment.
 
 ## Backlog (Prioritized)
 ### P2 - Refactoring
@@ -42,6 +48,8 @@ Multi-tenant POS system (React + FastAPI + MongoDB) with ZKTeco biometric integr
 - `/api/cash-register/close` - Close cash register with denominations
 - `/api/cash-register/summary` - Get current shift summary
 - `/api/cash-register/today` - Today's cash register data
+- `/api/orders` - Create/manage orders
+- `/api/delivery-apps` - List delivery companies
 - Local Agent: `http://localhost:9999/print-receipt`, `/zk-face-photo`
 
 ## Test Credentials
