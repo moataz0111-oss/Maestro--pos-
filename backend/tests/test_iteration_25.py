@@ -14,7 +14,7 @@ import pytest
 import requests
 import os
 
-BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://zk-face-photo.preview.emergentagent.com')
+BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://pos-closing-fixes.preview.emergentagent.com')
 
 class TestAuthentication:
     """Test authentication endpoints"""

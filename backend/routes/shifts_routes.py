@@ -217,11 +217,11 @@ async def close_shift(shift_id: str, close_data: ShiftClose, current_user: dict 
     
     delivery_app_sales = {}
     for o in orders:
-        if o.get("delivery_app"):
-            app = o["delivery_app"]
-            if app not in delivery_app_sales:
-                delivery_app_sales[app] = 0
-            delivery_app_sales[app] += _safe_num(o.get("total"))
+        if o.get("delivery_app") or o.get("delivery_app_name"):
+            app_name = o.get("delivery_app_name") or o.get("delivery_app", "توصيل")
+            if app_name not in delivery_app_sales:
+                delivery_app_sales[app_name] = 0
+            delivery_app_sales[app_name] += _safe_num(o.get("total"))
     
     expenses = await db.expenses.find({
         "branch_id": shift_branch,
@@ -437,11 +437,11 @@ async def get_cash_register_summary(
     
     delivery_app_sales = {}
     for o in orders:
-        if o.get("delivery_app"):
-            app = o["delivery_app"]
-            if app not in delivery_app_sales:
-                delivery_app_sales[app] = 0
-            delivery_app_sales[app] += _safe_num(o.get("total"))
+        if o.get("delivery_app") or o.get("delivery_app_name"):
+            app_name = o.get("delivery_app_name") or o.get("delivery_app", "توصيل")
+            if app_name not in delivery_app_sales:
+                delivery_app_sales[app_name] = 0
+            delivery_app_sales[app_name] += _safe_num(o.get("total"))
     
     driver_sales = sum(_safe_num(o.get("total")) for o in orders if o.get("order_type") == OrderType.DELIVERY and o.get("driver_id"))
     discounts_total = sum(_safe_num(o.get("discount")) for o in orders)
@@ -651,11 +651,11 @@ async def close_cash_register(close_data: CashRegisterClose, current_user: dict 
     
     delivery_app_sales = {}
     for o in orders:
-        if o.get("delivery_app"):
-            app = o["delivery_app"]
-            if app not in delivery_app_sales:
-                delivery_app_sales[app] = 0
-            delivery_app_sales[app] += _safe_num(o.get("total"))
+        if o.get("delivery_app") or o.get("delivery_app_name"):
+            app_name = o.get("delivery_app_name") or o.get("delivery_app", "توصيل")
+            if app_name not in delivery_app_sales:
+                delivery_app_sales[app_name] = 0
+            delivery_app_sales[app_name] += _safe_num(o.get("total"))
     
     driver_sales = sum(_safe_num(o.get("total")) for o in orders if o.get("order_type") == OrderType.DELIVERY and o.get("driver_id"))
     discounts_total = sum(_safe_num(o.get("discount")) for o in orders)

@@ -931,12 +931,28 @@ export default function Dashboard() {
     const dateStr = now.toLocaleDateString('ar-IQ');
     const timeStr = now.toLocaleTimeString('ar-IQ');
     
-    // حساب الفرق
+    // حساب الفرق - closing_cash هو الجرد الفعلي (من فئات النقود)
     const expectedCash = data.expected_cash || 0;
-    const countedCash = data.counted_cash || 0;
+    const countedCash = data.closing_cash || data.counted_cash || 0;
     const difference = countedCash - expectedCash;
     const differenceClass = difference >= 0 ? 'positive' : 'negative';
     const differenceText = difference >= 0 ? '+' : '';
+    
+    // بناء HTML لمبيعات تطبيقات التوصيل
+    let deliveryAppHtml = '';
+    if (data.delivery_app_sales && Object.keys(data.delivery_app_sales).length > 0) {
+      deliveryAppHtml = `
+        <div class="section">
+          <div class="section-title">مبيعات تطبيقات التوصيل</div>
+          ${Object.entries(data.delivery_app_sales).map(([app, amount]) => `
+            <div class="row">
+              <span class="label">${app}:</span>
+              <span class="value">${formatPrice(amount)}</span>
+            </div>
+          `).join('')}
+        </div>
+      `;
+    }
     
     // تحويل شعار المطعم إلى base64 ثم الطباعة
     const logoUrl = tenantInfo?.logo_url;
@@ -962,17 +978,17 @@ export default function Dashboard() {
         <title>إيصال إغلاق الصندوق</title>
         <style>
           @page { 
-            size: 65mm 250mm !important;
+            size: 70mm auto !important;
             margin: 0mm !important;
           }
           * { margin: 0; padding: 0; box-sizing: border-box; }
-          html { width: 65mm; height: auto; overflow: hidden; }
+          html { width: 70mm; height: auto; overflow: hidden; }
           body {
             font-family: 'Arial', 'Tahoma', 'Helvetica', sans-serif;
             font-size: 13px;
             font-weight: 500;
-            width: 61mm;
-            max-width: 61mm;
+            width: 66mm;
+            max-width: 66mm;
             margin: 0 auto;
             padding: 2mm;
             direction: rtl;
@@ -1119,6 +1135,8 @@ export default function Dashboard() {
           </div>
         </div>
 
+        ${deliveryAppHtml}
+
         <div class="section">
           <div class="section-title">المصاريف والخصومات</div>
           <div class="row">
@@ -1238,7 +1256,7 @@ export default function Dashboard() {
     const formatPrice = (v) => `${(v || 0).toLocaleString()} IQD`;
     
     const expectedCash = data.expected_cash || 0;
-    const countedCash = data.counted_cash || 0;
+    const countedCash = data.closing_cash || data.counted_cash || 0;
     const difference = countedCash - expectedCash;
     
     let netCashLine = '';
@@ -1268,6 +1286,13 @@ export default function Dashboard() {
       { text: `بطاقة:  ${formatPrice(data.card_sales)}`, align: 'right' },
       { text: `آجل:  ${formatPrice(data.credit_sales)}`, align: 'right' },
       { text: '--------------------------------', align: 'center' },
+      ...(data.delivery_app_sales && Object.keys(data.delivery_app_sales).length > 0 ? [
+        { text: 'مبيعات تطبيقات التوصيل', bold: true, align: 'center' },
+        ...Object.entries(data.delivery_app_sales).map(([app, amount]) => (
+          { text: `${app}:  ${formatPrice(amount)}`, align: 'right' }
+        )),
+        { text: '--------------------------------', align: 'center' },
+      ] : []),
       { text: 'المصاريف والخصومات', bold: true, align: 'center' },
       { text: `المصاريف:  ${formatPrice(data.total_expenses)}`, align: 'right' },
       { text: `الخصومات:  ${formatPrice(data.total_discounts || data.discounts_total || 0)}`, align: 'right' },
