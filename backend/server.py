@@ -12709,7 +12709,29 @@ async def get_cash_register_closing_report(
         query["created_at"]["$lte"] = end_date
     
     # جلب الطلبات
-    orders = await db.orders.find(query, {"_id": 0}).to_list(5000)
+    all_orders = await db.orders.find(query, {"_id": 0}).to_list(5000)
+    
+    # فصل الطلبات: نشطة / مرتجعة / ملغية
+    orders = []          # طلبات نشطة (تحسب في المبيعات)
+    refunded_orders = []  # مرتجعات (لا تحسب في المبيعات)
+    cancelled_orders = [] # ملغية (لا تحسب في المبيعات)
+    
+    for o in all_orders:
+        status = o.get("status", "")
+        if status == "refunded":
+            refunded_orders.append(o)
+        elif status in ("cancelled", "canceled", "deleted"):
+            cancelled_orders.append(o)
+        else:
+            orders.append(o)
+    
+    # حساب إجمالي المرتجعات
+    total_refunds = sum(_sn(r.get("total")) for r in refunded_orders)
+    refund_count = len(refunded_orders)
+    
+    # حساب إجمالي الإلغاءات
+    total_cancellations = sum(_sn(c.get("total")) for c in cancelled_orders)
+    cancellation_count = len(cancelled_orders)
     
     # جلب المصروفات
     expenses_query = build_tenant_query(current_user)
@@ -12893,8 +12915,12 @@ async def get_cash_register_closing_report(
             "total_sales": total_sales,
             "total_orders": total_orders,
             "total_expenses": total_expenses,
+            "total_refunds": total_refunds,
+            "refund_count": refund_count,
+            "total_cancellations": total_cancellations,
+            "cancellation_count": cancellation_count,
             "expected_cash_in_drawer": expected_cash,
-            "net_sales": total_sales - total_expenses
+            "net_sales": total_sales - total_expenses - total_refunds
         },
         "by_order_type": {
             "dine_in": {"total": dine_in_total, "label": "داخلي"},

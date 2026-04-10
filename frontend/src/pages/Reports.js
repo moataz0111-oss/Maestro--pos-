@@ -513,7 +513,7 @@ const ComprehensiveReportTab = ({
             </div>
             <div className="flex justify-between items-center">
               <span className="text-sm text-muted-foreground flex items-center gap-1">
-                <Undo2 className="h-3 w-3" /> {t('الإرجاعات')}
+                <Undo2 className="h-3 w-3" /> {t('المرتجعات')}
               </span>
               <span className="font-medium text-purple-500">{refundsReport?.total_count || 0} ({formatPrice(refundsReport?.total_amount || 0)})</span>
             </div>
@@ -2270,7 +2270,7 @@ export default function Reports() {
         axios.get(`${API}/reports/credit`, { params })
       ]);
 
-      // جلب الإرجاعات
+      // جلب المرتجعات
       const refundsRes = await axios.get(`${API}/refunds`, { 
         params: { date_from: startDate, date_to: endDate, ...(branchId && { branch_id: branchId }) } 
       });
@@ -2342,7 +2342,7 @@ export default function Reports() {
         axios.get(`${API}/reports/credit`, { params })
       ]);
 
-      // جلب الإرجاعات والسلف
+      // جلب المرتجعات والسلف
       const [refundsRes, advancesRes] = await Promise.all([
         axios.get(`${API}/refunds`, { 
           params: { date_from: startDate, date_to: endDate, ...(branchId && { branch_id: branchId }) } 
@@ -2487,7 +2487,7 @@ export default function Reports() {
             <TabsTrigger value="cash-register" className="bg-emerald-600/20 text-emerald-400 font-bold">{t('إغلاق الصندوق')}</TabsTrigger>
             <TabsTrigger value="cancellations" className="text-red-500">{t('الإلغاءات')}</TabsTrigger>
             <TabsTrigger value="discounts" className="text-orange-500">{t('الخصومات')}</TabsTrigger>
-            <TabsTrigger value="refunds" className="text-purple-500">{t('الإرجاعات')}</TabsTrigger>
+            <TabsTrigger value="refunds" className="text-purple-500">{t('المرتجعات')}</TabsTrigger>
             <TabsTrigger value="credit" className="text-blue-500">{t('الآجل')}</TabsTrigger>
             <TabsTrigger value="card" className="text-cyan-500">{t('البطاقة')}</TabsTrigger>
             {dashboardSettings.showSmartReports !== false && (
@@ -3219,19 +3219,19 @@ export default function Reports() {
             )}
           </TabsContent>
 
-          {/* Refunds Report (الإرجاعات) */}
+          {/* Refunds Report (المرتجعات) */}
           <TabsContent value="refunds">
             {refundsReport ? (
               <div className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                   <StatCard
-                    title={t('إجمالي الإرجاعات')}
+                    title={t('إجمالي المرتجعات')}
                     value={formatPrice(refundsReport.total_amount)}
                     icon={RefreshCw}
                     color="purple-500"
                   />
                   <StatCard
-                    title={t('عدد الإرجاعات')}
+                    title={t('عدد المرتجعات')}
                     value={refundsReport.total_count}
                     icon={FileText}
                     color="orange-500"
@@ -3250,12 +3250,12 @@ export default function Reports() {
                   />
                 </div>
 
-                {/* جدول الإرجاعات */}
+                {/* جدول المرتجعات */}
                 <Card className="border-border/50 bg-card">
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2 text-foreground">
                       <RefreshCw className="h-5 w-5 text-purple-500" />
-                      {t('تفاصيل الإرجاعات')}
+                      {t('تفاصيل المرتجعات')}
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
@@ -3318,7 +3318,7 @@ export default function Reports() {
               </div>
             ) : (
               <div className="text-center py-8 text-muted-foreground">
-                {t('جاري تحميل بيانات الإرجاعات...')}
+                {t('جاري تحميل بيانات المرتجعات...')}
               </div>
             )}
           </TabsContent>

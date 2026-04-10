@@ -1127,9 +1127,37 @@ export default function Dashboard() {
           </div>
           <div class="row">
             <span class="label">الخصومات:</span>
-            <span class="value">${formatPrice(data.total_discounts || 0)}</span>
+            <span class="value">${formatPrice(data.total_discounts || data.discounts_total || 0)}</span>
           </div>
         </div>
+
+        ${(data.total_refunds > 0 || data.refund_count > 0) ? `
+        <div class="section" style="border: 1px solid #9333ea; padding: 4px; border-radius: 4px;">
+          <div class="section-title" style="color: #9333ea;">المرتجعات</div>
+          <div class="row">
+            <span class="label">عدد المرتجعات:</span>
+            <span class="value">${data.refund_count || 0}</span>
+          </div>
+          <div class="row highlight">
+            <span class="label">إجمالي المرتجعات:</span>
+            <span class="value" style="color: #9333ea;">-${formatPrice(data.total_refunds)}</span>
+          </div>
+        </div>
+        ` : ''}
+
+        ${(data.cancelled_orders > 0 || data.cancelled_amount > 0) ? `
+        <div class="section">
+          <div class="section-title">الإلغاءات (غير محسوبة)</div>
+          <div class="row">
+            <span class="label">عدد الإلغاءات:</span>
+            <span class="value">${data.cancelled_orders || 0}</span>
+          </div>
+          <div class="row">
+            <span class="label">إجمالي الإلغاءات:</span>
+            <span class="value">${formatPrice(data.cancelled_amount || 0)}</span>
+          </div>
+        </div>
+        ` : ''}
 
         <div class="section">
           <div class="section-title">جرد الصندوق</div>
@@ -1242,8 +1270,20 @@ export default function Dashboard() {
       { text: '--------------------------------', align: 'center' },
       { text: 'المصاريف والخصومات', bold: true, align: 'center' },
       { text: `المصاريف:  ${formatPrice(data.total_expenses)}`, align: 'right' },
-      { text: `الخصومات:  ${formatPrice(data.total_discounts || 0)}`, align: 'right' },
+      { text: `الخصومات:  ${formatPrice(data.total_discounts || data.discounts_total || 0)}`, align: 'right' },
       { text: '--------------------------------', align: 'center' },
+      ...(data.total_refunds > 0 ? [
+        { text: 'المرتجعات', bold: true, align: 'center' },
+        { text: `عدد المرتجعات:  ${data.refund_count || 0}`, align: 'right' },
+        { text: `إجمالي المرتجعات:  -${formatPrice(data.total_refunds)}`, align: 'right' },
+        { text: '--------------------------------', align: 'center' },
+      ] : []),
+      ...(data.cancelled_orders > 0 || data.cancelled_amount > 0 ? [
+        { text: 'الإلغاءات (غير محسوبة)', bold: true, align: 'center' },
+        { text: `عدد الإلغاءات:  ${data.cancelled_orders || 0}`, align: 'right' },
+        { text: `إجمالي الإلغاءات:  ${formatPrice(data.cancelled_amount || 0)}`, align: 'right' },
+        { text: '--------------------------------', align: 'center' },
+      ] : []),
       { text: 'جرد الصندوق', bold: true, align: 'center' },
       { text: `المتوقع في الصندوق:  ${formatPrice(expectedCash)}`, align: 'right' },
       { text: `الجرد الفعلي:  ${formatPrice(countedCash)}`, align: 'right' },
@@ -2747,6 +2787,23 @@ export default function Dashboard() {
                       )}
                     </div>
                   </div>
+
+                  {/* المرتجعات */}
+                  {(closingResult.total_refunds > 0 || closingResult.refund_count > 0) && (
+                    <div className="section mb-4 p-4 bg-purple-500/10 rounded-lg">
+                      <div className="section-title font-bold mb-2 text-purple-600">{t('المرتجعات')}</div>
+                      <div className="space-y-1">
+                        <div className="flex justify-between">
+                          <span>{t('عدد المرتجعات')}:</span>
+                          <span className="text-purple-600">{closingResult.refund_count || 0}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>{t('إجمالي المرتجعات')}:</span>
+                          <strong className="text-purple-600">-{formatPrice(closingResult.total_refunds || 0)}</strong>
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
                   {/* المصاريف */}
                   <div className="section mb-4 p-4 bg-yellow-500/10 rounded-lg">

@@ -1113,6 +1113,32 @@ export default function POS() {
       playSuccess();
       toast.success(`✅ ${t('تم إرجاع الفاتورة')} #${refundOrderInfo.order_number} ${t('بنجاح')}`);
       
+      // طباعة أمر المرتجع للمطبخ
+      try {
+        const restaurantName = restaurantSettings?.name_ar || restaurantSettings?.name || '';
+        const kitchenPrinters = availablePrinters.filter(p => 
+          (p.print_mode === 'orders_only' || p.print_mode === 'selected_products') &&
+          ((p.connection_type === 'usb' && p.usb_printer_name) || (p.connection_type !== 'usb' && p.ip_address))
+        );
+        if (kitchenPrinters.length > 0 && refundOrderInfo.items) {
+          const refundPrintOrder = {
+            order_number: refundOrderInfo.order_number,
+            order_type: refundOrderInfo.order_type || 'dine_in',
+            table_number: refundOrderInfo.table_number,
+            is_refund: true,
+            refund_label: '*** مرتجع - إلغاء ***',
+            notes: `مرتجع: ${refundReason.trim()}`
+          };
+          const refundItems = (refundOrderInfo.items || []).map(item => ({
+            ...item,
+            name: `[مرتجع] ${item.product_name || item.name}`,
+            product_name: `[مرتجع] ${item.product_name || item.name}`
+          }));
+          await printOrderToAllPrinters(refundPrintOrder, refundItems, products, kitchenPrinters, restaurantName);
+        }
+      } catch (printErr) {
+        console.warn('Failed to print refund to kitchen:', printErr);
+      }
       // إعادة تعيين الحالة وإغلاق الحوار
       setRefundDialogOpen(false);
       setRefundOrderId('');
@@ -1999,17 +2025,20 @@ export default function POS() {
           }
           
           // 2. إرسال الطلبات لطابعات المطبخ حسب ربط المنتجات
-          const kitchenPrinters = availablePrinters.filter(p => 
-            (p.print_mode === 'orders_only' || p.print_mode === 'selected_products') &&
-            ((p.connection_type === 'usb' && p.usb_printer_name) || (p.connection_type !== 'usb' && p.ip_address))
-          );
-          if (kitchenPrinters.length > 0) {
-            const kitchenResult = await printOrderToAllPrinters(orderForPrint, itemsForPrint, products, kitchenPrinters, restaurantName);
-            if (!kitchenResult.success) {
-              toast.error(t('فشل طباعة طلبات المطبخ'));
-              kitchenResult.results?.filter(r => !r.success).forEach(f => {
-                toast.error(`${f.printer_name}: ${f.message}`);
-              });
+          // فقط للطلبات الجديدة - لا نرسل للمطبخ مرة ثانية عند الدفع لطلب موجود
+          if (!editingOrder) {
+            const kitchenPrinters = availablePrinters.filter(p => 
+              (p.print_mode === 'orders_only' || p.print_mode === 'selected_products') &&
+              ((p.connection_type === 'usb' && p.usb_printer_name) || (p.connection_type !== 'usb' && p.ip_address))
+            );
+            if (kitchenPrinters.length > 0) {
+              const kitchenResult = await printOrderToAllPrinters(orderForPrint, itemsForPrint, products, kitchenPrinters, restaurantName);
+              if (!kitchenResult.success) {
+                toast.error(t('فشل طباعة طلبات المطبخ'));
+                kitchenResult.results?.filter(r => !r.success).forEach(f => {
+                  toast.error(`${f.printer_name}: ${f.message}`);
+                });
+              }
             }
           }
       } catch (printErr) {
@@ -2329,6 +2358,33 @@ export default function POS() {
         ? t('تم إلغاء الطلب (إلغاء سريع)') 
         : t('تم إلغاء الطلب')
       );
+      
+      // طباعة أمر الحذف للمطبخ
+      try {
+        const restaurantName = restaurantSettings?.name_ar || restaurantSettings?.name || '';
+        const kitchenPrinters = availablePrinters.filter(p => 
+          (p.print_mode === 'orders_only' || p.print_mode === 'selected_products') &&
+          ((p.connection_type === 'usb' && p.usb_printer_name) || (p.connection_type !== 'usb' && p.ip_address))
+        );
+        if (kitchenPrinters.length > 0 && editingOrder.items?.length > 0) {
+          const cancelPrintOrder = {
+            order_number: editingOrder.order_number,
+            order_type: editingOrder.order_type || 'dine_in',
+            table_number: editingOrder.table_number,
+            is_cancel: true,
+            notes: '*** تم إلغاء الطلب بالكامل ***'
+          };
+          const cancelItems = (editingOrder.items || []).map(item => ({
+            ...item,
+            name: `[تم حذف] ${item.product_name || item.name}`,
+            product_name: `[تم حذف] ${item.product_name || item.name}`
+          }));
+          await printOrderToAllPrinters(cancelPrintOrder, cancelItems, products, kitchenPrinters, restaurantName);
+        }
+      } catch (printErr) {
+        console.warn('Failed to print cancellation to kitchen:', printErr);
+      }
+      
       clearCart();
       
       // تحديث عداد الطلبات على الفرع فوراً (-1)

@@ -527,7 +527,7 @@ async def close_cash_register(close_data: CashRegisterClose, current_user: dict 
     )
     
     # جلب جميع طلبات الوردية - بالـ shift_id + الطلبات بدون shift_id في نفس الفترة والفرع
-    base_status_filter = {"$ne": OrderStatus.CANCELLED}
+    base_status_filter = {"$nin": [OrderStatus.CANCELLED, "refunded"]}
     
     shift_order_query = {"shift_id": shift_id, "status": base_status_filter}
     if tenant_id:
@@ -586,6 +586,33 @@ async def close_cash_register(close_data: CashRegisterClose, current_user: dict 
         if o.get("id") and o["id"] not in seen_cancelled:
             cancelled_orders.append(o)
             seen_cancelled.add(o["id"])
+    
+    # جلب المرتجعات بشكل منفصل
+    refunded_shift = {"shift_id": shift_id, "status": "refunded"}
+    if tenant_id:
+        refunded_shift["tenant_id"] = tenant_id
+    refunded_orders = await db.orders.find(refunded_shift).to_list(1000)
+    
+    refunded_unlinked_query = {
+        "created_at": {"$gte": shift_start},
+        "status": "refunded",
+        "$or": [{"shift_id": {"$exists": False}}, {"shift_id": None}, {"shift_id": ""}]
+    }
+    if tenant_id:
+        refunded_unlinked_query["tenant_id"] = tenant_id
+    if shift.get("branch_id"):
+        refunded_unlinked_query["branch_id"] = shift["branch_id"]
+    refunded_unlinked = await db.orders.find(refunded_unlinked_query).to_list(1000)
+    
+    seen_refunded = set(o.get("id") for o in refunded_orders if o.get("id"))
+    for o in refunded_unlinked:
+        if o.get("id") and o["id"] not in seen_refunded:
+            refunded_orders.append(o)
+            seen_refunded.add(o["id"])
+    
+    total_refunds = sum(_safe_num(o.get("total")) for o in refunded_orders)
+    refund_count = len(refunded_orders)
+
     
     total_sales = sum(_safe_num(o.get("total")) for o in orders)
     total_cost = sum(_safe_num(o.get("total_cost")) for o in orders)
@@ -651,6 +678,8 @@ async def close_cash_register(close_data: CashRegisterClose, current_user: dict 
         "cancelled_orders": len(cancelled_orders),
         "cancelled_amount": cancelled_amount,
         "cancelled_by": list(cancelled_by.values()),
+        "total_refunds": total_refunds,
+        "refund_count": refund_count,
         "total_expenses": total_expenses,
         "net_profit": net_profit,
         "ended_at": datetime.now(timezone.utc).isoformat(),
