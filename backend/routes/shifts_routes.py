@@ -213,7 +213,7 @@ async def close_shift(shift_id: str, close_data: ShiftClose, current_user: dict 
     gross_profit = total_sales - total_cost
     cash_sales = sum(_safe_num(o.get("total")) for o in orders if o.get("payment_method") == PaymentMethod.CASH)
     card_sales = sum(_safe_num(o.get("total")) for o in orders if o.get("payment_method") == PaymentMethod.CARD)
-    credit_sales = sum(_safe_num(o.get("total")) for o in orders if o.get("payment_method") == PaymentMethod.CREDIT)
+    credit_sales = sum(_safe_num(o.get("total")) for o in orders if o.get("payment_method") == PaymentMethod.CREDIT and not o.get("delivery_app") and not o.get("is_delivery_company"))
     
     delivery_app_sales = {}
     for o in orders:
@@ -433,7 +433,7 @@ async def get_cash_register_summary(
     gross_profit = total_sales - total_cost
     cash_sales = sum(_safe_num(o.get("total")) for o in orders if o.get("payment_method") == PaymentMethod.CASH)
     card_sales = sum(_safe_num(o.get("total")) for o in orders if o.get("payment_method") == PaymentMethod.CARD)
-    credit_sales = sum(_safe_num(o.get("total")) for o in orders if o.get("payment_method") == PaymentMethod.CREDIT)
+    credit_sales = sum(_safe_num(o.get("total")) for o in orders if o.get("payment_method") == PaymentMethod.CREDIT and not o.get("delivery_app") and not o.get("is_delivery_company"))
     
     delivery_app_sales = {}
     for o in orders:
@@ -647,7 +647,7 @@ async def close_cash_register(close_data: CashRegisterClose, current_user: dict 
     gross_profit = total_sales - total_cost
     cash_sales = sum(_safe_num(o.get("total")) for o in orders if o.get("payment_method") == PaymentMethod.CASH)
     card_sales = sum(_safe_num(o.get("total")) for o in orders if o.get("payment_method") == PaymentMethod.CARD)
-    credit_sales = sum(_safe_num(o.get("total")) for o in orders if o.get("payment_method") == PaymentMethod.CREDIT)
+    credit_sales = sum(_safe_num(o.get("total")) for o in orders if o.get("payment_method") == PaymentMethod.CREDIT and not o.get("delivery_app") and not o.get("is_delivery_company"))
     
     delivery_app_sales = {}
     for o in orders:

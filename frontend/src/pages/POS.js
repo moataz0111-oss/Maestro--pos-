@@ -1530,6 +1530,7 @@ export default function POS() {
           payment_method: 'pending',
           discount: discount,
           delivery_app: orderType === 'delivery' ? deliveryApp : null,
+          delivery_app_name: orderType === 'delivery' && deliveryApp ? (deliveryApps.find(a => a.id === deliveryApp)?.name || '') : null,
           driver_id: orderType === 'delivery' ? selectedDriver : null,
           notes: orderNotes,
           auto_ready: isDeliveryOrder  // معلق للسفري والطاولات، جاهز للتوصيل فقط
@@ -1645,6 +1646,7 @@ export default function POS() {
             branch_id: currentBranchId,
             payment_method: 'pending',
             delivery_app: orderType === 'delivery' ? deliveryApp : null,
+            delivery_app_name: orderType === 'delivery' && deliveryApp ? (deliveryApps.find(a => a.id === deliveryApp)?.name || '') : null,
             driver_id: selectedDriver || null,
             notes: orderNotes,
             status: 'pending',
@@ -1814,6 +1816,7 @@ export default function POS() {
         branch_id: currentBranchId,
         payment_method: paymentMethod,
         delivery_app: orderType === 'delivery' ? deliveryApp : null,
+        delivery_app_name: orderType === 'delivery' && deliveryApp ? (deliveryApps.find(a => a.id === deliveryApp)?.name || '') : null,
         driver_id: selectedDriver || null,
         notes: orderNotes,
         status: 'pending',
@@ -1946,6 +1949,7 @@ export default function POS() {
           payment_method: paymentMethod,
           discount: discount,
           delivery_app: orderType === 'delivery' ? deliveryApp : null,
+          delivery_app_name: orderType === 'delivery' && deliveryApp ? (deliveryApps.find(a => a.id === deliveryApp)?.name || '') : null,
           driver_id: selectedDriver || null,
           notes: orderNotes
         };
@@ -2140,6 +2144,7 @@ export default function POS() {
         buzzer_number: buzzerNumber || null,
         driver_id: orderType === 'delivery' && selectedDriver ? selectedDriver : null,
         delivery_app: orderType === 'delivery' && deliveryApp ? deliveryApp : null,
+        delivery_app_name: orderType === 'delivery' && deliveryApp ? (deliveryApps.find(a => a.id === deliveryApp)?.name || '') : null,
         discount: discount || 0,
         branch_id: currentBranchId,
         payment_method: paymentMethod || 'pending',

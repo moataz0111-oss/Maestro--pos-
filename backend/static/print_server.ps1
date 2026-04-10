@@ -1050,6 +1050,14 @@ function Build-Receipt {
         $aligns.Add('center')
     }
 
+    # إظهار اسم شركة التوصيل إذا موجود
+    if ($order.delivery_company) {
+        $lines.Add([string]$order.delivery_company)
+        $sizes.Add(14)
+        $bolds.Add($true)
+        $aligns.Add('center')
+    }
+
     if ($order.table_number) {
         $tableLabel = if ($lang -eq 'ar') { "$([char]0x0637)$([char]0x0627)$([char]0x0648)$([char]0x0644)$([char]0x0629): " } else { 'Table: ' }
         $lines.Add([string]($tableLabel + $order.table_number))
