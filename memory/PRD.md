@@ -7,8 +7,8 @@ Multi-tenant POS system (React + FastAPI + MongoDB) with printing, ZKTeco biomet
 ```
 Print:     Browser Canvas -> ESC/POS -> localhost:9999 -> Agent v3.7.0 -> USB/TCP Printer
 Biometric: Browser -> localhost:9999/zk-* -> Agent v3.7.0 -> UDP ZK Protocol -> ZKTeco Device
-Auto-Sync: Agent polls ZKTeco every 1min -> Frontend relays -> Backend auto-processes -> Toast notification
-Audit:     Login/Logout/Impersonation -> audit_logs collection -> Auto-delete after 30 days
+Auto-Sync: Agent polls ZKTeco every 1min -> Toast notification on new punches
+Audit:     Login/Logout/Impersonation -> audit_logs -> Auto-delete after 30 days
 ```
 
 ## Credentials
@@ -18,46 +18,35 @@ Audit:     Login/Logout/Impersonation -> audit_logs collection -> Auto-delete af
 
 ## Completed Features
 
-### POS Core
-- [x] Orders, items, extras with ESC/POS printing
-- [x] Payment: cash, card, credit (آجل), delivery
-- [x] Payment does NOT resend to kitchen for existing orders
-- [x] Cancel order prints "[تم حذف]" to kitchen printers
+### POS Core & Refund System (2026-04-10)
+- [x] Orders with cash, card, credit, delivery payments
+- [x] **Refunded orders completely excluded** from: credit_sales, cash_sales, card_sales, total_sales
+- [x] Refunded orders appear ONLY in المرتجعات report
+- [x] Close receipt shows المرتجعات section with count + total
+- [x] Close receipt shows الإلغاءات section (info only)
 - [x] Refund prints "[مرتجع]" to kitchen printers
-
-### Returns & Cancellations (2026-04-10)
-- [x] Renamed الإرجاعات → المرتجعات throughout the app
-- [x] Refunded orders excluded from: total_sales, cash_sales, card_sales, credit_sales
-- [x] Refunded orders only count in المرتجعات report
-- [x] Cancelled orders only count in الإلغاءات (not in any sales total)
-- [x] Close receipt shows المرتجعات section with count and total
-- [x] Close receipt shows الإلغاءات section (info only, not calculated)
-- [x] USB direct print for close receipt (no print dialog)
+- [x] Cancel prints "[تم حذف]" to kitchen printers
+- [x] Payment for existing order does NOT resend to kitchen
+- [x] All queries use $nin: [cancelled, refunded] filter
 
 ### Printing & Receipt
-- [x] ESC/POS 65mm receipt with Arabic Canvas
-- [x] Close register receipt: 65mm x 25cm, prints via USB directly
-- [x] Net cash: ✅ (match), + (over), - (under) indicators
+- [x] ESC/POS 65mm receipt, close receipt 65mm x 25cm via USB
+- [x] Net cash indicators: ✅/+/-
 
 ### ZKTeco Biometric (Agent v3.7.0)
-- [x] Full ZK Protocol with face photo support
-- [x] Auto-sync every 1 minute with toast notifications
-- [x] Face photo UI: camera button, dialog, avatar
+- [x] Full ZK Protocol, face photo, auto-sync 1min
 
 ### HR System
-- [x] Attendance in 12-hour format (ص/م)
-- [x] Auto-refresh every 60 seconds
-- [x] Break time fields with AM/PM picker
-- [x] Overtime approval tab
-- [x] Employee name enrichment across all endpoints
+- [x] 12-hour format, break time, overtime, name enrichment
 
-### Audit Log System (2026-04-10)
-- [x] Tracks ALL login/logout/impersonation events
-- [x] Clear button + auto-delete after 30 days
+### Audit Log
+- [x] All login/logout/impersonation events, clear button, auto-delete 30 days
 
-### Reports
-- [x] by_cashier resolves names (fixes "غير محدد")
-- [x] Closing report includes المرتجعات and الإلغاءات
+## Key API Endpoints
+- POST /api/refunds (creates refund, marks order as "refunded")
+- GET /api/cash-register/summary (total_refunds, refund_count excluded from sales)
+- POST /api/cash-register/close (total_refunds, refund_count in response)
+- GET /api/reports/credit (excludes refunded orders)
 
 ## Upcoming Tasks
 - P2: Refactor server.py (18K+ lines) into modular routes
