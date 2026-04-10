@@ -18,54 +18,46 @@ Audit:     Login/Logout/Impersonation -> audit_logs collection -> Auto-delete af
 
 ## Completed Features
 
+### POS Core
+- [x] Orders, items, extras with ESC/POS printing
+- [x] Payment: cash, card, credit (آجل), delivery
+- [x] Payment does NOT resend to kitchen for existing orders
+- [x] Cancel order prints "[تم حذف]" to kitchen printers
+- [x] Refund prints "[مرتجع]" to kitchen printers
+
+### Returns & Cancellations (2026-04-10)
+- [x] Renamed الإرجاعات → المرتجعات throughout the app
+- [x] Refunded orders excluded from: total_sales, cash_sales, card_sales, credit_sales
+- [x] Refunded orders only count in المرتجعات report
+- [x] Cancelled orders only count in الإلغاءات (not in any sales total)
+- [x] Close receipt shows المرتجعات section with count and total
+- [x] Close receipt shows الإلغاءات section (info only, not calculated)
+- [x] USB direct print for close receipt (no print dialog)
+
 ### Printing & Receipt
-- [x] ESC/POS encoding with Arabic Canvas (65mm receipt)
-- [x] Close register receipt: 65mm x 25cm, prints via USB directly (no print dialog)
-- [x] Net cash on receipt: ✅ (match), + (over), - (under) indicators
-- [x] Kitchen routing by print_mode
+- [x] ESC/POS 65mm receipt with Arabic Canvas
+- [x] Close register receipt: 65mm x 25cm, prints via USB directly
+- [x] Net cash: ✅ (match), + (over), - (under) indicators
 
 ### ZKTeco Biometric (Agent v3.7.0)
-- [x] Full ZK Protocol (UDP C# ZKHelper)
-- [x] All endpoints: /zk-test, /zk-sync, /zk-users, /zk-push-user, /zk-delete-user, /zk-face-photo
-- [x] Face Photo UI: camera button, dialog with preview/refresh, avatar in employee list
-- [x] Auto-sync every 1 minute with toggle + toast notifications
+- [x] Full ZK Protocol with face photo support
+- [x] Auto-sync every 1 minute with toast notifications
+- [x] Face photo UI: camera button, dialog, avatar
 
 ### HR System
-- [x] Attendance in 12-hour format (ص/م AM/PM)
-- [x] Auto-refresh HR data every 60 seconds (no page reload)
-- [x] Employee break time: break_start, break_end fields with AM/PM picker
-- [x] Break time deducted from worked_hours in auto-process
-- [x] Overtime approval tab with approve/reject buttons
+- [x] Attendance in 12-hour format (ص/م)
+- [x] Auto-refresh every 60 seconds
+- [x] Break time fields with AM/PM picker
+- [x] Overtime approval tab
 - [x] Employee name enrichment across all endpoints
-- [x] Reset HR deletes employees from biometric (skips admin uid=1)
 
 ### Audit Log System (2026-04-10)
 - [x] Tracks ALL login/logout/impersonation events
-- [x] GET /api/auth/audit-logs with pagination
-- [x] DELETE /api/auth/audit-logs (clear button)
-- [x] Auto-deletes records older than 30 days
-- [x] Frontend UI: event type icons (login/logout/impersonation), user name, role, timestamp
-- [x] Logout audit logging via /api/auth/logout endpoint
+- [x] Clear button + auto-delete after 30 days
 
 ### Reports
-- [x] by_cashier resolves names from users collection (fixes "غير محدد")
-
-## Key Files
-- `/app/frontend/src/pages/Dashboard.js` - Dashboard + close register receipt (USB print)
-- `/app/frontend/src/pages/Settings.js` - Audit log tab
-- `/app/frontend/src/pages/HR.js` - HR with biometric, face photo, overtime, break fields
-- `/app/frontend/src/context/AuthContext.js` - Logout audit logging
-- `/app/backend/server.py` - Backend (18K+ lines)
-- `/app/backend/routes/payroll_routes.py` - Payroll + overtime
-- `/app/backend/static/print_server.ps1` - Local agent v3.7.0
-
-## Key API Endpoints
-- POST /api/auth/login (+ audit log), POST /api/auth/logout (+ audit log)
-- GET /api/auth/audit-logs, DELETE /api/auth/audit-logs
-- POST /api/employees/{id}/face-photo
-- POST /api/attendance/auto-process
-- GET /api/overtime-requests, PUT /api/overtime-requests/{id}/approve|reject
-- GET /api/print-agent-version (3.7.0)
+- [x] by_cashier resolves names (fixes "غير محدد")
+- [x] Closing report includes المرتجعات and الإلغاءات
 
 ## Upcoming Tasks
 - P2: Refactor server.py (18K+ lines) into modular routes
