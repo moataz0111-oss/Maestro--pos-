@@ -1025,10 +1025,38 @@ function Build-Receipt {
         $aligns.Add('center')
     }
 
+    if ($order.branch_name) {
+        $lines.Add([string]$order.branch_name)
+        $sizes.Add(12)
+        $bolds.Add($false)
+        $aligns.Add('center')
+    }
+
+    if ($order.phone) {
+        $lines.Add([string]$order.phone)
+        $sizes.Add(10)
+        $bolds.Add($false)
+        $aligns.Add('center')
+    }
+
+    if ($order.address) {
+        $lines.Add([string]$order.address)
+        $sizes.Add(10)
+        $bolds.Add($false)
+        $aligns.Add('center')
+    }
+
     $lines.Add('================================')
     $sizes.Add(10)
     $bolds.Add($false)
     $aligns.Add('center')
+
+    if ($order.section_name) {
+        $lines.Add([string]$order.section_name)
+        $sizes.Add(16)
+        $bolds.Add($true)
+        $aligns.Add('center')
+    }
 
     if ($order.order_number) {
         $lines.Add('#' + [string]$order.order_number)
@@ -1083,6 +1111,20 @@ function Build-Receipt {
         $lines.Add([string]$order.customer_name)
         $sizes.Add(12)
         $bolds.Add($true)
+        $aligns.Add('center')
+    }
+
+    if ($order.customer_phone) {
+        $lines.Add([string]$order.customer_phone)
+        $sizes.Add(10)
+        $bolds.Add($false)
+        $aligns.Add('center')
+    }
+
+    if ($order.delivery_address) {
+        $lines.Add([string]$order.delivery_address)
+        $sizes.Add(10)
+        $bolds.Add($false)
         $aligns.Add('center')
     }
 
@@ -1183,6 +1225,19 @@ function Build-Receipt {
         $aligns.Add('center')
     }
 
+    # ملاحظات الطلب
+    $notes = if ($order.order_notes) { $order.order_notes } elseif ($order.notes) { $order.notes } else { $null }
+    if ($notes) {
+        $lines.Add('================================')
+        $sizes.Add(10)
+        $bolds.Add($false)
+        $aligns.Add('center')
+        $lines.Add([string]$notes)
+        $sizes.Add(11)
+        $bolds.Add($false)
+        $aligns.Add('center')
+    }
+
     $lines.Add('================================')
     $sizes.Add(10)
     $bolds.Add($false)
@@ -1199,30 +1254,50 @@ function Build-Receipt {
     $bolds.Add($false)
     $aligns.Add('center')
 
-    try {
-        $result = [ReceiptRenderer]::RenderTextToEscPos(
-            [string[]]$lines.ToArray(),
-            [int[]]$sizes.ToArray(),
-            [bool[]]$bolds.ToArray(),
-            [string[]]$aligns.ToArray(),
-            $paperWidth
-        )
-        return $result
-    } catch {
-        "$(Get-Date) - ReceiptRenderer error: $_ - falling back to UTF8" | Out-File $agentLog -Append
-        $enc = [System.Text.Encoding]::UTF8
-        $bytes = [System.Collections.Generic.List[byte]]::new()
-        $bytes.AddRange([byte[]]@(0x1b, 0x40))
-        foreach ($i in 0..($lines.Count - 1)) {
-            if ($bolds[$i]) { $bytes.AddRange([byte[]]@(0x1b, 0x45, 0x01)) }
-            $bytes.AddRange($enc.GetBytes($lines[$i]))
-            $bytes.Add(0x0a)
-            if ($bolds[$i]) { $bytes.AddRange([byte[]]@(0x1b, 0x45, 0x00)) }
+    # استخدام ESC/POS نصي (سريع جداً - مثل إيصال الإغلاق)
+    $enc = [System.Text.Encoding]::UTF8
+    $bytes = [System.Collections.Generic.List[byte]]::new()
+    
+    # Initialize printer + Arabic codepage
+    $bytes.AddRange([byte[]]@(0x1b, 0x40))         # Reset
+    $bytes.AddRange([byte[]]@(0x1b, 0x74, 22))     # Arabic codepage (Windows-1256)
+    
+    foreach ($i in 0..($lines.Count - 1)) {
+        $line = $lines[$i]
+        $bold = $bolds[$i]
+        $align = $aligns[$i]
+        $size = $sizes[$i]
+        
+        # Alignment: 0=left, 1=center, 2=right
+        if ($align -eq 'center') { $bytes.AddRange([byte[]]@(0x1b, 0x61, 1)) }
+        elseif ($align -eq 'right') { $bytes.AddRange([byte[]]@(0x1b, 0x61, 2)) }
+        else { $bytes.AddRange([byte[]]@(0x1b, 0x61, 0)) }
+        
+        # Bold
+        if ($bold) { $bytes.AddRange([byte[]]@(0x1b, 0x45, 1)) }
+        
+        # Size: large text = double width+height
+        if ($size -ge 16) {
+            $bytes.AddRange([byte[]]@(0x1d, 0x21, 0x11))  # Double W+H
+        } elseif ($size -ge 13) {
+            $bytes.AddRange([byte[]]@(0x1d, 0x21, 0x01))  # Double H only
+        } else {
+            $bytes.AddRange([byte[]]@(0x1d, 0x21, 0x00))  # Normal
         }
-        $bytes.Add(0x0a); $bytes.Add(0x0a); $bytes.Add(0x0a); $bytes.Add(0x0a)
-        $bytes.AddRange([byte[]]@(0x1d, 0x56, 0x42, 0x00))
-        return $bytes.ToArray()
+        
+        # Text
+        $bytes.AddRange($enc.GetBytes($line))
+        $bytes.Add(0x0a)  # Line feed
+        
+        # Reset formatting
+        if ($bold) { $bytes.AddRange([byte[]]@(0x1b, 0x45, 0)) }
+        if ($size -ge 13) { $bytes.AddRange([byte[]]@(0x1d, 0x21, 0x00)) }
     }
+    
+    # Feed + Cut paper
+    $bytes.Add(0x0a); $bytes.Add(0x0a); $bytes.Add(0x0a)
+    $bytes.AddRange([byte[]]@(0x1d, 0x56, 0x42, 3))
+    return $bytes.ToArray()
 }
 
 # ============================================

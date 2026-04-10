@@ -167,8 +167,8 @@ export const sendRawPrint = async (ip, port, text, usbPrinterName = null) => {
 
 /**
  * طباعة إيصال - الدالة الرئيسية
- * 1. يولد صورة ESC/POS في المتصفح (Canvas)
- * 2. يرسلها كـ raw_data للوكيل المحلي
+ * للـ USB: يرسل بيانات الطلب مباشرة للوكيل المحلي (Build-Receipt في C# - سريع جداً)
+ * للشبكة: يولد صورة ESC/POS في المتصفح ثم يرسلها
  */
 export const sendReceiptPrint = async (printer, orderData) => {
   try {
@@ -179,25 +179,26 @@ export const sendReceiptPrint = async (printer, orderData) => {
       printer_type: isKitchen ? 'kitchen' : 'receipt'
     };
 
-    // توليد ESC/POS bitmap
-    const renderResult = await renderReceiptBitmap(orderData, printerConfig);
-    
-    if (!renderResult.success || !renderResult.raw_data) {
-      return { success: false, message: 'RENDER_FAILED: ' + (renderResult.error || 'Unknown') };
-    }
+    const printPayload = {};
 
-    // إرسال البيانات للطابعة عبر الوكيل - بدون انتظار طويل
-    const printPayload = { raw_data: renderResult.raw_data };
-
+    // USB: إرسال بيانات الطلب مباشرة - الوكيل يبني الإيصال محلياً (أسرع بكثير)
     if (printer.connection_type === 'usb' && printer.usb_printer_name) {
+      printPayload.order = orderData;
+      printPayload.printer_config = printerConfig;
       printPayload.usb_printer_name = printer.usb_printer_name;
     } else {
+      // شبكة: توليد ESC/POS bitmap في المتصفح
+      const renderResult = await renderReceiptBitmap(orderData, printerConfig);
+      if (!renderResult.success || !renderResult.raw_data) {
+        return { success: false, message: 'RENDER_FAILED: ' + (renderResult.error || 'Unknown') };
+      }
+      printPayload.raw_data = renderResult.raw_data;
       printPayload.ip = printer.ip_address;
       printPayload.port = printer.port || 9100;
     }
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 sec max
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
 
     const res = await fetch(`${PRINT_AGENT_URL}/print-receipt`, {
       method: 'POST',
