@@ -305,7 +305,10 @@ export const printOrderToAllPrinters = async (order, orderItems, products, print
         const extras = (item.extras || item.selectedExtras || []).reduce((s, e) => s + ((e.price || 0) * (e.quantity || 1)), 0);
         return sum + ((item.price + extras) * (item.quantity || 1));
       }, 0),
-      discount: order.discount || 0
+      discount: order.discount || 0,
+      payment_method: order.payment_method || '',
+      qr_url: order.qr_url || '',
+      contact_message: order.contact_message || ''
     };
 
     return sendReceiptPrint(printer, orderData).then(result => ({

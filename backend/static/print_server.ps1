@@ -1009,26 +1009,25 @@ function Build-TestPage {
 function Build-Receipt {
     param($order, $config)
     $showPrices = $true
-    if ($config -and $config.show_prices -eq $false) { $showPrices = $false }
+    $isKitchen = $false
+    if ($config) {
+        if ($config.show_prices -eq $false) { $showPrices = $false }
+        if ($config.printer_type -eq 'kitchen' -or $config.print_mode -eq 'orders_only' -or $config.print_mode -eq 'selected_products') {
+            $isKitchen = $true
+        }
+    }
     $lang = if ($order.language) { $order.language } else { 'ar' }
-    $paperWidth = 384
 
     $lines = [System.Collections.Generic.List[string]]::new()
     $sizes = [System.Collections.Generic.List[int]]::new()
     $bolds = [System.Collections.Generic.List[bool]]::new()
     $aligns = [System.Collections.Generic.List[string]]::new()
 
+    # === رأس الإيصال ===
     if ($order.restaurant_name) {
         $lines.Add([string]$order.restaurant_name)
         $sizes.Add(20)
         $bolds.Add($true)
-        $aligns.Add('center')
-    }
-
-    if ($order.branch_name) {
-        $lines.Add([string]$order.branch_name)
-        $sizes.Add(12)
-        $bolds.Add($false)
         $aligns.Add('center')
     }
 
@@ -1046,25 +1045,61 @@ function Build-Receipt {
         $aligns.Add('center')
     }
 
-    $lines.Add('================================')
+    if ($order.branch_name) {
+        $lines.Add([string]$order.branch_name)
+        $sizes.Add(11)
+        $bolds.Add($false)
+        $aligns.Add('center')
+    }
+
+    $lines.Add('--------------------------------')
     $sizes.Add(10)
     $bolds.Add($false)
     $aligns.Add('center')
 
-    if ($order.section_name) {
+    # === قسم المطبخ إذا كان kitchen ===
+    if ($isKitchen -and $order.section_name) {
         $lines.Add([string]$order.section_name)
         $sizes.Add(16)
         $bolds.Add($true)
         $aligns.Add('center')
     }
 
+    # === رقم الفاتورة ===
     if ($order.order_number) {
-        $lines.Add('#' + [string]$order.order_number)
+        $invoiceLabel = if ($lang -eq 'ar') { "$([char]0x0641)$([char]0x0627)$([char]0x062A)$([char]0x0648)$([char]0x0631)$([char]0x0629) $([char]0x0631)$([char]0x0642)$([char]0x0645): #" } else { 'Invoice #' }
+        $lines.Add([string]($invoiceLabel + $order.order_number))
         $sizes.Add(16)
         $bolds.Add($true)
-        $aligns.Add('left')
+        $aligns.Add('center')
     }
 
+    # === التاريخ والوقت ===
+    $now = Get-Date
+    $hour = $now.Hour
+    $ampm = if ($hour -ge 12) { 'PM' } else { 'AM' }
+    $h12 = if ($hour -eq 0) { 12 } elseif ($hour -gt 12) { $hour - 12 } else { $hour }
+    $timeStr = "$($now.ToString('d/M/yyyy')) - $($h12):$($now.ToString('mm')) $ampm"
+    $lines.Add($timeStr)
+    $sizes.Add(10)
+    $bolds.Add($false)
+    $aligns.Add('center')
+
+    # === الكاشير ===
+    if ($order.cashier_name) {
+        $cashierLabel = if ($lang -eq 'ar') { "$([char]0x0627)$([char]0x0644)$([char]0x0643)$([char]0x0627)$([char]0x0634)$([char]0x064A)$([char]0x0631): " } else { 'Cashier: ' }
+        $lines.Add([string]($cashierLabel + $order.cashier_name))
+        $sizes.Add(10)
+        $bolds.Add($false)
+        $aligns.Add('center')
+    }
+
+    $lines.Add('--------------------------------')
+    $sizes.Add(10)
+    $bolds.Add($false)
+    $aligns.Add('center')
+
+    # === نوع الطلب ===
     if ($order.order_type) {
         $typeText = switch ($order.order_type) {
             'dine_in' { if ($lang -eq 'ar') { "$([char]0x0637)$([char]0x0644)$([char]0x0628) $([char]0x062F)$([char]0x0627)$([char]0x062E)$([char]0x0644)$([char]0x064A)" } else { 'Dine In' } }
@@ -1073,54 +1108,50 @@ function Build-Receipt {
             default { $order.order_type }
         }
         $lines.Add([string]$typeText)
-        $sizes.Add(16)
-        $bolds.Add($true)
-        $aligns.Add('center')
-    }
-
-    # إظهار اسم شركة التوصيل إذا موجود
-    if ($order.delivery_company) {
-        $lines.Add([string]$order.delivery_company)
         $sizes.Add(14)
         $bolds.Add($true)
         $aligns.Add('center')
     }
 
+    # === شركة التوصيل ===
+    if ($order.delivery_company) {
+        $lines.Add([string]$order.delivery_company)
+        $sizes.Add(13)
+        $bolds.Add($true)
+        $aligns.Add('center')
+    }
+
+    # === الطاولة ===
     if ($order.table_number) {
         $tableLabel = if ($lang -eq 'ar') { "$([char]0x0637)$([char]0x0627)$([char]0x0648)$([char]0x0644)$([char]0x0629): " } else { 'Table: ' }
         $lines.Add([string]($tableLabel + $order.table_number))
-        $sizes.Add(14)
+        $sizes.Add(13)
         $bolds.Add($true)
         $aligns.Add('center')
     }
 
+    # === البزر ===
     if ($order.buzzer_number) {
         $buzzerLabel = if ($lang -eq 'ar') { "$([char]0x0628)$([char]0x0632)$([char]0x0648)$([char]0x0646): " } else { 'Buzzer: ' }
         $lines.Add([string]($buzzerLabel + $order.buzzer_number))
-        $sizes.Add(14)
+        $sizes.Add(13)
         $bolds.Add($true)
         $aligns.Add('center')
     }
 
-    $lines.Add((Get-Date -Format 'yyyy/MM/dd HH:mm'))
-    $sizes.Add(10)
-    $bolds.Add($false)
-    $aligns.Add('center')
-
+    # === العميل ===
     if ($order.customer_name) {
         $lines.Add([string]$order.customer_name)
         $sizes.Add(12)
         $bolds.Add($true)
         $aligns.Add('center')
     }
-
     if ($order.customer_phone) {
         $lines.Add([string]$order.customer_phone)
         $sizes.Add(10)
         $bolds.Add($false)
         $aligns.Add('center')
     }
-
     if ($order.delivery_address) {
         $lines.Add([string]$order.delivery_address)
         $sizes.Add(10)
@@ -1128,41 +1159,47 @@ function Build-Receipt {
         $aligns.Add('center')
     }
 
-    $lines.Add('================================')
-    $sizes.Add(10)
-    $bolds.Add($false)
-    $aligns.Add('center')
-
-    # إشعار الإلغاء أو الارجاع بشكل بارز
-    if ($order.is_refund -or $order.is_cancel) {
-        $statusLabel = if ($order.is_refund) { '*** مرتجع ***' } else { '*** تم الإلغاء ***' }
-        $lines.Add('')
-        $sizes.Add(10)
-        $bolds.Add($false)
-        $aligns.Add('center')
-        $lines.Add([string]$statusLabel)
-        $sizes.Add(18)
+    # === ترحيب / custom_header ===
+    if ($order.custom_header) {
+        $lines.Add([string]$order.custom_header)
+        $sizes.Add(13)
         $bolds.Add($true)
-        $aligns.Add('center')
-        $lines.Add('')
-        $sizes.Add(10)
-        $bolds.Add($false)
         $aligns.Add('center')
     }
 
-    # عرض custom_header إذا موجود
-    if ($order.custom_header) {
-        $lines.Add([string]$order.custom_header)
+    # === إشعار الإلغاء/الارجاع ===
+    if ($order.is_refund -or $order.is_cancel) {
+        $statusLabel = if ($order.is_refund) { '*** مرتجع ***' } else { '*** تم الإلغاء ***' }
+        $lines.Add([string]$statusLabel)
         $sizes.Add(16)
         $bolds.Add($true)
         $aligns.Add('center')
     }
 
+    $lines.Add('--------------------------------')
+    $sizes.Add(10)
+    $bolds.Add($false)
+    $aligns.Add('center')
+
+    # === عناوين الأعمدة (فقط مع الأسعار) ===
+    if ($showPrices) {
+        $colHeader = if ($lang -eq 'ar') { "$([char]0x0627)$([char]0x0644)$([char]0x0635)$([char]0x0646)$([char]0x0641)        $([char]0x0627)$([char]0x0644)$([char]0x0643)$([char]0x0645)$([char]0x064A)$([char]0x0629)      $([char]0x0627)$([char]0x0644)$([char]0x0633)$([char]0x0639)$([char]0x0631)" } else { 'Item      Qty      Price' }
+        $lines.Add($colHeader)
+        $sizes.Add(10)
+        $bolds.Add($true)
+        $aligns.Add('center')
+        $lines.Add('--------------------------------')
+        $sizes.Add(10)
+        $bolds.Add($false)
+        $aligns.Add('center')
+    }
+
+    # === المنتجات ===
     foreach ($item in $order.items) {
         $n = if ($item.product_name) { [string]$item.product_name } else { [string]$item.name }
         $q = if ($item.quantity) { $item.quantity } else { 1 }
 
-        # خط فوق المنتج الملغى/المرتجع
+        # تمييز المنتج الملغى/المرتجع
         if ($order.is_refund -or $order.is_cancel) {
             $lines.Add('XXXXXXXXXXXXXXXXXXXXXXX')
             $sizes.Add(10)
@@ -1171,23 +1208,22 @@ function Build-Receipt {
         }
 
         if ($showPrices) {
-            $p = [math]::Round($item.price * $q)
-            $lines.Add("$n x$q  $p")
-            $sizes.Add(13)
+            $p = '{0:N0}' -f [math]::Round($item.price * $q)
+            $lines.Add("$n    $q    $p IQD")
+            $sizes.Add(12)
             $bolds.Add($true)
-            $aligns.Add('left')
+            $aligns.Add('right')
         } else {
             $lines.Add("$n  x$q")
-            $sizes.Add(18)
+            $sizes.Add(16)
             $bolds.Add($true)
-            $aligns.Add('left')
+            $aligns.Add('right')
         }
 
-        # خط تحت المنتج + علامة الإلغاء/الارجاع
         if ($order.is_refund -or $order.is_cancel) {
             $itemStatus = if ($order.is_refund) { '>> تم الارجاع <<' } else { '>> تم الإلغاء <<' }
             $lines.Add([string]$itemStatus)
-            $sizes.Add(13)
+            $sizes.Add(12)
             $bolds.Add($true)
             $aligns.Add('center')
             $lines.Add('XXXXXXXXXXXXXXXXXXXXXXX')
@@ -1195,11 +1231,12 @@ function Build-Receipt {
             $bolds.Add($false)
             $aligns.Add('center')
         }
+
         if ($item.notes) {
             $lines.Add('  >> ' + [string]$item.notes)
             $sizes.Add(10)
             $bolds.Add($false)
-            $aligns.Add('left')
+            $aligns.Add('right')
         }
         if ($item.extras) {
             foreach ($extra in $item.extras) {
@@ -1207,107 +1244,124 @@ function Build-Receipt {
                 if ($eName) {
                     $eQty = if ($extra.quantity) { [int]$extra.quantity } else { 1 }
                     if ($showPrices -and $extra.price) {
-                        $eTotal = [math]::Round($extra.price * $eQty)
-                        if ($eQty -gt 1) {
-                            $lines.Add("  + $eName x$eQty  $eTotal")
-                        } else {
-                            $lines.Add("  + $eName  $eTotal")
-                        }
+                        $eTotal = '{0:N0}' -f [math]::Round($extra.price * $eQty)
+                        if ($eQty -gt 1) { $lines.Add("  + $eName x$eQty  $eTotal") }
+                        else { $lines.Add("  + $eName  $eTotal") }
                     } else {
-                        if ($eQty -gt 1) {
-                            $lines.Add("  + $eName x$eQty")
-                        } else {
-                            $lines.Add("  + $eName")
-                        }
+                        if ($eQty -gt 1) { $lines.Add("  + $eName x$eQty") }
+                        else { $lines.Add("  + $eName") }
                     }
                     $sizes.Add(10)
                     $bolds.Add($false)
-                    $aligns.Add('left')
+                    $aligns.Add('right')
                 }
             }
         }
     }
 
-    $lines.Add('================================')
+    $lines.Add('--------------------------------')
     $sizes.Add(10)
     $bolds.Add($false)
     $aligns.Add('center')
 
+    # === الخصم ===
     if ($showPrices -and $order.discount -and $order.discount -gt 0) {
         $discLabel = if ($lang -eq 'ar') { "$([char]0x062E)$([char]0x0635)$([char]0x0645): -" } else { 'Discount: -' }
-        $lines.Add([string]($discLabel + [math]::Round($order.discount)))
-        $sizes.Add(13)
-        $bolds.Add($true)
-        $aligns.Add('center')
-    }
-
-    if ($showPrices -and $order.total) {
-        $totalLabel = if ($lang -eq 'ar') { "$([char]0x0627)$([char]0x0644)$([char]0x0625)$([char]0x062C)$([char]0x0645)$([char]0x0627)$([char]0x0644)$([char]0x064A): " } else { 'Total: ' }
-        $total = [math]::Round($order.total)
-        $lines.Add([string]($totalLabel + $total))
-        $sizes.Add(18)
-        $bolds.Add($true)
-        $aligns.Add('center')
-    }
-
-    if ($showPrices -and $order.payment_method) {
-        $pmText = switch ($order.payment_method) {
-            'cash' { if ($lang -eq 'ar') { "$([char]0x0646)$([char]0x0642)$([char]0x062F)$([char]0x064A)" } else { 'Cash' } }
-            'card' { if ($lang -eq 'ar') { "$([char]0x0628)$([char]0x0637)$([char]0x0627)$([char]0x0642)$([char]0x0629)" } else { 'Card' } }
-            'credit' { if ($lang -eq 'ar') { "$([char]0x0622)$([char]0x062C)$([char]0x0644)" } else { 'Credit' } }
-            default { [string]$order.payment_method }
-        }
-        $pmLabel = if ($lang -eq 'ar') { "$([char]0x0627)$([char]0x0644)$([char]0x062F)$([char]0x0641)$([char]0x0639): " } else { 'Payment: ' }
-        $lines.Add([string]($pmLabel + $pmText))
+        $dVal = '{0:N0}' -f [math]::Round($order.discount)
+        $lines.Add([string]($discLabel + $dVal + ' IQD'))
         $sizes.Add(12)
         $bolds.Add($true)
         $aligns.Add('center')
     }
 
-    if ($showPrices -and $order.cashier_name) {
-        $cashierLabel = if ($lang -eq 'ar') { "$([char]0x0627)$([char]0x0644)$([char]0x0643)$([char]0x0627)$([char]0x0634)$([char]0x064A)$([char]0x0631): " } else { 'Cashier: ' }
-        $lines.Add([string]($cashierLabel + $order.cashier_name))
+    # === الإجمالي النهائي ===
+    if ($showPrices -and $order.total) {
+        $totalLabel = if ($lang -eq 'ar') { "$([char]0x0627)$([char]0x0644)$([char]0x0625)$([char]0x062C)$([char]0x0645)$([char]0x0627)$([char]0x0644)$([char]0x064A) $([char]0x0627)$([char]0x0644)$([char]0x0646)$([char]0x0647)$([char]0x0627)$([char]0x0626)$([char]0x064A): " } else { 'Final Total: ' }
+        $tVal = '{0:N0}' -f [math]::Round($order.total)
+        $lines.Add([string]($totalLabel + $tVal + ' IQD'))
+        $sizes.Add(16)
+        $bolds.Add($true)
+        $aligns.Add('center')
+    }
+
+    $lines.Add('--------------------------------')
+    $sizes.Add(10)
+    $bolds.Add($false)
+    $aligns.Add('center')
+
+    # === طريقة الدفع ===
+    if ($showPrices -and $order.payment_method) {
+        $pmText = switch ($order.payment_method) {
+            'cash' { if ($lang -eq 'ar') { "$([char]0x0646)$([char]0x0642)$([char]0x062F)$([char]0x064A)" } else { 'Cash' } }
+            'card' { if ($lang -eq 'ar') { "$([char]0x0628)$([char]0x0637)$([char]0x0627)$([char]0x0642)$([char]0x0629)" } else { 'Card' } }
+            'credit' { if ($lang -eq 'ar') { "$([char]0x0622)$([char]0x062C)$([char]0x0644)" } else { 'Credit' } }
+            'delivery_company' { if ($lang -eq 'ar') { "$([char]0x0634)$([char]0x0631)$([char]0x0643)$([char]0x0629) $([char]0x062A)$([char]0x0648)$([char]0x0635)$([char]0x064A)$([char]0x0644)" } else { 'Delivery Co.' }  }
+            default { [string]$order.payment_method }
+        }
+        $pmLabel = if ($lang -eq 'ar') { "$([char]0x0627)$([char]0x0644)$([char]0x062F)$([char]0x0641)$([char]0x0639): " } else { 'Payment: ' }
+        $lines.Add([string]($pmLabel + $pmText))
+        $sizes.Add(11)
+        $bolds.Add($true)
+        $aligns.Add('center')
+    }
+
+    # === ملاحظات ===
+    $notes = if ($order.order_notes) { $order.order_notes } elseif ($order.notes) { $order.notes } else { $null }
+    if ($notes) {
+        $lines.Add([string]$notes)
         $sizes.Add(10)
         $bolds.Add($false)
         $aligns.Add('center')
     }
 
-    # ملاحظات الطلب
-    $notes = if ($order.order_notes) { $order.order_notes } elseif ($order.notes) { $order.notes } else { $null }
-    if ($notes) {
-        $lines.Add('================================')
+    # === التذييل المخصص ===
+    if ($order.custom_footer) {
+        $lines.Add('--------------------------------')
         $sizes.Add(10)
         $bolds.Add($false)
         $aligns.Add('center')
-        $lines.Add([string]$notes)
+        $lines.Add([string]$order.custom_footer)
         $sizes.Add(11)
         $bolds.Add($false)
         $aligns.Add('center')
     }
 
-    $lines.Add('================================')
+    $lines.Add('--------------------------------')
     $sizes.Add(10)
     $bolds.Add($false)
     $aligns.Add('center')
 
-    $thankText = if ($lang -eq 'ar') { "$([char]0x0634)$([char]0x0643)$([char]0x0631)$([char]0x0627)$([char]0x064B) $([char]0x0644)$([char]0x0632)$([char]0x064A)$([char]0x0627)$([char]0x0631)$([char]0x062A)$([char]0x0643)$([char]0x0645)" } else { 'Thank you!' }
-    $lines.Add([string]$thankText)
-    $sizes.Add(14)
+    # === شكراً ===
+    $thankMsg = if ($order.thank_you_message) { $order.thank_you_message } else {
+        if ($lang -eq 'ar') { "$([char]0x0634)$([char]0x0643)$([char]0x0631)$([char]0x0627)$([char]0x064B) $([char]0x0644)$([char]0x0632)$([char]0x064A)$([char]0x0627)$([char]0x0631)$([char]0x062A)$([char]0x0643)$([char]0x0645)" } else { 'Thank you!' }
+    }
+    $lines.Add([string]$thankMsg)
+    $sizes.Add(13)
     $bolds.Add($true)
     $aligns.Add('center')
 
-    $lines.Add('Maestro EGP')
-    $sizes.Add(9)
+    # === اسم النظام ===
+    $sysName = if ($order.system_name) { $order.system_name } else { 'Maestro EGP' }
+    $lines.Add([string]$sysName)
+    $sizes.Add(10)
     $bolds.Add($false)
     $aligns.Add('center')
 
-    # استخدام ESC/POS نصي (سريع جداً - مثل إيصال الإغلاق)
+    # === رسالة التواصل ===
+    if ($order.contact_message) {
+        $lines.Add([string]$order.contact_message)
+        $sizes.Add(9)
+        $bolds.Add($false)
+        $aligns.Add('center')
+    }
+
+    # === بناء ESC/POS نصي سريع ===
     $enc = [System.Text.Encoding]::UTF8
     $bytes = [System.Collections.Generic.List[byte]]::new()
     
-    # Initialize printer + Arabic codepage
-    $bytes.AddRange([byte[]]@(0x1b, 0x40))         # Reset
-    $bytes.AddRange([byte[]]@(0x1b, 0x74, 22))     # Arabic codepage (Windows-1256)
+    # Initialize + Arabic codepage
+    $bytes.AddRange([byte[]]@(0x1b, 0x40))
+    $bytes.AddRange([byte[]]@(0x1b, 0x74, 22))
     
     foreach ($i in 0..($lines.Count - 1)) {
         $line = $lines[$i]
@@ -1315,7 +1369,7 @@ function Build-Receipt {
         $align = $aligns[$i]
         $size = $sizes[$i]
         
-        # Alignment: 0=left, 1=center, 2=right
+        # Alignment
         if ($align -eq 'center') { $bytes.AddRange([byte[]]@(0x1b, 0x61, 1)) }
         elseif ($align -eq 'right') { $bytes.AddRange([byte[]]@(0x1b, 0x61, 2)) }
         else { $bytes.AddRange([byte[]]@(0x1b, 0x61, 0)) }
@@ -1323,25 +1377,43 @@ function Build-Receipt {
         # Bold
         if ($bold) { $bytes.AddRange([byte[]]@(0x1b, 0x45, 1)) }
         
-        # Size: large text = double width+height
-        if ($size -ge 16) {
-            $bytes.AddRange([byte[]]@(0x1d, 0x21, 0x11))  # Double W+H
-        } elseif ($size -ge 13) {
-            $bytes.AddRange([byte[]]@(0x1d, 0x21, 0x01))  # Double H only
-        } else {
-            $bytes.AddRange([byte[]]@(0x1d, 0x21, 0x00))  # Normal
-        }
+        # Size
+        if ($size -ge 16) { $bytes.AddRange([byte[]]@(0x1d, 0x21, 0x11)) }
+        elseif ($size -ge 13) { $bytes.AddRange([byte[]]@(0x1d, 0x21, 0x01)) }
+        else { $bytes.AddRange([byte[]]@(0x1d, 0x21, 0x00)) }
         
         # Text
         $bytes.AddRange($enc.GetBytes($line))
-        $bytes.Add(0x0a)  # Line feed
+        $bytes.Add(0x0a)
         
-        # Reset formatting
+        # Reset
         if ($bold) { $bytes.AddRange([byte[]]@(0x1b, 0x45, 0)) }
         if ($size -ge 13) { $bytes.AddRange([byte[]]@(0x1d, 0x21, 0x00)) }
     }
+
+    # QR Code (native ESC/POS - إذا موجود رابط)
+    if ($order.qr_url) {
+        $bytes.AddRange([byte[]]@(0x1b, 0x61, 1))  # Center
+        $qrData = $enc.GetBytes($order.qr_url)
+        $qrLen = $qrData.Length + 3
+        # QR Code: Function 167 - Set model
+        $bytes.AddRange([byte[]]@(0x1d, 0x28, 0x6b, 4, 0, 0x31, 0x41, 0x32, 0x00))
+        # QR Code: Function 167 - Set size (4 dots)
+        $bytes.AddRange([byte[]]@(0x1d, 0x28, 0x6b, 3, 0, 0x31, 0x43, 4))
+        # QR Code: Function 167 - Set error correction (L)
+        $bytes.AddRange([byte[]]@(0x1d, 0x28, 0x6b, 3, 0, 0x31, 0x45, 0x30))
+        # QR Code: Function 167 - Store data
+        $bytes.AddRange([byte[]]@(0x1d, 0x28, 0x6b))
+        $bytes.Add([byte]($qrLen -band 0xFF))
+        $bytes.Add([byte](($qrLen -shr 8) -band 0xFF))
+        $bytes.AddRange([byte[]]@(0x31, 0x50, 0x30))
+        $bytes.AddRange($qrData)
+        # QR Code: Function 167 - Print
+        $bytes.AddRange([byte[]]@(0x1d, 0x28, 0x6b, 3, 0, 0x31, 0x51, 0x30))
+        $bytes.Add(0x0a)
+    }
     
-    # Feed + Cut paper
+    # Feed + Cut
     $bytes.Add(0x0a); $bytes.Add(0x0a); $bytes.Add(0x0a)
     $bytes.AddRange([byte[]]@(0x1d, 0x56, 0x42, 3))
     return $bytes.ToArray()

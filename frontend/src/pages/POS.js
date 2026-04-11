@@ -1402,7 +1402,8 @@ export default function POS() {
       system_logo_url: resolvedSysLogoUrl,
       // ملاحظات الفاتورة (من نموذج الحفظ والإرسال)
       order_notes: orderNotes || '',
-      cashier_name: user?.username || user?.name || ''
+      cashier_name: user?.username || user?.name || '',
+      payment_method: paymentMethod || ''
     };
   };
 
