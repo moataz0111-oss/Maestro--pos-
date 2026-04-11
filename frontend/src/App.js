@@ -13,6 +13,8 @@ import InstallPWA from "./components/InstallPWA";
 import React, { Suspense, lazy, useEffect, useState } from "react";
 import { t } from "./utils/translations";
 
+import { useAutoSync } from "./hooks/useAutoSync";
+
 // Loading Component
 const PageLoader = () => (
   <div className="flex items-center justify-center min-h-screen bg-background">
@@ -587,6 +589,12 @@ function AppRoutes() {
   );
 }
 
+// مكون المزامنة التلقائية - يعمل في خلفية التطبيق
+function AutoSyncRunner() {
+  useAutoSync();
+  return null;
+}
+
 function App() {
   return (
     <ErrorBoundary>
@@ -600,6 +608,7 @@ function App() {
                     <BrowserRouter>
                       <OfflineBanner />
                       <AppRoutes />
+                      <AutoSyncRunner />
                       <Toaster position="top-center" richColors />
                       {/* Incoming Call Popup - يظهر في جميع الصفحات */}
                       <IncomingCallPopup />

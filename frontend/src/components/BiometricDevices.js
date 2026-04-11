@@ -73,6 +73,16 @@ export default function BiometricDevices({ branches = [], onDataRefresh }) {
   useEffect(() => {
     fetchDevices();
     checkAgent();
+    // تحميل حالة المزامنة التلقائية من السيرفر
+    (async () => {
+      try {
+        const token = localStorage.getItem('token');
+        const res = await axios.get(`${API}/biometric/auto-sync`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (res.data?.enabled) setAutoSyncActive(true);
+      } catch {}
+    })();
   }, []);
 
   // Auto-sync polling - كل 5 دقائق
@@ -405,7 +415,19 @@ export default function BiometricDevices({ branches = [], onDataRefresh }) {
             <Button 
               variant={autoSyncActive ? 'destructive' : 'default'} 
               size="sm" 
-              onClick={() => setAutoSyncActive(!autoSyncActive)}
+              onClick={async () => {
+                const newState = !autoSyncActive;
+                try {
+                  const token = localStorage.getItem('token');
+                  await axios.post(`${API}/biometric/auto-sync`, { enabled: newState }, {
+                    headers: { Authorization: `Bearer ${token}` }
+                  });
+                  setAutoSyncActive(newState);
+                  toast.success(newState ? t('تم تفعيل المزامنة التلقائية - ستبقى تعمل حتى بعد تسجيل الخروج') : t('تم إيقاف المزامنة التلقائية'));
+                } catch {
+                  toast.error(t('فشل في تحديث حالة المزامنة'));
+                }
+              }}
               disabled={!agentOnline}
               data-testid="auto-sync-toggle"
             >

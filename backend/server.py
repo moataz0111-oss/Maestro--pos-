@@ -14309,6 +14309,40 @@ async def auto_process_attendance(current_user: dict = Depends(get_current_user)
     """
     return await _auto_process_attendance_internal(current_user)
 
+
+@api_router.get("/biometric/auto-sync")
+async def get_auto_sync_status(current_user: dict = Depends(get_current_user)):
+    tenant_id = get_user_tenant_id(current_user)
+    query = {}
+    if tenant_id:
+        query["restaurant_id"] = tenant_id
+    setting = await db.biometric_auto_sync.find_one(query, {"_id": 0})
+    if not setting:
+        return {"enabled": False}
+    return {"enabled": setting.get("enabled", False), "enabled_at": setting.get("enabled_at"), "enabled_by": setting.get("enabled_by_name", "")}
+
+@api_router.post("/biometric/auto-sync")
+async def toggle_auto_sync(body: dict = Body(...), current_user: dict = Depends(get_current_user)):
+    tenant_id = get_user_tenant_id(current_user)
+    enabled = body.get("enabled", False)
+    query = {}
+    if tenant_id:
+        query["restaurant_id"] = tenant_id
+    from datetime import datetime, timezone
+    await db.biometric_auto_sync.update_one(
+        query,
+        {"$set": {
+            "enabled": enabled,
+            "enabled_by": current_user.get("id", ""),
+            "enabled_by_name": current_user.get("name", current_user.get("full_name", "")),
+            "enabled_at": datetime.now(timezone.utc).isoformat(),
+            "restaurant_id": tenant_id
+        }},
+        upsert=True
+    )
+    return {"success": True, "enabled": enabled}
+
+
 async def _auto_process_attendance_internal(current_user: dict):
     """
     دالة داخلية للمعالجة التلقائية - تستدعى من auto-process و sync-from-agent

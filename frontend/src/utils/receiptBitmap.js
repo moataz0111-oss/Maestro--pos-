@@ -76,7 +76,7 @@ function drawRow(ctx, label, value, y, size = 18) {
 
 // Dashed line
 function dash(ctx, y) {
-  ctx.strokeStyle='#000'; ctx.lineWidth=1; ctx.setLineDash([5,3]);
+  ctx.strokeStyle='#000'; ctx.lineWidth=2; ctx.setLineDash([5,3]);
   ctx.beginPath(); ctx.moveTo(MARGIN,y+4); ctx.lineTo(PW-MARGIN,y+4); ctx.stroke();
   ctx.setLineDash([]); return 12;
 }
@@ -208,10 +208,15 @@ async function renderReceipt(order) {
 
   y += dash(x, y);
 
-  // ===== ORDER TYPE =====
-  const types = {'dine_in':'طلب داخلي','takeaway':'طلب سفري','delivery':'طلب توصيل','delivery_company':'شركة توصيل'};
+  // ===== ORDER TYPE (centered) =====
+  const types = {'dine_in':'طلب داخلي','takeaway':'طلب سفري','delivery':'طلب توصيل'};
   const typeText = types[order.order_type] || order.order_type || '';
   if (typeText) { y += drawC(x, typeText, y, 24, true); y += 2; }
+
+  // Delivery company name ONLY (centered, no label)
+  if (order.delivery_company) {
+    y += drawC(x, order.delivery_company, y, 22, true);
+  }
 
   // Table / Customer info
   if (order.order_type === 'dine_in' && order.table_number)
@@ -225,7 +230,6 @@ async function renderReceipt(order) {
     if (order.customer_phone) y += drawRow(x, `${order.customer_phone} :الهاتف`, '', y, 18);
     if (order.delivery_address) y += drawRow(x, `${order.delivery_address} :العنوان`, '', y, 18);
     if (order.driver_name) y += drawRow(x, `${order.driver_name} :السائق`, '', y, 18);
-    if (order.delivery_company) y += drawRow(x, `${order.delivery_company} :شركة التوصيل`, '', y, 18);
   }
 
   // Custom header (greeting)
@@ -257,7 +261,7 @@ async function renderReceipt(order) {
   y += headerSize + 8;
 
   // Header separator
-  x.strokeStyle='#000'; x.lineWidth=1; x.setLineDash([3,2]);
+  x.strokeStyle='#000'; x.lineWidth=2; x.setLineDash([3,2]);
   x.beginPath(); x.moveTo(MARGIN, y); x.lineTo(PW-MARGIN, y); x.stroke();
   x.setLineDash([]); y += 6;
 
@@ -340,7 +344,7 @@ async function renderReceipt(order) {
     // Item separator (dotted line between items)
     if (i < items.length - 1) {
       y += 2;
-      x.setLineDash([2,4]); x.strokeStyle='#000'; x.lineWidth=1;
+      x.setLineDash([2,4]); x.strokeStyle='#000'; x.lineWidth=2;
       x.beginPath(); x.moveTo(MARGIN+20, y); x.lineTo(PW-MARGIN-20, y); x.stroke();
       x.setLineDash([]); y += 8;
     }
