@@ -82,7 +82,7 @@
   },
   
   "test_credentials": {
-    "api_url": "https://pos-closing-fixes.preview.emergentagent.com",
+    "api_url": "https://zk-photo-sync.preview.emergentagent.com",
     "client_graffiti": {
       "email": "hanialdujaili@gmail.com",
       "password": "graffiti123",

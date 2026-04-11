@@ -132,7 +132,7 @@
   },
   
   "test_credentials": {
-    "api_url": "https://pos-closing-fixes.preview.emergentagent.com",
+    "api_url": "https://zk-photo-sync.preview.emergentagent.com",
     "owner": {
       "email": "owner@maestroegp.com",
       "password": "owner123",
