@@ -1421,112 +1421,124 @@ function Build-Receipt {
 
     # system_name, contact_message, و QR code يُطبعون بعد شعار النظام (في قسم ESC/POS)
 
-    # === بناء ESC/POS نصي سريع ===
+    # === بناء ESC/POS ===
     $enc = [System.Text.Encoding]::UTF8
     $bytes = [System.Collections.Generic.List[byte]]::new()
-    
-    # Initialize + Arabic codepage
-    $bytes.AddRange([byte[]]@(0x1b, 0x40))
-    $bytes.AddRange([byte[]]@(0x1b, 0x74, 22))
-    
-    # === شعار المطعم (أعلى الإيصال) ===
-    if (-not $isKitchen) {
+    $bytes.AddRange([byte[]]@(0x1b, 0x40))  # Reset
+
+    if ($isKitchen) {
+        # === وضع المطبخ: ESC/POS نصي سريع ===
+        $bytes.AddRange([byte[]]@(0x1b, 0x74, 22))  # Arabic codepage
+        foreach ($i in 0..($lines.Count - 1)) {
+            $line = $lines[$i]; $bold = $bolds[$i]; $align = $aligns[$i]; $size = $sizes[$i]
+            if ($align -eq 'center') { $bytes.AddRange([byte[]]@(0x1b, 0x61, 1)) }
+            elseif ($align -eq 'right') { $bytes.AddRange([byte[]]@(0x1b, 0x61, 2)) }
+            else { $bytes.AddRange([byte[]]@(0x1b, 0x61, 0)) }
+            if ($bold) { $bytes.AddRange([byte[]]@(0x1b, 0x45, 1)) }
+            if ($size -ge 16) { $bytes.AddRange([byte[]]@(0x1d, 0x21, 0x11)) }
+            elseif ($size -ge 13) { $bytes.AddRange([byte[]]@(0x1d, 0x21, 0x01)) }
+            else { $bytes.AddRange([byte[]]@(0x1d, 0x21, 0x00)) }
+            $bytes.AddRange($enc.GetBytes($line)); $bytes.Add(0x0a)
+            if ($bold) { $bytes.AddRange([byte[]]@(0x1b, 0x45, 0)) }
+            if ($size -ge 13) { $bytes.AddRange([byte[]]@(0x1d, 0x21, 0x00)) }
+        }
+        $bytes.Add(0x0a); $bytes.Add(0x0a); $bytes.Add(0x0a)
+        $bytes.AddRange([byte[]]@(0x1d, 0x56, 0x42, 3))  # Cut
+    } else {
+        # === وضع الفاتورة: bitmap كامل (نفس شكل الصورة الأصلية) ===
+        
+        # 1. شعار المطعم (صورة bitmap)
         $logoImgBytes = Get-ImageBytes -base64 $order.logo_base64 -url $order.logo_url
         if ($logoImgBytes) {
             try {
                 $logoEscPos = [ReceiptRenderer]::ImageToEscPos($logoImgBytes, 384)
-                if ($logoEscPos.Length -gt 0) {
-                    $bytes.AddRange($logoEscPos)
+                if ($logoEscPos.Length -gt 0) { $bytes.AddRange($logoEscPos) }
+            } catch { "$(Get-Date) - Logo error: $_" | Out-File $agentLog -Append }
+        }
+
+        # 2. إضافة system_name و contact_message للنص
+        $sysName = if ($order.system_name) { $order.system_name } else { 'Maestro EGP' }
+        $lines.Add([string]$sysName)
+        $sizes.Add(10)
+        $bolds.Add($false)
+        $aligns.Add('center')
+
+        if ($order.contact_message) {
+            $lines.Add([string]$order.contact_message)
+            $sizes.Add(9)
+            $bolds.Add($false)
+            $aligns.Add('center')
+        }
+
+        # 3. النص الكامل كصورة bitmap (بنفس جودة الأصل)
+        try {
+            $receiptBitmap = [ReceiptRenderer]::RenderTextToEscPos(
+                [string[]]$lines.ToArray(),
+                [int[]]$sizes.ToArray(),
+                [bool[]]$bolds.ToArray(),
+                [string[]]$aligns.ToArray(),
+                384
+            )
+            if ($receiptBitmap.Length -gt 0) {
+                # RenderTextToEscPos يتضمن Reset و Cut - نحتاج فقط البيانات بدون Cut
+                # نأخذ كل البيانات ما عدا آخر 6 bytes (feed + cut)
+                $cutLen = 8  # 4 feed + 4 cut bytes
+                $dataLen = $receiptBitmap.Length - $cutLen
+                if ($dataLen -gt 0) {
+                    # نتخطى أول 2 bytes (Reset من RenderTextToEscPos) لأن عندنا reset بالفعل
+                    $bytes.AddRange($receiptBitmap[2..($dataLen - 1)])
                 }
-            } catch {
-                "$(Get-Date) - Logo render error: $_" | Out-File $agentLog -Append
+            }
+        } catch {
+            "$(Get-Date) - RenderTextToEscPos error: $_ - using text fallback" | Out-File $agentLog -Append
+            # Fallback: ESC/POS نصي
+            $bytes.AddRange([byte[]]@(0x1b, 0x74, 22))
+            foreach ($i in 0..($lines.Count - 1)) {
+                $line = $lines[$i]; $bold = $bolds[$i]; $align = $aligns[$i]; $size = $sizes[$i]
+                if ($align -eq 'center') { $bytes.AddRange([byte[]]@(0x1b, 0x61, 1)) }
+                elseif ($align -eq 'right') { $bytes.AddRange([byte[]]@(0x1b, 0x61, 2)) }
+                else { $bytes.AddRange([byte[]]@(0x1b, 0x61, 0)) }
+                if ($bold) { $bytes.AddRange([byte[]]@(0x1b, 0x45, 1)) }
+                if ($size -ge 16) { $bytes.AddRange([byte[]]@(0x1d, 0x21, 0x11)) }
+                elseif ($size -ge 13) { $bytes.AddRange([byte[]]@(0x1d, 0x21, 0x01)) }
+                else { $bytes.AddRange([byte[]]@(0x1d, 0x21, 0x00)) }
+                $bytes.AddRange($enc.GetBytes($line)); $bytes.Add(0x0a)
+                if ($bold) { $bytes.AddRange([byte[]]@(0x1b, 0x45, 0)) }
+                if ($size -ge 13) { $bytes.AddRange([byte[]]@(0x1d, 0x21, 0x00)) }
             }
         }
-    }
 
-    foreach ($i in 0..($lines.Count - 1)) {
-        $line = $lines[$i]
-        $bold = $bolds[$i]
-        $align = $aligns[$i]
-        $size = $sizes[$i]
-        
-        # Alignment
-        if ($align -eq 'center') { $bytes.AddRange([byte[]]@(0x1b, 0x61, 1)) }
-        elseif ($align -eq 'right') { $bytes.AddRange([byte[]]@(0x1b, 0x61, 2)) }
-        else { $bytes.AddRange([byte[]]@(0x1b, 0x61, 0)) }
-        
-        # Bold
-        if ($bold) { $bytes.AddRange([byte[]]@(0x1b, 0x45, 1)) }
-        
-        # Size
-        if ($size -ge 16) { $bytes.AddRange([byte[]]@(0x1d, 0x21, 0x11)) }
-        elseif ($size -ge 13) { $bytes.AddRange([byte[]]@(0x1d, 0x21, 0x01)) }
-        else { $bytes.AddRange([byte[]]@(0x1d, 0x21, 0x00)) }
-        
-        # Text
-        $bytes.AddRange($enc.GetBytes($line))
-        $bytes.Add(0x0a)
-        
-        # Reset
-        if ($bold) { $bytes.AddRange([byte[]]@(0x1b, 0x45, 0)) }
-        if ($size -ge 13) { $bytes.AddRange([byte[]]@(0x1d, 0x21, 0x00)) }
-    }
-
-    # === شعار النظام (أسفل الإيصال) ===
-    if (-not $isKitchen) {
+        # 4. شعار النظام (صورة bitmap)
         $sysLogoBytes = Get-ImageBytes -base64 $order.system_logo_base64 -url $order.system_logo_url
         if ($sysLogoBytes) {
             try {
                 $sysLogoEscPos = [ReceiptRenderer]::ImageToEscPos($sysLogoBytes, 200)
-                if ($sysLogoEscPos.Length -gt 0) {
-                    $bytes.AddRange($sysLogoEscPos)
-                }
-            } catch {
-                "$(Get-Date) - System logo render error: $_" | Out-File $agentLog -Append
-            }
+                if ($sysLogoEscPos.Length -gt 0) { $bytes.AddRange($sysLogoEscPos) }
+            } catch { "$(Get-Date) - SysLogo error: $_" | Out-File $agentLog -Append }
         }
 
-        # اسم النظام (بعد الشعار)
-        $sysName = if ($order.system_name) { $order.system_name } else { 'Maestro EGP' }
-        $bytes.AddRange([byte[]]@(0x1b, 0x61, 1))  # Center
-        $bytes.AddRange([byte[]]@(0x1d, 0x21, 0x00))  # Normal size
-        $bytes.AddRange($enc.GetBytes($sysName))
-        $bytes.Add(0x0a)
+        # 5. QR Code (أوامر ESC/POS الأصلية - سريع)
+        if ($order.qr_url) {
+            $bytes.AddRange([byte[]]@(0x1b, 0x61, 1))
+            $qrData = $enc.GetBytes($order.qr_url)
+            $qrLen = $qrData.Length + 3
+            $bytes.AddRange([byte[]]@(0x1d, 0x28, 0x6b, 4, 0, 0x31, 0x41, 0x32, 0x00))
+            $bytes.AddRange([byte[]]@(0x1d, 0x28, 0x6b, 3, 0, 0x31, 0x43, 4))
+            $bytes.AddRange([byte[]]@(0x1d, 0x28, 0x6b, 3, 0, 0x31, 0x45, 0x30))
+            $bytes.AddRange([byte[]]@(0x1d, 0x28, 0x6b))
+            $bytes.Add([byte]($qrLen -band 0xFF))
+            $bytes.Add([byte](($qrLen -shr 8) -band 0xFF))
+            $bytes.AddRange([byte[]]@(0x31, 0x50, 0x30))
+            $bytes.AddRange($qrData)
+            $bytes.AddRange([byte[]]@(0x1d, 0x28, 0x6b, 3, 0, 0x31, 0x51, 0x30))
+            $bytes.Add(0x0a)
+        }
+
+        # Feed + Cut
+        $bytes.Add(0x0a); $bytes.Add(0x0a); $bytes.Add(0x0a)
+        $bytes.AddRange([byte[]]@(0x1d, 0x56, 0x42, 3))
     }
 
-    # === رسالة التواصل + QR Code (أسفل الإيصال) ===
-    if (-not $isKitchen -and $order.contact_message) {
-        $bytes.AddRange([byte[]]@(0x1b, 0x61, 1))
-        $bytes.AddRange([byte[]]@(0x1d, 0x21, 0x00))
-        $bytes.AddRange($enc.GetBytes($order.contact_message))
-        $bytes.Add(0x0a)
-    }
-
-    # QR Code (native ESC/POS)
-    if (-not $isKitchen -and $order.qr_url) {
-        $bytes.AddRange([byte[]]@(0x1b, 0x61, 1))  # Center
-        $qrData = $enc.GetBytes($order.qr_url)
-        $qrLen = $qrData.Length + 3
-        # Set model 2
-        $bytes.AddRange([byte[]]@(0x1d, 0x28, 0x6b, 4, 0, 0x31, 0x41, 0x32, 0x00))
-        # Set size (4 dots)
-        $bytes.AddRange([byte[]]@(0x1d, 0x28, 0x6b, 3, 0, 0x31, 0x43, 4))
-        # Set error correction (L)
-        $bytes.AddRange([byte[]]@(0x1d, 0x28, 0x6b, 3, 0, 0x31, 0x45, 0x30))
-        # Store data
-        $bytes.AddRange([byte[]]@(0x1d, 0x28, 0x6b))
-        $bytes.Add([byte]($qrLen -band 0xFF))
-        $bytes.Add([byte](($qrLen -shr 8) -band 0xFF))
-        $bytes.AddRange([byte[]]@(0x31, 0x50, 0x30))
-        $bytes.AddRange($qrData)
-        # Print
-        $bytes.AddRange([byte[]]@(0x1d, 0x28, 0x6b, 3, 0, 0x31, 0x51, 0x30))
-        $bytes.Add(0x0a)
-    }
-    
-    # Feed + Cut
-    $bytes.Add(0x0a); $bytes.Add(0x0a); $bytes.Add(0x0a)
-    $bytes.AddRange([byte[]]@(0x1d, 0x56, 0x42, 3))
     return $bytes.ToArray()
 }
 
