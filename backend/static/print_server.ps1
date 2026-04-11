@@ -875,43 +875,58 @@ public class ZKHelper {
     public static string GetFacePhoto(string ip, int port, int timeoutMs, int uid) {
         try {
             // طريقة 1: جلب الصورة عبر HTTP من السيرفر الداخلي للجهاز
-            string[] urlPatterns = new string[] {
-                "http://" + ip + "/auth_files/biophoto/" + uid + ".jpg",
-                "http://" + ip + "/files/photo/" + uid + ".jpg",
-                "http://" + ip + ":8088/auth_files/biophoto/" + uid + ".jpg",
-                "http://" + ip + "/iclock/biophoto?Pin=" + uid,
-                "http://" + ip + ":80/files/photo/" + uid + ".jpg",
-                "http://" + ip + "/cust-files/data/biophoto/" + uid + ".jpg",
-                "http://" + ip + ":8088/files/photo/" + uid + ".jpg"
+            string[] defaultCreds = new string[] { "", "admin:admin@", "admin:123456@", "admin:@" };
+            string[] pathPatterns = new string[] {
+                "/auth_files/biophoto/{uid}.jpg",
+                "/files/photo/{uid}.jpg",
+                "/csl/ex/photo/{uid}.jpg",
+                "/iclock/biophoto?Pin={uid}",
+                "/cust-files/data/biophoto/{uid}.jpg",
+                "/user/photo?uid={uid}",
+                "/uploads/users/{uid}/photo.jpg",
+                "/biophoto/{uid}.jpg",
+                "/ISAPI/AccessControl/UserInfo/photo/{uid}"
             };
+            int[] ports = new int[] { 80, 8088, 8080, 8081 };
 
-            foreach (string url in urlPatterns) {
-                try {
-                    System.Net.HttpWebRequest req = (System.Net.HttpWebRequest)System.Net.WebRequest.Create(url);
-                    req.Timeout = 5000;
-                    req.Method = "GET";
-                    using (System.Net.HttpWebResponse resp = (System.Net.HttpWebResponse)req.GetResponse()) {
-                        if (resp.StatusCode == System.Net.HttpStatusCode.OK) {
-                            using (System.IO.Stream stream = resp.GetResponseStream()) {
-                                using (System.IO.MemoryStream ms = new System.IO.MemoryStream()) {
-                                    byte[] buffer = new byte[8192];
-                                    int read;
-                                    while ((read = stream.Read(buffer, 0, buffer.Length)) > 0) {
-                                        ms.Write(buffer, 0, read);
-                                    }
-                                    byte[] imgBytes = ms.ToArray();
-                                    if (imgBytes.Length > 100) {
-                                        string base64 = Convert.ToBase64String(imgBytes);
-                                        return "{\"success\":true,\"uid\":" + uid + ",\"photo\":\"data:image/jpeg;base64," + base64 + "\",\"source\":\"http\",\"size\":" + imgBytes.Length + "}";
+            foreach (string cred in defaultCreds) {
+                foreach (int p in ports) {
+                    foreach (string pathTemplate in pathPatterns) {
+                        string path = pathTemplate.Replace("{uid}", uid.ToString());
+                        string url = "http://" + cred + ip + ":" + p + path;
+                        try {
+                            System.Net.HttpWebRequest req = (System.Net.HttpWebRequest)System.Net.WebRequest.Create(url);
+                            req.Timeout = 3000;
+                            req.Method = "GET";
+                            if (cred.Contains(":")) {
+                                string authPart = cred.TrimEnd('@');
+                                string authB64 = Convert.ToBase64String(System.Text.Encoding.ASCII.GetBytes(authPart));
+                                req.Headers["Authorization"] = "Basic " + authB64;
+                            }
+                            using (System.Net.HttpWebResponse resp = (System.Net.HttpWebResponse)req.GetResponse()) {
+                                if (resp.StatusCode == System.Net.HttpStatusCode.OK && resp.ContentLength > 100) {
+                                    using (System.IO.Stream stream = resp.GetResponseStream()) {
+                                        using (System.IO.MemoryStream ms = new System.IO.MemoryStream()) {
+                                            byte[] buffer = new byte[8192];
+                                            int read;
+                                            while ((read = stream.Read(buffer, 0, buffer.Length)) > 0) {
+                                                ms.Write(buffer, 0, read);
+                                            }
+                                            byte[] imgBytes = ms.ToArray();
+                                            if (imgBytes.Length > 100) {
+                                                string base64 = Convert.ToBase64String(imgBytes);
+                                                return "{\"success\":true,\"uid\":" + uid + ",\"photo\":\"data:image/jpeg;base64," + base64 + "\",\"source\":\"http\",\"url\":\"" + EscJson(url) + "\",\"size\":" + imgBytes.Length + "}";
+                                            }
+                                        }
                                     }
                                 }
                             }
-                        }
+                        } catch {}
                     }
-                } catch {}
+                }
             }
 
-            // طريقة 2: جلب عبر بروتوكول UDP الثنائي (CMD_DATA_WRRQ مع biophoto)
+            // طريقة 2: جلب عبر بروتوكول UDP مع دعم الحزم المتعددة
             UdpClient client = null;
             try {
                 client = new UdpClient();
@@ -932,19 +947,63 @@ public class ZKHelper {
                     SendAndReceive(client, ip, port, disablePkt, timeoutMs);
                 } catch {}
 
-                // أرسل طلب بيانات biophoto عبر CMD_DATA_WRRQ (0x000D)
-                const ushort CMD_DATA_WRRQ = 0x000D;
-                string queryStr = "biophoto Pin=" + uid + "\0";
-                byte[] queryBytes = System.Text.Encoding.UTF8.GetBytes(queryStr);
-                byte[] wrrqPkt = BuildPacket(CMD_DATA_WRRQ, sessionId, replyId++, queryBytes);
-                byte[] wrrqResp = SendAndReceive(client, ip, port, wrrqPkt, timeoutMs);
+                // محاولة عدة أنماط لطلب الصورة
+                string[] queryPatterns = new string[] {
+                    "biophoto Pin=" + uid + "\0",
+                    "FacePhoto" + uid + "\0",
+                    "~BioPhoto Pin=" + uid + "\0"
+                };
+
+                byte[] photoData = null;
+                foreach (string query in queryPatterns) {
+                    try {
+                        const ushort CMD_DATA_WRRQ = 0x000D;
+                        byte[] queryBytes = System.Text.Encoding.UTF8.GetBytes(query);
+                        byte[] wrrqPkt = BuildPacket(CMD_DATA_WRRQ, sessionId, replyId++, queryBytes);
+                        byte[] firstResp = SendAndReceive(client, ip, port, wrrqPkt, timeoutMs);
+
+                        if (firstResp != null && firstResp.Length > 8) {
+                            // تحقق إذا البيانات مباشرة في الرد الأول
+                            if (firstResp.Length > 100 && firstResp[0] == 0xFF && firstResp[1] == 0xD8) {
+                                photoData = firstResp;
+                                break;
+                            }
+                            // جمع الحزم المتعددة
+                            var allData = new System.IO.MemoryStream();
+                            if (firstResp.Length > 20) allData.Write(firstResp, 8, firstResp.Length - 8);
+                            
+                            for (int retry = 0; retry < 50; retry++) {
+                                try {
+                                    IPEndPoint ep = new IPEndPoint(IPAddress.Any, 0);
+                                    client.Client.ReceiveTimeout = 2000;
+                                    byte[] chunk = client.Receive(ref ep);
+                                    if (chunk == null || chunk.Length < 8) break;
+                                    allData.Write(chunk, 8, chunk.Length - 8);
+                                    if (chunk.Length < 1024) break;
+                                } catch { break; }
+                            }
+                            byte[] assembled = allData.ToArray();
+                            allData.Close();
+                            // بحث عن JPEG header
+                            for (int i = 0; i < assembled.Length - 1; i++) {
+                                if (assembled[i] == 0xFF && assembled[i + 1] == 0xD8) {
+                                    int jpegLen = assembled.Length - i;
+                                    byte[] jpeg = new byte[jpegLen];
+                                    Array.Copy(assembled, i, jpeg, 0, jpegLen);
+                                    photoData = jpeg;
+                                    break;
+                                }
+                            }
+                            if (photoData != null) break;
+                        }
+                    } catch {}
+                }
 
                 // Enable device
                 try {
                     byte[] enablePkt = BuildPacket(CMD_ENABLEDEVICE, sessionId, replyId++, null);
                     SendAndReceive(client, ip, port, enablePkt, timeoutMs);
                 } catch {}
-
                 // Disconnect
                 try {
                     byte[] exitPkt = BuildPacket(CMD_EXIT, sessionId, replyId++, null);
@@ -952,27 +1011,15 @@ public class ZKHelper {
                 } catch {}
                 client.Close();
 
-                if (wrrqResp != null && wrrqResp.Length > 20) {
-                    // محاولة استخراج بيانات الصورة
-                    string respStr = System.Text.Encoding.UTF8.GetString(wrrqResp);
-                    if (respStr.Contains("content=")) {
-                        int idx = respStr.IndexOf("content=") + 8;
-                        string b64 = respStr.Substring(idx).Trim('\0', '\r', '\n');
-                        if (b64.Length > 100) {
-                            return "{\"success\":true,\"uid\":" + uid + ",\"photo\":\"data:image/jpeg;base64," + b64 + "\",\"source\":\"udp_query\",\"size\":" + b64.Length + "}";
-                        }
-                    }
-                    // قد يكون الرد بيانات ثنائية مباشرة (JPEG)
-                    if (wrrqResp[0] == 0xFF && wrrqResp[1] == 0xD8) {
-                        string base64 = Convert.ToBase64String(wrrqResp);
-                        return "{\"success\":true,\"uid\":" + uid + ",\"photo\":\"data:image/jpeg;base64," + base64 + "\",\"source\":\"udp_raw\",\"size\":" + wrrqResp.Length + "}";
-                    }
+                if (photoData != null && photoData.Length > 100) {
+                    string base64 = Convert.ToBase64String(photoData);
+                    return "{\"success\":true,\"uid\":" + uid + ",\"photo\":\"data:image/jpeg;base64," + base64 + "\",\"source\":\"udp\",\"size\":" + photoData.Length + "}";
                 }
 
-                return "{\"success\":false,\"message\":\"No photo found for UID " + uid + "\",\"resp_len\":" + (wrrqResp != null ? wrrqResp.Length : 0) + "}";
+                return "{\"success\":false,\"message\":\"No photo found for UID " + uid + " - tried HTTP and UDP methods\"}";
             } catch (Exception ex2) {
                 if (client != null) try { client.Close(); } catch {}
-                return "{\"success\":false,\"message\":\"UDP query failed: " + EscJson(ex2.Message) + "\"}";
+                return "{\"success\":false,\"message\":\"UDP error: " + EscJson(ex2.Message) + "\"}";
             }
         } catch (Exception ex) {
             return "{\"success\":false,\"message\":\"" + EscJson(ex.Message) + "\"}";
