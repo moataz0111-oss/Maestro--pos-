@@ -60,7 +60,8 @@ import {
   WifiOff,
   CloudOff,
   Cloud,
-  Camera
+  Camera,
+  Upload
 } from 'lucide-react';
 import { toast, Toaster } from 'sonner';
 import BiometricDevices from '../components/BiometricDevices';
@@ -235,6 +236,15 @@ export default function HR() {
       fetchData();
     }, 60 * 1000);
     return () => clearInterval(autoRefreshInterval);
+  }, [selectedBranchId, selectedMonth, dateMode, startDate, endDate, selectedYear]);
+
+  // الاستماع لأحداث المزامنة التلقائية - تحديث فوري عند وصول بيانات جديدة
+  useEffect(() => {
+    const handleSyncUpdate = () => {
+      fetchData();
+    };
+    window.addEventListener('biometric-sync-data-updated', handleSyncUpdate);
+    return () => window.removeEventListener('biometric-sync-data-updated', handleSyncUpdate);
   }, [selectedBranchId, selectedMonth, dateMode, startDate, endDate, selectedYear]);
 
   const fetchData = async () => {
@@ -554,17 +564,44 @@ export default function HR() {
           toast.warning(t('تم جلب الصورة لكن فشل الحفظ'));
         }
       } else {
-        toast.info(res.data?.message || t('لا توجد صورة وجه لهذا الموظف في الجهاز'));
+        if (!emp.face_photo) {
+          toast.info(t('لا توجد صورة في الجهاز - يمكنك رفع صورة يدوياً'));
+        }
       }
     } catch (err) {
       if (err.code === 'ECONNABORTED' || err.message?.includes('timeout')) {
         toast.error(t('انتهت مهلة الاتصال بجهاز البصمة'));
       } else {
-        toast.error(t('فشل الاتصال بالوكيل المحلي'));
+        if (!emp.face_photo) {
+          toast.info(t('تعذر الاتصال - يمكنك رفع صورة يدوياً'));
+        }
       }
     } finally {
       setFacePhotoLoading(false);
     }
+  };
+
+  // رفع صورة يدوياً
+  const handleManualPhotoUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file || !facePhotoEmployee) return;
+    
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const base64 = reader.result;
+      setFacePhotoData(base64);
+      try {
+        const token = localStorage.getItem('token');
+        await axios.post(`${API}/employees/${facePhotoEmployee.id}/face-photo`, {
+          face_photo: base64
+        }, { headers: { Authorization: `Bearer ${token}` } });
+        toast.success(t('تم حفظ الصورة'));
+        fetchData();
+      } catch {
+        toast.error(t('فشل في حفظ الصورة'));
+      }
+    };
+    reader.readAsDataURL(file);
   };
 
   // Overtime handlers
@@ -2683,6 +2720,17 @@ export default function HR() {
                     {facePhotoLoading ? t('جاري الجلب...') : t('تحديث الصورة')}
                   </Button>
                 )}
+              </div>
+              
+              {/* رفع صورة يدوياً */}
+              <div className="w-full">
+                <label className="cursor-pointer">
+                  <input type="file" accept="image/*" className="hidden" onChange={handleManualPhotoUpload} data-testid="manual-photo-upload" />
+                  <div className="flex items-center justify-center gap-2 p-2 border border-dashed rounded-lg text-sm text-muted-foreground hover:bg-accent transition-colors">
+                    <Upload className="h-4 w-4" />
+                    {t('رفع صورة من الجهاز')}
+                  </div>
+                </label>
               </div>
             </div>
           </DialogContent>

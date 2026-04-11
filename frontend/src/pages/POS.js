@@ -1345,7 +1345,7 @@ export default function POS() {
 
   // دالة مساعدة لبناء بيانات الطباعة مع معلومات الفرع والتوصيل
   const buildPrintOrderData = (orderNumber) => {
-    const currentBranch = branches?.find(b => b.id === (getBranchIdForApi() || localStorage.getItem('selectedBranchId') || user?.branch_id));
+    const currentBranch = branches?.find(b => b.id === (getBranchIdForApi() || localStorage.getItem('selectedBranchId') || user?.branch_id)) || (branches?.length ? branches[0] : null);
     const driverObj = selectedDriver ? drivers.find(d => d.id === selectedDriver) : null;
     const deliveryAppObj = deliveryApp ? deliveryApps.find(a => a.id === deliveryApp) : null;
     

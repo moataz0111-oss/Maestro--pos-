@@ -7,6 +7,13 @@ const API = process.env.REACT_APP_BACKEND_URL + '/api';
 const AGENT_URL = 'http://localhost:9999';
 const SYNC_INTERVAL = 60 * 1000; // كل دقيقة
 
+// حدث مخصص لتحديث البيانات في أي صفحة
+export const SYNC_DATA_UPDATED = 'biometric-sync-data-updated';
+
+export function dispatchSyncUpdate() {
+  window.dispatchEvent(new CustomEvent(SYNC_DATA_UPDATED));
+}
+
 export function useAutoSync() {
   const intervalRef = useRef(null);
   const runningRef = useRef(false);
@@ -65,6 +72,8 @@ export function useAutoSync() {
           `${t('مزامنة تلقائية')}: ${totalNewRecords > 0 ? totalNewRecords + ' ' + t('بصمة جديدة') : ''} ${processed > 0 ? processed + ' ' + t('سجل حضور') : ''}`,
           { duration: 4000 }
         );
+        // إرسال حدث تحديث لكل الصفحات
+        dispatchSyncUpdate();
       }
     } catch {} finally {
       runningRef.current = false;
