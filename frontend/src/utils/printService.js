@@ -167,8 +167,8 @@ export const sendRawPrint = async (ip, port, text, usbPrinterName = null) => {
 
 /**
  * طباعة إيصال - الدالة الرئيسية
- * للـ USB: يرسل بيانات الطلب مباشرة للوكيل المحلي (Build-Receipt في C# - سريع جداً)
- * للشبكة: يولد صورة ESC/POS في المتصفح ثم يرسلها
+ * الفاتورة: bitmap من المتصفح (نفس الشكل الأصلي تماماً)
+ * المطبخ USB: بيانات مباشرة للوكيل (نصي سريع)
  */
 export const sendReceiptPrint = async (printer, orderData) => {
   try {
@@ -181,20 +181,25 @@ export const sendReceiptPrint = async (printer, orderData) => {
 
     const printPayload = {};
 
-    // USB: إرسال بيانات الطلب مباشرة - الوكيل يبني الإيصال محلياً (أسرع بكثير)
-    if (printer.connection_type === 'usb' && printer.usb_printer_name) {
+    // المطبخ USB: بيانات مباشرة للوكيل (نصي سريع جداً)
+    if (isKitchen && printer.connection_type === 'usb' && printer.usb_printer_name) {
       printPayload.order = orderData;
       printPayload.printer_config = printerConfig;
       printPayload.usb_printer_name = printer.usb_printer_name;
     } else {
-      // شبكة: توليد ESC/POS bitmap في المتصفح
+      // الفاتورة + شبكة: bitmap من المتصفح (نفس الشكل الأصلي)
       const renderResult = await renderReceiptBitmap(orderData, printerConfig);
       if (!renderResult.success || !renderResult.raw_data) {
         return { success: false, message: 'RENDER_FAILED: ' + (renderResult.error || 'Unknown') };
       }
       printPayload.raw_data = renderResult.raw_data;
-      printPayload.ip = printer.ip_address;
-      printPayload.port = printer.port || 9100;
+
+      if (printer.connection_type === 'usb' && printer.usb_printer_name) {
+        printPayload.usb_printer_name = printer.usb_printer_name;
+      } else {
+        printPayload.ip = printer.ip_address;
+        printPayload.port = printer.port || 9100;
+      }
     }
 
     const controller = new AbortController();
