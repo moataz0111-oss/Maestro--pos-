@@ -287,6 +287,8 @@ export const printOrderToAllPrinters = async (order, orderItems, products, print
       language: order.language || localStorage.getItem('language') || 'ar',
       logo_base64: order.logo_base64 || null,
       logo_url: order.logo_url || null,
+      system_logo_base64: order.system_logo_base64 || null,
+      system_logo_url: order.system_logo_url || null,
       phone: order.phone || '',
       phone2: order.phone2 || '',
       address: order.address || '',

@@ -121,6 +121,66 @@ public class RawPrinterHelper {
 }
 
 public class ReceiptRenderer {
+    // تحويل صورة إلى ESC/POS raster bitmap (للشعارات)
+    public static byte[] ImageToEscPos(byte[] imageBytes, int maxWidth) {
+        try {
+            using (var ms = new MemoryStream(imageBytes)) {
+                var img = Image.FromStream(ms);
+                // تغيير حجم الصورة للعرض المطلوب مع الحفاظ على النسبة
+                int newWidth = Math.Min(img.Width, maxWidth);
+                int newHeight = (int)((float)img.Height / img.Width * newWidth);
+                if (newHeight > 400) newHeight = 400; // حد أقصى للارتفاع
+                
+                var bmp = new Bitmap(maxWidth, newHeight);
+                var g = Graphics.FromImage(bmp);
+                g.Clear(Color.White);
+                g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
+                // توسيط الصورة
+                int x = (maxWidth - newWidth) / 2;
+                g.DrawImage(img, x, 0, newWidth, newHeight);
+                g.Dispose();
+                img.Dispose();
+                
+                var result = new List<byte>();
+                // Center alignment
+                result.AddRange(new byte[] { 0x1b, 0x61, 1 });
+                int bytesPerRow = (maxWidth + 7) / 8;
+                // GS v 0 - Print raster bit image
+                result.AddRange(new byte[] { 0x1d, 0x76, 0x30, 0x00 });
+                result.Add((byte)(bytesPerRow & 0xFF));
+                result.Add((byte)((bytesPerRow >> 8) & 0xFF));
+                result.Add((byte)(newHeight & 0xFF));
+                result.Add((byte)((newHeight >> 8) & 0xFF));
+                
+                var bmpData = bmp.LockBits(new Rectangle(0, 0, maxWidth, newHeight), ImageLockMode.ReadOnly, PixelFormat.Format24bppRgb);
+                int stride = bmpData.Stride;
+                byte[] rgb = new byte[stride * newHeight];
+                Marshal.Copy(bmpData.Scan0, rgb, 0, rgb.Length);
+                bmp.UnlockBits(bmpData);
+                
+                for (int row = 0; row < newHeight; row++) {
+                    for (int col = 0; col < bytesPerRow; col++) {
+                        byte b = 0;
+                        for (int bit = 0; bit < 8; bit++) {
+                            int px = col * 8 + bit;
+                            if (px < maxWidth) {
+                                int idx = row * stride + px * 3;
+                                float brightness = rgb[idx + 2] * 0.299f + rgb[idx + 1] * 0.587f + rgb[idx] * 0.114f;
+                                if (brightness < 128) b |= (byte)(0x80 >> bit);
+                            }
+                        }
+                        result.Add(b);
+                    }
+                }
+                bmp.Dispose();
+                result.Add(0x0a);
+                return result.ToArray();
+            }
+        } catch {
+            return new byte[0];
+        }
+    }
+
     public static byte[] RenderTextToEscPos(string[] lines, int[] sizes, bool[] bolds, string[] aligns, int paperWidth) {
         var bmp = new Bitmap(paperWidth, 3000);
         var g = Graphics.FromImage(bmp);
@@ -1006,6 +1066,25 @@ function Build-TestPage {
     return $bytes.ToArray()
 }
 
+function Get-ImageBytes {
+    param([string]$base64, [string]$url)
+    try {
+        if ($base64) {
+            # Remove data:image prefix if present
+            $clean = $base64 -replace '^data:image/[^;]+;base64,', ''
+            return [System.Convert]::FromBase64String($clean)
+        }
+        if ($url) {
+            $wc = New-Object System.Net.WebClient
+            $wc.Headers.Add('User-Agent', 'MaestroAgent/3.7')
+            return $wc.DownloadData($url)
+        }
+    } catch {
+        "$(Get-Date) - Get-ImageBytes error: $_" | Out-File $agentLog -Append
+    }
+    return $null
+}
+
 function Build-Receipt {
     param($order, $config)
     $showPrices = $true
@@ -1340,20 +1419,7 @@ function Build-Receipt {
     $bolds.Add($true)
     $aligns.Add('center')
 
-    # === اسم النظام ===
-    $sysName = if ($order.system_name) { $order.system_name } else { 'Maestro EGP' }
-    $lines.Add([string]$sysName)
-    $sizes.Add(10)
-    $bolds.Add($false)
-    $aligns.Add('center')
-
-    # === رسالة التواصل ===
-    if ($order.contact_message) {
-        $lines.Add([string]$order.contact_message)
-        $sizes.Add(9)
-        $bolds.Add($false)
-        $aligns.Add('center')
-    }
+    # system_name, contact_message, و QR code يُطبعون بعد شعار النظام (في قسم ESC/POS)
 
     # === بناء ESC/POS نصي سريع ===
     $enc = [System.Text.Encoding]::UTF8
@@ -1363,6 +1429,21 @@ function Build-Receipt {
     $bytes.AddRange([byte[]]@(0x1b, 0x40))
     $bytes.AddRange([byte[]]@(0x1b, 0x74, 22))
     
+    # === شعار المطعم (أعلى الإيصال) ===
+    if (-not $isKitchen) {
+        $logoImgBytes = Get-ImageBytes -base64 $order.logo_base64 -url $order.logo_url
+        if ($logoImgBytes) {
+            try {
+                $logoEscPos = [ReceiptRenderer]::ImageToEscPos($logoImgBytes, 384)
+                if ($logoEscPos.Length -gt 0) {
+                    $bytes.AddRange($logoEscPos)
+                }
+            } catch {
+                "$(Get-Date) - Logo render error: $_" | Out-File $agentLog -Append
+            }
+        }
+    }
+
     foreach ($i in 0..($lines.Count - 1)) {
         $line = $lines[$i]
         $bold = $bolds[$i]
@@ -1391,24 +1472,54 @@ function Build-Receipt {
         if ($size -ge 13) { $bytes.AddRange([byte[]]@(0x1d, 0x21, 0x00)) }
     }
 
-    # QR Code (native ESC/POS - إذا موجود رابط)
-    if ($order.qr_url) {
+    # === شعار النظام (أسفل الإيصال) ===
+    if (-not $isKitchen) {
+        $sysLogoBytes = Get-ImageBytes -base64 $order.system_logo_base64 -url $order.system_logo_url
+        if ($sysLogoBytes) {
+            try {
+                $sysLogoEscPos = [ReceiptRenderer]::ImageToEscPos($sysLogoBytes, 200)
+                if ($sysLogoEscPos.Length -gt 0) {
+                    $bytes.AddRange($sysLogoEscPos)
+                }
+            } catch {
+                "$(Get-Date) - System logo render error: $_" | Out-File $agentLog -Append
+            }
+        }
+
+        # اسم النظام (بعد الشعار)
+        $sysName = if ($order.system_name) { $order.system_name } else { 'Maestro EGP' }
+        $bytes.AddRange([byte[]]@(0x1b, 0x61, 1))  # Center
+        $bytes.AddRange([byte[]]@(0x1d, 0x21, 0x00))  # Normal size
+        $bytes.AddRange($enc.GetBytes($sysName))
+        $bytes.Add(0x0a)
+    }
+
+    # === رسالة التواصل + QR Code (أسفل الإيصال) ===
+    if (-not $isKitchen -and $order.contact_message) {
+        $bytes.AddRange([byte[]]@(0x1b, 0x61, 1))
+        $bytes.AddRange([byte[]]@(0x1d, 0x21, 0x00))
+        $bytes.AddRange($enc.GetBytes($order.contact_message))
+        $bytes.Add(0x0a)
+    }
+
+    # QR Code (native ESC/POS)
+    if (-not $isKitchen -and $order.qr_url) {
         $bytes.AddRange([byte[]]@(0x1b, 0x61, 1))  # Center
         $qrData = $enc.GetBytes($order.qr_url)
         $qrLen = $qrData.Length + 3
-        # QR Code: Function 167 - Set model
+        # Set model 2
         $bytes.AddRange([byte[]]@(0x1d, 0x28, 0x6b, 4, 0, 0x31, 0x41, 0x32, 0x00))
-        # QR Code: Function 167 - Set size (4 dots)
+        # Set size (4 dots)
         $bytes.AddRange([byte[]]@(0x1d, 0x28, 0x6b, 3, 0, 0x31, 0x43, 4))
-        # QR Code: Function 167 - Set error correction (L)
+        # Set error correction (L)
         $bytes.AddRange([byte[]]@(0x1d, 0x28, 0x6b, 3, 0, 0x31, 0x45, 0x30))
-        # QR Code: Function 167 - Store data
+        # Store data
         $bytes.AddRange([byte[]]@(0x1d, 0x28, 0x6b))
         $bytes.Add([byte]($qrLen -band 0xFF))
         $bytes.Add([byte](($qrLen -shr 8) -band 0xFF))
         $bytes.AddRange([byte[]]@(0x31, 0x50, 0x30))
         $bytes.AddRange($qrData)
-        # QR Code: Function 167 - Print
+        # Print
         $bytes.AddRange([byte[]]@(0x1d, 0x28, 0x6b, 3, 0, 0x31, 0x51, 0x30))
         $bytes.Add(0x0a)
     }
