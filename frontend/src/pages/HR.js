@@ -209,6 +209,8 @@ export default function HR() {
   const [facePhotoEmployee, setFacePhotoEmployee] = useState(null);
   const [facePhotoData, setFacePhotoData] = useState(null);
   const [facePhotoLoading, setFacePhotoLoading] = useState(false);
+  const [probeResult, setProbeResult] = useState(null);
+  const [probeLoading, setProbeLoading] = useState(false);
 
   // جلب أول جهاز بصمة تلقائياً
   useEffect(() => {
@@ -558,14 +560,15 @@ export default function HR() {
           await axios.post(`${API}/employees/${emp.id}/face-photo`, {
             face_photo: res.data.photo
           }, { headers: { Authorization: `Bearer ${token}` } });
-          toast.success(t('تم جلب وحفظ صورة الوجه'));
+          toast.success(t('تم جلب وحفظ صورة الوجه') + ` (${res.data.source})`);
           fetchData();
         } catch (saveErr) {
           toast.warning(t('تم جلب الصورة لكن فشل الحفظ'));
         }
       } else {
+        const debugInfo = res.data?.debug ? res.data.debug.join(', ') : '';
         if (!emp.face_photo) {
-          toast.info(t('لا توجد صورة في الجهاز - يمكنك رفع صورة يدوياً'));
+          toast.info(t('لا توجد صورة في الجهاز') + (debugInfo ? ` - ${debugInfo}` : ''));
         }
       }
     } catch (err) {
@@ -602,6 +605,31 @@ export default function HR() {
       }
     };
     reader.readAsDataURL(file);
+  };
+
+  // تشخيص جهاز البصمة
+  const handleProbeDevice = async () => {
+    const device = biometricDevices.length > 0 ? (biometricDevices.find(d => d.id === (selectedDevice?.id || selectedDevice)) || biometricDevices[0]) : null;
+    if (!device) {
+      toast.error(t('لا يوجد جهاز بصمة مسجل'));
+      return;
+    }
+    setProbeLoading(true);
+    setProbeResult(null);
+    try {
+      const res = await axios.post(`${AGENT_URL}/zk-probe-device`, {
+        ip: device.ip_address
+      }, { timeout: 30000 });
+      setProbeResult(res.data);
+      if (res.data?.success) {
+        toast.success(t('تم فحص الجهاز'));
+      }
+    } catch (err) {
+      toast.error(t('فشل في فحص الجهاز'));
+      setProbeResult({ error: err.message });
+    } finally {
+      setProbeLoading(false);
+    }
   };
 
   // Overtime handlers
@@ -2731,6 +2759,36 @@ export default function HR() {
                     {t('رفع صورة من الجهاز')}
                   </div>
                 </label>
+              </div>
+              
+              {/* تشخيص الجهاز */}
+              <div className="w-full border-t pt-3">
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  className="w-full text-xs text-muted-foreground"
+                  onClick={handleProbeDevice} 
+                  disabled={probeLoading}
+                  data-testid="probe-device-btn"
+                >
+                  {probeLoading ? t('جاري فحص الجهاز...') : t('فحص اتصال الجهاز (تشخيص)')}
+                </Button>
+                {probeResult && (
+                  <div className="mt-2 p-2 bg-muted rounded text-xs font-mono max-h-40 overflow-auto" data-testid="probe-result">
+                    {probeResult.udp_4370 !== undefined && (
+                      <p>UDP 4370: <span className={probeResult.udp_4370 ? 'text-green-500' : 'text-red-500'}>{probeResult.udp_4370 ? 'OK' : 'FAIL'}</span></p>
+                    )}
+                    {probeResult.http_probes?.map((p, i) => (
+                      <p key={i}>
+                        {p.port && `Port ${p.port}`} {p.cred && `[${p.cred}]`} {p.path || ''}: 
+                        <span className={p.status === 200 ? 'text-green-500' : p.status === 401 ? 'text-yellow-500' : 'text-red-500'}>
+                          {` ${p.status}`}
+                        </span>
+                      </p>
+                    ))}
+                    {probeResult.error && <p className="text-red-500">{probeResult.error}</p>}
+                  </div>
+                )}
               </div>
             </div>
           </DialogContent>

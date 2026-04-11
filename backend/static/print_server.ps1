@@ -46,6 +46,7 @@ using System.Runtime.InteropServices;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.Collections.Generic;
+using System.IO;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
@@ -263,9 +264,12 @@ public class ZKHelper {
     const ushort CMD_ACK_DATA = 2002;
     const ushort CMD_ACK_UNAUTH = 2005;
     const ushort CMD_AUTH = 29;
+    const ushort CMD_OPTIONS_RRQ = 11;
     const ushort CMD_PREPARE_DATA = 1500;
     const ushort CMD_DATA = 1501;
     const ushort CMD_FREE_DATA = 1502;
+    const ushort CMD_DATA_WRRQ = 1503;
+    const ushort CMD_DATA_RDY = 1504;
 
     private static ushort CreateChecksum(byte[] p) {
         int l = p.Length;
@@ -871,62 +875,259 @@ public class ZKHelper {
         }
     }
 
-    // ===== Get Face Photo from Device via HTTP =====
-    public static string GetFacePhoto(string ip, int port, int timeoutMs, int uid) {
+    // ===== Helper: Read HTTP photo from URL =====
+    private static byte[] HttpGetPhoto(string url, string user, string pass, int timeout) {
         try {
-            // طريقة 1: جلب الصورة عبر HTTP من السيرفر الداخلي للجهاز
-            string[] defaultCreds = new string[] { "", "admin:admin@", "admin:123456@", "admin:@" };
-            string[] pathPatterns = new string[] {
-                "/auth_files/biophoto/{uid}.jpg",
-                "/files/photo/{uid}.jpg",
-                "/csl/ex/photo/{uid}.jpg",
-                "/iclock/biophoto?Pin={uid}",
-                "/cust-files/data/biophoto/{uid}.jpg",
-                "/user/photo?uid={uid}",
-                "/uploads/users/{uid}/photo.jpg",
-                "/biophoto/{uid}.jpg",
-                "/ISAPI/AccessControl/UserInfo/photo/{uid}"
-            };
-            int[] ports = new int[] { 80, 8088, 8080, 8081 };
-
-            foreach (string cred in defaultCreds) {
-                foreach (int p in ports) {
-                    foreach (string pathTemplate in pathPatterns) {
-                        string path = pathTemplate.Replace("{uid}", uid.ToString());
-                        string url = "http://" + cred + ip + ":" + p + path;
-                        try {
-                            System.Net.HttpWebRequest req = (System.Net.HttpWebRequest)System.Net.WebRequest.Create(url);
-                            req.Timeout = 3000;
-                            req.Method = "GET";
-                            if (cred.Contains(":")) {
-                                string authPart = cred.TrimEnd('@');
-                                string authB64 = Convert.ToBase64String(System.Text.Encoding.ASCII.GetBytes(authPart));
-                                req.Headers["Authorization"] = "Basic " + authB64;
+            System.Net.HttpWebRequest req = (System.Net.HttpWebRequest)System.Net.WebRequest.Create(url);
+            req.Timeout = timeout;
+            req.Method = "GET";
+            req.AllowAutoRedirect = true;
+            if (!string.IsNullOrEmpty(user)) {
+                req.Credentials = new System.Net.NetworkCredential(user, pass);
+                string authB64 = Convert.ToBase64String(Encoding.ASCII.GetBytes(user + ":" + pass));
+                req.Headers["Authorization"] = "Basic " + authB64;
+            }
+            using (System.Net.HttpWebResponse resp = (System.Net.HttpWebResponse)req.GetResponse()) {
+                if ((int)resp.StatusCode >= 200 && (int)resp.StatusCode < 300) {
+                    using (System.IO.Stream stream = resp.GetResponseStream()) {
+                        using (System.IO.MemoryStream ms = new System.IO.MemoryStream()) {
+                            byte[] buffer = new byte[8192];
+                            int read;
+                            while ((read = stream.Read(buffer, 0, buffer.Length)) > 0) {
+                                ms.Write(buffer, 0, read);
                             }
-                            using (System.Net.HttpWebResponse resp = (System.Net.HttpWebResponse)req.GetResponse()) {
-                                if (resp.StatusCode == System.Net.HttpStatusCode.OK && resp.ContentLength > 100) {
-                                    using (System.IO.Stream stream = resp.GetResponseStream()) {
-                                        using (System.IO.MemoryStream ms = new System.IO.MemoryStream()) {
-                                            byte[] buffer = new byte[8192];
-                                            int read;
-                                            while ((read = stream.Read(buffer, 0, buffer.Length)) > 0) {
-                                                ms.Write(buffer, 0, read);
-                                            }
-                                            byte[] imgBytes = ms.ToArray();
-                                            if (imgBytes.Length > 100) {
-                                                string base64 = Convert.ToBase64String(imgBytes);
-                                                return "{\"success\":true,\"uid\":" + uid + ",\"photo\":\"data:image/jpeg;base64," + base64 + "\",\"source\":\"http\",\"url\":\"" + EscJson(url) + "\",\"size\":" + imgBytes.Length + "}";
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        } catch {}
+                            return ms.ToArray();
+                        }
                     }
                 }
             }
+        } catch {}
+        return null;
+    }
 
-            // طريقة 2: جلب عبر بروتوكول UDP مع دعم الحزم المتعددة
+    // ===== Helper: Receive large data following ZK exchange protocol =====
+    private static byte[] ReceiveLargeData(UdpClient client, string ip, int port, ushort sessionId, ref ushort replyId, byte[] firstResp, int timeoutMs) {
+        if (firstResp == null || firstResp.Length < 8) return null;
+        ushort respCmd = BitConverter.ToUInt16(firstResp, 0);
+
+        // Case 1: Small data returned directly in CMD_DATA
+        if (respCmd == CMD_DATA && firstResp.Length > 8) {
+            byte[] smallData = new byte[firstResp.Length - 8];
+            Array.Copy(firstResp, 8, smallData, 0, smallData.Length);
+            return smallData;
+        }
+
+        // Case 2: CMD_ACK_DATA with inline data
+        if (respCmd == CMD_ACK_DATA && firstResp.Length > 8) {
+            byte[] inlineData = new byte[firstResp.Length - 8];
+            Array.Copy(firstResp, 8, inlineData, 0, inlineData.Length);
+            return inlineData;
+        }
+
+        // Case 3: Large data exchange - CMD_ACK_OK with size info
+        if (respCmd == CMD_ACK_OK && firstResp.Length >= 13) {
+            uint dataSize = BitConverter.ToUInt32(firstResp, 9);
+            if (dataSize == 0 || dataSize > 10000000) return null;
+
+            // Send CMD_DATA_RDY
+            byte[] rdyData = new byte[8];
+            rdyData[0] = 0; rdyData[1] = 0; rdyData[2] = 0; rdyData[3] = 0;
+            rdyData[4] = (byte)(dataSize & 0xFF);
+            rdyData[5] = (byte)((dataSize >> 8) & 0xFF);
+            rdyData[6] = (byte)((dataSize >> 16) & 0xFF);
+            rdyData[7] = (byte)((dataSize >> 24) & 0xFF);
+            byte[] rdyPkt = BuildPacket(CMD_DATA_RDY, sessionId, replyId, rdyData);
+            client.Send(rdyPkt, rdyPkt.Length, ip, port);
+
+            // Receive CMD_PREPARE_DATA + CMD_DATA + CMD_ACK_OK
+            var allData = new System.IO.MemoryStream();
+            int maxPackets = (int)(dataSize / 1000) + 100;
+            for (int i = 0; i < maxPackets && allData.Length < dataSize; i++) {
+                try {
+                    IPEndPoint ep = new IPEndPoint(IPAddress.Any, 0);
+                    client.Client.ReceiveTimeout = timeoutMs;
+                    byte[] rawPkt = client.Receive(ref ep);
+                    byte[] pkt = ExtractPayload(rawPkt);
+                    if (pkt == null || pkt.Length < 8) continue;
+                    ushort pktCmd = BitConverter.ToUInt16(pkt, 0);
+                    if (pktCmd == CMD_DATA && pkt.Length > 8) {
+                        allData.Write(pkt, 8, pkt.Length - 8);
+                    } else if (pktCmd == CMD_PREPARE_DATA) {
+                        continue;
+                    } else if (pktCmd == CMD_ACK_OK) {
+                        break;
+                    }
+                } catch { break; }
+            }
+
+            // Free data buffer
+            replyId++;
+            try {
+                byte[] freePkt = BuildPacket(CMD_FREE_DATA, sessionId, replyId++, null);
+                client.Send(freePkt, freePkt.Length, ip, port);
+            } catch {}
+
+            byte[] result = allData.ToArray();
+            allData.Close();
+            return result.Length > 0 ? result : null;
+        }
+
+        return null;
+    }
+
+    // ===== Probe Device - Diagnostic endpoint =====
+    public static string ProbeDevice(string ip) {
+        var results = new List<string>();
+        int[] httpPorts = new int[] { 80, 8080, 8081, 8088, 443 };
+        string[][] credentials = new string[][] {
+            new string[] { "", "" },
+            new string[] { "admin", "" },
+            new string[] { "admin", "admin" },
+            new string[] { "admin", "12345" },
+            new string[] { "admin", "123456" },
+            new string[] { "admin", "00000" },
+            new string[] { "admin", "0" },
+            new string[] { "admin", "1234" },
+            new string[] { "admin", "8888" },
+            new string[] { "administrator", "" },
+            new string[] { "administrator", "admin" }
+        };
+
+        foreach (int p in httpPorts) {
+            foreach (string[] cred in credentials) {
+                string url = "http://" + ip + ":" + p + "/";
+                try {
+                    System.Net.HttpWebRequest req = (System.Net.HttpWebRequest)System.Net.WebRequest.Create(url);
+                    req.Timeout = 3000;
+                    req.Method = "GET";
+                    req.AllowAutoRedirect = false;
+                    if (!string.IsNullOrEmpty(cred[0])) {
+                        req.Credentials = new System.Net.NetworkCredential(cred[0], cred[1]);
+                        string authB64 = Convert.ToBase64String(Encoding.ASCII.GetBytes(cred[0] + ":" + cred[1]));
+                        req.Headers["Authorization"] = "Basic " + authB64;
+                    }
+                    using (System.Net.HttpWebResponse resp = (System.Net.HttpWebResponse)req.GetResponse()) {
+                        int code = (int)resp.StatusCode;
+                        string ct = resp.ContentType ?? "";
+                        long cl = resp.ContentLength;
+                        string credStr = string.IsNullOrEmpty(cred[0]) ? "none" : cred[0] + ":" + cred[1];
+                        results.Add("{\"port\":" + p + ",\"cred\":\"" + EscJson(credStr) + "\",\"status\":" + code + ",\"content_type\":\"" + EscJson(ct) + "\",\"size\":" + cl + "}");
+                        if (code == 200) {
+                            // Found working port+cred, try photo paths
+                            string[] photoPaths = new string[] {
+                                "/biophoto/", "/auth_files/biophoto/", "/files/photo/",
+                                "/csl/ex/photo/", "/cust-files/data/biophoto/",
+                                "/iclock/biophoto", "/media/", "/uploads/"
+                            };
+                            foreach (string pp in photoPaths) {
+                                try {
+                                    System.Net.HttpWebRequest req2 = (System.Net.HttpWebRequest)System.Net.WebRequest.Create("http://" + ip + ":" + p + pp);
+                                    req2.Timeout = 2000;
+                                    if (!string.IsNullOrEmpty(cred[0])) {
+                                        req2.Credentials = new System.Net.NetworkCredential(cred[0], cred[1]);
+                                        string ab = Convert.ToBase64String(Encoding.ASCII.GetBytes(cred[0] + ":" + cred[1]));
+                                        req2.Headers["Authorization"] = "Basic " + ab;
+                                    }
+                                    using (System.Net.HttpWebResponse r2 = (System.Net.HttpWebResponse)req2.GetResponse()) {
+                                        results.Add("{\"port\":" + p + ",\"path\":\"" + EscJson(pp) + "\",\"status\":" + (int)r2.StatusCode + "}");
+                                    }
+                                } catch (System.Net.WebException wex) {
+                                    if (wex.Response != null) {
+                                        int sc = (int)((System.Net.HttpWebResponse)wex.Response).StatusCode;
+                                        if (sc != 404) results.Add("{\"port\":" + p + ",\"path\":\"" + EscJson(pp) + "\",\"status\":" + sc + "}");
+                                    }
+                                } catch {}
+                            }
+                        }
+                    }
+                } catch (System.Net.WebException wex) {
+                    if (wex.Response != null) {
+                        int sc = (int)((System.Net.HttpWebResponse)wex.Response).StatusCode;
+                        string credStr = string.IsNullOrEmpty(cred[0]) ? "none" : cred[0] + ":" + cred[1];
+                        results.Add("{\"port\":" + p + ",\"cred\":\"" + EscJson(credStr) + "\",\"status\":" + sc + "}");
+                    }
+                } catch {}
+            }
+        }
+
+        // Test UDP connection on port 4370
+        string udpResult = "false";
+        try {
+            UdpClient testClient = new UdpClient();
+            testClient.Client.ReceiveTimeout = 5000;
+            testClient.Client.SendTimeout = 5000;
+            bool testOk;
+            ushort testSid = ConnectAndAuth(testClient, ip, 4370, 5000, 0, out testOk);
+            udpResult = testOk ? "true" : "false";
+            try { testClient.Close(); } catch {}
+        } catch {}
+
+        return "{\"success\":true,\"ip\":\"" + EscJson(ip) + "\",\"udp_4370\":" + udpResult + ",\"http_probes\":[" + string.Join(",", results.ToArray()) + "]}";
+    }
+
+    // ===== Get Face Photo from Device =====
+    public static string GetFacePhoto(string ip, int port, int timeoutMs, int uid) {
+        var debugLog = new List<string>();
+        try {
+            // === Method 1: HTTP - try many credentials and iFace990-specific paths ===
+            string[][] httpCreds = new string[][] {
+                new string[] { "", "" },
+                new string[] { "admin", "" },
+                new string[] { "admin", "12345" },
+                new string[] { "admin", "123456" },
+                new string[] { "admin", "00000" },
+                new string[] { "admin", "0" },
+                new string[] { "admin", "1234" },
+                new string[] { "admin", "8888" },
+                new string[] { "admin", "admin" },
+                new string[] { "administrator", "" },
+                new string[] { "administrator", "12345" }
+            };
+            string[] photoPaths = new string[] {
+                "/biophoto/{uid}.jpg",
+                "/auth_files/biophoto/{uid}.jpg",
+                "/files/photo/{uid}.jpg",
+                "/csl/ex/photo/{uid}.jpg",
+                "/cust-files/data/biophoto/{uid}.jpg",
+                "/iclock/biophoto?Pin={uid}",
+                "/user/photo?uid={uid}",
+                "/uploads/users/{uid}/photo.jpg",
+                "/ISAPI/AccessControl/UserInfo/photo/{uid}",
+                "/cgi-bin/snapshot.cgi?user={uid}",
+                "/media/biophoto/{uid}.jpg",
+                "/data/biophoto/{uid}.jpg",
+                "/biophoto/{uid}.bmp",
+                "/photo/{uid}.jpg",
+                "/face/{uid}.jpg",
+                "/capture/{uid}.jpg"
+            };
+            int[] httpPorts = new int[] { 80, 8080, 8081, 8088 };
+
+            foreach (string[] cred in httpCreds) {
+                foreach (int hp in httpPorts) {
+                    foreach (string pathTpl in photoPaths) {
+                        string urlPath = pathTpl.Replace("{uid}", uid.ToString());
+                        string url = "http://" + ip + ":" + hp + urlPath;
+                        byte[] imgData = HttpGetPhoto(url, cred[0], cred[1], 3000);
+                        if (imgData != null && imgData.Length > 100) {
+                            // Check if it looks like an image (JPEG, PNG, BMP)
+                            bool isImage = (imgData.Length > 2 && imgData[0] == 0xFF && imgData[1] == 0xD8) || // JPEG
+                                           (imgData.Length > 4 && imgData[0] == 0x89 && imgData[1] == 0x50) || // PNG
+                                           (imgData.Length > 2 && imgData[0] == 0x42 && imgData[1] == 0x4D);   // BMP
+                            if (isImage) {
+                                string mimeType = "image/jpeg";
+                                if (imgData[0] == 0x89) mimeType = "image/png";
+                                else if (imgData[0] == 0x42) mimeType = "image/bmp";
+                                string base64 = Convert.ToBase64String(imgData);
+                                return "{\"success\":true,\"uid\":" + uid + ",\"photo\":\"data:" + mimeType + ";base64," + base64 + "\",\"source\":\"http\",\"url\":\"" + EscJson(url) + "\",\"size\":" + imgData.Length + "}";
+                            }
+                        }
+                    }
+                }
+            }
+            debugLog.Add("HTTP: no photo found on any port/path/cred combo");
+
+            // === Method 2: UDP Protocol - Face template retrieval ===
             UdpClient client = null;
             try {
                 client = new UdpClient();
@@ -937,74 +1138,121 @@ public class ZKHelper {
                 ushort sessionId = ConnectAndAuth(client, ip, port, timeoutMs, 0, out ok);
                 if (!ok) {
                     client.Close();
-                    return "{\"success\":false,\"message\":\"Connection/Auth failed\"}";
+                    debugLog.Add("UDP: connection/auth failed");
+                    return "{\"success\":false,\"message\":\"No photo found - HTTP and UDP both failed\",\"debug\":[\"" + string.Join("\",\"", debugLog.ToArray()) + "\"]}";
                 }
                 ushort replyId = 2;
+                debugLog.Add("UDP: connected, sessionId=" + sessionId);
 
-                // CMD_DISABLEDEVICE
+                // Disable device for data operations
                 try {
                     byte[] disablePkt = BuildPacket(CMD_DISABLEDEVICE, sessionId, replyId++, null);
                     SendAndReceive(client, ip, port, disablePkt, timeoutMs);
                 } catch {}
 
-                // محاولة عدة أنماط لطلب الصورة
-                string[] queryPatterns = new string[] {
-                    "biophoto Pin=" + uid + "\0",
-                    "FacePhoto" + uid + "\0",
-                    "~BioPhoto Pin=" + uid + "\0"
-                };
-
                 byte[] photoData = null;
-                foreach (string query in queryPatterns) {
-                    try {
-                        const ushort CMD_DATA_WRRQ = 0x000D;
-                        byte[] queryBytes = System.Text.Encoding.UTF8.GetBytes(query);
-                        byte[] wrrqPkt = BuildPacket(CMD_DATA_WRRQ, sessionId, replyId++, queryBytes);
-                        byte[] firstResp = SendAndReceive(client, ip, port, wrrqPkt, timeoutMs);
 
-                        if (firstResp != null && firstResp.Length > 8) {
-                            // تحقق إذا البيانات مباشرة في الرد الأول
-                            if (firstResp.Length > 100 && firstResp[0] == 0xFF && firstResp[1] == 0xD8) {
-                                photoData = firstResp;
-                                break;
+                // Method 2a: CMD_USERTEMP_RRQ with face-specific finger indexes
+                // On iFace devices, face template indexes are typically 50-55
+                int[] faceIndexes = new int[] { 50, 51, 52, 53, 54, 55 };
+                foreach (int fIdx in faceIndexes) {
+                    try {
+                        // fp tmp req: user_sn(2 bytes LE) + finger_index(1 byte)
+                        byte[] reqData = new byte[3];
+                        reqData[0] = (byte)(uid & 0xFF);
+                        reqData[1] = (byte)((uid >> 8) & 0xFF);
+                        reqData[2] = (byte)fIdx;
+                        byte[] tmpPkt = BuildPacket(CMD_USERTEMP_RRQ, sessionId, replyId++, reqData);
+                        byte[] tmpResp = SendAndReceive(client, ip, port, tmpPkt, timeoutMs);
+                        if (tmpResp != null && tmpResp.Length >= 8) {
+                            ushort tmpCmd = BitConverter.ToUInt16(tmpResp, 0);
+                            if (tmpCmd == CMD_ACK_ERROR) {
+                                continue; // No template at this index
                             }
-                            // جمع الحزم المتعددة
-                            var allData = new System.IO.MemoryStream();
-                            if (firstResp.Length > 20) allData.Write(firstResp, 8, firstResp.Length - 8);
-                            
-                            for (int retry = 0; retry < 50; retry++) {
-                                try {
-                                    IPEndPoint ep = new IPEndPoint(IPAddress.Any, 0);
-                                    client.Client.ReceiveTimeout = 2000;
-                                    byte[] chunk = client.Receive(ref ep);
-                                    if (chunk == null || chunk.Length < 8) break;
-                                    allData.Write(chunk, 8, chunk.Length - 8);
-                                    if (chunk.Length < 1024) break;
-                                } catch { break; }
-                            }
-                            byte[] assembled = allData.ToArray();
-                            allData.Close();
-                            // بحث عن JPEG header
-                            for (int i = 0; i < assembled.Length - 1; i++) {
-                                if (assembled[i] == 0xFF && assembled[i + 1] == 0xD8) {
-                                    int jpegLen = assembled.Length - i;
-                                    byte[] jpeg = new byte[jpegLen];
-                                    Array.Copy(assembled, i, jpeg, 0, jpegLen);
-                                    photoData = jpeg;
-                                    break;
+                            // Try to receive data (could be large)
+                            byte[] faceData = ReceiveLargeData(client, ip, port, sessionId, ref replyId, tmpResp, timeoutMs);
+                            if (faceData != null && faceData.Length > 100) {
+                                // Check if it contains JPEG data
+                                for (int i = 0; i < faceData.Length - 1; i++) {
+                                    if (faceData[i] == 0xFF && faceData[i + 1] == 0xD8) {
+                                        int jpegLen = faceData.Length - i;
+                                        byte[] jpeg = new byte[jpegLen];
+                                        Array.Copy(faceData, i, jpeg, 0, jpegLen);
+                                        photoData = jpeg;
+                                        debugLog.Add("UDP: found JPEG in face template index " + fIdx);
+                                        break;
+                                    }
                                 }
+                                if (photoData != null) break;
+                                debugLog.Add("UDP: got data at index " + fIdx + " (" + faceData.Length + "B) but no JPEG header");
                             }
-                            if (photoData != null) break;
                         }
-                    } catch {}
+                    } catch (Exception ex) {
+                        debugLog.Add("UDP: index " + fIdx + " error: " + ex.Message);
+                    }
                 }
 
-                // Enable device
+                // Method 2b: CMD_DATA_WRRQ with biophoto data IDs
+                if (photoData == null) {
+                    string[] queryPatterns = new string[] {
+                        "biophoto Pin=" + uid + "\0",
+                        "BioPhoto Pin=" + uid + "\0",
+                        "FacePhoto" + uid + "\0",
+                        "~BioPhoto Pin=" + uid + "\0",
+                        "biophoto " + uid + "\0",
+                        "UserPicture " + uid + "\0"
+                    };
+                    foreach (string query in queryPatterns) {
+                        try {
+                            byte[] queryBytes = Encoding.UTF8.GetBytes(query);
+                            byte[] wrrqPkt = BuildPacket(CMD_DATA_WRRQ, sessionId, replyId++, queryBytes);
+                            byte[] wrrqResp = SendAndReceive(client, ip, port, wrrqPkt, timeoutMs);
+                            if (wrrqResp != null && wrrqResp.Length >= 8) {
+                                ushort wCmd = BitConverter.ToUInt16(wrrqResp, 0);
+                                if (wCmd == CMD_ACK_ERROR) {
+                                    debugLog.Add("UDP WRRQ: query '" + query.TrimEnd('\0') + "' -> ACK_ERROR");
+                                    continue;
+                                }
+                                byte[] wData = ReceiveLargeData(client, ip, port, sessionId, ref replyId, wrrqResp, timeoutMs);
+                                if (wData != null && wData.Length > 100) {
+                                    for (int i = 0; i < wData.Length - 1; i++) {
+                                        if (wData[i] == 0xFF && wData[i + 1] == 0xD8) {
+                                            int jpegLen = wData.Length - i;
+                                            byte[] jpeg = new byte[jpegLen];
+                                            Array.Copy(wData, i, jpeg, 0, jpegLen);
+                                            photoData = jpeg;
+                                            debugLog.Add("UDP WRRQ: found JPEG via query '" + query.TrimEnd('\0') + "'");
+                                            break;
+                                        }
+                                    }
+                                    if (photoData == null) {
+                                        // Check for PNG
+                                        for (int i = 0; i < wData.Length - 3; i++) {
+                                            if (wData[i] == 0x89 && wData[i + 1] == 0x50 && wData[i + 2] == 0x4E && wData[i + 3] == 0x47) {
+                                                int pngLen = wData.Length - i;
+                                                byte[] png = new byte[pngLen];
+                                                Array.Copy(wData, i, png, 0, pngLen);
+                                                photoData = png;
+                                                debugLog.Add("UDP WRRQ: found PNG via query '" + query.TrimEnd('\0') + "'");
+                                                break;
+                                            }
+                                        }
+                                    }
+                                    if (photoData != null) break;
+                                    debugLog.Add("UDP WRRQ: got " + wData.Length + "B data but no image header");
+                                }
+                            }
+                        } catch (Exception ex) {
+                            debugLog.Add("UDP WRRQ: error: " + ex.Message);
+                        }
+                    }
+                }
+
+                // Enable device + disconnect
                 try {
                     byte[] enablePkt = BuildPacket(CMD_ENABLEDEVICE, sessionId, replyId++, null);
                     SendAndReceive(client, ip, port, enablePkt, timeoutMs);
                 } catch {}
-                // Disconnect
                 try {
                     byte[] exitPkt = BuildPacket(CMD_EXIT, sessionId, replyId++, null);
                     client.Send(exitPkt, exitPkt.Length, ip, port);
@@ -1012,14 +1260,16 @@ public class ZKHelper {
                 client.Close();
 
                 if (photoData != null && photoData.Length > 100) {
+                    string mimeType = (photoData[0] == 0x89) ? "image/png" : "image/jpeg";
                     string base64 = Convert.ToBase64String(photoData);
-                    return "{\"success\":true,\"uid\":" + uid + ",\"photo\":\"data:image/jpeg;base64," + base64 + "\",\"source\":\"udp\",\"size\":" + photoData.Length + "}";
+                    return "{\"success\":true,\"uid\":" + uid + ",\"photo\":\"data:" + mimeType + ";base64," + base64 + "\",\"source\":\"udp\",\"size\":" + photoData.Length + "}";
                 }
 
-                return "{\"success\":false,\"message\":\"No photo found for UID " + uid + " - tried HTTP and UDP methods\"}";
+                return "{\"success\":false,\"message\":\"No photo found for UID " + uid + "\",\"debug\":[\"" + string.Join("\",\"", debugLog.ToArray()) + "\"]}";
             } catch (Exception ex2) {
                 if (client != null) try { client.Close(); } catch {}
-                return "{\"success\":false,\"message\":\"UDP error: " + EscJson(ex2.Message) + "\"}";
+                debugLog.Add("UDP fatal: " + ex2.Message);
+                return "{\"success\":false,\"message\":\"" + EscJson(ex2.Message) + "\",\"debug\":[\"" + string.Join("\",\"", debugLog.ToArray()) + "\"]}";
             }
         } catch (Exception ex) {
             return "{\"success\":false,\"message\":\"" + EscJson(ex.Message) + "\"}";
@@ -1875,6 +2125,20 @@ try {
                 $em = $_.Exception.Message -replace '"', '' -replace '\\', ''
                 $jsonOut = '{"success":false,"message":"' + $em + '"}'
                 "$(Get-Date) - ZK Face Photo error: $em" | Out-File $agentLog -Append
+            }
+        }
+        elseif ($path -eq '/zk-probe-device' -and $req.HttpMethod -eq 'POST') {
+            $reader = New-Object System.IO.StreamReader($req.InputStream)
+            $body = $reader.ReadToEnd() | ConvertFrom-Json
+            $zkIp = $body.ip
+            "$(Get-Date) - ZK Probe Device: $zkIp" | Out-File $agentLog -Append
+            try {
+                $jsonOut = [ZKHelper]::ProbeDevice($zkIp)
+                "$(Get-Date) - ZK Probe result: $($jsonOut.Substring(0, [Math]::Min(300, $jsonOut.Length)))" | Out-File $agentLog -Append
+            } catch {
+                $em = $_.Exception.Message -replace '"', '' -replace '\\', ''
+                $jsonOut = '{"success":false,"message":"' + $em + '"}'
+                "$(Get-Date) - ZK Probe error: $em" | Out-File $agentLog -Append
             }
         }
         else {

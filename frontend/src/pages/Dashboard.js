@@ -280,6 +280,15 @@ export default function Dashboard() {
     return () => clearInterval(interval);
   }, [selectedBranchId]);
 
+  // الاستماع لأحداث المزامنة التلقائية من البصمة
+  useEffect(() => {
+    const handleSyncUpdate = () => {
+      fetchData();
+    };
+    window.addEventListener('biometric-sync-data-updated', handleSyncUpdate);
+    return () => window.removeEventListener('biometric-sync-data-updated', handleSyncUpdate);
+  }, [selectedBranchId]);
+
   // تحديد الفترة الافتراضية بناءً على صلاحيات المستخدم
   useEffect(() => {
     // المدير والأدمن يرى كل الفترات
