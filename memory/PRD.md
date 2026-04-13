@@ -4,60 +4,47 @@
 Multi-tenant POS system (React + FastAPI + MongoDB) with ZKTeco biometric integration, HR/payroll module, and comprehensive restaurant management.
 
 ## Architecture
-- **Frontend**: React (port 3000) - Dashboard.js, POS.js, HR.js, SuperAdmin.js, Settings.js
-- **Backend**: FastAPI (port 8001) - server.py (monolith) + routes/shifts_routes.py
+- **Frontend**: React (port 3000) - Dashboard.js, POS.js, HR.js, Expenses.js, etc.
+- **Backend**: FastAPI (port 8001) - server.py + routes/shifts_routes.py
 - **Database**: MongoDB (maestro_pos)
-- **Local Agent**: PowerShell print_server.ps1 v3.8.0 with embedded C# ZKHelper
+- **Local Agent**: PowerShell print_server.ps1 v3.8.0
 
 ## Completed Features
 
-### Previous Sessions
-- ZKTeco fingerprint device integration, HR payroll, audit logs, refund handling, kitchen printing, delivery app separation, receipt formatting, auto-sync, etc.
+### April 13, 2026 - Session 1: ZKTeco Photo + Cash Register
+- Fixed CMD_DATA_WRRQ bug, enhanced face photo fetching
+- Cash register: denominations always visible, no-cash button, auto-print, receipt restructured
 
-### April 11, 2026 - ZKTeco Photo Improvements
-- Fixed CMD_DATA_WRRQ bug (0x000D → 0x05DF)
-- Enhanced GetFacePhoto with 11 HTTP credentials + 16 URL paths for iFace990 Plus
-- Added ProbeDevice diagnostic endpoint
-- Auto face photo sync every 5 minutes
-- Dashboard sync event listener
-- Agent v3.8.0
+### April 13, 2026 - Session 2: Owner Shift Management
+- Owner does NOT create own shift - uses cashier's shift
+- Cashier selection dialog when no shift exists
+- Active shift badge shows cashier name
+- Orders by owner go under cashier's shift
 
-### April 13, 2026 - Cash Register Closing Improvements
-- Denominations grid always visible
-- Refresh button + "لا يوجد نقد متوفر" direct close button
-- Receipt restructured: Expenses→Returns→Cancellations→Inventory→Surplus/Deficit→Net Cash
-- Net cash = actual counted cash (not difference)
-- One-step auto-print via USB (no browser dialog)
+### April 13, 2026 - Session 3: Expenses + POS Flow (CURRENT)
+**Expenses Enhancement:**
+- Expenses API returns `created_by_name` (cashier who created each expense)
+- Old expenses populated with cashier names from users collection
+- **3 sections**: حسب التصنيف (by category), مصاريف الكاشيرية (by cashier), سجل المصاريف (log)
+- Expense log shows: date + time + cashier name + amount + category
 
-### April 13, 2026 - Owner Shift Management (NEW)
-- **Owner does NOT create own shift** - admin/manager/super_admin blocked from auto-opening shifts
-- **Cashier selection dialog** - When no shift exists, owner sees list of cashiers to choose from
-- **Open shift for cashier** - `POST /api/shifts/open-for-cashier` creates shift under cashier's name
-- **Active shift badge** - Shows "الوردية: [cashier name]" in header bar
-- **shifts/current for admin** - Returns active cashier's shift (not admin's)
-- **shifts/auto-open for admin** - Returns existing cashier shift or 404 (doesn't create)
-- **Order creation** - When admin creates order, uses cashier_id from active shift (effective_cashier_id)
-- **Cash register close** - Closes the cashier's shift, not the admin's
-- **AuthContext.js** - autoOpenShift only runs for cashier role (not admin/manager)
-- **cash-register/summary for admin** - Returns 404 instead of auto-creating shift
-
-## Key API Endpoints
-- `GET /api/shifts/current` - Returns active shift (for admin: cashier's shift)
-- `POST /api/shifts/auto-open` - Auto-open for cashier, returns existing for admin
-- `POST /api/shifts/open-for-cashier` - Admin opens shift for selected cashier
-- `GET /api/shifts/cashiers-list` - List of cashiers for admin to choose from
-- `GET /api/cash-register/summary` - Shift summary (needs branch_id for admin)
-- `POST /api/cash-register/close` - Close register
-- Local Agent: `POST /zk-face-photo`, `POST /zk-probe-device`, `POST /print-receipt`
+**POS Order Flow:**
+- Payment method buttons turn **orange** (bg-orange-500) when selected
+- `handleSaveAndSendToKitchen` now validates: payment method + table (dine-in) + phone (takeaway) + delivery details
+- After kitchen send: auto-prints customer receipt via USB with `is_paid: false`
+- Receipt shows **"غير مدفوعة"** (unpaid, red) when sent to kitchen
+- Receipt shows **"مدفوعة"** (paid, green) when payment completed
+- Receipt bitmap updated with paid/unpaid status below total
+- printService passes `is_paid` to receipt data
 
 ## Key Files
-- `/app/backend/routes/shifts_routes.py` - Shift management + cash register
-- `/app/backend/server.py` - Main API (order creation with effective_cashier_id)
-- `/app/frontend/src/pages/Dashboard.js` - Dashboard + cash register closing + cashier selection
-- `/app/frontend/src/context/AuthContext.js` - Auth + auto-open shift logic
-- `/app/frontend/src/pages/POS.js` - POS page
-- `/app/frontend/src/hooks/useAutoSync.js` - Auto-sync hook
-- `/app/backend/static/print_server.ps1` - Local print agent v3.8.0
+- `/app/frontend/src/pages/Expenses.js` - Expenses with cashier breakdown
+- `/app/frontend/src/pages/POS.js` - POS with orange buttons + validation
+- `/app/frontend/src/utils/receiptBitmap.js` - Receipt with paid/unpaid status
+- `/app/frontend/src/utils/printService.js` - Print service with is_paid
+- `/app/frontend/src/pages/Dashboard.js` - Dashboard + cash register + cashier selection
+- `/app/backend/routes/shifts_routes.py` - Shift management
+- `/app/backend/server.py` - Main API
 
 ## Backlog
 ### P2 - Refactoring
