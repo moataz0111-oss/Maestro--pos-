@@ -147,8 +147,8 @@ export const AuthProvider = ({ children }) => {
       // حفظ بيانات المستخدم في التخزين المحلي للاستخدام في Electron
       localStorage.setItem('cached_user', JSON.stringify(userData));
       
-      // فتح وردية تلقائياً للكاشير أو المدير
-      if (['cashier', 'manager', 'admin'].includes(userData.role)) {
+      // فتح وردية تلقائياً للكاشير فقط - المالك يختار كاشير من لوحة التحكم
+      if (['cashier'].includes(userData.role)) {
         await autoOpenShift();
       }
     } catch (error) {
@@ -273,8 +273,8 @@ export const AuthProvider = ({ children }) => {
         // إرسال حدث تسجيل الدخول لتحديث إعدادات العملة
         window.dispatchEvent(new CustomEvent('userLoggedIn'));
         
-        // فتح وردية تلقائياً للكاشير أو المدير
-        if (['cashier', 'manager', 'admin'].includes(userData.role)) {
+        // فتح وردية تلقائياً للكاشير فقط - المالك يختار كاشير من لوحة التحكم
+        if (['cashier'].includes(userData.role)) {
           setTimeout(async () => {
             await autoOpenShift();
           }, 500);

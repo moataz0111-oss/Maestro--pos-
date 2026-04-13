@@ -20,6 +20,7 @@ import {
   ShoppingCart, 
   DollarSign, 
   Users, 
+  User,
   TrendingUp,
   Package,
   Truck,
@@ -242,6 +243,11 @@ export default function Dashboard() {
   
   // حالات خلفية Dashboard
   const [showBackgroundDialog, setShowBackgroundDialog] = useState(false);
+  // وردية الكاشير النشطة (للمالك)
+  const [activeShift, setActiveShift] = useState(null);
+  const [showCashierSelect, setShowCashierSelect] = useState(false);
+  const [cashiersList, setCashiersList] = useState([]);
+  const [selectedCashierId, setSelectedCashierId] = useState('');
   const [dashboardBackgrounds, setDashboardBackgrounds] = useState([]);
   const [selectedBackground, setSelectedBackground] = useState(null);
   const [uploadingBg, setUploadingBg] = useState(false);
@@ -429,32 +435,90 @@ export default function Dashboard() {
   // فتح الوردية تلقائياً عند الدخول
   const autoOpenShift = async () => {
     try {
-      // التحقق من وجود وردية مفتوحة للفرع المحدد
       const branchId = getBranchIdForApi();
-      const params = branchId ? { branch_id: branchId } : {};
-      const checkRes = await axios.get(`${API}/shifts/current`, { params });
-      if (!checkRes.data || checkRes.data.message === t('لا توجد وردية مفتوحة')) {
-        // فتح وردية جديدة
-        await axios.post(`${API}/shifts/open`, {
-          opening_cash: 0,
-          branch_id: branchId
+      const isOwner = ['admin', 'manager', 'super_admin', 'branch_manager'].includes(user?.role);
+      
+      if (isOwner) {
+        // المالك: لا يفتح وردية خاصة به - يبحث عن وردية كاشير مفتوحة
+        const checkRes = await axios.get(`${API}/shifts/current`, { 
+          params: branchId ? { branch_id: branchId } : {} 
         });
-        console.log('Auto-opened shift');
-      }
-    } catch (error) {
-      // إذا لم تكن هناك وردية، نفتح واحدة جديدة
-      if (error.response?.status === 404) {
-        try {
-          const branchId = getBranchIdForApi();
+        
+        if (checkRes.data && checkRes.data.id) {
+          // وردية كاشير مفتوحة - نستخدمها
+          setActiveShift(checkRes.data);
+          console.log('المالك يستخدم وردية الكاشير:', checkRes.data.cashier_name);
+        } else {
+          // لا توجد وردية مفتوحة - نعرض اختيار كاشير
+          setActiveShift(null);
+          setShowCashierSelect(true);
+          try {
+            const cashiersRes = await axios.get(`${API}/shifts/cashiers-list`);
+            setCashiersList(cashiersRes.data || []);
+          } catch (e) {
+            console.log('Error fetching cashiers:', e);
+          }
+        }
+      } else {
+        // كاشير: فتح وردية تلقائياً
+        const checkRes = await axios.get(`${API}/shifts/current`, {
+          params: branchId ? { branch_id: branchId } : {}
+        });
+        if (!checkRes.data || checkRes.data.message === t('لا توجد وردية مفتوحة')) {
           await axios.post(`${API}/shifts/open`, {
             opening_cash: 0,
             branch_id: branchId
           });
-          console.log('تم فتح الوردية تلقائياً');
-        } catch (openError) {
-          console.log('الوردية مفتوحة بالفعل أو حدث خطأ');
+          console.log('Auto-opened shift');
         }
       }
+    } catch (error) {
+      if (error.response?.status === 404) {
+        const isOwner = ['admin', 'manager', 'super_admin', 'branch_manager'].includes(user?.role);
+        if (isOwner) {
+          setActiveShift(null);
+          setShowCashierSelect(true);
+          try {
+            const cashiersRes = await axios.get(`${API}/shifts/cashiers-list`);
+            setCashiersList(cashiersRes.data || []);
+          } catch (e) {
+            console.log('Error fetching cashiers:', e);
+          }
+        } else {
+          try {
+            const branchId = getBranchIdForApi();
+            await axios.post(`${API}/shifts/open`, {
+              opening_cash: 0,
+              branch_id: branchId
+            });
+            console.log('تم فتح الوردية تلقائياً');
+          } catch (openError) {
+            console.log('الوردية مفتوحة بالفعل أو حدث خطأ');
+          }
+        }
+      }
+    }
+  };
+  
+  // فتح وردية لكاشير محدد (من قبل المالك)
+  const openShiftForCashier = async (cashierId) => {
+    try {
+      const branchId = getBranchIdForApi();
+      const res = await axios.post(`${API}/shifts/open-for-cashier`, {
+        cashier_id: cashierId,
+        branch_id: branchId,
+        opening_cash: 0
+      });
+      
+      if (res.data?.shift) {
+        setActiveShift(res.data.shift);
+        setShowCashierSelect(false);
+        toast.success(res.data.message || t('تم فتح الوردية'));
+        fetchData();
+        fetchDayStatus();
+      }
+    } catch (error) {
+      toast.error(error.response?.data?.detail || t('فشل في فتح الوردية'));
     }
   };
 
@@ -1961,6 +2025,14 @@ export default function Dashboard() {
               </Button>
             )}
 
+            {/* Active Shift Indicator - للمالك */}
+            {activeShift?.cashier_name && ['admin', 'manager', 'super_admin', 'branch_manager'].includes(user?.role) && (
+              <Badge variant="secondary" className="gap-1 px-3 py-1" data-testid="active-shift-badge">
+                <User className="h-3 w-3" />
+                {t('الوردية')}: {activeShift.cashier_name}
+              </Badge>
+            )}
+
             {/* Close Cash Register Button */}
             <Button
               variant="outline"
@@ -2673,6 +2745,53 @@ export default function Dashboard() {
         )}
       </main>
 
+      {/* حوار اختيار كاشير لفتح وردية (للمالك فقط) */}
+      <Dialog open={showCashierSelect} onOpenChange={setShowCashierSelect}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold flex items-center gap-2">
+              <Users className="h-6 w-6 text-blue-500" />
+              {t('لا توجد وردية مفتوحة')}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <p className="text-sm text-muted-foreground text-center">
+              {t('اختر كاشير لفتح وردية باسمه')}
+            </p>
+            
+            {cashiersList.length === 0 ? (
+              <div className="p-4 bg-yellow-500/10 border border-yellow-500/30 rounded-lg text-center">
+                <p className="text-sm text-yellow-600">{t('لا يوجد كاشيرية مسجلين في النظام')}</p>
+                <p className="text-xs text-muted-foreground mt-1">{t('يرجى إضافة كاشير من إعدادات المستخدمين')}</p>
+              </div>
+            ) : (
+              <div className="space-y-2" data-testid="cashier-selection-list">
+                {cashiersList.map((cashier) => (
+                  <Button
+                    key={cashier.id}
+                    variant={selectedCashierId === cashier.id ? "default" : "outline"}
+                    className="w-full justify-start gap-3 h-14"
+                    onClick={() => {
+                      setSelectedCashierId(cashier.id);
+                      openShiftForCashier(cashier.id);
+                    }}
+                    data-testid={`cashier-select-${cashier.id}`}
+                  >
+                    <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                      <User className="h-5 w-5 text-primary" />
+                    </div>
+                    <div className="text-right">
+                      <p className="font-medium">{cashier.full_name || cashier.username}</p>
+                      <p className="text-xs text-muted-foreground">{cashier.email}</p>
+                    </div>
+                  </Button>
+                ))}
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* Cash Register Close Dialog */}
       <Dialog open={cashRegisterOpen} onOpenChange={setCashRegisterOpen}>
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden">
@@ -2684,6 +2803,12 @@ export default function Dashboard() {
                 <Badge variant="outline" className="mr-2 text-sm bg-primary/10">
                   <Building2 className="h-4 w-4 ml-1" />
                   {cashSummary.branch_name}
+                </Badge>
+              )}
+              {activeShift?.cashier_name && ['admin', 'manager', 'super_admin', 'branch_manager'].includes(user?.role) && (
+                <Badge variant="secondary" className="mr-2 text-sm">
+                  <User className="h-4 w-4 ml-1" />
+                  {t('وردية')}: {activeShift.cashier_name}
                 </Badge>
               )}
             </DialogTitle>

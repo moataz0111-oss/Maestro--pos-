@@ -112,20 +112,152 @@ async def open_shift(shift: ShiftCreate, current_user: dict = Depends(get_curren
 
 @router.get("/shifts/current")
 async def get_current_shift(current_user: dict = Depends(get_current_user)):
-    """جلب الوردية الحالية للكاشير"""
+    """جلب الوردية الحالية - المالك/المدير يرى وردية الكاشير النشط"""
     db = get_database()
-    shift = await db.shifts.find_one(
-        {"cashier_id": current_user["id"], "status": "open"},
-        {"_id": 0}
-    )
-    return shift
+    tenant_id = get_user_tenant_id(current_user)
+    user_role = current_user.get("role", "")
+    is_owner = user_role in ["admin", "super_admin", "manager", "branch_manager"]
+    
+    if is_owner:
+        # المالك/المدير: البحث عن أي وردية مفتوحة للفرع
+        branch_id = current_user.get("branch_id")
+        shift_query = {"status": "open"}
+        if tenant_id:
+            shift_query["tenant_id"] = tenant_id
+        if branch_id:
+            shift_query["branch_id"] = branch_id
+        
+        # أولاً ابحث عن وردية كاشير (ليست وردية المالك نفسه)
+        cashier_shift_query = {**shift_query, "cashier_id": {"$ne": current_user["id"]}}
+        shift = await db.shifts.find_one(cashier_shift_query, {"_id": 0})
+        
+        # إذا لم توجد وردية كاشير، ابحث عن أي وردية مفتوحة
+        if not shift:
+            shift = await db.shifts.find_one(shift_query, {"_id": 0})
+        
+        return shift
+    else:
+        # الكاشير: ورديته فقط
+        shift_query = {"cashier_id": current_user["id"], "status": "open"}
+        if tenant_id:
+            shift_query["tenant_id"] = tenant_id
+        shift = await db.shifts.find_one(shift_query, {"_id": 0})
+        return shift
 
-@router.post("/shifts/auto-open")
-async def auto_open_shift(current_user: dict = Depends(get_current_user)):
-    """فتح وردية تلقائياً للكاشير عند تسجيل الدخول"""
+@router.get("/shifts/cashiers-list")
+async def get_cashiers_list(current_user: dict = Depends(get_current_user)):
+    """جلب قائمة الكاشيرية للمالك لاختيار كاشير لفتح وردية"""
     db = get_database()
     tenant_id = get_user_tenant_id(current_user)
     
+    user_role = current_user.get("role", "")
+    if user_role not in ["admin", "super_admin", "manager", "branch_manager"]:
+        raise HTTPException(status_code=403, detail="غير مصرح")
+    
+    query = {"role": "cashier", "is_active": {"$ne": False}}
+    if tenant_id:
+        query["tenant_id"] = tenant_id
+    
+    cashiers = await db.users.find(query, {"_id": 0, "password": 0}).to_list(100)
+    return cashiers
+
+class OpenShiftForCashier(BaseModel):
+    cashier_id: str
+    branch_id: Optional[str] = None
+    opening_cash: float = 0.0
+
+@router.post("/shifts/open-for-cashier")
+async def open_shift_for_cashier(data: OpenShiftForCashier, current_user: dict = Depends(get_current_user)):
+    """المالك يفتح وردية لكاشير محدد"""
+    db = get_database()
+    tenant_id = get_user_tenant_id(current_user)
+    
+    user_role = current_user.get("role", "")
+    if user_role not in ["admin", "super_admin", "manager", "branch_manager"]:
+        raise HTTPException(status_code=403, detail="غير مصرح - فقط المدير يمكنه فتح وردية لكاشير")
+    
+    # تحقق من عدم وجود وردية مفتوحة لهذا الكاشير
+    existing_query = {"cashier_id": data.cashier_id, "status": "open"}
+    if tenant_id:
+        existing_query["tenant_id"] = tenant_id
+    existing = await db.shifts.find_one(existing_query, {"_id": 0})
+    if existing:
+        return {"shift": existing, "was_existing": True, "message": "يوجد وردية مفتوحة بالفعل لهذا الكاشير"}
+    
+    cashier = await db.users.find_one({"id": data.cashier_id}, {"_id": 0, "password": 0})
+    if not cashier:
+        raise HTTPException(status_code=404, detail="الكاشير غير موجود")
+    
+    branch_id = data.branch_id or current_user.get("branch_id")
+    if not branch_id:
+        branch_query = {"tenant_id": tenant_id} if tenant_id else {}
+        branch = await db.branches.find_one(branch_query, {"_id": 0, "id": 1})
+        branch_id = branch["id"] if branch else None
+    
+    shift_doc = {
+        "id": str(uuid.uuid4()),
+        "cashier_id": data.cashier_id,
+        "cashier_name": cashier.get("full_name") or cashier.get("username", ""),
+        "branch_id": branch_id,
+        "opening_cash": data.opening_cash,
+        "closing_cash": None,
+        "expected_cash": data.opening_cash,
+        "cash_difference": None,
+        "total_sales": 0.0,
+        "total_cost": 0.0,
+        "gross_profit": 0.0,
+        "total_orders": 0,
+        "card_sales": 0.0,
+        "cash_sales": 0.0,
+        "credit_sales": 0.0,
+        "delivery_app_sales": {},
+        "driver_sales": 0.0,
+        "total_expenses": 0.0,
+        "net_profit": 0.0,
+        "started_at": datetime.now(timezone.utc).isoformat(),
+        "ended_at": None,
+        "status": "open",
+        "opened_by": current_user["id"],
+        "opened_by_name": current_user.get("full_name", "")
+    }
+    if tenant_id:
+        shift_doc["tenant_id"] = tenant_id
+    
+    await db.shifts.insert_one(shift_doc)
+    del shift_doc["_id"]
+    
+    return {"shift": shift_doc, "was_existing": False, "message": f"تم فتح وردية باسم {cashier.get('full_name', '')}"}
+
+@router.post("/shifts/auto-open")
+async def auto_open_shift(current_user: dict = Depends(get_current_user)):
+    """فتح وردية تلقائياً للكاشير عند تسجيل الدخول - المالك/المدير لا يفتح وردية تلقائياً"""
+    db = get_database()
+    tenant_id = get_user_tenant_id(current_user)
+    user_role = current_user.get("role", "")
+    is_owner = user_role in ["admin", "super_admin", "manager", "branch_manager"]
+    
+    if is_owner:
+        # المالك: البحث عن وردية كاشير مفتوحة بدلاً من إنشاء واحدة
+        shift_query = {"status": "open"}
+        if tenant_id:
+            shift_query["tenant_id"] = tenant_id
+        branch_id = current_user.get("branch_id")
+        if branch_id:
+            shift_query["branch_id"] = branch_id
+        
+        existing = await db.shifts.find_one(
+            {**shift_query, "cashier_id": {"$ne": current_user["id"]}}, 
+            {"_id": 0}
+        )
+        if not existing:
+            existing = await db.shifts.find_one(shift_query, {"_id": 0})
+        
+        if existing:
+            return {"shift": existing, "was_existing": True, "message": "وردية مفتوحة بالفعل"}
+        else:
+            raise HTTPException(status_code=404, detail="لا توجد وردية مفتوحة - يرجى فتح وردية لكاشير")
+    
+    # كاشير عادي: فتح وردية تلقائياً
     query = {"cashier_id": current_user["id"], "status": "open"}
     if tenant_id:
         query["tenant_id"] = tenant_id
@@ -312,8 +444,13 @@ async def get_cash_register_summary(
     
     shift = await db.shifts.find_one(shift_query, {"_id": 0})
     
-    # إذا لم توجد وردية مفتوحة، نُنشئ واحدة تلقائياً
+    # إذا لم توجد وردية مفتوحة
     if not shift:
+        # المالك/المدير: لا نُنشئ وردية تلقائياً - يجب اختيار كاشير
+        if is_manager:
+            raise HTTPException(status_code=404, detail="لا توجد وردية مفتوحة - يرجى فتح وردية لكاشير من نقاط البيع")
+        
+        # الكاشير: نُنشئ وردية تلقائياً
         new_shift = {
             "id": str(uuid.uuid4()),
             "tenant_id": tenant_id,

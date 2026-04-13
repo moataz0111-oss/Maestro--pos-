@@ -4816,25 +4816,42 @@ async def create_order(order: OrderCreate, current_user: dict = Depends(get_curr
     if order.branch_id:
         shift_query["branch_id"] = order.branch_id
     
-    current_shift = await db.shifts.find_one(shift_query, {"_id": 0, "id": 1})
+    current_shift = await db.shifts.find_one(shift_query, {"_id": 0, "id": 1, "cashier_id": 1})
     
-    # إذا لم توجد وردية مفتوحة، نُنشئ واحدة تلقائياً
+    # إذا لم توجد وردية مفتوحة
     if not current_shift:
-        new_shift = {
-            "id": str(uuid.uuid4()),
-            "tenant_id": tenant_id,
-            "branch_id": order.branch_id,
-            "cashier_id": current_user.get("id"),
-            "cashier_name": current_user.get("full_name", ""),
-            "opened_at": datetime.now(timezone.utc).isoformat(),
-            "status": "open",
-            "opening_balance": 0,
-            "created_at": datetime.now(timezone.utc).isoformat()
-        }
-        await db.shifts.insert_one(new_shift)
-        current_shift = new_shift
+        user_role = current_user.get("role", "")
+        is_owner = user_role in ["admin", "super_admin", "manager", "branch_manager"]
+        
+        if is_owner:
+            # المالك: لا ننشئ وردية باسمه - نرجع خطأ
+            raise HTTPException(status_code=400, detail="لا توجد وردية مفتوحة - يرجى فتح وردية لكاشير أولاً من نقاط البيع")
+        else:
+            # كاشير: ننشئ وردية تلقائياً
+            new_shift = {
+                "id": str(uuid.uuid4()),
+                "tenant_id": tenant_id,
+                "branch_id": order.branch_id,
+                "cashier_id": current_user.get("id"),
+                "cashier_name": current_user.get("full_name", ""),
+                "opened_at": datetime.now(timezone.utc).isoformat(),
+                "started_at": datetime.now(timezone.utc).isoformat(),
+                "status": "open",
+                "opening_balance": 0,
+                "created_at": datetime.now(timezone.utc).isoformat()
+            }
+            await db.shifts.insert_one(new_shift)
+            current_shift = new_shift
     
     shift_id = current_shift["id"] if current_shift else None
+    
+    # المالك/المدير: الطلب يُسجل باسم كاشير الوردية وليس باسم المالك
+    user_role = current_user.get("role", "")
+    is_owner = user_role in ["admin", "super_admin", "manager", "branch_manager"]
+    if is_owner and current_shift and current_shift.get("cashier_id") != current_user.get("id"):
+        effective_cashier_id = current_shift["cashier_id"]
+    else:
+        effective_cashier_id = current_user["id"]
     
     # حساب المجموع الفرعي مع الإضافات المختارة فقط
     def calculate_item_total(item):
@@ -4983,7 +5000,7 @@ async def create_order(order: OrderCreate, current_user: dict = Depends(get_curr
         "total_cost": total_cost,
         "profit": profit,
         "branch_id": order.branch_id,
-        "cashier_id": current_user["id"],
+        "cashier_id": effective_cashier_id,
         "shift_id": shift_id,  # ربط الطلب بالوردية الحالية
         "tenant_id": tenant_id,  # فصل البيانات لكل عميل
         "status": order_status,
