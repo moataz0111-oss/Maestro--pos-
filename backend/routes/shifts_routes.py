@@ -146,7 +146,7 @@ async def get_current_shift(current_user: dict = Depends(get_current_user)):
 
 @router.get("/shifts/cashiers-list")
 async def get_cashiers_list(current_user: dict = Depends(get_current_user)):
-    """جلب قائمة الكاشيرية للمالك لاختيار كاشير لفتح وردية"""
+    """جلب قائمة الكاشيرية مع حالة ورديتهم (نشط/غير نشط)"""
     db = get_database()
     tenant_id = get_user_tenant_id(current_user)
     
@@ -159,6 +159,17 @@ async def get_cashiers_list(current_user: dict = Depends(get_current_user)):
         query["tenant_id"] = tenant_id
     
     cashiers = await db.users.find(query, {"_id": 0, "password": 0}).to_list(100)
+    
+    # إضافة حالة الوردية لكل كاشير
+    for cashier in cashiers:
+        shift_query = {"cashier_id": cashier["id"], "status": "open"}
+        if tenant_id:
+            shift_query["tenant_id"] = tenant_id
+        active_shift = await db.shifts.find_one(shift_query, {"_id": 0, "id": 1, "started_at": 1})
+        cashier["has_active_shift"] = active_shift is not None
+        if active_shift:
+            cashier["shift_id"] = active_shift.get("id")
+    
     return cashiers
 
 class OpenShiftForCashier(BaseModel):

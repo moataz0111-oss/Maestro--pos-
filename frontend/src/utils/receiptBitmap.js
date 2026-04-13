@@ -714,6 +714,110 @@ export async function renderReceiptBitmap(order, config = {}) {
   }
 }
 
+// ======== CLOSING RECEIPT BITMAP ========
+export function renderClosingReceiptBitmap(data = {}) {
+  try {
+    const c = document.createElement('canvas');
+    c.width = PW; c.height = 4000;
+    const x = c.getContext('2d');
+    x.fillStyle='#FFF'; x.fillRect(0,0,PW,4000);
+    x.fillStyle='#000';
+    let y = 15;
+    const fp = n => `${Number(n||0).toLocaleString()} IQD`;
+
+    // === Header ===
+    if (data.restaurantName) {
+      y += invH(x, data.restaurantName, y, 26);
+    }
+    y += drawC(x, 'إيصال إغلاق الصندوق', y, 22, true);
+    y += 6;
+    if (data.dateStr) y += drawC(x, data.dateStr, y, 16);
+    if (data.timeStr) y += drawC(x, data.timeStr, y, 16);
+    if (data.branchName) y += drawC(x, `الفرع: ${data.branchName}`, y, 16);
+    if (data.cashierName) y += drawC(x, `الكاشير: ${data.cashierName}`, y, 16);
+    y += 4; y += dbl(x, y);
+
+    // === ملخص المبيعات ===
+    y += drawC(x, 'ملخص المبيعات', y, 20, true);
+    y += 4;
+    y += drawRow(x, 'إجمالي المبيعات:', fp(data.total_sales), y, 18);
+    y += drawRow(x, 'عدد الطلبات:', `${data.total_orders || 0}`, y, 16);
+    y += 4; y += dash(x, y);
+
+    // === حسب طريقة الدفع ===
+    y += drawC(x, 'حسب طريقة الدفع', y, 18, true);
+    y += 4;
+    y += drawRow(x, 'نقدي:', fp(data.cash_sales), y, 16);
+    y += drawRow(x, 'بطاقة:', fp(data.card_sales), y, 16);
+    y += drawRow(x, 'آجل:', fp(data.credit_sales), y, 16);
+    y += 4; y += dash(x, y);
+
+    // === مبيعات تطبيقات التوصيل ===
+    if (data.delivery_app_sales && Object.keys(data.delivery_app_sales).length > 0) {
+      y += drawC(x, 'مبيعات تطبيقات التوصيل', y, 18, true);
+      y += 4;
+      for (const [app, amount] of Object.entries(data.delivery_app_sales)) {
+        y += drawRow(x, `${app}:`, fp(amount), y, 16);
+      }
+      y += 4; y += dash(x, y);
+    }
+
+    // === المصاريف والخصومات ===
+    y += drawC(x, 'المصاريف والخصومات', y, 18, true);
+    y += 4;
+    y += drawRow(x, 'المصاريف:', fp(data.total_expenses), y, 16);
+    y += drawRow(x, 'الخصومات:', fp(data.total_discounts || data.discounts_total || 0), y, 16);
+    y += drawRow(x, `المرتجعات (${data.refund_count || 0}):`, fp(data.total_refunds || 0), y, 16);
+    y += drawRow(x, `الإلغاءات (${data.cancelled_orders || 0}):`, fp(data.cancelled_amount || 0), y, 16);
+    y += 4; y += dash(x, y);
+
+    // === جرد الصندوق ===
+    y += drawC(x, 'جرد الصندوق', y, 20, true);
+    y += 4;
+    const expectedCash = data.expected_cash || 0;
+    const countedCash = data.closing_cash || data.counted_cash || 0;
+    const difference = countedCash - expectedCash;
+    y += drawRow(x, 'المتوقع في الصندوق:', fp(expectedCash), y, 16);
+    y += drawRow(x, 'الجرد الفعلي:', fp(countedCash), y, 16);
+    y += 4; y += dash(x, y);
+
+    // === الفرق ===
+    if (difference > 0) {
+      y += drawRow(x, 'زيادة:', `+${fp(Math.abs(difference))}`, y, 20);
+    } else if (difference < 0) {
+      y += drawRow(x, 'نقص:', `-${fp(Math.abs(difference))}`, y, 20);
+    }
+
+    // === صافي النقدي ===
+    y += 4; y += dbl(x, y);
+    y += drawC(x, `صافي النقدي: ${fp(countedCash)}`, y, 26, true);
+    y += dbl(x, y);
+
+    // === ملاحظات ===
+    if (data.notes) {
+      y += 4;
+      y += drawC(x, `ملاحظات: ${data.notes}`, y, 14);
+    }
+
+    // === Footer ===
+    y += 8;
+    y += drawC(x, 'شكراً لاستخدامكم نظام Maestro', y, 14);
+    y += drawC(x, 'www.maestroegp.com', y, 14);
+    y += 30;
+
+    // Crop canvas to actual height
+    const f = document.createElement('canvas');
+    f.width = PW; f.height = y;
+    f.getContext('2d').drawImage(c, 0, 0);
+    const bytes = toEscPos(f);
+    console.log(`[ClosingReceipt] ${f.width}x${f.height}px, ${bytes.length}b`);
+    return { success: true, raw_data: toB64(bytes), size: bytes.length };
+  } catch (e) {
+    console.error('[ClosingReceipt] Error:', e);
+    return { success: false, error: e.message };
+  }
+}
+
 // ======== TEST PRINT ========
 export function renderTestBitmap(info = {}) {
   try {

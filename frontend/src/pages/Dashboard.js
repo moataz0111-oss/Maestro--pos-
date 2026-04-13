@@ -8,6 +8,7 @@ import { useOffline } from '../context/OfflineContext';
 import { getLocalTenantInfo, getLocalStats, getLocalDashboardSettings, getTodayOrders } from '../lib/offlineStorage';
 import db, { STORES } from '../lib/offlineDB';
 import { formatPrice, formatPriceCompact } from '../utils/currency';
+import { renderClosingReceiptBitmap } from '../utils/receiptBitmap';
 import { useTranslation } from '../hooks/useTranslation';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
@@ -248,6 +249,7 @@ export default function Dashboard() {
   const [showCashierSelect, setShowCashierSelect] = useState(false);
   const [cashiersList, setCashiersList] = useState([]);
   const [selectedCashierId, setSelectedCashierId] = useState('');
+  const ownerShiftTimeoutRef = useRef(null);
   const [dashboardBackgrounds, setDashboardBackgrounds] = useState([]);
   const [selectedBackground, setSelectedBackground] = useState(null);
   const [uploadingBg, setUploadingBg] = useState(false);
@@ -259,6 +261,10 @@ export default function Dashboard() {
     fetchDashboardBackgrounds();
     fetchDayStatus();
     autoOpenShift(); // فتح الوردية تلقائياً
+    return () => {
+      // تنظيف مهلة المالك عند مغادرة الصفحة
+      if (ownerShiftTimeoutRef.current) clearTimeout(ownerShiftTimeoutRef.current);
+    };
   }, [selectedBranchId]);
 
   // إعادة جلب البيانات عند العودة للصفحة (visibility change)
@@ -516,6 +522,18 @@ export default function Dashboard() {
         toast.success(res.data.message || t('تم فتح الوردية'));
         fetchData();
         fetchDayStatus();
+        
+        // مهلة دقيقة - إذا لم يسوِ طلب خلال 60 ثانية يتحرر المالك تلقائياً
+        if (ownerShiftTimeoutRef.current) clearTimeout(ownerShiftTimeoutRef.current);
+        ownerShiftTimeoutRef.current = setTimeout(() => {
+          setActiveShift(prev => {
+            if (prev && prev.id === res.data.shift.id) {
+              toast.warning(t('تم تحريرك تلقائياً - لم يتم إنشاء طلب خلال دقيقة'));
+              return null;
+            }
+            return prev;
+          });
+        }, 60000);
       }
     } catch (error) {
       toast.error(error.response?.data?.detail || t('فشل في فتح الوردية'));
@@ -988,6 +1006,16 @@ export default function Dashboard() {
             logout();
           }, 1000);
         }
+        
+        // تحرير المالك من وردية الكاشير
+        if (['admin', 'manager', 'super_admin', 'branch_manager'].includes(user?.role)) {
+          setActiveShift(null);
+          if (ownerShiftTimeoutRef.current) {
+            clearTimeout(ownerShiftTimeoutRef.current);
+            ownerShiftTimeoutRef.current = null;
+          }
+          toast.info(t('تم تحريرك من وردية الكاشير'));
+        }
       }, 1500);
       
     } catch (error) {
@@ -1310,99 +1338,26 @@ export default function Dashboard() {
     const now = new Date();
     const dateStr = now.toLocaleDateString('ar-IQ');
     const timeStr = now.toLocaleTimeString('ar-IQ', { hour: '2-digit', minute: '2-digit' });
-    const formatPrice = (v) => `${(v || 0).toLocaleString()} IQD`;
-    
-    const expectedCash = data.expected_cash || 0;
-    const countedCash = data.closing_cash || data.counted_cash || 0;
-    const difference = countedCash - expectedCash;
     
     const restaurantName = tenantInfo?.restaurant_name || 'المطعم';
     const branchName = tenantInfo?.branch_name || '';
     const cashierName = user?.full_name || user?.username || '';
     
-    // بناء نص الإيصال
-    const lines = [
-      { text: restaurantName, bold: true, align: 'center', size: 2 },
-      { text: 'إيصال إغلاق الصندوق', bold: true, align: 'center' },
-      { text: `التاريخ: ${dateStr}`, align: 'center' },
-      { text: `الوقت: ${timeStr}`, align: 'center' },
-      ...(branchName ? [{ text: `الفرع: ${branchName}`, align: 'center' }] : []),
-      { text: `الكاشير: ${cashierName}`, align: 'center' },
-      { text: '--------------------------------', align: 'center' },
-      { text: 'ملخص المبيعات', bold: true, align: 'center' },
-      { text: `إجمالي المبيعات:  ${formatPrice(data.total_sales)}`, align: 'right' },
-      { text: `عدد الطلبات:  ${data.total_orders || 0}`, align: 'right' },
-      { text: '--------------------------------', align: 'center' },
-      { text: 'حسب طريقة الدفع', bold: true, align: 'center' },
-      { text: `نقدي:  ${formatPrice(data.cash_sales)}`, align: 'right' },
-      { text: `بطاقة:  ${formatPrice(data.card_sales)}`, align: 'right' },
-      { text: `آجل:  ${formatPrice(data.credit_sales)}`, align: 'right' },
-      { text: '--------------------------------', align: 'center' },
-      ...(data.delivery_app_sales && Object.keys(data.delivery_app_sales).length > 0 ? [
-        { text: 'مبيعات تطبيقات التوصيل', bold: true, align: 'center' },
-        ...Object.entries(data.delivery_app_sales).map(([app, amount]) => (
-          { text: `${app}:  ${formatPrice(amount)}`, align: 'right' }
-        )),
-        { text: '--------------------------------', align: 'center' },
-      ] : []),
-      { text: 'المصاريف والخصومات', bold: true, align: 'center' },
-      { text: `المصاريف:  ${formatPrice(data.total_expenses)}`, align: 'right' },
-      { text: `الخصومات:  ${formatPrice(data.total_discounts || data.discounts_total || 0)}`, align: 'right' },
-      { text: `المرتجعات (${data.refund_count || 0}):  ${formatPrice(data.total_refunds || 0)}`, align: 'right' },
-      { text: `الإلغاءات (${data.cancelled_orders || 0}):  ${formatPrice(data.cancelled_amount || 0)}`, align: 'right' },
-      { text: '--------------------------------', align: 'center' },
-      { text: 'جرد الصندوق', bold: true, align: 'center' },
-      { text: `المتوقع في الصندوق:  ${formatPrice(expectedCash)}`, align: 'right' },
-      { text: `الجرد الفعلي:  ${formatPrice(countedCash)}`, align: 'right' },
-      { text: '--------------------------------', align: 'center' },
-      ...(difference > 0 ? [
-        { text: `زيادة:  +${formatPrice(Math.abs(difference))}`, bold: true, align: 'right' },
-      ] : difference < 0 ? [
-        { text: `نقص:  -${formatPrice(Math.abs(difference))}`, bold: true, align: 'right' },
-      ] : []),
-      { text: '================================', align: 'center' },
-      { text: `صافي النقدي: ${formatPrice(countedCash)}`, bold: true, align: 'center', size: 2 },
-      { text: '================================', align: 'center' },
-      ...(data.notes ? [{ text: `ملاحظات: ${data.notes}`, align: 'center' }] : []),
-      { text: 'شكراً لاستخدامكم نظام Maestro', align: 'center' },
-      { text: 'www.maestroegp.com', align: 'center' },
-      { text: '\n\n\n', align: 'center' }
-    ];
+    // توليد صورة bitmap للإيصال (يدعم العربية بالكامل)
+    const bitmapResult = renderClosingReceiptBitmap({
+      ...data,
+      restaurantName,
+      branchName,
+      cashierName,
+      dateStr,
+      timeStr
+    });
     
-    // تحويل النص إلى ESC/POS
-    const ESC = 0x1B, GS = 0x1D;
-    const encoder = new TextEncoder();
-    let commands = [];
-    
-    // Initialize printer
-    commands.push(ESC, 0x40); // Reset
-    commands.push(ESC, 0x74, 22); // Arabic codepage
-    
-    for (const line of lines) {
-      // Alignment
-      if (line.align === 'center') commands.push(ESC, 0x61, 1);
-      else if (line.align === 'left') commands.push(ESC, 0x61, 0);
-      else commands.push(ESC, 0x61, 2); // right
-      
-      // Bold
-      if (line.bold) commands.push(ESC, 0x45, 1);
-      
-      // Size
-      if (line.size === 2) commands.push(GS, 0x21, 0x11);
-      
-      // Text
-      const textBytes = encoder.encode(line.text + '\n');
-      commands.push(...textBytes);
-      
-      // Reset formatting
-      if (line.bold) commands.push(ESC, 0x45, 0);
-      if (line.size === 2) commands.push(GS, 0x21, 0x00);
+    if (!bitmapResult.success || !bitmapResult.raw_data) {
+      console.warn('Bitmap render failed, falling back to browser print');
+      printClosingReceipt(data);
+      return;
     }
-    
-    // Cut paper
-    commands.push(GS, 0x56, 0x42, 3);
-    
-    const rawData = btoa(String.fromCharCode(...new Uint8Array(commands)));
     
     try {
       // محاولة الطباعة عبر USB أولاً
@@ -1419,8 +1374,8 @@ export default function Dashboard() {
           await fetch(`${AGENT_URL}/print-receipt`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ raw_data: rawData, usb_printer_name: usbPrinter.usb_printer_name }),
-            signal: AbortSignal.timeout(5000)
+            body: JSON.stringify({ raw_data: bitmapResult.raw_data, usb_printer_name: usbPrinter.usb_printer_name }),
+            signal: AbortSignal.timeout(10000)
           });
           toast.success(t('تم طباعة إيصال الإغلاق'));
           return;
@@ -2025,12 +1980,27 @@ export default function Dashboard() {
               </Button>
             )}
 
-            {/* Active Shift Indicator - للمالك */}
-            {activeShift?.cashier_name && ['admin', 'manager', 'super_admin', 'branch_manager'].includes(user?.role) && (
-              <Badge variant="secondary" className="gap-1 px-3 py-1" data-testid="active-shift-badge">
+            {/* Active Shift Indicator - للمالك - قابل للنقر لإعادة الاختيار */}
+            {['admin', 'manager', 'super_admin', 'branch_manager'].includes(user?.role) && (
+              <Button
+                variant={activeShift?.cashier_name ? "secondary" : "outline"}
+                size="sm"
+                className={`gap-1 px-3 ${activeShift?.cashier_name ? '' : 'border-yellow-500 text-yellow-600 hover:bg-yellow-500/10'}`}
+                onClick={async () => {
+                  try {
+                    const cashiersRes = await axios.get(`${API}/shifts/cashiers-list`);
+                    setCashiersList(cashiersRes.data || []);
+                  } catch (e) { console.log('Error fetching cashiers:', e); }
+                  setShowCashierSelect(true);
+                }}
+                data-testid="active-shift-badge"
+              >
                 <User className="h-3 w-3" />
-                {t('الوردية')}: {activeShift.cashier_name}
-              </Badge>
+                {activeShift?.cashier_name 
+                  ? `${t('الوردية')}: ${activeShift.cashier_name}`
+                  : t('اختيار كاشير')
+                }
+              </Button>
             )}
 
             {/* Close Cash Register Button */}
@@ -2751,43 +2721,79 @@ export default function Dashboard() {
           <DialogHeader>
             <DialogTitle className="text-xl font-bold flex items-center gap-2">
               <Users className="h-6 w-6 text-blue-500" />
-              {t('لا توجد وردية مفتوحة')}
+              {t('اختيار وردية كاشير')}
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-4">
-            <p className="text-sm text-muted-foreground text-center">
-              {t('اختر كاشير لفتح وردية باسمه')}
-            </p>
-            
-            {cashiersList.length === 0 ? (
-              <div className="p-4 bg-yellow-500/10 border border-yellow-500/30 rounded-lg text-center">
-                <p className="text-sm text-yellow-600">{t('لا يوجد كاشيرية مسجلين في النظام')}</p>
-                <p className="text-xs text-muted-foreground mt-1">{t('يرجى إضافة كاشير من إعدادات المستخدمين')}</p>
-              </div>
-            ) : (
-              <div className="space-y-2" data-testid="cashier-selection-list">
-                {cashiersList.map((cashier) => (
-                  <Button
-                    key={cashier.id}
-                    variant={selectedCashierId === cashier.id ? "default" : "outline"}
-                    className="w-full justify-start gap-3 h-14"
-                    onClick={() => {
-                      setSelectedCashierId(cashier.id);
-                      openShiftForCashier(cashier.id);
-                    }}
-                    data-testid={`cashier-select-${cashier.id}`}
-                  >
-                    <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-                      <User className="h-5 w-5 text-primary" />
+            {(() => {
+              const activeCashiers = cashiersList.filter(c => c.has_active_shift);
+              
+              if (activeCashiers.length === 0) {
+                // لا يوجد كاشيرية نشطين - المالك يفتح باسمه
+                return (
+                  <div className="space-y-4">
+                    <div className="p-4 bg-yellow-500/10 border border-yellow-500/30 rounded-lg text-center">
+                      <p className="text-sm text-yellow-600 font-medium">{t('لا يوجد كاشير نشط حالياً')}</p>
+                      <p className="text-xs text-muted-foreground mt-1">{t('سيتم فتح الوردية باسمك')}</p>
                     </div>
-                    <div className="text-right">
-                      <p className="font-medium">{cashier.full_name || cashier.username}</p>
-                      <p className="text-xs text-muted-foreground">{cashier.email}</p>
-                    </div>
-                  </Button>
-                ))}
-              </div>
-            )}
+                    <Button
+                      className="w-full h-14 gap-3"
+                      onClick={async () => {
+                        try {
+                          const branchId = getBranchIdForApi();
+                          await axios.post(`${API}/shifts/open`, { opening_cash: 0, branch_id: branchId });
+                          setShowCashierSelect(false);
+                          toast.success(t('تم فتح الوردية باسمك'));
+                          fetchData();
+                          fetchDayStatus();
+                          checkAndOpenShift();
+                        } catch (err) {
+                          toast.error(err.response?.data?.detail || t('فشل في فتح الوردية'));
+                        }
+                      }}
+                      data-testid="open-own-shift-btn"
+                    >
+                      <User className="h-5 w-5" />
+                      {t('فتح وردية باسمي')} ({user?.full_name || user?.username})
+                    </Button>
+                  </div>
+                );
+              }
+              
+              // يوجد كاشيرية نشطين
+              return (
+                <>
+                  <p className="text-sm text-muted-foreground text-center">
+                    {t('اختر كاشير نشط للعمل تحت ورديته')}
+                  </p>
+                  <div className="space-y-2" data-testid="cashier-selection-list">
+                    {activeCashiers.map((cashier) => (
+                      <Button
+                        key={cashier.id}
+                        variant={selectedCashierId === cashier.id ? "default" : "outline"}
+                        className="w-full justify-start gap-3 h-14"
+                        onClick={() => {
+                          setSelectedCashierId(cashier.id);
+                          openShiftForCashier(cashier.id);
+                        }}
+                        data-testid={`cashier-select-${cashier.id}`}
+                      >
+                        <div className="w-10 h-10 rounded-full bg-green-500/20 flex items-center justify-center">
+                          <User className="h-5 w-5 text-green-600" />
+                        </div>
+                        <div className="text-right flex-1">
+                          <p className="font-medium">{cashier.full_name || cashier.username}</p>
+                          <p className="text-xs text-muted-foreground">{cashier.email}</p>
+                        </div>
+                        <Badge variant="outline" className="text-green-600 border-green-500/50 text-xs">
+                          {t('نشط')}
+                        </Badge>
+                      </Button>
+                    ))}
+                  </div>
+                </>
+              );
+            })()}
           </div>
         </DialogContent>
       </Dialog>
