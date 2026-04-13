@@ -902,8 +902,8 @@ export default function Dashboard() {
     setShowReport(false);
     
     try {
-      // إرسال branch_id المحدد للحصول على بيانات الفرع الصحيح
-      const branchId = getBranchIdForApi();
+      // إرسال branch_id من الوردية النشطة أو الفرع المحدد
+      const branchId = activeShift?.branch_id || getBranchIdForApi();
       const params = branchId ? { branch_id: branchId } : {};
       const token = localStorage.getItem('token');
       const res = await axios.get(`${API}/cash-register/summary`, { 
@@ -957,7 +957,7 @@ export default function Dashboard() {
     setIsClosing(true);
     
     try {
-      const branchId = getBranchIdForApi();
+      const branchId = activeShift?.branch_id || getBranchIdForApi();
       const token = localStorage.getItem('token');
       const res = await axios.post(`${API}/cash-register/close`, {
         denominations: noCashMode ? { "250": 0, "500": 0, "1000": 0, "5000": 0, "10000": 0, "25000": 0, "50000": 0 } : denominations,
