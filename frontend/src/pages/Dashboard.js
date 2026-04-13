@@ -3198,7 +3198,8 @@ export default function Dashboard() {
 
                 {/* أزرار الإغلاق */}
                 <div className="space-y-3">
-                  {/* زر "لا يوجد نقد" - يظهر دائماً */}
+                  {/* زر "لا يوجد نقد" - يختفي تلقائياً عند إدخال أي رقم في جدول الجرد */}
+                  {calculateCountedCash() === 0 && (
                   <Button 
                     variant="outline"
                     onClick={() => {
@@ -3213,6 +3214,7 @@ export default function Dashboard() {
                     <XCircle className="h-5 w-5" />
                     {t('لا يوجد نقد متوفر - إغلاق مباشر')}
                   </Button>
+                  )}
 
                   {/* زر التأكيد العادي */}
                   <Button 

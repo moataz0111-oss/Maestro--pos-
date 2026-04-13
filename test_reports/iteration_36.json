@@ -116,7 +116,7 @@
   },
   
   "test_credentials": {
-    "api_url": "https://zk-photo-sync.preview.emergentagent.com",
+    "api_url": "https://blind-count-pos.preview.emergentagent.com",
     "owner": {
       "email": "owner@maestroegp.com",
       "password": "owner123",
