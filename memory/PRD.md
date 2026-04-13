@@ -15,9 +15,13 @@ Multi-tenant POS system with biometric integration (ZKTeco), thermal receipt pri
 - Face photo fetching from iFace990 Plus (CMD_DATA_WRRQ)
 - /zk-probe-device diagnostic endpoint
 
-### Owner Shift Management
-- Owners cannot open their own shift
-- Must select an active cashier to manage under cashier's name
+### Owner Shift Management (Updated April 2026)
+- Owners cannot open their own shift; must select an active cashier
+- Cashier selection dialog shows ONLY active cashiers (with open shifts) + green "نشط" badge
+- If no active cashiers → owner opens shift under their own name
+- 1-minute auto-timeout: if no order created, owner is auto-released from cashier's shift
+- After register close → owner is automatically released from cashier's shift
+- Shift badge in header is now a clickable button to re-select cashier
 
 ### Expenses Tracking
 - Breakdown by cashier name
@@ -34,21 +38,26 @@ Multi-tenant POS system with biometric integration (ZKTeco), thermal receipt pri
 - **Deficit tracking**: Closing with 0 cash records full expected amount as deficit
 - **Receipt printing**: Deficit printed correctly on both canvas and USB receipts
 
+### Receipt Encoding Fix (April 2026)
+- Fixed closing receipt printing garbled/encoded characters on thermal printers
+- Converted from raw ESC/POS text (UTF-8 encoded, codepage mismatch) to **bitmap rendering**
+- Uses same Canvas-based bitmap approach as order receipts (renderClosingReceiptBitmap)
+- Arabic text now renders correctly as images on any printer regardless of codepage
+
 ### Print Agent Installer Fix (April 2026)
-- Fixed PRINT_AGENT_VERSION from 3.7.0 to 3.8.0 to match actual print_server.ps1
+- Fixed PRINT_AGENT_VERSION from 3.7.0 to 3.8.0 
 - Fixed Get-Content `-Head -Raw` parameter conflict in PowerShell installer
 - Updated all version references in BAT installer to 3.8.0
-- Fixed version verification check (was comparing against 3.6.0)
 
 ## Key API Endpoints
 - POST /api/cash-register/close
 - GET /api/shifts/current
 - POST /api/shifts/open-for-cashier
+- GET /api/shifts/cashiers-list (now includes has_active_shift boolean)
 - GET /api/expenses
 - GET /api/cash-register/summary
 - GET /api/print-agent-version
 - GET /api/download-print-agent
-- GET /api/print-agent-script
 
 ## DB Schema (Key)
 - orders: status, payment_method, is_paid
