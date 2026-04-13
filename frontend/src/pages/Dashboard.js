@@ -70,7 +70,8 @@ import {
   Bell,
   Phone,
   Trophy,
-  Medal
+  Medal,
+  RefreshCcw
 } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 import TargetCelebration from '../components/TargetCelebration';
@@ -881,10 +882,10 @@ export default function Dashboard() {
   };
 
   // إغلاق الصندوق
-  const handleCloseRegister = async () => {
-    const countedCash = calculateCountedCash();
+  const handleCloseRegister = async (noCashMode = false) => {
+    const countedCash = noCashMode ? 0 : calculateCountedCash();
     
-    if (countedCash === 0) {
+    if (!noCashMode && countedCash === 0 && (cashSummary?.expected_cash || 0) > 0) {
       toast.error(t('يرجى إدخال جرد الصندوق'));
       return;
     }
@@ -895,35 +896,35 @@ export default function Dashboard() {
       const branchId = getBranchIdForApi();
       const token = localStorage.getItem('token');
       const res = await axios.post(`${API}/cash-register/close`, {
-        denominations,
+        denominations: noCashMode ? { "250": 0, "500": 0, "1000": 0, "5000": 0, "10000": 0, "25000": 0, "50000": 0 } : denominations,
         notes: closeNotes,
         branch_id: branchId
       }, {
         headers: { Authorization: `Bearer ${token}` }
       });
       
-      setClosingResult(res.data);
-      setShowReport(true);
       toast.success(t('تم إغلاق الصندوق والوردية بنجاح!'));
       
       // تحديث حالة اليوم
       fetchDayStatus();
       
-      // طباعة الإيصال عبر USB مباشرة (بدون نافذة طباعة)
-      setTimeout(async () => {
-        await printClosingReceiptViaUSB(res.data);
+      // طباعة الإيصال عبر USB مباشرة ثم إغلاق الحوار
+      await printClosingReceiptViaUSB(res.data);
+      
+      // إغلاق الحوار مباشرة بعد الطباعة
+      setTimeout(() => {
+        setCashRegisterOpen(false);
+        setClosingResult(null);
+        setShowReport(false);
         
-        // تسجيل خروج إجباري للكاشير فقط بعد الطباعة
+        // تسجيل خروج إجباري للكاشير فقط
         if (user?.role === 'cashier') {
           setTimeout(() => {
             toast.info(t('تم تسجيل خروجك تلقائياً بعد إغلاق الصندوق'));
-            setCashRegisterOpen(false);
-            setClosingResult(null);
-            setShowReport(false);
             logout();
-          }, 2000);
+          }, 1000);
         }
-      }, 500);
+      }, 1500);
       
     } catch (error) {
       toast.error(error.response?.data?.detail || t('فشل في إغلاق الصندوق'));
@@ -1156,35 +1157,15 @@ export default function Dashboard() {
             <span class="label">الخصومات:</span>
             <span class="value">${formatPrice(data.total_discounts || data.discounts_total || 0)}</span>
           </div>
-        </div>
-
-        ${(data.total_refunds > 0 || data.refund_count > 0) ? `
-        <div class="section" style="border: 1px solid #9333ea; padding: 4px; border-radius: 4px;">
-          <div class="section-title" style="color: #9333ea;">المرتجعات</div>
           <div class="row">
-            <span class="label">عدد المرتجعات:</span>
-            <span class="value">${data.refund_count || 0}</span>
-          </div>
-          <div class="row highlight">
-            <span class="label">إجمالي المرتجعات:</span>
-            <span class="value" style="color: #9333ea;">-${formatPrice(data.total_refunds)}</span>
-          </div>
-        </div>
-        ` : ''}
-
-        ${(data.cancelled_orders > 0 || data.cancelled_amount > 0) ? `
-        <div class="section">
-          <div class="section-title">الإلغاءات (غير محسوبة)</div>
-          <div class="row">
-            <span class="label">عدد الإلغاءات:</span>
-            <span class="value">${data.cancelled_orders || 0}</span>
+            <span class="label">المرتجعات (${data.refund_count || 0}):</span>
+            <span class="value">${formatPrice(data.total_refunds || 0)}</span>
           </div>
           <div class="row">
-            <span class="label">إجمالي الإلغاءات:</span>
+            <span class="label">الإلغاءات (${data.cancelled_orders || 0}):</span>
             <span class="value">${formatPrice(data.cancelled_amount || 0)}</span>
           </div>
         </div>
-        ` : ''}
 
         <div class="section">
           <div class="section-title">جرد الصندوق</div>
@@ -1196,19 +1177,22 @@ export default function Dashboard() {
             <span class="label">الجرد الفعلي:</span>
             <span class="value">${formatPrice(countedCash)}</span>
           </div>
-          <div class="row highlight">
-            <span class="label">الفرق:</span>
-            <span class="value ${differenceClass}">${differenceText}${formatPrice(Math.abs(difference))}</span>
-          </div>
         </div>
 
+        ${difference > 0 ? `
+        <div class="row highlight">
+          <span class="label">زيادة:</span>
+          <span class="value positive">+${formatPrice(Math.abs(difference))}</span>
+        </div>
+        ` : difference < 0 ? `
+        <div class="row highlight">
+          <span class="label">نقص:</span>
+          <span class="value negative">-${formatPrice(Math.abs(difference))}</span>
+        </div>
+        ` : ''}
+
         <div class="big-total">
-          ${difference === 0 
-            ? `صافي النقدي: ${formatPrice(countedCash)} ✅` 
-            : difference > 0 
-              ? `صافي النقدي: +${formatPrice(Math.abs(difference))} (زيادة)` 
-              : `صافي النقدي: -${formatPrice(Math.abs(difference))} (نقص)`
-          }
+          صافي النقدي: ${formatPrice(countedCash)}
         </div>
 
         ${data.notes ? `
@@ -1268,11 +1252,6 @@ export default function Dashboard() {
     const countedCash = data.closing_cash || data.counted_cash || 0;
     const difference = countedCash - expectedCash;
     
-    let netCashLine = '';
-    if (difference === 0) netCashLine = `صافي النقدي: ${formatPrice(countedCash)} ✓`;
-    else if (difference > 0) netCashLine = `صافي النقدي: +${formatPrice(Math.abs(difference))} (زيادة)`;
-    else netCashLine = `صافي النقدي: -${formatPrice(Math.abs(difference))} (نقص)`;
-    
     const restaurantName = tenantInfo?.restaurant_name || 'المطعم';
     const branchName = tenantInfo?.branch_name || '';
     const cashierName = user?.full_name || user?.username || '';
@@ -1305,25 +1284,20 @@ export default function Dashboard() {
       { text: 'المصاريف والخصومات', bold: true, align: 'center' },
       { text: `المصاريف:  ${formatPrice(data.total_expenses)}`, align: 'right' },
       { text: `الخصومات:  ${formatPrice(data.total_discounts || data.discounts_total || 0)}`, align: 'right' },
+      { text: `المرتجعات (${data.refund_count || 0}):  ${formatPrice(data.total_refunds || 0)}`, align: 'right' },
+      { text: `الإلغاءات (${data.cancelled_orders || 0}):  ${formatPrice(data.cancelled_amount || 0)}`, align: 'right' },
       { text: '--------------------------------', align: 'center' },
-      ...(data.total_refunds > 0 ? [
-        { text: 'المرتجعات', bold: true, align: 'center' },
-        { text: `عدد المرتجعات:  ${data.refund_count || 0}`, align: 'right' },
-        { text: `إجمالي المرتجعات:  -${formatPrice(data.total_refunds)}`, align: 'right' },
-        { text: '--------------------------------', align: 'center' },
-      ] : []),
-      ...(data.cancelled_orders > 0 || data.cancelled_amount > 0 ? [
-        { text: 'الإلغاءات (غير محسوبة)', bold: true, align: 'center' },
-        { text: `عدد الإلغاءات:  ${data.cancelled_orders || 0}`, align: 'right' },
-        { text: `إجمالي الإلغاءات:  ${formatPrice(data.cancelled_amount || 0)}`, align: 'right' },
-        { text: '--------------------------------', align: 'center' },
-      ] : []),
       { text: 'جرد الصندوق', bold: true, align: 'center' },
       { text: `المتوقع في الصندوق:  ${formatPrice(expectedCash)}`, align: 'right' },
       { text: `الجرد الفعلي:  ${formatPrice(countedCash)}`, align: 'right' },
-      { text: `الفرق:  ${difference >= 0 ? '+' : ''}${formatPrice(difference)}`, align: 'right' },
+      { text: '--------------------------------', align: 'center' },
+      ...(difference > 0 ? [
+        { text: `زيادة:  +${formatPrice(Math.abs(difference))}`, bold: true, align: 'right' },
+      ] : difference < 0 ? [
+        { text: `نقص:  -${formatPrice(Math.abs(difference))}`, bold: true, align: 'right' },
+      ] : []),
       { text: '================================', align: 'center' },
-      { text: netCashLine, bold: true, align: 'center', size: 2 },
+      { text: `صافي النقدي: ${formatPrice(countedCash)}`, bold: true, align: 'center', size: 2 },
       { text: '================================', align: 'center' },
       ...(data.notes ? [{ text: `ملاحظات: ${data.notes}`, align: 'center' }] : []),
       { text: 'شكراً لاستخدامكم نظام Maestro', align: 'center' },
@@ -3007,19 +2981,32 @@ export default function Dashboard() {
                   )}
                 </div>
 
-                {/* جرد فئات النقود */}
+                {/* جرد فئات النقود - يظهر دائماً */}
                 <div className="space-y-3">
-                  {(cashSummary?.expected_cash || 0) <= 0 ? (
-                    <div className="p-4 bg-yellow-500/10 border border-yellow-500/30 rounded-lg text-center">
-                      <p className="font-bold text-yellow-600 mb-1">{t('لا يوجد نقدي متبقي في الصندوق')}</p>
-                      <p className="text-sm text-muted-foreground">{t('المصاريف تساوي أو أكبر من المبيعات النقدية - يمكنك تأكيد الإغلاق مباشرة')}</p>
+                  <div className="flex items-center justify-between">
+                    <h3 className="font-bold flex items-center gap-2">
+                      <Banknote className="h-5 w-5 text-green-500" />
+                      {t('جرد الصندوق')} ({t('فئات النقود')})
+                    </h3>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={openCashRegister}
+                      className="gap-1"
+                      data-testid="refresh-summary-btn"
+                    >
+                      <RefreshCcw className="h-4 w-4" />
+                      {t('تحديث')}
+                    </Button>
+                  </div>
+
+                  {/* المتوقع في الصندوق */}
+                  {canSee('hide_cash_expected') && (
+                    <div className="flex items-center justify-between p-3 bg-blue-500/10 rounded-lg">
+                      <span className="font-medium">{t('المتوقع في الصندوق')} ({t('نقدي')} - {t('المصاريف')}):</span>
+                      <span className="text-lg font-bold text-blue-600">{formatPrice(cashSummary?.expected_cash || 0)}</span>
                     </div>
-                  ) : (
-                  <>
-                  <h3 className="font-bold flex items-center gap-2">
-                    <Banknote className="h-5 w-5 text-green-500" />
-                    {t('جرد الصندوق')} ({t('فئات النقود')})
-                  </h3>
+                  )}
                   
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                     {DENOMINATIONS.map((denom) => (
@@ -3049,29 +3036,27 @@ export default function Dashboard() {
                     <span className="text-2xl font-bold text-primary">{formatPrice(calculateCountedCash())}</span>
                   </div>
 
-                  {/* الفرق - يظهر عند تفعيل النقدي والمتوقع */}
+                  {/* الفرق */}
                   {calculateCountedCash() > 0 && canSee('hide_cash_expected') && (
                     <div className={`flex items-center justify-between p-4 rounded-lg ${
-                      calculateCountedCash() - cashSummary.expected_cash >= 0 
+                      calculateCountedCash() - (cashSummary?.expected_cash || 0) >= 0 
                         ? 'bg-green-500/10' 
                         : 'bg-red-500/10'
                     }`}>
                       <span className="font-bold">{t('الفرق')}:</span>
                       <span className={`text-xl font-bold flex items-center gap-2 ${
-                        calculateCountedCash() - cashSummary.expected_cash >= 0 
+                        calculateCountedCash() - (cashSummary?.expected_cash || 0) >= 0 
                           ? 'text-green-600' 
                           : 'text-red-600'
                       }`}>
-                        {calculateCountedCash() - cashSummary.expected_cash >= 0 ? (
+                        {calculateCountedCash() - (cashSummary?.expected_cash || 0) >= 0 ? (
                           <CheckCircle className="h-5 w-5" />
                         ) : (
                           <AlertCircle className="h-5 w-5" />
                         )}
-                        {formatPrice(calculateCountedCash() - cashSummary.expected_cash)}
+                        {formatPrice(calculateCountedCash() - (cashSummary?.expected_cash || 0))}
                       </span>
                     </div>
-                  )}
-                  </>
                   )}
                 </div>
 
@@ -3086,25 +3071,44 @@ export default function Dashboard() {
                   />
                 </div>
 
-                {/* زر الإغلاق */}
-                <Button 
-                  onClick={handleCloseRegister} 
-                  className="w-full h-12 text-lg gap-2"
-                  disabled={isClosing || (calculateCountedCash() === 0 && (cashSummary?.expected_cash || 0) > 0)}
-                  data-testid="confirm-close-btn"
-                >
-                  {isClosing ? (
-                    <>
-                      <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                      جاري الإغلاق...
-                    </>
-                  ) : (
-                    <>
-                      <Check className="h-5 w-5" />
-                      {t('تأكيد إغلاق الصندوق والوردية')}
-                    </>
-                  )}
-                </Button>
+                {/* أزرار الإغلاق */}
+                <div className="space-y-3">
+                  {/* زر "لا يوجد نقد" - يظهر دائماً */}
+                  <Button 
+                    variant="outline"
+                    onClick={() => {
+                      if (window.confirm(t('هل أنت متأكد من عدم وجود نقد في الصندوق؟ سيتم إغلاق الصندوق بجرد صفري.'))) {
+                        handleCloseRegister(true);
+                      }
+                    }}
+                    className="w-full h-10 gap-2 text-yellow-600 border-yellow-500 hover:bg-yellow-500/10"
+                    disabled={isClosing}
+                    data-testid="no-cash-btn"
+                  >
+                    <XCircle className="h-5 w-5" />
+                    {t('لا يوجد نقد متوفر - إغلاق مباشر')}
+                  </Button>
+
+                  {/* زر التأكيد العادي */}
+                  <Button 
+                    onClick={() => handleCloseRegister(false)} 
+                    className="w-full h-12 text-lg gap-2"
+                    disabled={isClosing || calculateCountedCash() === 0}
+                    data-testid="confirm-close-btn"
+                  >
+                    {isClosing ? (
+                      <>
+                        <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        جاري الإغلاق...
+                      </>
+                    ) : (
+                      <>
+                        <Check className="h-5 w-5" />
+                        {t('تأكيد إغلاق الصندوق والوردية')}
+                      </>
+                    )}
+                  </Button>
+                </div>
                 <p className="text-xs text-center text-muted-foreground mt-2">
                   * {t('سيتم إغلاق الوردية الحالية تلقائياً عند إغلاق الصندوق')}
                 </p>
