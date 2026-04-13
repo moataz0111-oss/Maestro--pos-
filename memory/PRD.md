@@ -1,56 +1,51 @@
-# Maestro EGP - POS System PRD
+# Maestro EGP - Multi-Tenant POS System PRD
 
 ## Original Problem Statement
-Multi-tenant POS system (React + FastAPI + MongoDB) with ZKTeco biometric integration, HR/payroll module, and comprehensive restaurant management.
+Multi-tenant POS system with biometric integration (ZKTeco), thermal receipt printing via Local Print Agent, shift management, expense tracking, and order management. Arabic (RTL) interface.
 
-## Architecture
-- **Frontend**: React (port 3000) - Dashboard.js, POS.js, HR.js, Expenses.js, etc.
-- **Backend**: FastAPI (port 8001) - server.py + routes/shifts_routes.py
-- **Database**: MongoDB (maestro_pos)
-- **Local Agent**: PowerShell print_server.ps1 v3.8.0
+## Core Architecture
+- **Frontend**: React (RTL Arabic UI)
+- **Backend**: FastAPI + MongoDB
+- **Local Agent**: PowerShell script (print_server.ps1 v3.8.0) with embedded C# for ESC/POS printing and ZKTeco biometric communication
 
 ## Completed Features
 
-### April 13, 2026 - Session 1: ZKTeco Photo + Cash Register
-- Fixed CMD_DATA_WRRQ bug, enhanced face photo fetching
-- Cash register: denominations always visible, no-cash button, auto-print, receipt restructured
+### ZKTeco Biometric Integration
+- Real-time background sync via useAutoSync hook
+- Face photo fetching from iFace990 Plus (CMD_DATA_WRRQ)
+- /zk-probe-device diagnostic endpoint
 
-### April 13, 2026 - Session 2: Owner Shift Management
-- Owner does NOT create own shift - uses cashier's shift
-- Cashier selection dialog when no shift exists
-- Active shift badge shows cashier name
-- Orders by owner go under cashier's shift
+### Owner Shift Management
+- Owners cannot open their own shift
+- Must select an active cashier to manage under cashier's name
 
-### April 13, 2026 - Session 3: Expenses + POS Flow (CURRENT)
-**Expenses Enhancement:**
-- Expenses API returns `created_by_name` (cashier who created each expense)
-- Old expenses populated with cashier names from users collection
-- **3 sections**: حسب التصنيف (by category), مصاريف الكاشيرية (by cashier), سجل المصاريف (log)
-- Expense log shows: date + time + cashier name + amount + category
+### Expenses Tracking
+- Breakdown by cashier name
+- Detailed log with exact time and cashier for each expense
 
-**POS Order Flow:**
-- Payment method buttons turn **orange** (bg-orange-500) when selected
-- `handleSaveAndSendToKitchen` now validates: payment method + table (dine-in) + phone (takeaway) + delivery details
-- After kitchen send: auto-prints customer receipt via USB with `is_paid: false`
-- Receipt shows **"غير مدفوعة"** (unpaid, red) when sent to kitchen
-- Receipt shows **"مدفوعة"** (paid, green) when payment completed
-- Receipt bitmap updated with paid/unpaid status below total
-- printService passes `is_paid` to receipt data
+### POS Order Flow
+- Forced payment method selection (orange highlight)
+- Auto-save + print to kitchen/customer
+- "Paid/Unpaid" status on receipts
 
-## Key Files
-- `/app/frontend/src/pages/Expenses.js` - Expenses with cashier breakdown
-- `/app/frontend/src/pages/POS.js` - POS with orange buttons + validation
-- `/app/frontend/src/utils/receiptBitmap.js` - Receipt with paid/unpaid status
-- `/app/frontend/src/utils/printService.js` - Print service with is_paid
-- `/app/frontend/src/pages/Dashboard.js` - Dashboard + cash register + cashier selection
-- `/app/backend/routes/shifts_routes.py` - Shift management
-- `/app/backend/server.py` - Main API
+### Shift Closing Dialog (Latest - April 2026)
+- **Role-based visibility**: Cashiers cannot see "Expected Cash" (المتوقع) or surplus/deficit. Only Total Sales and Total Expenses visible to cashiers
+- **"No cash available" button**: Disappears automatically when cashier enters any value in denomination grid
+- **Deficit tracking**: Closing with 0 cash records full expected amount as deficit (عجز)
+- **Receipt printing**: Deficit printed correctly on both canvas and USB receipts
+
+## Key API Endpoints
+- POST /api/cash-register/close
+- GET /api/shifts/current
+- POST /api/shifts/open-for-cashier
+- GET /api/expenses
+- GET /api/cash-register/summary
+
+## DB Schema (Key)
+- orders: status, payment_method, is_paid
+- shifts: cashier_id, cashier_name, status, branch_id, expected_cash, cash_difference
+- expenses: created_by_name, category, amount
 
 ## Backlog
-### P2 - Refactoring
-- Break down server.py (18k+ lines)
-- Break down large frontend files (SuperAdmin.js, Settings.js, POS.js)
-
-## Test Credentials
-- Admin: hanialdujaili@gmail.com / Hani@2024
-- Super Admin: owner@maestroegp.com / owner123 (Secret: 271018)
+- (P2) Refactor server.py (19k+ lines) into modular routes
+- (P2) Refactor Dashboard.js, POS.js, SuperAdmin.js into smaller components
