@@ -21,7 +21,9 @@ import {
   Filter,
   Trash2,
   WifiOff,
-  Cloud
+  Cloud,
+  Users,
+  User
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -302,6 +304,15 @@ export default function Expenses() {
     return acc;
   }, {});
 
+  // تجميع المصاريف حسب الكاشير
+  const expensesByCashier = expenses.reduce((acc, e) => {
+    const name = e.created_by_name || t('غير معروف');
+    if (!acc[name]) acc[name] = { total: 0, count: 0 };
+    acc[name].total += e.amount;
+    acc[name].count += 1;
+    return acc;
+  }, {});
+
   const getCategoryName = (catId) => {
     const cat = expenseCategories.find(c => c.id === catId);
     return cat ? t(cat.name) : catId;
@@ -542,6 +553,36 @@ export default function Expenses() {
           </CardContent>
         </Card>
 
+        {/* By Cashier */}
+        {Object.keys(expensesByCashier).length > 0 && (
+          <Card className="border-border/50 bg-card">
+            <CardHeader>
+              <CardTitle className="text-lg text-foreground flex items-center gap-2">
+                <Users className="h-5 w-5 text-blue-500" />
+                {t('مصاريف الكاشيرية')}
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                {Object.entries(expensesByCashier).map(([name, data]) => (
+                  <div key={name} className="p-4 bg-muted/30 rounded-lg flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-blue-500/10 flex items-center justify-center">
+                        <User className="h-5 w-5 text-blue-500" />
+                      </div>
+                      <div>
+                        <p className="font-medium text-foreground">{name}</p>
+                        <p className="text-xs text-muted-foreground">{data.count} {t('مصروف')}</p>
+                      </div>
+                    </div>
+                    <p className="text-lg font-bold text-red-500 tabular-nums">-{formatPrice(data.total)}</p>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {/* Expenses List */}
         <Card className="border-border/50 bg-card">
           <CardHeader>
@@ -561,9 +602,23 @@ export default function Expenses() {
                       <span className="text-2xl">{getCategoryIcon(expense.category)}</span>
                       <div>
                         <p className="font-medium text-foreground">{expense.description}</p>
-                        <p className="text-sm text-muted-foreground">
-                          {getCategoryName(expense.category)} • {expense.date}
-                        </p>
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                          <span>{getCategoryName(expense.category)}</span>
+                          <span>•</span>
+                          <span>{expense.date}</span>
+                          {expense.created_at && (
+                            <>
+                              <span>•</span>
+                              <span>{new Date(expense.created_at).toLocaleTimeString('ar-IQ', { hour: '2-digit', minute: '2-digit' })}</span>
+                            </>
+                          )}
+                        </div>
+                        {expense.created_by_name && (
+                          <p className="text-xs text-blue-500 mt-0.5 flex items-center gap-1">
+                            <User className="h-3 w-3" />
+                            {expense.created_by_name}
+                          </p>
+                        )}
                       </div>
                     </div>
                     <div className="text-left">

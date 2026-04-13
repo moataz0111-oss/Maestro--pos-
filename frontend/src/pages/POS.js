@@ -1414,14 +1414,33 @@ export default function POS() {
       return;
     }
 
-    if (orderType === 'dine_in' && !selectedTable) {
+    // إجبار اختيار طريقة الدفع
+    if (!paymentMethod || paymentMethod === 'pending') {
+      toast.error(t('يرجى تحديد طريقة الدفع (نقدي، آجل، أو بطاقة)'));
+      return;
+    }
+
+    if (orderType === 'dine_in' && !selectedTable && !editingOrder) {
       toast.error(t('يرجى اختيار طاولة'));
       return;
     }
 
-    // العنوان مطلوب فقط إذا تم اختيار سائق (وليس شركة توصيل)
-    if (orderType === 'delivery' && selectedDriver && !deliveryAddress) {
-      toast.error(t('يرجى إدخال عنوان التوصيل'));
+    // قواعد التوصيل
+    if (orderType === 'delivery') {
+      if (!deliveryApp && !selectedDriver) {
+        toast.error(t('يرجى اختيار شركة توصيل أو سائق'));
+        return;
+      }
+      if (selectedDriver) {
+        if (!deliveryAddress) { toast.error(t('يرجى إدخال عنوان التوصيل')); return; }
+        if (!customerName) { toast.error(t('يرجى إدخال اسم العميل')); return; }
+        if (!customerPhone && user?.role !== 'call_center') { toast.error(t('يرجى إدخال رقم هاتف العميل')); return; }
+      }
+    }
+
+    // السفري - إجبار إدخال رقم البزون
+    if (orderType === 'takeaway' && !buzzerNumber) {
+      toast.error(t('يرجى إدخال رقم جهاز البزون'));
       return;
     }
 
@@ -1528,7 +1547,7 @@ export default function POS() {
             extras: item.selectedExtras || []
           })),
           branch_id: currentBranchId || (await axios.get(`${API}/branches`)).data[0]?.id,
-          payment_method: 'pending',
+          payment_method: paymentMethod,  // حفظ طريقة الدفع المختارة
           discount: discount,
           delivery_app: orderType === 'delivery' ? deliveryApp : null,
           delivery_app_name: orderType === 'delivery' && deliveryApp ? (deliveryApps.find(a => a.id === deliveryApp)?.name || '') : null,
@@ -1598,6 +1617,36 @@ export default function POS() {
           toast.success(`${t('تم إنشاء الطلب')} #${res.data.order_number} ${t('وتحويله للسائق')}`);
         } else {
           toast.success(`${t('تم إنشاء الطلب')} #${res.data.order_number}`);
+        }
+        
+        // طباعة فاتورة الكاشير USB مع حالة "غير مدفوعة"
+        try {
+          let cashierPrinter = availablePrinters.find(p => p.print_mode === 'full_receipt');
+          if (!cashierPrinter) cashierPrinter = availablePrinters.find(p => p.connection_type === 'usb' && p.usb_printer_name);
+          if (cashierPrinter) {
+            const subtotalCalc = cart.reduce((sum, item) => sum + ((item.price * item.quantity) + (item.selectedExtras || []).reduce((s, e) => s + (e.price * (e.quantity || 1)), 0)), 0);
+            const orderForReceipt = buildPrintOrderData(res.data.order_number);
+            const cashierOrderData = {
+              ...orderForReceipt,
+              items: cart.map(item => ({
+                product_id: item.product_id || item.id,
+                product_name: item.product_name || item.name,
+                name: item.product_name || item.name,
+                price: item.price,
+                quantity: item.quantity,
+                notes: item.notes || '',
+                extras: item.selectedExtras || []
+              })),
+              total: subtotalCalc - (discount || 0),
+              subtotal: subtotalCalc,
+              payment_method: paymentMethod || '',
+              cashier_name: user?.name || user?.full_name || '',
+              is_paid: false
+            };
+            await sendReceiptPrint(cashierPrinter, cashierOrderData);
+          }
+        } catch (receiptErr) {
+          console.error('Receipt print error:', receiptErr);
         }
       }
       
@@ -2021,7 +2070,8 @@ export default function POS() {
               total: subtotalCalc - (discount || 0),
               subtotal: subtotalCalc,
               payment_method: paymentMethod || '',
-              cashier_name: user?.name || user?.full_name || ''
+              cashier_name: user?.name || user?.full_name || '',
+              is_paid: true
             };
             const cashierResult = await sendReceiptPrint(cashierPrinter, cashierOrderData);
             if (!cashierResult.success) {
@@ -3305,7 +3355,7 @@ export default function POS() {
               <Button
                 key={method.id}
                 variant={paymentMethod === method.id ? 'default' : 'outline'}
-                className={`flex-1 h-10 ${paymentMethod === method.id ? 'bg-secondary text-secondary-foreground' : ''}`}
+                className={`flex-1 h-10 transition-all ${paymentMethod === method.id ? 'bg-orange-500 hover:bg-orange-600 text-white border-orange-500 shadow-lg shadow-orange-500/30' : 'hover:border-orange-500/50'}`}
                 onClick={() => { setPaymentMethod(method.id); playClick(); }}
                 data-testid={`payment-${method.id}`}
               >

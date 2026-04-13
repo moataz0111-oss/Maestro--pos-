@@ -2816,9 +2816,10 @@ async def create_expense(expense: ExpenseCreate, current_user: dict = Depends(ge
     expense_doc = {
         "id": str(uuid.uuid4()),
         **expense.model_dump(),
-        "tenant_id": get_user_tenant_id(current_user),  # فصل البيانات
+        "tenant_id": get_user_tenant_id(current_user),
         "date": expense.date or datetime.now(timezone.utc).strftime("%Y-%m-%d"),
         "created_by": current_user["id"],
+        "created_by_name": current_user.get("full_name", "") or current_user.get("username", ""),
         "created_at": datetime.now(timezone.utc).isoformat()
     }
     await db.expenses.insert_one(expense_doc)
@@ -2844,6 +2845,17 @@ async def get_expenses(
         query.setdefault("date", {})["$lte"] = end_date
     
     expenses = await db.expenses.find(query, {"_id": 0}).sort("date", -1).to_list(500)
+    
+    # ملء اسم الكاشير للمصاريف القديمة التي لا تحتوي على created_by_name
+    needs_update = [e for e in expenses if not e.get("created_by_name") and e.get("created_by")]
+    if needs_update:
+        user_ids = list(set(e["created_by"] for e in needs_update))
+        users = await db.users.find({"id": {"$in": user_ids}}, {"_id": 0, "id": 1, "full_name": 1, "username": 1}).to_list(100)
+        user_map = {u["id"]: u.get("full_name") or u.get("username", "") for u in users}
+        for e in expenses:
+            if not e.get("created_by_name") and e.get("created_by"):
+                e["created_by_name"] = user_map.get(e["created_by"], "")
+    
     return expenses
 
 @api_router.get("/expenses/categories")

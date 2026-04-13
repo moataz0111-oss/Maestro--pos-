@@ -314,6 +314,7 @@ export const printOrderToAllPrinters = async (order, orderItems, products, print
       }, 0),
       discount: order.discount || 0,
       payment_method: order.payment_method || '',
+      is_paid: order.is_paid !== undefined ? order.is_paid : true,
       qr_url: order.qr_url || '',
       contact_message: order.contact_message || ''
     };

@@ -385,6 +385,17 @@ async function renderReceipt(order) {
   x.beginPath(); x.moveTo(MARGIN, y); x.lineTo(PW-MARGIN, y); x.stroke();
   y += 10;
 
+  // حالة الدفع - مدفوعة / غير مدفوعة
+  const isPaid = order.is_paid === true || order.is_paid === 'true';
+  const paidText = isPaid ? 'مدفوعة' : 'غير مدفوعة';
+  const paidColor = isPaid ? '#16a34a' : '#dc2626';
+  x.fillStyle = paidColor;
+  x.font = font(24, true, paidText);
+  const paidW = x.measureText(paidText).width;
+  x.fillText(paidText, (PW - paidW) / 2, y);
+  y += 32;
+  x.fillStyle = '#000';
+
   // Payment method
   const pay = {'cash':'نقدي','card':'بطاقة','credit':'آجل','delivery_company':'شركة توصيل'};
   const payT = pay[order.payment_method] || order.payment_method || '';
