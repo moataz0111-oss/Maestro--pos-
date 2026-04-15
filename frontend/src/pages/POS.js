@@ -1047,7 +1047,9 @@ export default function POS() {
           quantity: item.quantity,
           notes: item.notes || '',
           selectedExtras: item.extras || [],
-          extras: product?.extras || []
+          extras: product?.extras || [],
+          _sentToKitchen: true,  // المنتجات القديمة تم إرسالها للمطبخ مسبقاً
+          _originalQty: item.quantity  // الكمية الأصلية لتتبع التغييرات
         };
       });
       setCart(cartItems);
@@ -1485,17 +1487,26 @@ export default function POS() {
           discount: discount || 0
         });
         
-        // إرسال جميع العناصر لطابعات المطبخ (الجديدة والقديمة)
+        // إرسال المنتجات الجديدة فقط لطابعات المطبخ (لا يُعاد إرسال القديمة)
         try {
           const kitchenPrinters = availablePrinters.filter(p => 
             (p.print_mode === 'orders_only' || p.print_mode === 'selected_products') &&
             ((p.connection_type === 'usb' && p.usb_printer_name) || (p.connection_type !== 'usb' && p.ip_address))
           );
-          if (kitchenPrinters.length > 0) {
+          
+          // تحديد المنتجات الجديدة فقط (لم تُرسل للمطبخ سابقاً)
+          const newItems = cart.filter(item => !item._sentToKitchen);
+          // تحديد المنتجات اللي زادت كميتها
+          const increasedQtyItems = cart
+            .filter(item => item._sentToKitchen && item._originalQty && item.quantity > item._originalQty)
+            .map(item => ({ ...item, quantity: item.quantity - item._originalQty }));
+          
+          const itemsToSend = [...newItems, ...increasedQtyItems];
+          
+          if (kitchenPrinters.length > 0 && itemsToSend.length > 0) {
             const restaurantName = restaurantSettings?.name_ar || restaurantSettings?.name || '';
             const orderForPrint = buildPrintOrderData(editingOrder.order_number);
-            // إرسال جميع العناصر في السلة للمطبخ (ليس فقط الجديدة)
-            const itemsForPrint = cart.map(item => ({
+            const itemsForPrint = itemsToSend.map(item => ({
               product_id: item.product_id || item.id,
               product_name: item.product_name || item.name,
               name: item.product_name || item.name,
@@ -1504,17 +1515,21 @@ export default function POS() {
               notes: item.notes || '',
               extras: item.selectedExtras || []
             }));
-            console.log('[Kitchen Print] Edit mode: sending ALL', itemsForPrint.length, 'items to', kitchenPrinters.length, 'printers');
+            console.log('[Kitchen Print] Edit mode: sending ONLY', itemsForPrint.length, 'NEW items (skipping', cart.length - newItems.length - increasedQtyItems.length, 'already-printed items)');
             const result = await printOrderToAllPrinters(orderForPrint, itemsForPrint, products, kitchenPrinters, restaurantName);
             
-            // تحديث حالة كل عنصر حسب نتيجة الطباعة الفعلية
+            // تحديث حالة كل عنصر
             const updatedStatus = {};
             cart.forEach((item, idx) => {
-              const product = products.find(p => p.id === item.product_id);
-              const pIds = product?.printer_ids?.filter(id => id) || [];
-              const hasPrinterResult = result.results?.some(r => pIds.includes(r.printer_id) && r.success);
-              const allDefaultSuccess = pIds.length === 0 && result.results?.length > 0 && result.success;
-              updatedStatus[idx] = (hasPrinterResult || allDefaultSuccess) ? 'success' : 'error';
+              if (item._sentToKitchen && !(item._originalQty && item.quantity > item._originalQty)) {
+                updatedStatus[idx] = 'success'; // القديم - تم إرساله سابقاً
+              } else {
+                const product = products.find(p => p.id === item.product_id);
+                const pIds = product?.printer_ids?.filter(id => id) || [];
+                const hasPrinterResult = result.results?.some(r => pIds.includes(r.printer_id) && r.success);
+                const allDefaultSuccess = pIds.length === 0 && result.results?.length > 0 && result.success;
+                updatedStatus[idx] = (hasPrinterResult || allDefaultSuccess) ? 'success' : 'error';
+              }
             });
             setKitchenPrintStatus(updatedStatus);
             
@@ -1523,6 +1538,13 @@ export default function POS() {
                 toast.error(`${f.printer_name}: ${f.message}`);
               });
             }
+          } else if (kitchenPrinters.length > 0 && itemsToSend.length === 0) {
+            // لا يوجد منتجات جديدة - كل شيء تم إرساله سابقاً
+            console.log('[Kitchen Print] Edit mode: no new items to send');
+            const updatedStatus = {};
+            cart.forEach((_, idx) => { updatedStatus[idx] = 'success'; });
+            setKitchenPrintStatus(updatedStatus);
+            toast.info(t('لا يوجد منتجات جديدة للإرسال للمطبخ'));
           } else {
             console.warn('[Kitchen Print] No kitchen printers configured!');
             toast.error(t('لا توجد طابعات مطبخ مفعّلة'));
