@@ -2182,21 +2182,15 @@ export default function POS() {
   const pendingDeliveryOrders = pendingOrders.filter(o => o.order_type === 'delivery');
   const pendingDineInOrders = pendingOrders.filter(o => o.order_type === 'dine_in');
 
-  // طباعة الفاتورة - حفظ + إرسال للمطبخ + طباعة "غير مدفوع" (بدون دفع)
+  // طباعة الفاتورة - حفظ + إرسال المنتجات الجديدة فقط للمطبخ + طباعة "غير مدفوع"
   const handlePrintBill = async () => {
     if (cart.length === 0) {
       toast.error(t('السلة فارغة'));
       return;
     }
     
-    // إذا كان هناك طلب قيد التعديل، افتح المعاينة مباشرة
-    if (editingOrder) {
-      setPrintDialogOpen(true);
-      return;
-    }
-    
     // التحقق من الشروط حسب نوع الطلب
-    if (orderType === 'dine_in' && !selectedTable) {
+    if (orderType === 'dine_in' && !selectedTable && !editingOrder) {
       toast.error(t('يرجى اختيار طاولة'));
       return;
     }
@@ -2209,10 +2203,16 @@ export default function POS() {
     setSubmitting(true);
     try {
       const currentBranchId = getBranchIdForApi() || localStorage.getItem('selectedBranchId') || user?.branch_id;
-      const isDeliveryOrder = orderType === 'delivery' && deliveryApp;
+      let savedOrderNumber = '';
+      let savedOrderId = '';
       
-      const orderData = {
-        items: cart.map(item => ({
+      if (editingOrder) {
+        // === تعديل طلب موجود ===
+        savedOrderId = editingOrder.id;
+        savedOrderNumber = editingOrder.order_number;
+        
+        // حفظ التعديلات (المنتجات الجديدة + القديمة)
+        const updatedItems = cart.map(item => ({
           product_id: item.product_id || item.id,
           product_name: item.product_name || item.name,
           price: item.price,
@@ -2220,38 +2220,70 @@ export default function POS() {
           cost: item.cost || 0,
           notes: item.notes || '',
           extras: item.selectedExtras || []
-        })),
-        order_type: orderType,
-        table_id: orderType === 'dine_in' ? selectedTable : null,
-        customer_name: customerName || null,
-        customer_phone: customerPhone || null,
-        delivery_address: deliveryAddress || null,
-        buzzer_number: buzzerNumber || null,
-        driver_id: orderType === 'delivery' && selectedDriver ? selectedDriver : null,
-        delivery_app: orderType === 'delivery' && deliveryApp ? deliveryApp : null,
-        delivery_app_name: orderType === 'delivery' && deliveryApp ? (deliveryApps.find(a => a.id === deliveryApp)?.name || '') : null,
-        discount: discount || 0,
-        branch_id: currentBranchId,
-        payment_method: 'pending',
-        notes: orderNotes || null,
-        auto_ready: isDeliveryOrder
-      };
+        }));
+        
+        await axios.put(`${API}/orders/${editingOrder.id}/update-items`, {
+          items: updatedItems,
+          notes: orderNotes || null,
+          discount: discount || 0
+        });
+        
+      } else {
+        // === طلب جديد ===
+        const isDeliveryOrder = orderType === 'delivery' && deliveryApp;
+        const orderData = {
+          items: cart.map(item => ({
+            product_id: item.product_id || item.id,
+            product_name: item.product_name || item.name,
+            price: item.price,
+            quantity: item.quantity,
+            cost: item.cost || 0,
+            notes: item.notes || '',
+            extras: item.selectedExtras || []
+          })),
+          order_type: orderType,
+          table_id: orderType === 'dine_in' ? selectedTable : null,
+          customer_name: customerName || null,
+          customer_phone: customerPhone || null,
+          delivery_address: deliveryAddress || null,
+          buzzer_number: buzzerNumber || null,
+          driver_id: orderType === 'delivery' && selectedDriver ? selectedDriver : null,
+          delivery_app: orderType === 'delivery' && deliveryApp ? deliveryApp : null,
+          delivery_app_name: orderType === 'delivery' && deliveryApp ? (deliveryApps.find(a => a.id === deliveryApp)?.name || '') : null,
+          discount: discount || 0,
+          branch_id: currentBranchId,
+          payment_method: 'pending',
+          notes: orderNotes || null,
+          auto_ready: isDeliveryOrder
+        };
+        
+        const res = await axios.post(`${API}/orders`, orderData);
+        savedOrderId = res.data.id;
+        savedOrderNumber = res.data.order_number;
+      }
       
-      // حفظ الطلب بدون دفع
-      const res = await axios.post(`${API}/orders`, orderData);
-      const savedOrder = res.data;
-      setLastOrderNumber(savedOrder.order_number);
+      setLastOrderNumber(savedOrderNumber);
       playSuccess();
       
-      // === إرسال المنتجات للمطبخ ===
+      // === إرسال المنتجات الجديدة فقط للمطبخ ===
       try {
         const kitchenPrinters = availablePrinters.filter(p =>
           (p.print_mode === 'orders_only' || p.print_mode === 'selected_products') &&
           ((p.connection_type === 'usb' && p.usb_printer_name) || (p.connection_type !== 'usb' && p.ip_address))
         );
-        if (kitchenPrinters.length > 0) {
+        
+        // تحديد المنتجات الجديدة فقط
+        const newItems = cart.filter(item => !item._sentToKitchen);
+        const increasedQtyItems = cart
+          .filter(item => item._sentToKitchen && item._originalQty && item.quantity > item._originalQty)
+          .map(item => ({ ...item, quantity: item.quantity - item._originalQty }));
+        const itemsToSend = [...newItems, ...increasedQtyItems];
+        
+        if (kitchenPrinters.length > 0 && itemsToSend.length > 0) {
           const restaurantName = invoiceSettings?.restaurant_name || '';
-          const itemsForKitchen = cart.map(item => ({
+          const kitchenOrderData = buildPrintOrderData(savedOrderNumber);
+          kitchenOrderData.notes = orderNotes || null;
+          const itemsForPrint = itemsToSend.map(item => ({
             product_id: item.product_id || item.id,
             product_name: item.product_name || item.name,
             name: item.product_name || item.name,
@@ -2260,22 +2292,23 @@ export default function POS() {
             notes: item.notes || '',
             extras: item.selectedExtras || []
           }));
-          const kitchenOrderData = buildPrintOrderData(savedOrder.order_number);
-          kitchenOrderData.notes = orderNotes || null;
-          await printOrderToAllPrinters(kitchenOrderData, itemsForKitchen, products, kitchenPrinters, restaurantName);
+          console.log('[Print] Sending', itemsForPrint.length, 'NEW items to kitchen');
+          await printOrderToAllPrinters(kitchenOrderData, itemsForPrint, products, kitchenPrinters, restaurantName);
+        } else {
+          console.log('[Print] No new items to send to kitchen');
         }
       } catch (kitchenErr) {
         console.error('[Print] Kitchen error:', kitchenErr);
       }
       
-      // === طباعة فاتورة "غير مدفوعة" ===
+      // === طباعة فاتورة بجميع المنتجات (قديمة + جديدة) - "غير مدفوعة" ===
       try {
         let cashierPrinter = availablePrinters.find(p => p.print_mode === 'full_receipt');
         if (!cashierPrinter) cashierPrinter = availablePrinters.find(p => p.connection_type === 'usb' && p.usb_printer_name);
         if (cashierPrinter) {
           const subtotalCalc = cart.reduce((sum, item) => sum + ((item.price * item.quantity) + (item.selectedExtras || []).reduce((s, e) => s + (e.price * (e.quantity || 1)), 0)), 0);
           const orderForPrint = {
-            ...buildPrintOrderData(savedOrder.order_number),
+            ...buildPrintOrderData(savedOrderNumber),
             items: cart.map(item => ({
               product_name: item.product_name || item.name,
               name: item.product_name || item.name,
@@ -2296,13 +2329,18 @@ export default function POS() {
         console.error('[Print] Receipt error:', receiptErr);
       }
       
-      toast.success(`${t('تم حفظ الطلب')} #${savedOrder.order_number} - ${t('غير مدفوع')}`);
+      toast.success(`${t('تم حفظ الطلب')} #${savedOrderNumber}`);
+      
+      // تعليم كل المنتجات في السلة كـ "مرسلة للمطبخ"
+      setCart(prev => prev.map(item => ({ ...item, _sentToKitchen: true, _originalQty: item.quantity })));
       
       // تحديث الطلبات المعلقة
       fetchPendingOrders();
       
-      // مسح السلة بعد 3 ثواني
-      setTimeout(() => { clearCart(); }, 3000);
+      // مسح السلة بعد 3 ثواني (فقط للطلبات الجديدة)
+      if (!editingOrder) {
+        setTimeout(() => { clearCart(); }, 3000);
+      }
       
       // تحديث الطاولات
       if (orderType === 'dine_in' && currentBranchId) {
