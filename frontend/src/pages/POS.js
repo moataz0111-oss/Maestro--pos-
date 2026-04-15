@@ -2287,6 +2287,42 @@ export default function POS() {
         console.error('[AutoPrint] Error:', autoPrintErr);
       }
       
+      // === إرسال المنتجات لطابعات المطبخ تلقائياً ===
+      try {
+        const kitchenPrinters = availablePrinters.filter(p =>
+          (p.print_mode === 'orders_only' || p.print_mode === 'selected_products') &&
+          ((p.connection_type === 'usb' && p.usb_printer_name) || (p.connection_type !== 'usb' && p.ip_address))
+        );
+        
+        if (kitchenPrinters.length > 0) {
+          const restaurantName = invoiceSettings?.restaurant_name || '';
+          const itemsForKitchen = cart.map(item => ({
+            product_id: item.product_id || item.id,
+            product_name: item.product_name || item.name,
+            name: item.product_name || item.name,
+            price: item.price,
+            quantity: item.quantity,
+            notes: item.notes || '',
+            extras: item.selectedExtras || []
+          }));
+          
+          const kitchenOrderData = buildPrintOrderData(savedOrder.order_number);
+          kitchenOrderData.notes = orderNotes || null;
+          
+          const result = await printOrderToAllPrinters(kitchenOrderData, itemsForKitchen, products, kitchenPrinters, restaurantName);
+          if (result.success) {
+            console.log('[AutoPrint] Kitchen orders sent successfully');
+          } else {
+            console.warn('[AutoPrint] Some kitchen prints failed:', result);
+          }
+        }
+      } catch (kitchenErr) {
+        console.error('[AutoPrint] Kitchen print error:', kitchenErr);
+      }
+      
+      // تحديث الطلبات المعلقة
+      fetchPendingOrders();
+      
     } catch (error) {
       console.error('Failed to save order:', error);
       
