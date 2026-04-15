@@ -1,6 +1,6 @@
 $ErrorActionPreference = 'Continue'
 $agentLog = "$PSScriptRoot\agent.log"
-"$(Get-Date) - Agent v3.9.1 starting..." | Out-File $agentLog
+"$(Get-Date) - Agent v3.9.2 starting..." | Out-File $agentLog
 
 # ============================================
 # === AUTO-CLEANUP: Kill old agent & files ===
@@ -1859,9 +1859,8 @@ while ($restartCount -lt $maxRestarts) {
 
     $listener = New-Object System.Net.HttpListener
     $listener.Prefixes.Add('http://localhost:9999/')
-    $listener.Prefixes.Add('http://127.0.0.1:9999/')
     $listener.Start()
-    "$(Get-Date) - HttpListener started on port 9999 (v3.9.1) [restart #$restartCount]" | Out-File $agentLog -Append
+    "$(Get-Date) - HttpListener started on port 9999 (v3.9.2) [restart #$restartCount]" | Out-File $agentLog -Append
 
     while ($listener.IsListening) {
       try {
@@ -1884,7 +1883,7 @@ while ($restartCount -lt $maxRestarts) {
         "$(Get-Date) - $($req.HttpMethod) $path" | Out-File $agentLog -Append
 
         if ($path -eq '/status') {
-            $jsonOut = '{"status":"running","version":"3.9.1","agent":"Maestro Print Agent","usb_support":true,"zk_support":true}'
+            $jsonOut = '{"status":"running","version":"3.9.2","agent":"Maestro Print Agent","usb_support":true,"zk_support":true}'
         }
         elseif ($path -eq '/list-printers') {
             try {

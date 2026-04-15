@@ -562,7 +562,8 @@ export default function POS() {
           console.log('🔴 Table', table.number, 'is occupied by order #', order?.order_number);
           return { ...table, status: 'occupied', current_order_id: order?.id };
         }
-        return table;
+        // إذا لا يوجد طلب نشط على الطاولة، تصير فارغة
+        return { ...table, status: 'available', current_order_id: null };
       });
       
       setTables(tablesWithStatus);
@@ -682,7 +683,8 @@ export default function POS() {
               const order = allStoredOrders.find(o => String(o.table_id) === String(table.id) && ['pending', 'preparing', 'ready'].includes(o.status));
               return { ...table, status: 'occupied', current_order_id: order?.id || order?.offline_id };
             }
-            return table;
+            // إذا لا يوجد طلب نشط على الطاولة، تصير فارغة
+            return { ...table, status: 'available', current_order_id: null };
           });
           
           setTables(filteredTables);
@@ -2158,7 +2160,7 @@ export default function POS() {
   const pendingDeliveryOrders = pendingOrders.filter(o => o.order_type === 'delivery');
   const pendingDineInOrders = pendingOrders.filter(o => o.order_type === 'dine_in');
 
-  // طباعة الفاتورة (حفظ تلقائي + معاينة)
+  // طباعة الفاتورة - يحول مباشرة لنموذج الحفظ والإرسال
   const handlePrintBill = async () => {
     if (cart.length === 0) {
       toast.error(t('السلة فارغة'));
@@ -2182,203 +2184,8 @@ export default function POS() {
       return;
     }
     
-    // حفظ الطلب تلقائياً قبل الطباعة
-    setSubmitting(true);
-    try {
-      const currentBranchId = getBranchIdForApi() || user?.branch_id;
-      
-      const orderData = {
-        items: cart.map(item => ({
-          product_id: item.product_id || item.id,
-          product_name: item.product_name || item.name,
-          price: item.price,
-          quantity: item.quantity,
-          cost: item.cost || 0,
-          notes: item.notes || '',
-          extras: item.selectedExtras || []
-        })),
-        order_type: orderType,
-        table_id: orderType === 'dine_in' ? selectedTable : null,
-        customer_name: customerName || null,
-        customer_phone: customerPhone || null,
-        delivery_address: deliveryAddress || null,
-        buzzer_number: buzzerNumber || null,
-        driver_id: orderType === 'delivery' && selectedDriver ? selectedDriver : null,
-        delivery_app: orderType === 'delivery' && deliveryApp ? deliveryApp : null,
-        delivery_app_name: orderType === 'delivery' && deliveryApp ? (deliveryApps.find(a => a.id === deliveryApp)?.name || '') : null,
-        discount: discount || 0,
-        branch_id: currentBranchId,
-        payment_method: paymentMethod || 'pending',
-        notes: orderNotes || null,
-        auto_ready: true
-      };
-      
-      const res = await axios.post(`${API}/orders`, orderData);
-      const savedOrder = res.data;
-      
-      // تحديث رقم الطلب الأخير
-      setLastOrderNumber(savedOrder.order_number);
-      
-      // إرسال إشعار للكاشير والسائق
-      await sendOrderNotification({
-        id: savedOrder.id,
-        order_number: savedOrder.order_number,
-        branch_id: currentBranchId,
-        order_type: orderType,
-        customer_name: customerName || null,
-        customer_phone: customerPhone || null,
-        delivery_address: deliveryAddress || null,
-        driver_id: selectedDriver || null,
-        total_amount: savedOrder.total_amount || cart.reduce((sum, item) => sum + ((item.price * item.quantity) + (item.selectedExtras || []).reduce((s, e) => s + (e.price * (e.quantity || 1)), 0)), 0),
-        items: cart.map(item => ({
-          ...item,
-          extras: item.selectedExtras || []
-        })),
-        notes: orderNotes || null
-      });
-      
-      // تحديث حالة الطاولة إذا كان طلب داخلي
-      if (orderType === 'dine_in' && selectedTable) {
-        try {
-          await axios.put(`${API}/tables/${selectedTable}/status?status=available`);
-        } catch (err) {
-          console.error('Failed to update table status:', err);
-        }
-      }
-      
-      playSuccess();
-      toast.success(`${t('تم حفظ الطلب')} #${savedOrder.order_number}`);
-      
-      // فتح معاينة الفاتورة
-      setPrintDialogOpen(true);
-      
-      // === طباعة تلقائية فورية عند فتح المعاينة (قبل الدفع) ===
-      try {
-        // نطبع مباشرة بدون checkAgentStatus لسرعة أكبر
-        let cashierPrinter = availablePrinters.find(p => p.print_mode === 'full_receipt');
-        if (!cashierPrinter) cashierPrinter = availablePrinters.find(p => p.connection_type === 'usb' && p.usb_printer_name);
-        if (!cashierPrinter && availablePrinters.length > 0) cashierPrinter = availablePrinters[0];
-        
-        if (cashierPrinter) {
-          const printData = buildPrintOrderData(savedOrder.order_number);
-          const subtotalCalc = cart.reduce((sum, item) => sum + ((item.price * item.quantity) + (item.selectedExtras || []).reduce((s, e) => s + (e.price * (e.quantity || 1)), 0)), 0);
-          const orderForPrint = {
-            ...printData,
-            items: cart.map(item => ({
-              product_name: item.product_name || item.name,
-              name: item.product_name || item.name,
-              price: item.price,
-              quantity: item.quantity,
-              notes: item.notes || '',
-              extras: item.selectedExtras || []
-            })),
-            total: subtotalCalc - (discount || 0),
-            subtotal: subtotalCalc,
-            payment_method: 'pending',
-            cashier_name: user?.name || user?.full_name || ''
-          };
-          console.log('[AutoPrint] Printing receipt #' + savedOrder.order_number);
-          const printResult = await sendReceiptPrint(cashierPrinter, orderForPrint);
-          if (!printResult.success) {
-            console.error('[AutoPrint] Failed:', printResult.message);
-          }
-        }
-      } catch (autoPrintErr) {
-        console.error('[AutoPrint] Error:', autoPrintErr);
-      }
-      
-      // === إرسال المنتجات لطابعات المطبخ تلقائياً ===
-      try {
-        const kitchenPrinters = availablePrinters.filter(p =>
-          (p.print_mode === 'orders_only' || p.print_mode === 'selected_products') &&
-          ((p.connection_type === 'usb' && p.usb_printer_name) || (p.connection_type !== 'usb' && p.ip_address))
-        );
-        
-        if (kitchenPrinters.length > 0) {
-          const restaurantName = invoiceSettings?.restaurant_name || '';
-          const itemsForKitchen = cart.map(item => ({
-            product_id: item.product_id || item.id,
-            product_name: item.product_name || item.name,
-            name: item.product_name || item.name,
-            price: item.price,
-            quantity: item.quantity,
-            notes: item.notes || '',
-            extras: item.selectedExtras || []
-          }));
-          
-          const kitchenOrderData = buildPrintOrderData(savedOrder.order_number);
-          kitchenOrderData.notes = orderNotes || null;
-          
-          const result = await printOrderToAllPrinters(kitchenOrderData, itemsForKitchen, products, kitchenPrinters, restaurantName);
-          if (result.success) {
-            console.log('[AutoPrint] Kitchen orders sent successfully');
-          } else {
-            console.warn('[AutoPrint] Some kitchen prints failed:', result);
-          }
-        }
-      } catch (kitchenErr) {
-        console.error('[AutoPrint] Kitchen print error:', kitchenErr);
-      }
-      
-      // تحديث الطلبات المعلقة
-      fetchPendingOrders();
-      
-    } catch (error) {
-      console.error('Failed to save order:', error);
-      
-      // إذا كان خطأ شبكة، حفظ الطلب محلياً
-      if (!error.response) {
-        console.log('🔄 Network error, saving order offline for printing...');
-        try {
-          const currentBranchId = getBranchIdForApi() || user?.branch_id;
-          const offlineOrder = {
-            order_type: orderType,
-            table_id: orderType === 'dine_in' ? selectedTable : null,
-            customer_name: customerName,
-            customer_phone: customerPhone,
-            delivery_address: orderType === 'delivery' ? deliveryAddress : null,
-            buzzer_number: orderType === 'takeaway' ? buzzerNumber : null,
-            items: cart.map(item => ({
-              product_id: item.product_id || item.id,
-              name: item.name,
-              price: item.price,
-              quantity: item.quantity,
-              notes: item.notes || '',
-              extras: item.selectedExtras || []
-            })),
-            subtotal: cart.reduce((sum, item) => sum + ((item.price * item.quantity) + (item.selectedExtras || []).reduce((s, e) => s + (e.price * (e.quantity || 1)), 0)), 0),
-            total: cart.reduce((sum, item) => sum + ((item.price * item.quantity) + (item.selectedExtras || []).reduce((s, e) => s + (e.price * (e.quantity || 1)), 0)), 0) - discount,
-            discount: discount,
-            branch_id: currentBranchId,
-            payment_method: 'pending',
-            cashier_id: user?.id,
-            cashier_name: user?.name || user?.full_name
-          };
-          
-          const savedOrder = await offlineStorage.saveOfflineOrder(offlineOrder);
-          setLastOrderNumber(savedOrder.offline_id);
-          
-          playSuccess();
-          toast.success(
-            <div>
-              <div>✅ {t('تم حفظ الطلب محلياً')}</div>
-              <div className="text-sm opacity-80">#{savedOrder.offline_id}</div>
-            </div>,
-            { duration: 3000 }
-          );
-          
-          // فتح نافذة الطباعة
-          setPrintDialogOpen(true);
-          return;
-        } catch (offlineError) {
-          console.error('Failed to save offline order:', offlineError);
-        }
-      }
-      
-      toast.error(getErrorMessage(error, t('فشل في حفظ الطلب')));
-    } finally {
-      setSubmitting(false);
-    }
+    // يستخدم نفس تدفق الحفظ والإرسال (يحفظ + يطبع + يرسل للمطبخ)
+    handleSubmitOrder();
   };
 
   // إلغاء تعديل الطلب

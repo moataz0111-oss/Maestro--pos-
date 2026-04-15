@@ -717,7 +717,7 @@ export async function renderReceiptBitmap(order, config = {}) {
 // ======== CLOSING RECEIPT BITMAP ========
 export function renderClosingReceiptBitmap(data = {}) {
   try {
-    const RW = 560; // 70mm × 8 dots/mm
+    const RW = 576; // 80mm عرض كامل (72mm × 8 dots/mm)
     const RM = 8;
     const RC = RW - RM * 2;
     const c = document.createElement('canvas');

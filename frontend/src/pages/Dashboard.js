@@ -1335,7 +1335,7 @@ export default function Dashboard() {
   const printClosingReceiptViaUSB = async (data) => {
     if (!data) return;
     
-    const AGENT_URL = (() => { try { return localStorage.getItem('maestro_agent_url') || 'http://localhost:9999'; } catch { return 'http://localhost:9999'; } })();
+    const AGENT_URL = 'http://localhost:9999';
     const now = new Date();
     const dateStr = now.toLocaleDateString('ar-IQ');
     const timeStr = now.toLocaleTimeString('ar-IQ', { hour: '2-digit', minute: '2-digit' });
