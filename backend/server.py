@@ -18781,9 +18781,9 @@ async def get_sales_leaderboard(
     cashier_ids = list(set(o.get("cashier_id") for o in orders if o.get("cashier_id")))
     users_list = await db.users.find(
         {"id": {"$in": cashier_ids}},
-        {"_id": 0, "id": 1, "name": 1}
+        {"_id": 0, "id": 1, "name": 1, "full_name": 1}
     ).to_list(500)
-    user_names = {u["id"]: u["name"] for u in users_list}
+    user_names = {u["id"]: u.get("full_name") or u.get("name", "غير معروف") for u in users_list}
     
     cashier_stats = {}
     for order in orders:

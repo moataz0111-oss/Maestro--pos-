@@ -2160,7 +2160,7 @@ export default function POS() {
   const pendingDeliveryOrders = pendingOrders.filter(o => o.order_type === 'delivery');
   const pendingDineInOrders = pendingOrders.filter(o => o.order_type === 'dine_in');
 
-  // طباعة الفاتورة - يحول مباشرة لنموذج الحفظ والإرسال
+  // طباعة الفاتورة - حفظ + إرسال للمطبخ + طباعة "غير مدفوع" (بدون دفع)
   const handlePrintBill = async () => {
     if (cart.length === 0) {
       toast.error(t('السلة فارغة'));
@@ -2184,8 +2184,116 @@ export default function POS() {
       return;
     }
     
-    // يستخدم نفس تدفق الحفظ والإرسال (يحفظ + يطبع + يرسل للمطبخ)
-    handleSubmitOrder();
+    setSubmitting(true);
+    try {
+      const currentBranchId = getBranchIdForApi() || localStorage.getItem('selectedBranchId') || user?.branch_id;
+      const isDeliveryOrder = orderType === 'delivery' && deliveryApp;
+      
+      const orderData = {
+        items: cart.map(item => ({
+          product_id: item.product_id || item.id,
+          product_name: item.product_name || item.name,
+          price: item.price,
+          quantity: item.quantity,
+          cost: item.cost || 0,
+          notes: item.notes || '',
+          extras: item.selectedExtras || []
+        })),
+        order_type: orderType,
+        table_id: orderType === 'dine_in' ? selectedTable : null,
+        customer_name: customerName || null,
+        customer_phone: customerPhone || null,
+        delivery_address: deliveryAddress || null,
+        buzzer_number: buzzerNumber || null,
+        driver_id: orderType === 'delivery' && selectedDriver ? selectedDriver : null,
+        delivery_app: orderType === 'delivery' && deliveryApp ? deliveryApp : null,
+        delivery_app_name: orderType === 'delivery' && deliveryApp ? (deliveryApps.find(a => a.id === deliveryApp)?.name || '') : null,
+        discount: discount || 0,
+        branch_id: currentBranchId,
+        payment_method: 'pending',
+        notes: orderNotes || null,
+        auto_ready: isDeliveryOrder
+      };
+      
+      // حفظ الطلب بدون دفع
+      const res = await axios.post(`${API}/orders`, orderData);
+      const savedOrder = res.data;
+      setLastOrderNumber(savedOrder.order_number);
+      playSuccess();
+      
+      // === إرسال المنتجات للمطبخ ===
+      try {
+        const kitchenPrinters = availablePrinters.filter(p =>
+          (p.print_mode === 'orders_only' || p.print_mode === 'selected_products') &&
+          ((p.connection_type === 'usb' && p.usb_printer_name) || (p.connection_type !== 'usb' && p.ip_address))
+        );
+        if (kitchenPrinters.length > 0) {
+          const restaurantName = invoiceSettings?.restaurant_name || '';
+          const itemsForKitchen = cart.map(item => ({
+            product_id: item.product_id || item.id,
+            product_name: item.product_name || item.name,
+            name: item.product_name || item.name,
+            price: item.price,
+            quantity: item.quantity,
+            notes: item.notes || '',
+            extras: item.selectedExtras || []
+          }));
+          const kitchenOrderData = buildPrintOrderData(savedOrder.order_number);
+          kitchenOrderData.notes = orderNotes || null;
+          await printOrderToAllPrinters(kitchenOrderData, itemsForKitchen, products, kitchenPrinters, restaurantName);
+        }
+      } catch (kitchenErr) {
+        console.error('[Print] Kitchen error:', kitchenErr);
+      }
+      
+      // === طباعة فاتورة "غير مدفوعة" ===
+      try {
+        let cashierPrinter = availablePrinters.find(p => p.print_mode === 'full_receipt');
+        if (!cashierPrinter) cashierPrinter = availablePrinters.find(p => p.connection_type === 'usb' && p.usb_printer_name);
+        if (cashierPrinter) {
+          const subtotalCalc = cart.reduce((sum, item) => sum + ((item.price * item.quantity) + (item.selectedExtras || []).reduce((s, e) => s + (e.price * (e.quantity || 1)), 0)), 0);
+          const orderForPrint = {
+            ...buildPrintOrderData(savedOrder.order_number),
+            items: cart.map(item => ({
+              product_name: item.product_name || item.name,
+              name: item.product_name || item.name,
+              price: item.price,
+              quantity: item.quantity,
+              notes: item.notes || '',
+              extras: item.selectedExtras || []
+            })),
+            total: subtotalCalc - (discount || 0),
+            subtotal: subtotalCalc,
+            payment_method: 'pending',
+            cashier_name: user?.name || user?.full_name || '',
+            is_paid: false
+          };
+          await sendReceiptPrint(cashierPrinter, orderForPrint);
+        }
+      } catch (receiptErr) {
+        console.error('[Print] Receipt error:', receiptErr);
+      }
+      
+      toast.success(`${t('تم حفظ الطلب')} #${savedOrder.order_number} - ${t('غير مدفوع')}`);
+      
+      // تحديث الطلبات المعلقة
+      fetchPendingOrders();
+      
+      // مسح السلة بعد 3 ثواني
+      setTimeout(() => { clearCart(); }, 3000);
+      
+      // تحديث الطاولات
+      if (orderType === 'dine_in' && currentBranchId) {
+        const tablesRes = await axios.get(`${API}/tables`, { params: { branch_id: currentBranchId } });
+        setTables(tablesRes.data);
+      }
+      
+    } catch (error) {
+      console.error('Failed to save order:', error);
+      toast.error(error.response?.data?.detail || t('فشل في حفظ الطلب'));
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   // إلغاء تعديل الطلب
