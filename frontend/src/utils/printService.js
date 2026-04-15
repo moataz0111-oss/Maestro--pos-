@@ -225,7 +225,8 @@ export const sendRawPrint = async (ip, port, text, usbPrinterName = null) => {
 /**
  * طباعة إيصال - الدالة الرئيسية
  * الفاتورة: bitmap من المتصفح (نفس الشكل الأصلي تماماً)
- * المطبخ (USB + شبكة): بيانات مباشرة للوكيل (يبني الإيصال محلياً - أسرع وأكثر موثوقية)
+ * المطبخ USB: بيانات مباشرة للوكيل (نصي سريع)
+ * المطبخ شبكة: bitmap من المتصفح (يدعم العربية كصورة)
  */
 export const sendReceiptPrint = async (printer, orderData) => {
   try {
@@ -238,18 +239,13 @@ export const sendReceiptPrint = async (printer, orderData) => {
 
     const printPayload = {};
 
-    // المطبخ (USB + شبكة): بيانات مباشرة للوكيل (يبني الإيصال محلياً)
-    if (isKitchen) {
+    // المطبخ USB فقط: بيانات مباشرة للوكيل (نصي سريع جداً)
+    if (isKitchen && printer.connection_type === 'usb' && printer.usb_printer_name) {
       printPayload.order = orderData;
       printPayload.printer_config = printerConfig;
-      if (printer.connection_type === 'usb' && printer.usb_printer_name) {
-        printPayload.usb_printer_name = printer.usb_printer_name;
-      } else {
-        printPayload.ip = printer.ip_address;
-        printPayload.port = printer.port || 9100;
-      }
+      printPayload.usb_printer_name = printer.usb_printer_name;
     } else {
-      // الفاتورة: bitmap من المتصفح (نفس الشكل الأصلي)
+      // الفاتورة + المطبخ شبكة: bitmap من المتصفح (يدعم العربية كصورة)
       const renderResult = await renderReceiptBitmap(orderData, printerConfig);
       if (!renderResult.success || !renderResult.raw_data) {
         return { success: false, message: 'RENDER_FAILED: ' + (renderResult.error || 'Unknown') };
