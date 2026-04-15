@@ -9,7 +9,7 @@ import { useTranslation } from '../hooks/useTranslation';
 import { formatPrice } from '../utils/currency';
 import { playClick, playSuccess } from '../utils/sound';
 import { useOrderNotifications, sendOrderNotification } from '../utils/orderNotifications';
-import { printOrderToAllPrinters, sendReceiptPrint } from '../utils/printService';
+import { printOrderToAllPrinters, sendReceiptPrint, checkAgentStatus, getSavedAgentStatus } from '../utils/printService';
 import { AgentUpdateBanner } from '../utils/AgentUpdateChecker';
 import offlineStorage from '../lib/offlineStorage';
 import db, { STORES } from '../lib/offlineDB';
@@ -166,7 +166,7 @@ export default function POS() {
   
   // الطابعات المتعددة
   const [availablePrinters, setAvailablePrinters] = useState([]);
-  const [printAgentOnline, setPrintAgentOnline] = useState(false);
+  const [printAgentOnline, setPrintAgentOnline] = useState(() => getSavedAgentStatus().online);
   
   // إعدادات الفاتورة والمطعم والنظام
   const [invoiceSettings, setInvoiceSettings] = useState({});
@@ -212,7 +212,11 @@ export default function POS() {
     fetchData();
     // تحديث الطلبات المعلقة كل 30 ثانية
     const interval = setInterval(fetchPendingOrders, 30000);
-    return () => clearInterval(interval);
+    // فحص حالة الوسيط كل 30 ثانية (مشترك لجميع المستخدمين)
+    const agentInterval = setInterval(() => {
+      checkAgentStatus().then(online => setPrintAgentOnline(online));
+    }, 30000);
+    return () => { clearInterval(interval); clearInterval(agentInterval); };
   }, []); // فقط عند التحميل الأولي
 
   // إعادة جلب البيانات عند العودة للصفحة (visibility change)
@@ -619,6 +623,12 @@ export default function POS() {
       setDataLoaded(true);
       sessionStorage.setItem('pos_data_loaded', 'true');
     }
+    
+    // فحص حالة الوسيط عند تحميل الصفحة (مشترك لجميع المستخدمين)
+    checkAgentStatus().then(online => {
+      setPrintAgentOnline(online);
+      if (online) console.log('[POS] Print agent is online');
+    });
   };
 
   // جلب البيانات بدون إظهار شاشة التحميل (عند تغيير الفرع)

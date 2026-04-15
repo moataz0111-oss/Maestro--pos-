@@ -1,17 +1,47 @@
 /**
- * Maestro POS - Print Service v3.0
+ * Maestro POS - Print Service v3.1
  * يولد الإيصال كصورة bitmap مباشرة في المتصفح (يدعم العربية)
  * ثم يرسله للوكيل المحلي (localhost:9999)
  * 
  * التدفق: Browser Canvas → ESC/POS Bitmap → Print Agent → Printer
+ * حالة الوسيط محفوظة في localStorage ومشتركة بين جميع المستخدمين على نفس الجهاز
  */
 
 import { renderReceiptBitmap, renderTestBitmap } from './receiptBitmap';
 
 const PRINT_AGENT_URL = 'http://localhost:9999';
 
+// === حالة الوسيط المشتركة (محفوظة في localStorage لجميع المستخدمين) ===
+const AGENT_STATUS_KEY = 'maestro_agent_status';
+const AGENT_LAST_CHECK_KEY = 'maestro_agent_last_check';
+
 /**
- * فحص حالة وكيل الطباعة
+ * حفظ حالة الوسيط في localStorage (مشتركة لجميع المستخدمين)
+ */
+const saveAgentStatus = (online, version = null) => {
+  try {
+    localStorage.setItem(AGENT_STATUS_KEY, JSON.stringify({ online, version, timestamp: Date.now() }));
+    localStorage.setItem(AGENT_LAST_CHECK_KEY, Date.now().toString());
+  } catch {}
+};
+
+/**
+ * قراءة حالة الوسيط المحفوظة
+ */
+export const getSavedAgentStatus = () => {
+  try {
+    const data = JSON.parse(localStorage.getItem(AGENT_STATUS_KEY) || '{}');
+    const age = Date.now() - (data.timestamp || 0);
+    // صالحة لمدة 5 دقائق
+    if (age < 300000) return data;
+    return { online: false, version: null };
+  } catch {
+    return { online: false, version: null };
+  }
+};
+
+/**
+ * فحص حالة وكيل الطباعة وحفظها للمشاركة
  */
 export const checkAgentStatus = async () => {
   try {
@@ -23,8 +53,11 @@ export const checkAgentStatus = async () => {
     });
     clearTimeout(timeout);
     const data = await res.json();
-    return data.status === 'running';
+    const online = data.status === 'running';
+    saveAgentStatus(online, data.version);
+    return online;
   } catch {
+    saveAgentStatus(false);
     return false;
   }
 };
@@ -351,6 +384,7 @@ export const printOrderToAllPrinters = async (order, orderItems, products, print
 
 export default {
   checkAgentStatus,
+  getSavedAgentStatus,
   agentSupportsUsb,
   checkAgentVersionMatch,
   listAgentPrinters,

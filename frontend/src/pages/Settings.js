@@ -6,7 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { formatPrice, setCurrency } from '../utils/currency';
 import { useTranslation } from '../hooks/useTranslation';
-import { checkAgentStatus, sendTestPrint, checkPrinterOnline, listAgentPrinters, agentSupportsUsb, checkAgentVersionMatch } from '../utils/printService';
+import { checkAgentStatus, sendTestPrint, checkPrinterOnline, listAgentPrinters, agentSupportsUsb, checkAgentVersionMatch, getSavedAgentStatus } from '../utils/printService';
 import { AgentUpdateBanner } from '../utils/AgentUpdateChecker';
 import { 
   playClick, 
@@ -437,7 +437,7 @@ export default function Settings() {
   const [editPrinterDialogOpen, setEditPrinterDialogOpen] = useState(false);
   const [printerTestStatus, setPrinterTestStatus] = useState({}); // حالة اختبار الطابعات
   const [printerTypes, setPrinterTypes] = useState([]);
-  const [printAgentOnline, setPrintAgentOnline] = useState(false);
+  const [printAgentOnline, setPrintAgentOnline] = useState(() => getSavedAgentStatus().online);
   const [agentNeedsUpdate, setAgentNeedsUpdate] = useState(false);
   const [windowsPrinters, setWindowsPrinters] = useState([]);
   const [categoryForm, setCategoryForm] = useState({
