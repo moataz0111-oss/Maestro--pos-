@@ -717,97 +717,147 @@ export async function renderReceiptBitmap(order, config = {}) {
 // ======== CLOSING RECEIPT BITMAP ========
 export function renderClosingReceiptBitmap(data = {}) {
   try {
+    const RW = 560; // 70mm × 8 dots/mm
+    const RM = 8;
+    const RC = RW - RM * 2;
     const c = document.createElement('canvas');
-    c.width = PW; c.height = 4000;
+    c.width = RW; c.height = 4000;
     const x = c.getContext('2d');
-    x.fillStyle='#FFF'; x.fillRect(0,0,PW,4000);
+    x.fillStyle='#FFF'; x.fillRect(0,0,RW,4000);
     x.fillStyle='#000';
     let y = 15;
     const fp = n => `${Number(n||0).toLocaleString()} IQD`;
 
+    // Local drawing helpers using RW dimensions
+    function rC(text, yy, size = 18, bold = false) {
+      if (!text) return 0;
+      x.font = font(size, bold, text);
+      x.textAlign = 'center'; x.textBaseline = 'top';
+      x.direction = isAr(text) ? 'rtl' : 'ltr';
+      const words = text.split(' ');
+      let line = '', h = 0, lh = size + 6;
+      for (const w of words) {
+        const t = line ? line + ' ' + w : w;
+        if (x.measureText(t).width > RC && line) { x.fillText(line, RW/2, yy+h); h += lh; line = w; }
+        else line = t;
+      }
+      if (line) { x.fillText(line, RW/2, yy+h); h += lh; }
+      x.direction = 'ltr'; return h;
+    }
+    function rRow(label, value, yy, size = 18) {
+      if (label) { x.font = font(size, true, label); x.textAlign = 'right'; x.textBaseline = 'top'; x.direction = isAr(label)?'rtl':'ltr'; x.fillText(label, RW-RM, yy); x.direction = 'ltr'; }
+      if (value) { x.font = font(size, true, value); x.textAlign = 'left'; x.textBaseline = 'top'; x.direction = 'ltr'; x.fillText(value, RM, yy); }
+      return size + 8;
+    }
+    function rDash(yy) {
+      x.strokeStyle='#000'; x.lineWidth=2; x.setLineDash([5,3]);
+      x.beginPath(); x.moveTo(RM,yy+4); x.lineTo(RW-RM,yy+4); x.stroke();
+      x.setLineDash([]); return 12;
+    }
+    function rDbl(yy) {
+      x.strokeStyle='#000'; x.lineWidth=2;
+      x.beginPath(); x.moveTo(RM,yy+2); x.lineTo(RW-RM,yy+2); x.stroke();
+      x.beginPath(); x.moveTo(RM,yy+7); x.lineTo(RW-RM,yy+7); x.stroke();
+      return 14;
+    }
+    function rInv(text, yy, size = 26) {
+      x.font = font(size, true, text);
+      const tw = x.measureText(text).width;
+      const bw = Math.min(tw + 28, RC);
+      const bh = size + 14;
+      const bx = (RW - bw) / 2;
+      x.fillStyle = '#000'; x.fillRect(bx, yy, bw, bh);
+      x.fillStyle = '#FFF';
+      x.textAlign = 'center'; x.textBaseline = 'top';
+      x.direction = isAr(text)?'rtl':'ltr';
+      x.fillText(text, RW/2, yy + 7);
+      x.direction = 'ltr'; x.fillStyle = '#000';
+      return bh + 8;
+    }
+
     // === Header ===
     if (data.restaurantName) {
-      y += invH(x, data.restaurantName, y, 26);
+      y += rInv(data.restaurantName, y, 26);
     }
-    y += drawC(x, 'إيصال إغلاق الصندوق', y, 22, true);
+    y += rC('إيصال إغلاق الصندوق', y, 22, true);
     y += 6;
-    if (data.dateStr) y += drawC(x, data.dateStr, y, 16);
-    if (data.timeStr) y += drawC(x, data.timeStr, y, 16);
-    if (data.branchName) y += drawC(x, `الفرع: ${data.branchName}`, y, 16);
-    if (data.cashierName) y += drawC(x, `الكاشير: ${data.cashierName}`, y, 16);
-    y += 4; y += dbl(x, y);
+    if (data.dateStr) y += rC(data.dateStr, y, 16);
+    if (data.timeStr) y += rC(data.timeStr, y, 16);
+    if (data.branchName) y += rC(`الفرع: ${data.branchName}`, y, 16);
+    if (data.cashierName) y += rC(`الكاشير: ${data.cashierName}`, y, 16);
+    y += 4; y += rDbl(y);
 
     // === ملخص المبيعات ===
-    y += drawC(x, 'ملخص المبيعات', y, 20, true);
+    y += rC('ملخص المبيعات', y, 20, true);
     y += 4;
-    y += drawRow(x, 'إجمالي المبيعات:', fp(data.total_sales), y, 18);
-    y += drawRow(x, 'عدد الطلبات:', `${data.total_orders || 0}`, y, 16);
-    y += 4; y += dash(x, y);
+    y += rRow('إجمالي المبيعات:', fp(data.total_sales), y, 18);
+    y += rRow('عدد الطلبات:', `${data.total_orders || 0}`, y, 16);
+    y += 4; y += rDash(y);
 
     // === حسب طريقة الدفع ===
-    y += drawC(x, 'حسب طريقة الدفع', y, 18, true);
+    y += rC('حسب طريقة الدفع', y, 18, true);
     y += 4;
-    y += drawRow(x, 'نقدي:', fp(data.cash_sales), y, 16);
-    y += drawRow(x, 'بطاقة:', fp(data.card_sales), y, 16);
-    y += drawRow(x, 'آجل:', fp(data.credit_sales), y, 16);
-    y += 4; y += dash(x, y);
+    y += rRow('نقدي:', fp(data.cash_sales), y, 16);
+    y += rRow('بطاقة:', fp(data.card_sales), y, 16);
+    y += rRow('آجل:', fp(data.credit_sales), y, 16);
+    y += 4; y += rDash(y);
 
     // === مبيعات تطبيقات التوصيل ===
     if (data.delivery_app_sales && Object.keys(data.delivery_app_sales).length > 0) {
-      y += drawC(x, 'مبيعات تطبيقات التوصيل', y, 18, true);
+      y += rC('مبيعات تطبيقات التوصيل', y, 18, true);
       y += 4;
       for (const [app, amount] of Object.entries(data.delivery_app_sales)) {
-        y += drawRow(x, `${app}:`, fp(amount), y, 16);
+        y += rRow(`${app}:`, fp(amount), y, 16);
       }
-      y += 4; y += dash(x, y);
+      y += 4; y += rDash(y);
     }
 
     // === المصاريف والخصومات ===
-    y += drawC(x, 'المصاريف والخصومات', y, 18, true);
+    y += rC('المصاريف والخصومات', y, 18, true);
     y += 4;
-    y += drawRow(x, 'المصاريف:', fp(data.total_expenses), y, 16);
-    y += drawRow(x, 'الخصومات:', fp(data.total_discounts || data.discounts_total || 0), y, 16);
-    y += drawRow(x, `المرتجعات (${data.refund_count || 0}):`, fp(data.total_refunds || 0), y, 16);
-    y += drawRow(x, `الإلغاءات (${data.cancelled_orders || 0}):`, fp(data.cancelled_amount || 0), y, 16);
-    y += 4; y += dash(x, y);
+    y += rRow('المصاريف:', fp(data.total_expenses), y, 16);
+    y += rRow('الخصومات:', fp(data.total_discounts || data.discounts_total || 0), y, 16);
+    y += rRow(`المرتجعات (${data.refund_count || 0}):`, fp(data.total_refunds || 0), y, 16);
+    y += rRow(`الإلغاءات (${data.cancelled_orders || 0}):`, fp(data.cancelled_amount || 0), y, 16);
+    y += 4; y += rDash(y);
 
     // === جرد الصندوق ===
-    y += drawC(x, 'جرد الصندوق', y, 20, true);
+    y += rC('جرد الصندوق', y, 20, true);
     y += 4;
     const expectedCash = data.expected_cash || 0;
     const countedCash = data.closing_cash || data.counted_cash || 0;
     const difference = countedCash - expectedCash;
-    y += drawRow(x, 'المتوقع في الصندوق:', fp(expectedCash), y, 16);
-    y += drawRow(x, 'الجرد الفعلي:', fp(countedCash), y, 16);
-    y += 4; y += dash(x, y);
+    y += rRow('المتوقع في الصندوق:', fp(expectedCash), y, 16);
+    y += rRow('الجرد الفعلي:', fp(countedCash), y, 16);
+    y += 4; y += rDash(y);
 
     // === الفرق ===
     if (difference > 0) {
-      y += drawRow(x, 'زيادة:', `+${fp(Math.abs(difference))}`, y, 20);
+      y += rRow('زيادة:', `+${fp(Math.abs(difference))}`, y, 20);
     } else if (difference < 0) {
-      y += drawRow(x, 'نقص:', `-${fp(Math.abs(difference))}`, y, 20);
+      y += rRow('نقص:', `-${fp(Math.abs(difference))}`, y, 20);
     }
 
     // === صافي النقدي ===
-    y += 4; y += dbl(x, y);
-    y += drawC(x, `صافي النقدي: ${fp(countedCash)}`, y, 26, true);
-    y += dbl(x, y);
+    y += 4; y += rDbl(y);
+    y += rC(`صافي النقدي: ${fp(countedCash)}`, y, 26, true);
+    y += rDbl(y);
 
     // === ملاحظات ===
     if (data.notes) {
       y += 4;
-      y += drawC(x, `ملاحظات: ${data.notes}`, y, 14);
+      y += rC(`ملاحظات: ${data.notes}`, y, 14);
     }
 
     // === Footer ===
     y += 8;
-    y += drawC(x, 'شكراً لاستخدامكم نظام Maestro', y, 14);
-    y += drawC(x, 'www.maestroegp.com', y, 14);
+    y += rC('شكراً لاستخدامكم نظام Maestro', y, 14);
+    y += rC('www.maestroegp.com', y, 14);
     y += 30;
 
     // Crop canvas to actual height
     const f = document.createElement('canvas');
-    f.width = PW; f.height = y;
+    f.width = RW; f.height = y;
     f.getContext('2d').drawImage(c, 0, 0);
     const bytes = toEscPos(f);
     console.log(`[ClosingReceipt] ${f.width}x${f.height}px, ${bytes.length}b`);

@@ -6,44 +6,41 @@ Multi-tenant POS system with biometric integration (ZKTeco), thermal receipt pri
 ## Core Architecture
 - **Frontend**: React (RTL Arabic UI)
 - **Backend**: FastAPI + MongoDB
-- **Local Agent**: PowerShell script (print_server.ps1 v3.8.1) with embedded C# for ESC/POS printing and ZKTeco biometric communication
+- **Local Agent**: PowerShell script (print_server.ps1 v3.8.1)
+
+## Latest Changes (April 15, 2026)
+
+### Kitchen Print Fix
+- Fixed kitchen Ethernet printers not receiving orders
+- Changed: ALL kitchen printers (USB AND Ethernet) now send structured data to the agent
+- Agent builds the receipt locally (faster, more reliable than client-side bitmap)
+- Previously only USB kitchen printers used this approach; Ethernet used bitmap which failed
+
+### Closing Receipt Width Fix
+- Increased from 520px (65mm) to 560px (70mm) to match paper width
+- Uses self-contained drawing functions (rC, rRow, rDash, rDbl, rInv) instead of module-scope helpers
+- Content now centers properly on 70mm thermal paper
+
+### Print Agent Stability (v3.8.1)
+- Added try-catch inside HTTP listener loop
+- Agent continues running even when requests fail
+- Works for ALL users on the same device
 
 ## Completed Features
-
-### Print Agent Stability Fix (v3.8.1 - April 2026)
-- Added try-catch inside HTTP listener loop so individual request errors don't crash the entire agent
-- Agent now continues running even when malformed requests are received
-- Works for ALL users on the same device without stopping
-- Only stops when a new update is installed
-
-### Receipt Encoding Fix (April 2026)
-- Fixed closing receipt printing garbled characters on thermal printers
-- Converted from raw ESC/POS text to bitmap rendering (renderClosingReceiptBitmap)
-
-### Owner Shift Management (Updated April 2026)
-- Owners select from ACTIVE cashiers only (with open shifts, green badge)
-- If no active cashiers → owner opens shift under their own name
-- 1-minute auto-timeout if no order made
-- Owner auto-released from cashier's shift after register close
-- Shift badge in header is clickable to re-select cashier
-
-### Shift Closing Dialog (April 2026)
-- Role-based visibility: Cashiers cannot see Expected Cash
-- "No cash available" button disappears when denomination values entered
-- Deficit tracking and printing on receipts
-
-### Print Agent Installer (v3.8.1)
-- Fixed PRINT_AGENT_VERSION, Get-Content parameter conflict
-- All version references updated
+- ZKTeco Biometric Integration
+- Owner Shift Management (active cashiers only, 1-min timeout, auto-release)
+- Expenses Tracking by cashier
+- POS Order Flow (forced payment, paid/unpaid status)
+- Shift Closing Dialog (role-based visibility, deficit tracking)
+- Receipt bitmap rendering (Arabic support)
+- Print Agent installer (v3.8.1)
 
 ## Key API Endpoints
 - POST /api/cash-register/close
-- GET /api/shifts/current
-- POST /api/shifts/open-for-cashier
-- GET /api/shifts/cashiers-list (includes has_active_shift)
-- GET /api/print-agent-version
-- GET /api/download-print-agent
+- GET /api/shifts/current, /api/shifts/cashiers-list
+- GET /api/print-agent-version, /api/download-print-agent
+- GET /api/printers
 
 ## Backlog
 - (P2) Refactor server.py (19k+ lines) into modular routes
-- (P2) Refactor Dashboard.js, POS.js, SuperAdmin.js into smaller components
+- (P2) Refactor Dashboard.js, POS.js into smaller components
