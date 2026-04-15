@@ -1,6 +1,6 @@
 $ErrorActionPreference = 'Continue'
 $agentLog = "$PSScriptRoot\agent.log"
-"$(Get-Date) - Agent v3.8.0 starting..." | Out-File $agentLog
+"$(Get-Date) - Agent v3.8.1 starting..." | Out-File $agentLog
 
 # ============================================
 # === AUTO-CLEANUP: Kill old agent & files ===
@@ -1846,9 +1846,10 @@ try {
     $listener = New-Object System.Net.HttpListener
     $listener.Prefixes.Add('http://localhost:9999/')
     $listener.Start()
-    "$(Get-Date) - HttpListener started on port 9999 (v3.8.0)" | Out-File $agentLog -Append
+    "$(Get-Date) - HttpListener started on port 9999 (v3.8.1)" | Out-File $agentLog -Append
 
     while ($listener.IsListening) {
+      try {
         $ctx = $listener.GetContext()
         $req = $ctx.Request
         $res = $ctx.Response
@@ -1868,7 +1869,7 @@ try {
         "$(Get-Date) - $($req.HttpMethod) $path" | Out-File $agentLog -Append
 
         if ($path -eq '/status') {
-            $jsonOut = '{"status":"running","version":"3.8.0","agent":"Maestro Print Agent","usb_support":true,"zk_support":true}'
+            $jsonOut = '{"status":"running","version":"3.8.1","agent":"Maestro Print Agent","usb_support":true,"zk_support":true}'
         }
         elseif ($path -eq '/list-printers') {
             try {
@@ -2149,6 +2150,10 @@ try {
         $buffer = [System.Text.Encoding]::UTF8.GetBytes($jsonOut)
         $res.OutputStream.Write($buffer, 0, $buffer.Length)
         $res.Close()
+      } catch {
+        "$(Get-Date) - REQUEST ERROR (agent continues): $_" | Out-File $agentLog -Append
+        try { $res.Close() } catch {}
+      }
     }
 } catch {
     "$(Get-Date) - FATAL ERROR: $_" | Out-File $agentLog -Append
