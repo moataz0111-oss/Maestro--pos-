@@ -1840,13 +1840,28 @@ function Build-Receipt {
 }
 
 # ============================================
-# === HTTP LISTENER (port 9999)            ===
+# === HTTP LISTENER WITH AUTO-RESTART      ===
+# === الوسيط يعيد التشغيل تلقائياً أبداً   ===
 # ============================================
-try {
+$maxRestarts = 9999
+$restartCount = 0
+
+while ($restartCount -lt $maxRestarts) {
+  $listener = $null
+  try {
+    # تنظيف المنفذ قبل البدء
+    $netstat = netstat -ano 2>$null | Select-String 'LISTENING' | Select-String ':9999 '
+    if ($netstat -and $restartCount -gt 0) {
+        $pids = $netstat | ForEach-Object { ($_.ToString().Trim() -split '\s+')[-1] } | Sort-Object -Unique | Where-Object { $_ -ne '0' -and $_ -ne $PID }
+        foreach ($oldPid in $pids) { try { Stop-Process -Id ([int]$oldPid) -Force -ErrorAction SilentlyContinue } catch {} }
+        Start-Sleep -Seconds 2
+    }
+
     $listener = New-Object System.Net.HttpListener
     $listener.Prefixes.Add('http://localhost:9999/')
+    $listener.Prefixes.Add('http://127.0.0.1:9999/')
     $listener.Start()
-    "$(Get-Date) - HttpListener started on port 9999 (v3.9.0)" | Out-File $agentLog -Append
+    "$(Get-Date) - HttpListener started on port 9999 (v3.9.0) [restart #$restartCount]" | Out-File $agentLog -Append
 
     while ($listener.IsListening) {
       try {
@@ -2155,9 +2170,15 @@ try {
         try { $res.Close() } catch {}
       }
     }
-} catch {
-    "$(Get-Date) - FATAL ERROR: $_" | Out-File $agentLog -Append
-} finally {
-    if ($listener) { $listener.Stop() }
-    "$(Get-Date) - Agent stopped" | Out-File $agentLog -Append
+  } catch {
+    "$(Get-Date) - LISTENER ERROR (will auto-restart in 3s): $_" | Out-File $agentLog -Append
+  } finally {
+    if ($listener) { try { $listener.Stop(); $listener.Close() } catch {} }
+  }
+
+  $restartCount++
+  "$(Get-Date) - Agent restarting... (attempt $restartCount)" | Out-File $agentLog -Append
+  Start-Sleep -Seconds 3
 }
+
+"$(Get-Date) - Agent stopped after $maxRestarts restarts" | Out-File $agentLog -Append

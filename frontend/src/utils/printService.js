@@ -10,18 +10,28 @@
 import { renderReceiptBitmap, renderTestBitmap } from './receiptBitmap';
 
 const PRINT_AGENT_URL = 'http://localhost:9999';
+const PRINT_AGENT_URL_ALT = 'http://127.0.0.1:9999';
 
 // === حالة الوسيط المشتركة (محفوظة في localStorage لجميع المستخدمين) ===
 const AGENT_STATUS_KEY = 'maestro_agent_status';
 const AGENT_LAST_CHECK_KEY = 'maestro_agent_last_check';
+const AGENT_URL_KEY = 'maestro_agent_url';
+
+/**
+ * الحصول على عنوان الوسيط المحفوظ (يستخدم آخر عنوان نجح)
+ */
+const getAgentUrl = () => {
+  try { return localStorage.getItem(AGENT_URL_KEY) || PRINT_AGENT_URL; } catch { return PRINT_AGENT_URL; }
+};
 
 /**
  * حفظ حالة الوسيط في localStorage (مشتركة لجميع المستخدمين)
  */
-const saveAgentStatus = (online, version = null) => {
+const saveAgentStatus = (online, version = null, url = null) => {
   try {
     localStorage.setItem(AGENT_STATUS_KEY, JSON.stringify({ online, version, timestamp: Date.now() }));
     localStorage.setItem(AGENT_LAST_CHECK_KEY, Date.now().toString());
+    if (url) localStorage.setItem(AGENT_URL_KEY, url);
   } catch {}
 };
 
@@ -41,25 +51,39 @@ export const getSavedAgentStatus = () => {
 };
 
 /**
+ * محاولة الاتصال بالوسيط على عنوان محدد
+ */
+const tryAgentUrl = async (url) => {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 2000);
+  const res = await fetch(`${url}/status`, { mode: 'cors', signal: controller.signal });
+  clearTimeout(timeout);
+  const data = await res.json();
+  return data;
+};
+
+/**
  * فحص حالة وكيل الطباعة وحفظها للمشاركة
+ * يجرب localhost أولاً ثم 127.0.0.1
  */
 export const checkAgentStatus = async () => {
-  try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 3000);
-    const res = await fetch(`${PRINT_AGENT_URL}/status`, {
-      mode: 'cors',
-      signal: controller.signal
-    });
-    clearTimeout(timeout);
-    const data = await res.json();
-    const online = data.status === 'running';
-    saveAgentStatus(online, data.version);
-    return online;
-  } catch {
-    saveAgentStatus(false);
-    return false;
+  // جرب العنوان المحفوظ أولاً
+  const savedUrl = getAgentUrl();
+  const urls = savedUrl === PRINT_AGENT_URL_ALT 
+    ? [PRINT_AGENT_URL_ALT, PRINT_AGENT_URL]
+    : [PRINT_AGENT_URL, PRINT_AGENT_URL_ALT];
+  
+  for (const url of urls) {
+    try {
+      const data = await tryAgentUrl(url);
+      if (data.status === 'running') {
+        saveAgentStatus(true, data.version, url);
+        return true;
+      }
+    } catch {}
   }
+  saveAgentStatus(false);
+  return false;
 };
 
 /**
@@ -67,7 +91,7 @@ export const checkAgentStatus = async () => {
  */
 export const agentSupportsUsb = async () => {
   try {
-    const res = await fetch(`${PRINT_AGENT_URL}/status`);
+    const res = await fetch(`${getAgentUrl()}/status`);
     const data = await res.json();
     if (data.usb_support !== true) return false;
     const major = parseInt(String(data.version || '0').split('.')[0]) || 0;
@@ -82,7 +106,7 @@ export const agentSupportsUsb = async () => {
  */
 export const checkAgentVersionMatch = async (backendUrl) => {
   try {
-    const agentRes = await fetch(`${PRINT_AGENT_URL}/status`);
+    const agentRes = await fetch(`${getAgentUrl()}/status`);
     const agentData = await agentRes.json();
     const agentVersion = String(agentData.version || '0').trim();
 
@@ -101,7 +125,7 @@ export const checkAgentVersionMatch = async (backendUrl) => {
  */
 export const listAgentPrinters = async () => {
   try {
-    const res = await fetch(`${PRINT_AGENT_URL}/list-printers`);
+    const res = await fetch(`${getAgentUrl()}/list-printers`);
     return await res.json();
   } catch (e) {
     return { success: false, message: e.message };
@@ -113,7 +137,7 @@ export const listAgentPrinters = async () => {
  */
 export const checkPrinterOnline = async (ip, port = 9100) => {
   try {
-    const res = await fetch(`${PRINT_AGENT_URL}/check-printer`, {
+    const res = await fetch(`${getAgentUrl()}/check-printer`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ip, port })
@@ -144,7 +168,7 @@ export const sendTestPrint = async (printer, branchName = '') => {
         return { success: false, message: 'RENDER_FAILED: ' + (renderResult.error || 'Unknown') };
       }
       
-      const res = await fetch(`${PRINT_AGENT_URL}/print-receipt`, {
+      const res = await fetch(`${getAgentUrl()}/print-receipt`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -164,7 +188,7 @@ export const sendTestPrint = async (printer, branchName = '') => {
     payload.port = printer.port || 9100;
     if (branchName) payload.branch_name = branchName;
     
-    const res = await fetch(`${PRINT_AGENT_URL}/print-test`, {
+    const res = await fetch(`${getAgentUrl()}/print-test`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
@@ -187,7 +211,7 @@ export const sendRawPrint = async (ip, port, text, usbPrinterName = null) => {
       payload.ip = ip;
       payload.port = port;
     }
-    const res = await fetch(`${PRINT_AGENT_URL}/print-raw`, {
+    const res = await fetch(`${getAgentUrl()}/print-raw`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
@@ -243,7 +267,7 @@ export const sendReceiptPrint = async (printer, orderData) => {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 8000);
 
-    const res = await fetch(`${PRINT_AGENT_URL}/print-receipt`, {
+    const res = await fetch(`${getAgentUrl()}/print-receipt`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(printPayload),

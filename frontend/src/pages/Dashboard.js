@@ -9,6 +9,7 @@ import { getLocalTenantInfo, getLocalStats, getLocalDashboardSettings, getTodayO
 import db, { STORES } from '../lib/offlineDB';
 import { formatPrice, formatPriceCompact } from '../utils/currency';
 import { renderClosingReceiptBitmap } from '../utils/receiptBitmap';
+import { getSavedAgentStatus } from '../utils/printService';
 import { useTranslation } from '../hooks/useTranslation';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
@@ -1334,7 +1335,7 @@ export default function Dashboard() {
   const printClosingReceiptViaUSB = async (data) => {
     if (!data) return;
     
-    const AGENT_URL = 'http://localhost:9999';
+    const AGENT_URL = (() => { try { return localStorage.getItem('maestro_agent_url') || 'http://localhost:9999'; } catch { return 'http://localhost:9999'; } })();
     const now = new Date();
     const dateStr = now.toLocaleDateString('ar-IQ');
     const timeStr = now.toLocaleTimeString('ar-IQ', { hour: '2-digit', minute: '2-digit' });
