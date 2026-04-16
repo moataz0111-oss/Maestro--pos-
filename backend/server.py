@@ -8362,7 +8362,7 @@ async def test_printer_connection(printer_id: str, current_user: dict = Depends(
         return {"status": "error", "message": f"خطأ في الاتصال: {str(e)}"}
 
 
-PRINT_AGENT_VERSION = "4.3.0"
+PRINT_AGENT_VERSION = "4.3.1"
 
 @api_router.get("/print-agent-version")
 async def get_print_agent_version():
@@ -8409,7 +8409,7 @@ async def download_print_agent(request: Request):
         'chcp 65001 >nul 2>&1',
         '',
         'REM ======================================================',
-        'REM   Maestro Print Agent v4.3.0 - Full Clean Install',
+        'REM   Maestro Print Agent v4.3.1 - Full Clean Install',
         'REM ======================================================',
         '',
         'REM === Request Admin ===',
@@ -8419,11 +8419,11 @@ async def download_print_agent(request: Request):
         '    exit /b',
         ')',
         '',
-        'title Maestro Print Agent v4.3.0 - Clean Install',
+        'title Maestro Print Agent v4.3.1 - Clean Install',
         'color 0A',
         'echo.',
         'echo  ========================================',
-        'echo    Maestro Print Agent v4.3.0',
+        'echo    Maestro Print Agent v4.3.1',
         'echo    Full Clean Install',
         'echo  ========================================',
         'echo.',
@@ -8511,9 +8511,9 @@ async def download_print_agent(request: Request):
         'echo.',
         '',
         'REM ========================================',
-        'REM   STEP 3: DOWNLOAD FRESH v4.3.0',
+        'REM   STEP 3: DOWNLOAD FRESH v4.3.1',
         'REM ========================================',
-        'echo  [3/6] Downloading v4.3.0 (no cache)...',
+        'echo  [3/6] Downloading v4.3.1 (no cache)...',
         'powershell -NoProfile -Command "[Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; $headers=@{\'Cache-Control\'=\'no-cache\';\'Pragma\'=\'no-cache\'}; Invoke-WebRequest -Uri \'' + script_url + '\' -OutFile \'%D%\\server.ps1\' -UseBasicParsing -Headers $headers"',
         '',
         'if not exist "%D%\\server.ps1" (',
@@ -8537,7 +8537,7 @@ async def download_print_agent(request: Request):
         'REM ========================================',
         'REM   STEP 4: START NEW AGENT',
         'REM ========================================',
-        'echo  [4/6] Starting new agent v4.3.0...',
+        'echo  [4/6] Starting new agent v4.3.1...',
         'start "" powershell -ExecutionPolicy Bypass -NoProfile -WindowStyle Hidden -File "%D%\\server.ps1"',
         'echo    [OK]',
         'echo.',
@@ -8556,7 +8556,7 @@ async def download_print_agent(request: Request):
         'echo  [6/6] Setting up watchdog (auto-restart every 2 min)...',
         '',
         'REM إنشاء سكربت الحارس (watchdog)',
-        'powershell -NoProfile -Command "$d=$env:LOCALAPPDATA+\'\\MaestroPrintAgent\'; $w=\'try{$r=Invoke-WebRequest -Uri http://localhost:9999/status -UseBasicParsing -TimeoutSec 5;if($r.StatusCode-eq 200){exit 0}}catch{}\'+\"`r`n\"+\'$s=$env:LOCALAPPDATA+\\\"\\MaestroPrintAgent\\server.ps1\\\"\'+\"`r`n\"+\'if(Test-Path $s){Start-Process powershell -ArgumentList \\\"-ExecutionPolicy Bypass -NoProfile -WindowStyle Hidden -File `\\\"$s`\\\"\\\"-WindowStyle Hidden}\'; Set-Content -Path ($d+\'\\watchdog.ps1\') -Value $w -Force"',
+        'echo try{Invoke-WebRequest -Uri http://localhost:9999/status -UseBasicParsing -TimeoutSec 5 -ErrorAction Stop}catch{$s=$env:LOCALAPPDATA+\'\\MaestroPrintAgent\\server.ps1\';if(Test-Path $s){Start-Process powershell -ArgumentList \'-ExecutionPolicy Bypass -NoProfile -WindowStyle Hidden -File\',\"`\"$s`\"\"-WindowStyle Hidden}} > "%D%\\watchdog.ps1"',
         '',
         'REM حذف المهمة القديمة وإنشاء جديدة',
         'schtasks /Delete /TN "MaestroPrintAgentWatchdog" /F >nul 2>&1',
@@ -8573,11 +8573,11 @@ async def download_print_agent(request: Request):
         'echo.',
         'echo  Verifying agent is running...',
         'timeout /t 10 /nobreak >nul',
-        'powershell -NoProfile -Command "try { $r=Invoke-WebRequest -Uri \'http://localhost:9999/status\' -UseBasicParsing -TimeoutSec 10; $j=$r.Content|ConvertFrom-Json; Write-Host (\'  Agent Version: \'+$j.version) -ForegroundColor Green; if($j.version -eq \'4.3.0\'){Write-Host \'  v4.3.0 OK!\' -ForegroundColor Green}else{Write-Host \'  WARNING: Expected 4.3.0 got \'+$j.version -ForegroundColor Red} } catch { Write-Host \'  Agent starting... wait 30 sec and refresh browser\' -ForegroundColor Yellow }"',
+        'powershell -NoProfile -Command "try { $r=Invoke-WebRequest -Uri \'http://localhost:9999/status\' -UseBasicParsing -TimeoutSec 10; $j=$r.Content|ConvertFrom-Json; Write-Host (\'  Agent Version: \'+$j.version) -ForegroundColor Green; if($j.version -eq \'4.3.1\'){Write-Host \'  v4.3.1 OK!\' -ForegroundColor Green}else{Write-Host \'  WARNING: Expected 4.3.1 got \'+$j.version -ForegroundColor Red} } catch { Write-Host \'  Agent starting... wait 30 sec and refresh browser\' -ForegroundColor Yellow }"',
         'echo.',
         'echo  ========================================',
         'echo    DONE! Refresh the POS page.',
-        'echo    Agent v4.3.0 installed.',
+        'echo    Agent v4.3.1 installed.',
         'echo  ========================================',
         'echo.',
         'pause',
