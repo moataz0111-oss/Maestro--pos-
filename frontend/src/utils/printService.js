@@ -70,7 +70,7 @@ export const checkAgentStatus = async () => {
  */
 export const agentSupportsUsb = async () => {
   try {
-    const res = await fetch(`${PRINT_AGENT_URL}/status`);
+    const res = await fetch(`${PRINT_AGENT_URL}/status`, { mode: 'cors', credentials: 'omit' });
     const data = await res.json();
     if (data.usb_support !== true) return false;
     const major = parseInt(String(data.version || '0').split('.')[0]) || 0;
@@ -85,7 +85,7 @@ export const agentSupportsUsb = async () => {
  */
 export const checkAgentVersionMatch = async (backendUrl) => {
   try {
-    const agentRes = await fetch(`${PRINT_AGENT_URL}/status`);
+    const agentRes = await fetch(`${PRINT_AGENT_URL}/status`, { mode: 'cors', credentials: 'omit' });
     const agentData = await agentRes.json();
     const agentVersion = String(agentData.version || '0').trim();
 
@@ -104,7 +104,7 @@ export const checkAgentVersionMatch = async (backendUrl) => {
  */
 export const listAgentPrinters = async () => {
   try {
-    const res = await fetch(`${PRINT_AGENT_URL}/list-printers`);
+    const res = await fetch(`${PRINT_AGENT_URL}/list-printers`, { mode: 'cors', credentials: 'omit' });
     return await res.json();
   } catch (e) {
     return { success: false, message: e.message };
@@ -118,6 +118,8 @@ export const checkPrinterOnline = async (ip, port = 9100) => {
   try {
     const res = await fetch(`${PRINT_AGENT_URL}/check-printer`, {
       method: 'POST',
+      mode: 'cors',
+      credentials: 'omit',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ip, port })
     });
@@ -149,6 +151,8 @@ export const sendTestPrint = async (printer, branchName = '') => {
       
       const res = await fetch(`${PRINT_AGENT_URL}/print-receipt`, {
         method: 'POST',
+        mode: 'cors',
+        credentials: 'omit',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           raw_data: renderResult.raw_data,
@@ -169,6 +173,8 @@ export const sendTestPrint = async (printer, branchName = '') => {
     
     const res = await fetch(`${PRINT_AGENT_URL}/print-test`, {
       method: 'POST',
+      mode: 'cors',
+      credentials: 'omit',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     });
@@ -192,6 +198,8 @@ export const sendRawPrint = async (ip, port, text, usbPrinterName = null) => {
     }
     const res = await fetch(`${PRINT_AGENT_URL}/print-raw`, {
       method: 'POST',
+      mode: 'cors',
+      credentials: 'omit',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     });
@@ -244,6 +252,8 @@ export const sendReceiptPrint = async (printer, orderData) => {
 
     const res = await fetch(`${PRINT_AGENT_URL}/print-receipt`, {
       method: 'POST',
+      mode: 'cors',
+      credentials: 'omit',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(printPayload),
       signal: controller.signal
