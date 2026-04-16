@@ -768,150 +768,124 @@ export async function renderReceiptBitmap(order, config = {}) {
 // ======== CLOSING RECEIPT BITMAP ========
 export function renderClosingReceiptBitmap(data = {}) {
   try {
-    const RW = 560; // 70mm × 8 dots/mm - يتوسط في ورقة 80mm
-    const RM = 8;
+    const RW = PW; // نفس عرض فواتير الطلبات (520px) اللي تشتغل صح
+    const RM = 6;
     const RC = RW - RM * 2;
     const c = document.createElement('canvas');
-    c.width = RW; c.height = 4000;
+    c.width = RW; c.height = 6000;
     const x = c.getContext('2d');
-    x.fillStyle='#FFF'; x.fillRect(0,0,RW,4000);
+    x.fillStyle='#FFF'; x.fillRect(0,0,RW,6000);
     x.fillStyle='#000';
-    let y = 15;
+    let y = 20;
     const fp = n => `${Number(n||0).toLocaleString()} IQD`;
 
-    // Local drawing helpers using RW dimensions
-    function rC(text, yy, size = 18, bold = false) {
-      if (!text) return 0;
-      x.font = font(size, bold, text);
-      x.textAlign = 'center'; x.textBaseline = 'top';
-      x.direction = isAr(text) ? 'rtl' : 'ltr';
-      const words = text.split(' ');
-      let line = '', h = 0, lh = size + 6;
-      for (const w of words) {
-        const t = line ? line + ' ' + w : w;
-        if (x.measureText(t).width > RC && line) { x.fillText(line, RW/2, yy+h); h += lh; line = w; }
-        else line = t;
-      }
-      if (line) { x.fillText(line, RW/2, yy+h); h += lh; }
-      x.direction = 'ltr'; return h;
-    }
-    function rRow(label, value, yy, size = 18) {
-      if (label) { x.font = font(size, true, label); x.textAlign = 'right'; x.textBaseline = 'top'; x.direction = isAr(label)?'rtl':'ltr'; x.fillText(label, RW-RM, yy); x.direction = 'ltr'; }
-      if (value) { x.font = font(size, true, value); x.textAlign = 'left'; x.textBaseline = 'top'; x.direction = 'ltr'; x.fillText(value, RM, yy); }
-      return size + 8;
-    }
-    function rDash(yy) {
-      x.strokeStyle='#000'; x.lineWidth=2; x.setLineDash([5,3]);
-      x.beginPath(); x.moveTo(RM,yy+4); x.lineTo(RW-RM,yy+4); x.stroke();
-      x.setLineDash([]); return 12;
-    }
-    function rDbl(yy) {
-      x.strokeStyle='#000'; x.lineWidth=2;
-      x.beginPath(); x.moveTo(RM,yy+2); x.lineTo(RW-RM,yy+2); x.stroke();
-      x.beginPath(); x.moveTo(RM,yy+7); x.lineTo(RW-RM,yy+7); x.stroke();
-      return 14;
-    }
-    function rInv(text, yy, size = 26) {
-      x.font = font(size, true, text);
-      const tw = x.measureText(text).width;
-      const bw = Math.min(tw + 28, RC);
-      const bh = size + 14;
-      const bx = (RW - bw) / 2;
-      x.fillStyle = '#000'; x.fillRect(bx, yy, bw, bh);
-      x.fillStyle = '#FFF';
-      x.textAlign = 'center'; x.textBaseline = 'top';
-      x.direction = isAr(text)?'rtl':'ltr';
-      x.fillText(text, RW/2, yy + 7);
-      x.direction = 'ltr'; x.fillStyle = '#000';
-      return bh + 8;
-    }
+    // === الشعار ===
+    // رسم شعار بسيط (دائرة مع حرف)
+    const logoSize = 60;
+    x.beginPath();
+    x.arc(RW/2, y + logoSize/2, logoSize/2, 0, Math.PI * 2);
+    x.fillStyle = '#000'; x.fill();
+    x.fillStyle = '#FFF'; x.font = 'bold 28px Arial';
+    x.textAlign = 'center'; x.textBaseline = 'middle';
+    const initial = (data.restaurantName || 'M')[0];
+    x.fillText(initial, RW/2, y + logoSize/2);
+    x.fillStyle = '#000';
+    y += logoSize + 12;
 
-    // === Header ===
+    // === اسم المطعم ===
     if (data.restaurantName) {
-      y += rInv(data.restaurantName, y, 26);
+      y += invH(x, data.restaurantName, y, 30);
     }
-    y += rC('إيصال إغلاق الصندوق', y, 22, true);
-    y += 6;
-    if (data.dateStr) y += rC(data.dateStr, y, 16);
-    if (data.timeStr) y += rC(data.timeStr, y, 16);
-    if (data.branchName) y += rC(`الفرع: ${data.branchName}`, y, 16);
-    if (data.cashierName) y += rC(`الكاشير: ${data.cashierName}`, y, 16);
-    y += 4; y += rDbl(y);
+    
+    // === اسم الفرع ===
+    if (data.branchName) {
+      y += drawC(x, data.branchName, y, 22, true);
+    }
+    y += 8;
+    
+    // === إيصال إغلاق الصندوق ===
+    y += drawC(x, 'إيصال إغلاق الصندوق', y, 26, true);
+    y += 10;
+    
+    if (data.dateStr) y += drawC(x, `التاريخ: ${data.dateStr}`, y, 20);
+    if (data.timeStr) y += drawC(x, `الوقت: ${data.timeStr}`, y, 20);
+    if (data.cashierName) y += drawC(x, `الكاشير: ${data.cashierName}`, y, 20);
+    y += 8; y += dbl(x, y); y += 8;
 
     // === ملخص المبيعات ===
-    y += rC('ملخص المبيعات', y, 20, true);
-    y += 4;
-    y += rRow('إجمالي المبيعات:', fp(data.total_sales), y, 18);
-    y += rRow('عدد الطلبات:', `${data.total_orders || 0}`, y, 16);
-    y += 4; y += rDash(y);
+    y += drawC(x, 'ملخص المبيعات', y, 24, true);
+    y += 8;
+    y += drawRow(x, 'إجمالي المبيعات:', fp(data.total_sales), y, 22);
+    y += drawRow(x, 'عدد الطلبات:', `${data.total_orders || 0}`, y, 20);
+    y += 8; y += dash(x, y); y += 8;
 
     // === حسب طريقة الدفع ===
-    y += rC('حسب طريقة الدفع', y, 18, true);
-    y += 4;
-    y += rRow('نقدي:', fp(data.cash_sales), y, 16);
-    y += rRow('بطاقة:', fp(data.card_sales), y, 16);
-    y += rRow('آجل:', fp(data.credit_sales), y, 16);
-    y += 4; y += rDash(y);
+    y += drawC(x, 'حسب طريقة الدفع', y, 22, true);
+    y += 8;
+    y += drawRow(x, 'نقدي:', fp(data.cash_sales), y, 20);
+    y += drawRow(x, 'بطاقة:', fp(data.card_sales), y, 20);
+    y += drawRow(x, 'آجل:', fp(data.credit_sales), y, 20);
+    y += 8; y += dash(x, y); y += 8;
 
     // === مبيعات تطبيقات التوصيل ===
     if (data.delivery_app_sales && Object.keys(data.delivery_app_sales).length > 0) {
-      y += rC('مبيعات تطبيقات التوصيل', y, 18, true);
-      y += 4;
+      y += drawC(x, 'تطبيقات التوصيل', y, 22, true);
+      y += 8;
       for (const [app, amount] of Object.entries(data.delivery_app_sales)) {
-        y += rRow(`${app}:`, fp(amount), y, 16);
+        y += drawRow(x, `${app}:`, fp(amount), y, 20);
       }
-      y += 4; y += rDash(y);
+      y += 8; y += dash(x, y); y += 8;
     }
 
     // === المصاريف والخصومات ===
-    y += rC('المصاريف والخصومات', y, 18, true);
-    y += 4;
-    y += rRow('المصاريف:', fp(data.total_expenses), y, 16);
-    y += rRow('الخصومات:', fp(data.total_discounts || data.discounts_total || 0), y, 16);
-    y += rRow(`المرتجعات (${data.refund_count || 0}):`, fp(data.total_refunds || 0), y, 16);
-    y += rRow(`الإلغاءات (${data.cancelled_orders || 0}):`, fp(data.cancelled_amount || 0), y, 16);
-    y += 4; y += rDash(y);
+    y += drawC(x, 'المصاريف والخصومات', y, 22, true);
+    y += 8;
+    y += drawRow(x, 'المصاريف:', fp(data.total_expenses), y, 20);
+    y += drawRow(x, 'الخصومات:', fp(data.total_discounts || data.discounts_total || 0), y, 20);
+    y += drawRow(x, `المرتجعات (${data.refund_count || 0}):`, fp(data.total_refunds || 0), y, 20);
+    y += drawRow(x, `الإلغاءات (${data.cancelled_orders || 0}):`, fp(data.cancelled_amount || 0), y, 20);
+    y += 8; y += dash(x, y); y += 8;
 
     // === جرد الصندوق ===
-    y += rC('جرد الصندوق', y, 20, true);
-    y += 4;
+    y += drawC(x, 'جرد الصندوق', y, 24, true);
+    y += 8;
     const expectedCash = data.expected_cash || 0;
     const countedCash = data.closing_cash || data.counted_cash || 0;
     const difference = countedCash - expectedCash;
-    y += rRow('المتوقع في الصندوق:', fp(expectedCash), y, 16);
-    y += rRow('الجرد الفعلي:', fp(countedCash), y, 16);
-    y += 4; y += rDash(y);
+    y += drawRow(x, 'المتوقع:', fp(expectedCash), y, 22);
+    y += drawRow(x, 'الجرد الفعلي:', fp(countedCash), y, 22);
+    y += 8; y += dash(x, y); y += 8;
 
     // === الفرق ===
     if (difference > 0) {
-      y += rRow('زيادة:', `+${fp(Math.abs(difference))}`, y, 20);
+      y += drawRow(x, 'زيادة:', `+${fp(Math.abs(difference))}`, y, 24);
     } else if (difference < 0) {
-      y += rRow('نقص:', `-${fp(Math.abs(difference))}`, y, 20);
+      y += drawRow(x, 'نقص:', `-${fp(Math.abs(difference))}`, y, 24);
     }
 
     // === صافي النقدي ===
-    y += 4; y += rDbl(y);
-    y += rC(`صافي النقدي: ${fp(countedCash)}`, y, 26, true);
-    y += rDbl(y);
+    y += 8; y += dbl(x, y); y += 4;
+    y += invH(x, `صافي النقدي: ${fp(countedCash)}`, y, 28);
+    y += dbl(x, y); y += 8;
 
     // === ملاحظات ===
     if (data.notes) {
-      y += 4;
-      y += rC(`ملاحظات: ${data.notes}`, y, 14);
+      y += drawC(x, `ملاحظات: ${data.notes}`, y, 18);
+      y += 8;
     }
 
     // === Footer ===
-    y += 8;
-    y += rC('شكراً لاستخدامكم نظام Maestro', y, 14);
-    y += rC('www.maestroegp.com', y, 14);
-    y += 30;
+    y += 10;
+    y += drawC(x, 'شكراً لاستخدامكم نظام Maestro', y, 16);
+    y += drawC(x, 'www.maestroegp.com', y, 16);
+    y += 40;
 
     // Crop canvas to actual height
     const f = document.createElement('canvas');
     f.width = RW; f.height = y;
     f.getContext('2d').drawImage(c, 0, 0);
-    const bytes = toEscPosRaster(f);
-    console.log(`[ClosingReceipt] ${f.width}x${f.height}px, ${bytes.length}b (raster mode)`);
+    const bytes = toEscPos(f);
+    console.log(`[ClosingReceipt] ${f.width}x${f.height}px, ${bytes.length}b`);
     return { success: true, raw_data: toB64(bytes), size: bytes.length };
   } catch (e) {
     console.error('[ClosingReceipt] Error:', e);
