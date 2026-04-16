@@ -1,7 +1,7 @@
 // Service Worker for Offline Support - V5 (Auto-Update)
 // يدعم العمل بدون إنترنت لجميع الصفحات مع تحديث تلقائي
 
-const CACHE_VERSION = 'v6';
+const CACHE_VERSION = 'v7';
 const CACHE_NAME = `maestro-offline-${CACHE_VERSION}`;
 const STATIC_CACHE = `maestro-static-${CACHE_VERSION}`;
 const DATA_CACHE = `maestro-data-${CACHE_VERSION}`;
@@ -113,6 +113,11 @@ self.addEventListener('fetch', (event) => {
   
   // تجاهل الطلبات غير HTTP/HTTPS
   if (!url.protocol.startsWith('http')) {
+    return;
+  }
+  
+  // تجاهل طلبات الوسيط المحلي (Print Agent) - يجب ألا يتدخل SW
+  if (url.hostname === 'localhost' || url.hostname === '127.0.0.1') {
     return;
   }
   
