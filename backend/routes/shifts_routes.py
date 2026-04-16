@@ -399,6 +399,38 @@ async def close_shift(shift_id: str, close_data: ShiftClose, current_user: dict 
     await db.shifts.update_one({"id": shift_id}, {"$set": update_data})
     updated_shift = await db.shifts.find_one({"id": shift_id}, {"_id": 0})
     
+    # حفظ سجل الإغلاق في cash_register_closings للتقارير
+    closing_record = {
+        "id": str(uuid.uuid4()),
+        "tenant_id": shift.get("tenant_id"),
+        "branch_id": shift.get("branch_id"),
+        "branch_name": shift.get("branch_name", ""),
+        "cashier_id": shift.get("cashier_id"),
+        "cashier_name": shift.get("cashier_name", ""),
+        "shift_id": shift_id,
+        "shift_start": shift.get("started_at"),
+        "shift_end": datetime.now(timezone.utc).isoformat(),
+        "closed_at": datetime.now(timezone.utc).isoformat(),
+        "total_sales": total_sales,
+        "cash_sales": cash_sales,
+        "card_sales": card_sales,
+        "credit_sales": credit_sales,
+        "delivery_sales": sum(delivery_app_sales.values()) if delivery_app_sales else 0,
+        "dine_in_sales": sum(o.get("total", 0) for o in orders if o.get("order_type") == "dine_in"),
+        "takeaway_sales": sum(o.get("total", 0) for o in orders if o.get("order_type") == "takeaway"),
+        "total_expenses": total_expenses,
+        "expected_cash": expected_cash,
+        "actual_cash": close_data.closing_cash,
+        "closing_cash": close_data.closing_cash,
+        "counted_cash": close_data.closing_cash,
+        "difference": cash_difference,
+        "difference_type": "surplus" if cash_difference > 0 else "shortage" if cash_difference < 0 else "exact",
+        "notes": close_data.notes or "",
+        "orders_count": len(orders)
+    }
+    await db.cash_register_closings.insert_one(closing_record)
+    del closing_record["_id"]
+    
     return updated_shift
 
 @router.get("/shifts", response_model=List[ShiftResponse])

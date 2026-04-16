@@ -1033,12 +1033,13 @@ const CashRegisterClosingTab = ({ t, formatPrice, selectedBranchId, branches, ge
   const [closingsHistory, setClosingsHistory] = useState([]);
   const [localBranchId, setLocalBranchId] = useState(selectedBranchId || '');
 
-  // حساب النقد المعدود من الإغلاقات السابقة
-  const totalCountedCash = closingsHistory.reduce((sum, c) => sum + (c.counted_cash || 0), 0);
-  const expectedCash = report?.summary?.cash_sales || 0;
+  // حساب النقد المعدود والفرق من الإغلاقات
+  const totalCountedCash = closingsHistory.reduce((sum, c) => sum + (c.closing_cash || c.counted_cash || 0), 0);
+  const totalExpectedCash = closingsHistory.reduce((sum, c) => sum + (c.expected_cash || 0), 0);
+  const expectedCash = totalExpectedCash || report?.summary?.cash_sales || 0;
   const cashDifference = totalCountedCash - expectedCash;
-  const isOverCash = cashDifference > 0 && totalCountedCash > 0;
-  const isShortCash = cashDifference < 0 && totalCountedCash > 0;
+  const isOverCash = cashDifference > 0;
+  const isShortCash = cashDifference < 0;
 
   const fetchReport = async () => {
     setLoading(true);
