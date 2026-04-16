@@ -38,25 +38,31 @@ export const getSavedAgentStatus = () => {
 };
 
 /**
- * فحص حالة وكيل الطباعة وحفظها للمشاركة
+ * فحص حالة وكيل الطباعة - 3 محاولات مع تأخير
  */
 export const checkAgentStatus = async () => {
-  try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 3000);
-    const res = await fetch(`${PRINT_AGENT_URL}/status`, {
-      mode: 'cors',
-      signal: controller.signal
-    });
-    clearTimeout(timeout);
-    const data = await res.json();
-    const online = data.status === 'running';
-    saveAgentStatus(online, data.version);
-    return online;
-  } catch {
-    saveAgentStatus(false);
-    return false;
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 3000);
+      const res = await fetch(`${PRINT_AGENT_URL}/status`, {
+        mode: 'cors',
+        credentials: 'omit',
+        signal: controller.signal,
+        headers: { 'Accept': 'application/json' }
+      });
+      clearTimeout(timeout);
+      const data = await res.json();
+      const online = data.status === 'running';
+      saveAgentStatus(online, data.version);
+      return online;
+    } catch (e) {
+      console.log(`[Agent] Check attempt ${attempt}/3 failed:`, e.message);
+      if (attempt < 3) await new Promise(r => setTimeout(r, 1000 * attempt));
+    }
   }
+  saveAgentStatus(false);
+  return false;
 };
 
 /**
