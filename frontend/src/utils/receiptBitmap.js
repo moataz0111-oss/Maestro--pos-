@@ -634,6 +634,57 @@ async function renderKitchen(order) {
 }
 
 // ======== ESC/POS ENCODER (column mode ESC * 33, skip blank strips) ========
+// تحويل Canvas إلى ESC/POS raster mode (GS v 0) - يدعم التوسيط
+function toEscPosRaster(canvas) {
+  const ctx = canvas.getContext('2d');
+  const w = canvas.width, h = canvas.height;
+  const px = ctx.getImageData(0,0,w,h).data;
+  const dark = (cx,cy) => {
+    if (cx>=w||cy>=h) return 0;
+    const i=(cy*w+cx)*4;
+    return (px[i]*.299+px[i+1]*.587+px[i+2]*.114)<128?1:0;
+  };
+
+  const bw = Math.ceil(w / 8); // bytes per row
+  const imgData = new Uint8Array(bw * h);
+  
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      if (dark(x, y)) {
+        imgData[y * bw + Math.floor(x / 8)] |= (0x80 >> (x % 8));
+      }
+    }
+  }
+  
+  // Build ESC/POS command
+  const buf = new Uint8Array(16 + imgData.length + 12);
+  let p = 0;
+  
+  // ESC @ init
+  buf[p++]=0x1B; buf[p++]=0x40;
+  // ESC a 1 = center align
+  buf[p++]=0x1B; buf[p++]=0x61; buf[p++]=0x01;
+  // GS v 0 m xL xH yL yH [data]
+  buf[p++]=0x1D; buf[p++]=0x76; buf[p++]=0x30; buf[p++]=0x00;
+  buf[p++] = bw & 0xFF;        // xL (bytes per row)
+  buf[p++] = (bw >> 8) & 0xFF; // xH
+  buf[p++] = h & 0xFF;         // yL (height)
+  buf[p++] = (h >> 8) & 0xFF;  // yH
+  
+  // Copy image data
+  const result = new Uint8Array(p + imgData.length + 8);
+  result.set(buf.subarray(0, p));
+  result.set(imgData, p);
+  p += imgData.length;
+  
+  // Feed + FULL CUT
+  result[p++]=0x0A; result[p++]=0x0A; result[p++]=0x0A;
+  result[p++]=0x1D; result[p++]=0x56; result[p++]=0x41; result[p++]=0x00;
+  
+  return result.subarray(0, p);
+}
+
+// ESC * mode (bit image) - الطريقة القديمة المتوافقة
 function toEscPos(canvas) {
   const ctx = canvas.getContext('2d');
   const w = canvas.width, h = canvas.height;
@@ -717,7 +768,7 @@ export async function renderReceiptBitmap(order, config = {}) {
 // ======== CLOSING RECEIPT BITMAP ========
 export function renderClosingReceiptBitmap(data = {}) {
   try {
-    const RW = 576; // 80mm عرض كامل (72mm × 8 dots/mm)
+    const RW = 560; // 70mm × 8 dots/mm - يتوسط في ورقة 80mm
     const RM = 8;
     const RC = RW - RM * 2;
     const c = document.createElement('canvas');
@@ -859,8 +910,8 @@ export function renderClosingReceiptBitmap(data = {}) {
     const f = document.createElement('canvas');
     f.width = RW; f.height = y;
     f.getContext('2d').drawImage(c, 0, 0);
-    const bytes = toEscPos(f);
-    console.log(`[ClosingReceipt] ${f.width}x${f.height}px, ${bytes.length}b`);
+    const bytes = toEscPosRaster(f);
+    console.log(`[ClosingReceipt] ${f.width}x${f.height}px, ${bytes.length}b (raster mode)`);
     return { success: true, raw_data: toB64(bytes), size: bytes.length };
   } catch (e) {
     console.error('[ClosingReceipt] Error:', e);
