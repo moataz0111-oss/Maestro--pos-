@@ -8556,7 +8556,7 @@ async def download_print_agent(request: Request):
         '',
         'REM حذف المهمة القديمة وإنشاء جديدة',
         'schtasks /Delete /TN "MaestroPrintAgentWatchdog" /F >nul 2>&1',
-        'schtasks /Create /TN "MaestroPrintAgentWatchdog" /TR "powershell -ExecutionPolicy Bypass -NoProfile -WindowStyle Hidden -File \"%LOCALAPPDATA%\\MaestroPrintAgent\\watchdog.ps1\"" /SC MINUTE /MO 2 /RL HIGHEST /F >nul 2>&1',
+        'schtasks /Create /TN "MaestroPrintAgentWatchdog" /TR "powershell -ExecutionPolicy Bypass -NoProfile -WindowStyle Hidden -File \"%LOCALAPPDATA%\\MaestroPrintAgent\\watchdog.ps1\"" /SC MINUTE /MO 1 /RL HIGHEST /F >nul 2>&1',
         '',
         'if %errorlevel% equ 0 (',
         '    echo    [OK] Watchdog scheduled task created',
