@@ -1344,14 +1344,8 @@ export default function Dashboard() {
     const branchName = tenantInfo?.branch_name || '';
     const cashierName = user?.full_name || user?.username || '';
     
-    // توليد صورة bitmap للإيصال (يدعم العربية بالكامل)
     const bitmapResult = renderClosingReceiptBitmap({
-      ...data,
-      restaurantName,
-      branchName,
-      cashierName,
-      dateStr,
-      timeStr
+      ...data, restaurantName, branchName, cashierName, dateStr, timeStr
     });
     
     if (!bitmapResult.success || !bitmapResult.raw_data) {
@@ -1360,30 +1354,48 @@ export default function Dashboard() {
       return;
     }
     
+    // جلب الطابعات من الباكند
+    const token = localStorage.getItem('token');
+    const printersRes = await axios.get(`${API}/printers`, { headers: { Authorization: `Bearer ${token}` } }).catch(() => ({ data: [] }));
+    const printers = printersRes.data || [];
+    const usbPrinter = printers.find(p => p.connection_type === 'usb' && p.print_mode !== 'orders_only' && p.print_mode !== 'selected_products');
+    
+    if (!usbPrinter?.usb_printer_name) {
+      printClosingReceipt(data);
+      return;
+    }
+    
+    // إرسال الطباعة مباشرة بدون فحص الوسيط أولاً (أسرع)
     try {
-      // محاولة الطباعة عبر USB أولاً
-      const agentCheck = await fetch(`${AGENT_URL}/status`, { signal: AbortSignal.timeout(2000) }).then(r => r.json()).catch(() => null);
-      
-      if (agentCheck?.status === 'running') {
-        // جلب الطابعات
-        const token = localStorage.getItem('token');
-        const printersRes = await axios.get(`${API}/printers`, { headers: { Authorization: `Bearer ${token}` } }).catch(() => ({ data: [] }));
-        const printers = printersRes.data || [];
-        const usbPrinter = printers.find(p => p.connection_type === 'usb' && p.print_mode !== 'orders_only' && p.print_mode !== 'selected_products');
-        
-        if (usbPrinter?.usb_printer_name) {
-          await fetch(`${AGENT_URL}/print-receipt`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ raw_data: bitmapResult.raw_data, usb_printer_name: usbPrinter.usb_printer_name }),
-            signal: AbortSignal.timeout(10000)
-          });
-          toast.success(t('تم طباعة إيصال الإغلاق'));
-          return;
-        }
-      }
-    } catch (agentErr) {
-      console.warn('USB print failed, falling back to browser print:', agentErr);
+      await fetch(`${AGENT_URL}/print-receipt`, {
+        method: 'POST',
+        mode: 'cors',
+        credentials: 'omit',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ raw_data: bitmapResult.raw_data, usb_printer_name: usbPrinter.usb_printer_name }),
+        signal: AbortSignal.timeout(10000)
+      });
+      toast.success(t('تم طباعة إيصال الإغلاق'));
+      return;
+    } catch (e) {
+      console.warn('USB print attempt 1 failed:', e.message);
+    }
+    
+    // محاولة ثانية بعد ثانية
+    try {
+      await new Promise(r => setTimeout(r, 1000));
+      await fetch(`${AGENT_URL}/print-receipt`, {
+        method: 'POST',
+        mode: 'cors',
+        credentials: 'omit',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ raw_data: bitmapResult.raw_data, usb_printer_name: usbPrinter.usb_printer_name }),
+        signal: AbortSignal.timeout(10000)
+      });
+      toast.success(t('تم طباعة إيصال الإغلاق'));
+      return;
+    } catch (e) {
+      console.warn('USB print attempt 2 failed:', e.message);
     }
     
     // Fallback: طباعة عبر المتصفح
