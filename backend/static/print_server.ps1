@@ -1,6 +1,6 @@
 $ErrorActionPreference = 'Continue'
 $agentLog = "$PSScriptRoot\agent.log"
-"$(Get-Date) - Agent v3.9.5 starting..." | Out-File $agentLog
+"$(Get-Date) - Agent v3.9.6 starting..." | Out-File $agentLog
 
 # ============================================
 # === AUTO-CLEANUP: Kill old agent & files ===
@@ -1860,17 +1860,21 @@ while ($restartCount -lt $maxRestarts) {
     $listener = New-Object System.Net.HttpListener
     $listener.Prefixes.Add('http://localhost:9999/')
     $listener.Start()
-    "$(Get-Date) - HttpListener started on port 9999 (v3.9.5) [restart #$restartCount]" | Out-File $agentLog -Append
+    "$(Get-Date) - HttpListener started on port 9999 (v3.9.6) [restart #$restartCount]" | Out-File $agentLog -Append
 
     while ($listener.IsListening) {
       try {
         $ctx = $listener.GetContext()
         $req = $ctx.Request
         $res = $ctx.Response
-        $res.AddHeader('Access-Control-Allow-Origin', '*')
+        $origin = $req.Headers['Origin']
+        if (-not $origin) { $origin = '*' }
+        $res.AddHeader('Access-Control-Allow-Origin', $origin)
         $res.AddHeader('Access-Control-Allow-Methods', 'POST, GET, OPTIONS')
-        $res.AddHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization')
+        $res.AddHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, Access-Control-Request-Private-Network')
         $res.AddHeader('Access-Control-Allow-Private-Network', 'true')
+        $res.AddHeader('Access-Control-Max-Age', '86400')
+        $res.AddHeader('Vary', 'Origin')
         $res.ContentType = 'application/json'
 
         if ($req.HttpMethod -eq 'OPTIONS') {
@@ -1884,7 +1888,7 @@ while ($restartCount -lt $maxRestarts) {
         "$(Get-Date) - $($req.HttpMethod) $path" | Out-File $agentLog -Append
 
         if ($path -eq '/status') {
-            $jsonOut = '{"status":"running","version":"3.9.5","agent":"Maestro Print Agent","usb_support":true,"zk_support":true}'
+            $jsonOut = '{"status":"running","version":"3.9.6","agent":"Maestro Print Agent","usb_support":true,"zk_support":true}'
         }
         elseif ($path -eq '/list-printers') {
             try {
