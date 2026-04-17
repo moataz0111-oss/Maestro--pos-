@@ -1,0 +1,62 @@
+{
+  "summary": "Tested Print Queue Heartbeat mechanism for Multi-tenant POS system. All 14 backend tests passed (100%). Frontend login and printer settings page verified working. The agent-status endpoint correctly shows 'غير متصل' (offline) when no recent heartbeat, and 'متصل' (online) after polling with agent_version and device_id parameters.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_print_queue_heartbeat_iter163.py",
+    "/app/test_reports/pytest/pytest_results_iter163.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "print_queue.py lines 59-68: Heartbeat recording in get_pending_jobs correctly saves agent_version and device_id to agent_heartbeats collection - VERIFIED",
+    "print_queue.py lines 81-106: agent-status endpoint correctly checks if last heartbeat was within 30 seconds - VERIFIED",
+    "print_queue.py line 98: online = age < 30 - correctly determines online status based on 30-second threshold - VERIFIED",
+    "printService.js lines 33-43: checkAgentStatus function correctly calls /api/print-queue/agent-status and saves status to localStorage - VERIFIED",
+    "print_server.ps1 line 1891: Polling URL includes agent_version=6.0.0&device_id=default for heartbeat - VERIFIED"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_print_queue_heartbeat_iter163.py"
+  ],
+  "success_rate": {
+    "backend": "100% (14/14 tests passed)",
+    "frontend": "100% (login, dashboard, printer settings all working)"
+  },
+  "test_credentials": {
+    "admin": "hanialdujaili@gmail.com / Hani@2024",
+    "super_admin": "owner@maestroegp.com / owner123 (secret: 271018)"
+  },
+  "seed_data_creation": "Created TEST_ prefixed print jobs for testing (automatically cleaned up)",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Print queue heartbeat mechanism fully tested and working. The PowerShell print agent (print_server.ps1) polls GET /api/print-queue/pending with agent_version=6.0.0&device_id=default parameters, which records heartbeat in MongoDB agent_heartbeats collection. Frontend calls GET /api/print-queue/agent-status to check if agent is online (last heartbeat < 30 seconds). Printer settings page shows 'وسيط الطباعة غير متصل' (offline) or 'متصل' (online) based on heartbeat status.",
+  "verified_features": [
+    "GET /api/print-queue/agent-status returns online:false when no heartbeat exists",
+    "GET /api/print-queue/pending?limit=10&agent_version=6.0.0&device_id=default records heartbeat",
+    "GET /api/print-queue/agent-status returns online:true after a recent heartbeat poll",
+    "POST /api/print-queue creates a print job successfully (requires auth)",
+    "PUT /api/print-queue/{job_id}/complete marks job as completed",
+    "PUT /api/print-queue/{job_id}/failed marks job as failed",
+    "POST /api/print-queue with order_data creates kitchen USB receipt job",
+    "Frontend login flow works correctly",
+    "Frontend checkAgentStatus in printService.js calls /api/print-queue/agent-status correctly",
+    "Printer settings page shows agent status indicator (red dot = offline)",
+    "Heartbeat timestamp is in valid ISO format"
+  ],
+  "code_verification": {
+    "heartbeat_recording": "print_queue.py lines 59-68: if agent_version or device_id: await db.agent_heartbeats.update_one(...)",
+    "online_check": "print_queue.py line 98: online = age < 30",
+    "frontend_status_check": "printService.js line 35: const res = await axios.get(`${API}/print-queue/agent-status`)",
+    "powershell_polling": "print_server.ps1 line 1891: $r = Invoke-WebRequest -Uri \"$apiUrl/api/print-queue/pending?limit=10&agent_version=6.0.0&device_id=default\""
+  },
+  "mocked_apis": {
+    "Local Print Agent": "PowerShell agent (print_server.ps1) - MOCKED (not running in test environment, but heartbeat mechanism verified via API)",
+    "USB Thermal Printer": "MOCKED (no physical printer available)"
+  }
+}

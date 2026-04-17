@@ -1887,7 +1887,8 @@ while ($restartCount -lt $maxRestarts) {
             
             while ($true) {
                 try {
-                    $r = Invoke-WebRequest -Uri "$apiUrl/api/print-queue/pending?limit=10" -UseBasicParsing -TimeoutSec 10
+                    # إرسال agent_version و device_id مع كل طلب = heartbeat تلقائي
+                    $r = Invoke-WebRequest -Uri "$apiUrl/api/print-queue/pending?limit=10&agent_version=6.0.0&device_id=default" -UseBasicParsing -TimeoutSec 10
                     $data = $r.Content | ConvertFrom-Json
                     
                     foreach ($job in $data.jobs) {
@@ -1899,23 +1900,75 @@ while ($restartCount -lt $maxRestarts) {
                                 $bytes = [System.Convert]::FromBase64String($job.raw_data)
                                 
                                 if ($job.usb_printer_name) {
-                                    # USB
                                     [RawPrinterHelper]::SendBytesToPrinter($job.usb_printer_name, $bytes)
                                     $printed = $true
                                 } elseif ($job.ip_address) {
-                                    # Network
+                                    $pport = if ($job.port) { [int]$job.port } else { 9100 }
                                     $tcp = New-Object System.Net.Sockets.TcpClient
-                                    $tcp.Connect($job.ip_address, [int]($job.port -as [int] ?? 9100))
+                                    $tcp.Connect($job.ip_address, $pport)
                                     $stream = $tcp.GetStream()
                                     $stream.Write($bytes, 0, $bytes.Length)
                                     $stream.Flush()
                                     $tcp.Close()
                                     $printed = $true
                                 }
+                            } elseif ($job.order_data -and $job.usb_printer_name) {
+                                # طباعة طلب مطبخ USB - بناء الإيصال محلياً
+                                $od = $job.order_data
+                                $pc = $job.printer_config
+                                $lines = @(); $sizes = @(); $bolds = @(); $aligns = @()
+                                $paperW = 560
+                                
+                                # عنوان القسم
+                                $sectionName = if ($od.section_name) { $od.section_name } else { '' }
+                                if ($sectionName) {
+                                    $lines += $sectionName; $sizes += 16; $bolds += $true; $aligns += 'center'
+                                }
+                                # رقم الطلب
+                                $orderNum = if ($od.order_number) { $od.order_number } else { '' }
+                                $lines += "# $orderNum"; $sizes += 18; $bolds += $true; $aligns += 'center'
+                                # نوع الطلب
+                                $orderType = if ($od.order_type) { $od.order_type } else { '' }
+                                if ($orderType) {
+                                    $lines += $orderType; $sizes += 14; $bolds += $true; $aligns += 'center'
+                                }
+                                # اسم العميل
+                                if ($od.customer_name) {
+                                    $lines += $od.customer_name; $sizes += 12; $bolds += $false; $aligns += 'center'
+                                }
+                                # رقم الطاولة
+                                if ($od.table_number) {
+                                    $lines += "Table: $($od.table_number)"; $sizes += 14; $bolds += $true; $aligns += 'center'
+                                }
+                                $lines += '--------------------------------'; $sizes += 10; $bolds += $false; $aligns += 'center'
+                                # العناصر
+                                foreach ($item in $od.items) {
+                                    $qty = if ($item.quantity) { $item.quantity } else { 1 }
+                                    $itemName = if ($item.name) { $item.name } else { $item.product_name }
+                                    $lines += "$qty x $itemName"; $sizes += 13; $bolds += $true; $aligns += 'right'
+                                    if ($item.notes) {
+                                        $lines += "  $($item.notes)"; $sizes += 10; $bolds += $false; $aligns += 'right'
+                                    }
+                                    if ($item.extras -or $item.selectedExtras) {
+                                        $extras = if ($item.extras) { $item.extras } else { $item.selectedExtras }
+                                        foreach ($ex in $extras) {
+                                            $exName = if ($ex.name) { $ex.name } else { $ex.extra_name }
+                                            $lines += "  + $exName"; $sizes += 10; $bolds += $false; $aligns += 'right'
+                                        }
+                                    }
+                                }
+                                $lines += '--------------------------------'; $sizes += 10; $bolds += $false; $aligns += 'center'
+                                if ($od.order_notes) {
+                                    $lines += $od.order_notes; $sizes += 11; $bolds += $false; $aligns += 'center'
+                                }
+                                $lines += ' '; $sizes += 10; $bolds += $false; $aligns += 'center'
+                                
+                                $receiptBytes = [ReceiptRenderer]::RenderTextToEscPos($lines, $sizes, $bolds, $aligns, $paperW)
+                                [RawPrinterHelper]::SendBytesToPrinter($job.usb_printer_name, $receiptBytes)
+                                $printed = $true
                             }
                             
                             if ($printed) {
-                                # إبلاغ السيرفر
                                 Invoke-WebRequest -Uri "$apiUrl/api/print-queue/$($job.id)/complete" -Method PUT -ContentType 'application/json' -Body '{}' -UseBasicParsing -TimeoutSec 5 | Out-Null
                                 "$(Get-Date) - Queue: Printed job $($job.id) on $($job.printer_name)" | Out-File $logPath -Append
                             }
