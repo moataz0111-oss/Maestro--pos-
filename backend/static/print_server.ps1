@@ -1,6 +1,6 @@
 $ErrorActionPreference = 'Continue'
 $agentLog = "$PSScriptRoot\agent.log"
-"$(Get-Date) - Agent v6.0.0 starting..." | Out-File $agentLog
+"$(Get-Date) - Agent v6.1.0 starting..." | Out-File $agentLog
 
 # ============================================
 # === AUTO-CLEANUP: Kill old agent & files ===
@@ -1873,7 +1873,7 @@ while ($restartCount -lt $maxRestarts) {
     $listener.Prefixes.Add('http://localhost:9999/')
     try { $listener.Prefixes.Add('https://localhost:9443/') } catch {}
     $listener.Start()
-    "$(Get-Date) - HttpListener started on port 9999 (v6.0.0) [restart #$restartCount]" | Out-File $agentLog -Append
+    "$(Get-Date) - HttpListener started on port 9999 (v6.1.0) [restart #$restartCount]" | Out-File $agentLog -Append
 
     # === Print Queue Polling (Background Job) ===
     # يسحب أوامر الطباعة من السيرفر كل 3 ثواني
@@ -1885,10 +1885,138 @@ while ($restartCount -lt $maxRestarts) {
             $ErrorActionPreference = 'Continue'
             "$(Get-Date) - Print Queue polling started: $apiUrl" | Out-File $logPath -Append
             
+            # === تجميع كود USB/Bitmap داخل الـ Job (لأن Start-Job عملية منفصلة) ===
+            try {
+$jobCsharp = @'
+using System;
+using System.Runtime.InteropServices;
+using System.Drawing;
+using System.Drawing.Imaging;
+using System.Collections.Generic;
+using System.IO;
+using System.Text;
+
+public class JobRawPrinter {
+    [StructLayout(LayoutKind.Sequential)]
+    public struct DOCINFOA {
+        [MarshalAs(UnmanagedType.LPStr)] public string pDocName;
+        [MarshalAs(UnmanagedType.LPStr)] public string pOutputFile;
+        [MarshalAs(UnmanagedType.LPStr)] public string pDataType;
+    }
+    [DllImport("winspool.drv", SetLastError = true, CharSet = CharSet.Ansi)]
+    public static extern bool OpenPrinter(string szPrinter, out IntPtr hPrinter, IntPtr pd);
+    [DllImport("winspool.drv", SetLastError = true, CharSet = CharSet.Ansi)]
+    public static extern bool StartDocPrinter(IntPtr hPrinter, int level, ref DOCINFOA di);
+    [DllImport("winspool.drv", SetLastError = true)]
+    public static extern bool StartPagePrinter(IntPtr hPrinter);
+    [DllImport("winspool.drv", SetLastError = true)]
+    public static extern bool WritePrinter(IntPtr hPrinter, IntPtr pBytes, int dwCount, out int dwWritten);
+    [DllImport("winspool.drv", SetLastError = true)]
+    public static extern bool EndPagePrinter(IntPtr hPrinter);
+    [DllImport("winspool.drv", SetLastError = true)]
+    public static extern bool EndDocPrinter(IntPtr hPrinter);
+    [DllImport("winspool.drv", SetLastError = true)]
+    public static extern bool ClosePrinter(IntPtr hPrinter);
+
+    public static bool SendBytes(string printerName, byte[] data) {
+        IntPtr hPrinter;
+        if (!OpenPrinter(printerName, out hPrinter, IntPtr.Zero)) return false;
+        DOCINFOA di = new DOCINFOA();
+        di.pDocName = "Maestro POS Receipt";
+        di.pDataType = "RAW";
+        if (!StartDocPrinter(hPrinter, 1, ref di)) { ClosePrinter(hPrinter); return false; }
+        if (!StartPagePrinter(hPrinter)) { EndDocPrinter(hPrinter); ClosePrinter(hPrinter); return false; }
+        bool success = true;
+        int chunkSize = 1024;
+        int offset = 0;
+        while (offset < data.Length) {
+            int remaining = data.Length - offset;
+            int currentSize = remaining < chunkSize ? remaining : chunkSize;
+            IntPtr pChunk = Marshal.AllocCoTaskMem(currentSize);
+            Marshal.Copy(data, offset, pChunk, currentSize);
+            int written;
+            bool ok = WritePrinter(hPrinter, pChunk, currentSize, out written);
+            Marshal.FreeCoTaskMem(pChunk);
+            if (!ok) { success = false; break; }
+            offset += currentSize;
+        }
+        EndPagePrinter(hPrinter);
+        EndDocPrinter(hPrinter);
+        ClosePrinter(hPrinter);
+        return success;
+    }
+}
+
+public class JobReceiptRenderer {
+    public static byte[] RenderText(string[] lines, int[] sizes, bool[] bolds, string[] aligns, int paperWidth) {
+        var bmp = new Bitmap(paperWidth, 3000);
+        var g = Graphics.FromImage(bmp);
+        g.Clear(Color.White);
+        g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
+        float y = 5;
+        for (int i = 0; i < lines.Length; i++) {
+            var style = bolds[i] ? FontStyle.Bold : FontStyle.Regular;
+            var font = new Font("Arial", sizes[i], style);
+            var sf = new StringFormat();
+            if (aligns[i] == "center") sf.Alignment = StringAlignment.Center;
+            else if (aligns[i] == "right") sf.Alignment = StringAlignment.Far;
+            else sf.Alignment = StringAlignment.Near;
+            foreach (char c in lines[i]) {
+                if (c >= 0x0600 && c <= 0x06FF) { sf.FormatFlags = StringFormatFlags.DirectionRightToLeft; break; }
+            }
+            var rect = new RectangleF(3, y, paperWidth - 6, 200);
+            var measured = g.MeasureString(lines[i], font, paperWidth - 6, sf);
+            g.DrawString(lines[i], font, Brushes.Black, rect, sf);
+            y += measured.Height + 1;
+            font.Dispose(); sf.Dispose();
+        }
+        g.Dispose();
+        int height = (int)y + 20;
+        if (height > 2999) height = 2999;
+        var result = new List<byte>();
+        result.AddRange(new byte[] { 0x1b, 0x40 });
+        int bytesPerRow = (paperWidth + 7) / 8;
+        result.AddRange(new byte[] { 0x1d, 0x76, 0x30, 0x00 });
+        result.Add((byte)(bytesPerRow & 0xFF));
+        result.Add((byte)((bytesPerRow >> 8) & 0xFF));
+        result.Add((byte)(height & 0xFF));
+        result.Add((byte)((height >> 8) & 0xFF));
+        var bmpData = bmp.LockBits(new Rectangle(0, 0, paperWidth, height), ImageLockMode.ReadOnly, PixelFormat.Format24bppRgb);
+        int stride = bmpData.Stride;
+        byte[] rgb = new byte[stride * height];
+        Marshal.Copy(bmpData.Scan0, rgb, 0, rgb.Length);
+        bmp.UnlockBits(bmpData);
+        for (int row = 0; row < height; row++) {
+            for (int col = 0; col < bytesPerRow; col++) {
+                byte b = 0;
+                for (int bit = 0; bit < 8; bit++) {
+                    int px = col * 8 + bit;
+                    if (px < paperWidth) {
+                        int idx = row * stride + px * 3;
+                        float brightness = rgb[idx + 2] * 0.299f + rgb[idx + 1] * 0.587f + rgb[idx] * 0.114f;
+                        if (brightness < 128) b |= (byte)(0x80 >> bit);
+                    }
+                }
+                result.Add(b);
+            }
+        }
+        bmp.Dispose();
+        result.Add(0x0a); result.Add(0x0a); result.Add(0x0a); result.Add(0x0a);
+        result.AddRange(new byte[] { 0x1d, 0x56, 0x42, 0x00 });
+        return result.ToArray();
+    }
+}
+'@
+                Add-Type -TypeDefinition $jobCsharp -ReferencedAssemblies System.Drawing -ErrorAction Stop
+                "$(Get-Date) - Job: C# USB+Bitmap compiled OK" | Out-File $logPath -Append
+            } catch {
+                "$(Get-Date) - Job: C# compile warning: $_" | Out-File $logPath -Append
+            }
+            
             while ($true) {
                 try {
                     # إرسال agent_version و device_id مع كل طلب = heartbeat تلقائي
-                    $r = Invoke-WebRequest -Uri "$apiUrl/api/print-queue/pending?limit=10&agent_version=6.0.0&device_id=default" -UseBasicParsing -TimeoutSec 10
+                    $r = Invoke-WebRequest -Uri "$apiUrl/api/print-queue/pending?limit=10&agent_version=6.1.0&device_id=default" -UseBasicParsing -TimeoutSec 10
                     $data = $r.Content | ConvertFrom-Json
                     
                     foreach ($job in $data.jobs) {
@@ -1900,8 +2028,9 @@ while ($restartCount -lt $maxRestarts) {
                                 $bytes = [System.Convert]::FromBase64String($job.raw_data)
                                 
                                 if ($job.usb_printer_name) {
-                                    [RawPrinterHelper]::SendBytesToPrinter($job.usb_printer_name, $bytes)
+                                    [JobRawPrinter]::SendBytes($job.usb_printer_name, $bytes)
                                     $printed = $true
+                                    "$(Get-Date) - Queue: USB print $($bytes.Length) bytes to $($job.usb_printer_name)" | Out-File $logPath -Append
                                 } elseif ($job.ip_address) {
                                     $pport = if ($job.port) { [int]$job.port } else { 9100 }
                                     $tcp = New-Object System.Net.Sockets.TcpClient
@@ -1963,8 +2092,8 @@ while ($restartCount -lt $maxRestarts) {
                                 }
                                 $lines += ' '; $sizes += 10; $bolds += $false; $aligns += 'center'
                                 
-                                $receiptBytes = [ReceiptRenderer]::RenderTextToEscPos($lines, $sizes, $bolds, $aligns, $paperW)
-                                [RawPrinterHelper]::SendBytesToPrinter($job.usb_printer_name, $receiptBytes)
+                                $receiptBytes = [JobReceiptRenderer]::RenderText($lines, $sizes, $bolds, $aligns, $paperW)
+                                [JobRawPrinter]::SendBytes($job.usb_printer_name, $receiptBytes)
                                 $printed = $true
                             }
                             
@@ -2012,7 +2141,7 @@ while ($restartCount -lt $maxRestarts) {
         "$(Get-Date) - $($req.HttpMethod) $path" | Out-File $agentLog -Append
 
         if ($path -eq '/status') {
-            $jsonOut = '{"status":"running","version":"6.0.0","agent":"Maestro Print Agent","usb_support":true,"zk_support":true}'
+            $jsonOut = '{"status":"running","version":"6.1.0","agent":"Maestro Print Agent","usb_support":true,"zk_support":true}'
         }
         elseif ($path -eq '/list-printers') {
             try {

@@ -79,7 +79,14 @@ export const checkPrinterOnline = async () => ({ online: true });
  */
 export const sendTestPrint = async (printer) => {
   try {
-    const testResult = renderTestBitmap({ printerName: printer.name });
+    const testResult = renderTestBitmap({
+      name: printer.name,
+      connection_type: printer.connection_type,
+      usb_printer_name: printer.usb_printer_name || '',
+      ip_address: printer.ip_address || '',
+      port: printer.port || 9100,
+      branch_name: printer.branch_name || ''
+    });
     if (!testResult.success) return { success: false, message: 'Render failed' };
     
     const token = localStorage.getItem('token');
