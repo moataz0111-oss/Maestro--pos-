@@ -766,9 +766,9 @@ export async function renderReceiptBitmap(order, config = {}) {
 }
 
 // ======== CLOSING RECEIPT BITMAP ========
-export function renderClosingReceiptBitmap(data = {}) {
+export async function renderClosingReceiptBitmap(data = {}) {
   try {
-    const RW = PW; // نفس عرض فواتير الطلبات (520px) اللي تشتغل صح
+    const RW = PW;
     const RM = 6;
     const RC = RW - RM * 2;
     const c = document.createElement('canvas');
@@ -779,18 +779,31 @@ export function renderClosingReceiptBitmap(data = {}) {
     let y = 20;
     const fp = n => `${Number(n||0).toLocaleString()} IQD`;
 
-    // === الشعار ===
-    // رسم شعار بسيط (دائرة مع حرف)
-    const logoSize = 60;
-    x.beginPath();
-    x.arc(RW/2, y + logoSize/2, logoSize/2, 0, Math.PI * 2);
-    x.fillStyle = '#000'; x.fill();
-    x.fillStyle = '#FFF'; x.font = 'bold 28px Arial';
-    x.textAlign = 'center'; x.textBaseline = 'middle';
-    const initial = (data.restaurantName || 'M')[0];
-    x.fillText(initial, RW/2, y + logoSize/2);
-    x.fillStyle = '#000';
-    y += logoSize + 12;
+    // === الشعار الحقيقي ===
+    const logo = await loadImg(data.logo_base64 || data.logo_url);
+    if (logo) {
+      const sz = 80;
+      const lx = (RW - sz) / 2;
+      x.save();
+      x.beginPath(); x.arc(lx + sz/2, y + sz/2, sz/2, 0, Math.PI * 2); x.clip();
+      x.drawImage(logo, lx, y, sz, sz);
+      x.restore();
+      x.strokeStyle='#000'; x.lineWidth=2;
+      x.beginPath(); x.arc(lx + sz/2, y + sz/2, sz/2, 0, Math.PI * 2); x.stroke();
+      y += sz + 12;
+    } else {
+      // شعار بديل (دائرة مع حرف) إذا ما في شعار
+      const logoSize = 60;
+      x.beginPath();
+      x.arc(RW/2, y + logoSize/2, logoSize/2, 0, Math.PI * 2);
+      x.fillStyle = '#000'; x.fill();
+      x.fillStyle = '#FFF'; x.font = 'bold 28px Arial';
+      x.textAlign = 'center'; x.textBaseline = 'middle';
+      const initial = (data.restaurantName || 'M')[0];
+      x.fillText(initial, RW/2, y + logoSize/2);
+      x.fillStyle = '#000';
+      y += logoSize + 12;
+    }
 
     // === اسم المطعم ===
     if (data.restaurantName) {

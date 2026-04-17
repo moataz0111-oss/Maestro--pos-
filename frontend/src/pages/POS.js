@@ -1581,7 +1581,8 @@ export default function POS() {
             extras: item.selectedExtras || []
           })),
           branch_id: currentBranchId || (await axios.get(`${API}/branches`)).data[0]?.id,
-          payment_method: paymentMethod,  // حفظ طريقة الدفع المختارة
+          payment_method: 'pending',  // حفظ كمعلق - الدفع يتم عبر زر الإرسال (Submit) فقط
+          preferred_payment: paymentMethod || 'cash',  // حفظ طريقة الدفع المفضلة لاستخدامها لاحقاً
           discount: discount,
           delivery_app: orderType === 'delivery' ? deliveryApp : null,
           delivery_app_name: orderType === 'delivery' && deliveryApp ? (deliveryApps.find(a => a.id === deliveryApp)?.name || '') : null,
@@ -2211,7 +2212,7 @@ export default function POS() {
               total: subtotalCalc - (discount || 0), subtotal: subtotalCalc,
               payment_method: editingOrder.payment_method || 'pending',
               cashier_name: user?.name || user?.full_name || '',
-              is_paid: editingOrder.payment_method && editingOrder.payment_method !== 'pending'
+              is_paid: false
             };
             await sendReceiptPrint(cashierPrinter, orderForPrint);
             toast.success(t('تم طباعة الفاتورة'));

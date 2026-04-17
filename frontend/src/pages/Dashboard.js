@@ -1339,12 +1339,23 @@ export default function Dashboard() {
     const dateStr = now.toLocaleDateString('ar-IQ');
     const timeStr = now.toLocaleTimeString('ar-IQ', { hour: '2-digit', minute: '2-digit' });
     
-    const restaurantName = tenantInfo?.restaurant_name || 'المطعم';
-    const branchName = tenantInfo?.branch_name || '';
+    const restaurantName = tenantInfo?.name || tenantInfo?.restaurant_name || 'المطعم';
+    const branchName = tenantInfo?.branch_name || data?.branch_name || '';
     const cashierName = user?.full_name || user?.username || '';
     
-    const bitmapResult = renderClosingReceiptBitmap({
-      ...data, restaurantName, branchName, cashierName, dateStr, timeStr
+    // جلب الشعار من الإعدادات
+    const logoUrl = tenantInfo?.logo_url;
+    let resolvedLogoUrl = null;
+    if (logoUrl) {
+      if (logoUrl.startsWith('http')) resolvedLogoUrl = logoUrl;
+      else if (logoUrl.startsWith('/')) resolvedLogoUrl = `${BACKEND_URL}${logoUrl}`;
+      else resolvedLogoUrl = logoUrl;
+    }
+    
+    const bitmapResult = await renderClosingReceiptBitmap({
+      ...data, restaurantName, branchName, cashierName, dateStr, timeStr,
+      logo_url: resolvedLogoUrl,
+      logo_base64: tenantInfo?.logo_base64 || null
     });
     
     if (!bitmapResult.success || !bitmapResult.raw_data) {
