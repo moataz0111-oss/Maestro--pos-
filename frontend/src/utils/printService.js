@@ -52,12 +52,20 @@ export const agentSupportsUsb = async () => true;
  */
 export const checkAgentVersionMatch = async (backendUrl) => {
   try {
-    const res = await axios.get(`${backendUrl}/api/print-agent-version`);
+    // جلب النسخة المطلوبة من السيرفر
+    const versionRes = await axios.get(`${backendUrl}/api/print-agent-version`);
+    const latestVersion = versionRes.data?.version || '?';
+    
+    // جلب النسخة الفعلية للوسيط من الـ heartbeat
+    const statusRes = await axios.get(`${API}/print-queue/agent-status`);
+    const agentVersion = statusRes.data?.version || '?';
+    
+    const match = latestVersion !== '?' && agentVersion !== '?' && latestVersion === agentVersion;
     return {
-      match: true,
-      latestVersion: res.data?.version || '?',
-      agentVersion: 'queue',
-      needsUpdate: false
+      match,
+      latestVersion,
+      agentVersion,
+      needsUpdate: !match && agentVersion !== '?'
     };
   } catch {
     return { match: false, latestVersion: '?', agentVersion: '?', needsUpdate: false };
