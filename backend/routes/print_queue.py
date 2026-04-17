@@ -49,10 +49,23 @@ async def add_print_job(job_data: dict, current_user: dict = Depends(get_current
 async def get_pending_jobs(
     device_id: str = Query(default=""),
     branch_id: str = Query(default=""),
+    agent_version: str = Query(default=""),
     limit: int = Query(default=20)
 ):
-    """الوسيط يسحب أوامر الطباعة المعلقة (لا يحتاج auth - الوسيط يتصل مباشرة)"""
+    """الوسيط يسحب أوامر الطباعة المعلقة + يسجل heartbeat"""
     db = get_database()
+    
+    # تسجيل heartbeat الوسيط (يثبت إنه شغال)
+    if agent_version or device_id:
+        await db.agent_heartbeats.update_one(
+            {"device_id": device_id or "default"},
+            {"$set": {
+                "last_seen": datetime.now(timezone.utc).isoformat(),
+                "version": agent_version,
+                "status": "online"
+            }},
+            upsert=True
+        )
     
     query = {"status": "pending"}
     if branch_id:
@@ -63,6 +76,34 @@ async def get_pending_jobs(
     ).sort("created_at", 1).limit(limit).to_list(limit)
     
     return {"jobs": jobs, "count": len(jobs)}
+
+
+@router.get("/print-queue/agent-status")
+async def get_agent_status():
+    """فحص حالة الوسيط الحقيقية من آخر heartbeat"""
+    db = get_database()
+    
+    heartbeat = await db.agent_heartbeats.find_one(
+        {}, {"_id": 0}, sort=[("last_seen", -1)]
+    )
+    
+    if not heartbeat:
+        return {"online": False, "version": None, "last_seen": None}
+    
+    last_seen = heartbeat.get("last_seen", "")
+    try:
+        from datetime import timedelta
+        last_dt = datetime.fromisoformat(last_seen.replace("Z", "+00:00"))
+        age = (datetime.now(timezone.utc) - last_dt).total_seconds()
+        online = age < 30  # إذا آخر heartbeat أقل من 30 ثانية = شغال
+    except:
+        online = False
+    
+    return {
+        "online": online,
+        "version": heartbeat.get("version"),
+        "last_seen": last_seen
+    }
 
 
 @router.put("/print-queue/{job_id}/complete")

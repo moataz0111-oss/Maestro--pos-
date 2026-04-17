@@ -28,14 +28,14 @@ export const getSavedAgentStatus = () => {
 };
 
 /**
- * فحص حالة الوسيط - يسأل السيرفر عن آخر نشاط للوسيط
+ * فحص حالة الوسيط الحقيقية - يسأل السيرفر عن آخر heartbeat
  */
 export const checkAgentStatus = async () => {
   try {
-    const res = await axios.get(`${API}/print-queue/pending?limit=0`);
-    // إذا الـ API شغال يعني الطابور متاح
-    saveAgentStatus(true, 'queue');
-    return true;
+    const res = await axios.get(`${API}/print-queue/agent-status`);
+    const data = res.data;
+    saveAgentStatus(data.online, data.version);
+    return data.online;
   } catch {
     saveAgentStatus(false);
     return false;
