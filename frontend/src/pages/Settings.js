@@ -5013,20 +5013,6 @@ export default function Settings() {
                           <Download className="h-3.5 w-3.5 ml-1" />{t('تحميل الوسيط')}
                         </Button>
                       )}
-                      {!printAgentOnline && (
-                        <Button 
-                          variant="outline" 
-                          size="sm"
-                          className="border-yellow-500 text-yellow-600"
-                          onClick={() => {
-                            window.open('https://localhost:9443/status', '_blank');
-                            toast.info(t('اضغط "Advanced" ثم "Proceed to localhost" لتفعيل الاتصال الآمن، ثم عُد واضغط فحص'));
-                          }}
-                          data-testid="activate-https-btn"
-                        >
-                          {t('تفعيل الاتصال')}
-                        </Button>
-                      )}
                       {printAgentOnline && agentNeedsUpdate && (
                         <Button 
                           size="sm"

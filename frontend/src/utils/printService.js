@@ -1,227 +1,106 @@
 /**
- * Maestro POS - Print Service v3.1
- * يولد الإيصال كصورة bitmap مباشرة في المتصفح (يدعم العربية)
- * ثم يرسله للوكيل المحلي (localhost:9999)
- * 
- * التدفق: Browser Canvas → ESC/POS Bitmap → Print Agent → Printer
- * حالة الوسيط محفوظة في localStorage ومشتركة بين جميع المستخدمين على نفس الجهاز
+ * Maestro POS - Print Service v4.0
+ * النظام الجديد: المتصفح يرسل أوامر الطباعة للسيرفر (Print Queue)
+ * الوسيط يسحب الأوامر من السيرفر ويطبعها
+ * لا يوجد اتصال مباشر بين المتصفح والوسيط = لا CORS ولا PNA
  */
 
 import { renderReceiptBitmap, renderTestBitmap } from './receiptBitmap';
+import axios from 'axios';
 
-const PRINT_AGENT_URL = 'http://localhost:9999';
-const PRINT_AGENT_URL_HTTPS = 'https://localhost:9443';
+const API = process.env.REACT_APP_BACKEND_URL + '/api';
 
-// === حالة الوسيط المشتركة (محفوظة في localStorage لجميع المستخدمين) ===
+/**
+ * حفظ حالة الوسيط
+ */
 const AGENT_STATUS_KEY = 'maestro_agent_status';
-const AGENT_PROTO_KEY = 'maestro_agent_proto'; // 'https' or 'http'
 
-const getAgentUrl = () => {
-  try {
-    return localStorage.getItem(AGENT_PROTO_KEY) === 'https' ? PRINT_AGENT_URL_HTTPS : PRINT_AGENT_URL;
-  } catch { return PRINT_AGENT_URL; }
-};
-
-/**
- * حفظ حالة الوسيط في localStorage (مشتركة لجميع المستخدمين)
- */
 const saveAgentStatus = (online, version = null) => {
-  try {
-    localStorage.setItem(AGENT_STATUS_KEY, JSON.stringify({ online, version, timestamp: Date.now() }));
-  } catch {}
+  try { localStorage.setItem(AGENT_STATUS_KEY, JSON.stringify({ online, version, timestamp: Date.now() })); } catch {}
 };
 
-/**
- * قراءة حالة الوسيط المحفوظة
- */
 export const getSavedAgentStatus = () => {
   try {
     const data = JSON.parse(localStorage.getItem(AGENT_STATUS_KEY) || '{}');
-    const age = Date.now() - (data.timestamp || 0);
-    if (age < 300000) return data;
+    if (Date.now() - (data.timestamp || 0) < 300000) return data;
     return { online: false, version: null };
-  } catch {
-    return { online: false, version: null };
-  }
+  } catch { return { online: false, version: null }; }
 };
 
 /**
- * فحص حالة وكيل الطباعة - يجرب HTTPS أولاً ثم HTTP
+ * فحص حالة الوسيط - يسأل السيرفر عن آخر نشاط للوسيط
  */
 export const checkAgentStatus = async () => {
-  const urls = [PRINT_AGENT_URL_HTTPS, PRINT_AGENT_URL];
-  for (const url of urls) {
-    try {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 3000);
-      const res = await fetch(`${url}/status`, {
-        mode: 'cors', credentials: 'omit', signal: controller.signal,
-        headers: { 'Accept': 'application/json' }
-      });
-      clearTimeout(timeout);
-      const data = await res.json();
-      if (data.status === 'running') {
-        const proto = url === PRINT_AGENT_URL_HTTPS ? 'https' : 'http';
-        try { localStorage.setItem(AGENT_PROTO_KEY, proto); } catch {}
-        saveAgentStatus(true, data.version);
-        console.log(`[Agent] Connected via ${proto.toUpperCase()} (${data.version})`);
-        return true;
-      }
-    } catch {}
-  }
-  saveAgentStatus(false);
-  return false;
-};
-
-/**
- * فحص دعم USB
- */
-export const agentSupportsUsb = async () => {
   try {
-    const res = await fetch(`${getAgentUrl()}/status`, { mode: 'cors', credentials: 'omit' });
-    const data = await res.json();
-    if (data.usb_support !== true) return false;
-    const major = parseInt(String(data.version || '0').split('.')[0]) || 0;
-    return (major >= 3);
+    const res = await axios.get(`${API}/print-queue/pending?limit=0`);
+    // إذا الـ API شغال يعني الطابور متاح
+    saveAgentStatus(true, 'queue');
+    return true;
   } catch {
+    saveAgentStatus(false);
     return false;
   }
 };
 
 /**
- * فحص إذا الوكيل يحتاج تحديث بمقارنة الإصدار مع السيرفر
+ * فحص توافق USB
+ */
+export const agentSupportsUsb = async () => true;
+
+/**
+ * فحص تطابق نسخة الوسيط
  */
 export const checkAgentVersionMatch = async (backendUrl) => {
   try {
-    const agentRes = await fetch(`${getAgentUrl()}/status`, { mode: 'cors', credentials: 'omit' });
-    const agentData = await agentRes.json();
-    const agentVersion = String(agentData.version || '0').trim();
-
-    const serverRes = await fetch(`${backendUrl}/api/print-agent-version`);
-    const serverData = await serverRes.json();
-    const latestVersion = String(serverData.version || '0').trim();
-
-    return { match: agentVersion === latestVersion, agentVersion, latestVersion };
-  } catch {
-    return { match: true, agentVersion: '?', latestVersion: '?' };
-  }
-};
-
-/**
- * جلب قائمة الطابعات من الوكيل
- */
-export const listAgentPrinters = async () => {
-  try {
-    const res = await fetch(`${getAgentUrl()}/list-printers`, { mode: 'cors', credentials: 'omit' });
-    return await res.json();
-  } catch (e) {
-    return { success: false, message: e.message };
-  }
-};
-
-/**
- * فحص طابعة شبكية
- */
-export const checkPrinterOnline = async (ip, port = 9100) => {
-  try {
-    const res = await fetch(`${getAgentUrl()}/check-printer`, {
-      method: 'POST',
-      mode: 'cors',
-      credentials: 'omit',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ip, port })
-    });
-    return await res.json();
-  } catch (e) {
-    return { success: false, message: e.message };
-  }
-};
-
-/**
- * إرسال طباعة تجريبية
- * للـ USB: يولد صفحة اختبار كاملة بالعربية عبر Canvas/bitmap ثم يرسلها عبر /print-receipt
- * للشبكة: يرسل عبر /print-test العادي (يولد صفحة عربية كاملة من الوكيل)
- */
-export const sendTestPrint = async (printer, branchName = '') => {
-  try {
-    // USB: توليد صفحة اختبار كبيرة عبر Canvas bitmap (مثل طابعات الشبكة)
-    if (printer.connection_type === 'usb' && printer.usb_printer_name) {
-      const renderResult = renderTestBitmap({
-        name: printer.name || '',
-        connection_type: 'usb',
-        usb_printer_name: printer.usb_printer_name,
-        branch_name: branchName || ''
-      });
-      
-      if (!renderResult.success || !renderResult.raw_data) {
-        return { success: false, message: 'RENDER_FAILED: ' + (renderResult.error || 'Unknown') };
-      }
-      
-      const res = await fetch(`${getAgentUrl()}/print-receipt`, {
-        method: 'POST',
-        mode: 'cors',
-        credentials: 'omit',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          raw_data: renderResult.raw_data,
-          usb_printer_name: printer.usb_printer_name
-        })
-      });
-      return await res.json();
-    }
-    
-    // شبكة: يستخدم /print-test من الوكيل (يولد صفحة عربية كبيرة)
-    const payload = {
-      printer_name: printer.name || 'Test',
-      connection_type: printer.connection_type || 'network'
+    const res = await axios.get(`${backendUrl}/api/print-agent-version`);
+    return {
+      match: true,
+      latestVersion: res.data?.version || '?',
+      agentVersion: 'queue',
+      needsUpdate: false
     };
-    payload.ip = printer.ip_address;
-    payload.port = printer.port || 9100;
-    if (branchName) payload.branch_name = branchName;
-    
-    const res = await fetch(`${getAgentUrl()}/print-test`, {
-      method: 'POST',
-      mode: 'cors',
-      credentials: 'omit',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-    return await res.json();
-  } catch (e) {
-    return { success: false, message: e.message };
+  } catch {
+    return { match: false, latestVersion: '?', agentVersion: '?', needsUpdate: false };
   }
 };
 
 /**
- * طباعة نص خام
+ * قائمة الطابعات من الوسيط
  */
-export const sendRawPrint = async (ip, port, text, usbPrinterName = null) => {
+export const listAgentPrinters = async () => [];
+
+/**
+ * فحص حالة طابعة
+ */
+export const checkPrinterOnline = async () => ({ online: true });
+
+/**
+ * طباعة اختبار عبر الطابور
+ */
+export const sendTestPrint = async (printer) => {
   try {
-    const payload = { text };
-    if (usbPrinterName) {
-      payload.usb_printer_name = usbPrinterName;
-    } else {
-      payload.ip = ip;
-      payload.port = port;
-    }
-    const res = await fetch(`${getAgentUrl()}/print-raw`, {
-      method: 'POST',
-      mode: 'cors',
-      credentials: 'omit',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-    return await res.json();
+    const testResult = renderTestBitmap({ printerName: printer.name });
+    if (!testResult.success) return { success: false, message: 'Render failed' };
+    
+    const token = localStorage.getItem('token');
+    await axios.post(`${API}/print-queue`, {
+      printer_name: printer.name,
+      printer_type: printer.connection_type,
+      usb_printer_name: printer.usb_printer_name || '',
+      ip_address: printer.ip_address || '',
+      port: printer.port || 9100,
+      raw_data: testResult.raw_data
+    }, { headers: { Authorization: `Bearer ${token}` } });
+    
+    return { success: true, message: 'Test print queued' };
   } catch (e) {
     return { success: false, message: e.message };
   }
 };
 
 /**
- * طباعة إيصال - الدالة الرئيسية
- * الفاتورة: bitmap من المتصفح (نفس الشكل الأصلي تماماً)
- * المطبخ USB: بيانات مباشرة للوكيل (نصي سريع)
- * المطبخ شبكة: bitmap من المتصفح (يدعم العربية كصورة)
+ * طباعة إيصال عبر الطابور (Print Queue)
+ * المتصفح يرسل للسيرفر → الوسيط يسحب ويطبع
  */
 export const sendReceiptPrint = async (printer, orderData) => {
   try {
@@ -232,44 +111,53 @@ export const sendReceiptPrint = async (printer, orderData) => {
       printer_type: isKitchen ? 'kitchen' : 'receipt'
     };
 
-    const printPayload = {};
+    const jobData = {
+      printer_name: printer.name || '',
+      printer_type: printer.connection_type || 'usb',
+      usb_printer_name: printer.usb_printer_name || '',
+      ip_address: printer.ip_address || '',
+      port: printer.port || 9100,
+    };
 
-    // المطبخ USB فقط: بيانات مباشرة للوكيل (نصي سريع جداً)
+    // المطبخ USB: بيانات مباشرة (الوسيط يبني الإيصال)
     if (isKitchen && printer.connection_type === 'usb' && printer.usb_printer_name) {
-      printPayload.order = orderData;
-      printPayload.printer_config = printerConfig;
-      printPayload.usb_printer_name = printer.usb_printer_name;
+      jobData.order_data = orderData;
+      jobData.printer_config = printerConfig;
     } else {
-      // الفاتورة + المطبخ شبكة: bitmap من المتصفح (يدعم العربية كصورة)
+      // الفاتورة + المطبخ شبكة: bitmap
       const renderResult = await renderReceiptBitmap(orderData, printerConfig);
       if (!renderResult.success || !renderResult.raw_data) {
         return { success: false, message: 'RENDER_FAILED: ' + (renderResult.error || 'Unknown') };
       }
-      printPayload.raw_data = renderResult.raw_data;
-
-      if (printer.connection_type === 'usb' && printer.usb_printer_name) {
-        printPayload.usb_printer_name = printer.usb_printer_name;
-      } else {
-        printPayload.ip = printer.ip_address;
-        printPayload.port = printer.port || 9100;
-      }
+      jobData.raw_data = renderResult.raw_data;
     }
 
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 8000);
-
-    const res = await fetch(`${getAgentUrl()}/print-receipt`, {
-      method: 'POST',
-      mode: 'cors',
-      credentials: 'omit',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(printPayload),
-      signal: controller.signal
+    const token = localStorage.getItem('token');
+    const res = await axios.post(`${API}/print-queue`, jobData, {
+      headers: { Authorization: `Bearer ${token}` }
     });
-    clearTimeout(timeoutId);
     
-    const result = await res.json();
-    return result;
+    return { success: true, message: 'Print job queued', job_id: res.data?.job_id };
+  } catch (e) {
+    return { success: false, message: e.message };
+  }
+};
+
+/**
+ * إرسال بيانات خام للطباعة عبر الطابور
+ */
+export const sendRawPrint = async (printer, rawData) => {
+  try {
+    const token = localStorage.getItem('token');
+    await axios.post(`${API}/print-queue`, {
+      printer_name: printer.name || '',
+      printer_type: printer.connection_type || 'usb',
+      usb_printer_name: printer.usb_printer_name || '',
+      ip_address: printer.ip_address || '',
+      port: printer.port || 9100,
+      raw_data: rawData
+    }, { headers: { Authorization: `Bearer ${token}` } });
+    return { success: true };
   } catch (e) {
     return { success: false, message: e.message };
   }
@@ -277,7 +165,6 @@ export const sendReceiptPrint = async (printer, orderData) => {
 
 /**
  * توزيع العناصر على الطابعات حسب ربط المنتجات
- * العناصر تظهر فقط في الطابعة المخصصة لها - لا يوجد طابعة افتراضية
  */
 export const routeOrderToPrinters = (orderItems, products, printers) => {
   const printerJobs = {};

@@ -1331,11 +1331,10 @@ export default function Dashboard() {
     }
   };
 
-  // طباعة إيصال إغلاق الصندوق عبر USB مباشرة (بدون نافذة طباعة)
+  // طباعة إيصال إغلاق الصندوق عبر Print Queue (بدون اتصال مباشر بالوسيط)
   const printClosingReceiptViaUSB = async (data) => {
     if (!data) return;
     
-    const AGENT_URL = (() => { try { return localStorage.getItem('maestro_agent_proto') === 'https' ? 'https://localhost:9443' : 'http://localhost:9999'; } catch { return 'http://localhost:9999'; } })();
     const now = new Date();
     const dateStr = now.toLocaleDateString('ar-IQ');
     const timeStr = now.toLocaleTimeString('ar-IQ', { hour: '2-digit', minute: '2-digit' });
@@ -1349,7 +1348,6 @@ export default function Dashboard() {
     });
     
     if (!bitmapResult.success || !bitmapResult.raw_data) {
-      console.warn('Bitmap render failed, falling back to browser print');
       printClosingReceipt(data);
       return;
     }
@@ -1365,41 +1363,19 @@ export default function Dashboard() {
       return;
     }
     
-    // إرسال الطباعة مباشرة بدون فحص الوسيط أولاً (أسرع)
+    // إرسال عبر Print Queue (السيرفر) - لا يحتاج اتصال مباشر بالوسيط
     try {
-      await fetch(`${AGENT_URL}/print-receipt`, {
-        method: 'POST',
-        mode: 'cors',
-        credentials: 'omit',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ raw_data: bitmapResult.raw_data, usb_printer_name: usbPrinter.usb_printer_name }),
-        signal: AbortSignal.timeout(10000)
-      });
-      toast.success(t('تم طباعة إيصال الإغلاق'));
-      return;
+      await axios.post(`${API}/print-queue`, {
+        printer_name: usbPrinter.name || 'Cashier',
+        printer_type: 'usb',
+        usb_printer_name: usbPrinter.usb_printer_name,
+        raw_data: bitmapResult.raw_data
+      }, { headers: { Authorization: `Bearer ${token}` } });
+      toast.success(t('تم إرسال إيصال الإغلاق للطباعة'));
     } catch (e) {
-      console.warn('USB print attempt 1 failed:', e.message);
+      console.warn('Print queue failed:', e.message);
+      printClosingReceipt(data);
     }
-    
-    // محاولة ثانية بعد ثانية
-    try {
-      await new Promise(r => setTimeout(r, 1000));
-      await fetch(`${AGENT_URL}/print-receipt`, {
-        method: 'POST',
-        mode: 'cors',
-        credentials: 'omit',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ raw_data: bitmapResult.raw_data, usb_printer_name: usbPrinter.usb_printer_name }),
-        signal: AbortSignal.timeout(10000)
-      });
-      toast.success(t('تم طباعة إيصال الإغلاق'));
-      return;
-    } catch (e) {
-      console.warn('USB print attempt 2 failed:', e.message);
-    }
-    
-    // Fallback: طباعة عبر المتصفح
-    printClosingReceipt(data);
   };
 
 

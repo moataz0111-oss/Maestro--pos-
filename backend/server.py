@@ -8362,7 +8362,7 @@ async def test_printer_connection(printer_id: str, current_user: dict = Depends(
         return {"status": "error", "message": f"خطأ في الاتصال: {str(e)}"}
 
 
-PRINT_AGENT_VERSION = "5.4.0"
+PRINT_AGENT_VERSION = "6.0.0"
 
 @api_router.get("/print-agent-version")
 async def get_print_agent_version():
@@ -8403,13 +8403,14 @@ async def download_print_agent(request: Request):
     host = request.headers.get('x-forwarded-host') or request.headers.get('host', 'localhost:8001')
     scheme = request.headers.get('x-forwarded-proto', 'https')
     script_url = f"{scheme}://{host}/api/print-agent-script"
+    backend_url = f"{scheme}://{host}"
 
     bat_lines = [
         '@echo off',
         'chcp 65001 >nul 2>&1',
         '',
         'REM ======================================================',
-        'REM   Maestro Print Agent v5.4.0 - Full Clean Install',
+        'REM   Maestro Print Agent v6.0.0 - Full Clean Install',
         'REM ======================================================',
         '',
         'REM === Request Admin ===',
@@ -8419,11 +8420,11 @@ async def download_print_agent(request: Request):
         '    exit /b',
         ')',
         '',
-        'title Maestro Print Agent v5.4.0 - Clean Install',
+        'title Maestro Print Agent v6.0.0 - Clean Install',
         'color 0A',
         'echo.',
         'echo  ========================================',
-        'echo    Maestro Print Agent v5.4.0',
+        'echo    Maestro Print Agent v6.0.0',
         'echo    Full Clean Install',
         'echo  ========================================',
         'echo.',
@@ -8514,9 +8515,9 @@ async def download_print_agent(request: Request):
         'echo.',
         '',
         'REM ========================================',
-        'REM   STEP 3: DOWNLOAD FRESH v5.4.0',
+        'REM   STEP 3: DOWNLOAD FRESH v6.0.0',
         'REM ========================================',
-        'echo  [3/6] Downloading v5.4.0 (no cache)...',
+        'echo  [3/6] Downloading v6.0.0 (no cache)...',
         'powershell -NoProfile -Command "[Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; $headers=@{\'Cache-Control\'=\'no-cache\';\'Pragma\'=\'no-cache\'}; Invoke-WebRequest -Uri \'' + script_url + '\' -OutFile \'%D%\\server.ps1\' -UseBasicParsing -Headers $headers"',
         '',
         'if not exist "%D%\\server.ps1" (',
@@ -8547,7 +8548,8 @@ async def download_print_agent(request: Request):
         'echo  [3.5/6] Setting up HTTPS certificate...',
         'powershell -ExecutionPolicy Bypass -NoProfile -Command "& { $d=$env:LOCALAPPDATA+\'\\MaestroPrintAgent\'; try { $ex=Get-ChildItem Cert:\\LocalMachine\\My -ErrorAction SilentlyContinue | Where-Object {$_.Subject -eq \'CN=MaestroPrintAgent\'}; if($ex){$t=$ex[0].Thumbprint; Write-Host \'    Cert exists:\' $t -ForegroundColor Green; $cp=$d+\'\\cert.cer\'; if(-not(Test-Path $cp)){Export-Certificate -Cert $ex[0] -FilePath $cp -Force|Out-Null}} else {$c=New-SelfSignedCertificate -DnsName \'localhost\',\'127.0.0.1\' -CertStoreLocation \'Cert:\\LocalMachine\\My\' -FriendlyName \'Maestro Print Agent\' -Subject \'CN=MaestroPrintAgent\' -NotAfter (Get-Date).AddYears(10) -KeyAlgorithm RSA -KeyLength 2048 -KeyExportPolicy Exportable; $t=$c.Thumbprint; Write-Host \'    Cert created:\' $t -ForegroundColor Green; Export-Certificate -Cert $c -FilePath ($d+\'\\cert.cer\') -Force|Out-Null}; certutil -addstore Root ($d+\'\\cert.cer\')|Out-Null; Write-Host \'    Cert trusted (certutil)\' -ForegroundColor Green; netsh http delete sslcert ipport=0.0.0.0:9443|Out-Null; netsh http add sslcert ipport=0.0.0.0:9443 certhash=$t appid=\'{d4a1c0e1-0000-0000-0000-000000000001}\'|Out-Null; Write-Host \'    SSL port 9443 OK\' -ForegroundColor Green } catch { Write-Host \'    HTTPS error:\' $_.Exception.Message -ForegroundColor Yellow } }"',
         '',
-        'echo  [4/6] Starting new agent v5.4.0...',
+        'echo  [4/6] Starting new agent v6.0.0...',
+        f'echo {{"backend_url":"{backend_url}"}} > "%D%\\config.json"',
         'start "" powershell -ExecutionPolicy Bypass -NoProfile -WindowStyle Hidden -File "%D%\\server.ps1"',
         'echo    [OK]',
         'echo.',
@@ -8583,11 +8585,11 @@ async def download_print_agent(request: Request):
         'echo.',
         'echo  Verifying agent is running...',
         'timeout /t 10 /nobreak >nul',
-        'powershell -NoProfile -Command "try { $r=Invoke-WebRequest -Uri \'http://localhost:9999/status\' -UseBasicParsing -TimeoutSec 10; $j=$r.Content|ConvertFrom-Json; Write-Host (\'  Agent Version: \'+$j.version) -ForegroundColor Green; if($j.version -eq \'5.4.0\'){Write-Host \'  v5.4.0 OK!\' -ForegroundColor Green}else{Write-Host \'  WARNING: Expected 5.4.0 got \'+$j.version -ForegroundColor Red} } catch { Write-Host \'  Agent starting... wait 30 sec and refresh browser\' -ForegroundColor Yellow }"',
+        'powershell -NoProfile -Command "try { $r=Invoke-WebRequest -Uri \'http://localhost:9999/status\' -UseBasicParsing -TimeoutSec 10; $j=$r.Content|ConvertFrom-Json; Write-Host (\'  Agent Version: \'+$j.version) -ForegroundColor Green; if($j.version -eq \'6.0.0\'){Write-Host \'  v6.0.0 OK!\' -ForegroundColor Green}else{Write-Host \'  WARNING: Expected 6.0.0 got \'+$j.version -ForegroundColor Red} } catch { Write-Host \'  Agent starting... wait 30 sec and refresh browser\' -ForegroundColor Yellow }"',
         'echo.',
         'echo  ========================================',
         'echo    DONE! Refresh the POS page.',
-        'echo    Agent v5.4.0 installed.',
+        'echo    Agent v6.0.0 installed.',
         'echo  ========================================',
         'echo.',
         'pause',
@@ -18771,7 +18773,9 @@ app.include_router(external_branches_router, prefix="/api")
 
 # Order notifications routes (real-time notifications for cashier and driver)
 from routes.order_notifications import router as order_notifications_router
+from routes.print_queue import router as print_queue_router
 app.include_router(order_notifications_router, prefix="/api")
+app.include_router(print_queue_router, prefix="/api")
 
 # ==================== SALES LEADERBOARD (لوحة تنافس المبيعات) ====================
 

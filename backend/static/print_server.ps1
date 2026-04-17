@@ -1,6 +1,6 @@
 $ErrorActionPreference = 'Continue'
 $agentLog = "$PSScriptRoot\agent.log"
-"$(Get-Date) - Agent v5.4.0 starting..." | Out-File $agentLog
+"$(Get-Date) - Agent v6.0.0 starting..." | Out-File $agentLog
 
 # ============================================
 # === AUTO-CLEANUP: Kill old agent & files ===
@@ -37,6 +37,18 @@ try {
 } catch {
     "$(Get-Date) - Cleanup warning: $_" | Out-File $agentLog -Append
 }
+
+# === BACKEND API URL (for Print Queue polling) ===
+$configPath = "$PSScriptRoot\config.json"
+$backendUrl = ""
+if (Test-Path $configPath) {
+    try { $cfg = Get-Content $configPath -Raw | ConvertFrom-Json; $backendUrl = $cfg.backend_url } catch {}
+}
+if (-not $backendUrl) {
+    # Try to read from script download URL
+    $backendUrl = ""
+}
+"$(Get-Date) - Backend URL for polling: $backendUrl" | Out-File $agentLog -Append
 
 # === RAW USB PRINTER SUPPORT via Windows Print Spooler ===
 try {
@@ -1861,7 +1873,65 @@ while ($restartCount -lt $maxRestarts) {
     $listener.Prefixes.Add('http://localhost:9999/')
     try { $listener.Prefixes.Add('https://localhost:9443/') } catch {}
     $listener.Start()
-    "$(Get-Date) - HttpListener started on port 9999 (v5.4.0) [restart #$restartCount]" | Out-File $agentLog -Append
+    "$(Get-Date) - HttpListener started on port 9999 (v6.0.0) [restart #$restartCount]" | Out-File $agentLog -Append
+
+    # === Print Queue Polling (Background Job) ===
+    # يسحب أوامر الطباعة من السيرفر كل 3 ثواني
+    $pollingJob = $null
+    if ($backendUrl) {
+        $pollingJob = Start-Job -ScriptBlock {
+            param($apiUrl, $logPath)
+            Add-Type -AssemblyName System.Drawing
+            $ErrorActionPreference = 'Continue'
+            "$(Get-Date) - Print Queue polling started: $apiUrl" | Out-File $logPath -Append
+            
+            while ($true) {
+                try {
+                    $r = Invoke-WebRequest -Uri "$apiUrl/api/print-queue/pending?limit=10" -UseBasicParsing -TimeoutSec 10
+                    $data = $r.Content | ConvertFrom-Json
+                    
+                    foreach ($job in $data.jobs) {
+                        try {
+                            $printed = $false
+                            
+                            if ($job.raw_data) {
+                                # طباعة bitmap مباشرة
+                                $bytes = [System.Convert]::FromBase64String($job.raw_data)
+                                
+                                if ($job.usb_printer_name) {
+                                    # USB
+                                    [RawPrinterHelper]::SendBytesToPrinter($job.usb_printer_name, $bytes)
+                                    $printed = $true
+                                } elseif ($job.ip_address) {
+                                    # Network
+                                    $tcp = New-Object System.Net.Sockets.TcpClient
+                                    $tcp.Connect($job.ip_address, [int]($job.port -as [int] ?? 9100))
+                                    $stream = $tcp.GetStream()
+                                    $stream.Write($bytes, 0, $bytes.Length)
+                                    $stream.Flush()
+                                    $tcp.Close()
+                                    $printed = $true
+                                }
+                            }
+                            
+                            if ($printed) {
+                                # إبلاغ السيرفر
+                                Invoke-WebRequest -Uri "$apiUrl/api/print-queue/$($job.id)/complete" -Method PUT -ContentType 'application/json' -Body '{}' -UseBasicParsing -TimeoutSec 5 | Out-Null
+                                "$(Get-Date) - Queue: Printed job $($job.id) on $($job.printer_name)" | Out-File $logPath -Append
+                            }
+                        } catch {
+                            try { Invoke-WebRequest -Uri "$apiUrl/api/print-queue/$($job.id)/failed" -Method PUT -ContentType 'application/json' -Body "{`"error`":`"$_`"}" -UseBasicParsing -TimeoutSec 5 | Out-Null } catch {}
+                            "$(Get-Date) - Queue: FAILED job $($job.id): $_" | Out-File $logPath -Append
+                        }
+                    }
+                } catch {
+                    # Polling error - silent
+                }
+                Start-Sleep -Seconds 3
+            }
+        } -ArgumentList $backendUrl, $agentLog
+        "$(Get-Date) - Print Queue polling job started (ID: $($pollingJob.Id))" | Out-File $agentLog -Append
+    }
 
     while ($listener.IsListening) {
       try {
@@ -1889,7 +1959,7 @@ while ($restartCount -lt $maxRestarts) {
         "$(Get-Date) - $($req.HttpMethod) $path" | Out-File $agentLog -Append
 
         if ($path -eq '/status') {
-            $jsonOut = '{"status":"running","version":"5.4.0","agent":"Maestro Print Agent","usb_support":true,"zk_support":true}'
+            $jsonOut = '{"status":"running","version":"6.0.0","agent":"Maestro Print Agent","usb_support":true,"zk_support":true}'
         }
         elseif ($path -eq '/list-printers') {
             try {
