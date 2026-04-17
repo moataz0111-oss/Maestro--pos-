@@ -132,6 +132,7 @@ export const sendReceiptPrint = async (printer, orderData) => {
       usb_printer_name: printer.usb_printer_name || '',
       ip_address: printer.ip_address || '',
       port: printer.port || 9100,
+      branch_id: printer.branch_id || '',
     };
 
     // المطبخ USB: بيانات مباشرة (الوسيط يبني الإيصال)

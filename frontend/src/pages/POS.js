@@ -450,7 +450,7 @@ export default function POS() {
         axios.get(`${API}/settings/restaurant`).catch(() => ({ data: {} })),
         axios.get(`${API}/system/invoice-settings`).catch(() => ({ data: {} })),
         axios.get(`${API}/login-backgrounds`).catch(() => ({ data: {} })),
-        axios.get(`${API}/printers`).catch(err => { console.error('[POS] Failed to load printers:', err.message); return { data: [] }; })
+        axios.get(`${API}/printers`, { params: { branch_id: getBranchIdForApi() || user?.branch_id || '' } }).catch(err => { console.error('[POS] Failed to load printers:', err.message); return { data: [] }; })
       ]);
 
       setCategories(catRes.data);
@@ -702,7 +702,7 @@ export default function POS() {
         axios.get(`${API}/categories`),
         axios.get(`${API}/products`),
         axios.get(`${API}/tables`, { params: activeBranchId ? { branch_id: activeBranchId } : {} }).catch(() => ({ data: [] })),
-        axios.get(`${API}/printers`).catch(err => { console.error('[POS] Failed to reload printers:', err.message); return { data: [] }; })
+        axios.get(`${API}/printers`, { params: { branch_id: activeBranchId || '' } }).catch(err => { console.error('[POS] Failed to reload printers:', err.message); return { data: [] }; })
       ]);
 
       setCategories(catRes.data);

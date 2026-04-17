@@ -45,6 +45,7 @@ import {
   Activity,
   CheckCircle,
   CircleDollarSign,
+  ChevronDown,
   User
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -1032,6 +1033,8 @@ const CashRegisterClosingTab = ({ t, formatPrice, selectedBranchId, branches, ge
   });
   const [closingsHistory, setClosingsHistory] = useState([]);
   const [localBranchId, setLocalBranchId] = useState(selectedBranchId || '');
+  const [viewMode, setViewMode] = useState('individual'); // 'individual' = كل شفت لوحده، 'all' = مجمّع
+  const [expandedShift, setExpandedShift] = useState(null); // شفت مفتوح للتفاصيل
 
   // حساب النقد المعدود والفرق من الإغلاقات
   const totalCountedCash = closingsHistory.reduce((sum, c) => sum + (c.closing_cash || c.counted_cash || 0), 0);
@@ -1053,13 +1056,34 @@ const CashRegisterClosingTab = ({ t, formatPrice, selectedBranchId, branches, ge
       const token = localStorage.getItem('token');
       const headers = token ? { Authorization: `Bearer ${token}` } : {};
       
-      const [reportRes, historyRes] = await Promise.all([
+      const [reportRes, historyRes, shiftsRes] = await Promise.all([
         axios.get(`${API_URL}/reports/cash-register-closing?${params}`, { headers }),
-        axios.get(`${API_URL}/reports/cash-register-closings?${params}&limit=20`, { headers })
+        axios.get(`${API_URL}/reports/cash-register-closings?${params}&limit=50`, { headers }),
+        axios.get(`${API_URL}/shifts?status=closed${branchId && branchId !== 'all' ? '&branch_id=' + branchId : ''}`, { headers }).catch(() => ({ data: [] }))
       ]);
       
       setReport(reportRes.data);
-      setClosingsHistory(historyRes.data.closings || []);
+      
+      // دمج بيانات الإغلاقات: أولوية للشفتات (فيها تفاصيل أكثر)
+      const closingsFromHistory = historyRes.data.closings || [];
+      const closedShifts = (shiftsRes.data || []).filter(s => {
+        // فلتر حسب التاريخ
+        const closedAt = s.ended_at || s.closed_at || '';
+        return closedAt >= dateRange.start && closedAt <= dateRange.end + 'T23:59:59';
+      });
+      
+      // استخدام الشفتات المغلقة كمصدر أساسي (فيها تفاصيل أكثر: denominations, delivery_app_sales, etc.)
+      if (closedShifts.length > 0) {
+        setClosingsHistory(closedShifts.map(s => ({
+          ...s,
+          closed_at: s.ended_at || s.closed_at || s.updated_at,
+          actual_cash: s.closing_cash || s.actual_cash || 0,
+          difference: (s.closing_cash || 0) - (s.expected_cash || 0),
+          difference_type: ((s.closing_cash || 0) - (s.expected_cash || 0)) > 0 ? 'surplus' : ((s.closing_cash || 0) - (s.expected_cash || 0)) < 0 ? 'shortage' : 'exact'
+        })));
+      } else {
+        setClosingsHistory(closingsFromHistory);
+      }
     } catch (error) {
       console.error('Error fetching cash register report:', error);
       // لا نظهر رسالة خطأ إذا لم تكن هناك بيانات
@@ -1250,6 +1274,29 @@ const CashRegisterClosingTab = ({ t, formatPrice, selectedBranchId, branches, ge
         </Button>
       </div>
 
+      {/* زر التبديل بين العرض المجمّع والفردي */}
+      {closingsHistory.length > 0 && (
+        <div className="flex items-center gap-3 bg-gray-900/40 border border-emerald-700/30 rounded-lg p-3">
+          <span className="text-sm text-emerald-300 font-medium">{t('طريقة العرض')}:</span>
+          <div className="flex bg-gray-800/60 rounded-lg p-0.5">
+            <button
+              onClick={() => setViewMode('individual')}
+              className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${viewMode === 'individual' ? 'bg-emerald-600 text-white shadow' : 'text-gray-400 hover:text-white'}`}
+              data-testid="view-individual-shifts"
+            >
+              {t('كل شفت بمفرده')} ({closingsHistory.length})
+            </button>
+            <button
+              onClick={() => setViewMode('all')}
+              className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${viewMode === 'all' ? 'bg-emerald-600 text-white shadow' : 'text-gray-400 hover:text-white'}`}
+              data-testid="view-all-shifts"
+            >
+              {t('مجمّع')}
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* حقل النقد المعدود ومربعات Over/Short */}
       {report && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -1308,6 +1355,149 @@ const CashRegisterClosingTab = ({ t, formatPrice, selectedBranchId, branches, ge
       {loading ? (
         <div className="flex justify-center py-12">
           <RefreshCw className="h-8 w-8 animate-spin text-emerald-500" />
+        </div>
+      ) : viewMode === 'individual' && closingsHistory.length > 0 ? (
+        /* ========== عرض كل شفت بمفرده ========== */
+        <div className="space-y-4">
+          {closingsHistory.map((closing, idx) => {
+            const isExpanded = expandedShift === idx;
+            const diff = (closing.closing_cash || closing.actual_cash || 0) - (closing.expected_cash || 0);
+            const diffType = diff > 0 ? 'surplus' : diff < 0 ? 'shortage' : 'exact';
+            const shiftSales = closing.total_sales || 0;
+            const shiftCash = closing.cash_sales || 0;
+            const shiftCard = closing.card_sales || 0;
+            const shiftCredit = closing.credit_sales || 0;
+            const shiftExpenses = closing.total_expenses || 0;
+            const shiftOrders = closing.total_orders || closing.orders_count || 0;
+            
+            return (
+              <Card key={idx} className={`border transition-all cursor-pointer ${isExpanded ? 'border-emerald-500 bg-gray-900/60' : 'border-gray-700/40 bg-gray-900/30 hover:border-emerald-700/50'}`}>
+                {/* رأس الشفت - يُضغط للفتح/الإغلاق */}
+                <div
+                  className="flex items-center justify-between p-4"
+                  onClick={() => setExpandedShift(isExpanded ? null : idx)}
+                  data-testid={`shift-header-${idx}`}
+                >
+                  <div className="flex items-center gap-4">
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center text-lg font-bold ${diffType === 'surplus' ? 'bg-emerald-500/20 text-emerald-400' : diffType === 'shortage' ? 'bg-red-500/20 text-red-400' : 'bg-gray-500/20 text-gray-400'}`}>
+                      {idx + 1}
+                    </div>
+                    <div>
+                      <p className="font-bold text-white">{closing.cashier_name || t('كاشير')}</p>
+                      <p className="text-sm text-gray-400">{closing.closed_at ? new Date(closing.closed_at).toLocaleString('ar-IQ') : ''}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-6">
+                    <div className="text-left">
+                      <p className="text-xs text-gray-400">{t('المبيعات')}</p>
+                      <p className="font-bold text-white">{formatPrice(shiftSales)}</p>
+                    </div>
+                    <div className="text-left">
+                      <p className="text-xs text-gray-400">{t('الطلبات')}</p>
+                      <p className="font-bold text-white">{shiftOrders}</p>
+                    </div>
+                    <div className="text-left">
+                      <p className="text-xs text-gray-400">{t('الفرق')}</p>
+                      <p className={`font-bold ${diffType === 'surplus' ? 'text-emerald-400' : diffType === 'shortage' ? 'text-red-400' : 'text-gray-400'}`}>
+                        {diff > 0 ? '+' : ''}{formatPrice(diff)}
+                      </p>
+                    </div>
+                    <Badge className={diffType === 'surplus' ? 'bg-emerald-500/20 text-emerald-400' : diffType === 'shortage' ? 'bg-red-500/20 text-red-400' : 'bg-gray-500/20 text-gray-400'}>
+                      {diffType === 'surplus' ? t('زيادة') : diffType === 'shortage' ? t('نقص') : t('مطابق')}
+                    </Badge>
+                    <ChevronDown className={`h-5 w-5 text-gray-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                  </div>
+                </div>
+                
+                {/* تفاصيل الشفت الكاملة */}
+                {isExpanded && (
+                  <div className="px-4 pb-4 space-y-4 border-t border-gray-700/30 pt-4">
+                    {/* ملخص سريع */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                      <div className="bg-emerald-900/20 rounded-lg p-3 text-center">
+                        <p className="text-xs text-emerald-300">{t('إجمالي المبيعات')}</p>
+                        <p className="text-lg font-bold text-white">{formatPrice(shiftSales)}</p>
+                      </div>
+                      <div className="bg-teal-900/20 rounded-lg p-3 text-center">
+                        <p className="text-xs text-teal-300">{t('المتوقع')}</p>
+                        <p className="text-lg font-bold text-white">{formatPrice(closing.expected_cash || 0)}</p>
+                      </div>
+                      <div className="bg-blue-900/20 rounded-lg p-3 text-center">
+                        <p className="text-xs text-blue-300">{t('الفعلي')}</p>
+                        <p className="text-lg font-bold text-white">{formatPrice(closing.closing_cash || closing.actual_cash || 0)}</p>
+                      </div>
+                      <div className="bg-red-900/20 rounded-lg p-3 text-center">
+                        <p className="text-xs text-red-300">{t('المصروفات')}</p>
+                        <p className="text-lg font-bold text-white">{formatPrice(shiftExpenses)}</p>
+                      </div>
+                    </div>
+                    
+                    {/* طريقة الدفع + نوع الطلب */}
+                    <div className="grid md:grid-cols-2 gap-4">
+                      <div className="bg-gray-800/30 rounded-lg p-3 space-y-2">
+                        <p className="text-sm font-bold text-emerald-300 mb-2">{t('حسب طريقة الدفع')}</p>
+                        <div className="flex justify-between text-sm">
+                          <span className="text-gray-300">{t('نقدي')}</span>
+                          <span className="text-white font-medium">{formatPrice(shiftCash)}</span>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                          <span className="text-gray-300">{t('بطاقة')}</span>
+                          <span className="text-white font-medium">{formatPrice(shiftCard)}</span>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                          <span className="text-gray-300">{t('آجل')}</span>
+                          <span className="text-white font-medium">{formatPrice(shiftCredit)}</span>
+                        </div>
+                        {closing.delivery_app_sales && Object.entries(closing.delivery_app_sales).map(([app, amount]) => (
+                          <div key={app} className="flex justify-between text-sm">
+                            <span className="text-gray-300">{app}</span>
+                            <span className="text-white font-medium">{formatPrice(typeof amount === 'object' ? amount : amount)}</span>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="bg-gray-800/30 rounded-lg p-3 space-y-2">
+                        <p className="text-sm font-bold text-teal-300 mb-2">{t('تفاصيل إضافية')}</p>
+                        <div className="flex justify-between text-sm">
+                          <span className="text-gray-300">{t('الخصومات')}</span>
+                          <span className="text-white font-medium">{formatPrice(closing.discounts_total || 0)}</span>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                          <span className="text-gray-300">{t('الإلغاءات')}</span>
+                          <span className="text-white font-medium">{closing.cancelled_orders || 0} ({formatPrice(closing.cancelled_amount || 0)})</span>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                          <span className="text-gray-300">{t('المرتجعات')}</span>
+                          <span className="text-white font-medium">{closing.refund_count || 0} ({formatPrice(closing.total_refunds || 0)})</span>
+                        </div>
+                        {closing.notes && (
+                          <div className="mt-2 p-2 bg-gray-700/30 rounded text-sm text-gray-300">
+                            {t('ملاحظات')}: {closing.notes}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* فئات النقود */}
+                    {closing.denominations && Object.keys(closing.denominations).length > 0 && (
+                      <div className="bg-gray-800/30 rounded-lg p-3">
+                        <p className="text-sm font-bold text-cyan-300 mb-2">{t('فئات النقود')}</p>
+                        <div className="grid grid-cols-4 md:grid-cols-7 gap-2">
+                          {Object.entries(closing.denominations).sort((a,b) => Number(a[0]) - Number(b[0])).map(([denom, count]) => (
+                            count > 0 && (
+                              <div key={denom} className="bg-gray-700/30 rounded p-2 text-center">
+                                <p className="text-xs text-gray-400">{Number(denom).toLocaleString()}</p>
+                                <p className="text-white font-bold">{count}</p>
+                              </div>
+                            )
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </Card>
+            );
+          })}
         </div>
       ) : report ? (
         <>
