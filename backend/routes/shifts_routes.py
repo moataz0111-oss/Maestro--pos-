@@ -781,6 +781,8 @@ async def close_cash_register(close_data: CashRegisterClose, current_user: dict 
         }
         if tenant_id:
             fallback_query["tenant_id"] = tenant_id
+        if shift.get("branch_id"):
+            fallback_query["branch_id"] = shift["branch_id"]
         orders = await db.orders.find(fallback_query).to_list(1000)
     
     cancelled_shift = {"shift_id": shift_id, "status": OrderStatus.CANCELLED}
