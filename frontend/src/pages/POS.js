@@ -3201,14 +3201,18 @@ export default function POS() {
                       >
                         <Plus className="h-4 w-4" />
                       </Button>
+                      {/* زر الحذف - بعد الحفظ فقط المالك يقدر يحذف */}
+                      {(!editingOrder || ['admin', 'manager', 'super_admin', 'branch_manager'].includes(user?.role)) && (
                       <Button
                         variant="ghost"
                         size="icon"
                         className="h-8 w-8 text-destructive hover:bg-destructive/10"
                         onClick={() => removeFromCart(item.product_id)}
+                        data-testid={`remove-item-${item.product_id}`}
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
+                      )}
                     </div>
                   </div>
                   {/* زر الإضافات والملاحظات */}

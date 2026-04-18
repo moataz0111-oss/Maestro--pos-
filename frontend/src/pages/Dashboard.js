@@ -925,8 +925,8 @@ export default function Dashboard() {
     setShowReport(false);
     
     try {
-      // إرسال branch_id من الوردية النشطة أو الفرع المحدد
-      const branchId = activeShift?.branch_id || getBranchIdForApi();
+      // إرسال branch_id من الفرع المحدد (أولوية) أو الوردية النشطة
+      const branchId = getBranchIdForApi() || activeShift?.branch_id;
       const params = branchId ? { branch_id: branchId } : {};
       const token = localStorage.getItem('token');
       const res = await axios.get(`${API}/cash-register/summary`, { 

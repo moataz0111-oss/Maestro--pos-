@@ -588,10 +588,10 @@ async function renderKitchen(order) {
     // Item name (right, bold)
     y += kR(name, y, 22, true);
     
-    // Quantity (left, on same line as name)
-    x.font = font(20, true, `x${qty}`);
+    // Quantity (left, bold, large - واضح للمطبخ)
+    x.font = font(28, true, `x${qty}`);
     x.textAlign='left'; x.textBaseline='top'; x.direction='ltr';
-    x.fillText(`x${qty}`, KM, y - 27);
+    x.fillText(`x${qty}`, KM, y - 30);
     
     // Notes
     if (items[i].notes) y += kC(`** ${items[i].notes} **`, y, 16, true);

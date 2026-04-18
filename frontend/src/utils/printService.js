@@ -121,7 +121,7 @@ export const sendReceiptPrint = async (printer, orderData) => {
   try {
     const isKitchen = printer.print_mode === 'orders_only' || printer.print_mode === 'selected_products';
     const printerConfig = {
-      show_prices: isKitchen ? false : (printer.show_prices !== false),
+      show_prices: printer.show_prices !== false,
       print_mode: printer.print_mode || (isKitchen ? 'kitchen' : 'full_receipt'),
       printer_type: isKitchen ? 'kitchen' : 'receipt'
     };
@@ -185,9 +185,17 @@ export const sendRawPrint = async (printer, rawData) => {
 export const routeOrderToPrinters = (orderItems, products, printers) => {
   const printerJobs = {};
 
+  // أولاً: الطابعات مع "طباعة جميع الطلبات" تحصل على كل العناصر
+  const allItemsPrinters = printers.filter(p => p.print_individual_items === true);
+  for (const printer of allItemsPrinters) {
+    // فقط الطابعات التي تدعم الطباعة التلقائية
+    if (printer.auto_print_on_order === false) continue;
+    printerJobs[printer.id] = [...orderItems];
+  }
+
+  // ثانياً: توزيع العناصر حسب ربط المنتجات
   for (const item of orderItems) {
     const product = products.find(p => p.id === item.product_id || p.id === item.id);
-    // إزالة التكرارات من printer_ids باستخدام Set
     const rawIds = Array.isArray(product?.printer_ids) ? product.printer_ids.filter(id => id) : [];
     const productPrinterIds = [...new Set(rawIds)];
 
@@ -195,13 +203,15 @@ export const routeOrderToPrinters = (orderItems, products, printers) => {
       for (const printerId of productPrinterIds) {
         const targetPrinter = printers.find(p => p.id === printerId);
         if (targetPrinter) {
+          // تخطي الطابعات غير المفعّل فيها الطباعة التلقائية
+          if (targetPrinter.auto_print_on_order === false) continue;
+          // تخطي إذا كان العنصر مضاف مسبقاً (من "طباعة جميع الطلبات")
+          if (printerJobs[printerId] && printerJobs[printerId].some(i => (i.product_id || i.id) === (item.product_id || item.id))) continue;
           if (!printerJobs[printerId]) printerJobs[printerId] = [];
           printerJobs[printerId].push(item);
         }
-        // لا نرسل للطابعة الافتراضية - فقط الطابعة المخصصة
       }
     }
-    // إذا لا يوجد printer_ids = لا يتم طباعة هذا العنصر في أي مطبخ
   }
   return printerJobs;
 };
