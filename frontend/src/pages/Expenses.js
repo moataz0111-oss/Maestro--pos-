@@ -61,6 +61,7 @@ export default function Expenses() {
   const { t, isRTL } = useTranslation();
   const { isOnline, isOffline, updateSyncStatus } = useOffline();
   const navigate = useNavigate();
+  const isManager = ['admin', 'manager', 'super_admin', 'branch_manager'].includes(user?.role);
   
   const [expenses, setExpenses] = useState([]);
   const [branches, setBranches] = useState([]);
@@ -481,7 +482,8 @@ export default function Expenses() {
         </div>
       </header>
 
-      {/* Filters */}
+      {/* Filters - فقط للمدير/المالك */}
+      {isManager && (
       <div className="max-w-7xl mx-auto px-6 py-4 border-b border-border">
         <div className="flex flex-wrap items-center gap-4">
           <div className="flex items-center gap-2">
@@ -513,6 +515,7 @@ export default function Expenses() {
           </Select>
         </div>
       </div>
+      )}
 
       <main className="max-w-7xl mx-auto px-6 py-6 space-y-6">
         {/* Summary Cards */}
@@ -544,7 +547,8 @@ export default function Expenses() {
           </Card>
         </div>
 
-        {/* By Category */}
+        {/* By Category - فقط للمدير */}
+        {isManager && (
         <Card className="border-border/50 bg-card">
           <CardHeader>
             <CardTitle className="text-lg text-foreground">{t('حسب التصنيف')}</CardTitle>
@@ -561,9 +565,10 @@ export default function Expenses() {
             </div>
           </CardContent>
         </Card>
+        )}
 
-        {/* By Cashier */}
-        {Object.keys(expensesByCashier).length > 0 && (
+        {/* By Cashier - فقط للمدير */}
+        {isManager && Object.keys(expensesByCashier).length > 0 && (
           <Card className="border-border/50 bg-card">
             <CardHeader>
               <CardTitle className="text-lg text-foreground flex items-center gap-2">

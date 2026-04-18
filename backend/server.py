@@ -2840,12 +2840,23 @@ async def get_expenses(
         query["category"] = category
     else:
         query["category"] = {"$ne": "refund"}
+    
+    # الكاشير يرى مصاريفه فقط في اليوم الحالي
+    user_role = current_user.get("role", "")
+    is_manager = user_role in ["admin", "super_admin", "manager", "branch_manager"]
+    if not is_manager:
+        query["created_by"] = current_user["id"]
+        # الكاشير يرى فقط مصاريف اليوم
+        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        query["date"] = {"$gte": today, "$lte": today}
+    else:
+        if start_date:
+            query["date"] = {"$gte": start_date}
+        if end_date:
+            query.setdefault("date", {})["$lte"] = end_date
+    
     if branch_id:
         query["branch_id"] = branch_id
-    if start_date:
-        query["date"] = {"$gte": start_date}
-    if end_date:
-        query.setdefault("date", {})["$lte"] = end_date
     
     expenses = await db.expenses.find(query, {"_id": 0}).sort("date", -1).to_list(500)
     
