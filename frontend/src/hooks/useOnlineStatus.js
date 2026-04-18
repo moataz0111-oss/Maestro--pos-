@@ -85,14 +85,15 @@ export const useOnlineStatus = () => {
           notifyListeners(true);
         }
       } catch (error) {
-        if (isOnline && !navigator.onLine) {
+        // إذا فشل الاتصال بالسيرفر = offline
+        if (isOnline) {
           notifyListeners(false);
         }
       }
     };
 
-    // التحقق كل 30 ثانية
-    const interval = setInterval(checkConnection, 30000);
+    // التحقق كل 10 ثواني (أسرع لكشف الانقطاع)
+    const interval = setInterval(checkConnection, 10000);
 
     return () => {
       unsubscribe();
