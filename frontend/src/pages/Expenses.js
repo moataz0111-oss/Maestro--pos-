@@ -70,6 +70,7 @@ export default function Expenses() {
   const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [selectedCashierFilter, setSelectedCashierFilter] = useState(null); // فلتر الكاشير
   
   // التصنيفات المخصصة (يتم جلبها من قاعدة البيانات)
   const [customCategories, setCustomCategories] = useState([]);
@@ -299,6 +300,14 @@ export default function Expenses() {
   };
 
   const totalExpenses = expenses.reduce((sum, e) => sum + e.amount, 0);
+  
+  // فلترة المصاريف حسب الكاشير المختار
+  const filteredExpenses = selectedCashierFilter 
+    ? expenses.filter(e => (e.created_by_name || t('غير معروف')) === selectedCashierFilter)
+    : expenses;
+  
+  const filteredTotal = filteredExpenses.reduce((sum, e) => sum + e.amount, 0);
+  
   const expensesByCategory = expenses.reduce((acc, e) => {
     acc[e.category] = (acc[e.category] || 0) + e.amount;
     return acc;
@@ -565,7 +574,16 @@ export default function Expenses() {
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 {Object.entries(expensesByCashier).map(([name, data]) => (
-                  <div key={name} className="p-4 bg-muted/30 rounded-lg flex items-center justify-between">
+                  <div 
+                    key={name} 
+                    className={`p-4 rounded-lg flex items-center justify-between cursor-pointer transition-all border-2 ${
+                      selectedCashierFilter === name 
+                        ? 'bg-blue-500/20 border-blue-500' 
+                        : 'bg-muted/30 border-transparent hover:border-blue-500/30'
+                    }`}
+                    onClick={() => setSelectedCashierFilter(selectedCashierFilter === name ? null : name)}
+                    data-testid={`cashier-filter-${name}`}
+                  >
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 rounded-full bg-blue-500/10 flex items-center justify-center">
                         <User className="h-5 w-5 text-blue-500" />
@@ -586,17 +604,27 @@ export default function Expenses() {
         {/* Expenses List */}
         <Card className="border-border/50 bg-card">
           <CardHeader>
-            <CardTitle className="text-lg text-foreground">{t('سجل المصاريف')}</CardTitle>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-lg text-foreground">{t('سجل المصاريف')}</CardTitle>
+              {selectedCashierFilter && (
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-blue-500 font-medium">{selectedCashierFilter} ({filteredExpenses.length})</span>
+                  <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setSelectedCashierFilter(null)}>
+                    {t('إلغاء الفلتر')}
+                  </Button>
+                </div>
+              )}
+            </div>
           </CardHeader>
           <CardContent>
-            {expenses.length === 0 ? (
+            {filteredExpenses.length === 0 ? (
               <div className="text-center py-8">
                 <Receipt className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
                 <p className="text-muted-foreground">{t('لا توجد مصاريف في هذه الفترة')}</p>
               </div>
             ) : (
               <div className="space-y-2">
-                {expenses.map(expense => (
+                {filteredExpenses.map(expense => (
                   <div key={expense.id} className="flex items-center justify-between p-4 bg-muted/30 rounded-lg">
                     <div className="flex items-center gap-4">
                       <span className="text-2xl">{getCategoryIcon(expense.category)}</span>

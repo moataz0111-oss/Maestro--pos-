@@ -1493,6 +1493,33 @@ const CashRegisterClosingTab = ({ t, formatPrice, selectedBranchId, branches, ge
                         </div>
                       </div>
                     )}
+
+                    {/* تفاصيل المرتجعات */}
+                    {closing.cancelled_by && closing.cancelled_by.length > 0 && (
+                      <div className="bg-red-900/10 border border-red-700/20 rounded-lg p-3">
+                        <p className="text-sm font-bold text-red-400 mb-2">{t('تفاصيل الإلغاءات')}</p>
+                        <div className="space-y-2">
+                          {closing.cancelled_by.map((item, ci) => (
+                            <div key={ci} className="flex justify-between items-center text-sm bg-red-900/10 rounded p-2">
+                              <div>
+                                <p className="text-white font-medium">#{item.order_number || '?'}</p>
+                                <p className="text-xs text-gray-400">{item.cancelled_by_name || item.cashier_name || ''}</p>
+                              </div>
+                              <p className="text-red-400 font-bold">{formatPrice(item.total || item.amount || 0)}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {(closing.refund_count > 0 || closing.total_refunds > 0) && (
+                      <div className="bg-orange-900/10 border border-orange-700/20 rounded-lg p-3">
+                        <p className="text-sm font-bold text-orange-400 mb-2">
+                          {t('المرتجعات')}: {closing.refund_count || 0} ({formatPrice(closing.total_refunds || 0)})
+                        </p>
+                        <p className="text-xs text-gray-400">{t('المرتجعات تُخصم من إجمالي المبيعات ولا تحتسب في المصاريف')}</p>
+                      </div>
+                    )}
                   </div>
                 )}
               </Card>
