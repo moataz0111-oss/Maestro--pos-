@@ -437,6 +437,7 @@ export default function Settings() {
   const [editPrinterDialogOpen, setEditPrinterDialogOpen] = useState(false);
   const [printerTestStatus, setPrinterTestStatus] = useState({}); // حالة اختبار الطابعات
   const [printerTypes, setPrinterTypes] = useState([]);
+  const [printerBranchFilter, setPrinterBranchFilter] = useState('all'); // فلتر الفرع للطابعات
   const [printAgentOnline, setPrintAgentOnline] = useState(() => getSavedAgentStatus().online);
   const [agentNeedsUpdate, setAgentNeedsUpdate] = useState(false);
   const [windowsPrinters, setWindowsPrinters] = useState([]);
@@ -5060,7 +5061,35 @@ export default function Settings() {
                     <p className="text-center text-muted-foreground py-8">{t('لا توجد طابعات مضافة')}</p>
                   ) : (
                     <div className="space-y-3">
-                      {printers.map(printer => (
+                      {/* فلتر الفرع */}
+                      {branches && branches.length > 1 && (
+                        <div className="flex items-center gap-3 p-3 bg-muted/20 rounded-lg border border-border/50">
+                          <span className="text-sm font-medium text-muted-foreground">{t('الفرع')}:</span>
+                          <div className="flex gap-1.5 flex-wrap">
+                            <button
+                              onClick={() => setPrinterBranchFilter('all')}
+                              className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${printerBranchFilter === 'all' ? 'bg-primary text-primary-foreground' : 'bg-muted/50 text-muted-foreground hover:bg-muted'}`}
+                              data-testid="printer-filter-all"
+                            >
+                              {t('الكل')} ({printers.length})
+                            </button>
+                            {branches.map(branch => {
+                              const count = printers.filter(p => p.branch_id === branch.id).length;
+                              return (
+                                <button
+                                  key={branch.id}
+                                  onClick={() => setPrinterBranchFilter(branch.id)}
+                                  className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${printerBranchFilter === branch.id ? 'bg-primary text-primary-foreground' : 'bg-muted/50 text-muted-foreground hover:bg-muted'}`}
+                                  data-testid={`printer-filter-${branch.id}`}
+                                >
+                                  {branch.name} ({count})
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                      {printers.filter(p => printerBranchFilter === 'all' || p.branch_id === printerBranchFilter).map(printer => (
                         <div key={printer.id} className="flex items-center justify-between p-4 bg-muted/30 rounded-lg">
                           <div className="flex items-center gap-4">
                             <div className="relative">
@@ -5075,7 +5104,14 @@ export default function Settings() {
                               )}
                             </div>
                             <div>
-                              <p className="font-medium text-foreground">{t(printer.name)}</p>
+                              <p className="font-medium text-foreground">
+                                {t(printer.name)}
+                                {branches && branches.length > 1 && (
+                                  <span className="text-xs text-primary/60 mr-2">
+                                    ({branches.find(b => b.id === printer.branch_id)?.name || ''})
+                                  </span>
+                                )}
+                              </p>
                               <p className="text-sm text-muted-foreground">
                                 {printer.connection_type === 'usb' 
                                   ? `🔌 USB: ${printer.usb_printer_name || t('لم يُحدد اسم الطابعة')}` 
