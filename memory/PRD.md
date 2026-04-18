@@ -1,46 +1,72 @@
 # Maestro EGP - Multi-Tenant POS System PRD
 
 ## Original Problem Statement
-Multi-tenant POS system with biometric integration (ZKTeco), thermal receipt printing via Local Print Agent, shift management, expense tracking, and order management. Arabic (RTL) interface. Multi-branch support.
+Multi-tenant POS system with biometric integration (ZKTeco), thermal receipt printing via Local Print Agent, shift management, expense tracking, multi-branch support, and order management. Arabic (RTL) interface.
 
 ## Core Architecture
 - **Frontend**: React (RTL Arabic UI)
 - **Backend**: FastAPI + MongoDB
-- **Local Agent**: PowerShell script (print_server.ps1 v6.1.0 - Server Polling Architecture)
+- **Local Agent**: PowerShell script (print_server.ps1 v6.1.1 - Server Polling Architecture)
 
-## Print Architecture (v6.1.0) - Multi-Branch
+## Print Architecture (v6.1.1) - Multi-Branch
 - Each branch has its own printers (Cashier, Kitchen, etc.)
 - POS fetches only current branch printers via `GET /printers?branch_id=xxx`
 - Print jobs include `branch_id` for proper routing
-- Agent polls all pending jobs for the device
+- Agent polls pending jobs with heartbeat params
 - Products link to printers per-branch via `printer_ids` array
 - Settings shows printers grouped by branch with filter tabs
+- Start-Job compiles its own C# (`JobRawPrinter`, `JobReceiptRenderer`) for USB printing
+- Watchdog uses VBScript wrapper (no blue flash)
 
-## Completed Features
-- ZKTeco Biometric Integration
-- Owner Shift Management
-- Expenses Tracking by cashier
-- POS Order Flow
-- Shift Closing Dialog (role-based, deficit tracking, blind counts)
-- Receipt bitmap rendering (Arabic support)
-- Kitchen printing (Bitmap for USB and Ethernet)
-- Print Bill separated from Payment flow
-- Kitchen order appending (_sentToKitchen flag)
-- Print Agent v6.1.0 (Server Polling + USB fix + heartbeat)
-- Closing receipt with real logo, restaurant name, branch name
-- Print Bill always shows "غير مدفوعة" for pending orders
-- "Save and Send" orders save as pending
-- Individual shift view in closing report with toggle
-- **Multi-branch printer support with branch filter in Settings**
-- **Product printer linking grouped by branch**
+## Multi-Branch Features
+- Owner can switch between branches freely
+- `/shifts/current?branch_id=xxx` filters shifts by branch (owner releases from other branch cashiers)
+- Cashier selection filtered by branch
+- Cash register closing follows selected branch
+- Reports filter by branch
+- Printers filter by branch in Settings
+
+## Completed Features (This Session - April 17-18, 2026)
+1. Real Heartbeat mechanism for agent status
+2. USB print fix in polling job (C# compiled inside Start-Job)
+3. Test print bitmap shows printer name, IP, connection type
+4. Version comparison for agent update notifications
+5. Closing receipt with real restaurant logo, name, branch name (async loadImg)
+6. Print Bill always shows "غير مدفوعة" for pending orders
+7. "Save and Send" orders save as payment_method: 'pending'
+8. Individual shift view in closing report with toggle (individual/combined)
+9. Multi-branch printer support (POS, Settings, product forms)
+10. Branch filter in Settings printer list
+11. "Download for another branch" button always visible
+12. Cashier selection filtered by branch with branch name shown
+13. `/shifts/open` endpoint for owner to open shift on any branch
+14. Cashier delete protection (only owner can delete items after save)
+15. Closing dialog follows selected branch (not active shift)
+16. Printer settings now execute: show_prices, print_all_orders, auto_print
+17. Kitchen receipt quantity font enlarged (20→28)
+18. Refunds removed from expenses (tracked separately in refunds collection)
+19. Watchdog VBScript wrapper (no PowerShell blue flash)
 
 ## Key API Endpoints
 - GET /api/printers?branch_id=xxx
 - POST /api/print-queue (with branch_id)
 - GET /api/print-queue/pending, /agent-status
+- POST /api/shifts/open (quick open for owner/cashier)
+- GET /api/shifts/current?branch_id=xxx
+- GET /api/shifts/cashiers-list?branch_id=xxx
 - GET /api/shifts?status=closed
-- GET /api/reports/cash-register-closing, /cash-register-closings
+- GET /api/reports/cash-register-closing?branch_id=xxx
+
+## Important Notes
+- handleNewOrder sends payment_method: 'pending' (not counted as sale until paid)
+- Refunds are NOT added to expenses collection (fixed)
+- Owner is free to switch branches - releases from cashier shift automatically
+- Cashier cannot delete items after order is saved (owner can)
+- routeOrderToPrinters respects print_individual_items (print all) and auto_print_on_order
+- Closing receipt is async (loadImg for logo)
 
 ## Backlog
+- Filter expenses by cashier (click to filter)
+- Refund/cancellation details in closing report
 - (P2) Refactor server.py (19k+ lines) into modular routes
 - (P2) Refactor Dashboard.js, POS.js, Settings.js into smaller components

@@ -96,7 +96,7 @@ async def get_agent_status():
         last_dt = datetime.fromisoformat(last_seen.replace("Z", "+00:00"))
         age = (datetime.now(timezone.utc) - last_dt).total_seconds()
         online = age < 30  # إذا آخر heartbeat أقل من 30 ثانية = شغال
-    except:
+    except Exception:
         online = False
     
     return {
