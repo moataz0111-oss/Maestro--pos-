@@ -2733,17 +2733,92 @@ export default function Dashboard() {
           <div className="space-y-4 py-4">
             {(() => {
               const activeCashiers = cashiersList.filter(c => c.has_active_shift);
+              const inactiveCashiers = cashiersList.filter(c => !c.has_active_shift);
               
-              if (activeCashiers.length === 0) {
-                // لا يوجد كاشيرية نشطين - المالك يفتح باسمه
-                return (
-                  <div className="space-y-4">
-                    <div className="p-4 bg-yellow-500/10 border border-yellow-500/30 rounded-lg text-center">
-                      <p className="text-sm text-yellow-600 font-medium">{t('لا يوجد كاشير نشط حالياً')}</p>
-                      <p className="text-xs text-muted-foreground mt-1">{t('سيتم فتح الوردية باسمك')}</p>
-                    </div>
+              return (
+                <div className="space-y-4">
+                  {/* كاشيرية نشطين - يمكن الانضمام لورديتهم */}
+                  {activeCashiers.length > 0 && (
+                    <>
+                      <p className="text-sm text-muted-foreground text-center">
+                        {t('اختر كاشير نشط للعمل تحت ورديته')}
+                      </p>
+                      <div className="space-y-2" data-testid="cashier-selection-list">
+                        {activeCashiers.map((cashier) => (
+                          <Button
+                            key={cashier.id}
+                            variant={selectedCashierId === cashier.id ? "default" : "outline"}
+                            className="w-full justify-start gap-3 h-14"
+                            onClick={() => {
+                              setSelectedCashierId(cashier.id);
+                              openShiftForCashier(cashier.id);
+                            }}
+                            data-testid={`cashier-select-${cashier.id}`}
+                          >
+                            <div className="w-10 h-10 rounded-full bg-green-500/20 flex items-center justify-center">
+                              <User className="h-5 w-5 text-green-600" />
+                            </div>
+                            <div className="text-right flex-1">
+                              <p className="font-medium">{cashier.full_name || cashier.username}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {cashier.branch_name ? `${cashier.branch_name} - ` : ''}{cashier.email}
+                              </p>
+                            </div>
+                            <Badge variant="outline" className="text-green-600 border-green-500/50 text-xs">
+                              {t('نشط')}
+                            </Badge>
+                          </Button>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                  
+                  {/* كاشيرية غير نشطين - يمكن فتح وردية لهم */}
+                  {inactiveCashiers.length > 0 && (
+                    <>
+                      <p className="text-xs text-muted-foreground text-center mt-2">
+                        {t('أو افتح وردية لكاشير غير نشط')}
+                      </p>
+                      <div className="space-y-2">
+                        {inactiveCashiers.map((cashier) => (
+                          <Button
+                            key={cashier.id}
+                            variant="outline"
+                            className="w-full justify-start gap-3 h-12 opacity-80"
+                            onClick={() => {
+                              setSelectedCashierId(cashier.id);
+                              openShiftForCashier(cashier.id);
+                            }}
+                            data-testid={`cashier-inactive-${cashier.id}`}
+                          >
+                            <div className="w-9 h-9 rounded-full bg-gray-500/20 flex items-center justify-center">
+                              <User className="h-4 w-4 text-gray-400" />
+                            </div>
+                            <div className="text-right flex-1">
+                              <p className="font-medium text-sm">{cashier.full_name || cashier.username}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {cashier.branch_name ? `${cashier.branch_name} - ` : ''}{cashier.email}
+                              </p>
+                            </div>
+                            <Badge variant="outline" className="text-gray-400 border-gray-400/50 text-xs">
+                              {t('غير نشط')}
+                            </Badge>
+                          </Button>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                  
+                  {/* لا يوجد كاشيرية أبداً أو المالك يريد فتح باسمه */}
+                  <div className="border-t border-border/30 pt-3">
+                    {cashiersList.length === 0 && (
+                      <div className="p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-lg text-center mb-3">
+                        <p className="text-sm text-yellow-600 font-medium">{t('لا يوجد كاشير لهذا الفرع')}</p>
+                      </div>
+                    )}
                     <Button
-                      className="w-full h-14 gap-3"
+                      variant="secondary"
+                      className="w-full h-12 gap-3"
                       onClick={async () => {
                         try {
                           const branchId = getBranchIdForApi();
@@ -2763,43 +2838,7 @@ export default function Dashboard() {
                       {t('فتح وردية باسمي')} ({user?.full_name || user?.username})
                     </Button>
                   </div>
-                );
-              }
-              
-              // يوجد كاشيرية نشطين
-              return (
-                <>
-                  <p className="text-sm text-muted-foreground text-center">
-                    {t('اختر كاشير نشط للعمل تحت ورديته')}
-                  </p>
-                  <div className="space-y-2" data-testid="cashier-selection-list">
-                    {activeCashiers.map((cashier) => (
-                      <Button
-                        key={cashier.id}
-                        variant={selectedCashierId === cashier.id ? "default" : "outline"}
-                        className="w-full justify-start gap-3 h-14"
-                        onClick={() => {
-                          setSelectedCashierId(cashier.id);
-                          openShiftForCashier(cashier.id);
-                        }}
-                        data-testid={`cashier-select-${cashier.id}`}
-                      >
-                        <div className="w-10 h-10 rounded-full bg-green-500/20 flex items-center justify-center">
-                          <User className="h-5 w-5 text-green-600" />
-                        </div>
-                        <div className="text-right flex-1">
-                          <p className="font-medium">{cashier.full_name || cashier.username}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {cashier.branch_name ? `${cashier.branch_name} - ` : ''}{cashier.email}
-                          </p>
-                        </div>
-                        <Badge variant="outline" className="text-green-600 border-green-500/50 text-xs">
-                          {t('نشط')}
-                        </Badge>
-                      </Button>
-                    ))}
-                  </div>
-                </>
+                </div>
               );
             })()}
           </div>

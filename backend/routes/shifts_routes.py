@@ -187,6 +187,66 @@ class OpenShiftForCashier(BaseModel):
     branch_id: Optional[str] = None
     opening_cash: float = 0.0
 
+
+class QuickOpenShift(BaseModel):
+    opening_cash: float = 0.0
+    branch_id: Optional[str] = None
+
+@router.post("/shifts/open")
+async def quick_open_shift(data: QuickOpenShift, current_user: dict = Depends(get_current_user)):
+    """فتح وردية سريعة - للمالك أو الكاشير"""
+    db = get_database()
+    tenant_id = get_user_tenant_id(current_user)
+    user_id = current_user["id"]
+    
+    branch_id = data.branch_id or current_user.get("branch_id")
+    if not branch_id:
+        branch_query = {"tenant_id": tenant_id} if tenant_id else {}
+        branch = await db.branches.find_one(branch_query, {"_id": 0, "id": 1})
+        branch_id = branch["id"] if branch else None
+    
+    # تحقق من عدم وجود وردية مفتوحة
+    existing_query = {"cashier_id": user_id, "status": "open"}
+    if tenant_id:
+        existing_query["tenant_id"] = tenant_id
+    existing = await db.shifts.find_one(existing_query, {"_id": 0})
+    if existing:
+        return {"shift": existing, "was_existing": True, "message": "وردية مفتوحة بالفعل"}
+    
+    shift_doc = {
+        "id": str(uuid.uuid4()),
+        "cashier_id": user_id,
+        "cashier_name": current_user.get("full_name") or current_user.get("username", ""),
+        "branch_id": branch_id,
+        "opening_cash": data.opening_cash,
+        "closing_cash": None,
+        "expected_cash": data.opening_cash,
+        "cash_difference": None,
+        "total_sales": 0.0,
+        "total_cost": 0.0,
+        "gross_profit": 0.0,
+        "total_orders": 0,
+        "card_sales": 0.0,
+        "cash_sales": 0.0,
+        "credit_sales": 0.0,
+        "delivery_app_sales": {},
+        "driver_sales": 0.0,
+        "total_expenses": 0.0,
+        "net_profit": 0.0,
+        "started_at": datetime.now(timezone.utc).isoformat(),
+        "ended_at": None,
+        "status": "open",
+        "opened_by": user_id,
+        "opened_by_name": current_user.get("full_name", "")
+    }
+    if tenant_id:
+        shift_doc["tenant_id"] = tenant_id
+    
+    await db.shifts.insert_one(shift_doc)
+    del shift_doc["_id"]
+    
+    return {"shift": shift_doc, "was_existing": False, "message": "تم فتح الوردية"}
+
 @router.post("/shifts/open-for-cashier")
 async def open_shift_for_cashier(data: OpenShiftForCashier, current_user: dict = Depends(get_current_user)):
     """المالك يفتح وردية لكاشير محدد"""
