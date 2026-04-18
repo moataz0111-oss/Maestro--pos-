@@ -460,7 +460,9 @@ export default function Dashboard() {
           setActiveShift(null);
           setShowCashierSelect(true);
           try {
-            const cashiersRes = await axios.get(`${API}/shifts/cashiers-list`);
+            const cashiersRes = await axios.get(`${API}/shifts/cashiers-list`, {
+              params: { branch_id: getBranchIdForApi() || '' }
+            });
             setCashiersList(cashiersRes.data || []);
           } catch (e) {
             console.log('Error fetching cashiers:', e);
@@ -486,7 +488,9 @@ export default function Dashboard() {
           setActiveShift(null);
           setShowCashierSelect(true);
           try {
-            const cashiersRes = await axios.get(`${API}/shifts/cashiers-list`);
+            const cashiersRes = await axios.get(`${API}/shifts/cashiers-list`, {
+              params: { branch_id: getBranchIdForApi() || '' }
+            });
             setCashiersList(cashiersRes.data || []);
           } catch (e) {
             console.log('Error fetching cashiers:', e);
@@ -1988,7 +1992,9 @@ export default function Dashboard() {
                 className={`gap-1 px-3 ${activeShift?.cashier_name ? '' : 'border-yellow-500 text-yellow-600 hover:bg-yellow-500/10'}`}
                 onClick={async () => {
                   try {
-                    const cashiersRes = await axios.get(`${API}/shifts/cashiers-list`);
+                    const cashiersRes = await axios.get(`${API}/shifts/cashiers-list`, {
+                      params: { branch_id: getBranchIdForApi() || '' }
+                    });
                     setCashiersList(cashiersRes.data || []);
                   } catch (e) { console.log('Error fetching cashiers:', e); }
                   setShowCashierSelect(true);
@@ -2783,7 +2789,9 @@ export default function Dashboard() {
                         </div>
                         <div className="text-right flex-1">
                           <p className="font-medium">{cashier.full_name || cashier.username}</p>
-                          <p className="text-xs text-muted-foreground">{cashier.email}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {cashier.branch_name ? `${cashier.branch_name} - ` : ''}{cashier.email}
+                          </p>
                         </div>
                         <Badge variant="outline" className="text-green-600 border-green-500/50 text-xs">
                           {t('نشط')}

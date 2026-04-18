@@ -145,8 +145,8 @@ async def get_current_shift(current_user: dict = Depends(get_current_user)):
         return shift
 
 @router.get("/shifts/cashiers-list")
-async def get_cashiers_list(current_user: dict = Depends(get_current_user)):
-    """جلب قائمة الكاشيرية مع حالة ورديتهم (نشط/غير نشط)"""
+async def get_cashiers_list(branch_id: Optional[str] = None, current_user: dict = Depends(get_current_user)):
+    """جلب قائمة الكاشيرية مع حالة ورديتهم (نشط/غير نشط) - يدعم فلتر الفرع"""
     db = get_database()
     tenant_id = get_user_tenant_id(current_user)
     
@@ -157,18 +157,28 @@ async def get_cashiers_list(current_user: dict = Depends(get_current_user)):
     query = {"role": "cashier", "is_active": {"$ne": False}}
     if tenant_id:
         query["tenant_id"] = tenant_id
+    if branch_id:
+        query["branch_id"] = branch_id
     
     cashiers = await db.users.find(query, {"_id": 0, "password": 0}).to_list(100)
     
-    # إضافة حالة الوردية لكل كاشير
+    # جلب أسماء الفروع
+    branch_ids = list(set(c.get("branch_id") for c in cashiers if c.get("branch_id")))
+    branches_lookup = {}
+    if branch_ids:
+        branches = await db.branches.find({"id": {"$in": branch_ids}}, {"_id": 0, "id": 1, "name": 1}).to_list(50)
+        branches_lookup = {b["id"]: b["name"] for b in branches}
+    
+    # إضافة حالة الوردية واسم الفرع لكل كاشير
     for cashier in cashiers:
         shift_query = {"cashier_id": cashier["id"], "status": "open"}
         if tenant_id:
             shift_query["tenant_id"] = tenant_id
-        active_shift = await db.shifts.find_one(shift_query, {"_id": 0, "id": 1, "started_at": 1})
+        active_shift = await db.shifts.find_one(shift_query, {"_id": 0, "id": 1, "started_at": 1, "branch_id": 1})
         cashier["has_active_shift"] = active_shift is not None
         if active_shift:
             cashier["shift_id"] = active_shift.get("id")
+        cashier["branch_name"] = branches_lookup.get(cashier.get("branch_id", ""), "")
     
     return cashiers
 
