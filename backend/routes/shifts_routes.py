@@ -111,7 +111,7 @@ async def open_shift(shift: ShiftCreate, current_user: dict = Depends(get_curren
     return shift_doc
 
 @router.get("/shifts/current")
-async def get_current_shift(current_user: dict = Depends(get_current_user)):
+async def get_current_shift(branch_id: Optional[str] = None, current_user: dict = Depends(get_current_user)):
     """جلب الوردية الحالية - المالك/المدير يرى وردية الكاشير النشط"""
     db = get_database()
     tenant_id = get_user_tenant_id(current_user)
@@ -119,13 +119,13 @@ async def get_current_shift(current_user: dict = Depends(get_current_user)):
     is_owner = user_role in ["admin", "super_admin", "manager", "branch_manager"]
     
     if is_owner:
-        # المالك/المدير: البحث عن أي وردية مفتوحة للفرع
-        branch_id = current_user.get("branch_id")
+        # المالك/المدير: البحث عن أي وردية مفتوحة للفرع المحدد
+        target_branch = branch_id or current_user.get("branch_id")
         shift_query = {"status": "open"}
         if tenant_id:
             shift_query["tenant_id"] = tenant_id
-        if branch_id:
-            shift_query["branch_id"] = branch_id
+        if target_branch:
+            shift_query["branch_id"] = target_branch
         
         # أولاً ابحث عن وردية كاشير (ليست وردية المالك نفسه)
         cashier_shift_query = {**shift_query, "cashier_id": {"$ne": current_user["id"]}}

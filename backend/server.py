@@ -5729,24 +5729,6 @@ async def create_refund(refund: RefundCreate, current_user: dict = Depends(get_c
     
     await db.orders.update_one({"id": order["id"]}, {"$set": update_data})
     
-    # إضافة سجل في المصاريف (اختياري - للمحاسبة)
-    expense_doc = {
-        "id": str(uuid.uuid4()),
-        "category": "refund",
-        "description": f"إرجاع طلب #{order.get('order_number', 0)} - {refund.reason}",
-        "amount": refund_amount,
-        "payment_method": order.get("payment_method", "cash"),
-        "reference_number": f"REF-{refund_number}",
-        "branch_id": order.get("branch_id", ""),
-        "tenant_id": tenant_id,
-        "created_by": current_user["id"],
-        "date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
-        "created_at": datetime.now(timezone.utc).isoformat(),
-        "refund_id": refund_doc["id"],
-        "order_id": order["id"]
-    }
-    await db.expenses.insert_one(expense_doc)
-    
     if "_id" in refund_doc:
         del refund_doc["_id"]
     return refund_doc
