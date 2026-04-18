@@ -2835,10 +2835,13 @@ async def get_expenses(
     current_user: dict = Depends(get_current_user)
 ):
     query = build_tenant_query(current_user)  # فلترة حسب tenant_id
-    if branch_id:
-        query["branch_id"] = branch_id
+    # استبعاد المرتجعات من المصاريف نهائياً
     if category:
         query["category"] = category
+    else:
+        query["category"] = {"$ne": "refund"}
+    if branch_id:
+        query["branch_id"] = branch_id
     if start_date:
         query["date"] = {"$gte": start_date}
     if end_date:

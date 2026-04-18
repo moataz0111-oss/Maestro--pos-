@@ -126,7 +126,7 @@ export default function Expenses() {
           // تصفية المصاريف حسب التاريخ
           const filteredExpenses = localExpenses.filter(e => {
             const expenseDate = e.date;
-            return expenseDate >= startDate && expenseDate <= endDate;
+            return expenseDate >= startDate && expenseDate <= endDate && e.category !== 'refund';
           });
           
           setExpenses(filteredExpenses);
@@ -156,7 +156,7 @@ export default function Expenses() {
         axios.get(`${API}/branches`)
       ]);
 
-      setExpenses(expensesRes.data);
+      setExpenses((expensesRes.data || []).filter(e => e.category !== 'refund'));
       setBranches(branchesRes.data);
 
       // حفظ البيانات محلياً للاستخدام offline
