@@ -5001,6 +5001,9 @@ export default function Settings() {
                             : t('وسيط الطباعة متصل - الطباعة المباشرة مفعلة (USB + شبكة)')
                         }
                       </span>
+                      {printAgentOnline && branches && branches.length > 1 && (
+                        <span className="text-xs text-muted-foreground mr-2">({t('كل فرع يحتاج وسيط مثبت على جهازه')})</span>
+                      )}
                     </div>
                     <div className="flex items-center gap-2">
                       <Button 
@@ -5039,6 +5042,20 @@ export default function Settings() {
                           data-testid="download-agent-btn"
                         >
                           <Download className="h-3.5 w-3.5 ml-1" />{t('تحميل الوسيط')}
+                        </Button>
+                      )}
+                      {printAgentOnline && (
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          className="border-primary/50 text-primary/70"
+                          onClick={() => {
+                            window.open(`${API}/download-print-agent`, '_blank');
+                            toast.success(t('جاري تحميل وسيط الطباعة - ثبّته على جهاز الفرع الآخر'));
+                          }}
+                          data-testid="download-agent-extra-btn"
+                        >
+                          <Download className="h-3.5 w-3.5 ml-1" />{t('تحميل لفرع آخر')}
                         </Button>
                       )}
                       {printAgentOnline && agentNeedsUpdate && (
