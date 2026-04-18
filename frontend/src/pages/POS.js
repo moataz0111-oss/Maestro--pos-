@@ -109,6 +109,13 @@ export default function POS() {
   // التحقق من دور المستخدم
   const isCallCenter = user?.role === 'call_center';
   const isCaptain = user?.role === 'captain';
+  const isOwner = ['admin', 'manager', 'super_admin', 'branch_manager'].includes(user?.role);
+  
+  // التحقق من الصلاحيات
+  const hasPermission = (permId) => {
+    if (isOwner) return true; // المالك/المدير لديه كل الصلاحيات
+    return (user?.permissions || []).includes(permId);
+  };
   
   const [categories, setCategories] = useState([]);
   const [products, setProducts] = useState([]);
@@ -1067,9 +1074,7 @@ export default function POS() {
   // التحقق من صلاحية الإرجاع
   const canRefund = () => {
     if (!user) return false;
-    const role = user.role;
-    const permissions = user.permissions || [];
-    return role === 'admin' || role === 'super_admin' || role === 'manager' || permissions.includes('can_refund');
+    return hasPermission('pos_refund');
   };
 
   // البحث عن طلب للإرجاع
@@ -2301,6 +2306,12 @@ export default function POS() {
   const handleCancelOrder = async () => {
     if (!editingOrder) return;
     
+    // التحقق من صلاحية الإلغاء
+    if (!hasPermission('pos_cancel')) {
+      toast.error(t('ليس لديك صلاحية إلغاء الطلبات'));
+      return;
+    }
+    
     if (!confirm(t('هل أنت متأكد؟'))) return;
     
     // تحديد الفرع النشط
@@ -3262,7 +3273,8 @@ export default function POS() {
 
         {/* Totals & Payment */}
         <div className="p-4 border-t border-border bg-muted/30 space-y-4">
-          {/* Discount */}
+          {/* Discount - فقط إذا عنده صلاحية */}
+          {hasPermission('pos_discount') && (
           <div className="flex items-center gap-2">
             <span className="text-sm text-muted-foreground">{t('خصم')}:</span>
             <Input
@@ -3274,6 +3286,7 @@ export default function POS() {
               data-testid="discount-input"
             />
           </div>
+          )}
 
           {/* Subtotal & Total */}
           <div className="space-y-2">
