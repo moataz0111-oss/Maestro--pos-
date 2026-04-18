@@ -547,8 +547,7 @@ export default function Expenses() {
           </Card>
         </div>
 
-        {/* By Category - فقط للمدير */}
-        {isManager && (
+        {/* By Category */}
         <Card className="border-border/50 bg-card">
           <CardHeader>
             <CardTitle className="text-lg text-foreground">{t('حسب التصنيف')}</CardTitle>
@@ -565,7 +564,6 @@ export default function Expenses() {
             </div>
           </CardContent>
         </Card>
-        )}
 
         {/* By Cashier - فقط للمدير */}
         {isManager && Object.keys(expensesByCashier).length > 0 && (
