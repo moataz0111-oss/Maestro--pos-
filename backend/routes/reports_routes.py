@@ -345,19 +345,34 @@ async def get_expenses_report(
     total_expenses = sum(e["amount"] for e in expenses)
     by_category = {}
     by_date = {}
+    by_cashier = {}
     
     for e in expenses:
         cat = e.get("category", "other")
         by_category[cat] = by_category.get(cat, 0) + e["amount"]
         
-        date = e.get("date", e["created_at"][:10])
+        date = e.get("date", e.get("created_at", "")[:10])
         by_date[date] = by_date.get(date, 0) + e["amount"]
+        
+        cashier = e.get("created_by_name") or "غير محدد"
+        if cashier not in by_cashier:
+            by_cashier[cashier] = {"total": 0, "count": 0, "by_category": {}, "items": []}
+        by_cashier[cashier]["total"] += e["amount"]
+        by_cashier[cashier]["count"] += 1
+        by_cashier[cashier]["by_category"][cat] = by_cashier[cashier]["by_category"].get(cat, 0) + e["amount"]
+        by_cashier[cashier]["items"].append({
+            "description": e.get("description", ""),
+            "amount": e["amount"],
+            "category": cat,
+            "date": e.get("date", "")
+        })
     
     return {
         "total_expenses": total_expenses,
         "total_transactions": len(expenses),
         "by_category": by_category,
         "by_date": by_date,
+        "by_cashier": by_cashier,
         "expenses": expenses
     }
 

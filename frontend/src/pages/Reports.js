@@ -3003,6 +3003,7 @@ export default function Reports() {
                   />
                 </div>
 
+                {/* حسب التصنيف - مجمّع */}
                 <Card className="border-border/50 bg-card">
                   <CardHeader>
                     <CardTitle className="text-lg text-foreground">{t('حسب التصنيف')}</CardTitle>
@@ -3011,14 +3012,9 @@ export default function Reports() {
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                       {Object.entries(expensesReport.by_category || {}).map(([cat, amount]) => {
                         const catNames = {
-                          rent: t('إيجار'),
-                          utilities: t('كهرباء وماء'),
-                          salaries: t('رواتب'),
-                          maintenance: t('صيانة'),
-                          supplies: t('مستلزمات'),
-                          marketing: t('تسويق'),
-                          transport: t('نقل'),
-                          other: t('أخرى')
+                          rent: t('إيجار'), utilities: t('كهرباء وماء'), salaries: t('رواتب'),
+                          maintenance: t('صيانة'), supplies: t('مستلزمات'), marketing: t('تسويق'),
+                          transport: t('نقل'), other: t('أخرى')
                         };
                         return (
                           <div key={cat} className="p-4 bg-muted/30 rounded-lg text-center">
@@ -3030,6 +3026,60 @@ export default function Reports() {
                     </div>
                   </CardContent>
                 </Card>
+
+                {/* حسب الكاشير - كل شخص ومصاريفه */}
+                {expensesReport.by_cashier && Object.keys(expensesReport.by_cashier).length > 0 && (
+                  <Card className="border-border/50 bg-card">
+                    <CardHeader>
+                      <CardTitle className="text-lg text-foreground">{t('مصاريف كل موظف')}</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      {Object.entries(expensesReport.by_cashier).map(([cashierName, data]) => (
+                        <details key={cashierName} className="group border border-border/30 rounded-lg overflow-hidden">
+                          <summary className="flex items-center justify-between p-4 cursor-pointer hover:bg-muted/20 transition-colors">
+                            <div className="flex items-center gap-3">
+                              <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
+                                <User className="h-5 w-5 text-primary" />
+                              </div>
+                              <div>
+                                <p className="font-bold text-foreground">{cashierName}</p>
+                                <p className="text-xs text-muted-foreground">{data.count} {t('معاملة')}</p>
+                              </div>
+                            </div>
+                            <p className="text-lg font-bold text-red-500 tabular-nums">{formatPrice(data.total)}</p>
+                          </summary>
+                          <div className="p-4 pt-0 space-y-3 border-t border-border/20">
+                            {/* تصنيفات هذا الكاشير */}
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                              {Object.entries(data.by_category || {}).map(([cat, amount]) => {
+                                const catNames = {
+                                  rent: t('إيجار'), utilities: t('كهرباء وماء'), salaries: t('رواتب'),
+                                  maintenance: t('صيانة'), supplies: t('مستلزمات'), marketing: t('تسويق'),
+                                  transport: t('نقل'), other: t('أخرى')
+                                };
+                                return (
+                                  <div key={cat} className="p-2 bg-muted/20 rounded text-center">
+                                    <p className="text-xs text-muted-foreground">{catNames[cat] || cat}</p>
+                                    <p className="text-sm font-bold text-foreground">{formatPrice(amount)}</p>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                            {/* تفاصيل كل مصروف */}
+                            <div className="space-y-1">
+                              {(data.items || []).map((item, idx) => (
+                                <div key={idx} className="flex justify-between text-sm p-2 bg-muted/10 rounded">
+                                  <span className="text-muted-foreground">{item.description || item.category}</span>
+                                  <span className="font-medium text-foreground tabular-nums">{formatPrice(item.amount)}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </details>
+                      ))}
+                    </CardContent>
+                  </Card>
+                )}
 
                 <div className="flex justify-end gap-2 mt-4">
                   <Button variant="outline" onClick={handlePrintExpensesReport} className="gap-2">
