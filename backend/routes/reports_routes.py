@@ -333,6 +333,8 @@ async def get_expenses_report(
     elif branch_id:
         query["branch_id"] = branch_id
     
+    # استبعاد المرتجعات من المصاريف نهائياً
+    query["category"] = {"$ne": "refund"}
     if start_date:
         query["date"] = {"$gte": start_date}
     if end_date:
@@ -409,6 +411,7 @@ async def get_profit_loss_report(
     elif branch_id:
         expense_query["branch_id"] = branch_id
     
+    expense_query["category"] = {"$ne": "refund"}
     if start_date:
         expense_query["date"] = {"$gte": start_date}
     if end_date:

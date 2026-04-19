@@ -12448,48 +12448,6 @@ async def get_break_even_alerts(
 
 # ==================== SMART REPORTS - التقارير الذكية ====================
 
-@api_router.get("/reports/expenses")
-async def get_expenses_report(
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None,
-    branch_id: Optional[str] = None,
-    current_user: dict = Depends(get_current_user)
-):
-    """تقرير المصاريف - بدون المرتجعات"""
-    query = build_tenant_query(current_user)
-    query["category"] = {"$ne": "refund"}
-    if branch_id:
-        query["branch_id"] = branch_id
-    if start_date:
-        query["date"] = {"$gte": start_date}
-    if end_date:
-        query.setdefault("date", {})["$lte"] = end_date
-    
-    expenses = await db.expenses.find(query, {"_id": 0}).sort("date", -1).to_list(1000)
-    
-    total_expenses = sum(_sn(e.get("amount", 0)) for e in expenses)
-    
-    by_category = {}
-    by_cashier = {}
-    for e in expenses:
-        cat = e.get("category", "other")
-        by_category[cat] = by_category.get(cat, 0) + _sn(e.get("amount", 0))
-        cashier = e.get("created_by_name", "غير محدد")
-        if cashier not in by_cashier:
-            by_cashier[cashier] = {"total": 0, "count": 0}
-        by_cashier[cashier]["total"] += _sn(e.get("amount", 0))
-        by_cashier[cashier]["count"] += 1
-    
-    return {
-        "total_expenses": total_expenses,
-        "count": len(expenses),
-        "average": total_expenses / len(expenses) if expenses else 0,
-        "by_category": by_category,
-        "by_cashier": by_cashier,
-        "items": expenses
-    }
-
-
 
 @api_router.get("/smart-reports/sales")
 async def get_sales_report(
