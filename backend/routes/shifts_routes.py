@@ -976,12 +976,19 @@ async def close_cash_register(close_data: CashRegisterClose, current_user: dict 
     return updated_shift
 
 @router.get("/shifts/active-shift-details")
-async def get_active_shift_details(current_user: dict = Depends(get_current_user)):
-    """جلب تفاصيل الوردية النشطة"""
+async def get_active_shift_details(shift_id: Optional[str] = None, cashier_id: Optional[str] = None, current_user: dict = Depends(get_current_user)):
+    """جلب تفاصيل وردية (نشطة أو محددة) مع حساب المبيعات والمصاريف الفعلية"""
     db = get_database()
     tenant_id = get_user_tenant_id(current_user)
     
-    shift_query = {"cashier_id": current_user["id"], "status": "open"}
+    # البحث عن الوردية
+    if shift_id:
+        shift_query = {"id": shift_id}
+    elif cashier_id:
+        shift_query = {"cashier_id": cashier_id, "status": "open"}
+    else:
+        shift_query = {"cashier_id": current_user["id"], "status": "open"}
+    
     if tenant_id:
         shift_query["tenant_id"] = tenant_id
     
@@ -990,38 +997,83 @@ async def get_active_shift_details(current_user: dict = Depends(get_current_user
     if not shift:
         return None
     
-    order_query = {"shift_id": shift["id"], "status": {"$ne": OrderStatus.CANCELLED}}
+    shift_start = shift.get("started_at") or shift.get("opened_at") or ""
+    shift_cashier_id = shift.get("cashier_id") or current_user.get("id")
+    
+    # جلب الطلبات للوردية
+    order_query = {"shift_id": shift["id"], "status": {"$nin": [OrderStatus.CANCELLED, "cancelled", "canceled", "deleted"]}}
     if tenant_id:
         order_query["tenant_id"] = tenant_id
     
     orders = await db.orders.find(order_query).to_list(1000)
     
     if not orders:
-        shift_start = shift.get("started_at") or shift.get("opened_at") or ""
         fallback_query = {
-            "cashier_id": shift.get("cashier_id") or current_user.get("id"),
+            "cashier_id": shift_cashier_id,
             "created_at": {"$gte": shift_start},
-            "status": {"$ne": OrderStatus.CANCELLED}
+            "status": {"$nin": [OrderStatus.CANCELLED, "cancelled", "canceled", "deleted"]}
         }
         if tenant_id:
             fallback_query["tenant_id"] = tenant_id
+        if shift.get("branch_id"):
+            fallback_query["branch_id"] = shift["branch_id"]
         orders = await db.orders.find(fallback_query).to_list(1000)
     
+    # حساب المبيعات
     total_sales = sum(_safe_num(o.get("total")) for o in orders)
     cash_sales = sum(_safe_num(o.get("total")) for o in orders if o.get("payment_method") == PaymentMethod.CASH)
+    card_sales = sum(_safe_num(o.get("total")) for o in orders if o.get("payment_method") == PaymentMethod.CARD)
+    credit_sales = sum(_safe_num(o.get("total")) for o in orders if o.get("payment_method") == PaymentMethod.CREDIT)
     
-    shift_start_for_expenses = shift.get("started_at") or shift.get("opened_at") or ""
-    expenses = await db.expenses.find({
-        "branch_id": shift.get("branch_id"),
-        "created_at": {"$gte": shift_start_for_expenses}
-    }).to_list(100)
+    # جلب المصاريف (بدون المرتجعات)
+    expenses_query = {
+        "created_by": shift_cashier_id,
+        "category": {"$ne": "refund"},
+        "created_at": {"$gte": shift_start}
+    }
+    if tenant_id:
+        expenses_query["tenant_id"] = tenant_id
+    if shift.get("branch_id"):
+        expenses_query["branch_id"] = shift["branch_id"]
+    
+    expenses = await db.expenses.find(expenses_query, {"_id": 0}).to_list(100)
     total_expenses = sum(_safe_num(e.get("amount")) for e in expenses)
+    
+    # جلب المرتجعات
+    refund_query = {"cashier_id": shift_cashier_id, "created_at": {"$gte": shift_start}}
+    if tenant_id:
+        refund_query["tenant_id"] = tenant_id
+    refund_orders = await db.orders.find({
+        **{"status": "refunded"},
+        "cashier_id": shift_cashier_id,
+        "created_at": {"$gte": shift_start},
+        **({"tenant_id": tenant_id} if tenant_id else {})
+    }).to_list(100)
+    total_refunds = sum(_safe_num(r.get("total")) for r in refund_orders)
+    
+    # جلب الإلغاءات
+    cancelled_orders = await db.orders.find({
+        "status": {"$in": ["cancelled", "canceled", "deleted"]},
+        "cashier_id": shift_cashier_id,
+        "created_at": {"$gte": shift_start},
+        **({"tenant_id": tenant_id} if tenant_id else {})
+    }).to_list(100)
+    total_cancellations = sum(_safe_num(c.get("total")) for c in cancelled_orders)
     
     opening_cash = _safe_num(shift.get("opening_cash", shift.get("opening_balance", 0)))
     expected_cash = opening_cash + cash_sales - total_expenses
     
     shift["total_sales"] = total_sales
     shift["total_orders"] = len(orders)
+    shift["cash_sales"] = cash_sales
+    shift["card_sales"] = card_sales
+    shift["credit_sales"] = credit_sales
+    shift["total_expenses"] = total_expenses
+    shift["total_refunds"] = total_refunds
+    shift["refund_count"] = len(refund_orders)
+    shift["total_cancellations"] = total_cancellations
+    shift["cancelled_orders"] = len(cancelled_orders)
     shift["expected_cash"] = expected_cash
+    shift["opening_cash"] = opening_cash
     
     return shift

@@ -1073,19 +1073,24 @@ const CashRegisterClosingTab = ({ t, formatPrice, selectedBranchId, branches, ge
         return closedAt >= dateRange.start && closedAt <= dateRange.end + 'T23:59:59';
       });
       
-      // الشفتات النشطة (المفتوحة)
-      const activeShifts = (activeShiftsRes.data || []).filter(s => {
+      // الشفتات النشطة (المفتوحة) - جلب البيانات الحقيقية
+      const rawActiveShifts = (activeShiftsRes.data || []).filter(s => {
         const startedAt = s.started_at || '';
         return startedAt >= dateRange.start && startedAt <= dateRange.end + 'T23:59:59';
-      }).map(s => ({
-        ...s,
-        is_active: true,
-        closed_at: null,
-        status: 'open'
-      }));
+      });
+      
+      // جلب تفاصيل كل وردية نشطة
+      const activeShiftsWithDetails = await Promise.all(
+        rawActiveShifts.map(async (s) => {
+          try {
+            const detailsRes = await axios.get(`${API_URL}/shifts/active-shift-details?shift_id=${s.id}`, { headers });
+            return { ...s, ...(detailsRes.data || {}), is_active: true, status: 'open' };
+          } catch { return { ...s, is_active: true, status: 'open' }; }
+        })
+      );
       
       // دمج الشفتات المغلقة والنشطة
-      const allShifts = [...closedShifts, ...activeShifts];
+      const allShifts = [...closedShifts, ...activeShiftsWithDetails];
       
       // استخدام الشفتات المغلقة كمصدر أساسي (فيها تفاصيل أكثر: denominations, delivery_app_sales, etc.)
       if (allShifts.length > 0) {
