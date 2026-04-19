@@ -569,6 +569,16 @@ async function renderKitchen(order) {
   // ===== ORDER TYPE =====
   const types = {'dine_in':'داخلي','takeaway':'سفري','delivery':'توصيل','delivery_company':'شركة توصيل'};
   y += kC(types[order.order_type] || '', y, 22, true);
+  
+  // ===== اسم شركة التوصيل أو السائق =====
+  if (order.order_type === 'delivery' || order.order_type === 'delivery_company') {
+    const deliveryName = order.delivery_app_name || order.delivery_app || order.delivery_company || '';
+    if (deliveryName) {
+      y += kC(deliveryName, y, 20, true);
+    } else if (order.driver_name) {
+      y += kC(order.driver_name, y, 20, true);
+    }
+  }
 
   // ===== TABLE NUMBER =====
   if (order.table_number) y += kC(`${order.table_number} :الطاولة`, y, 22, true);

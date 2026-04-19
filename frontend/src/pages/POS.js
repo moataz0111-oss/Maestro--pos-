@@ -1401,6 +1401,7 @@ export default function POS() {
       discount: discount || 0,
       driver_name: driverObj?.name || '',
       delivery_company: deliveryAppObj?.name || '',
+      delivery_app_name: deliveryAppObj?.name || '',
       language: localStorage.getItem('language') || 'ar',
       // Invoice settings
       phone: invoiceSettings?.phone || '',
