@@ -572,7 +572,7 @@ async function renderKitchen(order) {
   
   // ===== اسم شركة التوصيل أو السائق =====
   if (order.order_type === 'delivery' || order.order_type === 'delivery_company') {
-    const deliveryName = order.delivery_app_name || order.delivery_app || order.delivery_company || '';
+    const deliveryName = order.delivery_app_name || order.delivery_company || '';
     if (deliveryName) {
       y += kC(deliveryName, y, 20, true);
     } else if (order.driver_name) {
