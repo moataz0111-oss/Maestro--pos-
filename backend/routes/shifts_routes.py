@@ -1027,9 +1027,19 @@ async def get_active_shift_details(shift_id: Optional[str] = None, cashier_id: O
     
     # حساب المبيعات
     total_sales = sum(_safe_num(o.get("total")) for o in orders)
-    cash_sales = sum(_safe_num(o.get("total")) for o in orders if o.get("payment_method") == PaymentMethod.CASH)
+    cash_sales = sum(_safe_num(o.get("total")) for o in orders if o.get("payment_method") == PaymentMethod.CASH and not o.get("delivery_app"))
     card_sales = sum(_safe_num(o.get("total")) for o in orders if o.get("payment_method") == PaymentMethod.CARD)
-    credit_sales = sum(_safe_num(o.get("total")) for o in orders if o.get("payment_method") == PaymentMethod.CREDIT)
+    # الآجل = فقط الطلبات الغير توصيل
+    credit_sales = sum(_safe_num(o.get("total")) for o in orders if o.get("payment_method") == PaymentMethod.CREDIT and not o.get("delivery_app") and o.get("order_type") != "delivery")
+    
+    # شركات التوصيل
+    delivery_app_sales = {}
+    for o in orders:
+        app_name = o.get("delivery_app_name") or o.get("delivery_app")
+        if app_name:
+            if app_name not in delivery_app_sales:
+                delivery_app_sales[app_name] = 0
+            delivery_app_sales[app_name] += _safe_num(o.get("total"))
     
     # جلب المصاريف (بدون المرتجعات)
     expenses_query = {
@@ -1074,6 +1084,7 @@ async def get_active_shift_details(shift_id: Optional[str] = None, cashier_id: O
     shift["cash_sales"] = cash_sales
     shift["card_sales"] = card_sales
     shift["credit_sales"] = credit_sales
+    shift["delivery_app_sales"] = delivery_app_sales
     shift["total_expenses"] = total_expenses
     shift["total_refunds"] = total_refunds
     shift["refund_count"] = len(refund_orders)
