@@ -795,17 +795,9 @@ public class ZKHelper {
             // privilege (1 byte at offset 2)
             userData[2] = (byte)privilege;
             // password (8 bytes at offset 3) - empty
-            // name (24 bytes at offset 11) - try Unicode for Arabic/Chinese, fallback UTF8
+            // name (24 bytes at offset 11) - always UTF-8 (supports Arabic/English)
             if (!string.IsNullOrEmpty(name)) {
-                byte[] nameBytes;
-                bool hasNonAscii = false;
-                foreach (char c in name) { if (c > 127) { hasNonAscii = true; break; } }
-                if (hasNonAscii) {
-                    // Unicode UTF-16LE for non-ASCII (Arabic, Chinese, etc)
-                    nameBytes = Encoding.Unicode.GetBytes(name);
-                } else {
-                    nameBytes = Encoding.UTF8.GetBytes(name);
-                }
+                byte[] nameBytes = Encoding.UTF8.GetBytes(name);
                 int nameCopyLen = Math.Min(nameBytes.Length, 24);
                 Array.Copy(nameBytes, 0, userData, 11, nameCopyLen);
             }
