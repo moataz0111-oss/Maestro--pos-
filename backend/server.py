@@ -2846,9 +2846,10 @@ async def get_expenses(
     is_manager = user_role in ["admin", "super_admin", "manager", "branch_manager"]
     if not is_manager:
         query["created_by"] = current_user["id"]
-        # الكاشير يرى فقط مصاريف اليوم
-        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-        query["date"] = {"$gte": today, "$lte": today}
+        # الكاشير يرى فقط مصاريف اليوم (بتوقيت العراق UTC+3)
+        iraq_now = datetime.now(timezone.utc) + timedelta(hours=3)
+        today = iraq_now.strftime("%Y-%m-%d")
+        query["date"] = today
     else:
         if start_date:
             query["date"] = {"$gte": start_date}
