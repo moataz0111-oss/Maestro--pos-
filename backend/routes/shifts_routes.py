@@ -46,8 +46,8 @@ class ShiftResponse(BaseModel):
     id: str
     cashier_id: str
     cashier_name: str = ""
-    branch_id: str
-    opening_cash: float
+    branch_id: Optional[str] = None
+    opening_cash: Optional[float] = 0.0
     closing_cash: Optional[float] = None
     expected_cash: Optional[float] = None
     cash_difference: Optional[float] = None
@@ -55,6 +55,7 @@ class ShiftResponse(BaseModel):
     total_cost: float = 0.0
     gross_profit: float = 0.0
     total_orders: int = 0
+    started_at: Optional[str] = None
     card_sales: float = 0.0
     cash_sales: float = 0.0
     credit_sales: float = 0.0
@@ -517,10 +518,15 @@ async def get_shifts(branch_id: Optional[str] = None, date: Optional[str] = None
     
     shifts = await db.shifts.find(query, {"_id": 0}).sort("started_at", -1).to_list(100)
     
-    # معالجة القيم الفارغة
+    # معالجة القيم الفارغة والحقول القديمة
     for shift in shifts:
         if shift.get("cashier_name") is None:
             shift["cashier_name"] = ""
+        # دعم الشفتات القديمة: opening_balance → opening_cash, opened_at → started_at
+        if "opening_cash" not in shift and "opening_balance" in shift:
+            shift["opening_cash"] = shift.get("opening_balance", 0)
+        if "started_at" not in shift and "opened_at" in shift:
+            shift["started_at"] = shift.get("opened_at")
     
     return shifts
 
