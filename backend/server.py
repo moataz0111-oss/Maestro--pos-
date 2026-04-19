@@ -12802,16 +12802,15 @@ async def get_cash_register_closing_report(
     total_cancellations = sum(_sn(c.get("total")) for c in cancelled_orders)
     cancellation_count = len(cancelled_orders)
     
-    # جلب المصروفات
+    # جلب المصروفات (بدون المرتجعات)
     expenses_query = build_tenant_query(current_user)
+    expenses_query["category"] = {"$ne": "refund"}
     if branch_id:
         expenses_query["branch_id"] = branch_id
     if start_date:
-        expenses_query["created_at"] = {"$gte": start_date}
+        expenses_query["date"] = {"$gte": start_date}
     if end_date:
-        if "created_at" not in expenses_query:
-            expenses_query["created_at"] = {}
-        expenses_query["created_at"]["$lte"] = end_date
+        expenses_query.setdefault("date", {})["$lte"] = end_date
     
     expenses = await db.expenses.find(expenses_query, {"_id": 0}).to_list(1000)
     

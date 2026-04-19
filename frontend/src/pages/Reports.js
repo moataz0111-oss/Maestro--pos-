@@ -1056,10 +1056,11 @@ const CashRegisterClosingTab = ({ t, formatPrice, selectedBranchId, branches, ge
       const token = localStorage.getItem('token');
       const headers = token ? { Authorization: `Bearer ${token}` } : {};
       
-      const [reportRes, historyRes, shiftsRes] = await Promise.all([
+      const [reportRes, historyRes, shiftsRes, activeShiftsRes] = await Promise.all([
         axios.get(`${API_URL}/reports/cash-register-closing?${params}`, { headers }),
         axios.get(`${API_URL}/reports/cash-register-closings?${params}&limit=50`, { headers }),
-        axios.get(`${API_URL}/shifts?status=closed${branchId && branchId !== 'all' ? '&branch_id=' + branchId : ''}`, { headers }).catch(() => ({ data: [] }))
+        axios.get(`${API_URL}/shifts?status=closed${branchId && branchId !== 'all' ? '&branch_id=' + branchId : ''}`, { headers }).catch(() => ({ data: [] })),
+        axios.get(`${API_URL}/shifts?status=open${branchId && branchId !== 'all' ? '&branch_id=' + branchId : ''}`, { headers }).catch(() => ({ data: [] }))
       ]);
       
       setReport(reportRes.data);
@@ -1068,13 +1069,27 @@ const CashRegisterClosingTab = ({ t, formatPrice, selectedBranchId, branches, ge
       const closingsFromHistory = historyRes.data.closings || [];
       const closedShifts = (shiftsRes.data || []).filter(s => {
         // فلتر حسب التاريخ
-        const closedAt = s.ended_at || s.closed_at || '';
+        const closedAt = s.ended_at || s.closed_at || s.started_at || '';
         return closedAt >= dateRange.start && closedAt <= dateRange.end + 'T23:59:59';
       });
       
+      // الشفتات النشطة (المفتوحة)
+      const activeShifts = (activeShiftsRes.data || []).filter(s => {
+        const startedAt = s.started_at || '';
+        return startedAt >= dateRange.start && startedAt <= dateRange.end + 'T23:59:59';
+      }).map(s => ({
+        ...s,
+        is_active: true,
+        closed_at: null,
+        status: 'open'
+      }));
+      
+      // دمج الشفتات المغلقة والنشطة
+      const allShifts = [...closedShifts, ...activeShifts];
+      
       // استخدام الشفتات المغلقة كمصدر أساسي (فيها تفاصيل أكثر: denominations, delivery_app_sales, etc.)
-      if (closedShifts.length > 0) {
-        setClosingsHistory(closedShifts.map(s => ({
+      if (allShifts.length > 0) {
+        setClosingsHistory(allShifts.map(s => ({
           ...s,
           closed_at: s.ended_at || s.closed_at || s.updated_at,
           actual_cash: s.closing_cash || s.actual_cash || 0,
@@ -1405,6 +1420,9 @@ const CashRegisterClosingTab = ({ t, formatPrice, selectedBranchId, branches, ge
                     <Badge className={diffType === 'surplus' ? 'bg-emerald-500/20 text-emerald-400' : diffType === 'shortage' ? 'bg-red-500/20 text-red-400' : 'bg-gray-500/20 text-gray-400'}>
                       {diffType === 'surplus' ? t('زيادة') : diffType === 'shortage' ? t('نقص') : t('مطابق')}
                     </Badge>
+                    {closing.is_active && (
+                      <Badge className="bg-green-500/30 text-green-400 animate-pulse">{t('نشط')}</Badge>
+                    )}
                     <ChevronDown className={`h-5 w-5 text-gray-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
                   </div>
                 </div>
