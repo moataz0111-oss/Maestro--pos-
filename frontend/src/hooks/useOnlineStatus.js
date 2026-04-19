@@ -67,7 +67,8 @@ export const useOnlineStatus = () => {
 
     const unsubscribe = addListener(handleStatusChange);
     
-    // التحقق الدوري من الاتصال
+    // التحقق الدوري من الاتصال - فقط عند تغير الحالة
+    let lastKnownStatus = navigator.onLine;
     const checkConnection = async () => {
       try {
         const controller = new AbortController();
@@ -81,19 +82,22 @@ export const useOnlineStatus = () => {
         
         clearTimeout(timeoutId);
         
-        if (response.ok && !isOnline) {
+        // فقط إذا تغيرت الحالة من offline إلى online
+        if (response.ok && !lastKnownStatus) {
+          lastKnownStatus = true;
           notifyListeners(true);
         }
       } catch (error) {
-        // إذا فشل الاتصال بالسيرفر = offline
-        if (isOnline) {
+        // فقط إذا تغيرت الحالة من online إلى offline
+        if (lastKnownStatus) {
+          lastKnownStatus = false;
           notifyListeners(false);
         }
       }
     };
 
-    // التحقق كل 10 ثواني (أسرع لكشف الانقطاع)
-    const interval = setInterval(checkConnection, 10000);
+    // التحقق كل 30 ثانية (مستقر - لا يسبب إعادة تحميل)
+    const interval = setInterval(checkConnection, 30000);
 
     return () => {
       unsubscribe();

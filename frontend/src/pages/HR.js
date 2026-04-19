@@ -175,7 +175,7 @@ export default function HR() {
 
   // Forms
   const [employeeForm, setEmployeeForm] = useState({
-    name: '', phone: '', email: '', national_id: '', position: '', department: '',
+    name: '', name_en: '', phone: '', email: '', national_id: '', position: '', department: '',
     branch_id: '', hire_date: '', salary: '', salary_type: 'monthly', work_hours_per_day: 8,
     shift_start: '09:00', shift_end: '17:00', break_start: '', break_end: '', work_days: [0, 1, 2, 3, 4, 5]
   });
@@ -395,7 +395,7 @@ export default function HR() {
               port: selectedDevice.port || 4370,
               timeout: 10000,
               uid: parseInt(uid),
-              name: employeeForm.name,
+              name: employeeForm.name_en || employeeForm.name,
               privilege: 0,
               user_id: uid.toString()
             }, { timeout: 15000 });
@@ -443,7 +443,7 @@ export default function HR() {
               port: selectedDevice.port || 4370,
               timeout: 10000,
               uid: parseInt(uid),
-              name: employeeForm.name,
+              name: employeeForm.name_en || employeeForm.name,
               privilege: 0,
               user_id: uid.toString()
             }, { timeout: 15000 });
@@ -1163,7 +1163,7 @@ export default function HR() {
         timeout: 5000,
         uid: uid,
         user_id: String(uid),
-        name: pushingEmployee.name,
+        name: pushingEmployee.name_en || pushingEmployee.name,
         privilege: 0
       }, { timeout: 10000 });
 
@@ -1223,7 +1223,7 @@ export default function HR() {
           timeout: 5000,
           uid: uid,
           user_id: String(uid),
-          name: emp.name,
+          name: emp.name_en || emp.name,
           privilege: 0
         }, { timeout: 10000 });
         
@@ -1510,6 +1510,10 @@ export default function HR() {
                             <Input value={employeeForm.name} onChange={(e) => setEmployeeForm({...employeeForm, name: e.target.value})} required />
                           </div>
                           <div>
+                            <Label>{t('الاسم بالإنجليزية')} ({t('للبصمة')})</Label>
+                            <Input value={employeeForm.name_en} onChange={(e) => setEmployeeForm({...employeeForm, name_en: e.target.value})} placeholder="e.g. Ahmed Ali" dir="ltr" />
+                          </div>
+                          <div>
                             <Label>{t('رقم الهاتف')} *</Label>
                             <Input value={employeeForm.phone} onChange={(e) => setEmployeeForm({...employeeForm, phone: e.target.value})} required />
                           </div>
@@ -1682,7 +1686,7 @@ export default function HR() {
                               <Button size="sm" variant="outline" onClick={() => {
                                 setEditingEmployee(emp);
                                 setEmployeeForm({
-                                  name: emp.name, phone: emp.phone, email: emp.email || '', national_id: emp.national_id || '',
+                                  name: emp.name, name_en: emp.name_en || '', phone: emp.phone, email: emp.email || '', national_id: emp.national_id || '',
                                   position: emp.position, department: emp.department || '', branch_id: emp.branch_id,
                                   hire_date: emp.hire_date, salary: emp.salary, salary_type: emp.salary_type,
                                   work_hours_per_day: emp.work_hours_per_day,

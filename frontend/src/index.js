@@ -13,30 +13,22 @@ const registerServiceWorker = async () => {
       });
       console.log('Service Worker registered:', registration.scope);
       
-      // التحقق من التحديثات كل 10 دقائق
+      // التحقق من التحديثات كل 30 دقيقة (بدل 10 - أكثر استقرار)
       setInterval(() => {
         registration.update();
-      }, 10 * 60 * 1000);
+      }, 30 * 60 * 1000);
       
-      // عند وجود نسخة جديدة - تفعيلها بدون إعادة تحميل قسري
+      // عند وجود نسخة جديدة - لا نفعّلها تلقائياً
+      // المستخدم يحدّث يدوياً عند الرغبة
       registration.addEventListener('updatefound', () => {
-        const newWorker = registration.installing;
-        if (newWorker) {
-          newWorker.addEventListener('statechange', () => {
-            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-              // تفعيل النسخة الجديدة بصمت - بدون إعادة تحميل
-              newWorker.postMessage({ type: 'SKIP_WAITING' });
-            }
-          });
-        }
+        console.log('Service Worker update found - will activate on next page load');
       });
       
-      // منع إعادة التحميل المتكرر - فقط مرة واحدة
+      // منع إعادة التحميل المتكرر
       let refreshing = false;
       navigator.serviceWorker.addEventListener('controllerchange', () => {
         if (refreshing) return;
         refreshing = true;
-        // لا نعيد التحميل تلقائياً - نترك المستخدم يستمر بالعمل
         console.log('Service Worker updated');
       });
     } catch (error) {
