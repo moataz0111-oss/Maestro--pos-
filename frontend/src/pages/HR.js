@@ -1241,24 +1241,44 @@ export default function HR() {
       return;
     }
 
-    const activeEmployees = employees.filter(e => e.is_active);
+    const activeEmployees = employees.filter(e => e.is_active !== false);
     
-    // Fetch existing device users to find occupied UIDs
-    const deviceUsers = await fetchDeviceUsersForPush(device);
-    const existingUids = new Set((deviceUsers || []).map(u => parseInt(u.uid)));
+    if (activeEmployees.length === 0) {
+      toast.error(t('لا يوجد موظفين نشطين'));
+      setPushingAll(false);
+      return;
+    }
     
-    // أولاً: الموظفين اللي عندهم biometric_uid مسبق
-    // ثانياً: الموظفين بدون uid - يحصلون على uid جديد غير موجود على الجهاز
-    let nextUid = 1;
-    const getNextFreeUid = () => {
-      while (existingUids.has(nextUid) || activeEmployees.some(e => parseInt(e.biometric_uid) === nextUid)) nextUid++;
-      const uid = nextUid;
-      nextUid++;
-      return uid;
-    };
+    // === الخطوة 1: تعيين UIDs فريدة لكل موظف ===
+    const usedUids = new Set();
+    const employeesWithUids = [];
     
+    // أولاً: الموظفين اللي عندهم UID صحيح وفريد
     for (const emp of activeEmployees) {
-      const uid = emp.biometric_uid ? parseInt(emp.biometric_uid) : getNextFreeUid();
+      const uid = emp.biometric_uid ? parseInt(emp.biometric_uid) : 0;
+      if (uid > 0 && !usedUids.has(uid)) {
+        usedUids.add(uid);
+        employeesWithUids.push({ ...emp, assignedUid: uid });
+      }
+    }
+    
+    // ثانياً: الموظفين بدون UID أو UID مكرر - يحصلون على UID جديد فريد
+    let nextUid = 1;
+    for (const emp of activeEmployees) {
+      const uid = emp.biometric_uid ? parseInt(emp.biometric_uid) : 0;
+      const alreadyAssigned = employeesWithUids.some(e => e.id === emp.id);
+      if (!alreadyAssigned) {
+        // إيجاد UID فريد غير مستخدم
+        while (usedUids.has(nextUid)) nextUid++;
+        usedUids.add(nextUid);
+        employeesWithUids.push({ ...emp, assignedUid: nextUid, uidChanged: true });
+        nextUid++;
+      }
+    }
+    
+    // === الخطوة 2: تصدير كل موظف للبصمة ===
+    for (const emp of employeesWithUids) {
+      const uid = emp.assignedUid;
       try {
         const res = await axios.post(`${AGENT_URL}/zk-push-user`, {
           ip: device.ip_address,
@@ -1271,7 +1291,8 @@ export default function HR() {
         }, { timeout: 10000 });
         
         if (res.data.success) {
-          if (!emp.biometric_uid) {
+          // تحديث UID في النظام إذا تغير أو كان جديد
+          if (emp.uidChanged || !emp.biometric_uid || parseInt(emp.biometric_uid) !== uid) {
             const token = localStorage.getItem('token');
             await axios.put(`${API}/employees/${emp.id}`, 
               { biometric_uid: String(uid) },
