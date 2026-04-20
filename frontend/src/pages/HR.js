@@ -298,6 +298,48 @@ export default function HR() {
     return () => window.removeEventListener('biometric-sync-data-updated', handleSyncUpdate);
   }, [selectedBranchId, selectedMonth, dateMode, startDate, endDate, selectedYear]);
 
+  // جلب تلقائي لصور الوجه في الخلفية (عند تحميل الصفحة) للموظفين الذين ليس لديهم صورة
+  // تشغيل بصمت تام - لا toast مزعج في حالة الفشل
+  useEffect(() => {
+    if (!agentConnected || employees.length === 0 || biometricDevices.length === 0) return;
+    
+    const device = biometricDevices[0];
+    const token = localStorage.getItem('token');
+    if (!token || !device) return;
+    
+    // الموظفين الذين لديهم biometric_uid لكن ليس لديهم صورة
+    const needsPhoto = employees.filter(e => e.biometric_uid && !e.face_photo).slice(0, 10);
+    if (needsPhoto.length === 0) return;
+    
+    let cancelled = false;
+    const fetchMissingPhotos = async () => {
+      for (const emp of needsPhoto) {
+        if (cancelled) return;
+        try {
+          const res = await axios.post(`${AGENT_URL}/zk-face-photo`, {
+            ip: device.ip_address,
+            port: device.port || 4370,
+            timeout: 45000,
+            uid: parseInt(emp.biometric_uid)
+          }, { timeout: 60000 });
+          if (!cancelled && res.data?.success && res.data?.photo) {
+            await axios.post(`${API}/employees/${emp.id}/face-photo`, {
+              face_photo: res.data.photo
+            }, { headers: { Authorization: `Bearer ${token}` } });
+            // تحديث الحالة المحلية فوراً بدون إعادة جلب كامل
+            setEmployees(prev => prev.map(e => e.id === emp.id ? { ...e, face_photo: res.data.photo } : e));
+          }
+        } catch {
+          // تجاهل بصمت - لا نريد إزعاج المستخدم
+        }
+      }
+    };
+    
+    // تأخير قصير لعدم إثقال الصفحة عند التحميل الأول
+    const timer = setTimeout(fetchMissingPhotos, 3000);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [agentConnected, employees.length, biometricDevices.length]);
+
   const fetchData = async () => {
     setLoading(true);
     try {
@@ -610,12 +652,13 @@ export default function HR() {
         return;
       }
       
+      // timeout موسّع: الجهاز قد يحتاج وقتاً أطول لفحص عدة مسارات HTTP ومنافذ UDP
       const res = await axios.post(`${AGENT_URL}/zk-face-photo`, {
         ip: device.ip_address,
         port: device.port || 4370,
-        timeout: 15000,
+        timeout: 45000,
         uid: parseInt(emp.biometric_uid)
-      }, { timeout: 20000 });
+      }, { timeout: 60000 });
       
       if (res.data?.success && res.data?.photo) {
         setFacePhotoData(res.data.photo);
@@ -632,18 +675,21 @@ export default function HR() {
           toast.warning(t('تم جلب الصورة لكن فشل الحفظ'));
         }
       } else {
-        const debugInfo = res.data?.debug ? res.data.debug.join(', ') : '';
+        // لا توجد صورة على الجهاز - لا نعرض toast مزعج، فقط تحديث الحالة
         if (!emp.face_photo) {
-          toast.info(t('لا توجد صورة في الجهاز') + (debugInfo ? ` - ${debugInfo}` : ''));
+          toast.info(t('لا توجد صورة في الجهاز - يمكنك رفعها يدوياً'), { duration: 3000 });
         }
       }
     } catch (err) {
+      // تجاهل الأخطاء بصمت عندما يكون للموظف صورة بالفعل
+      if (emp.face_photo) {
+        // عرض الصورة المحفوظة ولا نزعج المستخدم
+        return;
+      }
       if (err.code === 'ECONNABORTED' || err.message?.includes('timeout')) {
-        toast.error(t('انتهت مهلة الاتصال بجهاز البصمة'));
+        toast.error(t('انتهت مهلة الاتصال بجهاز البصمة - جرّب رفع الصورة يدوياً'), { duration: 4000 });
       } else {
-        if (!emp.face_photo) {
-          toast.info(t('تعذر الاتصال - يمكنك رفع صورة يدوياً'));
-        }
+        toast.info(t('تعذر الاتصال - يمكنك رفع صورة يدوياً'), { duration: 3000 });
       }
     } finally {
       setFacePhotoLoading(false);

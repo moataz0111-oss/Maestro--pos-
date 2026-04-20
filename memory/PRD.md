@@ -48,6 +48,11 @@ Multi-tenant POS system with biometric integration (ZKTeco), thermal receipt pri
 19. Watchdog VBScript wrapper (no PowerShell blue flash)
 20. **[FIXED 2026-04-20] Auto-reload every minute bug**: Root causes were (a) duplicate SW registration in public/index.html + src/index.js, (b) ThemeContext 60s interval triggering needless state updates, (c) no controllerchange listener to block reload when SW swaps. Fixes: removed duplicate SW registration, guarded ThemeContext state, changed interval to 5min, added controllerchange listener that blocks reload, added beforeunload debug logger.
 21. **[FIXED 2026-04-20] HR/BiometricDevices agent status discrepancy**: BiometricDevices.checkAgent now calls /api/print-queue/agent-status (heartbeat) first, falls back to localhost:9999. HR.js already had this logic. Both use identical logic, ensuring consistent status display.
+22. **[FIXED 2026-04-20] Dialog accessibility warnings (Missing aria-describedby)**: Base `DialogContent` now includes a default sr-only `DialogPrimitive.Description` when no `aria-describedby` is provided — silences Radix UI warnings across all dialogs globally.
+23. **[FIXED 2026-04-20] Face photo fetch timeout + auto-fetch**:
+    - Increased face photo fetch timeouts from 20s → 60s (outer) and 15s → 45s (agent-side) to accommodate ZK devices trying multiple HTTP/UDP methods.
+    - Added background auto-fetch: HR page now automatically fetches face photos for up to 10 employees without saved photos on load (silently, no error toast).
+    - Improved UX: when fetch fails but employee has a saved photo, we silently display the saved one instead of the timeout error.
 
 ## Key API Endpoints
 - GET /api/printers?branch_id=xxx

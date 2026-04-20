@@ -122,9 +122,9 @@ export function useAutoSync() {
           const res = await axios.post(`${AGENT_URL}/zk-face-photo`, {
             ip: device.ip_address,
             port: device.port || 4370,
-            timeout: 15000,
+            timeout: 45000,
             uid: parseInt(emp.biometric_uid)
-          }, { timeout: 25000 });
+          }, { timeout: 60000 });
 
           if (res.data?.success && res.data?.photo) {
             await axios.post(`${API}/employees/${emp.id}/face-photo`, {
