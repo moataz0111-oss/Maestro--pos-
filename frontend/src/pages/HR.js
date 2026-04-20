@@ -803,14 +803,19 @@ export default function HR() {
     try {
       const res = await axios.post(`${AGENT_URL}/zk-probe-device`, {
         ip: device.ip_address
-      }, { timeout: 30000 });
+      }, { timeout: 90000 });
       setProbeResult(res.data);
       if (res.data?.success) {
         toast.success(t('تم فحص الجهاز'));
       }
     } catch (err) {
-      toast.error(t('فشل في فحص الجهاز'));
-      setProbeResult({ error: err.message });
+      const isTimeout = err.code === 'ECONNABORTED' || err.message?.includes('timeout');
+      toast.error(
+        isTimeout 
+          ? t('الجهاز لا يستجيب خلال 90 ثانية - الشبكة بطيئة أو الجهاز غير متصل')
+          : t('فشل في فحص الجهاز') + ': ' + (err.message || 'Network')
+      );
+      setProbeResult({ error: err.message, code: err.code });
     } finally {
       setProbeLoading(false);
     }
@@ -3117,72 +3122,88 @@ export default function HR() {
                 )}
               </div>
               
-              <div className="flex gap-2 w-full">
-                <Button className="flex-1" variant="outline" onClick={() => setFacePhotoDialogOpen(false)}>
-                  {t('إغلاق')}
-                </Button>
-                {facePhotoEmployee?.biometric_uid && (
-                  <Button className="flex-1" onClick={() => handleFetchFacePhoto(facePhotoEmployee)} disabled={facePhotoLoading} data-testid="refresh-face-photo-btn">
-                    <Camera className="h-4 w-4 ml-2" />
-                    {facePhotoLoading ? t('جاري الجلب...') : t('تحديث الصورة')}
-                  </Button>
-                )}
-              </div>
-              
-              {/* رفع صورة يدوياً */}
+              {/* الطرق الموصى بها: كاميرا + رفع ملف (الأكثر موثوقية 100%) */}
               <div className="w-full space-y-2">
+                <p className="text-xs font-semibold text-center text-primary">{t('الطرق الموصى بها')}</p>
                 <div className="grid grid-cols-2 gap-2">
-                  <label className="cursor-pointer">
-                    <input type="file" accept="image/*" className="hidden" onChange={handleManualPhotoUpload} data-testid="manual-photo-upload" />
-                    <div className="flex items-center justify-center gap-2 p-2 border border-dashed rounded-lg text-sm text-muted-foreground hover:bg-accent transition-colors">
-                      <Upload className="h-4 w-4" />
-                      {t('من الجهاز')}
-                    </div>
-                  </label>
                   <button
                     type="button"
                     onClick={startCamera}
                     data-testid="webcam-capture-btn"
-                    className="flex items-center justify-center gap-2 p-2 border border-dashed rounded-lg text-sm text-muted-foreground hover:bg-accent transition-colors"
+                    className="flex flex-col items-center justify-center gap-1 p-4 bg-primary/10 border-2 border-primary/30 rounded-lg hover:bg-primary/20 transition-all"
                   >
-                    <Camera className="h-4 w-4" />
-                    {t('التقاط بالكاميرا')}
+                    <Camera className="h-6 w-6 text-primary" />
+                    <span className="text-sm font-semibold">{t('التقاط بالكاميرا')}</span>
+                    <span className="text-[10px] text-muted-foreground">{t('أسرع وأضمن')}</span>
                   </button>
+                  <label className="cursor-pointer">
+                    <input type="file" accept="image/*" className="hidden" onChange={handleManualPhotoUpload} data-testid="manual-photo-upload" />
+                    <div className="flex flex-col items-center justify-center gap-1 p-4 bg-primary/10 border-2 border-primary/30 rounded-lg hover:bg-primary/20 transition-all">
+                      <Upload className="h-6 w-6 text-primary" />
+                      <span className="text-sm font-semibold">{t('رفع من الجهاز')}</span>
+                      <span className="text-[10px] text-muted-foreground">{t('صورة جاهزة')}</span>
+                    </div>
+                  </label>
                 </div>
-                <p className="text-xs text-muted-foreground text-center">
-                  {t('الطريقة الموصى بها: التقاط بالكاميرا أو رفع الملف')}
-                </p>
+              </div>
+
+              {/* زر الإغلاق الوحيد - بارز */}
+              <div className="w-full">
+                <Button className="w-full" variant="outline" onClick={() => setFacePhotoDialogOpen(false)}>
+                  {t('إغلاق')}
+                </Button>
               </div>
               
-              {/* تشخيص الجهاز */}
-              <div className="w-full border-t pt-3">
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
-                  className="w-full text-xs text-muted-foreground"
-                  onClick={handleProbeDevice} 
-                  disabled={probeLoading}
-                  data-testid="probe-device-btn"
-                >
-                  {probeLoading ? t('جاري فحص الجهاز...') : t('فحص اتصال الجهاز (تشخيص)')}
-                </Button>
-                {probeResult && (
-                  <div className="mt-2 p-2 bg-muted rounded text-xs font-mono max-h-40 overflow-auto" data-testid="probe-result">
-                    {probeResult.udp_4370 !== undefined && (
-                      <p>UDP 4370: <span className={probeResult.udp_4370 ? 'text-green-500' : 'text-red-500'}>{probeResult.udp_4370 ? 'OK' : 'FAIL'}</span></p>
-                    )}
-                    {probeResult.http_probes?.map((p, i) => (
-                      <p key={i}>
-                        {p.port && `Port ${p.port}`} {p.cred && `[${p.cred}]`} {p.path || ''}: 
-                        <span className={p.status === 200 ? 'text-green-500' : p.status === 401 ? 'text-yellow-500' : 'text-red-500'}>
-                          {` ${p.status}`}
-                        </span>
-                      </p>
-                    ))}
-                    {probeResult.error && <p className="text-red-500">{probeResult.error}</p>}
-                  </div>
-                )}
-              </div>
+              {/* قسم متقدم مطوي - للمستخدمين المتقدمين فقط */}
+              <details className="w-full">
+                <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground transition-colors py-2 text-center select-none">
+                  {t('⚙️ خيارات متقدمة (معظم الأجهزة لا تدعمها)')}
+                </summary>
+                <div className="pt-2 space-y-2">
+                  {facePhotoEmployee?.biometric_uid && (
+                    <Button 
+                      className="w-full" 
+                      variant="ghost" 
+                      size="sm"
+                      onClick={() => handleFetchFacePhoto(facePhotoEmployee)} 
+                      disabled={facePhotoLoading} 
+                      data-testid="refresh-face-photo-btn"
+                    >
+                      <Camera className="h-4 w-4 ml-2" />
+                      {facePhotoLoading ? t('جاري الجلب من جهاز البصمة...') : t('محاولة جلب من جهاز البصمة')}
+                    </Button>
+                  )}
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className="w-full text-xs text-muted-foreground"
+                    onClick={handleProbeDevice} 
+                    disabled={probeLoading}
+                    data-testid="probe-device-btn"
+                  >
+                    {probeLoading ? t('جاري فحص الجهاز... (قد يستغرق حتى 90 ثانية)') : t('فحص اتصال الجهاز (تشخيص)')}
+                  </Button>
+                  {probeResult && (
+                    <div className="mt-2 p-2 bg-muted rounded text-xs font-mono max-h-40 overflow-auto" data-testid="probe-result">
+                      {probeResult.udp_4370 !== undefined && (
+                        <p>UDP 4370: <span className={probeResult.udp_4370 ? 'text-green-500' : 'text-red-500'}>{probeResult.udp_4370 ? 'OK' : 'FAIL'}</span></p>
+                      )}
+                      {probeResult.http_probes?.map((p, i) => (
+                        <p key={i}>
+                          {p.port && `Port ${p.port}`} {p.cred && `[${p.cred}]`} {p.path || ''}: 
+                          <span className={p.status === 200 ? 'text-green-500' : p.status === 401 ? 'text-yellow-500' : 'text-red-500'}>
+                            {` ${p.status}`}
+                          </span>
+                        </p>
+                      ))}
+                      {probeResult.error && <p className="text-red-500">{probeResult.error}</p>}
+                    </div>
+                  )}
+                  <p className="text-[10px] text-muted-foreground text-center italic">
+                    {t('ملاحظة: معظم أجهزة ZKTeco لا تدعم تصدير الصور — استخدم الكاميرا أو رفع الملف')}
+                  </p>
+                </div>
+              </details>
             </div>
           </DialogContent>
         </Dialog>
