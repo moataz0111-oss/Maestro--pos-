@@ -80,19 +80,8 @@ const ProtectedRoute = ({ children }) => {
   const { isAuthenticated, loading, user } = useAuth();
   const [initialCheckDone, setInitialCheckDone] = useState(() => isAuthChecked());
   
-  // تحميل الصفحات مسبقاً - مرة واحدة فقط
-  useEffect(() => {
-    if (isAuthenticated && user) {
-      const alreadyPreloaded = sessionStorage.getItem('pages_preloaded');
-      if (!alreadyPreloaded) {
-        const timer = setTimeout(() => {
-          preloadAllPages();
-          sessionStorage.setItem('pages_preloaded', 'true');
-        }, 5000);
-        return () => clearTimeout(timer);
-      }
-    }
-  }, [isAuthenticated, user]);
+  // تحميل الصفحات مسبقاً - معطّل لمنع إعادة التحميل والبطء
+  // الصفحات تُحمّل عند الحاجة (lazy loading) وهي أسرع وأكثر استقراراً
   
   // علّم التحقق الأولي كمكتمل بمجرد انتهاء التحميل
   useEffect(() => {

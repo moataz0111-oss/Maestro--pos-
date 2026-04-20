@@ -93,8 +93,8 @@ self.addEventListener('activate', (event) => {
           })
       );
     }).then(() => {
-      console.log('[SW-Offline] Activated and claimed');
-      return self.clients.claim();
+      console.log('[SW-Offline] Activated');
+      // لا نستخدم clients.claim() لمنع إعادة التحميل
     })
   );
 });
