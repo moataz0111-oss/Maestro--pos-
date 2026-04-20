@@ -124,8 +124,8 @@ export default function BiometricDevices({ branches = [], onDataRefresh }) {
           try {
             // 1. جلب البيانات من الجهاز عبر الوكيل
             const agentRes = await axios.post(`${AGENT_URL}/zk-sync`, {
-              ip: device.ip_address, port: device.port || 4370, timeout: 45000
-            }, { timeout: 60000 });
+              ip: device.ip_address, port: device.port || 4370, timeout: 150000
+            }, { timeout: 180000 });
             
             if (!agentRes.data.success || !agentRes.data.records?.length) continue;
             
@@ -258,29 +258,36 @@ export default function BiometricDevices({ branches = [], onDataRefresh }) {
 
   const handleSyncAttendance = async (device) => {
     setSyncingDevice(device.id);
+    const syncingToast = toast.loading(t('جاري المزامنة من الجهاز — قد تستغرق حتى 3 دقائق حسب حجم البيانات'), { duration: 180000 });
     try {
       const agentOk = await checkAgent();
       if (!agentOk) {
+        toast.dismiss(syncingToast);
         toast.error(t('الوكيل المحلي غير متصل! شغّل وسيط الطباعة'));
         return;
       }
 
-      // 1. Get attendance data from local agent
+      // 1. Get attendance data from local agent - مهلة موسّعة للأجهزة الكبيرة
       let agentRes;
       try {
         agentRes = await axios.post(`${AGENT_URL}/zk-sync`, {
           ip: device.ip_address,
           port: device.port || 4370,
-          timeout: 30000
-        }, { timeout: 60000 });
+          timeout: 150000
+        }, { timeout: 180000 });
       } catch (agentErr) {
-        toast.error(t('فشل الاتصال بالوكيل') + ': ' + (agentErr.message || 'Network error'));
+        toast.dismiss(syncingToast);
+        const errMsg = agentErr.code === 'ECONNABORTED' || agentErr.message?.includes('timeout')
+          ? t('الجهاز لم يستجب خلال 3 دقائق — جرّب إعادة تشغيل الجهاز أو تقسيم المزامنة لفترات أقصر')
+          : t('فشل الاتصال بالوكيل') + ': ' + (agentErr.message || 'Network error');
+        toast.error(errMsg, { duration: 6000 });
         return;
       }
 
       console.log('Agent sync response:', JSON.stringify(agentRes.data));
 
       if (!agentRes.data || !agentRes.data.success) {
+        toast.dismiss(syncingToast);
         const msg = agentRes.data?.message || t('فشل في جلب البيانات');
         const dbg = agentRes.data?.debug || '';
         const raw = agentRes.data?.raw_bytes || '';
@@ -300,8 +307,10 @@ export default function BiometricDevices({ branches = [], onDataRefresh }) {
         }, {
           headers: { Authorization: `Bearer ${token}` }
         });
+        toast.dismiss(syncingToast);
         toast.success(t('تمت المزامنة!') + ` (${backendRes.data?.records_count || recordCount} ${t('سجل')})`);
       } catch (backendErr) {
+        toast.dismiss(syncingToast);
         const backendMsg = backendErr.response?.data?.detail || backendErr.message || 'Backend error';
         toast.error(t('جلب البيانات نجح لكن الحفظ فشل') + ': ' + backendMsg);
       }
@@ -309,6 +318,7 @@ export default function BiometricDevices({ branches = [], onDataRefresh }) {
       fetchDevices();
     } catch (error) {
       console.error('Sync error:', error);
+      toast.dismiss(syncingToast);
       toast.error(t('خطأ غير متوقع') + ': ' + (error.message || String(error)));
     } finally {
       setSyncingDevice(null);

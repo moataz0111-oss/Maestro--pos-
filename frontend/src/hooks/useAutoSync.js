@@ -54,8 +54,8 @@ export function useAutoSync() {
       for (const device of devices) {
         try {
           const agentRes = await axios.post(`${AGENT_URL}/zk-sync`, {
-            ip: device.ip_address, port: device.port || 4370, timeout: 45000
-          }, { timeout: 60000 });
+            ip: device.ip_address, port: device.port || 4370, timeout: 150000
+          }, { timeout: 180000 });
           if (!agentRes.data?.success || !agentRes.data?.records?.length) continue;
 
           const syncRes = await axios.post(`${API}/biometric/devices/${device.id}/sync-from-agent`, {
