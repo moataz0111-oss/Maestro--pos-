@@ -2619,7 +2619,54 @@ export default function HR() {
                     <p>{t('لا توجد طلبات أوقات إضافية')}</p>
                   </div>
                 ) : (
-                  <div className="overflow-x-auto">
+                  <>
+                    {/* ملخص الأوقات الإضافية لكل موظف */}
+                    {(() => {
+                      const summary = {};
+                      overtimeRequests.forEach(ot => {
+                        if (ot.status === 'approved') {
+                          const key = ot.employee_id;
+                          if (!summary[key]) {
+                            summary[key] = {
+                              name: employees.find(e => e.id === ot.employee_id)?.name || ot.employee_name,
+                              total: 0,
+                              count: 0
+                            };
+                          }
+                          summary[key].total += ot.hours || 0;
+                          summary[key].count += 1;
+                        }
+                      });
+                      const summaryArr = Object.values(summary).sort((a, b) => b.total - a.total);
+                      if (summaryArr.length === 0) return null;
+                      const grandTotal = summaryArr.reduce((s, x) => s + x.total, 0);
+                      return (
+                        <div className="mb-4 p-4 bg-gradient-to-br from-amber-50 to-yellow-50 dark:from-amber-950/20 dark:to-yellow-950/20 border-2 border-amber-200 dark:border-amber-800 rounded-lg" data-testid="overtime-summary">
+                          <div className="flex items-center justify-between mb-3">
+                            <h4 className="font-bold text-amber-800 dark:text-amber-300 flex items-center gap-2">
+                              <Timer className="h-4 w-4" />
+                              {t('ملخص الأوقات الإضافية المعتمدة')}
+                            </h4>
+                            <Badge className="bg-amber-600 text-white text-sm">
+                              {t('إجمالي')}: {grandTotal.toFixed(1)} {t('ساعة')}
+                            </Badge>
+                          </div>
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                            {summaryArr.map((s, i) => (
+                              <div key={i} className="flex items-center justify-between p-2 bg-white/60 dark:bg-black/20 rounded-md">
+                                <span className="text-sm font-medium truncate">{s.name}</span>
+                                <div className="flex items-center gap-2 shrink-0">
+                                  <Badge variant="outline" className="text-xs">{s.count} {t('أيام')}</Badge>
+                                  <span className="font-bold text-amber-700 dark:text-amber-300">{s.total.toFixed(1)}h</span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })()}
+                    
+                    <div className="overflow-x-auto">
                     <table className="w-full">
                       <thead>
                         <tr className="border-b">
@@ -2634,15 +2681,46 @@ export default function HR() {
                       <tbody>
                         {overtimeRequests.map(ot => {
                           const emp = employees.find(e => e.id === ot.employee_id);
+                          // تحديد لون الصف حسب الحالة والتاريخ
+                          const today = new Date().toISOString().slice(0, 10);
+                          const isPast = ot.date < today;
+                          const isApproved = ot.status === 'approved';
+                          const isApprovedToday = isApproved && !isPast;
+                          const isApprovedPast = isApproved && isPast;
+                          
+                          let rowClass = 'border-b hover:bg-muted/50 transition-all';
+                          let badgeClass = '';
+                          let badgeLabel = '';
+                          if (ot.status === 'pending') {
+                            rowClass += ' bg-orange-50/40 dark:bg-orange-950/10';
+                            badgeClass = 'bg-orange-500/10 text-orange-500';
+                            badgeLabel = t('بانتظار الموافقة');
+                          } else if (isApprovedToday) {
+                            // اليوم الحالي - أخضر صلب
+                            rowClass += ' bg-green-500/15 dark:bg-green-900/20 border-green-500/30';
+                            badgeClass = 'bg-green-500 text-white font-bold shadow-sm';
+                            badgeLabel = t('تمت الموافقة - اليوم');
+                          } else if (isApprovedPast) {
+                            // أيام سابقة - أخضر فسفوري زاهي
+                            rowClass += ' bg-gradient-to-r from-lime-300/40 via-green-300/40 to-lime-300/40 dark:from-lime-500/20 dark:via-green-500/20 dark:to-lime-500/20 border-l-4 border-lime-400';
+                            badgeClass = 'bg-lime-400 text-lime-950 font-bold shadow-md shadow-lime-400/50';
+                            badgeLabel = t('✓ تمت الموافقة (مُرحّلة)');
+                          } else if (ot.status === 'rejected') {
+                            rowClass += ' bg-red-50/40 dark:bg-red-950/10 opacity-60';
+                            badgeClass = 'bg-red-500/10 text-red-500';
+                            badgeLabel = t('مرفوض');
+                          }
+                          
                           return (
-                            <tr key={ot.id} className="border-b hover:bg-muted/50">
+                            <tr key={ot.id} className={rowClass} data-testid={`overtime-row-${ot.id}`} data-status={ot.status} data-past={isPast ? 'true' : 'false'}>
                               <td className="p-3 font-medium">{emp?.name || ot.employee_name}</td>
-                              <td className="p-3">{ot.date}</td>
-                              <td className="p-3">{ot.hours?.toFixed(1)}</td>
                               <td className="p-3">
-                                {ot.status === 'pending' && <Badge className="bg-orange-500/10 text-orange-500">{t('بانتظار الموافقة')}</Badge>}
-                                {ot.status === 'approved' && <Badge className="bg-green-500/10 text-green-500">{t('تمت الموافقة')}</Badge>}
-                                {ot.status === 'rejected' && <Badge className="bg-red-500/10 text-red-500">{t('مرفوض')}</Badge>}
+                                {ot.date}
+                                {isApprovedPast && <span className="mr-2 text-[10px] text-lime-700 dark:text-lime-300 font-bold">●</span>}
+                              </td>
+                              <td className="p-3 font-bold">{ot.hours?.toFixed(1)}</td>
+                              <td className="p-3">
+                                <Badge className={badgeClass}>{badgeLabel}</Badge>
                               </td>
                               <td className="p-3 text-sm text-muted-foreground">{ot.notes || '-'}</td>
                               <td className="p-3">
@@ -2663,7 +2741,8 @@ export default function HR() {
                         })}
                       </tbody>
                     </table>
-                  </div>
+                    </div>
+                  </>
                 )}
               </CardContent>
             </Card>
