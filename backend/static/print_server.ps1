@@ -1,6 +1,6 @@
 $ErrorActionPreference = 'Continue'
 $agentLog = "$PSScriptRoot\agent.log"
-"$(Get-Date) - Agent v6.1.1 starting..." | Out-File $agentLog
+"$(Get-Date) - Agent v6.1.2 starting..." | Out-File $agentLog
 
 # ============================================
 # === AUTO-CLEANUP: Kill old agent & files ===
@@ -1069,6 +1069,12 @@ public class ZKHelper {
         return "{\"success\":true,\"ip\":\"" + EscJson(ip) + "\",\"udp_4370\":" + udpResult + ",\"http_probes\":[" + string.Join(",", results.ToArray()) + "]}";
     }
 
+    // ===== Photo fetch cache (speeds up repeated requests) =====
+    public static string LastSuccessfulPhotoUser = "";
+    public static string LastSuccessfulPhotoPass = "";
+    public static int LastSuccessfulPhotoPort = 0;
+    public static string LastSuccessfulPhotoPathTpl = "";
+
     // ===== Get Face Photo from Device =====
     public static string GetFacePhoto(string ip, int port, int timeoutMs, int uid) {
         var debugLog = new List<string>();
@@ -1107,12 +1113,31 @@ public class ZKHelper {
             };
             int[] httpPorts = new int[] { 80, 8080, 8081, 8088 };
 
+            // === Fast path: try last successful combo first (cache) ===
+            if (LastSuccessfulPhotoPort != 0 && !string.IsNullOrEmpty(LastSuccessfulPhotoPathTpl)) {
+                string cachedPath = LastSuccessfulPhotoPathTpl.Replace("{uid}", uid.ToString());
+                string cachedUrl = "http://" + ip + ":" + LastSuccessfulPhotoPort + cachedPath;
+                byte[] cachedData = HttpGetPhoto(cachedUrl, LastSuccessfulPhotoUser, LastSuccessfulPhotoPass, 2500);
+                if (cachedData != null && cachedData.Length > 100) {
+                    bool cachedIsImage = (cachedData.Length > 2 && cachedData[0] == 0xFF && cachedData[1] == 0xD8) ||
+                                         (cachedData.Length > 4 && cachedData[0] == 0x89 && cachedData[1] == 0x50) ||
+                                         (cachedData.Length > 2 && cachedData[0] == 0x42 && cachedData[1] == 0x4D);
+                    if (cachedIsImage) {
+                        string cachedMime = "image/jpeg";
+                        if (cachedData[0] == 0x89) cachedMime = "image/png";
+                        else if (cachedData[0] == 0x42) cachedMime = "image/bmp";
+                        string cachedB64 = Convert.ToBase64String(cachedData);
+                        return "{\"success\":true,\"uid\":" + uid + ",\"photo\":\"data:" + cachedMime + ";base64," + cachedB64 + "\",\"source\":\"http-cache\",\"url\":\"" + EscJson(cachedUrl) + "\",\"size\":" + cachedData.Length + "}";
+                    }
+                }
+            }
+
             foreach (string[] cred in httpCreds) {
                 foreach (int hp in httpPorts) {
                     foreach (string pathTpl in photoPaths) {
                         string urlPath = pathTpl.Replace("{uid}", uid.ToString());
                         string url = "http://" + ip + ":" + hp + urlPath;
-                        byte[] imgData = HttpGetPhoto(url, cred[0], cred[1], 3000);
+                        byte[] imgData = HttpGetPhoto(url, cred[0], cred[1], 1500);
                         if (imgData != null && imgData.Length > 100) {
                             // Check if it looks like an image (JPEG, PNG, BMP)
                             bool isImage = (imgData.Length > 2 && imgData[0] == 0xFF && imgData[1] == 0xD8) || // JPEG
@@ -1123,6 +1148,11 @@ public class ZKHelper {
                                 if (imgData[0] == 0x89) mimeType = "image/png";
                                 else if (imgData[0] == 0x42) mimeType = "image/bmp";
                                 string base64 = Convert.ToBase64String(imgData);
+                                // حفظ في الكاش للاستخدام السريع التالي
+                                LastSuccessfulPhotoUser = cred[0];
+                                LastSuccessfulPhotoPass = cred[1];
+                                LastSuccessfulPhotoPort = hp;
+                                LastSuccessfulPhotoPathTpl = pathTpl;
                                 return "{\"success\":true,\"uid\":" + uid + ",\"photo\":\"data:" + mimeType + ";base64," + base64 + "\",\"source\":\"http\",\"url\":\"" + EscJson(url) + "\",\"size\":" + imgData.Length + "}";
                             }
                         }
@@ -1865,7 +1895,7 @@ while ($restartCount -lt $maxRestarts) {
     $listener.Prefixes.Add('http://localhost:9999/')
     try { $listener.Prefixes.Add('https://localhost:9443/') } catch {}
     $listener.Start()
-    "$(Get-Date) - HttpListener started on port 9999 (v6.1.1) [restart #$restartCount]" | Out-File $agentLog -Append
+    "$(Get-Date) - HttpListener started on port 9999 (v6.1.2) [restart #$restartCount]" | Out-File $agentLog -Append
 
     # === Print Queue Polling (Background Job) ===
     # يسحب أوامر الطباعة من السيرفر كل 3 ثواني
@@ -2008,7 +2038,7 @@ public class JobReceiptRenderer {
             while ($true) {
                 try {
                     # إرسال agent_version و device_id مع كل طلب = heartbeat تلقائي
-                    $r = Invoke-WebRequest -Uri "$apiUrl/api/print-queue/pending?limit=10&agent_version=6.1.1&device_id=default" -UseBasicParsing -TimeoutSec 10
+                    $r = Invoke-WebRequest -Uri "$apiUrl/api/print-queue/pending?limit=10&agent_version=6.1.2&device_id=default" -UseBasicParsing -TimeoutSec 10
                     $data = $r.Content | ConvertFrom-Json
                     
                     foreach ($job in $data.jobs) {
@@ -2133,7 +2163,7 @@ public class JobReceiptRenderer {
         "$(Get-Date) - $($req.HttpMethod) $path" | Out-File $agentLog -Append
 
         if ($path -eq '/status') {
-            $jsonOut = '{"status":"running","version":"6.1.1","agent":"Maestro Print Agent","usb_support":true,"zk_support":true}'
+            $jsonOut = '{"status":"running","version":"6.1.2","agent":"Maestro Print Agent","usb_support":true,"zk_support":true}'
         }
         elseif ($path -eq '/list-printers') {
             try {

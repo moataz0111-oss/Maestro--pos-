@@ -281,18 +281,18 @@ export default function HR() {
     fetchData();
   }, [selectedBranchId, selectedMonth, dateMode, startDate, endDate, selectedYear, isOffline]);
 
-  // تحديث تلقائي للبيانات كل دقيقة
+  // تحديث تلقائي للبيانات كل دقيقة - بصمت بدون إظهار شاشة التحميل (silent refresh)
   useEffect(() => {
     const autoRefreshInterval = setInterval(() => {
-      fetchData();
+      fetchData(true); // silent = true، لا نُظهر spinner عند التحديث الخلفي
     }, 60 * 1000);
     return () => clearInterval(autoRefreshInterval);
   }, [selectedBranchId, selectedMonth, dateMode, startDate, endDate, selectedYear]);
 
-  // الاستماع لأحداث المزامنة التلقائية - تحديث فوري عند وصول بيانات جديدة
+  // الاستماع لأحداث المزامنة التلقائية - تحديث فوري عند وصول بيانات جديدة (بصمت)
   useEffect(() => {
     const handleSyncUpdate = () => {
-      fetchData();
+      fetchData(true); // silent refresh
     };
     window.addEventListener('biometric-sync-data-updated', handleSyncUpdate);
     return () => window.removeEventListener('biometric-sync-data-updated', handleSyncUpdate);
@@ -300,6 +300,7 @@ export default function HR() {
 
   // جلب تلقائي لصور الوجه في الخلفية (عند تحميل الصفحة) للموظفين الذين ليس لديهم صورة
   // تشغيل بصمت تام - لا toast مزعج في حالة الفشل
+  const [photoFetchProgress, setPhotoFetchProgress] = useState(null); // {current, total}
   useEffect(() => {
     if (!agentConnected || employees.length === 0 || biometricDevices.length === 0) return;
     
@@ -309,12 +310,19 @@ export default function HR() {
     
     // الموظفين الذين لديهم biometric_uid لكن ليس لديهم صورة
     const needsPhoto = employees.filter(e => e.biometric_uid && !e.face_photo).slice(0, 10);
-    if (needsPhoto.length === 0) return;
+    if (needsPhoto.length === 0) {
+      setPhotoFetchProgress(null);
+      return;
+    }
     
     let cancelled = false;
     const fetchMissingPhotos = async () => {
+      setPhotoFetchProgress({ current: 0, total: needsPhoto.length });
+      let idx = 0;
       for (const emp of needsPhoto) {
         if (cancelled) return;
+        idx++;
+        setPhotoFetchProgress({ current: idx, total: needsPhoto.length });
         try {
           const res = await axios.post(`${AGENT_URL}/zk-face-photo`, {
             ip: device.ip_address,
@@ -333,6 +341,10 @@ export default function HR() {
           // تجاهل بصمت - لا نريد إزعاج المستخدم
         }
       }
+      if (!cancelled) {
+        // إخفاء المؤشر بعد ثانيتين من الانتهاء
+        setTimeout(() => setPhotoFetchProgress(null), 2000);
+      }
     };
     
     // تأخير قصير لعدم إثقال الصفحة عند التحميل الأول
@@ -340,8 +352,9 @@ export default function HR() {
     return () => { cancelled = true; clearTimeout(timer); };
   }, [agentConnected, employees.length, biometricDevices.length]);
 
-  const fetchData = async () => {
-    setLoading(true);
+  const fetchData = async (silent = false) => {
+    // في التحديث البصمت، لا نُظهر spinner الشاشة الكاملة (يمنع الوميض كل دقيقة)
+    if (!silent) setLoading(true);
     try {
       // === وضع Offline ===
       if (isOffline) {
@@ -1440,12 +1453,18 @@ export default function HR() {
                 </div>
                 <div>
                   <h1 className="text-2xl font-bold text-foreground">{t('إدارة الموارد البشرية')}</h1>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <p className="text-sm text-muted-foreground">{t('إدارة الموظفين والرواتب والحضور')}</p>
                     <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${agentConnected ? 'bg-green-500/20 text-green-500' : 'bg-red-500/20 text-red-500'}`}>
                       <span className={`w-2 h-2 rounded-full ${agentConnected ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`}></span>
                       {agentConnected ? t('الوسيط متصل') : t('الوسيط غير متصل')}
                     </span>
+                    {photoFetchProgress && (
+                      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-500/20 text-blue-500" data-testid="photo-fetch-progress">
+                        <Camera className="h-3 w-3 animate-pulse" />
+                        {t('جلب الصور')}: {photoFetchProgress.current}/{photoFetchProgress.total}
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>
