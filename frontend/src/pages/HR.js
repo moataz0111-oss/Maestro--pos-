@@ -3056,38 +3056,70 @@ export default function HR() {
               <div className="space-y-4">
                 <div className="bg-muted p-4 rounded-lg">
                   <h3 className="font-bold text-lg mb-2">{payrollPreview.employee_name}</h3>
-                  <p className="text-muted-foreground">{t('شهر: {payrollPreview.month}')}</p>
+                  <p className="text-muted-foreground">{t('شهر')}: {payrollPreview.month}</p>
                 </div>
                 
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="bg-card border rounded-lg p-4">
-                    <p className="text-muted-foreground">{t('الراتب الأساسي')}</p>
-                    <p className="text-2xl font-bold">{formatPrice(payrollPreview.basic_salary)}</p>
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="bg-card border rounded-lg p-3">
+                    <p className="text-xs text-muted-foreground">{t('الراتب الأساسي')}</p>
+                    <p className="text-lg font-bold">{formatPrice(payrollPreview.basic_salary)}</p>
                   </div>
-                  <div className="bg-card border rounded-lg p-4">
-                    <p className="text-muted-foreground">{t('أيام العمل')}</p>
-                    <p className="text-2xl font-bold">{payrollPreview.worked_days}</p>
+                  <div className="bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
+                    <p className="text-xs text-muted-foreground">{t('السعر اليومي')}</p>
+                    <p className="text-lg font-bold text-blue-600 dark:text-blue-400">{formatPrice(payrollPreview.daily_rate || (payrollPreview.basic_salary/30))}</p>
+                    <p className="text-[10px] text-muted-foreground">{t('= الأساسي ÷ 30')}</p>
+                  </div>
+                  <div className="bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800 rounded-lg p-3">
+                    <p className="text-xs text-muted-foreground">{t('أيام العمل الفعلية')}</p>
+                    <p className="text-lg font-bold text-emerald-600 dark:text-emerald-400">{payrollPreview.worked_days}</p>
+                    <p className="text-[10px] text-muted-foreground">{t('يوم')}</p>
                   </div>
                 </div>
                 
-                <div className="space-y-2">
+                {/* الراتب المستحق بعد التناسب */}
+                <div className="bg-gradient-to-r from-primary/10 to-primary/5 border-2 border-primary/30 rounded-lg p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-semibold">{t('الراتب المستحق (pro-rata)')}</span>
+                    <span className="text-xs text-muted-foreground">
+                      {formatPrice(payrollPreview.daily_rate || (payrollPreview.basic_salary/30))} × {payrollPreview.worked_days} {t('يوم')}
+                    </span>
+                  </div>
+                  <p className="text-2xl font-bold text-primary" data-testid="earned-salary">
+                    {formatPrice(payrollPreview.earned_salary)}
+                  </p>
+                </div>
+                
+                <div className="space-y-2 bg-muted/30 p-4 rounded-lg">
                   <div className="flex justify-between">
-                    <span>{t('الخصومات')}</span>
-                    <span className="text-red-500">-{formatPrice(payrollPreview.total_deductions)}</span>
+                    <span>+ {t('المكافآت')}</span>
+                    <span className="text-green-600 font-semibold">+{formatPrice(payrollPreview.total_bonuses)}</span>
+                  </div>
+                  {payrollPreview.overtime_pay > 0 && (
+                    <div className="flex justify-between">
+                      <span>+ {t('وقت إضافي معتمد')}</span>
+                      <span className="text-green-600 font-semibold">+{formatPrice(payrollPreview.overtime_pay)}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between">
+                    <span>- {t('الخصومات')}</span>
+                    <span className="text-red-600 font-semibold">-{formatPrice(payrollPreview.total_deductions)}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span>{t('المكافآت')}</span>
-                    <span className="text-green-500">+{formatPrice(payrollPreview.total_bonuses)}</span>
+                    <span>- {t('استقطاع السلف')}</span>
+                    <span className="text-orange-600 font-semibold">-{formatPrice(payrollPreview.advance_deduction)}</span>
                   </div>
-                  <div className="flex justify-between">
-                    <span>{t('استقطاع السلف')}</span>
-                    <span className="text-yellow-500">-{formatPrice(payrollPreview.advance_deduction)}</span>
-                  </div>
-                  <hr />
-                  <div className="flex justify-between text-lg font-bold">
+                  <hr className="border-primary/30" />
+                  <div className="flex justify-between text-xl font-bold">
                     <span>{t('صافي الراتب')}</span>
-                    <span className="text-primary">{formatPrice(payrollPreview.net_salary)}</span>
+                    <span className={payrollPreview.net_salary < 0 ? 'text-red-600' : 'text-primary'} data-testid="net-salary">
+                      {formatPrice(payrollPreview.net_salary)}
+                    </span>
                   </div>
+                  {payrollPreview.net_salary < 0 && (
+                    <div className="mt-2 p-2 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800 rounded text-xs text-red-700 dark:text-red-400">
+                      ⚠️ {t('صافي الراتب سالب - الموظف مدين للشركة بمبلغ')} {formatPrice(Math.abs(payrollPreview.net_salary))}
+                    </div>
+                  )}
                 </div>
                 
                 <div className="flex justify-end gap-2">

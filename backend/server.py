@@ -3628,17 +3628,18 @@ async def get_payroll_summary_report(
         absent_days = len([a for a in emp_attendance if a.get("status") == "absent"])
         total_worked_hours = sum(_sn(a.get("worked_hours")) for a in emp_attendance)
         
-        # حساب الراتب المستحق حسب النوع
-        # ملاحظة مهمة: للموظفين بالشهر، لا نخصم أيام الغياب هنا
-        # لأن الخصومات التلقائية للغياب محفوظة في مجموعة deductions
-        # وتُطبَّق لاحقاً، لذلك خصم الغياب هنا يسبب خصم مزدوج
+        # حساب الراتب المستحق حسب النوع - pro-rata حسب أيام العمل الفعلية
+        # مثال: راتب 600,000 / 30 = 20,000 يومي. عمل 10 أيام → مستحق = 200,000
+        # الصيغة: earned = daily_rate × worked_days
+        # صافي الراتب يمكن أن يكون سالباً (الموظف مدين للشركة) وهذا مقصود للدقة
+        worked_days_count = present_days + late_days + early_leave_days
         if salary_type == "hourly":
             earned_salary = round(total_worked_hours * hourly_rate, 2)
         elif salary_type == "daily":
-            earned_salary = round(worked_days * daily_rate, 2)
+            earned_salary = round(worked_days_count * daily_rate, 2)
         else:
-            # monthly: الراتب الأساسي كامل، والخصومات تتكفل بالغياب
-            earned_salary = basic_salary
+            # monthly: pro-rata حسب أيام العمل الفعلية
+            earned_salary = round(daily_rate * worked_days_count, 2) if basic_salary else 0
         
         # الخصومات
         deductions = deductions_by_emp.get(emp_id, [])
@@ -3791,7 +3792,28 @@ async def get_employee_salary_slip(
     pending_advances = sum(a.get("remaining_amount", 0) for a in advances if a.get("status") == "approved")
     
     basic_salary = _sn(employee.get("salary"))
-    net_salary = basic_salary + total_bonuses - total_deductions - advance_deduction
+    salary_type = employee.get("salary_type", "monthly")
+    
+    # حساب الراتب المستحق حسب النوع (pro-rata للراتب الشهري حسب أيام العمل الفعلية)
+    worked_days = attendance_stats["present"] + attendance_stats["late"] + attendance_stats["early_leave"]
+    daily_rate = round(basic_salary / 30, 2) if basic_salary else 0
+    
+    if salary_type == "monthly":
+        # الراتب الشهري: يُحسب بالتناسب مع أيام العمل الفعلية
+        # مثال: راتب 600, يومي = 20, عمل 10 أيام → مستحق = 200
+        earned_salary = round(daily_rate * worked_days, 2)
+    elif salary_type == "daily":
+        earned_salary = round(daily_rate * worked_days, 2)
+    elif salary_type == "hourly":
+        total_worked_hours = sum(_sn(a.get("worked_hours")) for a in attendance)
+        hourly_rate = _sn(employee.get("hourly_rate")) or (daily_rate / (_sn(employee.get("work_hours_per_day")) or 8))
+        earned_salary = round(total_worked_hours * hourly_rate, 2)
+    else:
+        earned_salary = basic_salary
+    
+    # صافي الراتب = المستحق + المكافآت - الخصومات - السلف
+    # يمكن أن يكون سالباً (الموظف مدين للشركة) وهذا متوقّع ودقيق
+    net_salary = round(earned_salary + total_bonuses - total_deductions - advance_deduction, 2)
     
     return {
         "employee": employee,
@@ -3800,7 +3822,10 @@ async def get_employee_salary_slip(
         "month": month,
         "salary_details": {
             "basic_salary": basic_salary,
-            "salary_type": employee.get("salary_type", "monthly"),
+            "salary_type": salary_type,
+            "daily_rate": daily_rate,
+            "worked_days": worked_days,
+            "earned_salary": earned_salary,
             "work_hours_per_day": employee.get("work_hours_per_day", 8)
         },
         "deductions": {
@@ -3824,6 +3849,9 @@ async def get_employee_salary_slip(
         },
         "summary": {
             "basic_salary": basic_salary,
+            "worked_days": worked_days,
+            "daily_rate": daily_rate,
+            "earned_salary": earned_salary,
             "total_additions": total_bonuses,
             "total_deductions": total_deductions + advance_deduction,
             "net_salary": net_salary
@@ -14838,26 +14866,11 @@ async def _auto_process_attendance_internal(current_user: dict):
         await db.attendance.insert_one(att_doc)
         created_attendance += 1
         
-        # خصم غياب يوم كامل - فقط للموظفين بالراتب الشهري
-        # (الموظفون بالساعة/اليوم لا يتقاضون أصلاً عن أيام الغياب، فلا حاجة لخصم إضافي)
-        salary_type_emp = emp.get("salary_type", "monthly")
-        if daily_rate > 0 and salary_type_emp == "monthly":
-            ded_doc = {
-                "id": str(uuid.uuid4()),
-                "employee_id": emp["id"],
-                "employee_name": emp.get("name"),
-                "deduction_type": "absence",
-                "amount": round(daily_rate),
-                "hours": None,
-                "days": 1,
-                "reason": f"غياب يوم كامل {yesterday} - تلقائي",
-                "date": yesterday,
-                "tenant_id": tenant_id,
-                "created_by": "system",
-                "created_at": datetime.now(timezone.utc).isoformat()
-            }
-            await db.deductions.insert_one(ded_doc)
-            created_deductions += 1
+        # ملاحظة: لم نعد ننشئ خصم غياب تلقائي
+        # لأن النظام الآن يستخدم pro-rata لحساب الراتب (earned_salary = daily_rate × worked_days)
+        # وبالتالي أيام الغياب مخصومة تلقائياً من الراتب المستحق
+        # إنشاء خصم غياب هنا يسبب خصماً مزدوجاً
+        # (الخصومات المنشأة يدوياً من قبل المدير مثل التأخير/المخالفات لا تزال تُطبَّق)
     
     # 6. تحديث السجلات كمعالجة
     record_ids = [r.get("id") for r in raw_records if r.get("id")]

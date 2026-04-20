@@ -442,13 +442,17 @@ async def calculate_payroll(
     total_overtime_hours = sum(a.get("overtime_hours", 0) for a in attendance)
     
     # حساب الراتب الأساسي المستحق حسب نوع الراتب
+    # القاعدة الموحّدة: pro-rata حسب أيام العمل الفعلية
+    # مثال: راتب 600 شهري، يومي = 20. عمل 10 أيام → مستحق = 200
+    # صافي الراتب قد يكون سالباً (مثال: عمل يوم واحد = 20، خصومات 30 → صافي = -10)
+    # هذا مقصود للدقة: الموظف يكون مديناً للشركة بـ 10
     if salary_type == "hourly":
         earned_salary = round(total_worked_hours * hourly_rate, 2)
     elif salary_type == "daily":
         earned_salary = round(worked_days * daily_rate, 2)
     else:
-        # شهري: الراتب كامل - خصم أيام الغياب
-        earned_salary = round(basic_salary - (absent_days * daily_rate), 2)
+        # شهري: يُحسب بالتناسب مع أيام العمل الفعلية
+        earned_salary = round(daily_rate * worked_days, 2)
     
     # جلب الوقت الإضافي الموافق عليه فقط
     approved_overtime = await db.overtime_requests.find({
