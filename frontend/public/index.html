@@ -70,17 +70,8 @@
             }
             
             // تسجيل Service Worker للعمل بدون إنترنت
-            if ('serviceWorker' in navigator) {
-                window.addEventListener('load', function() {
-                    navigator.serviceWorker.register('/sw-offline.js')
-                        .then(function(registration) {
-                            console.log('[App] Service Worker registered:', registration.scope);
-                        })
-                        .catch(function(error) {
-                            console.log('[App] Service Worker registration failed:', error);
-                        });
-                });
-            }
+            // ملاحظة: التسجيل الفعلي يتم في src/index.js لتجنب التسجيل المزدوج
+            // الذي قد يسبب إعادة تحميل عشوائية
         </script>
     </head>
     <body>

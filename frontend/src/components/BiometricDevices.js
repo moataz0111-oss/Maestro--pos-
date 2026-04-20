@@ -56,7 +56,26 @@ export default function BiometricDevices({ branches = [], onDataRefresh }) {
   const autoSyncRef = useRef(null);
 
   // Check if local agent is running
+  // يحاول أولاً عبر السيرفر (heartbeat) لأن Chrome يحظر localhost بسبب PNA
+  // ثم يحاول localhost كـ fallback
   const checkAgent = async () => {
+    // الطريقة 1: heartbeat من السيرفر (يعمل دائماً بدون مشاكل CORS/PNA)
+    try {
+      const token = localStorage.getItem('token');
+      if (token) {
+        const hbRes = await axios.get(`${API}/print-queue/agent-status`, {
+          headers: { Authorization: `Bearer ${token}` },
+          timeout: 5000
+        });
+        if (hbRes.data?.online === true) {
+          setAgentOnline(true);
+          setAgentVersion(hbRes.data?.version || '');
+          return true;
+        }
+      }
+    } catch {}
+    
+    // الطريقة 2: اتصال مباشر بـ localhost (قد يحظره Chrome)
     try {
       const res = await axios.get(`${AGENT_URL}/status`, { timeout: 3000 });
       const isOnline = res.data?.status === 'running' && res.data?.zk_support === true;
@@ -73,6 +92,8 @@ export default function BiometricDevices({ branches = [], onDataRefresh }) {
   useEffect(() => {
     fetchDevices();
     checkAgent();
+    // فحص دوري لحالة الوكيل كل 10 ثواني
+    const agentInterval = setInterval(checkAgent, 10000);
     // تحميل حالة المزامنة التلقائية من السيرفر
     (async () => {
       try {
@@ -83,6 +104,7 @@ export default function BiometricDevices({ branches = [], onDataRefresh }) {
         if (res.data?.enabled) setAutoSyncActive(true);
       } catch {}
     })();
+    return () => clearInterval(agentInterval);
   }, []);
 
   // Auto-sync polling - كل 5 دقائق

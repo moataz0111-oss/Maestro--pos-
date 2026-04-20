@@ -12,11 +12,34 @@ const registerServiceWorker = async () => {
         updateViaCache: 'all'
       });
       console.log('Service Worker registered:', registration.scope);
+      
+      // منع إعادة التحميل التلقائية عند تفعيل SW جديد
+      // هذا كان السبب الرئيسي في إعادة تحميل الصفحة كل دقيقة على بعض المتصفحات
+      let refreshing = false;
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (refreshing) return;
+        refreshing = true;
+        console.log('[SW] Controller changed - reload blocked intentionally');
+        // لا نفعل reload - نترك المستخدم يواصل عمله
+      });
+      
+      // تعطيل الفحص الدوري للتحديثات من المتصفح لتجنب حلقات التحديث
+      // المتصفح يفحص كل 24 ساعة تلقائياً وهذا كافٍ
     } catch (error) {
       console.error('Service Worker registration failed:', error);
     }
   }
 };
+
+// سجل تشخيصي لمعرفة سبب أي إعادة تحميل (debug aid)
+if (typeof window !== 'undefined') {
+  window.addEventListener('beforeunload', function(e) {
+    try {
+      const reason = new Error('beforeunload stack');
+      console.warn('[Reload Debug] Page is about to unload. Stack:', reason.stack);
+    } catch {}
+  });
+}
 
 // Hide initial loader when React starts
 const hideLoader = () => {

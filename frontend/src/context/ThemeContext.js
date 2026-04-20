@@ -22,17 +22,20 @@ export const ThemeProvider = ({ children }) => {
         effectiveTheme = (hour >= 6 && hour < 18) ? 'light' : 'dark';
       }
       
-      setResolvedTheme(effectiveTheme);
+      // تحديث الحالة فقط عند التغير الفعلي لمنع إعادة التصيير غير الضرورية
+      setResolvedTheme(prev => prev === effectiveTheme ? prev : effectiveTheme);
       
       const root = window.document.documentElement;
-      root.classList.remove('light', 'dark');
-      root.classList.add(effectiveTheme);
+      if (!root.classList.contains(effectiveTheme)) {
+        root.classList.remove('light', 'dark');
+        root.classList.add(effectiveTheme);
+      }
     };
 
     updateTheme();
     
-    // Update every minute to handle day/night transition
-    const interval = setInterval(updateTheme, 60000);
+    // Update every 5 minutes to handle day/night transition (was every minute - سبب محتمل في re-render المتكرر)
+    const interval = setInterval(updateTheme, 5 * 60 * 1000);
     
     return () => clearInterval(interval);
   }, [theme]);
