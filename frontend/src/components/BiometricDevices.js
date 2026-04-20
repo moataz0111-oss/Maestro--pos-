@@ -267,19 +267,39 @@ export default function BiometricDevices({ branches = [], onDataRefresh }) {
         return;
       }
 
-      // 1. Get attendance data from local agent - مهلة موسّعة للأجهزة الكبيرة
+      // 1. Get attendance data from local agent - مهلة موسّعة + إعادة محاولة واحدة عند فشل الشبكة
       let agentRes;
-      try {
-        agentRes = await axios.post(`${AGENT_URL}/zk-sync`, {
-          ip: device.ip_address,
-          port: device.port || 4370,
-          timeout: 150000
-        }, { timeout: 180000 });
-      } catch (agentErr) {
+      let lastErr;
+      for (let attempt = 1; attempt <= 2; attempt++) {
+        try {
+          agentRes = await axios.post(`${AGENT_URL}/zk-sync`, {
+            ip: device.ip_address,
+            port: device.port || 4370,
+            timeout: 150000
+          }, { timeout: 180000 });
+          lastErr = null;
+          break;
+        } catch (agentErr) {
+          lastErr = agentErr;
+          const isNetworkErr = agentErr.message === 'Network Error' || agentErr.code === 'ERR_NETWORK';
+          if (isNetworkErr && attempt === 1) {
+            // انتظر 3 ثواني واعد المحاولة - الوكيل قد يكون مشغولاً في UDP call
+            console.log('Network error on first try, retrying after 3s...');
+            await new Promise(r => setTimeout(r, 3000));
+            continue;
+          }
+          break;
+        }
+      }
+      if (lastErr) {
         toast.dismiss(syncingToast);
-        const errMsg = agentErr.code === 'ECONNABORTED' || agentErr.message?.includes('timeout')
-          ? t('الجهاز لم يستجب خلال 3 دقائق — جرّب إعادة تشغيل الجهاز أو تقسيم المزامنة لفترات أقصر')
-          : t('فشل الاتصال بالوكيل') + ': ' + (agentErr.message || 'Network error');
+        const isTimeout = lastErr.code === 'ECONNABORTED' || lastErr.message?.includes('timeout');
+        const isNetwork = lastErr.message === 'Network Error' || lastErr.code === 'ERR_NETWORK';
+        const errMsg = isTimeout
+          ? t('الجهاز لم يستجب خلال 3 دقائق — جرّب إعادة تشغيل الجهاز')
+          : isNetwork
+          ? t('فشل الاتصال بالوكيل — تأكد أن وسيط الطباعة يعمل (لون أيقونة الوسيط أخضر)')
+          : t('فشل الاتصال بالوكيل') + ': ' + (lastErr.message || 'Network error');
         toast.error(errMsg, { duration: 6000 });
         return;
       }

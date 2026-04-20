@@ -14583,14 +14583,37 @@ async def _auto_process_attendance_internal(current_user: dict):
             break_in = times[-2]
             check_out = times[-1]
         
-        # التحقق من عدم وجود سجل مسبق لنفس اليوم
+        # التحقق من وجود سجل مسبق لنفس اليوم - إذا وُجد، ندمج البصمات الجديدة مع القديمة
         existing = await db.attendance.find_one({
             "employee_id": emp["id"],
             "date": date_str,
             "source": "fingerprint"
         })
         if existing:
-            continue
+            # دمج الأوقات المحفوظة سابقاً مع البصمات الجديدة
+            existing_times = set()
+            for fld in ("check_in", "break_out", "break_in", "check_out"):
+                v = existing.get(fld)
+                if v:
+                    existing_times.add(v)
+            # دمج مع times الجديدة وإعادة التوزيع
+            all_times = sorted(set(times) | existing_times)
+            times = all_times
+            # إعادة توزيع البصمات المدمجة
+            check_in = times[0] if times else None
+            check_out = None
+            break_out = None
+            break_in = None
+            n = len(times)
+            if n == 2:
+                check_out = times[1]
+            elif n == 3:
+                break_out = times[1]
+                check_out = times[2]
+            elif n >= 4:
+                break_out = times[1]
+                break_in = times[-2]
+                check_out = times[-1]
         
         # حساب ساعات العمل
         worked_hours = 0
@@ -14660,9 +14683,8 @@ async def _auto_process_attendance_internal(current_user: dict):
         if worked_hours > required_hours:
             overtime_hours = round(worked_hours - required_hours, 2)
         
-        # إنشاء سجل الحضور
+        # إنشاء أو تحديث سجل الحضور
         att_doc = {
-            "id": str(uuid.uuid4()),
             "employee_id": emp["id"],
             "employee_name": emp.get("name"),
             "date": date_str,
@@ -14676,12 +14698,22 @@ async def _auto_process_attendance_internal(current_user: dict):
             "overtime_hours": overtime_hours,
             "status": status,
             "source": "fingerprint",
-            "notes": None,
             "tenant_id": tenant_id,
-            "created_by": current_user["id"],
-            "created_at": datetime.now(timezone.utc).isoformat()
+            "updated_at": datetime.now(timezone.utc).isoformat()
         }
-        await db.attendance.insert_one(att_doc)
+        if existing:
+            # تحديث السجل الموجود
+            await db.attendance.update_one(
+                {"id": existing["id"]},
+                {"$set": att_doc}
+            )
+        else:
+            # إنشاء سجل جديد
+            att_doc["id"] = str(uuid.uuid4())
+            att_doc["notes"] = None
+            att_doc["created_by"] = current_user["id"]
+            att_doc["created_at"] = datetime.now(timezone.utc).isoformat()
+            await db.attendance.insert_one(att_doc)
         created_attendance += 1
         
         # إنشاء طلب وقت إضافي بانتظار موافقة المدير (لا يُضاف للراتب تلقائياً)
