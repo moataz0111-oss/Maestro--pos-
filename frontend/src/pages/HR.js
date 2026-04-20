@@ -218,6 +218,7 @@ export default function HR() {
   const [selectedDevice, setSelectedDevice] = useState(null);
   const [pushingEmployee, setPushingEmployee] = useState(null);
   const [pushingAll, setPushingAll] = useState(false);
+  const [agentConnected, setAgentConnected] = useState(false);
   const AGENT_URL = 'http://localhost:9999';
 
   // Face photo states
@@ -227,6 +228,21 @@ export default function HR() {
   const [facePhotoLoading, setFacePhotoLoading] = useState(false);
   const [probeResult, setProbeResult] = useState(null);
   const [probeLoading, setProbeLoading] = useState(false);
+
+  // فحص دوري لحالة الوسيط - يبقى متصل دائماً
+  useEffect(() => {
+    const checkAgent = async () => {
+      try {
+        const res = await axios.get(`${AGENT_URL}/status`, { timeout: 3000 });
+        setAgentConnected(res.data?.status === 'running');
+      } catch {
+        setAgentConnected(false);
+      }
+    };
+    checkAgent();
+    const interval = setInterval(checkAgent, 15000);
+    return () => clearInterval(interval);
+  }, []);
 
   // جلب أول جهاز بصمة تلقائياً
   useEffect(() => {
@@ -1293,11 +1309,15 @@ export default function HR() {
         if (res.data.success) {
           // تحديث UID في النظام إذا تغير أو كان جديد
           if (emp.uidChanged || !emp.biometric_uid || parseInt(emp.biometric_uid) !== uid) {
-            const token = localStorage.getItem('token');
-            await axios.put(`${API}/employees/${emp.id}`, 
-              { biometric_uid: String(uid) },
-              { headers: { Authorization: `Bearer ${token}` } }
-            );
+            try {
+              const token = localStorage.getItem('token');
+              await axios.put(`${API}/employees/${emp.id}`, 
+                { biometric_uid: String(uid) },
+                { headers: { Authorization: `Bearer ${token}` } }
+              );
+            } catch (updateErr) {
+              console.warn(`Failed to update UID for ${emp.name}:`, updateErr.message);
+            }
           }
           successCount++;
         } else {

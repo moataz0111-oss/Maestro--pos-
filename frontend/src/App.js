@@ -80,14 +80,17 @@ const ProtectedRoute = ({ children }) => {
   const { isAuthenticated, loading, user } = useAuth();
   const [initialCheckDone, setInitialCheckDone] = useState(() => isAuthChecked());
   
-  // تحميل جميع الصفحات مسبقاً للعمل Offline
+  // تحميل الصفحات مسبقاً - مرة واحدة فقط
   useEffect(() => {
     if (isAuthenticated && user) {
-      // تأخير قصير ثم تحميل جميع الصفحات في الخلفية
-      const timer = setTimeout(() => {
-        preloadAllPages();
-      }, 3000);
-      return () => clearTimeout(timer);
+      const alreadyPreloaded = sessionStorage.getItem('pages_preloaded');
+      if (!alreadyPreloaded) {
+        const timer = setTimeout(() => {
+          preloadAllPages();
+          sessionStorage.setItem('pages_preloaded', 'true');
+        }, 5000);
+        return () => clearTimeout(timer);
+      }
     }
   }, [isAuthenticated, user]);
   
