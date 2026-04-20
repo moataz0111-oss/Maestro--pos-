@@ -1226,12 +1226,22 @@ export default function HR() {
 
     const activeEmployees = employees.filter(e => e.is_active);
     
-    // Fetch existing device users to find max UID
+    // Fetch existing device users to find occupied UIDs
     const deviceUsers = await fetchDeviceUsersForPush(device);
-    let nextUid = getNextBiometricUid(deviceUsers);
+    const existingUids = new Set((deviceUsers || []).map(u => parseInt(u.uid)));
+    
+    // أولاً: الموظفين اللي عندهم biometric_uid مسبق
+    // ثانياً: الموظفين بدون uid - يحصلون على uid جديد غير موجود على الجهاز
+    let nextUid = 1;
+    const getNextFreeUid = () => {
+      while (existingUids.has(nextUid) || activeEmployees.some(e => parseInt(e.biometric_uid) === nextUid)) nextUid++;
+      const uid = nextUid;
+      nextUid++;
+      return uid;
+    };
     
     for (const emp of activeEmployees) {
-      const uid = emp.biometric_uid ? parseInt(emp.biometric_uid) : nextUid++;
+      const uid = emp.biometric_uid ? parseInt(emp.biometric_uid) : getNextFreeUid();
       try {
         const res = await axios.post(`${AGENT_URL}/zk-push-user`, {
           ip: device.ip_address,

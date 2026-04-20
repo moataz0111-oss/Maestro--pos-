@@ -3,34 +3,15 @@ import ReactDOM from "react-dom/client";
 import "@/index.css";
 import App from "@/App";
 
-// تسجيل Service Worker للعمل Offline
+// تسجيل Service Worker للعمل Offline - بدون إعادة تحميل تلقائية
 const registerServiceWorker = async () => {
   if ('serviceWorker' in navigator) {
     try {
       const registration = await navigator.serviceWorker.register('/sw-offline.js', {
         scope: '/',
-        updateViaCache: 'none'
+        updateViaCache: 'all'
       });
       console.log('Service Worker registered:', registration.scope);
-      
-      // التحقق من التحديثات كل 30 دقيقة (بدل 10 - أكثر استقرار)
-      setInterval(() => {
-        registration.update();
-      }, 30 * 60 * 1000);
-      
-      // عند وجود نسخة جديدة - لا نفعّلها تلقائياً
-      // المستخدم يحدّث يدوياً عند الرغبة
-      registration.addEventListener('updatefound', () => {
-        console.log('Service Worker update found - will activate on next page load');
-      });
-      
-      // منع إعادة التحميل المتكرر
-      let refreshing = false;
-      navigator.serviceWorker.addEventListener('controllerchange', () => {
-        if (refreshing) return;
-        refreshing = true;
-        console.log('Service Worker updated');
-      });
     } catch (error) {
       console.error('Service Worker registration failed:', error);
     }

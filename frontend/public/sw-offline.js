@@ -102,7 +102,8 @@ self.addEventListener('activate', (event) => {
 // السماح بالتحديث اليدوي من التطبيق
 self.addEventListener('message', (event) => {
   if (event.data && event.data.type === 'SKIP_WAITING') {
-    self.skipWaiting();
+    // لا نستخدم skipWaiting لمنع إعادة التحميل المتكرر
+    // self.skipWaiting() - DISABLED
   }
 });
 
@@ -342,7 +343,8 @@ function offlinePage() {
 // استقبال رسائل من التطبيق
 self.addEventListener('message', (event) => {
   if (event.data && event.data.type === 'SKIP_WAITING') {
-    self.skipWaiting();
+    // لا نستخدم skipWaiting لمنع إعادة التحميل المتكرر
+    // self.skipWaiting() - DISABLED
   }
   
   if (event.data && event.data.type === 'CLEAR_CACHE') {
