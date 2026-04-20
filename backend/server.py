@@ -3019,7 +3019,7 @@ async def update_employee(employee_id: str, update: EmployeeUpdate, current_user
 
 @api_router.delete("/employees/{employee_id}")
 async def delete_employee(employee_id: str, current_user: dict = Depends(get_current_user)):
-    """حذف موظف"""
+    """حذف موظف نهائياً من النظام"""
     if current_user["role"] not in [UserRole.ADMIN, UserRole.SUPER_ADMIN]:
         raise HTTPException(status_code=403, detail="غير مصرح")
     
@@ -3028,9 +3028,12 @@ async def delete_employee(employee_id: str, current_user: dict = Depends(get_cur
     if not employee:
         raise HTTPException(status_code=404, detail="الموظف غير موجود")
     
-    # تعطيل بدلاً من الحذف للحفاظ على السجلات
-    await db.employees.update_one({"id": employee_id}, {"$set": {"is_active": False}})
-    return {"message": "تم تعطيل الموظف"}
+    biometric_uid = employee.get("biometric_uid")
+    
+    # حذف نهائي من قاعدة البيانات
+    await db.employees.delete_one({"id": employee_id})
+    
+    return {"message": "تم حذف الموظف نهائياً", "biometric_uid": biometric_uid}
 
 @api_router.post("/employees/{employee_id}/face-photo")
 async def save_employee_face_photo(employee_id: str, request: Request, current_user: dict = Depends(get_current_user)):

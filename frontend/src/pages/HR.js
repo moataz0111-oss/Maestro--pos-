@@ -480,11 +480,28 @@ export default function HR() {
   };
 
   const handleDeleteEmployee = async (id) => {
-    if (!window.confirm(t('هل أنت متأكد من حذف هذا الموظف؟'))) return;
+    if (!window.confirm(t('هل أنت متأكد من حذف هذا الموظف نهائياً؟ سيتم حذفه من النظام والبصمة.'))) return;
     try {
       const token = localStorage.getItem('token');
-      await axios.delete(`${API}/employees/${id}`, { headers: { Authorization: `Bearer ${token}` } });
-      toast.success(t('تم تعطيل الموظف'));
+      const res = await axios.delete(`${API}/employees/${id}`, { headers: { Authorization: `Bearer ${token}` } });
+      
+      // حذف من البصمة إذا عنده biometric_uid
+      const biometricUid = res.data?.biometric_uid;
+      if (biometricUid && selectedDevice) {
+        try {
+          await axios.post(`${AGENT_URL}/zk-delete-user`, {
+            ip: selectedDevice.ip_address,
+            port: selectedDevice.port || 4370,
+            timeout: 5000,
+            uid: parseInt(biometricUid)
+          }, { timeout: 10000 });
+          toast.success(t('تم حذف الموظف من النظام والبصمة'));
+        } catch {
+          toast.success(t('تم حذف الموظف من النظام (البصمة غير متصلة - احذفه يدوياً)'));
+        }
+      } else {
+        toast.success(t('تم حذف الموظف نهائياً'));
+      }
       fetchData();
     } catch (error) {
       toast.error(t('فشل في حذف الموظف'));
