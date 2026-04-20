@@ -229,18 +229,35 @@ export default function HR() {
   const [probeResult, setProbeResult] = useState(null);
   const [probeLoading, setProbeLoading] = useState(false);
 
-  // فحص دوري لحالة الوسيط - يبقى متصل دائماً
+  // فحص دوري لحالة الوسيط - heartbeat أولاً ثم localhost
   useEffect(() => {
     const checkAgent = async () => {
+      // الطريقة 1: heartbeat عبر السيرفر (دائماً يعمل)
+      try {
+        const token = localStorage.getItem('token');
+        const res = await axios.get(`${API}/print-queue/agent-status`, {
+          headers: { Authorization: `Bearer ${token}` },
+          timeout: 5000
+        });
+        if (res.data?.online === true) {
+          setAgentConnected(true);
+          return;
+        }
+      } catch {}
+      
+      // الطريقة 2: اتصال مباشر بـ localhost (قد يحظره Chrome)
       try {
         const res = await axios.get(`${AGENT_URL}/status`, { timeout: 3000 });
-        setAgentConnected(res.data?.status === 'running');
-      } catch {
-        setAgentConnected(false);
-      }
+        if (res.data?.status === 'running') {
+          setAgentConnected(true);
+          return;
+        }
+      } catch {}
+      
+      setAgentConnected(false);
     };
     checkAgent();
-    const interval = setInterval(checkAgent, 15000);
+    const interval = setInterval(checkAgent, 10000);
     return () => clearInterval(interval);
   }, []);
 
@@ -1377,7 +1394,13 @@ export default function HR() {
                 </div>
                 <div>
                   <h1 className="text-2xl font-bold text-foreground">{t('إدارة الموارد البشرية')}</h1>
-                  <p className="text-sm text-muted-foreground">{t('إدارة الموظفين والرواتب والحضور')}</p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm text-muted-foreground">{t('إدارة الموظفين والرواتب والحضور')}</p>
+                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${agentConnected ? 'bg-green-500/20 text-green-500' : 'bg-red-500/20 text-red-500'}`}>
+                      <span className={`w-2 h-2 rounded-full ${agentConnected ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`}></span>
+                      {agentConnected ? t('الوسيط متصل') : t('الوسيط غير متصل')}
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>
