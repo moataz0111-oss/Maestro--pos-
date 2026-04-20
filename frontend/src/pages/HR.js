@@ -78,7 +78,8 @@ import {
   Cloud,
   Camera,
   Upload,
-  RefreshCw
+  RefreshCw,
+  Calculator
 } from 'lucide-react';
 import { toast, Toaster } from 'sonner';
 import BiometricDevices from '../components/BiometricDevices';
@@ -306,6 +307,27 @@ export default function HR() {
   // المستخدم يستخدم webcam أو رفع الملفات بدلاً من ذلك
   // (الكود القديم محتفظ به في git history إذا أردنا تفعيله مستقبلاً مع أجهزة تدعمه)
   const [photoFetchProgress, setPhotoFetchProgress] = useState(null); // { current, total }
+
+  // فلترة تلقائية حسب الفرع المختار في كل التبويبات
+  // الموظفون يُفلتَرون على السيرفر (branch_id)، والبيانات المرتبطة نُفلتَرها client-side
+  const filteredEmployeeIds = React.useMemo(() => {
+    // إذا لم يكن هناك فرع محدد، أعد قائمة فارغة (المعنى: لا فلترة)
+    if (!getBranchIdForApi()) return null;
+    return new Set(employees.map(e => e.id));
+  }, [employees, selectedBranchId]);
+  
+  const filterByBranch = React.useCallback((arr) => {
+    if (!filteredEmployeeIds || !Array.isArray(arr)) return arr;
+    return arr.filter(item => filteredEmployeeIds.has(item.employee_id));
+  }, [filteredEmployeeIds]);
+  
+  // مشتقات مفلترة - تُستخدم في العرض بدلاً من المصفوفات الأصلية
+  const filteredAttendance = React.useMemo(() => filterByBranch(attendance), [attendance, filterByBranch]);
+  const filteredAdvances = React.useMemo(() => filterByBranch(advances), [advances, filterByBranch]);
+  const filteredDeductions = React.useMemo(() => filterByBranch(deductions), [deductions, filterByBranch]);
+  const filteredBonuses = React.useMemo(() => filterByBranch(bonuses), [bonuses, filterByBranch]);
+  const filteredPayrolls = React.useMemo(() => filterByBranch(payrolls), [payrolls, filterByBranch]);
+  const filteredOvertimeRequests = React.useMemo(() => filterByBranch(overtimeRequests), [overtimeRequests, filterByBranch]);
 
   const fetchData = async (silent = false) => {
     // في التحديث البصمت، لا نُظهر spinner الشاشة الكاملة (يمنع الوميض كل دقيقة)
@@ -1727,8 +1749,8 @@ export default function HR() {
             </TabsTrigger>
             <TabsTrigger value="overtime" className="flex items-center gap-2" data-testid="overtime-tab">
               <Timer className="h-4 w-4" /> {t('الأوقات الإضافية')}
-              {overtimeRequests.filter(r => r.status === 'pending').length > 0 && (
-                <Badge className="bg-orange-500/20 text-orange-500 text-xs">{overtimeRequests.filter(r => r.status === 'pending').length}</Badge>
+              {filteredOvertimeRequests.filter(r => r.status === 'pending').length > 0 && (
+                <Badge className="bg-orange-500/20 text-orange-500 text-xs">{filteredOvertimeRequests.filter(r => r.status === 'pending').length}</Badge>
               )}
             </TabsTrigger>
             <TabsTrigger value="payroll" className="flex items-center gap-2">
@@ -2195,7 +2217,7 @@ export default function HR() {
                       </tr>
                     </thead>
                     <tbody>
-                      {attendance.map(att => {
+                      {filteredAttendance.map(att => {
                         // تحويل الوقت إلى 12 ساعة
                         const formatTime12 = (t) => {
                           if (!t || t === '-') return '-';
@@ -2286,7 +2308,7 @@ export default function HR() {
                       </tr>
                     </thead>
                     <tbody>
-                      {advances.map(adv => (
+                      {filteredAdvances.map(adv => (
                         <tr key={adv.id} className="border-b hover:bg-muted/50">
                           <td className="p-3 font-medium">{adv.employee_name}</td>
                           <td className="p-3">{formatPrice(adv.amount)}</td>
@@ -2400,7 +2422,7 @@ export default function HR() {
                       </tr>
                     </thead>
                     <tbody>
-                      {deductions.map(ded => (
+                      {filteredDeductions.map(ded => (
                         <tr key={ded.id} className="border-b hover:bg-muted/50">
                           <td className="p-3 font-medium">{ded.employee_name}</td>
                           <td className="p-3">
@@ -2583,7 +2605,7 @@ export default function HR() {
                       </tr>
                     </thead>
                     <tbody>
-                      {bonuses.map(bon => (
+                      {filteredBonuses.map(bon => (
                         <tr key={bon.id} className="border-b hover:bg-muted/50">
                           <td className="p-3 font-medium">{bon.employee_name}</td>
                           <td className="p-3">
@@ -2613,7 +2635,7 @@ export default function HR() {
                 <CardTitle>{t('طلبات الأوقات الإضافية')} - {dateLabel}</CardTitle>
               </CardHeader>
               <CardContent>
-                {overtimeRequests.length === 0 ? (
+                {filteredOvertimeRequests.length === 0 ? (
                   <div className="text-center py-8 text-muted-foreground">
                     <Timer className="h-12 w-12 mx-auto mb-3 opacity-30" />
                     <p>{t('لا توجد طلبات أوقات إضافية')}</p>
@@ -2623,7 +2645,7 @@ export default function HR() {
                     {/* ملخص الأوقات الإضافية لكل موظف */}
                     {(() => {
                       const summary = {};
-                      overtimeRequests.forEach(ot => {
+                      filteredOvertimeRequests.forEach(ot => {
                         if (ot.status === 'approved') {
                           const key = ot.employee_id;
                           if (!summary[key]) {
@@ -2679,7 +2701,7 @@ export default function HR() {
                         </tr>
                       </thead>
                       <tbody>
-                        {overtimeRequests.map(ot => {
+                        {filteredOvertimeRequests.map(ot => {
                           const emp = employees.find(e => e.id === ot.employee_id);
                           // تحديد لون الصف حسب الحالة والتاريخ
                           const today = new Date().toISOString().slice(0, 10);
@@ -2751,10 +2773,21 @@ export default function HR() {
           {/* Payroll Tab */}
           <TabsContent value="payroll">
             <Card>
-              <CardHeader>
+              <CardHeader className="flex flex-row items-center justify-between flex-wrap gap-2">
                 <CardTitle>{t('كشوفات الرواتب')} - {dateLabel}</CardTitle>
+                <div className="flex items-center gap-2">
+                  <Badge className="bg-primary/10 text-primary" data-testid="payroll-count-badge">
+                    {filteredPayrolls.length} {t('كشف')} / {employees.length} {t('موظف')}
+                  </Badge>
+                </div>
               </CardHeader>
               <CardContent>
+                {employees.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <Users className="h-12 w-12 mx-auto mb-3 opacity-30" />
+                    <p>{t('لا يوجد موظفون في هذا الفرع')}</p>
+                  </div>
+                ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full">
                     <thead>
@@ -2770,36 +2803,62 @@ export default function HR() {
                       </tr>
                     </thead>
                     <tbody>
-                      {payrolls.map(pay => (
-                        <tr key={pay.id} className="border-b hover:bg-muted/50">
-                          <td className="p-3 font-medium">{pay.employee_name}</td>
-                          <td className="p-3">{formatPrice(pay.basic_salary)}</td>
-                          <td className="p-3 text-red-500">-{formatPrice(pay.total_deductions)}</td>
-                          <td className="p-3 text-green-500">+{formatPrice(pay.total_bonuses)}</td>
-                          <td className="p-3 text-yellow-500">-{formatPrice(pay.advance_deduction)}</td>
-                          <td className="p-3 font-bold">{formatPrice(pay.net_salary)}</td>
-                          <td className="p-3">{getPayrollStatusBadge(pay.status)}</td>
-                          <td className="p-3">
-                            <div className="flex gap-2">
-                              {pay.status !== 'paid' && (
-                                <Button size="sm" onClick={() => payPayroll(pay.id)}>
-                                  <Banknote className="h-4 w-4 ml-2" /> {t('صرف')}
-                                </Button>
-                              )}
-                              <Button 
-                                size="sm" 
-                                variant="outline"
-                                onClick={() => window.open(`/payroll/print/${pay.id}`, '_blank')}
-                              >
-                                <Printer className="h-4 w-4" />
+                      {employees.map(emp => {
+                        // ابحث عن كشف راتب محفوظ لهذا الموظف في الشهر الحالي
+                        const pay = filteredPayrolls.find(p => p.employee_id === emp.id);
+                        if (pay) {
+                          return (
+                            <tr key={pay.id} className="border-b hover:bg-muted/50" data-testid={`payroll-row-${pay.id}`}>
+                              <td className="p-3 font-medium">{pay.employee_name}</td>
+                              <td className="p-3">{formatPrice(pay.basic_salary)}</td>
+                              <td className="p-3 text-red-500">-{formatPrice(pay.total_deductions)}</td>
+                              <td className="p-3 text-green-500">+{formatPrice(pay.total_bonuses)}</td>
+                              <td className="p-3 text-yellow-500">-{formatPrice(pay.advance_deduction)}</td>
+                              <td className="p-3 font-bold">{formatPrice(pay.net_salary)}</td>
+                              <td className="p-3">{getPayrollStatusBadge(pay.status)}</td>
+                              <td className="p-3">
+                                <div className="flex gap-2">
+                                  {pay.status !== 'paid' && (
+                                    <Button size="sm" onClick={() => payPayroll(pay.id)}>
+                                      <Banknote className="h-4 w-4 ml-2" /> {t('صرف')}
+                                    </Button>
+                                  )}
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => window.open(`/payroll/print/${pay.id}`, '_blank')}
+                                  >
+                                    <Printer className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        }
+                        // لم يُنشأ كشف راتب بعد — أظهر صفاً مع زر "حساب الراتب"
+                        return (
+                          <tr key={emp.id} className="border-b hover:bg-muted/50 bg-muted/20" data-testid={`payroll-pending-${emp.id}`}>
+                            <td className="p-3 font-medium">{emp.name}</td>
+                            <td className="p-3">{formatPrice(emp.salary || 0)}</td>
+                            <td className="p-3 text-muted-foreground">-</td>
+                            <td className="p-3 text-muted-foreground">-</td>
+                            <td className="p-3 text-muted-foreground">-</td>
+                            <td className="p-3 text-muted-foreground italic">{t('لم يُحسب')}</td>
+                            <td className="p-3">
+                              <Badge variant="outline" className="text-muted-foreground">{t('بانتظار الإنشاء')}</Badge>
+                            </td>
+                            <td className="p-3">
+                              <Button size="sm" variant="outline" onClick={() => calculatePayroll(emp.id)} data-testid={`calc-payroll-${emp.id}`}>
+                                <Calculator className="h-4 w-4 ml-2" /> {t('حساب الراتب')}
                               </Button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
