@@ -103,7 +103,7 @@
   },
   
   "test_credentials": {
-    "api_url": "https://print-queue-polling.preview.emergentagent.com",
+    "api_url": "https://pos-stability-fix-1.preview.emergentagent.com",
     "customer_menu_url": "/menu/default"
   },
   

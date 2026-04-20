@@ -1,144 +1,172 @@
 <analysis>**original_problem_statement**: 
-Fixing bugs and adding operational features to a multi-tenant POS system. The system requires complete ZKTeco Fingerprint device integration (syncing attendance, pushing/fetching employees, and fetching face photos) via the Local Print Agent. Additionally, the HR system needed comprehensive payroll calculation based on actual attendance, date-range filtering, and the ability to reset HR data.
+Fixing bugs and adding operational features to a multi-tenant POS system. Specifically, addressing issues with Local Print Agent versioning and connection status, fixing UI bugs in printer settings, ensuring closing receipts display correct details (logo, branch), adjusting POS order workflows (unpaid status for modified orders, restricting cart deletions for cashiers), fixing expense reports to exclude refunds and restrict cashier views, integrating ZKTeco biometric correctly (fixing Arabic name encoding/transliteration and UID overwriting), and stopping a severe recurring issue where the frontend application auto-reloads every minute.
+
+PRODUCT REQUIREMENTS: 
+1. Print Agent connection status and versions must be accurately reflected across all branches.
+2. Closing receipts must display actual logos, branch names, and separate shifts individually.
+3. Order modifications by cashiers must not automatically mark orders as paid.
+4. Cashiers must not be able to delete items from an order *after* it has been saved/sent (only admins/owners).
+5. Expenses API and UI must entirely exclude refunds/cancellations. Cashiers should only see their own expenses for the current day.
+6. ZKTeco biometric integration must export names properly (transliterating Arabic to English since the device doesn't support Arabic) and assign unique UIDs without overwriting existing users.
+7. The application must be stable and stop auto-reloading every minute.
 
 **User's preferred language**: Arabic (العربية)
-(INSTRUCT NEXT AGENT: You MUST automatically detect the user's primary language from their messages and INSTRUCT next agent to respond in the user's preferred language, Arabic, only.)
+(INSTRUCT NEXT AGENT: You MUST automatically detect the user's primary language from their messages inside the <trajectory> tag and INSTRUCT next agent to respond in the user's preferred language, Arabic, only.)
 
 **what currently exists?** 
-A multi-tenant POS system (React + FastAPI + MongoDB). A local print agent runs via a Windows PowerShell script ( currently at v3.6.0) utilizing a custom embedded C# class () for ESC/POS printing and local ZKTeco hardware communication via UDP/HTTP. An HR module that auto-processes attendance into payroll deductions and salary slips.
+A multi-tenant POS system (React + FastAPI + MongoDB) with a Windows PowerShell script (, now v6.1.1) acting as a local agent for thermal ESC/POS printing and ZKTeco biometrics. The print agent relies on a Server-Polling architecture. The frontend has comprehensive modules for POS, HR (Biometrics), Settings, and Reporting. 
 
 **Last working item**: 
-    - Last item agent was working: Implementing Face Photo fetching from the ZKTeco device. The user requested the ability to fetch the biometric face photo of employees. The agent added a  method to the embedded C#  class and a  endpoint in . The agent was just about to run a compilation test () on the extracted C# block when the session ended.
+    - Last item agent was working: Fixing the severe auto-reloading issue on the frontend (page refreshes every minute) and fixing a visual bug in the HR page where the global header says the Print Agent is Connected but the biometric section below it says Not Connected.
     - Status: IN PROGRESS
     - Agent Testing Done: N
-    - Which testing method agent to use? manual testing by  (Extract the C# block from  into a temporary  file and compile using  to verify syntax before asking the user to update their agent).
+    - Which testing method agent to use? Frontend testing agent / screenshot tool
     - User Testing Done: N
 
-**All Pending/In progress Issue list**: 
-  Issue 1: (P0) Implement ZKTeco Face Photo Fetching ()
-     - Attempted fixes: Modified  to include  in the embedded C# code and added a route .
-     - Next debug checklist: Check  for C# syntax errors. Test the compilation using  locally. If it compiles, implement the frontend UI in  or  to call the local agent endpoint, fetch the photo, and display/save it in the employee profile. Note: Face photos on ZKTeco usually require HTTP (port 80) or PUSH protocol, ensure the C# implementation correctly addresses the device's capability.
-     - Why fix this issue and what will be achieved with the fix? The restaurant owner wants to visually verify employee faces directly from the HR dashboard.
+**All Pending/In progress Issue list**:
+  Issue 1: (P0) Frontend Application Auto-Reloading Every Minute
+     - Attempted fixes: Agent disabled  and  in  and removed the  function that was fetching 21 pages on login. Agent also adjusted  intervals. None of this stopped the reloading.
+     - Next debug checklist: 
+        - Grep for  or  across the  directory.
+        - Check Axios interceptors (e.g., in  or ) to see if 401/403 errors or failed API calls are triggering a forced reload.
+        - Check  and  for any dependency array loops causing continuous mounting/unmounting or page crashes that trigger an error boundary reload.
+     - Why fix this issue and what will be achieved with the fix? The system is currently unusable as the user is interrupted every minute by a page refresh.
      - Status: IN PROGRESS
-     - Is recurring issue? N
-     - Should Test frontend/backend/both after fix? Both
+     - Is recurring issue? Y
+     - Should Test frontend/backend/both after fix? Frontend
      - Blocked on other issue: None
 
-  Issue 2: (P1) Overtime Approval/Rejection UI
-     - Attempted fixes: The backend now auto-generates overtime requests during  attendance.
-     - Next debug checklist: Create a frontend UI in  (perhaps an Overtime Requests tab) for managers to approve or reject these pending requests so they apply to the final payroll.
-     - Why fix this issue and what will be achieved with the fix? Completes the automated HR payroll workflow.
-     - Status: NOT STARTED
+  Issue 2: (P1) Print Agent Status Discrepancy on HR Page
+     - Attempted fixes: Agent added global heartbeat check to the top of  which successfully shows green Connected.
+     - Next debug checklist: 
+        - Check . The biometric export section likely still relies on a direct  check to determine if the local agent is ready for ZKTeco commands. Due to Chrome PNA blocks, this fails, leading to a Disconnected UI state. Fallback to trusting the global  state, or handle the PNA CORS error gracefully.
+     - Why fix this issue and what will be achieved with the fix? Eliminates user confusion regarding whether the biometric sync will work.
+     - Status: IN PROGRESS
      - Is recurring issue? N
      - Should Test frontend/backend/both after fix? Frontend
      - Blocked on other issue: None
 
-**In progress Task List**: 
-  None
+**In progress Task List**:
+  None strictly in progress besides the issues above.
 
-**Upcoming and Future Tasks**:
+**Upcoming and Future Tasks**
     Future Tasks:
-    - (P2) Refactor : Break down the monolithic file (18k+ lines) into modular routes.
-    - (P2) Refactor , , & : Break down frontend monoliths into smaller components.
-    
-    *CRITICAL WARNING*: The user explicitly stated in Arabic: لاز اريد مبدل المطاعم في الوقت الحالي صديقي من اريدة اقول لك ف ما اريدك تجيب سيرته ثاني الا من اطلب منك (Do NOT build or mention the multi-restaurant switcher until explicitly requested). Keep it in the backlog but do NOT propose it in your plan.
+    - (P2) Refactor : Break down the monolithic file (19k+ lines) into modular routes.
+    - (P2) Refactor , ,  & : Break down frontend monoliths into smaller components.
+    - (P2) Add specific filters for Expenses by Cashier in backend/reports.
+    - (P2) Show detailed breakdown of refunds/cancellations inside the Closing Report UI.
 
-**Completed work in this session**:
-- Fixed C# compilation error  in  by correcting variable scopes (DONE).
-- Updated ZKTeco local agent iteratively up to , enforcing version matching checks in the React frontend (DONE).
-- Fixed ZKTeco  payload byte offsets (name at 11, userId at 48) and implemented Unicode (UTF-16LE) fallback for Arabic names (DONE).
-- Added  endpoint to fetch existing users from the biometric device and UI to Import as Employees directly to the HR system (DONE).
-- Connected Employee updates/creation to automatically push changes to the ZKTeco device (DONE).
-- Removed duplicate  route that was returning zeros for payroll totals (DONE).
-- Upgraded HR date filtering to support custom ranges (day/month/year) and full-year views (DONE).
-- Built automated attendance processing () to calculate late/early/absent deductions and update net salaries (DONE).
-- Implemented Reset HR Data inside SuperAdmin (wipes employees, attendance, deductions, payroll) (DONE).
-- Fixed Sales Leaderboard displaying Unknown for cashier names, and added  permission to hide it from cashiers (DONE).
-- Fixed Expense creation bug where checking role overrode standard permissions (DONE).
+**Completed work in this session**
+- Test Printing (USB/Ethernet) fix to correctly pass IP/Printer name (DONE)
+- Local Agent VBScript Watchdog added to remove the blue PowerShell flash (v6.1.1) (DONE)
+- Printer Settings banner fixed to properly compare version strings and prompt for updates (DONE)
+- Closing Receipt UI updated to show Real Logo, Restaurant Name, and Branch Name (DONE)
+- Order modification workflow updated so saved/pending orders don't switch to 'Paid' instantly (DONE)
+- Cash Register Closing Report now correctly filters by branch and allows toggling between 'Individual Shift' breakdown and 'Aggregated' (DONE)
+- Printer Settings now correctly filtered by Branch (DONE)
+- Owner/Admin shift opening decoupled from specific cashiers (DONE)
+- Cart Item Deletion restricted: Cashiers cannot delete items post-saving (DONE)
+- Kitchen Receipt Font Increased (quantity font size 20 -> 28) (DONE)
+- Kitchen Receipt Delivery Info updated to show Delivery App name (e.g., Talabat) or Driver name (DONE)
+- Expense API/UI refactored: Refunds entirely removed from expenses. Cashiers restricted to viewing only their own expenses for the current day (DONE)
+- ZKTeco Biometric export logic fixed: Added auto-transliteration (Arabic -> English) since device doesn't support Arabic, and fixed UID assignment to prevent overwriting existing device users (DONE)
+- Delete Employee changed from soft-disable to hard-delete (DB + Biometric Device) (DONE)
 
-**Earlier issues found/mentioned but not fixed**:
-  None
+**Earlier issues found/mentioned but not fixed**
+   Issue 1:
+   - Debug checklist: Expenses filter by cashier in reports / Refund details in Closing Report (Requested in backlog).
+   - Why to solve this issue and what will be achieved with this? Gives the owner granular financial tracking.
+   - Should Test frontend/backend/both after fix: Both
+   - Is recurring issue? N
 
-**Known issue recurrence from previous fork**:
-  - Issue recurrence in previous fork: C# compilation error inside .
-  - Recurrence count: 3
-  - Status: RESOLVED (But high risk of recurring).
-  Note: Be extremely careful when using  on the embedded C# code. ALWAYS extract the C# code to a local  file and compile with  to verify before completing the fix.
+**Known issue recurrence from previous fork**
+  - Issue recurrence in previous fork: Chrome blocking HTTP/HTTPS requests to localhost due to CORS and Private Network Access (PNA) policies. 
+  - Recurrence count: 10+
+  - Status: RESOLVED (via Polling Queue), but lingering direct-to-localhost checks in  are causing UI bugs (Issue 2).
+  - Issue recurrence in previous fork: Frontend auto-reloading/crashing.
+  - Recurrence count: 2
+  - Status: IN PROGRESS
 
-**Code Architecture**:
+**Code Architecture**
 
 
-**Key Technical Concepts**:
+**Key Technical Concepts**
 - React, FastAPI, MongoDB
-- Custom C# UDP/HTTP implementation inside Windows PowerShell for ZKTeco Biometric device integration (pyzk byte formatting).
+- Server Polling Architecture for Printing
+- ZKTeco Biometrics over HTTP via Local Print Agent proxy
+- Canvas to ESC/POS Raster Bitmap conversion ()
+- Offline Service Workers & Hooks
 
-**key DB schema**:
-  - : , , , , , .
-  - : , , .
-  - : , , .
+**key DB schema**
+  - : {{branch_id, cashier_id, opening_cash, expected_cash, status}}
+  - : {{branch_id, payment_method, status, items}}
+  - : {{branch_id, category, amount, created_by}}
 
-**changes in tech stack**:
-  -  (Mono C# compiler) installed locally to test C# syntax within the container.
+**changes in tech stack**
+  - None.
 
-**All files of reference**: 
--  (Contains the  C# class, WIP on )
-- 
-- 
-- 
+**All files of reference** 
+-  (Biometrics & auto-reload culprit)
+-  (Auto-reload culprit)
+-  (Auto-reload culprit)
+-  &  (Global app wrappers)
+-  (Axios interceptors)
 
 **Areas that need refactoring**:
--  (18k+ lines).
--  (Getting very large).
+-  (19k+ lines)
+-  (4.4k+ lines)
+-  (2.8k+ lines)
 
-**key api endpoints**:
-- Local Agent: , ,  (WIP).
-- Backend: , , , 
+**key api endpoints**
+- 
+- 
+- 
+- 
 
-**Critical Info for New Agent**:
-- **Language:** The user communicates exclusively in **Arabic**. You must reply in Arabic.
-- **Hardware constraints:** You cannot test the ZKTeco connection yourself.
-- **Current Blocker:** You are in the middle of implementing  in . Extract the C# code and test it using  to ensure it compiles before handing the PS script back to the user. Remember that ZKTeco face photos are usually requested over HTTP (port 80) rather than UDP port 4370.
+**Critical Info for New Agent** 
+- **Language:** Reply strictly in **Arabic**.
+- **Auto-Reload Blocker (CRITICAL):** The user's system is reloading every minute. The previous agent tried removing SW  and  but failed. You MUST aggressively hunt for , faulty  checks that force a route change, or 401/403 Axios interceptors that are triggering page refreshes.
+- **HR Print Agent Status:** HR connects to ZKTeco biometrics via the local print agent (). Because of PNA blocks, status pinging directly fails on Chrome. Rely on the backend's heartbeat status to show Connected in the UI rather than failing the UI completely if localhost ping fails.
 
-**documents and test reports created in this job**:
-  - /app/memory/PRD.md updated with the latest fixes.
+**documents and test reports created in this job** 
+  - 
+  - 
 
-**Last 10 User Messages and any pending HUMAN messages**: 
-1. (User) Make the agent update version to 3.4.0.
-2. (User) It synced but didnt fetch the users, and it overwrote the admin. Make it fetch existing users."
-3. (User) "Update agent to 3.5.0."
-4. (User) "It needs to calculate exact salary based on attendance hours and days, and overtime needs manager approval."
-5. (User) "Uploaded Image: Salary report shows 0 for everything but the top cards are correct. Please fix before publishing."
-6. (User) "Make the HR date filter support day/month/year, not just month, and allow full-year view."
-7. (User) "Add a button to reset HR Data (employees, salary, deductions) next to Reset Sales in Super Admin."
-8. (User) "Uploaded Images: Sync succeeded but users werent added to HR. Pushing user with Arabic name shows as symbols in the biometric.
-9. (User) Is it broken? What do we do? (Agent fixed frontend function scope error).
-10. (PENDING HUMAN) Uploaded Images: 1. I want the system to fetch the face/fingerprint photos from the device so the owner can see them. 2. Leaderboard shows Unknown. Hide it from Cashiers. 3. Expenses give unauthorized.
+**Last 10 User Messages and any pending HUMAN messages** 
+1. (User) The app still reloads every minute... please fix this, and the agent status in HR says connected at the top but disconnected at the bottom.
+2. (Agent) *Checks index.js and sw-offline.js, disables Service Worker updates and preloadAllPages.*
+3. (User) The agent disconnects in HR when leaving and coming back, it should stay connected.
+4. (Agent) *Changes HR.js to use the server heartbeat for the top header status.*
+5. (User) There is a 404 error when pushing biometric users, and the app STILL reloads every minute with a white screen!
+6. (Agent) *Fixes the biometric UID overwriting bug, wraps the push in try-catch. Disables preloadAllPages completely.*
+7. (User) The print agent says connected at the top but disconnected below. And the reload happens every minute! (PENDING)
 
 **Project Health Check:**
-- Broken: None at the moment, but  C# code is actively being modified and needs compilation checks.
-- Mocked: ZKTeco devices
+- Broken: Frontend stability (Auto-reloading every 1 min).
+- Broken: HR biometric agent UI status discrepancy.
+- Mocked: USB Thermal Printers, ZKTeco hardware.
 
-**3rd Party Integrations**
-- ZKTeco Biometrics (Via Local PowerShell Agent).
+**3rd Party Integrations** 
+- ZKTeco Biometrics via Local Print Agent (Requires Local Agent  to proxy requests).
 
-**Testing status**:
-  - Testing agent used after significant changes: NO (Iterative debugging directly with the user).
+**Testing status**
+  - Testing agent used after significant changes: NO
   - Troubleshoot agent used after agent stuck in loop: NO
   - Test files created: None
-  - Known regressions: None
+  - Known regressions: Page auto-reloading loop.
 
-**Credentials to test flow**:
+**Credentials to test flow:**
 - Admin: hanialdujaili@gmail.com / Hani@2024
-- Super Admin: owner@maestroegp.com / owner123 (Secret: 271018)
+- Super Admin: owner@maestroegp.com / owner123
 
-**What agent forgot to execute**:
-- The Overtime approval UI was discussed but not implemented yet in the frontend.
+**What agent forgot to execute**
+The agent failed to identify the actual source of the 1-minute auto-reload. It assumed Service Workers were the cause, but it is highly likely there is an Axios interceptor or a  in an Auth/Offline hook calling  upon a specific silent API failure (like a 403 or PNA block).
 
-**Debugging checklist for current issue**:
-    Issue: Face Photo Fetching (WIP in )
-    Backend files to check:
-    - :
-      1. Extract the C# code starting at  and ending before .
-      2. Save it to .
-      3. Run  to verify compilation.
-      4. Ensure the  method handles the correct byte commands or HTTP requests needed for ZKTeco biophotos.</analysis>
+**Debugging checklist for current issue**
+    Issue: App reloads every minute & HR biometric agent status discrepancy.
+
+    Frontend files to check: 
+    - : Check for  inside response interceptors.
+    - : Check if token refresh failures or intervals force a reload.
+    - : Check if the interval triggers a full DOM re-render loop.
+    - : Locate the الوكيل غير متصل string in the biometric section. It is likely pinging . Change it to rely on  (from the heartbeat) instead.</analysis>
