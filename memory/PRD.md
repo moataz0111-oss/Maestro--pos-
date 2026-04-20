@@ -53,6 +53,15 @@ Multi-tenant POS system with biometric integration (ZKTeco), thermal receipt pri
     - Increased face photo fetch timeouts from 20s → 60s (outer) and 15s → 45s (agent-side) to accommodate ZK devices trying multiple HTTP/UDP methods.
     - Added background auto-fetch: HR page now automatically fetches face photos for up to 10 employees without saved photos on load (silently, no error toast).
     - Improved UX: when fetch fails but employee has a saved photo, we silently display the saved one instead of the timeout error.
+24. **[FIXED 2026-04-20] HR white-screen flash every 60 seconds (ROOT CAUSE)**:
+    - The real root cause wasn't the service worker — HR.js `fetchData()` was calling `setLoading(true)` every 60s during auto-refresh, triggering the full-page loading spinner (line 1199) that looked like a page reload/white screen.
+    - Fix: `fetchData()` now accepts a `silent` flag; the auto-refresh useEffect calls `fetchData(true)` so the spinner never shows during background updates.
+    - Verified via 3-minute continuous monitor: 0 white-screen flashes, content always visible.
+25. **[ENHANCEMENT 2026-04-20] Photo fetch progress indicator**: Added `photoFetchProgress` state + UI badge next to the agent status showing "جلب الصور: X/Y" during background photo auto-fetch — gives user visibility into the process.
+26. **[AGENT v6.1.2 2026-04-20] Photo fetch caching + faster HTTP timeouts**:
+    - `GetFacePhoto` now caches the last successful (user, pass, port, path) combo and tries it FIRST for subsequent UIDs — drastically reduces fetch time after first success.
+    - Reduced per-path HTTP timeout from 3000ms → 1500ms — makes negative lookups finish much faster.
+    - Agent version bumped from 6.1.1 → 6.1.2.
 
 ## Key API Endpoints
 - GET /api/printers?branch_id=xxx
