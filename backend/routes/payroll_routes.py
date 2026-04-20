@@ -158,6 +158,118 @@ async def get_deductions(
     
     return deductions
 
+# ==================== RESET DEDUCTIONS (Owner only, once per month, after 15th of next month) ====================
+@router.get("/deductions/reset-eligibility")
+async def check_deductions_reset_eligibility(current_user: dict = Depends(get_current_user)):
+    """فحص إذا كان المالك يستطيع تصفير الخصومات الآن"""
+    db = get_database()
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.SUPER_ADMIN]:
+        raise HTTPException(status_code=403, detail="هذه العملية متاحة للمالك فقط")
+    
+    tenant_id = get_user_tenant_id(current_user)
+    now = datetime.now(timezone.utc)
+    today = now.date()
+    
+    # جلب آخر تصفير لهذا المستأجر
+    last_reset = await db.deductions_resets.find_one(
+        {"tenant_id": tenant_id},
+        {"_id": 0},
+        sort=[("created_at", -1)]
+    )
+    
+    # الشرط 1: يجب أن يكون اليوم بعد الـ 15 من الشهر
+    is_after_15th = today.day >= 15
+    
+    # الشرط 2: لم يتم التصفير في هذا الشهر من قبل
+    can_reset_this_month = True
+    last_reset_date = None
+    if last_reset:
+        try:
+            last_dt = datetime.fromisoformat(last_reset["created_at"].replace("Z", "+00:00"))
+            last_reset_date = last_dt.date()
+            # إذا كان التصفير السابق في نفس السنة-الشهر، لا يمكن التصفير مرة أخرى
+            if last_reset_date.year == today.year and last_reset_date.month == today.month:
+                can_reset_this_month = False
+        except Exception:
+            pass
+    
+    can_reset = is_after_15th and can_reset_this_month
+    
+    # رسالة واضحة للمستخدم
+    if not is_after_15th:
+        reason = f"التصفير متاح فقط بعد الـ 15 من الشهر (اليوم: {today.day})"
+    elif not can_reset_this_month:
+        reason = f"تم التصفير في هذا الشهر بالفعل في {last_reset_date.isoformat() if last_reset_date else 'تاريخ سابق'}"
+    else:
+        reason = "يمكن التصفير الآن"
+    
+    return {
+        "can_reset": can_reset,
+        "is_after_15th": is_after_15th,
+        "can_reset_this_month": can_reset_this_month,
+        "reason": reason,
+        "today": today.isoformat(),
+        "last_reset_date": last_reset_date.isoformat() if last_reset_date else None
+    }
+
+@router.post("/deductions/reset")
+async def reset_all_deductions(current_user: dict = Depends(get_current_user)):
+    """تصفير (حذف نهائي) جميع الخصومات. للمالك فقط، مرة واحدة شهرياً بعد الـ 15"""
+    db = get_database()
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.SUPER_ADMIN]:
+        raise HTTPException(status_code=403, detail="هذه العملية متاحة للمالك فقط")
+    
+    tenant_id = get_user_tenant_id(current_user)
+    now = datetime.now(timezone.utc)
+    today = now.date()
+    
+    # تحقق من الشروط
+    if today.day < 15:
+        raise HTTPException(
+            status_code=400,
+            detail=f"التصفير متاح فقط بعد الـ 15 من الشهر. اليوم: {today.day}"
+        )
+    
+    last_reset = await db.deductions_resets.find_one(
+        {"tenant_id": tenant_id},
+        {"_id": 0},
+        sort=[("created_at", -1)]
+    )
+    if last_reset:
+        try:
+            last_dt = datetime.fromisoformat(last_reset["created_at"].replace("Z", "+00:00"))
+            if last_dt.date().year == today.year and last_dt.date().month == today.month:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"تم التصفير في هذا الشهر بالفعل في {last_dt.date().isoformat()}"
+                )
+        except HTTPException:
+            raise
+        except Exception:
+            pass
+    
+    # تنفيذ التصفير (حذف نهائي)
+    result = await db.deductions.delete_many({"tenant_id": tenant_id})
+    deleted_count = result.deleted_count
+    
+    # تسجيل عملية التصفير في سجل منفصل (للتدقيق)
+    reset_log = {
+        "id": str(uuid.uuid4()),
+        "tenant_id": tenant_id,
+        "deleted_count": deleted_count,
+        "reset_by": current_user["id"],
+        "reset_by_name": current_user.get("name") or current_user.get("email"),
+        "created_at": now.isoformat()
+    }
+    await db.deductions_resets.insert_one(reset_log)
+    
+    return {
+        "success": True,
+        "deleted_count": deleted_count,
+        "message": f"تم تصفير {deleted_count} خصم بنجاح",
+        "reset_date": today.isoformat()
+    }
+
 # ==================== BONUSES ====================
 @router.post("/bonuses", response_model=BonusResponse)
 async def create_bonus(bonus: BonusCreate, current_user: dict = Depends(get_current_user)):

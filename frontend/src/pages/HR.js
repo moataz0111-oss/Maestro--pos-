@@ -77,7 +77,8 @@ import {
   CloudOff,
   Cloud,
   Camera,
-  Upload
+  Upload,
+  RefreshCw
 } from 'lucide-react';
 import { toast, Toaster } from 'sonner';
 import BiometricDevices from '../components/BiometricDevices';
@@ -186,6 +187,9 @@ export default function HR() {
   const [attendanceDialogOpen, setAttendanceDialogOpen] = useState(false);
   const [advanceDialogOpen, setAdvanceDialogOpen] = useState(false);
   const [deductionDialogOpen, setDeductionDialogOpen] = useState(false);
+  const [resetDeductionsDialogOpen, setResetDeductionsDialogOpen] = useState(false);
+  const [resetEligibility, setResetEligibility] = useState(null);
+  const [resetting, setResetting] = useState(false);
   const [bonusDialogOpen, setBonusDialogOpen] = useState(false);
   const [payrollDialogOpen, setPayrollDialogOpen] = useState(false);
 
@@ -497,12 +501,12 @@ export default function HR() {
             await axios.post(`${AGENT_URL}/zk-push-user`, {
               ip: selectedDevice.ip_address,
               port: selectedDevice.port || 4370,
-              timeout: 10000,
+              timeout: 45000,
               uid: parseInt(uid),
               name: employeeForm.name_en || arabicToEnglish(employeeForm.name),
               privilege: 0,
               user_id: uid.toString()
-            }, { timeout: 15000 });
+            }, { timeout: 60000 });
             toast.success(t('تم تصدير الموظف للبصمة') + ` UID#${uid}`);
           }
         } catch (pushErr) {
@@ -545,12 +549,12 @@ export default function HR() {
             await axios.post(`${AGENT_URL}/zk-push-user`, {
               ip: selectedDevice.ip_address,
               port: selectedDevice.port || 4370,
-              timeout: 10000,
+              timeout: 45000,
               uid: parseInt(uid),
               name: employeeForm.name_en || arabicToEnglish(employeeForm.name),
               privilege: 0,
               user_id: uid.toString()
-            }, { timeout: 15000 });
+            }, { timeout: 60000 });
             toast.success(t('تم تصدير التعديلات للبصمة') + ` UID#${uid}`);
           }
         } catch (pushErr) {
@@ -799,6 +803,39 @@ export default function HR() {
   };
 
   // Deduction handlers
+  // فتح حوار تصفير الخصومات - يفحص الأهلية من السيرفر أولاً
+  const handleOpenResetDeductions = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await axios.get(`${API}/deductions/reset-eligibility`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setResetEligibility(res.data);
+      setResetDeductionsDialogOpen(true);
+    } catch (error) {
+      toast.error(error.response?.data?.detail || t('فشل في فحص الأهلية'));
+    }
+  };
+
+  // تنفيذ تصفير الخصومات (حذف نهائي)
+  const handleConfirmResetDeductions = async () => {
+    setResetting(true);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await axios.post(`${API}/deductions/reset`, {}, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      toast.success(res.data.message || t('تم التصفير بنجاح'));
+      setResetDeductionsDialogOpen(false);
+      setResetEligibility(null);
+      fetchData();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || t('فشل في التصفير'));
+    } finally {
+      setResetting(false);
+    }
+  };
+
   const handleCreateDeduction = async (e) => {
     e.preventDefault();
     try {
@@ -1254,8 +1291,8 @@ export default function HR() {
       const res = await axios.post(`${AGENT_URL}/zk-users`, {
         ip: device.ip_address,
         port: device.port || 4370,
-        timeout: 10000
-      }, { timeout: 15000 });
+        timeout: 45000
+      }, { timeout: 60000 });
       if (res.data?.success) return res.data.users || [];
     } catch {}
     return [];
@@ -2074,6 +2111,12 @@ export default function HR() {
                         <th className="text-right p-3">{t('الموظف')}</th>
                         <th className="text-right p-3">{t('التاريخ')}</th>
                         <th className="text-right p-3">{t('الحضور')}</th>
+                        <th className="text-right p-3 text-amber-600 bg-amber-50/50" data-testid="col-break-out">
+                          {t('ذهاب الاستراحة')}
+                        </th>
+                        <th className="text-right p-3 text-emerald-600 bg-emerald-50/50" data-testid="col-break-in">
+                          {t('عودة من الاستراحة')}
+                        </th>
                         <th className="text-right p-3">{t('الانصراف')}</th>
                         <th className="text-right p-3">{t('الساعات')}</th>
                         <th className="text-right p-3">{t('الحالة')}</th>
@@ -2095,6 +2138,12 @@ export default function HR() {
                           <td className="p-3 font-medium">{att.employee_name}</td>
                           <td className="p-3">{att.date}</td>
                           <td className="p-3">{formatTime12(att.check_in)}</td>
+                          <td className="p-3 text-amber-700 bg-amber-50/30" data-testid={`break-out-${att.id}`}>
+                            {formatTime12(att.break_out)}
+                          </td>
+                          <td className="p-3 text-emerald-700 bg-emerald-50/30" data-testid={`break-in-${att.id}`}>
+                            {formatTime12(att.break_in)}
+                          </td>
                           <td className="p-3">{formatTime12(att.check_out)}</td>
                           <td className="p-3">{att.worked_hours?.toFixed(1) || '-'}</td>
                           <td className="p-3">{getStatusBadge(att.status)}</td>
@@ -2189,16 +2238,28 @@ export default function HR() {
           {/* Deductions Tab */}
           <TabsContent value="deductions">
             <Card>
-              <CardHeader className="flex flex-row items-center justify-between">
+              <CardHeader className="flex flex-row items-center justify-between flex-wrap gap-2">
                 <CardTitle>{t('الخصومات')} - {dateLabel}</CardTitle>
-                <Dialog open={deductionDialogOpen} onOpenChange={setDeductionDialogOpen}>
-                  <DialogTrigger asChild>
-                    <Button variant="destructive"><Plus className="h-4 w-4 ml-2" /> {t('خصم جديد')}</Button>
-                  </DialogTrigger>
-                  <DialogContent>
-                    <DialogHeader>
-                      <DialogTitle>{t('تسجيل خصم')}</DialogTitle>
-                    </DialogHeader>
+                <div className="flex items-center gap-2">
+                  {/* زر تصفير الخصومات - للمالك فقط */}
+                  {hasRole(['admin', 'super_admin']) && (
+                    <Button
+                      variant="outline"
+                      onClick={handleOpenResetDeductions}
+                      data-testid="reset-deductions-btn"
+                      className="border-red-300 text-red-600 hover:bg-red-50"
+                    >
+                      <RefreshCw className="h-4 w-4 ml-2" /> {t('تصفير الخصومات')}
+                    </Button>
+                  )}
+                  <Dialog open={deductionDialogOpen} onOpenChange={setDeductionDialogOpen}>
+                    <DialogTrigger asChild>
+                      <Button variant="destructive" data-testid="new-deduction-btn"><Plus className="h-4 w-4 ml-2" /> {t('خصم جديد')}</Button>
+                    </DialogTrigger>
+                    <DialogContent>
+                      <DialogHeader>
+                        <DialogTitle>{t('تسجيل خصم')}</DialogTitle>
+                      </DialogHeader>
                     <form onSubmit={handleCreateDeduction} className="space-y-4">
                       <div>
                         <Label>{t('الموظف *')}</Label>
@@ -2251,6 +2312,7 @@ export default function HR() {
                     </form>
                   </DialogContent>
                 </Dialog>
+                </div>
               </CardHeader>
               <CardContent>
                 <div className="overflow-x-auto">
@@ -2299,6 +2361,80 @@ export default function HR() {
                 </div>
               </CardContent>
             </Card>
+
+            {/* حوار تأكيد تصفير الخصومات */}
+            <Dialog open={resetDeductionsDialogOpen} onOpenChange={setResetDeductionsDialogOpen}>
+              <DialogContent data-testid="reset-deductions-dialog" className="max-w-md">
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-2 text-red-600">
+                    <RefreshCw className="h-5 w-5" />
+                    {t('تصفير جميع الخصومات')}
+                  </DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                  {resetEligibility && resetEligibility.can_reset ? (
+                    <>
+                      <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
+                        <p className="text-sm text-red-800 font-semibold mb-2">
+                          ⚠️ {t('تحذير: هذا الإجراء لا يمكن التراجع عنه')}
+                        </p>
+                        <p className="text-sm text-red-700">
+                          {t('سيتم حذف جميع الخصومات نهائياً من قاعدة البيانات.')}
+                        </p>
+                        <ul className="text-xs text-red-600 mt-2 space-y-1 list-disc pr-4">
+                          <li>{t('لن تظهر في التقارير بعد التصفير')}</li>
+                          <li>{t('لن تخصم من الرواتب القادمة')}</li>
+                          <li>{t('لا يمكن التصفير مرة أخرى إلا الشهر القادم (بعد يوم 15)')}</li>
+                        </ul>
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        {t('تاريخ اليوم')}: {resetEligibility.today}
+                        {resetEligibility.last_reset_date && (
+                          <> • {t('آخر تصفير')}: {resetEligibility.last_reset_date}</>
+                        )}
+                      </div>
+                    </>
+                  ) : (
+                    <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg">
+                      <p className="text-sm text-amber-800 font-semibold mb-1">
+                        {t('التصفير غير متاح حالياً')}
+                      </p>
+                      <p className="text-sm text-amber-700">
+                        {resetEligibility?.reason || t('جاري التحقق...')}
+                      </p>
+                      <ul className="text-xs text-amber-600 mt-2 space-y-1 list-disc pr-4">
+                        <li>{t('متاح للمالك فقط')}</li>
+                        <li>{t('مرة واحدة شهرياً')}</li>
+                        <li>{t('بعد الـ 15 من الشهر فقط')}</li>
+                      </ul>
+                    </div>
+                  )}
+                </div>
+                <div className="flex justify-end gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setResetDeductionsDialogOpen(false)}
+                    data-testid="cancel-reset-btn"
+                  >
+                    {t('إلغاء')}
+                  </Button>
+                  {resetEligibility && resetEligibility.can_reset && (
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      onClick={handleConfirmResetDeductions}
+                      disabled={resetting}
+                      data-testid="confirm-reset-btn"
+                    >
+                      {resetting
+                        ? <><RefreshCw className="h-4 w-4 ml-2 animate-spin" />{t('جاري التصفير...')}</>
+                        : <><RefreshCw className="h-4 w-4 ml-2" />{t('نعم، صفّر الآن')}</>}
+                    </Button>
+                  )}
+                </div>
+              </DialogContent>
+            </Dialog>
           </TabsContent>
 
           {/* Bonuses Tab */}

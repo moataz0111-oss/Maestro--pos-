@@ -124,8 +124,8 @@ export default function BiometricDevices({ branches = [], onDataRefresh }) {
           try {
             // 1. جلب البيانات من الجهاز عبر الوكيل
             const agentRes = await axios.post(`${AGENT_URL}/zk-sync`, {
-              ip: device.ip_address, port: device.port || 4370, timeout: 15000
-            }, { timeout: 30000 });
+              ip: device.ip_address, port: device.port || 4370, timeout: 45000
+            }, { timeout: 60000 });
             
             if (!agentRes.data.success || !agentRes.data.records?.length) continue;
             
@@ -327,8 +327,8 @@ export default function BiometricDevices({ branches = [], onDataRefresh }) {
       const res = await axios.post(`${AGENT_URL}/zk-users`, {
         ip: device.ip_address,
         port: device.port || 4370,
-        timeout: 10000
-      }, { timeout: 15000 });
+        timeout: 45000
+      }, { timeout: 60000 });
 
       if (res.data?.success) {
         const users = res.data.users || [];

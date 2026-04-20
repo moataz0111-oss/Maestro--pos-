@@ -1458,6 +1458,8 @@ class AttendanceCreate(BaseModel):
     date: str  # YYYY-MM-DD
     check_in: Optional[str] = None  # وقت الحضور HH:MM
     check_out: Optional[str] = None  # وقت الانصراف HH:MM
+    break_out: Optional[str] = None  # وقت الذهاب للاستراحة HH:MM
+    break_in: Optional[str] = None   # وقت العودة من الاستراحة HH:MM
     status: str = "present"  # present, absent, late, early_leave, holiday
     notes: Optional[str] = None
     source: str = "manual"  # manual, fingerprint, system
@@ -1470,6 +1472,8 @@ class AttendanceResponse(BaseModel):
     date: str
     check_in: Optional[str] = None
     check_out: Optional[str] = None
+    break_out: Optional[str] = None
+    break_in: Optional[str] = None
     worked_hours: Optional[float] = None
     status: str
     notes: Optional[str] = None
@@ -14554,10 +14558,26 @@ async def _auto_process_attendance_internal(current_user: dict):
         if not emp:
             continue
         
-        # ترتيب الأوقات
+        # ترتيب الأوقات وتوزيع البصمات:
+        # 1 بصمة = حضور فقط
+        # 2 بصمات = حضور + انصراف
+        # 3 بصمات = حضور + ذهاب استراحة + انصراف
+        # 4+ بصمات = حضور + ذهاب استراحة + عودة من استراحة + انصراف
         times.sort()
-        check_in = times[0]    # أول بصمة = حضور
-        check_out = times[-1] if len(times) > 1 else None  # آخر بصمة = انصراف
+        check_in = times[0]
+        check_out = None
+        break_out = None  # ذهاب للاستراحة
+        break_in = None   # عودة من الاستراحة
+        n = len(times)
+        if n == 2:
+            check_out = times[1]
+        elif n == 3:
+            break_out = times[1]
+            check_out = times[2]
+        elif n >= 4:
+            break_out = times[1]
+            break_in = times[-2]
+            check_out = times[-1]
         
         # التحقق من عدم وجود سجل مسبق لنفس اليوم
         existing = await db.attendance.find_one({
@@ -14576,17 +14596,27 @@ async def _auto_process_attendance_internal(current_user: dict):
                 co = datetime.strptime(check_out, "%H:%M")
                 worked_hours = round((co - ci).seconds / 3600, 2)
                 
-                # خصم وقت الاستراحة إن وجد
-                break_start = emp.get("break_start")
-                break_end = emp.get("break_end")
-                if break_start and break_end:
+                # خصم وقت الاستراحة الفعلي من البصمات (إن وجد)
+                if break_out and break_in:
                     try:
-                        bs = datetime.strptime(break_start, "%H:%M")
-                        be = datetime.strptime(break_end, "%H:%M")
-                        break_hours = round((be - bs).seconds / 3600, 2)
-                        worked_hours = max(0, round(worked_hours - break_hours, 2))
+                        bo = datetime.strptime(break_out, "%H:%M")
+                        bi = datetime.strptime(break_in, "%H:%M")
+                        actual_break_hours = round((bi - bo).seconds / 3600, 2)
+                        worked_hours = max(0, round(worked_hours - actual_break_hours, 2))
                     except:
                         pass
+                else:
+                    # fallback: خصم وقت الاستراحة المجدول للموظف
+                    break_start = emp.get("break_start")
+                    break_end = emp.get("break_end")
+                    if break_start and break_end:
+                        try:
+                            bs = datetime.strptime(break_start, "%H:%M")
+                            be = datetime.strptime(break_end, "%H:%M")
+                            break_hours = round((be - bs).seconds / 3600, 2)
+                            worked_hours = max(0, round(worked_hours - break_hours, 2))
+                        except:
+                            pass
             except:
                 pass
         
@@ -14634,6 +14664,8 @@ async def _auto_process_attendance_internal(current_user: dict):
             "date": date_str,
             "check_in": check_in,
             "check_out": check_out,
+            "break_out": break_out,
+            "break_in": break_in,
             "worked_hours": worked_hours,
             "late_minutes": late_minutes,
             "early_leave_minutes": early_leave_minutes,

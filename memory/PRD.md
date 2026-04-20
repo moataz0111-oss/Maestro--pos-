@@ -66,6 +66,22 @@ Multi-tenant POS system with biometric integration (ZKTeco), thermal receipt pri
     - ROOT CAUSE: `/break-even/daily-range` returned a FLAT structure (`salaries: number`, `fixed_costs.rent: number`, `name`, `id`) but the frontend expected nested objects (`salaries.monthly_total`, `fixed_costs.rent.daily`, `branch_name`, `branch_id`).
     - Backend fix: endpoint now returns the same rich nested structure as `/break-even/daily` (single date), with all fields the frontend expects + both old (`id`, `name`) and new (`branch_id`, `branch_name`) key aliases for safety. Includes `fixed_costs.{rent,water,electricity,generator}.{monthly,daily,covered,remaining}` and `salaries.{monthly_total,daily,covered,remaining,employees_count}`.
     - Frontend fix: branch name now appears prominently in THREE places per card: (1) small "الفرع" label + branch name in the header, (2) pill-style centered badge with Building icon, (3) large gradient-highlighted header at the top of the expanded section.
+28. **[FIXED 2026-04-20] Installer version mismatch (single source of truth)**:
+    - All version references now driven by `PRINT_AGENT_VERSION = "6.1.2"` constant in `server.py:8365`.
+    - `print_server.ps1` uses `{{AGENT_VERSION}}` placeholder, injected at serve time via `/api/print-agent-script`.
+    - Frontend `AgentUpdateChecker` fetches required version from `/api/print-agent-version` dynamically.
+    - One-line upgrade for future version bumps.
+29. **[FIXED 2026-04-20] Biometric operation timeouts extended**:
+    - All ZK operations (zk-users, zk-sync, zk-push-user) extended from 15s → 60s (outer) and 10s → 45s (inner) across `HR.js`, `BiometricDevices.js`, `useAutoSync.js`. Fixes "timeout of 15000ms exceeded" errors.
+30. **[FEATURE 2026-04-20] Reset Deductions button (owner only, monthly limit)**:
+    - New endpoints: `GET /api/deductions/reset-eligibility` (check) and `POST /api/deductions/reset` (execute).
+    - Restrictions enforced on backend: (a) admin/super_admin role only, (b) only after the 15th of the month, (c) only once per calendar month per tenant (tracked via `deductions_resets` audit collection).
+    - Frontend: red-outlined "تصفير الخصومات" button in the deductions tab; opens confirmation dialog that explains eligibility and shows warning. Only shows the "Confirm" button when eligible.
+31. **[FEATURE 2026-04-20] Attendance break times (4-punch logic)**:
+    - `AttendanceCreate`/`AttendanceResponse` extended with `break_out` and `break_in` fields.
+    - Auto-process attendance logic now distributes ZK punches: 1 punch=check_in, 2=check_in+check_out, 3=check_in+break_out+check_out, 4+=check_in+break_out+break_in+check_out.
+    - Actual break duration (from punches) is subtracted from worked hours, falling back to scheduled `break_start`/`break_end` if no break punches exist.
+    - Frontend attendance table now shows 4 time columns in order: Check-in → Break-out (amber) → Break-in (green) → Check-out.
 
 ## Key API Endpoints
 - GET /api/printers?branch_id=xxx
