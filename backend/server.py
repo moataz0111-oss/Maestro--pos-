@@ -3629,12 +3629,16 @@ async def get_payroll_summary_report(
         total_worked_hours = sum(_sn(a.get("worked_hours")) for a in emp_attendance)
         
         # حساب الراتب المستحق حسب النوع
+        # ملاحظة مهمة: للموظفين بالشهر، لا نخصم أيام الغياب هنا
+        # لأن الخصومات التلقائية للغياب محفوظة في مجموعة deductions
+        # وتُطبَّق لاحقاً، لذلك خصم الغياب هنا يسبب خصم مزدوج
         if salary_type == "hourly":
             earned_salary = round(total_worked_hours * hourly_rate, 2)
         elif salary_type == "daily":
             earned_salary = round(worked_days * daily_rate, 2)
         else:
-            earned_salary = round(basic_salary - (absent_days * daily_rate), 2)
+            # monthly: الراتب الأساسي كامل، والخصومات تتكفل بالغياب
+            earned_salary = basic_salary
         
         # الخصومات
         deductions = deductions_by_emp.get(emp_id, [])
@@ -14802,8 +14806,10 @@ async def _auto_process_attendance_internal(current_user: dict):
         await db.attendance.insert_one(att_doc)
         created_attendance += 1
         
-        # خصم غياب يوم كامل
-        if daily_rate > 0:
+        # خصم غياب يوم كامل - فقط للموظفين بالراتب الشهري
+        # (الموظفون بالساعة/اليوم لا يتقاضون أصلاً عن أيام الغياب، فلا حاجة لخصم إضافي)
+        salary_type_emp = emp.get("salary_type", "monthly")
+        if daily_rate > 0 and salary_type_emp == "monthly":
             ded_doc = {
                 "id": str(uuid.uuid4()),
                 "employee_id": emp["id"],

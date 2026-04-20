@@ -90,6 +90,13 @@ Multi-tenant POS system with biometric integration (ZKTeco), thermal receipt pri
     - ADDED **Individual file upload**: Upload single photo per employee from device storage.
     - REMOVED misleading background auto-fetch errors and timeouts.
     - All saved photos update local state immediately (no full data re-fetch).
+33. **[CRITICAL FIX 2026-04-20] Payroll DOUBLE-COUNTING absences (financial bug)**:
+    - ROOT CAUSE: For monthly-salary employees, `earned_salary` was computed as `basic_salary - (absent_days × daily_rate)`. Then `emp_deductions` (which ALREADY contained auto-created "absence" deductions for the same absent days) was subtracted again. Net result: absences deducted TWICE.
+    - Example: Basic 5,000,000, deductions 310,917 (includes 276,667 in absence deductions) → displayed net 4,412,416 (WRONG). Correct: 5,000,000 - 310,917 = 4,689,083.
+    - **Fix 1**: `earned_salary` for monthly employees now equals `basic_salary`. The `deductions` collection (which already contains absence entries) is the single source of salary reduction.
+    - **Fix 2**: Auto-absence deductions are now created ONLY for monthly-salary employees. For hourly/daily employees, missing a day already means no pay for that day — creating a deduction on top would be another double-penalty.
+    - Formula now correctly matches user expectation: `net_payable = basic + bonuses + overtime - deductions - advances`
+    - Verified mathematically: old formula produced 4,412,416 (bug), new formula produces 4,689,083 (correct). ✓
 
 ## Key API Endpoints
 - GET /api/printers?branch_id=xxx
