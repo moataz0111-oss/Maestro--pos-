@@ -8,6 +8,22 @@ import { useOffline } from '../context/OfflineContext';
 import offlineStorage from '../lib/offlineStorage';
 import db, { STORES } from '../lib/offlineDB';
 import { formatPrice } from '../utils/currency';
+
+// تحويل الأسماء العربية للإنجليزية (للبصمة)
+const arabicToEnglish = (name) => {
+  if (!name) return '';
+  const hasArabic = /[\u0600-\u06FF]/.test(name);
+  if (!hasArabic) return name;
+  const map = {
+    'ا':'a','أ':'a','إ':'e','آ':'a','ب':'b','ت':'t','ث':'th','ج':'j','ح':'h','خ':'kh',
+    'د':'d','ذ':'th','ر':'r','ز':'z','س':'s','ش':'sh','ص':'s','ض':'d','ط':'t','ظ':'z',
+    'ع':'a','غ':'gh','ف':'f','ق':'q','ك':'k','ل':'l','م':'m','ن':'n','ه':'h','و':'w',
+    'ي':'y','ى':'a','ة':'a','ئ':'e','ء':'a','ؤ':'o',' ':' ',
+    'َ':'a','ُ':'u','ِ':'i','ّ':'','ً':'','ٌ':'','ٍ':''
+  };
+  return name.split('').map(c => map[c] !== undefined ? map[c] : c).join('');
+};
+
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -395,7 +411,7 @@ export default function HR() {
               port: selectedDevice.port || 4370,
               timeout: 10000,
               uid: parseInt(uid),
-              name: employeeForm.name_en || employeeForm.name,
+              name: employeeForm.name_en || arabicToEnglish(employeeForm.name),
               privilege: 0,
               user_id: uid.toString()
             }, { timeout: 15000 });
@@ -443,7 +459,7 @@ export default function HR() {
               port: selectedDevice.port || 4370,
               timeout: 10000,
               uid: parseInt(uid),
-              name: employeeForm.name_en || employeeForm.name,
+              name: employeeForm.name_en || arabicToEnglish(employeeForm.name),
               privilege: 0,
               user_id: uid.toString()
             }, { timeout: 15000 });
@@ -1163,7 +1179,7 @@ export default function HR() {
         timeout: 5000,
         uid: uid,
         user_id: String(uid),
-        name: pushingEmployee.name_en || pushingEmployee.name,
+        name: pushingEmployee.name_en || arabicToEnglish(pushingEmployee.name),
         privilege: 0
       }, { timeout: 10000 });
 
@@ -1223,7 +1239,7 @@ export default function HR() {
           timeout: 5000,
           uid: uid,
           user_id: String(uid),
-          name: emp.name_en || emp.name,
+          name: emp.name_en || arabicToEnglish(emp.name),
           privilege: 0
         }, { timeout: 10000 });
         
