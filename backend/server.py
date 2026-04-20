@@ -12080,15 +12080,23 @@ async def get_daily_break_even_range(
     total_target = 0
     total_profit = 0
     total_collected = 0
+    total_monthly_target = 0
+    total_monthly_profit = 0
     
     for branch in branches:
         branch_id_val = branch.get("id")
         
-        # حساب التكاليف الثابتة اليومية للفرع * عدد الأيام
-        rent_cost = (_sn(branch.get("rent_cost")) / 30) * days_count
-        water_cost = (_sn(branch.get("water_cost")) / 30) * days_count
-        electricity_cost = (_sn(branch.get("electricity_cost")) / 30) * days_count
-        generator_cost = (_sn(branch.get("generator_cost")) / 30) * days_count
+        # القيم الشهرية الأصلية للفرع
+        rent_monthly = _sn(branch.get("rent_cost"))
+        water_monthly = _sn(branch.get("water_cost"))
+        electricity_monthly = _sn(branch.get("electricity_cost"))
+        generator_monthly = _sn(branch.get("generator_cost"))
+        
+        # حساب التكاليف الثابتة للفترة (النطاق)
+        rent_cost = (rent_monthly / 30) * days_count
+        water_cost = (water_monthly / 30) * days_count
+        electricity_cost = (electricity_monthly / 30) * days_count
+        generator_cost = (generator_monthly / 30) * days_count
         fixed_costs = rent_cost + water_cost + electricity_cost + generator_cost
         
         # حساب رواتب الموظفين * عدد الأيام
@@ -12099,10 +12107,14 @@ async def get_daily_break_even_range(
         }, {"_id": 0, "salary": 1}).to_list(1000)
         
         total_monthly_salaries = sum(_sn(emp.get("salary")) for emp in employees)
-        salaries = (total_monthly_salaries / 30) * days_count
+        salaries_range = (total_monthly_salaries / 30) * days_count
         
         # الهدف الإجمالي للفترة
-        branch_target = fixed_costs + salaries
+        branch_target = fixed_costs + salaries_range
+        
+        # الهدف الشهري الكامل (للعرض في monthly view)
+        monthly_fixed_costs = rent_monthly + water_monthly + electricity_monthly + generator_monthly
+        branch_monthly_target = monthly_fixed_costs + total_monthly_salaries
         
         # جلب الطلبات المكتملة في النطاق لهذا الفرع
         orders_query = {
@@ -12117,11 +12129,12 @@ async def get_daily_break_even_range(
         
         orders = await db.orders.find(orders_query, {"_id": 0, "total": 1, "total_cost": 1, "profit": 1}).to_list(10000)
         
-        # حساب الربح الإجمالي
+        # حساب الأرباح والمبيعات
         branch_profit = sum(_sn(o.get("profit")) for o in orders)
         branch_sales = sum(_sn(o.get("total")) for o in orders)
+        branch_material_cost = sum(_sn(o.get("total_cost")) for o in orders)
         
-        # المستقطع من الربح لتغطية الهدف (الحد الأدنى بين الربح والهدف)
+        # المستقطع من الربح لتغطية الهدف
         branch_collected = min(branch_profit, branch_target)
         
         # نسبة التغطية
@@ -12133,31 +12146,100 @@ async def get_daily_break_even_range(
         # الربح الصافي بعد نقطة التعادل
         net_profit = max(0, branch_profit - branch_target)
         
+        # المتبقي من كل تكلفة
+        remaining_to_cover = max(0, branch_target - branch_profit)
+        if remaining_to_cover > 0 and branch_target > 0:
+            ratio = remaining_to_cover / branch_target
+            remaining_rent = rent_cost * ratio
+            remaining_water = water_cost * ratio
+            remaining_electricity = electricity_cost * ratio
+            remaining_generator = generator_cost * ratio
+            remaining_salaries = salaries_range * ratio
+        else:
+            remaining_rent = remaining_water = remaining_electricity = remaining_generator = remaining_salaries = 0
+        
+        # المبالغ المغطاة من كل تكلفة
+        covered_amount = min(branch_profit, branch_target)
+        if branch_target > 0:
+            covered_ratio = covered_amount / branch_target
+            covered_rent = rent_cost * covered_ratio
+            covered_water = water_cost * covered_ratio
+            covered_electricity = electricity_cost * covered_ratio
+            covered_generator = generator_cost * covered_ratio
+            covered_salaries = salaries_range * covered_ratio
+        else:
+            covered_rent = covered_water = covered_electricity = covered_generator = covered_salaries = 0
+        
         branch_result = {
+            # مفاتيح المعرّف والاسم - يدعم frontend القديم والجديد
             "id": branch_id_val,
+            "branch_id": branch_id_val,
             "name": branch.get("name", "فرع غير مسمى"),
+            "branch_name": branch.get("name", "فرع غير مسمى"),
+            
+            # الأهداف
             "target": branch_target,
+            "daily_target": branch_target,  # للنطاق اليومي (قد يكون متعدد الأيام)
+            "monthly_target": branch_monthly_target,
+            
+            # الأرباح والمبيعات
             "profit": branch_profit,
+            "daily_gross_profit": branch_profit,
+            "monthly_gross_profit": branch_profit,  # نفس القيمة لأن النطاق هو ما تم طلبه
             "sales": branch_sales,
+            "daily_sales": branch_sales,
+            "monthly_sales": branch_sales,
+            "daily_material_cost": branch_material_cost,
+            "monthly_material_cost": branch_material_cost,
+            
+            # الإحصائيات
             "collected_towards_target": branch_collected,
             "coverage_percentage": round(coverage_percentage, 1),
             "is_break_even_reached": is_break_even_reached,
+            "remaining_to_break_even": remaining_to_cover,
             "net_profit_after_break_even": net_profit,
+            "net_profit_after_costs": net_profit,
             "orders_count": len(orders),
+            
+            # التكاليف الثابتة - بنية متداخلة كما يتوقعها الـ frontend
             "fixed_costs": {
-                "rent": rent_cost,
-                "water": water_cost,
-                "electricity": electricity_cost,
-                "generator": generator_cost,
-                "total": fixed_costs
+                "rent": {
+                    "monthly": rent_monthly, "daily": rent_cost,
+                    "covered": covered_rent, "remaining": remaining_rent
+                },
+                "water": {
+                    "monthly": water_monthly, "daily": water_cost,
+                    "covered": covered_water, "remaining": remaining_water
+                },
+                "electricity": {
+                    "monthly": electricity_monthly, "daily": electricity_cost,
+                    "covered": covered_electricity, "remaining": remaining_electricity
+                },
+                "generator": {
+                    "monthly": generator_monthly, "daily": generator_cost,
+                    "covered": covered_generator, "remaining": remaining_generator
+                },
+                "total_daily": fixed_costs,
+                "total": fixed_costs  # للتوافق مع الـ frontend القديم
             },
-            "salaries": salaries
+            
+            # الرواتب - بنية متداخلة مع تفاصيل كاملة
+            "salaries": {
+                "monthly_total": total_monthly_salaries,
+                "total": salaries_range,
+                "daily": salaries_range,  # للنطاق
+                "covered": covered_salaries,
+                "remaining": remaining_salaries,
+                "employees_count": len(employees)
+            }
         }
         
         result_branches.append(branch_result)
         total_target += branch_target
         total_profit += branch_profit
         total_collected += branch_collected
+        total_monthly_target += branch_monthly_target
+        total_monthly_profit += branch_profit
     
     # الإجمالي لجميع الفروع
     total_coverage = (total_profit / total_target * 100) if total_target > 0 else 0
@@ -12168,10 +12250,13 @@ async def get_daily_break_even_range(
         "days_count": days_count,
         "branches": result_branches,
         "total_daily_target": total_target,
+        "total_monthly_target": total_monthly_target,
         "total_daily_profit": total_profit,
+        "total_monthly_profit": total_monthly_profit,
         "total_coverage_percentage": round(total_coverage, 1),
         "is_break_even_reached": total_profit >= total_target,
         "net_profit_after_break_even": max(0, total_profit - total_target),
+        "net_profit_after_costs": max(0, total_profit - total_target),
         "total_collected_towards_target": total_collected
     }
 

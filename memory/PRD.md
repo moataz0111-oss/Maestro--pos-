@@ -62,6 +62,10 @@ Multi-tenant POS system with biometric integration (ZKTeco), thermal receipt pri
     - `GetFacePhoto` now caches the last successful (user, pass, port, path) combo and tries it FIRST for subsequent UIDs — drastically reduces fetch time after first success.
     - Reduced per-path HTTP timeout from 3000ms → 1500ms — makes negative lookups finish much faster.
     - Agent version bumped from 6.1.1 → 6.1.2.
+27. **[FIXED 2026-04-20] Break-Even Report: Salaries showing 0 + Branch name missing**:
+    - ROOT CAUSE: `/break-even/daily-range` returned a FLAT structure (`salaries: number`, `fixed_costs.rent: number`, `name`, `id`) but the frontend expected nested objects (`salaries.monthly_total`, `fixed_costs.rent.daily`, `branch_name`, `branch_id`).
+    - Backend fix: endpoint now returns the same rich nested structure as `/break-even/daily` (single date), with all fields the frontend expects + both old (`id`, `name`) and new (`branch_id`, `branch_name`) key aliases for safety. Includes `fixed_costs.{rent,water,electricity,generator}.{monthly,daily,covered,remaining}` and `salaries.{monthly_total,daily,covered,remaining,employees_count}`.
+    - Frontend fix: branch name now appears prominently in THREE places per card: (1) small "الفرع" label + branch name in the header, (2) pill-style centered badge with Building icon, (3) large gradient-highlighted header at the top of the expanded section.
 
 ## Key API Endpoints
 - GET /api/printers?branch_id=xxx

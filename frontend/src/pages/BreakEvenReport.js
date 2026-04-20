@@ -357,18 +357,31 @@ export default function BreakEvenReport() {
                 <Card className="overflow-hidden">
                   <CollapsibleTrigger asChild>
                     <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
-                      <div className="flex items-center justify-between">
+                      <div className="flex items-center justify-between gap-4">
                         <div className="flex items-center gap-4">
                           <div className={`w-3 h-3 rounded-full ${branch.is_break_even_reached ? 'bg-green-500' : 'bg-orange-500'}`} />
                           <div>
-                            <CardTitle className="text-foreground">{branch.branch_name}</CardTitle>
-                            <p className="text-sm text-muted-foreground">
-                              {branch.orders_count} {t('طلب')} | {t('الهدف')}: {formatPrice(viewMode === 'daily' ? branch.daily_target : branch.monthly_target)}
-                            </p>
+                            <p className="text-xs text-muted-foreground">{t('الفرع')}</p>
+                            <CardTitle className="text-foreground text-lg font-bold" data-testid={`branch-name-${branch.branch_id || branch.id}`}>
+                              {branch.branch_name || branch.name || t('فرع غير مسمى')}
+                            </CardTitle>
                           </div>
                         </div>
-                        
-                        <div className="flex items-center gap-6">
+
+                        {/* اسم الفرع بارز في وسط البطاقة */}
+                        <div className="hidden md:flex flex-1 items-center justify-center">
+                          <div className="px-4 py-1.5 rounded-full bg-primary/10 border border-primary/20">
+                            <span className="text-sm font-semibold text-primary">
+                              <Building2 className="h-3.5 w-3.5 inline ml-1 -mt-0.5" />
+                              {branch.branch_name || branch.name || t('فرع غير مسمى')}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-4">
+                          <p className="text-xs text-muted-foreground hidden lg:block">
+                            {branch.orders_count} {t('طلب')} | {t('الهدف')}: {formatPrice(viewMode === 'daily' ? branch.daily_target : branch.monthly_target)}
+                          </p>
                           {/* شريط التقدم المصغر */}
                           <div className="w-32">
                             <div className="flex justify-between text-xs mb-1">
@@ -409,6 +422,21 @@ export default function BreakEvenReport() {
                   
                   <CollapsibleContent>
                     <CardContent className="border-t border-border pt-6">
+                      {/* عنوان الفرع بارز في وسط القسم الموسّع */}
+                      <div className="flex items-center justify-center mb-6">
+                        <div className="px-6 py-2 rounded-lg bg-gradient-to-r from-primary/10 via-primary/15 to-primary/10 border border-primary/30 shadow-sm">
+                          <div className="flex items-center gap-2">
+                            <Building2 className="h-5 w-5 text-primary" />
+                            <span className="text-base font-bold text-primary" data-testid={`branch-expanded-name-${branch.branch_id || branch.id}`}>
+                              {branch.branch_name || branch.name || t('فرع غير مسمى')}
+                            </span>
+                            <span className="text-xs text-muted-foreground mx-2">•</span>
+                            <span className="text-xs text-muted-foreground">
+                              {branch.orders_count} {t('طلب')} | {t('الهدف')}: {formatPrice(viewMode === 'daily' ? branch.daily_target : branch.monthly_target)}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         {/* التكاليف الثابتة */}
                         <div>
