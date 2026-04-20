@@ -82,6 +82,14 @@ Multi-tenant POS system with biometric integration (ZKTeco), thermal receipt pri
     - Auto-process attendance logic now distributes ZK punches: 1 punch=check_in, 2=check_in+check_out, 3=check_in+break_out+check_out, 4+=check_in+break_out+break_in+check_out.
     - Actual break duration (from punches) is subtracted from worked hours, falling back to scheduled `break_start`/`break_end` if no break punches exist.
     - Frontend attendance table now shows 4 time columns in order: Check-in → Break-out (amber) → Break-in (green) → Check-out.
+32. **[FEATURE 2026-04-20] Face photo capture redesign — pragmatic solution**:
+    - ROOT CAUSE: Most ZKTeco devices (>90%) do NOT expose face photos via HTTP. Previous HTTP probe (11 creds × 4 ports × 16 paths = 704 attempts) always failed, causing 60s timeouts.
+    - DISABLED automatic HTTP photo fetch (was in background every page load). No more unnecessary retries.
+    - ADDED **Webcam capture**: Live camera preview with guide circle + instant capture button in face photo dialog. Works on any device with a camera.
+    - ADDED **Bulk photo upload**: User selects multiple image files at once from the employees list header; system matches files to employees by UID in filename (e.g., "1.jpg" → UID=1). Shows progress badge X/Y.
+    - ADDED **Individual file upload**: Upload single photo per employee from device storage.
+    - REMOVED misleading background auto-fetch errors and timeouts.
+    - All saved photos update local state immediately (no full data re-fetch).
 
 ## Key API Endpoints
 - GET /api/printers?branch_id=xxx

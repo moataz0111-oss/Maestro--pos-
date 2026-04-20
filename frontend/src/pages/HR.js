@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { API_URL, BACKEND_URL } from '../utils/api';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
@@ -302,59 +302,10 @@ export default function HR() {
     return () => window.removeEventListener('biometric-sync-data-updated', handleSyncUpdate);
   }, [selectedBranchId, selectedMonth, dateMode, startDate, endDate, selectedYear]);
 
-  // جلب تلقائي لصور الوجه في الخلفية (عند تحميل الصفحة) للموظفين الذين ليس لديهم صورة
-  // تشغيل بصمت تام - لا toast مزعج في حالة الفشل
-  const [photoFetchProgress, setPhotoFetchProgress] = useState(null); // {current, total}
-  useEffect(() => {
-    if (!agentConnected || employees.length === 0 || biometricDevices.length === 0) return;
-    
-    const device = biometricDevices[0];
-    const token = localStorage.getItem('token');
-    if (!token || !device) return;
-    
-    // الموظفين الذين لديهم biometric_uid لكن ليس لديهم صورة
-    const needsPhoto = employees.filter(e => e.biometric_uid && !e.face_photo).slice(0, 10);
-    if (needsPhoto.length === 0) {
-      setPhotoFetchProgress(null);
-      return;
-    }
-    
-    let cancelled = false;
-    const fetchMissingPhotos = async () => {
-      setPhotoFetchProgress({ current: 0, total: needsPhoto.length });
-      let idx = 0;
-      for (const emp of needsPhoto) {
-        if (cancelled) return;
-        idx++;
-        setPhotoFetchProgress({ current: idx, total: needsPhoto.length });
-        try {
-          const res = await axios.post(`${AGENT_URL}/zk-face-photo`, {
-            ip: device.ip_address,
-            port: device.port || 4370,
-            timeout: 45000,
-            uid: parseInt(emp.biometric_uid)
-          }, { timeout: 60000 });
-          if (!cancelled && res.data?.success && res.data?.photo) {
-            await axios.post(`${API}/employees/${emp.id}/face-photo`, {
-              face_photo: res.data.photo
-            }, { headers: { Authorization: `Bearer ${token}` } });
-            // تحديث الحالة المحلية فوراً بدون إعادة جلب كامل
-            setEmployees(prev => prev.map(e => e.id === emp.id ? { ...e, face_photo: res.data.photo } : e));
-          }
-        } catch {
-          // تجاهل بصمت - لا نريد إزعاج المستخدم
-        }
-      }
-      if (!cancelled) {
-        // إخفاء المؤشر بعد ثانيتين من الانتهاء
-        setTimeout(() => setPhotoFetchProgress(null), 2000);
-      }
-    };
-    
-    // تأخير قصير لعدم إثقال الصفحة عند التحميل الأول
-    const timer = setTimeout(fetchMissingPhotos, 3000);
-    return () => { cancelled = true; clearTimeout(timer); };
-  }, [agentConnected, employees.length, biometricDevices.length]);
+  // الجلب التلقائي للصور من الجهاز مُعطَّل - معظم أجهزة ZKTeco لا تدعم HTTP
+  // المستخدم يستخدم webcam أو رفع الملفات بدلاً من ذلك
+  // (الكود القديم محتفظ به في git history إذا أردنا تفعيله مستقبلاً مع أجهزة تدعمه)
+  const [photoFetchProgress, setPhotoFetchProgress] = useState(null); // { current, total }
 
   const fetchData = async (silent = false) => {
     // في التحديث البصمت، لا نُظهر spinner الشاشة الكاملة (يمنع الوميض كل دقيقة)
@@ -728,12 +679,116 @@ export default function HR() {
           face_photo: base64
         }, { headers: { Authorization: `Bearer ${token}` } });
         toast.success(t('تم حفظ الصورة'));
-        fetchData();
+        // تحديث الحالة المحلية فوراً
+        setEmployees(prev => prev.map(emp => emp.id === facePhotoEmployee.id ? { ...emp, face_photo: base64 } : emp));
       } catch {
         toast.error(t('فشل في حفظ الصورة'));
       }
     };
     reader.readAsDataURL(file);
+  };
+
+  // رفع متعدد للصور - يطابق الصور بالموظفين حسب UID في اسم الملف
+  // الأسماء المقبولة: "1.jpg", "5.png", "uid_3.jpg", "employee-7.jpeg"
+  const [bulkUploadProgress, setBulkUploadProgress] = useState(null);
+  const handleBulkPhotoUpload = async (e) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+    
+    const token = localStorage.getItem('token');
+    let matched = 0, saved = 0, skipped = 0;
+    setBulkUploadProgress({ current: 0, total: files.length });
+    
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      setBulkUploadProgress({ current: i + 1, total: files.length });
+      
+      // استخراج UID من اسم الملف (1.jpg, uid_5.png, emp-10.jpeg)
+      const match = file.name.match(/(\d+)/);
+      if (!match) { skipped++; continue; }
+      const uid = parseInt(match[1]);
+      const emp = employees.find(e => parseInt(e.biometric_uid) === uid);
+      if (!emp) { skipped++; continue; }
+      matched++;
+      
+      try {
+        const base64 = await new Promise((resolve, reject) => {
+          const r = new FileReader();
+          r.onload = () => resolve(r.result);
+          r.onerror = reject;
+          r.readAsDataURL(file);
+        });
+        await axios.post(`${API}/employees/${emp.id}/face-photo`, {
+          face_photo: base64
+        }, { headers: { Authorization: `Bearer ${token}` } });
+        saved++;
+        setEmployees(prev => prev.map(x => x.id === emp.id ? { ...x, face_photo: base64 } : x));
+      } catch {}
+    }
+    
+    setBulkUploadProgress(null);
+    toast.success(t('اكتملت عملية الرفع') + ` — ${saved}/${matched} محفوظة، ${skipped} غير مطابقة`, { duration: 5000 });
+  };
+
+  // التقاط صورة بالكاميرا (webcam)
+  const [cameraDialogOpen, setCameraDialogOpen] = useState(false);
+  const [cameraStream, setCameraStream] = useState(null);
+  const videoRef = useRef(null);
+  const canvasRef = useRef(null);
+  
+  const startCamera = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 640 } }
+      });
+      setCameraStream(stream);
+      setCameraDialogOpen(true);
+      // تأخير قصير للتأكد من تحميل video
+      setTimeout(() => {
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+        }
+      }, 100);
+    } catch (err) {
+      toast.error(t('فشل الوصول للكاميرا - تحقق من الأذونات'));
+    }
+  };
+  
+  const stopCamera = () => {
+    if (cameraStream) {
+      cameraStream.getTracks().forEach(t => t.stop());
+      setCameraStream(null);
+    }
+    setCameraDialogOpen(false);
+  };
+  
+  const captureCameraPhoto = async () => {
+    if (!videoRef.current || !canvasRef.current || !facePhotoEmployee) return;
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    // رسم الإطار الحالي من video إلى canvas
+    const size = Math.min(video.videoWidth, video.videoHeight);
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d');
+    // قص مركزي للوجه
+    const offsetX = (video.videoWidth - size) / 2;
+    const offsetY = (video.videoHeight - size) / 2;
+    ctx.drawImage(video, offsetX, offsetY, size, size, 0, 0, size, size);
+    const base64 = canvas.toDataURL('image/jpeg', 0.85);
+    
+    setFacePhotoData(base64);
+    try {
+      const token = localStorage.getItem('token');
+      await axios.post(`${API}/employees/${facePhotoEmployee.id}/face-photo`, {
+        face_photo: base64
+      }, { headers: { Authorization: `Bearer ${token}` } });
+      toast.success(t('تم التقاط وحفظ الصورة'));
+      setEmployees(prev => prev.map(x => x.id === facePhotoEmployee.id ? { ...x, face_photo: base64 } : x));
+      stopCamera();
+    } catch {
+      toast.error(t('فشل في حفظ الصورة'));
+    }
   };
 
   // تشخيص جهاز البصمة
@@ -1687,7 +1742,19 @@ export default function HR() {
             <Card>
               <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle>{t('قائمة الموظفين')}</CardTitle>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 flex-wrap">
+                  <label className="cursor-pointer">
+                    <input type="file" accept="image/*" multiple className="hidden" onChange={handleBulkPhotoUpload} data-testid="bulk-photo-upload" />
+                    <div className="inline-flex items-center gap-2 px-3 py-2 border rounded-md text-sm hover:bg-accent transition-colors">
+                      <Upload className="h-4 w-4" />
+                      {t('رفع صور جماعي')}
+                      {bulkUploadProgress && (
+                        <Badge className="bg-blue-500/20 text-blue-600">
+                          {bulkUploadProgress.current}/{bulkUploadProgress.total}
+                        </Badge>
+                      )}
+                    </div>
+                  </label>
                   <Button variant="outline" size="sm" onClick={() => { 
                     setPushingEmployee(null); fetchBiometricDevices(); setBiometricDialogOpen(true); 
                   }} data-testid="push-all-biometric-btn">
@@ -3063,14 +3130,28 @@ export default function HR() {
               </div>
               
               {/* رفع صورة يدوياً */}
-              <div className="w-full">
-                <label className="cursor-pointer">
-                  <input type="file" accept="image/*" className="hidden" onChange={handleManualPhotoUpload} data-testid="manual-photo-upload" />
-                  <div className="flex items-center justify-center gap-2 p-2 border border-dashed rounded-lg text-sm text-muted-foreground hover:bg-accent transition-colors">
-                    <Upload className="h-4 w-4" />
-                    {t('رفع صورة من الجهاز')}
-                  </div>
-                </label>
+              <div className="w-full space-y-2">
+                <div className="grid grid-cols-2 gap-2">
+                  <label className="cursor-pointer">
+                    <input type="file" accept="image/*" className="hidden" onChange={handleManualPhotoUpload} data-testid="manual-photo-upload" />
+                    <div className="flex items-center justify-center gap-2 p-2 border border-dashed rounded-lg text-sm text-muted-foreground hover:bg-accent transition-colors">
+                      <Upload className="h-4 w-4" />
+                      {t('من الجهاز')}
+                    </div>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={startCamera}
+                    data-testid="webcam-capture-btn"
+                    className="flex items-center justify-center gap-2 p-2 border border-dashed rounded-lg text-sm text-muted-foreground hover:bg-accent transition-colors"
+                  >
+                    <Camera className="h-4 w-4" />
+                    {t('التقاط بالكاميرا')}
+                  </button>
+                </div>
+                <p className="text-xs text-muted-foreground text-center">
+                  {t('الطريقة الموصى بها: التقاط بالكاميرا أو رفع الملف')}
+                </p>
               </div>
               
               {/* تشخيص الجهاز */}
@@ -3101,6 +3182,47 @@ export default function HR() {
                     {probeResult.error && <p className="text-red-500">{probeResult.error}</p>}
                   </div>
                 )}
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Camera Capture Dialog */}
+        <Dialog open={cameraDialogOpen} onOpenChange={(open) => { if (!open) stopCamera(); }}>
+          <DialogContent className="max-w-lg" data-testid="camera-dialog">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Camera className="h-5 w-5" />
+                {t('التقاط صورة')} - {facePhotoEmployee?.name}
+              </DialogTitle>
+            </DialogHeader>
+            <div className="flex flex-col items-center gap-4">
+              <div className="relative w-full aspect-square bg-black rounded-lg overflow-hidden">
+                <video
+                  ref={videoRef}
+                  autoPlay
+                  playsInline
+                  muted
+                  className="w-full h-full object-cover"
+                  data-testid="camera-video"
+                />
+                {/* إطار توجيه للوجه */}
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                  <div className="w-56 h-56 rounded-full border-4 border-white/60 shadow-lg"></div>
+                </div>
+              </div>
+              <canvas ref={canvasRef} className="hidden" />
+              <p className="text-sm text-muted-foreground text-center">
+                {t('ضع الوجه داخل الدائرة ثم اضغط "التقاط"')}
+              </p>
+              <div className="flex gap-2 w-full">
+                <Button variant="outline" className="flex-1" onClick={stopCamera} data-testid="camera-cancel-btn">
+                  {t('إلغاء')}
+                </Button>
+                <Button className="flex-1" onClick={captureCameraPhoto} data-testid="camera-capture-btn">
+                  <Camera className="h-4 w-4 ml-2" />
+                  {t('التقاط')}
+                </Button>
               </div>
             </div>
           </DialogContent>
