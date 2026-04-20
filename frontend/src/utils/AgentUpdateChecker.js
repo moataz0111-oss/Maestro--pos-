@@ -1,7 +1,7 @@
 /**
- * Maestro POS - Agent Update Checker v4
+ * Maestro POS - Agent Update Checker v5
  * يفحص إصدار وسيط الطباعة ويظهر زر تحديث عند توفر نسخة جديدة
- * يختفي تلقائياً بعد التحديث - مقارنة مرنة للإصدارات
+ * يعتمد على النسخة المطلوبة من السيرفر (single source of truth)
  */
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Button } from '../components/ui/button';
@@ -10,27 +10,47 @@ import { Download, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 
 const PRINT_AGENT_URL = 'http://localhost:9999';
-const REQUIRED_MAJOR = 3;
-const REQUIRED_MINOR = 2;
 
-/** مقارنة مرنة للإصدارات: هل الإصدار المحلي يساوي أو أحدث من المطلوب */
-function isVersionOk(version) {
-  if (!version) return false;
-  const clean = String(version).replace(/^v/i, '').trim();
-  const parts = clean.split('.').map(Number);
-  const major = parts[0] || 0;
-  const minor = parts[1] || 0;
-  return (major > REQUIRED_MAJOR) || (major === REQUIRED_MAJOR && minor >= REQUIRED_MINOR);
+/** مقارنة مرنة للإصدارات: هل النسخة a >= النسخة b */
+function compareVersions(a, b) {
+  const clean = (v) => String(v || '0').replace(/^v/i, '').trim().split('.').map(n => parseInt(n, 10) || 0);
+  const av = clean(a);
+  const bv = clean(b);
+  const maxLen = Math.max(av.length, bv.length);
+  for (let i = 0; i < maxLen; i++) {
+    const ai = av[i] || 0;
+    const bi = bv[i] || 0;
+    if (ai > bi) return 1;
+    if (ai < bi) return -1;
+  }
+  return 0;
 }
 
 export function AgentUpdateBanner({ t = (s) => s }) {
   const [needsUpdate, setNeedsUpdate] = useState(false);
   const [localVer, setLocalVer] = useState(null);
+  const [requiredVer, setRequiredVer] = useState(null);
   const [downloading, setDownloading] = useState(false);
   const intervalRef = useRef(null);
   const agentReachable = useRef(false);
 
+  // جلب النسخة المطلوبة من السيرفر (مصدر الحقيقة الوحيد)
+  useEffect(() => {
+    const fetchRequiredVersion = async () => {
+      try {
+        const r = await fetch(`${API_URL}/print-agent-version`);
+        const d = await r.json();
+        if (d.version) setRequiredVer(d.version);
+      } catch {}
+    };
+    fetchRequiredVersion();
+    // إعادة فحص النسخة المطلوبة كل 10 دقائق (في حال ترقية السيرفر)
+    const i = setInterval(fetchRequiredVersion, 10 * 60 * 1000);
+    return () => clearInterval(i);
+  }, []);
+
   const check = useCallback(async () => {
+    if (!requiredVer) return; // ننتظر جلب النسخة المطلوبة أولاً
     try {
       const ctrl = new AbortController();
       setTimeout(() => ctrl.abort(), 2500);
@@ -40,7 +60,7 @@ export function AgentUpdateBanner({ t = (s) => s }) {
       if (d.status === 'running') {
         const v = d.version || d.agent_version || null;
         setLocalVer(v);
-        const ok = isVersionOk(v);
+        const ok = v && compareVersions(v, requiredVer) >= 0;
         setNeedsUpdate(!ok);
         if (ok && intervalRef.current) {
           clearInterval(intervalRef.current);
@@ -51,7 +71,7 @@ export function AgentUpdateBanner({ t = (s) => s }) {
       agentReachable.current = false;
       setNeedsUpdate(false);
     }
-  }, []);
+  }, [requiredVer]);
 
   useEffect(() => {
     check();
@@ -89,14 +109,12 @@ export function AgentUpdateBanner({ t = (s) => s }) {
 
   if (!needsUpdate) return null;
 
-  const requiredStr = `${REQUIRED_MAJOR}.${REQUIRED_MINOR}`;
-
   return (
     <div data-testid="agent-update-banner" dir="rtl"
       className="flex items-center gap-3 bg-amber-50 border-2 border-amber-400 rounded-lg px-4 py-3 mb-3 shadow-sm">
       <Download className="w-5 h-5 text-amber-600 shrink-0" />
       <span className="text-sm font-semibold text-amber-800 flex-1">
-        {t('تحديث وسيط الطباعة متاح')} ({localVer || t('قديم')} → {requiredStr})
+        {t('تحديث وسيط الطباعة متاح')} ({localVer || t('قديم')} → {requiredVer})
       </span>
       <Button data-testid="update-agent-btn" size="sm"
         className="bg-amber-500 hover:bg-amber-600 text-white font-bold"

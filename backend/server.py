@@ -8372,12 +8372,14 @@ async def get_print_agent_version():
 
 @api_router.get("/print-agent-script")
 async def get_print_agent_script():
-    """إرجاع ملف server.ps1 مباشرة للتحميل من المثبّت"""
+    """إرجاع ملف server.ps1 مع حقن رقم النسخة الحالي (single source of truth)"""
     from fastapi.responses import Response
     ps1_path = ROOT_DIR / "static" / "print_server.ps1"
     if not ps1_path.exists():
         raise HTTPException(status_code=404, detail="ملف وسيط الطباعة غير موجود")
     ps1_code = ps1_path.read_text(encoding='utf-8')
+    # حقن النسخة الحالية من الثابت المركزي PRINT_AGENT_VERSION
+    ps1_code = ps1_code.replace("{{AGENT_VERSION}}", PRINT_AGENT_VERSION)
     return Response(
         content=ps1_code,
         media_type="text/plain",
@@ -8410,7 +8412,7 @@ async def download_print_agent(request: Request):
         'chcp 65001 >nul 2>&1',
         '',
         'REM ======================================================',
-        'REM   Maestro Print Agent v6.1.2 - Full Clean Install',
+        f'REM   Maestro Print Agent v{PRINT_AGENT_VERSION} - Full Clean Install',
         'REM ======================================================',
         '',
         'REM === Request Admin ===',
@@ -8420,11 +8422,11 @@ async def download_print_agent(request: Request):
         '    exit /b',
         ')',
         '',
-        'title Maestro Print Agent v6.1.2 - Clean Install',
+        f'title Maestro Print Agent v{PRINT_AGENT_VERSION} - Clean Install',
         'color 0A',
         'echo.',
         'echo  ========================================',
-        'echo    Maestro Print Agent v6.1.2',
+        f'echo    Maestro Print Agent v{PRINT_AGENT_VERSION}',
         'echo    Full Clean Install',
         'echo  ========================================',
         'echo.',
@@ -8515,9 +8517,9 @@ async def download_print_agent(request: Request):
         'echo.',
         '',
         'REM ========================================',
-        'REM   STEP 3: DOWNLOAD FRESH v6.1.2',
+        f'REM   STEP 3: DOWNLOAD FRESH v{PRINT_AGENT_VERSION}',
         'REM ========================================',
-        'echo  [3/6] Downloading v6.1.2 (no cache)...',
+        f'echo  [3/6] Downloading v{PRINT_AGENT_VERSION} (no cache)...',
         'powershell -NoProfile -Command "[Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; $headers=@{\'Cache-Control\'=\'no-cache\';\'Pragma\'=\'no-cache\'}; Invoke-WebRequest -Uri \'' + script_url + '\' -OutFile \'%D%\\server.ps1\' -UseBasicParsing -Headers $headers"',
         '',
         'if not exist "%D%\\server.ps1" (',
@@ -8548,7 +8550,7 @@ async def download_print_agent(request: Request):
         'echo  [3.5/6] Setting up HTTPS certificate...',
         'powershell -ExecutionPolicy Bypass -NoProfile -Command "& { $d=$env:LOCALAPPDATA+\'\\MaestroPrintAgent\'; try { $ex=Get-ChildItem Cert:\\LocalMachine\\My -ErrorAction SilentlyContinue | Where-Object {$_.Subject -eq \'CN=MaestroPrintAgent\'}; if($ex){$t=$ex[0].Thumbprint; Write-Host \'    Cert exists:\' $t -ForegroundColor Green; $cp=$d+\'\\cert.cer\'; if(-not(Test-Path $cp)){Export-Certificate -Cert $ex[0] -FilePath $cp -Force|Out-Null}} else {$c=New-SelfSignedCertificate -DnsName \'localhost\',\'127.0.0.1\' -CertStoreLocation \'Cert:\\LocalMachine\\My\' -FriendlyName \'Maestro Print Agent\' -Subject \'CN=MaestroPrintAgent\' -NotAfter (Get-Date).AddYears(10) -KeyAlgorithm RSA -KeyLength 2048 -KeyExportPolicy Exportable; $t=$c.Thumbprint; Write-Host \'    Cert created:\' $t -ForegroundColor Green; Export-Certificate -Cert $c -FilePath ($d+\'\\cert.cer\') -Force|Out-Null}; certutil -addstore Root ($d+\'\\cert.cer\')|Out-Null; Write-Host \'    Cert trusted (certutil)\' -ForegroundColor Green; netsh http delete sslcert ipport=0.0.0.0:9443|Out-Null; netsh http add sslcert ipport=0.0.0.0:9443 certhash=$t appid=\'{d4a1c0e1-0000-0000-0000-000000000001}\'|Out-Null; Write-Host \'    SSL port 9443 OK\' -ForegroundColor Green } catch { Write-Host \'    HTTPS error:\' $_.Exception.Message -ForegroundColor Yellow } }"',
         '',
-        'echo  [4/6] Starting new agent v6.1.2...',
+        f'echo  [4/6] Starting new agent v{PRINT_AGENT_VERSION}...',
         f'echo {{"backend_url":"{backend_url}"}} > "%D%\\config.json"',
         'start "" powershell -ExecutionPolicy Bypass -NoProfile -WindowStyle Hidden -File "%D%\\server.ps1"',
         'echo    [OK]',
@@ -8589,11 +8591,11 @@ async def download_print_agent(request: Request):
         'echo.',
         'echo  Verifying agent is running...',
         'timeout /t 10 /nobreak >nul',
-        'powershell -NoProfile -Command "try { $r=Invoke-WebRequest -Uri \'http://localhost:9999/status\' -UseBasicParsing -TimeoutSec 10; $j=$r.Content|ConvertFrom-Json; Write-Host (\'  Agent Version: \'+$j.version) -ForegroundColor Green; if($j.version -eq \'6.1.2\'){Write-Host \'  v6.1.2 OK!\' -ForegroundColor Green}else{Write-Host \'  WARNING: Expected 6.1.2 got \'+$j.version -ForegroundColor Red} } catch { Write-Host \'  Agent starting... wait 30 sec and refresh browser\' -ForegroundColor Yellow }"',
+        f'powershell -NoProfile -Command "try {{ $r=Invoke-WebRequest -Uri \'http://localhost:9999/status\' -UseBasicParsing -TimeoutSec 10; $j=$r.Content|ConvertFrom-Json; Write-Host (\'  Agent Version: \'+$j.version) -ForegroundColor Green; if($j.version -eq \'{PRINT_AGENT_VERSION}\'){{Write-Host \'  v{PRINT_AGENT_VERSION} OK!\' -ForegroundColor Green}}else{{Write-Host \'  WARNING: Expected {PRINT_AGENT_VERSION} got \'+$j.version -ForegroundColor Red}} }} catch {{ Write-Host \'  Agent starting... wait 30 sec and refresh browser\' -ForegroundColor Yellow }}"',
         'echo.',
         'echo  ========================================',
         'echo    DONE! Refresh the POS page.',
-        'echo    Agent v6.1.2 installed.',
+        f'echo    Agent v{PRINT_AGENT_VERSION} installed.',
         'echo  ========================================',
         'echo.',
         'pause',

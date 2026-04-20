@@ -1,6 +1,6 @@
 $ErrorActionPreference = 'Continue'
 $agentLog = "$PSScriptRoot\agent.log"
-"$(Get-Date) - Agent v6.1.2 starting..." | Out-File $agentLog
+"$(Get-Date) - Agent v{{AGENT_VERSION}} starting..." | Out-File $agentLog
 
 # ============================================
 # === AUTO-CLEANUP: Kill old agent & files ===
@@ -1895,7 +1895,7 @@ while ($restartCount -lt $maxRestarts) {
     $listener.Prefixes.Add('http://localhost:9999/')
     try { $listener.Prefixes.Add('https://localhost:9443/') } catch {}
     $listener.Start()
-    "$(Get-Date) - HttpListener started on port 9999 (v6.1.2) [restart #$restartCount]" | Out-File $agentLog -Append
+    "$(Get-Date) - HttpListener started on port 9999 (v{{AGENT_VERSION}}) [restart #$restartCount]" | Out-File $agentLog -Append
 
     # === Print Queue Polling (Background Job) ===
     # يسحب أوامر الطباعة من السيرفر كل 3 ثواني
@@ -2038,7 +2038,7 @@ public class JobReceiptRenderer {
             while ($true) {
                 try {
                     # إرسال agent_version و device_id مع كل طلب = heartbeat تلقائي
-                    $r = Invoke-WebRequest -Uri "$apiUrl/api/print-queue/pending?limit=10&agent_version=6.1.2&device_id=default" -UseBasicParsing -TimeoutSec 10
+                    $r = Invoke-WebRequest -Uri "$apiUrl/api/print-queue/pending?limit=10&agent_version={{AGENT_VERSION}}&device_id=default" -UseBasicParsing -TimeoutSec 10
                     $data = $r.Content | ConvertFrom-Json
                     
                     foreach ($job in $data.jobs) {
@@ -2163,7 +2163,7 @@ public class JobReceiptRenderer {
         "$(Get-Date) - $($req.HttpMethod) $path" | Out-File $agentLog -Append
 
         if ($path -eq '/status') {
-            $jsonOut = '{"status":"running","version":"6.1.2","agent":"Maestro Print Agent","usb_support":true,"zk_support":true}'
+            $jsonOut = '{"status":"running","version":"{{AGENT_VERSION}}","agent":"Maestro Print Agent","usb_support":true,"zk_support":true}'
         }
         elseif ($path -eq '/list-printers') {
             try {
