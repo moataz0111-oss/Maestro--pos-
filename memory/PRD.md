@@ -26,7 +26,7 @@ Multi-tenant POS system with biometric integration (ZKTeco), thermal receipt pri
 - Reports filter by branch
 - Printers filter by branch in Settings
 
-## Completed Features (This Session - April 17-18, 2026)
+## Completed Features (This Session - April 17-20, 2026)
 1. Real Heartbeat mechanism for agent status
 2. USB print fix in polling job (C# compiled inside Start-Job)
 3. Test print bitmap shows printer name, IP, connection type
@@ -46,6 +46,8 @@ Multi-tenant POS system with biometric integration (ZKTeco), thermal receipt pri
 17. Kitchen receipt quantity font enlarged (20→28)
 18. Refunds removed from expenses (tracked separately in refunds collection)
 19. Watchdog VBScript wrapper (no PowerShell blue flash)
+20. **[FIXED 2026-04-20] Auto-reload every minute bug**: Root causes were (a) duplicate SW registration in public/index.html + src/index.js, (b) ThemeContext 60s interval triggering needless state updates, (c) no controllerchange listener to block reload when SW swaps. Fixes: removed duplicate SW registration, guarded ThemeContext state, changed interval to 5min, added controllerchange listener that blocks reload, added beforeunload debug logger.
+21. **[FIXED 2026-04-20] HR/BiometricDevices agent status discrepancy**: BiometricDevices.checkAgent now calls /api/print-queue/agent-status (heartbeat) first, falls back to localhost:9999. HR.js already had this logic. Both use identical logic, ensuring consistent status display.
 
 ## Key API Endpoints
 - GET /api/printers?branch_id=xxx
