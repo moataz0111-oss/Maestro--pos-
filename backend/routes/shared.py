@@ -172,3 +172,47 @@ def generate_id() -> str:
 def get_current_timestamp() -> str:
     """الحصول على الوقت الحالي بصيغة ISO"""
     return datetime.now(timezone.utc).isoformat()
+
+# ==================== BUSINESS DATE HELPERS ====================
+# Business Date = التاريخ التشغيلي للوردية (بتوقيت العراق UTC+3)
+# يُستخدم لضمان أن جميع السجلات المالية (طلبات، مصاريف، سلف، خصومات...)
+# التي تنتمي لنفس الوردية تحمل نفس التاريخ - حتى لو امتدت الوردية بعد منتصف الليل.
+
+IRAQ_TZ_OFFSET_HOURS = 3
+
+def iraq_date_from_utc(utc_iso_str: Optional[str] = None) -> str:
+    """تحويل ISO datetime (UTC) لتاريخ العراق YYYY-MM-DD"""
+    try:
+        if utc_iso_str:
+            dt = datetime.fromisoformat(utc_iso_str.replace("Z", "+00:00"))
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+        else:
+            dt = datetime.now(timezone.utc)
+        iraq_dt = dt + timedelta(hours=IRAQ_TZ_OFFSET_HOURS)
+        return iraq_dt.strftime("%Y-%m-%d")
+    except Exception:
+        return (datetime.now(timezone.utc) + timedelta(hours=IRAQ_TZ_OFFSET_HOURS)).strftime("%Y-%m-%d")
+
+async def resolve_business_date(tenant_id: Optional[str], branch_id: Optional[str]) -> str:
+    """
+    الحصول على business_date من الوردية المفتوحة الحالية لهذا الفرع.
+    إذا لم توجد وردية مفتوحة، يُستخدم تاريخ اليوم بتوقيت العراق.
+    """
+    db = get_database()
+    shift_query = {"status": "open"}
+    if tenant_id:
+        shift_query["tenant_id"] = tenant_id
+    if branch_id:
+        shift_query["branch_id"] = branch_id
+    shift = await db.shifts.find_one(
+        shift_query,
+        {"_id": 0, "business_date": 1, "started_at": 1, "opened_at": 1}
+    )
+    if shift:
+        if shift.get("business_date"):
+            return shift["business_date"]
+        started = shift.get("started_at") or shift.get("opened_at")
+        if started:
+            return iraq_date_from_utc(started)
+    return iraq_date_from_utc()

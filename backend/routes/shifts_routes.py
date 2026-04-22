@@ -10,7 +10,8 @@ import logging
 
 from .shared import (
     get_database, get_current_user, get_user_tenant_id,
-    build_tenant_query, UserRole, OrderStatus, PaymentMethod, OrderType
+    build_tenant_query, UserRole, OrderStatus, PaymentMethod, OrderType,
+    iraq_date_from_utc, resolve_business_date
 )
 
 logger = logging.getLogger(__name__)
@@ -70,6 +71,7 @@ class ShiftResponse(BaseModel):
     cancelled_orders: int = 0
     cancelled_amount: float = 0.0
     discounts_total: float = 0.0
+    business_date: Optional[str] = None
 
 # ==================== SHIFT CRUD ====================
 @router.post("/shifts", response_model=ShiftResponse)
@@ -105,7 +107,8 @@ async def open_shift(shift: ShiftCreate, current_user: dict = Depends(get_curren
         "net_profit": 0.0,
         "started_at": datetime.now(timezone.utc).isoformat(),
         "ended_at": None,
-        "status": "open"
+        "status": "open",
+        "business_date": iraq_date_from_utc()
     }
     await db.shifts.insert_one(shift_doc)
     del shift_doc["_id"]
@@ -238,7 +241,8 @@ async def quick_open_shift(data: QuickOpenShift, current_user: dict = Depends(ge
         "ended_at": None,
         "status": "open",
         "opened_by": user_id,
-        "opened_by_name": current_user.get("full_name", "")
+        "opened_by_name": current_user.get("full_name", ""),
+        "business_date": iraq_date_from_utc()
     }
     if tenant_id:
         shift_doc["tenant_id"] = tenant_id
@@ -300,7 +304,8 @@ async def open_shift_for_cashier(data: OpenShiftForCashier, current_user: dict =
         "ended_at": None,
         "status": "open",
         "opened_by": current_user["id"],
-        "opened_by_name": current_user.get("full_name", "")
+        "opened_by_name": current_user.get("full_name", ""),
+        "business_date": iraq_date_from_utc()
     }
     if tenant_id:
         shift_doc["tenant_id"] = tenant_id
@@ -391,7 +396,8 @@ async def auto_open_shift(current_user: dict = Depends(get_current_user)):
         "net_profit": 0.0,
         "started_at": datetime.now(timezone.utc).isoformat(),
         "ended_at": None,
-        "status": "open"
+        "status": "open",
+        "business_date": iraq_date_from_utc()
     }
     
     if tenant_id:
@@ -439,6 +445,7 @@ async def close_shift(shift_id: str, close_data: ShiftClose, current_user: dict 
     
     expenses = await db.expenses.find({
         "branch_id": shift_branch,
+        "category": {"$ne": "refund"},
         "created_at": {"$gte": shift_start}
     }).to_list(100)
     total_expenses = sum(_safe_num(e.get("amount")) for e in expenses)
@@ -505,16 +512,44 @@ async def close_shift(shift_id: str, close_data: ShiftClose, current_user: dict 
     return updated_shift
 
 @router.get("/shifts", response_model=List[ShiftResponse])
-async def get_shifts(branch_id: Optional[str] = None, date: Optional[str] = None, status: Optional[str] = None, current_user: dict = Depends(get_current_user)):
-    """جلب قائمة الورديات"""
+async def get_shifts(
+    branch_id: Optional[str] = None,
+    date: Optional[str] = None,
+    status: Optional[str] = None,
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """جلب قائمة الورديات - يدعم الفلترة بالـ business_date (اليوم التشغيلي)"""
     db = get_database()
     query = {}
     if branch_id:
         query["branch_id"] = branch_id
-    if date:
-        query["started_at"] = {"$regex": f"^{date}"}
     if status:
         query["status"] = status
+    
+    # فلترة بتاريخ محدد (business_date أولاً، fallback لـ started_at للسجلات القديمة)
+    if date:
+        query["$or"] = [
+            {"business_date": date},
+            {"business_date": {"$exists": False}, "started_at": {"$regex": f"^{date}"}}
+        ]
+    elif date_from or date_to:
+        biz_range = {}
+        if date_from:
+            biz_range["$gte"] = date_from
+        if date_to:
+            biz_range["$lte"] = date_to
+        # للسجلات القديمة: استخدم started_at كنطاق
+        started_range = {}
+        if date_from:
+            started_range["$gte"] = date_from
+        if date_to:
+            started_range["$lte"] = date_to + "T23:59:59"
+        query["$or"] = [
+            {"business_date": biz_range.copy()},
+            {"business_date": {"$exists": False}, "started_at": started_range.copy()}
+        ]
     
     shifts = await db.shifts.find(query, {"_id": 0}).sort("started_at", -1).to_list(100)
     
@@ -580,7 +615,8 @@ async def get_cash_register_summary(
             "opened_at": datetime.now(timezone.utc).isoformat(),
             "status": "open",
             "opening_balance": 0,
-            "created_at": datetime.now(timezone.utc).isoformat()
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "business_date": iraq_date_from_utc()
         }
         await db.shifts.insert_one(new_shift)
         shift = new_shift
@@ -719,9 +755,10 @@ async def get_cash_register_summary(
             cancelled_by[cancelled_by_id]["count"] += 1
             cancelled_by[cancelled_by_id]["total"] += _safe_num(o.get("total"))
     
-    # جلب المصروفات خلال فترة الوردية
+    # جلب المصروفات خلال فترة الوردية (باستثناء المرتجعات)
     expense_query = {
         "branch_id": shift.get("branch_id"),
+        "category": {"$ne": "refund"},
         "created_at": {"$gte": shift_start}
     }
     if tenant_id:
@@ -937,6 +974,7 @@ async def close_cash_register(close_data: CashRegisterClose, current_user: dict 
     
     expenses = await db.expenses.find({
         "branch_id": shift.get("branch_id"),
+        "category": {"$ne": "refund"},
         "created_at": {"$gte": shift.get("started_at", shift.get("opened_at", ""))},
         **({"tenant_id": tenant_id} if tenant_id else {})
     }, {"_id": 0}).to_list(100)

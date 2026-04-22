@@ -10,7 +10,7 @@ import logging
 
 from .shared import (
     get_database, get_current_user, get_user_tenant_id,
-    build_tenant_query, UserRole
+    build_tenant_query, UserRole, resolve_business_date
 )
 
 logger = logging.getLogger(__name__)
@@ -113,12 +113,15 @@ async def create_deduction(deduction: DeductionCreate, current_user: dict = Depe
         elif deduction.days:
             amount = deduction.days * daily_rate
     
+    deduction_tenant = get_user_tenant_id(current_user)
+    deduction_biz_date = await resolve_business_date(deduction_tenant, employee.get("branch_id"))
     deduction_doc = {
         "id": str(uuid.uuid4()),
         **deduction.model_dump(),
         "employee_name": employee.get("name"),
         "amount": amount,
-        "tenant_id": get_user_tenant_id(current_user),
+        "tenant_id": deduction_tenant,
+        "business_date": deduction_biz_date,
         "created_by": current_user["id"],
         "created_at": datetime.now(timezone.utc).isoformat()
     }
@@ -288,12 +291,15 @@ async def create_bonus(bonus: BonusCreate, current_user: dict = Depends(get_curr
         overtime_rate = hourly_rate * 1.5
         amount = bonus.hours * overtime_rate
     
+    bonus_tenant = get_user_tenant_id(current_user)
+    bonus_biz_date = await resolve_business_date(bonus_tenant, employee.get("branch_id"))
     bonus_doc = {
         "id": str(uuid.uuid4()),
         **bonus.model_dump(),
         "employee_name": employee.get("name"),
         "amount": amount,
-        "tenant_id": get_user_tenant_id(current_user),
+        "tenant_id": bonus_tenant,
+        "business_date": bonus_biz_date,
         "created_by": current_user["id"],
         "created_at": datetime.now(timezone.utc).isoformat()
     }

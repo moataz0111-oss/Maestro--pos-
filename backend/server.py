@@ -26,6 +26,23 @@ import aiofiles
 import asyncio
 import socketio
 
+# ==================== BUSINESS DATE HELPERS (اليوم التشغيلي) ====================
+IRAQ_TZ_OFFSET_HOURS = 3
+
+def iraq_date_from_utc(utc_iso_str: Optional[str] = None) -> str:
+    """تحويل ISO datetime (UTC) لتاريخ العراق YYYY-MM-DD"""
+    try:
+        if utc_iso_str:
+            dt = datetime.fromisoformat(utc_iso_str.replace("Z", "+00:00"))
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+        else:
+            dt = datetime.now(timezone.utc)
+        iraq_dt = dt + timedelta(hours=IRAQ_TZ_OFFSET_HOURS)
+        return iraq_dt.strftime("%Y-%m-%d")
+    except Exception:
+        return (datetime.now(timezone.utc) + timedelta(hours=IRAQ_TZ_OFFSET_HOURS)).strftime("%Y-%m-%d")
+
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
@@ -33,6 +50,26 @@ load_dotenv(ROOT_DIR / '.env')
 mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
+
+async def _resolve_business_date(tenant_id: Optional[str], branch_id: Optional[str]) -> str:
+    """الحصول على business_date من الوردية المفتوحة الحالية للفرع.
+    إذا لم توجد وردية مفتوحة، يُستخدم تاريخ العراق الحالي."""
+    shift_query = {"status": "open"}
+    if tenant_id:
+        shift_query["tenant_id"] = tenant_id
+    if branch_id:
+        shift_query["branch_id"] = branch_id
+    shift = await db.shifts.find_one(
+        shift_query,
+        {"_id": 0, "business_date": 1, "started_at": 1, "opened_at": 1}
+    )
+    if shift:
+        if shift.get("business_date"):
+            return shift["business_date"]
+        started = shift.get("started_at") or shift.get("opened_at")
+        if started:
+            return iraq_date_from_utc(started)
+    return iraq_date_from_utc()
 
 # JWT Configuration
 JWT_SECRET = os.environ.get('JWT_SECRET')
@@ -412,7 +449,118 @@ async def startup_event():
     # إضافة الخلفيات الافتراضية إذا لم تكن موجودة
     await seed_default_backgrounds()
     
+    # ترحيل تلقائي لـ business_date (idempotent - آمن للتشغيل المتكرر)
+    await auto_migrate_business_dates()
+    
     logger.info("✅ Application started successfully")
+
+async def auto_migrate_business_dates():
+    """ترحيل تلقائي آمن لحقل business_date (اليوم التشغيلي) لجميع العملاء.
+    يُحدّث فقط السجلات التي لا تملك business_date. Idempotent."""
+    try:
+        updated = {"shifts": 0, "orders": 0, "expenses": 0, "shifts_recomputed": 0}
+        
+        # 1) تحديث الورديات
+        async for shift in db.shifts.find(
+            {"business_date": {"$exists": False}},
+            {"_id": 0, "id": 1, "started_at": 1, "opened_at": 1}
+        ):
+            started = shift.get("started_at") or shift.get("opened_at")
+            biz_date = iraq_date_from_utc(started) if started else iraq_date_from_utc()
+            await db.shifts.update_one({"id": shift["id"]}, {"$set": {"business_date": biz_date}})
+            updated["shifts"] += 1
+        
+        # 2) تحديث الطلبات (حسب shift_id إن توفر)
+        shift_biz_map = {}
+        async for s in db.shifts.find({}, {"_id": 0, "id": 1, "business_date": 1, "started_at": 1, "ended_at": 1, "branch_id": 1, "tenant_id": 1}):
+            if s.get("business_date"):
+                shift_biz_map[s["id"]] = s
+        
+        async for order in db.orders.find(
+            {"business_date": {"$exists": False}},
+            {"_id": 0, "id": 1, "shift_id": 1, "created_at": 1}
+        ):
+            biz = None
+            sid = order.get("shift_id")
+            if sid and sid in shift_biz_map:
+                biz = shift_biz_map[sid].get("business_date")
+            if not biz:
+                biz = iraq_date_from_utc(order.get("created_at"))
+            await db.orders.update_one({"id": order["id"]}, {"$set": {"business_date": biz}})
+            updated["orders"] += 1
+        
+        # 3) تحديث المصاريف (مطابقة بالفرع + الفترة الزمنية)
+        async for exp in db.expenses.find(
+            {"business_date": {"$exists": False}},
+            {"_id": 0, "id": 1, "branch_id": 1, "tenant_id": 1, "created_at": 1, "date": 1}
+        ):
+            biz = None
+            exp_branch = exp.get("branch_id")
+            exp_tenant = exp.get("tenant_id")
+            exp_created = exp.get("created_at", "")
+            # ابحث عن الوردية التي تحتوي هذا المصروف زمنياً في نفس الفرع
+            for s in shift_biz_map.values():
+                if s.get("branch_id") != exp_branch:
+                    continue
+                if s.get("tenant_id") and exp_tenant and s.get("tenant_id") != exp_tenant:
+                    continue
+                s_start = s.get("started_at") or ""
+                s_end = s.get("ended_at") or ""
+                if exp_created >= s_start and (not s_end or exp_created <= s_end):
+                    biz = s.get("business_date")
+                    break
+            if not biz:
+                biz = exp.get("date") or iraq_date_from_utc(exp_created)
+            await db.expenses.update_one({"id": exp["id"]}, {"$set": {"business_date": biz}})
+            updated["expenses"] += 1
+        
+        # 4) ترحيل السلف/الخصومات/المكافآت/الساعات الإضافية (استخدام created_at)
+        for coll_name in ["advances", "deductions", "bonuses", "overtime_requests"]:
+            coll = db[coll_name]
+            async for rec in coll.find(
+                {"business_date": {"$exists": False}},
+                {"_id": 0, "id": 1, "created_at": 1, "date": 1}
+            ):
+                biz = iraq_date_from_utc(rec.get("created_at")) or rec.get("date")
+                await coll.update_one({"id": rec["id"]}, {"$set": {"business_date": biz}})
+        
+        # 5) إعادة احتساب total_expenses للورديات المُغلقة لاستبعاد المرتجعات
+        async for s in db.shifts.find(
+            {"status": "closed", "expenses_refund_fix_applied": {"$ne": True}},
+            {"_id": 0, "id": 1, "branch_id": 1, "tenant_id": 1, "started_at": 1, "opened_at": 1, "ended_at": 1, "cash_sales": 1, "opening_cash": 1, "opening_balance": 1}
+        ):
+            shift_start = s.get("started_at") or s.get("opened_at") or ""
+            shift_end = s.get("ended_at") or ""
+            if not shift_start:
+                continue
+            exp_q = {
+                "branch_id": s.get("branch_id"),
+                "category": {"$ne": "refund"},
+                "created_at": {"$gte": shift_start}
+            }
+            if s.get("tenant_id"):
+                exp_q["tenant_id"] = s["tenant_id"]
+            if shift_end:
+                exp_q["created_at"]["$lte"] = shift_end
+            shift_expenses = await db.expenses.find(exp_q, {"_id": 0, "amount": 1}).to_list(500)
+            total_exp = sum(float(e.get("amount") or 0) for e in shift_expenses)
+            opening_cash = float(s.get("opening_cash") or s.get("opening_balance") or 0)
+            cash_sales = float(s.get("cash_sales") or 0)
+            expected_cash = opening_cash + cash_sales - total_exp
+            await db.shifts.update_one(
+                {"id": s["id"]},
+                {"$set": {
+                    "total_expenses": total_exp,
+                    "expected_cash": expected_cash,
+                    "expenses_refund_fix_applied": True
+                }}
+            )
+            updated["shifts_recomputed"] += 1
+        
+        if any(updated.values()):
+            logger.info(f"✅ business_date auto-migration: {updated}")
+    except Exception as e:
+        logger.warning(f"⚠️ business_date auto-migration skipped: {e}")
 
 async def seed_default_backgrounds():
     """إضافة الخلفيات الافتراضية لصفحة الدخول"""
@@ -2817,11 +2965,15 @@ async def create_expense(expense: ExpenseCreate, current_user: dict = Depends(ge
     if current_user["role"] not in [UserRole.ADMIN, UserRole.MANAGER, UserRole.SUPERVISOR, UserRole.SUPER_ADMIN] and "expenses" not in user_permissions:
         raise HTTPException(status_code=403, detail="غير مصرح")
     
+    tenant_id_for_biz = get_user_tenant_id(current_user)
+    branch_for_biz = expense.branch_id if hasattr(expense, 'branch_id') else None
+    business_date = await _resolve_business_date(tenant_id_for_biz, branch_for_biz)
     expense_doc = {
         "id": str(uuid.uuid4()),
         **expense.model_dump(),
-        "tenant_id": get_user_tenant_id(current_user),
+        "tenant_id": tenant_id_for_biz,
         "date": expense.date or datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+        "business_date": business_date,
         "created_by": current_user["id"],
         "created_by_name": current_user.get("full_name", "") or current_user.get("username", ""),
         "created_at": datetime.now(timezone.utc).isoformat()
@@ -2850,15 +3002,27 @@ async def get_expenses(
     is_manager = user_role in ["admin", "super_admin", "manager", "branch_manager"]
     if not is_manager:
         query["created_by"] = current_user["id"]
-        # الكاشير يرى فقط مصاريف اليوم (بتوقيت العراق UTC+3)
-        iraq_now = datetime.now(timezone.utc) + timedelta(hours=3)
-        today = iraq_now.strftime("%Y-%m-%d")
-        query["date"] = today
+        # الكاشير يرى فقط مصاريف اليوم التشغيلي (business_date من الوردية المفتوحة، أو تاريخ العراق اليوم)
+        user_tenant = get_user_tenant_id(current_user)
+        user_branch = current_user.get("branch_id") or branch_id
+        biz_today = await _resolve_business_date(user_tenant, user_branch)
+        # مطابقة business_date أو fallback للتاريخ القديم `date` للسجلات القديمة
+        query["$or"] = [
+            {"business_date": biz_today},
+            {"business_date": {"$exists": False}, "date": biz_today}
+        ]
     else:
-        if start_date:
-            query["date"] = {"$gte": start_date}
-        if end_date:
-            query.setdefault("date", {})["$lte"] = end_date
+        if start_date or end_date:
+            date_range = {}
+            if start_date:
+                date_range["$gte"] = start_date
+            if end_date:
+                date_range["$lte"] = end_date
+            # استخدام business_date عند توفره، مع fallback للتاريخ القديم للسجلات القديمة
+            query["$or"] = [
+                {"business_date": date_range.copy()},
+                {"business_date": {"$exists": False}, "date": date_range.copy()}
+            ]
     
     if branch_id:
         query["branch_id"] = branch_id
@@ -3181,6 +3345,9 @@ async def create_advance(advance: AdvanceCreate, current_user: dict = Depends(ge
     
     monthly_deduction = advance.amount / advance.deduction_months
     
+    advance_tenant = get_user_tenant_id(current_user)
+    advance_branch = employee.get("branch_id")
+    advance_biz_date = await _resolve_business_date(advance_tenant, advance_branch)
     advance_doc = {
         "id": str(uuid.uuid4()),
         **advance.model_dump(),
@@ -3190,7 +3357,8 @@ async def create_advance(advance: AdvanceCreate, current_user: dict = Depends(ge
         "monthly_deduction": monthly_deduction,
         "status": "approved",  # يمكن إضافة workflow للموافقة
         "date": advance.date or datetime.now(timezone.utc).strftime("%Y-%m-%d"),
-        "tenant_id": get_user_tenant_id(current_user),
+        "business_date": advance_biz_date,
+        "tenant_id": advance_tenant,
         "created_by": current_user["id"],
         "created_at": datetime.now(timezone.utc).isoformat()
     }
@@ -3203,11 +3371,12 @@ async def create_advance(advance: AdvanceCreate, current_user: dict = Depends(ge
         "description": f"سلفة للموظف {employee.get('name')}",
         "amount": advance.amount,
         "payment_method": "cash",
-        "branch_id": employee.get("branch_id"),
+        "branch_id": advance_branch,
         "employee_id": advance.employee_id,
         "advance_id": advance_doc["id"],
-        "tenant_id": get_user_tenant_id(current_user),
+        "tenant_id": advance_tenant,
         "date": advance_doc["date"],
+        "business_date": advance_biz_date,
         "created_by": current_user["id"],
         "created_at": datetime.now(timezone.utc).isoformat()
     }
@@ -4882,7 +5051,7 @@ async def create_order(order: OrderCreate, current_user: dict = Depends(get_curr
     if order.branch_id:
         shift_query["branch_id"] = order.branch_id
     
-    current_shift = await db.shifts.find_one(shift_query, {"_id": 0, "id": 1, "cashier_id": 1})
+    current_shift = await db.shifts.find_one(shift_query, {"_id": 0, "id": 1, "cashier_id": 1, "business_date": 1, "started_at": 1, "opened_at": 1})
     
     # إذا لم توجد وردية مفتوحة
     if not current_shift:
@@ -4904,12 +5073,24 @@ async def create_order(order: OrderCreate, current_user: dict = Depends(get_curr
                 "started_at": datetime.now(timezone.utc).isoformat(),
                 "status": "open",
                 "opening_balance": 0,
-                "created_at": datetime.now(timezone.utc).isoformat()
+                "created_at": datetime.now(timezone.utc).isoformat(),
+                "business_date": iraq_date_from_utc()
             }
             await db.shifts.insert_one(new_shift)
             current_shift = new_shift
     
     shift_id = current_shift["id"] if current_shift else None
+    
+    # تحديد business_date من الوردية (لضمان تسجيل السجل ضمن اليوم التشغيلي الصحيح حتى لو تجاوزت الوردية منتصف الليل)
+    shift_business_date = None
+    if current_shift:
+        shift_business_date = current_shift.get("business_date")
+        if not shift_business_date:
+            shift_started = current_shift.get("started_at") or current_shift.get("opened_at")
+            if shift_started:
+                shift_business_date = iraq_date_from_utc(shift_started)
+    if not shift_business_date:
+        shift_business_date = iraq_date_from_utc()
     
     # المالك/المدير: الطلب يُسجل باسم كاشير الوردية وليس باسم المالك
     user_role = current_user.get("role", "")
@@ -5068,6 +5249,7 @@ async def create_order(order: OrderCreate, current_user: dict = Depends(get_curr
         "branch_id": order.branch_id,
         "cashier_id": effective_cashier_id,
         "shift_id": shift_id,  # ربط الطلب بالوردية الحالية
+        "business_date": shift_business_date,  # اليوم التشغيلي (حسب الوردية المفتوحة)
         "tenant_id": tenant_id,  # فصل البيانات لكل عميل
         "status": order_status,
         "payment_method": order.payment_method,
@@ -11951,14 +12133,22 @@ async def get_daily_break_even(
         daily_target = fixed_costs_daily + daily_salaries
         
         # جلب الطلبات المكتملة لهذا اليوم في هذا الفرع
+        # جلب الطلبات المكتملة في هذا اليوم باستخدام business_date (اليوم التشغيلي)
+        target_date_str = target_date.strftime("%Y-%m-%d")
         orders_query = {
             "tenant_id": tenant_id,
             "branch_id": branch_id_val,
             "status": {"$in": ["delivered", "ready"]},
-            "created_at": {
-                "$gte": start_of_day.isoformat(),
-                "$lte": end_of_day.isoformat()
-            }
+            "$or": [
+                {"business_date": target_date_str},
+                {
+                    "business_date": {"$exists": False},
+                    "created_at": {
+                        "$gte": start_of_day.isoformat(),
+                        "$lte": end_of_day.isoformat()
+                    }
+                }
+            ]
         }
         
         orders = await db.orders.find(orders_query, {"_id": 0, "total": 1, "total_cost": 1, "profit": 1}).to_list(10000)
@@ -12155,14 +12345,23 @@ async def get_daily_break_even_range(
         branch_monthly_target = monthly_fixed_costs + total_monthly_salaries
         
         # جلب الطلبات المكتملة في النطاق لهذا الفرع
+        # نستخدم business_date (اليوم التشغيلي) للسجلات الجديدة، و fallback لـ created_at للسجلات القديمة
+        start_date_str = start_date.strftime("%Y-%m-%d")
+        end_date_str = end_date.strftime("%Y-%m-%d")
         orders_query = {
             "tenant_id": tenant_id,
             "branch_id": branch_id_val,
             "status": {"$in": ["delivered", "ready"]},
-            "created_at": {
-                "$gte": start_date.isoformat(),
-                "$lte": end_date.isoformat()
-            }
+            "$or": [
+                {"business_date": {"$gte": start_date_str, "$lte": end_date_str}},
+                {
+                    "business_date": {"$exists": False},
+                    "created_at": {
+                        "$gte": start_date.isoformat(),
+                        "$lte": end_date.isoformat()
+                    }
+                }
+            ]
         }
         
         orders = await db.orders.find(orders_query, {"_id": 0, "total": 1, "total_cost": 1, "profit": 1}).to_list(10000)
@@ -12896,13 +13095,30 @@ async def get_cash_register_closing_report(
     if branch_id:
         query["branch_id"] = branch_id
     
-    # تحديد الفترة الزمنية
+    # تحديد الفترة الزمنية - استخدام business_date (اليوم التشغيلي) مع fallback للتواريخ القديمة
+    date_filter_from = None
+    date_filter_to = None
     if start_date:
-        query["created_at"] = {"$gte": start_date}
+        # استخراج الجزء التاريخي فقط
+        date_filter_from = start_date[:10] if len(start_date) >= 10 else start_date
     if end_date:
-        if "created_at" not in query:
-            query["created_at"] = {}
-        query["created_at"]["$lte"] = end_date
+        date_filter_to = end_date[:10] if len(end_date) >= 10 else end_date
+    
+    if date_filter_from or date_filter_to:
+        biz_range = {}
+        if date_filter_from:
+            biz_range["$gte"] = date_filter_from
+        if date_filter_to:
+            biz_range["$lte"] = date_filter_to
+        created_range = {}
+        if start_date:
+            created_range["$gte"] = start_date
+        if end_date:
+            created_range["$lte"] = end_date
+        query["$or"] = [
+            {"business_date": biz_range.copy()},
+            {"business_date": {"$exists": False}, "created_at": created_range.copy()}
+        ]
     
     # جلب الطلبات
     all_orders = await db.orders.find(query, {"_id": 0}).to_list(5000)
@@ -12934,10 +13150,16 @@ async def get_cash_register_closing_report(
     expenses_query["category"] = {"$ne": "refund"}
     if branch_id:
         expenses_query["branch_id"] = branch_id
-    if start_date:
-        expenses_query["date"] = {"$gte": start_date}
-    if end_date:
-        expenses_query.setdefault("date", {})["$lte"] = end_date
+    if date_filter_from or date_filter_to:
+        biz_range_exp = {}
+        if date_filter_from:
+            biz_range_exp["$gte"] = date_filter_from
+        if date_filter_to:
+            biz_range_exp["$lte"] = date_filter_to
+        expenses_query["$or"] = [
+            {"business_date": biz_range_exp.copy()},
+            {"business_date": {"$exists": False}, "date": biz_range_exp.copy()}
+        ]
     
     expenses = await db.expenses.find(expenses_query, {"_id": 0}).to_list(1000)
     
@@ -14756,6 +14978,7 @@ async def _auto_process_attendance_internal(current_user: dict):
                     "employee_id": emp["id"],
                     "employee_name": emp.get("name"),
                     "date": date_str,
+                    "business_date": date_str,
                     "hours": overtime_hours,
                     "status": "pending",
                     "approved_by": None,
@@ -14783,6 +15006,7 @@ async def _auto_process_attendance_internal(current_user: dict):
                     "days": None,
                     "reason": f"تأخير {late_minutes} دقيقة - تلقائي من البصمة",
                     "date": date_str,
+                    "business_date": date_str,
                     "tenant_id": tenant_id,
                     "created_by": "system",
                     "created_at": datetime.now(timezone.utc).isoformat()
@@ -14807,6 +15031,7 @@ async def _auto_process_attendance_internal(current_user: dict):
                     "days": None,
                     "reason": f"خروج مبكر {early_leave_minutes} دقيقة - تلقائي من البصمة",
                     "date": date_str,
+                    "business_date": date_str,
                     "tenant_id": tenant_id,
                     "created_by": "system",
                     "created_at": datetime.now(timezone.utc).isoformat()
@@ -17446,7 +17671,7 @@ async def get_menu_link(request: Request, current_user: dict = Depends(get_curre
         base_url = f"{parsed.scheme}://{parsed.netloc}"
     else:
         # fallback للـ environment variable
-        base_url = os.environ.get('REACT_APP_BACKEND_URL', 'https://pos-stability-fix-1.preview.emergentagent.com')
+        base_url = os.environ.get('REACT_APP_BACKEND_URL', 'https://financial-reconcile-2.preview.emergentagent.com')
     
     menu_url = f"{base_url}/menu/{tenant.get('menu_slug', tenant_id)}"
     
@@ -18919,6 +19144,181 @@ async def deactivate_tenant_device(
         raise HTTPException(status_code=404, detail="الجهاز غير موجود")
     
     return {"success": True, "message": "تم إلغاء ترخيص الجهاز"}
+
+
+# ==================== BUSINESS DATE MIGRATION ====================
+@api_router.post("/admin/migrate-business-dates")
+async def migrate_business_dates(current_user: dict = Depends(get_current_user)):
+    """
+    ترحيل (Migration) لتحديث جميع السجلات المالية القديمة بـ business_date
+    (اليوم التشغيلي المستنِد على تاريخ بدء الوردية).
+    
+    يُشغَّل مرة واحدة من قِبَل المالك فقط. آمن لإعادة التشغيل (idempotent).
+    """
+    # صلاحية المالك فقط
+    if current_user.get("role") not in ["admin", "super_admin", "manager"]:
+        raise HTTPException(status_code=403, detail="غير مصرح - المالك فقط")
+    
+    tenant_id = get_user_tenant_id(current_user)
+    stats = {
+        "shifts_updated": 0,
+        "orders_updated": 0,
+        "expenses_updated": 0,
+        "advances_updated": 0,
+        "deductions_updated": 0,
+        "bonuses_updated": 0,
+        "overtime_updated": 0,
+        "shift_expenses_recomputed": 0,
+        "errors": []
+    }
+    
+    try:
+        # 1) إضافة business_date للورديات التي لا تملكه
+        shifts_cursor = db.shifts.find(
+            {"tenant_id": tenant_id, "business_date": {"$exists": False}},
+            {"_id": 0, "id": 1, "started_at": 1, "opened_at": 1}
+        )
+        async for shift in shifts_cursor:
+            started = shift.get("started_at") or shift.get("opened_at")
+            biz_date = iraq_date_from_utc(started) if started else iraq_date_from_utc()
+            await db.shifts.update_one(
+                {"id": shift["id"]},
+                {"$set": {"business_date": biz_date}}
+            )
+            stats["shifts_updated"] += 1
+        
+        # 2) جلب كل الورديات للـ tenant مع business_date لمعالجة السجلات الأخرى
+        all_shifts = await db.shifts.find(
+            {"tenant_id": tenant_id},
+            {"_id": 0, "id": 1, "branch_id": 1, "started_at": 1, "opened_at": 1, "ended_at": 1, "business_date": 1, "status": 1}
+        ).sort("started_at", 1).to_list(10000)
+        
+        # ترتيب الورديات حسب الفرع
+        shifts_by_branch = {}
+        for s in all_shifts:
+            b = s.get("branch_id") or "__no_branch__"
+            shifts_by_branch.setdefault(b, []).append(s)
+        
+        def find_shift_for_record(record_branch_id, record_created_at, record_shift_id=None):
+            """إيجاد الوردية التي ينتمي إليها السجل"""
+            if record_shift_id:
+                for s in all_shifts:
+                    if s.get("id") == record_shift_id:
+                        return s
+            branch_shifts = shifts_by_branch.get(record_branch_id or "__no_branch__", [])
+            if not branch_shifts:
+                branch_shifts = all_shifts
+            for s in branch_shifts:
+                start = s.get("started_at") or s.get("opened_at") or ""
+                end = s.get("ended_at") or ""
+                if record_created_at >= start and (not end or record_created_at <= end):
+                    return s
+            return None
+        
+        # 3) ترحيل الطلبات
+        async for order in db.orders.find(
+            {"tenant_id": tenant_id, "business_date": {"$exists": False}},
+            {"_id": 0, "id": 1, "branch_id": 1, "created_at": 1, "shift_id": 1}
+        ):
+            shift = find_shift_for_record(order.get("branch_id"), order.get("created_at", ""), order.get("shift_id"))
+            biz = shift["business_date"] if (shift and shift.get("business_date")) else iraq_date_from_utc(order.get("created_at"))
+            await db.orders.update_one({"id": order["id"]}, {"$set": {"business_date": biz}})
+            stats["orders_updated"] += 1
+        
+        # 4) ترحيل المصاريف
+        async for exp in db.expenses.find(
+            {"tenant_id": tenant_id, "business_date": {"$exists": False}},
+            {"_id": 0, "id": 1, "branch_id": 1, "created_at": 1, "date": 1}
+        ):
+            shift = find_shift_for_record(exp.get("branch_id"), exp.get("created_at", ""))
+            if shift and shift.get("business_date"):
+                biz = shift["business_date"]
+            else:
+                biz = exp.get("date") or iraq_date_from_utc(exp.get("created_at"))
+            await db.expenses.update_one({"id": exp["id"]}, {"$set": {"business_date": biz}})
+            stats["expenses_updated"] += 1
+        
+        # 5) ترحيل السلف
+        async for adv in db.advances.find(
+            {"tenant_id": tenant_id, "business_date": {"$exists": False}},
+            {"_id": 0, "id": 1, "created_at": 1, "date": 1}
+        ):
+            biz = iraq_date_from_utc(adv.get("created_at")) or adv.get("date")
+            await db.advances.update_one({"id": adv["id"]}, {"$set": {"business_date": biz}})
+            stats["advances_updated"] += 1
+        
+        # 6) ترحيل الخصومات
+        async for ded in db.deductions.find(
+            {"tenant_id": tenant_id, "business_date": {"$exists": False}},
+            {"_id": 0, "id": 1, "created_at": 1, "date": 1}
+        ):
+            biz = iraq_date_from_utc(ded.get("created_at")) or ded.get("date")
+            await db.deductions.update_one({"id": ded["id"]}, {"$set": {"business_date": biz}})
+            stats["deductions_updated"] += 1
+        
+        # 7) ترحيل المكافآت
+        async for bon in db.bonuses.find(
+            {"tenant_id": tenant_id, "business_date": {"$exists": False}},
+            {"_id": 0, "id": 1, "created_at": 1, "date": 1}
+        ):
+            biz = iraq_date_from_utc(bon.get("created_at")) or bon.get("date")
+            await db.bonuses.update_one({"id": bon["id"]}, {"$set": {"business_date": biz}})
+            stats["bonuses_updated"] += 1
+        
+        # 8) ترحيل طلبات الساعات الإضافية
+        async for ot in db.overtime_requests.find(
+            {"tenant_id": tenant_id, "business_date": {"$exists": False}},
+            {"_id": 0, "id": 1, "created_at": 1, "date": 1}
+        ):
+            biz = iraq_date_from_utc(ot.get("created_at")) or ot.get("date")
+            await db.overtime_requests.update_one({"id": ot["id"]}, {"$set": {"business_date": biz}})
+            stats["overtime_updated"] += 1
+        
+        # 9) إعادة احتساب total_expenses للورديات المُغلقة (استبعاد المرتجعات)
+        closed_shifts = await db.shifts.find(
+            {"tenant_id": tenant_id, "status": "closed"},
+            {"_id": 0, "id": 1, "branch_id": 1, "started_at": 1, "opened_at": 1, "ended_at": 1, "cash_sales": 1, "opening_cash": 1, "opening_balance": 1}
+        ).to_list(10000)
+        
+        for s in closed_shifts:
+            shift_start = s.get("started_at") or s.get("opened_at") or ""
+            shift_end = s.get("ended_at") or ""
+            if not shift_start:
+                continue
+            exp_query = {
+                "tenant_id": tenant_id,
+                "branch_id": s.get("branch_id"),
+                "category": {"$ne": "refund"},
+                "created_at": {"$gte": shift_start}
+            }
+            if shift_end:
+                exp_query["created_at"]["$lte"] = shift_end
+            shift_expenses = await db.expenses.find(exp_query, {"_id": 0, "amount": 1}).to_list(500)
+            total_exp = sum(float(e.get("amount") or 0) for e in shift_expenses)
+            
+            opening_cash = float(s.get("opening_cash") or s.get("opening_balance") or 0)
+            cash_sales = float(s.get("cash_sales") or 0)
+            expected_cash = opening_cash + cash_sales - total_exp
+            
+            await db.shifts.update_one(
+                {"id": s["id"]},
+                {"$set": {"total_expenses": total_exp, "expected_cash": expected_cash}}
+            )
+            stats["shift_expenses_recomputed"] += 1
+        
+        return {
+            "success": True,
+            "message": "تمت عملية الترحيل بنجاح",
+            "stats": stats
+        }
+    except Exception as e:
+        logger.exception("Business date migration failed")
+        stats["errors"].append(str(e))
+        return {
+            "success": False,
+            "message": f"فشلت عملية الترحيل: {str(e)}",
+            "stats": stats
+        }
 
 
 # Include reports routes (refactored) - PRIORITY over old routes

@@ -1068,13 +1068,20 @@ const CashRegisterClosingTab = ({ t, formatPrice, selectedBranchId, branches, ge
       // دمج بيانات الإغلاقات: أولوية للشفتات (فيها تفاصيل أكثر)
       const closingsFromHistory = historyRes.data.closings || [];
       const closedShifts = (shiftsRes.data || []).filter(s => {
-        // فلتر حسب التاريخ
+        // فلتر حسب business_date (اليوم التشغيلي) أولاً، fallback لوقت الإغلاق للسجلات القديمة
+        if (s.business_date) {
+          return s.business_date >= dateRange.start && s.business_date <= dateRange.end;
+        }
         const closedAt = s.ended_at || s.closed_at || s.started_at || '';
         return closedAt >= dateRange.start && closedAt <= dateRange.end + 'T23:59:59';
       });
       
       // الشفتات النشطة (المفتوحة) - جلب البيانات الحقيقية
       const rawActiveShifts = (activeShiftsRes.data || []).filter(s => {
+        // فلتر حسب business_date (اليوم التشغيلي) أولاً
+        if (s.business_date) {
+          return s.business_date >= dateRange.start && s.business_date <= dateRange.end;
+        }
         const startedAt = s.started_at || '';
         return startedAt >= dateRange.start && startedAt <= dateRange.end + 'T23:59:59';
       });

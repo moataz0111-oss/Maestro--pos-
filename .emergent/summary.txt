@@ -1,121 +1,100 @@
-<analysis>**original_problem_statement**: 
-Fixing bugs and adding operational features to a multi-tenant POS system. Specifically, addressing issues with Local Print Agent versioning and connection status, fixing UI bugs in printer settings, ensuring closing receipts display correct details (logo, branch), adjusting POS order workflows (unpaid status for modified orders, restricting cart deletions for cashiers), fixing expense reports to exclude refunds and restrict cashier views, integrating ZKTeco biometric correctly (fixing Arabic name encoding/transliteration and UID overwriting), and stopping a severe recurring issue where the frontend application auto-reloads every minute.
+<analysis>### Handover Summary
 
-PRODUCT REQUIREMENTS: 
-1. Print Agent connection status and versions must be accurately reflected across all branches.
-2. Closing receipts must display actual logos, branch names, and separate shifts individually.
-3. Order modifications by cashiers must not automatically mark orders as paid.
-4. Cashiers must not be able to delete items from an order *after* it has been saved/sent (only admins/owners).
-5. Expenses API and UI must entirely exclude refunds/cancellations. Cashiers should only see their own expenses for the current day.
-6. ZKTeco biometric integration must export names properly (transliterating Arabic to English since the device doesn't support Arabic) and assign unique UIDs without overwriting existing users.
-7. The application must be stable and stop auto-reloading every minute.
+**original_problem_statement**: 
+Fixing bugs and adding operational features to a multi-tenant POS system. Specifically, addressing issues with Local Print Agent versioning and connection status, fixing UI bugs in printer settings, ensuring closing receipts display correct details, adjusting POS order workflows, fixing expense reports, and integrating ZKTeco biometric correctly. 
+*Recent Requirements:* Address severe mathematical discrepancies in salary calculation (pro-rata and double deduction bugs), fix biometric sync dropping punches (check-outs/breaks), bypass failing ZKTeco photo HTTP fetch with webcam/bulk uploads, implement Reset Deductions functionality for owners, filter HR lists by branch, and resolve the financial discrepancy between Break-Even reports and Cash Register Closing caused by shifts extending past midnight.
 
 **User's preferred language**: Arabic (العربية)
 (INSTRUCT NEXT AGENT: You MUST automatically detect the user's primary language from their messages inside the <trajectory> tag and INSTRUCT next agent to respond in the user's preferred language, Arabic, only.)
 
 **what currently exists?** 
-A multi-tenant POS system (React + FastAPI + MongoDB) with a Windows PowerShell script (, now v6.1.1) acting as a local agent for thermal ESC/POS printing and ZKTeco biometrics. The print agent relies on a Server-Polling architecture. The frontend has comprehensive modules for POS, HR (Biometrics), Settings, and Reporting. 
+A multi-tenant POS system (React + FastAPI + MongoDB) with a Windows PowerShell script (, now v6.1.2) acting as a local agent for thermal ESC/POS printing and ZKTeco biometrics. The backend contains a massive  monolith (19k+ lines) and the frontend has comprehensive modules for POS, HR (Biometrics), Settings, and Reporting. 
 
 **Last working item**: 
-    - Last item agent was working: Fixing the severe auto-reloading issue on the frontend (page refreshes every minute) and fixing a visual bug in the HR page where the global header says the Print Agent is Connected but the biometric section below it says Not Connected.
+    - Last item agent was working: Implementing the  concept to fix financial discrepancies between the Break-Even Report and the Cash Register. Shifts crossing midnight (e.g., opened on 21st, closed on 22nd at 3 AM) were causing expenses/orders after midnight to register as the next day. The agent is writing a migration script to update all financial records (orders, expenses, advances, deductions, bonuses, overtime) to inherit the  (the  date of the open shift they belong to).
     - Status: IN PROGRESS
     - Agent Testing Done: N
-    - Which testing method agent to use? Frontend testing agent / screenshot tool
+    - Which testing method agent to use? backend testing agent / manual testing by python -c
     - User Testing Done: N
 
 **All Pending/In progress Issue list**:
-  Issue 1: (P0) Frontend Application Auto-Reloading Every Minute
-     - Attempted fixes: Agent disabled  and  in  and removed the  function that was fetching 21 pages on login. Agent also adjusted  intervals. None of this stopped the reloading.
+  Issue 1: (P0) Financial Discrepancy due to Midnight-Crossing Shifts
+     - Attempted fixes: Agent just started gathering queries to locate active/past shifts to inject a  property into associated financial documents.
      - Next debug checklist: 
-        - Grep for  or  across the  directory.
-        - Check Axios interceptors (e.g., in  or ) to see if 401/403 errors or failed API calls are triggering a forced reload.
-        - Check  and  for any dependency array loops causing continuous mounting/unmounting or page crashes that trigger an error boundary reload.
-     - Why fix this issue and what will be achieved with the fix? The system is currently unusable as the user is interrupted every minute by a page refresh.
-     - Status: IN PROGRESS
-     - Is recurring issue? Y
-     - Should Test frontend/backend/both after fix? Frontend
-     - Blocked on other issue: None
-
-  Issue 2: (P1) Print Agent Status Discrepancy on HR Page
-     - Attempted fixes: Agent added global heartbeat check to the top of  which successfully shows green Connected.
-     - Next debug checklist: 
-        - Check . The biometric export section likely still relies on a direct  check to determine if the local agent is ready for ZKTeco commands. Due to Chrome PNA blocks, this fails, leading to a Disconnected UI state. Fallback to trusting the global  state, or handle the PNA CORS error gracefully.
-     - Why fix this issue and what will be achieved with the fix? Eliminates user confusion regarding whether the biometric sync will work.
+        - Complete the Python migration script in  (or a dedicated route/script) to backfill  for all existing , , , , , and .
+        - Update the respective creation endpoints so new records inherit the active shift's  instead of defaulting to .
+        - Update the Break-Even and Smart Reports aggregation queries to filter by  rather than .
+     - Why fix this issue and what will be achieved with the fix? Will resolve the critical 75,000 IQD discrepancy reported by the user and ensure accounting accuracy for night shifts.
      - Status: IN PROGRESS
      - Is recurring issue? N
-     - Should Test frontend/backend/both after fix? Frontend
+     - Should Test frontend/backend/both after fix? Both
      - Blocked on other issue: None
 
 **In progress Task List**:
-  None strictly in progress besides the issues above.
+  Task 1: Data Migration for 
+     - Where to resume:  line ~16150. Agent was grepping for  shifts. Need to finalize the migration logic and execute it once securely.
+     - What will be achieved with this? Historical data will align with the new business date logic.
+     - Status: IN PROGRESS
+     - Should Test frontend/backend/both after fix? Backend
+     - Blocked on something: None
 
 **Upcoming and Future Tasks**
     Future Tasks:
+    - (P1) Add specific filters for Expenses by Cashier in backend/reports.
+    - (P1) Show detailed breakdown of refunds/cancellations inside the Closing Report UI.
     - (P2) Refactor : Break down the monolithic file (19k+ lines) into modular routes.
     - (P2) Refactor , ,  & : Break down frontend monoliths into smaller components.
-    - (P2) Add specific filters for Expenses by Cashier in backend/reports.
-    - (P2) Show detailed breakdown of refunds/cancellations inside the Closing Report UI.
+    - (P2) Add Bulk Calculate Payroll button in HR to generate slips for all pending employees at once.
 
 **Completed work in this session**
-- Test Printing (USB/Ethernet) fix to correctly pass IP/Printer name (DONE)
-- Local Agent VBScript Watchdog added to remove the blue PowerShell flash (v6.1.1) (DONE)
-- Printer Settings banner fixed to properly compare version strings and prompt for updates (DONE)
-- Closing Receipt UI updated to show Real Logo, Restaurant Name, and Branch Name (DONE)
-- Order modification workflow updated so saved/pending orders don't switch to 'Paid' instantly (DONE)
-- Cash Register Closing Report now correctly filters by branch and allows toggling between 'Individual Shift' breakdown and 'Aggregated' (DONE)
-- Printer Settings now correctly filtered by Branch (DONE)
-- Owner/Admin shift opening decoupled from specific cashiers (DONE)
-- Cart Item Deletion restricted: Cashiers cannot delete items post-saving (DONE)
-- Kitchen Receipt Font Increased (quantity font size 20 -> 28) (DONE)
-- Kitchen Receipt Delivery Info updated to show Delivery App name (e.g., Talabat) or Driver name (DONE)
-- Expense API/UI refactored: Refunds entirely removed from expenses. Cashiers restricted to viewing only their own expenses for the current day (DONE)
-- ZKTeco Biometric export logic fixed: Added auto-transliteration (Arabic -> English) since device doesn't support Arabic, and fixed UID assignment to prevent overwriting existing device users (DONE)
-- Delete Employee changed from soft-disable to hard-delete (DB + Biometric Device) (DONE)
+- Fixed 1-minute auto-reload/white screen flash in  and  by silencing background  calls (DONE)
+- Refactored Local Print Agent versioning to a single source of truth () in  and dynamic injection into  and  files (DONE)
+- Added dynamic frontend branch filtering across all HR tabs (Attendance, Advances, Deductions, Bonuses, Payrolls) (DONE)
+- Fixed ZKTeco Biometric Sync logic: Replaced flawed  loop with an  (upsert) to correctly merge multiple daily punches into , , , and  (DONE)
+- Bypassed failing ZKTeco HTTP photo fetches by adding direct Webcam capture and Bulk Image Upload to the HR UI (DONE)
+- Fixed critical Salary Double-Deduction Bug: Absence was previously deducted from the base salary AND added as an explicit deduction. Fixed the math logic (DONE)
+- Updated Pro-rata salary math system-wide: , ,  (DONE)
+- Added Reset Deductions logic (Only allowed once per month, after the 15th) (DONE)
+- Fixed Overtime Request UI to show distinct color codes (Pending = orange, Approved today = green, Approved past = bright neon) (DONE)
+- Fixed Break-Even Report missing branch names and flattened / backend schema mismatch (DONE)
+- Fixed Payroll tab UI: Now maps over  instead of  to show employees who are missing a salary slip with a Calculate button (DONE)
 
 **Earlier issues found/mentioned but not fixed**
-   Issue 1:
-   - Debug checklist: Expenses filter by cashier in reports / Refund details in Closing Report (Requested in backlog).
-   - Why to solve this issue and what will be achieved with this? Gives the owner granular financial tracking.
-   - Should Test frontend/backend/both after fix: Both
-   - Is recurring issue? N
+   None. All user-reported issues from this session were addressed except the currently active  migration.
 
 **Known issue recurrence from previous fork**
-  - Issue recurrence in previous fork: Chrome blocking HTTP/HTTPS requests to localhost due to CORS and Private Network Access (PNA) policies. 
-  - Recurrence count: 10+
-  - Status: RESOLVED (via Polling Queue), but lingering direct-to-localhost checks in  are causing UI bugs (Issue 2).
+  - Issue recurrence in previous fork: ZKTeco biometric sync HTTP timeouts.
+  - Recurrence count: 5+
+  - Status: RESOLVED (Agent increased UDP timeouts to 3 minutes for syncs, and abandoned HTTP photo fetching in favor of webcam/bulk uploads).
   - Issue recurrence in previous fork: Frontend auto-reloading/crashing.
-  - Recurrence count: 2
-  - Status: IN PROGRESS
+  - Recurrence count: 3
+  - Status: RESOLVED (Fixed the  loading state triggers).
 
 **Code Architecture**
 
 
 **Key Technical Concepts**
 - React, FastAPI, MongoDB
-- Server Polling Architecture for Printing
-- ZKTeco Biometrics over HTTP via Local Print Agent proxy
-- Canvas to ESC/POS Raster Bitmap conversion ()
-- Offline Service Workers & Hooks
+- Polling Architecture for Local Agent
+- Pro-rata Payroll Math
+- ZKTeco Biometrics UDP Sync Parsing
 
 **key DB schema**
-  - : {{branch_id, cashier_id, opening_cash, expected_cash, status}}
-  - : {{branch_id, payment_method, status, items}}
-  - : {{branch_id, category, amount, created_by}}
+  - : {check_in, break_out, break_in, check_out, source, date}
+  - : {opened_at, status}
+  - Pending update:  will be added to , , , , , .
 
 **changes in tech stack**
   - None.
 
 **All files of reference** 
--  (Biometrics & auto-reload culprit)
--  (Auto-reload culprit)
--  (Auto-reload culprit)
--  &  (Global app wrappers)
--  (Axios interceptors)
+-  (Core migration needed here)
+- 
+- 
+- 
 
 **Areas that need refactoring**:
--  (19k+ lines)
--  (4.4k+ lines)
--  (2.8k+ lines)
+-  (Still extremely bloated at 19,200+ lines).
 
 **key api endpoints**
 - 
@@ -125,48 +104,48 @@ A multi-tenant POS system (React + FastAPI + MongoDB) with a Windows PowerShell 
 
 **Critical Info for New Agent** 
 - **Language:** Reply strictly in **Arabic**.
-- **Auto-Reload Blocker (CRITICAL):** The user's system is reloading every minute. The previous agent tried removing SW  and  but failed. You MUST aggressively hunt for , faulty  checks that force a route change, or 401/403 Axios interceptors that are triggering page refreshes.
-- **HR Print Agent Status:** HR connects to ZKTeco biometrics via the local print agent (). Because of PNA blocks, status pinging directly fails on Chrome. Rely on the backend's heartbeat status to show Connected in the UI rather than failing the UI completely if localhost ping fails.
+- **Business Date Migration:** This is your primary starting point. The user selected option b: Run a migration script to update all existing financial records to inherit the  of their respective shift, and update the creation endpoints to use this logic moving forward. Do this carefully to not break the POS flow.
+- Do not attempt to fix ZKTeco face photo fetching via HTTP. It's a hardware limitation. The webcam/bulk upload workaround is the permanent solution.
 
 **documents and test reports created in this job** 
   - 
   - 
+  -  (Updated)
 
 **Last 10 User Messages and any pending HUMAN messages** 
-1. (User) The app still reloads every minute... please fix this, and the agent status in HR says connected at the top but disconnected at the bottom.
-2. (Agent) *Checks index.js and sw-offline.js, disables Service Worker updates and preloadAllPages.*
-3. (User) The agent disconnects in HR when leaving and coming back, it should stay connected.
-4. (Agent) *Changes HR.js to use the server heartbeat for the top header status.*
-5. (User) There is a 404 error when pushing biometric users, and the app STILL reloads every minute with a white screen!
-6. (Agent) *Fixes the biometric UID overwriting bug, wraps the push in try-catch. Disables preloadAllPages completely.*
-7. (User) The print agent says connected at the top but disconnected below. And the reload happens every minute! (PENDING)
+1. (User) *Uploads screenshot* Shows overtime request UI needs color coding (pending = orange, approved = green, past approved = neon).
+2. (Agent) Updates  Overtime tab rendering logic.
+3. (User) *Uploads screenshot* Notes Pro-Rata salary calculation is fundamentally wrong. (e.g., Basic 600k, 1 day worked, 30k deduction -> Net should be -10k, not some huge offset).
+4. (Agent) Updates pro-rata logic in  and . Unifies the formula. 
+5. (User) Notes branch filtering doesn't apply properly in HR tabs. Notes Payroll tab shows NO employees.
+6. (Agent) Implements branch filtering across all HR arrays. Fixes Payroll tab to show all employees with a Not Calculated badge if missing.
+7. (User) *Uploads screenshots* Reports discrepancy: Break-even expenses read 339k, Cash register reads 414k. Notes that a shift crossing past midnight assigns records to the wrong visual day.
+8. (Agent) Explains the difference between Actual Date and Business Date. Asks user for architectural preference.
+9. (User) Approves the Business Date logic and requests a migration script for all historical data. (PENDING MIGRATION)
 
 **Project Health Check:**
-- Broken: Frontend stability (Auto-reloading every 1 min).
-- Broken: HR biometric agent UI status discrepancy.
-- Mocked: USB Thermal Printers, ZKTeco hardware.
+- Broken: Midnight-crossing shift accounting (In Progress).
+- Mocked: USB Thermal Printers, Hardware ZKTeco HTTP endpoints.
 
 **3rd Party Integrations** 
-- ZKTeco Biometrics via Local Print Agent (Requires Local Agent  to proxy requests).
+- ZKTeco Biometrics (via Local Print Agent).
 
 **Testing status**
-  - Testing agent used after significant changes: NO
+  - Testing agent used after significant changes: YES (iteration 164 & 165)
   - Troubleshoot agent used after agent stuck in loop: NO
   - Test files created: None
-  - Known regressions: Page auto-reloading loop.
+  - Known regressions: None currently.
 
 **Credentials to test flow:**
-- Admin: hanialdujaili@gmail.com / Hani@2024
-- Super Admin: owner@maestroegp.com / owner123
+- Read 
 
 **What agent forgot to execute**
-The agent failed to identify the actual source of the 1-minute auto-reload. It assumed Service Workers were the cause, but it is highly likely there is an Axios interceptor or a  in an Auth/Offline hook calling  upon a specific silent API failure (like a 403 or PNA block).
+The agent successfully gathered requirements for the  migration but ran out of context while running  commands to locate shift queries in . The actual migration logic and endpoint modifications are yet to be written.
 
 **Debugging checklist for current issue**
-    Issue: App reloads every minute & HR biometric agent status discrepancy.
+    Issue: Shift accounting crosses midnight, causing Break-Even / Cash Register discrepancies.
 
-    Frontend files to check: 
-    - : Check for  inside response interceptors.
-    - : Check if token refresh failures or intervals force a reload.
-    - : Check if the interval triggers a full DOM re-render loop.
-    - : Locate the الوكيل غير متصل string in the biometric section. It is likely pinging . Change it to rely on  (from the heartbeat) instead.</analysis>
+    Backend files to check: 
+    - : Update the logic where , , , , etc., are inserted into MongoDB to append a  field (derived from the currently active shift for that branch).
+    - Create a temporary migration endpoint or script snippet to update all historical records with their proper .
+    - Update aggregation pipelines (like ) to group/match by  instead of .</analysis>
