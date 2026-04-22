@@ -3030,6 +3030,32 @@ async def create_expense(expense: ExpenseCreate, current_user: dict = Depends(ge
     }
     await db.expenses.insert_one(expense_doc)
     del expense_doc["_id"]
+    
+    # تحديث إجمالي مصروفات الوردية المفتوحة الحالية (لو كان المصروف ليس مرتجع)
+    if expense_doc.get("category") != "refund" and branch_for_biz:
+        current_shift = await db.shifts.find_one(
+            {"branch_id": branch_for_biz, "status": "open", **({"tenant_id": tenant_id_for_biz} if tenant_id_for_biz else {})},
+            {"_id": 0, "id": 1, "started_at": 1, "opening_cash": 1, "opening_balance": 1, "cash_sales": 1}
+        )
+        if current_shift:
+            exp_q = {
+                **({"tenant_id": tenant_id_for_biz} if tenant_id_for_biz else {}),
+                "branch_id": branch_for_biz,
+                "category": {"$ne": "refund"},
+                "created_at": {"$gte": current_shift.get("started_at", "")}
+            }
+            shift_expenses_live = await db.expenses.find(exp_q, {"_id": 0, "amount": 1}).to_list(500)
+            total_exp_live = sum(float(e.get("amount") or 0) for e in shift_expenses_live)
+            opening_cash_live = float(current_shift.get("opening_cash") or current_shift.get("opening_balance") or 0)
+            cash_sales_live = float(current_shift.get("cash_sales") or 0)
+            await db.shifts.update_one(
+                {"id": current_shift["id"]},
+                {"$set": {
+                    "total_expenses": total_exp_live,
+                    "expected_cash": opening_cash_live + cash_sales_live - total_exp_live
+                }}
+            )
+    
     return expense_doc
 
 @api_router.get("/expenses")
