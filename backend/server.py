@@ -608,6 +608,66 @@ async def auto_migrate_business_dates():
             logger.info(f"✅ business_date auto-migration: {updated}")
     except Exception as e:
         logger.warning(f"⚠️ business_date auto-migration skipped: {e}")
+    
+    # ==================== ONE-TIME ORPHAN EXPENSE CLEANUP ====================
+    # حذف مصروف الصيانة اليتيم 75,000 د.ع (ID محدد مسبقاً من طلب المالك)
+    # يعمل مرة واحدة فقط - محمي بـ flag في system_flags
+    try:
+        cleanup_flag = await db.system_flags.find_one({"flag": "orphan_maintenance_75k_cleaned"})
+        if not cleanup_flag:
+            ORPHAN_EXPENSE_ID = "7b13235e-b5de-4a98-93f2-aabc691a28d2"
+            orphan = await db.expenses.find_one({"id": ORPHAN_EXPENSE_ID}, {"_id": 0})
+            if orphan:
+                orphan_branch = orphan.get("branch_id")
+                orphan_tenant = orphan.get("tenant_id")
+                orphan_created = orphan.get("created_at", "")
+                
+                # حذف المصروف
+                await db.expenses.delete_one({"id": ORPHAN_EXPENSE_ID})
+                logger.info(f"🗑️ orphan cleanup: deleted expense {ORPHAN_EXPENSE_ID} ({orphan.get('description')} {orphan.get('amount')})")
+                
+                # إعادة احتساب total_expenses للوردية المرتبطة
+                if orphan_branch and orphan_created:
+                    shift_q = {"branch_id": orphan_branch, "started_at": {"$lte": orphan_created}}
+                    if orphan_tenant:
+                        shift_q["tenant_id"] = orphan_tenant
+                    affected_shifts = await db.shifts.find(
+                        shift_q,
+                        {"_id": 0, "id": 1, "started_at": 1, "ended_at": 1, "opening_cash": 1, "opening_balance": 1, "cash_sales": 1}
+                    ).to_list(100)
+                    for s in affected_shifts:
+                        s_end = s.get("ended_at") or ""
+                        if s_end and orphan_created > s_end:
+                            continue
+                        q = {
+                            "branch_id": orphan_branch,
+                            "category": {"$ne": "refund"},
+                            "created_at": {"$gte": s.get("started_at", "")}
+                        }
+                        if orphan_tenant:
+                            q["tenant_id"] = orphan_tenant
+                        if s_end:
+                            q["created_at"]["$lte"] = s_end
+                        shift_exps = await db.expenses.find(q, {"_id": 0, "amount": 1}).to_list(500)
+                        total_exp = sum(float(e.get("amount") or 0) for e in shift_exps)
+                        opening_cash = float(s.get("opening_cash") or s.get("opening_balance") or 0)
+                        cash_sales = float(s.get("cash_sales") or 0)
+                        await db.shifts.update_one(
+                            {"id": s["id"]},
+                            {"$set": {"total_expenses": total_exp, "expected_cash": opening_cash + cash_sales - total_exp}}
+                        )
+                        logger.info(f"🔄 recomputed shift {s['id'][:8]}: total_expenses={total_exp}")
+            
+            # وضع العلم لمنع إعادة التشغيل
+            await db.system_flags.insert_one({
+                "flag": "orphan_maintenance_75k_cleaned",
+                "applied_at": datetime.now(timezone.utc).isoformat(),
+                "expense_existed": bool(orphan)
+            })
+            if not orphan:
+                logger.info("ℹ️ orphan cleanup: expense not found (already clean)")
+    except Exception as e:
+        logger.warning(f"⚠️ orphan cleanup skipped: {e}")
 
 async def seed_default_backgrounds():
     """إضافة الخلفيات الافتراضية لصفحة الدخول"""
