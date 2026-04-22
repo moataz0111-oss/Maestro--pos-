@@ -3117,55 +3117,7 @@ async def get_expenses(
     
     return expenses
 
-@api_router.delete("/expenses/{expense_id}")
-async def delete_expense(expense_id: str, current_user: dict = Depends(get_current_user)):
-    """حذف مصروف - صلاحية المالك/المدير فقط. يُعيد احتساب إجمالي مصروفات الوردية المرتبطة تلقائياً."""
-    if current_user.get("role") not in ["admin", "super_admin", "manager", "branch_manager"]:
-        raise HTTPException(status_code=403, detail="غير مصرح - المالك أو المدير فقط")
-    
-    tenant_id = get_user_tenant_id(current_user)
-    tenant_query = {"tenant_id": tenant_id} if tenant_id else {"$or": [{"tenant_id": {"$exists": False}}, {"tenant_id": None}]}
-    
-    expense = await db.expenses.find_one({"id": expense_id, **tenant_query}, {"_id": 0})
-    if not expense:
-        raise HTTPException(status_code=404, detail="المصروف غير موجود")
-    
-    # حذف المصروف
-    await db.expenses.delete_one({"id": expense_id, **tenant_query})
-    
-    # إعادة احتساب total_expenses لأي وردية يقع هذا المصروف ضمن فترتها
-    exp_created = expense.get("created_at", "")
-    exp_branch = expense.get("branch_id")
-    if exp_created and exp_branch:
-        affected_shifts = await db.shifts.find({
-            **tenant_query,
-            "branch_id": exp_branch,
-            "started_at": {"$lte": exp_created}
-        }, {"_id": 0, "id": 1, "started_at": 1, "ended_at": 1, "opening_cash": 1, "opening_balance": 1, "cash_sales": 1}).to_list(100)
-        
-        for s in affected_shifts:
-            s_end = s.get("ended_at") or ""
-            if s_end and exp_created > s_end:
-                continue
-            exp_q = {
-                **tenant_query,
-                "branch_id": exp_branch,
-                "category": {"$ne": "refund"},
-                "created_at": {"$gte": s.get("started_at", "")}
-            }
-            if s_end:
-                exp_q["created_at"]["$lte"] = s_end
-            shift_expenses = await db.expenses.find(exp_q, {"_id": 0, "amount": 1}).to_list(500)
-            total_exp = sum(float(e.get("amount") or 0) for e in shift_expenses)
-            opening_cash = float(s.get("opening_cash") or s.get("opening_balance") or 0)
-            cash_sales = float(s.get("cash_sales") or 0)
-            expected_cash = opening_cash + cash_sales - total_exp
-            await db.shifts.update_one(
-                {"id": s["id"]},
-                {"$set": {"total_expenses": total_exp, "expected_cash": expected_cash}}
-            )
-    
-    return {"success": True, "message": "تم حذف المصروف وإعادة احتساب إجمالي الوردية"}
+
 
 @api_router.get("/expenses/categories")
 async def get_expense_categories():
@@ -19305,6 +19257,72 @@ async def deactivate_tenant_device(
 
 
 # ==================== BUSINESS DATE MIGRATION ====================
+# ==================== BUSINESS DATE MIGRATION ====================
+
+# Platform-owner only: cleanup a specific orphan expense record
+# (لا واجهة أمامية - استخدام داخلي فقط من قبل المالك عبر API)
+@api_router.post("/superadmin/cleanup-orphan-expense/{expense_id}")
+async def superadmin_cleanup_orphan_expense(
+    expense_id: str,
+    current_user: dict = Depends(verify_super_admin)
+):
+    """حذف سجل مصروف يتيم (للمالك/super_admin فقط - بدون واجهة).
+    يُعيد احتساب إجمالي الوردية المرتبطة تلقائياً."""
+    expense = await db.expenses.find_one({"id": expense_id}, {"_id": 0})
+    if not expense:
+        raise HTTPException(status_code=404, detail="المصروف غير موجود")
+    
+    await db.expenses.delete_one({"id": expense_id})
+    
+    # إعادة احتساب total_expenses للوردية المرتبطة
+    exp_created = expense.get("created_at", "")
+    exp_branch = expense.get("branch_id")
+    exp_tenant = expense.get("tenant_id")
+    recomputed_shifts = 0
+    if exp_created and exp_branch:
+        shift_q = {"branch_id": exp_branch, "started_at": {"$lte": exp_created}}
+        if exp_tenant:
+            shift_q["tenant_id"] = exp_tenant
+        affected_shifts = await db.shifts.find(
+            shift_q,
+            {"_id": 0, "id": 1, "started_at": 1, "ended_at": 1, "opening_cash": 1, "opening_balance": 1, "cash_sales": 1}
+        ).to_list(100)
+        for s in affected_shifts:
+            s_end = s.get("ended_at") or ""
+            if s_end and exp_created > s_end:
+                continue
+            exp_q = {
+                "branch_id": exp_branch,
+                "category": {"$ne": "refund"},
+                "created_at": {"$gte": s.get("started_at", "")}
+            }
+            if exp_tenant:
+                exp_q["tenant_id"] = exp_tenant
+            if s_end:
+                exp_q["created_at"]["$lte"] = s_end
+            shift_expenses = await db.expenses.find(exp_q, {"_id": 0, "amount": 1}).to_list(500)
+            total_exp = sum(float(e.get("amount") or 0) for e in shift_expenses)
+            opening_cash = float(s.get("opening_cash") or s.get("opening_balance") or 0)
+            cash_sales = float(s.get("cash_sales") or 0)
+            expected_cash = opening_cash + cash_sales - total_exp
+            await db.shifts.update_one(
+                {"id": s["id"]},
+                {"$set": {"total_expenses": total_exp, "expected_cash": expected_cash}}
+            )
+            recomputed_shifts += 1
+    
+    return {
+        "success": True,
+        "deleted_expense": {
+            "id": expense.get("id"),
+            "description": expense.get("description"),
+            "amount": expense.get("amount"),
+            "date": expense.get("date")
+        },
+        "shifts_recomputed": recomputed_shifts
+    }
+
+
 @api_router.post("/admin/migrate-business-dates")
 async def migrate_business_dates(force: bool = False, current_user: dict = Depends(get_current_user)):
     """
