@@ -56,3 +56,32 @@
 - ShiftResponse model: branch_id, opening_cash, started_at made optional
 - Fallback for old shifts: opening_balance→opening_cash, opened_at→started_at
 - Cleaned 9 refund expenses from DB
+
+## 2026-04-22 — business_date (اليوم التشغيلي) + Refund-exclusion fix (75K IQD discrepancy)
+### Problem
+- مصاريف صفحة "المصاريف اليومية" = 339,000 د.ع
+- مصاريف "إغلاق الصندوق/التقارير" = 414,000 د.ع
+- فرق 75,000 د.ع ناتج عن:
+  1. المرتجعات (category=refund) كانت تُحسب ضمن مصاريف الوردية عند الإغلاق (لا يجب)
+  2. الورديات التي تتجاوز منتصف الليل كانت تُسجَّل تحت اليوم الجديد في التقارير
+
+### Fix
+- Added `business_date` field (YYYY-MM-DD بتوقيت العراق) to:
+  - `shifts` (مُحسب من started_at عند فتح الوردية)
+  - `orders`, `expenses`, `advances`, `deductions`, `bonuses`, `overtime_requests` (تُرَث من الوردية المفتوحة)
+- Auto-migration on backend startup (idempotent): يُضيف business_date للسجلات القديمة + يُعيد حساب total_expenses للورديات المُغلقة مع استبعاد المرتجعات
+- Helper: `iraq_date_from_utc(iso_str)` و `_resolve_business_date(tenant, branch)`
+- Endpoints updated to filter by business_date (مع fallback للـ created_at/date للسجلات القديمة):
+  - GET /api/expenses
+  - GET /api/break-even/daily, /api/break-even/daily-range
+  - GET /api/reports/cash-register-closing
+  - GET /api/shifts (أضيف date_from/date_to/date)
+- 5 مواقع في shifts_routes.py تستبعد الآن category=refund من total_expenses
+- OrderResponse + ShiftResponse models: added business_date field
+- Migration endpoint: POST /api/admin/migrate-business-dates (صلاحية مالك فقط، آمن لإعادة التشغيل)
+- Frontend Reports.js: filter shifts by business_date عند توفره
+
+### Testing
+- 14/15 pytest tests PASS (1 skipped — no open shift)
+- 32 historical closed shifts had total_expenses recomputed on startup
+- Migration verified idempotent (second run = 0 updates)

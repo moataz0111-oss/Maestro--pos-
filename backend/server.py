@@ -1436,6 +1436,8 @@ class OrderResponse(BaseModel):
     created_at: Optional[str] = None  # Made optional for legacy orders
     updated_at: Optional[str] = None  # Made optional for legacy orders
     tenant_id: Optional[str] = None  # Added for tenant filtering
+    business_date: Optional[str] = None  # اليوم التشغيلي (من الوردية)
+    shift_id: Optional[str] = None
 
 # Shift Models
 class ShiftCreate(BaseModel):
@@ -1481,6 +1483,7 @@ class ShiftResponse(BaseModel):
     cancelled_amount: float = 0.0  # إجمالي الإلغاءات
     discounts_total: float = 0.0  # إجمالي الخصومات
     cancelled_by: List[Dict] = []  # تفاصيل من قام بالإلغاء
+    business_date: Optional[str] = None  # اليوم التشغيلي
 
 # Delivery Driver Models
 class DriverCreate(BaseModel):
