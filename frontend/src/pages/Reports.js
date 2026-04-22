@@ -46,7 +46,8 @@ import {
   CheckCircle,
   CircleDollarSign,
   ChevronDown,
-  User
+  User,
+  Trash2
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -3196,9 +3197,31 @@ export default function Reports() {
                             {/* تفاصيل كل مصروف */}
                             <div className="space-y-1">
                               {(data.items || []).map((item, idx) => (
-                                <div key={idx} className="flex justify-between text-sm p-2 bg-muted/10 rounded">
-                                  <span className="text-muted-foreground">{item.description || item.category}</span>
+                                <div key={idx} className="flex justify-between items-center text-sm p-2 bg-muted/10 rounded group">
+                                  <span className="text-muted-foreground flex-1">{item.description || item.category}</span>
                                   <span className="font-medium text-foreground tabular-nums">{formatPrice(item.amount)}</span>
+                                  {item.id && (
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="ml-2 h-7 w-7 opacity-0 group-hover:opacity-100 text-red-500 hover:text-red-700 hover:bg-red-500/10"
+                                      onClick={async () => {
+                                        if (!window.confirm(t('هل أنت متأكد من حذف هذا المصروف؟ لن يمكن التراجع.'))) return;
+                                        try {
+                                          const token = localStorage.getItem('token');
+                                          await axios.delete(`${API}/expenses/${item.id}`, { headers: { Authorization: `Bearer ${token}` } });
+                                          toast.success(t('تم حذف المصروف وإعادة احتساب إجمالي الوردية'));
+                                          fetchReports();
+                                        } catch (e) {
+                                          toast.error(e.response?.data?.detail || t('فشل حذف المصروف'));
+                                        }
+                                      }}
+                                      data-testid={`delete-expense-${item.id}`}
+                                      title={t('حذف')}
+                                    >
+                                      <Trash2 className="h-3.5 w-3.5" />
+                                    </Button>
+                                  )}
                                 </div>
                               ))}
                             </div>

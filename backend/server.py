@@ -470,24 +470,71 @@ async def auto_migrate_business_dates():
             await db.shifts.update_one({"id": shift["id"]}, {"$set": {"business_date": biz_date}})
             updated["shifts"] += 1
         
-        # 2) تحديث الطلبات (حسب shift_id إن توفر)
+        # 2) تحديث الطلبات (حسب shift_id أو branch+time)
         shift_biz_map = {}
-        async for s in db.shifts.find({}, {"_id": 0, "id": 1, "business_date": 1, "started_at": 1, "ended_at": 1, "branch_id": 1, "tenant_id": 1}):
+        all_shifts_list = []
+        async for s in db.shifts.find({}, {"_id": 0, "id": 1, "business_date": 1, "started_at": 1, "ended_at": 1, "opened_at": 1, "branch_id": 1, "tenant_id": 1}):
             if s.get("business_date"):
                 shift_biz_map[s["id"]] = s
+                all_shifts_list.append(s)
+        
+        def find_containing_shift(branch_id, created_at, tenant_id=None):
+            """يبحث عن الوردية التي تحتوي هذا الوقت في نفس الفرع"""
+            if not branch_id or not created_at:
+                return None
+            candidates = [s for s in all_shifts_list if s.get("branch_id") == branch_id]
+            if tenant_id:
+                candidates = [s for s in candidates if not s.get("tenant_id") or s.get("tenant_id") == tenant_id]
+            for s in candidates:
+                s_start = s.get("started_at") or s.get("opened_at") or ""
+                s_end = s.get("ended_at") or ""
+                if created_at >= s_start and (not s_end or created_at <= s_end):
+                    return s
+            return None
         
         async for order in db.orders.find(
             {"business_date": {"$exists": False}},
-            {"_id": 0, "id": 1, "shift_id": 1, "created_at": 1}
+            {"_id": 0, "id": 1, "shift_id": 1, "created_at": 1, "branch_id": 1, "tenant_id": 1}
         ):
             biz = None
             sid = order.get("shift_id")
             if sid and sid in shift_biz_map:
                 biz = shift_biz_map[sid].get("business_date")
             if not biz:
+                # البحث بالفرع والوقت
+                shift = find_containing_shift(order.get("branch_id"), order.get("created_at", ""), order.get("tenant_id"))
+                if shift:
+                    biz = shift.get("business_date")
+            if not biz:
                 biz = iraq_date_from_utc(order.get("created_at"))
             await db.orders.update_one({"id": order["id"]}, {"$set": {"business_date": biz}})
             updated["orders"] += 1
+        
+        # 2.1) تصحيح معالج ذكي: إعادة حساب business_date للطلبات التي تم ترحيلها سابقاً
+        # بلا استخدام branch+time matching (قد تملك business_date خاطئ من الترحيل الأول)
+        # نستخدم flag لمنع إعادة التشغيل في كل مرة
+        fix_flag = await db.system_flags.find_one({"flag": "orders_business_date_v2_fixed"})
+        if not fix_flag:
+            async for order in db.orders.find(
+                {"business_date": {"$exists": True}},
+                {"_id": 0, "id": 1, "shift_id": 1, "created_at": 1, "branch_id": 1, "tenant_id": 1, "business_date": 1}
+            ):
+                correct_biz = None
+                sid = order.get("shift_id")
+                if sid and sid in shift_biz_map:
+                    correct_biz = shift_biz_map[sid].get("business_date")
+                if not correct_biz:
+                    shift = find_containing_shift(order.get("branch_id"), order.get("created_at", ""), order.get("tenant_id"))
+                    if shift:
+                        correct_biz = shift.get("business_date")
+                # فقط إذا وجدنا وردية مطابقة ومختلفة، نصحّح
+                if correct_biz and correct_biz != order.get("business_date"):
+                    await db.orders.update_one({"id": order["id"]}, {"$set": {"business_date": correct_biz}})
+                    updated["orders"] += 1
+            await db.system_flags.insert_one({
+                "flag": "orders_business_date_v2_fixed",
+                "applied_at": datetime.now(timezone.utc).isoformat()
+            })
         
         # 3) تحديث المصاريف (مطابقة بالفرع + الفترة الزمنية)
         async for exp in db.expenses.find(
@@ -3043,6 +3090,56 @@ async def get_expenses(
                 e["created_by_name"] = user_map.get(e["created_by"], "")
     
     return expenses
+
+@api_router.delete("/expenses/{expense_id}")
+async def delete_expense(expense_id: str, current_user: dict = Depends(get_current_user)):
+    """حذف مصروف - صلاحية المالك/المدير فقط. يُعيد احتساب إجمالي مصروفات الوردية المرتبطة تلقائياً."""
+    if current_user.get("role") not in ["admin", "super_admin", "manager", "branch_manager"]:
+        raise HTTPException(status_code=403, detail="غير مصرح - المالك أو المدير فقط")
+    
+    tenant_id = get_user_tenant_id(current_user)
+    tenant_query = {"tenant_id": tenant_id} if tenant_id else {"$or": [{"tenant_id": {"$exists": False}}, {"tenant_id": None}]}
+    
+    expense = await db.expenses.find_one({"id": expense_id, **tenant_query}, {"_id": 0})
+    if not expense:
+        raise HTTPException(status_code=404, detail="المصروف غير موجود")
+    
+    # حذف المصروف
+    await db.expenses.delete_one({"id": expense_id, **tenant_query})
+    
+    # إعادة احتساب total_expenses لأي وردية يقع هذا المصروف ضمن فترتها
+    exp_created = expense.get("created_at", "")
+    exp_branch = expense.get("branch_id")
+    if exp_created and exp_branch:
+        affected_shifts = await db.shifts.find({
+            **tenant_query,
+            "branch_id": exp_branch,
+            "started_at": {"$lte": exp_created}
+        }, {"_id": 0, "id": 1, "started_at": 1, "ended_at": 1, "opening_cash": 1, "opening_balance": 1, "cash_sales": 1}).to_list(100)
+        
+        for s in affected_shifts:
+            s_end = s.get("ended_at") or ""
+            if s_end and exp_created > s_end:
+                continue
+            exp_q = {
+                **tenant_query,
+                "branch_id": exp_branch,
+                "category": {"$ne": "refund"},
+                "created_at": {"$gte": s.get("started_at", "")}
+            }
+            if s_end:
+                exp_q["created_at"]["$lte"] = s_end
+            shift_expenses = await db.expenses.find(exp_q, {"_id": 0, "amount": 1}).to_list(500)
+            total_exp = sum(float(e.get("amount") or 0) for e in shift_expenses)
+            opening_cash = float(s.get("opening_cash") or s.get("opening_balance") or 0)
+            cash_sales = float(s.get("cash_sales") or 0)
+            expected_cash = opening_cash + cash_sales - total_exp
+            await db.shifts.update_one(
+                {"id": s["id"]},
+                {"$set": {"total_expenses": total_exp, "expected_cash": expected_cash}}
+            )
+    
+    return {"success": True, "message": "تم حذف المصروف وإعادة احتساب إجمالي الوردية"}
 
 @api_router.get("/expenses/categories")
 async def get_expense_categories():
@@ -17204,6 +17301,7 @@ async def create_customer_order(
         "status": "pending",
         "order_type": "delivery",
         "source": "customer_app",
+        "business_date": await _resolve_business_date(tenant_id, order.branch_id),
         "created_at": datetime.now(timezone.utc).isoformat()
     }
     
@@ -19182,12 +19280,14 @@ async def deactivate_tenant_device(
 
 # ==================== BUSINESS DATE MIGRATION ====================
 @api_router.post("/admin/migrate-business-dates")
-async def migrate_business_dates(current_user: dict = Depends(get_current_user)):
+async def migrate_business_dates(force: bool = False, current_user: dict = Depends(get_current_user)):
     """
     ترحيل (Migration) لتحديث جميع السجلات المالية القديمة بـ business_date
     (اليوم التشغيلي المستنِد على تاريخ بدء الوردية).
     
     يُشغَّل مرة واحدة من قِبَل المالك فقط. آمن لإعادة التشغيل (idempotent).
+    
+    force=True: إعادة احتساب business_date لجميع السجلات حتى التي تملكه سابقاً (مفيد لتصحيح ترحيل سابق خاطئ).
     """
     # صلاحية المالك فقط
     if current_user.get("role") not in ["admin", "super_admin", "manager"]:
@@ -19249,28 +19349,36 @@ async def migrate_business_dates(current_user: dict = Depends(get_current_user))
                     return s
             return None
         
-        # 3) ترحيل الطلبات
+        # 3) ترحيل الطلبات - مع force يُعاد احتساب حتى إن كانت تملك business_date
+        orders_filter = {"tenant_id": tenant_id}
+        if not force:
+            orders_filter["business_date"] = {"$exists": False}
         async for order in db.orders.find(
-            {"tenant_id": tenant_id, "business_date": {"$exists": False}},
-            {"_id": 0, "id": 1, "branch_id": 1, "created_at": 1, "shift_id": 1}
+            orders_filter,
+            {"_id": 0, "id": 1, "branch_id": 1, "created_at": 1, "shift_id": 1, "business_date": 1}
         ):
             shift = find_shift_for_record(order.get("branch_id"), order.get("created_at", ""), order.get("shift_id"))
             biz = shift["business_date"] if (shift and shift.get("business_date")) else iraq_date_from_utc(order.get("created_at"))
-            await db.orders.update_one({"id": order["id"]}, {"$set": {"business_date": biz}})
-            stats["orders_updated"] += 1
+            if order.get("business_date") != biz:
+                await db.orders.update_one({"id": order["id"]}, {"$set": {"business_date": biz}})
+                stats["orders_updated"] += 1
         
         # 4) ترحيل المصاريف
+        expenses_filter = {"tenant_id": tenant_id}
+        if not force:
+            expenses_filter["business_date"] = {"$exists": False}
         async for exp in db.expenses.find(
-            {"tenant_id": tenant_id, "business_date": {"$exists": False}},
-            {"_id": 0, "id": 1, "branch_id": 1, "created_at": 1, "date": 1}
+            expenses_filter,
+            {"_id": 0, "id": 1, "branch_id": 1, "created_at": 1, "date": 1, "business_date": 1}
         ):
             shift = find_shift_for_record(exp.get("branch_id"), exp.get("created_at", ""))
             if shift and shift.get("business_date"):
                 biz = shift["business_date"]
             else:
                 biz = exp.get("date") or iraq_date_from_utc(exp.get("created_at"))
-            await db.expenses.update_one({"id": exp["id"]}, {"$set": {"business_date": biz}})
-            stats["expenses_updated"] += 1
+            if exp.get("business_date") != biz:
+                await db.expenses.update_one({"id": exp["id"]}, {"$set": {"business_date": biz}})
+                stats["expenses_updated"] += 1
         
         # 5) ترحيل السلف
         async for adv in db.advances.find(

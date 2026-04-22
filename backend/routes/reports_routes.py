@@ -386,6 +386,7 @@ async def get_expenses_report(
         by_cashier[cashier]["count"] += 1
         by_cashier[cashier]["by_category"][cat] = by_cashier[cashier]["by_category"].get(cat, 0) + e["amount"]
         by_cashier[cashier]["items"].append({
+            "id": e.get("id"),
             "description": e.get("description", ""),
             "amount": e["amount"],
             "category": cat,

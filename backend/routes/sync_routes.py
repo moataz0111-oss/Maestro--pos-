@@ -11,7 +11,9 @@ import jwt
 import uuid
 import json
 import httpx
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
+
+from .shared import resolve_business_date
 
 router = APIRouter(prefix="/sync", tags=["Sync"])
 
@@ -159,7 +161,8 @@ async def sync_order(order: OfflineOrder, current_user: dict = Depends(get_curre
             "is_offline_order": True,
             "synced_at": datetime.now(timezone.utc).isoformat(),
             "created_at": order.created_at or datetime.now(timezone.utc).isoformat(),
-            "updated_at": datetime.now(timezone.utc).isoformat()
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+            "business_date": await resolve_business_date(tenant_id, order.branch_id or current_user.get("branch_id"))
         }
         
         # حفظ الطلب

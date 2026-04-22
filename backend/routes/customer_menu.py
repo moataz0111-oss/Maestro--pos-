@@ -4,11 +4,13 @@ Customer Menu API - واجهة برمجة تطبيق قائمة العملاء
 """
 from fastapi import APIRouter, HTTPException, Depends
 from typing import List, Optional, Dict
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from pydantic import BaseModel
 import uuid
 import secrets
 import hashlib
+
+from .shared import resolve_business_date
 
 router = APIRouter(prefix="/customer", tags=["Customer Menu"])
 
@@ -324,6 +326,9 @@ async def get_customer_order_routes(db):
         )
         order_number = counter.get("seq", 1)
         
+        # تحديد business_date من الوردية المفتوحة الحالية للفرع
+        order_business_date = await resolve_business_date(tenant_id, order.branch_id)
+        
         # إنشاء الطلب
         order_doc = {
             "id": str(uuid.uuid4()),
@@ -346,6 +351,7 @@ async def get_customer_order_routes(db):
             "payment_status": "pending",  # pending, paid, failed
             "status": "pending",
             "source": "customer_app",
+            "business_date": order_business_date,
             "created_at": datetime.now(timezone.utc).isoformat()
         }
         
