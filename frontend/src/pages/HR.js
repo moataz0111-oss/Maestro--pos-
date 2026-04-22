@@ -1164,6 +1164,56 @@ export default function HR() {
     }
   };
 
+  // احتساب رواتب جميع الموظفين بالجملة (Bulk Calculate Payroll)
+  const [bulkCalculating, setBulkCalculating] = useState(false);
+  const bulkCalculatePayroll = async () => {
+    const pendingEmployees = (filteredEmployees || []).filter(
+      emp => !payrolls.some(p => p.employee_id === emp.id && p.month === selectedMonth)
+    );
+    if (pendingEmployees.length === 0) {
+      toast.info(t('لا يوجد موظفين بانتظار احتساب الراتب'));
+      return;
+    }
+    if (!window.confirm(t(`سيتم احتساب وحفظ رواتب ${pendingEmployees.length} موظف لشهر ${selectedMonth}. هل أنت متأكد؟`))) return;
+    
+    setBulkCalculating(true);
+    const token = localStorage.getItem('token');
+    let successCount = 0;
+    let failCount = 0;
+    try {
+      for (const emp of pendingEmployees) {
+        try {
+          const calcRes = await axios.post(
+            `${API}/payroll/calculate?employee_id=${emp.id}&month=${selectedMonth}`,
+            {},
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+          const preview = calcRes.data;
+          await axios.post(
+            `${API}/payroll`,
+            {
+              employee_id: preview.employee_id,
+              month: preview.month,
+              basic_salary: preview.basic_salary,
+              total_deductions: preview.total_deductions,
+              total_bonuses: preview.total_bonuses,
+              advance_deduction: preview.advance_deduction,
+              net_salary: preview.net_salary
+            },
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+          successCount++;
+        } catch (e) {
+          failCount++;
+        }
+      }
+      toast.success(t(`تم احتساب ${successCount} كشف راتب${failCount > 0 ? ` (${failCount} فشل)` : ''}`));
+      fetchData();
+    } finally {
+      setBulkCalculating(false);
+    }
+  };
+
   // تصدير تقرير الرواتب الشامل
   const exportPayrollReport = async (format = 'excel') => {
     try {
@@ -2776,6 +2826,21 @@ export default function HR() {
               <CardHeader className="flex flex-row items-center justify-between flex-wrap gap-2">
                 <CardTitle>{t('كشوفات الرواتب')} - {dateLabel}</CardTitle>
                 <div className="flex items-center gap-2">
+                  <Button
+                    variant="default"
+                    size="sm"
+                    className="gap-2"
+                    onClick={bulkCalculatePayroll}
+                    disabled={bulkCalculating}
+                    data-testid="bulk-calculate-payroll-btn"
+                  >
+                    {bulkCalculating ? (
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                      <Calculator className="h-4 w-4" />
+                    )}
+                    {t('احتساب الرواتب بالجملة')}
+                  </Button>
                   <Badge className="bg-primary/10 text-primary" data-testid="payroll-count-badge">
                     {filteredPayrolls.length} {t('كشف')} / {employees.length} {t('موظف')}
                   </Badge>

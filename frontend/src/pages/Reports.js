@@ -208,6 +208,59 @@ const ComprehensiveReportTab = ({
   onStartDateChange,
   onEndDateChange
 }) => {
+  // فترة مختارة (dropdown) - تحسب تلقائياً startDate و endDate
+  const [period, setPeriod] = useState('today');
+  
+  // حساب نطاق التاريخ بناءً على الفترة المختارة
+  const computeDateRange = (p) => {
+    const now = new Date();
+    const fmt = (d) => d.toISOString().split('T')[0];
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    
+    switch (p) {
+      case 'today':
+        return { start: fmt(today), end: fmt(today) };
+      case 'yesterday': {
+        const y = new Date(today); y.setDate(y.getDate() - 1);
+        return { start: fmt(y), end: fmt(y) };
+      }
+      case 'week': {
+        const start = new Date(today); start.setDate(start.getDate() - 6);
+        return { start: fmt(start), end: fmt(today) };
+      }
+      case 'month': {
+        const start = new Date(today.getFullYear(), today.getMonth(), 1);
+        return { start: fmt(start), end: fmt(today) };
+      }
+      case 'last_month': {
+        const lastDayPrev = new Date(today.getFullYear(), today.getMonth(), 0);
+        const firstDayPrev = new Date(lastDayPrev.getFullYear(), lastDayPrev.getMonth(), 1);
+        return { start: fmt(firstDayPrev), end: fmt(lastDayPrev) };
+      }
+      case 'six_months': {
+        const start = new Date(today); start.setMonth(start.getMonth() - 6);
+        return { start: fmt(start), end: fmt(today) };
+      }
+      case 'year': {
+        const start = new Date(today); start.setFullYear(start.getFullYear() - 1);
+        return { start: fmt(start), end: fmt(today) };
+      }
+      default:
+        return null; // custom
+    }
+  };
+  
+  // تطبيق الفترة على startDate/endDate عند تغيير الـ dropdown
+  const handlePeriodChange = (p) => {
+    setPeriod(p);
+    if (p === 'custom') return;
+    const range = computeDateRange(p);
+    if (range) {
+      onStartDateChange(range.start);
+      onEndDateChange(range.end);
+      setTimeout(() => fetchAllReports(), 100);
+    }
+  };
   const handlePrint = () => {
     printComprehensiveReport(
       {
@@ -273,31 +326,54 @@ const ComprehensiveReportTab = ({
         {/* فلاتر التاريخ والفرع */}
         <div className="flex flex-wrap items-end gap-4 pt-2 border-t border-border/30">
           <div>
-            <Label className="text-xs text-muted-foreground">{t('من تاريخ')}</Label>
-            <Input
-              type="date"
-              value={startDate}
-              onChange={(e) => {
-                onStartDateChange(e.target.value);
-                // جلب البيانات بعد التغيير
-                setTimeout(() => fetchAllReports(), 100);
-              }}
-              className="mt-1 w-[150px]"
-            />
+            <Label className="text-xs text-muted-foreground">{t('الفترة')}</Label>
+            <Select value={period} onValueChange={handlePeriodChange}>
+              <SelectTrigger className="mt-1 w-[160px]" data-testid="comprehensive-period-select">
+                <Clock className="h-4 w-4 ml-2" />
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="today">{t('اليوم')}</SelectItem>
+                <SelectItem value="yesterday">{t('أمس')}</SelectItem>
+                <SelectItem value="week">{t('هذا الأسبوع')}</SelectItem>
+                <SelectItem value="month">{t('هذا الشهر')}</SelectItem>
+                <SelectItem value="last_month">{t('الشهر السابق')}</SelectItem>
+                <SelectItem value="six_months">{t('6 أشهر')}</SelectItem>
+                <SelectItem value="year">{t('سنة')}</SelectItem>
+                <SelectItem value="custom">{t('مخصص')}</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
-          <div>
-            <Label className="text-xs text-muted-foreground">{t('إلى تاريخ')}</Label>
-            <Input
-              type="date"
-              value={endDate}
-              onChange={(e) => {
-                onEndDateChange(e.target.value);
-                // جلب البيانات بعد التغيير
-                setTimeout(() => fetchAllReports(), 100);
-              }}
-              className="mt-1 w-[150px]"
-            />
-          </div>
+          {period === 'custom' && (
+            <>
+              <div>
+                <Label className="text-xs text-muted-foreground">{t('من تاريخ')}</Label>
+                <Input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => {
+                    onStartDateChange(e.target.value);
+                    setTimeout(() => fetchAllReports(), 100);
+                  }}
+                  className="mt-1 w-[150px]"
+                  data-testid="comprehensive-start-date"
+                />
+              </div>
+              <div>
+                <Label className="text-xs text-muted-foreground">{t('إلى تاريخ')}</Label>
+                <Input
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => {
+                    onEndDateChange(e.target.value);
+                    setTimeout(() => fetchAllReports(), 100);
+                  }}
+                  className="mt-1 w-[150px]"
+                  data-testid="comprehensive-end-date"
+                />
+              </div>
+            </>
+          )}
           <div>
             <Label className="text-xs text-muted-foreground">{t('الفرع')}</Label>
             <Select value={selectedBranchId || 'all'} onValueChange={(val) => {
@@ -643,7 +719,7 @@ const SmartReportTab = ({ t, formatPrice, selectedBranchId, branches, getBranchI
           </Select>
           {/* اختيار الفترة */}
           <Select value={period} onValueChange={setPeriod}>
-            <SelectTrigger className="w-36">
+            <SelectTrigger className="w-36" data-testid="smart-report-period-select">
               <Clock className="h-4 w-4 ml-2" />
               <SelectValue />
             </SelectTrigger>
@@ -652,6 +728,9 @@ const SmartReportTab = ({ t, formatPrice, selectedBranchId, branches, getBranchI
               <SelectItem value="yesterday">{t('أمس')}</SelectItem>
               <SelectItem value="week">{t('هذا الأسبوع')}</SelectItem>
               <SelectItem value="month">{t('هذا الشهر')}</SelectItem>
+              <SelectItem value="last_month">{t('الشهر السابق')}</SelectItem>
+              <SelectItem value="six_months">{t('6 أشهر')}</SelectItem>
+              <SelectItem value="year">{t('سنة')}</SelectItem>
             </SelectContent>
           </Select>
           <Button onClick={fetchSmartReport} disabled={loading} variant="outline" size="sm">
@@ -2366,6 +2445,25 @@ export default function Reports() {
   const [creditReport, setCreditReport] = useState(null);
   const [refundsReport, setRefundsReport] = useState(null);
   const [cardReport, setCardReport] = useState(null);
+  // فلتر كاشير محدد لتقرير المصاريف
+  const [cashiers, setCashiers] = useState([]);
+  const [selectedCashierId, setSelectedCashierId] = useState('');
+
+  // جلب قائمة الكاشيرين/الموظفين (للفلتر)
+  useEffect(() => {
+    const fetchCashiers = async () => {
+      try {
+        const res = await axios.get(`${API}/users`);
+        const allUsers = Array.isArray(res.data) ? res.data : [];
+        // إظهار الكاشيرين والمشرفين والمدراء فقط
+        const filtered = allUsers.filter(u => ['cashier', 'supervisor', 'manager', 'branch_manager'].includes(u.role));
+        setCashiers(filtered);
+      } catch (e) {
+        setCashiers([]);
+      }
+    };
+    fetchCashiers();
+  }, []);
 
   // جلب إعدادات لوحة المعلومات للتحقق من الصلاحيات
   useEffect(() => {
@@ -2436,7 +2534,9 @@ export default function Reports() {
           setInventoryReport(invRes.data);
           break;
         case 'expenses':
-          const expRes = await axios.get(`${API}/reports/expenses`, { params });
+          const expRes = await axios.get(`${API}/reports/expenses`, { 
+            params: { ...params, ...(selectedCashierId && { cashier_id: selectedCashierId }) } 
+          });
           setExpensesReport(expRes.data);
           break;
         case 'profit':
@@ -2993,6 +3093,27 @@ export default function Reports() {
 
           {/* Expenses Report */}
           <TabsContent value="expenses">
+            {/* فلتر الكاشير */}
+            <div className="mb-4 flex items-end gap-3">
+              <div>
+                <Label className="text-xs text-muted-foreground">{t('فلتر حسب الكاشير')}</Label>
+                <Select value={selectedCashierId || 'all'} onValueChange={(val) => {
+                  setSelectedCashierId(val === 'all' ? '' : val);
+                  setTimeout(() => fetchReports(), 50);
+                }}>
+                  <SelectTrigger className="mt-1 w-[220px]" data-testid="expenses-cashier-filter">
+                    <User className="h-4 w-4 ml-2" />
+                    <SelectValue placeholder={t('جميع الكاشيرين')} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">{t('جميع الكاشيرين')}</SelectItem>
+                    {cashiers?.map(c => (
+                      <SelectItem key={c.id} value={c.id}>{c.full_name || c.username}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
             {expensesReport && (
               <div className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

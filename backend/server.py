@@ -12793,12 +12793,24 @@ async def get_sales_report(
     
     # تحديد الفترة
     now = datetime.now(timezone.utc)
+    end_dt = None
     if period == "today":
         start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    elif period == "yesterday":
+        y = now - timedelta(days=1)
+        start = y.replace(hour=0, minute=0, second=0, microsecond=0)
+        end_dt = y.replace(hour=23, minute=59, second=59, microsecond=999999)
     elif period == "week":
         start = now - timedelta(days=7)
     elif period == "month":
         start = now - timedelta(days=30)
+    elif period == "last_month":
+        # الشهر السابق كاملاً (من اليوم الأول للشهر الماضي إلى آخر يوم)
+        first_of_this_month = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        end_dt = first_of_this_month - timedelta(microseconds=1)
+        start = end_dt.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    elif period == "six_months":
+        start = now - timedelta(days=180)
     elif period == "year":
         start = now - timedelta(days=365)
     elif period == "custom" and start_date:
@@ -12807,7 +12819,9 @@ async def get_sales_report(
         start = now.replace(hour=0, minute=0, second=0, microsecond=0)
     
     query["created_at"] = {"$gte": start.isoformat()}
-    if end_date:
+    if end_dt:
+        query["created_at"]["$lte"] = end_dt.isoformat()
+    elif end_date:
         query["created_at"]["$lte"] = end_date
     
     # استبعاد الطلبات الملغية والمرتجعة من التقارير
@@ -13565,14 +13579,31 @@ async def get_products_report(
     
     # تحديد الفترة
     now = datetime.now(timezone.utc)
-    if period == "week":
+    end_dt = None
+    if period == "today":
+        start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    elif period == "yesterday":
+        y = now - timedelta(days=1)
+        start = y.replace(hour=0, minute=0, second=0, microsecond=0)
+        end_dt = y.replace(hour=23, minute=59, second=59, microsecond=999999)
+    elif period == "week":
         start = now - timedelta(days=7)
     elif period == "month":
         start = now - timedelta(days=30)
+    elif period == "last_month":
+        first_of_this_month = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        end_dt = first_of_this_month - timedelta(microseconds=1)
+        start = end_dt.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    elif period == "six_months":
+        start = now - timedelta(days=180)
+    elif period == "year":
+        start = now - timedelta(days=365)
     else:
         start = now - timedelta(days=30)
     
     query["created_at"] = {"$gte": start.isoformat()}
+    if end_dt:
+        query["created_at"]["$lte"] = end_dt.isoformat()
     
     orders = await db.orders.find(query, {"_id": 0, "items": 1}).to_list(10000)
     

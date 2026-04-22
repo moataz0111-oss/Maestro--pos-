@@ -17,6 +17,34 @@ from .shared import (
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/reports", tags=["Reports"])
 
+
+def _apply_business_date_filter(query: dict, start_date: Optional[str], end_date: Optional[str], legacy_field: str = "created_at") -> dict:
+    """يُضيف فلتر business_date (مع fallback للحقل القديم للسجلات التي لا تملك business_date).
+    يُعدّل الـ query بإضافة $or أو $and حسب السياق."""
+    if not start_date and not end_date:
+        return query
+    biz_range = {}
+    legacy_range = {}
+    if start_date:
+        biz_range["$gte"] = start_date[:10] if len(start_date) >= 10 else start_date
+        legacy_range["$gte"] = start_date
+    if end_date:
+        end_iso = end_date + "T23:59:59" if "T" not in end_date else end_date
+        biz_range["$lte"] = end_date[:10] if len(end_date) >= 10 else end_date
+        legacy_range["$lte"] = end_iso
+    date_or = [
+        {"business_date": biz_range},
+        {"business_date": {"$exists": False}, legacy_field: legacy_range}
+    ]
+    if "$or" in query and "$and" not in query:
+        # دمج $or قديم مع $or الجديد عبر $and
+        query["$and"] = [{"$or": query.pop("$or")}, {"$or": date_or}]
+    elif "$and" in query:
+        query["$and"].append({"$or": date_or})
+    else:
+        query["$or"] = date_or
+    return query
+
 # ==================== SALES REPORT ====================
 @router.get("/sales")
 async def get_sales_report(
@@ -44,10 +72,7 @@ async def get_sales_report(
     elif branch_id:
         query["branch_id"] = branch_id
     
-    if start_date:
-        query["created_at"] = {"$gte": start_date}
-    if end_date:
-        query.setdefault("created_at", {})["$lte"] = end_date + "T23:59:59"
+    query = _apply_business_date_filter(query, start_date, end_date)
     
     # تحسين الأداء: استخدام projection لجلب الحقول المطلوبة فقط
     projection = {
@@ -236,10 +261,7 @@ async def get_purchases_report(
     elif branch_id:
         query["branch_id"] = branch_id
     
-    if start_date:
-        query["created_at"] = {"$gte": start_date}
-    if end_date:
-        query.setdefault("created_at", {})["$lte"] = end_date + "T23:59:59"
+    query = _apply_business_date_filter(query, start_date, end_date)
     
     purchases = await db.purchases.find(query, {"_id": 0}).to_list(1000)
     
@@ -312,6 +334,7 @@ async def get_inventory_report(branch_id: Optional[str] = None, current_user: di
 @router.get("/expenses")
 async def get_expenses_report(
     branch_id: Optional[str] = None,
+    cashier_id: Optional[str] = None,
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
     current_user: dict = Depends(get_current_user)
@@ -333,12 +356,14 @@ async def get_expenses_report(
     elif branch_id:
         query["branch_id"] = branch_id
     
+    # فلترة حسب الكاشير المحدد
+    if cashier_id:
+        query["created_by"] = cashier_id
+    
     # استبعاد المرتجعات من المصاريف نهائياً
     query["category"] = {"$ne": "refund"}
-    if start_date:
-        query["date"] = {"$gte": start_date}
-    if end_date:
-        query.setdefault("date", {})["$lte"] = end_date
+    # فلتر بالـ business_date مع fallback لـ date القديم
+    query = _apply_business_date_filter(query, start_date, end_date, legacy_field="date")
     
     expenses = await db.expenses.find(query, {"_id": 0}).to_list(1000)
     
@@ -402,10 +427,7 @@ async def get_profit_loss_report(
     elif branch_id:
         sales_query["branch_id"] = branch_id
     
-    if start_date:
-        sales_query["created_at"] = {"$gte": start_date}
-    if end_date:
-        sales_query.setdefault("created_at", {})["$lte"] = end_date + "T23:59:59"
+    sales_query = _apply_business_date_filter(sales_query, start_date, end_date)
     
     orders = await db.orders.find(sales_query, {"_id": 0}).to_list(10000)
     
@@ -571,10 +593,7 @@ async def get_delivery_credits_report(
     
     if delivery_app:
         query["delivery_app"] = delivery_app
-    if start_date:
-        query["created_at"] = {"$gte": start_date}
-    if end_date:
-        query.setdefault("created_at", {})["$lte"] = end_date + "T23:59:59"
+    query = _apply_business_date_filter(query, start_date, end_date)
     
     orders = await db.orders.find(query, {"_id": 0}).to_list(10000)
     
@@ -708,10 +727,7 @@ async def get_products_report(
     elif branch_id:
         order_query["branch_id"] = branch_id
     
-    if start_date:
-        order_query["created_at"] = {"$gte": start_date}
-    if end_date:
-        order_query.setdefault("created_at", {})["$lte"] = end_date + "T23:59:59"
+    order_query = _apply_business_date_filter(order_query, start_date, end_date)
     
     orders = await db.orders.find(order_query, {"_id": 0}).to_list(10000)
     
