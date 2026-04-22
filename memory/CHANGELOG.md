@@ -85,3 +85,38 @@
 - 14/15 pytest tests PASS (1 skipped — no open shift)
 - 32 historical closed shifts had total_expenses recomputed on startup
 - Migration verified idempotent (second run = 0 updates)
+
+## 2026-04-22 (المتابعة) — فلاتر وتحسينات التقارير + احتساب الرواتب بالجملة
+
+### Comprehensive Report UX Fix
+- استبدال حقلي التاريخ اليدوية في "التقرير الشامل" بـ dropdown "الفترة" (مثل "التقرير الذكي"):
+  - اليوم، أمس، هذا الأسبوع، هذا الشهر، الشهر السابق، 6 أشهر، سنة، مخصص
+  - حساب النطاق تلقائياً عند تغيير الفترة (JavaScript client-side)
+  - عند اختيار "مخصص" تظهر حقول التاريخ اليدوية
+
+### Smart Report — New Period Options
+- إضافة 3 خيارات جديدة للـ Smart Report: الشهر السابق، 6 أشهر، سنة (مضافة لليوم وأمس والأسبوع والشهر القائمة)
+- Backend `/api/smart-reports/sales` & `/api/smart-reports/products`:
+  - `yesterday`: يوم أمس (00:00 → 23:59 UTC)
+  - `last_month`: الشهر الميلادي السابق كاملاً
+  - `six_months`: 180 يوم
+  - `year`: 365 يوم
+
+### Expenses Report — Cashier Filter (P1)
+- Backend `/api/reports/expenses` يقبل `cashier_id` جديد (يفلتر حسب `created_by`)
+- Frontend: dropdown لاختيار الكاشير فوق تبويب المصاريف
+
+### Bulk Payroll Calculation (P1)
+- زر "احتساب الرواتب بالجملة" في تبويب الرواتب بـ HR
+- يحتسب ويحفظ كشف راتب لكل موظف لا يملك واحداً في الشهر الحالي
+- مع toast نتيجة (نجاح/فشل لكل موظف)
+
+### business_date Filter Extension
+- `/api/reports/sales, /purchases, /products, /expenses, /profit-loss, /delivery-credits` الآن تفلتر بـ `business_date` مع fallback لـ `created_at`/`date` للسجلات القديمة
+- Helper مشترك: `_apply_business_date_filter(query, start_date, end_date)`
+
+### Testing
+- 36/36 pytest tests PASS (iteration 167)
+- جميع الـ endpoints الـ 9 المحدّثة تعمل بدون أخطاء MongoDB $or/$and conflicts
+- Migration تبقى idempotent
+
