@@ -61,12 +61,17 @@ async def get_pending_jobs(
 ):
     """الوسيط يسحب أوامر الطباعة المعلقة + يسجل heartbeat.
     
-    ⚠️ **حماية مهمة**: إذا لم يُرسَل branch_id، يتم رفض الطلب لمنع الوكلاء من سحب
-    أوامر طباعة فرع آخر (خصوصاً عند وجود عدة فروع في نفس النظام).
+    منطق مرن يدعم الوسطاء القديمة والجديدة بدون كسر:
+    - إذا أرسل الوسيط branch_id صحيح → يسحب أوامر ذلك الفرع فقط (عزل تام)
+    - إذا لم يُرسله أو كان placeholder فارغ → يسحب الأوامر غير المُرتبطة بفرع (backward compat)
     """
     db = get_database()
     
-    # تسجيل heartbeat منفصل لكل (device_id, branch_id) — لا تتعارض الفروع
+    # تنظيف قيم الـ placeholder المُزعجة (إذا لم يُحقن {{BRANCH_ID}})
+    if branch_id and (branch_id.startswith("{{") or branch_id == "default"):
+        branch_id = ""
+    
+    # تسجيل heartbeat منفصل لكل (device_id, branch_id)
     if agent_version or device_id:
         hb_key = f"{device_id or 'default'}__{branch_id or 'nobranch'}"
         await db.agent_heartbeats.update_one(
@@ -82,11 +87,14 @@ async def get_pending_jobs(
             upsert=True
         )
     
-    # حماية صارمة: لا بد من branch_id لمنع تداخل الفروع
-    if not branch_id:
-        return {"jobs": [], "count": 0, "warning": "branch_id required"}
-    
-    query = {"status": "pending", "branch_id": branch_id}
+    # بناء الاستعلام: يدعم العزل عند توفر branch_id + يعمل مع الوسطاء القديمة
+    if branch_id:
+        # وسيط جديد مع branch_id → يأخذ فقط أوامر فرعه (عزل تام)
+        query = {"status": "pending", "branch_id": branch_id}
+    else:
+        # وسيط قديم (بدون branch_id) → السلوك التقليدي: يأخذ كل المعلقة
+        # ⚠️ مع عميل متعدد الفروع، هذا قد يؤدي لخلط — يجب تحديث الوسيط لإصلاح العزل
+        query = {"status": "pending"}
     
     jobs = await db.print_queue.find(
         query, {"_id": 0}

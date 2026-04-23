@@ -15,7 +15,7 @@ import os
 
 BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', '').rstrip('/')
 if not BASE_URL:
-    BASE_URL = "https://financial-reconcile-2.preview.emergentagent.com"
+    BASE_URL = "https://print-agent-v2.preview.emergentagent.com"
 
 # Test credentials from test_credentials.md
 ADMIN_EMAIL = "hanialdujaili@gmail.com"

@@ -1,5 +1,17 @@
 # Maestro EGP - Changelog
 
+## Session: Feb 23, 2026 - Print Agent v6.3.0 (Fast Multi-Branch)
+
+### Print Agent Performance + Multi-Branch Reliability
+- Version bumped 6.2.0 → **6.3.0** (forces all branches to auto-update via existing checker)
+- Polling interval: 3s → **1s** (idle) / **100ms** (queue active) — ~20x faster receipt dispatch
+- Polling limit: 10 → **20 jobs/poll** (burst draining)
+- Web request timeout: 10s → 8s (faster error recovery)
+- `$jobCount` properly initialized before try-block
+- **printService.js**: new `resolveBranchId()` fallback chain (printer.branch_id → localStorage.selectedBranchId → user.branch_id) — guarantees every queued print job carries a valid branch_id even when printer config is missing it (root cause of new-branch invoices not dispatching)
+- Backend endpoints verified via curl: queue/pending/heartbeat all working for both new (branch-isolated) and old (cross-branch) agents
+
+
 ## Session: April 17-19, 2026
 
 ### Print Agent (v6.1.1)

@@ -2036,10 +2036,12 @@ public class JobReceiptRenderer {
             }
             
             while ($true) {
+                $jobCount = 0
                 try {
                     # إرسال agent_version و device_id و branch_id (لعزل الفروع)
-                    $r = Invoke-WebRequest -Uri "$apiUrl/api/print-queue/pending?limit=10&agent_version={{AGENT_VERSION}}&device_id={{BRANCH_ID}}&branch_id={{BRANCH_ID}}" -UseBasicParsing -TimeoutSec 10
+                    $r = Invoke-WebRequest -Uri "$apiUrl/api/print-queue/pending?limit=20&agent_version={{AGENT_VERSION}}&device_id={{BRANCH_ID}}&branch_id={{BRANCH_ID}}" -UseBasicParsing -TimeoutSec 8
                     $data = $r.Content | ConvertFrom-Json
+                    $jobCount = if ($data.jobs) { @($data.jobs).Count } else { 0 }
                     
                     foreach ($job in $data.jobs) {
                         try {
@@ -2131,7 +2133,12 @@ public class JobReceiptRenderer {
                 } catch {
                     # Polling error - silent
                 }
-                Start-Sleep -Seconds 3
+                # سرعة عالية: لو في جوبز، بول فوري (0.1 ثانية). لو فاضي، انتظر 1 ثانية
+                if ($jobCount -gt 0) {
+                    Start-Sleep -Milliseconds 100
+                } else {
+                    Start-Sleep -Seconds 1
+                }
             }
         } -ArgumentList $backendUrl, $agentLog
         "$(Get-Date) - Print Queue polling job started (ID: $($pollingJob.Id))" | Out-File $agentLog -Append

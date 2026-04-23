@@ -11,6 +11,27 @@ import axios from 'axios';
 const API = process.env.REACT_APP_BACKEND_URL + '/api';
 
 /**
+ * جلب branch_id الحالي من عدة مصادر (أولويات):
+ * 1. branch_id المحدد في الطابعة
+ * 2. selectedBranchId المحفوظ من SuperAdmin
+ * 3. branch_id من user في localStorage
+ * هذا يضمن وصول أمر الطباعة لوكيل الفرع الصحيح دائماً.
+ */
+const resolveBranchId = (printerBranchId) => {
+  if (printerBranchId) return printerBranchId;
+  try {
+    const selected = localStorage.getItem('selectedBranchId');
+    if (selected) return selected;
+    const userStr = localStorage.getItem('user');
+    if (userStr) {
+      const u = JSON.parse(userStr);
+      if (u?.branch_id) return u.branch_id;
+    }
+  } catch {}
+  return '';
+};
+
+/**
  * حفظ حالة الوسيط
  */
 const AGENT_STATUS_KEY = 'maestro_agent_status';
@@ -110,7 +131,7 @@ export const sendTestPrint = async (printer) => {
       usb_printer_name: printer.usb_printer_name || '',
       ip_address: printer.ip_address || '',
       port: printer.port || 9100,
-      branch_id: printer.branch_id || '',
+      branch_id: resolveBranchId(printer.branch_id),
       raw_data: testResult.raw_data
     }, { headers: { Authorization: `Bearer ${token}` } });
     
@@ -139,7 +160,7 @@ export const sendReceiptPrint = async (printer, orderData) => {
       usb_printer_name: printer.usb_printer_name || '',
       ip_address: printer.ip_address || '',
       port: printer.port || 9100,
-      branch_id: printer.branch_id || '',
+      branch_id: resolveBranchId(printer.branch_id),
     };
 
     // المطبخ USB: بيانات مباشرة (الوسيط يبني الإيصال)

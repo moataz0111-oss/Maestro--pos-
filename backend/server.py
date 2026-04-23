@@ -8680,7 +8680,7 @@ async def delete_printer(printer_id: str, current_user: dict = Depends(get_curre
 
 @api_router.post("/printers/{printer_id}/test")
 async def test_printer_connection(printer_id: str, current_user: dict = Depends(get_current_user)):
-    """اختبار اتصال الطابعة"""
+    """اختبار اتصال الطابعة (سريع - 1.5 ثانية timeout)"""
     import socket
     
     # التحقق من أن الطابعة تنتمي لنفس العميل
@@ -8689,37 +8689,48 @@ async def test_printer_connection(printer_id: str, current_user: dict = Depends(
     if not printer:
         raise HTTPException(status_code=404, detail="الطابعة غير موجودة")
     
+    connection_type = printer.get("connection_type", "network")
     ip = printer.get("ip_address", "")
     port = printer.get("port", 9100)
     
+    # طابعة USB: نعتمد على حالة الوسيط (لا معنى لفحص socket)
+    if connection_type == "usb" or not ip:
+        agent_hb = await db.agent_heartbeats.find_one(
+            {"branch_id": printer.get("branch_id", "")},
+            {"_id": 0, "last_seen": 1},
+            sort=[("last_seen", -1)]
+        )
+        if agent_hb:
+            try:
+                last_dt = datetime.fromisoformat(agent_hb["last_seen"].replace("Z", "+00:00"))
+                age = (datetime.now(timezone.utc) - last_dt).total_seconds()
+                if age < 60:
+                    await db.printers.update_one(query, {"$set": {"is_online": True, "last_check": datetime.now(timezone.utc).isoformat()}})
+                    return {"status": "online", "message": "الوسيط متصل - الطابعة جاهزة"}
+            except Exception:
+                pass
+        await db.printers.update_one(query, {"$set": {"is_online": False, "last_check": datetime.now(timezone.utc).isoformat()}})
+        return {"status": "offline", "message": "الوسيط غير متصل - شغّل الوسيط على جهاز الكاشير"}
+    
+    # طابعة شبكية: فحص socket سريع
     try:
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.settimeout(3)  # timeout 3 ثواني
+        sock.settimeout(1.5)  # timeout أسرع لتحسين UX
         result = sock.connect_ex((ip, port))
         sock.close()
         
         if result == 0:
-            # تحديث حالة الطابعة
-            await db.printers.update_one(
-                query,
-                {"$set": {"is_online": True, "last_check": datetime.now(timezone.utc).isoformat()}}
-            )
+            await db.printers.update_one(query, {"$set": {"is_online": True, "last_check": datetime.now(timezone.utc).isoformat()}})
             return {"status": "online", "message": "الطابعة متصلة"}
         else:
-            await db.printers.update_one(
-                query,
-                {"$set": {"is_online": False, "last_check": datetime.now(timezone.utc).isoformat()}}
-            )
-            return {"status": "offline", "message": "الطابعة غير متصلة"}
+            await db.printers.update_one(query, {"$set": {"is_online": False, "last_check": datetime.now(timezone.utc).isoformat()}})
+            return {"status": "offline", "message": "الطابعة غير متصلة - تحقق من IP"}
     except socket.error as e:
-        await db.printers.update_one(
-            query,
-            {"$set": {"is_online": False, "last_check": datetime.now(timezone.utc).isoformat()}}
-        )
+        await db.printers.update_one(query, {"$set": {"is_online": False, "last_check": datetime.now(timezone.utc).isoformat()}})
         return {"status": "error", "message": f"خطأ في الاتصال: {str(e)}"}
 
 
-PRINT_AGENT_VERSION = "6.2.0"
+PRINT_AGENT_VERSION = "6.3.0"
 
 @api_router.get("/print-agent-version")
 async def get_print_agent_version():
@@ -17847,7 +17858,7 @@ async def get_menu_link(request: Request, current_user: dict = Depends(get_curre
         base_url = f"{parsed.scheme}://{parsed.netloc}"
     else:
         # fallback للـ environment variable
-        base_url = os.environ.get('REACT_APP_BACKEND_URL', 'https://financial-reconcile-2.preview.emergentagent.com')
+        base_url = os.environ.get('REACT_APP_BACKEND_URL', 'https://print-agent-v2.preview.emergentagent.com')
     
     menu_url = f"{base_url}/menu/{tenant.get('menu_slug', tenant_id)}"
     
