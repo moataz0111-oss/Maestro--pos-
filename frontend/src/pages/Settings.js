@@ -105,7 +105,8 @@ import {
   Filter,
   Download,
   LogIn,
-  LogOut
+  LogOut,
+  ChevronDown
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -145,6 +146,140 @@ const API = API_URL;
 // Permissions are now defined below in the component with the new comprehensive structure
 
 // PERMISSION_GROUPS is now defined above with the new permissions structure
+
+// =================== لوحة مراقبة الوسطاء (Agents Monitor) ===================
+const AgentsMonitorPanel = ({ t }) => {
+  const [data, setData] = useState({ agents: [], summary: null });
+  const [loading, setLoading] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
+  
+  const fetchAgentsStatus = React.useCallback(async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await axios.get(`${API}/print-queue/agents-monitor`, { headers: { Authorization: `Bearer ${token}` } });
+      setData(res.data || { agents: [], summary: null });
+    } catch (e) {
+      // silent fail (UI already shows generic agent status)
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+  
+  useEffect(() => {
+    setLoading(true);
+    fetchAgentsStatus();
+    const interval = setInterval(fetchAgentsStatus, 15000); // كل 15 ثانية
+    return () => clearInterval(interval);
+  }, [fetchAgentsStatus]);
+  
+  const statusColor = (s) => {
+    if (s === 'online') return 'text-emerald-500 bg-emerald-500/10 border-emerald-500/30';
+    if (s === 'warning') return 'text-amber-500 bg-amber-500/10 border-amber-500/30';
+    if (s === 'offline') return 'text-red-500 bg-red-500/10 border-red-500/30';
+    return 'text-muted-foreground bg-muted/20 border-border/40';
+  };
+  
+  const statusLabel = (s) => {
+    if (s === 'online') return t('متصل');
+    if (s === 'warning') return t('بطيء');
+    if (s === 'offline') return t('غير متصل');
+    return t('غير مثبّت');
+  };
+  
+  const formatAge = (sec) => {
+    if (sec == null) return '-';
+    if (sec < 60) return `${sec}${t('ث')}`;
+    if (sec < 3600) return `${Math.floor(sec / 60)}${t('د')}`;
+    if (sec < 86400) return `${Math.floor(sec / 3600)}${t('س')}`;
+    return `${Math.floor(sec / 86400)}${t('ي')}`;
+  };
+  
+  if (!data.summary || data.summary.total_branches === 0) return null;
+  
+  const summary = data.summary;
+  const hasAlert = summary.offline > 0 || summary.warning > 0 || summary.not_installed > 0;
+  
+  return (
+    <div className="mb-4 rounded-xl border border-border/50 bg-card/40 overflow-hidden" data-testid="agents-monitor-panel">
+      <button
+        type="button"
+        onClick={() => setCollapsed(c => !c)}
+        className="w-full flex items-center justify-between gap-3 p-3 hover:bg-muted/20 transition-colors"
+        data-testid="agents-monitor-toggle"
+      >
+        <div className="flex items-center gap-2">
+          <div className={`h-2.5 w-2.5 rounded-full ${hasAlert ? 'bg-amber-500 animate-pulse' : 'bg-emerald-500'}`} />
+          <span className="font-semibold text-sm">{t('مراقبة وسطاء الفروع')}</span>
+          <span className="text-xs text-muted-foreground">({summary.total_branches} {t('فرع')})</span>
+        </div>
+        <div className="flex items-center gap-2 text-xs">
+          {summary.online > 0 && (
+            <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 border border-emerald-500/30" data-testid="monitor-online-count">
+              ● {summary.online} {t('متصل')}
+            </span>
+          )}
+          {summary.warning > 0 && (
+            <span className="px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-600 border border-amber-500/30" data-testid="monitor-warning-count">
+              ⚠ {summary.warning} {t('بطيء')}
+            </span>
+          )}
+          {summary.offline > 0 && (
+            <span className="px-2 py-0.5 rounded-full bg-red-500/10 text-red-600 border border-red-500/30" data-testid="monitor-offline-count">
+              ✖ {summary.offline} {t('غير متصل')}
+            </span>
+          )}
+          {summary.not_installed > 0 && (
+            <span className="px-2 py-0.5 rounded-full bg-muted/50 text-muted-foreground border border-border/50" data-testid="monitor-notinstalled-count">
+              ○ {summary.not_installed} {t('غير مثبّت')}
+            </span>
+          )}
+          <ChevronDown className={`h-4 w-4 transition-transform ${collapsed ? '' : 'rotate-180'}`} />
+        </div>
+      </button>
+      {!collapsed && (
+        <div className="border-t border-border/40 p-3 space-y-2 bg-muted/10">
+          {data.agents.length === 0 ? (
+            <p className="text-xs text-muted-foreground text-center py-2">{t('لا يوجد وسطاء مسجّلون')}</p>
+          ) : (
+            data.agents.map((a) => (
+              <div
+                key={`${a.branch_id}-${a.device_id}`}
+                className={`flex items-center justify-between gap-3 p-2.5 rounded-lg border ${statusColor(a.status)}`}
+                data-testid={`agent-row-${a.branch_id}`}
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className={`h-2 w-2 rounded-full ${a.status === 'online' ? 'bg-emerald-500 animate-pulse' : a.status === 'warning' ? 'bg-amber-500' : a.status === 'offline' ? 'bg-red-500' : 'bg-muted-foreground'}`} />
+                  <div className="min-w-0">
+                    <div className="font-medium text-sm truncate">{a.branch_name}</div>
+                    <div className="text-[10px] text-muted-foreground flex items-center gap-2">
+                      {a.version && <span>v{a.version}</span>}
+                      {a.age_seconds != null && <span>• {t('آخر اتصال')}: {formatAge(a.age_seconds)} {t('منذ')}</span>}
+                    </div>
+                  </div>
+                </div>
+                <span className="text-xs font-bold whitespace-nowrap">
+                  {statusLabel(a.status)}
+                </span>
+              </div>
+            ))
+          )}
+          <div className="flex justify-between items-center pt-2 border-t border-border/30">
+            <span className="text-[10px] text-muted-foreground">{t('تحديث تلقائي كل 15 ثانية')}</span>
+            <button
+              type="button"
+              onClick={fetchAgentsStatus}
+              disabled={loading}
+              className="text-[11px] text-primary hover:underline disabled:opacity-50"
+              data-testid="agents-monitor-refresh"
+            >
+              {loading ? t('جاري التحديث...') : t('تحديث الآن')}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
 
 export default function Settings() {
   const { user, hasRole, logout, hasPermission } = useAuth();
@@ -5088,6 +5223,9 @@ export default function Settings() {
                       )}
                     </div>
                   </div>
+                  
+                  {/* ============ لوحة مراقبة الوسطاء (كل فرع) ============ */}
+                  <AgentsMonitorPanel t={t} />
                   
                   {printers.length === 0 ? (
                     <p className="text-center text-muted-foreground py-8">{t('لا توجد طابعات مضافة')}</p>

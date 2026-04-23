@@ -167,3 +167,92 @@ async def cleanup_old_jobs(current_user: dict = Depends(get_current_user)):
         "created_at": {"$lt": cutoff}
     })
     return {"deleted": result.deleted_count}
+
+
+@router.get("/print-queue/agents-monitor")
+async def get_all_agents_status(current_user: dict = Depends(get_current_user)):
+    """لوحة مراقبة الوسطاء: حالة كل agent في كل فرع مع آخر heartbeat + version.
+    
+    تُستخدم في Settings لعرض إعلام فوري عند انقطاع أي فرع.
+    """
+    from datetime import timedelta
+    db = get_database()
+    tenant_id = get_user_tenant_id(current_user)
+    
+    # جلب جميع الفروع للـ tenant
+    branch_query = {}
+    if tenant_id:
+        branch_query["tenant_id"] = tenant_id
+    branches = await db.branches.find(branch_query, {"_id": 0, "id": 1, "name": 1}).to_list(200)
+    
+    # جلب جميع heartbeats من آخر 24 ساعة
+    now = datetime.now(timezone.utc)
+    cutoff_24h = (now - timedelta(hours=24)).isoformat()
+    heartbeats = await db.agent_heartbeats.find(
+        {"last_seen": {"$gte": cutoff_24h}},
+        {"_id": 0}
+    ).to_list(1000)
+    
+    # مطابقة كل فرع بـ heartbeat
+    result_agents = []
+    seen_branches = set()
+    
+    for hb in heartbeats:
+        hb_branch = hb.get("branch_id", "")
+        if not hb_branch or hb_branch in seen_branches:
+            continue
+        seen_branches.add(hb_branch)
+        last_seen_str = hb.get("last_seen", "")
+        try:
+            last_dt = datetime.fromisoformat(last_seen_str.replace("Z", "+00:00"))
+            age_seconds = (now - last_dt).total_seconds()
+            if age_seconds < 30:
+                status = "online"
+            elif age_seconds < 300:  # 5 minutes
+                status = "warning"
+            else:
+                status = "offline"
+        except Exception:
+            status = "offline"
+            age_seconds = None
+        
+        branch = next((b for b in branches if b.get("id") == hb_branch), None)
+        result_agents.append({
+            "branch_id": hb_branch,
+            "branch_name": branch.get("name") if branch else "فرع محذوف",
+            "device_id": hb.get("device_id", ""),
+            "version": hb.get("version", "?"),
+            "last_seen": last_seen_str,
+            "age_seconds": int(age_seconds) if age_seconds is not None else None,
+            "status": status
+        })
+    
+    # إضافة الفروع التي ليس لها heartbeat أصلاً (وسيط غير مثبّت بعد)
+    for b in branches:
+        if b.get("id") not in seen_branches:
+            result_agents.append({
+                "branch_id": b.get("id"),
+                "branch_name": b.get("name"),
+                "device_id": "",
+                "version": None,
+                "last_seen": None,
+                "age_seconds": None,
+                "status": "not_installed"
+            })
+    
+    # إحصائيات سريعة
+    online_count = sum(1 for a in result_agents if a["status"] == "online")
+    offline_count = sum(1 for a in result_agents if a["status"] == "offline")
+    warning_count = sum(1 for a in result_agents if a["status"] == "warning")
+    not_installed = sum(1 for a in result_agents if a["status"] == "not_installed")
+    
+    return {
+        "agents": result_agents,
+        "summary": {
+            "total_branches": len(branches),
+            "online": online_count,
+            "offline": offline_count,
+            "warning": warning_count,
+            "not_installed": not_installed
+        }
+    }
