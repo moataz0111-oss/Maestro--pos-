@@ -49,11 +49,15 @@ export const getSavedAgentStatus = () => {
 };
 
 /**
- * فحص حالة الوسيط الحقيقية - يسأل السيرفر عن آخر heartbeat
+ * فحص حالة الوسيط الحقيقية - يسأل السيرفر عن آخر heartbeat للفرع الحالي
  */
 export const checkAgentStatus = async () => {
   try {
-    const res = await axios.get(`${API}/print-queue/agent-status`);
+    const branchId = resolveBranchId('');
+    const url = branchId 
+      ? `${API}/print-queue/agent-status?branch_id=${encodeURIComponent(branchId)}`
+      : `${API}/print-queue/agent-status`;
+    const res = await axios.get(url);
     const data = res.data;
     saveAgentStatus(data.online, data.version);
     return data.online;
@@ -77,8 +81,12 @@ export const checkAgentVersionMatch = async (backendUrl) => {
     const versionRes = await axios.get(`${backendUrl}/api/print-agent-version`);
     const latestVersion = versionRes.data?.version || '?';
     
-    // جلب النسخة الفعلية للوسيط من الـ heartbeat
-    const statusRes = await axios.get(`${API}/print-queue/agent-status`);
+    // جلب النسخة الفعلية لوسيط الفرع الحالي من الـ heartbeat (وليس أي فرع)
+    const branchId = resolveBranchId('');
+    const statusUrl = branchId 
+      ? `${API}/print-queue/agent-status?branch_id=${encodeURIComponent(branchId)}`
+      : `${API}/print-queue/agent-status`;
+    const statusRes = await axios.get(statusUrl);
     const agentVersion = statusRes.data?.version || '?';
     
     const match = latestVersion !== '?' && agentVersion !== '?' && latestVersion === agentVersion;

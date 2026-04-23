@@ -1,5 +1,12 @@
 # Maestro EGP - Changelog
 
+## Session: Feb 23, 2026 - Print Agent v6.3.1 (Stability + Per-Branch Version Check)
+
+### Hotfixes for v6.3.0
+- Version bumped **6.3.0 → 6.3.1** (forces reinstall on Al Yarmouk where v6.3.0 polling loop stopped after ~60s)
+- **PowerShell compatibility fix**: replaced ternary-style `$x = if() {} else {}` with PowerShell 2.0-safe two-line form (`$jobCount=0; if(...) { $jobCount=... }`) — root cause of 57s-stale heartbeats on older Windows
+- **Per-branch version check**: `checkAgentStatus()` and `checkAgentVersionMatch()` in printService.js now pass `branch_id` to `/api/print-queue/agent-status`, so each cashier sees **their own branch's** agent version, not "any recent heartbeat". Fixes false "يحتاج تحديث 6.2.0→6.3.1" on already-updated branches.
+
 ## Session: Feb 23, 2026 - Print Agent v6.3.0 (Fast Multi-Branch)
 
 ### Print Agent Performance + Multi-Branch Reliability

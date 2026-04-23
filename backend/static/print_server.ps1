@@ -2041,7 +2041,7 @@ public class JobReceiptRenderer {
                     # إرسال agent_version و device_id و branch_id (لعزل الفروع)
                     $r = Invoke-WebRequest -Uri "$apiUrl/api/print-queue/pending?limit=20&agent_version={{AGENT_VERSION}}&device_id={{BRANCH_ID}}&branch_id={{BRANCH_ID}}" -UseBasicParsing -TimeoutSec 8
                     $data = $r.Content | ConvertFrom-Json
-                    $jobCount = if ($data.jobs) { @($data.jobs).Count } else { 0 }
+                    if ($data -and $data.jobs) { $jobCount = @($data.jobs).Count }
                     
                     foreach ($job in $data.jobs) {
                         try {
