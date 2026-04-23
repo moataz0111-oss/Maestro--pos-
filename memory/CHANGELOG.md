@@ -157,3 +157,46 @@
 1. يستطيع الآن حذف أي مصروف خاطئ من الواجهة (يتم إعادة احتساب الوردية تلقائياً)
 2. جميع الطلبات بعد منتصف الليل ستبقى مرتبطة بـ شفت 21 (business_date = 21)
 3. إغلاق الصندوق سيُظهر القيمة الصحيحة بعد حذف المصروف اليتيم
+
+## 2026-04-22 (متابعة) — دعم Multi-Branch للوسيط + إصلاحات Settings
+
+### المشاكل المُبلَّغة:
+- عند إضافة فرع ثالث: الوسيط يتأخر في الطباعة ويفقد الاتصال
+- خطأ `TypeError: undefined.length` عند تعديل إعدادات الطابعة
+- خطأ `422` عند حفظ إعدادات الطابعة
+- الوسيط يسحب أوامر من كل الفروع بدون عزل (conflict)
+
+### الإصلاحات:
+**1. عزل الوسيط لكل فرع (Multi-Branch Safe)**
+- `GET /api/print-queue/pending` يتطلب الآن **`branch_id`** صارماً
+- كل agent يُحمَّل بـ `branch_id` محقون في ملف ps1 عبر `{{BRANCH_ID}}`
+- `heartbeat` منفصل لكل `(device_id, branch_id)` — لا تتداخل حالات الفروع
+- يعمل مع **100+ فرع** دون تعارض
+
+**2. حوار اختيار الفرع قبل تحميل الوسيط**
+- زر "تحميل الوسيط" يُظهر dialog لاختيار الفرع المستهدف
+- `/download-print-agent?branch_id=X` — الرابط يتضمن معرّف الفرع
+- لو فرع واحد فقط: تحميل مباشر بدون سؤال
+
+**3. إصلاح TypeError في Settings**
+- `listAgentPrinters()` الآن يُرجع object `{agentOffline, needsUpdate, printers: []}` (بدل مصفوفة فارغة)
+- لا مزيد من crash عند قراءة `result.printers.length`
+
+**4. إصلاح 422 على PUT /api/printers/{id}**
+- حذفت تعريف `PrinterCreate` المكرر في السطر 15873 → أُعيد تسميته `InvoicePrinterCreate`
+- الآن الـ endpoint يستخدم الـ model الصحيح (يشمل usb_printer_name, print_mode, show_prices, ...)
+
+**5. إصلاح 500 على GET /api/branches**
+- `BranchResponse`: الحقول `address, phone, created_at` أصبحت اختيارية (لتدعم فروع قديمة ناقصة البيانات)
+
+**6. bump version: 6.1.2 → 6.2.0**
+- الإجبار على إعادة تحميل الوسيط على جميع الفروع مع branch_id المحقون
+
+### الاختبارات (PASS):
+- ✅ `/print-agent-script?branch_id=X` يحقن الـ ID في ps1
+- ✅ `/print-queue/pending` بدون branch_id يُرجع `{warning: "branch_id required"}`
+- ✅ `/print-queue/pending?branch_id=X` يُرجع فقط أوامر ذلك الفرع
+- ✅ الواجهة لا تعطي TypeError بعد إصلاح listAgentPrinters
+
+### ملاحظة للنشر:
+بعد تحديث production، **يجب إعادة تحميل الوسيط على كل فرع** لحقن `branch_id` الخاص به.

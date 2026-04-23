@@ -2037,8 +2037,8 @@ public class JobReceiptRenderer {
             
             while ($true) {
                 try {
-                    # إرسال agent_version و device_id مع كل طلب = heartbeat تلقائي
-                    $r = Invoke-WebRequest -Uri "$apiUrl/api/print-queue/pending?limit=10&agent_version={{AGENT_VERSION}}&device_id=default" -UseBasicParsing -TimeoutSec 10
+                    # إرسال agent_version و device_id و branch_id (لعزل الفروع)
+                    $r = Invoke-WebRequest -Uri "$apiUrl/api/print-queue/pending?limit=10&agent_version={{AGENT_VERSION}}&device_id={{BRANCH_ID}}&branch_id={{BRANCH_ID}}" -UseBasicParsing -TimeoutSec 10
                     $data = $r.Content | ConvertFrom-Json
                     
                     foreach ($job in $data.jobs) {

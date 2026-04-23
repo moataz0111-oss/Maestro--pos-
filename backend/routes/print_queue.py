@@ -52,14 +52,22 @@ async def get_pending_jobs(
     agent_version: str = Query(default=""),
     limit: int = Query(default=20)
 ):
-    """الوسيط يسحب أوامر الطباعة المعلقة + يسجل heartbeat"""
+    """الوسيط يسحب أوامر الطباعة المعلقة + يسجل heartbeat.
+    
+    ⚠️ **حماية مهمة**: إذا لم يُرسَل branch_id، يتم رفض الطلب لمنع الوكلاء من سحب
+    أوامر طباعة فرع آخر (خصوصاً عند وجود عدة فروع في نفس النظام).
+    """
     db = get_database()
     
-    # تسجيل heartbeat الوسيط (يثبت إنه شغال)
+    # تسجيل heartbeat منفصل لكل (device_id, branch_id) — لا تتعارض الفروع
     if agent_version or device_id:
+        hb_key = f"{device_id or 'default'}__{branch_id or 'nobranch'}"
         await db.agent_heartbeats.update_one(
-            {"device_id": device_id or "default"},
+            {"heartbeat_key": hb_key},
             {"$set": {
+                "heartbeat_key": hb_key,
+                "device_id": device_id or "default",
+                "branch_id": branch_id,
                 "last_seen": datetime.now(timezone.utc).isoformat(),
                 "version": agent_version,
                 "status": "online"
@@ -67,9 +75,11 @@ async def get_pending_jobs(
             upsert=True
         )
     
-    query = {"status": "pending"}
-    if branch_id:
-        query["branch_id"] = branch_id
+    # حماية صارمة: لا بد من branch_id لمنع تداخل الفروع
+    if not branch_id:
+        return {"jobs": [], "count": 0, "warning": "branch_id required"}
+    
+    query = {"status": "pending", "branch_id": branch_id}
     
     jobs = await db.print_queue.find(
         query, {"_id": 0}
@@ -79,12 +89,15 @@ async def get_pending_jobs(
 
 
 @router.get("/print-queue/agent-status")
-async def get_agent_status():
-    """فحص حالة الوسيط الحقيقية من آخر heartbeat"""
+async def get_agent_status(branch_id: str = Query(default="")):
+    """فحص حالة الوسيط الحقيقية من آخر heartbeat — مفلتر حسب الفرع إن مُرِّر"""
     db = get_database()
     
+    hb_query = {}
+    if branch_id:
+        hb_query["branch_id"] = branch_id
     heartbeat = await db.agent_heartbeats.find_one(
-        {}, {"_id": 0}, sort=[("last_seen", -1)]
+        hb_query, {"_id": 0}, sort=[("last_seen", -1)]
     )
     
     if not heartbeat:
@@ -95,14 +108,15 @@ async def get_agent_status():
         from datetime import timedelta
         last_dt = datetime.fromisoformat(last_seen.replace("Z", "+00:00"))
         age = (datetime.now(timezone.utc) - last_dt).total_seconds()
-        online = age < 30  # إذا آخر heartbeat أقل من 30 ثانية = شغال
+        online = age < 30
     except Exception:
         online = False
     
     return {
         "online": online,
         "version": heartbeat.get("version"),
-        "last_seen": last_seen
+        "last_seen": last_seen,
+        "branch_id": heartbeat.get("branch_id", "")
     }
 
 

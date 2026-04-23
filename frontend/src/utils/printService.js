@@ -74,8 +74,14 @@ export const checkAgentVersionMatch = async (backendUrl) => {
 
 /**
  * قائمة الطابعات من الوسيط
+ * ملاحظة: الوسيط يعمل على localhost:9999 على جهاز الكاشير، لذلك هذه الدالة stub
+ * (CORS يمنع الاتصال المباشر من السيرفر) — يمكن تحسينها مستقبلاً عبر polling API
  */
-export const listAgentPrinters = async () => [];
+export const listAgentPrinters = async () => ({
+  agentOffline: false,
+  needsUpdate: false,
+  printers: []
+});
 
 /**
  * فحص حالة طابعة
@@ -104,6 +110,7 @@ export const sendTestPrint = async (printer) => {
       usb_printer_name: printer.usb_printer_name || '',
       ip_address: printer.ip_address || '',
       port: printer.port || 9100,
+      branch_id: printer.branch_id || '',
       raw_data: testResult.raw_data
     }, { headers: { Authorization: `Bearer ${token}` } });
     

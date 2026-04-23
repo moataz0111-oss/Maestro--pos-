@@ -114,6 +114,8 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  DialogDescription,
+  DialogFooter,
 } from '../components/ui/dialog';
 import {
   Tabs,
@@ -439,6 +441,27 @@ export default function Settings() {
   const [printerTypes, setPrinterTypes] = useState([]);
   const [printerBranchFilter, setPrinterBranchFilter] = useState('all'); // فلتر الفرع للطابعات
   const [printAgentOnline, setPrintAgentOnline] = useState(() => getSavedAgentStatus().online);
+  // حوار اختيار الفرع قبل تحميل الوسيط (لعزل أوامر الطباعة عند تعدد الفروع)
+  const [showAgentBranchDialog, setShowAgentBranchDialog] = useState(false);
+  const [agentDownloadBranch, setAgentDownloadBranch] = useState('');
+  
+  // تحميل الوسيط مع تحديد الفرع (مهم: كل فرع له agent منفصل، لا تتعارض الأوامر)
+  const downloadAgentForBranch = (forBranchId = null) => {
+    const targetBranch = forBranchId || (branches && branches.length === 1 ? branches[0].id : null);
+    if (!targetBranch && branches && branches.length > 1) {
+      // أكثر من فرع - افتح حوار الاختيار
+      setAgentDownloadBranch('');
+      setShowAgentBranchDialog(true);
+      return;
+    }
+    // فرع واحد أو محدد - حمّل مباشرة
+    const url = targetBranch 
+      ? `${API}/download-print-agent?branch_id=${encodeURIComponent(targetBranch)}`
+      : `${API}/download-print-agent`;
+    window.open(url, '_blank');
+    const branchName = branches?.find(b => b.id === targetBranch)?.name || '';
+    toast.success(t('جاري تحميل وسيط الطباعة') + (branchName ? ` - ${branchName}` : ''));
+  };
   const [agentNeedsUpdate, setAgentNeedsUpdate] = useState(false);
   const [windowsPrinters, setWindowsPrinters] = useState([]);
   const [categoryForm, setCategoryForm] = useState({
@@ -4980,10 +5003,7 @@ export default function Settings() {
                       <Button 
                         size="sm"
                         className="bg-amber-500 hover:bg-amber-600 text-white font-bold px-4"
-                        onClick={() => {
-                          window.open(`${API}/download-print-agent`, '_blank');
-                          toast.success(t('جاري تحميل الوسيط الجديد - شغّل الملف بعد التحميل'));
-                        }}
+                        onClick={() => downloadAgentForBranch()}
                         data-testid="update-agent-btn"
                       >
                         <Download className="h-4 w-4 ml-2" />{t('تحديث الوسيط')}
@@ -5035,10 +5055,7 @@ export default function Settings() {
                           variant="outline" 
                           size="sm"
                           className="border-primary text-primary"
-                          onClick={() => {
-                            window.open(`${API}/download-print-agent`, '_blank');
-                            toast.success(t('جاري تحميل وسيط الطباعة - شغّل الملف وسيعمل تلقائياً في الخلفية'));
-                          }}
+                          onClick={() => downloadAgentForBranch()}
                           data-testid="download-agent-btn"
                         >
                           <Download className="h-3.5 w-3.5 ml-1" />{t('تحميل الوسيط')}
@@ -5050,8 +5067,9 @@ export default function Settings() {
                           size="sm"
                           className="border-primary/50 text-primary/70"
                           onClick={() => {
-                            window.open(`${API}/download-print-agent`, '_blank');
-                            toast.success(t('جاري تحميل وسيط الطباعة - ثبّته على جهاز الفرع الآخر'));
+                            // دائماً افتح حوار اختيار فرع آخر (الفرع المتصل الحالي غير مطلوب)
+                            setAgentDownloadBranch('');
+                            setShowAgentBranchDialog(true);
                           }}
                           data-testid="download-agent-extra-btn"
                         >
@@ -5062,10 +5080,7 @@ export default function Settings() {
                         <Button 
                           size="sm"
                           className="bg-amber-500 hover:bg-amber-600 text-white font-bold"
-                          onClick={() => {
-                            window.open(`${API}/download-print-agent`, '_blank');
-                            toast.success(t('جاري تحميل التحديث - شغّل الملف كمسؤول'));
-                          }}
+                          onClick={() => downloadAgentForBranch()}
                           data-testid="update-agent-inline-btn"
                         >
                           <Download className="h-3.5 w-3.5 ml-1" />{t('تحديث الوسيط')}
@@ -7467,6 +7482,48 @@ export default function Settings() {
           )}
         </Tabs>
       </main>
+      
+      {/* حوار اختيار الفرع قبل تحميل الوسيط */}
+      <Dialog open={showAgentBranchDialog} onOpenChange={setShowAgentBranchDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{t('اختر الفرع لتحميل وسيط الطباعة')}</DialogTitle>
+            <DialogDescription>
+              {t('كل فرع يحتاج وسيط مستقل خاص به لضمان عدم تعارض أوامر الطباعة بين الفروع')}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-3">
+            <Label className="text-sm mb-2 block">{t('الفرع')}</Label>
+            <Select value={agentDownloadBranch} onValueChange={setAgentDownloadBranch}>
+              <SelectTrigger data-testid="agent-branch-select">
+                <SelectValue placeholder={t('اختر الفرع')} />
+              </SelectTrigger>
+              <SelectContent>
+                {(branches || []).map(b => (
+                  <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowAgentBranchDialog(false)}>
+              {t('إلغاء')}
+            </Button>
+            <Button
+              disabled={!agentDownloadBranch}
+              onClick={() => {
+                const bid = agentDownloadBranch;
+                setShowAgentBranchDialog(false);
+                downloadAgentForBranch(bid);
+              }}
+              data-testid="agent-branch-download-btn"
+            >
+              <Download className="h-4 w-4 ml-2" />
+              {t('تحميل الوسيط')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -1273,11 +1273,11 @@ class BranchResponse(BaseModel):
     model_config = ConfigDict(extra="ignore")
     id: str
     name: str
-    address: str
-    phone: str
+    address: Optional[str] = ""
+    phone: Optional[str] = ""
     email: Optional[str] = None
     is_active: bool = True
-    created_at: str
+    created_at: Optional[str] = None
     # التكاليف الثابتة الشهرية
     rent_cost: float = 0.0
     water_cost: float = 0.0
@@ -8718,7 +8718,7 @@ async def test_printer_connection(printer_id: str, current_user: dict = Depends(
         return {"status": "error", "message": f"خطأ في الاتصال: {str(e)}"}
 
 
-PRINT_AGENT_VERSION = "6.1.2"
+PRINT_AGENT_VERSION = "6.2.0"
 
 @api_router.get("/print-agent-version")
 async def get_print_agent_version():
@@ -8727,15 +8727,16 @@ async def get_print_agent_version():
 
 
 @api_router.get("/print-agent-script")
-async def get_print_agent_script():
-    """إرجاع ملف server.ps1 مع حقن رقم النسخة الحالي (single source of truth)"""
+async def get_print_agent_script(branch_id: str = ""):
+    """إرجاع ملف server.ps1 مع حقن رقم النسخة و branch_id (لعزل الفروع)"""
     from fastapi.responses import Response
     ps1_path = ROOT_DIR / "static" / "print_server.ps1"
     if not ps1_path.exists():
         raise HTTPException(status_code=404, detail="ملف وسيط الطباعة غير موجود")
     ps1_code = ps1_path.read_text(encoding='utf-8')
-    # حقن النسخة الحالية من الثابت المركزي PRINT_AGENT_VERSION
+    # حقن النسخة الحالية + branch_id لعزل أوامر الطباعة بين الفروع
     ps1_code = ps1_code.replace("{{AGENT_VERSION}}", PRINT_AGENT_VERSION)
+    ps1_code = ps1_code.replace("{{BRANCH_ID}}", branch_id or "")
     return Response(
         content=ps1_code,
         media_type="text/plain",
@@ -8749,8 +8750,11 @@ async def get_print_agent_script():
 
 
 @api_router.get("/download-print-agent")
-async def download_print_agent(request: Request):
-    """تحميل وسيط الطباعة المحلي - ملف bat بسيط يحمّل من الإنترنت"""
+async def download_print_agent(request: Request, branch_id: str = ""):
+    """تحميل وسيط الطباعة المحلي - ملف bat بسيط يحمّل من الإنترنت.
+    
+    يجب تمرير branch_id لعزل أوامر الطباعة بين الفروع (مهم للعملاء متعددي الفروع)
+    """
     from fastapi.responses import Response
 
     ps1_path = ROOT_DIR / "static" / "print_server.ps1"
@@ -8760,7 +8764,8 @@ async def download_print_agent(request: Request):
     # Build the download URL from request headers
     host = request.headers.get('x-forwarded-host') or request.headers.get('host', 'localhost:8001')
     scheme = request.headers.get('x-forwarded-proto', 'https')
-    script_url = f"{scheme}://{host}/api/print-agent-script"
+    # تمرير branch_id ليحقنه السيرفر في ملف ps1
+    script_url = f"{scheme}://{host}/api/print-agent-script?branch_id={branch_id}"
     backend_url = f"{scheme}://{host}"
 
     bat_lines = [
@@ -15870,7 +15875,7 @@ async def get_low_stock_alerts(current_user: dict = Depends(get_current_user)):
 
 # ==================== INVOICE & PRINTING ROUTES ====================
 
-class PrinterCreate(BaseModel):
+class InvoicePrinterCreate(BaseModel):
     name: str
     printer_type: str = "thermal"
     paper_width: int = 80
@@ -15904,7 +15909,7 @@ async def get_printers(current_user: dict = Depends(get_current_user)):
     return printers
 
 @api_router.post("/invoices/printers")
-async def create_printer(printer: PrinterCreate, current_user: dict = Depends(get_current_user)):
+async def create_printer(printer: InvoicePrinterCreate, current_user: dict = Depends(get_current_user)):
     """إضافة طابعة"""
     new_printer = {
         "id": str(uuid.uuid4()),
