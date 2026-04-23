@@ -1381,56 +1381,45 @@ export default function Settings() {
         setPrinterTestStatus(prev => ({ ...prev, [printerId]: 'error' }));
         return;
       }
-      const agentOnline = await checkAgentStatus();
-      setPrintAgentOnline(agentOnline);
-      if (agentOnline) {
-        try {
-          const branchName = branches.find(b => b.id === printer.branch_id)?.name || '';
-          const result = await sendTestPrint(printer, branchName);
-          if (result.success) {
-            toast.success(t('تم الطباعة بنجاح على') + ` ${printer.name} (USB)`);
-            setPrinterTestStatus(prev => ({ ...prev, [printerId]: 'success' }));
-          } else {
-            toast.error(t('فشل الطباعة USB') + `: ${result.message}`);
-            setPrinterTestStatus(prev => ({ ...prev, [printerId]: 'error' }));
-          }
-        } catch (error) {
-          toast.error(t('خطأ في الاتصال بوسيط الطباعة'));
-          setPrinterTestStatus(prev => ({ ...prev, [printerId]: 'error' }));
-        }
-      } else {
-        toast.error(t('وسيط الطباعة غير متصل - شغّل الوسيط أولاً للطباعة USB بدون نافذة'));
-        setPrinterTestStatus(prev => ({ ...prev, [printerId]: 'error' }));
-      }
-      return;
-    }
-    
-    // طابعات الشبكة - عبر وسيط الطباعة المحلي
-    const agentOnline = await checkAgentStatus();
-    setPrintAgentOnline(agentOnline);
-    
-    if (agentOnline) {
+      // إرسال مباشر للطابور بدون فحص حالة الوسيط (سرعة قصوى)
       try {
         const branchName = branches.find(b => b.id === printer.branch_id)?.name || '';
-        const result = await sendTestPrint(printer, branchName);
-        
+        const result = await sendTestPrint({ ...printer, branch_name: branchName });
         if (result.success) {
-          toast.success(t('تم إرسال صفحة اختبار للطابعة مباشرة') + ` (${printer.name})`);
+          toast.success(t('تم إرسال الاختبار لـ') + ` ${printer.name} (USB) - ${t('الطباعة خلال ثانية')}`);
           setPrinterTestStatus(prev => ({ ...prev, [printerId]: 'success' }));
-          await axios.put(`${API}/printers/${printerId}`, { is_online: true }, {
-            headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
-          }).catch(() => {});
         } else {
-          toast.error(`${printer.name}: ${t('الطابعة لا تستجيب - تأكد من عنوان IP')} (${printer.ip_address}:${printer.port || 9100})`);
+          toast.error(t('فشل الطباعة USB') + `: ${result.message}`);
           setPrinterTestStatus(prev => ({ ...prev, [printerId]: 'error' }));
         }
       } catch (error) {
-        toast.error(t('خطأ في الاتصال بوسيط الطباعة'));
+        toast.error(t('خطأ في إرسال الاختبار'));
         setPrinterTestStatus(prev => ({ ...prev, [printerId]: 'error' }));
       }
-    } else {
-      // الوسيط غير متصل - لا يمكن اختبار طابعة الشبكة بدون الوسيط
-      toast.error(t('وسيط الطباعة غير متصل - شغّل الوسيط أولاً لاختبار طابعات الشبكة'));
+      // Reset status after 5 seconds
+      setTimeout(() => {
+        setPrinterTestStatus(prev => ({ ...prev, [printerId]: null }));
+      }, 5000);
+      return;
+    }
+    
+    // طابعات الشبكة - إرسال مباشر للطابور أيضاً (الوسيط يتعامل مع TCP)
+    try {
+      const branchName = branches.find(b => b.id === printer.branch_id)?.name || '';
+      const result = await sendTestPrint({ ...printer, branch_name: branchName });
+      
+      if (result.success) {
+        toast.success(t('تم إرسال الاختبار لـ') + ` ${printer.name} - ${t('الطباعة خلال ثانية')}`);
+        setPrinterTestStatus(prev => ({ ...prev, [printerId]: 'success' }));
+        await axios.put(`${API}/printers/${printerId}`, { is_online: true }, {
+          headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+        }).catch(() => {});
+      } else {
+        toast.error(`${printer.name}: ${t('فشل الإرسال')} - ${result.message}`);
+        setPrinterTestStatus(prev => ({ ...prev, [printerId]: 'error' }));
+      }
+    } catch (error) {
+      toast.error(t('خطأ في إرسال الاختبار'));
       setPrinterTestStatus(prev => ({ ...prev, [printerId]: 'error' }));
     }
     

@@ -2133,11 +2133,11 @@ public class JobReceiptRenderer {
                 } catch {
                     # Polling error - silent
                 }
-                # سرعة عالية: لو في جوبز، بول فوري (0.1 ثانية). لو فاضي، انتظر 1 ثانية
+                # سرعة قصوى: لو في جوبز، بول فوري (50ms). لو فاضي، انتظر 500ms
                 if ($jobCount -gt 0) {
-                    Start-Sleep -Milliseconds 100
+                    Start-Sleep -Milliseconds 50
                 } else {
-                    Start-Sleep -Seconds 1
+                    Start-Sleep -Milliseconds 500
                 }
             }
         } -ArgumentList $backendUrl, $agentLog

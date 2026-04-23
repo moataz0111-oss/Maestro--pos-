@@ -118,7 +118,8 @@ export const listAgentPrinters = async () => ({
 export const checkPrinterOnline = async () => ({ online: true });
 
 /**
- * طباعة اختبار عبر الطابور
+ * طباعة اختبار عبر الطابور - سريع جداً: يُرسل مباشرة بدون فحص حالة الوسيط
+ * (الوسيط سيلتقط الأمر خلال 500ms ويطبع)
  */
 export const sendTestPrint = async (printer) => {
   try {
@@ -133,6 +134,7 @@ export const sendTestPrint = async (printer) => {
     if (!testResult.success) return { success: false, message: 'Render failed' };
     
     const token = localStorage.getItem('token');
+    // timeout 5 ثوان فقط (API queue job ≈ 100ms)
     await axios.post(`${API}/print-queue`, {
       printer_name: printer.name,
       printer_type: printer.connection_type,
@@ -141,7 +143,10 @@ export const sendTestPrint = async (printer) => {
       port: printer.port || 9100,
       branch_id: resolveBranchId(printer.branch_id),
       raw_data: testResult.raw_data
-    }, { headers: { Authorization: `Bearer ${token}` } });
+    }, { 
+      headers: { Authorization: `Bearer ${token}` },
+      timeout: 5000
+    });
     
     return { success: true, message: 'Test print queued' };
   } catch (e) {

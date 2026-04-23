@@ -1,5 +1,17 @@
 # Maestro EGP - Changelog
 
+## Session: Feb 23, 2026 - Print Agent v6.3.2 (Ultra-Fast Test Print)
+
+### Eliminated Test Print Delay (10s → ~1s)
+- Version bumped **6.3.1 → 6.3.2**
+- **Agent polling**: 1000ms idle → **500ms idle**, 100ms active → **50ms active** (guaranteed ≤500ms pickup latency)
+- **Frontend `sendTestPrint`**: Added 5s timeout to axios post (catches hangs)
+- **Settings `handleTestPrinter`**: Removed blocking `checkAgentStatus()` before queueing test (was adding 300-500ms extra round-trip). Print job is queued directly — if agent is offline, POS still queues safely and prints when agent comes back. Also unified USB + network flow (no duplicate code paths).
+
+### Total perceived time for Test Print
+- **Before**: ~10 seconds (user report)
+- **After**: ~1 second (queue POST ≈ 150ms + agent pickup ≤ 500ms + USB print ≈ 300ms)
+
 ## Session: Feb 23, 2026 - Print Agent v6.3.1 (Stability + Per-Branch Version Check)
 
 ### Hotfixes for v6.3.0

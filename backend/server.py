@@ -8730,7 +8730,7 @@ async def test_printer_connection(printer_id: str, current_user: dict = Depends(
         return {"status": "error", "message": f"خطأ في الاتصال: {str(e)}"}
 
 
-PRINT_AGENT_VERSION = "6.3.1"
+PRINT_AGENT_VERSION = "6.3.2"
 
 @api_router.get("/print-agent-version")
 async def get_print_agent_version():
