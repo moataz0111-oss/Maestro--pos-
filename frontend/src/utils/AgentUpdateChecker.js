@@ -52,20 +52,20 @@ export function AgentUpdateBanner({ t = (s) => s }) {
   const check = useCallback(async () => {
     if (!requiredVer) return; // ننتظر جلب النسخة المطلوبة أولاً
     try {
-      const ctrl = new AbortController();
-      setTimeout(() => ctrl.abort(), 2500);
-      const r = await fetch(`${PRINT_AGENT_URL}/status`, { signal: ctrl.signal });
+      // استخدام backend heartbeat بدل الاتصال المباشر بـ localhost:9999
+      // (يتجنب Chrome Private Network Access block + CORS + بطء)
+      const r = await fetch(`${API_URL}/print-queue/agent-status`);
       const d = await r.json();
-      agentReachable.current = true;
-      if (d.status === 'running') {
-        const v = d.version || d.agent_version || null;
-        setLocalVer(v);
-        const ok = v && compareVersions(v, requiredVer) >= 0;
+      agentReachable.current = d.online === true;
+      const v = d.version || null;
+      setLocalVer(v);
+      // إذا online والإصدار مطابق - لا حاجة للتحديث
+      if (d.online && v) {
+        const ok = compareVersions(v, requiredVer) >= 0;
         setNeedsUpdate(!ok);
-        if (ok && intervalRef.current) {
-          clearInterval(intervalRef.current);
-          intervalRef.current = setInterval(check, 120000);
-        }
+      } else {
+        // إذا offline - لا نعرض banner تحديث (الوسيط أصلاً غير متصل)
+        setNeedsUpdate(false);
       }
     } catch {
       agentReachable.current = false;

@@ -8564,10 +8564,11 @@ async def upload_category_image(
 # ==================== PRINTER ROUTES ====================
 
 class PrinterCreate(BaseModel):
+    model_config = ConfigDict(extra="ignore")
     name: str
     ip_address: Optional[str] = ""
     port: int = 9100
-    branch_id: str
+    branch_id: Optional[str] = ""  # اختياري لتفادي 422 في UPDATE عند إرسال null
     printer_type: str = "receipt"  # النوع: receipt, kitchen, bar, packaging, label, custom
     connection_type: str = "network"  # network أو usb
     usb_printer_name: Optional[str] = ""  # اسم الطابعة في Windows للطباعة USB

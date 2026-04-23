@@ -18,14 +18,21 @@ from routes.shared import get_database, get_current_user, get_user_tenant_id
 
 @router.post("/print-queue")
 async def add_print_job(job_data: dict, current_user: dict = Depends(get_current_user)):
-    """إضافة أمر طباعة لطابور الطباعة"""
+    """إضافة أمر طباعة لطابور الطباعة.
+    
+    مهم: branch_id يُؤخذ تلقائياً من المستخدم الحالي إذا لم يُرسل،
+    لضمان وصول الأمر لوسيط الفرع الصحيح.
+    """
     db = get_database()
     tenant_id = get_user_tenant_id(current_user)
+    
+    # branch_id: من الطلب أولاً، ثم من المستخدم (عزل صارم بين الفروع)
+    job_branch_id = job_data.get("branch_id") or current_user.get("branch_id") or ""
     
     job = {
         "id": str(uuid.uuid4()),
         "tenant_id": tenant_id,
-        "branch_id": job_data.get("branch_id"),
+        "branch_id": job_branch_id,
         "status": "pending",
         "printer_name": job_data.get("printer_name", ""),
         "printer_type": job_data.get("printer_type", "usb"),
@@ -42,7 +49,7 @@ async def add_print_job(job_data: dict, current_user: dict = Depends(get_current
     
     await db.print_queue.insert_one(job)
     del job["_id"]
-    return {"success": True, "job_id": job["id"]}
+    return {"success": True, "job_id": job["id"], "branch_id": job_branch_id}
 
 
 @router.get("/print-queue/pending")
