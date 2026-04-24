@@ -2050,8 +2050,8 @@ export default function POS() {
         orderNumber = res.data.order_number;
         setLastOrderNumber(orderNumber); // حفظ رقم الفاتورة
         
-        // إرسال إشعار للكاشير والسائق (فقط للطلبات الجديدة)
-        await sendOrderNotification({
+        // إرسال إشعار للكاشير والسائق (فقط للطلبات الجديدة) — fire-and-forget لعدم تعطيل الـUI
+        sendOrderNotification({
           id: orderId,
           order_number: orderNumber,
           branch_id: currentBranchId,
@@ -2066,22 +2066,23 @@ export default function POS() {
             extras: item.selectedExtras || []
           })),
           notes: orderNotes || null
-        });
+        }).catch(e => console.warn('notification err:', e.message));
       }
       
-      // تحديث طريقة الدفع وإغلاق الطلب
-      await axios.put(`${API}/orders/${orderId}/payment?payment_method=${paymentMethod}`);
-      await axios.put(`${API}/orders/${orderId}/status?status=delivered`);
-      
-      // إغلاق الطاولة تلقائياً إذا كان طلب داخل المطعم
-      if (orderType === 'dine_in' && (selectedTable || editingOrder?.table_id)) {
-        const tableId = selectedTable || editingOrder?.table_id;
-        try {
-          await axios.put(`${API}/tables/${tableId}/status?status=available`);
-        } catch (err) {
-          console.log('Table status update:', err);
-        }
+      // تحديث الحالة + الدفع + تحرير الطاولة — كلهم بالتوازي (بدل تسلسل)
+      // هذا يوفر ~1-1.5 ثانية في الفروع البعيدة عن السيرفر
+      const tableId = (orderType === 'dine_in') ? (selectedTable || editingOrder?.table_id) : null;
+      const parallelUpdates = [
+        axios.put(`${API}/orders/${orderId}/payment?payment_method=${paymentMethod}`).catch(e => console.warn('payment update err:', e.message)),
+        axios.put(`${API}/orders/${orderId}/status?status=delivered`).catch(e => console.warn('status update err:', e.message)),
+      ];
+      if (tableId) {
+        parallelUpdates.push(
+          axios.put(`${API}/tables/${tableId}/status?status=available`).catch(e => console.warn('table update err:', e.message))
+        );
       }
+      // ننتظر فقط للتأكد من الطلب محفوظ، لكن لا نتعطل بالـerrors
+      Promise.all(parallelUpdates).catch(() => {});
       
       playSuccess();
       
