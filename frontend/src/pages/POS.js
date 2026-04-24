@@ -170,6 +170,7 @@ export default function POS() {
   const [showCustomerInfo, setShowCustomerInfo] = useState(false);
   const [printDialogOpen, setPrintDialogOpen] = useState(false);
   const [lastOrderNumber, setLastOrderNumber] = useState(null); // آخر رقم فاتورة
+  const [lastSaveTimeMs, setLastSaveTimeMs] = useState(null); // زمن حفظ آخر طلب بالـms
   
   // الطابعات المتعددة
   const [availablePrinters, setAvailablePrinters] = useState([]);
@@ -1993,6 +1994,7 @@ export default function POS() {
     }
     
     // === محاولة الإرسال Online مع fallback لـ Offline ===
+    const _saveStartTime = performance.now(); // قياس زمن الاستجابة
     try {
       let orderNumber = '';
       let orderId = '';
@@ -2083,6 +2085,9 @@ export default function POS() {
       }
       // ننتظر فقط للتأكد من الطلب محفوظ، لكن لا نتعطل بالـerrors
       Promise.all(parallelUpdates).catch(() => {});
+      
+      // سجّل زمن الاستجابة لهذا الحفظ (لمؤشر الأداء)
+      setLastSaveTimeMs(Math.round(performance.now() - _saveStartTime));
       
       playSuccess();
       
@@ -2736,6 +2741,24 @@ export default function POS() {
               <Building2 className="h-4 w-4 text-muted-foreground" />
               <BranchSelector />
             </div>
+            
+            {/* مؤشر زمن الاستجابة (أداء الحفظ) */}
+            {lastSaveTimeMs !== null && (
+              <div 
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium border ${
+                  lastSaveTimeMs < 500
+                    ? 'bg-green-500/10 text-green-500 border-green-500/30'
+                    : lastSaveTimeMs < 1000
+                    ? 'bg-yellow-500/10 text-yellow-500 border-yellow-500/30'
+                    : 'bg-red-500/10 text-red-500 border-red-500/30'
+                }`}
+                data-testid="save-latency-indicator"
+                title={t('زمن حفظ آخر طلب - مؤشر على سرعة الشبكة')}
+              >
+                <span className="inline-block w-1.5 h-1.5 rounded-full bg-current"></span>
+                {lastSaveTimeMs}ms
+              </div>
+            )}
             
             {/* مؤشر الطلبات المعلقة */}
             <Button 
