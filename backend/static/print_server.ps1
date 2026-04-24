@@ -2041,8 +2041,9 @@ public class JobReceiptRenderer {
                 while ($true) {
                     $jobCount = 0
                     try {
-                        # إرسال agent_version و device_id و branch_id (لعزل الفروع)
-                        $r = Invoke-WebRequest -Uri "$apiUrl/api/print-queue/pending?limit=20&agent_version={{AGENT_VERSION}}&device_id={{BRANCH_ID}}&branch_id={{BRANCH_ID}}" -UseBasicParsing -TimeoutSec 8
+                        # Long-polling: نطلب من السيرفر يحتفظ بالاتصال حتى 25ث أو حتى يظهر job
+                        # هذا يجعل الطباعة فورية (<200ms بدل polling delay)
+                        $r = Invoke-WebRequest -Uri "$apiUrl/api/print-queue/pending?limit=20&wait=25&agent_version={{AGENT_VERSION}}&device_id={{BRANCH_ID}}&branch_id={{BRANCH_ID}}" -UseBasicParsing -TimeoutSec 30
                         $data = $r.Content | ConvertFrom-Json
                         if ($data -and $data.jobs) { $jobCount = @($data.jobs).Count }
                     
@@ -2134,13 +2135,14 @@ public class JobReceiptRenderer {
                         }
                     }
                     } catch {
-                        # Polling error - silent
+                        # Polling error - silent (timeout طبيعي عند long-poll idle)
                     }
-                    # سرعة قصوى: لو في جوبز، بول فوري (50ms). لو فاضي، انتظر 500ms
+                    # مع long-polling، لا نحتاج sleep طويل (الـrequest نفسه انتظر)
+                    # فقط sleep قصير جداً لو في jobs (لتخفيف الضغط)، وإلا نبدأ طلب جديد فوراً
                     if ($jobCount -gt 0) {
-                        Start-Sleep -Milliseconds 50
+                        Start-Sleep -Milliseconds 20
                     } else {
-                        Start-Sleep -Milliseconds 500
+                        Start-Sleep -Milliseconds 100
                     }
                 }
               } catch {

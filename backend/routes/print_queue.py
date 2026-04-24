@@ -57,21 +57,22 @@ async def get_pending_jobs(
     device_id: str = Query(default=""),
     branch_id: str = Query(default=""),
     agent_version: str = Query(default=""),
-    limit: int = Query(default=20)
+    limit: int = Query(default=20),
+    wait: int = Query(default=0, description="Long-polling: max seconds to wait for new jobs (0 = no wait)")
 ):
     """الوسيط يسحب أوامر الطباعة المعلقة + يسجل heartbeat.
     
-    منطق مرن يدعم الوسطاء القديمة والجديدة بدون كسر:
-    - إذا أرسل الوسيط branch_id صحيح → يسحب أوامر ذلك الفرع فقط (عزل تام)
-    - إذا لم يُرسله أو كان placeholder فارغ → يسحب الأوامر غير المُرتبطة بفرع (backward compat)
+    دعم Long-Polling: إذا wait > 0، الـrequest يبقى مفتوحاً حتى يظهر job أو ينتهي الوقت.
+    هذا يجعل الطباعة فورية (<200ms بدل 500ms polling delay).
     """
+    import asyncio
     db = get_database()
     
-    # تنظيف قيم الـ placeholder المُزعجة (إذا لم يُحقن {{BRANCH_ID}})
+    # تنظيف قيم الـ placeholder المُزعجة
     if branch_id and (branch_id.startswith("{{") or branch_id == "default"):
         branch_id = ""
     
-    # تسجيل heartbeat منفصل لكل (device_id, branch_id)
+    # تسجيل heartbeat
     if agent_version or device_id:
         hb_key = f"{device_id or 'default'}__{branch_id or 'nobranch'}"
         await db.agent_heartbeats.update_one(
@@ -87,20 +88,27 @@ async def get_pending_jobs(
             upsert=True
         )
     
-    # بناء الاستعلام: يدعم العزل عند توفر branch_id + يعمل مع الوسطاء القديمة
+    # بناء الاستعلام
     if branch_id:
-        # وسيط جديد مع branch_id → يأخذ فقط أوامر فرعه (عزل تام)
         query = {"status": "pending", "branch_id": branch_id}
     else:
-        # وسيط قديم (بدون branch_id) → السلوك التقليدي: يأخذ كل المعلقة
-        # ⚠️ مع عميل متعدد الفروع، هذا قد يؤدي لخلط — يجب تحديث الوسيط لإصلاح العزل
         query = {"status": "pending"}
     
-    jobs = await db.print_queue.find(
-        query, {"_id": 0}
-    ).sort("created_at", 1).limit(limit).to_list(limit)
+    # Long-polling loop: نتحقق كل 100ms حتى يظهر job أو ينتهي wait
+    max_wait = max(0, min(int(wait or 0), 30))  # حد أقصى 30 ثانية
+    check_interval = 0.1  # 100ms
+    elapsed = 0.0
     
-    return {"jobs": jobs, "count": len(jobs)}
+    while True:
+        jobs = await db.print_queue.find(
+            query, {"_id": 0}
+        ).sort("created_at", 1).limit(limit).to_list(limit)
+        
+        if jobs or elapsed >= max_wait:
+            return {"jobs": jobs, "count": len(jobs)}
+        
+        await asyncio.sleep(check_interval)
+        elapsed += check_interval
 
 
 @router.get("/print-queue/agent-status")

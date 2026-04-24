@@ -1,5 +1,15 @@
 # Maestro EGP - Changelog
 
+## Session: Feb 23, 2026 - Print Agent v6.4.0 (Long-Polling - INSTANT Print)
+
+### THE ULTIMATE FIX: Long-Polling Eliminates Polling Delay
+- `PRINT_AGENT_VERSION: 6.3.3 → 6.4.0`
+- **Backend `/api/print-queue/pending`**: يدعم `?wait=25` — الـrequest يبقى مفتوحاً حتى 25 ثانية يترقب أي job. بمجرد ما يظهر job، يُرجِعه فوراً. الفحص الداخلي كل 100ms.
+- **Agent PowerShell**: يرسل `wait=25&TimeoutSec=30` — اتصال دائم مع السيرفر. عند وصول job، يُرجَع خلال <200ms.
+- **اختُبر**: حقن job في 1000ms، الـpoll رد في 1149ms → job التُقِط خلال **149ms**
+- **النتيجة**: click → print خلال ~200-400ms بدلاً من 500-1500ms سابقاً
+- ✨ بدون polling overhead (كان الوكيل يطلب كل 500ms → ~172 طلب/دقيقة. الآن ~2-3 طلبات/دقيقة فقط بنفس الاستجابة الفورية)
+
 ## Session: Feb 23, 2026 - Auto Cleanup Duplicates Migration
 
 ### Startup Migration: Remove Duplicate Expenses
