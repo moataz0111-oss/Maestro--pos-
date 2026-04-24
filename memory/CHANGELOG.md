@@ -1,5 +1,19 @@
 # Maestro EGP - Changelog
 
+## Session: Feb 23, 2026 - Auto Cleanup Duplicates Migration
+
+### Startup Migration: Remove Duplicate Expenses
+- أُضيفت migration `cleanup_duplicate_expenses_v1` في `startup_event`:
+  - تكتشف المصاريف المكررة: نفس `(tenant_id, branch_id, created_by, amount, description)` خلال **60 ثانية** = تكرار
+  - تحتفظ بالأقدم، تحذف النُسَخ
+  - تعيد حساب `total_expenses` و `expected_cash` لكل وردية متأثرة تلقائياً
+  - تُنفَّذ **مرة واحدة فقط** (محفوظة في `system_migrations` collection)
+- تم التحقق من الـsyntax والتنفيذ السليم على preview
+
+### ⚠️ ملاحظة للمستخدم
+- على preview env: 0 مكررات (قاعدة بيانات نظيفة)
+- عند النشر (Deploy) على production: ستكتشف وتحذف مصروف الغاز المكرر + أي مكررات أخرى + تُعيد حساب تقرير إغلاق الصندوق
+
 ## Session: Feb 23, 2026 - Print Agent v6.3.3 + Fixes (Stability & Duplicates & undefined)
 
 ### Print Agent v6.3.3 - Bulletproof Polling

@@ -16942,6 +16942,119 @@ async def setup_database_indexes():
         logger.error(f"Failed to create indexes: {e}")
 
 
+@app.on_event("startup")
+async def cleanup_duplicate_expenses():
+    """تنظيف المصاريف المكررة تلقائياً مرة واحدة فقط (one-shot migration).
+    
+    يكتشف المصاريف المكررة: نفس (branch_id + created_by + amount + description)
+    تم إنشاؤها خلال 60 ثانية من بعضها = تكرار بشري/شبكي.
+    يحتفظ بالأقدم ويحذف البقية، ثم يعيد حساب total_expenses لكل وردية متأثرة.
+    
+    يُنفَّذ مرة واحدة فقط (محفوظ في collection `system_migrations`).
+    """
+    try:
+        MIG_KEY = "cleanup_duplicate_expenses_v1"
+        done = await db.system_migrations.find_one({"key": MIG_KEY})
+        if done:
+            logger.info(f"🟢 Migration {MIG_KEY} already applied, skipping")
+            return
+        
+        logger.info(f"🔧 Running migration: {MIG_KEY}")
+        from datetime import datetime as _dt, timezone as _tz, timedelta as _td
+        
+        # تجميع المصاريف حسب الـ fingerprint
+        all_expenses = await db.expenses.find(
+            {}, {"_id": 0}
+        ).sort("created_at", 1).to_list(100000)
+        
+        groups = {}
+        for e in all_expenses:
+            created = e.get("created_at", "")
+            if not created:
+                continue
+            fp = (
+                e.get("tenant_id") or "",
+                e.get("branch_id") or "",
+                e.get("created_by") or "",
+                float(e.get("amount") or 0),
+                (e.get("description") or "").strip()
+            )
+            groups.setdefault(fp, []).append(e)
+        
+        # البحث عن المكررات (نفس fp خلال 60 ثانية)
+        deleted_ids = []
+        affected_shifts = set()
+        for fp, items in groups.items():
+            if len(items) < 2:
+                continue
+            # ترتيب حسب الوقت (الأقدم أولاً)
+            items_sorted = sorted(items, key=lambda x: x.get("created_at", ""))
+            kept = items_sorted[0]
+            for dup in items_sorted[1:]:
+                try:
+                    t1 = _dt.fromisoformat(kept.get("created_at", "").replace("Z", "+00:00"))
+                    t2 = _dt.fromisoformat(dup.get("created_at", "").replace("Z", "+00:00"))
+                    diff = abs((t2 - t1).total_seconds())
+                except Exception:
+                    diff = 9999
+                if diff <= 60:
+                    # مكرر - احذفه
+                    await db.expenses.delete_one({"id": dup["id"]})
+                    deleted_ids.append(dup["id"])
+                    if dup.get("branch_id"):
+                        affected_shifts.add((dup.get("tenant_id") or "", dup["branch_id"], dup.get("created_at", "")))
+                    logger.info(f"   🗑️  حذف مكرر: amount={fp[3]} desc={fp[4][:30]} id={dup['id'][:8]}")
+        
+        # إعادة حساب total_expenses لكل وردية متأثرة
+        recomputed_shifts = set()
+        for tenant_id, branch_id, exp_created in affected_shifts:
+            shift_q = {"branch_id": branch_id, "started_at": {"$lte": exp_created}}
+            if tenant_id:
+                shift_q["tenant_id"] = tenant_id
+            affected = await db.shifts.find(shift_q, {"_id": 0}).to_list(100)
+            for s in affected:
+                if s["id"] in recomputed_shifts:
+                    continue
+                s_end = s.get("ended_at") or ""
+                if s_end and exp_created > s_end:
+                    continue
+                q = {
+                    "branch_id": branch_id,
+                    "category": {"$ne": "refund"},
+                    "created_at": {"$gte": s.get("started_at", "")}
+                }
+                if tenant_id:
+                    q["tenant_id"] = tenant_id
+                if s_end:
+                    q["created_at"]["$lte"] = s_end
+                shift_expenses = await db.expenses.find(q, {"_id": 0, "amount": 1}).to_list(500)
+                total_exp = sum(float(e.get("amount") or 0) for e in shift_expenses)
+                opening_cash = float(s.get("opening_cash") or s.get("opening_balance") or 0)
+                cash_sales = float(s.get("cash_sales") or 0)
+                await db.shifts.update_one(
+                    {"id": s["id"]},
+                    {"$set": {
+                        "total_expenses": total_exp,
+                        "expected_cash": opening_cash + cash_sales - total_exp
+                    }}
+                )
+                recomputed_shifts.add(s["id"])
+                logger.info(f"   ✅ أُعيد حساب الوردية {s['id'][:8]}... → total_expenses={total_exp:,.0f}")
+        
+        # تسجيل المهاجرة كمُنفَّذة
+        await db.system_migrations.insert_one({
+            "key": MIG_KEY,
+            "executed_at": _dt.now(_tz.utc).isoformat(),
+            "deleted_count": len(deleted_ids),
+            "recomputed_shifts": len(recomputed_shifts)
+        })
+        logger.info(f"✅ Migration {MIG_KEY} complete: حذف {len(deleted_ids)} مكرر، إعادة حساب {len(recomputed_shifts)} وردية")
+    except Exception as e:
+        logger.error(f"❌ cleanup_duplicate_expenses migration failed: {e}")
+
+
+
+
 # ==================== SYSTEM HEALTH & RELIABILITY APIS ====================
 
 @api_router.get("/system/health")
