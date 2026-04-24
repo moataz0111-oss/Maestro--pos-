@@ -2041,9 +2041,9 @@ public class JobReceiptRenderer {
                 while ($true) {
                     $jobCount = 0
                     try {
-                        # Long-polling: نطلب من السيرفر يحتفظ بالاتصال حتى 25ث أو حتى يظهر job
-                        # هذا يجعل الطباعة فورية (<200ms بدل polling delay)
-                        $r = Invoke-WebRequest -Uri "$apiUrl/api/print-queue/pending?limit=20&wait=25&agent_version={{AGENT_VERSION}}&device_id={{BRANCH_ID}}&branch_id={{BRANCH_ID}}" -UseBasicParsing -TimeoutSec 30
+                        # Short-polling سريع: يعمل على كل الشبكات (حتى الضعيفة/NAT)
+                        # كل 300ms poll خفيف - heartbeat يتحدث باستمرار
+                        $r = Invoke-WebRequest -Uri "$apiUrl/api/print-queue/pending?limit=20&agent_version={{AGENT_VERSION}}&device_id={{BRANCH_ID}}&branch_id={{BRANCH_ID}}" -UseBasicParsing -TimeoutSec 5
                         $data = $r.Content | ConvertFrom-Json
                         if ($data -and $data.jobs) { $jobCount = @($data.jobs).Count }
                     
@@ -2135,14 +2135,13 @@ public class JobReceiptRenderer {
                         }
                     }
                     } catch {
-                        # Polling error - silent (timeout طبيعي عند long-poll idle)
+                        # Polling error - silent (نحاول مرة أخرى فوراً)
                     }
-                    # مع long-polling، لا نحتاج sleep طويل (الـrequest نفسه انتظر)
-                    # فقط sleep قصير جداً لو في jobs (لتخفيف الضغط)، وإلا نبدأ طلب جديد فوراً
+                    # سرعة: لو في jobs، نستمر فوراً. لو فاضي، 300ms sleep خفيف
                     if ($jobCount -gt 0) {
-                        Start-Sleep -Milliseconds 20
+                        Start-Sleep -Milliseconds 30
                     } else {
-                        Start-Sleep -Milliseconds 100
+                        Start-Sleep -Milliseconds 300
                     }
                 }
               } catch {
