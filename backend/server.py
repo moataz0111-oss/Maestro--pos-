@@ -1256,6 +1256,7 @@ class BranchCreate(BaseModel):
     name: str
     address: str
     phone: str
+    phone2: Optional[str] = ""  # رقم هاتف ثانوي للفرع
     email: Optional[str] = None
     # التكاليف الثابتة الشهرية
     rent_cost: float = 0.0  # الإيجار الشهري
@@ -1275,6 +1276,7 @@ class BranchResponse(BaseModel):
     name: str
     address: Optional[str] = ""
     phone: Optional[str] = ""
+    phone2: Optional[str] = ""
     email: Optional[str] = None
     is_active: bool = True
     created_at: Optional[str] = None

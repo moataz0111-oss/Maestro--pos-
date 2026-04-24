@@ -1403,10 +1403,10 @@ export default function POS() {
       delivery_company: deliveryAppObj?.name || '',
       delivery_app_name: deliveryAppObj?.name || '',
       language: localStorage.getItem('language') || 'ar',
-      // Invoice settings
-      phone: invoiceSettings?.phone || '',
-      phone2: invoiceSettings?.phone2 || '',
-      address: invoiceSettings?.address || '',
+      // Invoice settings - استخدم بيانات الفرع الحالي أولاً (كل فرع له عنوان وهاتف خاص)
+      phone: currentBranch?.phone || invoiceSettings?.phone || '',
+      phone2: currentBranch?.phone2 || invoiceSettings?.phone2 || '',
+      address: currentBranch?.address || invoiceSettings?.address || '',
       tax_number: invoiceSettings?.tax_number || '',
       show_tax: invoiceSettings?.show_tax !== false,
       custom_header: invoiceSettings?.custom_header || '',
@@ -2085,7 +2085,7 @@ export default function POS() {
       
       playSuccess();
       
-      // === طباعة الفاتورة على الكاشير وإرسال الطلبات للمطبخ ===
+      // === طباعة الفاتورة على الكاشير وإرسال الطلبات للمطبخ (متوازي - بلا انتظار) ===
       try {
           const restaurantName = restaurantSettings?.name_ar || restaurantSettings?.name || '';
           const orderForPrint = buildPrintOrderData(orderNumber);
@@ -2099,10 +2099,12 @@ export default function POS() {
             extras: item.selectedExtras || []
           }));
           
-          // 1. طباعة الفاتورة على طابعة الكاشير USB فقط
+          // 1. طباعة الفاتورة على طابعة الكاشير USB (fire-and-forget)
           let cashierPrinter = availablePrinters.find(p => p.print_mode === 'full_receipt');
           if (!cashierPrinter) cashierPrinter = availablePrinters.find(p => p.connection_type === 'usb' && p.usb_printer_name);
           console.log('[Submit] Cashier printer:', cashierPrinter?.name || 'NOT FOUND', 'Total printers:', availablePrinters.length);
+          
+          const printPromises = [];
           if (cashierPrinter) {
             const subtotalCalc = cart.reduce((sum, item) => sum + ((item.price * item.quantity) + (item.selectedExtras || []).reduce((s, e) => s + (e.price * (e.quantity || 1)), 0)), 0);
             const cashierOrderData = {
@@ -2114,29 +2116,34 @@ export default function POS() {
               cashier_name: user?.name || user?.full_name || '',
               is_paid: true
             };
-            const cashierResult = await sendReceiptPrint(cashierPrinter, cashierOrderData);
-            if (!cashierResult.success) {
-              toast.error(t('فشل طباعة فاتورة الكاشير: ') + (cashierResult.message || ''));
-            }
+            printPromises.push(
+              sendReceiptPrint(cashierPrinter, cashierOrderData).then(r => {
+                if (!r.success) toast.error(t('فشل طباعة فاتورة الكاشير: ') + (r.message || ''));
+              }).catch(e => console.error('Cashier print err:', e))
+            );
           }
           
-          // 2. إرسال الطلبات لطابعات المطبخ حسب ربط المنتجات
-          // فقط للطلبات الجديدة - لا نرسل للمطبخ مرة ثانية عند الدفع لطلب موجود
+          // 2. إرسال الطلبات لطابعات المطبخ (بالتوازي مع الكاشير)
           if (!editingOrder) {
             const kitchenPrinters = availablePrinters.filter(p => 
               (p.print_mode === 'orders_only' || p.print_mode === 'selected_products') &&
               ((p.connection_type === 'usb' && p.usb_printer_name) || (p.connection_type !== 'usb' && p.ip_address))
             );
             if (kitchenPrinters.length > 0) {
-              const kitchenResult = await printOrderToAllPrinters(orderForPrint, itemsForPrint, products, kitchenPrinters, restaurantName);
-              if (!kitchenResult.success) {
-                toast.error(t('فشل طباعة طلبات المطبخ'));
-                kitchenResult.results?.filter(r => !r.success).forEach(f => {
-                  toast.error(`${f.printer_name}: ${f.message}`);
-                });
-              }
+              printPromises.push(
+                printOrderToAllPrinters(orderForPrint, itemsForPrint, products, kitchenPrinters, restaurantName).then(r => {
+                  if (!r.success) {
+                    toast.error(t('فشل طباعة طلبات المطبخ'));
+                    r.results?.filter(x => !x.success).forEach(f => toast.error(`${f.printer_name}: ${f.message}`));
+                  }
+                }).catch(e => console.error('Kitchen print err:', e))
+              );
             }
           }
+          
+          // لا ننتظر الطباعات - تسير بالتوازي وتُسجَّل في الطابور خلال 100ms
+          // (الـUI يحرر الكاشير فوراً بدل ما يشوف spinner)
+          Promise.all(printPromises).catch(() => {});
       } catch (printErr) {
         console.error('Print error:', printErr);
         toast.error(t('خطأ في الطباعة: ') + printErr.message);

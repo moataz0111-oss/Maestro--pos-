@@ -563,7 +563,7 @@ export default function Settings() {
   });
   const [editUserForm, setEditUserForm] = useState(null);
   const [branchForm, setBranchForm] = useState({
-    name: '', address: '', phone: '', email: ''
+    name: '', address: '', phone: '', phone2: '', email: ''
   });
   const [editBranchForm, setEditBranchForm] = useState(null);
   const [printerForm, setPrinterForm] = useState({
@@ -1206,7 +1206,7 @@ export default function Settings() {
       await axios.post(`${API}/branches`, branchForm);
       toast.success(t('تم الحفظ بنجاح'));
       setBranchDialogOpen(false);
-      setBranchForm({ name: '', address: '', phone: '', email: '' });
+      setBranchForm({ name: '', address: '', phone: '', phone2: '', email: '' });
       fetchData();
     } catch (error) {
       toast.error(error.response?.data?.detail || t('فشل في حفظ البيانات'));
@@ -1237,6 +1237,7 @@ export default function Settings() {
         name: editBranchForm.name,
         address: editBranchForm.address,
         phone: editBranchForm.phone,
+        phone2: editBranchForm.phone2 || '',
         email: editBranchForm.email || null,
         // التكاليف الثابتة الشهرية
         rent_cost: parseFloat(editBranchForm.rent_cost) || 0,
@@ -3137,17 +3138,27 @@ export default function Settings() {
                               onChange={(e) => setBranchForm({ ...branchForm, phone: e.target.value })}
                               required
                               className="mt-1"
+                              data-testid="branch-phone-input"
                             />
                           </div>
                           <div>
-                            <Label className="text-foreground">{t('البريد الإلكتروني')}</Label>
+                            <Label className="text-foreground">{t('هاتف إضافي')}</Label>
                             <Input
-                              type="email"
-                              value={branchForm.email}
-                              onChange={(e) => setBranchForm({ ...branchForm, email: e.target.value })}
+                              value={branchForm.phone2 || ''}
+                              onChange={(e) => setBranchForm({ ...branchForm, phone2: e.target.value })}
                               className="mt-1"
+                              data-testid="branch-phone2-input"
                             />
                           </div>
+                        </div>
+                        <div>
+                          <Label className="text-foreground">{t('البريد الإلكتروني')}</Label>
+                          <Input
+                            type="email"
+                            value={branchForm.email}
+                            onChange={(e) => setBranchForm({ ...branchForm, email: e.target.value })}
+                            className="mt-1"
+                          />
                         </div>
                         <div className="flex gap-2 pt-4">
                           <Button type="button" variant="outline" onClick={() => setBranchDialogOpen(false)} className="flex-1">{t('إلغاء')}</Button>
@@ -3240,17 +3251,27 @@ export default function Settings() {
                             onChange={(e) => setEditBranchForm({ ...editBranchForm, phone: e.target.value })}
                             required
                             className="mt-1"
+                            data-testid="edit-branch-phone-input"
                           />
                         </div>
                         <div>
-                          <Label className="text-foreground">{t('البريد الإلكتروني')}</Label>
+                          <Label className="text-foreground">{t('هاتف إضافي')}</Label>
                           <Input
-                            type="email"
-                            value={editBranchForm.email}
-                            onChange={(e) => setEditBranchForm({ ...editBranchForm, email: e.target.value })}
+                            value={editBranchForm.phone2 || ''}
+                            onChange={(e) => setEditBranchForm({ ...editBranchForm, phone2: e.target.value })}
                             className="mt-1"
+                            data-testid="edit-branch-phone2-input"
                           />
                         </div>
+                      </div>
+                      <div>
+                        <Label className="text-foreground">{t('البريد الإلكتروني')}</Label>
+                        <Input
+                          type="email"
+                          value={editBranchForm.email}
+                          onChange={(e) => setEditBranchForm({ ...editBranchForm, email: e.target.value })}
+                          className="mt-1"
+                        />
                       </div>
                       
                       {/* التكاليف الثابتة الشهرية */}
