@@ -1,5 +1,20 @@
 # Maestro EGP - Changelog
 
+## Session: Feb 23, 2026 - Print Agent v6.3.3 + Fixes (Stability & Duplicates & undefined)
+
+### Print Agent v6.3.3 - Bulletproof Polling
+- `PRINT_AGENT_VERSION: 6.3.2 → 6.3.3` (بعد اكتشاف أن الـ Start-Job ينهار بصمت كل ~دقيقة)
+- **حلقة خارجية (OUTER loop)** حول حلقة polling الرئيسية: لو حصل exception فادح خارج الـinner try/catch، يُسجَّل في agent.log ويُعاد تشغيل الحلقة فوراً (بدون انتظار watchdog الدقيقي). هذا يحل عطل Al Yarmouk v6.3.1 الذي كان يُظهر "آخر اتصال: 1د منذ".
+- Polling الفعلي: 500ms خامل / 50ms نشط (أسرع ردّ ممكن).
+
+### Duplicate Expenses Fix
+- **Backend dedup window** (10 ثواني) في `POST /api/expenses`: لو نفس المستخدم + الفرع + المبلغ + الوصف تم إرسالهم خلال 10 ثواني، نُعيد المصروف الموجود بدل إنشاء نسخة مكررة. يحمي ضد: double-click, network retry, React re-render.
+- **Frontend `submitting` state** في Expenses.js: زر الحفظ يُعطَّل فوراً عند الضغط (منع multi-click).
+- ✅ تم الاختبار: استدعاء `/api/expenses` مرتين بنفس البيانات يُرجع نفس الـID.
+
+### Kitchen Cancel Receipt "undefined" Fix
+- `handleCancelOrder` في POS.js: defensive name lookup مع fallback متعدد: `product_name → name → productName → products.find(p=>p.id===item.product_id).name → 'صنف'`. لن يظهر "[تم حذف] undefined" بعد الآن.
+
 ## Session: Feb 23, 2026 - Print Agent v6.3.2 (Ultra-Fast Test Print)
 
 ### Eliminated Test Print Delay (10s → ~1s)

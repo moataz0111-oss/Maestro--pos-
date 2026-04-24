@@ -71,6 +71,7 @@ export default function Expenses() {
   const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [submitting, setSubmitting] = useState(false); // يمنع التكرار بالضغط المتعدد
   const [selectedCashierFilter, setSelectedCashierFilter] = useState(null); // فلتر الكاشير
   
   // التصنيفات المخصصة (يتم جلبها من قاعدة البيانات)
@@ -197,6 +198,8 @@ export default function Expenses() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (submitting) return; // منع التكرار عند الضغط المتعدد
+    setSubmitting(true);
     try {
       let categoryToUse = formData.category;
       
@@ -297,6 +300,8 @@ export default function Expenses() {
       fetchData();
     } catch (error) {
       toast.error(error.response?.data?.detail || t('فشل في إضافة المصروف'));
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -472,7 +477,9 @@ export default function Expenses() {
                     <div className="flex gap-2 pt-4">
                       <Button type="button" variant="outline" onClick={() => setDialogOpen(false)} className="flex-1">
                         {t('إلغاء')}</Button>
-                      <Button type="submit" className="flex-1 bg-primary text-primary-foreground">{t('حفظ')}</Button>
+                      <Button type="submit" className="flex-1 bg-primary text-primary-foreground" disabled={submitting} data-testid="expense-submit-btn">
+                        {submitting ? t('جاري الحفظ...') : t('حفظ')}
+                      </Button>
                     </div>
                   </form>
                 </DialogContent>

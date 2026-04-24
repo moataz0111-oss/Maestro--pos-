@@ -3077,6 +3077,23 @@ async def create_expense(expense: ExpenseCreate, current_user: dict = Depends(ge
     
     tenant_id_for_biz = get_user_tenant_id(current_user)
     branch_for_biz = expense.branch_id if hasattr(expense, 'branch_id') else None
+    
+    # حماية ضد التكرار: نفس المستخدم + الفرع + المبلغ + الوصف خلال آخر 10 ثواني = تكرار
+    from datetime import timedelta
+    dup_cutoff = (datetime.now(timezone.utc) - timedelta(seconds=10)).isoformat()
+    dup_query = {
+        "created_by": current_user["id"],
+        "branch_id": branch_for_biz,
+        "amount": float(expense.amount),
+        "description": (expense.description or "").strip(),
+        "created_at": {"$gte": dup_cutoff}
+    }
+    if tenant_id_for_biz:
+        dup_query["tenant_id"] = tenant_id_for_biz
+    existing_dup = await db.expenses.find_one(dup_query, {"_id": 0})
+    if existing_dup:
+        return existing_dup  # إرجاع المصروف الموجود بدل إنشاء نسخة مكررة
+    
     business_date = await _resolve_business_date(tenant_id_for_biz, branch_for_biz)
     expense_doc = {
         "id": str(uuid.uuid4()),
@@ -8730,7 +8747,7 @@ async def test_printer_connection(printer_id: str, current_user: dict = Depends(
         return {"status": "error", "message": f"خطأ في الاتصال: {str(e)}"}
 
 
-PRINT_AGENT_VERSION = "6.3.2"
+PRINT_AGENT_VERSION = "6.3.3"
 
 @api_router.get("/print-agent-version")
 async def get_print_agent_version():

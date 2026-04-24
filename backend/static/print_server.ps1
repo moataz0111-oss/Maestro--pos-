@@ -2035,13 +2035,16 @@ public class JobReceiptRenderer {
                 "$(Get-Date) - Job: C# compile warning: $_" | Out-File $logPath -Append
             }
             
+            # OUTER loop: يضمن استمرار الـpolling حتى لو حصل خطأ غير متوقع
             while ($true) {
-                $jobCount = 0
-                try {
-                    # إرسال agent_version و device_id و branch_id (لعزل الفروع)
-                    $r = Invoke-WebRequest -Uri "$apiUrl/api/print-queue/pending?limit=20&agent_version={{AGENT_VERSION}}&device_id={{BRANCH_ID}}&branch_id={{BRANCH_ID}}" -UseBasicParsing -TimeoutSec 8
-                    $data = $r.Content | ConvertFrom-Json
-                    if ($data -and $data.jobs) { $jobCount = @($data.jobs).Count }
+              try {
+                while ($true) {
+                    $jobCount = 0
+                    try {
+                        # إرسال agent_version و device_id و branch_id (لعزل الفروع)
+                        $r = Invoke-WebRequest -Uri "$apiUrl/api/print-queue/pending?limit=20&agent_version={{AGENT_VERSION}}&device_id={{BRANCH_ID}}&branch_id={{BRANCH_ID}}" -UseBasicParsing -TimeoutSec 8
+                        $data = $r.Content | ConvertFrom-Json
+                        if ($data -and $data.jobs) { $jobCount = @($data.jobs).Count }
                     
                     foreach ($job in $data.jobs) {
                         try {
@@ -2130,15 +2133,21 @@ public class JobReceiptRenderer {
                             "$(Get-Date) - Queue: FAILED job $($job.id): $_" | Out-File $logPath -Append
                         }
                     }
-                } catch {
-                    # Polling error - silent
+                    } catch {
+                        # Polling error - silent
+                    }
+                    # سرعة قصوى: لو في جوبز، بول فوري (50ms). لو فاضي، انتظر 500ms
+                    if ($jobCount -gt 0) {
+                        Start-Sleep -Milliseconds 50
+                    } else {
+                        Start-Sleep -Milliseconds 500
+                    }
                 }
-                # سرعة قصوى: لو في جوبز، بول فوري (50ms). لو فاضي، انتظر 500ms
-                if ($jobCount -gt 0) {
-                    Start-Sleep -Milliseconds 50
-                } else {
-                    Start-Sleep -Milliseconds 500
-                }
+              } catch {
+                # لو حصل خطأ فادح خارج الحلقة الداخلية، نسجله ونعيد التشغيل فوراً
+                "$(Get-Date) - FATAL polling loop crashed: $_ - Restarting..." | Out-File $logPath -Append
+                Start-Sleep -Seconds 1
+              }
             }
         } -ArgumentList $backendUrl, $agentLog
         "$(Get-Date) - Print Queue polling job started (ID: $($pollingJob.Id))" | Out-File $agentLog -Append

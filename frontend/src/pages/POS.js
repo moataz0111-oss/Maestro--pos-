@@ -2398,11 +2398,16 @@ export default function POS() {
             is_cancel: true,
             notes: '*** تم إلغاء الطلب بالكامل ***'
           };
-          const cancelItems = (editingOrder.items || []).map(item => ({
-            ...item,
-            name: `[تم حذف] ${item.product_name || item.name}`,
-            product_name: `[تم حذف] ${item.product_name || item.name}`
-          }));
+          const cancelItems = (editingOrder.items || []).map(item => {
+            const realName = item.product_name || item.name || item.productName || 
+                             (products.find(p => p.id === (item.product_id || item.id))?.name) || 
+                             'صنف';
+            return {
+              ...item,
+              name: `[تم حذف] ${realName}`,
+              product_name: `[تم حذف] ${realName}`
+            };
+          });
           await printOrderToAllPrinters(cancelPrintOrder, cancelItems, products, kitchenPrinters, restaurantName);
         }
       } catch (printErr) {
