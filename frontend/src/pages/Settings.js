@@ -250,10 +250,22 @@ const AgentsMonitorPanel = ({ t }) => {
                 <div className="flex items-center gap-3 min-w-0">
                   <div className={`h-2 w-2 rounded-full ${a.status === 'online' ? 'bg-emerald-500 animate-pulse' : a.status === 'warning' ? 'bg-amber-500' : a.status === 'offline' ? 'bg-red-500' : 'bg-muted-foreground'}`} />
                   <div className="min-w-0">
-                    <div className="font-medium text-sm truncate">{a.branch_name}</div>
-                    <div className="text-[10px] text-muted-foreground flex items-center gap-2">
+                    <div className="font-medium text-sm truncate flex items-center gap-2">
+                      {a.branch_name}
+                      {a.version && a.version !== '6.4.0' && (
+                        <span className="px-1.5 py-0.5 text-[9px] rounded bg-red-500/20 text-red-600 font-bold border border-red-500/40" title="يحتاج تحديث">
+                          قديم
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-[10px] text-muted-foreground flex items-center gap-2 flex-wrap">
                       {a.version && <span>v{a.version}</span>}
                       {a.age_seconds != null && <span>• {t('آخر اتصال')}: {formatAge(a.age_seconds)} {t('منذ')}</span>}
+                      {a.pending_count > 0 && (
+                        <span className={`px-1.5 py-0.5 rounded font-bold ${a.oldest_job_age_seconds > 10 ? 'bg-red-500/20 text-red-600' : 'bg-amber-500/20 text-amber-600'}`}>
+                          📋 {a.pending_count} {t('معلق')} ({formatAge(a.oldest_job_age_seconds)})
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>

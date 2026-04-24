@@ -217,6 +217,36 @@ async def get_all_agents_status(current_user: dict = Depends(get_current_user)):
     ).to_list(1000)
     
     # مطابقة كل فرع بـ heartbeat
+    # جلب أوامر الطباعة المعلقة per branch (لتشخيص التأخير الحقيقي)
+    pending_query = {"status": "pending"}
+    if tenant_id:
+        pending_query["tenant_id"] = tenant_id
+    pending_jobs = await db.print_queue.find(
+        pending_query, {"_id": 0, "branch_id": 1, "created_at": 1}
+    ).to_list(1000)
+    
+    # حساب pending per branch + أقدم job
+    pending_by_branch = {}
+    for pj in pending_jobs:
+        bid = pj.get("branch_id", "")
+        if bid not in pending_by_branch:
+            pending_by_branch[bid] = {"count": 0, "oldest_created_at": pj.get("created_at", "")}
+        pending_by_branch[bid]["count"] += 1
+        if pj.get("created_at", "") < pending_by_branch[bid]["oldest_created_at"]:
+            pending_by_branch[bid]["oldest_created_at"] = pj.get("created_at", "")
+    
+    def _pending_info(branch_id):
+        """إرجاع pending_count + oldest_job_age_seconds لفرع"""
+        info = pending_by_branch.get(branch_id)
+        if not info:
+            return {"pending_count": 0, "oldest_job_age_seconds": 0}
+        try:
+            oldest_dt = datetime.fromisoformat(info["oldest_created_at"].replace("Z", "+00:00"))
+            age = int((now - oldest_dt).total_seconds())
+        except Exception:
+            age = 0
+        return {"pending_count": info["count"], "oldest_job_age_seconds": age}
+    
     result_agents = []
     seen_branches = set()
     
@@ -247,7 +277,8 @@ async def get_all_agents_status(current_user: dict = Depends(get_current_user)):
             "version": hb.get("version", "?"),
             "last_seen": last_seen_str,
             "age_seconds": int(age_seconds) if age_seconds is not None else None,
-            "status": status
+            "status": status,
+            **_pending_info(hb_branch)
         })
     
     # إضافة الفروع التي ليس لها heartbeat أصلاً (وسيط غير مثبّت بعد)
@@ -260,7 +291,8 @@ async def get_all_agents_status(current_user: dict = Depends(get_current_user)):
                 "version": None,
                 "last_seen": None,
                 "age_seconds": None,
-                "status": "not_installed"
+                "status": "not_installed",
+                **_pending_info(b.get("id"))
             })
     
     # إحصائيات سريعة
