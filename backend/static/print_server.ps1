@@ -2062,7 +2062,14 @@ public class JobReceiptRenderer {
                                 } elseif ($job.ip_address) {
                                     $pport = if ($job.port) { [int]$job.port } else { 9100 }
                                     $tcp = New-Object System.Net.Sockets.TcpClient
-                                    $tcp.Connect($job.ip_address, $pport)
+                                    $tcp.SendTimeout = 2000
+                                    $tcp.ReceiveTimeout = 2000
+                                    # Async connect مع timeout 2s لتجنب التعلق على طابعات معطوبة/مطفأة
+                                    $connectTask = $tcp.ConnectAsync($job.ip_address, $pport)
+                                    if (-not $connectTask.Wait(2000)) {
+                                        $tcp.Close()
+                                        throw "Network printer $($job.ip_address):$pport unreachable (2s timeout)"
+                                    }
                                     $stream = $tcp.GetStream()
                                     $stream.Write($bytes, 0, $bytes.Length)
                                     $stream.Flush()
@@ -2221,9 +2228,14 @@ public class JobReceiptRenderer {
             $qport = if ($req.QueryString['port']) { [int]$req.QueryString['port'] } else { 9100 }
             try {
                 $tc = New-Object System.Net.Sockets.TcpClient
-                $tc.Connect($qip, $qport)
-                $tc.Close()
-                $jsonOut = '{"online":true,"ip":"' + $qip + '"}'
+                $connectTask = $tc.ConnectAsync($qip, $qport)
+                if (-not $connectTask.Wait(1500)) {
+                    $tc.Close()
+                    $jsonOut = '{"online":false,"ip":"' + $qip + '","error":"timeout"}'
+                } else {
+                    $tc.Close()
+                    $jsonOut = '{"online":true,"ip":"' + $qip + '"}'
+                }
             } catch {
                 $jsonOut = '{"online":false,"ip":"' + $qip + '"}'
             }

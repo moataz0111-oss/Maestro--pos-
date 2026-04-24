@@ -88,6 +88,14 @@ async def get_pending_jobs(
             upsert=True
         )
     
+    # تنظيف: أي job "processing" لأكثر من 60 ثانية = الوكيل توقف → نرجعه لـ pending
+    from datetime import timedelta
+    stuck_cutoff = (datetime.now(timezone.utc) - timedelta(seconds=60)).isoformat()
+    await db.print_queue.update_many(
+        {"status": "processing", "claimed_at": {"$lt": stuck_cutoff}},
+        {"$set": {"status": "pending"}, "$unset": {"claimed_at": "", "claimed_by": ""}}
+    )
+    
     # بناء الاستعلام
     if branch_id:
         query = {"status": "pending", "branch_id": branch_id}
@@ -99,10 +107,32 @@ async def get_pending_jobs(
     check_interval = 0.1  # 100ms
     elapsed = 0.0
     
-    while True:
-        jobs = await db.print_queue.find(
-            query, {"_id": 0}
+    async def _fetch_and_claim():
+        """جلب الأوامر وتعليمها كـprocessing atomically - يمنع التكرار"""
+        # نحصل على IDs أولاً (قراءة)
+        pending = await db.print_queue.find(
+            query, {"_id": 0, "id": 1}
         ).sort("created_at", 1).limit(limit).to_list(limit)
+        if not pending:
+            return []
+        ids = [p["id"] for p in pending]
+        # نُعلّمهم كـprocessing atomically (منع الوكيل من إعادة الجلب)
+        await db.print_queue.update_many(
+            {"id": {"$in": ids}, "status": "pending"},
+            {"$set": {
+                "status": "processing",
+                "claimed_at": datetime.now(timezone.utc).isoformat(),
+                "claimed_by": device_id or "agent"
+            }}
+        )
+        # نرجع البيانات الكاملة للوكيل
+        claimed = await db.print_queue.find(
+            {"id": {"$in": ids}}, {"_id": 0}
+        ).sort("created_at", 1).to_list(limit)
+        return claimed
+    
+    while True:
+        jobs = await _fetch_and_claim()
         
         if jobs or elapsed >= max_wait:
             return {"jobs": jobs, "count": len(jobs)}

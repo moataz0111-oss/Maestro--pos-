@@ -8670,7 +8670,8 @@ async def get_printers(branch_id: Optional[str] = None, current_user: dict = Dep
     return printers
 
 @api_router.put("/printers/{printer_id}")
-async def update_printer(printer_id: str, printer: PrinterCreate, current_user: dict = Depends(get_current_user)):
+async def update_printer(printer_id: str, printer: dict, current_user: dict = Depends(get_current_user)):
+    """تحديث طابعة - يقبل partial update (أي حقول، حتى is_online فقط)"""
     if current_user["role"] not in [UserRole.ADMIN, UserRole.MANAGER, UserRole.SUPER_ADMIN]:
         raise HTTPException(status_code=403, detail="غير مصرح")
     
@@ -8680,7 +8681,12 @@ async def update_printer(printer_id: str, printer: PrinterCreate, current_user: 
     if not existing:
         raise HTTPException(status_code=404, detail="الطابعة غير موجودة")
     
-    update_data = printer.model_dump()
+    # إزالة حقول محظورة من الـ update (id, tenant_id, _id)
+    update_data = {k: v for k, v in (printer or {}).items() if k not in ("id", "_id", "tenant_id")}
+    if not update_data:
+        return {**existing, "_id": None}
+    update_data.pop("_id", None)
+    existing.pop("_id", None)
     await db.printers.update_one({"id": printer_id}, {"$set": update_data})
     updated = await db.printers.find_one({"id": printer_id}, {"_id": 0})
     return updated
@@ -8749,7 +8755,7 @@ async def test_printer_connection(printer_id: str, current_user: dict = Depends(
         return {"status": "error", "message": f"خطأ في الاتصال: {str(e)}"}
 
 
-PRINT_AGENT_VERSION = "6.4.1"
+PRINT_AGENT_VERSION = "6.4.2"
 
 @api_router.get("/print-agent-version")
 async def get_print_agent_version():
