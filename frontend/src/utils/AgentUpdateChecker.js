@@ -1,15 +1,15 @@
 /**
- * Maestro POS - Agent Update Checker v5
- * يفحص إصدار وسيط الطباعة ويظهر زر تحديث عند توفر نسخة جديدة
- * يعتمد على النسخة المطلوبة من السيرفر (single source of truth)
+ * Maestro POS - Agent Update Checker v6
+ * يفحص إصدار وسيط الطباعة ويظهر إشعار للمالك فقط
+ * - يظهر مرة واحدة فقط للمالك (admin) عند إطلاق نسخة جديدة
+ * - يُخفى تلقائياً بعد ضغط "تحديث" أو "إغلاق"
+ * - يُخفى للكاشير وبقية المستخدمين تماماً
  */
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Button } from '../components/ui/button';
 import { API_URL } from './api';
-import { Download, RefreshCw } from 'lucide-react';
+import { Download, RefreshCw, X } from 'lucide-react';
 import { toast } from 'sonner';
-
-const PRINT_AGENT_URL = 'http://localhost:9999';
 
 /** مقارنة مرنة للإصدارات: هل النسخة a >= النسخة b */
 function compareVersions(a, b) {
@@ -26,58 +26,49 @@ function compareVersions(a, b) {
   return 0;
 }
 
+/** قراءة المستخدم الحالي من localStorage */
+function getCurrentUserRole() {
+  try {
+    const userStr = localStorage.getItem('user');
+    if (!userStr) return null;
+    const u = JSON.parse(userStr);
+    return u?.role || null;
+  } catch {
+    return null;
+  }
+}
+
 export function AgentUpdateBanner({ t = (s) => s }) {
-  const [needsUpdate, setNeedsUpdate] = useState(false);
-  const [localVer, setLocalVer] = useState(null);
+  const [show, setShow] = useState(false);
   const [requiredVer, setRequiredVer] = useState(null);
   const [downloading, setDownloading] = useState(false);
-  const intervalRef = useRef(null);
-  const agentReachable = useRef(false);
+  const checkedRef = useRef(false);
 
-  // جلب النسخة المطلوبة من السيرفر (مصدر الحقيقة الوحيد)
   useEffect(() => {
-    const fetchRequiredVersion = async () => {
+    // نعرض الإشعار فقط للمالك (admin / super_admin)
+    const role = getCurrentUserRole();
+    const isOwner = role === 'admin' || role === 'super_admin';
+    if (!isOwner) return;
+    if (checkedRef.current) return;
+    checkedRef.current = true;
+
+    const checkOnce = async () => {
       try {
         const r = await fetch(`${API_URL}/print-agent-version`);
         const d = await r.json();
-        if (d.version) setRequiredVer(d.version);
+        const reqV = d.version;
+        if (!reqV) return;
+        setRequiredVer(reqV);
+
+        // هل سبق وأخفى المالك إشعار هذه النسخة؟
+        const dismissedKey = `agent_update_dismissed_${reqV}`;
+        if (localStorage.getItem(dismissedKey)) return;
+
+        setShow(true);
       } catch {}
     };
-    fetchRequiredVersion();
-    // إعادة فحص النسخة المطلوبة كل 10 دقائق (في حال ترقية السيرفر)
-    const i = setInterval(fetchRequiredVersion, 10 * 60 * 1000);
-    return () => clearInterval(i);
+    checkOnce();
   }, []);
-
-  const check = useCallback(async () => {
-    if (!requiredVer) return; // ننتظر جلب النسخة المطلوبة أولاً
-    try {
-      // استخدام backend heartbeat بدل الاتصال المباشر بـ localhost:9999
-      // (يتجنب Chrome Private Network Access block + CORS + بطء)
-      const r = await fetch(`${API_URL}/print-queue/agent-status`);
-      const d = await r.json();
-      agentReachable.current = d.online === true;
-      const v = d.version || null;
-      setLocalVer(v);
-      // إذا online والإصدار مطابق - لا حاجة للتحديث
-      if (d.online && v) {
-        const ok = compareVersions(v, requiredVer) >= 0;
-        setNeedsUpdate(!ok);
-      } else {
-        // إذا offline - لا نعرض banner تحديث (الوسيط أصلاً غير متصل)
-        setNeedsUpdate(false);
-      }
-    } catch {
-      agentReachable.current = false;
-      setNeedsUpdate(false);
-    }
-  }, [requiredVer]);
-
-  useEffect(() => {
-    check();
-    intervalRef.current = setInterval(check, 30000);
-    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
-  }, [check]);
 
   const handleDownload = async () => {
     setDownloading(true);
@@ -97,24 +88,28 @@ export function AgentUpdateBanner({ t = (s) => s }) {
       a.remove();
       window.URL.revokeObjectURL(url);
       toast.success(t('تم تحميل التحديث — شغّل الملف على الجهاز'));
-      
-      // فحص سريع كل 5 ثواني لمعرفة إذا تم التحديث
-      if (intervalRef.current) clearInterval(intervalRef.current);
-      intervalRef.current = setInterval(check, 5000);
+      // إخفاء فوري + تذكر لهذه النسخة
+      if (requiredVer) localStorage.setItem(`agent_update_dismissed_${requiredVer}`, '1');
+      setShow(false);
     } catch {
       toast.error(t('فشل التحميل'));
     }
     setDownloading(false);
   };
 
-  if (!needsUpdate) return null;
+  const handleDismiss = () => {
+    if (requiredVer) localStorage.setItem(`agent_update_dismissed_${requiredVer}`, '1');
+    setShow(false);
+  };
+
+  if (!show || !requiredVer) return null;
 
   return (
     <div data-testid="agent-update-banner" dir="rtl"
       className="flex items-center gap-3 bg-amber-50 border-2 border-amber-400 rounded-lg px-4 py-3 mb-3 shadow-sm">
       <Download className="w-5 h-5 text-amber-600 shrink-0" />
       <span className="text-sm font-semibold text-amber-800 flex-1">
-        {t('تحديث وسيط الطباعة متاح')} ({localVer || t('قديم')} → {requiredVer})
+        {t('تحديث وسيط الطباعة متاح')} (v{requiredVer})
       </span>
       <Button data-testid="update-agent-btn" size="sm"
         className="bg-amber-500 hover:bg-amber-600 text-white font-bold"
@@ -122,6 +117,11 @@ export function AgentUpdateBanner({ t = (s) => s }) {
         {downloading
           ? <><RefreshCw className="w-4 h-4 ml-1 animate-spin" />{t('جاري...')}</>
           : <><Download className="w-4 h-4 ml-1" />{t('تحديث')}</>}
+      </Button>
+      <Button data-testid="dismiss-update-btn" size="sm" variant="ghost"
+        className="text-amber-700 hover:bg-amber-100"
+        onClick={handleDismiss} aria-label={t('إغلاق')}>
+        <X className="w-4 h-4" />
       </Button>
     </div>
   );
