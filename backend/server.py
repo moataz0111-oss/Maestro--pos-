@@ -16944,50 +16944,58 @@ async def setup_database_indexes():
 
 @app.on_event("startup")
 async def cleanup_duplicate_expenses():
-    """تنظيف المصاريف المكررة تلقائياً مرة واحدة فقط (one-shot migration).
+    """حذف مصروف الغاز 50,000 المكرر تحديداً (one-shot).
     
-    يكتشف المصاريف المكررة: نفس (branch_id + created_by + amount + description)
-    تم إنشاؤها خلال 60 ثانية من بعضها = تكرار بشري/شبكي.
-    يحتفظ بالأقدم ويحذف البقية، ثم يعيد حساب total_expenses لكل وردية متأثرة.
+    نطاق محدود جداً:
+    - description يحتوي "غاز" فقط
+    - amount = 50,000 تحديداً
+    - نفس (tenant + branch + user + description + amount) تم إنشاؤها خلال 60 ثانية = تكرار
+    - يحتفظ بالأقدم، يحذف الأحدث، ويُعيد حساب الوردية المتأثرة
     
-    يُنفَّذ مرة واحدة فقط (محفوظ في collection `system_migrations`).
+    لن يلمس أي مصروف عادي. يعمل مرة واحدة فقط (محفوظ في system_migrations).
     """
     try:
-        MIG_KEY = "cleanup_duplicate_expenses_v1"
+        MIG_KEY = "cleanup_duplicate_gas_expense_v2"
         done = await db.system_migrations.find_one({"key": MIG_KEY})
         if done:
             logger.info(f"🟢 Migration {MIG_KEY} already applied, skipping")
             return
         
-        logger.info(f"🔧 Running migration: {MIG_KEY}")
-        from datetime import datetime as _dt, timezone as _tz, timedelta as _td
+        logger.info(f"🔧 Running TARGETED migration: {MIG_KEY} (غاز 50,000 فقط)")
+        from datetime import datetime as _dt, timezone as _tz
         
-        # تجميع المصاريف حسب الـ fingerprint
-        all_expenses = await db.expenses.find(
-            {}, {"_id": 0}
-        ).sort("created_at", 1).to_list(100000)
+        # نطاق محدد: فقط مصاريف الغاز بمبلغ 50,000
+        gas_expenses = await db.expenses.find({
+            "amount": 50000,
+            "description": {"$regex": "غاز", "$options": "i"}
+        }, {"_id": 0}).sort("created_at", 1).to_list(1000)
         
+        if not gas_expenses:
+            logger.info("   لا توجد مصاريف غاز 50,000 مطابقة")
+            await db.system_migrations.insert_one({
+                "key": MIG_KEY,
+                "executed_at": _dt.now(_tz.utc).isoformat(),
+                "deleted_count": 0,
+                "recomputed_shifts": 0
+            })
+            return
+        
+        # تجميع حسب fingerprint
         groups = {}
-        for e in all_expenses:
-            created = e.get("created_at", "")
-            if not created:
-                continue
+        for e in gas_expenses:
             fp = (
                 e.get("tenant_id") or "",
                 e.get("branch_id") or "",
                 e.get("created_by") or "",
-                float(e.get("amount") or 0),
                 (e.get("description") or "").strip()
             )
             groups.setdefault(fp, []).append(e)
         
-        # البحث عن المكررات (نفس fp خلال 60 ثانية)
         deleted_ids = []
         affected_shifts = set()
         for fp, items in groups.items():
             if len(items) < 2:
                 continue
-            # ترتيب حسب الوقت (الأقدم أولاً)
             items_sorted = sorted(items, key=lambda x: x.get("created_at", ""))
             kept = items_sorted[0]
             for dup in items_sorted[1:]:
@@ -16998,14 +17006,13 @@ async def cleanup_duplicate_expenses():
                 except Exception:
                     diff = 9999
                 if diff <= 60:
-                    # مكرر - احذفه
                     await db.expenses.delete_one({"id": dup["id"]})
                     deleted_ids.append(dup["id"])
                     if dup.get("branch_id"):
                         affected_shifts.add((dup.get("tenant_id") or "", dup["branch_id"], dup.get("created_at", "")))
-                    logger.info(f"   🗑️  حذف مكرر: amount={fp[3]} desc={fp[4][:30]} id={dup['id'][:8]}")
+                    logger.info(f"   🗑️  حذف غاز مكرر: desc={fp[3][:40]} id={dup['id'][:8]}")
         
-        # إعادة حساب total_expenses لكل وردية متأثرة
+        # إعادة حساب الوردية المتأثرة
         recomputed_shifts = set()
         for tenant_id, branch_id, exp_created in affected_shifts:
             shift_q = {"branch_id": branch_id, "started_at": {"$lte": exp_created}}
@@ -17039,18 +17046,17 @@ async def cleanup_duplicate_expenses():
                     }}
                 )
                 recomputed_shifts.add(s["id"])
-                logger.info(f"   ✅ أُعيد حساب الوردية {s['id'][:8]}... → total_expenses={total_exp:,.0f}")
+                logger.info(f"   ✅ وردية {s['id'][:8]} → total_expenses={total_exp:,.0f}")
         
-        # تسجيل المهاجرة كمُنفَّذة
         await db.system_migrations.insert_one({
             "key": MIG_KEY,
             "executed_at": _dt.now(_tz.utc).isoformat(),
             "deleted_count": len(deleted_ids),
             "recomputed_shifts": len(recomputed_shifts)
         })
-        logger.info(f"✅ Migration {MIG_KEY} complete: حذف {len(deleted_ids)} مكرر، إعادة حساب {len(recomputed_shifts)} وردية")
+        logger.info(f"✅ {MIG_KEY} complete: حذف {len(deleted_ids)} مكرر غاز، إعادة حساب {len(recomputed_shifts)} وردية")
     except Exception as e:
-        logger.error(f"❌ cleanup_duplicate_expenses migration failed: {e}")
+        logger.error(f"❌ cleanup_duplicate_gas_expense migration failed: {e}")
 
 
 
