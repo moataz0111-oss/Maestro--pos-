@@ -159,6 +159,9 @@ export default function SuperAdmin() {
   const [showLiveView, setShowLiveView] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showResetSalesConfirm, setShowResetSalesConfirm] = useState(false);
+  const [showResetBranchDialog, setShowResetBranchDialog] = useState(false);
+  const [tenantBranches, setTenantBranches] = useState([]);
+  const [confirmBranchReset, setConfirmBranchReset] = useState(null); // {branch, tenant_id}
   const [showResetInventoryConfirm, setShowResetInventoryConfirm] = useState(false);
   const [showResetHRConfirm, setShowResetHRConfirm] = useState(false);
   const [showEditTenant, setShowEditTenant] = useState(false);
@@ -1048,6 +1051,42 @@ export default function SuperAdmin() {
     } catch (error) {
       console.error('Reset sales error:', error);
       toast.error(getErrorMessage(error) || t('فشل في تصفير المبيعات'));
+    }
+  };
+
+  // === تصفير فرع محدد لعميل ===
+  const fetchTenantBranches = async (tenantId) => {
+    try {
+      const token = localStorage.getItem('super_admin_token');
+      const headers = { Authorization: `Bearer ${token}` };
+      const res = await axios.get(`${API}/super-admin/tenants/${tenantId}`, { headers });
+      const branches = res.data?.branches || [];
+      setTenantBranches(branches);
+    } catch (error) {
+      console.error('Fetch tenant branches error:', error);
+      setTenantBranches([]);
+    }
+  };
+
+  const resetBranchSales = async (tenantId, branchId, branchName) => {
+    try {
+      const token = localStorage.getItem('super_admin_token');
+      const headers = { Authorization: `Bearer ${token}` };
+      const res = await axios.post(
+        `${API}/super-admin/tenants/${tenantId}/branches/${branchId}/reset-sales?confirm=true`,
+        null,
+        { headers }
+      );
+      const d = res.data || {};
+      toast.success(
+        t('تم تصفير الفرع') + ` "${branchName}": ` +
+        `${d.deleted_orders || 0} طلب، ${d.deleted_shifts || 0} وردية، ${d.deleted_expenses || 0} مصروف`
+      );
+      // إعادة جلب الفروع بعد التصفير
+      await fetchTenantBranches(tenantId);
+    } catch (error) {
+      console.error('Reset branch sales error:', error);
+      toast.error(getErrorMessage(error) || t('فشل في تصفير الفرع'));
     }
   };
 
@@ -2128,6 +2167,21 @@ export default function SuperAdmin() {
           {/* تصفير المبيعات */}
           <Button variant="ghost" size="icon" onClick={() => { setSelectedTenant(tenant); setShowResetSalesConfirm(true); }} className="hover:bg-gray-600" title={t('تصفير المبيعات')}>
             <RotateCcw className="h-4 w-4 text-orange-400" />
+          </Button>
+          {/* تصفير فرع محدد */}
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={async () => {
+              setSelectedTenant(tenant);
+              await fetchTenantBranches(tenant.id);
+              setShowResetBranchDialog(true);
+            }}
+            className="hover:bg-gray-600"
+            title={t('تصفير فرع محدد')}
+            data-testid={`reset-branch-${tenant.id}`}
+          >
+            <Store className="h-4 w-4 text-pink-400" />
           </Button>
           {/* تصفير المخزون */}
           <Button variant="ghost" size="icon" onClick={() => { setSelectedTenant(tenant); setShowResetInventoryConfirm(true); }} className="hover:bg-gray-600" title={t('تصفير المخزون')}>
@@ -3764,6 +3818,89 @@ export default function SuperAdmin() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Modal: تصفير فرع محدد */}
+      <Dialog open={showResetBranchDialog} onOpenChange={(open) => { setShowResetBranchDialog(open); if (!open) { setConfirmBranchReset(null); setTenantBranches([]); }}}>
+        <DialogContent className="bg-gray-800 border-gray-700 text-white max-w-lg" data-testid="reset-branch-dialog">
+          <DialogHeader>
+            <DialogTitle className="text-xl text-pink-400 flex items-center gap-2">
+              <Store className="h-5 w-5" />
+              {t('تصفير فرع محدد')}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="py-2">
+            <p className="text-gray-300 mb-3 text-sm">
+              {t('العميل')}: <span className="font-bold text-white">{selectedTenant?.name}</span>
+            </p>
+            <p className="text-pink-300 text-xs mb-3">
+              {t('سيتم حذف: الطلبات + الورديات + المصاريف + المرتجعات + سجلات الصندوق + أوامر الطباعة المعلقة')}
+            </p>
+            <p className="text-emerald-300 text-xs mb-4">
+              {t('لن يُحذف: المنتجات، الفئات، الموظفون، الطابعات، إعدادات الفرع')}
+            </p>
+            
+            {tenantBranches.length === 0 ? (
+              <div className="text-center text-gray-400 py-6">{t('لا توجد فروع لهذا العميل')}</div>
+            ) : (
+              <div className="space-y-2 max-h-80 overflow-y-auto">
+                {tenantBranches.map((b) => (
+                  <div
+                    key={b.id}
+                    className="flex items-center justify-between p-3 bg-gray-900 rounded-lg border border-gray-700"
+                    data-testid={`branch-row-${b.id}`}
+                  >
+                    <div>
+                      <div className="font-bold text-white">{b.name}</div>
+                      {b.address && <div className="text-xs text-gray-400 mt-1">{b.address}</div>}
+                    </div>
+                    {confirmBranchReset?.branchId === b.id ? (
+                      <div className="flex gap-1">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setConfirmBranchReset(null)}
+                          className="border-gray-600 text-xs h-8"
+                          data-testid={`cancel-reset-${b.id}`}
+                        >
+                          {t('إلغاء')}
+                        </Button>
+                        <Button
+                          size="sm"
+                          onClick={async () => {
+                            await resetBranchSales(selectedTenant.id, b.id, b.name);
+                            setConfirmBranchReset(null);
+                          }}
+                          className="bg-red-600 hover:bg-red-700 text-xs h-8"
+                          data-testid={`confirm-reset-${b.id}`}
+                        >
+                          <RotateCcw className="h-3 w-3 ml-1" />
+                          {t('تأكيد التصفير')}
+                        </Button>
+                      </div>
+                    ) : (
+                      <Button
+                        size="sm"
+                        onClick={() => setConfirmBranchReset({ branchId: b.id, name: b.name })}
+                        className="bg-pink-600 hover:bg-pink-700 text-xs h-8"
+                        data-testid={`reset-branch-btn-${b.id}`}
+                      >
+                        <RotateCcw className="h-3 w-3 ml-1" />
+                        {t('تصفير الفرع')}
+                      </Button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowResetBranchDialog(false)} className="border-gray-600">
+              {t('إغلاق')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
 
       {/* Modal: تأكيد تصفير المخزون */}
       <Dialog open={showResetInventoryConfirm} onOpenChange={setShowResetInventoryConfirm}>

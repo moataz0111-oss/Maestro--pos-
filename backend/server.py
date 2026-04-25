@@ -10334,6 +10334,59 @@ async def reset_all_sales(confirm: bool = False, current_user: dict = Depends(ve
         }
     }
 
+@api_router.post("/super-admin/tenants/{tenant_id}/branches/{branch_id}/reset-sales")
+async def reset_branch_sales(
+    tenant_id: str,
+    branch_id: str,
+    confirm: bool = False,
+    current_user: dict = Depends(verify_super_admin)
+):
+    """تصفير مبيعات فرع محدد لعميل محدد (super_admin فقط).
+    
+    يحذف من هذا الفرع فقط:
+    - الطلبات، الورديات، المصاريف، المرتجعات
+    - سجلات الصندوق وإغلاقاته
+    - أوامر الطباعة المعلقة
+    
+    لا يحذف: المنتجات، الفئات، الموظفين، إعدادات الفرع، الطابعات.
+    """
+    if not confirm:
+        raise HTTPException(status_code=400, detail="يجب تأكيد التصفير بإرسال confirm=true")
+    
+    branch = await db.branches.find_one({"id": branch_id, "tenant_id": tenant_id}, {"_id": 0})
+    if not branch:
+        raise HTTPException(status_code=404, detail="الفرع غير موجود لهذا العميل")
+    
+    base_q = {"tenant_id": tenant_id, "branch_id": branch_id}
+    
+    orders_result = await db.orders.delete_many(base_q)
+    shifts_result = await db.shifts.delete_many(base_q)
+    expenses_result = await db.expenses.delete_many(base_q)
+    refunds_result = await db.refunds.delete_many(base_q)
+    cash_closings_result = await db.cash_register_closings.delete_many(base_q)
+    cash_drawer_result = await db.cash_drawer_logs.delete_many(base_q)
+    print_queue_result = await db.print_queue.delete_many(base_q)
+    
+    # تصفير حالة الطاولات
+    await db.tables.update_many(base_q, {"$set": {
+        "status": "available",
+        "current_order_id": None
+    }})
+    
+    return {
+        "message": f"تم تصفير فرع '{branch.get('name','')}' بنجاح",
+        "branch_name": branch.get("name", ""),
+        "deleted_orders": orders_result.deleted_count,
+        "deleted_shifts": shifts_result.deleted_count,
+        "deleted_expenses": expenses_result.deleted_count,
+        "deleted_refunds": refunds_result.deleted_count,
+        "deleted_cash_closings": cash_closings_result.deleted_count,
+        "deleted_cash_drawer_logs": cash_drawer_result.deleted_count,
+        "deleted_print_queue": print_queue_result.deleted_count
+    }
+
+
+
 @api_router.post("/super-admin/tenants/{tenant_id}/reset-sales")
 async def reset_tenant_sales(tenant_id: str, confirm: bool = False, current_user: dict = Depends(verify_super_admin)):
     """تصفير مبيعات عميل معين - للتجربة"""
