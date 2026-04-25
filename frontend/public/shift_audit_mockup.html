@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<title>معاينة - تدقيق الشفت قبل الإغلاق</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', 'Tahoma', sans-serif; background: #0f172a; padding: 24px; color: #e2e8f0; }
+  .container { max-width: 580px; margin: 0 auto; background: #1e293b; border-radius: 16px; padding: 0; box-shadow: 0 20px 50px rgba(0,0,0,0.5); border: 1px solid #334155; overflow: hidden; }
+  .header { background: linear-gradient(135deg, #f59e0b, #d97706); padding: 18px 24px; text-align: center; }
+  .header h1 { color: #fff; font-size: 20px; font-weight: bold; margin-bottom: 4px; }
+  .header .sub { color: #fef3c7; font-size: 12px; }
+  .content { padding: 20px; }
+  .section { background: #0f172a; border: 1px solid #334155; border-radius: 12px; padding: 14px 16px; margin-bottom: 12px; }
+  .section-title { font-size: 13px; font-weight: bold; color: #94a3b8; margin-bottom: 10px; display: flex; align-items: center; gap: 6px; }
+  .row { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; font-size: 14px; }
+  .row.bold { font-weight: bold; padding-top: 10px; border-top: 1px dashed #475569; margin-top: 6px; }
+  .label { color: #cbd5e1; }
+  .value { color: #f1f5f9; font-family: 'Cairo', monospace; font-weight: 600; }
+  .value.green { color: #10b981; }
+  .value.red { color: #ef4444; }
+  .value.amber { color: #f59e0b; }
+  .value.muted { color: #64748b; text-decoration: line-through; }
+  .badge { display: inline-block; font-size: 10px; padding: 2px 8px; border-radius: 8px; font-weight: bold; margin-right: 4px; }
+  .badge.refund { background: #7c2d12; color: #fed7aa; }
+  .badge.cancel { background: #450a0a; color: #fecaca; }
+  .input-section { background: linear-gradient(135deg, #0c4a6e, #075985); border: 2px solid #0ea5e9; border-radius: 12px; padding: 16px; margin: 16px 0; }
+  .input-label { font-size: 13px; color: #bae6fd; margin-bottom: 8px; font-weight: bold; }
+  .cash-input { width: 100%; padding: 12px; font-size: 24px; font-weight: bold; text-align: center; background: #082f49; border: 2px solid #0ea5e9; border-radius: 8px; color: #fff; font-family: 'Cairo', monospace; }
+  .diff-row { background: #1e293b; border-radius: 10px; padding: 14px; margin-top: 12px; text-align: center; border: 2px solid #475569; }
+  .diff-row.match { border-color: #10b981; background: linear-gradient(135deg, #064e3b, #052e2c); }
+  .diff-row.short { border-color: #ef4444; background: linear-gradient(135deg, #7f1d1d, #450a0a); }
+  .diff-row.over { border-color: #f59e0b; background: linear-gradient(135deg, #78350f, #451a03); }
+  .diff-label { font-size: 11px; color: #94a3b8; margin-bottom: 4px; }
+  .diff-value { font-size: 22px; font-weight: bold; }
+  .diff-value.match { color: #10b981; }
+  .diff-value.short { color: #fca5a5; }
+  .diff-value.over { color: #fde68a; }
+  .actions { display: flex; gap: 8px; padding: 16px 20px; background: #0f172a; border-top: 1px solid #334155; }
+  .btn { flex: 1; padding: 12px; border-radius: 10px; font-weight: bold; font-size: 14px; cursor: pointer; border: none; }
+  .btn.cancel { background: #334155; color: #cbd5e1; }
+  .btn.confirm { background: linear-gradient(135deg, #10b981, #059669); color: #fff; box-shadow: 0 4px 12px rgba(16,185,129,0.3); }
+  .info-note { background: #1e3a8a; border: 1px solid #3b82f6; border-radius: 8px; padding: 8px 12px; font-size: 11px; color: #bfdbfe; margin-bottom: 10px; }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <h1>📋 تدقيق الشفت قبل الإغلاق</h1>
+    <div class="sub">الكاشير: احمد زين • الفرع: السيدية • الشفت: 2026/04/24</div>
+  </div>
+  
+  <div class="content">
+    <!-- المبيعات حسب طريقة الدفع -->
+    <div class="section">
+      <div class="section-title">💰 الإيرادات حسب طريقة الدفع</div>
+      <div class="row"><span class="label">نقد</span><span class="value green">85,500 IQD</span></div>
+      <div class="row"><span class="label">بطاقة</span><span class="value">12,000 IQD</span></div>
+      <div class="row"><span class="label">آجل</span><span class="value">5,000 IQD</span></div>
+      <div class="row"><span class="label">توصيل (طلبات)</span><span class="value">8,500 IQD</span></div>
+      <div class="row bold"><span class="label">إجمالي المبيعات</span><span class="value">111,000 IQD</span></div>
+    </div>
+    
+    <!-- المصاريف -->
+    <div class="section">
+      <div class="section-title">📤 المصاريف (الفرع + الكاشير فقط)</div>
+      <div class="row"><span class="label">غاز</span><span class="value red">-50,000 IQD</span></div>
+      <div class="row"><span class="label">صيانة</span><span class="value red">-8,000 IQD</span></div>
+      <div class="row bold"><span class="label">إجمالي المصاريف</span><span class="value red">-58,000 IQD</span></div>
+    </div>
+    
+    <!-- المرتجعات والإلغاءات (تظهر لا تُحسب) -->
+    <div class="section" style="border: 1px dashed #475569;">
+      <div class="section-title">⚠️ المرتجعات والإلغاءات (للعلم فقط - لا تُخصم من المبيعات)</div>
+      <div class="row">
+        <span class="label"><span class="badge refund">مرتجع</span>طلب #45 - نقد</span>
+        <span class="value muted">4,500 IQD</span>
+      </div>
+      <div class="row">
+        <span class="label"><span class="badge cancel">ملغي</span>طلب #52</span>
+        <span class="value muted">12,000 IQD</span>
+      </div>
+      <div class="info-note">
+        ℹ️ المرتجعات النقدية فقط تُخصم من الصندوق المتوقع (لأن المال خرج فعلياً). الإلغاءات لا تُخصم من أي رقم.
+      </div>
+      <div class="row"><span class="label">المرتجع النقدي (يُخصم من الصندوق)</span><span class="value amber">-4,500 IQD</span></div>
+    </div>
+    
+    <!-- المعادلة -->
+    <div class="section">
+      <div class="section-title">🧮 معادلة الصندوق المتوقع</div>
+      <div class="row"><span class="label">الصندوق الافتتاحي</span><span class="value">+ 50,000</span></div>
+      <div class="row"><span class="label">+ مبيعات النقد</span><span class="value green">+ 85,500</span></div>
+      <div class="row"><span class="label">- المصاريف</span><span class="value red">- 58,000</span></div>
+      <div class="row"><span class="label">- المرتجعات النقدية</span><span class="value amber">- 4,500</span></div>
+      <div class="row bold"><span class="label">💎 الصندوق المتوقع</span><span class="value" style="font-size:18px;color:#fbbf24;">73,000 IQD</span></div>
+    </div>
+    
+    <!-- إدخال المبلغ الفعلي -->
+    <div class="input-section">
+      <div class="input-label">💵 المبلغ النقدي الموجود في الصندوق فعلاً</div>
+      <input class="cash-input" type="text" value="73,000" />
+    </div>
+    
+    <!-- الفرق -->
+    <div class="diff-row match">
+      <div class="diff-label">الفرق (مطابق)</div>
+      <div class="diff-value match">0 IQD ✅</div>
+    </div>
+  </div>
+  
+  <div class="actions">
+    <button class="btn cancel">إلغاء</button>
+    <button class="btn confirm">✅ تأكيد الإغلاق</button>
+  </div>
+</div>
+</body>
+</html>
