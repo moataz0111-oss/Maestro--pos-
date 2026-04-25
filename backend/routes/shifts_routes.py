@@ -421,19 +421,50 @@ async def close_shift(shift_id: str, close_data: ShiftClose, current_user: dict 
     shift_start = shift.get("started_at") or shift.get("opened_at") or ""
     shift_cashier = shift.get("cashier_id") or ""
     shift_branch = shift.get("branch_id") or ""
+    shift_tenant = shift.get("tenant_id") or get_user_tenant_id(current_user)
+    shift_end_time = datetime.now(timezone.utc).isoformat()  # حد علوي = الآن
     
-    orders = await db.orders.find({
+    # === جلب الطلبات بفلاتر دقيقة (tenant + branch + cashier + الفترة الزمنية) ===
+    orders_query = {
         "cashier_id": shift_cashier,
-        "created_at": {"$gte": shift_start},
-        "status": {"$ne": OrderStatus.CANCELLED}
-    }).to_list(1000)
+        "created_at": {"$gte": shift_start, "$lte": shift_end_time},
+        "status": {"$nin": [OrderStatus.CANCELLED, "canceled", "deleted"]}
+    }
+    if shift_tenant:
+        orders_query["tenant_id"] = shift_tenant
+    if shift_branch:
+        orders_query["branch_id"] = shift_branch  # منع خلط فروع
+    
+    all_orders_raw = await db.orders.find(orders_query).to_list(2000)
+    
+    # فصل المرتجعات (لا تُحسب في المبيعات لكن نقدها يُخصم من expected_cash)
+    orders = []
+    refunded_orders = []
+    for o in all_orders_raw:
+        if o.get("status") == "refunded":
+            refunded_orders.append(o)
+        else:
+            orders.append(o)
     
     total_sales = sum(_safe_num(o.get("total")) for o in orders)
-    total_cost = sum(_safe_num(o.get("total_cost")) for o in orders)
+    
+    # حساب التكلفة بشكل دقيق: من items إذا total_cost ناقص أو null
+    def _calc_order_cost(o):
+        tc = o.get("total_cost")
+        if tc is not None and _safe_num(tc) > 0:
+            return _safe_num(tc)
+        # احسب من items: cost × quantity
+        items = o.get("items", []) or []
+        return sum(_safe_num(it.get("cost", it.get("product_cost", 0))) * _safe_num(it.get("quantity", 1)) for it in items)
+    
+    total_cost = sum(_calc_order_cost(o) for o in orders)
     gross_profit = total_sales - total_cost
     cash_sales = sum(_safe_num(o.get("total")) for o in orders if o.get("payment_method") == PaymentMethod.CASH)
     card_sales = sum(_safe_num(o.get("total")) for o in orders if o.get("payment_method") == PaymentMethod.CARD)
     credit_sales = sum(_safe_num(o.get("total")) for o in orders if o.get("payment_method") == PaymentMethod.CREDIT and not o.get("delivery_app") and not o.get("is_delivery_company"))
+    
+    # المرتجعات النقدية - تُخصم من expected_cash
+    cash_refunds = sum(_safe_num(o.get("total")) for o in refunded_orders if o.get("payment_method") == PaymentMethod.CASH)
     
     delivery_app_sales = {}
     for o in orders:
@@ -443,22 +474,35 @@ async def close_shift(shift_id: str, close_data: ShiftClose, current_user: dict 
                 delivery_app_sales[app_name] = 0
             delivery_app_sales[app_name] += _safe_num(o.get("total"))
     
-    expenses = await db.expenses.find({
+    # === جلب المصروفات بفلاتر دقيقة ===
+    expenses_query = {
         "branch_id": shift_branch,
         "category": {"$ne": "refund"},
-        "created_at": {"$gte": shift_start}
-    }).to_list(100)
+        "created_at": {"$gte": shift_start, "$lte": shift_end_time}
+    }
+    if shift_tenant:
+        expenses_query["tenant_id"] = shift_tenant
+    # إضافة فلتر الكاشير إذا كان مسجلاً (يمنع double-count بين كاشيرين بنفس الفرع)
+    expenses_query["$or"] = [
+        {"cashier_id": shift_cashier},
+        {"created_by": shift_cashier},
+        {"cashier_id": {"$exists": False}, "created_by": {"$exists": False}}  # المصاريف القديمة بدون cashier
+    ]
+    
+    expenses = await db.expenses.find(expenses_query, {"_id": 0}).to_list(500)
     total_expenses = sum(_safe_num(e.get("amount")) for e in expenses)
     
     net_profit = gross_profit - total_expenses
     opening_cash = _safe_num(shift.get("opening_cash", shift.get("opening_balance", 0)))
-    expected_cash = opening_cash + cash_sales - total_expenses
+    # ✅ خصم المرتجعات النقدية من expected_cash
+    expected_cash = opening_cash + cash_sales - total_expenses - cash_refunds
     cash_difference = close_data.closing_cash - expected_cash
     
     update_data = {
         "closing_cash": close_data.closing_cash,
         "expected_cash": expected_cash,
         "cash_difference": cash_difference,
+        "cash_refunds": cash_refunds,
         "total_sales": total_sales,
         "total_cost": total_cost,
         "gross_profit": gross_profit,
@@ -469,7 +513,7 @@ async def close_shift(shift_id: str, close_data: ShiftClose, current_user: dict 
         "delivery_app_sales": delivery_app_sales,
         "total_expenses": total_expenses,
         "net_profit": net_profit,
-        "ended_at": datetime.now(timezone.utc).isoformat(),
+        "ended_at": shift_end_time,
         "status": "closed",
         "notes": close_data.notes
     }

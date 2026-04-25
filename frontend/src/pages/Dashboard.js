@@ -1367,23 +1367,34 @@ export default function Dashboard() {
       return;
     }
     
-    // جلب الطابعات من الباكند
+    // جلب الطابعات من الباكند - مع فلتر الفرع الحالي
     const token = localStorage.getItem('token');
-    const printersRes = await axios.get(`${API}/printers`, { headers: { Authorization: `Bearer ${token}` } }).catch(() => ({ data: [] }));
+    const currentBranchId = getBranchIdForApi() || user?.branch_id || '';
+    const printersRes = await axios.get(`${API}/printers`, { 
+      headers: { Authorization: `Bearer ${token}` },
+      params: currentBranchId ? { branch_id: currentBranchId } : {}
+    }).catch(() => ({ data: [] }));
     const printers = printersRes.data || [];
-    const usbPrinter = printers.find(p => p.connection_type === 'usb' && p.print_mode !== 'orders_only' && p.print_mode !== 'selected_products');
+    // اختيار طابعة الكاشير في هذا الفرع تحديداً
+    const usbPrinter = printers.find(p => 
+      p.connection_type === 'usb' && 
+      p.print_mode !== 'orders_only' && 
+      p.print_mode !== 'selected_products' &&
+      (!currentBranchId || !p.branch_id || p.branch_id === currentBranchId)
+    );
     
     if (!usbPrinter?.usb_printer_name) {
       printClosingReceipt(data);
       return;
     }
     
-    // إرسال عبر Print Queue (السيرفر) - لا يحتاج اتصال مباشر بالوسيط
+    // إرسال عبر Print Queue (السيرفر) - مع branch_id لضمان وصول للوسيط الصحيح
     try {
       await axios.post(`${API}/print-queue`, {
         printer_name: usbPrinter.name || 'Cashier',
         printer_type: 'usb',
         usb_printer_name: usbPrinter.usb_printer_name,
+        branch_id: usbPrinter.branch_id || currentBranchId || '',
         raw_data: bitmapResult.raw_data
       }, { headers: { Authorization: `Bearer ${token}` } });
       toast.success(t('تم إرسال إيصال الإغلاق للطباعة'));

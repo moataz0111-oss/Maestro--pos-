@@ -1133,7 +1133,7 @@ export default function POS() {
       playSuccess();
       toast.success(`✅ ${t('تم إرجاع الفاتورة')} #${refundOrderInfo.order_number} ${t('بنجاح')}`);
       
-      // طباعة أمر المرتجع للمطبخ
+      // طباعة أمر المرتجع للمطبخ + إيصال للكاشير بقيمة 0
       try {
         const restaurantName = restaurantSettings?.name_ar || restaurantSettings?.name || '';
         const kitchenPrinters = availablePrinters.filter(p => 
@@ -1149,15 +1149,43 @@ export default function POS() {
             refund_label: '*** مرتجع - إلغاء ***',
             notes: `مرتجع: ${refundReason.trim()}`
           };
-          const refundItems = (refundOrderInfo.items || []).map(item => ({
-            ...item,
-            name: `[مرتجع] ${item.product_name || item.name}`,
-            product_name: `[مرتجع] ${item.product_name || item.name}`
-          }));
-          await printOrderToAllPrinters(refundPrintOrder, refundItems, products, kitchenPrinters, restaurantName);
+          const refundItems = (refundOrderInfo.items || []).map(item => {
+            const realName = item.product_name || item.name || item.productName || 
+                             (products.find(p => p.id === (item.product_id || item.id))?.name) || 'صنف';
+            return {
+              ...item,
+              name: `[مرتجع] ${realName}`,
+              product_name: `[مرتجع] ${realName}`
+            };
+          });
+          printOrderToAllPrinters(refundPrintOrder, refundItems, products, kitchenPrinters, restaurantName)
+            .catch(e => console.warn('Refund kitchen print err:', e));
+        }
+        
+        // إيصال مرتجع بقيمة 0 لطابعة الكاشير (تنبيه للموظف)
+        let cashierPrinter = availablePrinters.find(p => p.print_mode === 'full_receipt');
+        if (!cashierPrinter) cashierPrinter = availablePrinters.find(p => p.connection_type === 'usb' && p.usb_printer_name);
+        if (cashierPrinter && refundOrderInfo.items) {
+          const refundCashierOrder = {
+            ...buildPrintOrderData(refundOrderInfo.order_number),
+            order_number: refundOrderInfo.order_number,
+            is_refund: true,
+            refund_label: '*** مرتجع - تم إلغاء الطلب ***',
+            notes: `سبب المرتجع: ${refundReason.trim()}`,
+            items: (refundOrderInfo.items || []).map(item => {
+              const realName = item.product_name || item.name || item.productName || 
+                               (products.find(p => p.id === (item.product_id || item.id))?.name) || 'صنف';
+              return { ...item, product_name: `[مرتجع] ${realName}`, name: `[مرتجع] ${realName}` };
+            }),
+            total: 0,
+            subtotal: 0,
+            payment_method: 'مرتجع',
+            cashier_name: user?.name || user?.full_name || ''
+          };
+          sendReceiptPrint(cashierPrinter, refundCashierOrder).catch(e => console.warn('Refund cashier print err:', e));
         }
       } catch (printErr) {
-        console.warn('Failed to print refund to kitchen:', printErr);
+        console.warn('Failed to print refund:', printErr);
       }
       // إعادة تعيين الحالة وإغلاق الحوار
       setRefundDialogOpen(false);
@@ -2421,10 +2449,34 @@ export default function POS() {
               product_name: `[تم حذف] ${realName}`
             };
           });
-          await printOrderToAllPrinters(cancelPrintOrder, cancelItems, products, kitchenPrinters, restaurantName);
+          printOrderToAllPrinters(cancelPrintOrder, cancelItems, products, kitchenPrinters, restaurantName)
+            .catch(e => console.warn('Cancel kitchen print err:', e));
+        }
+        
+        // إيصال إلغاء بقيمة 0 لطابعة الكاشير
+        let cashierPrinter = availablePrinters.find(p => p.print_mode === 'full_receipt');
+        if (!cashierPrinter) cashierPrinter = availablePrinters.find(p => p.connection_type === 'usb' && p.usb_printer_name);
+        if (cashierPrinter && editingOrder.items?.length > 0) {
+          const cancelCashierOrder = {
+            ...buildPrintOrderData(editingOrder.order_number),
+            order_number: editingOrder.order_number,
+            is_cancel: true,
+            refund_label: '*** تم إلغاء الطلب بالكامل ***',
+            notes: 'إلغاء طلب',
+            items: (editingOrder.items || []).map(item => {
+              const realName = item.product_name || item.name || item.productName || 
+                               (products.find(p => p.id === (item.product_id || item.id))?.name) || 'صنف';
+              return { ...item, product_name: `[ملغي] ${realName}`, name: `[ملغي] ${realName}` };
+            }),
+            total: 0,
+            subtotal: 0,
+            payment_method: 'ملغي',
+            cashier_name: user?.name || user?.full_name || ''
+          };
+          sendReceiptPrint(cashierPrinter, cancelCashierOrder).catch(e => console.warn('Cancel cashier print err:', e));
         }
       } catch (printErr) {
-        console.warn('Failed to print cancellation to kitchen:', printErr);
+        console.warn('Failed to print cancellation:', printErr);
       }
       
       clearCart();
