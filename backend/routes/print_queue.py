@@ -108,26 +108,34 @@ async def get_pending_jobs(
     elapsed = 0.0
     
     async def _fetch_and_claim():
-        """جلب الأوامر وتعليمها كـprocessing atomically - يمنع التكرار"""
-        # نحصل على IDs أولاً (قراءة)
+        """جلب الأوامر وتعليمها كـprocessing بـclaim_token فريد - bulletproof ضد race conditions"""
+        import uuid as _uuid
+        claim_token = _uuid.uuid4().hex
+        
+        # خطوة 1: جلب IDs المعلقة
         pending = await db.print_queue.find(
             query, {"_id": 0, "id": 1}
         ).sort("created_at", 1).limit(limit).to_list(limit)
         if not pending:
             return []
         ids = [p["id"] for p in pending]
-        # نُعلّمهم كـprocessing atomically (منع الوكيل من إعادة الجلب)
-        await db.print_queue.update_many(
+        
+        # خطوة 2: تعليم atomic بـclaim_token خاص بهذا الـrequest (لو وكيلان متوازيان، واحد فقط ينجح)
+        result = await db.print_queue.update_many(
             {"id": {"$in": ids}, "status": "pending"},
             {"$set": {
                 "status": "processing",
                 "claimed_at": datetime.now(timezone.utc).isoformat(),
-                "claimed_by": device_id or "agent"
+                "claimed_by": device_id or "agent",
+                "claim_token": claim_token
             }}
         )
-        # نرجع البيانات الكاملة للوكيل
+        if result.modified_count == 0:
+            return []  # وكيل آخر سرقها - لا نُرجع شيئاً
+        
+        # خطوة 3: نُرجع فقط الأوامر التي لها claim_token الخاص بنا (لا تكرار أبداً)
         claimed = await db.print_queue.find(
-            {"id": {"$in": ids}}, {"_id": 0}
+            {"claim_token": claim_token}, {"_id": 0}
         ).sort("created_at", 1).to_list(limit)
         return claimed
     

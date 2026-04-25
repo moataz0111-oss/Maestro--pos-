@@ -8755,7 +8755,7 @@ async def test_printer_connection(printer_id: str, current_user: dict = Depends(
         return {"status": "error", "message": f"خطأ في الاتصال: {str(e)}"}
 
 
-PRINT_AGENT_VERSION = "6.4.2"
+PRINT_AGENT_VERSION = "6.4.3"
 
 @api_router.get("/print-agent-version")
 async def get_print_agent_version():
