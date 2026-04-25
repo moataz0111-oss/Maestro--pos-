@@ -1078,9 +1078,11 @@ export default function SuperAdmin() {
         { headers }
       );
       const d = res.data || {};
+      const det = d.details || {};
       toast.success(
-        t('تم تصفير الفرع') + ` "${branchName}": ` +
-        `${d.deleted_orders || 0} طلب، ${d.deleted_shifts || 0} وردية، ${d.deleted_expenses || 0} مصروف`
+        `${t('تم تصفير فرع')} "${branchName}": ${d.total_deleted || 0} ${t('سجل')}\n` +
+        `طلبات: ${det.orders || 0} | ورديات: ${det.shifts || 0} | إغلاقات: ${(det.cash_register_closings||0)+(det.cash_register_closes||0)} | مصاريف: ${det.expenses || 0} | مرتجعات: ${det.refunds || 0}`,
+        { duration: 8000 }
       );
       // إعادة جلب الفروع بعد التصفير
       await fetchTenantBranches(tenantId);
@@ -3833,10 +3835,10 @@ export default function SuperAdmin() {
               {t('العميل')}: <span className="font-bold text-white">{selectedTenant?.name}</span>
             </p>
             <p className="text-pink-300 text-xs mb-3">
-              {t('سيتم حذف: الطلبات + الورديات + المصاريف + المرتجعات + سجلات الصندوق + أوامر الطباعة المعلقة')}
+              {t('سيُحذف من هذا الفرع فقط: كل الطلبات (نقد/بطاقة/آجل/توصيل/شركات) + الإلغاءات + المرتجعات + الورديات + إغلاقات الصندوق (قديمة وجديدة) + المصاريف + سجلات الصندوق + حركات المخزون + الحجوزات + المراجعات + الكوبونات المُستخدمة + سجل التدقيق + المكالمات.')}
             </p>
             <p className="text-emerald-300 text-xs mb-4">
-              {t('لن يُحذف: المنتجات، الفئات، الموظفون، الطابعات، إعدادات الفرع')}
+              {t('لن يُحذف: المنتجات، الفئات، الموظفون، الطابعات، إعدادات الفرع، الموردون، الرواتب، السلف، الحضور.')}
             </p>
             
             {tenantBranches.length === 0 ? (

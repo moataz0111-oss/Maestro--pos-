@@ -10341,14 +10341,24 @@ async def reset_branch_sales(
     confirm: bool = False,
     current_user: dict = Depends(verify_super_admin)
 ):
-    """تصفير مبيعات فرع محدد لعميل محدد (super_admin فقط).
+    """تصفير شامل لفرع محدد لعميل محدد (super_admin فقط).
     
-    يحذف من هذا الفرع فقط:
-    - الطلبات، الورديات، المصاريف، المرتجعات
-    - سجلات الصندوق وإغلاقاته
+    يحذف من هذا الفرع فقط (كل البيانات المعاملاتية):
+    - الطلبات (نقد/بطاقة/آجل/توصيل/شركات) + الإلغاءات
+    - الورديات (شفتات قديمة وجديدة)
+    - إغلاقات الصندوق (قديمة وجديدة)
+    - سجلات الصندوق وحركاته
+    - المصاريف
+    - المرتجعات + counters المرتجعات
     - أوامر الطباعة المعلقة
+    - حركات/معاملات المخزون
+    - الحجوزات + المراجعات
+    - استخدام الكوبونات
+    - سجلات التدقيق (audit) لهذا الفرع
+    - معاملات الدفع
     
-    لا يحذف: المنتجات، الفئات، الموظفين، إعدادات الفرع، الطابعات.
+    لن يحذف: المنتجات، الفئات، الموظفين، الطابعات، الإعدادات، الموردين، 
+    الرواتب، السلف، الحسومات، الموظفين، الحضور.
     """
     if not confirm:
         raise HTTPException(status_code=400, detail="يجب تأكيد التصفير بإرسال confirm=true")
@@ -10359,30 +10369,61 @@ async def reset_branch_sales(
     
     base_q = {"tenant_id": tenant_id, "branch_id": branch_id}
     
-    orders_result = await db.orders.delete_many(base_q)
-    shifts_result = await db.shifts.delete_many(base_q)
-    expenses_result = await db.expenses.delete_many(base_q)
-    refunds_result = await db.refunds.delete_many(base_q)
-    cash_closings_result = await db.cash_register_closings.delete_many(base_q)
-    cash_drawer_result = await db.cash_drawer_logs.delete_many(base_q)
-    print_queue_result = await db.print_queue.delete_many(base_q)
+    # === حذف كل البيانات المعاملاتية للفرع ===
+    deleted = {}
     
-    # تصفير حالة الطاولات
+    # طلبات + إلغاءات + توصيل (كلها بنفس collection)
+    deleted["orders"] = (await db.orders.delete_many(base_q)).deleted_count
+    deleted["branch_orders"] = (await db.branch_orders.delete_many(base_q)).deleted_count
+    deleted["branch_orders_new"] = (await db.branch_orders_new.delete_many(base_q)).deleted_count
+    
+    # ورديات + إغلاقات الصندوق
+    deleted["shifts"] = (await db.shifts.delete_many(base_q)).deleted_count
+    deleted["cash_register_closings"] = (await db.cash_register_closings.delete_many(base_q)).deleted_count
+    deleted["cash_register_closes"] = (await db.cash_register_closes.delete_many(base_q)).deleted_count
+    deleted["cash_drawer_logs"] = (await db.cash_drawer_logs.delete_many(base_q)).deleted_count
+    deleted["day_closures"] = (await db.day_closures.delete_many(base_q)).deleted_count
+    
+    # مصاريف + مرتجعات
+    deleted["expenses"] = (await db.expenses.delete_many(base_q)).deleted_count
+    deleted["refunds"] = (await db.refunds.delete_many(base_q)).deleted_count
+    deleted["refund_counters"] = (await db.refund_counters.delete_many(base_q)).deleted_count
+    
+    # طابور الطباعة
+    deleted["print_queue"] = (await db.print_queue.delete_many(base_q)).deleted_count
+    
+    # حركات المخزون والمعاملات
+    deleted["inventory_movements"] = (await db.inventory_movements.delete_many(base_q)).deleted_count
+    deleted["inventory_transactions"] = (await db.inventory_transactions.delete_many(base_q)).deleted_count
+    
+    # حجوزات + مراجعات
+    deleted["reservations"] = (await db.reservations.delete_many(base_q)).deleted_count
+    deleted["reviews"] = (await db.reviews.delete_many(base_q)).deleted_count
+    deleted["customer_reviews"] = (await db.customer_reviews.delete_many(base_q)).deleted_count
+    
+    # كوبونات + معاملات الدفع
+    deleted["coupon_usage"] = (await db.coupon_usage.delete_many(base_q)).deleted_count
+    deleted["payment_transactions"] = (await db.payment_transactions.delete_many(base_q)).deleted_count
+    
+    # سجلات التدقيق
+    deleted["audit_logs"] = (await db.audit_logs.delete_many(base_q)).deleted_count
+    
+    # سجلات المكالمات (call center) لهذا الفرع
+    deleted["call_logs"] = (await db.call_logs.delete_many(base_q)).deleted_count
+    
+    # تصفير حالة الطاولات (مهيأة للاستخدام)
     await db.tables.update_many(base_q, {"$set": {
         "status": "available",
         "current_order_id": None
     }})
     
+    total_deleted = sum(deleted.values())
+    
     return {
         "message": f"تم تصفير فرع '{branch.get('name','')}' بنجاح",
         "branch_name": branch.get("name", ""),
-        "deleted_orders": orders_result.deleted_count,
-        "deleted_shifts": shifts_result.deleted_count,
-        "deleted_expenses": expenses_result.deleted_count,
-        "deleted_refunds": refunds_result.deleted_count,
-        "deleted_cash_closings": cash_closings_result.deleted_count,
-        "deleted_cash_drawer_logs": cash_drawer_result.deleted_count,
-        "deleted_print_queue": print_queue_result.deleted_count
+        "total_deleted": total_deleted,
+        "details": deleted
     }
 
 
