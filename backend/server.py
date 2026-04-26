@@ -17047,6 +17047,80 @@ async def setup_database_indexes():
 
 
 @app.on_event("startup")
+async def fix_pending_orders_extras_calc():
+    """إصلاح الطلبات المعلقة التي حُسِبت بالصيغة الخاطئة القديمة.
+    
+    الـbug القديم: total = (price + extras) × quantity (الإضافات تُضرب بالكمية)
+    الصيغة الصحيحة: total = price × quantity + extras
+    
+    يُطبَّق فقط على الطلبات النشطة/المعلقة (status: pending, preparing, ready, on_hold).
+    لن يُلمس الطلبات المغلقة (paid/delivered/cancelled) لأن المال خرج وله أثر محاسبي.
+    
+    يعمل مرة واحدة فقط (محفوظ في system_migrations).
+    """
+    try:
+        MIG_KEY = "fix_pending_orders_extras_v1"
+        done = await db.system_migrations.find_one({"key": MIG_KEY})
+        if done:
+            logger.info(f"🟢 Migration {MIG_KEY} already applied, skipping")
+            return
+        
+        logger.info(f"🔧 Running migration: {MIG_KEY}")
+        from datetime import datetime as _dt, timezone as _tz
+        
+        # نطاق محدد: الطلبات المعلقة/النشطة فقط (لن نلمس المغلقة/المدفوعة)
+        active_statuses = ["pending", "preparing", "ready", "on_hold", "in_progress"]
+        active_orders = await db.orders.find(
+            {"status": {"$in": active_statuses}}, {"_id": 0}
+        ).to_list(10000)
+        
+        fixed_count = 0
+        for o in active_orders:
+            items = o.get("items", []) or []
+            if not items:
+                continue
+            
+            # حساب صحيح: price × qty + extras (مرة واحدة)
+            new_subtotal = 0
+            for it in items:
+                price = float(it.get("price") or 0)
+                qty = int(it.get("quantity") or 1)
+                extras = it.get("extras") or []
+                extras_total = sum(float(e.get("price") or 0) * int(e.get("quantity") or 1) for e in extras)
+                new_subtotal += (price * qty) + extras_total
+            
+            old_total = float(o.get("total") or 0)
+            old_subtotal = float(o.get("subtotal") or 0)
+            discount = float(o.get("discount") or 0)
+            new_total = max(0, new_subtotal - discount)
+            
+            # فقط إذا الفرق ≥ 1 IQD نُصلح
+            if abs(new_total - old_total) >= 1:
+                await db.orders.update_one(
+                    {"id": o["id"]},
+                    {"$set": {
+                        "subtotal": new_subtotal,
+                        "total": new_total,
+                        "_extras_calc_fixed": True,
+                        "_old_total_before_fix": old_total
+                    }}
+                )
+                fixed_count += 1
+                logger.info(f"   ✅ طلب #{o.get('order_number','?')}: {old_total:,.0f} → {new_total:,.0f} (فرق {old_total-new_total:+,.0f})")
+        
+        await db.system_migrations.insert_one({
+            "key": MIG_KEY,
+            "executed_at": _dt.now(_tz.utc).isoformat(),
+            "fixed_count": fixed_count,
+            "scanned": len(active_orders)
+        })
+        logger.info(f"✅ {MIG_KEY} complete: فحص {len(active_orders)} طلب، تصحيح {fixed_count}")
+    except Exception as e:
+        logger.error(f"❌ fix_pending_orders_extras migration failed: {e}")
+
+
+
+@app.on_event("startup")
 async def cleanup_duplicate_expenses():
     """حذف مصروف الغاز 50,000 المكرر تحديداً (one-shot).
     
