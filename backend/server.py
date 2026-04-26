@@ -5257,15 +5257,16 @@ async def create_order(order: OrderCreate, current_user: dict = Depends(get_curr
     else:
         effective_cashier_id = current_user["id"]
     
-    # حساب المجموع الفرعي مع الإضافات المختارة فقط
+    # حساب المجموع الفرعي مع الإضافات - مُطابق تماماً لحساب السلة (Frontend):
+    # الصيغة الصحيحة: (price × quantity) + extras_total  
+    # NOT: (price + extras) × quantity  ← هذه كانت تُضاعف الإضافات
+    # هذا يضمن تطابق 100% بين ما يراه العميل في السلة وما يُحفظ في DB
     def calculate_item_total(item):
-        # سعر المنتج الأساسي
-        base_price = item.price
-        # إضافة سعر الإضافات المختارة (تأتي من Frontend كـ extras)
-        # ملاحظة: item.extras هنا هي الإضافات المختارة من العميل وليس كل الإضافات
-        extras_price = sum(_sn(extra.get("price")) * int(extra.get("quantity", 1)) for extra in (item.extras or []))
-        # المجموع للعنصر الواحد
-        return (base_price + extras_price) * item.quantity
+        # سعر المنتج الأساسي مضروباً في الكمية
+        base_total = item.price * item.quantity
+        # الإضافات: كل إضافة لها سعر × كميتها الخاصة (لا تُضرب بكمية المنتج)
+        extras_total = sum(_sn(extra.get("price")) * int(extra.get("quantity", 1)) for extra in (item.extras or []))
+        return base_total + extras_total
     
     subtotal = sum(calculate_item_total(item) for item in order.items)
     tax = subtotal * 0.0  # No tax for Iraq
@@ -5663,8 +5664,9 @@ async def add_items_to_order(order_id: str, items: List[OrderItemCreate], curren
     existing_items = order.get("items", [])
     all_items = existing_items + new_items
     
-    # إعادة حساب المجاميع
-    subtotal = sum((i["price"] + _sn(i.get("extras_total"))) * i["quantity"] for i in all_items)
+    # إعادة حساب المجاميع - الصيغة الصحيحة (مطابقة للسلة):
+    # (price × qty) + extras_total — الإضافات لا تُضرب بالكمية
+    subtotal = sum((_sn(i["price"]) * _sn(i["quantity"])) + _sn(i.get("extras_total")) for i in all_items)
     total_cost = sum(_sn(i.get("cost")) * i["quantity"] for i in all_items)
     discount = _sn(order.get("discount"))
     tax = 0
@@ -5731,8 +5733,8 @@ async def update_order_items(order_id: str, request: UpdateOrderItemsRequest, cu
             "extras_total": extras_total
         })
     
-    # إعادة حساب المجاميع
-    subtotal = sum((i["price"] + _sn(i.get("extras_total"))) * i["quantity"] for i in updated_items)
+    # إعادة حساب المجاميع - الصيغة الصحيحة (مطابقة للسلة)
+    subtotal = sum((_sn(i["price"]) * _sn(i["quantity"])) + _sn(i.get("extras_total")) for i in updated_items)
     discount = request.discount
     tax = 0
     total = subtotal - discount + tax
