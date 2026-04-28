@@ -5954,6 +5954,81 @@ async def cancel_order(order_id: str, current_user: dict = Depends(get_current_u
         "in_reports": True
     }
 
+
+class ItemCancellationRequest(BaseModel):
+    """طلب إلغاء صنف من طلب محفوظ (إلغاء جزئي)"""
+    product_id: str
+    product_name: Optional[str] = None
+    quantity: float = 1
+    price: float = 0
+    reason: Optional[str] = "حذف من الطلب بعد الحفظ"
+
+
+@api_router.post("/orders/{order_id}/cancel-item")
+async def cancel_order_item(
+    order_id: str,
+    payload: ItemCancellationRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    تسجيل إلغاء صنف واحد (أو جزء من كميته) من طلب محفوظ ومُرسَل للمطبخ.
+    - يُضاف لسجل تدقيق على الطلب نفسه (cancelled_items[])
+    - يُسجَّل أيضاً في مجموعة item_cancellations لظهوره في تقارير الإلغاءات
+    """
+    query = build_tenant_query(current_user, {"id": order_id})
+    order = await db.orders.find_one(query)
+    if not order:
+        raise HTTPException(status_code=404, detail="الطلب غير موجود")
+
+    qty = float(payload.quantity or 0)
+    if qty <= 0:
+        raise HTTPException(status_code=400, detail="الكمية غير صالحة")
+
+    now_iso = datetime.now(timezone.utc).isoformat()
+    cancellation_entry = {
+        "id": str(uuid.uuid4()),
+        "product_id": payload.product_id,
+        "product_name": payload.product_name or "",
+        "quantity": qty,
+        "price": float(payload.price or 0),
+        "total_value": float(payload.price or 0) * qty,
+        "reason": payload.reason or "حذف من الطلب بعد الحفظ",
+        "cancelled_by": current_user.get("id"),
+        "cancelled_by_name": current_user.get("full_name") or current_user.get("username") or "",
+        "cancelled_at": now_iso,
+    }
+
+    # إضافة للسجل التدقيقي على الطلب
+    await db.orders.update_one(
+        {"id": order_id},
+        {
+            "$push": {"cancelled_items": cancellation_entry},
+            "$set": {"updated_at": now_iso},
+        },
+    )
+
+    # تسجيل مستقل في مجموعة item_cancellations لتقارير الإلغاءات
+    try:
+        log_doc = {
+            **cancellation_entry,
+            "order_id": order_id,
+            "order_number": order.get("order_number"),
+            "order_status": order.get("status"),
+            "tenant_id": order.get("tenant_id") or current_user.get("tenant_id"),
+            "branch_id": order.get("branch_id") or current_user.get("branch_id"),
+        }
+        await db.item_cancellations.insert_one(log_doc)
+    except Exception as _e:
+        logger.warning(f"item_cancellations insert failed: {_e}")
+
+    return {
+        "message": "تم تسجيل إلغاء الصنف",
+        "cancellation": cancellation_entry,
+        "order_number": order.get("order_number"),
+        "order_status": order.get("status"),
+    }
+
+
 # ==================== REFUND/RETURN ROUTES - إرجاع الطلبات ====================
 
 class RefundCreate(BaseModel):
@@ -18172,7 +18247,7 @@ async def get_menu_link(request: Request, current_user: dict = Depends(get_curre
         base_url = f"{parsed.scheme}://{parsed.netloc}"
     else:
         # fallback للـ environment variable
-        base_url = os.environ.get('REACT_APP_BACKEND_URL', 'https://print-agent-v2.preview.emergentagent.com')
+        base_url = os.environ.get('REACT_APP_BACKEND_URL', 'https://pos-audit-fix-1.preview.emergentagent.com')
     
     menu_url = f"{base_url}/menu/{tenant.get('menu_slug', tenant_id)}"
     

@@ -6,7 +6,7 @@ import pytest
 import requests
 import os
 
-BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://print-agent-v2.preview.emergentagent.com')
+BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://pos-audit-fix-1.preview.emergentagent.com')
 
 class TestHealthAndAuth:
     """Health check and authentication tests"""

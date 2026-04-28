@@ -1,0 +1,36 @@
+{
+  "summary": "Backend testing of new POST /api/orders/{order_id}/cancel-item endpoint plus regressions for PUT /api/orders/{id}/cancel and POST /api/orders cart math. All 8 pytest tests passed (100% backend success).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/orders/{id}", "issue": "OrderResponse model strips cancelled_items array (extra='ignore'), so the audit trail is invisible to API consumers. Verified via direct mongo. Recommend exposing cancelled_items in OrderResponse so frontend can display per-item cancellation history."}
+    ]
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_cancel_item_iter169.py",
+    "/app/test_reports/pytest/iter169_results.xml"
+  ],
+  "action_items": [
+    "(Optional) Add 'cancelled_items: List[Dict[str, Any]] = []' to OrderResponse so the audit trail is visible via GET /api/orders/{id}.",
+    "(Optional) Validate quantity > 0 at Pydantic level via 'quantity: float = Field(gt=0)' so 422 surfaces input errors before the manual 400 check (cosmetic).",
+    "(Optional) Consider also decrementing/marking the original item entry in orders.items[] (currently only an audit row is appended; the order's items array still shows the original quantity)."
+  ],
+  "critical_code_review_comments": [
+    "cancel-item correctly enforces tenant isolation via build_tenant_query (verified — super admin without impersonation returns 404 on tenant order).",
+    "Endpoint persists to two locations atomically conceptually, but the item_cancellations insert is best-effort (try/except logs warning). Acceptable for audit, but a failed insert here will silently lose the report row. Consider raising 500 or a retry/queue for stronger guarantees.",
+    "ItemCancellationRequest has no Pydantic validators (gt=0). The runtime check uses float(...) and could swallow invalid string types coming as quantity. Pydantic v2 handles type coercion fine, but explicit validators would be clearer.",
+    "PUT /api/orders/{id}/cancel quick-delete (<60s) hard-deletes the order with no audit trace. With cancel-item now writing to item_cancellations, consider also writing an order_cancellations log on full cancel (consistency).",
+    "server.py is 20,301 lines — should be split (routes already partially extracted under /app/backend/routes). Not in scope for this iteration."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_cancel_item_iter169.py (created)"
+  ],
+  "success_rate": {"backend": "100%", "frontend": "not tested (backend-only request)"},
+  "test_credentials": "Admin: hanialdujaili@gmail.com / Hani@2024 ; Super Admin: owner@maestroegp.com / owner123 — both valid.",
+  "seed_data_creation": "Opened a shift for tenant cashier 'كاشير تجريبي' on branch 'الفرع الرئيسي' via /api/shifts/open-for-cashier (idempotent). Created several test orders (auto-cleanup of TEST_ cancellation logs only — orders themselves remain since /orders DELETE is not in scope). Cancellation logs with reason 'TEST_iter169 ...' were purged from item_cancellations after the run.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Test file at /app/backend/tests/test_cancel_item_iter169.py covers: (a) cancel-item persistence in orders.cancelled_items[] AND item_cancellations collection with full required field set; (b) 404 on invalid order; (c) 400 on quantity<=0 (tested 0, -1, -5.5); (d) 401/403 for missing/bad auth; (e) tenant isolation via super-admin (no tenant) returning 404; (f) PUT /api/orders/{id}/cancel regression (handles both quick-delete and standard cancel paths); (g) POST /api/orders subtotal regression with extras. Tests rely on /api/shifts/open-for-cashier to ensure a shift exists before order creation. mongo helpers (_mongo_run/_find_*) read MONGO_URL+DB_NAME from /app/backend/.env if env not set.",
+  "rca of the issue": "N/A — feature works as designed. The only observation: cancelled_items array is populated correctly in MongoDB but is not surfaced via GET /api/orders/{id} due to OrderResponse model filtering. Tests therefore verify persistence directly via Motor."
+}

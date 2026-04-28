@@ -126,7 +126,7 @@
   },
   
   "test_credentials": {
-    "api_url": "https://print-agent-v2.preview.emergentagent.com",
+    "api_url": "https://pos-audit-fix-1.preview.emergentagent.com",
     "owner_email": "owner@maestroegp.com",
     "owner_password": "owner123",
     "super_admin_secret": "271018",

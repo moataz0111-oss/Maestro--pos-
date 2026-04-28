@@ -1,5 +1,5 @@
 {
-  "summary": "Frontend-only verification of HR page stability (P0 white-screen-flash fix), DialogContent accessibility (P1), and photo-fetch progress badge (P1) on https://print-agent-v2.preview.emergentagent.com. Logged in as hanialdujaili@gmail.com, navigated to /hr, monitored continuously for 3 minutes (180s) sampling every 30s. ALL P0 + P1 ITEMS PASSED.",
+  "summary": "Frontend-only verification of HR page stability (P0 white-screen-flash fix), DialogContent accessibility (P1), and photo-fetch progress badge (P1) on https://pos-audit-fix-1.preview.emergentagent.com. Logged in as hanialdujaili@gmail.com, navigated to /hr, monitored continuously for 3 minutes (180s) sampling every 30s. ALL P0 + P1 ITEMS PASSED.",
   "backend_issues": {
     "critical": [],
     "minor": []

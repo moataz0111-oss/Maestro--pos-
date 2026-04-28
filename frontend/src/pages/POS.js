@@ -1324,17 +1324,68 @@ export default function POS() {
     playClick();
     setCart(prev => prev.map(item => {
       if (item.product_id === productId) {
+        // منع تقليل الكمية تحت الكمية الأصلية المحفوظة (المُرسَلة للمطبخ سابقاً)
+        if (delta < 0 && item._sentToKitchen && item._originalQty) {
+          if (item.quantity <= item._originalQty) {
+            toast.error(t('لا يمكن تقليل الكمية تحت العدد المحفوظ - استخدم زر الحذف بدلاً'));
+            return item; // لا تغيير
+          }
+        }
         const newQty = item.quantity + delta;
         return newQty > 0 ? { ...item, quantity: newQty } : item;
       }
       return item;
     }).filter(item => item.quantity > 0));
-  }, []);
+  }, [t]);
 
-  const removeFromCart = useCallback((productId) => {
+  const removeFromCart = useCallback(async (productId) => {
     playClick();
-    setCart(prev => prev.filter(item => item.product_id !== productId));
-  }, []);
+    const item = cart.find(c => c.product_id === productId);
+    
+    // إذا الـitem مُرسَل للمطبخ مسبقاً (طلب معلق محفوظ) → نطبع أمر إلغاء + نُسجِّل
+    if (item?._sentToKitchen && editingOrder) {
+      const confirmed = window.confirm(t('سيتم إلغاء هذا المنتج من الطلب المحفوظ. هل أنت متأكد؟'));
+      if (!confirmed) return;
+      
+      try {
+        const restaurantName = restaurantSettings?.name_ar || restaurantSettings?.name || '';
+        // طباعة أمر إلغاء للمطبخ
+        const kitchenPrinters = availablePrinters.filter(p => 
+          (p.print_mode === 'orders_only' || p.print_mode === 'selected_products') &&
+          ((p.connection_type === 'usb' && p.usb_printer_name) || (p.connection_type !== 'usb' && p.ip_address))
+        );
+        if (kitchenPrinters.length > 0) {
+          const realName = item.product_name || item.name || 'صنف';
+          printOrderToAllPrinters(
+            {
+              order_number: editingOrder.order_number,
+              order_type: editingOrder.order_type || 'dine_in',
+              is_cancel: true,
+              refund_label: '*** تم حذف منتج من الطلب ***',
+              notes: `إلغاء منتج: ${realName} (×${item.quantity})`
+            },
+            [{ ...item, name: `[محذوف] ${realName}`, product_name: `[محذوف] ${realName}` }],
+            products, kitchenPrinters, restaurantName
+          ).catch(e => console.warn('Cancel item kitchen print err:', e));
+        }
+        
+        // تسجيل الإلغاء في DB (لظهوره في تقارير الإلغاءات)
+        await axios.post(`${API}/orders/${editingOrder.id}/cancel-item`, {
+          product_id: item.product_id,
+          product_name: item.product_name || item.name,
+          quantity: item.quantity,
+          price: item.price,
+          reason: 'حذف من الطلب بعد الحفظ'
+        }).catch(e => console.warn('Log cancel-item failed:', e.message));
+        
+        toast.success(t('تم إلغاء المنتج وإرسال أمر الحذف للمطبخ'));
+      } catch (err) {
+        console.warn('Cancel item failed:', err);
+      }
+    }
+    
+    setCart(prev => prev.filter(it => it.product_id !== productId));
+  }, [cart, editingOrder, availablePrinters, products, restaurantSettings, t]);
 
   const clearCart = useCallback(() => {
     playClick();
