@@ -348,6 +348,71 @@ class TestOrderMathRegression:
             f"subtotal {subtotal} greater than max expected {max_expected}"
 
 
+class TestRoleGuard:
+    """Cashier must be 403 on cancel-item; only admin/manager/super_admin allowed."""
+
+    _temp_cashier_id = None
+
+    def test_cashier_role_blocked_with_403(self, admin_headers, admin_branch_id, admin_product, admin_token):
+        # Create a temporary cashier user in same tenant via direct mongo (known password)
+        import bcrypt
+        admin_tok, admin_user = admin_token
+        tenant_id = admin_user.get("tenant_id")
+        cashier_email = f"role_test_cashier_{uuid.uuid4().hex[:8]}@test.local"
+        cashier_pw = "TestPass123!"
+        pwd_hash = bcrypt.hashpw(cashier_pw.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+        cashier_id = str(uuid.uuid4())
+
+        async def _seed(db):
+            await db.users.insert_one({
+                "id": cashier_id,
+                "email": cashier_email,
+                "username": cashier_email,
+                "full_name": "Role Test Cashier",
+                "role": "cashier",
+                "branch_id": admin_branch_id,
+                "tenant_id": tenant_id,
+                "password_hash": pwd_hash,
+                "is_active": True,
+            })
+        _mongo_run(_seed)
+        TestRoleGuard._temp_cashier_id = cashier_id
+
+        # Login as cashier
+        rl = requests.post(f"{API}/auth/login",
+                           json={"email": cashier_email, "password": cashier_pw}, timeout=30)
+        assert rl.status_code == 200, f"cashier login failed: {rl.status_code} {rl.text}"
+        cashier_token = rl.json()["token"]
+        cashier_headers = {"Authorization": f"Bearer {cashier_token}",
+                           "Content-Type": "application/json"}
+
+        # Create an order (admin) and try to cancel-item as cashier → must be 403
+        r, _ = _create_order(admin_headers, admin_branch_id, admin_product, qty=2)
+        assert r.status_code == 200, f"order create: {r.status_code} {r.text}"
+        order_id = r.json()["id"]
+        TestCancelItem.created_order_ids.append(order_id)
+
+        payload = {"product_id": admin_product["id"],
+                   "product_name": "TEST", "quantity": 1, "price": 1.0,
+                   "reason": "TEST_iter169 role_guard"}
+        r2 = requests.post(f"{API}/orders/{order_id}/cancel-item",
+                           headers=cashier_headers, json=payload, timeout=30)
+        assert r2.status_code == 403, \
+            f"cashier should be blocked with 403, got {r2.status_code} {r2.text}"
+
+    def test_admin_still_allowed(self, admin_headers, admin_branch_id, admin_product):
+        r, _ = _create_order(admin_headers, admin_branch_id, admin_product, qty=2)
+        assert r.status_code == 200
+        order_id = r.json()["id"]
+        TestCancelItem.created_order_ids.append(order_id)
+        payload = {"product_id": admin_product["id"],
+                   "product_name": "TEST", "quantity": 1, "price": 1.0,
+                   "reason": "TEST_iter169 admin_allowed"}
+        r2 = requests.post(f"{API}/orders/{order_id}/cancel-item",
+                           headers=admin_headers, json=payload, timeout=30)
+        assert r2.status_code == 200, f"admin must succeed, got {r2.status_code} {r2.text}"
+
+
 # ------------------------ Cleanup ------------------------ #
 @pytest.fixture(scope="module", autouse=True)
 def _cleanup(request, admin_headers):
@@ -377,6 +442,9 @@ def _cleanup(request, admin_headers):
             # Remove cancellation logs created by these tests
             await db.item_cancellations.delete_many({"reason": {"$regex": "^TEST_iter169"}})
             await db.item_cancellations.delete_many({"order_id": {"$in": TestCancelItem.created_order_ids}})
+            # Remove temp cashier created for role-guard test
+            if TestRoleGuard._temp_cashier_id:
+                await db.users.delete_one({"id": TestRoleGuard._temp_cashier_id})
             client.close()
 
         asyncio.get_event_loop().run_until_complete(_purge())

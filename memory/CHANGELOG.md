@@ -1,5 +1,18 @@
 # Maestro EGP - Changelog
 
+## Session: Apr 28, 2026 - Role Guard on Item Cancellation
+
+### Cashier Cannot Delete/Reduce Items After Sending to Kitchen
+- **توضيح المتطلب:** الكاشير ممنوع تماماً من حذف أو تقليل صنف مُرسَل للمطبخ. فقط مالك المطعم (Admin) أو المدير العام (Manager) أو Super Admin يقدر.
+- **الواجهة الأمامية (`POS.js`):**
+  - `updateQuantity`: يفحص `user.role` — إذا كاشير ومحاولة تقليل صنف `_sentToKitchen` → رسالة "غير مسموح — فقط مالك المطعم أو المدير العام يستطيع تعديل صنف مُرسَل للمطبخ".
+  - `removeFromCart`: نفس الفحص — يرفض الحذف من الكاشير قبل المتابعة لطباعة المطبخ والتسجيل.
+- **الباك إند (`server.py > cancel_order_item`):**
+  - يتحقق من `current_user.role ∈ [admin, manager, super_admin]`.
+  - الكاشير يحصل على HTTP 403 مع رسالة "غير مسموح — فقط مالك المطعم أو المدير العام يستطيع حذف/تعديل صنف مُرسَل للمطبخ".
+- **الاختبار:** ✅ 10/10 pytest passed (أُضيف `TestRoleGuard` يُنشئ كاشير مؤقت ويتأكد من 403، ثم يتحقق أن Admin يبقى مسموح).
+
+
 ## Session: Apr 28, 2026 - Partial Item Cancellation Audit Trail
 
 ### New: `POST /api/orders/{order_id}/cancel-item`

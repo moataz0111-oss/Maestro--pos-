@@ -5975,7 +5975,12 @@ async def cancel_order_item(
     تسجيل إلغاء صنف واحد (أو جزء من كميته) من طلب محفوظ ومُرسَل للمطبخ.
     - يُضاف لسجل تدقيق على الطلب نفسه (cancelled_items[])
     - يُسجَّل أيضاً في مجموعة item_cancellations لظهوره في تقارير الإلغاءات
+    - مسموح فقط لـ Admin/Manager/Super Admin (الكاشير ممنوع).
     """
+    # حماية الأدوار: الكاشير وغير المخوّلين ممنوعون
+    if current_user.get("role") not in [UserRole.ADMIN, UserRole.MANAGER, UserRole.SUPER_ADMIN]:
+        raise HTTPException(status_code=403, detail="غير مسموح — فقط مالك المطعم أو المدير العام يستطيع حذف/تعديل صنف مُرسَل للمطبخ")
+
     query = build_tenant_query(current_user, {"id": order_id})
     order = await db.orders.find_one(query)
     if not order:

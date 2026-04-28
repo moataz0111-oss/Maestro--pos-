@@ -1322,21 +1322,24 @@ export default function POS() {
 
   const updateQuantity = useCallback((productId, delta) => {
     playClick();
+    // الكاشير وغير المدير/المالك ممنوع من تقليل صنف مُرسَل للمطبخ — فقط Admin/Manager/Super Admin
+    const canModifySent = ['admin', 'manager', 'super_admin', 'owner'].includes(user?.role);
     setCart(prev => prev.map(item => {
       if (item.product_id === productId) {
-        // منع تقليل الكمية تحت الكمية الأصلية المحفوظة (المُرسَلة للمطبخ سابقاً)
-        if (delta < 0 && item._sentToKitchen && item._originalQty) {
-          if (item.quantity <= item._originalQty) {
+        if (delta < 0 && item._sentToKitchen && item._originalQty && item.quantity <= item._originalQty) {
+          if (!canModifySent) {
+            toast.error(t('غير مسموح — فقط مالك المطعم أو المدير العام يستطيع تعديل صنف مُرسَل للمطبخ'));
+          } else {
             toast.error(t('لا يمكن تقليل الكمية تحت العدد المحفوظ - استخدم زر الحذف بدلاً'));
-            return item; // لا تغيير
           }
+          return item;
         }
         const newQty = item.quantity + delta;
         return newQty > 0 ? { ...item, quantity: newQty } : item;
       }
       return item;
     }).filter(item => item.quantity > 0));
-  }, [t]);
+  }, [t, user]);
 
   const removeFromCart = useCallback(async (productId) => {
     playClick();
@@ -1344,6 +1347,12 @@ export default function POS() {
     
     // إذا الـitem مُرسَل للمطبخ مسبقاً (طلب معلق محفوظ) → نطبع أمر إلغاء + نُسجِّل
     if (item?._sentToKitchen && editingOrder) {
+      // الكاشير ممنوع من حذف صنف مُرسَل للمطبخ — فقط Admin/Manager/Super Admin
+      const canModifySent = ['admin', 'manager', 'super_admin', 'owner'].includes(user?.role);
+      if (!canModifySent) {
+        toast.error(t('غير مسموح — فقط مالك المطعم أو المدير العام يستطيع حذف صنف مُرسَل للمطبخ'));
+        return;
+      }
       const confirmed = window.confirm(t('سيتم إلغاء هذا المنتج من الطلب المحفوظ. هل أنت متأكد؟'));
       if (!confirmed) return;
       
@@ -1385,7 +1394,7 @@ export default function POS() {
     }
     
     setCart(prev => prev.filter(it => it.product_id !== productId));
-  }, [cart, editingOrder, availablePrinters, products, restaurantSettings, t]);
+  }, [cart, editingOrder, availablePrinters, products, restaurantSettings, t, user]);
 
   const clearCart = useCallback(() => {
     playClick();
