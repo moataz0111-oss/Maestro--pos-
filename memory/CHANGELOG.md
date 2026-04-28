@@ -1,5 +1,20 @@
 # Maestro EGP - Changelog
 
+## Session: Apr 28, 2026 - Partial Item Cancellation Audit Trail
+
+### New: `POST /api/orders/{order_id}/cancel-item`
+- يُسجِّل إلغاء صنف منفرد (أو جزء من كميته) على طلب محفوظ مُرسَل للمطبخ.
+- يحفظ الإدخال في:
+  - مصفوفة `orders.cancelled_items` (سجل تدقيق على الطلب نفسه)
+  - مجموعة `item_cancellations` (لتقارير الإلغاءات) مع `tenant_id`, `branch_id`, `order_id`, `order_number`, `order_status`, `product_id`, `product_name`, `quantity`, `price`, `total_value`, `reason`, `cancelled_by`, `cancelled_at`.
+- محمي بـ `get_current_user` + `build_tenant_query` (عزل بيانات صارم بين العملاء).
+- التحقق: 404 إذا لم يوجد الطلب، 400 إذا الكمية ≤ 0.
+- الواجهة الأمامية `POS.js > removeFromCart` كانت تستدعي هذا المسار مسبقاً + تطبع إيصال إلغاء للمطبخ — الآن أصبح المسار الخلفي مكتملاً.
+- اختبار شامل: 8/8 pytest passed (`/app/backend/tests/test_cancel_item_iter169.py`).
+- إضافة `cancelled_items` لـ `OrderResponse` لإظهار سجل التدقيق عبر `GET /api/orders/{id}`.
+
+
+
 ## Session: Feb 23, 2026 - Print Agent v6.4.0 (Long-Polling - INSTANT Print)
 
 ### THE ULTIMATE FIX: Long-Polling Eliminates Polling Delay

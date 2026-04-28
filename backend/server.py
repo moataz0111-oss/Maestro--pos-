@@ -1547,6 +1547,7 @@ class OrderResponse(BaseModel):
     tenant_id: Optional[str] = None  # Added for tenant filtering
     business_date: Optional[str] = None  # اليوم التشغيلي (من الوردية)
     shift_id: Optional[str] = None
+    cancelled_items: List[Dict[str, Any]] = []  # سجل تدقيق إلغاء الأصناف الجزئي
 
 # Shift Models
 class ShiftCreate(BaseModel):
