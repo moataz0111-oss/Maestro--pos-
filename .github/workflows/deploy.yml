@@ -73,9 +73,12 @@ jobs:
           # تحديث Frontend
           # =============================================
           # ✅ بدون --no-cache: yarn install ينعاد فقط لو package.json/yarn.lock تغيروا
-          # (يوفر ~13 دقيقة في كل deploy عادي)
+          # ✅ CACHEBUST يضمن إعادة build (yarn build) عند كل deploy
+          #    حتى لو src/ ما تغير حرفياً (لتجنب مشاكل الكاش العميق)
           echo "🎨 تحديث Frontend..."
-          docker build -t maestro_frontend:new ./frontend
+          docker build \
+            --build-arg CACHEBUST="$(date +%s)" \
+            -t maestro_frontend:new ./frontend
           docker stop frontend 2>/dev/null || true
           docker rm frontend 2>/dev/null || true
           docker tag maestro_frontend:new maestro_frontend:latest

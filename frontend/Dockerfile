@@ -3,21 +3,24 @@ FROM node:20-alpine as build
 
 WORKDIR /app
 
-# متغير لإجبار إعادة البناء (يتغير مع كل deploy)
-ARG CACHEBUST=1
-
 # نسخ ملفات package
 COPY package.json yarn.lock ./
 
 # تثبيت المتطلبات مع كاش yarn (يخلي install أسرع 5x بين البناءات)
+# هذا الـlayer يبقى مكاش طالما package.json/yarn.lock ما تغيروا
 RUN --mount=type=cache,target=/usr/local/share/.cache/yarn \
     yarn install --network-timeout 100000 --prefer-offline 2>&1 | grep -v "Workspaces can only" || true
 
-# نسخ الكود (هذا يجب أن يبطل cache إذا تغيرت الملفات)
+# CACHEBUST يأتي بعد yarn install: يجبر إبطال الكاش لكل ما يأتي تحته
+# (نسخ الكود + البناء) عند كل deploy، بينما يحافظ على layer التثبيت
+ARG CACHEBUST=1
+RUN echo "Cache bust: $CACHEBUST"
+
+# نسخ الكود
 COPY . .
 
 # طباعة للتأكد من الكود الجديد
-RUN echo "Build timestamp: $(date)" && grep -c "صورة الفاتورة" src/pages/Purchasing.js || true
+RUN echo "Build timestamp: $(date)" && grep -c "اسم العميل المرتبط" src/pages/Coupons.js || true
 
 # بناء التطبيق
 ARG REACT_APP_BACKEND_URL
