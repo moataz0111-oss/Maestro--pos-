@@ -21,10 +21,13 @@ jobs:
         username: root
         key: ${{ secrets.VPS_SSH_KEY }}
         port: 22
-        command_timeout: 30m
+        command_timeout: 60m
         script: |
           echo "🚀 بدء النشر..."
           cd /var/www/maestro
+          
+          # تفعيل BuildKit لسرعة البناء + cache layers
+          export DOCKER_BUILDKIT=1
           
           # سحب الكود
           git fetch origin && git reset --hard origin/main
@@ -47,8 +50,11 @@ jobs:
           # =============================================
           # تحديث Backend
           # =============================================
+          # ✅ نزيل --no-cache: Docker layer cache يعيد استخدام
+          # طبقات pip install تلقائياً إذا requirements.txt ما تغير،
+          # ويُعيد بناء طبقة الكود عند أي تغيير في الملفات.
           echo "📦 تحديث Backend..."
-          docker build --no-cache -t maestro_backend:new ./backend
+          docker build -t maestro_backend:new ./backend
           docker stop backend 2>/dev/null || true
           docker rm backend 2>/dev/null || true
           docker tag maestro_backend:new maestro_backend:latest
@@ -66,8 +72,10 @@ jobs:
           # =============================================
           # تحديث Frontend
           # =============================================
+          # ✅ بدون --no-cache: yarn install ينعاد فقط لو package.json/yarn.lock تغيروا
+          # (يوفر ~13 دقيقة في كل deploy عادي)
           echo "🎨 تحديث Frontend..."
-          docker build --no-cache -t maestro_frontend:new ./frontend
+          docker build -t maestro_frontend:new ./frontend
           docker stop frontend 2>/dev/null || true
           docker rm frontend 2>/dev/null || true
           docker tag maestro_frontend:new maestro_frontend:latest
