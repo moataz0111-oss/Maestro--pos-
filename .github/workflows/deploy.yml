@@ -70,12 +70,12 @@ jobs:
           # تحديث Frontend
           # =============================================
           # ✅ بدون --no-cache: yarn install ينعاد فقط لو package.json/yarn.lock تغيروا
-          # ✅ CACHEBUST يضمن إعادة build (yarn build) عند كل deploy
-          #    حتى لو src/ ما تغير حرفياً (لتجنب مشاكل الكاش العميق)
+          # ✅ file-based cachebust: نكتب timestamp في ملف داخل build context
+          #    → COPY يكتشف تغير الملف → يبطل الكاش لكل ما بعده
+          #    (يعمل مع classic Docker builder بدون BuildKit/buildx)
           echo "🎨 تحديث Frontend..."
-          docker build \
-            --build-arg CACHEBUST="$(date +%s)" \
-            -t maestro_frontend:new ./frontend
+          date +%s > ./frontend/.cachebust
+          docker build -t maestro_frontend:new ./frontend
           docker stop frontend 2>/dev/null || true
           docker rm frontend 2>/dev/null || true
           docker tag maestro_frontend:new maestro_frontend:latest

@@ -7,13 +7,13 @@ COPY package.json yarn.lock ./
 
 # تثبيت المتطلبات
 # هذا الـlayer يبقى مكاش طالما package.json/yarn.lock ما تغيروا
-# (Docker layer cache العادي بدون BuildKit)
 RUN yarn install --network-timeout 100000 --prefer-offline 2>&1 | grep -v "Workspaces can only" || true
 
-# CACHEBUST يأتي بعد yarn install: يجبر إبطال الكاش لكل ما يأتي تحته
-# (نسخ الكود + البناء) عند كل deploy، بينما يحافظ على layer التثبيت
-ARG CACHEBUST=1
-RUN echo "Cache bust: $CACHEBUST"
+# File-based cachebust: deploy.yml يكتب timestamp في .cachebust قبل البناء
+# → COPY يكتشف الملف تغير → يبطل الكاش → COPY . . و yarn build يعملان من جديد
+# (يشتغل على classic Docker builder بدون BuildKit/buildx)
+COPY .cachebust /tmp/.cachebust
+RUN echo "Cache bust: $(cat /tmp/.cachebust)"
 
 # نسخ الكود
 COPY . .
