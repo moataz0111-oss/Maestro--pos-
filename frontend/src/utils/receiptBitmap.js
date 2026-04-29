@@ -359,9 +359,22 @@ async function renderReceipt(order) {
     y += 4;
   }
 
-  if (order.discount > 0) {
-    y += drawRow(x, 'الخصم:', `-${fmt(order.discount)} IQD`, y, 20);
+  // عرض الكوبون المطبّق (قبل الخصم العام)
+  if (order.coupon_discount && order.coupon_discount > 0) {
+    const couponLbl = order.coupon_name ? `كوبون (${order.coupon_name}):` : 'خصم الكوبون:';
+    y += drawRow(x, couponLbl, `-${fmt(order.coupon_discount)} IQD`, y, 20);
     y += 4;
+  }
+
+  if (order.discount > 0) {
+    // إذا الخصم الكلي يحتوي خصم الكوبون، نعرض الفرق فقط (خصم يدوي)
+    const manual = (order.coupon_discount && order.coupon_discount > 0)
+      ? Math.max(0, order.discount - order.coupon_discount)
+      : order.discount;
+    if (manual > 0) {
+      y += drawRow(x, 'الخصم:', `-${fmt(manual)} IQD`, y, 20);
+      y += 4;
+    }
   }
 
   // Thick separator before total
@@ -868,6 +881,27 @@ export async function renderClosingReceiptBitmap(data = {}) {
     y += drawRow(x, `المرتجعات (${data.refund_count || 0}):`, fp(data.total_refunds || 0), y, 20);
     y += drawRow(x, `الإلغاءات (${data.cancelled_orders || 0}):`, fp(data.cancelled_amount || 0), y, 20);
     y += 8; y += dash(x, y); y += 8;
+
+    // === الكوبونات المستخدمة ===
+    const coupons = data.coupons_summary || [];
+    if (coupons.length > 0) {
+      y += drawC(x, 'الكوبونات المستخدمة', y, 22, true);
+      y += 8;
+      for (const c of coupons) {
+        const lbl = c.coupon_name || c.coupon_code || 'كوبون';
+        y += drawRow(x, `${lbl} (×${c.used_count}):`, `-${fp(c.total_discount)}`, y, 20);
+        if (c.cashier_name) {
+          y += drawRow(x, '  الكاشير:', c.cashier_name, y, 18);
+        }
+        if (Array.isArray(c.customers) && c.customers.length > 0) {
+          y += drawRow(x, '  العملاء:', c.customers.slice(0, 3).join(', '), y, 18);
+        }
+      }
+      const totalCouponDisc = data.total_coupon_discount || coupons.reduce((s, c) => s + (c.total_discount || 0), 0);
+      y += 4;
+      y += drawRow(x, 'إجمالي خصم الكوبونات:', `-${fp(totalCouponDisc)}`, y, 20);
+      y += 8; y += dash(x, y); y += 8;
+    }
 
     // === جرد الصندوق ===
     y += drawC(x, 'جرد الصندوق', y, 24, true);

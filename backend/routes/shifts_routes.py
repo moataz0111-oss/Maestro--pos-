@@ -492,6 +492,39 @@ async def close_shift(shift_id: str, close_data: ShiftClose, current_user: dict 
     expenses = await db.expenses.find(expenses_query, {"_id": 0}).to_list(500)
     total_expenses = sum(_safe_num(e.get("amount")) for e in expenses)
     
+    # === جلب استخدامات الكوبونات في هذه الوردية ===
+    coupon_usage_query = {
+        "used_at": {"$gte": shift_start, "$lte": shift_end_time},
+        "cashier_id": shift_cashier,
+    }
+    if shift_tenant:
+        coupon_usage_query["tenant_id"] = shift_tenant
+    if shift_branch:
+        coupon_usage_query["branch_id"] = shift_branch
+    
+    coupon_usages = await db.coupon_usage.find(coupon_usage_query, {"_id": 0}).to_list(500)
+    # تجميع حسب الكوبون
+    coupons_summary_map = {}
+    for cu in coupon_usages:
+        cid = cu.get("coupon_id") or "_unknown"
+        if cid not in coupons_summary_map:
+            coupons_summary_map[cid] = {
+                "coupon_id": cid,
+                "coupon_name": cu.get("coupon_name", ""),
+                "coupon_code": cu.get("coupon_code", ""),
+                "used_count": 0,
+                "total_discount": 0.0,
+                "cashier_name": cu.get("cashier_name", ""),
+                "customers": [],
+            }
+        coupons_summary_map[cid]["used_count"] += 1
+        coupons_summary_map[cid]["total_discount"] += _safe_num(cu.get("discount_amount", 0))
+        cust = cu.get("customer_name") or ""
+        if cust and cust not in coupons_summary_map[cid]["customers"]:
+            coupons_summary_map[cid]["customers"].append(cust)
+    coupons_summary = list(coupons_summary_map.values())
+    total_coupon_discount = sum(c["total_discount"] for c in coupons_summary)
+    
     net_profit = gross_profit - total_expenses
     opening_cash = _safe_num(shift.get("opening_cash", shift.get("opening_balance", 0)))
     # ✅ خصم المرتجعات النقدية من expected_cash
@@ -512,6 +545,8 @@ async def close_shift(shift_id: str, close_data: ShiftClose, current_user: dict 
         "credit_sales": credit_sales,
         "delivery_app_sales": delivery_app_sales,
         "total_expenses": total_expenses,
+        "coupons_summary": coupons_summary,
+        "total_coupon_discount": total_coupon_discount,
         "net_profit": net_profit,
         "ended_at": shift_end_time,
         "status": "closed",
@@ -548,7 +583,9 @@ async def close_shift(shift_id: str, close_data: ShiftClose, current_user: dict 
         "difference": cash_difference,
         "difference_type": "surplus" if cash_difference > 0 else "shortage" if cash_difference < 0 else "exact",
         "notes": close_data.notes or "",
-        "orders_count": len(orders)
+        "orders_count": len(orders),
+        "coupons_summary": coupons_summary,
+        "total_coupon_discount": total_coupon_discount,
     }
     await db.cash_register_closings.insert_one(closing_record)
     del closing_record["_id"]

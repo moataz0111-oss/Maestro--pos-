@@ -1,5 +1,37 @@
 # Maestro EGP - Changelog
 
+## Session: Apr 29, 2026 - Customer-Bound Coupons (Auto-Apply at POS)
+
+### الميزة الجديدة
+كوبونات مرتبطة باسم العميل، تظهر وتُخصم تلقائياً في POS بمجرد إدخال الاسم، مع تقييد الفرع والوقت اليومي.
+
+### الباك إند (`server.py`)
+- **`CouponCreate`**: إضافة `branch_ids: List[str]`, `daily_start_time: HH:MM`, `daily_end_time: HH:MM`, `customer_name`.
+- **`OrderCreate` / `OrderResponse`**: إضافة `coupon_id, coupon_code, coupon_name, coupon_discount`.
+- **GET `/api/coupons/lookup-by-customer`**: مسار جديد يبحث بـ `customer_name` (case-insensitive) ويفلتر على الفرع الحالي والوقت الحالي وتاريخ الصلاحية وحد الاستخدام، ويُرجع أعلى خصم منطبق.
+- **POST `/api/coupons/validate`**: التحقق الآن يفرض `customer_name` و `branch_id` والنطاق الزمني اليومي.
+- **POST `/api/coupons/{id}/use`**: يخزّن `tenant_id, branch_id, cashier_id, cashier_name, customer_name, coupon_name, coupon_code, shift_id` في `coupon_usage` لتقارير الإغلاق.
+
+### إغلاق الوردية (`shifts_routes.py`)
+- يجمع `coupons_summary[]` (لكل كوبون: العدد، الإجمالي المخصوم، الكاشير، أسماء العملاء) و `total_coupon_discount` من `coupon_usage` ضمن نطاق الوردية (tenant + branch + cashier + الفترة).
+- يُحفظ في `shifts.update_data` و `cash_register_closings`.
+
+### الواجهة الأمامية
+- **`Coupons.js`**: حقول جديدة في الديالوج — اسم العميل المرتبط، الفروع المسموح بها (مع "جميع الفروع")، وقت بدء/انتهاء يومي.
+- **`POS.js`**:
+  - `useEffect` ببحث Debounced 350ms على `customer_name` يستدعي `/coupons/lookup-by-customer` ويطبّق الخصم تلقائياً.
+  - عرض في السلة: المجموع الفرعي → سطر "🎟️ كوبون <الاسم> (X%)" بخط أخضر → الإجمالي.
+  - الخصم الكلي = خصم يدوي + خصم الكوبون (يُخصم من النقد المتوقع تلقائياً).
+  - يُسجَّل الاستخدام عبر `/coupons/{id}/use` بعد إنشاء الطلب.
+- **`receiptBitmap.js`**: 
+  - فاتورة العميل تعرض سطر "كوبون <الاسم>: -<قيمة>" قبل سطر الخصم اليدوي.
+  - إيصال الإغلاق: قسم "الكوبونات المستخدمة" مع كل كوبون (×عدد المرات، الكاشير، أسماء العملاء، الإجمالي).
+
+### الاختبار: ✅ 18/18 pytest
+- `/app/backend/tests/test_coupons_customer_iter170.py`: 8 سيناريوهات (إنشاء، lookup case-insensitive، رفض اسم خاطئ/فارغ/فرع خاطئ/وقت خارج النطاق، use tracking كامل).
+- `/app/backend/tests/test_cancel_item_iter169.py`: 10 لا regressions.
+
+
 ## Session: Apr 28, 2026 - Role Guard on Item Cancellation
 
 ### Cashier Cannot Delete/Reduce Items After Sending to Kitchen

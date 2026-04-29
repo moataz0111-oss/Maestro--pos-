@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field, ConfigDict, EmailStr
 from typing import List, Optional, Dict, Any
 from enum import Enum
 import uuid
+import re
 from datetime import datetime, timezone, timedelta
 import bcrypt
 import jwt
@@ -1505,6 +1506,11 @@ class OrderCreate(BaseModel):
     branch_id: str
     payment_method: str = PaymentMethod.CASH
     discount: float = 0.0
+    # كوبون مرتبط بالطلب (يُحسب ضمن discount لكن نخزن المرجع)
+    coupon_id: Optional[str] = None
+    coupon_code: Optional[str] = None
+    coupon_name: Optional[str] = None
+    coupon_discount: float = 0.0
     notes: Optional[str] = None
     delivery_app: Optional[str] = None
     delivery_app_name: Optional[str] = None  # اسم شركة التوصيل (للإدخال المباشر)
@@ -1548,6 +1554,11 @@ class OrderResponse(BaseModel):
     business_date: Optional[str] = None  # اليوم التشغيلي (من الوردية)
     shift_id: Optional[str] = None
     cancelled_items: List[Dict[str, Any]] = []  # سجل تدقيق إلغاء الأصناف الجزئي
+    # كوبون مطبّق على الطلب
+    coupon_id: Optional[str] = None
+    coupon_code: Optional[str] = None
+    coupon_name: Optional[str] = None
+    coupon_discount: float = 0.0
 
 # Shift Models
 class ShiftCreate(BaseModel):
@@ -4475,6 +4486,11 @@ class CouponCreate(BaseModel):
     applicable_ids: List[str] = []  # category_ids أو product_ids
     loyalty_tier_required: Optional[str] = None  # bronze, silver, gold, platinum
     first_order_only: bool = False
+    # ===== الحقول الجديدة =====
+    branch_ids: List[str] = []  # الفروع المسموح بها (فارغ = كل الفروع)
+    daily_start_time: Optional[str] = None  # HH:MM وقت بدء التفعيل اليومي (None = طول اليوم)
+    daily_end_time: Optional[str] = None    # HH:MM وقت انتهاء التفعيل اليومي
+    customer_name: Optional[str] = None  # اسم العميل المرتبط بالكوبون (None = للجميع)
 
 class PromotionCreate(BaseModel):
     name: str
@@ -4557,22 +4573,53 @@ async def validate_coupon(
     order_total: float,
     customer_id: Optional[str] = None,
     customer_phone: Optional[str] = None,
+    customer_name: Optional[str] = None,
+    branch_id: Optional[str] = None,
     current_user: dict = Depends(get_current_user)
 ):
     """التحقق من صلاحية الكوبون"""
-    coupon = await db.coupons.find_one({"code": code.upper(), "is_active": True}, {"_id": 0})
+    coupon = await db.coupons.find_one(
+        build_tenant_query(current_user, {"code": code.upper(), "is_active": True}),
+        {"_id": 0}
+    )
     
     if not coupon:
         raise HTTPException(status_code=404, detail="الكوبون غير صالح")
     
-    now = datetime.now(timezone.utc).isoformat()
+    now_dt = datetime.now(timezone.utc)
+    now = now_dt.isoformat()
     
     # التحقق من التاريخ
-    if coupon.get("valid_from") > now:
+    if coupon.get("valid_from") and coupon.get("valid_from") > now:
         raise HTTPException(status_code=400, detail="الكوبون لم يبدأ بعد")
     
-    if coupon.get("valid_until") < now:
+    if coupon.get("valid_until") and coupon.get("valid_until") < now:
         raise HTTPException(status_code=400, detail="الكوبون منتهي الصلاحية")
+
+    # ===== التحقق من الفرع =====
+    allowed_branches = coupon.get("branch_ids") or []
+    target_branch = branch_id or current_user.get("branch_id")
+    if allowed_branches and target_branch and target_branch not in allowed_branches:
+        raise HTTPException(status_code=400, detail="الكوبون غير متاح في هذا الفرع")
+
+    # ===== التحقق من الوقت اليومي =====
+    ds = coupon.get("daily_start_time")
+    de = coupon.get("daily_end_time")
+    if ds and de:
+        cur_hm = now_dt.strftime("%H:%M")
+        # نسمح بالوقت داخل النطاق فقط (لا يدعم نطاق يعبر منتصف الليل)
+        if not (ds <= cur_hm <= de):
+            raise HTTPException(
+                status_code=400,
+                detail=f"الكوبون غير فعال في هذا الوقت — مفعل من {ds} إلى {de}"
+            )
+
+    # ===== التحقق من اسم العميل المرتبط =====
+    target_name = (coupon.get("customer_name") or "").strip().lower()
+    if target_name:
+        provided = (customer_name or "").strip().lower()
+        if not provided or provided != target_name:
+            raise HTTPException(status_code=400, detail="هذا الكوبون مخصص لعميل معين")
     
     # التحقق من الحد الأدنى للطلب
     if order_total < coupon.get("min_order_amount", 0):
@@ -4632,12 +4679,86 @@ async def validate_coupon(
         "final_total": round(order_total - discount, 2)
     }
 
+@api_router.get("/coupons/lookup-by-customer")
+async def lookup_coupon_by_customer(
+    customer_name: str,
+    order_total: float = 0,
+    branch_id: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    البحث عن كوبون نشط مرتبط باسم العميل في الفرع الحالي والوقت الحالي.
+    يُستخدم في POS لاقتراح الخصم تلقائياً عند كتابة اسم العميل.
+    يرجع أول كوبون منطبق (أعلى نسبة خصم).
+    """
+    name_lower = (customer_name or "").strip().lower()
+    if not name_lower:
+        return {"found": False}
+
+    target_branch = branch_id or current_user.get("branch_id")
+    now_dt = datetime.now(timezone.utc)
+    now_iso = now_dt.isoformat()
+    cur_hm = now_dt.strftime("%H:%M")
+
+    base = build_tenant_query(current_user, {
+        "is_active": True,
+        "customer_name": {"$regex": f"^{re.escape(name_lower)}$", "$options": "i"},
+    })
+    candidates = await db.coupons.find(base, {"_id": 0}).to_list(50)
+
+    best = None
+    best_discount = -1.0
+    for c in candidates:
+        # تاريخ
+        if c.get("valid_from") and c["valid_from"] > now_iso:
+            continue
+        if c.get("valid_until") and c["valid_until"] < now_iso:
+            continue
+        # حد الاستخدام الكلي
+        if c.get("usage_limit") and c.get("used_count", 0) >= c.get("usage_limit"):
+            continue
+        # الفرع
+        allowed = c.get("branch_ids") or []
+        if allowed and target_branch and target_branch not in allowed:
+            continue
+        # الوقت اليومي
+        ds, de = c.get("daily_start_time"), c.get("daily_end_time")
+        if ds and de and not (ds <= cur_hm <= de):
+            continue
+        # الحد الأدنى
+        if order_total and order_total < c.get("min_order_amount", 0):
+            continue
+
+        # حساب الخصم
+        if c.get("discount_type") == "percentage":
+            disc = (order_total or 0) * (c.get("discount_value", 0) / 100)
+            if c.get("max_discount"):
+                disc = min(disc, c["max_discount"])
+        else:
+            disc = c.get("discount_value", 0)
+        if disc > best_discount:
+            best_discount = disc
+            best = c
+
+    if not best:
+        return {"found": False}
+
+    return {
+        "found": True,
+        "coupon": best,
+        "discount": round(best_discount, 2),
+        "final_total": round((order_total or 0) - best_discount, 2),
+    }
+
+
 @api_router.post("/coupons/{coupon_id}/use")
 async def use_coupon(
     coupon_id: str,
     order_id: str,
     discount_amount: float,
     customer_phone: Optional[str] = None,
+    customer_name: Optional[str] = None,
+    branch_id: Optional[str] = None,
     current_user: dict = Depends(get_current_user)
 ):
     """تسجيل استخدام كوبون"""
@@ -4649,12 +4770,22 @@ async def use_coupon(
         }
     )
     
-    # تسجيل الاستخدام
+    # تسجيل الاستخدام مع تفاصيل الكاشير والفرع لتقارير الإغلاق
+    # نجلب اسم الكوبون لإظهاره في التقارير دون استعلامات لاحقة
+    cp = await db.coupons.find_one({"id": coupon_id}, {"_id": 0, "name": 1, "code": 1})
     usage_doc = {
         "id": str(uuid.uuid4()),
         "coupon_id": coupon_id,
+        "coupon_name": (cp or {}).get("name", ""),
+        "coupon_code": (cp or {}).get("code", ""),
         "order_id": order_id,
         "customer_phone": customer_phone,
+        "customer_name": customer_name,
+        "branch_id": branch_id or current_user.get("branch_id"),
+        "tenant_id": current_user.get("tenant_id"),
+        "cashier_id": current_user.get("id"),
+        "cashier_name": current_user.get("full_name") or current_user.get("username") or "",
+        "shift_id": current_user.get("shift_id"),  # قد يكون None
         "discount_amount": discount_amount,
         "used_at": datetime.now(timezone.utc).isoformat()
     }
@@ -5400,6 +5531,10 @@ async def create_order(order: OrderCreate, current_user: dict = Depends(get_curr
         "items": items_with_cost,
         "subtotal": subtotal,
         "discount": order.discount,
+        "coupon_id": order.coupon_id,
+        "coupon_code": order.coupon_code,
+        "coupon_name": order.coupon_name,
+        "coupon_discount": order.coupon_discount,
         "tax": tax,
         "packaging_cost": total_packaging_cost,  # تكلفة التغليف الإجمالية
         "total": total,

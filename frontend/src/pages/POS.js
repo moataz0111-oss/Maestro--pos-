@@ -129,6 +129,9 @@ export default function POS() {
   const [tables, setTables] = useState([]);
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
+  // ===== كوبون مرتبط باسم العميل (خصم تلقائي) =====
+  const [appliedCoupon, setAppliedCoupon] = useState(null); // {id, name, code, discount_type, discount_value}
+  const [couponDiscount, setCouponDiscount] = useState(0); // قيمة الخصم بالعملة
   const [deliveryAddress, setDeliveryAddress] = useState('');
   const [buzzerNumber, setBuzzerNumber] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('');  // فارغ - يجب على المستخدم الاختيار
@@ -1411,20 +1414,57 @@ export default function POS() {
     setEditingOrder(null);
     setCustomerData(null);
     setCustomerSearchPhone('');
+    setAppliedCoupon(null);
+    setCouponDiscount(0);
   }, []);
 
   const subtotal = cart.reduce((sum, item) => {
     const extrasTotal = (item.selectedExtras || []).reduce((extSum, ext) => extSum + (ext.price * (ext.quantity || 1)), 0);
     return sum + (item.price * item.quantity) + extrasTotal;
   }, 0);
+
+  // ===== خصم تلقائي للكوبون عند كتابة اسم العميل =====
+  useEffect(() => {
+    const name = (customerName || '').trim();
+    // إذا فضي → نلغي الكوبون
+    if (!name) {
+      if (appliedCoupon) { setAppliedCoupon(null); setCouponDiscount(0); }
+      return;
+    }
+    // إذا الكوبون الحالي يطابق نفس الاسم، نعيد حساب الخصم فقط (مع تغير subtotal)
+    const branchId = getBranchIdForApi() || user?.branch_id || '';
+    const ctrl = new AbortController();
+    const t = setTimeout(async () => {
+      try {
+        const token = localStorage.getItem('token');
+        const res = await axios.get(`${API}/coupons/lookup-by-customer`, {
+          params: { customer_name: name, order_total: subtotal, branch_id: branchId },
+          headers: { Authorization: `Bearer ${token}` },
+          signal: ctrl.signal,
+        });
+        if (res.data?.found) {
+          setAppliedCoupon(res.data.coupon);
+          setCouponDiscount(Number(res.data.discount) || 0);
+        } else {
+          setAppliedCoupon(null);
+          setCouponDiscount(0);
+        }
+      } catch (_e) { /* ignore */ }
+    }, 350);
+    return () => { clearTimeout(t); ctrl.abort(); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [customerName, subtotal]);
   
   // حساب عمولة شركة التوصيل
   const selectedDeliveryApp = deliveryApps.find(a => a.id === deliveryApp);
   const commissionRate = selectedDeliveryApp?.commission_rate || 0;
   const commissionAmount = subtotal * (commissionRate / 100);
   
+  // الخصم الكلي = خصم يدوي + خصم الكوبون التلقائي
+  const totalDiscount = (Number(discount) || 0) + (Number(couponDiscount) || 0);
+  
   // المجموع بعد الخصم والعمولة
-  const totalBeforeCommission = subtotal - discount;
+  const totalBeforeCommission = subtotal - totalDiscount;
   const netTotal = totalBeforeCommission - commissionAmount;
 
 
@@ -1678,7 +1718,11 @@ export default function POS() {
           branch_id: currentBranchId || (await axios.get(`${API}/branches`)).data[0]?.id,
           payment_method: 'pending',  // حفظ كمعلق - الدفع يتم عبر زر الإرسال (Submit) فقط
           preferred_payment: paymentMethod || 'cash',  // حفظ طريقة الدفع المفضلة لاستخدامها لاحقاً
-          discount: discount,
+          discount: totalDiscount,
+          coupon_id: appliedCoupon?.id || null,
+          coupon_code: appliedCoupon?.code || null,
+          coupon_name: appliedCoupon?.name || null,
+          coupon_discount: couponDiscount || 0,
           delivery_app: orderType === 'delivery' ? deliveryApp : null,
           delivery_app_name: orderType === 'delivery' && deliveryApp ? (deliveryApps.find(a => a.id === deliveryApp)?.name || '') : null,
           driver_id: orderType === 'delivery' ? selectedDriver : null,
@@ -2128,7 +2172,11 @@ export default function POS() {
           })),
           branch_id: currentBranchId || (await axios.get(`${API}/branches`)).data[0]?.id,
           payment_method: paymentMethod,
-          discount: discount,
+          discount: totalDiscount,
+          coupon_id: appliedCoupon?.id || null,
+          coupon_code: appliedCoupon?.code || null,
+          coupon_name: appliedCoupon?.name || null,
+          coupon_discount: couponDiscount || 0,
           delivery_app: orderType === 'delivery' ? deliveryApp : null,
           delivery_app_name: orderType === 'delivery' && deliveryApp ? (deliveryApps.find(a => a.id === deliveryApp)?.name || '') : null,
           driver_id: selectedDriver || null,
@@ -2139,6 +2187,21 @@ export default function POS() {
         orderId = res.data.id;
         orderNumber = res.data.order_number;
         setLastOrderNumber(orderNumber); // حفظ رقم الفاتورة
+        
+        // ===== تسجيل استخدام الكوبون (لتقارير الإغلاق والخصومات) =====
+        if (appliedCoupon?.id && couponDiscount > 0) {
+          try {
+            await axios.post(`${API}/coupons/${appliedCoupon.id}/use`, null, {
+              params: {
+                order_id: orderId,
+                discount_amount: couponDiscount,
+                customer_phone: customerPhone || '',
+                customer_name: customerName || '',
+                branch_id: currentBranchId || ''
+              }
+            });
+          } catch (e) { console.warn('coupon use track failed:', e.message); }
+        }
         
         // إرسال إشعار للكاشير والسائق (فقط للطلبات الجديدة) — fire-and-forget لعدم تعطيل الـUI
         sendOrderNotification({
@@ -3443,6 +3506,15 @@ export default function POS() {
               <span className="text-muted-foreground">{t('المجموع الفرعي')}:</span>
               <span className="tabular-nums text-foreground">{formatPrice(subtotal)}</span>
             </div>
+            {appliedCoupon && couponDiscount > 0 && (
+              <div className="flex justify-between text-sm bg-emerald-500/10 p-2 rounded-md border border-emerald-500/30" data-testid="cart-coupon-line">
+                <span className="text-emerald-500 font-medium">
+                  🎟️ {t('كوبون')} {appliedCoupon.name || appliedCoupon.code}
+                  {appliedCoupon.discount_type === 'percentage' && ` (${appliedCoupon.discount_value}%)`}
+                </span>
+                <span className="tabular-nums text-emerald-500 font-bold">-{formatPrice(couponDiscount)}</span>
+              </div>
+            )}
             {discount > 0 && (
               <div className="flex justify-between text-sm text-destructive">
                 <span>{t('الخصم')}:</span>
@@ -3457,7 +3529,7 @@ export default function POS() {
             )}
             <div className="flex justify-between text-lg font-bold pt-2 border-t border-border">
               <span className="text-foreground">{t('الإجمالي')}:</span>
-              <span className="text-primary tabular-nums">{formatPrice(totalBeforeCommission)}</span>
+              <span className="text-primary tabular-nums" data-testid="cart-total">{formatPrice(totalBeforeCommission)}</span>
             </div>
             {commissionAmount > 0 && (
               <div className="flex justify-between text-base font-bold bg-green-500/10 p-2 rounded-lg">

@@ -63,8 +63,14 @@ export default function Coupons() {
     valid_until: new Date(Date.now() + 30*24*60*60*1000).toISOString().split('T')[0],
     is_active: true,
     loyalty_tier_required: 'all',
-    first_order_only: false
+    first_order_only: false,
+    // الحقول الجديدة
+    branch_ids: [],
+    daily_start_time: '',
+    daily_end_time: '',
+    customer_name: ''
   });
+  const [branches, setBranches] = useState([]);
   const [promotionForm, setPromotionForm] = useState({
     name: '',
     description: '',
@@ -88,13 +94,15 @@ export default function Coupons() {
       const token = localStorage.getItem('token');
       const headers = { Authorization: `Bearer ${token}` };
       
-      const [couponsRes, promotionsRes] = await Promise.all([
+      const [couponsRes, promotionsRes, branchesRes] = await Promise.all([
         axios.get(`${API}/coupons`, { headers }),
-        axios.get(`${API}/promotions`, { headers })
+        axios.get(`${API}/promotions`, { headers }),
+        axios.get(`${API}/branches`, { headers }).catch(() => ({ data: [] }))
       ]);
       
       setCoupons(couponsRes.data);
       setPromotions(promotionsRes.data);
+      setBranches(branchesRes.data || []);
     } catch (error) {
       console.error('Error:', error);
     } finally {
@@ -116,7 +124,11 @@ export default function Coupons() {
         ...couponForm,
         max_discount: couponForm.max_discount || null,
         usage_limit: couponForm.usage_limit || null,
-        loyalty_tier_required: couponForm.loyalty_tier_required || null
+        loyalty_tier_required: couponForm.loyalty_tier_required || null,
+        daily_start_time: couponForm.daily_start_time || null,
+        daily_end_time: couponForm.daily_end_time || null,
+        customer_name: (couponForm.customer_name || '').trim() || null,
+        branch_ids: couponForm.branch_ids || []
       };
       
       if (editingCoupon) {
@@ -200,7 +212,8 @@ export default function Coupons() {
       usage_limit: null, usage_per_customer: 1,
       valid_from: new Date().toISOString().split('T')[0],
       valid_until: new Date(Date.now() + 30*24*60*60*1000).toISOString().split('T')[0],
-      is_active: true, loyalty_tier_required: 'all', first_order_only: false
+      is_active: true, loyalty_tier_required: 'all', first_order_only: false,
+      branch_ids: [], daily_start_time: '', daily_end_time: '', customer_name: ''
     });
     setEditingCoupon(null);
   };
@@ -220,7 +233,11 @@ export default function Coupons() {
     setCouponForm({
       ...coupon,
       valid_from: coupon.valid_from?.split('T')[0] || '',
-      valid_until: coupon.valid_until?.split('T')[0] || ''
+      valid_until: coupon.valid_until?.split('T')[0] || '',
+      branch_ids: coupon.branch_ids || [],
+      daily_start_time: coupon.daily_start_time || '',
+      daily_end_time: coupon.daily_end_time || '',
+      customer_name: coupon.customer_name || ''
     });
     setCouponDialogOpen(true);
   };
@@ -591,6 +608,80 @@ export default function Coupons() {
                 />
               </div>
             </div>
+            <div>
+              <Label>{t('اسم العميل المرتبط (اختياري)')}</Label>
+              <Input
+                value={couponForm.customer_name || ''}
+                onChange={(e) => setCouponForm({ ...couponForm, customer_name: e.target.value })}
+                placeholder={t('اتركه فارغاً ليطبق على جميع العملاء')}
+                data-testid="coupon-customer-name"
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                {t('عند كتابة هذا الاسم في POS، يطبق الكوبون تلقائياً')}
+              </p>
+            </div>
+
+            <div>
+              <Label>{t('الفروع المسموح بها')}</Label>
+              <div className="border rounded-md p-2 max-h-32 overflow-y-auto space-y-1" data-testid="coupon-branches-list">
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="branch-all"
+                    checked={(couponForm.branch_ids || []).length === 0}
+                    onChange={(e) => {
+                      if (e.target.checked) setCouponForm({ ...couponForm, branch_ids: [] });
+                    }}
+                    data-testid="coupon-branch-all"
+                  />
+                  <label htmlFor="branch-all" className="text-sm cursor-pointer">{t('جميع الفروع')}</label>
+                </div>
+                {branches.map((br) => {
+                  const isSelected = (couponForm.branch_ids || []).includes(br.id);
+                  return (
+                    <div key={br.id} className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        id={`branch-${br.id}`}
+                        checked={isSelected}
+                        onChange={(e) => {
+                          const list = couponForm.branch_ids || [];
+                          if (e.target.checked) {
+                            setCouponForm({ ...couponForm, branch_ids: [...list, br.id] });
+                          } else {
+                            setCouponForm({ ...couponForm, branch_ids: list.filter(x => x !== br.id) });
+                          }
+                        }}
+                        data-testid={`coupon-branch-${br.id}`}
+                      />
+                      <label htmlFor={`branch-${br.id}`} className="text-sm cursor-pointer">{br.name}</label>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label>{t('فعّال من الساعة (اختياري)')}</Label>
+                <Input
+                  type="time"
+                  value={couponForm.daily_start_time || ''}
+                  onChange={(e) => setCouponForm({ ...couponForm, daily_start_time: e.target.value })}
+                  data-testid="coupon-daily-start"
+                />
+              </div>
+              <div>
+                <Label>{t('إلى الساعة')}</Label>
+                <Input
+                  type="time"
+                  value={couponForm.daily_end_time || ''}
+                  onChange={(e) => setCouponForm({ ...couponForm, daily_end_time: e.target.value })}
+                  data-testid="coupon-daily-end"
+                />
+              </div>
+            </div>
+
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <Label>{t('يبدأ من')}</Label>
