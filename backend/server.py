@@ -4720,10 +4720,24 @@ async def search_coupons_by_customer_prefix(
     now_iso = now_dt.isoformat()
     cur_hm = now_dt.strftime("%H:%M")
 
+    # نطابق على customer_name إذا موجود، وإلا نقع على name (اسم الكوبون)
+    # ↳ يدعم الكوبونات القديمة بدون customer_name
+    prefix_regex = f"^{re.escape(p)}"
     base = build_tenant_query(current_user, {
         "is_active": True,
-        # الكوبون لازم يكون مرتبط باسم عميل (مش عام)
-        "customer_name": {"$regex": f"^{re.escape(p)}", "$options": "i"},
+        "$or": [
+            {"customer_name": {"$regex": prefix_regex, "$options": "i"}},
+            {
+                "$and": [
+                    {"$or": [
+                        {"customer_name": {"$exists": False}},
+                        {"customer_name": None},
+                        {"customer_name": ""},
+                    ]},
+                    {"name": {"$regex": prefix_regex, "$options": "i"}},
+                ]
+            },
+        ],
     })
     candidates = await db.coupons.find(base, {"_id": 0}).to_list(100)
 
@@ -4769,9 +4783,24 @@ async def lookup_coupon_by_customer(
     now_iso = now_dt.isoformat()
     cur_hm = now_dt.strftime("%H:%M")
 
+    # نبحث على customer_name أولاً، وإلا نقع على name (اسم الكوبون نفسه)
+    # هذا يدعم الكوبونات القديمة التي اسم الكوبون فيها هو اسم العميل
+    name_regex = f"^{re.escape(name_lower)}$"
     base = build_tenant_query(current_user, {
         "is_active": True,
-        "customer_name": {"$regex": f"^{re.escape(name_lower)}$", "$options": "i"},
+        "$or": [
+            {"customer_name": {"$regex": name_regex, "$options": "i"}},
+            {
+                "$and": [
+                    {"$or": [
+                        {"customer_name": {"$exists": False}},
+                        {"customer_name": None},
+                        {"customer_name": ""},
+                    ]},
+                    {"name": {"$regex": name_regex, "$options": "i"}},
+                ]
+            },
+        ],
     })
     candidates = await db.coupons.find(base, {"_id": 0}).to_list(50)
 

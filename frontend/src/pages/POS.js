@@ -1473,7 +1473,7 @@ export default function POS() {
 
   // عند اختيار كوبون من قائمة الاقتراحات
   const selectCouponSuggestion = (coupon) => {
-    setCustomerName(coupon.customer_name || '');
+    setCustomerName(coupon.customer_name || coupon.name || '');
     setShowCouponSuggestions(false);
     // الـuseEffect أعلاه سيُجلب lookup ويطبق الخصم تلقائياً
   };
@@ -3313,7 +3313,7 @@ export default function POS() {
                           {c.discount_type === 'percentage' ? `${c.discount_value}%` : `-${c.discount_value}`}
                         </span>
                         <span className="text-sm">
-                          🎟️ <span className="font-medium">{c.customer_name}</span> — {c.name}
+                          🎟️ <span className="font-medium">{c.customer_name || c.name}</span>{c.customer_name ? ` — ${c.name}` : ''}
                         </span>
                       </button>
                     ))}
@@ -3362,7 +3362,7 @@ export default function POS() {
                           {c.discount_type === 'percentage' ? `${c.discount_value}%` : `-${c.discount_value}`}
                         </span>
                         <span className="text-sm">
-                          🎟️ <span className="font-medium">{c.customer_name}</span> — {c.name}
+                          🎟️ <span className="font-medium">{c.customer_name || c.name}</span>{c.customer_name ? ` — ${c.name}` : ''}
                         </span>
                       </button>
                     ))}
