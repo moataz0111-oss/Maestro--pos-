@@ -2700,13 +2700,20 @@ async def create_branch(branch: BranchCreate, current_user: dict = Depends(get_c
     return branch_doc
 
 @api_router.get("/branches", response_model=List[BranchResponse])
-async def get_branches(current_user: dict = Depends(get_current_user), include_inactive: bool = False):
+async def get_branches(
+    current_user: dict = Depends(get_current_user),
+    include_inactive: bool = False,
+    include_departments: bool = False,
+):
     """
     جلب الفروع - مع عزل صارم للبيانات بين المستأجرين
     
     - Super Admin الحقيقي (بدون tenant_id) = لا يرى فروع (يستخدم Super Admin Panel)
     - Admin/Manager = يرى فروع الـ tenant الخاص به فقط
     - Cashier/Staff = يرى فرعه فقط
+    
+    include_departments=False (افتراضي): يرجع الفروع العادية فقط (لـPOS, Dashboard, etc.)
+    include_departments=True: يرجع الفروع + الأقسام (المطبخ المركزي/المخزن/المشتريات) — لـHR
     """
     tenant_id = current_user.get("tenant_id")
     
@@ -2728,8 +2735,16 @@ async def get_branches(current_user: dict = Depends(get_current_user), include_i
     if not include_inactive:
         query["is_active"] = {"$ne": False}
     
-    # لا نستبعد أي فروع بناءً على الاسم - كل فروع العميل مهمة
-    # (تم إزالة فلتر الأسماء الافتراضية لأنه يسبب مشاكل للعملاء)
+    # === فلترة الأقسام (مطبخ مركزي/مخزن/مشتريات) ===
+    # افتراضياً نخفيها — تظهر فقط لـHR عند تمرير include_departments=true
+    if not include_departments:
+        query["$and"] = query.get("$and", []) + [
+            {"$or": [
+                {"branch_type": {"$exists": False}},
+                {"branch_type": "branch"},
+                {"branch_type": None},
+            ]}
+        ]
     
     branches = await db.branches.find(query, {"_id": 0}).to_list(100)
     return branches

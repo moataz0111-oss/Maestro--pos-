@@ -365,7 +365,7 @@ export default function HR() {
       const dateRange = getDateRange();
       const [empRes, branchRes, attRes, advRes, dedRes, bonRes, payRes, summaryRes, otRes] = await Promise.all([
         axios.get(`${API}/employees${branchId ? `?branch_id=${branchId}` : ''}`, { headers }),
-        axios.get(`${API}/branches`, { headers }),
+        axios.get(`${API}/branches?include_departments=true`, { headers }),
         axios.get(`${API}/attendance?start_date=${dateRange.start}&end_date=${dateRange.end}`, { headers }),
         axios.get(`${API}/advances`, { headers }),
         axios.get(`${API}/deductions?start_date=${dateRange.start}&end_date=${dateRange.end}`, { headers }),
