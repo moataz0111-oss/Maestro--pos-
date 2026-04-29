@@ -769,6 +769,134 @@ async def get_products_report(
         "low_selling": sorted(result, key=lambda x: x["quantity_sold"])[:10]
     }
 
+
+@router.get("/products-by-channel")
+async def get_products_by_channel(
+    branch_id: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """تقرير الأصناف المباعة مفصّلاً حسب طريقة الدفع/قناة البيع.
+    
+    يُرجع قاموس channels حيث المفتاح = اسم القناة بالعربية، والقيمة:
+    - channel_key: مفتاح برمجي (cash/credit/delivery_app_<id>/delivery_driver/pending)
+    - channel_label: اسم عربي
+    - orders_count: عدد الطلبات في هذه القناة
+    - total_revenue: إيرادات القناة
+    - products: قائمة الأصناف المباعة في هذه القناة (مرتبة بالأكثر مبيعاً)
+    """
+    db = get_database()
+    tenant_id = get_user_tenant_id(current_user)
+
+    order_query = {"status": {"$ne": OrderStatus.CANCELLED}}
+    if tenant_id:
+        order_query["tenant_id"] = tenant_id
+    else:
+        order_query["$or"] = [{"tenant_id": {"$exists": False}}, {"tenant_id": None}]
+
+    user_branch_id = current_user.get("branch_id")
+    user_role = current_user.get("role")
+    if user_branch_id and user_role not in [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.MANAGER]:
+        order_query["branch_id"] = user_branch_id
+    elif branch_id:
+        order_query["branch_id"] = branch_id
+
+    order_query = _apply_business_date_filter(order_query, start_date, end_date)
+
+    orders = await db.orders.find(order_query, {"_id": 0}).to_list(20000)
+
+    # جلب أسماء شركات التوصيل لعرضها
+    delivery_apps = {}
+    da_query = {"tenant_id": tenant_id} if tenant_id else {}
+    async for da in db.delivery_apps.find(da_query, {"_id": 0, "id": 1, "name": 1}):
+        delivery_apps[da["id"]] = da.get("name", "")
+
+    def _classify(order):
+        """يحدد قناة الطلب: (channel_key, channel_label)"""
+        pm = (order.get("payment_method") or "").lower()
+        order_type = (order.get("order_type") or "").lower()
+        delivery_app_id = order.get("delivery_app")
+        is_company = bool(order.get("is_delivery_company") or delivery_app_id)
+        driver_id = order.get("driver_id")
+
+        # طلب لشركة توصيل (آجل لها)
+        if is_company and delivery_app_id:
+            app_name = delivery_apps.get(delivery_app_id, order.get("delivery_app_name") or "شركة توصيل")
+            return (f"delivery_app__{delivery_app_id}", f"توصيل {app_name}")
+
+        # طلب توصيل من خلال سائق داخلي
+        if order_type == "delivery" and driver_id and not is_company:
+            return ("delivery_driver", "توصيل عن طريق السائقين")
+
+        # سفري
+        if order_type == "takeaway":
+            return ("takeaway", "سفري")
+
+        # حسب طريقة الدفع
+        if pm in ("cash", "نقدي"):
+            return ("cash", "نقدي")
+        if pm in ("card", "بطاقة"):
+            return ("card", "بطاقة")
+        if pm in ("credit", "آجل"):
+            return ("credit", "آجل")
+        if pm in ("pending", "معلق"):
+            return ("pending", "معلق")
+        return ("other", pm or "غير محدد")
+
+    # تجميع الأصناف حسب القناة
+    channels = {}  # key → {channel_label, orders_count, total_revenue, items: {product_id: {...}}}
+    for o in orders:
+        ck, label = _classify(o)
+        if ck not in channels:
+            channels[ck] = {
+                "channel_key": ck,
+                "channel_label": label,
+                "orders_count": 0,
+                "total_revenue": 0.0,
+                "_items": {},
+            }
+        channels[ck]["orders_count"] += 1
+        channels[ck]["total_revenue"] += float(o.get("total") or 0)
+        for it in o.get("items", []):
+            pid = it.get("product_id") or it.get("name") or "unknown"
+            qty = float(it.get("quantity") or 0)
+            unit_price = float(it.get("price") or 0)
+            rev = unit_price * qty
+            store = channels[ck]["_items"]
+            if pid not in store:
+                store[pid] = {
+                    "product_id": pid,
+                    "name": it.get("name") or it.get("product_name") or "",
+                    "quantity_sold": 0.0,
+                    "revenue": 0.0,
+                }
+            store[pid]["quantity_sold"] += qty
+            store[pid]["revenue"] += rev
+
+    # تحويل items dict → list مرتبة بالأكثر مبيعاً
+    out = []
+    for ch in channels.values():
+        items = list(ch["_items"].values())
+        items.sort(key=lambda x: x["quantity_sold"], reverse=True)
+        out.append({
+            "channel_key": ch["channel_key"],
+            "channel_label": ch["channel_label"],
+            "orders_count": ch["orders_count"],
+            "total_revenue": round(ch["total_revenue"], 2),
+            "products": items,
+            "products_count": len(items),
+        })
+
+    # ترتيب القنوات بالإيرادات تنازلياً
+    out.sort(key=lambda x: x["total_revenue"], reverse=True)
+
+    return {
+        "channels": out,
+        "total_orders": sum(c["orders_count"] for c in out),
+        "total_revenue": round(sum(c["total_revenue"] for c in out), 2),
+    }
+
 # ==================== CANCELLATIONS REPORT ====================
 @router.get("/cancellations")
 async def get_cancellations_report(

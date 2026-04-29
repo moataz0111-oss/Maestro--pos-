@@ -12,6 +12,7 @@ import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Badge } from '../components/ui/badge';
 import BranchSelector from '../components/BranchSelector';
+import ProductsByChannelTab from '../components/reports/ProductsByChannelTab';
 import {
   ArrowRight,
   BarChart3,
@@ -3390,49 +3391,15 @@ export default function Reports() {
           {/* Products Report */}
           <TabsContent value="products">
             {productsReport && (
-              <div className="space-y-6">
-                <Card className="border-border/50 bg-card">
-                  <CardHeader>
-                    <CardTitle className="text-lg text-foreground">{t('تقرير الأصناف')}</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-sm">
-                        <thead>
-                          <tr className="border-b border-border">
-                            <th className="text-right p-3 text-muted-foreground">{t('الصنف')}</th>
-                            <th className="text-right p-3 text-muted-foreground">{t('السعر')}</th>
-                            <th className="text-right p-3 text-muted-foreground">{t('التكلفة')}</th>
-                            <th className="text-right p-3 text-muted-foreground">{t('الربح/وحدة')}</th>
-                            <th className="text-right p-3 text-muted-foreground">{t('الكمية المباعة')}</th>
-                            <th className="text-right p-3 text-muted-foreground">{t('إجمالي الإيرادات')}</th>
-                            <th className="text-right p-3 text-muted-foreground">{t('إجمالي الربح')}</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {productsReport.products?.map(p => (
-                            <tr key={p.id} className="border-b border-border/50 hover:bg-muted/30">
-                              <td className="p-3 font-medium text-foreground">{p.name}</td>
-                              <td className="p-3 tabular-nums text-foreground">{formatPrice(p.price)}</td>
-                              <td className="p-3 tabular-nums text-foreground">{formatPrice(p.cost + p.operating_cost)}</td>
-                              <td className="p-3 tabular-nums text-green-500">{formatPrice(p.profit_per_unit)}</td>
-                              <td className="p-3 tabular-nums text-foreground">{p.quantity_sold}</td>
-                              <td className="p-3 tabular-nums text-foreground">{formatPrice(p.total_revenue)}</td>
-                              <td className="p-3 tabular-nums text-green-500">{formatPrice(p.total_profit)}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </CardContent>
-                </Card>
-                <div className="flex justify-end gap-2 mt-4">
-                  <Button variant="outline" onClick={handlePrintProductsReport} className="gap-2">
-                    <Printer className="h-4 w-4" />
-                    {t('طباعة التقرير')}
-                  </Button>
-                </div>
-              </div>
+              <ProductsByChannelTab
+                productsReport={productsReport}
+                t={t}
+                formatPrice={formatPrice}
+                handlePrintProductsReport={handlePrintProductsReport}
+                getBranchIdForApi={getBranchIdForApi}
+                startDate={startDate}
+                endDate={endDate}
+              />
             )}
           </TabsContent>
 

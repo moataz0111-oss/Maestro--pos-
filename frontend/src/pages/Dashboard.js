@@ -2687,12 +2687,18 @@ export default function Dashboard() {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {periodStats?.by_payment_method && Object.entries(periodStats.by_payment_method).map(([method, amount]) => (
+                {periodStats?.by_payment_method && Object.entries(periodStats.by_payment_method).map(([method, amount]) => {
+                  // الباك إند يرجع الأسماء بالعربية مباشرة (نقدي/بطاقة/آجل/توصيل طلبات/...)
+                  // نحوّل المفاتيح الإنجليزية القديمة فقط للتوافق العكسي
+                  const label = method === 'cash' ? t('نقدي')
+                    : method === 'card' ? t('بطاقة')
+                    : method === 'credit' ? t('آجل')
+                    : method === 'pending' ? t('معلق')
+                    : t(method);
+                  return (
                   <div key={method} className="space-y-2">
                     <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">
-                        {method === 'cash' ? t('نقدي') : method === 'card' ? t('بطاقة') : t('آجل')}
-                      </span>
+                      <span className="text-muted-foreground">{label}</span>
                       <span className="font-medium text-foreground">{formatPrice(amount)}</span>
                     </div>
                     <div className="w-full bg-muted rounded-full h-2">
@@ -2702,7 +2708,8 @@ export default function Dashboard() {
                       />
                     </div>
                   </div>
-                ))}
+                  );
+                })}
                 {(!periodStats?.by_payment_method || Object.keys(periodStats.by_payment_method).length === 0) && (
                   <p className="text-center text-muted-foreground py-8">{t('لا توجد مبيعات في هذه الفترة')}</p>
                 )}
