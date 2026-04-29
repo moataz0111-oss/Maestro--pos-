@@ -132,6 +132,8 @@ export default function POS() {
   // ===== كوبون مرتبط باسم العميل (خصم تلقائي) =====
   const [appliedCoupon, setAppliedCoupon] = useState(null); // {id, name, code, discount_type, discount_value}
   const [couponDiscount, setCouponDiscount] = useState(0); // قيمة الخصم بالعملة
+  const [couponSuggestions, setCouponSuggestions] = useState([]); // اقتراحات autocomplete
+  const [showCouponSuggestions, setShowCouponSuggestions] = useState(false);
   const [deliveryAddress, setDeliveryAddress] = useState('');
   const [buzzerNumber, setBuzzerNumber] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('');  // فارغ - يجب على المستخدم الاختيار
@@ -1429,6 +1431,8 @@ export default function POS() {
     // إذا فضي → نلغي الكوبون
     if (!name) {
       if (appliedCoupon) { setAppliedCoupon(null); setCouponDiscount(0); }
+      setCouponSuggestions([]);
+      setShowCouponSuggestions(false);
       return;
     }
     // إذا الكوبون الحالي يطابق نفس الاسم، نعيد حساب الخصم فقط (مع تغير subtotal)
@@ -1437,6 +1441,7 @@ export default function POS() {
     const t = setTimeout(async () => {
       try {
         const token = localStorage.getItem('token');
+        // 1) Lookup للمطابقة الكاملة (يطبق الخصم)
         const res = await axios.get(`${API}/coupons/lookup-by-customer`, {
           params: { customer_name: name, order_total: subtotal, branch_id: branchId },
           headers: { Authorization: `Bearer ${token}` },
@@ -1449,11 +1454,29 @@ export default function POS() {
           setAppliedCoupon(null);
           setCouponDiscount(0);
         }
+
+        // 2) Autocomplete للاقتراحات (يبدأ بـ)
+        const sres = await axios.get(`${API}/coupons/search-by-customer-prefix`, {
+          params: { prefix: name, branch_id: branchId, limit: 8 },
+          headers: { Authorization: `Bearer ${token}` },
+          signal: ctrl.signal,
+        });
+        const list = sres.data?.coupons || [];
+        setCouponSuggestions(list);
+        // إظهار القائمة فقط إذا لا يوجد تطابق كامل ويوجد اقتراحات
+        setShowCouponSuggestions(!res.data?.found && list.length > 0);
       } catch (_e) { /* ignore */ }
-    }, 350);
+    }, 250);
     return () => { clearTimeout(t); ctrl.abort(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [customerName, subtotal]);
+
+  // عند اختيار كوبون من قائمة الاقتراحات
+  const selectCouponSuggestion = (coupon) => {
+    setCustomerName(coupon.customer_name || '');
+    setShowCouponSuggestions(false);
+    // الـuseEffect أعلاه سيُجلب lookup ويطبق الخصم تلقائياً
+  };
   
   // حساب عمولة شركة التوصيل
   const selectedDeliveryApp = deliveryApps.find(a => a.id === deliveryApp);
@@ -3264,12 +3287,39 @@ export default function POS() {
 
           {orderType === 'takeaway' && (
             <div className="space-y-2">
-              <Input
-                placeholder={t('اسم الزبون')}
-                value={customerName}
-                onChange={(e) => setCustomerName(e.target.value)}
-                data-testid="customer-name"
-              />
+              <div className="relative">
+                <Input
+                  placeholder={t('اسم الزبون')}
+                  value={customerName}
+                  onChange={(e) => setCustomerName(e.target.value)}
+                  onFocus={() => couponSuggestions.length > 0 && setShowCouponSuggestions(true)}
+                  onBlur={() => setTimeout(() => setShowCouponSuggestions(false), 200)}
+                  data-testid="customer-name"
+                />
+                {showCouponSuggestions && couponSuggestions.length > 0 && (
+                  <div className="absolute top-full left-0 right-0 z-50 mt-1 max-h-56 overflow-y-auto rounded-md border border-emerald-500/40 bg-popover shadow-lg" data-testid="coupon-suggestions">
+                    <div className="px-3 py-1 text-xs text-muted-foreground bg-emerald-500/5 border-b">
+                      {t('كوبونات متاحة')}
+                    </div>
+                    {couponSuggestions.map((c) => (
+                      <button
+                        key={c.id}
+                        type="button"
+                        onClick={() => selectCouponSuggestion(c)}
+                        className="w-full text-right px-3 py-2 hover:bg-emerald-500/10 border-b last:border-b-0 flex items-center justify-between gap-2"
+                        data-testid={`coupon-suggestion-${c.id}`}
+                      >
+                        <span className="text-emerald-500 font-bold tabular-nums text-sm">
+                          {c.discount_type === 'percentage' ? `${c.discount_value}%` : `-${c.discount_value}`}
+                        </span>
+                        <span className="text-sm">
+                          🎟️ <span className="font-medium">{c.customer_name}</span> — {c.name}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
               <Input
                 placeholder={t('رقم الهاتف')}
                 value={customerPhone}
@@ -3287,12 +3337,38 @@ export default function POS() {
 
           {orderType === 'delivery' && (
             <div className="space-y-2">
-              <Input
-                placeholder={t('اسم العميل')}
-                value={customerName}
-                onChange={(e) => setCustomerName(e.target.value)}
-                data-testid="delivery-name"
-              />
+              <div className="relative">
+                <Input
+                  placeholder={t('اسم العميل')}
+                  value={customerName}
+                  onChange={(e) => setCustomerName(e.target.value)}
+                  onFocus={() => couponSuggestions.length > 0 && setShowCouponSuggestions(true)}
+                  onBlur={() => setTimeout(() => setShowCouponSuggestions(false), 200)}
+                  data-testid="delivery-name"
+                />
+                {showCouponSuggestions && couponSuggestions.length > 0 && (
+                  <div className="absolute top-full left-0 right-0 z-50 mt-1 max-h-56 overflow-y-auto rounded-md border border-emerald-500/40 bg-popover shadow-lg" data-testid="coupon-suggestions-delivery">
+                    <div className="px-3 py-1 text-xs text-muted-foreground bg-emerald-500/5 border-b">
+                      {t('كوبونات متاحة')}
+                    </div>
+                    {couponSuggestions.map((c) => (
+                      <button
+                        key={c.id}
+                        type="button"
+                        onClick={() => selectCouponSuggestion(c)}
+                        className="w-full text-right px-3 py-2 hover:bg-emerald-500/10 border-b last:border-b-0 flex items-center justify-between gap-2"
+                      >
+                        <span className="text-emerald-500 font-bold tabular-nums text-sm">
+                          {c.discount_type === 'percentage' ? `${c.discount_value}%` : `-${c.discount_value}`}
+                        </span>
+                        <span className="text-sm">
+                          🎟️ <span className="font-medium">{c.customer_name}</span> — {c.name}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
               <Input
                 placeholder={t('رقم الهاتف')}
                 value={customerPhone}

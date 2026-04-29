@@ -1341,9 +1341,21 @@ export default function HR() {
   };
 
   // Stats
+  // === تصنيف الموظفين: فروع ↔ أقسام (مطبخ مركزي/مخزن/مشتريات) ===
+  const departmentBranchIds = React.useMemo(() => {
+    return new Set(branches.filter(b => b.branch_type && b.branch_type !== 'branch').map(b => b.id));
+  }, [branches]);
+  const branchEmployees = employees.filter(e => e.is_active && !departmentBranchIds.has(e.branch_id));
+  const departmentEmployees = employees.filter(e => e.is_active && departmentBranchIds.has(e.branch_id));
+  
   const stats = {
     totalEmployees: employees.filter(e => e.is_active).length,
     totalSalaries: employees.filter(e => e.is_active).reduce((sum, e) => sum + (e.salary || 0), 0),
+    // إحصائيات منفصلة للفروع والأقسام
+    branchEmployeesCount: branchEmployees.length,
+    branchSalariesTotal: branchEmployees.reduce((sum, e) => sum + (e.salary || 0), 0),
+    departmentEmployeesCount: departmentEmployees.length,
+    departmentSalariesTotal: departmentEmployees.reduce((sum, e) => sum + (e.salary || 0), 0),
     pendingAdvances: advances.filter(a => a.status === 'approved' && a.remaining_amount > 0).reduce((sum, a) => sum + a.remaining_amount, 0),
     monthlyDeductions: deductions.reduce((sum, d) => sum + d.amount, 0),
     monthlyBonuses: bonuses.reduce((sum, b) => sum + b.amount, 0),
@@ -1744,6 +1756,18 @@ export default function HR() {
               <Banknote className="h-8 w-8 text-green-500 mx-auto mb-2" />
               <p className="text-lg font-bold text-green-500">{formatPrice(stats.totalSalaries)}</p>
               <p className="text-sm text-muted-foreground">{t('إجمالي الرواتب')}</p>
+              {stats.departmentEmployeesCount > 0 && !getBranchIdForApi() && (
+                <div className="mt-2 pt-2 border-t border-green-500/20 text-xs space-y-0.5" data-testid="salary-split">
+                  <div className="flex justify-between text-muted-foreground">
+                    <span>{t('الفروع')} ({stats.branchEmployeesCount}):</span>
+                    <span className="tabular-nums text-foreground">{formatPrice(stats.branchSalariesTotal)}</span>
+                  </div>
+                  <div className="flex justify-between text-muted-foreground">
+                    <span>{t('الأقسام')} ({stats.departmentEmployeesCount}):</span>
+                    <span className="tabular-nums text-amber-500">{formatPrice(stats.departmentSalariesTotal)}</span>
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
           <Card className="bg-yellow-500/10 border-yellow-500/20">
@@ -1891,7 +1915,26 @@ export default function HR() {
                             <Select value={employeeForm.branch_id} onValueChange={(v) => setEmployeeForm({...employeeForm, branch_id: v})}>
                               <SelectTrigger><SelectValue placeholder={t('اختر الفرع')} /></SelectTrigger>
                               <SelectContent>
-                                {branches.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
+                                {/* الفروع العادية */}
+                                {branches.filter(b => !b.branch_type || b.branch_type === 'branch').map(b => (
+                                  <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
+                                ))}
+                                {/* الأقسام (مطبخ مركزي / مخزن / مشتريات) */}
+                                {branches.filter(b => b.branch_type && b.branch_type !== 'branch').length > 0 && (
+                                  <>
+                                    <div className="px-2 py-1 text-xs text-muted-foreground border-t mt-1 pt-2">
+                                      {t('الأقسام (خارج الفروع)')}
+                                    </div>
+                                    {branches.filter(b => b.branch_type && b.branch_type !== 'branch').map(b => (
+                                      <SelectItem key={b.id} value={b.id}>
+                                        {b.branch_type === 'central_kitchen' && '🍳 '}
+                                        {b.branch_type === 'warehouse' && '📦 '}
+                                        {b.branch_type === 'purchasing' && '🛒 '}
+                                        {b.name}
+                                      </SelectItem>
+                                    ))}
+                                  </>
+                                )}
                               </SelectContent>
                             </Select>
                           </div>

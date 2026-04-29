@@ -668,6 +668,7 @@ export default function Coupons() {
                   type="time"
                   value={couponForm.daily_start_time || ''}
                   onChange={(e) => setCouponForm({ ...couponForm, daily_start_time: e.target.value })}
+                  disabled={!couponForm.daily_start_time && !couponForm.daily_end_time && couponForm._allDay}
                   data-testid="coupon-daily-start"
                 />
               </div>
@@ -677,9 +678,30 @@ export default function Coupons() {
                   type="time"
                   value={couponForm.daily_end_time || ''}
                   onChange={(e) => setCouponForm({ ...couponForm, daily_end_time: e.target.value })}
+                  disabled={!couponForm.daily_start_time && !couponForm.daily_end_time && couponForm._allDay}
                   data-testid="coupon-daily-end"
                 />
               </div>
+            </div>
+
+            <div className="flex items-center gap-2 bg-emerald-500/5 p-2 rounded-md border border-emerald-500/20">
+              <input
+                type="checkbox"
+                id="all-day-toggle"
+                checked={!couponForm.daily_start_time && !couponForm.daily_end_time}
+                onChange={(e) => {
+                  if (e.target.checked) {
+                    setCouponForm({ ...couponForm, daily_start_time: '', daily_end_time: '' });
+                  } else {
+                    setCouponForm({ ...couponForm, daily_start_time: '00:00', daily_end_time: '23:59' });
+                  }
+                }}
+                data-testid="coupon-all-day"
+                className="h-4 w-4 cursor-pointer"
+              />
+              <label htmlFor="all-day-toggle" className="text-sm cursor-pointer text-emerald-600 font-medium">
+                {t('نشط على مدار اليوم (24 ساعة)')}
+              </label>
             </div>
 
             <div className="grid grid-cols-2 gap-4">

@@ -1270,6 +1270,10 @@ class BranchCreate(BaseModel):
     buyer_phone: Optional[str] = None  # هاتف المشتري
     owner_percentage: float = 0.0  # نسبة المالك من المبيعات
     monthly_fee: float = 0.0  # رسوم شهرية ثابتة
+    # === تصنيف الفرع/القسم ===
+    # branch (افتراضي) | central_kitchen | warehouse | purchasing
+    # الأقسام (غير-فرع) لها موظفون لكن رواتبهم تُحسب منفصلة عن الفروع
+    branch_type: str = "branch"
 
 class BranchResponse(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -1292,6 +1296,7 @@ class BranchResponse(BaseModel):
     buyer_phone: Optional[str] = None
     owner_percentage: float = 0.0
     monthly_fee: float = 0.0
+    branch_type: str = "branch"
 
 # Category Models
 class CategoryCreate(BaseModel):
@@ -4678,6 +4683,55 @@ async def validate_coupon(
         "discount": round(discount, 2),
         "final_total": round(order_total - discount, 2)
     }
+
+@api_router.get("/coupons/search-by-customer-prefix")
+async def search_coupons_by_customer_prefix(
+    prefix: str = "",
+    branch_id: Optional[str] = None,
+    limit: int = 10,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    اقتراح الكوبونات لـPOS: يرجع كل الكوبونات النشطة المرتبطة بأسماء عملاء
+    تبدأ بالنص المُدخل (لـautocomplete أثناء كتابة الكاشير).
+    يفلتر على الفرع الحالي والوقت الحالي والصلاحية.
+    """
+    p = (prefix or "").strip()
+    if not p:
+        return {"coupons": []}
+
+    target_branch = branch_id or current_user.get("branch_id")
+    now_dt = datetime.now(timezone.utc)
+    now_iso = now_dt.isoformat()
+    cur_hm = now_dt.strftime("%H:%M")
+
+    base = build_tenant_query(current_user, {
+        "is_active": True,
+        # الكوبون لازم يكون مرتبط باسم عميل (مش عام)
+        "customer_name": {"$regex": f"^{re.escape(p)}", "$options": "i"},
+    })
+    candidates = await db.coupons.find(base, {"_id": 0}).to_list(100)
+
+    valid = []
+    for c in candidates:
+        if c.get("valid_from") and c["valid_from"] > now_iso:
+            continue
+        if c.get("valid_until") and c["valid_until"] < now_iso:
+            continue
+        if c.get("usage_limit") and c.get("used_count", 0) >= c.get("usage_limit"):
+            continue
+        allowed = c.get("branch_ids") or []
+        if allowed and target_branch and target_branch not in allowed:
+            continue
+        ds, de = c.get("daily_start_time"), c.get("daily_end_time")
+        if ds and de and not (ds <= cur_hm <= de):
+            continue
+        valid.append(c)
+        if len(valid) >= limit:
+            break
+
+    return {"coupons": valid}
+
 
 @api_router.get("/coupons/lookup-by-customer")
 async def lookup_coupon_by_customer(
@@ -17334,6 +17388,81 @@ async def fix_pending_orders_extras_calc():
     except Exception as e:
         logger.error(f"❌ fix_pending_orders_extras migration failed: {e}")
 
+
+
+@app.on_event("startup")
+async def seed_department_branches():
+    """إنشاء 3 أقسام افتراضية (مطبخ مركزي، مخزن، مشتريات) لكل tenant.
+    
+    هذه الأقسام تعمل كـbranches لكن branch_type يُميزها:
+    - رواتب موظفيها تُحسب منفصلة عن الفروع في تقارير HR
+    - تظهر في dropdown اختيار الفرع لكن مصنفة في قسم خاص
+    
+    Idempotent: يعمل مرة واحدة لكل tenant.
+    """
+    try:
+        MIG_KEY = "seed_department_branches_v1"
+        done = await db.system_migrations.find_one({"key": MIG_KEY})
+        if done:
+            return
+        
+        logger.info(f"🔧 Running migration: {MIG_KEY}")
+        DEFAULTS = [
+            {"name": "المطبخ المركزي", "branch_type": "central_kitchen"},
+            {"name": "المخزن", "branch_type": "warehouse"},
+            {"name": "قسم المشتريات", "branch_type": "purchasing"},
+        ]
+        
+        tenants = await db.tenants.find({}, {"_id": 0, "id": 1}).to_list(1000)
+        created = 0
+        for ten in tenants:
+            tid = ten.get("id")
+            if not tid:
+                continue
+            for d in DEFAULTS:
+                # هل القسم موجود مسبقاً لهذا المستأجر؟
+                existing = await db.branches.find_one({
+                    "tenant_id": tid,
+                    "branch_type": d["branch_type"],
+                })
+                if existing:
+                    continue
+                doc = {
+                    "id": str(uuid.uuid4()),
+                    "tenant_id": tid,
+                    "name": d["name"],
+                    "branch_type": d["branch_type"],
+                    "address": "",
+                    "phone": "",
+                    "phone2": "",
+                    "email": None,
+                    "is_active": True,
+                    "rent_cost": 0,
+                    "water_cost": 0,
+                    "electricity_cost": 0,
+                    "generator_cost": 0,
+                    "is_sold_branch": False,
+                    "owner_percentage": 0,
+                    "monthly_fee": 0,
+                    "created_at": datetime.now(timezone.utc).isoformat(),
+                }
+                await db.branches.insert_one(doc)
+                created += 1
+        
+        # وضع علامة على كل الـbranches القديمة كـbranch_type=branch (إن لم تُحدد)
+        await db.branches.update_many(
+            {"branch_type": {"$exists": False}},
+            {"$set": {"branch_type": "branch"}}
+        )
+        
+        await db.system_migrations.insert_one({
+            "key": MIG_KEY,
+            "applied_at": datetime.now(timezone.utc).isoformat(),
+            "departments_created": created,
+        })
+        logger.info(f"✅ Migration {MIG_KEY} done. Created {created} department(s).")
+    except Exception as e:
+        logger.error(f"❌ {MIG_KEY} migration failed: {e}")
 
 
 @app.on_event("startup")
