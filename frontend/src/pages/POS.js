@@ -1616,9 +1616,9 @@ export default function POS() {
       }
     }
 
-    // السفري - إجبار إدخال رقم البزر (جهاز التنبيه)
+    // السفري - إجبار إدخال رقم الجهاز (جهاز التنبيه)
     if (orderType === 'takeaway' && !buzzerNumber) {
-      toast.error(t('يرجى إدخال رقم البزر (جهاز التنبيه)'));
+      toast.error(t('يرجى إدخال رقم الجهاز'));
       return;
     }
 
@@ -2027,10 +2027,10 @@ export default function POS() {
       }
     }
 
-    // 3. السفري - إجبار إدخال رقم البزر (جهاز التنبيه)
+    // 3. السفري - إجبار إدخال رقم الجهاز (جهاز التنبيه)
     if (orderType === 'takeaway') {
       if (!buzzerNumber) {
-        toast.error(t('يرجى إدخال رقم البزر (جهاز التنبيه)'));
+        toast.error(t('يرجى إدخال رقم الجهاز'));
         return;
       }
     }
