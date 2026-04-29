@@ -1450,6 +1450,10 @@ export default function POS() {
         if (res.data?.found) {
           setAppliedCoupon(res.data.coupon);
           setCouponDiscount(Number(res.data.discount) || 0);
+          // مسح الخصم اليدوي عند تطبيق كوبون لمنع المضاعفة
+          if ((Number(discount) || 0) > 0) {
+            setDiscount(0);
+          }
         } else {
           setAppliedCoupon(null);
           setCouponDiscount(0);
@@ -1484,11 +1488,13 @@ export default function POS() {
   const commissionAmount = subtotal * (commissionRate / 100);
   
   // الخصم الكلي = خصم يدوي + خصم الكوبون التلقائي
-  const totalDiscount = (Number(discount) || 0) + (Number(couponDiscount) || 0);
+  // محدود بـsubtotal لمنع الإجمالي السلبي (مثل كوبون 100% + خصم يدوي)
+  const rawTotalDiscount = (Number(discount) || 0) + (Number(couponDiscount) || 0);
+  const totalDiscount = Math.min(subtotal, rawTotalDiscount);
   
   // المجموع بعد الخصم والعمولة
-  const totalBeforeCommission = subtotal - totalDiscount;
-  const netTotal = totalBeforeCommission - commissionAmount;
+  const totalBeforeCommission = Math.max(0, subtotal - totalDiscount);
+  const netTotal = Math.max(0, totalBeforeCommission - commissionAmount);
 
 
   // دالة مساعدة لربط عناصر السلة بطابعاتها
@@ -1610,9 +1616,9 @@ export default function POS() {
       }
     }
 
-    // السفري - إجبار إدخال رقم البزون
+    // السفري - إجبار إدخال رقم البزر (جهاز التنبيه)
     if (orderType === 'takeaway' && !buzzerNumber) {
-      toast.error(t('يرجى إدخال رقم جهاز البزون'));
+      toast.error(t('يرجى إدخال رقم البزر (جهاز التنبيه)'));
       return;
     }
 
@@ -1834,8 +1840,14 @@ export default function POS() {
                 notes: item.notes || '',
                 extras: item.selectedExtras || []
               })),
-              total: subtotalCalc - (discount || 0),
+              total: Math.max(0, subtotalCalc - Math.min(subtotalCalc, (discount || 0) + (couponDiscount || 0))),
               subtotal: subtotalCalc,
+              discount: (discount || 0),
+              coupon_id: appliedCoupon?.id || null,
+              coupon_code: appliedCoupon?.code || null,
+              coupon_name: appliedCoupon?.name || null,
+              coupon_discount: couponDiscount || 0,
+              customer_name: customerName || '',
               payment_method: paymentMethod || '',
               cashier_name: user?.name || user?.full_name || '',
               is_paid: false
@@ -2015,10 +2027,10 @@ export default function POS() {
       }
     }
 
-    // 3. السفري - إجبار إدخال رقم البزون
+    // 3. السفري - إجبار إدخال رقم البزر (جهاز التنبيه)
     if (orderType === 'takeaway') {
       if (!buzzerNumber) {
-        toast.error(t('يرجى إدخال رقم جهاز البزون'));
+        toast.error(t('يرجى إدخال رقم البزر (جهاز التنبيه)'));
         return;
       }
     }
@@ -2290,8 +2302,14 @@ export default function POS() {
             const cashierOrderData = {
               ...orderForPrint,
               items: itemsForPrint,
-              total: subtotalCalc - (discount || 0),
+              total: Math.max(0, subtotalCalc - Math.min(subtotalCalc, (discount || 0) + (couponDiscount || 0))),
               subtotal: subtotalCalc,
+              discount: (discount || 0),
+              coupon_id: appliedCoupon?.id || null,
+              coupon_code: appliedCoupon?.code || null,
+              coupon_name: appliedCoupon?.name || null,
+              coupon_discount: couponDiscount || 0,
+              customer_name: customerName || '',
               payment_method: paymentMethod || '',
               cashier_name: user?.name || user?.full_name || '',
               is_paid: true
@@ -2402,7 +2420,14 @@ export default function POS() {
                 product_name: item.product_name || item.name, name: item.product_name || item.name,
                 price: item.price, quantity: item.quantity, notes: item.notes || '', extras: item.selectedExtras || []
               })),
-              total: subtotalCalc - (discount || 0), subtotal: subtotalCalc,
+              total: Math.max(0, subtotalCalc - Math.min(subtotalCalc, (discount || 0) + (couponDiscount || 0))),
+              subtotal: subtotalCalc,
+              discount: (discount || 0),
+              coupon_id: appliedCoupon?.id || null,
+              coupon_code: appliedCoupon?.code || null,
+              coupon_name: appliedCoupon?.name || null,
+              coupon_discount: couponDiscount || 0,
+              customer_name: customerName || '',
               payment_method: editingOrder.payment_method || 'pending',
               cashier_name: user?.name || user?.full_name || '',
               is_paid: false

@@ -5500,7 +5500,9 @@ async def create_order(order: OrderCreate, current_user: dict = Depends(get_curr
     
     subtotal = sum(calculate_item_total(item) for item in order.items)
     tax = subtotal * 0.0  # No tax for Iraq
-    total = subtotal - order.discount + tax
+    # حد الخصم الكلي بـsubtotal لمنع الإجمالي السلبي
+    safe_discount = max(0.0, min(subtotal, float(order.discount or 0)))
+    total = max(0.0, subtotal - safe_discount + tax)
     
     # Calculate total cost including packaging for delivery/takeaway
     total_cost = 0
@@ -5628,7 +5630,7 @@ async def create_order(order: OrderCreate, current_user: dict = Depends(get_curr
         "buzzer_number": order.buzzer_number,  # رقم جهاز التنبيه
         "items": items_with_cost,
         "subtotal": subtotal,
-        "discount": order.discount,
+        "discount": safe_discount,
         "coupon_id": order.coupon_id,
         "coupon_code": order.coupon_code,
         "coupon_name": order.coupon_name,
@@ -16494,6 +16496,11 @@ async def print_invoice(order_id: str, print_type: str = "customer", printer_id:
         print_data["tax"] = order.get("tax", 0)
         print_data["total"] = _sn(order.get("total"))
         print_data["payment_method"] = order.get("payment_method", "cash")
+        # تفاصيل الكوبون لإظهارها في الفاتورة
+        print_data["coupon_id"] = order.get("coupon_id")
+        print_data["coupon_name"] = order.get("coupon_name")
+        print_data["coupon_code"] = order.get("coupon_code")
+        print_data["coupon_discount"] = _sn(order.get("coupon_discount"))
     
     # إذا كانت طباعة كل صنف على حدة، نجهز مصفوفة من الطباعات
     print_jobs = []
@@ -16591,6 +16598,11 @@ async def get_auto_print_data(order_id: str, branch_id: Optional[str] = None, cu
             print_data["tax"] = order.get("tax", 0)
             print_data["total"] = _sn(order.get("total"))
             print_data["payment_method"] = order.get("payment_method", "cash")
+            # تفاصيل الكوبون لإظهارها في الفاتورة
+            print_data["coupon_id"] = order.get("coupon_id")
+            print_data["coupon_name"] = order.get("coupon_name")
+            print_data["coupon_code"] = order.get("coupon_code")
+            print_data["coupon_discount"] = _sn(order.get("coupon_discount"))
         
         # تجهيز الطباعات
         print_jobs = []
