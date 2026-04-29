@@ -26,9 +26,6 @@ jobs:
           echo "🚀 بدء النشر..."
           cd /var/www/maestro
           
-          # تفعيل BuildKit لسرعة البناء + cache layers
-          export DOCKER_BUILDKIT=1
-          
           # سحب الكود
           git fetch origin && git reset --hard origin/main
           

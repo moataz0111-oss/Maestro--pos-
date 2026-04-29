@@ -1,4 +1,3 @@
-# syntax=docker/dockerfile:1.4
 FROM node:20-alpine as build
 
 WORKDIR /app
@@ -6,10 +5,10 @@ WORKDIR /app
 # نسخ ملفات package
 COPY package.json yarn.lock ./
 
-# تثبيت المتطلبات مع كاش yarn (يخلي install أسرع 5x بين البناءات)
+# تثبيت المتطلبات
 # هذا الـlayer يبقى مكاش طالما package.json/yarn.lock ما تغيروا
-RUN --mount=type=cache,target=/usr/local/share/.cache/yarn \
-    yarn install --network-timeout 100000 --prefer-offline 2>&1 | grep -v "Workspaces can only" || true
+# (Docker layer cache العادي بدون BuildKit)
+RUN yarn install --network-timeout 100000 --prefer-offline 2>&1 | grep -v "Workspaces can only" || true
 
 # CACHEBUST يأتي بعد yarn install: يجبر إبطال الكاش لكل ما يأتي تحته
 # (نسخ الكود + البناء) عند كل deploy، بينما يحافظ على layer التثبيت
