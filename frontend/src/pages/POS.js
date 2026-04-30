@@ -1041,6 +1041,12 @@ export default function POS() {
       setDiscount(order.discount || 0);
       setDeliveryApp(order.delivery_app || '');
       setOrderNotes(order.notes || '');
+      // ✅ استعادة طريقة الدفع المفضلة (التي اختارها الكاشير عند الحفظ الأول)
+      // إذا متوفرة، نستخدمها — وإلا نقع على payment_method (لو الطلب مش معلق)
+      const preferred = order.preferred_payment || (order.payment_method !== 'pending' ? order.payment_method : null);
+      if (preferred) {
+        setPaymentMethod(preferred);
+      }
       
       // تحويل عناصر الطلب إلى سلة
       const cartItems = (order.items || []).map(item => {
@@ -1648,7 +1654,12 @@ export default function POS() {
         await axios.put(`${API}/orders/${editingOrder.id}/update-items`, {
           items: updatedItems,
           notes: orderNotes || null,
-          discount: discount || 0
+          discount: (discount || 0) + (couponDiscount || 0),
+          preferred_payment: paymentMethod || null,
+          coupon_id: appliedCoupon?.id || null,
+          coupon_code: appliedCoupon?.code || null,
+          coupon_name: appliedCoupon?.name || null,
+          coupon_discount: couponDiscount || 0,
         });
         
         // إرسال المنتجات الجديدة فقط لطابعات المطبخ (لا يُعاد إرسال القديمة)
@@ -2185,7 +2196,12 @@ export default function POS() {
         await axios.put(`${API}/orders/${editingOrder.id}/update-items`, {
           items: updatedItems,
           notes: orderNotes || null,
-          discount: discount || 0
+          discount: (discount || 0) + (couponDiscount || 0),
+          preferred_payment: paymentMethod || null,
+          coupon_id: appliedCoupon?.id || null,
+          coupon_code: appliedCoupon?.code || null,
+          coupon_name: appliedCoupon?.name || null,
+          coupon_discount: couponDiscount || 0,
         });
       } else {
         // إنشاء طلب جديد أولاً

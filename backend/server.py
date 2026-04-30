@@ -1510,6 +1510,8 @@ class OrderCreate(BaseModel):
     items: List[OrderItemCreate]
     branch_id: str
     payment_method: str = PaymentMethod.CASH
+    # طريقة الدفع المفضّلة عند حفظ طلب كمعلق — تُستخدم لاحقاً عند الدفع الفعلي
+    preferred_payment: Optional[str] = None
     discount: float = 0.0
     # كوبون مرتبط بالطلب (يُحسب ضمن discount لكن نخزن المرجع)
     coupon_id: Optional[str] = None
@@ -1564,6 +1566,8 @@ class OrderResponse(BaseModel):
     coupon_code: Optional[str] = None
     coupon_name: Optional[str] = None
     coupon_discount: float = 0.0
+    # طريقة الدفع المفضّلة (تُستخدم عند تحميل طلب معلق)
+    preferred_payment: Optional[str] = None
 
 # Shift Models
 class ShiftCreate(BaseModel):
@@ -5647,6 +5651,7 @@ async def create_order(order: OrderCreate, current_user: dict = Depends(get_curr
         "tenant_id": tenant_id,  # فصل البيانات لكل عميل
         "status": order_status,
         "payment_method": order.payment_method,
+        "preferred_payment": order.preferred_payment,
         "payment_status": payment_status,
         "delivery_app": order.delivery_app,
         "delivery_app_name": delivery_app_name,  # اسم شركة التوصيل
@@ -5929,6 +5934,13 @@ class UpdateOrderItemsRequest(BaseModel):
     items: List[OrderItemCreate]
     notes: Optional[str] = None
     discount: float = 0.0
+    # طريقة الدفع المفضّلة — تحفظ من POS عند تعديل طلب معلق
+    preferred_payment: Optional[str] = None
+    # تفاصيل الكوبون عند تطبيقه على الطلب أثناء التعديل
+    coupon_id: Optional[str] = None
+    coupon_code: Optional[str] = None
+    coupon_name: Optional[str] = None
+    coupon_discount: float = 0.0
 
 
 @api_router.put("/orders/{order_id}/update-items")
@@ -5971,9 +5983,11 @@ async def update_order_items(order_id: str, request: UpdateOrderItemsRequest, cu
     
     # إعادة حساب المجاميع - الصيغة الصحيحة (مطابقة للسلة)
     subtotal = sum((_sn(i["price"]) * _sn(i["quantity"])) + _sn(i.get("extras_total")) for i in updated_items)
-    discount = request.discount
+    # حد الخصم بـsubtotal لمنع الإجمالي السلبي
+    safe_discount = max(0.0, min(subtotal, float(request.discount or 0)))
+    discount = safe_discount
     tax = 0
-    total = subtotal - discount + tax
+    total = max(0.0, subtotal - discount + tax)
     profit = total - total_cost - order.get("delivery_commission", 0)
     
     update_data = {
@@ -5986,6 +6000,16 @@ async def update_order_items(order_id: str, request: UpdateOrderItemsRequest, cu
         "notes": request.notes,
         "updated_at": datetime.now(timezone.utc).isoformat()
     }
+    
+    # حفظ طريقة الدفع المفضّلة (إذا أرسلها العميل)
+    if request.preferred_payment:
+        update_data["preferred_payment"] = request.preferred_payment
+    # حفظ تفاصيل الكوبون عند تعديل الطلب
+    if request.coupon_id:
+        update_data["coupon_id"] = request.coupon_id
+        update_data["coupon_code"] = request.coupon_code
+        update_data["coupon_name"] = request.coupon_name
+        update_data["coupon_discount"] = request.coupon_discount
     
     await db.orders.update_one({"id": order_id}, {"$set": update_data})
     

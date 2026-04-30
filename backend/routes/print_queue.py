@@ -6,6 +6,7 @@ Print Queue - نظام طابور الطباعة
 from fastapi import APIRouter, Depends, Query
 from datetime import datetime, timezone
 import uuid
+import hashlib
 
 router = APIRouter()
 
@@ -22,12 +23,43 @@ async def add_print_job(job_data: dict, current_user: dict = Depends(get_current
     
     مهم: branch_id يُؤخذ تلقائياً من المستخدم الحالي إذا لم يُرسل،
     لضمان وصول الأمر لوسيط الفرع الصحيح.
+    
+    Idempotency: يرفض تكرار نفس الـjob (نفس الـprinter + نفس الـorder/raw_data)
+    خلال آخر 10 ثوانٍ — يمنع طباعة فاتورة واحدة 5-6 مرات بسبب ضغطات متتالية أو
+    re-mount للمكونات في الواجهة.
     """
     db = get_database()
     tenant_id = get_user_tenant_id(current_user)
     
     # branch_id: من الطلب أولاً، ثم من المستخدم (عزل صارم بين الفروع)
     job_branch_id = job_data.get("branch_id") or current_user.get("branch_id") or ""
+    
+    # ===== Idempotency: بناء بصمة للطلب =====
+    raw_data = job_data.get("raw_data", "") or ""
+    order_data = job_data.get("order_data") or {}
+    order_id = (order_data.get("id") if isinstance(order_data, dict) else None) or ""
+    # استخدم order_id عندما متوفر، وإلا hash لأول 500 حرف من raw_data (كافي للتمييز)
+    fingerprint_src = (
+        f"{tenant_id or ''}|{job_branch_id}|"
+        f"{job_data.get('printer_name', '')}|{job_data.get('usb_printer_name', '')}|"
+        f"{order_id}|{hashlib.md5(str(raw_data)[:500].encode('utf-8')).hexdigest()[:16] if raw_data else ''}"
+    )
+    fingerprint = hashlib.sha1(fingerprint_src.encode('utf-8')).hexdigest()
+    
+    # إذا نفس البصمة أُنشئت خلال 10 ثوانٍ → تكرار، نرجّع نفس الـjob_id القديم
+    from datetime import timedelta as _td
+    dedupe_cutoff = (datetime.now(timezone.utc) - _td(seconds=10)).isoformat()
+    existing = await db.print_queue.find_one({
+        "fingerprint": fingerprint,
+        "created_at": {"$gte": dedupe_cutoff},
+    }, {"_id": 0, "id": 1})
+    if existing:
+        return {
+            "success": True,
+            "job_id": existing["id"],
+            "branch_id": job_branch_id,
+            "deduped": True,
+        }
     
     job = {
         "id": str(uuid.uuid4()),
@@ -42,6 +74,7 @@ async def add_print_job(job_data: dict, current_user: dict = Depends(get_current
         "raw_data": job_data.get("raw_data", ""),
         "order_data": job_data.get("order_data"),
         "printer_config": job_data.get("printer_config"),
+        "fingerprint": fingerprint,
         "created_at": datetime.now(timezone.utc).isoformat(),
         "created_by": current_user.get("id"),
         "device_id": job_data.get("device_id", ""),
