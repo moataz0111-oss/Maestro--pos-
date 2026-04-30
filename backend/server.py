@@ -13,6 +13,7 @@ from typing import List, Optional, Dict, Any
 from enum import Enum
 import uuid
 import re
+import hashlib
 from datetime import datetime, timezone, timedelta
 import bcrypt
 import jwt
@@ -5429,9 +5430,46 @@ async def get_next_order_number(branch_id: str) -> int:
 
 @api_router.post("/orders", response_model=OrderResponse)
 async def create_order(order: OrderCreate, current_user: dict = Depends(get_current_user)):
-    order_number = await get_next_order_number(order.branch_id)
-    
     tenant_id = get_user_tenant_id(current_user)
+    
+    # ===== Idempotency: منع إنشاء طلب مكرر خلال 30 ثانية =====
+    # السبب الجذري للطلب المكرر #11 في فرع السيدية: ضغط مزدوج/إعادة محاولة من POS
+    # نقارن: tenant + branch + cashier + customer + items hash + total
+    try:
+        items_sig_data = sorted([
+            f"{(it.product_id or '')}:{float(it.quantity or 0):.2f}"
+            for it in order.items
+        ])
+        items_sig = "|".join(items_sig_data)
+        order_fingerprint = hashlib.sha1(
+            f"{tenant_id or ''}|{order.branch_id}|{current_user.get('id','')}|"
+            f"{order.customer_name or ''}|{order.customer_phone or ''}|"
+            f"{order.order_type}|{items_sig}|{float(order.discount or 0):.2f}".encode("utf-8")
+        ).hexdigest()
+        
+        dedupe_cutoff_dt = datetime.now(timezone.utc) - timedelta(seconds=30)
+        dedupe_cutoff = dedupe_cutoff_dt.isoformat()
+        
+        existing_dup = await db.orders.find_one(
+            {
+                "order_fingerprint": order_fingerprint,
+                "created_at": {"$gte": dedupe_cutoff},
+                "status": {"$ne": "cancelled"},
+            },
+            {"_id": 0},
+        )
+        if existing_dup:
+            logger.info(
+                f"Order dedup: returning existing #{existing_dup.get('order_number')} "
+                f"instead of creating duplicate (branch={order.branch_id})"
+            )
+            return existing_dup
+    except Exception as _e:
+        # لا نوقف إنشاء الطلب لو فشل فحص التكرار
+        logger.warning(f"order dedup check failed: {_e}")
+        order_fingerprint = None
+    
+    order_number = await get_next_order_number(order.branch_id)
     
     # البحث عن الوردية المفتوحة للفرع (وليس للكاشير فقط)
     shift_query = {
@@ -5653,6 +5691,7 @@ async def create_order(order: OrderCreate, current_user: dict = Depends(get_curr
         "payment_method": order.payment_method,
         "preferred_payment": order.preferred_payment,
         "payment_status": payment_status,
+        "order_fingerprint": order_fingerprint,
         "delivery_app": order.delivery_app,
         "delivery_app_name": delivery_app_name,  # اسم شركة التوصيل
         "delivery_commission": delivery_commission,
@@ -6291,6 +6330,73 @@ async def cancel_order_item(
         "cancellation": cancellation_entry,
         "order_number": order.get("order_number"),
         "order_status": order.get("status"),
+    }
+
+
+@api_router.delete("/orders/{order_id}/force-delete")
+async def force_delete_unpaid_order(
+    order_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    حذف نهائي لطلب غير مدفوع/مكرر — بدون تسجيل في الإلغاءات/المرتجعات.
+    
+    شروط:
+    - فقط Admin / Manager / Super Admin يقدر
+    - الطلب يجب أن يكون: غير مدفوع (payment_method = pending) أو لم يدخل التقارير
+    - لا يُسمح بحذف طلب مدفوع بهذه الطريقة (يجب استخدام الإرجاع/الإلغاء العادي)
+    """
+    # حماية الأدوار
+    if current_user.get("role") not in [UserRole.ADMIN, UserRole.MANAGER, UserRole.SUPER_ADMIN]:
+        raise HTTPException(status_code=403, detail="غير مسموح — فقط مالك المطعم أو المدير العام يستطيع الحذف النهائي")
+    
+    query = build_tenant_query(current_user, {"id": order_id})
+    order = await db.orders.find_one(query, {"_id": 0})
+    if not order:
+        raise HTTPException(status_code=404, detail="الطلب غير موجود")
+    
+    pm = (order.get("payment_method") or "").lower()
+    payment_status = (order.get("payment_status") or "").lower()
+    is_paid = pm not in ("pending", "معلق", "") and payment_status not in ("pending", "unpaid", "معلق", "غير مدفوع", "")
+    
+    # يُسمح فقط لطلب غير مدفوع
+    if is_paid:
+        raise HTTPException(
+            status_code=400,
+            detail="لا يمكن الحذف النهائي لطلب مدفوع — استخدم الإرجاع أو الإلغاء العادي بدلاً"
+        )
+    
+    # احذف نهائياً (مع لوغ تدقيقي مستقل في force_deleted_orders للسجل فقط)
+    audit_doc = {
+        "id": str(uuid.uuid4()),
+        "deleted_at": datetime.now(timezone.utc).isoformat(),
+        "deleted_by": current_user.get("id"),
+        "deleted_by_name": current_user.get("full_name") or current_user.get("username") or "",
+        "tenant_id": order.get("tenant_id"),
+        "branch_id": order.get("branch_id"),
+        "order_id": order_id,
+        "order_number": order.get("order_number"),
+        "order_total": order.get("total"),
+        "order_type": order.get("order_type"),
+        "customer_name": order.get("customer_name"),
+        "reason": "duplicate_or_unpaid_force_delete",
+        # نسخة كاملة من الطلب للأرشيف
+        "snapshot": {
+            k: v for k, v in order.items()
+            if not isinstance(v, (bytes,))
+        },
+    }
+    try:
+        await db.force_deleted_orders.insert_one(audit_doc)
+    except Exception as _e:
+        logger.warning(f"force_deleted_orders archive failed: {_e}")
+    
+    res = await db.orders.delete_one({"id": order_id})
+    
+    return {
+        "message": "تم الحذف النهائي للطلب — لن يظهر في التقارير ولا في الإلغاءات",
+        "deleted": res.deleted_count,
+        "order_number": order.get("order_number"),
     }
 
 

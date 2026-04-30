@@ -946,6 +946,30 @@ export default function POS() {
     }
   };
 
+
+  // حذف نهائي لطلب معلق مكرر/غير مدفوع — لا يظهر في الإلغاءات
+  const handleForceDeleteOrder = async (order) => {
+    const ok = window.confirm(
+      t('سيتم حذف هذا الطلب نهائياً ولن يظهر في الإلغاءات أو التقارير.\n\nهل أنت متأكد؟') +
+      `\n\nطلب رقم: #${order.order_number || order.id}`
+    );
+    if (!ok) return;
+    try {
+      await axios.delete(`${API}/orders/${order.id}/force-delete`);
+      toast.success(t('تم حذف الطلب نهائياً'));
+      // إعادة جلب الطلبات المعلقة
+      try {
+        const params = { branch_id: getBranchIdForApi() || user?.branch_id || '' };
+        const headers = { Authorization: `Bearer ${localStorage.getItem('token')}` };
+        const r = await axios.get(`${API}/orders/pending`, { params, headers });
+        setPendingOrders(r.data || []);
+      } catch (_e) { /* ignore refetch error */ }
+    } catch (e) {
+      const msg = e?.response?.data?.detail || e.message || t('فشل الحذف');
+      toast.error(msg);
+    }
+  };
+
   // تحميل طلب موجود للتعديل
   const loadOrderForEditing = async (orderIdOrOrder) => {
     try {
@@ -3801,6 +3825,7 @@ export default function POS() {
                           loadOrderForEditing(order);
                           setPendingOrdersDialogOpen(false);
                         }}
+                        onForceDelete={handleForceDeleteOrder}
                       />
                     ))}
                   </div>
@@ -3823,6 +3848,7 @@ export default function POS() {
                           loadOrderForEditing(order);
                           setPendingOrdersDialogOpen(false);
                         }}
+                        onForceDelete={handleForceDeleteOrder}
                       />
                     ))}
                   </div>
@@ -3845,6 +3871,7 @@ export default function POS() {
                           loadOrderForEditing(order);
                           setPendingOrdersDialogOpen(false);
                         }}
+                        onForceDelete={handleForceDeleteOrder}
                       />
                     ))}
                   </div>
@@ -4710,8 +4737,10 @@ export default function POS() {
 }
 
 // مكون بطاقة الطلب المعلق
-function OrderCard({ order, onSelect }) {
+function OrderCard({ order, onSelect, onForceDelete }) {
   const { t } = useTranslation();
+  const { user } = useAuth();
+  const canForceDelete = ['admin', 'manager', 'super_admin', 'owner'].includes(user?.role);
   
   const getOrderTypeIcon = (type) => {
     switch (type) {
@@ -4809,7 +4838,19 @@ function OrderCard({ order, onSelect }) {
           </div>
         </div>
         
-        <div className="mt-2 flex justify-end">
+        <div className="mt-2 flex justify-end gap-2">
+          {canForceDelete && onForceDelete && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8 text-destructive border-destructive/50 hover:bg-destructive/10"
+              onClick={(e) => { e.stopPropagation(); onForceDelete(order); }}
+              data-testid={`force-delete-${order.id}`}
+            >
+              <Trash2 className="h-3 w-3 ml-1" />
+              {t('حذف نهائي')}
+            </Button>
+          )}
           <Button size="sm" variant="outline" className="h-8">
             <Eye className="h-3 w-3 ml-1" />
             {t('فتح للتعديل')}

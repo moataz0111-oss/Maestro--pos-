@@ -1060,7 +1060,9 @@ export default function SuperAdmin() {
       const token = localStorage.getItem('super_admin_token');
       const headers = { Authorization: `Bearer ${token}` };
       const res = await axios.get(`${API}/super-admin/tenants/${tenantId}`, { headers });
-      const branches = res.data?.branches || [];
+      const allBranches = res.data?.branches || [];
+      // استبعاد الأقسام (مطبخ مركزي/مخزن/مشتريات) — فقط الفروع الحقيقية
+      const branches = allBranches.filter(b => !b.branch_type || b.branch_type === 'branch');
       setTenantBranches(branches);
     } catch (error) {
       console.error('Fetch tenant branches error:', error);
