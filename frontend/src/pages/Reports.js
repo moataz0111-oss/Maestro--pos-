@@ -1279,6 +1279,7 @@ const CashRegisterClosingTab = ({ t, formatPrice, selectedBranchId, branches, ge
         <div class="section">
           <div class="section-title">حسب طريقة الدفع</div>
           <div class="row"><span class="row-label">نقدي</span><span class="row-value green">${formatPrice(report?.by_payment_method?.cash?.total || 0)}</span></div>
+          ${(report?.by_payment_method?.driver_cash?.total || 0) > 0 ? `<div class="row"><span class="row-label">نقدي السائقين</span><span class="row-value green">${formatPrice(report.by_payment_method.driver_cash.total)}</span></div>` : ''}
           <div class="row"><span class="row-label">بطاقة</span><span class="row-value blue">${formatPrice(report?.by_payment_method?.card?.total || 0)}</span></div>
           <div class="row"><span class="row-label">آجل</span><span class="row-value orange">${formatPrice(report?.by_payment_method?.credit?.total || 0)}</span></div>
           ${Object.entries(report?.delivery_apps || {}).map(([name, data]) => 
@@ -1736,8 +1737,16 @@ const CashRegisterClosingTab = ({ t, formatPrice, selectedBranchId, branches, ge
                   <span className="text-gray-300 flex items-center gap-2">
                     <Banknote className="h-4 w-4" /> {t('نقدي')}
                   </span>
-                  <span className="font-bold text-emerald-400">{formatPrice(report.by_payment_method?.cash?.total || 0)}</span>
+                  <span className="font-bold text-emerald-400" data-testid="cash-total">{formatPrice(report.by_payment_method?.cash?.total || 0)}</span>
                 </div>
+                {(report.by_payment_method?.driver_cash?.total || 0) > 0 && (
+                  <div className="flex justify-between items-center p-2 rounded bg-gray-800/30">
+                    <span className="text-gray-300 flex items-center gap-2">
+                      <Truck className="h-4 w-4 text-emerald-400" /> {t('نقدي السائقين')}
+                    </span>
+                    <span className="font-bold text-emerald-400" data-testid="driver-cash-total">{formatPrice(report.by_payment_method.driver_cash.total)}</span>
+                  </div>
+                )}
                 <div className="flex justify-between items-center p-2 rounded bg-gray-800/30">
                   <span className="text-gray-300 flex items-center gap-2">
                     <CreditCard className="h-4 w-4" /> {t('بطاقة')}

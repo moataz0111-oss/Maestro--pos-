@@ -13564,6 +13564,18 @@ async def get_sales_report(
         if o.get("payment_method") == "cash" and o.get("order_type") != "delivery"
     )
     
+    # نقدي السائقين (كاش محصّل من سائقي التوصيل — منفصل عن نقدي المطعم المباشر)
+    # هذه طلبات توصيل COD تم استلام فلوسها من السائق (payment_settled_from_driver_at)
+    driver_cash_amount = sum(
+        _sn(o.get("total")) for o in paid_orders
+        if o.get("payment_method") == "cash"
+        and o.get("order_type") == "delivery"
+        and o.get("driver_id")
+        and not o.get("is_delivery_company")
+        and not o.get("delivery_app")
+        and not o.get("delivery_app_name")
+    )
+    
     # مبيعات البطاقة (منفصلة - ليست نقدي)
     card_amount = sum(
         _sn(o.get("total")) for o in paid_orders 
@@ -13644,6 +13656,10 @@ async def get_sales_report(
     # إضافة النقدي فقط إذا كان أكبر من 0
     if cash_amount > 0:
         by_payment_method["نقدي"] = cash_amount
+    
+    # نقدي السائقين (كاش محصّل من التوصيل) — سطر منفصل للتدقيق
+    if driver_cash_amount > 0:
+        by_payment_method["نقدي السائقين"] = driver_cash_amount
     
     # إضافة البطاقة فقط إذا كانت أكبر من 0
     if card_amount > 0:
@@ -13922,7 +13938,23 @@ async def get_cash_register_closing_report(
     delivery_total = sum(_sn(o.get("total")) for o in orders if o.get("order_type") == "delivery" or o.get("delivery_app"))
     
     # حسب طريقة الدفع
-    cash_total = sum(_sn(o.get("total")) for o in orders if o.get("payment_method") == "cash" and not o.get("delivery_app"))
+    # cash_total: النقدي المباشر في المطعم فقط (لا يشمل نقدي التوصيل من السائقين)
+    cash_total = sum(
+        _sn(o.get("total")) for o in orders
+        if o.get("payment_method") == "cash"
+        and not o.get("delivery_app")
+        and not (o.get("order_type") == "delivery" and o.get("driver_id"))
+    )
+    # driver_cash_total: نقدي محصّل من السائقين (سطر منفصل للتدقيق)
+    driver_cash_total = sum(
+        _sn(o.get("total")) for o in orders
+        if o.get("payment_method") == "cash"
+        and o.get("order_type") == "delivery"
+        and o.get("driver_id")
+        and not o.get("is_delivery_company")
+        and not o.get("delivery_app")
+        and not o.get("delivery_app_name")
+    )
     card_total = sum(_sn(o.get("total")) for o in orders if o.get("payment_method") == "card")
     credit_total = sum(_sn(o.get("total")) for o in orders if o.get("payment_method") == "credit" and not o.get("delivery_app") and o.get("order_type") != "delivery")
     
@@ -13993,6 +14025,7 @@ async def get_cash_register_closing_report(
                 "total_sales": 0,
                 "orders_count": 0,
                 "cash": 0,
+                "driver_cash": 0,
                 "card": 0,
                 "credit": 0,
                 "delivery": 0,
@@ -14004,7 +14037,17 @@ async def get_cash_register_closing_report(
         by_cashier[cashier_id]["orders_count"] += 1
         
         # حسب طريقة الدفع
-        if o.get("payment_method") == "cash" and not o.get("delivery_app"):
+        is_driver_cash = (
+            o.get("payment_method") == "cash"
+            and o.get("order_type") == "delivery"
+            and o.get("driver_id")
+            and not o.get("is_delivery_company")
+            and not o.get("delivery_app")
+            and not o.get("delivery_app_name")
+        )
+        if is_driver_cash:
+            by_cashier[cashier_id]["driver_cash"] += _sn(o.get("total"))
+        elif o.get("payment_method") == "cash" and not o.get("delivery_app"):
             by_cashier[cashier_id]["cash"] += _sn(o.get("total"))
         elif o.get("payment_method") == "card":
             by_cashier[cashier_id]["card"] += _sn(o.get("total"))
@@ -14034,6 +14077,7 @@ async def get_cash_register_closing_report(
                 "total_sales": 0,
                 "orders_count": 0,
                 "cash": 0,
+                "driver_cash": 0,
                 "card": 0,
                 "credit": 0,
                 "delivery": 0
@@ -14042,7 +14086,17 @@ async def get_cash_register_closing_report(
         by_branch[branch_id]["total_sales"] += _sn(o.get("total"))
         by_branch[branch_id]["orders_count"] += 1
         
-        if o.get("payment_method") == "cash" and not o.get("delivery_app"):
+        is_driver_cash = (
+            o.get("payment_method") == "cash"
+            and o.get("order_type") == "delivery"
+            and o.get("driver_id")
+            and not o.get("is_delivery_company")
+            and not o.get("delivery_app")
+            and not o.get("delivery_app_name")
+        )
+        if is_driver_cash:
+            by_branch[branch_id]["driver_cash"] += _sn(o.get("total"))
+        elif o.get("payment_method") == "cash" and not o.get("delivery_app"):
             by_branch[branch_id]["cash"] += _sn(o.get("total"))
         elif o.get("payment_method") == "card":
             by_branch[branch_id]["card"] += _sn(o.get("total"))
@@ -14054,7 +14108,8 @@ async def get_cash_register_closing_report(
     # ==================== حساب مطابقة الصندوق ====================
     
     total_sales = sum(_sn(o.get("total")) for o in orders)
-    expected_cash = cash_total - total_expenses  # النقدي المتوقع = المبيعات النقدية - المصروفات
+    # النقدي المتوقع في الدرج = نقدي المطعم + نقدي السائقين المحصّل - المصروفات
+    expected_cash = cash_total + driver_cash_total - total_expenses
     
     # الإجمالي
     total_orders = len(orders)
@@ -14082,6 +14137,7 @@ async def get_cash_register_closing_report(
         },
         "by_payment_method": {
             "cash": {"total": cash_total, "label": "نقدي"},
+            "driver_cash": {"total": driver_cash_total, "label": "نقدي السائقين"},
             "card": {"total": card_total, "label": "بطاقة"},
             "credit": {"total": credit_total, "label": "آجل"}
         },
