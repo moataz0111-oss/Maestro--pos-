@@ -17768,6 +17768,111 @@ async def cleanup_duplicate_expenses():
         logger.error(f"❌ cleanup_duplicate_gas_expense migration failed: {e}")
 
 
+@app.on_event("startup")
+async def purge_ghost_order_saidiya_11_20260430():
+    """حذف نهائي للطلب الشبح المكرر #11 في فرع السيدية (one-shot).
+    
+    نطاق محدود جداً:
+    - order_number = 11 تحديداً
+    - الفرع = السيدية (اسم يحتوي كلمة: السيدية/السيديه/صيدية)
+    - total = 5000 تحديداً
+    - order_type = dine_in
+    - created_at يبدأ بـ 2026-04-30
+    
+    هذا الطلب مكرر/فاسد نشأ بسبب خطأ شبكي. سيُحذف نهائياً من orders (بدون تسجيل في
+    cancellations أو refunds) ويُؤرشف في ghost_orders_archive للرجوع التدقيقي فقط.
+    لن يظهر في التقارير ولا النقدي ولا إيصال إغلاق الصندوق.
+    
+    يعمل مرة واحدة فقط (محفوظ في system_migrations).
+    """
+    try:
+        MIG_KEY = "purge_ghost_order_saidiya_11_20260430_v1"
+        done = await db.system_migrations.find_one({"key": MIG_KEY})
+        if done:
+            logger.info(f"🟢 Migration {MIG_KEY} already applied, skipping")
+            return
+        
+        logger.info(f"🔧 Running TARGETED migration: {MIG_KEY}")
+        
+        # ابحث عن فرع السيدية
+        saidiya_branches = await db.branches.find(
+            {"name": {"$regex": "السيدية|السيديه|صيدية", "$options": "i"}},
+            {"_id": 0, "id": 1, "name": 1, "tenant_id": 1}
+        ).to_list(10)
+        
+        if not saidiya_branches:
+            logger.info(f"   لا يوجد فرع السيدية في هذه القاعدة — تم تخطي الـ migration وتسجيله")
+            await db.system_migrations.insert_one({
+                "key": MIG_KEY,
+                "executed_at": datetime.now(timezone.utc).isoformat(),
+                "deleted_count": 0,
+                "note": "saidiya_branch_not_found",
+            })
+            return
+        
+        branch_ids = [b["id"] for b in saidiya_branches]
+        logger.info(f"   فروع السيدية: {[(b.get('name'), b.get('id')[:8]) for b in saidiya_branches]}")
+        
+        # ابحث عن الطلب المستهدف بالمطابقة الدقيقة
+        query = {
+            "order_number": 11,
+            "branch_id": {"$in": branch_ids},
+            "total": 5000,
+            "order_type": "dine_in",
+            "created_at": {"$regex": "^2026-04-30"},
+        }
+        ghost_orders = await db.orders.find(query, {"_id": 0}).to_list(10)
+        
+        if not ghost_orders:
+            logger.info("   لم يتم العثور على طلب شبح مطابق — تم تسجيل الـ migration كمُنفّذ")
+            await db.system_migrations.insert_one({
+                "key": MIG_KEY,
+                "executed_at": datetime.now(timezone.utc).isoformat(),
+                "deleted_count": 0,
+                "note": "no_matching_ghost_order",
+            })
+            return
+        
+        # أرشفة آمنة قبل الحذف
+        ghost_ids = []
+        for o in ghost_orders:
+            ghost_ids.append(o.get("id"))
+            logger.info(f"   👻 طلب شبح: id={o.get('id')[:8]}... | status={o.get('status')} | payment={o.get('payment_method')}/{o.get('payment_status')}")
+            try:
+                await db.ghost_orders_archive.insert_one({
+                    "id": str(uuid.uuid4()),
+                    "_archived_at": datetime.now(timezone.utc).isoformat(),
+                    "_archived_reason": "duplicate_ghost_order_11_saidiya_20260430",
+                    "_migration_key": MIG_KEY,
+                    "order_snapshot": {k: v for k, v in o.items() if not isinstance(v, bytes)},
+                })
+            except Exception as _arch_e:
+                logger.warning(f"   ghost_orders_archive insert failed: {_arch_e}")
+        
+        # الحذف الفعلي من orders
+        del_orders = await db.orders.delete_many(query)
+        logger.info(f"   🗑️  حُذف من orders: {del_orders.deleted_count}")
+        
+        # تنظيف أي أثر محتمل في print_queue (لمنع إعادة الطباعة)
+        try:
+            del_pq = await db.print_queue.delete_many({"order_id": {"$in": ghost_ids}})
+            if del_pq.deleted_count:
+                logger.info(f"   🖨️  حُذف من print_queue: {del_pq.deleted_count}")
+        except Exception:
+            pass
+        
+        await db.system_migrations.insert_one({
+            "key": MIG_KEY,
+            "executed_at": datetime.now(timezone.utc).isoformat(),
+            "deleted_count": del_orders.deleted_count,
+            "archived_ids": ghost_ids,
+            "note": "ghost_order_purged_successfully",
+        })
+        logger.info(f"✅ {MIG_KEY} complete: purged {del_orders.deleted_count} ghost order(s)")
+    except Exception as e:
+        logger.error(f"❌ purge_ghost_order_saidiya_11_20260430 migration failed: {e}")
+
+
 
 
 # ==================== SYSTEM HEALTH & RELIABILITY APIS ====================
