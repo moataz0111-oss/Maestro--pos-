@@ -1,10 +1,11 @@
-<analysis>extrasquantityprint_server.ps1POS.jsSettings.jsserver.pyprint_server.ps1tenant_idbranch_idPOS.js_sentToKitchenupdateQuantityPOS.jsitem.quantityitem._originalQtycancelled_ordersPOS.jsremoveFromCartprintServicePOS.jsupdateQuantityserver.pyDashboard.jsSettings.jsPOS.jsHR.jsfind_one_and_updateoffline_idcleanup_duplicate_gas_expense_v2extrasquantity(price + extras) * qty(price * qty) + extrasfix_pending_orders_extras_v1tenant_idbranch_idshift_end
+<analysis>POS.jsOrders.jsReports.jsserver.pyprint_queue.pyOrders.jsOrders.jsOrders.jsDELETE /api/orders/{id}/force-deletePOS.jsOrders.jsDELETE /api/orders/{id}/force-deleteserver.pyfrontend/src/pages/Orders.jsordersforce_deleted_ordersserver.pyDashboard.jsSettings.jsPOS.jsHR.jscustomer_namebranch_idsdaily_start/end_timesubtotal--no-cache.cachebustdeploy.ymlDockerfilebranch_typeGET /api/reports/products-by-channelProductsByChannelTab.jsprint_queue.pypreferred_paymentprint_queue.py
 /app
 ├── frontend/
-│   ├── src/pages/ (Dashboard.js, POS.js, Settings.js, SuperAdmin.js)
-│   ├── src/utils/ (printService.js, AgentUpdateChecker.js, receiptBitmap.js)
+│   ├── Dockerfile (Updated for yarn cache)
+│   ├── src/pages/ (Orders.js, POS.js, HR.js, Reports.js, Coupons.js)
+│   ├── src/components/reports/ProductsByChannelTab.js
 ├── backend/
-│   ├── static/ (print_server.ps1 - v6.4.3)
-│   ├── routes/ (print_queue.py, shifts_routes.py)
-│   ├── server.py (Core Monolith - 20k lines)
-Invoke-WebRequestprint_queue.pyoffline_idordersprint_queueshifts/app/backend/server.py/app/frontend/src/pages/POS.js/app/backend/routes/print_queue.py/app/backend/static/print_server.ps1/app/backend/routes/shifts_routes.py/app/backend/server.py/app/frontend/src/pages/POS.jsPOST /api/ordersGET /api/print-queue/pendingDELETE /api/super-admin/tenants/{tenant_id}/branches/{branch_id}/reset-sales(price + extras) * qty(price * qty) + extras_total@app.on_event(startup)/app/memory/CHANGELOG.md/app/memory/PRD.md/reset-salesverify_super_adminserver.pyfix_pending_orders_extras_v1POS.jsupdateQuantity_originalQty/app/memory/test_credentials.mdowner@maestroegp.comhanialdujaili@gmail.comPOS.js_originalQty/app/frontend/src/pages/POS.jsremoveFromCartprintOrderToAllPrinters/app/backend/server.pyPOST /api/orders/{id}/partial-cancelcancelled_orders</analysis>
+│   ├── routes/ (print_queue.py, reports_routes.py)
+│   ├── server.py (Core Monolith - 20.6k lines)
+├── .github/workflows/deploy.yml
+.cachebustorderspreferred_paymentcancelled_itemscouponscustomer_namebranch_idsdaily_start_timedaily_end_timebranchesbranch_typeforce_deleted_ordersdeploy.ymlbuildx/app/frontend/src/pages/Orders.js/app/backend/server.pyforce-delete/app/frontend/src/pages/POS.js/app/frontend/src/pages/Reports.js/app/.github/workflows/deploy.yml/app/backend/server.pyDELETE /api/orders/{order_id}/force-deleteGET /api/coupons/search-by-customer-prefixGET /api/reports/products-by-channelPOST /api/print-queue/app/frontend/src/components/ui//app/memory/CHANGELOG.md/app/backend/tests/test_coupons_customer_iter170.pyGET /branches?include_departments=truecustomer_namenamecustomer_nameOrdersforce-deletetest_coupons_customer_iter170.py/app/memory/test_credentials.mdowner@maestroegp.comPOS.jsOrders.jsDELETE /api/orders/{id}/force-delete/app/frontend/src/pages/Orders.jscanSee('super_admin')DELETE /api/orders/{id}/force-delete/app/backend/server.pyforce_delete_unpaid_orderif order.get(payment_status) == paid</analysis>
