@@ -297,19 +297,41 @@ async def collect_driver_payment(driver_id: str, amount: float = 0, current_user
         }}
     )
     
+    # ==== FIX: حدّث حالة الدفع في الطلبات المحصّلة كي تظهر "نقدي" في تقرير الصندوق ====
+    # الطلبات التي الآن تم تسليم فلوسها للمطعم من السائق → يجب تصنيفها مدفوعة نقداً
+    # (تُستبعد الطلبات المدفوعة ببطاقة لأنها محسوبة كبطاقة فعلاً)
+    cash_settle = await db.orders.update_many(
+        {
+            "driver_id": driver_id,
+            "driver_payment_status": "paid",
+            "$or": [
+                {"payment_status": {"$in": [None, "", "pending", "unpaid"]}},
+                {"payment_status": {"$exists": False}},
+            ],
+            "payment_method": {"$nin": ["card", "credit"]},
+        },
+        {"$set": {
+            "payment_status": "paid",
+            "payment_method": "cash",
+            "payment_settled_from_driver_at": datetime.now(timezone.utc).isoformat(),
+        }}
+    )
+    
     payment_record = {
         "id": str(uuid.uuid4()),
         "driver_id": driver_id,
         "amount": amount,
         "collected_by": current_user["id"],
         "collected_at": datetime.now(timezone.utc).isoformat(),
-        "orders_count": result.modified_count
+        "orders_count": result.modified_count,
+        "orders_cash_settled": cash_settle.modified_count,
     }
     await db.driver_payments.insert_one(payment_record)
     
     return {
         "message": f"تم تحصيل المبلغ وتحديث {result.modified_count} طلب",
-        "orders_updated": result.modified_count
+        "orders_updated": result.modified_count,
+        "orders_cash_settled": cash_settle.modified_count,
     }
 
 # ==================== DRIVER PORTAL (No Auth) ====================

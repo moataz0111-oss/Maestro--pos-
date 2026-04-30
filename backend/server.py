@@ -17873,6 +17873,76 @@ async def purge_ghost_order_saidiya_11_20260430():
         logger.error(f"❌ purge_ghost_order_saidiya_11_20260430 migration failed: {e}")
 
 
+@app.on_event("startup")
+async def settle_driver_collected_orders_as_cash():
+    """تصحيح الطلبات المحصّلة من السائقين التي بقيت معلقة في التقارير (one-shot).
+    
+    المشكلة: endpoint /drivers/{id}/collect-payment كان يضبط driver_payment_status=paid
+    فقط دون تحديث payment_status و payment_method في الطلب نفسه، مما أدى إلى ظهور الطلب
+    في خانة "معلق" في تقرير إغلاق الصندوق بدلاً من "نقدي".
+    
+    هذه الـ migration تُصلح الطلبات السابقة بالشروط:
+    - driver_id موجود
+    - driver_payment_status == "paid" (أي المدير استلم الفلوس من السائق)
+    - payment_status in [pending, None, ""] (الطلب لا يزال غير مُصنّف مدفوع)
+    - payment_method ليس card ولا credit (كي لا نُخرب طلبات بطاقة/آجل فعلية)
+    
+    يتم ضبط payment_status="paid", payment_method="cash".
+    لن يلمس أي طلب آخر. يعمل مرة واحدة فقط (محفوظ في system_migrations).
+    """
+    try:
+        MIG_KEY = "settle_driver_collected_orders_as_cash_v1"
+        done = await db.system_migrations.find_one({"key": MIG_KEY})
+        if done:
+            logger.info(f"🟢 Migration {MIG_KEY} already applied, skipping")
+            return
+        
+        logger.info(f"🔧 Running migration: {MIG_KEY}")
+        
+        query = {
+            "driver_id": {"$exists": True, "$ne": None},
+            "driver_payment_status": "paid",
+            "$or": [
+                {"payment_status": {"$in": [None, "", "pending", "unpaid"]}},
+                {"payment_status": {"$exists": False}},
+            ],
+            "payment_method": {"$nin": ["card", "credit"]},
+        }
+        
+        # احصر أول قبل التعديل للوغ
+        count = await db.orders.count_documents(query)
+        logger.info(f"   طلبات مطابقة: {count}")
+        
+        if count == 0:
+            await db.system_migrations.insert_one({
+                "key": MIG_KEY,
+                "executed_at": datetime.now(timezone.utc).isoformat(),
+                "modified_count": 0,
+                "note": "no_matching_orders",
+            })
+            logger.info(f"✅ {MIG_KEY} complete: no orders needed fixing")
+            return
+        
+        result = await db.orders.update_many(
+            query,
+            {"$set": {
+                "payment_status": "paid",
+                "payment_method": "cash",
+                "payment_settled_from_driver_at": datetime.now(timezone.utc).isoformat(),
+                "_migration_applied": MIG_KEY,
+            }}
+        )
+        
+        await db.system_migrations.insert_one({
+            "key": MIG_KEY,
+            "executed_at": datetime.now(timezone.utc).isoformat(),
+            "modified_count": result.modified_count,
+        })
+        logger.info(f"✅ {MIG_KEY} complete: fixed {result.modified_count} order(s) → paid/cash")
+    except Exception as e:
+        logger.error(f"❌ settle_driver_collected_orders_as_cash migration failed: {e}")
+
+
 
 
 # ==================== SYSTEM HEALTH & RELIABILITY APIS ====================

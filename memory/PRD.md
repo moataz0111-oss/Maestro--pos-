@@ -121,3 +121,7 @@ Multi-tenant POS system with biometric integration (ZKTeco), thermal receipt pri
 - Refund/cancellation details in closing report
 - (P2) Refactor server.py (19k+ lines) into modular routes
 - (P2) Refactor Dashboard.js, POS.js, Settings.js into smaller components
+
+## April 30, 2026 - Fixes
+- **Ghost Order #11 Saidiya Purge**: Added one-shot migration `purge_ghost_order_saidiya_11_20260430_v1` in server.py that finds the duplicate ghost order (#11, 5000 IQD, dine_in, 2026-04-30) in Al-Saidiya branch, archives it to `ghost_orders_archive`, removes it from `orders` and `print_queue`. Runs once on next deploy to production VPS. No UI button added per user request.
+- **Driver Collected Cash → Cash Register Fix**: `collect_driver_payment` endpoint (`POST /api/drivers/{driver_id}/collect-payment` in `backend/routes/drivers_routes.py`) now also updates `payment_status="paid"` and `payment_method="cash"` for the collected orders (skips `card`/`credit`). Previously it only set `driver_payment_status="paid"` so the cash register report kept these orders in the "معلق" bucket instead of "نقدي". Also added migration `settle_driver_collected_orders_as_cash_v1` that retroactively fixes existing orders with `driver_payment_status="paid"` but `payment_status in [None, "", "pending", "unpaid"]`.
