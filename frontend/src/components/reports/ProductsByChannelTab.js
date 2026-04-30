@@ -33,9 +33,11 @@ export default function ProductsByChannelTab({ productsReport, t, formatPrice, h
   const [channelData, setChannelData] = useState(null);
   const [selectedChannel, setSelectedChannel] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
 
   const fetchChannels = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
       const params = {};
       const bid = getBranchIdForApi?.();
@@ -45,11 +47,19 @@ export default function ProductsByChannelTab({ productsReport, t, formatPrice, h
       const headers = { Authorization: `Bearer ${localStorage.getItem('token')}` };
       const res = await axios.get(`${API}/reports/products-by-channel`, { params, headers });
       setChannelData(res.data);
-      if (res.data?.channels?.length && !selectedChannel) {
-        setSelectedChannel(res.data.channels[0].channel_key);
+      const channels = res.data?.channels || [];
+      if (channels.length > 0) {
+        // إذا القناة المختارة حالياً لم تعد موجودة (مثلاً حُذف السفري) → اختر الأولى
+        const stillExists = channels.some(c => c.channel_key === selectedChannel);
+        if (!stillExists) {
+          setSelectedChannel(channels[0].channel_key);
+        }
+      } else {
+        setSelectedChannel(null);
       }
     } catch (e) {
       console.warn('products-by-channel failed:', e.message);
+      setError(e.message || 'تعذر تحميل البيانات');
     } finally {
       setLoading(false);
     }
@@ -139,11 +149,18 @@ export default function ProductsByChannelTab({ productsReport, t, formatPrice, h
             <div className="text-center text-muted-foreground py-8">{t('جاري التحميل...')}</div>
           )}
 
-          {!loading && channelData?.channels?.length === 0 && (
+          {!loading && error && (
+            <div className="text-center py-8 space-y-3">
+              <div className="text-destructive">{t('تعذر تحميل البيانات')}: {error}</div>
+              <Button variant="outline" onClick={fetchChannels}>{t('إعادة المحاولة')}</Button>
+            </div>
+          )}
+
+          {!loading && !error && channelData?.channels?.length === 0 && (
             <div className="text-center text-muted-foreground py-8">{t('لا توجد بيانات')}</div>
           )}
 
-          {!loading && channelData?.channels?.length > 0 && (
+          {!loading && !error && channelData?.channels?.length > 0 && (
             <>
               {/* بطاقات القنوات (أزرار التحديد) */}
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3" data-testid="channel-cards">

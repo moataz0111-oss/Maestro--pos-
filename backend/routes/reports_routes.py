@@ -813,36 +813,42 @@ async def get_products_by_channel(
         delivery_apps[da["id"]] = da.get("name", "")
 
     def _classify(order):
-        """يحدد قناة الطلب: (channel_key, channel_label)"""
+        """يحدد قناة الطلب بأولوية واضحة:
+        1) شركة توصيل (delivery_app) → قناة مستقلة لكل شركة
+        2) سائق توصيل داخلي → "توصيل عن طريق السائقين"
+        3) آجل → قناة آجل
+        4) بطاقة → قناة بطاقة
+        5) نقدي (الافتراضي) → يشمل السفري والصالة والتوصيل النقدي
+        """
         pm = (order.get("payment_method") or "").lower()
         order_type = (order.get("order_type") or "").lower()
         delivery_app_id = order.get("delivery_app")
         is_company = bool(order.get("is_delivery_company") or delivery_app_id)
         driver_id = order.get("driver_id")
 
-        # طلب لشركة توصيل (آجل لها)
+        # 1) طلب لشركة توصيل (آجل لها)
         if is_company and delivery_app_id:
             app_name = delivery_apps.get(delivery_app_id, order.get("delivery_app_name") or "شركة توصيل")
             return (f"delivery_app__{delivery_app_id}", f"توصيل {app_name}")
 
-        # طلب توصيل من خلال سائق داخلي
+        # 2) طلب توصيل عن طريق سائق داخلي (ليس شركة توصيل)
         if order_type == "delivery" and driver_id and not is_company:
             return ("delivery_driver", "توصيل عن طريق السائقين")
 
-        # سفري
-        if order_type == "takeaway":
-            return ("takeaway", "سفري")
-
-        # حسب طريقة الدفع
-        if pm in ("cash", "نقدي"):
-            return ("cash", "نقدي")
-        if pm in ("card", "بطاقة"):
-            return ("card", "بطاقة")
+        # 3) آجل
         if pm in ("credit", "آجل"):
             return ("credit", "آجل")
+
+        # 4) بطاقة
+        if pm in ("card", "بطاقة"):
+            return ("card", "بطاقة")
+
+        # 5) معلق (لم يُدفع بعد)
         if pm in ("pending", "معلق"):
             return ("pending", "معلق")
-        return ("other", pm or "غير محدد")
+
+        # 6) نقدي — الافتراضي يشمل السفري والصالة والتوصيل النقدي
+        return ("cash", "نقدي")
 
     # تجميع الأصناف حسب القناة
     channels = {}  # key → {channel_label, orders_count, total_revenue, items: {product_id: {...}}}
