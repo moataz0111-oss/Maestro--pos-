@@ -53,18 +53,36 @@ mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
 
-async def _resolve_business_date(tenant_id: Optional[str], branch_id: Optional[str]) -> str:
-    """الحصول على business_date من الوردية المفتوحة الحالية للفرع.
-    إذا لم توجد وردية مفتوحة، يُستخدم تاريخ العراق الحالي."""
-    shift_query = {"status": "open"}
+async def _resolve_business_date(tenant_id: Optional[str], branch_id: Optional[str], cashier_id: Optional[str] = None) -> str:
+    """الحصول على business_date من الوردية المفتوحة الحالية.
+    
+    أولوية البحث (لتفادي مشكلة شفت يامن المفتوح من أمس وشفت زهراء الجديد لليوم):
+    1. وردية الكاشير المفتوحة الخاصة به (cashier_id) — الأكثر صحة
+    2. أحدث وردية مفتوحة في الفرع (sort by started_at desc)
+    3. تاريخ العراق الحالي إذا لا يوجد شفت
+    """
+    base_q = {"status": "open"}
     if tenant_id:
-        shift_query["tenant_id"] = tenant_id
+        base_q["tenant_id"] = tenant_id
     if branch_id:
-        shift_query["branch_id"] = branch_id
-    shift = await db.shifts.find_one(
-        shift_query,
-        {"_id": 0, "business_date": 1, "started_at": 1, "opened_at": 1}
-    )
+        base_q["branch_id"] = branch_id
+    
+    shift = None
+    # 1) جرب وردية الكاشير الخاصة به أولاً
+    if cashier_id:
+        shift = await db.shifts.find_one(
+            {**base_q, "cashier_id": cashier_id},
+            {"_id": 0, "business_date": 1, "started_at": 1, "opened_at": 1},
+            sort=[("started_at", -1)]
+        )
+    # 2) إذا ما وجد، خذ أحدث وردية مفتوحة في الفرع
+    if not shift:
+        shift = await db.shifts.find_one(
+            base_q,
+            {"_id": 0, "business_date": 1, "started_at": 1, "opened_at": 1},
+            sort=[("started_at", -1)]
+        )
+    
     if shift:
         if shift.get("business_date"):
             return shift["business_date"]
@@ -3133,7 +3151,7 @@ async def create_expense(expense: ExpenseCreate, current_user: dict = Depends(ge
     if existing_dup:
         return existing_dup  # إرجاع المصروف الموجود بدل إنشاء نسخة مكررة
     
-    business_date = await _resolve_business_date(tenant_id_for_biz, branch_for_biz)
+    business_date = await _resolve_business_date(tenant_id_for_biz, branch_for_biz, current_user.get("id"))
     expense_doc = {
         "id": str(uuid.uuid4()),
         **expense.model_dump(),
@@ -3189,20 +3207,95 @@ async def get_current_business_date(
     """
     tenant_id = get_user_tenant_id(current_user)
     br = branch_id or current_user.get("branch_id")
-    biz = await _resolve_business_date(tenant_id, br)
+    biz = await _resolve_business_date(tenant_id, br, current_user.get("id"))
     # اجلب معلومات الوردية المفتوحة كذلك لعرضها في الواجهة
     shift_q = {"status": "open"}
     if tenant_id:
         shift_q["tenant_id"] = tenant_id
     if br:
         shift_q["branch_id"] = br
-    shift = await db.shifts.find_one(shift_q, {"_id": 0, "id": 1, "cashier_id": 1, "cashier_name": 1, "started_at": 1, "business_date": 1})
+    shift = await db.shifts.find_one(shift_q, {"_id": 0, "id": 1, "cashier_id": 1, "cashier_name": 1, "started_at": 1, "business_date": 1}, sort=[("started_at", -1)])
     return {
         "business_date": biz,
         "calendar_date_iraq": iraq_date_from_utc(),
         "has_open_shift": bool(shift),
         "open_shift": shift or None,
     }
+
+
+@api_router.get("/shifts/stale")
+async def list_stale_shifts(
+    hours_threshold: int = 18,
+    branch_id: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """قائمة الورديات العالقة (المفتوحة أكثر من X ساعة).
+    
+    للمالك/المدير فقط — تساعد على اكتشاف الورديات اللي نسي الكاشير إغلاقها
+    وتسبب مشاكل في تقارير الـ business_date.
+    """
+    if current_user.get("role") not in [UserRole.ADMIN, UserRole.MANAGER, UserRole.SUPER_ADMIN]:
+        raise HTTPException(status_code=403, detail="غير مسموح")
+    
+    tenant_id = get_user_tenant_id(current_user)
+    cutoff = (datetime.now(timezone.utc) - timedelta(hours=hours_threshold)).isoformat()
+    
+    q = {"status": "open", "started_at": {"$lt": cutoff}}
+    if tenant_id:
+        q["tenant_id"] = tenant_id
+    if branch_id:
+        q["branch_id"] = branch_id
+    
+    stale = await db.shifts.find(q, {"_id": 0, "id": 1, "cashier_id": 1, "cashier_name": 1, "started_at": 1, "business_date": 1, "branch_id": 1}).to_list(50)
+    
+    # احسب الساعات منذ الافتتاح
+    now = datetime.now(timezone.utc)
+    for s in stale:
+        try:
+            started = datetime.fromisoformat(s["started_at"].replace("Z", "+00:00"))
+            s["hours_open"] = round((now - started).total_seconds() / 3600, 1)
+        except Exception:
+            s["hours_open"] = None
+    
+    return {"stale_shifts": stale, "count": len(stale), "hours_threshold": hours_threshold}
+
+
+@api_router.post("/shifts/{shift_id}/force-close")
+async def force_close_stale_shift(
+    shift_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """إغلاق وردية عالقة بصلاحية المالك/المدير.
+    
+    يضع status=closed مع تسجيل الإغلاق القسري في force_closed_by/force_closed_at
+    لكي تتميز عن الإغلاقات الطبيعية. لا تنشئ ايصال إغلاق صندوق (المبيعات والمصاريف
+    تُحسب طبيعياً في تقرير اليوم التشغيلي للوردية).
+    """
+    if current_user.get("role") not in [UserRole.ADMIN, UserRole.MANAGER, UserRole.SUPER_ADMIN]:
+        raise HTTPException(status_code=403, detail="غير مسموح")
+    
+    tenant_id = get_user_tenant_id(current_user)
+    q = {"id": shift_id, "status": "open"}
+    if tenant_id:
+        q["tenant_id"] = tenant_id
+    
+    shift = await db.shifts.find_one(q, {"_id": 0})
+    if not shift:
+        raise HTTPException(status_code=404, detail="الوردية غير موجودة أو مغلقة بالفعل")
+    
+    now_iso = datetime.now(timezone.utc).isoformat()
+    await db.shifts.update_one(
+        {"id": shift_id},
+        {"$set": {
+            "status": "closed",
+            "ended_at": now_iso,
+            "force_closed_by": current_user.get("id"),
+            "force_closed_by_name": current_user.get("full_name") or current_user.get("username"),
+            "force_closed_at": now_iso,
+            "force_close_reason": "stale_shift_admin_override",
+        }}
+    )
+    return {"message": "تم إغلاق الوردية بنجاح", "shift_id": shift_id, "cashier_name": shift.get("cashier_name")}
 
 
 @api_router.get("/expenses")
@@ -3228,7 +3321,7 @@ async def get_expenses(
         # الكاشير يرى فقط مصاريف اليوم التشغيلي (business_date من الوردية المفتوحة، أو تاريخ العراق اليوم)
         user_tenant = get_user_tenant_id(current_user)
         user_branch = current_user.get("branch_id") or branch_id
-        biz_today = await _resolve_business_date(user_tenant, user_branch)
+        biz_today = await _resolve_business_date(user_tenant, user_branch, current_user.get("id"))
         # مطابقة business_date أو fallback للتاريخ القديم `date` للسجلات القديمة
         query["$or"] = [
             {"business_date": biz_today},
@@ -5502,16 +5595,26 @@ async def create_order(order: OrderCreate, current_user: dict = Depends(get_curr
     
     order_number = await get_next_order_number(order.branch_id)
     
-    # البحث عن الوردية المفتوحة للفرع (وليس للكاشير فقط)
-    shift_query = {
-        "status": "open"
-    }
+    # البحث عن الوردية المفتوحة — أولوية لشفت الكاشير نفسه (وليس أي شفت في الفرع)
+    base_shift_query = {"status": "open"}
     if tenant_id:
-        shift_query["tenant_id"] = tenant_id
+        base_shift_query["tenant_id"] = tenant_id
     if order.branch_id:
-        shift_query["branch_id"] = order.branch_id
+        base_shift_query["branch_id"] = order.branch_id
     
-    current_shift = await db.shifts.find_one(shift_query, {"_id": 0, "id": 1, "cashier_id": 1, "business_date": 1, "started_at": 1, "opened_at": 1})
+    # 1) جرب شفت الكاشير الخاص أولاً (الأكثر دقة)
+    current_shift = await db.shifts.find_one(
+        {**base_shift_query, "cashier_id": current_user.get("id")},
+        {"_id": 0, "id": 1, "cashier_id": 1, "business_date": 1, "started_at": 1, "opened_at": 1},
+        sort=[("started_at", -1)]
+    )
+    # 2) إن لم يوجد، خذ أحدث شفت مفتوح في الفرع
+    if not current_shift:
+        current_shift = await db.shifts.find_one(
+            base_shift_query,
+            {"_id": 0, "id": 1, "cashier_id": 1, "business_date": 1, "started_at": 1, "opened_at": 1},
+            sort=[("started_at", -1)]
+        )
     
     # إذا لم توجد وردية مفتوحة
     if not current_shift:
@@ -18101,6 +18204,141 @@ async def backfill_closing_business_date():
         logger.error(f"❌ backfill_closing_business_date migration failed: {e}")
 
 
+@app.on_event("startup")
+async def auto_heal_shifts_and_business_dates():
+    """إصلاح شامل تلقائي للشفتات العالقة و business_dates الخاطئة (يعمل دورياً عند كل إقلاع).
+    
+    هذه الـ migration ليست one-shot — تعمل كل مرة لأن البيانات قد تتلوّث مرة أخرى لاحقاً.
+    
+    1) إغلاق الشفتات العالقة:
+       - شفت status=open له started_at أقدم من 30 ساعة → يُغلق تلقائياً (auto_close_stale).
+       - يحفظ ended_at = started_at + 18 ساعة (تقدير معقول للإغلاق الفعلي).
+    
+    2) تصحيح business_date للشفتات:
+       - أي شفت ليس لديه business_date → يُحسب من started_at (Iraq time).
+    
+    3) تصحيح business_date للطلبات والمصاريف اللي ربطها بشفت غير صحيح:
+       - لكل طلب/مصروف بدون business_date أو business_date != الشفت الفعلي،
+         نبحث عن الشفت الذي كان يجب أن يكون مفتوحاً وقت الإنشاء (cashier+branch+
+         started_at <= created_at <= ended_at) ونعيد ضبط business_date.
+    
+    آمن جداً: لا يحذف بيانات، فقط يُحدّث الحقول.
+    """
+    try:
+        logger.info("🔧 Running auto_heal_shifts_and_business_dates")
+        
+        # === 1) إغلاق الشفتات العالقة (>30 ساعة) ===
+        stale_cutoff = (datetime.now(timezone.utc) - timedelta(hours=30)).isoformat()
+        stale_shifts = await db.shifts.find(
+            {"status": "open", "started_at": {"$lt": stale_cutoff}},
+            {"_id": 0, "id": 1, "started_at": 1, "cashier_name": 1}
+        ).to_list(200)
+        
+        for s in stale_shifts:
+            # احسب وقت إغلاق منطقي: started_at + 18 ساعة (افتراض شفت طبيعي)
+            try:
+                started = datetime.fromisoformat(s["started_at"].replace("Z", "+00:00"))
+                est_ended = (started + timedelta(hours=18)).isoformat()
+            except Exception:
+                est_ended = datetime.now(timezone.utc).isoformat()
+            
+            await db.shifts.update_one(
+                {"id": s["id"]},
+                {"$set": {
+                    "status": "closed",
+                    "ended_at": est_ended,
+                    "auto_closed_at": datetime.now(timezone.utc).isoformat(),
+                    "auto_close_reason": "stale_shift_over_30_hours",
+                }}
+            )
+        if stale_shifts:
+            logger.info(f"   🔒 أُغلق تلقائياً {len(stale_shifts)} شفت عالق")
+        
+        # === 2) تصحيح business_date للشفتات بدون قيمة ===
+        async for sh in db.shifts.find(
+            {"$or": [{"business_date": {"$exists": False}}, {"business_date": None}, {"business_date": ""}]},
+            {"_id": 0, "id": 1, "started_at": 1, "opened_at": 1}
+        ):
+            src = sh.get("started_at") or sh.get("opened_at")
+            if src:
+                biz = iraq_date_from_utc(src)
+                if biz:
+                    await db.shifts.update_one({"id": sh["id"]}, {"$set": {"business_date": biz}})
+        
+        # === 3) تصحيح business_date للمصاريف ===
+        # ابحث عن مصاريف لها created_by + branch_id + created_at، واربطها بالشفت
+        # الذي كان مفتوحاً عند الإنشاء (started_at <= created_at <= ended_at OR شفت مفتوح حالياً)
+        fixed_expenses = 0
+        async for exp in db.expenses.find(
+            {"created_at": {"$exists": True}, "created_by": {"$exists": True}, "branch_id": {"$exists": True}},
+            {"_id": 0, "id": 1, "created_by": 1, "branch_id": 1, "created_at": 1, "business_date": 1, "tenant_id": 1}
+        ):
+            exp_created = exp.get("created_at")
+            if not exp_created:
+                continue
+            # ابحث عن شفت الكاشير الذي يحوي وقت الإنشاء
+            shift_q = {
+                "cashier_id": exp["created_by"],
+                "branch_id": exp["branch_id"],
+                "started_at": {"$lte": exp_created},
+            }
+            if exp.get("tenant_id"):
+                shift_q["tenant_id"] = exp["tenant_id"]
+            # اختر آخر شفت يحتوي هذا الوقت
+            matching_shift = await db.shifts.find_one(
+                {**shift_q, "$or": [{"ended_at": {"$gte": exp_created}}, {"ended_at": {"$exists": False}}, {"ended_at": None}, {"status": "open"}]},
+                {"_id": 0, "id": 1, "business_date": 1, "started_at": 1},
+                sort=[("started_at", -1)]
+            )
+            if matching_shift:
+                correct_biz = matching_shift.get("business_date") or iraq_date_from_utc(matching_shift.get("started_at"))
+                if correct_biz and correct_biz != exp.get("business_date"):
+                    await db.expenses.update_one(
+                        {"id": exp["id"]},
+                        {"$set": {"business_date": correct_biz, "shift_id": matching_shift["id"], "_business_date_healed": datetime.now(timezone.utc).isoformat()}}
+                    )
+                    fixed_expenses += 1
+        if fixed_expenses:
+            logger.info(f"   💰 صُحّح business_date لـ {fixed_expenses} مصروف")
+        
+        # === 4) تصحيح business_date للطلبات (نفس المنطق) ===
+        fixed_orders = 0
+        async for o in db.orders.find(
+            {"created_at": {"$exists": True}, "branch_id": {"$exists": True}},
+            {"_id": 0, "id": 1, "cashier_id": 1, "branch_id": 1, "created_at": 1, "business_date": 1, "tenant_id": 1, "shift_id": 1}
+        ):
+            order_created = o.get("created_at")
+            cashier = o.get("cashier_id")
+            if not order_created or not cashier:
+                continue
+            shift_q = {
+                "cashier_id": cashier,
+                "branch_id": o["branch_id"],
+                "started_at": {"$lte": order_created},
+            }
+            if o.get("tenant_id"):
+                shift_q["tenant_id"] = o["tenant_id"]
+            matching_shift = await db.shifts.find_one(
+                {**shift_q, "$or": [{"ended_at": {"$gte": order_created}}, {"ended_at": {"$exists": False}}, {"ended_at": None}, {"status": "open"}]},
+                {"_id": 0, "id": 1, "business_date": 1, "started_at": 1},
+                sort=[("started_at", -1)]
+            )
+            if matching_shift:
+                correct_biz = matching_shift.get("business_date") or iraq_date_from_utc(matching_shift.get("started_at"))
+                if correct_biz and correct_biz != o.get("business_date"):
+                    await db.orders.update_one(
+                        {"id": o["id"]},
+                        {"$set": {"business_date": correct_biz, "shift_id": matching_shift["id"], "_business_date_healed": datetime.now(timezone.utc).isoformat()}}
+                    )
+                    fixed_orders += 1
+        if fixed_orders:
+            logger.info(f"   📦 صُحّح business_date لـ {fixed_orders} طلب")
+        
+        logger.info(f"✅ auto_heal_shifts_and_business_dates complete")
+    except Exception as e:
+        logger.error(f"❌ auto_heal_shifts_and_business_dates failed: {e}")
+
+
 
 
 # ==================== SYSTEM HEALTH & RELIABILITY APIS ====================
@@ -18534,7 +18772,7 @@ async def create_customer_order(
         "status": "pending",
         "order_type": "delivery",
         "source": "customer_app",
-        "business_date": await _resolve_business_date(tenant_id, order.branch_id),
+        "business_date": await _resolve_business_date(tenant_id, order.branch_id, current_user.get("id")),
         "created_at": datetime.now(timezone.utc).isoformat()
     }
     

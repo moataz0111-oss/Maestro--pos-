@@ -129,5 +129,15 @@ Multi-tenant POS system with biometric integration (ZKTeco), thermal receipt pri
 
 ## May 3, 2026 - Fixes
 - **Business Date Helper Endpoint**: Added `GET /api/business-date/current?branch_id=X` that returns the current business_date of the open shift (so a shift opened at 10pm and ending at 2am next day stays on the opening date). Returns `{business_date, calendar_date_iraq, has_open_shift, open_shift}`.
-- **Expenses Page Now Filters by Business Day**: `frontend/src/pages/Expenses.js` fetches `/api/business-date/current` on branch change and auto-sets `startDate=endDate=business_date`. A green badge "اليوم التشغيلي: YYYY-MM-DD" appears in the header when viewing the active business day. Fixes user report of today's 4000 IQD expense for cashier زهراء not appearing when the shift crossed midnight.
-- **Cash Register Closing Stores business_date**: `POST /api/reports/cash-register-closing` now persists `business_date` and `shift_id` on the closing record. Added migration `backfill_closing_business_date_v1` to populate this field on existing records. Frontend Reports.js now shows a small green pill "📅 business_date" next to each shift header, so users can distinguish "shift that ended at 2am May 3 but belongs to May 2" from actual May 3 shifts.
+- **Expenses Page Now Filters by Business Day**: `frontend/src/pages/Expenses.js` fetches `/api/business-date/current` on branch change and auto-sets `startDate=endDate=business_date`. A green badge "اليوم التشغيلي: YYYY-MM-DD" appears in the header when viewing the active business day.
+- **Cash Register Closing Stores business_date**: `POST /api/reports/cash-register-closing` now persists `business_date` and `shift_id` on the closing record. Migration `backfill_closing_business_date_v1` populates this field on existing records. Frontend Reports.js now shows a small green pill "📅 business_date" next to each shift header.
+- **CRITICAL ROOT-CAUSE FIX — Shift Resolution Picks Cashier's Own Shift First**: Bug was `_resolve_business_date()` and `create_order` used `find_one({"status":"open", "branch_id":X})` which returned ANY stale open shift in the branch (e.g. يامن's shift from yesterday) when sorted by Mongo insertion order, instead of the user's actual current shift. Fixed both functions to:
+  1. Try `cashier_id == current_user.id` shift first (sorted by `started_at` desc).
+  2. Fall back to most recent open shift in branch.
+  This fixes the misattribution where زهراء's 4000 IQD expense on day 3 got tagged with day 2 because يامن's day-2 shift was still technically open.
+- **Continuous Auto-Heal Migration `auto_heal_shifts_and_business_dates`**: Runs on every backend startup (NOT one-shot). Performs:
+  1. Auto-closes shifts open more than 30 hours (sets status=closed, ended_at=started_at+18h, auto_close_reason="stale_shift_over_30_hours").
+  2. Backfills missing `business_date` on shifts using `iraq_date_from_utc(started_at)`.
+  3. Re-tags every expense's business_date by finding the actual shift that was open at the expense's `created_at` (matched by cashier_id+branch_id+time-overlap). Sets `_business_date_healed` audit timestamp.
+  4. Same logic for orders.
+- **Stale Shift Admin Endpoints** (kept for transparency, not used in UI per user request): `GET /api/shifts/stale?hours_threshold=18` lists stuck shifts; `POST /api/shifts/{id}/force-close` allows admin override.

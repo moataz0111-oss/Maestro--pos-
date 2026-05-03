@@ -102,7 +102,6 @@ export default function Expenses() {
         const biz = res.data?.business_date;
         if (biz && biz !== businessDate) {
           setBusinessDate(biz);
-          // اضبط الفلتر تلقائياً على اليوم التشغيلي الفعلي (يصلح مشكلة الشفت اللي يعبر منتصف الليل)
           setStartDate(biz);
           setEndDate(biz);
         }
