@@ -18276,7 +18276,7 @@ async def auto_heal_shifts_and_business_dates():
             exp_created = exp.get("created_at")
             if not exp_created:
                 continue
-            # ابحث عن شفت الكاشير الذي يحوي وقت الإنشاء
+            # 1) جرب شفت الكاشير الذي يحوي وقت الإنشاء
             shift_q = {
                 "cashier_id": exp["created_by"],
                 "branch_id": exp["branch_id"],
@@ -18284,12 +18284,24 @@ async def auto_heal_shifts_and_business_dates():
             }
             if exp.get("tenant_id"):
                 shift_q["tenant_id"] = exp["tenant_id"]
-            # اختر آخر شفت يحتوي هذا الوقت
             matching_shift = await db.shifts.find_one(
                 {**shift_q, "$or": [{"ended_at": {"$gte": exp_created}}, {"ended_at": {"$exists": False}}, {"ended_at": None}, {"status": "open"}]},
                 {"_id": 0, "id": 1, "business_date": 1, "started_at": 1},
                 sort=[("started_at", -1)]
             )
+            # 2) fallback: أي شفت في نفس الفرع يحوي هذا الوقت (لو الكاشير_id مختلف)
+            if not matching_shift:
+                fallback_q = {
+                    "branch_id": exp["branch_id"],
+                    "started_at": {"$lte": exp_created},
+                }
+                if exp.get("tenant_id"):
+                    fallback_q["tenant_id"] = exp["tenant_id"]
+                matching_shift = await db.shifts.find_one(
+                    {**fallback_q, "$or": [{"ended_at": {"$gte": exp_created}}, {"ended_at": {"$exists": False}}, {"ended_at": None}, {"status": "open"}]},
+                    {"_id": 0, "id": 1, "business_date": 1, "started_at": 1},
+                    sort=[("started_at", -1)]
+                )
             if matching_shift:
                 correct_biz = matching_shift.get("business_date") or iraq_date_from_utc(matching_shift.get("started_at"))
                 if correct_biz and correct_biz != exp.get("business_date"):
@@ -18301,28 +18313,44 @@ async def auto_heal_shifts_and_business_dates():
         if fixed_expenses:
             logger.info(f"   💰 صُحّح business_date لـ {fixed_expenses} مصروف")
         
-        # === 4) تصحيح business_date للطلبات (نفس المنطق) ===
+        # === 4) تصحيح business_date للطلبات (نفس المنطق مع fallback) ===
         fixed_orders = 0
         async for o in db.orders.find(
             {"created_at": {"$exists": True}, "branch_id": {"$exists": True}},
             {"_id": 0, "id": 1, "cashier_id": 1, "branch_id": 1, "created_at": 1, "business_date": 1, "tenant_id": 1, "shift_id": 1}
         ):
             order_created = o.get("created_at")
-            cashier = o.get("cashier_id")
-            if not order_created or not cashier:
+            if not order_created:
                 continue
-            shift_q = {
-                "cashier_id": cashier,
-                "branch_id": o["branch_id"],
-                "started_at": {"$lte": order_created},
-            }
-            if o.get("tenant_id"):
-                shift_q["tenant_id"] = o["tenant_id"]
-            matching_shift = await db.shifts.find_one(
-                {**shift_q, "$or": [{"ended_at": {"$gte": order_created}}, {"ended_at": {"$exists": False}}, {"ended_at": None}, {"status": "open"}]},
-                {"_id": 0, "id": 1, "business_date": 1, "started_at": 1},
-                sort=[("started_at", -1)]
-            )
+            cashier = o.get("cashier_id")
+            matching_shift = None
+            # 1) جرب شفت الكاشير
+            if cashier:
+                shift_q = {
+                    "cashier_id": cashier,
+                    "branch_id": o["branch_id"],
+                    "started_at": {"$lte": order_created},
+                }
+                if o.get("tenant_id"):
+                    shift_q["tenant_id"] = o["tenant_id"]
+                matching_shift = await db.shifts.find_one(
+                    {**shift_q, "$or": [{"ended_at": {"$gte": order_created}}, {"ended_at": {"$exists": False}}, {"ended_at": None}, {"status": "open"}]},
+                    {"_id": 0, "id": 1, "business_date": 1, "started_at": 1},
+                    sort=[("started_at", -1)]
+                )
+            # 2) fallback: أي شفت في نفس الفرع يحوي وقت الطلب
+            if not matching_shift:
+                fallback_q = {
+                    "branch_id": o["branch_id"],
+                    "started_at": {"$lte": order_created},
+                }
+                if o.get("tenant_id"):
+                    fallback_q["tenant_id"] = o["tenant_id"]
+                matching_shift = await db.shifts.find_one(
+                    {**fallback_q, "$or": [{"ended_at": {"$gte": order_created}}, {"ended_at": {"$exists": False}}, {"ended_at": None}, {"status": "open"}]},
+                    {"_id": 0, "id": 1, "business_date": 1, "started_at": 1},
+                    sort=[("started_at", -1)]
+                )
             if matching_shift:
                 correct_biz = matching_shift.get("business_date") or iraq_date_from_utc(matching_shift.get("started_at"))
                 if correct_biz and correct_biz != o.get("business_date"):
