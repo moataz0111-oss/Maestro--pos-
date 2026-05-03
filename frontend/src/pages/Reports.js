@@ -1492,7 +1492,14 @@ const CashRegisterClosingTab = ({ t, formatPrice, selectedBranchId, branches, ge
                     </div>
                     <div>
                       <p className="font-bold text-white">{closing.cashier_name || t('كاشير')}</p>
-                      <p className="text-sm text-gray-400">{closing.closed_at ? new Date(closing.closed_at).toLocaleString('ar-IQ') : ''}</p>
+                      <p className="text-sm text-gray-400">
+                        {closing.business_date && (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 text-xs border border-emerald-500/20 ml-2" title={t('اليوم التشغيلي للشفت')}>
+                            📅 {closing.business_date}
+                          </span>
+                        )}
+                        {closing.closed_at ? new Date(closing.closed_at).toLocaleString('ar-IQ') : ''}
+                      </p>
                     </div>
                   </div>
                   <div className="flex items-center gap-6">

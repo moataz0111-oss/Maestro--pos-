@@ -3174,6 +3174,37 @@ async def create_expense(expense: ExpenseCreate, current_user: dict = Depends(ge
     
     return expense_doc
 
+@api_router.get("/business-date/current")
+async def get_current_business_date(
+    branch_id: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """إرجاع business_date الحالي للوردية المفتوحة في الفرع.
+    
+    مفيد للواجهة لكي تعرض مصاريف/مبيعات اليوم التشغيلي الفعلي بدل التاريخ التقويمي.
+    مثال: شفت افتُتح الساعة 10 مساءً وامتد حتى 2 صباحاً اليوم التالي — business_date
+    يبقى = تاريخ الافتتاح (لا يتغير مع منتصف الليل).
+    
+    إذا لم توجد وردية مفتوحة، يرجع تاريخ العراق الحالي.
+    """
+    tenant_id = get_user_tenant_id(current_user)
+    br = branch_id or current_user.get("branch_id")
+    biz = await _resolve_business_date(tenant_id, br)
+    # اجلب معلومات الوردية المفتوحة كذلك لعرضها في الواجهة
+    shift_q = {"status": "open"}
+    if tenant_id:
+        shift_q["tenant_id"] = tenant_id
+    if br:
+        shift_q["branch_id"] = br
+    shift = await db.shifts.find_one(shift_q, {"_id": 0, "id": 1, "cashier_id": 1, "cashier_name": 1, "started_at": 1, "business_date": 1})
+    return {
+        "business_date": biz,
+        "calendar_date_iraq": iraq_date_from_utc(),
+        "has_open_shift": bool(shift),
+        "open_shift": shift or None,
+    }
+
+
 @api_router.get("/expenses")
 async def get_expenses(
     branch_id: Optional[str] = None,
@@ -14160,6 +14191,22 @@ async def create_cash_register_closing(
     """إنشاء سجل إغلاق صندوق جديد"""
     closing_id = str(uuid.uuid4())
     
+    # احسب business_date بناءً على الوردية التي يُغلَق عليها (أو تاريخ العراق الحالي)
+    biz_date = data.get("business_date")
+    if not biz_date:
+        # جرب جلبه من الشفت المرتبط
+        shift_id = data.get("shift_id")
+        if shift_id:
+            _shift = await db.shifts.find_one({"id": shift_id}, {"_id": 0, "business_date": 1, "started_at": 1})
+            if _shift:
+                biz_date = _shift.get("business_date")
+                if not biz_date and _shift.get("started_at"):
+                    biz_date = iraq_date_from_utc(_shift["started_at"])
+        if not biz_date and data.get("shift_start"):
+            biz_date = iraq_date_from_utc(data["shift_start"])
+        if not biz_date:
+            biz_date = iraq_date_from_utc()
+    
     closing_record = {
         "id": closing_id,
         "tenant_id": current_user.get("tenant_id"),
@@ -14167,9 +14214,11 @@ async def create_cash_register_closing(
         "branch_name": data.get("branch_name"),
         "cashier_id": current_user.get("user_id"),
         "cashier_name": current_user.get("full_name") or current_user.get("email"),
+        "shift_id": data.get("shift_id"),
         "shift_start": data.get("shift_start"),
         "shift_end": data.get("shift_end") or datetime.now(timezone.utc).isoformat(),
         "closed_at": datetime.now(timezone.utc).isoformat(),
+        "business_date": biz_date,
         
         # المبيعات
         "total_sales": data.get("total_sales", 0),
@@ -17997,6 +18046,59 @@ async def settle_driver_collected_orders_as_cash():
         logger.info(f"✅ {MIG_KEY} complete: fixed {result.modified_count} order(s) → paid/cash")
     except Exception as e:
         logger.error(f"❌ settle_driver_collected_orders_as_cash migration failed: {e}")
+
+
+@app.on_event("startup")
+async def backfill_closing_business_date():
+    """تعبئة business_date في سجلات cash_register_closings القديمة (one-shot).
+    
+    ضروري لأن الواجهة ستفلتر الشفتات حسب business_date بدل وقت الإغلاق،
+    فالشفت اللي امتد بعد منتصف الليل يظهر بتاريخ اليوم الذي افتُتح فيه.
+    
+    منطق التعبئة:
+    - إن كان shift_id متاحاً → نأخذ business_date من الشفت
+    - وإلا → نحسب من shift_start (أو closed_at كمصدر أخير) عبر iraq_date_from_utc
+    """
+    try:
+        MIG_KEY = "backfill_closing_business_date_v1"
+        done = await db.system_migrations.find_one({"key": MIG_KEY})
+        if done:
+            logger.info(f"🟢 Migration {MIG_KEY} already applied, skipping")
+            return
+        
+        logger.info(f"🔧 Running migration: {MIG_KEY}")
+        closings = await db.cash_register_closings.find(
+            {"$or": [{"business_date": {"$exists": False}}, {"business_date": None}, {"business_date": ""}]},
+            {"_id": 0, "id": 1, "shift_id": 1, "shift_start": 1, "closed_at": 1, "started_at": 1}
+        ).to_list(5000)
+        
+        logger.info(f"   سجلات تحتاج تعبئة: {len(closings)}")
+        fixed = 0
+        for c in closings:
+            biz = None
+            if c.get("shift_id"):
+                _sh = await db.shifts.find_one({"id": c["shift_id"]}, {"_id": 0, "business_date": 1, "started_at": 1})
+                if _sh:
+                    biz = _sh.get("business_date")
+                    if not biz and _sh.get("started_at"):
+                        biz = iraq_date_from_utc(_sh["started_at"])
+            if not biz:
+                src = c.get("shift_start") or c.get("started_at") or c.get("closed_at")
+                if src:
+                    biz = iraq_date_from_utc(src)
+            if biz:
+                await db.cash_register_closings.update_one({"id": c["id"]}, {"$set": {"business_date": biz}})
+                fixed += 1
+        
+        await db.system_migrations.insert_one({
+            "key": MIG_KEY,
+            "executed_at": datetime.now(timezone.utc).isoformat(),
+            "fixed_count": fixed,
+            "scanned_count": len(closings),
+        })
+        logger.info(f"✅ {MIG_KEY} complete: عبّأت business_date لـ {fixed} إغلاق")
+    except Exception as e:
+        logger.error(f"❌ backfill_closing_business_date migration failed: {e}")
 
 
 

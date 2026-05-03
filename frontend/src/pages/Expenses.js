@@ -69,6 +69,7 @@ export default function Expenses() {
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
   const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
+  const [businessDate, setBusinessDate] = useState(null);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false); // يمنع التكرار بالضغط المتعدد
@@ -91,6 +92,25 @@ export default function Expenses() {
   useEffect(() => {
     fetchCategories();
   }, []);
+
+  // عند تغيير الفرع، اجلب business_date الحالي واضبط الفلتر ليعرض مصاريف اليوم التشغيلي فقط
+  useEffect(() => {
+    if (!selectedBranch || isOffline) return;
+    (async () => {
+      try {
+        const res = await axios.get(`${API}/business-date/current`, { params: { branch_id: selectedBranch } });
+        const biz = res.data?.business_date;
+        if (biz && biz !== businessDate) {
+          setBusinessDate(biz);
+          // اضبط الفلتر تلقائياً على اليوم التشغيلي الفعلي (يصلح مشكلة الشفت اللي يعبر منتصف الليل)
+          setStartDate(biz);
+          setEndDate(biz);
+        }
+      } catch (err) {
+        console.log('Could not fetch business_date, falling back to calendar date');
+      }
+    })();
+  }, [selectedBranch, isOffline]);
 
   useEffect(() => {
     fetchData();
@@ -360,7 +380,14 @@ export default function Expenses() {
             </Button>
             <div>
               <h1 className="text-xl font-bold font-cairo text-foreground">{t('المصاريف اليومية')}</h1>
-              <p className="text-sm text-muted-foreground">{t('تسجيل ومتابعة المصاريف')}</p>
+              <p className="text-sm text-muted-foreground">
+                {t('تسجيل ومتابعة المصاريف')}
+                {businessDate && startDate === businessDate && endDate === businessDate && (
+                  <span className="mr-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-500 text-xs border border-emerald-500/20" data-testid="business-day-badge">
+                    {t('اليوم التشغيلي')}: {businessDate}
+                  </span>
+                )}
+              </p>
             </div>
           </div>
 
