@@ -18254,16 +18254,26 @@ async def auto_heal_shifts_and_business_dates():
         if stale_shifts:
             logger.info(f"   🔒 أُغلق تلقائياً {len(stale_shifts)} شفت عالق")
         
-        # === 2) تصحيح business_date للشفتات بدون قيمة ===
+        # === 2) إعادة حساب business_date لجميع الشفتات من started_at ===
+        # نُعيد حساب business_date من started_at لضمان الصحة حتى للشفتات اللي
+        # ورثت قيمة خاطئة من شفت عالق وقت فتحها.
+        fixed_shifts = 0
         async for sh in db.shifts.find(
-            {"$or": [{"business_date": {"$exists": False}}, {"business_date": None}, {"business_date": ""}]},
-            {"_id": 0, "id": 1, "started_at": 1, "opened_at": 1}
+            {},
+            {"_id": 0, "id": 1, "started_at": 1, "opened_at": 1, "business_date": 1}
         ):
             src = sh.get("started_at") or sh.get("opened_at")
-            if src:
-                biz = iraq_date_from_utc(src)
-                if biz:
-                    await db.shifts.update_one({"id": sh["id"]}, {"$set": {"business_date": biz}})
+            if not src:
+                continue
+            correct_biz = iraq_date_from_utc(src)
+            if correct_biz and correct_biz != sh.get("business_date"):
+                await db.shifts.update_one(
+                    {"id": sh["id"]},
+                    {"$set": {"business_date": correct_biz, "_business_date_healed": datetime.now(timezone.utc).isoformat()}}
+                )
+                fixed_shifts += 1
+        if fixed_shifts:
+            logger.info(f"   🕐 صُحّح business_date لـ {fixed_shifts} شفت")
         
         # === 3) تصحيح business_date للمصاريف ===
         # ابحث عن مصاريف لها created_by + branch_id + created_at، واربطها بالشفت
