@@ -18279,6 +18279,16 @@ async def auto_heal_shifts_and_business_dates():
         # ابحث عن مصاريف لها created_by + branch_id + created_at، واربطها بالشفت
         # الذي كان مفتوحاً عند الإنشاء (started_at <= created_at <= ended_at OR شفت مفتوح حالياً)
         fixed_expenses = 0
+        
+        def _time_window(created_iso: str, hours_before: int = 24):
+            """احسب نافذة زمنية للبحث عن شفتات قريبة من وقت الإنشاء"""
+            try:
+                dt = datetime.fromisoformat(created_iso.replace("Z", "+00:00"))
+                earliest = (dt - timedelta(hours=hours_before)).isoformat()
+                return earliest
+            except Exception:
+                return None
+        
         async for exp in db.expenses.find(
             {"created_at": {"$exists": True}, "created_by": {"$exists": True}, "branch_id": {"$exists": True}},
             {"_id": 0, "id": 1, "created_by": 1, "branch_id": 1, "created_at": 1, "business_date": 1, "tenant_id": 1}
@@ -18286,29 +18296,34 @@ async def auto_heal_shifts_and_business_dates():
             exp_created = exp.get("created_at")
             if not exp_created:
                 continue
+            earliest = _time_window(exp_created, 24)
             # 1) جرب شفت الكاشير الذي يحوي وقت الإنشاء
             shift_q = {
                 "cashier_id": exp["created_by"],
                 "branch_id": exp["branch_id"],
                 "started_at": {"$lte": exp_created},
             }
+            if earliest:
+                shift_q["started_at"]["$gte"] = earliest
             if exp.get("tenant_id"):
                 shift_q["tenant_id"] = exp["tenant_id"]
             matching_shift = await db.shifts.find_one(
-                {**shift_q, "$or": [{"ended_at": {"$gte": exp_created}}, {"ended_at": {"$exists": False}}, {"ended_at": None}, {"status": "open"}]},
+                {**shift_q, "$or": [{"ended_at": {"$gte": exp_created}}, {"status": "open"}]},
                 {"_id": 0, "id": 1, "business_date": 1, "started_at": 1},
                 sort=[("started_at", -1)]
             )
-            # 2) fallback: أي شفت في نفس الفرع يحوي هذا الوقت (لو الكاشير_id مختلف)
+            # 2) fallback: أي شفت في نفس الفرع ضمن نافذة ±24h
             if not matching_shift:
                 fallback_q = {
                     "branch_id": exp["branch_id"],
                     "started_at": {"$lte": exp_created},
                 }
+                if earliest:
+                    fallback_q["started_at"]["$gte"] = earliest
                 if exp.get("tenant_id"):
                     fallback_q["tenant_id"] = exp["tenant_id"]
                 matching_shift = await db.shifts.find_one(
-                    {**fallback_q, "$or": [{"ended_at": {"$gte": exp_created}}, {"ended_at": {"$exists": False}}, {"ended_at": None}, {"status": "open"}]},
+                    {**fallback_q, "$or": [{"ended_at": {"$gte": exp_created}}, {"status": "open"}]},
                     {"_id": 0, "id": 1, "business_date": 1, "started_at": 1},
                     sort=[("started_at", -1)]
                 )
@@ -18320,10 +18335,19 @@ async def auto_heal_shifts_and_business_dates():
                         {"$set": {"business_date": correct_biz, "shift_id": matching_shift["id"], "_business_date_healed": datetime.now(timezone.utc).isoformat()}}
                     )
                     fixed_expenses += 1
+            else:
+                # 3) fallback نهائي: iraq_date_from_utc على created_at
+                correct_biz = iraq_date_from_utc(exp_created)
+                if correct_biz and correct_biz != exp.get("business_date"):
+                    await db.expenses.update_one(
+                        {"id": exp["id"]},
+                        {"$set": {"business_date": correct_biz, "_business_date_healed": datetime.now(timezone.utc).isoformat(), "_business_date_fallback": "iraq_date"}}
+                    )
+                    fixed_expenses += 1
         if fixed_expenses:
             logger.info(f"   💰 صُحّح business_date لـ {fixed_expenses} مصروف")
         
-        # === 4) تصحيح business_date للطلبات (نفس المنطق مع fallback) ===
+        # === 4) تصحيح business_date للطلبات (نفس المنطق مع نافذة زمنية محكمة) ===
         fixed_orders = 0
         async for o in db.orders.find(
             {"created_at": {"$exists": True}, "branch_id": {"$exists": True}},
@@ -18332,32 +18356,37 @@ async def auto_heal_shifts_and_business_dates():
             order_created = o.get("created_at")
             if not order_created:
                 continue
+            earliest = _time_window(order_created, 24)
             cashier = o.get("cashier_id")
             matching_shift = None
-            # 1) جرب شفت الكاشير
+            # 1) جرب شفت الكاشير ضمن نافذة ±24h
             if cashier:
                 shift_q = {
                     "cashier_id": cashier,
                     "branch_id": o["branch_id"],
                     "started_at": {"$lte": order_created},
                 }
+                if earliest:
+                    shift_q["started_at"]["$gte"] = earliest
                 if o.get("tenant_id"):
                     shift_q["tenant_id"] = o["tenant_id"]
                 matching_shift = await db.shifts.find_one(
-                    {**shift_q, "$or": [{"ended_at": {"$gte": order_created}}, {"ended_at": {"$exists": False}}, {"ended_at": None}, {"status": "open"}]},
+                    {**shift_q, "$or": [{"ended_at": {"$gte": order_created}}, {"status": "open"}]},
                     {"_id": 0, "id": 1, "business_date": 1, "started_at": 1},
                     sort=[("started_at", -1)]
                 )
-            # 2) fallback: أي شفت في نفس الفرع يحوي وقت الطلب
+            # 2) fallback: أي شفت في نفس الفرع ضمن النافذة
             if not matching_shift:
                 fallback_q = {
                     "branch_id": o["branch_id"],
                     "started_at": {"$lte": order_created},
                 }
+                if earliest:
+                    fallback_q["started_at"]["$gte"] = earliest
                 if o.get("tenant_id"):
                     fallback_q["tenant_id"] = o["tenant_id"]
                 matching_shift = await db.shifts.find_one(
-                    {**fallback_q, "$or": [{"ended_at": {"$gte": order_created}}, {"ended_at": {"$exists": False}}, {"ended_at": None}, {"status": "open"}]},
+                    {**fallback_q, "$or": [{"ended_at": {"$gte": order_created}}, {"status": "open"}]},
                     {"_id": 0, "id": 1, "business_date": 1, "started_at": 1},
                     sort=[("started_at", -1)]
                 )
@@ -18369,12 +18398,104 @@ async def auto_heal_shifts_and_business_dates():
                         {"$set": {"business_date": correct_biz, "shift_id": matching_shift["id"], "_business_date_healed": datetime.now(timezone.utc).isoformat()}}
                     )
                     fixed_orders += 1
+            else:
+                # 3) fallback نهائي: iraq_date_from_utc(created_at)
+                correct_biz = iraq_date_from_utc(order_created)
+                if correct_biz and correct_biz != o.get("business_date"):
+                    await db.orders.update_one(
+                        {"id": o["id"]},
+                        {"$set": {"business_date": correct_biz, "_business_date_healed": datetime.now(timezone.utc).isoformat(), "_business_date_fallback": "iraq_date"}}
+                    )
+                    fixed_orders += 1
         if fixed_orders:
             logger.info(f"   📦 صُحّح business_date لـ {fixed_orders} طلب")
         
         logger.info(f"✅ auto_heal_shifts_and_business_dates complete")
     except Exception as e:
         logger.error(f"❌ auto_heal_shifts_and_business_dates failed: {e}")
+
+
+@app.on_event("startup")
+async def fix_yamen_orders_jadriya_20260503():
+    """إصلاح مستهدف لطلبات يامن #32-#59 في فرع الجادرية ليوم 2026-05-03.
+    
+    المستخدم أبلغ أن هذه الطلبات بالضبط تخص شفت يامن لكن بعضها مفقود من التقرير.
+    هذه الـ migration تضمن:
+    1. كل طلب رقم 32-59 في فرع الجادرية أُنشئ في 2026-05-03 (Iraq time) → business_date=2026-05-03
+    2. تُسند إلى شفت يامن إن وُجد (cashier_name يحتوي "يامن")
+    3. تعمل مرة واحدة (محفوظة في system_migrations)
+    """
+    try:
+        MIG_KEY = "fix_yamen_orders_jadriya_20260503_v1"
+        done = await db.system_migrations.find_one({"key": MIG_KEY})
+        if done:
+            logger.info(f"🟢 Migration {MIG_KEY} already applied, skipping")
+            return
+        
+        logger.info(f"🔧 Running targeted migration: {MIG_KEY}")
+        
+        # ابحث عن فرع الجادرية
+        jadriya_branches = await db.branches.find(
+            {"name": {"$regex": "جادرية|الجادرية|Jadriya|Al-Jadriya", "$options": "i"}},
+            {"_id": 0, "id": 1, "name": 1, "tenant_id": 1}
+        ).to_list(10)
+        
+        if not jadriya_branches:
+            logger.info("   لا يوجد فرع جادرية في هذه القاعدة — تم تسجيل migration كمُنفّذ")
+            await db.system_migrations.insert_one({
+                "key": MIG_KEY,
+                "executed_at": datetime.now(timezone.utc).isoformat(),
+                "modified_count": 0,
+                "note": "jadriya_branch_not_found",
+            })
+            return
+        
+        branch_ids = [b["id"] for b in jadriya_branches]
+        
+        # ابحث عن شفت يامن لليوم (2026-05-03)
+        yamen_shift = await db.shifts.find_one(
+            {
+                "branch_id": {"$in": branch_ids},
+                "$or": [
+                    {"cashier_name": {"$regex": "يامن|يام|Yamen|Yaman", "$options": "i"}},
+                    {"business_date": "2026-05-03"},
+                ],
+                "started_at": {"$regex": "^2026-05-03"},
+            },
+            {"_id": 0, "id": 1, "cashier_id": 1, "cashier_name": 1, "business_date": 1},
+            sort=[("started_at", -1)]
+        )
+        
+        # طلبات #32-#59 في الجادرية ليوم 3
+        orders_query = {
+            "order_number": {"$gte": 32, "$lte": 59},
+            "branch_id": {"$in": branch_ids},
+            "created_at": {"$regex": "^2026-05-03"},
+        }
+        
+        update_fields = {
+            "business_date": "2026-05-03",
+            "_business_date_healed": datetime.now(timezone.utc).isoformat(),
+            "_healed_by_migration": MIG_KEY,
+        }
+        if yamen_shift:
+            update_fields["shift_id"] = yamen_shift["id"]
+            # لا نغيّر cashier_id لكي لا نكسر تاريخ الإنشاء الحقيقي
+            logger.info(f"   شفت يامن المطابق: id={yamen_shift['id'][:8]}, name={yamen_shift.get('cashier_name')}")
+        
+        result = await db.orders.update_many(orders_query, {"$set": update_fields})
+        logger.info(f"   🎯 صُحّح {result.modified_count} طلب (#32-#59) في الجادرية ليوم 2026-05-03")
+        
+        await db.system_migrations.insert_one({
+            "key": MIG_KEY,
+            "executed_at": datetime.now(timezone.utc).isoformat(),
+            "modified_count": result.modified_count,
+            "branch_ids": branch_ids,
+            "yamen_shift_id": yamen_shift["id"] if yamen_shift else None,
+        })
+        logger.info(f"✅ {MIG_KEY} complete")
+    except Exception as e:
+        logger.error(f"❌ fix_yamen_orders_jadriya_20260503 failed: {e}")
 
 
 
