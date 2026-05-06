@@ -151,3 +151,18 @@ Multi-tenant POS system with biometric integration (ZKTeco), thermal receipt pri
   3. Re-tags every expense's business_date by finding the actual shift that was open at the expense's `created_at` (matched by cashier_id+branch_id+time-overlap). Sets `_business_date_healed` audit timestamp.
   4. Same logic for orders.
 - **Stale Shift Admin Endpoints** (kept for transparency, not used in UI per user request): `GET /api/shifts/stale?hours_threshold=18` lists stuck shifts; `POST /api/shifts/{id}/force-close` allows admin override.
+
+
+## Completed Features (Feb 6, 2026 - HR Phase 1 Fixes)
+- **Biometric Push Per Branch**: `handlePushAllToDevice` in `HR.js` now filters employees by `device.branch_id`. The push-all dialog shows the device's branch name and `data-testid=push-all-eligible-count` reflecting only employees of that branch. Each device exports only its branch employees (e.g., Jadriya device → only Jadriya employees).
+- **Account Statement Modal (كشف حساب الموظف)**: New dialog (`data-testid=account-statement-dialog`) opened from each employee row's FileText button (`data-testid=account-statement-{empId}`). Shows totals cards + tables for deductions, bonuses, advances, payrolls, and attendance. A4 print supported via `window.print()` with scoped CSS.
+- **New Backend Endpoint** `GET /api/employees/{employee_id}/account-statement` (in `payroll_routes.py`): Returns employee, branch, deductions, bonuses, advances, payrolls, attendance, totals. Tenant-scoped on every sub-query for defence-in-depth. Optional `start_date`/`end_date` filters.
+- **Restored** `GET /api/payroll/{payroll_id}/print` endpoint (was missing after server.py refactor) — used by `/payroll/print/:id` route. Tenant-scoped.
+- **Branch Count Hardening**: `departmentBranchIds` set now also matches branch names containing مطبخ/مخزن/مستودع/مشتريات for defence-in-depth so internal departments are reliably excluded from `الفروع` salary card count.
+- **Salary Report Per-Employee Action**: Replaced row-level `window.print()` with Account Statement opener (`data-testid=statement-from-summary-{empId}`) for actionable per-employee inspection.
+- **Print Routing**: Administrative reports (PayrollPrint, Account Statement, salary report) use A4 `window.print()`. Deductions/Bonuses receipts retain thermal-style 350px receipt window per user spec.
+
+## Backlog
+- (P1) Audio low-stock alerts for owner when raw materials drop below minimum.
+- (P2) Refactor `server.py` (21k+ lines) into modular routes (continuing).
+- (P2) Refactor `HR.js`, `Dashboard.js`, `Settings.js`, `POS.js`, `WarehouseManufacturing.js` monoliths.
