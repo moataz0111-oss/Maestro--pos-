@@ -79,6 +79,7 @@ import {
 import { useTheme } from '../context/ThemeContext';
 import TargetCelebration from '../components/TargetCelebration';
 import LowStockBanner from '../components/LowStockBanner';
+import PriceAlertsBell from '../components/PriceAlertsBell';
 import { toast } from 'sonner';
 import {
   Dialog,
@@ -1956,6 +1957,9 @@ export default function Dashboard() {
           </div>
 
           <div className="flex items-center gap-3">
+            {/* Price Alerts Bell - تنبيهات تغير الأسعار (للمالك فقط) */}
+            <PriceAlertsBell user={user} />
+
             {/* Branch Selector - مكون اختيار الفرع العام */}
             <BranchSelector />
 

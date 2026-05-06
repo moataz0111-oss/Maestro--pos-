@@ -13,6 +13,15 @@ import aiofiles
 from pathlib import Path
 
 from .shared import get_database, get_current_user, get_user_tenant_id, UserRole
+from services.cost_layer_service import (
+    add_cost_layer,
+    get_active_layers,
+    get_current_effective_cost,
+    consume_fifo,
+    reconcile_layers_with_quantity,
+    detect_price_increase,
+    PRICE_DIFF_THRESHOLD_PERCENT,
+)
 
 router = APIRouter(prefix="/api", tags=["Inventory System"])
 
@@ -682,10 +691,39 @@ async def price_request_and_create_invoice(
     
     items = payload.get("items", [])
     items_with_totals = []
+    detected_alerts = []
+    tenant_id = current_user.get("tenant_id")
     for item in items:
         item_dict = dict(item)
         item_dict["total_cost"] = float(item.get("quantity", 0)) * float(item.get("cost_per_unit", 0))
         items_with_totals.append(item_dict)
+
+        # === كشف فرق السعر vs raw_materials.cost_per_unit ===
+        # نبحث المادة بالاسم (إن لم يتم تمرير material_id)
+        material_id = item.get("material_id")
+        if not material_id:
+            mq = {"name": item.get("name")}
+            if tenant_id:
+                mq["tenant_id"] = tenant_id
+            existing_material = await db.raw_materials.find_one(mq, {"_id": 0, "id": 1})
+            if existing_material:
+                material_id = existing_material.get("id")
+        if material_id:
+            alert = await detect_price_increase(
+                db,
+                tenant_id=tenant_id,
+                material_id=material_id,
+                material_name=item.get("name"),
+                unit=item.get("unit", "كغم"),
+                quantity=float(item.get("quantity", 0) or 0),
+                new_cost=float(item.get("cost_per_unit", 0) or 0),
+                purchase_id=None,  # سنُحدّثه بعد إنشاء الفاتورة
+                purchase_number=str(purchase_number),
+                triggered_by_user_id=current_user.get("id"),
+                triggered_by_role=current_user.get("role"),
+            )
+            if alert:
+                detected_alerts.append(alert)
     
     purchase_id = str(uuid.uuid4())
     purchase_doc = {
@@ -709,6 +747,13 @@ async def price_request_and_create_invoice(
         "sent_to_warehouse_by": None,
     }
     await db.purchases_new.insert_one(purchase_doc)
+
+    # ربط التنبيهات بالـ purchase_id الجديد
+    if detected_alerts:
+        await db.price_alerts.update_many(
+            {"id": {"$in": [a["id"] for a in detected_alerts]}},
+            {"$set": {"purchase_id": purchase_id}}
+        )
     
     # تحديث طلب المخزن
     await db.warehouse_purchase_requests.update_one(
@@ -726,6 +771,8 @@ async def price_request_and_create_invoice(
         "message": "تم تسعير الطلب وإنشاء الفاتورة. أرفق صورة الفاتورة ثم أرسلها للمخزن.",
         "purchase_id": purchase_id,
         "purchase_number": purchase_number,
+        "price_alerts": detected_alerts,  # تنبيهات الزيادة/النقصان (إن وُجدت)
+        "price_alerts_count": len(detected_alerts),
     }
 
 
@@ -831,26 +878,52 @@ async def confirm_warehouse_receipt(
     purchase_id = req.get("purchase_invoice_id")
     purchase = await db.purchases_new.find_one({"id": purchase_id}) if purchase_id else None
     
-    # إضافة المواد للمخزن (نفس منطق send-to-warehouse)
+    # إضافة المواد للمخزن (نفس منطق send-to-warehouse) — نظام طبقات FIFO
     movements_logged = 0
+    tenant_id = current_user.get("tenant_id")
     if purchase and purchase.get("status") == "pending":
         for item in purchase.get("items", []):
-            raw_material = await db.raw_materials.find_one({"name": item.get("name")})
+            item_qty = float(item.get("quantity", 0) or 0)
+            item_cost = float(item.get("cost_per_unit", 0) or 0)
+            mq = {"name": item.get("name")}
+            if tenant_id:
+                mq["tenant_id"] = tenant_id
+            raw_material = await db.raw_materials.find_one(mq)
             if raw_material:
-                new_quantity = raw_material.get("quantity", 0) + item.get("quantity", 0)
-                old_value = raw_material.get("quantity", 0) * raw_material.get("cost_per_unit", 0)
-                new_value = item.get("quantity", 0) * item.get("cost_per_unit", 0)
-                avg_cost = (old_value + new_value) / new_quantity if new_quantity > 0 else item.get("cost_per_unit", 0)
+                # زِد الكمية فقط — لا تُحدّث cost_per_unit (سيُحدَّد من أقدم طبقة)
+                new_quantity = float(raw_material.get("quantity", 0) or 0) + item_qty
                 await db.raw_materials.update_one(
                     {"id": raw_material["id"]},
                     {"$set": {
                         "quantity": new_quantity,
-                        "cost_per_unit": avg_cost,
-                        "last_updated": datetime.now(timezone.utc).isoformat()
+                        "last_updated": datetime.now(timezone.utc).isoformat(),
                     }}
                 )
                 material_id_for_log = raw_material["id"]
                 material_name_for_log = raw_material.get("name")
+                # أضف طبقة تكلفة جديدة (FIFO)
+                await add_cost_layer(
+                    db,
+                    material_id=raw_material["id"],
+                    material_name=raw_material.get("name") or item.get("name"),
+                    unit=item.get("unit") or raw_material.get("unit") or "كغم",
+                    quantity=item_qty,
+                    unit_cost=item_cost,
+                    tenant_id=tenant_id,
+                    source="purchase",
+                    source_id=purchase_id,
+                    source_number=str(purchase.get("purchase_number") or ""),
+                )
+                # بعد الإضافة: cost_per_unit = تكلفة أقدم طبقة نشطة
+                effective = await get_current_effective_cost(db, raw_material["id"], tenant_id)
+                if effective is not None:
+                    await db.raw_materials.update_one(
+                        {"id": raw_material["id"]},
+                        {"$set": {
+                            "cost_per_unit": effective,
+                            "last_cost_updated_at": datetime.now(timezone.utc).isoformat(),
+                        }}
+                    )
             else:
                 new_id = str(uuid.uuid4())
                 await db.raw_materials.insert_one({
@@ -858,16 +931,29 @@ async def confirm_warehouse_receipt(
                     "name": item.get("name"),
                     "name_en": None,
                     "unit": item.get("unit", "كغم"),
-                    "quantity": item.get("quantity", 0),
+                    "quantity": item_qty,
                     "min_quantity": 0,
-                    "cost_per_unit": item.get("cost_per_unit", 0),
+                    "cost_per_unit": item_cost,
                     "category": None,
                     "last_updated": datetime.now(timezone.utc).isoformat(),
                     "created_at": datetime.now(timezone.utc).isoformat(),
-                    "tenant_id": current_user.get("tenant_id"),
+                    "tenant_id": tenant_id,
                 })
                 material_id_for_log = new_id
                 material_name_for_log = item.get("name")
+                # طبقة أولى للمادة الجديدة
+                await add_cost_layer(
+                    db,
+                    material_id=new_id,
+                    material_name=item.get("name"),
+                    unit=item.get("unit") or "كغم",
+                    quantity=item_qty,
+                    unit_cost=item_cost,
+                    tenant_id=tenant_id,
+                    source="purchase",
+                    source_id=purchase_id,
+                    source_number=str(purchase.get("purchase_number") or ""),
+                )
             
             # === تسجيل حركة دخول (IN) في inventory_movements ===
             await db.inventory_movements.insert_one({
@@ -987,6 +1073,105 @@ async def create_raw_material(material: RawMaterialCreate, current_user: dict = 
     await db.raw_materials.insert_one(material_doc)
     del material_doc["_id"]
     return material_doc
+
+# ==================== Cost Layers (FIFO) + Price Alerts ====================
+
+@router.get("/raw-materials-new/{material_id}/cost-layers")
+async def list_material_cost_layers(material_id: str, current_user: dict = Depends(get_current_user)):
+    """طبقات تكلفة المادة (الأقدم أولاً) — للمالك/المخزن/المشتريات."""
+    db = get_db()
+    tenant_id = current_user.get("tenant_id")
+    layers = await db.material_cost_layers.find(
+        {"material_id": material_id, **({"tenant_id": tenant_id} if tenant_id else {})},
+        {"_id": 0}
+    ).sort("received_at", 1).to_list(500)
+    active = [layer for layer in layers if layer.get("status") == "active" and (layer.get("remaining_quantity", 0) or 0) > 0]
+    total_active_qty = sum(float(layer.get("remaining_quantity", 0) or 0) for layer in active)
+    total_active_value = sum(float(layer.get("remaining_quantity", 0) or 0) * float(layer.get("unit_cost", 0) or 0) for layer in active)
+    return {
+        "material_id": material_id,
+        "layers": layers,
+        "active_count": len(active),
+        "depleted_count": len(layers) - len(active),
+        "total_active_quantity": round(total_active_qty, 4),
+        "total_active_value": round(total_active_value, 2),
+        "current_effective_cost": (active[0].get("unit_cost") if active else None),
+    }
+
+
+@router.get("/price-alerts")
+async def list_price_alerts(
+    status_filter: Optional[str] = None,  # 'unread' | 'read' | 'dismissed' | None=all
+    limit: int = 100,
+    current_user: dict = Depends(get_current_user)
+):
+    """تنبيهات تغير الأسعار — للمالك/السوبر فقط."""
+    if current_user.get("role") not in ["admin", "super_admin"]:
+        return {"alerts": [], "unread_count": 0, "total_count": 0}
+
+    db = get_db()
+    tenant_id = current_user.get("tenant_id")
+    q = {}
+    if tenant_id:
+        q["tenant_id"] = tenant_id
+    if status_filter in ("unread", "read", "dismissed"):
+        q["status"] = status_filter
+
+    alerts = await db.price_alerts.find(q, {"_id": 0}).sort("triggered_at", -1).to_list(max(1, min(limit, 500)))
+    unread_q = {**q}
+    unread_q["status"] = "unread"
+    unread_count = await db.price_alerts.count_documents({"tenant_id": tenant_id, "status": "unread"} if tenant_id else {"status": "unread"})
+    return {
+        "alerts": alerts,
+        "unread_count": unread_count,
+        "total_count": len(alerts),
+    }
+
+
+@router.post("/price-alerts/{alert_id}/mark-read")
+async def mark_price_alert_read(alert_id: str, current_user: dict = Depends(get_current_user)):
+    if current_user.get("role") not in ["admin", "super_admin"]:
+        raise HTTPException(status_code=403, detail="غير مسموح")
+    db = get_db()
+    res = await db.price_alerts.update_one(
+        {"id": alert_id},
+        {"$set": {"status": "read", "read_at": datetime.now(timezone.utc).isoformat()},
+         "$addToSet": {"read_by": current_user.get("id")}}
+    )
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="التنبيه غير موجود")
+    return {"message": "تم تعليم التنبيه كمقروء"}
+
+
+@router.post("/price-alerts/mark-all-read")
+async def mark_all_price_alerts_read(current_user: dict = Depends(get_current_user)):
+    if current_user.get("role") not in ["admin", "super_admin"]:
+        raise HTTPException(status_code=403, detail="غير مسموح")
+    db = get_db()
+    tenant_id = current_user.get("tenant_id")
+    q = {"status": "unread"}
+    if tenant_id:
+        q["tenant_id"] = tenant_id
+    res = await db.price_alerts.update_many(
+        q,
+        {"$set": {"status": "read", "read_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    return {"message": "تمت قراءة الكل", "updated": res.modified_count}
+
+
+@router.post("/price-alerts/{alert_id}/dismiss")
+async def dismiss_price_alert(alert_id: str, current_user: dict = Depends(get_current_user)):
+    if current_user.get("role") not in ["admin", "super_admin"]:
+        raise HTTPException(status_code=403, detail="غير مسموح")
+    db = get_db()
+    res = await db.price_alerts.update_one(
+        {"id": alert_id},
+        {"$set": {"status": "dismissed", "dismissed_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="التنبيه غير موجود")
+    return {"message": "تم تجاهل التنبيه"}
+
 
 @router.get("/raw-materials-new")
 async def get_raw_materials(current_user: dict = Depends(get_current_user)):

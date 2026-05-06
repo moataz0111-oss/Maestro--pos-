@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="1" skipped="0" tests="9" time="6.990" timestamp="2026-05-06T13:23:34.359255+00:00" hostname="agent-env-fc058c68-717c-4edb-ba35-939ffd5a025a"><testcase classname="backend.tests.test_fifo_price_alerts.TestCostLayersEndpoint" name="test_cost_layers_for_existing_material" time="0.750" /><testcase classname="backend.tests.test_fifo_price_alerts.TestPriceAlertsListing" name="test_list_all" time="0.213" /><testcase classname="backend.tests.test_fifo_price_alerts.TestPriceAlertsListing" name="test_status_filter_unread" time="0.253" /><testcase classname="backend.tests.test_fifo_price_alerts.TestPriceAlertsListing" name="test_status_filter_dismissed" time="0.149" /><testcase classname="backend.tests.test_fifo_price_alerts.TestE2EFlow" name="test_e2e_increase_then_receipt_creates_layer" time="3.588" /><testcase classname="backend.tests.test_fifo_price_alerts.TestE2EFlow" name="test_e2e_within_threshold_no_alert" time="0.685" /><testcase classname="backend.tests.test_fifo_price_alerts.TestE2EFlow" name="test_e2e_decrease_creates_info_alert" time="0.894" /><testcase classname="backend.tests.test_fifo_price_alerts.TestPriceAlertsRBAC" name="test_unauth_returns_401_or_403" time="0.200" /><testcase classname="backend.tests.test_fifo_price_alerts.TestFIFOConsume" name="test_consume_fifo_drains_oldest" time="0.131"><failure message="KeyError: 'MONGO_URL'">backend/tests/test_fifo_price_alerts.py:289: in test_consume_fifo_drains_oldest
+    asyncio.get_event_loop().run_until_complete(runner())
+/usr/local/lib/python3.11/asyncio/base_events.py:654: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+backend/tests/test_fifo_price_alerts.py:247: in runner
+    mongo_url = os.environ["MONGO_URL"]
+                ^^^^^^^^^^^^^^^^^^^^^^^
+&lt;frozen os&gt;:679: in __getitem__
+    ???
+E   KeyError: 'MONGO_URL'</failure></testcase></testsuite></testsuites>

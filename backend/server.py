@@ -18499,6 +18499,76 @@ async def fix_yamen_orders_jadriya_20260503():
 
 
 
+@app.on_event("startup")
+async def seed_initial_cost_layers_v1():
+    """يُهيّء طبقة تكلفة أولية لكل مادة خام موجودة دون طبقات (one-shot).
+
+    لكل raw_material:
+    - إذا لم تكن لديها أي طبقة في material_cost_layers، نُنشئ طبقة واحدة بـ
+      remaining_quantity = quantity الحالية و unit_cost = cost_per_unit الحالية.
+    - هذا يضمن أن FIFO يعمل على البيانات السابقة دون فقدان المخزون.
+    """
+    try:
+        MIG_KEY = "seed_initial_cost_layers_v1"
+        done = await db.system_migrations.find_one({"key": MIG_KEY})
+        if done:
+            logger.info(f"🟢 Migration {MIG_KEY} already applied, skipping")
+            return
+
+        logger.info(f"🔧 Running migration: {MIG_KEY}")
+        seeded = 0
+        skipped = 0
+        async for mat in db.raw_materials.find({}, {"_id": 0}):
+            mat_id = mat.get("id")
+            if not mat_id:
+                continue
+            existing = await db.material_cost_layers.count_documents({"material_id": mat_id})
+            if existing > 0:
+                skipped += 1
+                continue
+            qty = float(mat.get("quantity", 0) or 0)
+            cost = float(mat.get("cost_per_unit", 0) or 0)
+            if qty <= 0 or cost <= 0:
+                # لا توجد كمية أو تكلفة لإنشاء طبقة منها
+                continue
+            await db.material_cost_layers.insert_one({
+                "id": str(uuid.uuid4()),
+                "tenant_id": mat.get("tenant_id"),
+                "material_id": mat_id,
+                "material_name": mat.get("name"),
+                "unit": mat.get("unit") or "كغم",
+                "unit_cost": cost,
+                "original_quantity": qty,
+                "remaining_quantity": qty,
+                "source": "opening_balance",
+                "source_id": None,
+                "source_number": "OPENING",
+                "received_at": mat.get("created_at") or datetime.now(timezone.utc).isoformat(),
+                "created_at": datetime.now(timezone.utc).isoformat(),
+                "status": "active",
+            })
+            seeded += 1
+
+        # فهارس للأداء
+        try:
+            await db.material_cost_layers.create_index([("material_id", 1), ("received_at", 1)])
+            await db.material_cost_layers.create_index([("tenant_id", 1), ("status", 1)])
+            await db.price_alerts.create_index([("tenant_id", 1), ("status", 1), ("triggered_at", -1)])
+        except Exception:
+            pass
+
+        await db.system_migrations.insert_one({
+            "key": MIG_KEY,
+            "executed_at": datetime.now(timezone.utc).isoformat(),
+            "seeded": seeded,
+            "skipped": skipped,
+        })
+        logger.info(f"✅ {MIG_KEY} — seeded={seeded}, skipped={skipped}")
+    except Exception as e:
+        logger.error(f"❌ seed_initial_cost_layers_v1 failed: {e}")
+
+
+
 
 # ==================== SYSTEM HEALTH & RELIABILITY APIS ====================
 
