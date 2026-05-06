@@ -234,6 +234,12 @@ export default function HR() {
   const [probeResult, setProbeResult] = useState(null);
   const [probeLoading, setProbeLoading] = useState(false);
 
+  // Account Statement states
+  const [statementOpen, setStatementOpen] = useState(false);
+  const [statementLoading, setStatementLoading] = useState(false);
+  const [statementData, setStatementData] = useState(null);
+  const [statementEmployee, setStatementEmployee] = useState(null);
+
   // فحص دوري لحالة الوسيط - heartbeat أولاً ثم localhost
   useEffect(() => {
     const checkAgent = async () => {
@@ -1099,6 +1105,31 @@ export default function HR() {
     printWindow.document.close();
   };
 
+  // Account Statement handlers
+  const openAccountStatement = async (employee) => {
+    setStatementEmployee(employee);
+    setStatementOpen(true);
+    setStatementLoading(true);
+    setStatementData(null);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await axios.get(`${API}/employees/${employee.id}/account-statement`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setStatementData(res.data);
+    } catch (error) {
+      toast.error(error.response?.data?.detail || t('فشل في جلب كشف الحساب'));
+    } finally {
+      setStatementLoading(false);
+    }
+  };
+
+  const printAccountStatement = () => {
+    // طباعة A4 عبر المتصفح
+    window.print();
+  };
+
+
   // Bonus handlers
   const handleCreateBonus = async (e) => {
     e.preventDefault();
@@ -1343,7 +1374,13 @@ export default function HR() {
   // Stats
   // === تصنيف الموظفين: فروع ↔ أقسام (مطبخ مركزي/مخزن/مشتريات) ===
   const departmentBranchIds = React.useMemo(() => {
-    return new Set(branches.filter(b => b.branch_type && b.branch_type !== 'branch').map(b => b.id));
+    const departmentTypes = new Set(['central_kitchen', 'warehouse', 'purchasing', 'kitchen']);
+    const namePattern = /(مطبخ|مخزن|مستودع|مشتريات|warehouse|kitchen|purchasing)/i;
+    return new Set(
+      branches
+        .filter(b => departmentTypes.has(b.branch_type) || (!b.branch_type ? false : b.branch_type !== 'branch') || namePattern.test(b.name || ''))
+        .map(b => b.id)
+    );
   }, [branches]);
   const branchEmployees = employees.filter(e => e.is_active && !departmentBranchIds.has(e.branch_id));
   const departmentEmployees = employees.filter(e => e.is_active && departmentBranchIds.has(e.branch_id));
@@ -1514,10 +1551,15 @@ export default function HR() {
       return;
     }
 
-    const activeEmployees = employees.filter(e => e.is_active !== false);
+    // === فلترة الموظفين حسب فرع الجهاز فقط ===
+    // كل جهاز بصمة خاص بفرع محدد، ويجب إصدار موظفي ذلك الفرع فقط
+    const activeEmployees = employees.filter(e => 
+      e.is_active !== false && 
+      (!device.branch_id || e.branch_id === device.branch_id)
+    );
     
     if (activeEmployees.length === 0) {
-      toast.error(t('لا يوجد موظفين نشطين'));
+      toast.error(t('لا يوجد موظفين نشطين في فرع هذا الجهاز'));
       setPushingAll(false);
       return;
     }
@@ -1598,6 +1640,16 @@ export default function HR() {
   return (
     <div className="min-h-screen bg-background" dir="rtl">
       <Toaster position="top-center" richColors />
+      <style>{`
+        @media print {
+          @page { size: A4; margin: 10mm; }
+          body { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+          /* عند فتح كشف الحساب - أخفِ كل شيء عدا المحتوى */
+          body:has(#account-statement-print) > *:not([role="dialog"]) { display: none !important; }
+          [role="dialog"] { position: static !important; transform: none !important; box-shadow: none !important; max-height: none !important; }
+          .print\\:hidden { display: none !important; }
+        }
+      `}</style>
       
       {/* Offline Banner */}
       {isOffline && (
@@ -2073,11 +2125,11 @@ export default function HR() {
                                 data-testid={`face-photo-${emp.id}`}>
                                 <Camera className="h-4 w-4" />
                               </Button>
-                              <Button size="sm" variant="outline" onClick={() => window.open(`/payroll/print/${emp.id}`, '_blank')} title={t('طباعة مفردات المرتب')}>
-                                <Printer className="h-4 w-4" />
-                              </Button>
-                              <Button size="sm" variant="outline" onClick={() => calculatePayroll(emp.id)} title={t('إنشاء كشف راتب')}>
+                              <Button size="sm" variant="outline" onClick={() => openAccountStatement(emp)} title={t('كشف حساب الموظف')} data-testid={`account-statement-${emp.id}`}>
                                 <FileText className="h-4 w-4" />
+                              </Button>
+                              <Button size="sm" variant="outline" onClick={() => calculatePayroll(emp.id)} title={t('إنشاء كشف راتب')} data-testid={`calc-payroll-emp-${emp.id}`}>
+                                <Calculator className="h-4 w-4" />
                               </Button>
                               <Button size="sm" variant="outline" onClick={() => {
                                 setEditingEmployee(emp);
@@ -2194,10 +2246,14 @@ export default function HR() {
                                   <Button 
                                     size="sm" 
                                     variant="outline"
-                                    onClick={() => window.print()}
-                                    title={t('طباعة')}
+                                    onClick={() => {
+                                      const fullEmp = employees.find(x => x.id === emp.id) || emp;
+                                      openAccountStatement(fullEmp);
+                                    }}
+                                    title={t('كشف حساب')}
+                                    data-testid={`statement-from-summary-${emp.id}`}
                                   >
-                                    <Printer className="h-4 w-4" />
+                                    <FileText className="h-4 w-4" />
                                   </Button>
                                 </div>
                               </td>
@@ -3318,9 +3374,31 @@ export default function HR() {
                 </div>
               )}
               {!pushingEmployee && (
-                <div className="p-3 bg-blue-500/10 rounded-lg">
-                  <p className="text-sm">{t('سيتم إصدار جميع الموظفين النشطين للجهاز المختار')}</p>
-                  <p className="text-sm font-bold mt-1">{t('عدد الموظفين')}: {employees.filter(e => e.is_active).length}</p>
+                <div className="p-3 bg-blue-500/10 rounded-lg" data-testid="push-all-info">
+                  {(() => {
+                    const dev = biometricDevices.find(d => d.id === selectedDevice);
+                    const devBranchId = dev?.branch_id;
+                    const branchName = devBranchId ? (branches.find(b => b.id === devBranchId)?.name || t('فرع الجهاز')) : null;
+                    const eligible = employees.filter(e => 
+                      e.is_active && (!devBranchId || e.branch_id === devBranchId)
+                    );
+                    return (
+                      <>
+                        <p className="text-sm">{t('سيتم إصدار موظفي هذا الجهاز فقط')}</p>
+                        {branchName && (
+                          <p className="text-xs text-blue-700 dark:text-blue-300 mt-1">
+                            {t('فرع الجهاز')}: <span className="font-bold">{branchName}</span>
+                          </p>
+                        )}
+                        <p className="text-sm font-bold mt-1" data-testid="push-all-eligible-count">
+                          {t('عدد الموظفين المؤهلين')}: {eligible.length}
+                        </p>
+                        {!devBranchId && dev && (
+                          <p className="text-xs text-amber-600 mt-1">{t('تنبيه: هذا الجهاز غير مرتبط بفرع — اربطه من تبويب أجهزة البصمة')}</p>
+                        )}
+                      </>
+                    );
+                  })()}
                 </div>
               )}
               <div>
@@ -3526,6 +3604,219 @@ export default function HR() {
             </div>
           </DialogContent>
         </Dialog>
+
+        {/* Account Statement Dialog */}
+        <Dialog open={statementOpen} onOpenChange={setStatementOpen}>
+          <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto" data-testid="account-statement-dialog">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <FileText className="h-5 w-5 text-primary" />
+                {t('كشف حساب الموظف')} {statementEmployee && `- ${statementEmployee.name}`}
+              </DialogTitle>
+            </DialogHeader>
+            {statementLoading ? (
+              <div className="py-12 flex flex-col items-center gap-3">
+                <div className="w-10 h-10 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+                <p className="text-muted-foreground">{t('جاري تحميل البيانات...')}</p>
+              </div>
+            ) : statementData ? (
+              <div className="space-y-4 print:p-6" id="account-statement-print">
+                {/* Header info */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 p-4 bg-muted/30 rounded-lg">
+                  <div>
+                    <p className="text-xs text-muted-foreground">{t('الاسم')}</p>
+                    <p className="font-bold">{statementData.employee?.name}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">{t('الوظيفة')}</p>
+                    <p className="font-medium">{statementData.employee?.position || '-'}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">{t('الفرع')}</p>
+                    <p className="font-medium">{statementData.branch?.name || '-'}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">{t('الراتب الأساسي')}</p>
+                    <p className="font-bold text-primary">{formatPrice(statementData.employee?.salary || 0)}</p>
+                  </div>
+                </div>
+
+                {/* Totals cards */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3" data-testid="statement-totals">
+                  <Card className="bg-red-500/10">
+                    <CardContent className="p-3 text-center">
+                      <p className="text-xs text-muted-foreground">{t('إجمالي الخصومات')}</p>
+                      <p className="text-lg font-bold text-red-500">{formatPrice(statementData.totals?.total_deductions || 0)}</p>
+                    </CardContent>
+                  </Card>
+                  <Card className="bg-green-500/10">
+                    <CardContent className="p-3 text-center">
+                      <p className="text-xs text-muted-foreground">{t('إجمالي المكافآت')}</p>
+                      <p className="text-lg font-bold text-green-500">{formatPrice(statementData.totals?.total_bonuses || 0)}</p>
+                    </CardContent>
+                  </Card>
+                  <Card className="bg-yellow-500/10">
+                    <CardContent className="p-3 text-center">
+                      <p className="text-xs text-muted-foreground">{t('السلف المتبقية')}</p>
+                      <p className="text-lg font-bold text-yellow-600">{formatPrice(statementData.totals?.remaining_advances || 0)}</p>
+                    </CardContent>
+                  </Card>
+                  <Card className="bg-cyan-500/10">
+                    <CardContent className="p-3 text-center">
+                      <p className="text-xs text-muted-foreground">{t('رواتب مصروفة')}</p>
+                      <p className="text-lg font-bold text-cyan-600">{formatPrice(statementData.totals?.total_paid_payrolls || 0)}</p>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {/* Deductions */}
+                <div>
+                  <h3 className="font-bold text-red-600 mb-2 flex items-center gap-2">
+                    <TrendingDown className="h-4 w-4" /> {t('الخصومات')} ({statementData.deductions?.length || 0})
+                  </h3>
+                  {statementData.deductions?.length > 0 ? (
+                    <div className="overflow-x-auto border rounded">
+                      <table className="w-full text-sm">
+                        <thead className="bg-red-50 dark:bg-red-950/20">
+                          <tr>
+                            <th className="p-2 text-right">{t('التاريخ')}</th>
+                            <th className="p-2 text-right">{t('النوع')}</th>
+                            <th className="p-2 text-right">{t('السبب')}</th>
+                            <th className="p-2 text-right">{t('المبلغ')}</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {statementData.deductions.map(d => (
+                            <tr key={d.id} className="border-t">
+                              <td className="p-2">{d.date}</td>
+                              <td className="p-2">{d.deduction_type}</td>
+                              <td className="p-2">{d.reason}</td>
+                              <td className="p-2 text-red-500 font-medium">-{formatPrice(d.amount)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : <p className="text-sm text-muted-foreground">{t('لا توجد خصومات')}</p>}
+                </div>
+
+                {/* Bonuses */}
+                <div>
+                  <h3 className="font-bold text-green-600 mb-2 flex items-center gap-2">
+                    <TrendingUp className="h-4 w-4" /> {t('المكافآت')} ({statementData.bonuses?.length || 0})
+                  </h3>
+                  {statementData.bonuses?.length > 0 ? (
+                    <div className="overflow-x-auto border rounded">
+                      <table className="w-full text-sm">
+                        <thead className="bg-green-50 dark:bg-green-950/20">
+                          <tr>
+                            <th className="p-2 text-right">{t('التاريخ')}</th>
+                            <th className="p-2 text-right">{t('النوع')}</th>
+                            <th className="p-2 text-right">{t('السبب')}</th>
+                            <th className="p-2 text-right">{t('المبلغ')}</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {statementData.bonuses.map(b => (
+                            <tr key={b.id} className="border-t">
+                              <td className="p-2">{b.date}</td>
+                              <td className="p-2">{b.bonus_type}</td>
+                              <td className="p-2">{b.reason}</td>
+                              <td className="p-2 text-green-500 font-medium">+{formatPrice(b.amount)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : <p className="text-sm text-muted-foreground">{t('لا توجد مكافآت')}</p>}
+                </div>
+
+                {/* Advances */}
+                <div>
+                  <h3 className="font-bold text-yellow-600 mb-2 flex items-center gap-2">
+                    <CreditCard className="h-4 w-4" /> {t('السلف')} ({statementData.advances?.length || 0})
+                  </h3>
+                  {statementData.advances?.length > 0 ? (
+                    <div className="overflow-x-auto border rounded">
+                      <table className="w-full text-sm">
+                        <thead className="bg-yellow-50 dark:bg-yellow-950/20">
+                          <tr>
+                            <th className="p-2 text-right">{t('التاريخ')}</th>
+                            <th className="p-2 text-right">{t('السبب')}</th>
+                            <th className="p-2 text-right">{t('المبلغ')}</th>
+                            <th className="p-2 text-right">{t('المتبقي')}</th>
+                            <th className="p-2 text-right">{t('الحالة')}</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {statementData.advances.map(a => (
+                            <tr key={a.id} className="border-t">
+                              <td className="p-2">{a.date || a.created_at?.slice(0,10)}</td>
+                              <td className="p-2">{a.reason || '-'}</td>
+                              <td className="p-2">{formatPrice(a.amount)}</td>
+                              <td className="p-2 text-yellow-600">{formatPrice(a.remaining_amount || 0)}</td>
+                              <td className="p-2"><Badge variant="outline">{a.status}</Badge></td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : <p className="text-sm text-muted-foreground">{t('لا توجد سلف')}</p>}
+                </div>
+
+                {/* Payrolls */}
+                <div>
+                  <h3 className="font-bold text-cyan-600 mb-2 flex items-center gap-2">
+                    <Banknote className="h-4 w-4" /> {t('كشوف الرواتب')} ({statementData.payrolls?.length || 0})
+                  </h3>
+                  {statementData.payrolls?.length > 0 ? (
+                    <div className="overflow-x-auto border rounded">
+                      <table className="w-full text-sm">
+                        <thead className="bg-cyan-50 dark:bg-cyan-950/20">
+                          <tr>
+                            <th className="p-2 text-right">{t('الشهر')}</th>
+                            <th className="p-2 text-right">{t('الراتب الأساسي')}</th>
+                            <th className="p-2 text-right">{t('المكافآت')}</th>
+                            <th className="p-2 text-right">{t('الخصومات')}</th>
+                            <th className="p-2 text-right">{t('استقطاع السلف')}</th>
+                            <th className="p-2 text-right">{t('صافي الراتب')}</th>
+                            <th className="p-2 text-right">{t('الحالة')}</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {statementData.payrolls.map(p => (
+                            <tr key={p.id} className="border-t">
+                              <td className="p-2 font-medium">{p.month}</td>
+                              <td className="p-2">{formatPrice(p.basic_salary)}</td>
+                              <td className="p-2 text-green-500">+{formatPrice(p.total_bonuses || 0)}</td>
+                              <td className="p-2 text-red-500">-{formatPrice(p.total_deductions || 0)}</td>
+                              <td className="p-2 text-yellow-600">-{formatPrice(p.advance_deduction || 0)}</td>
+                              <td className="p-2 font-bold text-cyan-600">{formatPrice(p.net_salary)}</td>
+                              <td className="p-2">{getPayrollStatusBadge(p.status)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : <p className="text-sm text-muted-foreground">{t('لا توجد كشوف رواتب')}</p>}
+                </div>
+
+                {/* Actions */}
+                <div className="flex justify-end gap-2 pt-4 border-t print:hidden">
+                  <Button variant="outline" onClick={() => setStatementOpen(false)} data-testid="close-statement-btn">
+                    {t('إغلاق')}
+                  </Button>
+                  <Button onClick={printAccountStatement} data-testid="print-statement-btn">
+                    <Printer className="h-4 w-4 ml-2" /> {t('طباعة A4')}
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <p className="text-center py-8 text-muted-foreground">{t('لا توجد بيانات')}</p>
+            )}
+          </DialogContent>
+        </Dialog>
+
       </div>
     </div>
   );

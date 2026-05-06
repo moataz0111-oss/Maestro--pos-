@@ -98,7 +98,7 @@
   },
   
   "test_credentials": {
-    "api_url": "https://paid-order-removal.preview.emergentagent.com",
+    "api_url": "https://hr-fixes-phase1.preview.emergentagent.com",
     "admin_email": "admin@maestroegp.com",
     "admin_password": "admin123"
   },

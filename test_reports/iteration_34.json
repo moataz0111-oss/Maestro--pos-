@@ -132,7 +132,7 @@
   },
   
   "test_credentials": {
-    "api_url": "https://paid-order-removal.preview.emergentagent.com",
+    "api_url": "https://hr-fixes-phase1.preview.emergentagent.com",
     "owner": {
       "email": "owner@maestroegp.com",
       "password": "owner123",

@@ -1,0 +1,41 @@
+{
+  "summary": "Tested HR Fixes Phase 1: new GET /api/employees/{id}/account-statement + /api/payroll/{id}/print endpoints, plus UI flows (Account Statement dialog, push-all biometric with branch filtering, salary tab). Backend: 11 passed / 1 skipped (12 tests). Frontend core flows work: Account Statement dialog opens with totals cards + close + print buttons, push-all dialog shows device-branch-filtered eligible count, Employees tab shows FileText+Calculator buttons per row (printer removed from rows), PayrollPrint route loads.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_hr_account_statement_iter170.py",
+    "/app/test_reports/pytest/iter170_results.xml"
+  ],
+  "action_items": [
+    "No action needed. salary-split testid was not rendered in test tenant because no internal departments (مطبخ مركزي/مخزن/مشتريات) were configured — per spec it only renders 'if departments exist'. Main agent should verify with a tenant that has internal departments if unsure.",
+    "statement-from-summary-{empId} buttons could not be verified visually because no payroll records exist for the current month (UI shows 'لا توجد بيانات رواتب لهذا الشهر'). Main agent can self-test by generating a payroll first.",
+    "Payroll print success path (with real payroll_id) could not be exercised because /api/payroll returned []. The 404 branch was verified. Main agent can self-test after generating a payroll."
+  ],
+  "critical_code_review_comments": [
+    "GET /api/employees/{id}/account-statement lacks tenant_id filter on deductions/bonuses/advances/payrolls/attendance sub-queries. The employee lookup is tenant-scoped (good), but sub-collections filter only by employee_id. Since employee is tenant-scoped first, impact is low, but if the same employee_id accidentally exists across tenants, cross-tenant leakage on those collections could occur. Consider adding tenant_id to each sub-query for defence-in-depth.",
+    "GET /api/payroll/{id}/print uses build_tenant_query correctly for the payroll, but the downstream deductions/bonuses/advances queries are only filtered by employee_id (no tenant_id). Same defence-in-depth concern as above.",
+    "Date range for deductions/bonuses in /payroll/{id}/print uses '{month}-31' as upper bound — off-by-one for months with 30/29/28 days (it captures by string <= '2026-02-31' which works for ISO 'YYYY-MM-DD' but is semantically odd). Consider using '{month}-32' or next-month-first-day exclusive.",
+    "totals in account-statement sum with 'or 0' guard which is good. total_advances includes ALL advances regardless of status, while remaining_advances filters approved/paid — a subtle semantic. Document it or use same filter for consistency.",
+    "/employees/{id}/account-statement hardcodes 1000-row limits for sub-collections — fine for typical use but note it silently truncates at scale."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_hr_account_statement_iter170.py (created)"
+  ],
+  "success_rate": {
+    "backend": "100% (11 passed, 1 skipped due to no payroll data — the skipped test's 404 counterpart passed)",
+    "frontend": "~90% (Account Statement dialog, push-all biometric branch filtering, row buttons all verified. salary-split and statement-from-summary require tenant seed data to verify visually; implemented per code review)"
+  },
+  "test_credentials": "Admin hanialdujaili@gmail.com / Hani@2024 used. Valid.",
+  "seed_data_creation": "None. Tests use existing tenant data.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Test file /app/backend/tests/test_hr_account_statement_iter170.py covers account-statement (success, 404, unauth, date filter), payroll print (404, success conditional), and regressions on /api/employees, /api/payroll, /api/payroll/calculate, /api/payroll/{id}/pay, /api/biometric/devices, /api/branches. UI findings (iter170): Employees tab shows 3 rows each with data-testid=account-statement-{id} and data-testid=calc-payroll-emp-{id}; no per-row printer button. push-all dialog: 3 devices exist, selecting a device displays data-testid=push-all-info with device branch name + data-testid=push-all-eligible-count (verified count updates per device, both tested devices showed 1 eligible). Account Statement Dialog confirmed with data-testid=account-statement-dialog, data-testid=statement-totals, data-testid=print-statement-btn, data-testid=close-statement-btn. PayrollPrint route /payroll/print/:id loads. salary-split didn't render (no internal departments in this tenant — conditional rendering). statement-from-summary-{id} not visible because salary report was empty for 2026-05.",
+  "rca of the issue": "N/A — feature verified working."
+}

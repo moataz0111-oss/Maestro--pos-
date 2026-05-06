@@ -702,3 +702,125 @@ async def generate_all_payrolls(month: str, current_user: dict = Depends(get_cur
             generated += 1
     
     return {"message": f"تم إنشاء {generated} كشف راتب"}
+
+
+
+@router.get("/payroll/{payroll_id}/print")
+async def get_payroll_print_data(payroll_id: str, current_user: dict = Depends(get_current_user)):
+    """جلب بيانات طباعة كشف الراتب"""
+    db = get_database()
+    query = build_tenant_query(current_user, {"id": payroll_id})
+    payroll = await db.payroll.find_one(query, {"_id": 0})
+
+    if not payroll:
+        raise HTTPException(status_code=404, detail="كشف الراتب غير موجود")
+
+    # جلب بيانات الموظف
+    employee = await db.employees.find_one({"id": payroll["employee_id"]}, {"_id": 0})
+
+    # جلب بيانات الفرع
+    branch = None
+    if employee and employee.get("branch_id"):
+        branch = await db.branches.find_one({"id": employee["branch_id"]}, {"_id": 0})
+
+    # تحديد نطاق التاريخ من الشهر
+    month = payroll.get("month", "")
+    start_date = f"{month}-01"
+    end_date = f"{month}-31"
+
+    deductions = await db.deductions.find({
+        "employee_id": payroll["employee_id"],
+        "date": {"$gte": start_date, "$lte": end_date}
+    }, {"_id": 0}).to_list(200)
+
+    bonuses = await db.bonuses.find({
+        "employee_id": payroll["employee_id"],
+        "date": {"$gte": start_date, "$lte": end_date}
+    }, {"_id": 0}).to_list(200)
+
+    advances = await db.advances.find({
+        "employee_id": payroll["employee_id"],
+        "status": {"$in": ["approved", "paid"]}
+    }, {"_id": 0}).to_list(200)
+
+    return {
+        "payroll": payroll,
+        "employee": employee,
+        "branch": branch,
+        "deductions": deductions,
+        "bonuses": bonuses,
+        "advances": advances,
+        "print_date": datetime.now(timezone.utc).isoformat()
+    }
+
+
+@router.get("/employees/{employee_id}/account-statement")
+async def get_employee_account_statement(
+    employee_id: str,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """كشف حساب الموظف الكامل: خصومات، مكافآت، سلف، رواتب"""
+    db = get_database()
+    tenant_id = get_user_tenant_id(current_user)
+
+    employee_query = {"id": employee_id}
+    if tenant_id:
+        employee_query["tenant_id"] = tenant_id
+    employee = await db.employees.find_one(employee_query, {"_id": 0})
+    if not employee:
+        raise HTTPException(status_code=404, detail="الموظف غير موجود")
+
+    branch = None
+    if employee.get("branch_id"):
+        branch = await db.branches.find_one({"id": employee["branch_id"]}, {"_id": 0})
+
+    # فلترة تاريخية اختيارية
+    date_filter = {}
+    if start_date and end_date:
+        date_filter = {"date": {"$gte": start_date, "$lte": end_date}}
+
+    deductions = await db.deductions.find(
+        {"employee_id": employee_id, **date_filter}, {"_id": 0}
+    ).sort("date", -1).to_list(1000)
+
+    bonuses = await db.bonuses.find(
+        {"employee_id": employee_id, **date_filter}, {"_id": 0}
+    ).sort("date", -1).to_list(1000)
+
+    advances = await db.advances.find(
+        {"employee_id": employee_id}, {"_id": 0}
+    ).sort("created_at", -1).to_list(1000)
+
+    payroll_query = {"employee_id": employee_id}
+    if start_date and end_date:
+        payroll_query["month"] = {"$gte": start_date[:7], "$lte": end_date[:7]}
+    payrolls = await db.payroll.find(payroll_query, {"_id": 0}).sort("month", -1).to_list(500)
+
+    attendance = await db.attendance.find(
+        {"employee_id": employee_id, **date_filter}, {"_id": 0}
+    ).sort("date", -1).to_list(2000)
+
+    totals = {
+        "total_deductions": sum(d.get("amount", 0) or 0 for d in deductions),
+        "total_bonuses": sum(b.get("amount", 0) or 0 for b in bonuses),
+        "total_advances": sum(a.get("amount", 0) or 0 for a in advances),
+        "remaining_advances": sum(a.get("remaining_amount", 0) or 0 for a in advances if a.get("status") in ["approved", "paid"]),
+        "total_paid_payrolls": sum(p.get("net_salary", 0) or 0 for p in payrolls if p.get("status") == "paid"),
+        "total_pending_payrolls": sum(p.get("net_salary", 0) or 0 for p in payrolls if p.get("status") != "paid"),
+        "attendance_days": len([a for a in attendance if a.get("status") in ["present", "late"]]),
+        "absent_days": len([a for a in attendance if a.get("status") == "absent"]),
+    }
+
+    return {
+        "employee": employee,
+        "branch": branch,
+        "deductions": deductions,
+        "bonuses": bonuses,
+        "advances": advances,
+        "payrolls": payrolls,
+        "attendance": attendance,
+        "totals": totals,
+        "generated_at": datetime.now(timezone.utc).isoformat()
+    }
