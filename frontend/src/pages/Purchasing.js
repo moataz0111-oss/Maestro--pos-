@@ -411,6 +411,22 @@ export default function Purchasing() {
     }
   };
 
+  // إرسال الفاتورة للمخزن (دخول المواد للمخزون كطبقات FIFO)
+  const [sendingToWarehouseId, setSendingToWarehouseId] = React.useState(null);
+  const handleSendToWarehouse = async (invoice) => {
+    if (!confirm(t('هل تريد إرسال هذه الفاتورة للمخزن؟ سيتم إضافة المواد للمخزون.'))) return;
+    setSendingToWarehouseId(invoice.id);
+    try {
+      await axios.post(`${API}/purchases-new/${invoice.id}/send-to-warehouse`, {}, { headers });
+      toast.success(t('تم إرسال الفاتورة للمخزن بنجاح'));
+      fetchData();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || t('فشل في إرسال الفاتورة للمخزن'));
+    } finally {
+      setSendingToWarehouseId(null);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -544,7 +560,7 @@ export default function Purchasing() {
                           </div>
                         </div>
                         
-                        {/* صورة الفاتورة */}
+                        {/* صورة الفاتورة + الإجراءات */}
                         <div className="flex flex-col gap-2 mr-4">
                           {invoice.image_data ? (
                             <button
@@ -557,6 +573,19 @@ export default function Purchasing() {
                             <div className="w-20 h-20 rounded-lg border flex items-center justify-center text-muted-foreground">
                               <ImageIcon className="h-8 w-8" />
                             </div>
+                          )}
+                          {/* إرسال للمخزن — يظهر فقط للفواتير غير المُحوّلة */}
+                          {invoice.status !== 'transferred' && (
+                            <Button
+                              size="sm"
+                              onClick={() => handleSendToWarehouse(invoice)}
+                              disabled={sendingToWarehouseId === invoice.id}
+                              className="bg-emerald-500 hover:bg-emerald-600 text-white text-xs"
+                              data-testid={`send-to-warehouse-${invoice.id}`}
+                            >
+                              <Send className="h-3.5 w-3.5 ml-1" />
+                              {sendingToWarehouseId === invoice.id ? t('جارٍ الإرسال...') : t('إرسال للمخزن')}
+                            </Button>
                           )}
                           <Button
                             variant="ghost"

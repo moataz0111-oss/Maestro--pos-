@@ -15,35 +15,44 @@ import { t } from "./utils/translations";
 
 import { useAutoSync } from "./hooks/useAutoSync";
 
-// Loading Component
+// Loading Component — شريط تحميل خفيف فوق الصفحة (غير معطّل للتنقل)
 const PageLoader = () => (
-  <div className="flex items-center justify-center min-h-screen bg-background">
-    <div className="flex flex-col items-center gap-4">
-      <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
-      <p className="text-muted-foreground">{t('loading')}</p>
+  <>
+    {/* شريط رفيع متحرك أعلى الصفحة بدلاً من شاشة التحميل الكاملة */}
+    <div className="fixed top-0 left-0 right-0 z-[100] h-1 bg-primary/20 overflow-hidden pointer-events-none">
+      <div className="h-full bg-primary animate-[slide_1s_ease-in-out_infinite]" style={{ width: '40%' }} />
     </div>
-  </div>
+    <style>{`
+      @keyframes slide {
+        0% { transform: translateX(-100%); }
+        100% { transform: translateX(350%); }
+      }
+    `}</style>
+  </>
 );
 
-// الصفحات الرئيسية - بدون lazy loading لتجنب شاشة التحميل
+// === الصفحات الرئيسية - بدون lazy loading لتنقل لحظي ===
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import POS from "./pages/POS";
 import Tables from "./pages/Tables";
 import Orders from "./pages/Orders";
+// === صفحات الأعمال اليومية للمالك - eager (تنقل لحظي) ===
+import HR from "./pages/HR";
+import Purchasing from "./pages/Purchasing";
+import WarehouseManufacturing from "./pages/WarehouseManufacturing";
+import Expenses from "./pages/Expenses";
+import Reports from "./pages/Reports";
+import Settings from "./pages/Settings";
 
 // الصفحات الثانوية - مع lazy loading
 const Inventory = lazy(() => import("./pages/Inventory"));
 const Delivery = lazy(() => import("./pages/Delivery"));
-const Settings = lazy(() => import("./pages/Settings"));
-const Reports = lazy(() => import("./pages/Reports"));
-const Expenses = lazy(() => import("./pages/Expenses"));
 // DriverPortal تم إزالته ودمجه في DriverApp
 const SuperAdmin = lazy(() => import("./pages/SuperAdmin"));
 const CallLogs = lazy(() => import("./pages/CallLogs"));
 const CallCenterDashboard = lazy(() => import("./pages/CallCenterDashboard"));
 const InstallApp = lazy(() => import("./pages/InstallApp"));
-const HR = lazy(() => import("./pages/HR"));
 const WarehouseTransfers = lazy(() => import("./pages/WarehouseTransfers"));
 const KitchenDisplay = lazy(() => import("./pages/KitchenDisplay"));
 const Loyalty = lazy(() => import("./pages/Loyalty"));
@@ -52,7 +61,6 @@ const Coupons = lazy(() => import("./pages/Coupons"));
 const PayrollPrint = lazy(() => import("./pages/PayrollPrint"));
 const Reservations = lazy(() => import("./pages/Reservations"));
 const SmartReports = lazy(() => import("./pages/SmartReports"));
-const Purchasing = lazy(() => import("./pages/Purchasing"));
 const BranchOrders = lazy(() => import("./pages/BranchOrders"));
 const SystemAdmin = lazy(() => import("./pages/SystemAdmin"));
 const CustomerMenu = lazy(() => import("./pages/CustomerMenu"));
@@ -61,7 +69,6 @@ const RestaurantSelector = lazy(() => import("./pages/RestaurantSelector"));
 const PurchasesPage = lazy(() => import("./pages/PurchasesPage"));
 const Ratings = lazy(() => import("./pages/Ratings"));
 const DriverApp = lazy(() => import("./pages/DriverApp"));
-const WarehouseManufacturing = lazy(() => import("./pages/WarehouseManufacturing"));
 const InventoryReports = lazy(() => import("./pages/InventoryReports"));
 const SystemContact = lazy(() => import("./pages/SystemContact"));
 const BreakEvenReport = lazy(() => import("./pages/BreakEvenReport"));
@@ -109,14 +116,7 @@ const ProtectedRoute = ({ children }) => {
   
   // فقط نعرض شاشة التحميل في التحميل الأولي جداً (أول مرة يفتح التطبيق)
   if (loading && !initialCheckDone && !hasCachedUser) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="text-center">
-          <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-          <p className="text-muted-foreground">جاري التحميل...</p>
-        </div>
-      </div>
-    );
+    return <PageLoader />;
   }
   
   // إذا لا يوجد token على الإطلاق، توجيه لصفحة الدخول
@@ -241,14 +241,7 @@ const PublicRoute = ({ children }) => {
   
   // Don't show loading for public routes after initial check
   if (showLoading && loading && !isAuthChecked()) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="text-center">
-          <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-          <p className="text-muted-foreground">جاري التحميل...</p>
-        </div>
-      </div>
-    );
+    return <PageLoader />;
   }
   
   // إذا كان مستخدم delivery، لا نعتبره authenticated للنظام الرئيسي
