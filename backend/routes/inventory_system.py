@@ -545,8 +545,8 @@ async def get_purchase(purchase_id: str):
 # ==================== PURCHASE REQUESTS (طلبات الشراء من المخزن) ====================
 
 @router.post("/warehouse-purchase-requests")
-async def create_warehouse_purchase_request(request: PurchaseRequestCreate):
-    """إنشاء طلب شراء من المخزن"""
+async def create_warehouse_purchase_request(request: PurchaseRequestCreate, current_user: dict = Depends(get_current_user)):
+    """إنشاء طلب شراء من المخزن — يبدأ بحالة pending_owner_approval"""
     db = get_db()
     
     # رقم تسلسلي
@@ -558,27 +558,230 @@ async def create_warehouse_purchase_request(request: PurchaseRequestCreate):
         "request_number": request_number,
         "items": request.items,
         "priority": request.priority,
-        "status": "pending",
+        "status": "pending_owner_approval",
         "notes": request.notes,
-        "created_by": "warehouse",
+        "created_by": current_user.get("id"),
+        "created_by_name": current_user.get("full_name") or current_user.get("username") or "warehouse",
         "created_at": datetime.now(timezone.utc).isoformat(),
-        "approved_by": None,
-        "approved_at": None
+        "tenant_id": current_user.get("tenant_id"),
+        # تتبع كامل لمراحل التدفق
+        "owner_approved_by": None,
+        "owner_approved_by_name": None,
+        "owner_approved_at": None,
+        "owner_rejected_reason": None,
+        "purchasing_handled_by": None,
+        "purchasing_handled_at": None,
+        "purchase_invoice_id": None,
+        "warehouse_received_by": None,
+        "warehouse_received_at": None,
     }
     
     await db.warehouse_purchase_requests.insert_one(request_doc)
     del request_doc["_id"]
     return request_doc
 
-@router.get("/warehouse-purchase-requests")
-async def get_warehouse_purchase_requests(status: Optional[str] = None):
-    """جلب طلبات الشراء"""
-    db = get_db()
+
+@router.post("/warehouse-purchase-requests/{request_id}/approve")
+async def approve_warehouse_purchase_request(
+    request_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """موافقة المالك على طلب الشراء — ينقله للمشتريات.
     
+    صلاحية المالك/المدير العام فقط.
+    """
+    if current_user.get("role") not in ["admin", "manager", "super_admin", "owner"]:
+        raise HTTPException(status_code=403, detail="فقط المالك/المدير يستطيع الموافقة")
+    
+    db = get_db()
+    req = await db.warehouse_purchase_requests.find_one({"id": request_id})
+    if not req:
+        raise HTTPException(status_code=404, detail="الطلب غير موجود")
+    if req.get("status") != "pending_owner_approval":
+        raise HTTPException(status_code=400, detail=f"حالة الطلب الحالية ({req.get('status')}) لا تسمح بالموافقة")
+    
+    await db.warehouse_purchase_requests.update_one(
+        {"id": request_id},
+        {"$set": {
+            "status": "approved_by_owner",
+            "owner_approved_by": current_user.get("id"),
+            "owner_approved_by_name": current_user.get("full_name") or current_user.get("username"),
+            "owner_approved_at": datetime.now(timezone.utc).isoformat(),
+        }}
+    )
+    return {"message": "تمت الموافقة وأُرسل الطلب للمشتريات", "request_id": request_id}
+
+
+@router.post("/warehouse-purchase-requests/{request_id}/reject")
+async def reject_warehouse_purchase_request(
+    request_id: str,
+    payload: dict,
+    current_user: dict = Depends(get_current_user)
+):
+    """رفض المالك لطلب الشراء."""
+    if current_user.get("role") not in ["admin", "manager", "super_admin", "owner"]:
+        raise HTTPException(status_code=403, detail="فقط المالك/المدير يستطيع الرفض")
+    
+    db = get_db()
+    req = await db.warehouse_purchase_requests.find_one({"id": request_id})
+    if not req:
+        raise HTTPException(status_code=404, detail="الطلب غير موجود")
+    if req.get("status") not in ["pending_owner_approval", "approved_by_owner"]:
+        raise HTTPException(status_code=400, detail="لا يمكن رفض هذا الطلب في حالته الحالية")
+    
+    reason = (payload or {}).get("reason", "")
+    await db.warehouse_purchase_requests.update_one(
+        {"id": request_id},
+        {"$set": {
+            "status": "rejected_by_owner",
+            "owner_approved_by": current_user.get("id"),
+            "owner_approved_by_name": current_user.get("full_name") or current_user.get("username"),
+            "owner_approved_at": datetime.now(timezone.utc).isoformat(),
+            "owner_rejected_reason": reason,
+        }}
+    )
+    return {"message": "تم رفض الطلب", "request_id": request_id}
+
+
+@router.post("/warehouse-purchase-requests/{request_id}/price-and-create-invoice")
+async def price_request_and_create_invoice(
+    request_id: str,
+    payload: dict,
+    current_user: dict = Depends(get_current_user)
+):
+    """قسم المشتريات يدخل اسم المورد + الأسعار + رقم الفاتورة، 
+    ويُنشئ فاتورة شراء (purchases_new) مرتبطة بطلب المخزن.
+    
+    payload: {
+        supplier_id: str,
+        invoice_number: str,
+        items: [{name, quantity, unit, cost_per_unit}],
+        total_amount: float,
+        payment_method: str,
+        payment_status: str,
+        notes: str (optional)
+    }
+    
+    الفاتورة تبدأ pending وتنتظر إرسالها للمخزن (مرحلة الاستلام).
+    """
+    if current_user.get("role") not in ["admin", "manager", "super_admin", "owner", "purchasing", "purchasing_keeper"]:
+        raise HTTPException(status_code=403, detail="غير مسموح")
+    
+    db = get_db()
+    req = await db.warehouse_purchase_requests.find_one({"id": request_id})
+    if not req:
+        raise HTTPException(status_code=404, detail="الطلب غير موجود")
+    if req.get("status") != "approved_by_owner":
+        raise HTTPException(status_code=400, detail="يجب أن يكون الطلب معتمداً من المالك")
+    
+    # إنشاء فاتورة شراء
+    last_purchase = await db.purchases_new.find_one(sort=[("purchase_number", -1)])
+    purchase_number = (last_purchase.get("purchase_number", 0) if last_purchase else 0) + 1
+    
+    supplier = await db.suppliers.find_one({"id": payload.get("supplier_id")}, {"_id": 0})
+    
+    items = payload.get("items", [])
+    items_with_totals = []
+    for item in items:
+        item_dict = dict(item)
+        item_dict["total_cost"] = float(item.get("quantity", 0)) * float(item.get("cost_per_unit", 0))
+        items_with_totals.append(item_dict)
+    
+    purchase_id = str(uuid.uuid4())
+    purchase_doc = {
+        "id": purchase_id,
+        "purchase_number": purchase_number,
+        "supplier_id": payload.get("supplier_id"),
+        "supplier_name": supplier.get("name") if supplier else payload.get("supplier_name"),
+        "invoice_number": payload.get("invoice_number"),
+        "invoice_image_url": None,
+        "items": items_with_totals,
+        "total_amount": payload.get("total_amount", sum(i["total_cost"] for i in items_with_totals)),
+        "payment_method": payload.get("payment_method", "cash"),
+        "payment_status": payload.get("payment_status", "paid"),
+        "status": "pending",
+        "notes": payload.get("notes"),
+        "linked_request_id": request_id,
+        "created_by": current_user.get("id"),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "tenant_id": current_user.get("tenant_id"),
+        "sent_to_warehouse_at": None,
+        "sent_to_warehouse_by": None,
+    }
+    await db.purchases_new.insert_one(purchase_doc)
+    
+    # تحديث طلب المخزن
+    await db.warehouse_purchase_requests.update_one(
+        {"id": request_id},
+        {"$set": {
+            "status": "priced_by_purchasing",
+            "purchasing_handled_by": current_user.get("id"),
+            "purchasing_handled_by_name": current_user.get("full_name") or current_user.get("username"),
+            "purchasing_handled_at": datetime.now(timezone.utc).isoformat(),
+            "purchase_invoice_id": purchase_id,
+        }}
+    )
+    
+    return {
+        "message": "تم تسعير الطلب وإنشاء الفاتورة. أرفق صورة الفاتورة ثم أرسلها للمخزن.",
+        "purchase_id": purchase_id,
+        "purchase_number": purchase_number,
+    }
+
+
+@router.post("/warehouse-purchase-requests/{request_id}/confirm-receipt")
+async def confirm_warehouse_receipt(
+    request_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """المخزن يؤكد استلام البضاعة → يُغلق الطلب نهائياً.
+    
+    الكميات تُضاف للمخزون عبر endpoint /purchases-new/{id}/send-to-warehouse القائم
+    (يتم استدعاؤه من الواجهة بعد تأكيد الاستلام).
+    """
+    db = get_db()
+    req = await db.warehouse_purchase_requests.find_one({"id": request_id})
+    if not req:
+        raise HTTPException(status_code=404, detail="الطلب غير موجود")
+    if req.get("status") != "priced_by_purchasing":
+        raise HTTPException(status_code=400, detail="الطلب غير جاهز للاستلام")
+    
+    await db.warehouse_purchase_requests.update_one(
+        {"id": request_id},
+        {"$set": {
+            "status": "received_by_warehouse",
+            "warehouse_received_by": current_user.get("id"),
+            "warehouse_received_by_name": current_user.get("full_name") or current_user.get("username"),
+            "warehouse_received_at": datetime.now(timezone.utc).isoformat(),
+        }}
+    )
+    return {"message": "تم تأكيد الاستلام", "request_id": request_id}
+
+
+@router.get("/warehouse-purchase-requests")
+async def get_warehouse_purchase_requests(
+    status: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """جلب طلبات الشراء.
+    
+    الحالات:
+    - pending_owner_approval: ينتظر موافقة المالك
+    - approved_by_owner: معتمد، ينتظر تسعير المشتريات
+    - rejected_by_owner: مرفوض
+    - priced_by_purchasing: تم تسعيره، ينتظر استلام المخزن
+    - received_by_warehouse: مستلم نهائياً (مغلق)
+    """
+    db = get_db()
     query = {}
     if status:
         query["status"] = status
-    
+    if current_user.get("tenant_id"):
+        query["$or"] = [
+            {"tenant_id": current_user["tenant_id"]},
+            {"tenant_id": {"$exists": False}},
+            {"tenant_id": None},
+        ]
     requests = await db.warehouse_purchase_requests.find(query, {"_id": 0}).sort("created_at", -1).to_list(1000)
     return requests
 

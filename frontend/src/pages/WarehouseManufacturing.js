@@ -101,6 +101,48 @@ export default function WarehouseManufacturing() {
   const [packagingMaterials, setPackagingMaterials] = useState([]);
   const [packagingRequests, setPackagingRequests] = useState([]);
   const [showAddPackagingDialog, setShowAddPackagingDialog] = useState(false);
+  
+  // === طلب شراء جديد للمشتريات (يبدأ بحالة pending_owner_approval) ===
+  const [showPurchaseRequestModal, setShowPurchaseRequestModal] = useState(false);
+  const [purchaseRequestItems, setPurchaseRequestItems] = useState([{ name: '', quantity: 0, unit: 'kg', notes: '' }]);
+  const [purchaseRequestPriority, setPurchaseRequestPriority] = useState('normal');
+  const [purchaseRequestNotes, setPurchaseRequestNotes] = useState('');
+  const [warehouseRequestsList, setWarehouseRequestsList] = useState([]);
+
+  // اجلب طلبات الشراء (للمالك لرؤية المعلقة، ولأمين المخزن لرؤية حالة طلباته)
+  const fetchPurchaseRequests = async () => {
+    try {
+      const res = await axios.get(`${API}/warehouse-purchase-requests`);
+      setWarehouseRequestsList(res.data || []);
+    } catch (_e) { /* ignore */ }
+  };
+
+  useEffect(() => {
+    fetchPurchaseRequests();
+    const id = setInterval(fetchPurchaseRequests, 30000);
+    return () => clearInterval(id);
+  }, []);
+
+  const approvePurchaseRequest = async (id) => {
+    try {
+      await axios.post(`${API}/warehouse-purchase-requests/${id}/approve`);
+      toast.success(t('تمت الموافقة وأُرسل الطلب للمشتريات'));
+      fetchPurchaseRequests();
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || t('فشل'));
+    }
+  };
+
+  const rejectPurchaseRequest = async (id) => {
+    const reason = window.prompt(t('سبب الرفض (اختياري):'), '') || '';
+    try {
+      await axios.post(`${API}/warehouse-purchase-requests/${id}/reject`, { reason });
+      toast.success(t('تم رفض الطلب'));
+      fetchPurchaseRequests();
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || t('فشل'));
+    }
+  };
   const [showAddPackagingStockDialog, setShowAddPackagingStockDialog] = useState(null);
   const [packagingForm, setPackagingForm] = useState({
     name: '',
@@ -1053,13 +1095,101 @@ export default function WarehouseManufacturing() {
                       </div>
                     </div>
                     <Button
-                      onClick={() => navigate('/purchasing')}
+                      onClick={() => {
+                        setPurchaseRequestItems([{ name: '', quantity: 0, unit: 'kg', notes: '' }]);
+                        setPurchaseRequestNotes('');
+                        setPurchaseRequestPriority('normal');
+                        setShowPurchaseRequestModal(true);
+                      }}
                       className="bg-green-500 hover:bg-green-600"
-                      data-testid="go-to-purchasing-btn"
+                      data-testid="open-purchase-request-modal-btn"
                     >
                       <ShoppingCart className="h-4 w-4 ml-2" />
-                      {t('المشتريات')}
+                      {t('إنشاء طلب شراء')}
                     </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+            
+            {/* === قسم: طلبات الشراء بانتظار موافقة المالك (للمالك فقط) === */}
+            {isAdmin && warehouseRequestsList.filter(r => r.status === 'pending_owner_approval').length > 0 && (
+              <Card className="border-orange-500/40 bg-orange-500/5" data-testid="owner-approval-section">
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Bell className="h-5 w-5 text-orange-500" />
+                    <span className="font-bold text-orange-600">{t('طلبات شراء بانتظار موافقتك')}</span>
+                    <Badge className="bg-orange-500 text-white">{warehouseRequestsList.filter(r => r.status === 'pending_owner_approval').length}</Badge>
+                  </div>
+                  <div className="space-y-3">
+                    {warehouseRequestsList.filter(r => r.status === 'pending_owner_approval').map(req => (
+                      <div key={req.id} className="p-3 bg-background rounded-lg border border-orange-500/30">
+                        <div className="flex items-start justify-between mb-2">
+                          <div>
+                            <p className="font-bold">#{req.request_number} — {req.created_by_name || t('المخزن')}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {new Date(req.created_at).toLocaleString('ar-EG')}
+                              {' · '}{t('الأولوية')}: <span className={
+                                req.priority === 'urgent' ? 'text-red-500 font-bold' :
+                                req.priority === 'high' ? 'text-orange-500 font-bold' : ''
+                              }>{
+                                req.priority === 'urgent' ? t('عاجل') :
+                                req.priority === 'high' ? t('عالية') :
+                                req.priority === 'low' ? t('منخفضة') : t('عادية')
+                              }</span>
+                            </p>
+                          </div>
+                          <div className="flex gap-2">
+                            <Button size="sm" className="bg-emerald-500 hover:bg-emerald-600" onClick={() => approvePurchaseRequest(req.id)} data-testid={`approve-pr-${req.id}`}>
+                              <CheckCircle className="h-4 w-4 ml-1" /> {t('موافقة')}
+                            </Button>
+                            <Button size="sm" variant="outline" className="border-red-500/50 text-red-500" onClick={() => rejectPurchaseRequest(req.id)} data-testid={`reject-pr-${req.id}`}>
+                              <X className="h-4 w-4 ml-1" /> {t('رفض')}
+                            </Button>
+                          </div>
+                        </div>
+                        <div className="text-sm space-y-1">
+                          {(req.items || []).map((it, i) => (
+                            <div key={i} className="flex items-center gap-2 text-muted-foreground">
+                              <span className="w-2 h-2 rounded-full bg-orange-400"></span>
+                              <span>{it.name}</span>
+                              <span className="text-xs">— {it.quantity} {it.unit}</span>
+                            </div>
+                          ))}
+                          {req.notes && <p className="text-xs italic mt-1">📝 {req.notes}</p>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+            
+            {/* قسم: طلبات الشراء الخاصة بأمين المخزن (لتتبع الحالة) */}
+            {isWarehouseKeeper && warehouseRequestsList.filter(r => ['pending_owner_approval', 'approved_by_owner', 'priced_by_purchasing'].includes(r.status)).length > 0 && (
+              <Card className="border-blue-500/30 bg-blue-500/5" data-testid="warehouse-my-requests">
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Clock className="h-5 w-5 text-blue-500" />
+                    <span className="font-bold text-blue-600">{t('طلبات الشراء قيد المعالجة')}</span>
+                  </div>
+                  <div className="space-y-2">
+                    {warehouseRequestsList.filter(r => ['pending_owner_approval', 'approved_by_owner', 'priced_by_purchasing'].includes(r.status)).map(req => {
+                      const statusLabel = {
+                        pending_owner_approval: { txt: t('بانتظار موافقة المالك'), color: 'bg-orange-500/20 text-orange-600' },
+                        approved_by_owner: { txt: t('معتمد — في المشتريات'), color: 'bg-blue-500/20 text-blue-600' },
+                        priced_by_purchasing: { txt: t('تم التسعير — جاهز للاستلام'), color: 'bg-emerald-500/20 text-emerald-600' },
+                      }[req.status] || { txt: req.status, color: 'bg-gray-500/20 text-gray-600' };
+                      return (
+                        <div key={req.id} className="flex items-center justify-between p-2 bg-background rounded border border-border">
+                          <div>
+                            <span className="font-bold">#{req.request_number}</span>
+                            <span className="text-xs text-muted-foreground mr-2">({(req.items || []).length} {t('صنف')})</span>
+                          </div>
+                          <Badge className={statusLabel.color}>{statusLabel.txt}</Badge>
+                        </div>
+                      );
+                    })}
                   </div>
                 </CardContent>
               </Card>
@@ -3129,6 +3259,163 @@ export default function WarehouseManufacturing() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowRequestHistoryDialog(false)}>
               {t('إغلاق')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ========== Modal: طلب شراء جديد (يُرسل للمالك للموافقة) ========== */}
+      <Dialog open={showPurchaseRequestModal} onOpenChange={setShowPurchaseRequestModal}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ShoppingCart className="h-5 w-5 text-green-500" />
+              {t('إنشاء طلب شراء جديد')}
+            </DialogTitle>
+            <p className="text-xs text-muted-foreground mt-2">
+              {t('ملاحظة: سيُرسل الطلب للمالك للموافقة قبل أن ينتقل لقسم المشتريات.')}
+            </p>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            {/* أولوية + ملاحظات */}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>{t('الأولوية')}</Label>
+                <Select value={purchaseRequestPriority} onValueChange={setPurchaseRequestPriority}>
+                  <SelectTrigger data-testid="pr-priority-select"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="low">{t('منخفضة')}</SelectItem>
+                    <SelectItem value="normal">{t('عادية')}</SelectItem>
+                    <SelectItem value="high">{t('عالية')}</SelectItem>
+                    <SelectItem value="urgent">{t('عاجل')}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>{t('ملاحظات (اختياري)')}</Label>
+                <Input
+                  value={purchaseRequestNotes}
+                  onChange={(e) => setPurchaseRequestNotes(e.target.value)}
+                  placeholder={t('مثال: لمطبخ الفرع الرئيسي...')}
+                  data-testid="pr-notes-input"
+                />
+              </div>
+            </div>
+
+            {/* جدول الأصناف */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <Label className="text-base font-bold">{t('الأصناف المطلوبة')}</Label>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setPurchaseRequestItems(prev => [...prev, { name: '', quantity: 0, unit: 'kg', notes: '' }])}
+                  data-testid="pr-add-item-btn"
+                >
+                  <Plus className="h-3 w-3 ml-1" /> {t('إضافة صنف')}
+                </Button>
+              </div>
+              <div className="space-y-2">
+                {purchaseRequestItems.map((item, idx) => (
+                  <div key={idx} className="grid grid-cols-12 gap-2 items-end p-2 rounded border border-border bg-card/50">
+                    <div className="col-span-5">
+                      <Label className="text-xs">{t('الصنف')}</Label>
+                      <Input
+                        value={item.name}
+                        onChange={(e) => {
+                          const v = [...purchaseRequestItems];
+                          v[idx].name = e.target.value;
+                          setPurchaseRequestItems(v);
+                        }}
+                        placeholder={t('اسم الصنف')}
+                        data-testid={`pr-item-name-${idx}`}
+                      />
+                    </div>
+                    <div className="col-span-3">
+                      <Label className="text-xs">{t('الكمية')}</Label>
+                      <Input
+                        type="number"
+                        value={item.quantity}
+                        onChange={(e) => {
+                          const v = [...purchaseRequestItems];
+                          v[idx].quantity = parseFloat(e.target.value) || 0;
+                          setPurchaseRequestItems(v);
+                        }}
+                        data-testid={`pr-item-qty-${idx}`}
+                      />
+                    </div>
+                    <div className="col-span-3">
+                      <Label className="text-xs">{t('الوحدة')}</Label>
+                      <Select
+                        value={item.unit}
+                        onValueChange={(val) => {
+                          const v = [...purchaseRequestItems];
+                          v[idx].unit = val;
+                          setPurchaseRequestItems(v);
+                        }}
+                      >
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="kg">{t('كجم')}</SelectItem>
+                          <SelectItem value="g">{t('جرام')}</SelectItem>
+                          <SelectItem value="liter">{t('لتر')}</SelectItem>
+                          <SelectItem value="piece">{t('قطعة')}</SelectItem>
+                          <SelectItem value="box">{t('كرتون')}</SelectItem>
+                          <SelectItem value="pack">{t('علبة')}</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="col-span-1">
+                      {purchaseRequestItems.length > 1 && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="text-red-500"
+                          onClick={() => {
+                            const v = purchaseRequestItems.filter((_, i) => i !== idx);
+                            setPurchaseRequestItems(v);
+                          }}
+                          data-testid={`pr-remove-item-${idx}`}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowPurchaseRequestModal(false)}>
+              {t('إلغاء')}
+            </Button>
+            <Button
+              className="bg-green-500 hover:bg-green-600"
+              data-testid="pr-submit-btn"
+              onClick={async () => {
+                const valid = purchaseRequestItems.filter(i => (i.name || '').trim() && parseFloat(i.quantity) > 0);
+                if (valid.length === 0) {
+                  toast.error(t('أضف صنفاً واحداً على الأقل بكمية صالحة'));
+                  return;
+                }
+                try {
+                  await axios.post(`${API}/warehouse-purchase-requests`, {
+                    items: valid,
+                    priority: purchaseRequestPriority,
+                    notes: purchaseRequestNotes,
+                  });
+                  toast.success(t('تم إرسال الطلب للمالك بنجاح ✓'));
+                  setShowPurchaseRequestModal(false);
+                } catch (err) {
+                  toast.error(err?.response?.data?.detail || t('فشل إرسال الطلب'));
+                }
+              }}
+            >
+              <Send className="h-4 w-4 ml-2" />
+              {t('إرسال للموافقة')}
             </Button>
           </DialogFooter>
         </DialogContent>

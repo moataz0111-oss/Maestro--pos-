@@ -127,7 +127,7 @@ export default function Purchasing() {
       const [invoicesRes, suppliersRes, requestsRes] = await Promise.all([
         axios.get(`${API}/purchase-invoices`, { headers }).catch(() => ({ data: [] })),
         axios.get(`${API}/purchase-suppliers`, { headers }).catch(() => ({ data: [] })),
-        axios.get(`${API}/warehouse-purchase-requests`, { headers }).catch(() => ({ data: [] }))
+        axios.get(`${API}/warehouse-purchase-requests`, { headers, params: { status: 'approved_by_owner' } }).catch(() => ({ data: [] }))
       ]);
       
       setInvoices(invoicesRes.data || []);

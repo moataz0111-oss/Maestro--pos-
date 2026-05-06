@@ -127,7 +127,17 @@ Multi-tenant POS system with biometric integration (ZKTeco), thermal receipt pri
 - **Driver Collected Cash → Cash Register Fix**: `collect_driver_payment` endpoint (`POST /api/drivers/{driver_id}/collect-payment` in `backend/routes/drivers_routes.py`) now also updates `payment_status="paid"` and `payment_method="cash"` for the collected orders (skips `card`/`credit`). Previously it only set `driver_payment_status="paid"` so the cash register report kept these orders in the "معلق" bucket instead of "نقدي". Also added migration `settle_driver_collected_orders_as_cash_v1` that retroactively fixes existing orders with `driver_payment_status="paid"` but `payment_status in [None, "", "pending", "unpaid"]`.
 - **Separate "نقدي السائقين" Line in Cash Register Closing**: Cash-register-closing and sales-analytics reports now split cash into two buckets: `نقدي` (direct restaurant cash, excludes delivery with driver_id) and `نقدي السائقين` (cash collected from delivery drivers after settlement). `expected_cash_in_drawer = cash + driver_cash - expenses`. Frontend Reports.js displays the new line conditionally (only if > 0) with truck icon and `data-testid="driver-cash-total"`.
 
-## May 3, 2026 - Fixes
+## May 6, 2026 - Purchasing Workflow Restructure
+- **Backend** (`/app/backend/routes/inventory_system.py`): Restructured warehouse purchase request lifecycle into 5 explicit statuses: `pending_owner_approval` → `approved_by_owner` (or `rejected_by_owner`) → `priced_by_purchasing` → `received_by_warehouse`. New endpoints:
+  - `POST /api/warehouse-purchase-requests` — creates request in `pending_owner_approval` (warehouse keeper)
+  - `POST /api/warehouse-purchase-requests/{id}/approve` — owner/admin only
+  - `POST /api/warehouse-purchase-requests/{id}/reject` — owner/admin only, accepts `reason`
+  - `POST /api/warehouse-purchase-requests/{id}/price-and-create-invoice` — purchasing dept enters supplier+invoice and atomically creates `purchases_new` doc linked via `linked_request_id`
+  - `POST /api/warehouse-purchase-requests/{id}/confirm-receipt` — warehouse confirms receipt
+- **Frontend** (`WarehouseManufacturing.js`): Removed `navigate('/purchasing')` button and replaced with **modal** that creates a request directly. Added two new sections:
+  - For **owner/admin**: orange "طلبات شراء بانتظار موافقتك" card with approve/reject buttons (auto-refresh every 30s).
+  - For **warehouse_keeper**: blue "طلبات الشراء قيد المعالجة" tracker showing each request's current state (pending owner / approved → at purchasing / priced → ready for receipt).
+- **Frontend** (`Purchasing.js`): Now fetches requests with `?status=approved_by_owner` filter, so the purchasing dept only sees requests already approved by the owner.
 - **Business Date Helper Endpoint**: Added `GET /api/business-date/current?branch_id=X` that returns the current business_date of the open shift (so a shift opened at 10pm and ending at 2am next day stays on the opening date). Returns `{business_date, calendar_date_iraq, has_open_shift, open_shift}`.
 - **Expenses Page Now Filters by Business Day**: `frontend/src/pages/Expenses.js` fetches `/api/business-date/current` on branch change and auto-sets `startDate=endDate=business_date`. A green badge "اليوم التشغيلي: YYYY-MM-DD" appears in the header when viewing the active business day.
 - **Cash Register Closing Stores business_date**: `POST /api/reports/cash-register-closing` now persists `business_date` and `shift_id` on the closing record. Migration `backfill_closing_business_date_v1` populates this field on existing records. Frontend Reports.js now shows a small green pill "📅 business_date" next to each shift header.
