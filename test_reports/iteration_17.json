@@ -83,7 +83,7 @@
   },
   
   "test_credentials": {
-    "api_url": "https://hr-fixes-phase1.preview.emergentagent.com",
+    "api_url": "https://multi-tenant-pos-28.preview.emergentagent.com",
     "admin_email": "admin@maestroegp.com",
     "admin_password": "admin123"
   },

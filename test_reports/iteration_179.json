@@ -54,7 +54,7 @@
     "frontend": "0% end-to-end (wrench never renders due to backend response gap); UI code review 100% correct"
   },
   "test_credentials": "Admin: hanialdujaili@gmail.com / Hani@2024 (used). Cashier role test not performed — blocked by primary issue.",
-  "seed_data_creation": "Created 1 sync order id=151ea9a6-6267-459c-8be6-43c3d764fece (offline_id=TEST_iter179_offline_*, customer_name='TEST iter179 wrong-routing', total=12000, is_offline_order=True in DB) — DELETED in cleanup at end of run.",
+  "seed_data_creation": "Created 1 sync order id=multi-tenant-pos-28 (offline_id=TEST_iter179_offline_*, customer_name='TEST iter179 wrong-routing', total=12000, is_offline_order=True in DB) — DELETED in cleanup at end of run.",
   "retest_needed": true,
   "main_agent_can_self_test": true,
   "context_for_next_testing_agent": "After main agent adds is_offline_order + original_order_number to OrderResponse, just login as admin, seed one sync order via POST /api/sync/orders with is_offline_order=true, navigate to /orders for today's date, and verify the wrench button is visible. The dialog markup itself is solid (verified by code read of Orders.js:698-846) — every required data-testid is present: fix-routing-dialog, fix-order-type, fix-payment-method, fix-payment-status, fix-customer-type, fix-delivery-company, fix-delivery-company-order-id, fix-routing-cancel, fix-routing-save. Also note: the orders list filters by today's date by default with no date picker, so always seed an order created today (created_at = now) for UI testing. POST /api/sync/orders correctly sets created_at to now if omitted.",

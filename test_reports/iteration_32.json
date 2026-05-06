@@ -82,7 +82,7 @@
   },
   
   "test_credentials": {
-    "api_url": "https://hr-fixes-phase1.preview.emergentagent.com",
+    "api_url": "https://multi-tenant-pos-28.preview.emergentagent.com",
     "client_graffiti": {
       "email": "hanialdujaili@gmail.com",
       "password": "graffiti123",

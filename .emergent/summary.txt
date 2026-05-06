@@ -1,11 +1,120 @@
-<analysis>POS.jsOrders.jsReports.jsserver.pyprint_queue.pyOrders.jsOrders.jsOrders.jsDELETE /api/orders/{id}/force-deletePOS.jsOrders.jsDELETE /api/orders/{id}/force-deleteserver.pyfrontend/src/pages/Orders.jsordersforce_deleted_ordersserver.pyDashboard.jsSettings.jsPOS.jsHR.jscustomer_namebranch_idsdaily_start/end_timesubtotal--no-cache.cachebustdeploy.ymlDockerfilebranch_typeGET /api/reports/products-by-channelProductsByChannelTab.jsprint_queue.pypreferred_paymentprint_queue.py
-/app
-├── frontend/
-│   ├── Dockerfile (Updated for yarn cache)
-│   ├── src/pages/ (Orders.js, POS.js, HR.js, Reports.js, Coupons.js)
-│   ├── src/components/reports/ProductsByChannelTab.js
-├── backend/
-│   ├── routes/ (print_queue.py, reports_routes.py)
-│   ├── server.py (Core Monolith - 20.6k lines)
-├── .github/workflows/deploy.yml
-.cachebustorderspreferred_paymentcancelled_itemscouponscustomer_namebranch_idsdaily_start_timedaily_end_timebranchesbranch_typeforce_deleted_ordersdeploy.ymlbuildx/app/frontend/src/pages/Orders.js/app/backend/server.pyforce-delete/app/frontend/src/pages/POS.js/app/frontend/src/pages/Reports.js/app/.github/workflows/deploy.yml/app/backend/server.pyDELETE /api/orders/{order_id}/force-deleteGET /api/coupons/search-by-customer-prefixGET /api/reports/products-by-channelPOST /api/print-queue/app/frontend/src/components/ui//app/memory/CHANGELOG.md/app/backend/tests/test_coupons_customer_iter170.pyGET /branches?include_departments=truecustomer_namenamecustomer_nameOrdersforce-deletetest_coupons_customer_iter170.py/app/memory/test_credentials.mdowner@maestroegp.comPOS.jsOrders.jsDELETE /api/orders/{id}/force-delete/app/frontend/src/pages/Orders.jscanSee('super_admin')DELETE /api/orders/{id}/force-delete/app/backend/server.pyforce_delete_unpaid_orderif order.get(payment_status) == paid</analysis>
+<analysis>**original_problem_statement**: 
+The user requested a massive set of fixes and enhancements for a Multi-tenant POS system. Initially, it involved fixing HR modules (biometric filtering, branch counts, employee statements, A4 printing). It then expanded to implementing Audio Low-Stock Alerts, an advanced FIFO (First-In-First-Out) Cost Layering system for inventory, resolving frontend navigation delays, adding detailed expense views in closing reports, and finally, fixing a critical bug where offline orders synced with incorrect chronological numbering and routing.
+
+**PRODUCT REQUIREMENTS**: Multi-tenant POS system with React frontend, FastAPI backend, MongoDB. Includes complex shift management ( logic), role-based workflows, Web Audio API notifications, offline-sync capabilities, and strict FIFO inventory cost accounting.
+
+**User's preferred language**: Arabic (العربية)
+**(INSTRUCT NEXT AGENT: You MUST automatically detect the user's primary language from their messages inside the <trajectory> tag and INSTRUCT next agent to respond in the user's preferred language, Arabic, only.)**
+
+**what currently exists?** 
+A robust React frontend and FastAPI backend. The system features a newly integrated FIFO cost layering service that automatically updates manufactured product costs, optimized instant frontend routing using , offline syncing that respects chronological  counters, and extensive startup migrations in  for automated data healing.
+
+**Last working item**: 
+    - Last item agent was working: Fixing the offline order numbering and routing sync issue. The agent aligned the offline counter to use the , created a migration () to fix existing messed-up order numbers, and added a UI (Wrench icon) in  for admins to manually correct the routing (payment method, delivery company) of synced offline orders while preserving the .
+    - Status: USER VERIFICATION PENDING
+    - Agent Testing Done: Y
+    - Which testing method agent to use? testing_agent_v3_fork
+    - User Testing Done: N
+
+**All Pending/In progress Issue list**:  
+  *(No active bugs or explicit issues pending. Awaiting user verification on the latest offline order routing fix.)*
+
+**In progress Task List**: 
+  *(None currently active.)*
+
+**Upcoming and Future Tasks**
+    - (P2) Refactor : Break down the monolithic file (21k+ lines) into modular routes (e.g., separating migrations, inventory logic).
+    - (P2) Refactor Frontend Monoliths: Break down , , , , and  into smaller components.
+
+**Completed work in this session**
+- HR Phase 1 fixes: Biometric push filtered by branch, excluded internal departments from branch count, added Employee Account Statement modal, routed reports to A4 printing. (DONE)
+- Low-Stock & 0-Stock Audio/Visual Alerts in Dashboard. (DONE)
+- FIFO Cost Tracking Phase 1 & 2: Added , updated purchasing/warehouse flow, and propagated cost changes to manufactured products. (DONE)
+- Edit/Delete UI for Raw Materials (locked if  is true). (DONE)
+- Frontend Performance: Removed Suspense fullscreen loader, added  top bar, and eager-loaded heavily used routes for instant navigation. (DONE)
+- Added Send to Warehouse UI and endpoint for legacy purchase invoices. (DONE)
+- Cash Register Closing Report: Added expandable details for Expenses to view individual line items. (DONE)
+- Offline Sync Fix: Aligned  to use , built renumbering migration, and added Admin UI in  to fix synced order routing. (DONE)
+
+**Earlier issues found/mentioned but not fixed**
+   - None.
+
+**Known issue recurrence from previous fork**
+  - None.
+
+**Code Architecture**
+
+
+**Key Technical Concepts**
+- React, FastAPI, MongoDB.
+- **FIFO Cost Layering**: Dynamic calculation tracking inventory batches to ensure actual cost is passed down to manufactured products.
+- **Offline Syncing**: Uses  and local device counters to align with server counters upon reconnection.
+- **Backend Migrations**: Heavily relies on  scripts in  to fix corrupt historical data.
+
+**key DB schema**
+  - : 
+  - : Added 
+  - : Dynamically evaluated  flag.
+  - : Tracks applied backend startup scripts.
+
+**changes in tech stack**
+  - Added  library in React for top-bar loading indicators.
+
+**All files of reference** 
+-  (New - core FIFO logic)
+-  (Updated offline sync logic)
+-  (Added routing fix UI)
+-  (Updated router loading logic)
+-  
+- 
+-  
+
+**Areas that need refactoring**:
+-  (>21k lines, needs splitting).
+- Large frontend files (, , ).
+
+**key api endpoints**
+- 
+- 
+- 
+
+**Critical Info for New Agent** 
+- **Language:** Reply strictly in **Arabic**.
+- **Offline Orders:** Do not tamper with the offline sync logic () without extreme care.  is critical for preventing order numbering drift.
+- **Migrations:**  has multiple idempotent startup scripts. If you modify database schemas, write a new startup migration instead of manually updating documents.
+- **Testing:** The previous agent relied heavily on  (Iterations 170-180). Continue this pattern for any backend/flow changes to catch regressions immediately.
+
+**documents and test reports created in this job** 
+  -  (Updated with FIFO, Alerts, and Sync fixes)
+  -  to 
+
+**Last 10 User Messages and any pending HUMAN messages** 
+1. (User) Asked for expense details to be expandable inside the Cash Register Closing report.
+2. (Agent) Implemented the expandable expense list in  and tested it.
+3. (User) Uploaded screenshots showing offline orders syncing with incorrect numbers (e.g., #13, #14) and asked for a fix to the sync logic and a way to correct existing bad orders.
+4. (Agent) Found root cause (sync counter was missing ). Fixed it and wrote a migration to renumber existing bad orders.
+5. (User) Prompted اكمل (Continue).
+6. (Agent) Fixed online/offline counter logic and aligned them perfectly.
+7. (User) Requested a way to manually edit the routing (delivery company, payment method) of the messed up offline orders so they appear correctly in reports.
+8. (Agent) Added  and backend logic.
+9. (User) Prompted اكمل (Continue).
+10. (Agent) Added the UI (Wrench icon) in  for Admins to fix routing. Tested E2E using  (iteration 180) which passed completely. (User has not yet replied).
+
+**Project Health Check:**
+- Broken: None.
+- Mocked: Thermal Printers (handled via local agent, expected to be offline in preview).
+
+**3rd Party Integrations** 
+- None actively added.
+
+**Testing status**
+  - Testing agent used after significant changes: YES (Iterations 170 through 180).
+  - Troubleshoot agent used after agent stuck in loop: NO
+  - Test files created: Handled internally by testing subagent (, etc.)
+  - Known regressions: None.
+
+**Credentials to test flow:**
+- Read  (Admin:  / )
+
+**What agent forgot to execute**
+- Nothing. The agent addressed every issue provided by the user up to the last prompt. Awaiting user verification on the final UI addition in .</analysis>
