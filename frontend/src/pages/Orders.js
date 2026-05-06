@@ -603,14 +603,16 @@ export default function Orders() {
                               <X className="h-4 w-4" />
                             </Button>
                           )}
-                          {/* تصحيح المسار للطلبات الأوفلاين (المالك/المدير فقط) */}
-                          {isAdmin && (order.is_offline_order || order.original_order_number) && (
+                          {/* تصحيح المسار - يظهر لمرة واحدة فقط للطلبات المعطوبة التي أعادت المهاجرة ترقيمها، ويختفي نهائياً بعد الإصلاح */}
+                          {isAdmin
+                            && order.renumbered_reason === 'fix_offline_sync_drift_v2'
+                            && !order.routing_fixed_at && (
                             <Button
                               size="sm"
                               variant="outline"
                               className="border-amber-500 text-amber-600 hover:bg-amber-50"
                               onClick={() => openFixRouting(order)}
-                              title={t('تصحيح مسار طلب أوفلاين')}
+                              title={t('تصحيح مسار طلب معطوب (مرة واحدة)')}
                               data-testid={`fix-routing-${order.id}`}
                             >
                               <Wrench className="h-4 w-4" />

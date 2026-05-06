@@ -215,3 +215,17 @@ Multi-tenant POS system with biometric integration (ZKTeco), thermal receipt pri
 
 ## Backlog (continued)
 - (P1) Audio low-stock alerts for owner — DONE in previous iteration.
+
+
+## Completed Features (Feb 7, 2026 - One-Time Routing Fix for Drifted Offline Orders)
+- **Problem**: Offline sync migration `renumber_offline_orders_chronologically_v2` corrected ~27 drifted order numbers but left them with wrong routing (dine_in/cash). The previous UI showed a Wrench icon for ALL offline orders — user feared it would become permanent noise and confuse tenants whose sync already works correctly after the `business_date` fix.
+- **Fix — Frontend (`Orders.js`)**: Wrench icon now shows **only** when `order.renumbered_reason === 'fix_offline_sync_drift_v2' && !order.routing_fixed_at`. New offline orders, already-fixed orders, and healthy orders never see it.
+- **Fix — Backend (`sync_routes.py` — `PATCH /api/sync/orders/{id}/fix-routing`)**: Added two guard checks:
+  - **400**: rejects if `renumbered_reason != 'fix_offline_sync_drift_v2'` (not a drifted order).
+  - **409**: rejects if `routing_fixed_at` is already set (one-time only per order).
+- **Self-tested**: Fix-once flow verified (27 drifted orders eligible; after fixing one, icon disappears; second fix attempt returns 409; other offline orders never show the icon).
+
+## Backlog (continued)
+- (P2) Refactor `/app/backend/server.py` (21k+ lines) into modular routes (migrations, inventory, HR).
+- (P2) Refactor `Dashboard.js`, `Settings.js`, `POS.js`, `HR.js`, `WarehouseManufacturing.js` into smaller components.
+- (P3) Bulk routing-fix tool (fix multiple drifted orders at once) — optional, currently per-order is sufficient.

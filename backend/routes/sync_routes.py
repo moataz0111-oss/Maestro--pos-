@@ -328,6 +328,19 @@ async def fix_order_routing(
     if not existing:
         raise HTTPException(status_code=404, detail="الطلب غير موجود")
 
+    # حماية: الطلب يجب أن يكون من الطلبات المعطوبة التي أعادت المهاجرة ترقيمها
+    # ولم يُصلَّح بعد — الأيقونة/الإصلاح يعمل لمرة واحدة فقط لكل طلب.
+    if existing.get("renumbered_reason") != "fix_offline_sync_drift_v2":
+        raise HTTPException(
+            status_code=400,
+            detail="هذا الطلب غير مؤهل لتصحيح المسار (ليس من الطلبات المعطوبة)"
+        )
+    if existing.get("routing_fixed_at"):
+        raise HTTPException(
+            status_code=409,
+            detail="تم تصحيح مسار هذا الطلب مسبقاً — لا يمكن تعديله مرة أخرى"
+        )
+
     update_set = {}
     audit_old = {}
     fields_to_check = [
