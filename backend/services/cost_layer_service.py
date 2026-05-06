@@ -144,7 +144,7 @@ async def consume_fifo(
 
 async def reconcile_layers_with_quantity(db, material_id: str, tenant_id: Optional[str] = None):
     """مُصالحة: إذا تبيّن أن raw_materials.quantity أقل من مجموع الطبقات (نتيجة استهلاك خارج FIFO)،
-    نسحب الفرق من الأقدم. هذه طريقة دفاعية لأن بعض نقاط الاستهلاك (POS/تصنيع) ما تزال تستخدم $inc مباشر.
+    نسحب الفرق من الأقدم. هذه طريقة دفاعية لأن بعض نقاط الاستهلاك ما تزال تستخدم $inc مباشر.
     """
     query = {"id": material_id}
     if tenant_id:
@@ -232,3 +232,87 @@ async def detect_price_increase(
     await db.price_alerts.insert_one(alert)
     alert.pop("_id", None)
     return alert
+
+
+
+async def propagate_cost_to_products(
+    db,
+    *,
+    material_id: str,
+    tenant_id: Optional[str] = None,
+) -> dict:
+    """يُحدّث raw_material_cost في المنتجات المصنعة (manufactured_products) و POS products
+    التي تستخدم هذه المادة في وصفتها — يعكس السعر الفعلي الجديد بعد تغير طبقات FIFO.
+    
+    يُرجع: {updated_manufactured: int, updated_pos: int}
+    """
+    # السعر الحالي للمادة
+    mat_q = {"id": material_id}
+    if tenant_id:
+        mat_q["tenant_id"] = tenant_id
+    mat = await db.raw_materials.find_one(mat_q, {"_id": 0, "cost_per_unit": 1, "name": 1})
+    if not mat:
+        return {"updated_manufactured": 0, "updated_pos": 0}
+    new_cost = float(mat.get("cost_per_unit", 0) or 0)
+    if new_cost <= 0:
+        return {"updated_manufactured": 0, "updated_pos": 0}
+
+    updated_mfg = 0
+    updated_pos = 0
+
+    # 1) المنتجات المصنعة (manufactured_products)
+    mfg_query = {"recipe.raw_material_id": material_id}
+    if tenant_id:
+        mfg_query["tenant_id"] = tenant_id
+    async for prod in db.manufactured_products.find(mfg_query, {"_id": 0}):
+        # حدّث cost_per_unit للمكوّن داخل الوصفة + إعادة حساب raw_material_cost
+        recipe = prod.get("recipe", []) or []
+        new_recipe = []
+        total_cost = 0.0
+        for ing in recipe:
+            ing_copy = dict(ing)
+            if ing.get("raw_material_id") == material_id:
+                ing_copy["cost_per_unit"] = new_cost
+            qty = float(ing_copy.get("quantity", 0) or 0)
+            cost = float(ing_copy.get("cost_per_unit", 0) or 0)
+            total_cost += qty * cost
+            new_recipe.append(ing_copy)
+        selling = float(prod.get("selling_price", 0) or 0)
+        await db.manufactured_products.update_one(
+            {"id": prod["id"]},
+            {"$set": {
+                "recipe": new_recipe,
+                "raw_material_cost": round(total_cost, 4),
+                "profit_margin": (selling - total_cost) if selling > 0 else 0,
+                "last_cost_recalc_at": datetime.now(timezone.utc).isoformat(),
+            }}
+        )
+        updated_mfg += 1
+
+    # 2) منتجات POS (products) التي تستخدم هذه المادة في recipe (إن وُجدت)
+    pos_query = {"recipe.material_id": material_id}
+    if tenant_id:
+        pos_query["tenant_id"] = tenant_id
+    async for prod in db.products.find(pos_query, {"_id": 0}):
+        recipe = prod.get("recipe", []) or []
+        new_recipe = []
+        total_cost = 0.0
+        for ing in recipe:
+            ing_copy = dict(ing)
+            if ing.get("material_id") == material_id:
+                ing_copy["cost_per_unit"] = new_cost
+            qty = float(ing_copy.get("quantity", 0) or 0)
+            cost = float(ing_copy.get("cost_per_unit", 0) or 0)
+            total_cost += qty * cost
+            new_recipe.append(ing_copy)
+        await db.products.update_one(
+            {"id": prod["id"]},
+            {"$set": {
+                "recipe": new_recipe,
+                "cost_per_unit": round(total_cost, 4),
+                "last_cost_recalc_at": datetime.now(timezone.utc).isoformat(),
+            }}
+        )
+        updated_pos += 1
+
+    return {"updated_manufactured": updated_mfg, "updated_pos": updated_pos}

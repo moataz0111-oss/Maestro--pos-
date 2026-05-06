@@ -1,0 +1,54 @@
+{
+  "summary": "Phase 2 FIFO cost propagation tested. Core FIFO consumption in fulfill endpoint works correctly (oldest layer drains first, weighted-average cost on manufacturing_inventory is accurate, raw_materials.cost_per_unit auto-updates, cost_propagation array is returned). HOWEVER: propagate_cost_to_products returns updated_manufactured=0 in real flow because manufactured_products documents are created WITHOUT a tenant_id field, and the helper filters by tenant_id. Net: cost changes are correctly tracked & response includes cost_propagation, but downstream manufactured_products & POS products are NOT actually being updated for any tenant-scoped call.",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "POST /api/manufactured-products (create_manufactured_product) + propagate_cost_to_products",
+        "issue": "create_manufactured_product endpoint does NOT persist tenant_id on the document (no Depends(get_current_user)). As a result, propagate_cost_to_products(db, material_id, tenant_id=<real_tenant>) filters by tenant_id and finds 0 matches. Verified: db.manufactured_products.count_documents({'tenant_id': '47b57008-...'}) = 0 out of 2 total docs. The fulfill endpoint correctly identifies cost_changed_materials and calls propagate_cost_to_products, but every call returns {updated_manufactured: 0, updated_pos: 0}, so manufactured products' raw_material_cost NEVER auto-updates in production flow. Manual verification by main agent worked only because they likely called the helper with tenant_id=None (confirmed: with tenant_id=None helper updates 1 product; with tenant_id=TENANT_ID it updates 0).",
+        "priority": "CRITICAL"
+      },
+      {
+        "endpoint": "POST /api/products (POS products)",
+        "issue": "Same root cause likely affects POS products — only 1 out of 22 products in DB has tenant_id set. propagate_cost_to_products will return updated_pos=0 for tenant-scoped calls even when products reference a material in recipe.",
+        "priority": "HIGH"
+      }
+    ],
+    "minor": [
+      {
+        "endpoint": "POST /api/manufacturing-requests/{id}/fulfill",
+        "issue": "raw_materials.quantity is updated with a raw $inc: -quantity separately from FIFO layer drain. In the test environment raw_materials.quantity (241) was already larger than sum(layer.remaining) (140) before the test, indicating pre-existing drift between FIFO layers and raw_materials.quantity. reconcile_layers_with_quantity helper exists but is not invoked before fulfill — any consume path that bypasses FIFO will grow this drift. Consider calling reconcile before consume_fifo."
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_fifo_fulfill_propagation_iter173.py",
+    "/app/test_reports/pytest/iter173_fifo_fulfill.xml"
+  ],
+  "action_items": [
+    "1) Add Depends(get_current_user) to POST /api/manufactured-products and persist tenant_id on the document (same as done for warehouse-purchase-requests). Do the same for POS /api/products create endpoint if it also lacks it.",
+    "2) Write a one-time backfill script that sets tenant_id on existing manufactured_products (and products) docs based on admin-single-tenant assumption or via audit_logs owner lookup.",
+    "3) After 1+2, re-run /app/backend/tests/test_fifo_fulfill_propagation_iter173.py — it should go 4/4.",
+    "4) Optional: call reconcile_layers_with_quantity(material_id) at the start of fulfill_manufacturing_request to heal any drift between FIFO layers and raw_materials.quantity before consume_fifo runs."
+  ],
+  "critical_code_review_comments": [
+    "create_manufactured_product at inventory_system.py:2264 lacks current_user dependency and tenant_id — breaks multi-tenant isolation AND breaks propagate_cost_to_products real-world flow. Same smell should be checked in POST /api/products.",
+    "propagate_cost_to_products applies tenant_id filter strictly (ok). But since it is the tenant check, the bug is upstream (missing tenant_id on docs).",
+    "fulfill endpoint increments/decrements raw_materials.quantity outside consume_fifo — risk of divergence. Consider single source of truth: consume_fifo updates raw_materials.quantity too.",
+    "inventory_system.py is now 3464 lines — should split into: cost_layers.py / manufacturing.py / purchase_requests.py routers."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_fifo_fulfill_propagation_iter173.py (new)"
+  ],
+  "success_rate": {"backend": "50% (1 passed preflight + 1 skipped + 2 failed due to same root cause tenant_id bug; FIFO mechanics themselves all verified via DB inspection — see rca)", "frontend": "N/A (skipped per request)"},
+  "test_credentials": "admin: hanialdujaili@gmail.com / Hani@2024",
+  "seed_data_creation": "Created 1 supplier TEST_SUP_173 and 1 warehouse-purchase-request + invoice at 700/kg for طماطم 30kg to add a new FIFO layer with different unit_cost (required for testing cost-change propagation). Current layers state on طماطم: [500 depleted, 600 depleted, 600 depleted, 700 active@25kg]; raw_materials.quantity=126, cost_per_unit=700. TEST_X manufactured_products were created during tests and cleaned up afterwards.",
+  "retest_needed": true,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Run /app/backend/tests/test_fifo_fulfill_propagation_iter173.py. If it still shows updated_manufactured=0, the tenant_id fix has not been applied. To make the preflight pass, ensure tomato has ≥2 active layers with ≥2 distinct unit_cost values (add a purchase at a new price if needed — see test_fifo_price_alerts.py for helpers). After a successful run the test will drain all same-priced older layers then take 5kg from the next-priced layer; raw_materials.quantity decreases by consume_qty and cost_per_unit moves to the next layer's price. Manufacturing_inventory weighted-avg assertion uses tolerance 0.5.",
+  "rca_of_the_issue": "Root cause: manufactured_products documents are inserted without a tenant_id field (create endpoint at inventory_system.py:2264 does not depend on get_current_user). propagate_cost_to_products in cost_layer_service.py:238 adds tenant_id to its mongo filter when provided, so every tenant-scoped call from fulfill_manufacturing_request (which always passes current_user.tenant_id) returns 0 matches. Reproduction: (a) db.manufactured_products.count_documents({tenant_id:'47b...'}) = 0 and = 2 without tenant filter. (b) Calling propagate_cost_to_products(db, material_id=TOMATO_ID, tenant_id=None) returns updated_manufactured=1; with tenant_id=TENANT_ID returns 0. Otherwise FIFO mechanics are verified correct via DB inspection: after fulfill, oldest layers were depleted in order, manufacturing_inventory.cost_per_unit=612.5 matches weighted-avg (15*600+20*600+5*700)/40, raw_materials.cost_per_unit auto-updated to 700 (next-oldest active layer). Mitigation: persist tenant_id in create_manufactured_product (inject via Depends(get_current_user)); backfill existing docs; optionally re-run propagate after backfill."
+}

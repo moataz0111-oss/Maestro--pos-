@@ -20,6 +20,7 @@ from services.cost_layer_service import (
     consume_fifo,
     reconcile_layers_with_quantity,
     detect_price_increase,
+    propagate_cost_to_products,
     PRICE_DIFF_THRESHOLD_PERCENT,
 )
 
@@ -1910,9 +1911,13 @@ async def get_manufacturing_requests(status: Optional[str] = None):
     return requests
 
 @router.post("/manufacturing-requests/{request_id}/fulfill")
-async def fulfill_manufacturing_request(request_id: str):
-    """تنفيذ طلب التصنيع (تحويل المواد من المخزن للتصنيع)"""
+async def fulfill_manufacturing_request(
+    request_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """تنفيذ طلب التصنيع (تحويل المواد من المخزن للتصنيع) — مع استهلاك FIFO."""
     db = get_db()
+    tenant_id = current_user.get("tenant_id")
     
     # جلب الطلب
     request = await db.manufacturing_requests.find_one({"id": request_id}, {"_id": 0})
@@ -1943,11 +1948,24 @@ async def fulfill_manufacturing_request(request_id: str):
         )
     
     # تنفيذ التحويل - خصم من المخزن وإضافة لمخزون التصنيع
+    cost_changed_materials = []
     for item in request.get("items", []):
         material_id = item.get("material_id")
         quantity = item.get("quantity")
         
-        # خصم من المواد الخام
+        # السعر الحالي قبل الاستهلاك (للمقارنة بعد FIFO)
+        before_mat = await db.raw_materials.find_one({"id": material_id}, {"_id": 0, "cost_per_unit": 1})
+        cost_before = float(before_mat.get("cost_per_unit", 0) or 0) if before_mat else 0
+        
+        # === FIFO: خصم من الطبقات الأقدم أولاً ===
+        # consume_fifo يُحدّث: layers + raw_materials.cost_per_unit (لأقدم طبقة نشطة)
+        fifo_result = await consume_fifo(
+            db,
+            material_id=material_id,
+            quantity=quantity,
+            tenant_id=tenant_id,
+        )
+        # تحديث raw_materials.quantity (consume_fifo لا يُعدّلها)
         await db.raw_materials.update_one(
             {"id": material_id},
             {
@@ -1955,6 +1973,11 @@ async def fulfill_manufacturing_request(request_id: str):
                 "$set": {"last_updated": datetime.now(timezone.utc).isoformat()}
             }
         )
+        # التكلفة المرجّحة لما تم استهلاكه (للتحويل لمخزون التصنيع)
+        weighted_cost = fifo_result.get("weighted_avg_cost") or item.get("cost_per_unit", 0)
+        new_effective = fifo_result.get("new_effective_cost")
+        if new_effective is not None and abs(new_effective - cost_before) > 0.001:
+            cost_changed_materials.append(material_id)
         
         # إضافة لمخزون التصنيع
         existing = await db.manufacturing_inventory.find_one({"material_id": material_id})
@@ -1963,7 +1986,10 @@ async def fulfill_manufacturing_request(request_id: str):
                 {"material_id": material_id},
                 {
                     "$inc": {"quantity": quantity},
-                    "$set": {"last_updated": datetime.now(timezone.utc).isoformat()}
+                    "$set": {
+                        "last_updated": datetime.now(timezone.utc).isoformat(),
+                        "cost_per_unit": weighted_cost,  # تحديث للتكلفة المرجّحة الأخيرة
+                    }
                 }
             )
         else:
@@ -1974,7 +2000,7 @@ async def fulfill_manufacturing_request(request_id: str):
                 "material_name": item.get("material_name"),
                 "quantity": quantity,
                 "unit": item.get("unit"),
-                "cost_per_unit": item.get("cost_per_unit", 0),
+                "cost_per_unit": weighted_cost,
                 "last_updated": datetime.now(timezone.utc).isoformat(),
                 "created_at": datetime.now(timezone.utc).isoformat()
             })
@@ -1999,7 +2025,17 @@ async def fulfill_manufacturing_request(request_id: str):
         "created_at": datetime.now(timezone.utc).isoformat()
     })
     
-    return {"message": "تم تنفيذ الطلب وتحويل المواد للتصنيع", "request_id": request_id}
+    # === تحديث تكلفة المنتجات المصنعة و POS تلقائياً للمواد التي تغيّر سعرها ===
+    propagated_summary = []
+    for mid in cost_changed_materials:
+        result = await propagate_cost_to_products(db, material_id=mid, tenant_id=tenant_id)
+        propagated_summary.append({"material_id": mid, **result})
+    
+    return {
+        "message": "تم تنفيذ الطلب وتحويل المواد للتصنيع",
+        "request_id": request_id,
+        "cost_propagation": propagated_summary,
+    }
 
 
 @router.patch("/manufacturing-requests/{request_id}/status")
