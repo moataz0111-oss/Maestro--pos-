@@ -346,16 +346,21 @@ async def fix_order_routing(
     update_set["routing_fixed_at"] = datetime.now(timezone.utc).isoformat()
     update_set["routing_fixed_by"] = current_user.get("id")
     update_set["routing_fixed_by_name"] = current_user.get("full_name") or current_user.get("username")
-    update_set["routing_fix_history"] = (existing.get("routing_fix_history") or []) + [{
+    update_set["updated_at"] = datetime.now(timezone.utc).isoformat()
+
+    history_entry = {
         "fixed_at": datetime.now(timezone.utc).isoformat(),
         "fixed_by": current_user.get("id"),
         "fixed_by_name": current_user.get("full_name") or current_user.get("username"),
         "old_values": audit_old,
         "new_values": {k: v for k, v in update_set.items() if k in fields_to_check},
-    }]
-    update_set["updated_at"] = datetime.now(timezone.utc).isoformat()
+    }
 
-    await db.orders.update_one({"id": order_id}, {"$set": update_set})
+    # $push آمن من race conditions (atomic append)
+    await db.orders.update_one(
+        {"id": order_id},
+        {"$set": update_set, "$push": {"routing_fix_history": history_entry}}
+    )
 
     return SyncResult(
         success=True,

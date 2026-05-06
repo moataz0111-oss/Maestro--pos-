@@ -33,7 +33,8 @@ import {
   Bell,
   WifiOff,
   Cloud,
-  CloudOff
+  CloudOff,
+  Wrench
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -65,6 +66,14 @@ export default function Orders() {
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [selectedOrder, setSelectedOrder] = useState(null);
+  // === تصحيح مسار طلب أوفلاين سُجّل بمسار خاطئ (للمالك) ===
+  const [fixRoutingOrder, setFixRoutingOrder] = useState(null);
+  const [fixForm, setFixForm] = useState({
+    order_type: 'dine_in', payment_method: 'cash', payment_status: 'paid',
+    customer_type: 'regular', delivery_company_name: '', delivery_company_order_id: '',
+    customer_name: '', customer_phone: '', delivery_address: '', notes: '',
+  });
+  const [fixSubmitting, setFixSubmitting] = useState(false);
   
   // Sound notification state
   const [soundEnabled, setSoundEnabled] = useState(() => {
@@ -231,6 +240,52 @@ export default function Orders() {
       toast.error(t('فشل في تحديث الحالة'));
     }
   };
+
+  // === فتح حوار تصحيح المسار ===
+  const isAdmin = user?.role === 'admin' || user?.role === 'super_admin' || user?.role === 'manager';
+
+  const openFixRouting = (order) => {
+    setFixRoutingOrder(order);
+    setFixForm({
+      order_type: order.order_type || 'dine_in',
+      payment_method: order.payment_method || 'cash',
+      payment_status: order.payment_status || 'paid',
+      customer_type: order.customer_type || 'regular',
+      delivery_company_name: order.delivery_company_name || '',
+      delivery_company_order_id: order.delivery_company_order_id || '',
+      customer_name: order.customer_name || '',
+      customer_phone: order.customer_phone || '',
+      delivery_address: order.delivery_address || '',
+      notes: order.notes || '',
+    });
+  };
+
+  const submitFixRouting = async () => {
+    if (!fixRoutingOrder) return;
+    setFixSubmitting(true);
+    try {
+      const token = localStorage.getItem('token');
+      // فقط الحقول التي قد تغيّرت أو لها قيمة
+      const payload = { ...fixForm };
+      // لو ما كانت توصيل، نظّف حقول التوصيل
+      if (payload.order_type !== 'delivery') {
+        payload.delivery_address = null;
+        payload.delivery_company_name = null;
+        payload.delivery_company_order_id = null;
+      }
+      await axios.patch(`${API}/sync/orders/${fixRoutingOrder.id}/fix-routing`, payload, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      toast.success(t('تم تصحيح مسار الطلب'));
+      setFixRoutingOrder(null);
+      fetchData();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || t('فشل في تصحيح المسار'));
+    } finally {
+      setFixSubmitting(false);
+    }
+  };
+
 
   const testNotificationSound = () => {
     playNewOrderNotification();
@@ -547,6 +602,19 @@ export default function Orders() {
                               <X className="h-4 w-4" />
                             </Button>
                           )}
+                          {/* تصحيح المسار للطلبات الأوفلاين (المالك/المدير فقط) */}
+                          {isAdmin && (order.is_offline_order || order.original_order_number) && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="border-amber-500 text-amber-600 hover:bg-amber-50"
+                              onClick={() => openFixRouting(order)}
+                              title={t('تصحيح مسار طلب أوفلاين')}
+                              data-testid={`fix-routing-${order.id}`}
+                            >
+                              <Wrench className="h-4 w-4" />
+                            </Button>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -626,6 +694,157 @@ export default function Orders() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* === Fix Routing Dialog (تصحيح مسار طلب أوفلاين) === */}
+      <Dialog open={!!fixRoutingOrder} onOpenChange={(o) => !o && setFixRoutingOrder(null)}>
+        <DialogContent className="max-w-lg" data-testid="fix-routing-dialog">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Wrench className="h-5 w-5 text-amber-500" />
+              {t('تصحيح مسار الطلب')} #{fixRoutingOrder?.order_number}
+            </DialogTitle>
+          </DialogHeader>
+          {fixRoutingOrder && (
+            <div className="space-y-3 py-2 max-h-[70vh] overflow-y-auto">
+              <div className="p-2.5 bg-amber-500/10 border border-amber-500/30 rounded text-xs text-amber-700 dark:text-amber-300">
+                {t('هذا الطلب أوفلاين سُجّل بمسار خاطئ. عدّل البيانات الصحيحة وستُحفظ مع سجل تدقيق.')}
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label>{t('نوع الطلب')}</Label>
+                  <Select value={fixForm.order_type} onValueChange={(v) => setFixForm({ ...fixForm, order_type: v })}>
+                    <SelectTrigger data-testid="fix-order-type"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="dine_in">{t('داخل')}</SelectItem>
+                      <SelectItem value="takeaway">{t('سفري')}</SelectItem>
+                      <SelectItem value="delivery">{t('توصيل')}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>{t('طريقة الدفع')}</Label>
+                  <Select value={fixForm.payment_method} onValueChange={(v) => {
+                    const next = { ...fixForm, payment_method: v };
+                    if (v === 'delivery_company') {
+                      next.customer_type = 'delivery_company';
+                      next.payment_status = 'unpaid';
+                    } else if (v === 'credit' || v === 'deferred') {
+                      next.customer_type = 'credit';
+                      next.payment_status = 'unpaid';
+                    } else {
+                      next.customer_type = 'regular';
+                      next.payment_status = 'paid';
+                    }
+                    setFixForm(next);
+                  }}>
+                    <SelectTrigger data-testid="fix-payment-method"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="cash">{t('نقدي')}</SelectItem>
+                      <SelectItem value="card">{t('بطاقة')}</SelectItem>
+                      <SelectItem value="credit">{t('آجل')}</SelectItem>
+                      <SelectItem value="deferred">{t('آجل عادي')}</SelectItem>
+                      <SelectItem value="delivery_company">{t('شركة توصيل (آجل)')}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label>{t('حالة الدفع')}</Label>
+                  <Select value={fixForm.payment_status} onValueChange={(v) => setFixForm({ ...fixForm, payment_status: v })}>
+                    <SelectTrigger data-testid="fix-payment-status"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="paid">{t('مدفوع')}</SelectItem>
+                      <SelectItem value="unpaid">{t('غير مدفوع (آجل)')}</SelectItem>
+                      <SelectItem value="partial">{t('جزئي')}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>{t('نوع العميل')}</Label>
+                  <Select value={fixForm.customer_type} onValueChange={(v) => setFixForm({ ...fixForm, customer_type: v })}>
+                    <SelectTrigger data-testid="fix-customer-type"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="regular">{t('عادي')}</SelectItem>
+                      <SelectItem value="delivery_company">{t('شركة توصيل')}</SelectItem>
+                      <SelectItem value="credit">{t('آجل')}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              {(fixForm.payment_method === 'delivery_company' || fixForm.customer_type === 'delivery_company' || fixForm.order_type === 'delivery') && (
+                <div className="grid grid-cols-2 gap-3 p-3 bg-blue-500/5 border border-blue-500/30 rounded">
+                  <div>
+                    <Label>{t('شركة التوصيل')}</Label>
+                    <Input
+                      placeholder="طلباتي / طلبات / Uber Eats"
+                      value={fixForm.delivery_company_name}
+                      onChange={(e) => setFixForm({ ...fixForm, delivery_company_name: e.target.value })}
+                      data-testid="fix-delivery-company"
+                    />
+                  </div>
+                  <div>
+                    <Label>{t('رقم طلب الشركة')}</Label>
+                    <Input
+                      placeholder="ABC123"
+                      value={fixForm.delivery_company_order_id}
+                      onChange={(e) => setFixForm({ ...fixForm, delivery_company_order_id: e.target.value })}
+                      data-testid="fix-delivery-company-order-id"
+                    />
+                  </div>
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label>{t('اسم العميل')}</Label>
+                  <Input
+                    value={fixForm.customer_name}
+                    onChange={(e) => setFixForm({ ...fixForm, customer_name: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <Label>{t('هاتف العميل')}</Label>
+                  <Input
+                    value={fixForm.customer_phone}
+                    onChange={(e) => setFixForm({ ...fixForm, customer_phone: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              {fixForm.order_type === 'delivery' && (
+                <div>
+                  <Label>{t('عنوان التوصيل')}</Label>
+                  <Input
+                    value={fixForm.delivery_address}
+                    onChange={(e) => setFixForm({ ...fixForm, delivery_address: e.target.value })}
+                  />
+                </div>
+              )}
+
+              <div>
+                <Label>{t('ملاحظات')}</Label>
+                <Input
+                  value={fixForm.notes}
+                  onChange={(e) => setFixForm({ ...fixForm, notes: e.target.value })}
+                />
+              </div>
+            </div>
+          )}
+          <div className="flex justify-end gap-2 pt-3 border-t">
+            <Button variant="outline" onClick={() => setFixRoutingOrder(null)} data-testid="fix-routing-cancel">
+              {t('إلغاء')}
+            </Button>
+            <Button onClick={submitFixRouting} disabled={fixSubmitting} data-testid="fix-routing-save">
+              {fixSubmitting ? t('جاري الحفظ...') : t('حفظ التصحيح')}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
     </div>
   );
 }
