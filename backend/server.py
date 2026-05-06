@@ -18568,6 +18568,59 @@ async def seed_initial_cost_layers_v1():
         logger.error(f"❌ seed_initial_cost_layers_v1 failed: {e}")
 
 
+@app.on_event("startup")
+async def backfill_tenant_id_on_products_v1():
+    """ملء tenant_id المفقود على manufactured_products و products (one-shot).
+    
+    يعتمد على فرضية أن كل بيئة لديها tenant واحد رئيسي. إذا كان هناك أكثر من
+    tenant، نأخذ أول admin/super_admin tenant_id كافتراضي. هذا يصلح propagate_cost_to_products
+    لكي يعمل عند تغيّر تكلفة المواد الخام.
+    """
+    try:
+        MIG_KEY = "backfill_tenant_id_on_products_v1"
+        done = await db.system_migrations.find_one({"key": MIG_KEY})
+        if done:
+            logger.info(f"🟢 Migration {MIG_KEY} already applied, skipping")
+            return
+
+        logger.info(f"🔧 Running migration: {MIG_KEY}")
+        # حدّد tenant_id الافتراضي: من أول admin/super_admin
+        admin = await db.users.find_one(
+            {"role": {"$in": ["admin", "super_admin"]}, "tenant_id": {"$ne": None}},
+            {"_id": 0, "tenant_id": 1}
+        )
+        default_tid = admin.get("tenant_id") if admin else None
+
+        if not default_tid:
+            logger.warning(f"⚠️ {MIG_KEY}: لا يوجد tenant_id افتراضي، الترقية لن تعمل")
+            await db.system_migrations.insert_one({
+                "key": MIG_KEY,
+                "executed_at": datetime.now(timezone.utc).isoformat(),
+                "skipped_reason": "no_default_tenant",
+            })
+            return
+
+        # ملء tenant_id على manufactured_products
+        mfg_res = await db.manufactured_products.update_many(
+            {"$or": [{"tenant_id": None}, {"tenant_id": {"$exists": False}}]},
+            {"$set": {"tenant_id": default_tid}}
+        )
+        # ملء tenant_id على products (POS)
+        prd_res = await db.products.update_many(
+            {"$or": [{"tenant_id": None}, {"tenant_id": {"$exists": False}}]},
+            {"$set": {"tenant_id": default_tid}}
+        )
+
+        await db.system_migrations.insert_one({
+            "key": MIG_KEY,
+            "executed_at": datetime.now(timezone.utc).isoformat(),
+            "default_tenant_id": default_tid,
+            "manufactured_products_updated": mfg_res.modified_count,
+            "products_updated": prd_res.modified_count,
+        })
+        logger.info(f"✅ {MIG_KEY} — manufactured_products={mfg_res.modified_count}, products={prd_res.modified_count}")
+    except Exception as e:
+        logger.error(f"❌ backfill_tenant_id_on_products_v1 failed: {e}")
 
 
 # ==================== SYSTEM HEALTH & RELIABILITY APIS ====================

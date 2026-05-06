@@ -1953,6 +1953,12 @@ async def fulfill_manufacturing_request(
         material_id = item.get("material_id")
         quantity = item.get("quantity")
         
+        # === مُصالحة دفاعية: حُلّ أي انجراف بين الطبقات و raw_materials.quantity قبل الاستهلاك ===
+        try:
+            await reconcile_layers_with_quantity(db, material_id, tenant_id)
+        except Exception:
+            pass  # لا تُفشل الطلب بسبب المُصالحة
+        
         # السعر الحالي قبل الاستهلاك (للمقارنة بعد FIFO)
         before_mat = await db.raw_materials.find_one({"id": material_id}, {"_id": 0, "cost_per_unit": 1})
         cost_before = float(before_mat.get("cost_per_unit", 0) or 0) if before_mat else 0
@@ -2262,9 +2268,13 @@ async def get_manufacturing_inventory():
 # ==================== MANUFACTURED PRODUCTS (المنتجات المصنعة) ====================
 
 @router.post("/manufactured-products")
-async def create_manufactured_product(product: ManufacturedProductCreate):
+async def create_manufactured_product(
+    product: ManufacturedProductCreate,
+    current_user: dict = Depends(get_current_user)
+):
     """إنشاء منتج مصنع جديد (وصفة)"""
     db = get_db()
+    tenant_id = current_user.get("tenant_id")
     
     # حساب تكلفة المواد الخام
     raw_material_cost = 0
@@ -2276,6 +2286,7 @@ async def create_manufactured_product(product: ManufacturedProductCreate):
     
     product_doc = {
         "id": str(uuid.uuid4()),
+        "tenant_id": tenant_id,
         "name": product.name,
         "name_en": product.name_en,
         "unit": product.unit,

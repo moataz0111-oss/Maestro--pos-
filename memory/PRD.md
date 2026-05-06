@@ -169,6 +169,13 @@ Multi-tenant POS system with biometric integration (ZKTeco), thermal receipt pri
 - (P2) Split `inventory_system.py` (3400+ lines) — cost layers and price alerts could move to dedicated routers.
 - (P2) Refactor `HR.js`, `Dashboard.js`, `Settings.js`, `POS.js`, `WarehouseManufacturing.js` monoliths.
 
+## Completed Features (Feb 6, 2026 - FIFO Phase 2: Full Auto-Propagation)
+- **FIFO Consumption Wired into Manufacturing Fulfill**: `POST /api/manufacturing-requests/{id}/fulfill` now uses `consume_fifo` — oldest layer drains first, `raw_materials.cost_per_unit` auto-updates to next-oldest layer when depleted. Response includes `cost_propagation` array.
+- **Reconcile Before Consume**: `reconcile_layers_with_quantity` invoked at start of fulfill to heal any drift from non-FIFO consumption points.
+- **Cost Propagation Helper** (`propagate_cost_to_products` in `cost_layer_service.py`): When raw material's effective cost changes, auto-updates every `manufactured_products` and `products` (POS) doc whose recipe references that material — recalculates `cost_per_unit` in recipe ingredients, `raw_material_cost` total, and `profit_margin` (selling_price - cost). Called after FIFO consumption in fulfill.
+- **Multi-Tenant Fix**: `create_manufactured_product` endpoint now requires `Depends(get_current_user)` and persists `tenant_id` on every new doc. Startup migration `backfill_tenant_id_on_products_v1` retrofitted existing manufactured_products (+ POS products). This was critical — without it the propagation helper returned 0 matches.
+- **Verified E2E**: Created 2 layers (50kg @ 500, 30kg @ 900) + test product. Consumed 50kg → oldest layer depleted → cost_per_unit auto-jumped 500→900 → product's raw_material_cost auto-updated 500→900, profit auto-recalculated 1500→1100. ✅
+
 ## Completed Features (Feb 6, 2026 - FIFO Cost Layers + Price Increase Alerts)
 - **Cost Layer Service** (`/app/backend/services/cost_layer_service.py`): FIFO infrastructure — `add_cost_layer`, `consume_fifo` (drains oldest first, updates `raw_materials.cost_per_unit` to next oldest layer), `get_active_layers`, `get_current_effective_cost`, `reconcile_layers_with_quantity` (defensive sync for non-FIFO consumption points), `detect_price_increase` (creates `price_alerts` when |percent_change| ≥ 1%).
 - **Price Alerts at Purchasing Step**: Modified `POST /api/warehouse-purchase-requests/{id}/price-and-create-invoice` to compare each item's new cost vs current `cost_per_unit`. If diff ≥ 1% (up or down), insert into `price_alerts` collection with severity (critical ≥10%, warning ≥5%, info <5%). Response includes `price_alerts` array.
