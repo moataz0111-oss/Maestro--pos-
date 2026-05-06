@@ -164,6 +164,21 @@ Multi-tenant POS system with biometric integration (ZKTeco), thermal receipt pri
 - **🔔 Low-Stock Audio Alerts (Owner Dashboard)**: New `LowStockBanner` component (`/app/frontend/src/components/LowStockBanner.js`) rendered at top of Dashboard for admin/super_admin only. Fetches `GET /api/raw-materials-new/alerts/low-stock` (new endpoint in `inventory_system.py`) on mount + auto-refresh every 60s. Plays `playUrgentAlert()` once on first detection. Sticky top banner with red gradient if any material at qty=0 (critical), amber if only below min_quantity (warning). Bell icon with count badge, expandable details list, "فتح المخزن" navigates to /warehouse-manufacturing, dismiss button hides for 24h via localStorage `lowstock_dismiss_until_v1`, with floating revive button bottom-left. Skips materials with `min_quantity=0` (no threshold defined).
 
 ## Backlog
-- (P1) Audio low-stock alerts for owner when raw materials drop below minimum.
+- (P1) **Wire FIFO consume_fifo helper into POS sale & manufacturing transfer endpoints** (currently only at receipt; consumption still uses direct $inc — `reconcile_layers_with_quantity` exists as defensive sync but is un-invoked).
 - (P2) Refactor `server.py` (21k+ lines) into modular routes (continuing).
+- (P2) Split `inventory_system.py` (3400+ lines) — cost layers and price alerts could move to dedicated routers.
 - (P2) Refactor `HR.js`, `Dashboard.js`, `Settings.js`, `POS.js`, `WarehouseManufacturing.js` monoliths.
+
+## Completed Features (Feb 6, 2026 - FIFO Cost Layers + Price Increase Alerts)
+- **Cost Layer Service** (`/app/backend/services/cost_layer_service.py`): FIFO infrastructure — `add_cost_layer`, `consume_fifo` (drains oldest first, updates `raw_materials.cost_per_unit` to next oldest layer), `get_active_layers`, `get_current_effective_cost`, `reconcile_layers_with_quantity` (defensive sync for non-FIFO consumption points), `detect_price_increase` (creates `price_alerts` when |percent_change| ≥ 1%).
+- **Price Alerts at Purchasing Step**: Modified `POST /api/warehouse-purchase-requests/{id}/price-and-create-invoice` to compare each item's new cost vs current `cost_per_unit`. If diff ≥ 1% (up or down), insert into `price_alerts` collection with severity (critical ≥10%, warning ≥5%, info <5%). Response includes `price_alerts` array.
+- **FIFO Layered Receipt**: Modified `POST /api/warehouse-purchase-requests/{id}/confirm-receipt` to add a NEW cost layer instead of weighted-average update. Old quantity stays at old price, new quantity at new price. `cost_per_unit` reflects oldest active layer.
+- **New Endpoints in `inventory_system.py`** (~line 1077):
+  - `GET /api/raw-materials-new/{material_id}/cost-layers` — list layers per material.
+  - `GET /api/price-alerts?status_filter=unread|read|dismissed` — list alerts (admin only).
+  - `POST /api/price-alerts/{id}/mark-read`, `POST /api/price-alerts/mark-all-read`, `POST /api/price-alerts/{id}/dismiss`.
+- **PriceAlertsBell Component** (`/app/frontend/src/components/PriceAlertsBell.js`): Bell icon in Dashboard header (admin/super_admin only). Badge shows unread count. Click → dropdown panel listing alerts with old→new price, % change badge (red for increase, green for decrease), severity color, mark-read / dismiss / mark-all-read actions. Auto-refreshes every 60s.
+- **Startup Migration `seed_initial_cost_layers_v1`**: One-shot migration that seeds an opening-balance layer for every existing raw material (so FIFO works on legacy data without losing inventory). Indexes added on `material_cost_layers` and `price_alerts`.
+
+## Backlog (continued)
+- (P1) Audio low-stock alerts for owner — DONE in previous iteration.
