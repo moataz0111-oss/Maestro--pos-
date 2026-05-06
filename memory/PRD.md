@@ -169,6 +169,12 @@ Multi-tenant POS system with biometric integration (ZKTeco), thermal receipt pri
 - (P2) Split `inventory_system.py` (3400+ lines) — cost layers and price alerts could move to dedicated routers.
 - (P2) Refactor `HR.js`, `Dashboard.js`, `Settings.js`, `POS.js`, `WarehouseManufacturing.js` monoliths.
 
+## Completed Features (Feb 6, 2026 - Three Fixes from User Screenshots)
+- **Fix 1: Send-to-Warehouse on Purchase Invoices**: Added `POST /api/purchase-invoices/{id}/send-to-warehouse` (server.py ~line 11458) for the legacy `purchase_invoices` collection. Adds raw_materials, creates FIFO cost layers via `add_cost_layer`, logs `inventory_movements` (type='in', subtype='purchase_receipt'), triggers price alerts (≥1%), sets status='transferred'. Idempotent (returns 400 on re-send). Frontend green button `data-testid=send-to-warehouse-{id}` (`Purchasing.js`) calls this new endpoint.
+- **Fix 2: Removed Wrong Cross-Department Navigation**: Deleted blue "طلب من المشتريات" button from `WarehouseManufacturing.js` header per user's role-isolation requirement (warehouse keeper must not enter purchasing area, and vice versa).
+- **Fix 3: Instant Page Navigation**: Replaced fullscreen `جاري التحميل` Suspense fallback in `App.js` with a thin 1px top progress bar. Eagerly imported the most-used pages (HR, Purchasing, WarehouseManufacturing, Expenses, Reports, Settings) so they don't trigger Suspense at all. Public route guards also use the thin loader. Initial auth check screens replaced too.
+- **Tested**: testing_agent_v3_fork (iter175→iter176) — Backend 6/6 pytest ✅, Frontend FIX1+FIX2+FIX3 verified. iter175 caught a critical collection mismatch bug; agent fixed it; iter176 passes 100%.
+
 ## Completed Features (Feb 6, 2026 - Raw Materials Edit/Delete with Transfer Lock)
 - **Owner-only Edit/Delete on Raw Materials** in `WarehouseManufacturing.js` raw materials cards. Pencil + Trash buttons (admin only), with state-based lock.
 - **Transfer-State Lock**: `GET /api/raw-materials-new` now returns `is_transferred`, `can_edit`, `can_delete` on every material. `is_transferred=true` if material was ever consumed via `manufacturing-requests fulfill` or any `warehouse_to_manufacturing` inventory movement.
