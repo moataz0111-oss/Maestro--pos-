@@ -309,15 +309,33 @@ export default function Purchasing() {
       const formData = {
         supplier_id: invoiceForm.supplier_id,
         invoice_number: invoiceForm.invoice_number,
-        items: invoiceForm.items,
+        items: invoiceForm.items.map(it => ({
+          name: it.name,
+          quantity: parseFloat(it.quantity) || 0,
+          unit: it.unit,
+          cost_per_unit: parseFloat(it.unit_price) || 0,
+        })),
         notes: invoiceForm.notes,
         total_amount: calculateTotal(),
-        image_data: invoiceForm.imagePreview // Base64 image
+        image_data: invoiceForm.imagePreview,
+        payment_method: 'cash',
+        payment_status: 'paid',
       };
       
-      await axios.post(`${API}/purchase-invoices`, formData, { headers });
+      // إذا كان مرتبطاً بطلب من المخزن → استخدم الـ endpoint الجديد
+      if (invoiceForm.request_id) {
+        await axios.post(
+          `${API}/warehouse-purchase-requests/${invoiceForm.request_id}/price-and-create-invoice`,
+          formData,
+          { headers }
+        );
+        toast.success(t('تم تسعير الطلب وإنشاء الفاتورة. أرسلها للمخزن.'));
+      } else {
+        // فاتورة شراء مباشرة (بدون طلب من المخزن)
+        await axios.post(`${API}/purchase-invoices`, formData, { headers });
+        toast.success(t('تم حفظ الفاتورة بنجاح'));
+      }
       
-      toast.success(t('تم حفظ الفاتورة بنجاح'));
       setShowInvoiceDialog(false);
       setInvoiceForm({
         supplier_id: '',
@@ -326,7 +344,8 @@ export default function Purchasing() {
         notes: '',
         total_amount: 0,
         image: null,
-        imagePreview: null
+        imagePreview: null,
+        request_id: null
       });
       fetchData();
     } catch (error) {
@@ -365,12 +384,12 @@ export default function Purchasing() {
     }
   };
 
-  // تحويل الطلب للمخزن
+  // تحويل الطلب للمخزن (مرحلة الاستلام)
   const handleTransferToWarehouse = async (requestId) => {
     setSubmitting(true);
     try {
-      await axios.post(`${API}/warehouse-purchase-requests/${requestId}/transfer`, {}, { headers });
-      toast.success(t('تم تحويل المواد للمخزن بنجاح'));
+      await axios.post(`${API}/warehouse-purchase-requests/${requestId}/confirm-receipt`, {}, { headers });
+      toast.success(t('تم إرسال الطلب للمخزن — الكميات ستُضاف للمخزون'));
       fetchData();
     } catch (error) {
       toast.error(error.response?.data?.detail || t('فشل في التحويل'));
@@ -442,9 +461,9 @@ export default function Purchasing() {
           <TabsTrigger value="requests" className="gap-2 relative">
             <Package className="h-4 w-4" />
             {t('طلبات المخزن')}
-            {warehouseRequests.filter(r => r.status === 'pending').length > 0 && (
+            {warehouseRequests.filter(r => r.status === 'approved_by_owner').length > 0 && (
               <Badge className="absolute -top-2 -right-2 bg-red-500 text-white text-xs px-1.5 py-0.5 rounded-full">
-                {warehouseRequests.filter(r => r.status === 'pending').length}
+                {warehouseRequests.filter(r => r.status === 'approved_by_owner').length}
               </Badge>
             )}
           </TabsTrigger>
@@ -638,19 +657,19 @@ export default function Purchasing() {
               ) : (
                 <div className="space-y-4">
                   {warehouseRequests.map(request => (
-                    <div key={request.id} className={`p-4 border rounded-lg ${request.status === 'pending' ? 'border-orange-500 bg-orange-500/5' : request.status === 'completed' ? 'border-green-500 bg-green-500/5' : ''}`}>
+                    <div key={request.id} className={`p-4 border rounded-lg ${request.status === 'approved_by_owner' ? 'border-orange-500 bg-orange-500/5' : request.status === 'priced_by_purchasing' ? 'border-blue-500 bg-blue-500/5' : request.status === 'received_by_warehouse' ? 'border-green-500 bg-green-500/5' : ''}`}>
                       <div className="flex items-start justify-between mb-3">
                         <div className="flex items-center gap-3">
                           <span className="font-bold text-lg">{t('طلب')} #{request.request_number}</span>
                           <Badge className={
-                            request.status === 'pending' ? 'bg-orange-500/20 text-orange-500' :
-                            request.status === 'purchased' ? 'bg-blue-500/20 text-blue-500' :
-                            request.status === 'completed' ? 'bg-green-500/20 text-green-500' :
+                            request.status === 'approved_by_owner' ? 'bg-orange-500/20 text-orange-500' :
+                            request.status === 'priced_by_purchasing' ? 'bg-blue-500/20 text-blue-500' :
+                            request.status === 'received_by_warehouse' ? 'bg-green-500/20 text-green-500' :
                             'bg-gray-500/20 text-gray-500'
                           }>
-                            {request.status === 'pending' ? t('بانتظار الشراء') :
-                             request.status === 'purchased' ? t('تم الشراء - جاهز للتحويل') :
-                             request.status === 'completed' ? t('تم التحويل') : request.status}
+                            {request.status === 'approved_by_owner' ? t('معتمد — جاهز للتسعير') :
+                             request.status === 'priced_by_purchasing' ? t('تم التسعير — جاهز للاستلام') :
+                             request.status === 'received_by_warehouse' ? t('تم الاستلام نهائياً') : request.status}
                           </Badge>
                           {request.priority === 'urgent' && (
                             <Badge className="bg-red-500 text-white">{t('مستعجل')}</Badge>
@@ -682,9 +701,15 @@ export default function Purchasing() {
                         </p>
                       )}
                       
+                      {request.owner_approved_by_name && (
+                        <p className="text-xs text-emerald-600 mb-2">
+                          ✓ {t('معتمد من')}: {request.owner_approved_by_name}
+                        </p>
+                      )}
+                      
                       {/* أزرار الإجراءات */}
                       <div className="flex gap-2">
-                        {request.status === 'pending' && (
+                        {request.status === 'approved_by_owner' && (
                           <Button
                             onClick={() => {
                               // فتح نافذة الفاتورة مع ملء المواد
@@ -702,12 +727,13 @@ export default function Purchasing() {
                               setShowInvoiceDialog(true);
                             }}
                             className="bg-blue-500 hover:bg-blue-600"
+                            data-testid={`price-request-${request.id}`}
                           >
-                            <FileText className="h-4 w-4 ml-2" />
-                            {t('إنشاء فاتورة')}
+                            <DollarSign className="h-4 w-4 ml-2" />
+                            {t('تسعير وإنشاء فاتورة')}
                           </Button>
                         )}
-                        {request.status === 'purchased' && (
+                        {request.status === 'priced_by_purchasing' && (
                           <Button
                             onClick={() => handleTransferToWarehouse(request.id)}
                             className="bg-green-500 hover:bg-green-600"
@@ -717,7 +743,7 @@ export default function Purchasing() {
                             {t('تحويل للمخزن')}
                           </Button>
                         )}
-                        {request.status === 'completed' && (
+                        {request.status === 'received_by_warehouse' && (
                           <Badge className="bg-green-500 text-white px-4 py-2">
                             <CheckCircle className="h-4 w-4 ml-2" />
                             {t('تم التحويل')}

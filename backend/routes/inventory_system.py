@@ -6,7 +6,7 @@
 from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, Form
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import uuid
 import os
 import aiofiles
@@ -729,15 +729,97 @@ async def price_request_and_create_invoice(
     }
 
 
+@router.get("/inventory-movements")
+async def get_inventory_movements(
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    material_id: Optional[str] = None,
+    movement_type: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """قائمة حركات المخزن (دخول وخروج) خلال فترة.
+    
+    Query params:
+    - start_date / end_date: نطاق تاريخي (YYYY-MM-DD)
+    - material_id: تصفية حسب مادة محددة
+    - movement_type: 'in' أو 'out' أو 'adjustment'
+    
+    إن لم تُحدَّد التواريخ، تُرجع آخر 30 يوماً.
+    """
+    db = get_db()
+    query = {}
+    if current_user.get("tenant_id"):
+        query["$or"] = [
+            {"tenant_id": current_user["tenant_id"]},
+            {"tenant_id": {"$exists": False}},
+            {"tenant_id": None},
+        ]
+    
+    # نطاق تاريخي افتراضي: آخر 30 يوماً
+    if not start_date:
+        start_date = (datetime.now(timezone.utc) - timedelta(days=30)).date().isoformat()
+    if not end_date:
+        end_date = datetime.now(timezone.utc).date().isoformat()
+    
+    query["created_at"] = {
+        "$gte": start_date + "T00:00:00",
+        "$lte": end_date + "T23:59:59",
+    }
+    
+    if material_id:
+        query["material_id"] = material_id
+    if movement_type:
+        query["type"] = movement_type
+    
+    movements = await db.inventory_movements.find(query, {"_id": 0}).sort("created_at", -1).to_list(2000)
+    
+    # ملخص الفترة
+    total_in = sum(m.get("quantity", 0) for m in movements if m.get("type") == "in")
+    total_out = sum(m.get("quantity", 0) for m in movements if m.get("type") == "out")
+    total_in_value = sum(m.get("total_value", 0) for m in movements if m.get("type") == "in")
+    total_out_value = sum(m.get("total_value", 0) for m in movements if m.get("type") == "out")
+    
+    # ملخص شهري (تجميع حسب اليوم)
+    daily_summary = {}
+    for m in movements:
+        day = m.get("created_at", "")[:10]
+        if not day:
+            continue
+        if day not in daily_summary:
+            daily_summary[day] = {"date": day, "in_qty": 0, "out_qty": 0, "in_value": 0, "out_value": 0, "movements": 0}
+        if m.get("type") == "in":
+            daily_summary[day]["in_qty"] += m.get("quantity", 0)
+            daily_summary[day]["in_value"] += m.get("total_value", 0)
+        elif m.get("type") == "out":
+            daily_summary[day]["out_qty"] += m.get("quantity", 0)
+            daily_summary[day]["out_value"] += m.get("total_value", 0)
+        daily_summary[day]["movements"] += 1
+    
+    return {
+        "movements": movements,
+        "summary": {
+            "total_in": total_in,
+            "total_out": total_out,
+            "total_in_value": total_in_value,
+            "total_out_value": total_out_value,
+            "movements_count": len(movements),
+            "period": {"start": start_date, "end": end_date},
+        },
+        "daily": sorted(daily_summary.values(), key=lambda x: x["date"], reverse=True),
+    }
+
+
 @router.post("/warehouse-purchase-requests/{request_id}/confirm-receipt")
 async def confirm_warehouse_receipt(
     request_id: str,
     current_user: dict = Depends(get_current_user)
 ):
-    """المخزن يؤكد استلام البضاعة → يُغلق الطلب نهائياً.
+    """المخزن يؤكد استلام البضاعة → يُغلق الطلب نهائياً + يُضيف الكميات للمخزون.
     
-    الكميات تُضاف للمخزون عبر endpoint /purchases-new/{id}/send-to-warehouse القائم
-    (يتم استدعاؤه من الواجهة بعد تأكيد الاستلام).
+    يستدعي نفس منطق /purchases-new/{id}/send-to-warehouse:
+    - يُحدّث raw_materials (كمية + متوسط تكلفة مرجح)
+    - يُنشئ مادة جديدة إن لم توجد
+    - يُحدّث حالة الفاتورة إلى sent_to_warehouse
     """
     db = get_db()
     req = await db.warehouse_purchase_requests.find_one({"id": request_id})
@@ -745,6 +827,82 @@ async def confirm_warehouse_receipt(
         raise HTTPException(status_code=404, detail="الطلب غير موجود")
     if req.get("status") != "priced_by_purchasing":
         raise HTTPException(status_code=400, detail="الطلب غير جاهز للاستلام")
+    
+    purchase_id = req.get("purchase_invoice_id")
+    purchase = await db.purchases_new.find_one({"id": purchase_id}) if purchase_id else None
+    
+    # إضافة المواد للمخزن (نفس منطق send-to-warehouse)
+    movements_logged = 0
+    if purchase and purchase.get("status") == "pending":
+        for item in purchase.get("items", []):
+            raw_material = await db.raw_materials.find_one({"name": item.get("name")})
+            if raw_material:
+                new_quantity = raw_material.get("quantity", 0) + item.get("quantity", 0)
+                old_value = raw_material.get("quantity", 0) * raw_material.get("cost_per_unit", 0)
+                new_value = item.get("quantity", 0) * item.get("cost_per_unit", 0)
+                avg_cost = (old_value + new_value) / new_quantity if new_quantity > 0 else item.get("cost_per_unit", 0)
+                await db.raw_materials.update_one(
+                    {"id": raw_material["id"]},
+                    {"$set": {
+                        "quantity": new_quantity,
+                        "cost_per_unit": avg_cost,
+                        "last_updated": datetime.now(timezone.utc).isoformat()
+                    }}
+                )
+                material_id_for_log = raw_material["id"]
+                material_name_for_log = raw_material.get("name")
+            else:
+                new_id = str(uuid.uuid4())
+                await db.raw_materials.insert_one({
+                    "id": new_id,
+                    "name": item.get("name"),
+                    "name_en": None,
+                    "unit": item.get("unit", "كغم"),
+                    "quantity": item.get("quantity", 0),
+                    "min_quantity": 0,
+                    "cost_per_unit": item.get("cost_per_unit", 0),
+                    "category": None,
+                    "last_updated": datetime.now(timezone.utc).isoformat(),
+                    "created_at": datetime.now(timezone.utc).isoformat(),
+                    "tenant_id": current_user.get("tenant_id"),
+                })
+                material_id_for_log = new_id
+                material_name_for_log = item.get("name")
+            
+            # === تسجيل حركة دخول (IN) في inventory_movements ===
+            await db.inventory_movements.insert_one({
+                "id": str(uuid.uuid4()),
+                "type": "in",
+                "subtype": "purchase_receipt",
+                "material_id": material_id_for_log,
+                "material_name": material_name_for_log,
+                "quantity": item.get("quantity", 0),
+                "unit": item.get("unit"),
+                "cost_per_unit": item.get("cost_per_unit", 0),
+                "total_value": item.get("quantity", 0) * item.get("cost_per_unit", 0),
+                "reference_type": "purchase_invoice",
+                "reference_id": purchase_id,
+                "reference_number": purchase.get("purchase_number"),
+                "request_id": request_id,
+                "request_number": req.get("request_number"),
+                "supplier_name": purchase.get("supplier_name"),
+                "performed_by": current_user.get("id"),
+                "performed_by_name": current_user.get("full_name") or current_user.get("username"),
+                "notes": f"استلام فاتورة شراء #{purchase.get('purchase_number')} من {purchase.get('supplier_name', 'مورد')}",
+                "created_at": datetime.now(timezone.utc).isoformat(),
+                "tenant_id": current_user.get("tenant_id"),
+            })
+            movements_logged += 1
+        
+        # حدّث حالة الفاتورة
+        await db.purchases_new.update_one(
+            {"id": purchase_id},
+            {"$set": {
+                "status": "sent_to_warehouse",
+                "sent_to_warehouse_at": datetime.now(timezone.utc).isoformat(),
+                "sent_to_warehouse_by": current_user.get("id"),
+            }}
+        )
     
     await db.warehouse_purchase_requests.update_one(
         {"id": request_id},
@@ -755,7 +913,7 @@ async def confirm_warehouse_receipt(
             "warehouse_received_at": datetime.now(timezone.utc).isoformat(),
         }}
     )
-    return {"message": "تم تأكيد الاستلام", "request_id": request_id}
+    return {"message": "تم تأكيد الاستلام وإضافة المواد للمخزون", "request_id": request_id, "purchase_id": purchase_id}
 
 
 @router.get("/warehouse-purchase-requests")

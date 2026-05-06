@@ -38,7 +38,10 @@ import {
   ShoppingCart,
   Bell,
   Box,
-  Receipt
+  Receipt,
+  ArrowUpDown,
+  TrendingUp,
+  TrendingDown
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -108,12 +111,89 @@ export default function WarehouseManufacturing() {
   const [purchaseRequestPriority, setPurchaseRequestPriority] = useState('normal');
   const [purchaseRequestNotes, setPurchaseRequestNotes] = useState('');
   const [warehouseRequestsList, setWarehouseRequestsList] = useState([]);
+  
+  // === Owner notification & details modal ===
+  const [showOwnerDetailsModal, setShowOwnerDetailsModal] = useState(false);
+  const [selectedRequestForDetails, setSelectedRequestForDetails] = useState(null);
+  const lastNotifiedRequestIdsRef = React.useRef(new Set());
+  
+  // === حركات المخزن ===
+  const [movements, setMovements] = useState([]);
+  const [movementsSummary, setMovementsSummary] = useState({ total_in: 0, total_out: 0, total_in_value: 0, total_out_value: 0 });
+  const [movementsDaily, setMovementsDaily] = useState([]);
+  const [movementsStartDate, setMovementsStartDate] = useState(() => {
+    const d = new Date();
+    d.setDate(1); // أول الشهر
+    return d.toISOString().split('T')[0];
+  });
+  const [movementsEndDate, setMovementsEndDate] = useState(new Date().toISOString().split('T')[0]);
+  const [movementsTypeFilter, setMovementsTypeFilter] = useState('all');
+  
+  const fetchInventoryMovements = async () => {
+    try {
+      const params = { start_date: movementsStartDate, end_date: movementsEndDate };
+      if (movementsTypeFilter !== 'all') params.movement_type = movementsTypeFilter;
+      const res = await axios.get(`${API}/inventory-movements`, { params });
+      setMovements(res.data?.movements || []);
+      setMovementsSummary(res.data?.summary || { total_in: 0, total_out: 0, total_in_value: 0, total_out_value: 0 });
+      setMovementsDaily(res.data?.daily || []);
+    } catch (_e) { /* ignore */ }
+  };
+  
+  useEffect(() => {
+    fetchInventoryMovements();
+  }, [movementsStartDate, movementsEndDate, movementsTypeFilter]);
 
   // اجلب طلبات الشراء (للمالك لرؤية المعلقة، ولأمين المخزن لرؤية حالة طلباته)
   const fetchPurchaseRequests = async () => {
     try {
       const res = await axios.get(`${API}/warehouse-purchase-requests`);
-      setWarehouseRequestsList(res.data || []);
+      const list = res.data || [];
+      setWarehouseRequestsList(list);
+      
+      // === إشعار صوتي للمالك عند ورود طلب جديد بانتظار الموافقة ===
+      if (isAdmin) {
+        const pending = list.filter(r => r.status === 'pending_owner_approval');
+        const newOnes = pending.filter(r => !lastNotifiedRequestIdsRef.current.has(r.id));
+        if (newOnes.length > 0 && lastNotifiedRequestIdsRef.current.size > 0) {
+          // شغّل beep عبر Web Audio API (بدون ملف خارجي)
+          try {
+            const ctx = new (window.AudioContext || window.webkitAudioContext)();
+            // beep متكرر 3 مرات لجلب الانتباه
+            [0, 0.25, 0.5].forEach(delay => {
+              const osc = ctx.createOscillator();
+              const gain = ctx.createGain();
+              osc.connect(gain);
+              gain.connect(ctx.destination);
+              osc.frequency.value = 880; // A5
+              osc.type = 'sine';
+              gain.gain.setValueAtTime(0, ctx.currentTime + delay);
+              gain.gain.linearRampToValueAtTime(0.3, ctx.currentTime + delay + 0.02);
+              gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + delay + 0.18);
+              osc.start(ctx.currentTime + delay);
+              osc.stop(ctx.currentTime + delay + 0.2);
+            });
+          } catch (_e) { /* ignore audio errors (e.g., autoplay block) */ }
+          
+          newOnes.forEach(req => {
+            toast.info(
+              `${t('طلب شراء جديد بانتظار موافقتك')}: #${req.request_number} — ${req.created_by_name || t('المخزن')}`,
+              {
+                duration: 10000,
+                action: {
+                  label: t('عرض التفاصيل'),
+                  onClick: () => {
+                    setSelectedRequestForDetails(req);
+                    setShowOwnerDetailsModal(true);
+                  }
+                }
+              }
+            );
+          });
+        }
+        // حدّث الـ ref لمنع التكرار
+        pending.forEach(r => lastNotifiedRequestIdsRef.current.add(r.id));
+      }
     } catch (_e) { /* ignore */ }
   };
 
@@ -1079,6 +1159,10 @@ export default function WarehouseManufacturing() {
                 {t('التحويلات')}
               </TabsTrigger>
             )}
+            <TabsTrigger value="movements" className="gap-2 px-4 py-2" data-testid="tab-movements">
+              <ArrowUpDown className="h-4 w-4" />
+              {t('حركات المخزن')}
+            </TabsTrigger>
           </TabsList>
           {/* المخزن (المواد الخام) */}
           <TabsContent value="warehouse" className="space-y-4">
@@ -2143,6 +2227,178 @@ export default function WarehouseManufacturing() {
                         )}
                       </div>
                     ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+          
+          {/* ============ حركات المخزن (دخول/خروج خلال الشهر) ============ */}
+          <TabsContent value="movements" className="space-y-4">
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+                  <div className="flex items-center gap-2">
+                    <ArrowUpDown className="h-5 w-5 text-blue-500" />
+                    <h3 className="font-bold text-lg">{t('حركات المخزن')}</h3>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Input
+                      type="date"
+                      value={movementsStartDate}
+                      onChange={(e) => setMovementsStartDate(e.target.value)}
+                      className="w-40"
+                      data-testid="movements-start-date"
+                    />
+                    <span className="text-muted-foreground">→</span>
+                    <Input
+                      type="date"
+                      value={movementsEndDate}
+                      onChange={(e) => setMovementsEndDate(e.target.value)}
+                      className="w-40"
+                      data-testid="movements-end-date"
+                    />
+                    <Select value={movementsTypeFilter} onValueChange={setMovementsTypeFilter}>
+                      <SelectTrigger className="w-32" data-testid="movements-type-filter">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">{t('الكل')}</SelectItem>
+                        <SelectItem value="in">{t('دخول')}</SelectItem>
+                        <SelectItem value="out">{t('خروج')}</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                
+                {/* بطاقات الملخص */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+                  <Card className="border-emerald-500/30 bg-emerald-500/5">
+                    <CardContent className="p-3">
+                      <div className="flex items-center gap-2 mb-1">
+                        <TrendingUp className="h-4 w-4 text-emerald-500" />
+                        <span className="text-xs text-muted-foreground">{t('إجمالي الدخول')}</span>
+                      </div>
+                      <p className="text-2xl font-bold text-emerald-500" data-testid="total-in-qty">{movementsSummary.total_in.toLocaleString()}</p>
+                      <p className="text-xs text-muted-foreground mt-1">{(movementsSummary.total_in_value || 0).toLocaleString()} IQD</p>
+                    </CardContent>
+                  </Card>
+                  <Card className="border-red-500/30 bg-red-500/5">
+                    <CardContent className="p-3">
+                      <div className="flex items-center gap-2 mb-1">
+                        <TrendingDown className="h-4 w-4 text-red-500" />
+                        <span className="text-xs text-muted-foreground">{t('إجمالي الخروج')}</span>
+                      </div>
+                      <p className="text-2xl font-bold text-red-500" data-testid="total-out-qty">{movementsSummary.total_out.toLocaleString()}</p>
+                      <p className="text-xs text-muted-foreground mt-1">{(movementsSummary.total_out_value || 0).toLocaleString()} IQD</p>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardContent className="p-3">
+                      <span className="text-xs text-muted-foreground">{t('عدد الحركات')}</span>
+                      <p className="text-2xl font-bold">{movementsSummary.movements_count || 0}</p>
+                    </CardContent>
+                  </Card>
+                  <Card className="border-blue-500/30">
+                    <CardContent className="p-3">
+                      <span className="text-xs text-muted-foreground">{t('صافي الحركة')}</span>
+                      <p className={`text-2xl font-bold ${movementsSummary.total_in - movementsSummary.total_out >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
+                        {(movementsSummary.total_in - movementsSummary.total_out >= 0 ? '+' : '')}{(movementsSummary.total_in - movementsSummary.total_out).toLocaleString()}
+                      </p>
+                    </CardContent>
+                  </Card>
+                </div>
+                
+                {/* الملخص اليومي */}
+                {movementsDaily.length > 0 && (
+                  <div className="mb-4">
+                    <Label className="text-base font-bold mb-2 block">{t('ملخص يومي')}</Label>
+                    <div className="overflow-x-auto border rounded-lg">
+                      <table className="w-full text-sm">
+                        <thead className="bg-muted/50">
+                          <tr>
+                            <th className="px-3 py-2 text-right">{t('التاريخ')}</th>
+                            <th className="px-3 py-2 text-center">{t('دخول')}</th>
+                            <th className="px-3 py-2 text-center">{t('خروج')}</th>
+                            <th className="px-3 py-2 text-center">{t('قيمة الدخول')}</th>
+                            <th className="px-3 py-2 text-center">{t('قيمة الخروج')}</th>
+                            <th className="px-3 py-2 text-center">{t('الحركات')}</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {movementsDaily.map(d => (
+                            <tr key={d.date} className="border-t border-border hover:bg-muted/30">
+                              <td className="px-3 py-2 font-medium">{d.date}</td>
+                              <td className="px-3 py-2 text-center text-emerald-500 font-bold">+{d.in_qty.toLocaleString()}</td>
+                              <td className="px-3 py-2 text-center text-red-500 font-bold">-{d.out_qty.toLocaleString()}</td>
+                              <td className="px-3 py-2 text-center text-emerald-600">{d.in_value.toLocaleString()}</td>
+                              <td className="px-3 py-2 text-center text-red-600">{d.out_value.toLocaleString()}</td>
+                              <td className="px-3 py-2 text-center text-muted-foreground">{d.movements}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+                
+                {/* جدول الحركات التفصيلي */}
+                <Label className="text-base font-bold mb-2 block">{t('سجل الحركات التفصيلي')}</Label>
+                {movements.length === 0 ? (
+                  <div className="text-center py-12 text-muted-foreground" data-testid="movements-empty">
+                    <Box className="h-12 w-12 mx-auto mb-2 opacity-30" />
+                    <p>{t('لا توجد حركات في هذه الفترة')}</p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto border rounded-lg">
+                    <table className="w-full text-sm" data-testid="movements-table">
+                      <thead className="bg-muted/50">
+                        <tr>
+                          <th className="px-3 py-2 text-right">{t('التاريخ')}</th>
+                          <th className="px-3 py-2 text-center">{t('النوع')}</th>
+                          <th className="px-3 py-2 text-right">{t('المادة')}</th>
+                          <th className="px-3 py-2 text-center">{t('الكمية')}</th>
+                          <th className="px-3 py-2 text-center">{t('القيمة')}</th>
+                          <th className="px-3 py-2 text-right">{t('المرجع')}</th>
+                          <th className="px-3 py-2 text-right">{t('بواسطة')}</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {movements.map(m => (
+                          <tr key={m.id} className="border-t border-border hover:bg-muted/30">
+                            <td className="px-3 py-2 text-xs text-muted-foreground">
+                              {new Date(m.created_at).toLocaleString('ar-EG', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                            </td>
+                            <td className="px-3 py-2 text-center">
+                              {m.type === 'in' ? (
+                                <Badge className="bg-emerald-500/20 text-emerald-500"><TrendingUp className="h-3 w-3 ml-1 inline" />{t('دخول')}</Badge>
+                              ) : m.type === 'out' ? (
+                                <Badge className="bg-red-500/20 text-red-500"><TrendingDown className="h-3 w-3 ml-1 inline" />{t('خروج')}</Badge>
+                              ) : (
+                                <Badge>{m.type}</Badge>
+                              )}
+                            </td>
+                            <td className="px-3 py-2 font-medium">{m.material_name}</td>
+                            <td className="px-3 py-2 text-center">
+                              <span className={`font-bold ${m.type === 'in' ? 'text-emerald-500' : 'text-red-500'}`}>
+                                {m.type === 'in' ? '+' : '-'}{m.quantity?.toLocaleString()}
+                              </span>
+                              <span className="text-xs text-muted-foreground mr-1">{m.unit}</span>
+                            </td>
+                            <td className="px-3 py-2 text-center">{(m.total_value || 0).toLocaleString()} IQD</td>
+                            <td className="px-3 py-2 text-xs">
+                              {m.subtype === 'purchase_receipt' && m.reference_number && (
+                                <span>📄 {t('فاتورة')} #{m.reference_number} {m.supplier_name && `— ${m.supplier_name}`}</span>
+                              )}
+                              {m.subtype !== 'purchase_receipt' && m.notes && (
+                                <span className="text-muted-foreground">{m.notes}</span>
+                              )}
+                            </td>
+                            <td className="px-3 py-2 text-xs text-muted-foreground">{m.performed_by_name || '-'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
                 )}
               </CardContent>
@@ -3416,6 +3672,105 @@ export default function WarehouseManufacturing() {
             >
               <Send className="h-4 w-4 ml-2" />
               {t('إرسال للموافقة')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      {/* ========== Modal: تفاصيل طلب شراء (للمالك) ========== */}
+      <Dialog open={showOwnerDetailsModal} onOpenChange={setShowOwnerDetailsModal}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto" data-testid="owner-pr-details-modal">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Bell className="h-5 w-5 text-orange-500 animate-pulse" />
+              {t('تفاصيل طلب الشراء')} #{selectedRequestForDetails?.request_number}
+            </DialogTitle>
+          </DialogHeader>
+          {selectedRequestForDetails && (
+            <div className="space-y-4 py-2">
+              <div className="grid grid-cols-2 gap-3 p-3 bg-muted/30 rounded-lg">
+                <div>
+                  <p className="text-xs text-muted-foreground">{t('من')}</p>
+                  <p className="font-bold">{selectedRequestForDetails.created_by_name || t('المخزن')}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">{t('التاريخ')}</p>
+                  <p className="font-bold">{new Date(selectedRequestForDetails.created_at).toLocaleString('ar-EG')}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">{t('الأولوية')}</p>
+                  <Badge className={
+                    selectedRequestForDetails.priority === 'urgent' ? 'bg-red-500 text-white' :
+                    selectedRequestForDetails.priority === 'high' ? 'bg-orange-500 text-white' :
+                    'bg-blue-500/20 text-blue-600'
+                  }>
+                    {selectedRequestForDetails.priority === 'urgent' ? t('عاجل') :
+                     selectedRequestForDetails.priority === 'high' ? t('عالية') :
+                     selectedRequestForDetails.priority === 'low' ? t('منخفضة') : t('عادية')}
+                  </Badge>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">{t('عدد الأصناف')}</p>
+                  <p className="font-bold">{(selectedRequestForDetails.items || []).length}</p>
+                </div>
+              </div>
+              
+              <div>
+                <Label className="text-base font-bold mb-2 block">{t('الأصناف المطلوبة')}</Label>
+                <div className="border rounded-lg overflow-hidden">
+                  <table className="w-full">
+                    <thead className="bg-muted/50">
+                      <tr>
+                        <th className="px-3 py-2 text-right text-sm">{t('الصنف')}</th>
+                        <th className="px-3 py-2 text-center text-sm">{t('الكمية')}</th>
+                        <th className="px-3 py-2 text-center text-sm">{t('الوحدة')}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(selectedRequestForDetails.items || []).map((it, i) => (
+                        <tr key={i} className="border-t border-border">
+                          <td className="px-3 py-2">{it.name}</td>
+                          <td className="px-3 py-2 text-center font-bold">{it.quantity}</td>
+                          <td className="px-3 py-2 text-center text-muted-foreground">{it.unit}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+              
+              {selectedRequestForDetails.notes && (
+                <div className="p-3 bg-yellow-500/10 rounded-lg border border-yellow-500/30">
+                  <p className="text-xs text-muted-foreground mb-1">{t('ملاحظات')}</p>
+                  <p className="text-sm">{selectedRequestForDetails.notes}</p>
+                </div>
+              )}
+            </div>
+          )}
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              className="border-red-500/50 text-red-500"
+              onClick={async () => {
+                if (selectedRequestForDetails) {
+                  await rejectPurchaseRequest(selectedRequestForDetails.id);
+                  setShowOwnerDetailsModal(false);
+                }
+              }}
+              data-testid="modal-reject-pr"
+            >
+              <X className="h-4 w-4 ml-1" /> {t('رفض')}
+            </Button>
+            <Button
+              className="bg-emerald-500 hover:bg-emerald-600"
+              onClick={async () => {
+                if (selectedRequestForDetails) {
+                  await approvePurchaseRequest(selectedRequestForDetails.id);
+                  setShowOwnerDetailsModal(false);
+                }
+              }}
+              data-testid="modal-approve-pr"
+            >
+              <CheckCircle className="h-4 w-4 ml-1" /> {t('موافقة وإرسال للمشتريات')}
             </Button>
           </DialogFooter>
         </DialogContent>
