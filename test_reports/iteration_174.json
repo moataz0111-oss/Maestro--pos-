@@ -1,0 +1,47 @@
+{
+  "summary": "Iter 174 — Owner-only Edit/Delete with transfer-state lock for Raw Materials. Both backend (pytest 7/7) and frontend (Playwright UI) flows verified end-to-end. All 11 review checkpoints pass.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_raw_material_lock_iter174.py",
+    "/app/test_reports/pytest/iter174_rm_lock.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "_get_transferred_material_ids and _is_material_transferred intentionally ignore tenant_id (UUID is unique). Comment in code explains it; acceptable for backwards-compat with legacy movements lacking tenant_id, but be aware: cross-tenant material_id collisions would be incorrectly flagged. Low risk since all IDs are UUIDv4.",
+    "Update PUT endpoint allows full payload replace (RawMaterialCreate model). Consider partial update (PATCH-style) to avoid clients resending all fields — minor UX/contract concern, not breaking.",
+    "Frontend: edit/delete buttons use both `disabled` attribute AND inline guard `() => !material.is_transferred && setEdit...`. Defensive double-check is fine. Tooltip via title attribute works (verified: 'مقفلة — تم التحويل للتصنيع').",
+    "WarehouseManufacturing.js is now ~3989 lines — recommend splitting RawMaterialsTab, EditDialog, DeleteDialog into separate files for maintainability."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_raw_material_lock_iter174.py (new)"
+  ],
+  "success_rate": {"backend": "100% (7/7)", "frontend": "100% — all data-testids present and behaviour correct"},
+  "test_credentials": "admin: hanialdujaili@gmail.com / Hani@2024",
+  "seed_data_creation": "Created TEST_iter174_lock raw material via POST /raw-materials-new, updated it via PUT, then deleted it via DELETE — all cleaned up. Tomato gained +1 kg via add-stock (intentional, proves add-stock works post-transfer). The page also already had several TEST_Material_* leftovers from prior iterations — not modified.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Backend test file /app/backend/tests/test_raw_material_lock_iter174.py is reusable as regression. Run with: REACT_APP_BACKEND_URL=<url> pytest backend/tests/test_raw_material_lock_iter174.py -v. The test depends on tomato (id=c4b3b488-011b-4fdb-a4b7-c5f3c76033d1) remaining in transferred state — if seed data is reset and tomato no longer has fulfilled manufacturing_request or out movements, test_put_transferred_returns_409 / test_delete_transferred_returns_409 / test_add_stock_works_after_transfer assertions will need a fresh transferred material ID.",
+  "verification_details": {
+    "backend": {
+      "GET_/api/raw-materials-new": "returns is_transferred/can_edit/can_delete on every material; tomato is_transferred=True, can_edit=False, can_delete=False; can_edit always equals NOT is_transferred.",
+      "PUT_transferred": "409 with Arabic detail containing 'تحويل'/'تعديل'.",
+      "DELETE_transferred": "409 with Arabic detail.",
+      "PUT_non_transferred": "200; subsequent GET reflects updated name/quantity/cost.",
+      "DELETE_non_transferred": "200; subsequent GET single → 404; not in list anymore (also removes material_cost_layers per code, dropped via delete_many).",
+      "POST_add-stock_after_transfer": "200; tomato qty increased by +1."
+    },
+    "frontend": {
+      "tomato_card": "Pencil + Trash buttons rendered with class containing opacity-40, disabled attr present, title='مقفلة — تم التحويل للتصنيع'. Clicking does NOT open edit dialog.",
+      "non_transferred_card": "Pencil click opens [data-testid=edit-raw-material-dialog] containing edit-rm-name-input, edit-rm-quantity-input, edit-rm-cost-input, edit-rm-save-btn. Trash click opens [data-testid=delete-raw-material-dialog] with delete-rm-confirm-btn.",
+      "admin_visibility": "Pencil/Trash rendered for admin only (gated by isAdmin in JSX line ~1509). Verified by code review; not re-tested as non-admin user."
+    }
+  }
+}

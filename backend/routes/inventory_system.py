@@ -1186,6 +1186,9 @@ async def get_raw_materials(current_user: dict = Depends(get_current_user)):
     
     materials = await db.raw_materials.find(query, {"_id": 0}).to_list(1000)
     
+    # جلب IDs المواد المحوّلة (مرة واحدة) لتحسين الأداء
+    transferred_ids = await _get_transferred_material_ids(db, tenant_id)
+    
     # حساب القيمة الإجمالية والتكلفة الفعلية والإحصائيات لكل مادة
     for material in materials:
         material["total_value"] = material.get("quantity", 0) * material.get("cost_per_unit", 0)
@@ -1200,6 +1203,12 @@ async def get_raw_materials(current_user: dict = Depends(get_current_user)):
         material["total_received"] = material.get("total_received", material.get("quantity", 0))
         material["transferred_to_manufacturing"] = material.get("transferred_to_manufacturing", 0)
         material["remaining_quantity"] = material.get("quantity", 0)
+        
+        # === حالة التحويل: هل خرجت المادة من المخزن إلى التصنيع من قبل؟ ===
+        is_transferred = material["id"] in transferred_ids
+        material["is_transferred"] = is_transferred
+        material["can_edit"] = not is_transferred  # قبل التحويل: تعديل كامل
+        material["can_delete"] = not is_transferred  # قبل التحويل: حذف مسموح
     
     return materials
 
@@ -1267,10 +1276,28 @@ async def get_raw_material(material_id: str, current_user: dict = Depends(get_cu
 
 @router.put("/raw-materials-new/{material_id}")
 async def update_raw_material(material_id: str, material: RawMaterialCreate, current_user: dict = Depends(get_current_user)):
-    """تحديث مادة خام"""
+    """تحديث مادة خام — مقيّد بحالة التحويل:
+    - قبل التحويل (is_transferred=False): تعديل كامل (اسم/تكلفة/كمية)
+    - بعد التحويل: مرفوض (المادة مقفلة، يمكن فقط الإضافة عبر add-stock أو الشراء)
+    """
     db = get_db()
     tenant_id = get_user_tenant_id(current_user)
-    
+
+    # تأكد أن المادة موجودة وضمن نطاق tenant
+    q = {"id": material_id}
+    if tenant_id:
+        q["tenant_id"] = tenant_id
+    existing = await db.raw_materials.find_one(q, {"_id": 0})
+    if not existing:
+        raise HTTPException(status_code=404, detail="المادة غير موجودة")
+
+    # === فحص حالة التحويل ===
+    if await _is_material_transferred(db, material_id, tenant_id):
+        raise HTTPException(
+            status_code=409,
+            detail="لا يمكن تعديل المادة بعد تحويلها للتصنيع. يمكنك فقط زيادة الكمية عبر إضافة المخزون أو شراء جديد."
+        )
+
     # حساب التكلفة الفعلية بعد الهدر
     waste_percentage = material.waste_percentage or 0
     effective_cost = material.cost_per_unit
@@ -1288,6 +1315,88 @@ async def update_raw_material(material_id: str, material: RawMaterialCreate, cur
     )
     
     return await db.raw_materials.find_one({"id": material_id}, {"_id": 0})
+
+
+@router.delete("/raw-materials-new/{material_id}")
+async def delete_raw_material(material_id: str, current_user: dict = Depends(get_current_user)):
+    """حذف مادة خام — مسموح فقط قبل التحويل للتصنيع، وللمالك/السوبر فقط."""
+    if current_user.get("role") not in ["admin", "super_admin"]:
+        raise HTTPException(status_code=403, detail="غير مسموح — للمالك فقط")
+
+    db = get_db()
+    tenant_id = get_user_tenant_id(current_user)
+
+    q = {"id": material_id}
+    if tenant_id:
+        q["tenant_id"] = tenant_id
+    material = await db.raw_materials.find_one(q, {"_id": 0})
+    if not material:
+        raise HTTPException(status_code=404, detail="المادة غير موجودة")
+
+    if await _is_material_transferred(db, material_id, tenant_id):
+        raise HTTPException(
+            status_code=409,
+            detail="لا يمكن حذف المادة بعد تحويلها للتصنيع. تم استخدامها في عمليات التصنيع."
+        )
+
+    # حذف المادة + طبقاتها (لا حركات لأنها لم تُحوّل)
+    await db.raw_materials.delete_one({"id": material_id})
+    await db.material_cost_layers.delete_many({"material_id": material_id})
+
+    return {"message": f"تم حذف المادة {material.get('name')} بنجاح"}
+
+
+async def _get_transferred_material_ids(db, tenant_id: Optional[str]) -> set:
+    """يُرجع IDs المواد التي تم تحويلها للتصنيع (وُجدت في حركة OUT أو manufacturing_request fulfilled).
+    
+    ملاحظة: لا نُطبّق tenant_id strict filter لأن material_id هو UUID فريد، وبعض السجلات
+    القديمة لا تحوي tenant_id (قبل multi-tenant migration).
+    """
+    transferred = set()
+
+    # 1) من حركات المخزون: type يحوي "out" أو نوع "warehouse_to_manufacturing"
+    movement_query = {
+        "$or": [
+            {"type": "warehouse_to_manufacturing"},
+            {"type": "out"},
+            {"type": "manufacturing_transfer"},
+            {"type": "raw_material_to_manufacturing"},
+        ]
+    }
+
+    async for mv in db.inventory_movements.find(movement_query, {"_id": 0, "material_id": 1, "items": 1}):
+        if mv.get("material_id"):
+            transferred.add(mv["material_id"])
+        for item in (mv.get("items") or []):
+            if item.get("material_id"):
+                transferred.add(item["material_id"])
+
+    # 2) من طلبات التصنيع المُنفّذة
+    async for req in db.manufacturing_requests.find({"status": "fulfilled"}, {"_id": 0, "items": 1}):
+        for item in (req.get("items") or []):
+            if item.get("material_id"):
+                transferred.add(item["material_id"])
+
+    return transferred
+
+
+async def _is_material_transferred(db, material_id: str, tenant_id: Optional[str]) -> bool:
+    """فحص سريع: هل تم تحويل هذه المادة من قبل؟ (UUID فريد، لا حاجة لفلتر tenant_id)"""
+    # فحص حركات OUT
+    mq = {
+        "$or": [
+            {"material_id": material_id},
+            {"items.material_id": material_id},
+        ],
+        "type": {"$in": ["warehouse_to_manufacturing", "out", "manufacturing_transfer", "raw_material_to_manufacturing"]},
+    }
+    if await db.inventory_movements.count_documents(mq, limit=1) > 0:
+        return True
+    # فحص manufacturing_requests fulfilled
+    rq = {"status": "fulfilled", "items.material_id": material_id}
+    if await db.manufacturing_requests.count_documents(rq, limit=1) > 0:
+        return True
+    return False
 
 
 @router.post("/raw-materials-new/{material_id}/add-stock")

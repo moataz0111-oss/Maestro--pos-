@@ -41,7 +41,9 @@ import {
   Receipt,
   ArrowUpDown,
   TrendingUp,
-  TrendingDown
+  TrendingDown,
+  Pencil,
+  Trash2
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -104,6 +106,10 @@ export default function WarehouseManufacturing() {
   const [packagingMaterials, setPackagingMaterials] = useState([]);
   const [packagingRequests, setPackagingRequests] = useState([]);
   const [showAddPackagingDialog, setShowAddPackagingDialog] = useState(false);
+
+  // === تعديل/حذف مادة خام (للمالك، قبل التحويل فقط) ===
+  const [editRawMaterial, setEditRawMaterial] = useState(null);  // null أو الكائن
+  const [deleteRawMaterial, setDeleteRawMaterial] = useState(null);  // null أو الكائن
   
   // === طلب شراء جديد للمشتريات (يبدأ بحالة pending_owner_approval) ===
   const [showPurchaseRequestModal, setShowPurchaseRequestModal] = useState(false);
@@ -835,6 +841,48 @@ export default function WarehouseManufacturing() {
       setSubmitting(false);
     }
   };
+
+  // === تعديل المادة الخام (قبل التحويل فقط) ===
+  const handleUpdateRawMaterial = async () => {
+    if (!editRawMaterial) return;
+    setSubmitting(true);
+    try {
+      const payload = {
+        name: editRawMaterial.name,
+        unit: editRawMaterial.unit,
+        quantity: parseFloat(editRawMaterial.quantity) || 0,
+        cost_per_unit: parseFloat(editRawMaterial.cost_per_unit) || 0,
+        min_quantity: parseFloat(editRawMaterial.min_quantity) || 0,
+        category: editRawMaterial.category || null,
+        waste_percentage: parseFloat(editRawMaterial.waste_percentage) || 0,
+      };
+      await axios.put(`${API}/raw-materials-new/${editRawMaterial.id}`, payload, { headers });
+      toast.success(t('تم تحديث المادة بنجاح'));
+      setEditRawMaterial(null);
+      fetchData();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || t('فشل في تحديث المادة'));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // === حذف المادة الخام (قبل التحويل فقط، للمالك) ===
+  const handleDeleteRawMaterial = async () => {
+    if (!deleteRawMaterial) return;
+    setSubmitting(true);
+    try {
+      await axios.delete(`${API}/raw-materials-new/${deleteRawMaterial.id}`, { headers });
+      toast.success(t('تم حذف المادة بنجاح'));
+      setDeleteRawMaterial(null);
+      fetchData();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || t('فشل في حذف المادة'));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   
   // إضافة مادة لقائمة الطلب
   const addMaterialToRequest = (material) => {
@@ -1436,12 +1484,13 @@ export default function WarehouseManufacturing() {
                     </div>
                     
                     {/* أزرار الإجراءات */}
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap gap-2">
                       <Button
                         variant="outline"
                         size="sm"
-                        className="flex-1"
+                        className="flex-1 min-w-[120px]"
                         onClick={() => addItemToTransfer(material)}
+                        data-testid={`add-to-transfer-${material.id}`}
                       >
                         <Send className="h-4 w-4 ml-2" />
                         {t('إضافة للتحويل')}
@@ -1451,10 +1500,38 @@ export default function WarehouseManufacturing() {
                         size="sm"
                         className="border-purple-500 text-purple-600 hover:bg-purple-50"
                         onClick={() => setShowAddRawMaterialStockDialog(material)}
-                        data-testid="add-raw-material-stock-btn"
+                        data-testid={`add-raw-material-stock-btn-${material.id}`}
+                        title={t('زيادة الكمية')}
                       >
                         <Plus className="h-4 w-4" />
                       </Button>
+                      {/* تعديل/حذف للمالك فقط، ومسموح فقط قبل التحويل للتصنيع */}
+                      {isAdmin && (
+                        <>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className={`${material.is_transferred ? 'opacity-40 cursor-not-allowed' : 'border-blue-500 text-blue-600 hover:bg-blue-50'}`}
+                            onClick={() => !material.is_transferred && setEditRawMaterial({ ...material })}
+                            disabled={!!material.is_transferred}
+                            title={material.is_transferred ? t('مقفلة — تم التحويل للتصنيع') : t('تعديل المادة')}
+                            data-testid={`edit-raw-material-btn-${material.id}`}
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className={`${material.is_transferred ? 'opacity-40 cursor-not-allowed' : 'border-red-500 text-red-600 hover:bg-red-50'}`}
+                            onClick={() => !material.is_transferred && setDeleteRawMaterial(material)}
+                            disabled={!!material.is_transferred}
+                            title={material.is_transferred ? t('مقفلة — تم التحويل للتصنيع') : t('حذف المادة')}
+                            data-testid={`delete-raw-material-btn-${material.id}`}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </>
+                      )}
                     </div>
                   </CardContent>
                 </Card>
@@ -3775,6 +3852,137 @@ export default function WarehouseManufacturing() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* === Edit Raw Material Dialog (للمالك فقط، قبل التحويل) === */}
+      <Dialog open={!!editRawMaterial} onOpenChange={(o) => !o && setEditRawMaterial(null)}>
+        <DialogContent className="max-w-md" data-testid="edit-raw-material-dialog">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Pencil className="h-5 w-5 text-blue-500" />
+              {t('تعديل المادة الخام')}
+            </DialogTitle>
+          </DialogHeader>
+          {editRawMaterial && (
+            <div className="space-y-3 py-2">
+              <div className="p-2.5 bg-blue-500/10 border border-blue-500/30 rounded text-xs text-blue-700 dark:text-blue-300">
+                {t('يمكن تعديل أي حقل لأن المادة لم تُحوّل للتصنيع بعد. بعد التحويل ستُقفل المادة.')}
+              </div>
+              <div>
+                <Label>{t('الاسم')}</Label>
+                <Input
+                  value={editRawMaterial.name || ''}
+                  onChange={(e) => setEditRawMaterial({ ...editRawMaterial, name: e.target.value })}
+                  data-testid="edit-rm-name-input"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label>{t('الكمية')}</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={editRawMaterial.quantity ?? 0}
+                    onChange={(e) => setEditRawMaterial({ ...editRawMaterial, quantity: e.target.value })}
+                    data-testid="edit-rm-quantity-input"
+                  />
+                </div>
+                <div>
+                  <Label>{t('الوحدة')}</Label>
+                  <Input
+                    value={editRawMaterial.unit || ''}
+                    onChange={(e) => setEditRawMaterial({ ...editRawMaterial, unit: e.target.value })}
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label>{t('التكلفة/وحدة')}</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={editRawMaterial.cost_per_unit ?? 0}
+                    onChange={(e) => setEditRawMaterial({ ...editRawMaterial, cost_per_unit: e.target.value })}
+                    data-testid="edit-rm-cost-input"
+                  />
+                </div>
+                <div>
+                  <Label>{t('الحد الأدنى')}</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={editRawMaterial.min_quantity ?? 0}
+                    onChange={(e) => setEditRawMaterial({ ...editRawMaterial, min_quantity: e.target.value })}
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label>{t('نسبة الهدر %')}</Label>
+                  <Input
+                    type="number"
+                    step="0.1"
+                    value={editRawMaterial.waste_percentage ?? 0}
+                    onChange={(e) => setEditRawMaterial({ ...editRawMaterial, waste_percentage: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <Label>{t('الفئة')}</Label>
+                  <Input
+                    value={editRawMaterial.category || ''}
+                    onChange={(e) => setEditRawMaterial({ ...editRawMaterial, category: e.target.value })}
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditRawMaterial(null)} data-testid="edit-rm-cancel-btn">
+              {t('إلغاء')}
+            </Button>
+            <Button onClick={handleUpdateRawMaterial} disabled={submitting} data-testid="edit-rm-save-btn">
+              {submitting ? t('جاري الحفظ...') : t('حفظ التعديلات')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* === Delete Raw Material Confirmation === */}
+      <Dialog open={!!deleteRawMaterial} onOpenChange={(o) => !o && setDeleteRawMaterial(null)}>
+        <DialogContent className="max-w-md" data-testid="delete-raw-material-dialog">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-600">
+              <Trash2 className="h-5 w-5" />
+              {t('تأكيد الحذف')}
+            </DialogTitle>
+          </DialogHeader>
+          {deleteRawMaterial && (
+            <div className="space-y-3 py-2">
+              <div className="p-3 bg-red-500/10 border border-red-500/30 rounded">
+                <p className="text-sm">
+                  {t('هل أنت متأكد من حذف المادة')}: <span className="font-bold">{deleteRawMaterial.name}</span>؟
+                </p>
+                <p className="text-xs text-muted-foreground mt-2">
+                  {t('سيتم حذف المادة وجميع طبقات تكلفتها. هذا الإجراء لا يمكن التراجع عنه.')}
+                </p>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteRawMaterial(null)} data-testid="delete-rm-cancel-btn">
+              {t('إلغاء')}
+            </Button>
+            <Button
+              className="bg-red-500 hover:bg-red-600"
+              onClick={handleDeleteRawMaterial}
+              disabled={submitting}
+              data-testid="delete-rm-confirm-btn"
+            >
+              {submitting ? t('جاري الحذف...') : t('نعم، احذف')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
     </div>
   );
 }
