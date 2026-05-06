@@ -417,7 +417,7 @@ export default function Purchasing() {
     if (!confirm(t('هل تريد إرسال هذه الفاتورة للمخزن؟ سيتم إضافة المواد للمخزون.'))) return;
     setSendingToWarehouseId(invoice.id);
     try {
-      await axios.post(`${API}/purchases-new/${invoice.id}/send-to-warehouse`, {}, { headers });
+      await axios.post(`${API}/purchase-invoices/${invoice.id}/send-to-warehouse`, {}, { headers });
       toast.success(t('تم إرسال الفاتورة للمخزن بنجاح'));
       fetchData();
     } catch (error) {

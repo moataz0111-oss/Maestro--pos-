@@ -1,0 +1,39 @@
+{
+  "summary": "Iter175 retest. New endpoint POST /api/purchase-invoices/{id}/send-to-warehouse fully validated via pytest (6/6 passed). Fix 1 backend works end-to-end: 200 happy path, status flips to 'transferred', raw_materials quantity increases, re-send → 400, non-existent → 404, no-auth → 401/403. Frontend handleSendToWarehouse (Purchasing.js:420) correctly points to the new endpoint, and badge/button logic (lines 520-521, 578) matches backend's 'transferred' value. FIX 2 verified on UI: 'طلب من المشتريات' not present on /warehouse-manufacturing (count=0). FIX 3 App.js Suspense loader is gone, but one page-level fullscreen loader still appears briefly on HR navigation — pre-existing issue already flagged in iter175, not a regression.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "HR / Reports / Dashboard during navigation",
+        "issues": ["A large centered loader (min-h-screen) inside page-level components still appears briefly during navigation (1 node detected during /hr transition). Known, carried over from iter175."]
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter175_send_to_warehouse.py",
+    "/app/test_reports/pytest/iter175_retest.xml"
+  ],
+  "action_items": [
+    "OPTIONAL (low priority): Replace page-level min-h-screen loaders inside HR/Reports/Dashboard with skeleton placeholders for truly 'instant' navigation feel."
+  ],
+  "critical_code_review_comments": [
+    "server.py:11458 — the new endpoint correctly applies tenant scoping and uses get_current_user dependency. Good.",
+    "server.py:11458 — new endpoint duplicates ~100 lines of FIFO/cost-layer/movement logic that already exists in routes/inventory_system.py. Consider extracting a shared helper to avoid drift between the two purchase systems.",
+    "The codebase still has two parallel purchase invoice systems (purchase_invoices in server.py vs purchases_new in routes/inventory_system.py). Long term, one of them should be retired to avoid future collection mismatch bugs."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter175_send_to_warehouse.py (rewritten for new endpoint)"
+  ],
+  "success_rate": {"backend": "100% (6/6 pytest)", "frontend": "95% (FIX1 backend-verified + wired; FIX2 verified; FIX3 App.js fixed, page-level loader remnants)"},
+  "test_credentials": "Admin: hanialdujaili@gmail.com / Hani@2024",
+  "seed_data_creation": "pytest creates and cleans up TEST_INV_175_* invoices and TEST_Material_* raw materials (auto-created by send-to-warehouse). Supplier 'TEST_Supplier_iter175' may remain if not pre-existing.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iter175 send-to-warehouse is fully fixed. The happy-path pytest in test_iter175_send_to_warehouse.py::test_send_to_warehouse_happy_path is the regression guard — it creates an invoice, sends it, verifies status=='transferred', verifies raw_materials quantity increment, and verifies re-send returns 400. Material id of طماطم referenced in request: c4b3b488-011b-4fdb-a4b7-c5f3c76033d1 (not used by tests — they create their own test material).",
+  "rca of the issue": "Previous iter175 root cause: frontend POSTed to /api/purchases-new/{id}/send-to-warehouse (collection purchases_new) but invoice ids lived in purchase_invoices collection → 404. Fix: main agent (1) added a NEW endpoint POST /api/purchase-invoices/{id}/send-to-warehouse in server.py (line 11458) that operates on the legacy collection, adds raw_materials, creates FIFO cost layers via add_cost_layer, logs inventory_movements (type='in', subtype='purchase_receipt'), writes status='transferred', and (2) updated Purchasing.js:420 to call the new endpoint. Tenant scoping via get_user_tenant_id is applied. Auth is enforced via Depends(get_current_user). Verified in this iteration: 6/6 pytest passed."
+}

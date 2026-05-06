@@ -11454,6 +11454,144 @@ async def delete_purchase_invoice(invoice_id: str, current_user: dict = Depends(
     
     return {"message": "تم حذف الفاتورة"}
 
+
+@api_router.post("/purchase-invoices/{invoice_id}/send-to-warehouse")
+async def send_purchase_invoice_to_warehouse(invoice_id: str, current_user: dict = Depends(get_current_user)):
+    """إرسال فاتورة شراء (legacy collection) للمخزن — يضيف المواد كطبقات FIFO."""
+    from services.cost_layer_service import add_cost_layer, get_current_effective_cost, detect_price_increase
+
+    tenant_id = get_user_tenant_id(current_user)
+    query = {"id": invoice_id}
+    if tenant_id:
+        query["tenant_id"] = tenant_id
+
+    invoice = await db.purchase_invoices.find_one(query, {"_id": 0})
+    if not invoice:
+        raise HTTPException(status_code=404, detail="الفاتورة غير موجودة")
+
+    if invoice.get("status") == "transferred":
+        raise HTTPException(status_code=400, detail="تم إرسال هذه الفاتورة للمخزن بالفعل")
+
+    detected_alerts = []
+    movements = []
+
+    for item in (invoice.get("items") or []):
+        item_qty = float(item.get("quantity", 0) or 0)
+        item_cost = float(item.get("unit_price", item.get("cost_per_unit", 0)) or 0)
+        item_name = item.get("name")
+        if item_qty <= 0 or not item_name:
+            continue
+
+        # ابحث عن المادة الخام بالاسم
+        mq = {"name": item_name}
+        if tenant_id:
+            mq["tenant_id"] = tenant_id
+        existing = await db.raw_materials.find_one(mq)
+
+        if existing:
+            material_id = existing["id"]
+            # كشف فرق السعر قبل الإضافة
+            alert = await detect_price_increase(
+                db,
+                tenant_id=tenant_id,
+                material_id=material_id,
+                material_name=item_name,
+                unit=item.get("unit", "كغم"),
+                quantity=item_qty,
+                new_cost=item_cost,
+                purchase_id=invoice_id,
+                purchase_number=str(invoice.get("invoice_number") or ""),
+                triggered_by_user_id=current_user.get("id"),
+                triggered_by_role=current_user.get("role"),
+            )
+            if alert:
+                detected_alerts.append(alert)
+
+            # زِد الكمية فقط (لا تُحدّث cost_per_unit — يأتي من أقدم طبقة)
+            await db.raw_materials.update_one(
+                {"id": material_id},
+                {"$inc": {"quantity": item_qty}, "$set": {"last_updated": datetime.now(timezone.utc).isoformat()}}
+            )
+        else:
+            material_id = str(uuid.uuid4())
+            await db.raw_materials.insert_one({
+                "id": material_id,
+                "name": item_name,
+                "name_en": None,
+                "unit": item.get("unit", "كغم"),
+                "quantity": item_qty,
+                "min_quantity": 0,
+                "cost_per_unit": item_cost,
+                "category": None,
+                "last_updated": datetime.now(timezone.utc).isoformat(),
+                "created_at": datetime.now(timezone.utc).isoformat(),
+                "tenant_id": tenant_id,
+            })
+
+        # أضف طبقة تكلفة (FIFO)
+        await add_cost_layer(
+            db,
+            material_id=material_id,
+            material_name=item_name,
+            unit=item.get("unit") or "كغم",
+            quantity=item_qty,
+            unit_cost=item_cost,
+            tenant_id=tenant_id,
+            source="purchase",
+            source_id=invoice_id,
+            source_number=str(invoice.get("invoice_number") or ""),
+        )
+
+        # تحديث cost_per_unit ليساوي تكلفة أقدم طبقة نشطة
+        effective = await get_current_effective_cost(db, material_id, tenant_id)
+        if effective is not None:
+            await db.raw_materials.update_one(
+                {"id": material_id},
+                {"$set": {"cost_per_unit": effective, "last_cost_updated_at": datetime.now(timezone.utc).isoformat()}}
+            )
+
+        # تسجيل حركة دخول
+        await db.inventory_movements.insert_one({
+            "id": str(uuid.uuid4()),
+            "type": "in",
+            "subtype": "purchase_receipt",
+            "material_id": material_id,
+            "material_name": item_name,
+            "quantity": item_qty,
+            "unit": item.get("unit"),
+            "cost_per_unit": item_cost,
+            "total_value": item_qty * item_cost,
+            "reference_type": "purchase_invoice",
+            "reference_id": invoice_id,
+            "reference_number": invoice.get("invoice_number"),
+            "supplier_name": invoice.get("supplier_name"),
+            "performed_by": current_user.get("id"),
+            "performed_by_name": current_user.get("full_name") or current_user.get("username"),
+            "notes": f"استلام فاتورة شراء #{invoice.get('invoice_number')}",
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "tenant_id": tenant_id,
+        })
+        movements.append({"material_name": item_name, "quantity": item_qty})
+
+    # تحديث حالة الفاتورة
+    await db.purchase_invoices.update_one(
+        {"id": invoice_id},
+        {"$set": {
+            "status": "transferred",
+            "transferred_at": datetime.now(timezone.utc).isoformat(),
+            "transferred_by": current_user.get("id"),
+        }}
+    )
+
+    return {
+        "message": "تم إرسال الفاتورة للمخزن بنجاح",
+        "invoice_id": invoice_id,
+        "movements": movements,
+        "price_alerts": detected_alerts,
+        "price_alerts_count": len(detected_alerts),
+    }
+
+
 @api_router.get("/purchase-suppliers")
 async def get_purchase_suppliers(current_user: dict = Depends(get_current_user)):
     """جلب موردي المشتريات"""
