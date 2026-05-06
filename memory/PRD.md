@@ -153,7 +153,7 @@ Multi-tenant POS system with biometric integration (ZKTeco), thermal receipt pri
 - **Stale Shift Admin Endpoints** (kept for transparency, not used in UI per user request): `GET /api/shifts/stale?hours_threshold=18` lists stuck shifts; `POST /api/shifts/{id}/force-close` allows admin override.
 
 
-## Completed Features (Feb 6, 2026 - HR Phase 1 Fixes)
+## Completed Features (Feb 6, 2026 - HR Phase 1 Fixes + Low Stock Alerts)
 - **Biometric Push Per Branch**: `handlePushAllToDevice` in `HR.js` now filters employees by `device.branch_id`. The push-all dialog shows the device's branch name and `data-testid=push-all-eligible-count` reflecting only employees of that branch. Each device exports only its branch employees (e.g., Jadriya device → only Jadriya employees).
 - **Account Statement Modal (كشف حساب الموظف)**: New dialog (`data-testid=account-statement-dialog`) opened from each employee row's FileText button (`data-testid=account-statement-{empId}`). Shows totals cards + tables for deductions, bonuses, advances, payrolls, and attendance. A4 print supported via `window.print()` with scoped CSS.
 - **New Backend Endpoint** `GET /api/employees/{employee_id}/account-statement` (in `payroll_routes.py`): Returns employee, branch, deductions, bonuses, advances, payrolls, attendance, totals. Tenant-scoped on every sub-query for defence-in-depth. Optional `start_date`/`end_date` filters.
@@ -161,6 +161,7 @@ Multi-tenant POS system with biometric integration (ZKTeco), thermal receipt pri
 - **Branch Count Hardening**: `departmentBranchIds` set now also matches branch names containing مطبخ/مخزن/مستودع/مشتريات for defence-in-depth so internal departments are reliably excluded from `الفروع` salary card count.
 - **Salary Report Per-Employee Action**: Replaced row-level `window.print()` with Account Statement opener (`data-testid=statement-from-summary-{empId}`) for actionable per-employee inspection.
 - **Print Routing**: Administrative reports (PayrollPrint, Account Statement, salary report) use A4 `window.print()`. Deductions/Bonuses receipts retain thermal-style 350px receipt window per user spec.
+- **🔔 Low-Stock Audio Alerts (Owner Dashboard)**: New `LowStockBanner` component (`/app/frontend/src/components/LowStockBanner.js`) rendered at top of Dashboard for admin/super_admin only. Fetches `GET /api/raw-materials-new/alerts/low-stock` (new endpoint in `inventory_system.py`) on mount + auto-refresh every 60s. Plays `playUrgentAlert()` once on first detection. Sticky top banner with red gradient if any material at qty=0 (critical), amber if only below min_quantity (warning). Bell icon with count badge, expandable details list, "فتح المخزن" navigates to /warehouse-manufacturing, dismiss button hides for 24h via localStorage `lowstock_dismiss_until_v1`, with floating revive button bottom-left. Skips materials with `min_quantity=0` (no threshold defined).
 
 ## Backlog
 - (P1) Audio low-stock alerts for owner when raw materials drop below minimum.
