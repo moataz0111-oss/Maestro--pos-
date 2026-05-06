@@ -1115,6 +1115,9 @@ const CashRegisterClosingTab = ({ t, formatPrice, selectedBranchId, branches, ge
   const [localBranchId, setLocalBranchId] = useState(selectedBranchId || '');
   const [viewMode, setViewMode] = useState('individual'); // 'individual' = كل شفت لوحده، 'all' = مجمّع
   const [expandedShift, setExpandedShift] = useState(null); // شفت مفتوح للتفاصيل
+  const [expandedExpensesShift, setExpandedExpensesShift] = useState(null); // فتح تفاصيل مصاريف شفت محدد
+  const [shiftExpensesDetails, setShiftExpensesDetails] = useState({}); // {shiftIdx: [expenses]}
+  const [loadingExpenses, setLoadingExpenses] = useState(false);
 
   // حساب النقد المعدود والفرق من الإغلاقات
   const totalCountedCash = closingsHistory.reduce((sum, c) => sum + (c.closing_cash || c.counted_cash || 0), 0);
@@ -1123,6 +1126,45 @@ const CashRegisterClosingTab = ({ t, formatPrice, selectedBranchId, branches, ge
   const cashDifference = totalCountedCash - expectedCash;
   const isOverCash = cashDifference > 0;
   const isShortCash = cashDifference < 0;
+
+  // جلب تفاصيل مصاريف شفت معيّن (حسب business_date و branch_id)
+  const fetchShiftExpenses = async (shiftIdx, closing) => {
+    if (shiftExpensesDetails[shiftIdx]) return; // موجودة مسبقاً
+    setLoadingExpenses(true);
+    try {
+      const token = localStorage.getItem('token');
+      const params = new URLSearchParams();
+      const bizDate = closing.business_date;
+      if (bizDate) {
+        params.append('start_date', bizDate);
+        params.append('end_date', bizDate);
+      }
+      if (closing.branch_id) params.append('branch_id', closing.branch_id);
+      const res = await axios.get(`${API}/expenses?${params.toString()}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      // فلترة إضافية: لو الكاشير أنشأها في هذا الشفت
+      let items = Array.isArray(res.data) ? res.data : (res.data?.expenses || []);
+      // فلترة بالـ created_by للكاشير (لو متوفر) وحقل shift_id
+      if (closing.shift_id) {
+        items = items.filter(e => !e.shift_id || e.shift_id === closing.shift_id);
+      }
+      setShiftExpensesDetails(prev => ({ ...prev, [shiftIdx]: items }));
+    } catch (err) {
+      setShiftExpensesDetails(prev => ({ ...prev, [shiftIdx]: [] }));
+    } finally {
+      setLoadingExpenses(false);
+    }
+  };
+
+  const toggleExpensesDetails = (shiftIdx, closing) => {
+    if (expandedExpensesShift === shiftIdx) {
+      setExpandedExpensesShift(null);
+    } else {
+      setExpandedExpensesShift(shiftIdx);
+      fetchShiftExpenses(shiftIdx, closing);
+    }
+  };
 
   const fetchReport = async () => {
     setLoading(true);
@@ -1544,11 +1586,88 @@ const CashRegisterClosingTab = ({ t, formatPrice, selectedBranchId, branches, ge
                         <p className="text-xs text-blue-300">{t('الفعلي')}</p>
                         <p className="text-lg font-bold text-white">{formatPrice(closing.closing_cash || closing.actual_cash || 0)}</p>
                       </div>
-                      <div className="bg-red-900/20 rounded-lg p-3 text-center">
-                        <p className="text-xs text-red-300">{t('المصروفات')}</p>
+                      <div
+                        className={`bg-red-900/20 rounded-lg p-3 text-center cursor-pointer transition-all hover:bg-red-900/40 hover:scale-[1.02] ${expandedExpensesShift === idx ? 'ring-2 ring-red-500/60' : ''}`}
+                        onClick={(e) => { e.stopPropagation(); toggleExpensesDetails(idx, closing); }}
+                        data-testid={`expenses-card-${idx}`}
+                        title={t('اضغط لعرض تفاصيل المصروفات')}
+                      >
+                        <p className="text-xs text-red-300 flex items-center justify-center gap-1">
+                          {t('المصروفات')}
+                          <ChevronDown className={`h-3 w-3 transition-transform ${expandedExpensesShift === idx ? 'rotate-180' : ''}`} />
+                        </p>
                         <p className="text-lg font-bold text-white">{formatPrice(shiftExpenses)}</p>
                       </div>
                     </div>
+
+                    {/* تفاصيل المصروفات (تظهر عند الضغط على بطاقة المصروفات) */}
+                    {expandedExpensesShift === idx && (
+                      <div className="bg-gradient-to-br from-red-950/40 to-red-900/20 border border-red-700/40 rounded-lg p-4 space-y-3" data-testid={`expenses-details-${idx}`}>
+                        <div className="flex items-center justify-between">
+                          <p className="text-sm font-bold text-red-300 flex items-center gap-2">
+                            <Receipt className="h-4 w-4" />
+                            {t('تفاصيل المصروفات')}
+                            <span className="text-xs text-gray-400 font-normal">
+                              ({(shiftExpensesDetails[idx]?.length || 0)} {t('عملية')})
+                            </span>
+                          </p>
+                          <span className="text-sm font-bold text-red-400">
+                            {formatPrice(shiftExpenses)}
+                          </span>
+                        </div>
+                        {loadingExpenses && !shiftExpensesDetails[idx] ? (
+                          <div className="flex justify-center py-4">
+                            <div className="w-6 h-6 border-2 border-red-500 border-t-transparent rounded-full animate-spin" />
+                          </div>
+                        ) : (shiftExpensesDetails[idx]?.length || 0) === 0 ? (
+                          <p className="text-center text-sm text-gray-400 py-3">{t('لا توجد مصاريف لهذا الشفت')}</p>
+                        ) : (
+                          <div className="overflow-x-auto rounded border border-red-800/30">
+                            <table className="w-full text-sm">
+                              <thead className="bg-red-950/40 text-red-300">
+                                <tr>
+                                  <th className="text-right p-2 text-xs font-bold">#</th>
+                                  <th className="text-right p-2 text-xs font-bold">{t('الفئة')}</th>
+                                  <th className="text-right p-2 text-xs font-bold">{t('الوصف')}</th>
+                                  <th className="text-right p-2 text-xs font-bold">{t('طريقة الدفع')}</th>
+                                  <th className="text-left p-2 text-xs font-bold">{t('المبلغ')}</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {shiftExpensesDetails[idx]?.map((exp, i) => (
+                                  <tr key={exp.id || i} className="border-t border-red-800/20 hover:bg-red-950/30 transition-colors" data-testid={`expense-row-${idx}-${i}`}>
+                                    <td className="p-2 text-gray-400">{i + 1}</td>
+                                    <td className="p-2">
+                                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-500/20 text-red-300 border border-red-500/30">
+                                        {exp.category || t('عام')}
+                                      </span>
+                                    </td>
+                                    <td className="p-2 text-white">
+                                      <div>{exp.description || '—'}</div>
+                                      {exp.reference_number && (
+                                        <div className="text-[10px] text-gray-400 mt-0.5">#{exp.reference_number}</div>
+                                      )}
+                                    </td>
+                                    <td className="p-2 text-gray-300 text-xs">{exp.payment_method === 'cash' ? t('نقدي') : exp.payment_method === 'card' ? t('بطاقة') : (exp.payment_method || '—')}</td>
+                                    <td className="p-2 text-left">
+                                      <span className="font-bold text-red-400 tabular-nums">-{formatPrice(exp.amount || 0)}</span>
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                              <tfoot>
+                                <tr className="border-t-2 border-red-700/50 bg-red-950/40">
+                                  <td colSpan="4" className="p-2 text-right text-sm font-bold text-red-300">{t('الإجمالي')}</td>
+                                  <td className="p-2 text-left font-bold text-red-400 tabular-nums">
+                                    -{formatPrice(shiftExpensesDetails[idx]?.reduce((s, e) => s + (e.amount || 0), 0) || 0)}
+                                  </td>
+                                </tr>
+                              </tfoot>
+                            </table>
+                          </div>
+                        )}
+                      </div>
+                    )}
                     
                     {/* طريقة الدفع + نوع الطلب */}
                     <div className="grid md:grid-cols-2 gap-4">
