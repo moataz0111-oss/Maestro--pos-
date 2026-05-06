@@ -39,20 +39,36 @@ class OfflineOrder(BaseModel):
     discount_type: Optional[str] = None
     discount_value: Optional[float] = 0
     tax: Optional[float] = 0
+    tax_amount: Optional[float] = 0
+    service_charge: Optional[float] = 0
+    delivery_fee: Optional[float] = 0
     status: Optional[str] = "pending"
-    order_type: Optional[str] = "dine_in"
+    order_type: Optional[str] = "dine_in"  # dine_in | takeaway | delivery
     table_id: Optional[str] = None
     customer_id: Optional[str] = None
     customer_name: Optional[str] = None
     customer_phone: Optional[str] = None
+    customer_type: Optional[str] = None  # regular | delivery_company | credit
     delivery_address: Optional[str] = None
     notes: Optional[str] = None
-    payment_method: Optional[str] = "cash"
+    # === حقول الدفع الكاملة ===
+    payment_method: Optional[str] = "cash"  # cash | card | credit | deferred | delivery_company
+    payment_status: Optional[str] = None  # paid | unpaid | partial | deferred
     paid_amount: Optional[float] = 0
     change_amount: Optional[float] = 0
+    # === حقول شركات التوصيل (طلبات/طلباتي/Uber/...) ===
+    delivery_company: Optional[str] = None
+    delivery_company_id: Optional[str] = None
+    delivery_company_name: Optional[str] = None
+    delivery_company_order_id: Optional[str] = None
+    # === حقول السائق (التوصيل الداخلي) ===
+    driver_id: Optional[str] = None
+    driver_name: Optional[str] = None
+    # === باقي الحقول ===
     branch_id: Optional[str] = None
     cashier_id: Optional[str] = None
     cashier_name: Optional[str] = None
+    shift_id: Optional[str] = None
     created_at: Optional[str] = None
     is_offline_order: Optional[bool] = False
 
@@ -139,6 +155,29 @@ async def sync_order(order: OfflineOrder, current_user: dict = Depends(get_curre
         biz_date = await resolve_business_date(tenant_id, order_branch_id)
         order_number = await get_next_order_number(tenant_id, order_branch_id, biz_date)
         
+        # === تحديد حالة الدفع التلقائية إن لم تُمرَّر ===
+        # القاعدة: إن كان طلب لشركة توصيل أو ائتمان أو "deferred" → unpaid افتراضياً
+        # وإلا (cash/card مع paid_amount >= total) → paid
+        inferred_payment_status = order.payment_status
+        if not inferred_payment_status:
+            pm = (order.payment_method or "cash").lower()
+            if pm in ("delivery_company", "deferred", "credit") or order.delivery_company_id or order.delivery_company:
+                inferred_payment_status = "unpaid"
+            elif (order.paid_amount or 0) >= (order.total or 0):
+                inferred_payment_status = "paid"
+            else:
+                inferred_payment_status = "partial"
+
+        # === تحديد customer_type التلقائي إن لم يُمرَّر ===
+        inferred_customer_type = order.customer_type
+        if not inferred_customer_type:
+            if order.delivery_company_id or order.delivery_company:
+                inferred_customer_type = "delivery_company"
+            elif (order.payment_method or "").lower() in ("credit", "deferred"):
+                inferred_customer_type = "credit"
+            else:
+                inferred_customer_type = "regular"
+
         # إنشاء الطلب الجديد
         new_order = {
             "id": str(uuid.uuid4()),
@@ -151,20 +190,36 @@ async def sync_order(order: OfflineOrder, current_user: dict = Depends(get_curre
             "discount_type": order.discount_type,
             "discount_value": order.discount_value or 0,
             "tax": order.tax or 0,
+            "tax_amount": order.tax_amount or order.tax or 0,
+            "service_charge": order.service_charge or 0,
+            "delivery_fee": order.delivery_fee or 0,
             "status": order.status or "pending",
             "order_type": order.order_type or "dine_in",
             "table_id": order.table_id,
             "customer_id": order.customer_id,
             "customer_name": order.customer_name,
             "customer_phone": order.customer_phone,
+            "customer_type": inferred_customer_type,
             "delivery_address": order.delivery_address,
             "notes": order.notes,
+            # === الدفع الكامل ===
             "payment_method": order.payment_method or "cash",
+            "payment_status": inferred_payment_status,
             "paid_amount": order.paid_amount or 0,
             "change_amount": order.change_amount or 0,
+            # === شركات التوصيل ===
+            "delivery_company": order.delivery_company,
+            "delivery_company_id": order.delivery_company_id,
+            "delivery_company_name": order.delivery_company_name,
+            "delivery_company_order_id": order.delivery_company_order_id,
+            # === السائق ===
+            "driver_id": order.driver_id,
+            "driver_name": order.driver_name,
+            # === باقي ===
             "branch_id": order.branch_id or current_user.get("branch_id"),
             "cashier_id": order.cashier_id or current_user.get("id"),
             "cashier_name": order.cashier_name or current_user.get("name") or current_user.get("full_name"),
+            "shift_id": order.shift_id,
             "tenant_id": tenant_id,
             "is_offline_order": True,
             "synced_at": datetime.now(timezone.utc).isoformat(),
@@ -231,6 +286,85 @@ async def sync_order(order: OfflineOrder, current_user: dict = Depends(get_curre
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"خطأ في المزامنة: {str(e)}")
+
+
+class OrderRoutingFix(BaseModel):
+    """تحديث مسار الطلب (للطلبات الأوفلاين التي رُكِّب لها مسار خاطئ)."""
+    order_type: Optional[str] = None  # dine_in | takeaway | delivery
+    payment_method: Optional[str] = None
+    payment_status: Optional[str] = None
+    customer_type: Optional[str] = None
+    customer_name: Optional[str] = None
+    customer_phone: Optional[str] = None
+    delivery_company_id: Optional[str] = None
+    delivery_company_name: Optional[str] = None
+    delivery_company_order_id: Optional[str] = None
+    driver_id: Optional[str] = None
+    driver_name: Optional[str] = None
+    delivery_address: Optional[str] = None
+    delivery_fee: Optional[float] = None
+    notes: Optional[str] = None
+
+
+@router.patch("/orders/{order_id}/fix-routing", response_model=SyncResult)
+async def fix_order_routing(
+    order_id: str,
+    payload: OrderRoutingFix,
+    current_user: dict = Depends(get_current_user)
+):
+    """تصحيح مسار الطلب (للمالك/المدير) — مفيد للطلبات الأوفلاين التي ظهرت بمسار خاطئ
+    مثل: طلب لشركة توصيل ظهر كـ dine_in/cash. يحتفظ بـ order_number كما هو.
+    """
+    if current_user.get("role") not in ["admin", "super_admin", "manager"]:
+        raise HTTPException(status_code=403, detail="غير مسموح — للمالك/المدير فقط")
+
+    tenant_id = get_user_tenant_id(current_user)
+    q = {"id": order_id}
+    if tenant_id:
+        q["tenant_id"] = tenant_id
+    existing = await db.orders.find_one(q, {"_id": 0})
+    if not existing:
+        raise HTTPException(status_code=404, detail="الطلب غير موجود")
+
+    update_set = {}
+    audit_old = {}
+    fields_to_check = [
+        "order_type", "payment_method", "payment_status", "customer_type",
+        "customer_name", "customer_phone", "delivery_company_id",
+        "delivery_company_name", "delivery_company_order_id",
+        "driver_id", "driver_name", "delivery_address", "delivery_fee", "notes",
+    ]
+    for f in fields_to_check:
+        new_val = getattr(payload, f, None)
+        if new_val is not None:
+            update_set[f] = new_val
+            audit_old[f] = existing.get(f)
+
+    if not update_set:
+        raise HTTPException(status_code=400, detail="لا توجد حقول لتحديثها")
+
+    update_set["routing_fixed_at"] = datetime.now(timezone.utc).isoformat()
+    update_set["routing_fixed_by"] = current_user.get("id")
+    update_set["routing_fixed_by_name"] = current_user.get("full_name") or current_user.get("username")
+    update_set["routing_fix_history"] = (existing.get("routing_fix_history") or []) + [{
+        "fixed_at": datetime.now(timezone.utc).isoformat(),
+        "fixed_by": current_user.get("id"),
+        "fixed_by_name": current_user.get("full_name") or current_user.get("username"),
+        "old_values": audit_old,
+        "new_values": {k: v for k, v in update_set.items() if k in fields_to_check},
+    }]
+    update_set["updated_at"] = datetime.now(timezone.utc).isoformat()
+
+    await db.orders.update_one({"id": order_id}, {"$set": update_set})
+
+    return SyncResult(
+        success=True,
+        id=order_id,
+        order_number=existing.get("order_number"),
+        message=f"تم تصحيح مسار الطلب #{existing.get('order_number')}"
+    )
+
+
 
 
 @router.post("/customers", response_model=SyncResult)

@@ -1,0 +1,39 @@
+{
+  "summary": "iter178 backend verification of sync-order routing preservation + new PATCH /api/sync/orders/{id}/fix-routing endpoint. All 10 pytest cases PASSED. Confirmed: (a) full delivery-company payload (order_type=delivery, payment_method=delivery_company, delivery_company_name='طلباتي', delivery_company_order_id, payment_status, customer_type, delivery_fee=2000) is persisted verbatim on the order doc; (b) auto-inference correctly sets payment_status='unpaid' + customer_type='delivery_company' when only delivery_company_id is provided, and payment_status='paid' + customer_type='regular' for cash with paid_amount>=total; (c) driver_id/driver_name preserved; (d) PATCH fix-routing is admin-only (cashier gets 403), returns 404 for missing order, 400 for empty body, preserves order_number, applies new routing fields, writes routing_fixed_at/by, and ACCUMULATES routing_fix_history (2nd fix adds a new entry with old_values = previous state); (e) regression: POST /api/orders still works.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {
+        "endpoint": "PATCH /api/sync/orders/{id}/fix-routing",
+        "issue": "routing_fix_history entries store audit metadata fields (routing_fixed_at, routing_fixed_by, routing_fixed_by_name, updated_at) inside new_values via the comprehension `{k:v for k,v in update_set.items() if k in fields_to_check}`. The filter does work (only fields_to_check are kept), so new_values is clean — but fields_to_check does NOT include delivery_fee's float validation. If a client sends delivery_fee as string, Pydantic coerces correctly; no bug. Purely cosmetic."
+      },
+      {
+        "endpoint": "POST /api/sync/orders",
+        "issue": "When caller sends explicit payment_status='partial' with delivery_company_id, the explicit value wins over inference (code only infers when payment_status is falsy). This is correct current behaviour, but worth documenting — there is no server-side reconciliation if caller sends contradictory fields (e.g., payment_method='cash' + payment_status='unpaid' + delivery_company_id)."
+      }
+    ]
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_sync_routing_fix_iter178.py",
+    "/app/test_reports/pytest/iter178_sync_routing.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "sync_routes.py:309-365 fix_order_routing — role check allows admin/super_admin/manager. Consider also restricting by tenant: currently tenant filter is applied ONLY if tenant_id is truthy (line 323-324). A super_admin with no tenant_id could fix orders across tenants. That may be intended (super_admin = system owner) — just confirm.",
+    "sync_routes.py:349-355 — routing_fix_history construction reads existing.get('routing_fix_history') from the PRE-update doc and then sets the array to (old+new_entry) in one $set. If two admins hit fix-routing concurrently on the same order, one entry will be lost (last-writer-wins). Recommend using $push with $each for atomic append.",
+    "sync_routes.py:158-179 auto-inference logic — 'partial' fallback is reached only when paid_amount < total AND payment_method is cash/card. If paid_amount is null/0 for a cash order with total>0, status becomes 'partial' which might be misleading (should probably be 'unpaid'). Consider adding explicit 0 check.",
+    "sync_routes.py:232 — await db.orders.insert_one(new_order) has no unique index on (tenant_id, offline_id); duplicate-detection relies on find_one check at line 141 which is race-prone under concurrent syncs of same offline_id. Add unique compound index as a safety net.",
+    "sync_routes.py:291-306 OrderRoutingFix model — payment_status, customer_type etc are free-form strings; no Pydantic enum/Literal validation. An admin could PATCH order_type='banana' and it would persist."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_sync_routing_fix_iter178.py (new, 10 pytest cases, all pass)"
+  ],
+  "success_rate": {"backend": "100% (10/10 pytest passed in 4.73s)", "frontend": "skipped per request"},
+  "test_credentials": "Admin: hanialdujaili@gmail.com / Hani@2024 (used)",
+  "seed_data_creation": "Created several TEST_iter178_* sync orders + 1 online order under admin's tenant + 1 cashier-role user (TEST iter178 Cashier <suffix>). All cleaned up: orders deleted via teardown_module (db.orders.delete_many by id), cashier user deleted in fixture teardown. A shift may be left open if test opened one (closed via direct DB write in fixture teardown).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "iter178 added regression guard for sync-order routing preservation + fix-routing endpoint. Any future refactor of sync_routes.py should keep this test green. Cashier fixture uses direct Mongo insert as fallback (/api/users and /api/auth/register may not both exist); if E1 standardises user-creation API, the fallback path can be removed. The payment_status auto-inference 'partial' fallback (sync_routes.py:169) is worth revisiting — see critical_code_review_comments.",
+  "rca of the issue": "Original user-reported bug (offline orders synced with order_type=dine_in/payment_method=cash when they should have been delivery_company) is resolved by: (1) expanded OfflineOrder Pydantic model now includes delivery_company_*, driver_*, customer_type, payment_status, paid_amount (sync_routes.py:32-73); (2) sync_order endpoint explicitly maps each field into new_order dict (lines 182-229) rather than relying on ** unpacking; (3) auto-inference (lines 158-179) provides safe defaults when client omits payment_status/customer_type but sends delivery_company_*. For legacy orders already stored incorrectly, the new PATCH /api/sync/orders/{id}/fix-routing allows owner/admin to correct them with full audit trail (routing_fix_history accumulates, order_number preserved)."
+}
