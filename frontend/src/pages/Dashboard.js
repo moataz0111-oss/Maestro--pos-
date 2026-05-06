@@ -78,6 +78,7 @@ import {
 } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 import TargetCelebration from '../components/TargetCelebration';
+import LowStockBanner from '../components/LowStockBanner';
 import { toast } from 'sonner';
 import {
   Dialog,
@@ -1845,6 +1846,9 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen bg-background" data-testid="dashboard">
+      {/* تنبيه نقص المواد الخام للمالك */}
+      <LowStockBanner user={user} />
+
       {/* احتفال تحقيق الهدف */}
       <TargetCelebration 
         show={showTargetCelebration} 

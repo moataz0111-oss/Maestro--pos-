@@ -1017,6 +1017,54 @@ async def get_raw_materials(current_user: dict = Depends(get_current_user)):
     
     return materials
 
+@router.get("/raw-materials-new/alerts/low-stock")
+async def get_raw_materials_low_stock(current_user: dict = Depends(get_current_user)):
+    """تنبيهات المواد الخام المنخفضة تحت الحد الأدنى — للمالك فقط"""
+    db = get_db()
+    tenant_id = get_user_tenant_id(current_user)
+
+    # المالك / السوبر فقط
+    if current_user.get("role") not in ["admin", "super_admin"]:
+        return {"alerts": [], "critical_count": 0, "warning_count": 0, "total_count": 0}
+
+    query = {}
+    if tenant_id:
+        query["tenant_id"] = tenant_id
+
+    materials = await db.raw_materials.find(query, {"_id": 0}).to_list(2000)
+
+    alerts = []
+    for m in materials:
+        qty = float(m.get("quantity", 0) or 0)
+        min_q = float(m.get("min_quantity", 0) or 0)
+        if min_q <= 0:
+            continue  # لا يوجد حد أدنى محدد
+        if qty <= min_q:
+            severity = "critical" if qty <= 0 else "warning"
+            alerts.append({
+                "material_id": m.get("id"),
+                "material_name": m.get("name"),
+                "quantity": qty,
+                "min_quantity": min_q,
+                "unit": m.get("unit", ""),
+                "shortage": round(min_q - qty, 3),
+                "severity": severity,
+            })
+
+    # الحالات الحرجة أولاً
+    alerts.sort(key=lambda a: (0 if a["severity"] == "critical" else 1, a["material_name"] or ""))
+
+    critical_count = sum(1 for a in alerts if a["severity"] == "critical")
+    warning_count = sum(1 for a in alerts if a["severity"] == "warning")
+
+    return {
+        "alerts": alerts,
+        "critical_count": critical_count,
+        "warning_count": warning_count,
+        "total_count": len(alerts),
+    }
+
+
 @router.get("/raw-materials-new/{material_id}")
 async def get_raw_material(material_id: str, current_user: dict = Depends(get_current_user)):
     """جلب مادة خام محددة"""
