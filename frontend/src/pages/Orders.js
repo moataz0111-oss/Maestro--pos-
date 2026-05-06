@@ -267,8 +267,9 @@ export default function Orders() {
       const token = localStorage.getItem('token');
       // فقط الحقول التي قد تغيّرت أو لها قيمة
       const payload = { ...fixForm };
-      // لو ما كانت توصيل، نظّف حقول التوصيل
-      if (payload.order_type !== 'delivery') {
+      // لو ما كانت توصيل ولا شركة توصيل، نظّف حقول التوصيل
+      const isDelivery = payload.order_type === 'delivery' || payload.payment_method === 'delivery_company' || payload.customer_type === 'delivery_company';
+      if (!isDelivery) {
         payload.delivery_address = null;
         payload.delivery_company_name = null;
         payload.delivery_company_order_id = null;

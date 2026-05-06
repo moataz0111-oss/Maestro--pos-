@@ -71,6 +71,7 @@ class OfflineOrder(BaseModel):
     shift_id: Optional[str] = None
     created_at: Optional[str] = None
     is_offline_order: Optional[bool] = False
+    original_order_number: Optional[int] = None  # للأوفلاين: الرقم المحلي الأصلي قبل المزامنة
 
 class OfflineCustomer(BaseModel):
     id: Optional[str] = None
@@ -222,6 +223,7 @@ async def sync_order(order: OfflineOrder, current_user: dict = Depends(get_curre
             "shift_id": order.shift_id,
             "tenant_id": tenant_id,
             "is_offline_order": True,
+            "original_order_number": order.original_order_number,
             "synced_at": datetime.now(timezone.utc).isoformat(),
             "created_at": order.created_at or datetime.now(timezone.utc).isoformat(),
             "updated_at": datetime.now(timezone.utc).isoformat(),

@@ -1587,6 +1587,24 @@ class OrderResponse(BaseModel):
     coupon_discount: float = 0.0
     # طريقة الدفع المفضّلة (تُستخدم عند تحميل طلب معلق)
     preferred_payment: Optional[str] = None
+    # === حقول الأوفلاين والتدقيق (لـ fix-routing UI) ===
+    is_offline_order: Optional[bool] = False
+    offline_id: Optional[str] = None
+    original_order_number: Optional[int] = None
+    customer_type: Optional[str] = None
+    paid_amount: Optional[float] = 0
+    delivery_fee: Optional[float] = 0
+    service_charge: Optional[float] = 0
+    delivery_company: Optional[str] = None
+    delivery_company_id: Optional[str] = None
+    delivery_company_name: Optional[str] = None
+    delivery_company_order_id: Optional[str] = None
+    routing_fixed_at: Optional[str] = None
+    routing_fixed_by: Optional[str] = None
+    routing_fixed_by_name: Optional[str] = None
+    routing_fix_history: List[Dict[str, Any]] = []
+    renumbered_at: Optional[str] = None
+    renumbered_reason: Optional[str] = None
 
 # Shift Models
 class ShiftCreate(BaseModel):
