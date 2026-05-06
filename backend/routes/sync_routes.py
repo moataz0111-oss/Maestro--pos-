@@ -93,15 +93,21 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
 def get_user_tenant_id(user: dict) -> str:
     return user.get("tenant_id")
 
-async def get_next_order_number(tenant_id: str) -> int:
-    """الحصول على رقم الطلب التالي"""
-    counter = await db.counters.find_one_and_update(
-        {"_id": f"order_number_{tenant_id}"},
-        {"$inc": {"seq": 1}},
+async def get_next_order_number(tenant_id: str, branch_id: Optional[str] = None, business_date: Optional[str] = None) -> int:
+    """الحصول على رقم الطلب التالي — يستخدم نفس عدّاد online orders (يومي حسب الفرع)
+    
+    حلّ مشكلة الترقيم: قبل هذا الإصلاح كان الأوفلاين يستخدم عدّاد عام يبدأ من 1 ويُسبّب
+    أرقام مثل #13 #14 وسط أرقام #47 #48 الصحيحة. الآن نستخدم نفس العدّاد اليومي للفرع.
+    """
+    counter_date = business_date or datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    counter_key = {"branch_id": branch_id, "date": counter_date} if branch_id else {"_id": f"order_number_{tenant_id}", "date": counter_date}
+    counter = await db.order_counters.find_one_and_update(
+        counter_key,
+        {"$inc": {"counter": 1}},
         upsert=True,
         return_document=True
     )
-    return counter.get("seq", 1)
+    return counter.get("counter", 1)
 
 # ==================== ROUTES ====================
 
@@ -128,8 +134,10 @@ async def sync_order(order: OfflineOrder, current_user: dict = Depends(get_curre
                     message="الطلب موجود مسبقاً"
                 )
         
-        # الحصول على رقم الطلب التالي
-        order_number = await get_next_order_number(tenant_id)
+        # الحصول على رقم الطلب التالي — يستخدم نفس عدّاد الأونلاين (branch_id + business_date)
+        order_branch_id = order.branch_id or current_user.get("branch_id")
+        biz_date = await resolve_business_date(tenant_id, order_branch_id)
+        order_number = await get_next_order_number(tenant_id, order_branch_id, biz_date)
         
         # إنشاء الطلب الجديد
         new_order = {
@@ -162,7 +170,7 @@ async def sync_order(order: OfflineOrder, current_user: dict = Depends(get_curre
             "synced_at": datetime.now(timezone.utc).isoformat(),
             "created_at": order.created_at or datetime.now(timezone.utc).isoformat(),
             "updated_at": datetime.now(timezone.utc).isoformat(),
-            "business_date": await resolve_business_date(tenant_id, order.branch_id or current_user.get("branch_id"))
+            "business_date": biz_date
         }
         
         # حفظ الطلب

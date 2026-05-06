@@ -1,0 +1,34 @@
+{
+  "summary": "Verified offline order numbering fix (sync_routes.get_next_order_number now uses order_counters keyed by branch_id+business_date, same as online). All 5 pytest passed. Migration renumber_offline_orders_chronologically_v2 confirmed: 27 orders renumbered chronologically 1..27 for branch 72a06c41-5454-4383-99a5-ac13adb96336 / 2026-04-28; both order_number and original_order_number fields populated. order_counters doc set to {counter: 27} so future orders will continue at 28. E2E proof: opened a fresh shift, created 5 online orders (#3..#7) via POST /api/orders, then 1 sync order via POST /api/sync/orders → got #8 (last_online + 1). Sync idempotency on offline_id also verified.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {
+        "endpoint": "/api/orders vs /api/sync/orders",
+        "issue": "Online get_next_order_number (server.py:5545) keys order_counters by UTC `today` (strftime %Y-%m-%d on UTC), while sync version keys by `business_date` resolved from open shift (Iraq TZ). At UTC midnight when Iraq is +03:00, the two flows could pick different counter docs for the same shift, causing a small re-divergence. Recommend aligning online flow to also use business_date."
+      }
+    ]
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_offline_order_numbering_iter177.py",
+    "/app/test_reports/pytest/iter177_offline_numbering.xml"
+  ],
+  "action_items": [
+    "OPTIONAL: align online order create_order (server.py:5545) to also use business_date from the open shift (call resolve_business_date) instead of UTC today, to fully eliminate any UTC-vs-Iraq-TZ midnight drift between online and sync counters."
+  ],
+  "critical_code_review_comments": [
+    "sync_routes.py:96-110 — counter_key fallback branch ('_id': f'order_number_{tenant_id}') only triggers when branch_id is None; mixes a custom _id with date in the same find_one_and_update upsert, which will create a NEW doc each new date for the same tenant. Edge case is unlikely in practice (sync orders always carry branch_id) but worth tightening.",
+    "server.py:5545 get_next_order_number(branch_id) silently uses UTC strftime today; will diverge from sync's business_date once shifts run past midnight UTC. Suggest passing in business_date and reusing resolve_business_date.",
+    "server.py:18800 drift detection uses abs(max - (min+count-1)) >= 3 — works for the reported case. For future safety, also flag groups where set(numbers) != range(min, max+1) (i.e., duplicate numbers) which can happen if two devices race the same counter."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_offline_order_numbering_iter177.py (new)"
+  ],
+  "success_rate": {"backend": "100% (5/5 pytest)", "frontend": "skipped per request"},
+  "test_credentials": "Admin: hanialdujaili@gmail.com / Hani@2024",
+  "seed_data_creation": "Pytest opens a shift in admin's tenant (no existing open shifts), creates 5 online orders + 2 sync orders all prefixed TEST_iter177_*, and tears them down via teardown_module (db.orders.delete_many on customer_name regex). Shift is force-closed via DB write at fixture teardown. No production data modified.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "iter177 verified the offline order numbering fix end-to-end. The pytest file test_offline_order_numbering_iter177.py is the regression guard. If main agent later changes online get_next_order_number to also use business_date (recommended in action_items), the E2E test will still pass because shift business_date == UTC today on the test day, but the alignment will be permanent. Migration v2 is idempotent (system_migrations gate)."
+}

@@ -18761,6 +18761,185 @@ async def backfill_tenant_id_on_products_v1():
         logger.error(f"❌ backfill_tenant_id_on_products_v1 failed: {e}")
 
 
+@app.on_event("startup")
+async def renumber_offline_orders_chronologically_v2():
+    """إصلاح ترقيم طلبات الأوفلاين v2 — يكتشف الانجراف دون الاعتماد على is_offline_order flag.
+    
+    لكل (tenant_id, branch_id, business_date): إذا كان أقل order_number أصغر بفارق ≥ 5
+    من أكبر order_number، نُعيد ترقيم كل اليوم تسلسلياً حسب created_at.
+    """
+    try:
+        MIG_KEY = "renumber_offline_orders_chronologically_v2"
+        done = await db.system_migrations.find_one({"key": MIG_KEY})
+        if done:
+            logger.info(f"🟢 Migration {MIG_KEY} already applied, skipping")
+            return
+
+        logger.info(f"🔧 Running migration: {MIG_KEY}")
+        renumbered_groups = 0
+        renumbered_orders = 0
+
+        # تجميع كل (tenant, branch, business_date) مع min/max
+        pipeline = [
+            {"$match": {"business_date": {"$ne": None}, "branch_id": {"$ne": None}}},
+            {"$group": {
+                "_id": {"tenant_id": "$tenant_id", "branch_id": "$branch_id", "business_date": "$business_date"},
+                "min_num": {"$min": "$order_number"},
+                "max_num": {"$max": "$order_number"},
+                "count": {"$sum": 1},
+            }}
+        ]
+        groups = await db.orders.aggregate(pipeline).to_list(5000)
+
+        for grp in groups:
+            min_num = grp.get("min_num") or 0
+            max_num = grp.get("max_num") or 0
+            count = grp.get("count") or 0
+            # شرط الانجراف: إذا الفرق بين max و عدد الطلبات أكبر من 5، يدل على ترقيم متضارب
+            # يعني: عدد الطلبات يجب أن يساوي max - min + 1 تقريباً. إن لم يكن، نعيد الترقيم.
+            expected_max = min_num + count - 1
+            drift = abs(max_num - expected_max)
+            if drift < 3:  # سماحية صغيرة
+                continue
+
+            tenant_id = grp["_id"].get("tenant_id")
+            branch_id = grp["_id"].get("branch_id")
+            business_date = grp["_id"].get("business_date")
+
+            q = {"branch_id": branch_id, "business_date": business_date}
+            if tenant_id:
+                q["tenant_id"] = tenant_id
+
+            all_orders = await db.orders.find(
+                q, {"_id": 0, "id": 1, "created_at": 1, "order_number": 1}
+            ).sort("created_at", 1).to_list(2000)
+
+            for new_num, ord_doc in enumerate(all_orders, start=1):
+                old_num = ord_doc.get("order_number")
+                if old_num != new_num:
+                    await db.orders.update_one(
+                        {"id": ord_doc["id"]},
+                        {"$set": {
+                            "order_number": new_num,
+                            "original_order_number": old_num,
+                            "renumbered_at": datetime.now(timezone.utc).isoformat(),
+                            "renumbered_reason": "fix_offline_sync_drift_v2",
+                        }}
+                    )
+                    renumbered_orders += 1
+            renumbered_groups += 1
+
+            # حدّث order_counters لكي لا تتكرّر
+            await db.order_counters.update_one(
+                {"branch_id": branch_id, "date": business_date},
+                {"$set": {"counter": len(all_orders)}},
+                upsert=True
+            )
+
+        await db.system_migrations.insert_one({
+            "key": MIG_KEY,
+            "executed_at": datetime.now(timezone.utc).isoformat(),
+            "renumbered_groups": renumbered_groups,
+            "renumbered_orders": renumbered_orders,
+        })
+        logger.info(f"✅ {MIG_KEY} — groups={renumbered_groups}, orders={renumbered_orders}")
+    except Exception as e:
+        logger.error(f"❌ renumber_offline_orders_chronologically_v2 failed: {e}")
+
+
+@app.on_event("startup")
+async def renumber_offline_orders_chronologically_v1():
+    """إصلاح ترقيم طلبات الأوفلاين التي حصلت على أرقام خاطئة من العدّاد العام القديم.
+    
+    المشكلة: قبل الإصلاح كان sync_routes.get_next_order_number يستخدم عدّاداً عاماً (counters)
+    يبدأ من 1، فظهرت أرقام مثل #13 #14 وسط الطلبات اليومية #47 #48.
+    
+    الحل: لكل branch_id + business_date، إذا وُجدت طلبات أوفلاين بأرقام أقل من أرقام الأونلاين
+    لنفس اليوم، نُعيد ترقيم الكل تسلسلياً حسب created_at.
+    """
+    try:
+        MIG_KEY = "renumber_offline_orders_chronologically_v1"
+        done = await db.system_migrations.find_one({"key": MIG_KEY})
+        if done:
+            logger.info(f"🟢 Migration {MIG_KEY} already applied, skipping")
+            return
+
+        logger.info(f"🔧 Running migration: {MIG_KEY}")
+        renumbered_groups = 0
+        renumbered_orders = 0
+
+        # 1) ابحث عن كل branch_id + business_date فيه طلبات أوفلاين
+        offline_groups = await db.orders.aggregate([
+            {"$match": {"is_offline_order": True, "business_date": {"$ne": None}}},
+            {"$group": {
+                "_id": {"branch_id": "$branch_id", "business_date": "$business_date", "tenant_id": "$tenant_id"},
+                "min_offline_num": {"$min": "$order_number"},
+            }}
+        ]).to_list(2000)
+
+        for grp in offline_groups:
+            branch_id = grp["_id"].get("branch_id")
+            business_date = grp["_id"].get("business_date")
+            tenant_id = grp["_id"].get("tenant_id")
+            if not branch_id or not business_date:
+                continue
+
+            # هل توجد طلبات أونلاين بنفس اليوم بأرقام أعلى؟ (=هناك تنافر)
+            q = {"branch_id": branch_id, "business_date": business_date}
+            if tenant_id:
+                q["tenant_id"] = tenant_id
+            online_max = await db.orders.find_one(
+                {**q, "$or": [{"is_offline_order": False}, {"is_offline_order": {"$exists": False}}]},
+                {"_id": 0, "order_number": 1},
+                sort=[("order_number", -1)]
+            )
+            if not online_max:
+                continue
+            online_max_num = online_max.get("order_number") or 0
+
+            # نتحقق إن كان هناك offline order بأرقام أقل من online — هذا الانجراف
+            anomaly = await db.orders.find_one(
+                {**q, "is_offline_order": True, "order_number": {"$lt": online_max_num}},
+                {"_id": 0}
+            )
+            if not anomaly:
+                continue
+
+            # 2) نُعيد ترقيم كل الطلبات لهذا اليوم/الفرع تسلسلياً حسب created_at
+            all_orders = await db.orders.find(q, {"_id": 0, "id": 1, "created_at": 1, "order_number": 1, "is_offline_order": 1}).sort("created_at", 1).to_list(2000)
+            for new_num, ord_doc in enumerate(all_orders, start=1):
+                old_num = ord_doc.get("order_number")
+                if old_num != new_num:
+                    await db.orders.update_one(
+                        {"id": ord_doc["id"]},
+                        {"$set": {
+                            "order_number": new_num,
+                            "original_order_number": old_num,
+                            "renumbered_at": datetime.now(timezone.utc).isoformat(),
+                            "renumbered_reason": "fix_offline_sync_counter_drift",
+                        }}
+                    )
+                    renumbered_orders += 1
+            renumbered_groups += 1
+
+            # 3) حدِّث order_counters لئلا تُكرَّر الأرقام لاحقاً
+            await db.order_counters.update_one(
+                {"branch_id": branch_id, "date": business_date},
+                {"$set": {"counter": len(all_orders)}},
+                upsert=True
+            )
+
+        await db.system_migrations.insert_one({
+            "key": MIG_KEY,
+            "executed_at": datetime.now(timezone.utc).isoformat(),
+            "renumbered_groups": renumbered_groups,
+            "renumbered_orders": renumbered_orders,
+        })
+        logger.info(f"✅ {MIG_KEY} — groups={renumbered_groups}, orders={renumbered_orders}")
+    except Exception as e:
+        logger.error(f"❌ renumber_offline_orders_chronologically_v1 failed: {e}")
+
+
 # ==================== SYSTEM HEALTH & RELIABILITY APIS ====================
 
 @api_router.get("/system/health")
