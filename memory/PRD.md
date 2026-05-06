@@ -169,6 +169,14 @@ Multi-tenant POS system with biometric integration (ZKTeco), thermal receipt pri
 - (P2) Split `inventory_system.py` (3400+ lines) — cost layers and price alerts could move to dedicated routers.
 - (P2) Refactor `HR.js`, `Dashboard.js`, `Settings.js`, `POS.js`, `WarehouseManufacturing.js` monoliths.
 
+## Completed Features (Feb 6, 2026 - Offline Order Numbering Fix)
+- **Critical Bug Fix**: Offline orders synced to a global counter (`counters` collection starting from 1), causing wrong numbers like #13, #14 mixed with online #44-#49.
+- **`sync_routes.get_next_order_number`** now uses the SAME counter as online orders (`order_counters` keyed by `branch_id + business_date`).
+- **`server.py.get_next_order_number`** also accepts and uses `business_date` (passed from open shift) to prevent UTC-vs-Iraq-TZ midnight drift.
+- **Order creation flow** rearranged: business_date is resolved from shift FIRST, then order_number is generated using that business_date — ensures online and sync flows share the exact same counter.
+- **Migration `renumber_offline_orders_chronologically_v2`**: Detects branch+business_date groups where order_numbers don't form a continuous sequence (drift ≥ 3) and renumbers all orders chronologically (1, 2, 3, ...). Stores `original_order_number` for audit. Updated 27 orders in production tenant. Updates `order_counters` so future orders continue correctly.
+- **Tested**: testing_agent_v3_fork (iter177) — Backend 5/5 pytest ✅. Sync orders + online orders now share counter; sequence verified continuous (1..27).
+
 ## Completed Features (Feb 6, 2026 - Three Fixes from User Screenshots)
 - **Fix 1: Send-to-Warehouse on Purchase Invoices**: Added `POST /api/purchase-invoices/{id}/send-to-warehouse` (server.py ~line 11458) for the legacy `purchase_invoices` collection. Adds raw_materials, creates FIFO cost layers via `add_cost_layer`, logs `inventory_movements` (type='in', subtype='purchase_receipt'), triggers price alerts (≥1%), sets status='transferred'. Idempotent (returns 400 on re-send). Frontend green button `data-testid=send-to-warehouse-{id}` (`Purchasing.js`) calls this new endpoint.
 - **Fix 2: Removed Wrong Cross-Department Navigation**: Deleted blue "طلب من المشتريات" button from `WarehouseManufacturing.js` header per user's role-isolation requirement (warehouse keeper must not enter purchasing area, and vice versa).

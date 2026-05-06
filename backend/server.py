@@ -5542,10 +5542,13 @@ async def delete_customer(customer_id: str, current_user: dict = Depends(get_cur
 
 # ==================== ORDER ROUTES ====================
 
-async def get_next_order_number(branch_id: str) -> int:
-    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+async def get_next_order_number(branch_id: str, business_date: Optional[str] = None) -> int:
+    """عدّاد الطلبات: يستخدم business_date (التاريخ التشغيلي للشفت) لضمان عدم الانجراف
+    عند منتصف الليل UTC. إذا لم يُمرَّر business_date، يستخدم اليوم بـ UTC كـ fallback.
+    """
+    counter_date = business_date or datetime.now(timezone.utc).strftime("%Y-%m-%d")
     counter = await db.order_counters.find_one_and_update(
-        {"branch_id": branch_id, "date": today},
+        {"branch_id": branch_id, "date": counter_date},
         {"$inc": {"counter": 1}},
         upsert=True,
         return_document=True
@@ -5593,7 +5596,7 @@ async def create_order(order: OrderCreate, current_user: dict = Depends(get_curr
         logger.warning(f"order dedup check failed: {_e}")
         order_fingerprint = None
     
-    order_number = await get_next_order_number(order.branch_id)
+    # سيتم حساب order_number لاحقاً (بعد استخراج business_date من الشفت لضمان الاتساق)
     
     # البحث عن الوردية المفتوحة — أولوية لشفت الكاشير نفسه (وليس أي شفت في الفرع)
     base_shift_query = {"status": "open"}
@@ -5654,6 +5657,9 @@ async def create_order(order: OrderCreate, current_user: dict = Depends(get_curr
                 shift_business_date = iraq_date_from_utc(shift_started)
     if not shift_business_date:
         shift_business_date = iraq_date_from_utc()
+    
+    # رقم الطلب — مرتبط بـ business_date (الشفت) لضمان عدم الانجراف عند منتصف الليل UTC
+    order_number = await get_next_order_number(order.branch_id, shift_business_date)
     
     # المالك/المدير: الطلب يُسجل باسم كاشير الوردية وليس باسم المالك
     user_role = current_user.get("role", "")
