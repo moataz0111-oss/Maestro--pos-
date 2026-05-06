@@ -169,6 +169,18 @@ Multi-tenant POS system with biometric integration (ZKTeco), thermal receipt pri
 - (P2) Split `inventory_system.py` (3400+ lines) — cost layers and price alerts could move to dedicated routers.
 - (P2) Refactor `HR.js`, `Dashboard.js`, `Settings.js`, `POS.js`, `WarehouseManufacturing.js` monoliths.
 
+## Completed Features (Feb 6, 2026 - Raw Materials Edit/Delete with Transfer Lock)
+- **Owner-only Edit/Delete on Raw Materials** in `WarehouseManufacturing.js` raw materials cards. Pencil + Trash buttons (admin only), with state-based lock.
+- **Transfer-State Lock**: `GET /api/raw-materials-new` now returns `is_transferred`, `can_edit`, `can_delete` on every material. `is_transferred=true` if material was ever consumed via `manufacturing-requests fulfill` or any `warehouse_to_manufacturing` inventory movement.
+- **Backend Enforcement**:
+  - `PUT /api/raw-materials-new/{id}` returns **409** with Arabic detail when `is_transferred=true`.
+  - `DELETE /api/raw-materials-new/{id}` returns **409** when transferred; **403** for non-admins; **200** + cascade-deletes `material_cost_layers` when allowed.
+  - `POST /api/raw-materials-new/{id}/add-stock` always allowed (only mutation post-transfer).
+- **Helpers**: `_get_transferred_material_ids` (bulk for list) and `_is_material_transferred` (single check) — both ignore tenant_id strictly because material UUIDs are globally unique (avoids issues with legacy movements lacking tenant_id).
+- **Frontend Edit Dialog** (`data-testid=edit-raw-material-dialog`): name, quantity, unit, cost, min_quantity, waste %, category — all editable for non-transferred materials.
+- **Frontend Delete Confirm Dialog** with red styling and clear warning.
+- **Tested**: testing_agent_v3_fork (iter174) — Backend pytest 7/7, Frontend 100% — no action items.
+
 ## Completed Features (Feb 6, 2026 - FIFO Phase 2: Full Auto-Propagation)
 - **FIFO Consumption Wired into Manufacturing Fulfill**: `POST /api/manufacturing-requests/{id}/fulfill` now uses `consume_fifo` — oldest layer drains first, `raw_materials.cost_per_unit` auto-updates to next-oldest layer when depleted. Response includes `cost_propagation` array.
 - **Reconcile Before Consume**: `reconcile_layers_with_quantity` invoked at start of fulfill to heal any drift from non-FIFO consumption points.
