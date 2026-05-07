@@ -113,6 +113,11 @@ class RawMaterialCreate(BaseModel):
     cost_per_unit: float = 0.0
     waste_percentage: float = 0.0  # نسبة الهدر %
     category: Optional[str] = None
+    # === تعريف الوحدة (اختياري) — يُستخدم عندما تكون الوحدة قطعة/علبة/كرتون ===
+    # مثال: علبة جبن = 250 غرام  ⇒ pack_quantity=250, pack_unit="غرام"
+    # مثال: كرتون مايونيز = 12 قطعة ⇒ pack_quantity=12, pack_unit="قطعة"
+    pack_quantity: Optional[float] = None
+    pack_unit: Optional[str] = None
 
 class RawMaterialResponse(BaseModel):
     id: str
@@ -126,6 +131,8 @@ class RawMaterialResponse(BaseModel):
     effective_cost_per_unit: float = 0.0  # التكلفة الفعلية بعد الهدر
     total_value: float = 0.0
     category: Optional[str] = None
+    pack_quantity: Optional[float] = None
+    pack_unit: Optional[str] = None
     last_updated: str
     created_at: str
 

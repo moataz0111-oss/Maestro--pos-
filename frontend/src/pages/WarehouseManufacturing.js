@@ -266,7 +266,9 @@ export default function WarehouseManufacturing() {
     min_quantity: 0,
     cost_per_unit: 0,
     waste_percentage: 0, // نسبة الهدر %
-    category: ''
+    category: '',
+    pack_quantity: '',
+    pack_unit: 'غرام',
   });
   
   const [transferForm, setTransferForm] = useState({
@@ -375,7 +377,17 @@ export default function WarehouseManufacturing() {
     
     setSubmitting(true);
     try {
-      await axios.post(`${API}/raw-materials-new`, rawMaterialForm, { headers });
+      const payload = { ...rawMaterialForm };
+      // تنظيف pack_* — إن لم تكن الوحدة قطعة/علبة/كرتون، نُلغيها كي لا تُحفظ بالخطأ
+      if (!['قطعة', 'علبة', 'كرتون'].includes(payload.unit)) {
+        payload.pack_quantity = null;
+        payload.pack_unit = null;
+      } else {
+        const pq = parseFloat(payload.pack_quantity);
+        payload.pack_quantity = (pq && pq > 0) ? pq : null;
+        if (!payload.pack_quantity) payload.pack_unit = null;
+      }
+      await axios.post(`${API}/raw-materials-new`, payload, { headers });
       toast.success(t('تم إضافة المادة الخام'));
       setShowAddRawMaterial(false);
       setRawMaterialForm({
@@ -386,7 +398,9 @@ export default function WarehouseManufacturing() {
         min_quantity: 0,
         cost_per_unit: 0,
         waste_percentage: 0,
-        category: ''
+        category: '',
+        pack_quantity: '',
+        pack_unit: 'غرام',
       });
       fetchData();
     } catch (error) {
@@ -855,6 +869,12 @@ export default function WarehouseManufacturing() {
         min_quantity: parseFloat(editRawMaterial.min_quantity) || 0,
         category: editRawMaterial.category || null,
         waste_percentage: parseFloat(editRawMaterial.waste_percentage) || 0,
+        pack_quantity: ['قطعة', 'علبة', 'كرتون'].includes(editRawMaterial.unit)
+          ? (parseFloat(editRawMaterial.pack_quantity) || null)
+          : null,
+        pack_unit: ['قطعة', 'علبة', 'كرتون'].includes(editRawMaterial.unit) && parseFloat(editRawMaterial.pack_quantity) > 0
+          ? (editRawMaterial.pack_unit || 'غرام')
+          : null,
       };
       await axios.put(`${API}/raw-materials-new/${editRawMaterial.id}`, payload, { headers });
       toast.success(t('تم تحديث المادة بنجاح'));
@@ -1473,6 +1493,13 @@ export default function WarehouseManufacturing() {
                         <p className="font-medium text-primary">{formatPrice(material.total_value || material.quantity * material.cost_per_unit)}</p>
                       </div>
                     </div>
+                    {/* تعريف الوحدة (إن وُجد) */}
+                    {material.pack_quantity && material.pack_unit && (
+                      <div className="mt-2 inline-flex items-center gap-1.5 text-xs px-2 py-1 rounded-md bg-amber-100/60 dark:bg-amber-900/20 text-amber-800 dark:text-amber-300 border border-amber-300/40">
+                        <Package className="h-3 w-3" />
+                        {t('كل')} {material.unit} = {material.pack_quantity} {material.pack_unit}
+                      </div>
+                    )}
                     
                     {/* أزرار الإجراءات */}
                     <div className="flex flex-wrap gap-2">
@@ -2568,6 +2595,62 @@ export default function WarehouseManufacturing() {
                 </p>
               </div>
             </div>
+
+            {/* تعريف الوحدة (اختياري) — يظهر فقط عند اختيار قطعة/علبة/كرتون */}
+            {['قطعة', 'علبة', 'كرتون'].includes(rawMaterialForm.unit) && (
+              <div className="rounded-lg border border-amber-300/60 bg-amber-50/40 dark:bg-amber-900/10 p-3 space-y-2">
+                <div className="flex items-center gap-2 text-sm font-semibold text-amber-700 dark:text-amber-300">
+                  <Package className="h-4 w-4" />
+                  {t(`تعريف ${rawMaterialForm.unit} (اختياري)`)}
+                </div>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  {rawMaterialForm.unit === 'قطعة' && t('مثال: قطعة لحم = 1.5 كغم — يساعد في تحويل الكميات بدقة في الوصفات.')}
+                  {rawMaterialForm.unit === 'علبة' && t('مثال: علبة جبن = 250 غرام — لتعرف الوزن الصافي للعلبة الواحدة.')}
+                  {rawMaterialForm.unit === 'كرتون' && t('مثال: كرتون مايونيز = 12 قطعة، أو كرتون زيت = 18 لتر.')}
+                </p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label className="text-xs">{t('الكمية لكل')} {rawMaterialForm.unit}</Label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={rawMaterialForm.pack_quantity}
+                      onChange={(e) => setRawMaterialForm(prev => ({ ...prev, pack_quantity: e.target.value }))}
+                      placeholder={rawMaterialForm.unit === 'كرتون' ? '12' : '250'}
+                      data-testid="pack-quantity-input"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs">{t('وحدة المحتوى')}</Label>
+                    <Select
+                      value={rawMaterialForm.pack_unit}
+                      onValueChange={(v) => setRawMaterialForm(prev => ({ ...prev, pack_unit: v }))}
+                    >
+                      <SelectTrigger data-testid="pack-unit-select">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="غرام">{t('غرام')}</SelectItem>
+                        <SelectItem value="كغم">{t('كغم')}</SelectItem>
+                        <SelectItem value="مل">{t('مل')}</SelectItem>
+                        <SelectItem value="لتر">{t('لتر')}</SelectItem>
+                        <SelectItem value="قطعة">{t('قطعة')}</SelectItem>
+                        <SelectItem value="شريحة">{t('شريحة')}</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                {parseFloat(rawMaterialForm.pack_quantity) > 0 && rawMaterialForm.cost_per_unit > 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    {t('تكلفة الوحدة المُحتوية')}: {' '}
+                    <span className="font-bold text-emerald-600">
+                      {formatPrice(rawMaterialForm.cost_per_unit / parseFloat(rawMaterialForm.pack_quantity))} / {rawMaterialForm.pack_unit}
+                    </span>
+                  </p>
+                )}
+              </div>
+            )}
             
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setShowAddRawMaterial(false)}>
@@ -3924,6 +4007,49 @@ export default function WarehouseManufacturing() {
                   />
                 </div>
               </div>
+
+              {/* تعريف الوحدة (اختياري) — يظهر فقط عند اختيار قطعة/علبة/كرتون */}
+              {['قطعة', 'علبة', 'كرتون'].includes(editRawMaterial.unit) && (
+                <div className="rounded-lg border border-amber-300/60 bg-amber-50/40 dark:bg-amber-900/10 p-3 space-y-2">
+                  <div className="flex items-center gap-2 text-sm font-semibold text-amber-700 dark:text-amber-300">
+                    <Package className="h-4 w-4" />
+                    {t(`تعريف ${editRawMaterial.unit} (اختياري)`)}
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <Label className="text-xs">{t('الكمية لكل')} {editRawMaterial.unit}</Label>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={editRawMaterial.pack_quantity ?? ''}
+                        onChange={(e) => setEditRawMaterial({ ...editRawMaterial, pack_quantity: e.target.value })}
+                        placeholder={editRawMaterial.unit === 'كرتون' ? '12' : '250'}
+                        data-testid="edit-pack-quantity-input"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-xs">{t('وحدة المحتوى')}</Label>
+                      <Select
+                        value={editRawMaterial.pack_unit || 'غرام'}
+                        onValueChange={(v) => setEditRawMaterial({ ...editRawMaterial, pack_unit: v })}
+                      >
+                        <SelectTrigger data-testid="edit-pack-unit-select">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="غرام">{t('غرام')}</SelectItem>
+                          <SelectItem value="كغم">{t('كغم')}</SelectItem>
+                          <SelectItem value="مل">{t('مل')}</SelectItem>
+                          <SelectItem value="لتر">{t('لتر')}</SelectItem>
+                          <SelectItem value="قطعة">{t('قطعة')}</SelectItem>
+                          <SelectItem value="شريحة">{t('شريحة')}</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           )}
           <DialogFooter>

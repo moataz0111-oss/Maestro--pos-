@@ -217,6 +217,18 @@ Multi-tenant POS system with biometric integration (ZKTeco), thermal receipt pri
 - (P1) Audio low-stock alerts for owner — DONE in previous iteration.
 
 
+## Completed Features (Feb 7, 2026 - Optional Pack Definition for Raw Materials)
+- **Need**: When raw material's unit is `قطعة` / `علبة` / `كرتون`, the cashier needs to know what's *inside* the unit (e.g., a cheese box = 250 g, a mayonnaise carton = 12 pieces, a meat piece = 1.5 kg) — for accurate recipe conversions and inventory analysis.
+- **Backend (`inventory_system.py`)**: Added two optional fields on `RawMaterialCreate` and `RawMaterialResponse`:
+  - `pack_quantity: Optional[float]` — quantity inside one unit (e.g., 250).
+  - `pack_unit: Optional[str]` — content unit (`غرام`/`كغم`/`مل`/`لتر`/`قطعة`/`شريحة`).
+  - Both POST and PUT endpoints accept and persist them; null values are honoured (e.g., when changing back to `كغم`).
+- **Frontend (`WarehouseManufacturing.js`)**: 
+  - Add Dialog: when unit ∈ {قطعة, علبة, كرتون}, an amber-themed contextual block appears with two inputs + a per-content-unit cost preview (e.g., "تكلفة الوحدة المُحتوية: 12 IQD / غرام").
+  - Edit Dialog: same fields with auto-clearing when unit changes back to weight/volume.
+  - Card list: small amber badge ("كل علبة = 250 غرام") on materials that have a pack definition.
+- **Self-tested**: Created/updated/deleted raw material with `pack_quantity=250, pack_unit=غرام` via API; switching unit to `كغم` correctly nulled both fields. Visual confirmation with screenshot.
+
 ## Completed Features (Feb 7, 2026 - One-Time Routing Fix for Drifted Offline Orders)
 - **Problem**: Offline sync migration `renumber_offline_orders_chronologically_v2` corrected ~27 drifted order numbers but left them with wrong routing (dine_in/cash). The previous UI showed a Wrench icon for ALL offline orders — user feared it would become permanent noise and confuse tenants whose sync already works correctly after the `business_date` fix.
 - **Fix — Frontend (`Orders.js`)**: Wrench icon now shows **only** when `order.renumbered_reason === 'fix_offline_sync_drift_v2' && !order.routing_fixed_at`. New offline orders, already-fixed orders, and healthy orders never see it.
