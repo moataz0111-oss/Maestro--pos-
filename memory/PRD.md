@@ -393,4 +393,29 @@ The owner explicitly rejected having salary advances appear as "expenses on the 
 ### Verified
 - 5,000 advance with branch balance 0 → 400 with branch name. ✅
 - After 100,000 deposit to that branch → 5,000 advance succeeded, persisted `branch_name`. ✅
+
+## Completed Features (Feb 8, 2026 - Branch / External Source on Owner Wallet Forms)
+**All three owner-wallet forms now require a branch (or "Other source") for proper accounting.**
+
+### Forms updated (`OwnerWallet.js`)
+- **إيداع جديد** (deposit): mandatory `branch_id` select listing all tenant branches + an `📦 أخرى` option. When "Other" is picked, a free-text `external_source` input appears and is required.
+- **سحب / تحويل** (withdrawal): same pattern. The branch determines which deposit pool the withdrawal draws from.
+- **تحويل للخزينة** (profit transfer): same pattern.
+- All three persist either `branch_id` (resolved into `branch_name` server-side) or `external_source` — never both.
+
+### Backend (`owner_wallet.py`)
+- `DepositCreate`, `WithdrawalCreate`, `ProfitTransferCreate` extended with `external_source` and (for withdrawal/transfer) `branch_id`/`branch_name`.
+- `POST /owner-wallet/withdrawals` resolves `branch_name` from the branches collection automatically.
+- `POST /owner-wallet/profit-transfers` does the same.
+- `POST /owner-wallet/deposits` already supported `branch_id` → now also stores `external_source`.
+
+### Visualisation under each deposit
+- Each deposit card on `OwnerWallet.js` now lists **its linked withdrawals** (matched by either same `branch_id` or same `external_source`) with:
+  - Counter strip: "⬆️ مخصوم من هذا الإيداع: N عملية − {total}".
+  - Mini list (top 5) of `beneficiary (category) − amount`.
+  - Footer: "المتبقي من الإيداع: {remaining}" — turns red if negative.
+
+### Verified visually
+- "إيداع اختبار للفرع" 100,000 IQD shows under it: "مخصوم من هذا الإيداع: 2 عملية − 20,000" with both withdrawal lines and "المتبقي من الإيداع: 80,000". ✅
+- The deposit dialog with "Other" selection auto-revealed the external source input. ✅
 - Owner Wallet UI shows `الرصيد المتاح: 80,000 IQD`, the new withdrawal card with branch line. ✅

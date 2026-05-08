@@ -107,10 +107,12 @@ export default function OwnerWallet() {
   const [closingDialogOpen, setClosingDialogOpen] = useState(false);
   
   // بيانات النماذج
-  const [newDeposit, setNewDeposit] = useState({ amount: '', date: new Date().toISOString().split('T')[0], description: '', source: 'cash_sales' });
-  const [newWithdrawal, setNewWithdrawal] = useState({ amount: '', date: new Date().toISOString().split('T')[0], beneficiary: '', description: '', category: 'transfer' });
-  const [newProfitTransfer, setNewProfitTransfer] = useState({ amount: '', month: selectedDate, description: '' });
+  const [newDeposit, setNewDeposit] = useState({ amount: '', date: new Date().toISOString().split('T')[0], description: '', source: 'cash_sales', branch_id: '', external_source: '' });
+  const [newWithdrawal, setNewWithdrawal] = useState({ amount: '', date: new Date().toISOString().split('T')[0], beneficiary: '', description: '', category: 'transfer', branch_id: '', external_source: '' });
+  const [newProfitTransfer, setNewProfitTransfer] = useState({ amount: '', month: selectedDate, description: '', branch_id: '', external_source: '' });
   const [newClosing, setNewClosing] = useState({ month: selectedDate, total_sales: '', total_expenses: '', net_profit: '', notes: '' });
+  // الفروع المتاحة + الخيار "أخرى"
+  const [branches, setBranches] = useState([]);
   
   // سحب الأرباح من الخزينة
   const [profitWithdrawAmount, setProfitWithdrawAmount] = useState('');
@@ -120,6 +122,18 @@ export default function OwnerWallet() {
   useEffect(() => {
     fetchData();
   }, [selectedDate]);
+
+  // جلب الفروع مرة واحدة
+  useEffect(() => {
+    (async () => {
+      try {
+        const { data } = await axios.get(`${API}/branches`);
+        setBranches(Array.isArray(data) ? data : (data?.branches || []));
+      } catch (e) {
+        // تجاهل — قد لا يكون للمستخدم صلاحية
+      }
+    })();
+  }, []);
 
   const fetchData = async () => {
     setLoading(true);
@@ -152,17 +166,33 @@ export default function OwnerWallet() {
       toast.error(t('يرجى إدخال المبلغ والتاريخ'));
       return;
     }
+    if (!newDeposit.branch_id) {
+      toast.error(t('يرجى اختيار الفرع'));
+      return;
+    }
+    if (newDeposit.branch_id === 'other' && !newDeposit.external_source?.trim()) {
+      toast.error(t('يرجى إدخال مصدر الأموال'));
+      return;
+    }
     try {
-      await axios.post(`${API}/owner-wallet/deposits`, {
-        ...newDeposit,
-        amount: parseFloat(newDeposit.amount)
-      });
+      const payload = {
+        amount: parseFloat(newDeposit.amount),
+        date: newDeposit.date,
+        description: newDeposit.description,
+        source: newDeposit.source,
+      };
+      if (newDeposit.branch_id === 'other') {
+        payload.external_source = newDeposit.external_source.trim();
+      } else {
+        payload.branch_id = newDeposit.branch_id;
+      }
+      await axios.post(`${API}/owner-wallet/deposits`, payload);
       toast.success(t('تم إضافة الإيداع بنجاح'));
       setDepositDialogOpen(false);
-      setNewDeposit({ amount: '', date: new Date().toISOString().split('T')[0], description: '', source: 'cash_sales' });
+      setNewDeposit({ amount: '', date: new Date().toISOString().split('T')[0], description: '', source: 'cash_sales', branch_id: '', external_source: '' });
       fetchData();
     } catch (error) {
-      toast.error(t('فشل في إضافة الإيداع'));
+      toast.error(error.response?.data?.detail || t('فشل في إضافة الإيداع'));
     }
   };
 
@@ -171,17 +201,34 @@ export default function OwnerWallet() {
       toast.error(t('يرجى إدخال جميع البيانات المطلوبة'));
       return;
     }
+    if (!newWithdrawal.branch_id) {
+      toast.error(t('يرجى اختيار الفرع'));
+      return;
+    }
+    if (newWithdrawal.branch_id === 'other' && !newWithdrawal.external_source?.trim()) {
+      toast.error(t('يرجى إدخال مصدر الأموال'));
+      return;
+    }
     try {
-      await axios.post(`${API}/owner-wallet/withdrawals`, {
-        ...newWithdrawal,
-        amount: parseFloat(newWithdrawal.amount)
-      });
+      const payload = {
+        amount: parseFloat(newWithdrawal.amount),
+        date: newWithdrawal.date,
+        beneficiary: newWithdrawal.beneficiary,
+        description: newWithdrawal.description,
+        category: newWithdrawal.category,
+      };
+      if (newWithdrawal.branch_id === 'other') {
+        payload.external_source = newWithdrawal.external_source.trim();
+      } else {
+        payload.branch_id = newWithdrawal.branch_id;
+      }
+      await axios.post(`${API}/owner-wallet/withdrawals`, payload);
       toast.success(t('تم إضافة السحب بنجاح'));
       setWithdrawalDialogOpen(false);
-      setNewWithdrawal({ amount: '', date: new Date().toISOString().split('T')[0], beneficiary: '', description: '', category: 'transfer' });
+      setNewWithdrawal({ amount: '', date: new Date().toISOString().split('T')[0], beneficiary: '', description: '', category: 'transfer', branch_id: '', external_source: '' });
       fetchData();
     } catch (error) {
-      toast.error(t('فشل في إضافة السحب'));
+      toast.error(error.response?.data?.detail || t('فشل في إضافة السحب'));
     }
   };
 
@@ -190,14 +237,29 @@ export default function OwnerWallet() {
       toast.error(t('يرجى إدخال المبلغ والتاريخ'));
       return;
     }
+    if (!newProfitTransfer.branch_id) {
+      toast.error(t('يرجى اختيار الفرع'));
+      return;
+    }
+    if (newProfitTransfer.branch_id === 'other' && !newProfitTransfer.external_source?.trim()) {
+      toast.error(t('يرجى إدخال مصدر الأموال'));
+      return;
+    }
     try {
-      await axios.post(`${API}/owner-wallet/profit-transfers`, {
-        ...newProfitTransfer,
-        amount: parseFloat(newProfitTransfer.amount)
-      });
+      const payload = {
+        amount: parseFloat(newProfitTransfer.amount),
+        month: newProfitTransfer.month,
+        description: newProfitTransfer.description,
+      };
+      if (newProfitTransfer.branch_id === 'other') {
+        payload.external_source = newProfitTransfer.external_source.trim();
+      } else {
+        payload.branch_id = newProfitTransfer.branch_id;
+      }
+      await axios.post(`${API}/owner-wallet/profit-transfers`, payload);
       toast.success(t('تم تحويل الأرباح للخزينة بنجاح'));
       setProfitDialogOpen(false);
-      setNewProfitTransfer({ amount: '', month: selectedDate, description: '' });
+      setNewProfitTransfer({ amount: '', month: selectedDate, description: '', branch_id: '', external_source: '' });
       fetchData();
     } catch (error) {
       toast.error(error.response?.data?.detail || t('فشل في تحويل الأرباح'));
@@ -417,6 +479,29 @@ export default function OwnerWallet() {
                   />
                 </div>
                 <div>
+                  <Label>{t('الفرع / المصدر')} <span className="text-red-500">*</span></Label>
+                  <Select value={newDeposit.branch_id} onValueChange={(v) => setNewDeposit({...newDeposit, branch_id: v})}>
+                    <SelectTrigger data-testid="deposit-branch-select"><SelectValue placeholder={t('اختر الفرع أو "أخرى"')} /></SelectTrigger>
+                    <SelectContent>
+                      {branches.map(b => (
+                        <SelectItem key={b.id} value={b.id}>🏪 {b.name}</SelectItem>
+                      ))}
+                      <SelectItem value="other">📦 {t('أخرى (مشروع/مصدر خارجي)')}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                {newDeposit.branch_id === 'other' && (
+                  <div>
+                    <Label>{t('مصدر الأموال')} <span className="text-red-500">*</span></Label>
+                    <Input
+                      value={newDeposit.external_source}
+                      onChange={(e) => setNewDeposit({...newDeposit, external_source: e.target.value})}
+                      placeholder={t('مثال: مشروع آخر، حساب بنكي، قرض شخصي...')}
+                      data-testid="deposit-external-source"
+                    />
+                  </div>
+                )}
+                <div>
                   <Label>{t('المصدر')}</Label>
                   <Select value={newDeposit.source} onValueChange={(v) => setNewDeposit({...newDeposit, source: v})}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
@@ -479,6 +564,29 @@ export default function OwnerWallet() {
                     onChange={(e) => setNewWithdrawal({...newWithdrawal, date: e.target.value})}
                   />
                 </div>
+                <div>
+                  <Label>{t('الفرع / المصدر')} <span className="text-red-500">*</span></Label>
+                  <Select value={newWithdrawal.branch_id} onValueChange={(v) => setNewWithdrawal({...newWithdrawal, branch_id: v})}>
+                    <SelectTrigger data-testid="withdrawal-branch-select"><SelectValue placeholder={t('اختر الفرع المخصوم منه')} /></SelectTrigger>
+                    <SelectContent>
+                      {branches.map(b => (
+                        <SelectItem key={b.id} value={b.id}>🏪 {b.name}</SelectItem>
+                      ))}
+                      <SelectItem value="other">📦 {t('أخرى (مصدر خارجي)')}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                {newWithdrawal.branch_id === 'other' && (
+                  <div>
+                    <Label>{t('مصدر الأموال')} <span className="text-red-500">*</span></Label>
+                    <Input
+                      value={newWithdrawal.external_source}
+                      onChange={(e) => setNewWithdrawal({...newWithdrawal, external_source: e.target.value})}
+                      placeholder={t('مثال: مشروع آخر، حساب بنكي، قرض شخصي...')}
+                      data-testid="withdrawal-external-source"
+                    />
+                  </div>
+                )}
                 <div>
                   <Label>{t('نوع العملية')}</Label>
                   <Select value={newWithdrawal.category} onValueChange={(v) => setNewWithdrawal({...newWithdrawal, category: v})}>
@@ -553,6 +661,29 @@ export default function OwnerWallet() {
                   />
                 </div>
                 <div>
+                  <Label>{t('الفرع / المصدر')} <span className="text-red-500">*</span></Label>
+                  <Select value={newProfitTransfer.branch_id} onValueChange={(v) => setNewProfitTransfer({...newProfitTransfer, branch_id: v})}>
+                    <SelectTrigger data-testid="profit-transfer-branch-select"><SelectValue placeholder={t('اختر الفرع')} /></SelectTrigger>
+                    <SelectContent>
+                      {branches.map(b => (
+                        <SelectItem key={b.id} value={b.id}>🏪 {b.name}</SelectItem>
+                      ))}
+                      <SelectItem value="other">📦 {t('أخرى (مصدر خارجي)')}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                {newProfitTransfer.branch_id === 'other' && (
+                  <div>
+                    <Label>{t('مصدر الأموال')} <span className="text-red-500">*</span></Label>
+                    <Input
+                      value={newProfitTransfer.external_source}
+                      onChange={(e) => setNewProfitTransfer({...newProfitTransfer, external_source: e.target.value})}
+                      placeholder={t('مثال: مشروع آخر، حساب بنكي...')}
+                      data-testid="profit-transfer-external-source"
+                    />
+                  </div>
+                )}
+                <div>
                   <Label>{t('ملاحظات')}</Label>
                   <Input
                     value={newProfitTransfer.description}
@@ -596,24 +727,61 @@ export default function OwnerWallet() {
                     </div>
                   ) : (
                     <div className="space-y-2 max-h-80 overflow-y-auto">
-                      {deposits.map((deposit) => (
-                        <div key={deposit.id} className="flex items-center justify-between p-3 bg-emerald-50 dark:bg-emerald-950/30 rounded-lg">
-                          <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 bg-emerald-500/20 rounded-full flex items-center justify-center">
-                              <ArrowDownCircle className="h-4 w-4 text-emerald-600" />
+                      {deposits.map((deposit) => {
+                        // حساب الخصومات المرتبطة بنفس الفرع/المصدر الخارجي
+                        const linkedWithdrawals = withdrawals.filter(w => {
+                          if (deposit.branch_id) return w.branch_id === deposit.branch_id;
+                          if (deposit.external_source) return w.external_source === deposit.external_source;
+                          return false;
+                        });
+                        const totalDeducted = linkedWithdrawals.reduce((s, w) => s + (w.amount || 0), 0);
+                        const remaining = (deposit.amount || 0) - totalDeducted;
+                        return (
+                          <div key={deposit.id} className="p-3 bg-emerald-50 dark:bg-emerald-950/30 rounded-lg">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-3">
+                                <div className="w-8 h-8 bg-emerald-500/20 rounded-full flex items-center justify-center">
+                                  <ArrowDownCircle className="h-4 w-4 text-emerald-600" />
+                                </div>
+                                <div>
+                                  <p className="font-medium text-emerald-700 dark:text-emerald-400">{formatPrice(deposit.amount)}</p>
+                                  <p className="text-xs text-muted-foreground">{sourceLabels[deposit.source]} • {formatDate(deposit.date)}</p>
+                                  {deposit.description && <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">📝 {deposit.description}</p>}
+                                  {deposit.branch_name && <p className="text-xs text-purple-600 dark:text-purple-400">🏪 {t('الفرع')}: {deposit.branch_name}</p>}
+                                  {deposit.external_source && <p className="text-xs text-orange-600 dark:text-orange-400">📦 {t('مصدر خارجي')}: {deposit.external_source}</p>}
+                                </div>
+                              </div>
+                              <Button variant="ghost" size="icon" onClick={() => handleDeleteDeposit(deposit.id)}>
+                                <Trash2 className="h-4 w-4 text-muted-foreground" />
+                              </Button>
                             </div>
-                            <div>
-                              <p className="font-medium text-emerald-700 dark:text-emerald-400">{formatPrice(deposit.amount)}</p>
-                              <p className="text-xs text-muted-foreground">{sourceLabels[deposit.source]} • {formatDate(deposit.date)}</p>
-                              {deposit.description && <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">📝 {deposit.description}</p>}
-                              {deposit.branch_name && <p className="text-xs text-purple-600 dark:text-purple-400">🏪 {deposit.branch_name}</p>}
-                            </div>
+                            {/* الخصومات من هذا الإيداع */}
+                            {linkedWithdrawals.length > 0 && (
+                              <div className="mt-2 pt-2 border-t border-emerald-200 dark:border-emerald-800">
+                                <div className="flex items-center justify-between text-xs mb-1">
+                                  <span className="text-rose-600 font-medium">⬆️ {t('مخصوم من هذا الإيداع')}: {linkedWithdrawals.length} {t('عملية')}</span>
+                                  <span className="font-bold text-rose-700">−{formatPrice(totalDeducted)}</span>
+                                </div>
+                                <div className="space-y-1 max-h-24 overflow-y-auto">
+                                  {linkedWithdrawals.slice(0, 5).map(w => (
+                                    <div key={w.id} className="flex items-center justify-between text-xs px-2 py-1 rounded bg-rose-50 dark:bg-rose-950/20">
+                                      <span className="text-muted-foreground">{w.beneficiary} ({categoryLabels[w.category]})</span>
+                                      <span className="text-rose-600 font-medium">−{formatPrice(w.amount)}</span>
+                                    </div>
+                                  ))}
+                                  {linkedWithdrawals.length > 5 && (
+                                    <p className="text-xs text-muted-foreground text-center">+{linkedWithdrawals.length - 5} {t('أخرى')}</p>
+                                  )}
+                                </div>
+                                <div className="flex items-center justify-between mt-1.5 pt-1.5 border-t border-emerald-200 dark:border-emerald-800 text-xs">
+                                  <span className="font-medium">{t('المتبقي من الإيداع')}:</span>
+                                  <span className={`font-bold ${remaining < 0 ? 'text-red-600' : 'text-emerald-700'}`}>{formatPrice(remaining)}</span>
+                                </div>
+                              </div>
+                            )}
                           </div>
-                          <Button variant="ghost" size="icon" onClick={() => handleDeleteDeposit(deposit.id)}>
-                            <Trash2 className="h-4 w-4 text-muted-foreground" />
-                          </Button>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                 </CardContent>
@@ -646,6 +814,7 @@ export default function OwnerWallet() {
                               <p className="font-medium text-rose-700 dark:text-rose-400">{formatPrice(withdrawal.amount)}</p>
                               <p className="text-xs text-muted-foreground">{withdrawal.beneficiary} • {categoryLabels[withdrawal.category]}</p>
                               {withdrawal.branch_name && <p className="text-xs text-purple-600 dark:text-purple-400">🏪 {t('الفرع')}: {withdrawal.branch_name}</p>}
+                              {withdrawal.external_source && <p className="text-xs text-orange-600 dark:text-orange-400">📦 {t('مصدر خارجي')}: {withdrawal.external_source}</p>}
                               <p className="text-xs text-muted-foreground">{formatDate(withdrawal.date)}</p>
                               {withdrawal.description && <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">📝 {withdrawal.description}</p>}
                             </div>

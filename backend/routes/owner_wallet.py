@@ -19,6 +19,7 @@ class DepositCreate(BaseModel):
     source: str = "cash_sales"  # cash_sales, card_sales, other
     branch_id: Optional[str] = None  # معرف الفرع
     branch_name: Optional[str] = None  # اسم الفرع
+    external_source: Optional[str] = None  # عند اختيار "أخرى" — مصدر خارجي (مشروع آخر، قرض، إلخ)
 
 class WithdrawalCreate(BaseModel):
     amount: float
@@ -26,11 +27,17 @@ class WithdrawalCreate(BaseModel):
     beneficiary: str  # اسم المستفيد
     description: Optional[str] = None
     category: str = "transfer"  # transfer, payment, personal
+    branch_id: Optional[str] = None
+    branch_name: Optional[str] = None
+    external_source: Optional[str] = None
 
 class ProfitTransferCreate(BaseModel):
     amount: float
     month: str  # YYYY-MM-DD (full date)
     description: Optional[str] = None
+    branch_id: Optional[str] = None
+    branch_name: Optional[str] = None
+    external_source: Optional[str] = None
 
 class ProfitWithdrawalCreate(BaseModel):
     amount: float
@@ -149,6 +156,7 @@ async def create_deposit(
         "source": deposit.source,
         "branch_id": deposit.branch_id,
         "branch_name": branch_name,
+        "external_source": deposit.external_source,
         "created_by": current_user.get("username") or current_user.get("full_name"),
         "created_at": datetime.now(timezone.utc).isoformat()
     }
@@ -196,7 +204,14 @@ async def create_withdrawal(
     """إنشاء سحب جديد"""
     db = get_database()
     tenant_id = get_user_tenant_id(current_user)
-    
+
+    # جلب اسم الفرع تلقائياً
+    branch_name = withdrawal.branch_name
+    if withdrawal.branch_id and not branch_name:
+        br = await db.branches.find_one({"id": withdrawal.branch_id}, {"_id": 0, "name": 1})
+        if br:
+            branch_name = br.get("name")
+
     new_withdrawal = {
         "id": str(uuid.uuid4()),
         "tenant_id": tenant_id,
@@ -205,6 +220,9 @@ async def create_withdrawal(
         "beneficiary": withdrawal.beneficiary,
         "description": withdrawal.description,
         "category": withdrawal.category,
+        "branch_id": withdrawal.branch_id,
+        "branch_name": branch_name,
+        "external_source": withdrawal.external_source,
         "created_by": current_user.get("username") or current_user.get("full_name"),
         "created_at": datetime.now(timezone.utc).isoformat()
     }
@@ -268,6 +286,9 @@ async def create_profit_transfer(
         "amount": transfer.amount,
         "month": transfer.month,
         "description": transfer.description,
+        "branch_id": transfer.branch_id,
+        "branch_name": (await db.branches.find_one({"id": transfer.branch_id}, {"_id": 0, "name": 1}) or {}).get("name") if transfer.branch_id else transfer.branch_name,
+        "external_source": transfer.external_source,
         "created_by": current_user.get("username") or current_user.get("full_name"),
         "created_at": datetime.now(timezone.utc).isoformat()
     }
