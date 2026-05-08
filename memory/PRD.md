@@ -229,6 +229,42 @@ Multi-tenant POS system with biometric integration (ZKTeco), thermal receipt pri
   - Card list: small amber badge ("كل علبة = 250 غرام") on materials that have a pack definition.
 - **Self-tested**: Created/updated/deleted raw material with `pack_quantity=250, pack_unit=غرام` via API; switching unit to `كغم` correctly nulled both fields. Visual confirmation with screenshot.
 
+## Completed Features (Feb 8, 2026 - HR Critical Fixes: Payroll, Punch Logic, Agent Detection)
+**Three critical HR bugs fixed in one session — affecting real money calculations.**
+
+### 1. Payroll Summary Endpoint Crash (500 → working)
+- **Root cause**: `NameError: name 'present_days' is not defined` at `server.py:4140` inside `get_payroll_summary_report`. The variables `present_days`, `late_days`, `early_leave_days` were referenced but never assigned. Caused entire `المستحقات` card and `تقرير الرواتب الشامل` to silently show empty.
+- **Fix**: Compute the three counters from `emp_attendance` before usage:
+  ```python
+  present_days = len([a for a in emp_attendance if a.get("status") == "present"])
+  late_days = len([a for a in emp_attendance if a.get("status") == "late"])
+  early_leave_days = len([a for a in emp_attendance if a.get("status") == "early_leave"])
+  worked_days_count = present_days + late_days + early_leave_days
+  ```
+- **Verified**: `GET /api/reports/payroll-summary?month=2026-05` returns 200 with proper `totals` & per-employee `earned_salary`/`net_payable`.
+
+### 2. Smart Punch Distribution Logic (server.py ~line 15943)
+- **Problem**: Old logic blindly assigned punches: `n=2 → check_in+check_out`, even when both punches were minutes apart (e.g., the `محمد باقر` case: 02:05 + 02:39 → falsely showed 0.6 worked hours). Also failed on accidental double-taps.
+- **New logic** (matches user's spec — 2 punches = full shift, 4 punches = with break):
+  - **Step 1**: De-dup punches within 5 minutes (handles double-tap on the device).
+  - **Step 2**: Distribute by count:
+    - **1 punch** → check_in only (no check_out).
+    - **2 punches with diff < 60 min** → check_in only (treated as duplicate; user did not actually leave).
+    - **2 punches with diff ≥ 60 min** → check_in + check_out (full shift, no break).
+    - **3 punches** → check_in + break_start + check_out.
+    - **4+ punches** → check_in + break_start + break_end + check_out (first/second/second-to-last/last).
+  - Existing-record merge path also applies the same dedup + distribution.
+- **Verified**: 8 unit tests passing including the `محمد باقر 02:05 + 02:39` real case (now correctly shows present-only, not a fake 0.6h shift).
+
+### 3. Agent Connection Detection (HR.js)
+- **Problem**: Top header used server heartbeat (works through HTTPS) → showed "متصل". But action buttons (إصدار، صورة الوجه) used direct `localhost:9999` from browser → blocked by Mixed Content Policy → showed "غير متصل" → the action was rejected even when the agent was actually running.
+- **Fix**: All HR.js action buttons (`handlePushAllToDevice`, `handlePushUserToDevice`, `fetchFacePhoto`) now check `agentConnected` (server heartbeat) FIRST. Only if heartbeat says offline do they fall back to direct localhost probe. This preserves the strict check while removing false negatives.
+- Note: `BiometricDevices.js` already had the correct dual-method pattern (heartbeat → localhost fallback). HR.js was the inconsistent file.
+
+### Outstanding (deferred to next session)
+- (P1) **Sync failure / device employee fetch failure**: Same root cause class as #3 — direct localhost calls from HTTPS frontend may fail mid-operation. Definitive fix is migrating all biometric ops to the print-queue pattern (frontend → server → agent polls). This is a larger refactor (~300 LOC) and was scoped out of this session.
+- (P2) **Night-shift detection**: When `shift_end < shift_start`, punches across midnight should be grouped as one work day. Current logic groups by calendar date.
+
 ## Completed Features (Feb 7, 2026 - One-Time Routing Fix for Drifted Offline Orders)
 - **Problem**: Offline sync migration `renumber_offline_orders_chronologically_v2` corrected ~27 drifted order numbers but left them with wrong routing (dine_in/cash). The previous UI showed a Wrench icon for ALL offline orders — user feared it would become permanent noise and confuse tenants whose sync already works correctly after the `business_date` fix.
 - **Fix — Frontend (`Orders.js`)**: Wrench icon now shows **only** when `order.renumbered_reason === 'fix_offline_sync_drift_v2' && !order.routing_fixed_at`. New offline orders, already-fixed orders, and healthy orders never see it.

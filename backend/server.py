@@ -15938,19 +15938,46 @@ async def _auto_process_attendance_internal(current_user: dict):
         if not emp:
             continue
         
-        # ترتيب الأوقات وتوزيع البصمات:
-        # 1 بصمة = حضور فقط
-        # 2 بصمات = حضور + انصراف
-        # 3 بصمات = حضور + ذهاب استراحة + انصراف
-        # 4+ بصمات = حضور + ذهاب استراحة + عودة من استراحة + انصراف
+        # === منطق توزيع البصمات الذكي (Feb 2026) ===
+        # القواعد المعتمدة:
+        #   - دمج البصمات المتقاربة (< 5 دقائق) — Double-tap على الجهاز
+        #   - 1 بصمة = حضور فقط (لم يبصم انصراف)
+        #   - 2 بصمات بفرق < 1 ساعة = دمج (خطأ تسجيل) → حضور فقط
+        #   - 2 بصمات بفرق ≥ 1 ساعة = حضور + انصراف (شفت كامل بدون استراحة)
+        #   - 3 بصمات = حضور + ذهاب استراحة + انصراف
+        #   - 4+ بصمات = حضور + ذهاب استراحة + عودة + انصراف (الأولى/الثانية/قبل الأخيرة/الأخيرة)
         times.sort()
-        check_in = times[0]
+
+        def _to_min(hhmm: str) -> int:
+            try:
+                h, m = hhmm.split(":")
+                return int(h) * 60 + int(m)
+            except Exception:
+                return -1
+
+        # 1) دمج البصمات المتقاربة (≤ 5 دقائق) — تكرار خاطئ
+        deduped = []
+        for t in times:
+            if not deduped:
+                deduped.append(t)
+                continue
+            if _to_min(t) - _to_min(deduped[-1]) <= 5:
+                continue  # تجاهل التكرار القريب
+            deduped.append(t)
+        times = deduped
+
+        check_in = times[0] if times else None
         check_out = None
         break_out = None  # ذهاب للاستراحة
         break_in = None   # عودة من الاستراحة
         n = len(times)
+
         if n == 2:
-            check_out = times[1]
+            # تحقق من فرق الزمن — لو < 60 دقيقة نعتبرها بصمة دخول مكررة فقط
+            diff = _to_min(times[1]) - _to_min(times[0])
+            if diff >= 60:
+                check_out = times[1]
+            # وإلا: check_out يبقى None (الموظف بصم مرتين متتاليتين بالخطأ)
         elif n == 3:
             break_out = times[1]
             check_out = times[2]
@@ -15974,7 +16001,18 @@ async def _auto_process_attendance_internal(current_user: dict):
                     existing_times.add(v)
             # دمج مع times الجديدة وإعادة التوزيع
             all_times = sorted(set(times) | existing_times)
-            times = all_times
+
+            # دمج البصمات المتقاربة (≤ 5 دقائق) بعد الدمج
+            merged = []
+            for tt in all_times:
+                if not merged:
+                    merged.append(tt)
+                    continue
+                if _to_min(tt) - _to_min(merged[-1]) <= 5:
+                    continue
+                merged.append(tt)
+            times = merged
+
             # إعادة توزيع البصمات المدمجة
             check_in = times[0] if times else None
             check_out = None
@@ -15982,7 +16020,9 @@ async def _auto_process_attendance_internal(current_user: dict):
             break_in = None
             n = len(times)
             if n == 2:
-                check_out = times[1]
+                diff = _to_min(times[1]) - _to_min(times[0])
+                if diff >= 60:
+                    check_out = times[1]
             elif n == 3:
                 break_out = times[1]
                 check_out = times[2]

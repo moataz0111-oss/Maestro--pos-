@@ -641,11 +641,20 @@ export default function HR() {
     }
     
     try {
-      const agentCheck = await axios.get(`${AGENT_URL}/status`, { timeout: 3000 });
-      if (agentCheck.data?.status !== 'running') {
-        toast.error(t('الوكيل المحلي غير متصل'));
-        setFacePhotoLoading(false);
-        return;
+      // فحص الوكيل: heartbeat أولاً، ثم localhost كـ fallback
+      if (!agentConnected) {
+        try {
+          const agentCheck = await axios.get(`${AGENT_URL}/status`, { timeout: 2000 });
+          if (agentCheck.data?.status !== 'running') {
+            toast.error(t('الوكيل المحلي غير متصل'));
+            setFacePhotoLoading(false);
+            return;
+          }
+        } catch {
+          toast.error(t('الوكيل المحلي غير متصل'));
+          setFacePhotoLoading(false);
+          return;
+        }
       }
       
       // timeout موسّع: الجهاز قد يحتاج وقتاً أطول لفحص عدة مسارات HTTP ومنافذ UDP
@@ -1486,16 +1495,25 @@ export default function HR() {
     if (!device) return;
 
     try {
-      // Check agent
-      const agentRes = await axios.get(`${AGENT_URL}/status`, { timeout: 3000 });
-      if (!agentRes.data?.zk_support) {
-        toast.error(t('الوكيل المحلي لا يدعم البصمة - حدّث إلى v2.4'));
-        return;
+      // فحص الوكيل: نعتمد على heartbeat (agentConnected) أولاً.
+      // اتصال localhost المباشر يحجبه المتصفح أحياناً (Mixed Content) لذا لا نعتمد عليه وحده.
+      if (!agentConnected) {
+        try {
+          await axios.get(`${AGENT_URL}/status`, { timeout: 2000 });
+        } catch {
+          toast.error(t('الوكيل المحلي غير متصل! شغّل print_server.ps1 v2.4'));
+          return;
+        }
       }
-    } catch {
-      toast.error(t('الوكيل المحلي غير متصل! شغّل print_server.ps1 v2.4'));
-      return;
-    }
+      // Optional zk_support check — لا نوقف العملية إن لم نستطع الفحص
+      try {
+        const agentRes = await axios.get(`${AGENT_URL}/status`, { timeout: 2000 });
+        if (agentRes.data && agentRes.data.zk_support === false) {
+          toast.error(t('الوكيل المحلي لا يدعم البصمة - حدّث إلى v2.4'));
+          return;
+        }
+      } catch {}
+    } catch {}
 
     const uid = pushingEmployee.biometric_uid ? parseInt(pushingEmployee.biometric_uid) : getNextBiometricUid(await fetchDeviceUsersForPush(device));
     
@@ -1543,12 +1561,16 @@ export default function HR() {
     let successCount = 0;
     let failCount = 0;
 
-    try {
-      await axios.get(`${AGENT_URL}/status`, { timeout: 3000 });
-    } catch {
-      toast.error(t('الوكيل المحلي غير متصل!'));
-      setPushingAll(false);
-      return;
+    // فحص الوكيل عبر heartbeat السيرفر (يتجاوز Mixed Content blocking)
+    if (!agentConnected) {
+      // محاولة fallback مباشرة على localhost
+      try {
+        await axios.get(`${AGENT_URL}/status`, { timeout: 2000 });
+      } catch {
+        toast.error(t('الوكيل المحلي غير متصل!'));
+        setPushingAll(false);
+        return;
+      }
     }
 
     // === فلترة الموظفين حسب فرع الجهاز فقط ===
