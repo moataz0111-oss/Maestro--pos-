@@ -10,6 +10,7 @@ import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Badge } from '../components/ui/badge';
 import { Textarea } from '../components/ui/textarea';
+import { ResponsiveContainer, ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip as ChartTooltip, Legend } from 'recharts';
 import {
   ArrowLeft,
   Wallet,
@@ -113,15 +114,86 @@ export default function OwnerWallet() {
   const [newClosing, setNewClosing] = useState({ month: selectedDate, total_sales: '', total_expenses: '', net_profit: '', notes: '' });
   // الفروع المتاحة + الخيار "أخرى"
   const [branches, setBranches] = useState([]);
+  // 📊 تفاصيل فرع/مصدر (Dialog مع رسم بياني)
+  const [detailDialog, setDetailDialog] = useState(null); // {branch_id, branch_name, external_source}
+  const [detailMode, setDetailMode] = useState('month'); // day | month | custom
+  const today = new Date().toISOString().slice(0, 10);
+  const monthStart = today.slice(0, 7) + '-01';
+  const [detailRange, setDetailRange] = useState({ start: monthStart, end: today });
+  const [detailData, setDetailData] = useState({ deposits: [], withdrawals: [], loading: false });
   
   // سحب الأرباح من الخزينة
   const [profitWithdrawAmount, setProfitWithdrawAmount] = useState('');
   const [profitWithdrawReason, setProfitWithdrawReason] = useState('');
   const [isWithdrawingProfit, setIsWithdrawingProfit] = useState(false);
 
+  // 📊 جلب تفاصيل فرع/مصدر مع نطاق تاريخ
+  const fetchBranchDetails = async () => {
+    if (!detailDialog) return;
+    setDetailData(prev => ({ ...prev, loading: true }));
+    try {
+      const params = new URLSearchParams();
+      params.append('start_date', detailRange.start);
+      params.append('end_date', detailRange.end);
+      if (detailDialog.branch_id) params.append('branch_id', detailDialog.branch_id);
+      if (detailDialog.external_source) params.append('external_source', detailDialog.external_source);
+      const [depRes, wdRes] = await Promise.all([
+        axios.get(`${API}/owner-wallet/deposits?${params.toString()}`),
+        axios.get(`${API}/owner-wallet/withdrawals?${params.toString()}`),
+      ]);
+      setDetailData({ deposits: depRes.data || [], withdrawals: wdRes.data || [], loading: false });
+    } catch (err) {
+      setDetailData({ deposits: [], withdrawals: [], loading: false });
+      toast.error(t('فشل تحميل التفاصيل'));
+    }
+  };
+
   useEffect(() => {
     fetchData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedDate]);
+
+  // إعادة الجلب عند تغيّر النطاق أو فتح/تغيير الفرع
+  useEffect(() => {
+    if (detailDialog) fetchBranchDetails();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [detailDialog, detailRange.start, detailRange.end]);
+
+  // ضبط تلقائي للنطاق عند تبديل الوضع
+  const applyDetailMode = (mode) => {
+    setDetailMode(mode);
+    const now = new Date();
+    const todayStr = now.toISOString().slice(0, 10);
+    if (mode === 'day') {
+      setDetailRange({ start: todayStr, end: todayStr });
+    } else if (mode === 'month') {
+      setDetailRange({ start: todayStr.slice(0, 7) + '-01', end: todayStr });
+    }
+    // custom: يبقي القيم الحالية
+  };
+
+  // تحويل البيانات إلى نقاط للرسم البياني (مجمَّعة حسب التاريخ)
+  const buildChartSeries = () => {
+    const map = {};
+    (detailData.deposits || []).forEach(d => {
+      const k = d.date;
+      if (!map[k]) map[k] = { date: k, deposits: 0, withdrawals: 0 };
+      map[k].deposits += (d.amount || 0);
+    });
+    (detailData.withdrawals || []).forEach(w => {
+      const k = w.date;
+      if (!map[k]) map[k] = { date: k, deposits: 0, withdrawals: 0 };
+      map[k].withdrawals += (w.amount || 0);
+    });
+    const arr = Object.values(map).sort((a, b) => a.date.localeCompare(b.date));
+    let running = 0;
+    arr.forEach(p => {
+      running += (p.deposits - p.withdrawals);
+      p.balance = running;
+    });
+    return arr;
+  };
+
 
   // جلب الفروع مرة واحدة
   useEffect(() => {
@@ -506,8 +578,16 @@ export default function OwnerWallet() {
                   return (
                     <Card
                       key={b.key}
-                      className={`border-2 ${isNegative ? 'border-red-500 bg-red-50 dark:bg-red-950/20' : isLow ? 'border-amber-500 bg-amber-50/50 dark:bg-amber-950/20' : isExternal ? 'border-orange-300 bg-orange-50/40 dark:bg-orange-950/10' : 'border-emerald-300 bg-emerald-50/40 dark:bg-emerald-950/10'}`}
+                      className={`border-2 cursor-pointer hover:shadow-lg transition-all ${isNegative ? 'border-red-500 bg-red-50 dark:bg-red-950/20' : isLow ? 'border-amber-500 bg-amber-50/50 dark:bg-amber-950/20' : isExternal ? 'border-orange-300 bg-orange-50/40 dark:bg-orange-950/10' : 'border-emerald-300 bg-emerald-50/40 dark:bg-emerald-950/10'}`}
                       data-testid={`branch-card-${b.branch_id || b.external_source}`}
+                      onClick={() => {
+                        setDetailDialog({
+                          branch_id: b.branch_id,
+                          branch_name: b.branch_name,
+                          external_source: b.external_source,
+                        });
+                        applyDetailMode('month');
+                      }}
                     >
                       <CardContent className="p-4 space-y-2">
                         <div className="flex items-start justify-between">
@@ -1120,6 +1200,152 @@ export default function OwnerWallet() {
             </Card>
           </TabsContent>
         </Tabs>
+
+        {/* 📊 Dialog: تفاصيل الفرع/المصدر مع رسم بياني */}
+        <Dialog open={!!detailDialog} onOpenChange={(o) => !o && setDetailDialog(null)}>
+          <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto" data-testid="branch-detail-dialog">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-lg">
+                <span className="text-2xl">{detailDialog?.external_source ? '📦' : '🏪'}</span>
+                {t('تفاصيل')} — <span className="text-emerald-600">{detailDialog?.branch_name || detailDialog?.external_source}</span>
+                <Badge variant="outline" className="ml-2 text-xs">{detailDialog?.external_source ? t('مصدر خارجي') : t('فرع')}</Badge>
+              </DialogTitle>
+            </DialogHeader>
+            {detailDialog && (
+              <div className="space-y-4">
+                {/* Mode tabs + date pickers */}
+                <div className="flex flex-wrap items-center gap-2 p-3 bg-muted/30 rounded-lg">
+                  <div className="flex items-center gap-1">
+                    <Button size="sm" variant={detailMode === 'day' ? 'default' : 'outline'} onClick={() => applyDetailMode('day')} data-testid="mode-day">{t('يومي')}</Button>
+                    <Button size="sm" variant={detailMode === 'month' ? 'default' : 'outline'} onClick={() => applyDetailMode('month')} data-testid="mode-month">{t('شهري')}</Button>
+                    <Button size="sm" variant={detailMode === 'custom' ? 'default' : 'outline'} onClick={() => applyDetailMode('custom')} data-testid="mode-custom">{t('مخصص')}</Button>
+                  </div>
+                  <div className="flex items-center gap-2 ml-2">
+                    <Label className="text-xs text-muted-foreground">{t('من')}</Label>
+                    <Input
+                      type="date"
+                      value={detailRange.start}
+                      onChange={(e) => { setDetailMode('custom'); setDetailRange({ ...detailRange, start: e.target.value }); }}
+                      className="w-40 h-8 text-xs"
+                      data-testid="detail-start-date"
+                    />
+                    <Label className="text-xs text-muted-foreground">{t('إلى')}</Label>
+                    <Input
+                      type="date"
+                      value={detailRange.end}
+                      onChange={(e) => { setDetailMode('custom'); setDetailRange({ ...detailRange, end: e.target.value }); }}
+                      className="w-40 h-8 text-xs"
+                      data-testid="detail-end-date"
+                    />
+                  </div>
+                </div>
+
+                {detailData.loading ? (
+                  <div className="text-center py-12"><RefreshCw className="h-8 w-8 animate-spin mx-auto text-muted-foreground" /></div>
+                ) : (
+                  <>
+                    {(() => {
+                      const totalDep = (detailData.deposits || []).reduce((s, d) => s + (d.amount || 0), 0);
+                      const totalWd = (detailData.withdrawals || []).reduce((s, w) => s + (w.amount || 0), 0);
+                      const balance = totalDep - totalWd;
+                      const series = buildChartSeries();
+                      return (
+                        <>
+                          {/* KPI strip */}
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                            <div className="rounded-lg p-3 bg-emerald-500/10 border border-emerald-500/30">
+                              <p className="text-xs text-muted-foreground">↓ {t('إيداعات')}</p>
+                              <p className="text-lg font-bold text-emerald-600 tabular-nums">{formatPrice(totalDep)}</p>
+                              <p className="text-[10px] text-muted-foreground">{(detailData.deposits || []).length} {t('عملية')}</p>
+                            </div>
+                            <div className="rounded-lg p-3 bg-rose-500/10 border border-rose-500/30">
+                              <p className="text-xs text-muted-foreground">↑ {t('سحوبات')}</p>
+                              <p className="text-lg font-bold text-rose-600 tabular-nums">{formatPrice(totalWd)}</p>
+                              <p className="text-[10px] text-muted-foreground">{(detailData.withdrawals || []).length} {t('عملية')}</p>
+                            </div>
+                            <div className={`rounded-lg p-3 border ${balance < 0 ? 'bg-red-500/10 border-red-500/30' : 'bg-cyan-500/10 border-cyan-500/30'}`}>
+                              <p className="text-xs text-muted-foreground">{t('الرصيد للفترة')}</p>
+                              <p className={`text-lg font-bold tabular-nums ${balance < 0 ? 'text-red-600' : 'text-cyan-600'}`} data-testid="detail-balance">
+                                {formatPrice(balance)}
+                              </p>
+                            </div>
+                            <div className="rounded-lg p-3 bg-purple-500/10 border border-purple-500/30">
+                              <p className="text-xs text-muted-foreground">{t('عدد الأيام النشطة')}</p>
+                              <p className="text-lg font-bold text-purple-600 tabular-nums">{series.length}</p>
+                            </div>
+                          </div>
+
+                          {/* Chart */}
+                          {series.length > 0 ? (
+                            <Card>
+                              <CardHeader className="pb-2"><CardTitle className="text-sm">{t('تدفق الأموال خلال الفترة')}</CardTitle></CardHeader>
+                              <CardContent>
+                                <div style={{ width: '100%', height: 280 }}>
+                                  <ResponsiveContainer>
+                                    <ComposedChart data={series}>
+                                      <CartesianGrid stroke="#3331" strokeDasharray="3 3" />
+                                      <XAxis dataKey="date" tick={{ fontSize: 11 }} />
+                                      <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v} />
+                                      <ChartTooltip formatter={(v) => formatPrice(v)} />
+                                      <Legend wrapperStyle={{ fontSize: 12 }} />
+                                      <Bar dataKey="deposits" fill="#10b981" name={t('إيداعات')} />
+                                      <Bar dataKey="withdrawals" fill="#ef4444" name={t('سحوبات')} />
+                                      <Line type="monotone" dataKey="balance" stroke="#06b6d4" strokeWidth={2} name={t('الرصيد التراكمي')} dot={{ r: 3 }} />
+                                    </ComposedChart>
+                                  </ResponsiveContainer>
+                                </div>
+                              </CardContent>
+                            </Card>
+                          ) : (
+                            <div className="text-center py-8 text-muted-foreground border border-dashed rounded-lg">
+                              <Calendar className="h-10 w-10 mx-auto mb-2 opacity-40" />
+                              {t('لا توجد عمليات في هذه الفترة')}
+                            </div>
+                          )}
+
+                          {/* Transactions list */}
+                          {((detailData.deposits || []).length + (detailData.withdrawals || []).length) > 0 && (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                              <Card>
+                                <CardHeader className="pb-2"><CardTitle className="text-sm flex items-center gap-2 text-emerald-600">↓ {t('الإيداعات')} ({(detailData.deposits || []).length})</CardTitle></CardHeader>
+                                <CardContent className="max-h-64 overflow-y-auto space-y-1.5">
+                                  {(detailData.deposits || []).map(d => (
+                                    <div key={d.id} className="text-xs flex items-start justify-between p-2 rounded bg-emerald-50 dark:bg-emerald-950/20">
+                                      <div>
+                                        <p className="font-medium">{formatPrice(d.amount)}</p>
+                                        <p className="text-[10px] text-muted-foreground">{d.date} • {d.description || sourceLabels[d.source] || '-'}</p>
+                                      </div>
+                                    </div>
+                                  ))}
+                                  {(detailData.deposits || []).length === 0 && <p className="text-center py-4 text-muted-foreground text-xs">{t('لا توجد إيداعات')}</p>}
+                                </CardContent>
+                              </Card>
+                              <Card>
+                                <CardHeader className="pb-2"><CardTitle className="text-sm flex items-center gap-2 text-rose-600">↑ {t('السحوبات')} ({(detailData.withdrawals || []).length})</CardTitle></CardHeader>
+                                <CardContent className="max-h-64 overflow-y-auto space-y-1.5">
+                                  {(detailData.withdrawals || []).map(w => (
+                                    <div key={w.id} className="text-xs flex items-start justify-between p-2 rounded bg-rose-50 dark:bg-rose-950/20">
+                                      <div>
+                                        <p className="font-medium">{formatPrice(w.amount)} <span className="text-muted-foreground">— {w.beneficiary}</span></p>
+                                        <p className="text-[10px] text-muted-foreground">{w.date} • {categoryLabels[w.category]}</p>
+                                      </div>
+                                    </div>
+                                  ))}
+                                  {(detailData.withdrawals || []).length === 0 && <p className="text-center py-4 text-muted-foreground text-xs">{t('لا توجد سحوبات')}</p>}
+                                </CardContent>
+                              </Card>
+                            </div>
+                          )}
+                        </>
+                      );
+                    })()}
+                  </>
+                )}
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
+
       </main>
     </div>
   );

@@ -118,17 +118,27 @@ async def get_wallet_summary(current_user: dict = Depends(get_current_user)):
 @router.get("/deposits")
 async def get_deposits(
     month: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    branch_id: Optional[str] = None,
+    external_source: Optional[str] = None,
     current_user: dict = Depends(get_current_user)
 ):
-    """جلب الإيداعات"""
+    """جلب الإيداعات. يدعم: شهر (YYYY-MM)، نطاق تاريخ (start/end)، فلترة بالفرع/المصدر."""
     db = get_database()
     tenant_id = get_user_tenant_id(current_user)
-    
+
     query = {"tenant_id": tenant_id} if tenant_id else {}
-    if month:
+    if start_date and end_date:
+        query["date"] = {"$gte": start_date, "$lte": end_date}
+    elif month:
         query["date"] = {"$regex": f"^{month}"}
-    
-    deposits = await db.owner_deposits.find(query, {"_id": 0}).sort("date", -1).to_list(100)
+    if branch_id:
+        query["branch_id"] = branch_id
+    if external_source:
+        query["external_source"] = external_source
+
+    deposits = await db.owner_deposits.find(query, {"_id": 0}).sort("date", -1).to_list(2000)
     return deposits
 
 @router.post("/deposits")
@@ -183,17 +193,27 @@ async def delete_deposit(deposit_id: str, current_user: dict = Depends(get_curre
 @router.get("/withdrawals")
 async def get_withdrawals(
     month: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    branch_id: Optional[str] = None,
+    external_source: Optional[str] = None,
     current_user: dict = Depends(get_current_user)
 ):
-    """جلب السحوبات"""
+    """جلب السحوبات. يدعم: شهر، نطاق تاريخ، فلترة بالفرع/المصدر."""
     db = get_database()
     tenant_id = get_user_tenant_id(current_user)
-    
+
     query = {"tenant_id": tenant_id} if tenant_id else {}
-    if month:
+    if start_date and end_date:
+        query["date"] = {"$gte": start_date, "$lte": end_date}
+    elif month:
         query["date"] = {"$regex": f"^{month}"}
-    
-    withdrawals = await db.owner_withdrawals.find(query, {"_id": 0}).sort("date", -1).to_list(100)
+    if branch_id:
+        query["branch_id"] = branch_id
+    if external_source:
+        query["external_source"] = external_source
+
+    withdrawals = await db.owner_withdrawals.find(query, {"_id": 0}).sort("date", -1).to_list(2000)
     return withdrawals
 
 @router.post("/withdrawals")

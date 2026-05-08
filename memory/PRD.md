@@ -438,3 +438,26 @@ The owner explicitly rejected having salary advances appear as "expenses on the 
 - "إيداع اختبار للفرع" 100,000 IQD shows under it: "مخصوم من هذا الإيداع: 2 عملية − 20,000" with both withdrawal lines and "المتبقي من الإيداع: 80,000". ✅
 - The deposit dialog with "Other" selection auto-revealed the external source input. ✅
 - Owner Wallet UI shows `الرصيد المتاح: 80,000 IQD`, the new withdrawal card with branch line. ✅
+
+## Completed Features (Feb 8, 2026 - Branch Detail Dialog with Chart & Filters)
+**Drill-down view for any branch/external source with day/month/custom date filters and a visual chart.**
+
+### Backend (`owner_wallet.py`)
+- `GET /owner-wallet/deposits` and `GET /owner-wallet/withdrawals` extended with optional query params:
+  - `start_date` + `end_date` (preferred when both provided — uses `$gte/$lte` instead of regex month).
+  - `branch_id` and `external_source` (server-side filter to drop unrelated rows).
+  - List size raised from 100 → 2000 to support multi-month custom ranges.
+
+### Frontend (`OwnerWallet.js`)
+- Branch cards on the wallet page are now **clickable** (`cursor-pointer`, hover shadow).
+- Click opens a wide modal (`max-w-5xl`) titled `"تفاصيل — {branch_name}"` with three modes:
+  - **يومي**: `start = end = today`.
+  - **شهري** (default): `start = first of current month`, `end = today`.
+  - **مخصص**: keeps user-edited dates; switching to `start`/`end` inputs auto-flips mode to custom.
+- Auto-fetches scoped deposits & withdrawals from the new endpoints whenever the dialog opens or the range changes.
+- **KPI strip**: deposits / withdrawals / period balance / active-days count.
+- **Chart** (`recharts ComposedChart`): green bars for deposits, red bars for withdrawals, cyan line for **cumulative balance** over time (one data point per active date).
+- **Two transaction lists** (deposits left, withdrawals right) with description, beneficiary, category, and date.
+
+### Verified visually
+- Clicked "الفرع الرئيسي" card → modal opened with all bits populated, chart rendered with the 100k / 35k / 65k pattern, lists populated. ✅
