@@ -447,6 +447,115 @@ export default function OwnerWallet() {
           </Card>
         </div>
 
+        {/* 🏪 بطاقات الفروع - رصيد كل فرع منفصلاً */}
+        {(() => {
+          // حساب رصيد كل فرع
+          const branchBalances = {};
+          (deposits || []).forEach(d => {
+            const key = d.branch_id || (d.external_source ? `ext:${d.external_source}` : '__none__');
+            if (!branchBalances[key]) {
+              branchBalances[key] = {
+                key,
+                branch_id: d.branch_id,
+                branch_name: d.branch_name,
+                external_source: d.external_source,
+                deposits: 0, withdrawals: 0,
+                deposit_count: 0, withdrawal_count: 0,
+              };
+            }
+            branchBalances[key].deposits += (d.amount || 0);
+            branchBalances[key].deposit_count++;
+          });
+          (withdrawals || []).forEach(w => {
+            const key = w.branch_id || (w.external_source ? `ext:${w.external_source}` : '__none__');
+            if (!branchBalances[key]) {
+              branchBalances[key] = {
+                key,
+                branch_id: w.branch_id,
+                branch_name: w.branch_name,
+                external_source: w.external_source,
+                deposits: 0, withdrawals: 0,
+                deposit_count: 0, withdrawal_count: 0,
+              };
+            }
+            branchBalances[key].withdrawals += (w.amount || 0);
+            branchBalances[key].withdrawal_count++;
+          });
+          const branchCards = Object.values(branchBalances).filter(b => b.key !== '__none__');
+          if (branchCards.length === 0) return null;
+          // ترتيب: الفروع أولاً، ثم المصادر الخارجية
+          branchCards.sort((a, b) => {
+            if (a.external_source && !b.external_source) return 1;
+            if (!a.external_source && b.external_source) return -1;
+            return (b.deposits - b.withdrawals) - (a.deposits - a.withdrawals);
+          });
+          return (
+            <div data-testid="branch-balances-section">
+              <h3 className="text-base font-semibold mb-3 flex items-center gap-2 text-foreground">
+                <span className="text-xl">🏪</span>
+                {t('أرصدة الفروع / المصادر')}
+                <Badge variant="outline" className="ml-2">{branchCards.length}</Badge>
+              </h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                {branchCards.map(b => {
+                  const balance = b.deposits - b.withdrawals;
+                  const pct = b.deposits > 0 ? Math.min(100, Math.max(0, (balance / b.deposits) * 100)) : 0;
+                  const isExternal = !!b.external_source;
+                  const isLow = b.deposits > 0 && balance < b.deposits * 0.2;
+                  const isNegative = balance < 0;
+                  return (
+                    <Card
+                      key={b.key}
+                      className={`border-2 ${isNegative ? 'border-red-500 bg-red-50 dark:bg-red-950/20' : isLow ? 'border-amber-500 bg-amber-50/50 dark:bg-amber-950/20' : isExternal ? 'border-orange-300 bg-orange-50/40 dark:bg-orange-950/10' : 'border-emerald-300 bg-emerald-50/40 dark:bg-emerald-950/10'}`}
+                      data-testid={`branch-card-${b.branch_id || b.external_source}`}
+                    >
+                      <CardContent className="p-4 space-y-2">
+                        <div className="flex items-start justify-between">
+                          <div className="flex items-center gap-2">
+                            <span className="text-lg">{isExternal ? '📦' : '🏪'}</span>
+                            <div>
+                              <p className="font-bold text-sm">{b.branch_name || b.external_source || t('غير محدد')}</p>
+                              <p className="text-xs text-muted-foreground">{isExternal ? t('مصدر خارجي') : t('فرع')}</p>
+                            </div>
+                          </div>
+                          {isNegative && <Badge variant="destructive" className="text-xs">{t('سالب!')}</Badge>}
+                          {!isNegative && isLow && <Badge className="text-xs bg-amber-500 text-white">{t('منخفض')}</Badge>}
+                        </div>
+                        <div className="grid grid-cols-2 gap-2 text-xs">
+                          <div>
+                            <p className="text-emerald-600 font-medium">↓ {t('إيداعات')}</p>
+                            <p className="font-bold tabular-nums">{formatPrice(b.deposits)}</p>
+                            <p className="text-[10px] text-muted-foreground">{b.deposit_count} {t('عملية')}</p>
+                          </div>
+                          <div>
+                            <p className="text-rose-600 font-medium">↑ {t('سحوبات')}</p>
+                            <p className="font-bold tabular-nums">{formatPrice(b.withdrawals)}</p>
+                            <p className="text-[10px] text-muted-foreground">{b.withdrawal_count} {t('عملية')}</p>
+                          </div>
+                        </div>
+                        <div className="pt-2 border-t">
+                          <p className="text-xs text-muted-foreground">{t('الرصيد المتاح')}</p>
+                          <p className={`text-lg font-bold tabular-nums ${isNegative ? 'text-red-600' : 'text-emerald-600'}`}>
+                            {formatPrice(balance)}
+                          </p>
+                          {b.deposits > 0 && (
+                            <div className="mt-1 h-1.5 bg-muted rounded-full overflow-hidden">
+                              <div
+                                className={`h-full transition-all ${isNegative ? 'bg-red-500' : isLow ? 'bg-amber-500' : 'bg-emerald-500'}`}
+                                style={{ width: `${Math.max(0, Math.min(100, pct))}%` }}
+                              />
+                            </div>
+                          )}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })()}
+
         {/* أزرار الإجراءات السريعة */}
         <div className="flex flex-wrap gap-3">
           <Dialog open={depositDialogOpen} onOpenChange={setDepositDialogOpen}>

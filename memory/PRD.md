@@ -416,6 +416,25 @@ The owner explicitly rejected having salary advances appear as "expenses on the 
   - Footer: "المتبقي من الإيداع: {remaining}" — turns red if negative.
 
 ### Verified visually
+
+## Completed Features (Feb 8, 2026 - Per-Branch Balance Cards on Owner Wallet)
+**Owner now sees a one-glance health overview of every branch's wallet balance.**
+
+### What was added (`OwnerWallet.js`)
+- New **"🏪 أرصدة الفروع / المصادر"** section between the top KPI cards and the action buttons.
+- For each unique `branch_id` and each unique `external_source` found across the displayed deposits + withdrawals, a card is rendered with:
+  - Header: 🏪/📦 icon + branch/source name + "فرع" or "مصدر خارجي" sub-label.
+  - Two-column mini-grid: ↓ إيداعات (count + total) | ↑ سحوبات (count + total).
+  - Big bottom line: **الرصيد المتاح** (deposits − withdrawals), red if negative.
+  - Progress bar (green / amber / red) showing the remaining ratio.
+- **Smart status badges**:
+  - `سالب!` (red) when balance < 0.
+  - `منخفض` (amber) when balance < 20% of total deposits.
+- Cards sorted: branches first, then external sources; within each group, healthier balance first.
+
+### Self-tested visually
+- Single branch "الفرع الرئيسي": deposits 100,000 / withdrawals 35,000 (2 ops) → balance card shows **65,000 IQD** in green with 65% green progress bar. ✅
+- Counter chip in header shows `1` (number of branches/sources tracked). ✅
 - "إيداع اختبار للفرع" 100,000 IQD shows under it: "مخصوم من هذا الإيداع: 2 عملية − 20,000" with both withdrawal lines and "المتبقي من الإيداع: 80,000". ✅
 - The deposit dialog with "Other" selection auto-revealed the external source input. ✅
 - Owner Wallet UI shows `الرصيد المتاح: 80,000 IQD`, the new withdrawal card with branch line. ✅
