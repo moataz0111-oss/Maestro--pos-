@@ -4129,7 +4129,10 @@ async def get_payroll_summary_report(
         
         # الحضور
         emp_attendance = attendance_by_emp.get(emp_id, [])
-        worked_days = len([a for a in emp_attendance if a.get("status") in ["present", "late"]])
+        present_days = len([a for a in emp_attendance if a.get("status") == "present"])
+        late_days = len([a for a in emp_attendance if a.get("status") == "late"])
+        early_leave_days = len([a for a in emp_attendance if a.get("status") == "early_leave"])
+        worked_days = present_days + late_days
         absent_days = len([a for a in emp_attendance if a.get("status") == "absent"])
         total_worked_hours = sum(_sn(a.get("worked_hours")) for a in emp_attendance)
         
