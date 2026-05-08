@@ -4063,7 +4063,17 @@ async def get_payroll_summary_report(
         "date": {"$gte": q_start, "$lte": q_end},
         "status": "approved"
     }, {"_id": 0}).to_list(5000)
-    
+
+    # 💰 جلب دفعات الرواتب النقدية (المالك يصرف من النقدي الفعلي)
+    all_payments = await db.salary_payments.find({
+        "employee_id": {"$in": employee_ids},
+        "payment_date": {"$gte": q_start, "$lte": q_end}
+    }, {"_id": 0}).to_list(5000)
+    payments_by_emp = {}
+    for p in all_payments:
+        eid = p.get("employee_id")
+        payments_by_emp[eid] = payments_by_emp.get(eid, 0) + (p.get("amount") or 0)
+
     # جلب جميع الفروع دفعة واحدة
     all_branches = await db.branches.find(
         {"id": {"$in": branch_ids}},
@@ -4168,7 +4178,10 @@ async def get_payroll_summary_report(
         emp_overtime_pay = round(approved_ot_hours * hourly_rate * 1.5, 2)
         
         net_payable = round(earned_salary + emp_overtime_pay + emp_bonuses - emp_deductions - emp_advances, 2)
-        
+        # 💰 المدفوع نقداً والمتبقي
+        emp_paid = round(payments_by_emp.get(emp_id, 0), 2)
+        emp_remaining = round(net_payable - emp_paid, 2)
+
         branch = branches_by_id.get(emp.get("branch_id"), {})
         
         employee_data.append({
@@ -4191,7 +4204,9 @@ async def get_payroll_summary_report(
             "pending_advances": pending_advances,
             "overtime_hours": approved_ot_hours,
             "overtime_pay": emp_overtime_pay,
-            "net_payable": net_payable
+            "net_payable": net_payable,
+            "paid_amount": emp_paid,
+            "remaining": emp_remaining,
         })
         
         totals["basic_salary"] += basic_salary
@@ -4200,6 +4215,8 @@ async def get_payroll_summary_report(
         totals["total_advances"] += emp_advances
         totals["overtime_pay"] += emp_overtime_pay
         totals["net_payable"] += net_payable
+        totals["paid_amount"] = totals.get("paid_amount", 0) + emp_paid
+        totals["remaining"] = totals.get("remaining", 0) + emp_remaining
     
     return {
         "month": month,
@@ -4207,6 +4224,280 @@ async def get_payroll_summary_report(
         "employees": employee_data,
         "totals": totals
     }
+
+# ==================== 💰 Salary Payments + Daily Payroll Summary ====================
+
+class SalaryPaymentCreate(BaseModel):
+    employee_id: str
+    amount: float
+    payment_date: Optional[str] = None  # YYYY-MM-DD (defaults to today)
+    notes: Optional[str] = None
+    payment_method: Optional[str] = "cash"  # cash | bank | other
+
+
+@api_router.post("/payroll/payments")
+async def create_salary_payment(
+    payload: SalaryPaymentCreate,
+    current_user: dict = Depends(get_current_user)
+):
+    """صرف دفعة من راتب موظف (المالك من النقدي الفعلي).
+    تُسجَّل في `salary_payments` وتُخصم من المتبقي الشهري في تقرير الرواتب الشامل والكشف اليومي."""
+    if current_user.get("role") not in ["admin", "super_admin", "manager"]:
+        raise HTTPException(status_code=403, detail="غير مسموح — للمالك/المدير فقط")
+
+    if payload.amount is None or payload.amount <= 0:
+        raise HTTPException(status_code=400, detail="المبلغ يجب أن يكون أكبر من صفر")
+
+    tenant_id = get_user_tenant_id(current_user)
+    emp_q = {"id": payload.employee_id}
+    if tenant_id:
+        emp_q["tenant_id"] = tenant_id
+    emp = await db.employees.find_one(emp_q, {"_id": 0})
+    if not emp:
+        raise HTTPException(status_code=404, detail="الموظف غير موجود")
+
+    pay_doc = {
+        "id": str(uuid.uuid4()),
+        "employee_id": payload.employee_id,
+        "employee_name": emp.get("name"),
+        "branch_id": emp.get("branch_id"),
+        "amount": round(float(payload.amount), 2),
+        "payment_date": payload.payment_date or datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+        "payment_method": payload.payment_method or "cash",
+        "notes": payload.notes,
+        "paid_by": current_user.get("id"),
+        "paid_by_name": current_user.get("full_name") or current_user.get("username"),
+        "tenant_id": tenant_id,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.salary_payments.insert_one(pay_doc)
+    pay_doc.pop("_id", None)
+    return pay_doc
+
+
+@api_router.get("/payroll/payments")
+async def list_salary_payments(
+    employee_id: Optional[str] = None,
+    branch_id: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """عرض دفعات الرواتب - فلترة بالموظف/الفرع/الفترة."""
+    tenant_id = get_user_tenant_id(current_user)
+    q = {}
+    if tenant_id:
+        q["tenant_id"] = tenant_id
+    if employee_id:
+        q["employee_id"] = employee_id
+    if branch_id:
+        q["branch_id"] = branch_id
+    if start_date or end_date:
+        date_q = {}
+        if start_date:
+            date_q["$gte"] = start_date
+        if end_date:
+            date_q["$lte"] = end_date
+        q["payment_date"] = date_q
+    payments = await db.salary_payments.find(q, {"_id": 0}).sort("payment_date", -1).to_list(2000)
+    return payments
+
+
+@api_router.delete("/payroll/payments/{payment_id}")
+async def delete_salary_payment(
+    payment_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """حذف دفعة - للمالك فقط (في حال خطأ تسجيل)."""
+    if current_user.get("role") not in ["admin", "super_admin"]:
+        raise HTTPException(status_code=403, detail="غير مسموح — للمالك فقط")
+
+    tenant_id = get_user_tenant_id(current_user)
+    q = {"id": payment_id}
+    if tenant_id:
+        q["tenant_id"] = tenant_id
+    existing = await db.salary_payments.find_one(q, {"_id": 0})
+    if not existing:
+        raise HTTPException(status_code=404, detail="الدفعة غير موجودة")
+
+    await db.salary_payments.delete_one({"id": payment_id})
+    return {"message": "تم حذف الدفعة"}
+
+
+@api_router.get("/payroll/daily-summary")
+async def get_daily_payroll_summary(
+    date: str,  # YYYY-MM-DD
+    branch_id: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """كشف رواتب يومي — يعرض راتب اليوم لكل موظف مع حضوره وما تم صرفه نقداً."""
+    tenant_id = get_user_tenant_id(current_user)
+    user_branch_id = current_user.get("branch_id")
+    user_role = current_user.get("role")
+
+    emp_query = {"is_active": True}
+    if tenant_id:
+        emp_query["tenant_id"] = tenant_id
+    if user_branch_id and user_role not in [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.MANAGER]:
+        emp_query["branch_id"] = user_branch_id
+    elif branch_id:
+        emp_query["branch_id"] = branch_id
+
+    employees = await db.employees.find(emp_query, {"_id": 0}).limit(500).to_list(500)
+    if not employees:
+        return {"date": date, "rows": [], "totals": {}}
+
+    employee_ids = [e["id"] for e in employees]
+    branch_ids = list(set([e.get("branch_id") for e in employees if e.get("branch_id")]))
+    month = date[:7]
+    month_start = f"{month}-01"
+
+    today_attendance = await db.attendance.find({
+        "employee_id": {"$in": employee_ids},
+        "date": date
+    }, {"_id": 0}).to_list(500)
+    att_by_emp = {a["employee_id"]: a for a in today_attendance}
+
+    mtd_attendance = await db.attendance.find({
+        "employee_id": {"$in": employee_ids},
+        "date": {"$gte": month_start, "$lte": date}
+    }, {"_id": 0}).to_list(20000)
+    mtd_days_by_emp = {}
+    for a in mtd_attendance:
+        if a.get("status") in ["present", "late", "early_leave"]:
+            mtd_days_by_emp[a["employee_id"]] = mtd_days_by_emp.get(a["employee_id"], 0) + 1
+
+    today_ded = await db.deductions.find({
+        "employee_id": {"$in": employee_ids},
+        "date": date
+    }, {"_id": 0}).to_list(500)
+    ded_today_by_emp = {}
+    for d in today_ded:
+        ded_today_by_emp[d["employee_id"]] = ded_today_by_emp.get(d["employee_id"], 0) + (d.get("amount") or 0)
+
+    mtd_ded = await db.deductions.find({
+        "employee_id": {"$in": employee_ids},
+        "date": {"$gte": month_start, "$lte": date}
+    }, {"_id": 0}).to_list(5000)
+    mtd_ded_by_emp = {}
+    for d in mtd_ded:
+        mtd_ded_by_emp[d["employee_id"]] = mtd_ded_by_emp.get(d["employee_id"], 0) + (d.get("amount") or 0)
+
+    today_bon = await db.bonuses.find({
+        "employee_id": {"$in": employee_ids},
+        "date": date
+    }, {"_id": 0}).to_list(500)
+    bon_today_by_emp = {}
+    for b in today_bon:
+        bon_today_by_emp[b["employee_id"]] = bon_today_by_emp.get(b["employee_id"], 0) + (b.get("amount") or 0)
+
+    mtd_bon = await db.bonuses.find({
+        "employee_id": {"$in": employee_ids},
+        "date": {"$gte": month_start, "$lte": date}
+    }, {"_id": 0}).to_list(5000)
+    mtd_bon_by_emp = {}
+    for b in mtd_bon:
+        mtd_bon_by_emp[b["employee_id"]] = mtd_bon_by_emp.get(b["employee_id"], 0) + (b.get("amount") or 0)
+
+    advances_q = {
+        "employee_id": {"$in": employee_ids},
+        "status": "approved",
+        "remaining_amount": {"$gt": 0}
+    }
+    advances = await db.advances.find(advances_q, {"_id": 0}).to_list(500)
+    adv_by_emp = {}
+    for a in advances:
+        adv_by_emp[a["employee_id"]] = adv_by_emp.get(a["employee_id"], 0) + (a.get("remaining_amount") or 0)
+
+    payments_this_month = await db.salary_payments.find({
+        "employee_id": {"$in": employee_ids},
+        "payment_date": {"$gte": month_start, "$lte": f"{month}-31"}
+    }, {"_id": 0}).to_list(5000)
+    paid_by_emp = {}
+    for p in payments_this_month:
+        paid_by_emp[p["employee_id"]] = paid_by_emp.get(p["employee_id"], 0) + (p.get("amount") or 0)
+
+    all_branches = await db.branches.find(
+        {"id": {"$in": branch_ids}}, {"_id": 0, "id": 1, "name": 1}
+    ).to_list(100)
+    branch_name_by_id = {b["id"]: b.get("name", "-") for b in all_branches}
+
+    rows = []
+    totals = {
+        "daily_earned": 0.0, "deductions_today": 0.0, "bonuses_today": 0.0,
+        "mtd_earned": 0.0, "mtd_deductions": 0.0, "mtd_bonuses": 0.0,
+        "pending_advances": 0.0, "paid_this_month": 0.0, "remaining_this_month": 0.0,
+        "present_count": 0, "absent_count": 0,
+    }
+
+    for emp in employees:
+        emp_id = emp["id"]
+        basic = float(emp.get("salary") or 0)
+        daily_rate = round(basic / 30, 2) if basic else 0
+        att = att_by_emp.get(emp_id)
+        present = bool(att and att.get("status") in ["present", "late"])
+        worked_hours = float(att.get("worked_hours") or 0) if att else 0
+        check_in = att.get("check_in") if att else None
+        check_out = att.get("check_out") if att else None
+
+        earned_today = daily_rate if present else 0
+        ded_today = ded_today_by_emp.get(emp_id, 0)
+        bon_today = bon_today_by_emp.get(emp_id, 0)
+
+        mtd_days = mtd_days_by_emp.get(emp_id, 0)
+        mtd_earned = round(daily_rate * mtd_days, 2)
+        mtd_ded_amt = mtd_ded_by_emp.get(emp_id, 0)
+        mtd_bon_amt = mtd_bon_by_emp.get(emp_id, 0)
+        paid_amt = paid_by_emp.get(emp_id, 0)
+        pending_adv = adv_by_emp.get(emp_id, 0)
+
+        # المتبقي للشهر = (مكتسب حتى اليوم + مكافآت) - خصومات - مدفوع نقداً
+        remaining = round(mtd_earned + mtd_bon_amt - mtd_ded_amt - paid_amt, 2)
+
+        rows.append({
+            "employee_id": emp_id,
+            "employee_name": emp.get("name"),
+            "branch_id": emp.get("branch_id"),
+            "branch_name": branch_name_by_id.get(emp.get("branch_id"), "-"),
+            "position": emp.get("position"),
+            "basic_salary": basic,
+            "daily_rate": daily_rate,
+            "present": present,
+            "status": (att.get("status") if att else "absent"),
+            "check_in": check_in,
+            "check_out": check_out,
+            "worked_hours": worked_hours,
+            "earned_today": earned_today,
+            "deductions_today": ded_today,
+            "bonuses_today": bon_today,
+            "mtd_days": mtd_days,
+            "mtd_earned": mtd_earned,
+            "mtd_deductions": mtd_ded_amt,
+            "mtd_bonuses": mtd_bon_amt,
+            "pending_advances": pending_adv,
+            "paid_this_month": paid_amt,
+            "remaining_this_month": remaining,
+        })
+
+        totals["daily_earned"] += earned_today
+        totals["deductions_today"] += ded_today
+        totals["bonuses_today"] += bon_today
+        totals["mtd_earned"] += mtd_earned
+        totals["mtd_deductions"] += mtd_ded_amt
+        totals["mtd_bonuses"] += mtd_bon_amt
+        totals["pending_advances"] += pending_adv
+        totals["paid_this_month"] += paid_amt
+        totals["remaining_this_month"] += remaining
+        if present:
+            totals["present_count"] += 1
+        else:
+            totals["absent_count"] += 1
+
+    totals = {k: (round(v, 2) if isinstance(v, float) else v) for k, v in totals.items()}
+    return {"date": date, "month": month, "rows": rows, "totals": totals}
+
+# ==================== End Salary Payments + Daily Payroll ====================
+
 
 @api_router.get("/reports/employee-salary-slip/{employee_id}")
 async def get_employee_salary_slip(
@@ -15915,11 +16206,19 @@ async def _auto_process_attendance_internal(current_user: dict):
     # 3. تجميع السجلات حسب (employee_code, date)
     from collections import defaultdict
     daily_punches = defaultdict(list)
-    
+
+    def _to_min_helper(hhmm: str) -> int:
+        try:
+            h, m = hhmm.split(":")
+            return int(h) * 60 + int(m)
+        except Exception:
+            return -1
+
     for rec in raw_records:
         uid = str(rec.get("employee_code", ""))
         if uid not in uid_to_emp:
             continue
+        emp_for_punch = uid_to_emp[uid]
         # استخراج التاريخ والوقت
         ts = rec.get("punch_time", "")
         if "T" in ts:
@@ -15927,6 +16226,26 @@ async def _auto_process_attendance_internal(current_user: dict):
             time_part = ts.split("T")[1][:5]  # HH:MM
         else:
             continue
+
+        # === دعم الشفت الليلي ===
+        # لو shift_end < shift_start (مثل 22:00 → 06:00)، البصمات بعد منتصف الليل
+        # وقبل (shift_end + ساعتين سماحية) تُنسب لـ business_date = اليوم السابق
+        shift_start = emp_for_punch.get("shift_start")
+        shift_end = emp_for_punch.get("shift_end")
+        if shift_start and shift_end:
+            try:
+                ss_min = _to_min_helper(shift_start)
+                se_min = _to_min_helper(shift_end)
+                tp_min = _to_min_helper(time_part)
+                if 0 <= ss_min and 0 <= se_min and 0 <= tp_min and se_min < ss_min:
+                    # شفت ليلي: نحسب نطاق الانصراف الموسّع (شامل ساعتين سماحية)
+                    if tp_min <= se_min + 120:
+                        # البصمة بعد منتصف الليل ضمن نطاق الشفت الليلي → اليوم السابق
+                        d = datetime.strptime(date_part, "%Y-%m-%d")
+                        date_part = (d - timedelta(days=1)).strftime("%Y-%m-%d")
+            except Exception:
+                pass
+
         daily_punches[(uid, date_part)].append(time_part)
     
     # 4. تحويل لسجلات حضور
@@ -16215,7 +16534,6 @@ async def _auto_process_attendance_internal(current_user: dict):
             continue
         
         # فحص يوم أمس
-        from datetime import timedelta
         yesterday_dt = today - timedelta(days=1)
         day_of_week = yesterday_dt.weekday()  # 0=Monday
         # تحويل لصيغة 0=Sunday

@@ -30,7 +30,7 @@ import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Badge } from '../components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '../components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '../components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Switch } from '../components/ui/switch';
 import { Textarea } from '../components/ui/textarea';
@@ -162,6 +162,13 @@ export default function HR() {
   const [overtimeRequests, setOvertimeRequests] = useState([]);
   const [employeeRatings, setEmployeeRatings] = useState({ ratings: [], summary: {} });
   const [ratingsLoading, setRatingsLoading] = useState(false);
+  // 💰 الكشف اليومي + دفعات الرواتب
+  const [dailyPayroll, setDailyPayroll] = useState(null);
+  const [dailyPayrollDate, setDailyPayrollDate] = useState(new Date().toISOString().slice(0, 10));
+  const [dailyPayrollLoading, setDailyPayrollLoading] = useState(false);
+  const [paymentDialog, setPaymentDialog] = useState(null); // {employee_id, employee_name, suggested_amount}
+  const [paymentForm, setPaymentForm] = useState({ amount: '', notes: '', payment_method: 'cash' });
+  const [paymentSubmitting, setPaymentSubmitting] = useState(false);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7));
@@ -452,6 +459,65 @@ export default function HR() {
       fetchEmployeeRatings();
     }
   }, [activeTab, selectedMonth, dateMode, startDate, endDate, selectedYear, selectedBranchId]);
+
+  // 💰 جلب الكشف اليومي
+  const fetchDailyPayroll = async () => {
+    setDailyPayrollLoading(true);
+    try {
+      const token = localStorage.getItem('token');
+      const branchId = getBranchIdForApi();
+      const res = await axios.get(
+        `${API}/payroll/daily-summary?date=${dailyPayrollDate}${branchId ? `&branch_id=${branchId}` : ''}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      setDailyPayroll(res.data);
+    } catch (error) {
+      console.error('Error fetching daily payroll:', error);
+      toast.error(t('فشل في تحميل الكشف اليومي'));
+    } finally {
+      setDailyPayrollLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'daily-payroll') {
+      fetchDailyPayroll();
+    }
+  }, [activeTab, dailyPayrollDate, selectedBranchId]);
+
+  // 💰 صرف دفعة من راتب موظف
+  const submitSalaryPayment = async () => {
+    if (!paymentDialog) return;
+    const amount = parseFloat(paymentForm.amount);
+    if (!amount || amount <= 0) {
+      toast.error(t('أدخل مبلغ صحيح أكبر من صفر'));
+      return;
+    }
+    setPaymentSubmitting(true);
+    try {
+      const token = localStorage.getItem('token');
+      await axios.post(
+        `${API}/payroll/payments`,
+        {
+          employee_id: paymentDialog.employee_id,
+          amount: amount,
+          payment_date: dailyPayrollDate,
+          payment_method: paymentForm.payment_method,
+          notes: paymentForm.notes,
+        },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      toast.success(t('تم صرف الدفعة') + ` — ${formatPrice(amount)}`);
+      setPaymentDialog(null);
+      setPaymentForm({ amount: '', notes: '', payment_method: 'cash' });
+      fetchDailyPayroll();
+      fetchData(); // refresh المستحقات + تقرير الرواتب
+    } catch (error) {
+      toast.error(error.response?.data?.detail || t('فشل في صرف الدفعة'));
+    } finally {
+      setPaymentSubmitting(false);
+    }
+  };
 
   // Employee handlers
   const handleCreateEmployee = async (e) => {
@@ -1883,6 +1949,9 @@ export default function HR() {
             <TabsTrigger value="salary-report" className="flex items-center gap-2">
               <BarChart3 className="h-4 w-4" /> {t('تقرير الرواتب')}
             </TabsTrigger>
+            <TabsTrigger value="daily-payroll" className="flex items-center gap-2" data-testid="daily-payroll-tab">
+              <DollarSign className="h-4 w-4" /> {t('الكشف اليومي')}
+            </TabsTrigger>
             <TabsTrigger value="attendance" className="flex items-center gap-2">
               <Calendar className="h-4 w-4" /> {t('الحضور')}
             </TabsTrigger>
@@ -2301,6 +2370,145 @@ export default function HR() {
                     <BarChart3 className="h-12 w-12 mx-auto mb-4 opacity-50" />
                     <p>{t('لا توجد بيانات رواتب لهذا الشهر')}</p>
                   </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+
+          {/* 💰 Daily Payroll Tab — كشف الرواتب اليومي */}
+          <TabsContent value="daily-payroll">
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between flex-wrap gap-3">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <DollarSign className="h-5 w-5 text-cyan-500" />
+                    {t('الكشف اليومي للرواتب')}
+                  </CardTitle>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {t('راتب كل موظف لليوم + ما تم صرفه نقداً + المتبقي')}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Input
+                    type="date"
+                    value={dailyPayrollDate}
+                    onChange={(e) => setDailyPayrollDate(e.target.value)}
+                    className="w-44"
+                    data-testid="daily-payroll-date"
+                  />
+                  <Button variant="outline" size="sm" onClick={fetchDailyPayroll} data-testid="refresh-daily-payroll">
+                    <RefreshCw className={`h-4 w-4 ${dailyPayrollLoading ? 'animate-spin' : ''}`} />
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {dailyPayrollLoading ? (
+                  <div className="text-center py-12">
+                    <RefreshCw className="h-8 w-8 animate-spin mx-auto mb-2 text-muted-foreground" />
+                    <p className="text-sm text-muted-foreground">{t('جاري التحميل...')}</p>
+                  </div>
+                ) : !dailyPayroll || (dailyPayroll.rows || []).length === 0 ? (
+                  <div className="text-center py-12 text-muted-foreground">
+                    <BarChart3 className="h-12 w-12 mx-auto mb-2 opacity-30" />
+                    <p>{t('لا يوجد موظفين للعرض')}</p>
+                  </div>
+                ) : (
+                  <>
+                    {/* Summary cards */}
+                    <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-5">
+                      <div className="rounded-lg p-3 bg-emerald-500/10 border border-emerald-500/30">
+                        <p className="text-xs text-muted-foreground">{t('حضر اليوم')}</p>
+                        <p className="text-lg font-bold text-emerald-600">{dailyPayroll.totals?.present_count || 0} / {(dailyPayroll.rows || []).length}</p>
+                      </div>
+                      <div className="rounded-lg p-3 bg-cyan-500/10 border border-cyan-500/30">
+                        <p className="text-xs text-muted-foreground">{t('راتب اليوم')}</p>
+                        <p className="text-lg font-bold text-cyan-600" data-testid="daily-earned-total">{formatPrice(dailyPayroll.totals?.daily_earned || 0)}</p>
+                      </div>
+                      <div className="rounded-lg p-3 bg-blue-500/10 border border-blue-500/30">
+                        <p className="text-xs text-muted-foreground">{t('مكتسب من بداية الشهر')}</p>
+                        <p className="text-lg font-bold text-blue-600">{formatPrice(dailyPayroll.totals?.mtd_earned || 0)}</p>
+                      </div>
+                      <div className="rounded-lg p-3 bg-purple-500/10 border border-purple-500/30">
+                        <p className="text-xs text-muted-foreground">{t('مدفوع نقداً (الشهر)')}</p>
+                        <p className="text-lg font-bold text-purple-600" data-testid="paid-this-month-total">{formatPrice(dailyPayroll.totals?.paid_this_month || 0)}</p>
+                      </div>
+                      <div className="rounded-lg p-3 bg-amber-500/10 border border-amber-500/30">
+                        <p className="text-xs text-muted-foreground">{t('المتبقي للموظفين')}</p>
+                        <p className="text-lg font-bold text-amber-600" data-testid="remaining-total">{formatPrice(dailyPayroll.totals?.remaining_this_month || 0)}</p>
+                      </div>
+                    </div>
+
+                    {/* Employees table */}
+                    <div className="overflow-x-auto rounded-lg border">
+                      <table className="min-w-full text-sm">
+                        <thead className="bg-muted/40">
+                          <tr>
+                            <th className="text-start p-3">{t('الموظف')}</th>
+                            <th className="p-3">{t('الحالة')}</th>
+                            <th className="p-3">{t('الحضور/الانصراف')}</th>
+                            <th className="p-3">{t('راتب يومي')}</th>
+                            <th className="p-3">{t('مكتسب الشهر')}</th>
+                            <th className="p-3">{t('خصومات الشهر')}</th>
+                            <th className="p-3">{t('مدفوع نقداً')}</th>
+                            <th className="p-3 font-bold">{t('المتبقي')}</th>
+                            <th className="p-3">{t('إجراء')}</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(dailyPayroll.rows || []).map(row => (
+                            <tr key={row.employee_id} className="border-t hover:bg-muted/20" data-testid={`daily-row-${row.employee_id}`}>
+                              <td className="p-3">
+                                <div className="font-medium">{row.employee_name}</div>
+                                <div className="text-xs text-muted-foreground">{row.position} • {row.branch_name}</div>
+                              </td>
+                              <td className="p-3 text-center">
+                                {row.present ? (
+                                  <Badge className="bg-emerald-500/15 text-emerald-700 border-emerald-300/40">{t('حاضر')}</Badge>
+                                ) : (
+                                  <Badge variant="outline" className="text-muted-foreground">{t('غائب')}</Badge>
+                                )}
+                              </td>
+                              <td className="p-3 text-center text-xs">
+                                {row.check_in || '-'} <span className="text-muted-foreground">→</span> {row.check_out || '-'}
+                              </td>
+                              <td className="p-3 text-center tabular-nums">{formatPrice(row.daily_rate || 0)}</td>
+                              <td className="p-3 text-center tabular-nums text-blue-600">{formatPrice(row.mtd_earned || 0)}</td>
+                              <td className="p-3 text-center tabular-nums text-red-600">{formatPrice(row.mtd_deductions || 0)}</td>
+                              <td className="p-3 text-center tabular-nums text-purple-600">{formatPrice(row.paid_this_month || 0)}</td>
+                              <td className="p-3 text-center tabular-nums font-bold text-amber-600">
+                                {formatPrice(row.remaining_this_month || 0)}
+                              </td>
+                              <td className="p-3 text-center">
+                                {(user?.role === 'admin' || user?.role === 'super_admin' || user?.role === 'manager') && (
+                                  <Button
+                                    size="sm"
+                                    onClick={() => {
+                                      setPaymentDialog({
+                                        employee_id: row.employee_id,
+                                        employee_name: row.employee_name,
+                                        suggested: Math.max(0, row.remaining_this_month || 0),
+                                      });
+                                      setPaymentForm({
+                                        amount: row.remaining_this_month > 0 ? String(row.remaining_this_month) : '',
+                                        notes: '',
+                                        payment_method: 'cash',
+                                      });
+                                    }}
+                                    className="bg-emerald-500 hover:bg-emerald-600 text-white"
+                                    data-testid={`pay-btn-${row.employee_id}`}
+                                  >
+                                    <DollarSign className="h-4 w-4 ml-1" />
+                                    {t('صرف دفعة')}
+                                  </Button>
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </>
                 )}
               </CardContent>
             </Card>
@@ -3836,6 +4044,92 @@ export default function HR() {
             ) : (
               <p className="text-center py-8 text-muted-foreground">{t('لا توجد بيانات')}</p>
             )}
+          </DialogContent>
+        </Dialog>
+
+        {/* 💰 Dialog: صرف دفعة من الراتب */}
+        <Dialog open={!!paymentDialog} onOpenChange={(o) => !o && setPaymentDialog(null)}>
+          <DialogContent className="max-w-md" data-testid="salary-payment-dialog">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <DollarSign className="h-5 w-5 text-emerald-500" />
+                {t('صرف دفعة من الراتب')}
+              </DialogTitle>
+            </DialogHeader>
+            {paymentDialog && (
+              <div className="space-y-3 py-2">
+                <div className="rounded-lg p-3 bg-emerald-500/10 border border-emerald-500/30">
+                  <p className="text-sm">
+                    {t('الموظف')}: <span className="font-bold">{paymentDialog.employee_name}</span>
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {t('المتبقي المستحق')}: <span className="font-bold text-amber-600">{formatPrice(paymentDialog.suggested || 0)}</span>
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {t('تاريخ الصرف')}: {dailyPayrollDate}
+                  </p>
+                </div>
+                <div>
+                  <Label>{t('المبلغ المُصرَف نقداً')} *</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0.01"
+                    value={paymentForm.amount}
+                    onChange={(e) => setPaymentForm({ ...paymentForm, amount: e.target.value })}
+                    placeholder="0"
+                    autoFocus
+                    data-testid="payment-amount-input"
+                  />
+                </div>
+                <div>
+                  <Label>{t('طريقة الدفع')}</Label>
+                  <Select
+                    value={paymentForm.payment_method}
+                    onValueChange={(v) => setPaymentForm({ ...paymentForm, payment_method: v })}
+                  >
+                    <SelectTrigger data-testid="payment-method-select">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="cash">{t('نقدي')}</SelectItem>
+                      <SelectItem value="bank">{t('تحويل بنكي')}</SelectItem>
+                      <SelectItem value="other">{t('أخرى')}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>{t('ملاحظات (اختياري)')}</Label>
+                  <Input
+                    value={paymentForm.notes}
+                    onChange={(e) => setPaymentForm({ ...paymentForm, notes: e.target.value })}
+                    placeholder={t('مثال: دفعة من راتب الشهر')}
+                    data-testid="payment-notes-input"
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground bg-amber-500/10 border border-amber-500/30 rounded p-2">
+                  {t('ملاحظة: يتم خصم هذا المبلغ من المتبقي الشهري للموظف. السلف محسوبة منفصلة.')}
+                </p>
+              </div>
+            )}
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setPaymentDialog(null)} data-testid="payment-cancel-btn">
+                {t('إلغاء')}
+              </Button>
+              <Button
+                onClick={submitSalaryPayment}
+                disabled={paymentSubmitting || !paymentForm.amount || parseFloat(paymentForm.amount) <= 0}
+                className="bg-emerald-500 hover:bg-emerald-600 text-white"
+                data-testid="payment-submit-btn"
+              >
+                {paymentSubmitting ? (
+                  <RefreshCw className="h-4 w-4 animate-spin ml-2" />
+                ) : (
+                  <DollarSign className="h-4 w-4 ml-2" />
+                )}
+                {t('صرف الدفعة')}
+              </Button>
+            </DialogFooter>
           </DialogContent>
         </Dialog>
 

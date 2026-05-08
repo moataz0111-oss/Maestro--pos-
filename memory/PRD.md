@@ -268,6 +268,46 @@ Multi-tenant POS system with biometric integration (ZKTeco), thermal receipt pri
 ## Completed Features (Feb 7, 2026 - One-Time Routing Fix for Drifted Offline Orders)
 - **Problem**: Offline sync migration `renumber_offline_orders_chronologically_v2` corrected ~27 drifted order numbers but left them with wrong routing (dine_in/cash). The previous UI showed a Wrench icon for ALL offline orders — user feared it would become permanent noise and confuse tenants whose sync already works correctly after the `business_date` fix.
 - **Fix — Frontend (`Orders.js`)**: Wrench icon now shows **only** when `order.renumbered_reason === 'fix_offline_sync_drift_v2' && !order.routing_fixed_at`. New offline orders, already-fixed orders, and healthy orders never see it.
+
+## Completed Features (Feb 8, 2026 - Daily Payroll + Cash Salary Payments + Night Shift)
+**Owner can now disburse cash advances from real cash daily, with running balance tracking.**
+
+### 1. Night Shift Detection (`process_pending_biometric_records`)
+- **Problem**: Punches for night-shift employees (e.g., shift 22:00 → 06:00) crossing midnight were grouped under the *next* calendar date, splitting their work day in two.
+- **Fix**: When an employee's `shift_end < shift_start`, any punch within `[00:00, shift_end + 2h]` of date D is reassigned to business date D-1 before grouping.
+- Tolerance window of 2 hours after `shift_end` covers late departures.
+
+### 2. Salary Payments Backend (cash advances tracker)
+- New collection: `salary_payments` — `{id, employee_id, employee_name, branch_id, amount, payment_date, payment_method (cash|bank|other), notes, paid_by, paid_by_name, tenant_id, created_at}`.
+- New endpoints:
+  - `POST /api/payroll/payments` — admin/manager only; rejects `amount ≤ 0`; verifies employee belongs to tenant.
+  - `GET /api/payroll/payments?employee_id=&branch_id=&start_date=&end_date=` — list with filters.
+  - `DELETE /api/payroll/payments/{id}` — admin only (correction tool).
+- **Integration with Payroll Summary**: `GET /api/reports/payroll-summary` now returns `paid_amount` and `remaining` per employee plus in `totals`. Net payable still computed from earned + bonuses - deductions - advance installments; `paid_amount` is *separate* (cash actually disbursed) so `remaining = net_payable - paid_amount`.
+
+### 3. Daily Payroll Summary (`GET /api/payroll/daily-summary?date=YYYY-MM-DD&branch_id=`)
+- Returns one row per active employee with:
+  - `daily_rate = basic_salary / 30`
+  - `present` flag + check_in/check_out for the day
+  - `earned_today` (daily_rate if present, else 0)
+  - `mtd_days`, `mtd_earned`, `mtd_deductions`, `mtd_bonuses` — month-to-date counters up to and including the queried date
+  - `pending_advances` (total remaining), `paid_this_month` (sum of cash payments)
+  - `remaining_this_month = mtd_earned + mtd_bonuses - mtd_deductions - paid_this_month`
+- Plus aggregated `totals` block.
+
+### 4. Frontend — `الكشف اليومي` Tab + `صرف دفعة` Button
+- New `daily-payroll` tab in `HR.js` with date picker and 5 KPI cards (present count, daily earned, MTD earned, paid this month, remaining).
+- Per-employee row: status badge, check-in/out times, daily rate, MTD earned, deductions, paid, remaining (bold), and **green "صرف دفعة" button** for admin/manager/super_admin.
+- Payment dialog: amount (defaults to suggested remaining), payment method (cash/bank/other), notes. On submit:
+  - `POST /api/payroll/payments` with `payment_date = selected daily date`.
+  - Toast confirms; both daily-payroll and main HR data are refreshed so KPI cards + summary card update instantly.
+- All controls have `data-testid`s for testing (`daily-payroll-tab`, `daily-payroll-date`, `pay-btn-{employee_id}`, `payment-amount-input`, `payment-submit-btn`, etc.).
+
+### Self-tested (Feb 8, 2026)
+- `POST /api/payroll/payments` with 50,000 IQD for أحمد محمد → succeeds, returns full doc.
+- `GET /api/reports/payroll-summary?month=2026-05` now includes `paid_amount: 50000, remaining: -50000` per employee + in totals. ✅
+- `GET /api/payroll/daily-summary?date=2026-05-08` returns all employees with present/absent + MTD numbers. ✅
+- Visual: Daily Payroll tab loads, table renders, payment dialog opens with pre-filled suggested amount. ✅
 - **Fix — Backend (`sync_routes.py` — `PATCH /api/sync/orders/{id}/fix-routing`)**: Added two guard checks:
   - **400**: rejects if `renumbered_reason != 'fix_offline_sync_drift_v2'` (not a drifted order).
   - **409**: rejects if `routing_fixed_at` is already set (one-time only per order).
