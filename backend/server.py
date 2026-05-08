@@ -4240,8 +4240,10 @@ async def create_salary_payment(
     payload: SalaryPaymentCreate,
     current_user: dict = Depends(get_current_user)
 ):
-    """صرف دفعة من راتب موظف (المالك من النقدي الفعلي).
-    تُسجَّل في `salary_payments` وتُخصم من المتبقي الشهري في تقرير الرواتب الشامل والكشف اليومي."""
+    """صرف دفعة من راتب موظف.
+    تُسجَّل في `salary_payments` (سلفة على الراتب) + تُسحَب تلقائياً من **خزينة المالك**
+    (`owner_withdrawals` بفئة `salary_payment`) لأن المالك يدفعها من ماله الخاص.
+    لا تؤثر على الشفت، المصاريف، أو نقدي المبيعات."""
     if current_user.get("role") not in ["admin", "super_admin", "manager"]:
         raise HTTPException(status_code=403, detail="غير مسموح — للمالك/المدير فقط")
 
@@ -4256,21 +4258,45 @@ async def create_salary_payment(
     if not emp:
         raise HTTPException(status_code=404, detail="الموظف غير موجود")
 
+    payment_id = str(uuid.uuid4())
+    pay_date = payload.payment_date or datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    paid_by_name = current_user.get("full_name") or current_user.get("username")
+
+    # 1) سجل الدفعة في salary_payments
     pay_doc = {
-        "id": str(uuid.uuid4()),
+        "id": payment_id,
         "employee_id": payload.employee_id,
         "employee_name": emp.get("name"),
         "branch_id": emp.get("branch_id"),
         "amount": round(float(payload.amount), 2),
-        "payment_date": payload.payment_date or datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+        "payment_date": pay_date,
         "payment_method": payload.payment_method or "cash",
         "notes": payload.notes,
         "paid_by": current_user.get("id"),
-        "paid_by_name": current_user.get("full_name") or current_user.get("username"),
+        "paid_by_name": paid_by_name,
         "tenant_id": tenant_id,
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
+
+    # 2) سحب موازي من خزينة المالك (يخصم من رصيد المالك الشخصي)
+    withdrawal_id = str(uuid.uuid4())
+    withdrawal_doc = {
+        "id": withdrawal_id,
+        "tenant_id": tenant_id,
+        "amount": round(float(payload.amount), 2),
+        "date": pay_date,
+        "beneficiary": f"راتب: {emp.get('name')}",
+        "description": payload.notes or f"دفعة على راتب الموظف",
+        "category": "salary_payment",
+        "linked_salary_payment_id": payment_id,
+        "created_by": paid_by_name,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+    pay_doc["linked_owner_withdrawal_id"] = withdrawal_id
+
     await db.salary_payments.insert_one(pay_doc)
+    await db.owner_withdrawals.insert_one(withdrawal_doc)
     pay_doc.pop("_id", None)
     return pay_doc
 
@@ -4308,7 +4334,8 @@ async def delete_salary_payment(
     payment_id: str,
     current_user: dict = Depends(get_current_user)
 ):
-    """حذف دفعة - للمالك فقط (في حال خطأ تسجيل)."""
+    """حذف دفعة - للمالك فقط (في حال خطأ تسجيل).
+    يحذف أيضاً السحب المرتبط من خزينة المالك."""
     if current_user.get("role") not in ["admin", "super_admin"]:
         raise HTTPException(status_code=403, detail="غير مسموح — للمالك فقط")
 
@@ -4320,8 +4347,13 @@ async def delete_salary_payment(
     if not existing:
         raise HTTPException(status_code=404, detail="الدفعة غير موجودة")
 
+    # حذف السحب المرتبط من خزينة المالك (إن وُجد)
+    linked_wid = existing.get("linked_owner_withdrawal_id")
+    if linked_wid:
+        await db.owner_withdrawals.delete_one({"id": linked_wid})
+
     await db.salary_payments.delete_one({"id": payment_id})
-    return {"message": "تم حذف الدفعة"}
+    return {"message": "تم حذف الدفعة + السحب المرتبط"}
 
 
 @api_router.get("/payroll/daily-summary")

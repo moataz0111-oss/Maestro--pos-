@@ -353,3 +353,26 @@ Multi-tenant POS system with biometric integration (ZKTeco), thermal receipt pri
 - Job queue full lifecycle ✅
 - Payment history dialog with 1 existing payment renders correctly with delete button visible. ✅
 - Daily payroll integration: paid_this_month + remaining update after a new payment. ✅
+
+## Completed Features (Feb 8, 2026 - Salary Payments Linked to Owner Wallet)
+**Salary advances are now correctly modelled as withdrawals from the owner's personal treasury — never as shift expenses.**
+
+### Background — User clarification
+The owner explicitly rejected having salary advances appear as "expenses on the shift" because:
+- The salary itself is not yet earned at the time of the advance (it accrues monthly).
+- The advance is paid by the owner from his **own personal treasury**, not from the shop's cash sales.
+
+### Implementation
+- `POST /api/payroll/payments` now performs a paired write:
+  1. Inserts the `salary_payments` record.
+  2. Inserts a matching `owner_withdrawals` row with `category: "salary_payment"`, `beneficiary: "راتب: <name>"`, `linked_salary_payment_id` for traceability.
+- `salary_payments` doc stores `linked_owner_withdrawal_id` for the reverse link.
+- `DELETE /api/payroll/payments/{id}` cascades the linked withdrawal so the owner's balance is restored automatically.
+- **Owner Wallet summary** (`GET /api/owner-wallet/summary`) now reflects salary advances: total_withdrawals increases, available_balance decreases, and the withdrawal appears in the wallet's "السحوبات" panel.
+- **No effect on**: shift cash register / closing report, daily expenses, cash sales totals.
+- Dialog warning text rewritten: "💼 سيُخصم هذا المبلغ تلقائياً من خزينة المالك (سحب من رصيدك الشخصي). لا يؤثر على نقدي المبيعات أو مصاريف الشفت."
+
+### Verified end-to-end
+- Pay 25,000 → owner balance: -25,000, 1 withdrawal labelled "راتب: أحمد محمد" with category `salary_payment`. ✅
+- Delete payment → cascade deletes withdrawal → balance restored. ✅
+- Visual verification on the Owner Wallet page: السحوبات card shows the entry with proper beneficiary and date. ✅
