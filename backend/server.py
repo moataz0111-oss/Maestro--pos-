@@ -4262,12 +4262,39 @@ async def create_salary_payment(
     pay_date = payload.payment_date or datetime.now(timezone.utc).strftime("%Y-%m-%d")
     paid_by_name = current_user.get("full_name") or current_user.get("username")
 
+    # جلب اسم الفرع من جدول branches
+    emp_branch_id = emp.get("branch_id")
+    emp_branch_name = None
+    if emp_branch_id:
+        br = await db.branches.find_one({"id": emp_branch_id}, {"_id": 0, "name": 1})
+        emp_branch_name = (br or {}).get("name")
+
+    # تحقق من رصيد الفرع المتاح في خزينة المالك (إيداعات الفرع - سحوباته)
+    if emp_branch_id:
+        branch_q = {"branch_id": emp_branch_id}
+        if tenant_id:
+            branch_q["tenant_id"] = tenant_id
+        br_deposits = await db.owner_deposits.find(branch_q, {"_id": 0}).to_list(5000)
+        br_withdrawals = await db.owner_withdrawals.find(branch_q, {"_id": 0}).to_list(5000)
+        br_total_dep = sum(d.get("amount", 0) for d in br_deposits)
+        br_total_wd = sum(w.get("amount", 0) for w in br_withdrawals)
+        # خصم تحويلات الأرباح للخزينة الشخصية لنفس الفرع
+        br_transfers = await db.owner_profit_transfers.find(branch_q, {"_id": 0}).to_list(5000)
+        br_total_tf = sum(t.get("amount", 0) for t in br_transfers)
+        branch_balance = br_total_dep - br_total_wd - br_total_tf
+        if float(payload.amount) > branch_balance:
+            raise HTTPException(
+                status_code=400,
+                detail=f"رصيد فرع \"{emp_branch_name or emp_branch_id}\" غير كافٍ في خزينة المالك. المتاح: {branch_balance:,.0f} IQD، المطلوب: {float(payload.amount):,.0f} IQD"
+            )
+
     # 1) سجل الدفعة في salary_payments
     pay_doc = {
         "id": payment_id,
         "employee_id": payload.employee_id,
         "employee_name": emp.get("name"),
-        "branch_id": emp.get("branch_id"),
+        "branch_id": emp_branch_id,
+        "branch_name": emp_branch_name,
         "amount": round(float(payload.amount), 2),
         "payment_date": pay_date,
         "payment_method": payload.payment_method or "cash",
@@ -4278,7 +4305,7 @@ async def create_salary_payment(
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
 
-    # 2) سحب موازي من خزينة المالك (يخصم من رصيد المالك الشخصي)
+    # 2) سحب موازي من خزينة المالك (مرتبط بالفرع لاستقطاع من إيداعاته)
     withdrawal_id = str(uuid.uuid4())
     withdrawal_doc = {
         "id": withdrawal_id,
@@ -4286,8 +4313,10 @@ async def create_salary_payment(
         "amount": round(float(payload.amount), 2),
         "date": pay_date,
         "beneficiary": f"راتب: {emp.get('name')}",
-        "description": payload.notes or f"دفعة على راتب الموظف",
+        "description": payload.notes or "دفعة على راتب الموظف",
         "category": "salary_payment",
+        "branch_id": emp_branch_id,
+        "branch_name": emp_branch_name,
         "linked_salary_payment_id": payment_id,
         "created_by": paid_by_name,
         "created_at": datetime.now(timezone.utc).isoformat(),

@@ -270,6 +270,7 @@ export default function OwnerWallet() {
     personal: t('سحب شخصي'),
     supplier: t('دفع مورد'),
     salary: t('رواتب'),
+    salary_payment: t('دفعة راتب موظف'),
     other: t('أخرى')
   };
 
@@ -644,6 +645,7 @@ export default function OwnerWallet() {
                             <div>
                               <p className="font-medium text-rose-700 dark:text-rose-400">{formatPrice(withdrawal.amount)}</p>
                               <p className="text-xs text-muted-foreground">{withdrawal.beneficiary} • {categoryLabels[withdrawal.category]}</p>
+                              {withdrawal.branch_name && <p className="text-xs text-purple-600 dark:text-purple-400">🏪 {t('الفرع')}: {withdrawal.branch_name}</p>}
                               <p className="text-xs text-muted-foreground">{formatDate(withdrawal.date)}</p>
                               {withdrawal.description && <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">📝 {withdrawal.description}</p>}
                             </div>

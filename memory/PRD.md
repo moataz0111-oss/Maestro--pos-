@@ -376,3 +376,21 @@ The owner explicitly rejected having salary advances appear as "expenses on the 
 - Pay 25,000 → owner balance: -25,000, 1 withdrawal labelled "راتب: أحمد محمد" with category `salary_payment`. ✅
 - Delete payment → cascade deletes withdrawal → balance restored. ✅
 - Visual verification on the Owner Wallet page: السحوبات card shows the entry with proper beneficiary and date. ✅
+
+## Completed Features (Feb 8, 2026 - Per-Branch Owner Wallet Enforcement)
+**Salary advances now strictly draw from the matching branch's deposits in the owner wallet.**
+
+### Backend (`POST /api/payroll/payments`)
+1. Looks up `branch_id`/`branch_name` for the employee.
+2. Computes per-branch wallet balance: sum(deposits) − sum(withdrawals) − sum(profit_transfers) for that branch.
+3. **Rejects HTTP 400** if amount > balance with Arabic message naming the branch and exact shortfall.
+4. Persists `branch_id` + `branch_name` on both `owner_withdrawals` and `salary_payments` for traceability and display.
+
+### Frontend (`OwnerWallet.js`)
+- Added category label: `salary_payment → "دفعة راتب موظف"`.
+- Withdrawal cards now render `🏪 الفرع: {branch_name}` in purple under the beneficiary.
+
+### Verified
+- 5,000 advance with branch balance 0 → 400 with branch name. ✅
+- After 100,000 deposit to that branch → 5,000 advance succeeded, persisted `branch_name`. ✅
+- Owner Wallet UI shows `الرصيد المتاح: 80,000 IQD`, the new withdrawal card with branch line. ✅
