@@ -239,6 +239,36 @@ input[type="number"] {
 
 /* Print styles */
 @media print {
+    /* عند طباعة إيصال الراتب: نعرض فقط #salary-receipt-print ونخفي الباقي */
+    body.printing-receipt #salary-receipt-print {
+        display: block !important;
+        visibility: visible !important;
+        position: fixed !important;
+        left: 0 !important;
+        top: 0 !important;
+        right: 0 !important;
+        width: 100% !important;
+        max-width: 210mm !important;
+        margin: 0 auto !important;
+        padding: 15mm !important;
+        background: white !important;
+        color: black !important;
+        z-index: 9999 !important;
+    }
+    body:has(#salary-receipt-print) > * {
+        visibility: hidden !important;
+    }
+    body:has(#salary-receipt-print) #salary-receipt-print,
+    body:has(#salary-receipt-print) #salary-receipt-print * {
+        visibility: visible !important;
+    }
+    body:has(#salary-receipt-print) #salary-receipt-print {
+        position: fixed !important;
+        inset: 0 !important;
+        background: white !important;
+        padding: 20mm !important;
+    }
+
     /* إخفاء كل العناصر غير المطلوبة */
     .no-print,
     header,

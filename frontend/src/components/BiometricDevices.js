@@ -8,6 +8,7 @@ import { Label } from '../components/ui/label';
 import { Badge } from '../components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
+import { executeBiometricOp } from '../utils/biometricQueue';
 import {
   Fingerprint,
   Plus,
@@ -211,46 +212,31 @@ export default function BiometricDevices({ branches = [], onDataRefresh }) {
   const handleTestConnection = async (device) => {
     setTestingDevice(device.id);
     try {
-      // Route through local agent (same network as ZKTeco device)
-      const agentOk = await checkAgent();
-      if (!agentOk) {
-        toast.error(
-          <div>
-            <p className="font-bold">{t('الوكيل المحلي غير متصل!')}</p>
-            <p className="text-sm">{t('يجب تشغيل وكيل Maestro على جهاز الكمبيوتر')}</p>
-          </div>
-        );
+      let res;
+      try {
+        res = await executeBiometricOp('zk-test', {
+          ip: device.ip_address,
+          port: device.port || 4370,
+          timeout: 5000
+        }, { branchId: device.branch_id, directTimeout: 12000, queueTimeout: 30000 });
+      } catch (err) {
+        toast.error(t('فشل في اختبار الاتصال') + ': ' + (err.message || ''));
         return;
       }
 
-      const res = await axios.post(`${AGENT_URL}/zk-test`, {
-        ip: device.ip_address,
-        port: device.port || 4370,
-        timeout: 5000
-      }, { timeout: 10000 });
-      
-      if (res.data.success) {
+      if (res?.success) {
         toast.success(
           <div>
             <p className="font-bold">{t('تم الاتصال بنجاح!')}</p>
-            {res.data.serial_number && <p className="text-sm">{t('الرقم التسلسلي')}: {res.data.serial_number}</p>}
-            {res.data.device_name && <p className="text-sm">{t('الجهاز')}: {res.data.device_name}</p>}
+            {res.serial_number && <p className="text-sm">{t('الرقم التسلسلي')}: {res.serial_number}</p>}
+            {res.device_name && <p className="text-sm">{t('الجهاز')}: {res.device_name}</p>}
           </div>
         );
       } else {
-        toast.error(res.data.message || t('فشل الاتصال بالجهاز'));
+        toast.error(res?.message || t('فشل الاتصال بالجهاز'));
       }
     } catch (error) {
-      if (error.code === 'ERR_NETWORK' || error.message?.includes('Network')) {
-        toast.error(
-          <div>
-            <p className="font-bold">{t('الوكيل المحلي غير متصل!')}</p>
-            <p className="text-sm">{t('شغّل ملف print_server.ps1 الإصدار 2.4')}</p>
-          </div>
-        );
-      } else {
-        toast.error(t('فشل في اختبار الاتصال'));
-      }
+      toast.error(t('فشل في اختبار الاتصال') + ': ' + (error.message || ''));
     } finally {
       setTestingDevice(null);
     }
@@ -260,62 +246,27 @@ export default function BiometricDevices({ branches = [], onDataRefresh }) {
     setSyncingDevice(device.id);
     const syncingToast = toast.loading(t('جاري المزامنة من الجهاز — قد تستغرق حتى 3 دقائق حسب حجم البيانات'), { duration: 180000 });
     try {
-      const agentOk = await checkAgent();
-      if (!agentOk) {
+      // executeBiometricOp: محاولة direct localhost أولاً، ثم Job Queue كـ fallback تلقائياً
+      let agentResData;
+      try {
+        agentResData = await executeBiometricOp('zk-sync', {
+          ip: device.ip_address,
+          port: device.port || 4370,
+          timeout: 150000
+        }, { branchId: device.branch_id, queueTimeout: 200000 });
+      } catch (agentErr) {
         toast.dismiss(syncingToast);
-        toast.error(t('الوكيل المحلي غير متصل! شغّل وسيط الطباعة'));
+        toast.error(t('فشل المزامنة') + ': ' + (agentErr.message || 'Network error'), { duration: 6000 });
         return;
       }
 
-      // 1. Get attendance data from local agent - مهلة موسّعة + إعادة محاولة واحدة عند فشل الشبكة
-      let agentRes;
-      let lastErr;
-      for (let attempt = 1; attempt <= 2; attempt++) {
-        try {
-          agentRes = await axios.post(`${AGENT_URL}/zk-sync`, {
-            ip: device.ip_address,
-            port: device.port || 4370,
-            timeout: 150000
-          }, { timeout: 180000 });
-          lastErr = null;
-          break;
-        } catch (agentErr) {
-          lastErr = agentErr;
-          const isNetworkErr = agentErr.message === 'Network Error' || agentErr.code === 'ERR_NETWORK';
-          if (isNetworkErr && attempt === 1) {
-            // انتظر 3 ثواني واعد المحاولة - الوكيل قد يكون مشغولاً في UDP call
-            console.log('Network error on first try, retrying after 3s...');
-            await new Promise(r => setTimeout(r, 3000));
-            continue;
-          }
-          break;
-        }
-      }
-      if (lastErr) {
+      if (!agentResData || !agentResData.success) {
         toast.dismiss(syncingToast);
-        const isTimeout = lastErr.code === 'ECONNABORTED' || lastErr.message?.includes('timeout');
-        const isNetwork = lastErr.message === 'Network Error' || lastErr.code === 'ERR_NETWORK';
-        const errMsg = isTimeout
-          ? t('الجهاز لم يستجب خلال 3 دقائق — جرّب إعادة تشغيل الجهاز')
-          : isNetwork
-          ? t('فشل الاتصال بالوكيل — تأكد أن وسيط الطباعة يعمل (لون أيقونة الوسيط أخضر)')
-          : t('فشل الاتصال بالوكيل') + ': ' + (lastErr.message || 'Network error');
-        toast.error(errMsg, { duration: 6000 });
+        toast.error(agentResData?.message || t('فشل في جلب البيانات'));
         return;
       }
 
-      console.log('Agent sync response:', JSON.stringify(agentRes.data));
-
-      if (!agentRes.data || !agentRes.data.success) {
-        toast.dismiss(syncingToast);
-        const msg = agentRes.data?.message || t('فشل في جلب البيانات');
-        const dbg = agentRes.data?.debug || '';
-        const raw = agentRes.data?.raw_bytes || '';
-        toast.error(`${msg}${dbg ? ' | debug: ' + dbg : ''}${raw ? ' | bytes: ' + raw : ''}`);
-        return;
-      }
-
-      const recordCount = agentRes.data.records?.length || 0;
+      const recordCount = agentResData.records?.length || 0;
       
       // 2. Send synced records to backend for storage
       const token = localStorage.getItem('token');
@@ -323,7 +274,7 @@ export default function BiometricDevices({ branches = [], onDataRefresh }) {
       
       try {
         const backendRes = await axios.post(`${API}/biometric/devices/${deviceId}/sync-from-agent`, {
-          records: agentRes.data.records || []
+          records: agentResData.records || []
         }, {
           headers: { Authorization: `Bearer ${token}` }
         });
@@ -349,23 +300,24 @@ export default function BiometricDevices({ branches = [], onDataRefresh }) {
   const handleFetchDeviceUsers = async (device) => {
     setFetchingUsers(device.id);
     try {
-      const agentOk = await checkAgent();
-      if (!agentOk) {
-        toast.error(t('الوكيل المحلي غير متصل!'));
+      let res;
+      try {
+        res = await executeBiometricOp('zk-users', {
+          ip: device.ip_address,
+          port: device.port || 4370,
+          timeout: 45000
+        }, { branchId: device.branch_id, queueTimeout: 90000 });
+      } catch (err) {
+        toast.error(t('فشل الاتصال') + ': ' + (err.message || ''));
         return;
       }
-      const res = await axios.post(`${AGENT_URL}/zk-users`, {
-        ip: device.ip_address,
-        port: device.port || 4370,
-        timeout: 45000
-      }, { timeout: 60000 });
 
-      if (res.data?.success) {
-        const users = res.data.users || [];
+      if (res?.success) {
+        const users = res.users || [];
         setDeviceUsers(prev => ({ ...prev, [device.id]: users }));
         toast.success(t('تم جلب المستخدمين') + ` (${users.length})`);
       } else {
-        toast.error(res.data?.message || t('فشل جلب المستخدمين'));
+        toast.error(res?.message || t('فشل جلب المستخدمين'));
       }
     } catch (err) {
       toast.error(t('فشل الاتصال') + ': ' + (err.message || ''));

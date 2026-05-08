@@ -16597,6 +16597,129 @@ async def _auto_process_attendance_internal(current_user: dict):
     }
 
 
+
+# ==================== 🔧 Biometric Job Queue ====================
+# نظام طابور عمليات البصمة (مزامنة، إصدار موظف، اختبار، صورة وجه...)
+# الفرونت ينشر جوب → الوكيل المحلي يـ poll → ينفذ → يرسل النتيجة → الفرونت يستفسر
+# يحلّ مشكلة Mixed Content blocking عند فتح التطبيق من HTTPS
+# ⚠️ يتطلب تحديث print_server.ps1 ليدعم endpoints biometric-queue/*
+
+ALLOWED_BIO_JOB_TYPES = {
+    "zk-sync", "zk-push-user", "zk-users", "zk-test",
+    "zk-face-photo", "zk-delete-user", "zk-probe-device",
+}
+
+
+@api_router.post("/biometric-queue")
+async def create_biometric_job(payload: dict, current_user: dict = Depends(get_current_user)):
+    """إنشاء جوب بصمة لتنفيذه عبر الوكيل المحلي."""
+    if current_user.get("role") not in ["admin", "super_admin", "manager"]:
+        raise HTTPException(status_code=403, detail="غير مسموح — للمالك/المدير فقط")
+
+    tenant_id = get_user_tenant_id(current_user)
+    job_type = (payload.get("type") or "").strip()
+    if job_type not in ALLOWED_BIO_JOB_TYPES:
+        raise HTTPException(status_code=400, detail=f"نوع الجوب غير مدعوم: {job_type}")
+
+    branch_id = payload.get("branch_id") or current_user.get("branch_id") or ""
+    job = {
+        "id": str(uuid.uuid4()),
+        "type": job_type,
+        "params": payload.get("params") or {},
+        "status": "pending",
+        "branch_id": branch_id,
+        "tenant_id": tenant_id,
+        "created_by": current_user.get("id"),
+        "created_by_name": current_user.get("full_name") or current_user.get("username"),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "result": None,
+        "error": None,
+    }
+    await db.biometric_queue.insert_one(job)
+    job.pop("_id", None)
+    return job
+
+
+@api_router.get("/biometric-queue/pending")
+async def list_pending_biometric_jobs(branch_id: Optional[str] = None, limit: int = 10):
+    """الوكيل يـ poll الجوبات المعلقة (atomic claim لمنع تكرار التنفيذ).
+    يُستخدم بدون auth (الوكيل المحلي قد لا يحمل توكن)."""
+    q = {"status": "pending"}
+    if branch_id:
+        q["branch_id"] = branch_id
+    jobs = await db.biometric_queue.find(q, {"_id": 0}).sort("created_at", 1).limit(limit).to_list(limit)
+    if jobs:
+        ids = [j["id"] for j in jobs]
+        await db.biometric_queue.update_many(
+            {"id": {"$in": ids}, "status": "pending"},
+            {"$set": {
+                "status": "processing",
+                "claimed_at": datetime.now(timezone.utc).isoformat(),
+            }}
+        )
+    return jobs
+
+
+@api_router.post("/biometric-queue/{job_id}/result")
+async def submit_biometric_job_result(job_id: str, payload: dict):
+    """الوكيل يرسل نتيجة تنفيذ الجوب. payload: {success: bool, result?, error?}"""
+    success = bool(payload.get("success"))
+    update = {
+        "status": "completed" if success else "failed",
+        "result": payload.get("result"),
+        "error": payload.get("error"),
+        "completed_at": datetime.now(timezone.utc).isoformat(),
+    }
+    res = await db.biometric_queue.update_one({"id": job_id}, {"$set": update})
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="الجوب غير موجود")
+    return {"ok": True, "job_id": job_id}
+
+
+@api_router.get("/biometric-queue/{job_id}")
+async def get_biometric_job(job_id: str, current_user: dict = Depends(get_current_user)):
+    """الفرونت يستفسر حالة الجوب (polling)."""
+    tenant_id = get_user_tenant_id(current_user)
+    q = {"id": job_id}
+    if tenant_id:
+        q["tenant_id"] = tenant_id
+    job = await db.biometric_queue.find_one(q, {"_id": 0})
+    if not job:
+        raise HTTPException(status_code=404, detail="الجوب غير موجود")
+    return job
+
+
+@api_router.delete("/biometric-queue/{job_id}")
+async def cancel_biometric_job(job_id: str, current_user: dict = Depends(get_current_user)):
+    """إلغاء جوب pending (للأدمن، في حال علقت أو فشل الوكيل)."""
+    if current_user.get("role") not in ["admin", "super_admin"]:
+        raise HTTPException(status_code=403, detail="غير مسموح")
+    tenant_id = get_user_tenant_id(current_user)
+    q = {"id": job_id}
+    if tenant_id:
+        q["tenant_id"] = tenant_id
+    await db.biometric_queue.delete_one(q)
+    return {"ok": True}
+
+
+@app.on_event("startup")
+async def cleanup_stale_biometric_jobs():
+    """تنظيف الجوبات العالقة (processing > 5 دقائق) عند الإقلاع."""
+    try:
+        cutoff = (datetime.now(timezone.utc) - timedelta(minutes=5)).isoformat()
+        await db.biometric_queue.update_many(
+            {"status": "processing", "claimed_at": {"$lt": cutoff}},
+            {"$set": {"status": "failed", "error": "Timeout - الوكيل لم يرد", "completed_at": datetime.now(timezone.utc).isoformat()}}
+        )
+        # حذف الجوبات الأقدم من 7 أيام
+        old_cutoff = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
+        await db.biometric_queue.delete_many({"created_at": {"$lt": old_cutoff}})
+    except Exception as e:
+        logger.error(f"cleanup_stale_biometric_jobs failed: {e}")
+
+# ==================== End Biometric Job Queue ====================
+
+
 @api_router.post("/biometric/push")
 async def receive_biometric_push(request: Request):
     """

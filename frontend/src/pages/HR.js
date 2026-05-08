@@ -84,6 +84,7 @@ import {
 import { toast, Toaster } from 'sonner';
 import BiometricDevices from '../components/BiometricDevices';
 import { useTranslation } from '../hooks/useTranslation';
+import { executeBiometricOp } from '../utils/biometricQueue';
 
 const API = API_URL;
 
@@ -169,6 +170,12 @@ export default function HR() {
   const [paymentDialog, setPaymentDialog] = useState(null); // {employee_id, employee_name, suggested_amount}
   const [paymentForm, setPaymentForm] = useState({ amount: '', notes: '', payment_method: 'cash' });
   const [paymentSubmitting, setPaymentSubmitting] = useState(false);
+  // 📜 سجل دفعات الموظف
+  const [historyDialog, setHistoryDialog] = useState(null); // {employee_id, employee_name}
+  const [historyData, setHistoryData] = useState([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  // 🧾 إيصال آخر دفعة (يفتح تلقائياً بعد الصرف)
+  const [receiptData, setReceiptData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7));
@@ -496,7 +503,7 @@ export default function HR() {
     setPaymentSubmitting(true);
     try {
       const token = localStorage.getItem('token');
-      await axios.post(
+      const { data: payment } = await axios.post(
         `${API}/payroll/payments`,
         {
           employee_id: paymentDialog.employee_id,
@@ -510,6 +517,12 @@ export default function HR() {
       toast.success(t('تم صرف الدفعة') + ` — ${formatPrice(amount)}`);
       setPaymentDialog(null);
       setPaymentForm({ amount: '', notes: '', payment_method: 'cash' });
+      // 🧾 افتح إيصال الطباعة تلقائياً
+      setReceiptData({
+        ...payment,
+        employee_name: paymentDialog.employee_name,
+        company_name: user?.tenant_name || user?.business_name || 'Maestro POS',
+      });
       fetchDailyPayroll();
       fetchData(); // refresh المستحقات + تقرير الرواتب
     } catch (error) {
@@ -517,6 +530,50 @@ export default function HR() {
     } finally {
       setPaymentSubmitting(false);
     }
+  };
+
+  // 📜 فتح سجل دفعات موظف
+  const openPaymentHistory = async (emp) => {
+    setHistoryDialog({ employee_id: emp.employee_id, employee_name: emp.employee_name });
+    setHistoryLoading(true);
+    try {
+      const token = localStorage.getItem('token');
+      const month = dailyPayrollDate.slice(0, 7);
+      const { data } = await axios.get(
+        `${API}/payroll/payments?employee_id=${emp.employee_id}&start_date=${month}-01&end_date=${month}-31`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      setHistoryData(data || []);
+    } catch (err) {
+      toast.error(t('فشل في تحميل السجل'));
+      setHistoryData([]);
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+
+  // 🗑️ حذف دفعة من السجل
+  const deletePayment = async (paymentId) => {
+    if (!window.confirm(t('هل أنت متأكد من حذف هذه الدفعة؟'))) return;
+    try {
+      const token = localStorage.getItem('token');
+      await axios.delete(`${API}/payroll/payments/${paymentId}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      toast.success(t('تم حذف الدفعة'));
+      // إعادة تحميل السجل
+      if (historyDialog) await openPaymentHistory({ employee_id: historyDialog.employee_id, employee_name: historyDialog.employee_name });
+      fetchDailyPayroll();
+      fetchData();
+    } catch (err) {
+      toast.error(err.response?.data?.detail || t('فشل في الحذف'));
+    }
+  };
+
+  // 🧾 طباعة الإيصال
+  const printReceipt = () => {
+    if (!receiptData) return;
+    window.print();
   };
 
   // Employee handlers
@@ -724,12 +781,20 @@ export default function HR() {
       }
       
       // timeout موسّع: الجهاز قد يحتاج وقتاً أطول لفحص عدة مسارات HTTP ومنافذ UDP
-      const res = await axios.post(`${AGENT_URL}/zk-face-photo`, {
-        ip: device.ip_address,
-        port: device.port || 4370,
-        timeout: 45000,
-        uid: parseInt(emp.biometric_uid)
-      }, { timeout: 60000 });
+      let res;
+      try {
+        const r = await executeBiometricOp('zk-face-photo', {
+          ip: device.ip_address,
+          port: device.port || 4370,
+          timeout: 45000,
+          uid: parseInt(emp.biometric_uid)
+        }, { branchId: device.branch_id, directTimeout: 65000, queueTimeout: 90000 });
+        res = { data: r };
+      } catch (err) {
+        toast.error(t('فشل جلب صورة الوجه') + ': ' + (err.message || ''));
+        setFacePhotoLoading(false);
+        return;
+      }
       
       if (res.data?.success && res.data?.photo) {
         setFacePhotoData(res.data.photo);
@@ -1584,15 +1649,22 @@ export default function HR() {
     const uid = pushingEmployee.biometric_uid ? parseInt(pushingEmployee.biometric_uid) : getNextBiometricUid(await fetchDeviceUsersForPush(device));
     
     try {
-      const res = await axios.post(`${AGENT_URL}/zk-push-user`, {
-        ip: device.ip_address,
-        port: device.port || 4370,
-        timeout: 5000,
-        uid: uid,
-        user_id: String(uid),
-        name: pushingEmployee.name_en || arabicToEnglish(pushingEmployee.name),
-        privilege: 0
-      }, { timeout: 10000 });
+      let res;
+      try {
+        const r = await executeBiometricOp('zk-push-user', {
+          ip: device.ip_address,
+          port: device.port || 4370,
+          timeout: 5000,
+          uid: uid,
+          user_id: String(uid),
+          name: pushingEmployee.name_en || arabicToEnglish(pushingEmployee.name),
+          privilege: 0
+        }, { branchId: device.branch_id, directTimeout: 15000, queueTimeout: 60000 });
+        res = { data: r };
+      } catch (err) {
+        toast.error(t('فشل في إصدار الموظف') + ': ' + (err.message || ''));
+        return;
+      }
 
       if (res.data.success) {
         // Update employee biometric_uid in backend
@@ -1683,16 +1755,23 @@ export default function HR() {
     for (const emp of employeesWithUids) {
       const uid = emp.assignedUid;
       try {
-        const res = await axios.post(`${AGENT_URL}/zk-push-user`, {
-          ip: device.ip_address,
-          port: device.port || 4370,
-          timeout: 5000,
-          uid: uid,
-          user_id: String(uid),
-          name: emp.name_en || arabicToEnglish(emp.name),
-          privilege: 0
-        }, { timeout: 10000 });
-        
+        let res;
+        try {
+          const r = await executeBiometricOp('zk-push-user', {
+            ip: device.ip_address,
+            port: device.port || 4370,
+            timeout: 5000,
+            uid: uid,
+            user_id: String(uid),
+            name: emp.name_en || arabicToEnglish(emp.name),
+            privilege: 0
+          }, { branchId: device.branch_id, directTimeout: 15000, queueTimeout: 60000 });
+          res = { data: r };
+        } catch (innerErr) {
+          failCount++;
+          continue;
+        }
+
         if (res.data.success) {
           // تحديث UID في النظام إذا تغير أو كان جديد
           if (emp.uidChanged || !emp.biometric_uid || parseInt(emp.biometric_uid) !== uid) {
@@ -2481,26 +2560,37 @@ export default function HR() {
                               </td>
                               <td className="p-3 text-center">
                                 {(user?.role === 'admin' || user?.role === 'super_admin' || user?.role === 'manager') && (
-                                  <Button
-                                    size="sm"
-                                    onClick={() => {
-                                      setPaymentDialog({
-                                        employee_id: row.employee_id,
-                                        employee_name: row.employee_name,
-                                        suggested: Math.max(0, row.remaining_this_month || 0),
-                                      });
-                                      setPaymentForm({
-                                        amount: row.remaining_this_month > 0 ? String(row.remaining_this_month) : '',
-                                        notes: '',
-                                        payment_method: 'cash',
-                                      });
-                                    }}
-                                    className="bg-emerald-500 hover:bg-emerald-600 text-white"
-                                    data-testid={`pay-btn-${row.employee_id}`}
-                                  >
-                                    <DollarSign className="h-4 w-4 ml-1" />
-                                    {t('صرف دفعة')}
-                                  </Button>
+                                  <div className="flex items-center justify-center gap-1">
+                                    <Button
+                                      size="sm"
+                                      onClick={() => {
+                                        setPaymentDialog({
+                                          employee_id: row.employee_id,
+                                          employee_name: row.employee_name,
+                                          suggested: Math.max(0, row.remaining_this_month || 0),
+                                        });
+                                        setPaymentForm({
+                                          amount: row.remaining_this_month > 0 ? String(row.remaining_this_month) : '',
+                                          notes: '',
+                                          payment_method: 'cash',
+                                        });
+                                      }}
+                                      className="bg-emerald-500 hover:bg-emerald-600 text-white"
+                                      data-testid={`pay-btn-${row.employee_id}`}
+                                    >
+                                      <DollarSign className="h-4 w-4 ml-1" />
+                                      {t('صرف دفعة')}
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => openPaymentHistory(row)}
+                                      title={t('سجل الدفعات لهذا الشهر')}
+                                      data-testid={`history-btn-${row.employee_id}`}
+                                    >
+                                      <Clock className="h-4 w-4" />
+                                    </Button>
+                                  </div>
                                 )}
                               </td>
                             </tr>
@@ -4130,6 +4220,139 @@ export default function HR() {
                 {t('صرف الدفعة')}
               </Button>
             </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* 📜 Dialog: سجل دفعات الموظف */}
+        <Dialog open={!!historyDialog} onOpenChange={(o) => !o && setHistoryDialog(null)}>
+          <DialogContent className="max-w-2xl" data-testid="payment-history-dialog">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Clock className="h-5 w-5 text-blue-500" />
+                {t('سجل دفعات')} — {historyDialog?.employee_name}
+                <Badge variant="outline" className="ml-2">{dailyPayrollDate.slice(0, 7)}</Badge>
+              </DialogTitle>
+            </DialogHeader>
+            <div className="py-2">
+              {historyLoading ? (
+                <div className="text-center py-6"><RefreshCw className="h-6 w-6 animate-spin mx-auto" /></div>
+              ) : historyData.length === 0 ? (
+                <p className="text-center py-6 text-muted-foreground">{t('لا توجد دفعات لهذا الشهر')}</p>
+              ) : (
+                <>
+                  <div className="rounded-lg p-3 bg-emerald-500/10 border border-emerald-500/30 mb-3">
+                    <p className="text-sm">
+                      {t('إجمالي المصروف هذا الشهر')}: <span className="font-bold text-emerald-600">{formatPrice(historyData.reduce((s, p) => s + (p.amount || 0), 0))}</span>
+                      <span className="text-muted-foreground"> ({historyData.length} {t('دفعة')})</span>
+                    </p>
+                  </div>
+                  <div className="overflow-x-auto rounded-lg border">
+                    <table className="min-w-full text-sm">
+                      <thead className="bg-muted/40">
+                        <tr>
+                          <th className="text-start p-2">{t('التاريخ')}</th>
+                          <th className="p-2">{t('المبلغ')}</th>
+                          <th className="p-2">{t('الطريقة')}</th>
+                          <th className="text-start p-2">{t('ملاحظات')}</th>
+                          <th className="p-2">{t('بواسطة')}</th>
+                          <th className="p-2">{t('إجراء')}</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {historyData.map(p => (
+                          <tr key={p.id} className="border-t hover:bg-muted/20">
+                            <td className="p-2">{p.payment_date}</td>
+                            <td className="p-2 text-center font-bold tabular-nums text-emerald-600">{formatPrice(p.amount)}</td>
+                            <td className="p-2 text-center">
+                              <Badge variant="outline" className="text-xs">
+                                {p.payment_method === 'cash' ? t('نقدي') : p.payment_method === 'bank' ? t('بنكي') : t('أخرى')}
+                              </Badge>
+                            </td>
+                            <td className="p-2 text-xs text-muted-foreground">{p.notes || '-'}</td>
+                            <td className="p-2 text-center text-xs">{p.paid_by_name || '-'}</td>
+                            <td className="p-2 text-center">
+                              {user?.role === 'admin' || user?.role === 'super_admin' ? (
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="text-red-500 hover:bg-red-500/10"
+                                  onClick={() => deletePayment(p.id)}
+                                  data-testid={`delete-payment-${p.id}`}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              ) : '-'}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              )}
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* 🧾 Dialog: إيصال الدفعة (طباعة A4) */}
+        <Dialog open={!!receiptData} onOpenChange={(o) => !o && setReceiptData(null)}>
+          <DialogContent className="max-w-md" data-testid="payment-receipt-dialog">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <BarChart3 className="h-5 w-5 text-emerald-500" />
+                {t('إيصال صرف دفعة')}
+              </DialogTitle>
+            </DialogHeader>
+            {receiptData && (
+              <>
+                <div id="salary-receipt-print" className="bg-white text-black p-6 border rounded-lg space-y-3" dir="rtl">
+                  <div className="text-center border-b pb-3">
+                    <h2 className="text-lg font-bold">{receiptData.company_name}</h2>
+                    <p className="text-xs text-gray-600">{t('إيصال صرف نقدي - راتب موظف')}</p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-sm">
+                    <div><span className="text-gray-600">{t('رقم الإيصال')}:</span></div>
+                    <div className="font-mono text-xs">{receiptData.id?.slice(0, 8).toUpperCase()}</div>
+                    <div><span className="text-gray-600">{t('التاريخ')}:</span></div>
+                    <div className="font-bold">{receiptData.payment_date}</div>
+                    <div><span className="text-gray-600">{t('الموظف')}:</span></div>
+                    <div className="font-bold">{receiptData.employee_name}</div>
+                    <div><span className="text-gray-600">{t('طريقة الدفع')}:</span></div>
+                    <div>{receiptData.payment_method === 'cash' ? t('نقدي') : receiptData.payment_method === 'bank' ? t('تحويل بنكي') : t('أخرى')}</div>
+                    {receiptData.notes && (<>
+                      <div><span className="text-gray-600">{t('ملاحظات')}:</span></div>
+                      <div className="text-xs">{receiptData.notes}</div>
+                    </>)}
+                  </div>
+                  <div className="bg-emerald-100 border-2 border-emerald-500 rounded p-3 text-center">
+                    <p className="text-xs text-gray-700">{t('المبلغ المُصرَف')}</p>
+                    <p className="text-2xl font-bold text-emerald-700">{formatPrice(receiptData.amount)}</p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4 pt-4 border-t text-xs">
+                    <div className="text-center">
+                      <p className="text-gray-600 mb-6">{t('توقيع المستلم')}</p>
+                      <div className="border-t border-gray-400 mt-4">{receiptData.employee_name}</div>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-gray-600 mb-6">{t('توقيع المُصرف')}</p>
+                      <div className="border-t border-gray-400 mt-4">{receiptData.paid_by_name}</div>
+                    </div>
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setReceiptData(null)} data-testid="close-receipt-btn">
+                    {t('إغلاق')}
+                  </Button>
+                  <Button
+                    onClick={printReceipt}
+                    className="bg-emerald-500 hover:bg-emerald-600 text-white"
+                    data-testid="print-receipt-btn"
+                  >
+                    {t('طباعة')}
+                  </Button>
+                </DialogFooter>
+              </>
+            )}
           </DialogContent>
         </Dialog>
 

@@ -317,3 +317,39 @@ Multi-tenant POS system with biometric integration (ZKTeco), thermal receipt pri
 - (P2) Refactor `/app/backend/server.py` (21k+ lines) into modular routes (migrations, inventory, HR).
 - (P2) Refactor `Dashboard.js`, `Settings.js`, `POS.js`, `HR.js`, `WarehouseManufacturing.js` into smaller components.
 - (P3) Bulk routing-fix tool (fix multiple drifted orders at once) — optional, currently per-order is sufficient.
+
+
+## Completed Features (Feb 8, 2026 - Biometric Job Queue + Payment History + Receipt)
+
+### 1. Biometric Job Queue (Backend) — solves Mixed Content blocking
+- New collection `biometric_queue` with state machine: pending → processing → completed/failed.
+- **Endpoints (server.py around line 16600)**:
+  - `POST /api/biometric-queue` — admin/manager creates job (type ∈ {zk-sync, zk-push-user, zk-users, zk-test, zk-face-photo, zk-delete-user, zk-probe-device}).
+  - `GET /api/biometric-queue/pending?branch_id=` — local agent polls (no auth needed); atomically marks them as `processing` to prevent duplicate execution.
+  - `POST /api/biometric-queue/{id}/result` — agent posts back `{success, result?, error?}`; status moves to completed/failed.
+  - `GET /api/biometric-queue/{id}` — frontend polls for the result.
+  - `DELETE /api/biometric-queue/{id}` — admin cancel.
+- **Startup cleanup**: Stale `processing` jobs > 5 min are auto-failed; jobs > 7 days deleted.
+- **End-to-end self-test**: created → claimed via pending → result submitted → state read back as completed with payload. ✅
+
+### 2. Frontend Helper `executeBiometricOp` (`utils/biometricQueue.js`)
+- Single function used by all biometric callsites. Tries `http://localhost:9999/{type}` first (fastest path on local network); on `ERR_NETWORK` falls back to job queue with polling (1.5 s interval, 180 s default timeout).
+- **Migrated callsites**: 
+  - `BiometricDevices.js`: `handleSyncAttendance`, `handleFetchDeviceUsers`, `handleTestConnection`.
+  - `HR.js`: `handlePushAllToDevice`, `handlePushUserToDevice`, `fetchFacePhoto`.
+- **What this means in practice**: If the user opens the app via HTTPS (Mixed Content blocked), all biometric ops automatically route through the queue. The local PowerShell agent must be updated to poll `/api/biometric-queue/pending` and post results — until then, ops keep working from local-network HTTP exactly as before, and gracefully fail with a clear toast on HTTPS instead of silent breakage.
+
+### 3. Payment History per Employee (Daily Payroll tab)
+- Clock icon button next to "صرف دفعة" → opens dialog with all payments in the displayed month.
+- Shows: date, amount (bold green), method badge (نقدي/بنكي/أخرى), notes, paid_by_name, and a delete button (admin/super_admin only).
+- Header strip: "إجمالي المصروف هذا الشهر: X (N دفعة)".
+- Delete reuses existing `DELETE /api/payroll/payments/{id}` and refreshes the daily summary + main HR data.
+
+### 4. Cash Receipt (auto-opens after each payment)
+- After successful `submitSalaryPayment`, a print-ready A4 receipt dialog opens with: company name (from `user.tenant_name`), receipt number (first 8 chars of payment id, uppercase), date, employee name, payment method, optional notes, big highlighted amount block, and two signature areas (المستلم / المُصرف).
+- "طباعة" button calls `window.print()`. Print CSS uses `body:has(#salary-receipt-print)` to isolate the receipt and hide everything else when printing.
+
+### Self-tested
+- Job queue full lifecycle ✅
+- Payment history dialog with 1 existing payment renders correctly with delete button visible. ✅
+- Daily payroll integration: paid_this_month + remaining update after a new payment. ✅
