@@ -161,6 +161,7 @@ class RecipeIngredient(BaseModel):
     quantity: float
     unit: str
     cost_per_unit: float = 0.0
+    waste_percentage: Optional[float] = 0.0  # نسبة الهدر للمادة الخام
 
 class ManufacturedProductCreate(BaseModel):
     name: str
@@ -172,6 +173,9 @@ class ManufacturedProductCreate(BaseModel):
     quantity: float = 0.0  # الكمية المصنعة المتوفرة
     min_quantity: float = 0.0
     selling_price: float = 0.0
+    # 🎯 تكاليف التصنيع (تُحسب من مجموع المكونات)
+    production_cost: Optional[float] = None  # التكلفة بعد الهدر (المعتمدة)
+    cost_before_waste: Optional[float] = None  # التكلفة قبل الهدر (للمحاسبة على الموردين)
     category: Optional[str] = None
 
 class ManufacturedProductResponse(BaseModel):
@@ -2392,14 +2396,26 @@ async def create_manufactured_product(
     db = get_db()
     tenant_id = current_user.get("tenant_id")
     
-    # حساب تكلفة المواد الخام
-    raw_material_cost = 0
+    # حساب تكلفة المواد الخام (قبل + بعد الهدر)
+    raw_material_cost = 0  # قبل الهدر
+    raw_material_cost_after_waste = 0  # بعد الهدر (المعتمدة)
     recipe_items = []
-    
+
     for ingredient in product.recipe:
-        raw_material_cost += ingredient.quantity * ingredient.cost_per_unit
+        base_cost = ingredient.quantity * ingredient.cost_per_unit
+        raw_material_cost += base_cost
+        # تكلفة فعلية بعد الهدر
+        waste_pct = ingredient.waste_percentage or 0
+        if waste_pct > 0 and waste_pct < 100:
+            effective_cost_per_unit = ingredient.cost_per_unit / (1 - waste_pct / 100)
+        else:
+            effective_cost_per_unit = ingredient.cost_per_unit
+        raw_material_cost_after_waste += ingredient.quantity * effective_cost_per_unit
         recipe_items.append(ingredient.model_dump())
-    
+
+    # 🎯 تكلفة التصنيع المعتمدة = بعد الهدر (يُستخدم في احتساب تكلفة المبيعات)
+    production_cost = product.production_cost if product.production_cost is not None else round(raw_material_cost_after_waste, 2)
+
     product_doc = {
         "id": str(uuid.uuid4()),
         "tenant_id": tenant_id,
@@ -2409,9 +2425,12 @@ async def create_manufactured_product(
         "recipe": recipe_items,
         "quantity": product.quantity,
         "min_quantity": product.min_quantity,
-        "raw_material_cost": raw_material_cost,
-        "selling_price": product.selling_price,
-        "profit_margin": product.selling_price - raw_material_cost if product.selling_price > 0 else 0,
+        "raw_material_cost": round(raw_material_cost, 2),  # قبل الهدر (للموردين)
+        "raw_material_cost_after_waste": round(raw_material_cost_after_waste, 2),  # بعد الهدر
+        "cost_before_waste": round(raw_material_cost, 2),  # alias
+        "production_cost": production_cost,  # ⭐ التكلفة المعتمدة (بعد الهدر)
+        "selling_price": product.selling_price,  # سعر البيع — يحدده المستخدم في قائمة الطعام، ليس هنا
+        "profit_margin": product.selling_price - production_cost if product.selling_price > 0 else 0,
         "category": product.category,
         "last_updated": datetime.now(timezone.utc).isoformat(),
         "created_at": datetime.now(timezone.utc).isoformat()

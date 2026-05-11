@@ -43,7 +43,8 @@ import {
   TrendingUp,
   TrendingDown,
   Pencil,
-  Trash2
+  Trash2,
+  DollarSign
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -734,6 +735,9 @@ export default function WarehouseManufacturing() {
       toast.error(t('المادة غير موجودة في مخزون التصنيع'));
       return;
     }
+    // جلب نسبة الهدر من جدول raw_materials الأصلي (لأن manufacturing_inventory لا يحفظها)
+    const rawMaster = rawMaterials.find(m => m.id === newIngredient.raw_material_id);
+    const wastePct = rawMaster?.waste_percentage || material.waste_percentage || 0;
     
     const exists = productForm.recipe.find(r => r.raw_material_id === newIngredient.raw_material_id);
     if (exists) {
@@ -748,7 +752,8 @@ export default function WarehouseManufacturing() {
         raw_material_name: material.raw_material_name,
         quantity: newIngredient.quantity,
         unit: material.unit,
-        cost_per_unit: material.cost_per_unit || 0
+        cost_per_unit: material.cost_per_unit || 0,
+        waste_percentage: wastePct,
       }]
     }));
     
@@ -761,9 +766,19 @@ export default function WarehouseManufacturing() {
       recipe: prev.recipe.filter((_, i) => i !== index)
     }));
   };
-  // حساب تكلفة الوصفة
+  // حساب تكلفة الوصفة (قيمتان: قبل الهدر + بعد الهدر)
   const calculateRecipeCost = () => {
+    // قبل الهدر = الكمية × تكلفة الوحدة الأصلية
     return productForm.recipe.reduce((sum, ing) => sum + (ing.quantity * (ing.cost_per_unit || 0)), 0);
+  };
+  const calculateRecipeCostAfterWaste = () => {
+    // بعد الهدر = الكمية × التكلفة الفعلية (cost / (1 - waste_pct/100))
+    return productForm.recipe.reduce((sum, ing) => {
+      const baseCost = ing.cost_per_unit || 0;
+      const wastePct = ing.waste_percentage || 0;
+      const effectiveCost = wastePct > 0 ? baseCost / (1 - wastePct / 100) : baseCost;
+      return sum + (ing.quantity * effectiveCost);
+    }, 0);
   };
   // إضافة منتج مصنع
   const handleAddProduct = async (e) => {
@@ -775,7 +790,18 @@ export default function WarehouseManufacturing() {
     
     setSubmitting(true);
     try {
-      await axios.post(`${API}/manufactured-products`, productForm, { headers });
+      // ✨ تكلفة التصنيع = مجموع تكاليف المكونات بعد نسبة الهدر (التكلفة الفعلية)
+      // قبل الهدر = للمحاسبة على الموردين | بعد الهدر = للاحتساب في المبيعات
+      const costBeforeWaste = calculateRecipeCost();
+      const costAfterWaste = calculateRecipeCostAfterWaste();
+      const payload = {
+        ...productForm,
+        production_cost: parseFloat(costAfterWaste.toFixed(2)),  // التكلفة المعتمدة
+        cost_before_waste: parseFloat(costBeforeWaste.toFixed(2)),  // مرجعية للموردين
+        // نُبقي selling_price = 0 (هذا حقل قديم، التكلفة هي الأهم؛ سعر البيع يُحدَّد في قائمة الطعام)
+        selling_price: 0,
+      };
+      await axios.post(`${API}/manufactured-products`, payload, { headers });
       toast.success(t('تم إضافة المنتج المصنع'));
       setShowAddProductDialog(false);
       setProductForm({
@@ -1975,18 +2001,24 @@ export default function WarehouseManufacturing() {
                                 </div>
                               )}
                               
-                              <div className="grid grid-cols-3 gap-4 text-sm mb-3">
-                                <div>
-                                  <p className="text-muted-foreground">{t('تكلفة المواد')}</p>
-                                  <p className="font-bold text-blue-500">{formatPrice(product.raw_material_cost)}</p>
+                              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm mb-3">
+                                <div className="p-2 rounded-md bg-blue-500/5 border border-blue-300/30" data-testid="cost-before-waste-card">
+                                  <p className="text-[11px] text-muted-foreground">{t('الكلفة قبل الهدر')}</p>
+                                  <p className="font-bold text-blue-600 tabular-nums">{formatPrice(product.raw_material_cost ?? product.cost_before_waste ?? 0)}</p>
+                                  <p className="text-[10px] text-muted-foreground mt-0.5">{t('للمقارنة مع الفاتورة')}</p>
                                 </div>
-                                <div>
-                                  <p className="text-muted-foreground">{t('سعر البيع')}</p>
-                                  <p className="font-bold text-green-500">{formatPrice(product.selling_price)}</p>
+                                <div className="p-2 rounded-md bg-emerald-500/10 border-2 border-emerald-500/40" data-testid="cost-after-waste-card">
+                                  <p className="text-[11px] text-muted-foreground">⭐ {t('الكلفة بعد الهدر')}</p>
+                                  <p className="font-bold text-emerald-600 tabular-nums">{formatPrice(product.raw_material_cost_after_waste ?? product.production_cost ?? product.raw_material_cost ?? 0)}</p>
+                                  <p className="text-[10px] text-muted-foreground mt-0.5">{t('التكلفة الفعلية المعتمدة')}</p>
                                 </div>
-                                <div>
-                                  <p className="text-muted-foreground">{t('هامش الربح')}</p>
-                                  <p className="font-bold text-primary">{formatPrice(product.profit_margin)}</p>
+                                <div className="p-2 rounded-md bg-green-500/5 border border-green-300/30">
+                                  <p className="text-[11px] text-muted-foreground">{t('سعر البيع')}</p>
+                                  <p className="font-bold text-green-600 tabular-nums">{formatPrice(product.selling_price)}</p>
+                                </div>
+                                <div className="p-2 rounded-md bg-purple-500/5 border border-purple-300/30">
+                                  <p className="text-[11px] text-muted-foreground">{t('هامش الربح')}</p>
+                                  <p className="font-bold text-purple-600 tabular-nums">{formatPrice((product.selling_price || 0) - (product.raw_material_cost_after_waste ?? product.production_cost ?? product.raw_material_cost ?? 0))}</p>
                                 </div>
                               </div>
                               
@@ -2827,13 +2859,32 @@ export default function WarehouseManufacturing() {
                 </div>
               )}
               
-              <div>
-                <Label>{t('سعر البيع')}</Label>
-                <Input
-                  type="number"
-                  value={productForm.selling_price}
-                  onChange={(e) => setProductForm(prev => ({ ...prev, selling_price: parseFloat(e.target.value) || 0 }))}
-                />
+              <div className="rounded-lg p-3 bg-emerald-500/10 border border-emerald-500/30 space-y-2">
+                <Label className="flex items-center gap-2 font-bold text-emerald-700">
+                  <DollarSign className="h-4 w-4" />
+                  {t('تكلفة التصنيع (تُحسب تلقائياً)')}
+                </Label>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  {t('التكلفة تُحسب من مجموع المكونات. تُعرض قيمتان:')}
+                </p>
+                {productForm.recipe.length === 0 ? (
+                  <p className="text-xs text-amber-600 bg-amber-50 dark:bg-amber-950/20 p-2 rounded">
+                    {t('أضف مكونات للوصفة لاحتساب التكلفة تلقائياً')}
+                  </p>
+                ) : (
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="p-2 rounded bg-white/60 dark:bg-black/20 border border-blue-300/40">
+                      <p className="text-[10px] text-muted-foreground">{t('قبل الهدر')}</p>
+                      <p className="font-bold text-blue-600 tabular-nums">{formatPrice(calculateRecipeCost())}</p>
+                      <p className="text-[10px] text-muted-foreground">{t('للمحاسبة على الموردين')}</p>
+                    </div>
+                    <div className="p-2 rounded bg-white/60 dark:bg-black/20 border-2 border-emerald-500">
+                      <p className="text-[10px] text-muted-foreground">⭐ {t('بعد الهدر (المعتمد)')}</p>
+                      <p className="font-bold text-emerald-600 tabular-nums text-base" data-testid="cost-after-waste">{formatPrice(calculateRecipeCostAfterWaste())}</p>
+                      <p className="text-[10px] text-muted-foreground">{t('التكلفة الفعلية للوحدة')}</p>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
             
@@ -2888,31 +2939,58 @@ export default function WarehouseManufacturing() {
                   </div>
                   
                   {productForm.recipe.length > 0 ? (
-                    <div className="space-y-2 max-h-40 overflow-y-auto">
-                      {productForm.recipe.map((ing, index) => (
-                        <div key={index} className="flex items-center justify-between bg-background rounded-lg px-3 py-2">
-                          <div className="flex items-center gap-2">
-                            <Beaker className="h-4 w-4 text-purple-500" />
-                            <span className="font-medium">{ing.raw_material_name}</span>
+                    <div className="space-y-2 max-h-52 overflow-y-auto">
+                      {productForm.recipe.map((ing, index) => {
+                        const baseCost = ing.cost_per_unit || 0;
+                        const wastePct = ing.waste_percentage || 0;
+                        const effectiveCost = wastePct > 0 && wastePct < 100 ? baseCost / (1 - wastePct / 100) : baseCost;
+                        const costBefore = ing.quantity * baseCost;
+                        const costAfter = ing.quantity * effectiveCost;
+                        return (
+                          <div key={index} className="bg-background rounded-lg px-3 py-2 space-y-1">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <Beaker className="h-4 w-4 text-purple-500" />
+                                <span className="font-medium">{ing.raw_material_name}</span>
+                                <span className="text-xs text-muted-foreground">({ing.quantity} {ing.unit})</span>
+                                {wastePct > 0 && (
+                                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-orange-100 dark:bg-orange-950/40 text-orange-700">
+                                    {t('هدر')} {wastePct}%
+                                  </span>
+                                )}
+                              </div>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="h-6 w-6 text-red-500"
+                                onClick={() => removeIngredientFromRecipe(index)}
+                              >
+                                <Minus className="h-3 w-3" />
+                              </Button>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2 pl-6">
+                              <div className="text-[11px]">
+                                <span className="text-muted-foreground">{t('قبل الهدر:')} </span>
+                                <span className="font-medium text-blue-600 tabular-nums">{formatPrice(costBefore)}</span>
+                              </div>
+                              <div className="text-[11px]">
+                                <span className="text-muted-foreground">{t('بعد الهدر:')} </span>
+                                <span className="font-medium text-emerald-600 tabular-nums">{formatPrice(costAfter)}</span>
+                              </div>
+                            </div>
                           </div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm text-muted-foreground">{ing.quantity} {ing.unit}</span>
-                            <span className="text-xs text-primary">({formatPrice(ing.quantity * (ing.cost_per_unit || 0))})</span>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              className="h-6 w-6 text-red-500"
-                              onClick={() => removeIngredientFromRecipe(index)}
-                            >
-                              <Minus className="h-3 w-3" />
-                            </Button>
-                          </div>
+                        );
+                      })}
+                      <div className="grid grid-cols-2 gap-2 pt-2 border-t border-purple-500/30">
+                        <div className="p-2 rounded bg-blue-500/5 border border-blue-300/30">
+                          <p className="text-[10px] text-muted-foreground">{t('إجمالي قبل الهدر')}</p>
+                          <p className="font-bold text-blue-600 tabular-nums">{formatPrice(calculateRecipeCost())}</p>
                         </div>
-                      ))}
-                      <div className="flex items-center justify-between pt-2 border-t border-purple-500/30">
-                        <span className="font-medium">{t('تكلفة الوحدة:')}</span>
-                        <span className="font-bold text-primary">{formatPrice(calculateRecipeCost())}</span>
+                        <div className="p-2 rounded bg-emerald-500/10 border-2 border-emerald-500/40">
+                          <p className="text-[10px] text-muted-foreground">⭐ {t('إجمالي بعد الهدر')}</p>
+                          <p className="font-bold text-emerald-600 tabular-nums" data-testid="recipe-total-after-waste">{formatPrice(calculateRecipeCostAfterWaste())}</p>
+                        </div>
                       </div>
                     </div>
                   ) : (

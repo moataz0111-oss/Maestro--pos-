@@ -26,6 +26,16 @@ Multi-tenant POS system with biometric integration (ZKTeco), thermal receipt pri
 - Reports filter by branch
 - Printers filter by branch in Settings
 
+## Manufacturing Cost Display (May 11, 2026)
+- Product card now displays **4 cards** instead of 3:
+  - الكلفة قبل الهدر (blue) — for invoice comparison with suppliers
+  - الكلفة بعد الهدر (emerald, ⭐ approved) — the actual production cost
+  - سعر البيع (green)
+  - هامش الربح (purple) — calculated from selling_price - cost_after_waste
+- Recipe form shows per-ingredient cost breakdown (before/after waste) + total summary cards
+- Backward compatible: old products without `raw_material_cost_after_waste` fall back to `production_cost ?? raw_material_cost`
+
+
 ## Completed Features (This Session - April 17-20, 2026)
 1. Real Heartbeat mechanism for agent status
 2. USB print fix in polling job (C# compiled inside Start-Job)
