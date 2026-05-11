@@ -31,7 +31,8 @@ import {
   Factory,
   Box,
   Percent,
-  ClipboardCheck
+  ClipboardCheck,
+  History
 } from 'lucide-react';
 import {
   Dialog,
@@ -56,6 +57,7 @@ import {
 import { Badge } from '../components/ui/badge';
 import WasteEfficiencyReport from '../components/WasteEfficiencyReport';
 import DailyStockCountDialog from '../components/DailyStockCountDialog';
+import StockCountHistoryDialog from '../components/StockCountHistoryDialog';
 import { useAuth } from '../context/AuthContext';
 const API = API_URL;
 export default function BranchOrders() {
@@ -77,6 +79,7 @@ export default function BranchOrders() {
   const [submitting, setSubmitting] = useState(false);
   const [selectedBranch, setSelectedBranch] = useState('');
   const [showStockCountDialog, setShowStockCountDialog] = useState(false);
+  const [showHistoryDialog, setShowHistoryDialog] = useState(false);
   
   const [form, setForm] = useState({
     to_branch_id: '',
@@ -505,14 +508,25 @@ export default function BranchOrders() {
                 </SelectContent>
               </Select>
               {selectedBranch && (
-                <Button
-                  onClick={() => setShowStockCountDialog(true)}
-                  className="bg-emerald-500 hover:bg-emerald-600 gap-2"
-                  data-testid="open-stock-count-btn"
-                >
-                  <ClipboardCheck className="h-4 w-4" />
-                  {t('إدخال الجرد اليومي')}
-                </Button>
+                <>
+                  <Button
+                    onClick={() => setShowStockCountDialog(true)}
+                    className="bg-emerald-500 hover:bg-emerald-600 gap-2"
+                    data-testid="open-stock-count-btn"
+                  >
+                    <ClipboardCheck className="h-4 w-4" />
+                    {t('إدخال الجرد اليومي')}
+                  </Button>
+                  <Button
+                    onClick={() => setShowHistoryDialog(true)}
+                    variant="outline"
+                    className="gap-2"
+                    data-testid="open-stock-count-history-btn"
+                  >
+                    <History className="h-4 w-4" />
+                    {t('سجل الجرود')}
+                  </Button>
+                </>
               )}
             </div>
             {!selectedBranch ? (
@@ -713,6 +727,14 @@ export default function BranchOrders() {
         branchId={selectedBranch}
         branchName={branches.find(b => b.id === selectedBranch)?.name || ''}
         onSubmitted={fetchData}
+      />
+
+      {/* Dialog: سجل الجرود التاريخي */}
+      <StockCountHistoryDialog
+        open={showHistoryDialog}
+        onOpenChange={setShowHistoryDialog}
+        branchId={selectedBranch}
+        branchName={branches.find(b => b.id === selectedBranch)?.name || ''}
       />
 
       {/* Dialog: إنشاء طلب جديد */}

@@ -26,6 +26,16 @@ Multi-tenant POS system with biometric integration (ZKTeco), thermal receipt pri
 - Reports filter by branch
 - Printers filter by branch in Settings
 
+## Daily Stock Count History + Pattern Analysis (May 11, 2026)
+- **New component**: `StockCountHistoryDialog` — opens via "سجل الجرود" button next to "إدخال الجرد اليومي" in `مخزون الفروع` tab.
+- **Digital signature per count**: shows submitter name + submission timestamp for every past count.
+- **Owner-only analytics**:
+  - Summary cards: total counts, total units lost, total loss value
+  - **Bar chart**: average loss by day-of-week (helps spot patterns like "Friday is the worst day")
+  - **Line chart**: loss trend over time (chronological)
+  - Expandable rows showing per-product breakdown (with expected/variance/loss columns hidden from non-admin).
+- Non-admin (kitchen manager) sees only history list + their own submissions (no analytics).
+
 ## Daily Stock Count + Branch Loss in Waste Report (May 11, 2026)
 - **New collection**: `branch_stock_counts` — per-branch daily product count.
 - **New endpoints**: `GET /branch-stock-count/today`, `POST /branch-stock-count/submit`, `GET /branch-stock-count/check`, `GET /branch-stock-count/history`.
