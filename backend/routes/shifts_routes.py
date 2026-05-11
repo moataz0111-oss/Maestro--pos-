@@ -41,6 +41,7 @@ class CashRegisterClose(BaseModel):
     denominations: Dict[str, int] = {}
     notes: Optional[str] = None
     branch_id: Optional[str] = None
+    force_close_without_count: Optional[bool] = False  # تجاوز فحص الجرد (للمالك/المدير)
 
 class ShiftResponse(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -918,6 +919,50 @@ async def close_cash_register(close_data: CashRegisterClose, current_user: dict 
     shift_start = shift.get("started_at") or shift.get("opened_at") or datetime.now(timezone.utc).isoformat()
     shift_cashier_id = shift.get("cashier_id") or current_user.get("id")
     branch = await db.branches.find_one({"id": shift.get("branch_id", "")}, {"_id": 0, "name": 1})
+    
+    # ====== فحص الجرد اليومي للفرع (لا يُسمح بالإغلاق قبل تسجيل الجرد إن كان هناك مخزون) ======
+    # المالك/المدير يمكنه التجاوز عبر علم force_close_without_count
+    bypass_count = bool(getattr(close_data, "force_close_without_count", False)) and is_manager
+    if not bypass_count and target_branch_id:
+        from datetime import datetime as _dt, timezone as _tz, timedelta as _td
+        today_iso = _dt.now(_tz.utc).date().isoformat()
+        # هل في الفرع مخزون منتجات؟
+        inv_q = {"branch_id": target_branch_id, "quantity": {"$gt": 0}}
+        if tenant_id:
+            inv_q["$or"] = [
+                {"tenant_id": tenant_id},
+                {"tenant_id": {"$exists": False}},
+                {"tenant_id": None},
+            ]
+        has_inv = await db.branch_inventory.count_documents(inv_q, limit=1) > 0
+        had_received = False
+        if not has_inv:
+            s_iso = today_iso + "T00:00:00"
+            e_iso = today_iso + "T23:59:59"
+            bo_q = {
+                "to_branch_id": target_branch_id,
+                "status": "delivered",
+                "delivered_at": {"$gte": s_iso, "$lte": e_iso},
+            }
+            if tenant_id:
+                bo_q["tenant_id"] = tenant_id
+            had_received = await db.branch_orders_new.count_documents(bo_q, limit=1) > 0
+        
+        if has_inv or had_received:
+            count_q = {"branch_id": target_branch_id, "business_date": today_iso, "status": "submitted"}
+            if tenant_id:
+                count_q["tenant_id"] = tenant_id
+            submitted = await db.branch_stock_counts.find_one(count_q, {"_id": 0, "id": 1})
+            if not submitted:
+                raise HTTPException(
+                    status_code=409,
+                    detail={
+                        "code": "STOCK_COUNT_REQUIRED",
+                        "message": "يجب إدخال الجرد اليومي للمنتجات قبل إغلاق الصندوق. اطلب من مسؤول المطبخ تسجيل الجرد.",
+                        "branch_id": target_branch_id,
+                        "business_date": today_iso,
+                    },
+                )
     
     denomination_values = {
         "250": 250, "500": 500, "1000": 1000, "5000": 5000,

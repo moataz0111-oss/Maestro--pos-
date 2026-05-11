@@ -26,6 +26,16 @@ Multi-tenant POS system with biometric integration (ZKTeco), thermal receipt pri
 - Reports filter by branch
 - Printers filter by branch in Settings
 
+## Daily Stock Count + Branch Loss in Waste Report (May 11, 2026)
+- **New collection**: `branch_stock_counts` — per-branch daily product count.
+- **New endpoints**: `GET /branch-stock-count/today`, `POST /branch-stock-count/submit`, `GET /branch-stock-count/check`, `GET /branch-stock-count/history`.
+- **Auto-calculated**: opening = prev_count.actual OR (current_qty - received_today + sold_today); expected = opening + received - sold; variance = expected - actual; **distributes loss across recipe ingredients** automatically.
+- **Block shift close**: `/cash-register/close` returns HTTP 409 with `code=STOCK_COUNT_REQUIRED` if branch has product inventory and no count submitted today. Owner/Manager can bypass via `force_close_without_count: true`.
+- **Frontend**: New `DailyStockCountDialog` component opened from "إدخال الجرد اليومي" button in `مخزون الفروع` tab — shows live calculation, recipe drill-down, summary cards.
+- **RBAC**: Expected/Variance/Loss-cost columns + recipe drill-down hidden from non-admin kitchen managers (only admin/manager see). Waste efficiency report tab itself also hidden + backend 403 for non-admin.
+- **Tab labels** in waste efficiency report: "حسب المنتج المصنع (بعد التصنيع — للفروع)" + "حسب المادة الخام (قبل التصنيع)".
+- **Integration**: Each variance creates a `branch_loss` movement (with `cost_before_waste=0`, `cost_after_waste=lost_value`) which flows into the existing waste efficiency report.
+
 ## Movements Log & Waste Efficiency Report (May 11, 2026)
 - **Enhanced حركات المخزن tab**: 4 category quick filters (📥 incoming / ➡️ to_manufacturing / 🏭 manufacturing / 🚚 to_branch), quick date chips (اليوم/أسبوع/شهر/مخصص), click any row to open a full details modal showing date+time, costs (before/after waste), consumed ingredients with waste %, references, performer.
 - **New `/produce` endpoint behavior**: Now logs `product_manufactured` movement (with full cost breakdown and consumed ingredients) + per-material `manufacturing_consumption` movements.

@@ -30,7 +30,8 @@ import {
   Minus,
   Factory,
   Box,
-  Percent
+  Percent,
+  ClipboardCheck
 } from 'lucide-react';
 import {
   Dialog,
@@ -54,10 +55,14 @@ import {
 } from '../components/ui/tabs';
 import { Badge } from '../components/ui/badge';
 import WasteEfficiencyReport from '../components/WasteEfficiencyReport';
+import DailyStockCountDialog from '../components/DailyStockCountDialog';
+import { useAuth } from '../context/AuthContext';
 const API = API_URL;
 export default function BranchOrders() {
   const navigate = useNavigate();
   const { t, isRTL } = useTranslation();
+  const { hasRole } = useAuth();
+  const canViewWasteReport = hasRole(['admin', 'super_admin', 'manager', 'branch_manager']);
   const [orders, setOrders] = useState([]);
   const [branches, setBranches] = useState([]);
   const [manufacturedProducts, setManufacturedProducts] = useState([]);
@@ -71,6 +76,7 @@ export default function BranchOrders() {
   const [filterStatus, setFilterStatus] = useState('all');
   const [submitting, setSubmitting] = useState(false);
   const [selectedBranch, setSelectedBranch] = useState('');
+  const [showStockCountDialog, setShowStockCountDialog] = useState(false);
   
   const [form, setForm] = useState({
     to_branch_id: '',
@@ -334,7 +340,7 @@ export default function BranchOrders() {
       <main className="max-w-7xl mx-auto p-4 space-y-4">
         {/* Tabs */}
         <Tabs value={selectedTab} onValueChange={setSelectedTab}>
-          <TabsList className="grid grid-cols-3 w-full max-w-xl">
+          <TabsList className={`grid ${canViewWasteReport ? 'grid-cols-3' : 'grid-cols-2'} w-full max-w-xl`}>
             <TabsTrigger value="orders" className="gap-2" data-testid="tab-orders">
               <Truck className="h-4 w-4" />
               {t('الطلبات')}
@@ -343,10 +349,12 @@ export default function BranchOrders() {
               <Box className="h-4 w-4" />
               {t('مخزون الفروع')}
             </TabsTrigger>
-            <TabsTrigger value="waste" className="gap-2" data-testid="tab-waste">
-              <Percent className="h-4 w-4" />
-              {t('كفاءة الهدر')}
-            </TabsTrigger>
+            {canViewWasteReport && (
+              <TabsTrigger value="waste" className="gap-2" data-testid="tab-waste">
+                <Percent className="h-4 w-4" />
+                {t('كفاءة الهدر')}
+              </TabsTrigger>
+            )}
           </TabsList>
           {/* الطلبات */}
           <TabsContent value="orders" className="space-y-4">
@@ -483,7 +491,7 @@ export default function BranchOrders() {
           </TabsContent>
           {/* مخزون الفروع */}
           <TabsContent value="inventory" className="space-y-4">
-            <div className="flex gap-2 items-center">
+            <div className="flex gap-2 items-center flex-wrap">
               <Select value={selectedBranch} onValueChange={setSelectedBranch}>
                 <SelectTrigger className="w-64">
                   <SelectValue placeholder={t('اختر الفرع')} />
@@ -496,6 +504,16 @@ export default function BranchOrders() {
                   ))}
                 </SelectContent>
               </Select>
+              {selectedBranch && (
+                <Button
+                  onClick={() => setShowStockCountDialog(true)}
+                  className="bg-emerald-500 hover:bg-emerald-600 gap-2"
+                  data-testid="open-stock-count-btn"
+                >
+                  <ClipboardCheck className="h-4 w-4" />
+                  {t('إدخال الجرد اليومي')}
+                </Button>
+              )}
             </div>
             {!selectedBranch ? (
               <Card>
@@ -680,12 +698,23 @@ export default function BranchOrders() {
               </div>
             )}
           </TabsContent>
-          {/* كفاءة الهدر */}
-          <TabsContent value="waste" className="space-y-4">
-            <WasteEfficiencyReport branches={branches} />
-          </TabsContent>
+          {/* كفاءة الهدر - للمالك/المدير فقط */}
+          {canViewWasteReport && (
+            <TabsContent value="waste" className="space-y-4">
+              <WasteEfficiencyReport branches={branches} />
+            </TabsContent>
+          )}
         </Tabs>
       </main>
+      {/* Dialog: الجرد اليومي للفرع */}
+      <DailyStockCountDialog
+        open={showStockCountDialog}
+        onOpenChange={setShowStockCountDialog}
+        branchId={selectedBranch}
+        branchName={branches.find(b => b.id === selectedBranch)?.name || ''}
+        onSubmitted={fetchData}
+      />
+
       {/* Dialog: إنشاء طلب جديد */}
       <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">

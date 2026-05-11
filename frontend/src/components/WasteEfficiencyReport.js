@@ -250,14 +250,14 @@ export default function WasteEfficiencyReport({ branches = [] }) {
 
       {/* اختيار التجميع */}
       <Tabs value={groupBy} onValueChange={setGroupBy}>
-        <TabsList className="grid grid-cols-2 w-full max-w-md">
+        <TabsList className="grid grid-cols-2 w-full max-w-xl">
           <TabsTrigger value="product" className="gap-2" data-testid="tab-by-product">
             <Factory className="h-4 w-4" />
-            {t('حسب المنتج')}
+            {t('حسب المنتج المصنع (بعد التصنيع — للفروع)')}
           </TabsTrigger>
           <TabsTrigger value="raw_material" className="gap-2" data-testid="tab-by-raw">
             <Beaker className="h-4 w-4" />
-            {t('حسب المادة الخام')}
+            {t('حسب المادة الخام (قبل التصنيع)')}
           </TabsTrigger>
         </TabsList>
 

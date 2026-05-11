@@ -3744,6 +3744,11 @@ async def waste_efficiency_report(
     - receiving_branch_id: الفرع المستلم للمنتج عبر transfer_to_branch. اختياري.
     - group_by: 'product' (افتراضي) أو 'raw_material'
     """
+    # صلاحيات: المالك/المدير فقط
+    role = (current_user or {}).get("role", "")
+    if role not in ("admin", "super_admin", "manager", "branch_manager"):
+        raise HTTPException(status_code=403, detail="هذا التقرير متاح للمالك/المدير فقط")
+    
     db = get_db()
     tenant_id = current_user.get("tenant_id")
     
@@ -3763,7 +3768,7 @@ async def waste_efficiency_report(
         ]
     
     # === حركات التصنيع (product_manufactured) — تحوي consumed_ingredients ===
-    mfg_query = {**base_query, "type": "product_manufactured"}
+    mfg_query = {**base_query, "type": {"$in": ["product_manufactured", "branch_loss"]}}
     if branch_id:
         mfg_query["branch_id"] = branch_id
     
