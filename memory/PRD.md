@@ -26,6 +26,13 @@ Multi-tenant POS system with biometric integration (ZKTeco), thermal receipt pri
 - Reports filter by branch
 - Printers filter by branch in Settings
 
+## Movements Log & Waste Efficiency Report (May 11, 2026)
+- **Enhanced حركات المخزن tab**: 4 category quick filters (📥 incoming / ➡️ to_manufacturing / 🏭 manufacturing / 🚚 to_branch), quick date chips (اليوم/أسبوع/شهر/مخصص), click any row to open a full details modal showing date+time, costs (before/after waste), consumed ingredients with waste %, references, performer.
+- **New `/produce` endpoint behavior**: Now logs `product_manufactured` movement (with full cost breakdown and consumed ingredients) + per-material `manufacturing_consumption` movements.
+- **New endpoint `/api/reports/waste-efficiency`**: Compares cost before/after waste, grouped by product OR raw_material. Supports date range, kitchen branch filter, and receiving branch filter.
+- **New tab in `/branch-orders` page**: "كفاءة الهدر" — summary cards (total before/after, waste value, waste %), efficiency rating, drill-down table per product or per raw material.
+- New component: `/app/frontend/src/components/WasteEfficiencyReport.js`.
+
 ## Manufacturing Cost Display (May 11, 2026)
 - Product card now displays **4 cards** instead of 3:
   - الكلفة قبل الهدر (blue) — for invoice comparison with suppliers

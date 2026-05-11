@@ -29,7 +29,8 @@ import {
   X,
   Minus,
   Factory,
-  Box
+  Box,
+  Percent
 } from 'lucide-react';
 import {
   Dialog,
@@ -52,6 +53,7 @@ import {
   TabsTrigger,
 } from '../components/ui/tabs';
 import { Badge } from '../components/ui/badge';
+import WasteEfficiencyReport from '../components/WasteEfficiencyReport';
 const API = API_URL;
 export default function BranchOrders() {
   const navigate = useNavigate();
@@ -332,7 +334,7 @@ export default function BranchOrders() {
       <main className="max-w-7xl mx-auto p-4 space-y-4">
         {/* Tabs */}
         <Tabs value={selectedTab} onValueChange={setSelectedTab}>
-          <TabsList className="grid grid-cols-2 w-full max-w-md">
+          <TabsList className="grid grid-cols-3 w-full max-w-xl">
             <TabsTrigger value="orders" className="gap-2" data-testid="tab-orders">
               <Truck className="h-4 w-4" />
               {t('الطلبات')}
@@ -340,6 +342,10 @@ export default function BranchOrders() {
             <TabsTrigger value="inventory" className="gap-2" data-testid="tab-inventory">
               <Box className="h-4 w-4" />
               {t('مخزون الفروع')}
+            </TabsTrigger>
+            <TabsTrigger value="waste" className="gap-2" data-testid="tab-waste">
+              <Percent className="h-4 w-4" />
+              {t('كفاءة الهدر')}
             </TabsTrigger>
           </TabsList>
           {/* الطلبات */}
@@ -673,6 +679,10 @@ export default function BranchOrders() {
                 )}
               </div>
             )}
+          </TabsContent>
+          {/* كفاءة الهدر */}
+          <TabsContent value="waste" className="space-y-4">
+            <WasteEfficiencyReport branches={branches} />
           </TabsContent>
         </Tabs>
       </main>

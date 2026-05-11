@@ -135,11 +135,31 @@ export default function WarehouseManufacturing() {
   });
   const [movementsEndDate, setMovementsEndDate] = useState(new Date().toISOString().split('T')[0]);
   const [movementsTypeFilter, setMovementsTypeFilter] = useState('all');
+  const [movementsCategoryFilter, setMovementsCategoryFilter] = useState('all');
+  const [movementsRangeKey, setMovementsRangeKey] = useState('month');
+  const [selectedMovement, setSelectedMovement] = useState(null);
+  
+  const applyMovementsRange = (key) => {
+    setMovementsRangeKey(key);
+    if (key === 'custom') return;
+    const end = new Date();
+    const start = new Date();
+    if (key === 'today') {
+      // same day
+    } else if (key === 'week') {
+      start.setDate(end.getDate() - 6);
+    } else if (key === 'month') {
+      start.setDate(1);
+    }
+    setMovementsStartDate(start.toISOString().split('T')[0]);
+    setMovementsEndDate(end.toISOString().split('T')[0]);
+  };
   
   const fetchInventoryMovements = async () => {
     try {
       const params = { start_date: movementsStartDate, end_date: movementsEndDate };
       if (movementsTypeFilter !== 'all') params.movement_type = movementsTypeFilter;
+      if (movementsCategoryFilter !== 'all') params.category = movementsCategoryFilter;
       const res = await axios.get(`${API}/inventory-movements`, { params });
       setMovements(res.data?.movements || []);
       setMovementsSummary(res.data?.summary || { total_in: 0, total_out: 0, total_in_value: 0, total_out_value: 0 });
@@ -149,7 +169,7 @@ export default function WarehouseManufacturing() {
   
   useEffect(() => {
     fetchInventoryMovements();
-  }, [movementsStartDate, movementsEndDate, movementsTypeFilter]);
+  }, [movementsStartDate, movementsEndDate, movementsTypeFilter, movementsCategoryFilter]);
 
   // اجلب طلبات الشراء (للمالك لرؤية المعلقة، ولأمين المخزن لرؤية حالة طلباته)
   const fetchPurchaseRequests = async () => {
@@ -2364,7 +2384,7 @@ export default function WarehouseManufacturing() {
           <TabsContent value="movements" className="space-y-4">
             <Card>
               <CardContent className="p-4">
-                <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+                <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
                   <div className="flex items-center gap-2">
                     <ArrowUpDown className="h-5 w-5 text-blue-500" />
                     <h3 className="font-bold text-lg">{t('حركات المخزن')}</h3>
@@ -2373,7 +2393,7 @@ export default function WarehouseManufacturing() {
                     <Input
                       type="date"
                       value={movementsStartDate}
-                      onChange={(e) => setMovementsStartDate(e.target.value)}
+                      onChange={(e) => { setMovementsStartDate(e.target.value); setMovementsRangeKey('custom'); }}
                       className="w-40"
                       data-testid="movements-start-date"
                     />
@@ -2381,7 +2401,7 @@ export default function WarehouseManufacturing() {
                     <Input
                       type="date"
                       value={movementsEndDate}
-                      onChange={(e) => setMovementsEndDate(e.target.value)}
+                      onChange={(e) => { setMovementsEndDate(e.target.value); setMovementsRangeKey('custom'); }}
                       className="w-40"
                       data-testid="movements-end-date"
                     />
@@ -2396,6 +2416,45 @@ export default function WarehouseManufacturing() {
                       </SelectContent>
                     </Select>
                   </div>
+                </div>
+                
+                {/* فلاتر التاريخ السريعة */}
+                <div className="flex flex-wrap items-center gap-2 mb-3">
+                  {[
+                    { key: 'today', label: 'اليوم' },
+                    { key: 'week', label: 'الأسبوع' },
+                    { key: 'month', label: 'الشهر' },
+                    { key: 'custom', label: 'مخصص' },
+                  ].map(r => (
+                    <Button
+                      key={r.key}
+                      variant={movementsRangeKey === r.key ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => applyMovementsRange(r.key)}
+                      data-testid={`mv-range-${r.key}`}
+                    >{t(r.label)}</Button>
+                  ))}
+                </div>
+                
+                {/* فلتر الفئات السريع */}
+                <div className="flex flex-wrap items-center gap-2 mb-4">
+                  {[
+                    { key: 'all', label: 'كل الحركات', cls: '' },
+                    { key: 'incoming', label: '📥 دخول للمخزن', cls: 'data-[active=true]:bg-emerald-500/15 data-[active=true]:text-emerald-700 data-[active=true]:border-emerald-500/50' },
+                    { key: 'to_manufacturing', label: '➡️ إرسال للتصنيع', cls: 'data-[active=true]:bg-purple-500/15 data-[active=true]:text-purple-700 data-[active=true]:border-purple-500/50' },
+                    { key: 'manufacturing', label: '🏭 تصنيع منتج', cls: 'data-[active=true]:bg-amber-500/15 data-[active=true]:text-amber-700 data-[active=true]:border-amber-500/50' },
+                    { key: 'to_branch', label: '🚚 إرسال للفروع', cls: 'data-[active=true]:bg-blue-500/15 data-[active=true]:text-blue-700 data-[active=true]:border-blue-500/50' },
+                  ].map(c => (
+                    <Button
+                      key={c.key}
+                      variant={movementsCategoryFilter === c.key ? 'default' : 'outline'}
+                      size="sm"
+                      data-active={movementsCategoryFilter === c.key}
+                      className={c.cls}
+                      onClick={() => setMovementsCategoryFilter(c.key)}
+                      data-testid={`mv-cat-${c.key}`}
+                    >{t(c.label)}</Button>
+                  ))}
                 </div>
                 
                 {/* بطاقات الملخص */}
@@ -2470,7 +2529,7 @@ export default function WarehouseManufacturing() {
                 )}
                 
                 {/* جدول الحركات التفصيلي */}
-                <Label className="text-base font-bold mb-2 block">{t('سجل الحركات التفصيلي')}</Label>
+                <Label className="text-base font-bold mb-2 block">{t('سجل الحركات التفصيلي')} <span className="text-xs text-muted-foreground font-normal">({t('اضغط على أي حركة لعرض التفاصيل')})</span></Label>
                 {movements.length === 0 ? (
                   <div className="text-center py-12 text-muted-foreground" data-testid="movements-empty">
                     <Box className="h-12 w-12 mx-auto mb-2 opacity-30" />
@@ -2482,8 +2541,8 @@ export default function WarehouseManufacturing() {
                       <thead className="bg-muted/50">
                         <tr>
                           <th className="px-3 py-2 text-right">{t('التاريخ')}</th>
-                          <th className="px-3 py-2 text-center">{t('النوع')}</th>
-                          <th className="px-3 py-2 text-right">{t('المادة')}</th>
+                          <th className="px-3 py-2 text-center">{t('الفئة')}</th>
+                          <th className="px-3 py-2 text-right">{t('المادة/المنتج')}</th>
                           <th className="px-3 py-2 text-center">{t('الكمية')}</th>
                           <th className="px-3 py-2 text-center">{t('القيمة')}</th>
                           <th className="px-3 py-2 text-right">{t('المرجع')}</th>
@@ -2491,39 +2550,48 @@ export default function WarehouseManufacturing() {
                         </tr>
                       </thead>
                       <tbody>
-                        {movements.map(m => (
-                          <tr key={m.id} className="border-t border-border hover:bg-muted/30">
+                        {movements.map(m => {
+                          const catLabels = {
+                            incoming: { lbl: '📥 دخول', cls: 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-400' },
+                            to_manufacturing: { lbl: '➡️ للتصنيع', cls: 'bg-purple-500/20 text-purple-700 dark:text-purple-400' },
+                            manufacturing: { lbl: '🏭 تصنيع', cls: 'bg-amber-500/20 text-amber-700 dark:text-amber-400' },
+                            to_branch: { lbl: '🚚 للفرع', cls: 'bg-blue-500/20 text-blue-700 dark:text-blue-400' },
+                            other: { lbl: m.type, cls: 'bg-gray-500/20 text-gray-700' },
+                          };
+                          const cat = catLabels[m.category] || catLabels.other;
+                          return (
+                          <tr
+                            key={m.id}
+                            className="border-t border-border hover:bg-primary/5 cursor-pointer transition-colors"
+                            onClick={() => setSelectedMovement(m)}
+                            data-testid={`movement-row-${m.id}`}
+                          >
                             <td className="px-3 py-2 text-xs text-muted-foreground">
                               {new Date(m.created_at).toLocaleString('ar-EG', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                             </td>
                             <td className="px-3 py-2 text-center">
-                              {m.type === 'in' ? (
-                                <Badge className="bg-emerald-500/20 text-emerald-500"><TrendingUp className="h-3 w-3 ml-1 inline" />{t('دخول')}</Badge>
-                              ) : m.type === 'out' ? (
-                                <Badge className="bg-red-500/20 text-red-500"><TrendingDown className="h-3 w-3 ml-1 inline" />{t('خروج')}</Badge>
-                              ) : (
-                                <Badge>{m.type}</Badge>
-                              )}
+                              <Badge className={cat.cls}>{cat.lbl}</Badge>
                             </td>
-                            <td className="px-3 py-2 font-medium">{m.material_name}</td>
+                            <td className="px-3 py-2 font-medium">{m.material_name || m.product_name || '—'}</td>
                             <td className="px-3 py-2 text-center">
-                              <span className={`font-bold ${m.type === 'in' ? 'text-emerald-500' : 'text-red-500'}`}>
-                                {m.type === 'in' ? '+' : '-'}{m.quantity?.toLocaleString()}
+                              <span className="font-bold tabular-nums">
+                                {m.quantity?.toLocaleString()}
                               </span>
                               <span className="text-xs text-muted-foreground mr-1">{m.unit}</span>
                             </td>
-                            <td className="px-3 py-2 text-center">{(m.total_value || 0).toLocaleString()} IQD</td>
+                            <td className="px-3 py-2 text-center tabular-nums">{(m.total_value || 0).toLocaleString()} IQD</td>
                             <td className="px-3 py-2 text-xs">
                               {m.subtype === 'purchase_receipt' && m.reference_number && (
                                 <span>📄 {t('فاتورة')} #{m.reference_number} {m.supplier_name && `— ${m.supplier_name}`}</span>
                               )}
                               {m.subtype !== 'purchase_receipt' && m.notes && (
-                                <span className="text-muted-foreground">{m.notes}</span>
+                                <span className="text-muted-foreground line-clamp-1">{m.notes}</span>
                               )}
                             </td>
                             <td className="px-3 py-2 text-xs text-muted-foreground">{m.performed_by_name || '-'}</td>
                           </tr>
-                        ))}
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>
@@ -2533,6 +2601,163 @@ export default function WarehouseManufacturing() {
           </TabsContent>
         </Tabs>
       </main>
+      {/* Dialog: تفاصيل حركة المخزن */}
+      <Dialog open={!!selectedMovement} onOpenChange={() => setSelectedMovement(null)}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto" data-testid="movement-details-dialog">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ArrowUpDown className="h-5 w-5 text-blue-500" />
+              {t('تفاصيل الحركة')}
+            </DialogTitle>
+          </DialogHeader>
+          {selectedMovement && (
+            <div className="space-y-4">
+              {/* رأس */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="p-3 rounded-lg bg-muted/40">
+                  <p className="text-xs text-muted-foreground">{t('التاريخ والوقت')}</p>
+                  <p className="font-medium text-sm">
+                    {new Date(selectedMovement.created_at).toLocaleString('ar-EG', {
+                      year: 'numeric', month: 'long', day: 'numeric',
+                      hour: '2-digit', minute: '2-digit', second: '2-digit'
+                    })}
+                  </p>
+                </div>
+                <div className="p-3 rounded-lg bg-muted/40">
+                  <p className="text-xs text-muted-foreground">{t('الفئة')}</p>
+                  <Badge className={
+                    selectedMovement.category === 'incoming' ? 'bg-emerald-500/20 text-emerald-700' :
+                    selectedMovement.category === 'to_manufacturing' ? 'bg-purple-500/20 text-purple-700' :
+                    selectedMovement.category === 'manufacturing' ? 'bg-amber-500/20 text-amber-700' :
+                    selectedMovement.category === 'to_branch' ? 'bg-blue-500/20 text-blue-700' :
+                    'bg-gray-500/20 text-gray-700'
+                  }>
+                    {selectedMovement.category === 'incoming' ? '📥 دخول للمخزن' :
+                     selectedMovement.category === 'to_manufacturing' ? '➡️ إرسال للتصنيع' :
+                     selectedMovement.category === 'manufacturing' ? '🏭 تصنيع منتج' :
+                     selectedMovement.category === 'to_branch' ? '🚚 إرسال للفرع' :
+                     selectedMovement.type}
+                  </Badge>
+                  <p className="text-[10px] text-muted-foreground mt-1">{t('النوع التقني')}: {selectedMovement.type}</p>
+                </div>
+              </div>
+
+              {/* المادة/المنتج + الكمية */}
+              <div className="p-4 rounded-lg border-2 border-primary/20 bg-primary/5">
+                <p className="text-xs text-muted-foreground mb-1">{t('المادة / المنتج')}</p>
+                <p className="font-bold text-lg">{selectedMovement.material_name || selectedMovement.product_name || '—'}</p>
+                <div className="grid grid-cols-3 gap-3 mt-3">
+                  <div>
+                    <p className="text-[11px] text-muted-foreground">{t('الكمية')}</p>
+                    <p className="font-bold tabular-nums">{(selectedMovement.quantity || 0).toLocaleString()} <span className="text-xs text-muted-foreground">{selectedMovement.unit}</span></p>
+                  </div>
+                  <div>
+                    <p className="text-[11px] text-muted-foreground">{t('سعر الوحدة')}</p>
+                    <p className="font-bold tabular-nums">{(selectedMovement.cost_per_unit || 0).toLocaleString()} IQD</p>
+                  </div>
+                  <div>
+                    <p className="text-[11px] text-muted-foreground">{t('القيمة الإجمالية')}</p>
+                    <p className="font-bold tabular-nums text-primary">{(selectedMovement.total_value || 0).toLocaleString()} IQD</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* تفاصيل الهدر (إن وُجدت) */}
+              {(selectedMovement.cost_before_waste != null || selectedMovement.cost_after_waste != null) && (
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="p-3 rounded-lg bg-blue-500/5 border border-blue-500/20">
+                    <p className="text-xs text-muted-foreground">{t('الكلفة قبل الهدر')}</p>
+                    <p className="font-bold text-blue-600 tabular-nums">{(selectedMovement.cost_before_waste || 0).toLocaleString()} IQD</p>
+                  </div>
+                  <div className="p-3 rounded-lg bg-emerald-500/10 border-2 border-emerald-500/40">
+                    <p className="text-xs text-muted-foreground">⭐ {t('الكلفة بعد الهدر')}</p>
+                    <p className="font-bold text-emerald-600 tabular-nums">{(selectedMovement.cost_after_waste || 0).toLocaleString()} IQD</p>
+                  </div>
+                </div>
+              )}
+
+              {/* المكونات المستهلكة (لو تصنيع منتج) */}
+              {Array.isArray(selectedMovement.consumed_ingredients) && selectedMovement.consumed_ingredients.length > 0 && (
+                <div className="rounded-lg border p-3">
+                  <p className="text-sm font-bold mb-2 flex items-center gap-2">
+                    <Beaker className="h-4 w-4 text-purple-500" />
+                    {t('المكونات المستهلكة')}
+                  </p>
+                  <div className="space-y-1">
+                    {selectedMovement.consumed_ingredients.map((ing, idx) => (
+                      <div key={idx} className="flex items-center justify-between text-xs p-2 bg-muted/30 rounded">
+                        <span className="font-medium">{ing.raw_material_name}</span>
+                        <div className="flex items-center gap-3">
+                          <span>{ing.quantity} {ing.unit}</span>
+                          {ing.waste_percentage > 0 && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-orange-100 dark:bg-orange-950/40 text-orange-700">هدر {ing.waste_percentage}%</span>
+                          )}
+                          <span className="text-blue-600 tabular-nums">{(ing.cost_before_waste || 0).toLocaleString()}</span>
+                          <span className="text-emerald-600 tabular-nums font-medium">{(ing.cost_after_waste || 0).toLocaleString()}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* عناصر متعددة (للتحويلات) */}
+              {Array.isArray(selectedMovement.items) && selectedMovement.items.length > 0 && (
+                <div className="rounded-lg border p-3">
+                  <p className="text-sm font-bold mb-2">{t('العناصر')}</p>
+                  <div className="space-y-1">
+                    {selectedMovement.items.map((it, idx) => (
+                      <div key={idx} className="flex items-center justify-between text-xs p-2 bg-muted/30 rounded">
+                        <span className="font-medium">{it.product_name || it.material_name || it.name || '—'}</span>
+                        <span>{it.quantity} {it.unit || ''}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* مرجع وبيانات إضافية */}
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                {selectedMovement.reference_number && (
+                  <div className="p-3 rounded-lg bg-muted/30">
+                    <p className="text-xs text-muted-foreground">{t('رقم المرجع')}</p>
+                    <p className="font-medium">#{selectedMovement.reference_number}</p>
+                  </div>
+                )}
+                {selectedMovement.supplier_name && (
+                  <div className="p-3 rounded-lg bg-muted/30">
+                    <p className="text-xs text-muted-foreground">{t('المورد')}</p>
+                    <p className="font-medium">{selectedMovement.supplier_name}</p>
+                  </div>
+                )}
+                {selectedMovement.branch_name && (
+                  <div className="p-3 rounded-lg bg-muted/30">
+                    <p className="text-xs text-muted-foreground">{t('الفرع')}</p>
+                    <p className="font-medium">{selectedMovement.branch_name}</p>
+                  </div>
+                )}
+                {selectedMovement.performed_by_name && (
+                  <div className="p-3 rounded-lg bg-muted/30">
+                    <p className="text-xs text-muted-foreground">{t('بواسطة')}</p>
+                    <p className="font-medium">{selectedMovement.performed_by_name}</p>
+                  </div>
+                )}
+              </div>
+
+              {selectedMovement.notes && (
+                <div className="p-3 rounded-lg bg-yellow-500/5 border border-yellow-500/20">
+                  <p className="text-xs text-muted-foreground mb-1">{t('ملاحظات')}</p>
+                  <p className="text-sm">{selectedMovement.notes}</p>
+                </div>
+              )}
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSelectedMovement(null)}>{t('إغلاق')}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Dialog: إضافة مادة خام */}
       <Dialog open={showAddRawMaterial} onOpenChange={setShowAddRawMaterial}>
         <DialogContent>

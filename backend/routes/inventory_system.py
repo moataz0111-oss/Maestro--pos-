@@ -794,6 +794,7 @@ async def get_inventory_movements(
     end_date: Optional[str] = None,
     material_id: Optional[str] = None,
     movement_type: Optional[str] = None,
+    category: Optional[str] = None,
     current_user: dict = Depends(get_current_user)
 ):
     """قائمة حركات المخزن (دخول وخروج) خلال فترة.
@@ -802,6 +803,7 @@ async def get_inventory_movements(
     - start_date / end_date: نطاق تاريخي (YYYY-MM-DD)
     - material_id: تصفية حسب مادة محددة
     - movement_type: 'in' أو 'out' أو 'adjustment'
+    - category: 'incoming' | 'to_manufacturing' | 'manufacturing' | 'to_branch'
     
     إن لم تُحدَّد التواريخ، تُرجع آخر 30 يوماً.
     """
@@ -830,13 +832,51 @@ async def get_inventory_movements(
     if movement_type:
         query["type"] = movement_type
     
+    # خريطة تصنيف الحركات (4 فئات شاملة)
+    CATEGORY_MAP = {
+        "incoming": [
+            "in", "purchase_received", "manual_stock_add", "raw_material_stock_add",
+            "incoming", "packaging_stock_added",
+        ],
+        "to_manufacturing": [
+            "warehouse_to_manufacturing", "raw_material_to_manufacturing",
+            "manufacturing_transfer",
+        ],
+        "manufacturing": [
+            "product_manufactured", "manufacturing_consumption", "manufacturing",
+        ],
+        "to_branch": [
+            "transfer_to_branch", "branch_request_fulfilled", "out",
+        ],
+    }
+    if category and category in CATEGORY_MAP:
+        query["type"] = {"$in": CATEGORY_MAP[category]}
+    
     movements = await db.inventory_movements.find(query, {"_id": 0}).sort("created_at", -1).to_list(2000)
     
+    # تصنيف كل حركة (إضافة category لو غير موجود)
+    type_to_category = {}
+    for cat, types in CATEGORY_MAP.items():
+        for t in types:
+            type_to_category[t] = cat
+    for m in movements:
+        if not m.get("category"):
+            m["category"] = type_to_category.get(m.get("type"), "other")
+    
     # ملخص الفترة
-    total_in = sum(m.get("quantity", 0) for m in movements if m.get("type") == "in")
-    total_out = sum(m.get("quantity", 0) for m in movements if m.get("type") == "out")
-    total_in_value = sum(m.get("total_value", 0) for m in movements if m.get("type") == "in")
-    total_out_value = sum(m.get("total_value", 0) for m in movements if m.get("type") == "out")
+    total_in = sum(m.get("quantity", 0) for m in movements if m.get("type") in CATEGORY_MAP["incoming"])
+    total_out = sum(m.get("quantity", 0) for m in movements if m.get("type") in (CATEGORY_MAP["to_branch"] + CATEGORY_MAP["to_manufacturing"]))
+    total_in_value = sum(m.get("total_value", 0) for m in movements if m.get("type") in CATEGORY_MAP["incoming"])
+    total_out_value = sum(m.get("total_value", 0) for m in movements if m.get("type") in (CATEGORY_MAP["to_branch"] + CATEGORY_MAP["to_manufacturing"]))
+    
+    # ملخص لكل فئة
+    category_summary = {cat: {"count": 0, "value": 0.0, "quantity": 0.0} for cat in CATEGORY_MAP}
+    for m in movements:
+        cat = m.get("category", "other")
+        if cat in category_summary:
+            category_summary[cat]["count"] += 1
+            category_summary[cat]["value"] += m.get("total_value", 0) or 0
+            category_summary[cat]["quantity"] += m.get("quantity", 0) or 0
     
     # ملخص شهري (تجميع حسب اليوم)
     daily_summary = {}
@@ -846,10 +886,10 @@ async def get_inventory_movements(
             continue
         if day not in daily_summary:
             daily_summary[day] = {"date": day, "in_qty": 0, "out_qty": 0, "in_value": 0, "out_value": 0, "movements": 0}
-        if m.get("type") == "in":
+        if m.get("type") in CATEGORY_MAP["incoming"]:
             daily_summary[day]["in_qty"] += m.get("quantity", 0)
             daily_summary[day]["in_value"] += m.get("total_value", 0)
-        elif m.get("type") == "out":
+        elif m.get("type") in (CATEGORY_MAP["to_branch"] + CATEGORY_MAP["to_manufacturing"]):
             daily_summary[day]["out_qty"] += m.get("quantity", 0)
             daily_summary[day]["out_value"] += m.get("total_value", 0)
         daily_summary[day]["movements"] += 1
@@ -863,6 +903,7 @@ async def get_inventory_movements(
             "total_out_value": total_out_value,
             "movements_count": len(movements),
             "period": {"start": start_date, "end": end_date},
+            "by_category": category_summary,
         },
         "daily": sorted(daily_summary.values(), key=lambda x: x["date"], reverse=True),
     }
@@ -2469,7 +2510,11 @@ async def get_manufactured_product(product_id: str):
     return product
 
 @router.post("/manufactured-products/{product_id}/produce")
-async def produce_product(product_id: str, quantity: int = 1):
+async def produce_product(
+    product_id: str,
+    quantity: int = 1,
+    current_user: dict = Depends(get_current_user),
+):
     """تصنيع كمية من المنتج (خصم المواد الخام من مخزون التصنيع)"""
     db = get_db()
     
@@ -2505,16 +2550,65 @@ async def produce_product(product_id: str, quantity: int = 1):
             }
         )
     
-    # خصم المواد الخام من مخزون التصنيع
+    now_iso = datetime.now(timezone.utc).isoformat()
+    tenant_id = current_user.get("tenant_id") if current_user else None
+    performed_by_name = (current_user or {}).get("full_name") or (current_user or {}).get("username")
+    
+    # حساب تكلفة هذه الدفعة من الإنتاج (قبل/بعد الهدر)
+    batch_cost_before_waste = 0.0
+    batch_cost_after_waste = 0.0
+    consumed_details = []
+    
+    # خصم المواد الخام من مخزون التصنيع + تسجيل حركة استهلاك لكل مادة
     for ingredient in product.get("recipe", []):
         needed = ingredient.get("quantity", 0) * quantity
+        base_cost = ingredient.get("cost_per_unit", 0) or 0
+        waste_pct = ingredient.get("waste_percentage", 0) or 0
+        effective_cost = (base_cost / (1 - waste_pct / 100)) if (0 < waste_pct < 100) else base_cost
+        line_before = needed * base_cost
+        line_after = needed * effective_cost
+        batch_cost_before_waste += line_before
+        batch_cost_after_waste += line_after
+        consumed_details.append({
+            "raw_material_id": ingredient.get("raw_material_id"),
+            "raw_material_name": ingredient.get("raw_material_name"),
+            "quantity": needed,
+            "unit": ingredient.get("unit"),
+            "cost_per_unit": base_cost,
+            "waste_percentage": waste_pct,
+            "cost_before_waste": round(line_before, 2),
+            "cost_after_waste": round(line_after, 2),
+        })
+        
         await db.manufacturing_inventory.update_one(
             {"raw_material_id": ingredient.get("raw_material_id")},
             {
                 "$inc": {"quantity": -needed},
-                "$set": {"last_updated": datetime.now(timezone.utc).isoformat()}
+                "$set": {"last_updated": now_iso}
             }
         )
+        # حركة استهلاك مادة خام لإنتاج منتج
+        await db.inventory_movements.insert_one({
+            "id": str(uuid.uuid4()),
+            "tenant_id": tenant_id,
+            "type": "manufacturing_consumption",
+            "category": "manufacturing",
+            "material_id": ingredient.get("raw_material_id"),
+            "material_name": ingredient.get("raw_material_name"),
+            "quantity": needed,
+            "unit": ingredient.get("unit"),
+            "cost_per_unit": base_cost,
+            "waste_percentage": waste_pct,
+            "total_value": round(line_after, 2),
+            "cost_before_waste": round(line_before, 2),
+            "cost_after_waste": round(line_after, 2),
+            "product_id": product_id,
+            "product_name": product.get("name"),
+            "batch_quantity": quantity,
+            "performed_by_name": performed_by_name,
+            "notes": f"استُهلكت لإنتاج {quantity} {product.get('unit')} من {product.get('name')}",
+            "created_at": now_iso,
+        })
     
     # زيادة كمية المنتج المصنع وإجمالي الإنتاج
     await db.manufactured_products.update_one(
@@ -2522,15 +2616,37 @@ async def produce_product(product_id: str, quantity: int = 1):
         {
             "$inc": {
                 "quantity": quantity,
-                "total_produced": quantity  # إجمالي ما تم تصنيعه
+                "total_produced": quantity
             },
-            "$set": {"last_updated": datetime.now(timezone.utc).isoformat()}
+            "$set": {"last_updated": now_iso}
         }
     )
     
+    # حركة إنتاج منتج مصنع (دخول للمنتجات المصنعة)
+    await db.inventory_movements.insert_one({
+        "id": str(uuid.uuid4()),
+        "tenant_id": tenant_id,
+        "type": "product_manufactured",
+        "category": "manufacturing",
+        "product_id": product_id,
+        "product_name": product.get("name"),
+        "material_name": product.get("name"),
+        "quantity": quantity,
+        "unit": product.get("unit"),
+        "total_value": round(batch_cost_after_waste, 2),
+        "cost_before_waste": round(batch_cost_before_waste, 2),
+        "cost_after_waste": round(batch_cost_after_waste, 2),
+        "consumed_ingredients": consumed_details,
+        "performed_by_name": performed_by_name,
+        "notes": f"تصنيع {quantity} {product.get('unit')} من {product.get('name')}",
+        "created_at": now_iso,
+    })
+    
     return {
         "message": f"تم تصنيع {quantity} {product.get('unit')} من {product.get('name')}",
-        "new_quantity": product.get("quantity", 0) + quantity
+        "new_quantity": product.get("quantity", 0) + quantity,
+        "cost_before_waste": round(batch_cost_before_waste, 2),
+        "cost_after_waste": round(batch_cost_after_waste, 2),
     }
 
 
@@ -3606,4 +3722,153 @@ async def deduct_branch_packaging(
     
     return {"message": "تم خصم مواد التغليف بنجاح"}
 
+
+
+
+# ==================== WASTE EFFICIENCY REPORT (تقرير كفاءة الهدر) ====================
+
+@router.get("/reports/waste-efficiency")
+async def waste_efficiency_report(
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    branch_id: Optional[str] = None,
+    receiving_branch_id: Optional[str] = None,
+    group_by: str = "product",  # 'product' | 'raw_material'
+    current_user: dict = Depends(get_current_user),
+):
+    """تقرير كفاءة الهدر — يقارن الكلفة قبل/بعد الهدر.
+    
+    Params:
+    - start_date / end_date: نطاق التاريخ (YYYY-MM-DD)
+    - branch_id: فرع المطبخ (الذي صنع المنتج). اختياري.
+    - receiving_branch_id: الفرع المستلم للمنتج عبر transfer_to_branch. اختياري.
+    - group_by: 'product' (افتراضي) أو 'raw_material'
+    """
+    db = get_db()
+    tenant_id = current_user.get("tenant_id")
+    
+    if not start_date:
+        start_date = (datetime.now(timezone.utc) - timedelta(days=30)).date().isoformat()
+    if not end_date:
+        end_date = datetime.now(timezone.utc).date().isoformat()
+    
+    base_query = {
+        "created_at": {"$gte": start_date + "T00:00:00", "$lte": end_date + "T23:59:59"},
+    }
+    if tenant_id:
+        base_query["$or"] = [
+            {"tenant_id": tenant_id},
+            {"tenant_id": {"$exists": False}},
+            {"tenant_id": None},
+        ]
+    
+    # === حركات التصنيع (product_manufactured) — تحوي consumed_ingredients ===
+    mfg_query = {**base_query, "type": "product_manufactured"}
+    if branch_id:
+        mfg_query["branch_id"] = branch_id
+    
+    mfg_movements = await db.inventory_movements.find(mfg_query, {"_id": 0}).to_list(5000)
+    
+    # === حركات التحويل للفروع (لمعرفة الفرع المستلم) ===
+    transferred_products = set()  # set of product_ids transferred to receiving_branch_id
+    if receiving_branch_id:
+        tr_query = {
+            **base_query,
+            "type": {"$in": ["transfer_to_branch", "branch_request_fulfilled"]},
+            "branch_id": receiving_branch_id,
+        }
+        async for tr in db.inventory_movements.find(tr_query, {"_id": 0, "product_id": 1, "items": 1}):
+            if tr.get("product_id"):
+                transferred_products.add(tr["product_id"])
+            for it in tr.get("items", []) or []:
+                if it.get("product_id"):
+                    transferred_products.add(it["product_id"])
+        # نُبقي فقط حركات إنتاج لمنتجات وصلت لذلك الفرع
+        mfg_movements = [m for m in mfg_movements if m.get("product_id") in transferred_products]
+    
+    # === تجميع ===
+    if group_by == "raw_material":
+        agg = {}  # raw_material_id -> { name, qty, cost_before, cost_after }
+        for m in mfg_movements:
+            for ing in m.get("consumed_ingredients", []) or []:
+                rid = ing.get("raw_material_id") or ing.get("raw_material_name")
+                if not rid:
+                    continue
+                if rid not in agg:
+                    agg[rid] = {
+                        "id": rid,
+                        "name": ing.get("raw_material_name", "—"),
+                        "unit": ing.get("unit", ""),
+                        "quantity": 0.0,
+                        "cost_before_waste": 0.0,
+                        "cost_after_waste": 0.0,
+                        "movements_count": 0,
+                    }
+                agg[rid]["quantity"] += ing.get("quantity", 0) or 0
+                agg[rid]["cost_before_waste"] += ing.get("cost_before_waste", 0) or 0
+                agg[rid]["cost_after_waste"] += ing.get("cost_after_waste", 0) or 0
+                agg[rid]["movements_count"] += 1
+    else:
+        agg = {}  # product_id -> aggregate
+        for m in mfg_movements:
+            pid = m.get("product_id") or m.get("product_name")
+            if not pid:
+                continue
+            if pid not in agg:
+                agg[pid] = {
+                    "id": pid,
+                    "name": m.get("product_name", "—"),
+                    "unit": m.get("unit", ""),
+                    "quantity": 0.0,
+                    "cost_before_waste": 0.0,
+                    "cost_after_waste": 0.0,
+                    "movements_count": 0,
+                }
+            agg[pid]["quantity"] += m.get("quantity", 0) or 0
+            agg[pid]["cost_before_waste"] += m.get("cost_before_waste", 0) or 0
+            agg[pid]["cost_after_waste"] += m.get("cost_after_waste", 0) or 0
+            agg[pid]["movements_count"] += 1
+    
+    # حساب الفروق والنسب
+    rows = []
+    total_before = 0.0
+    total_after = 0.0
+    for entry in agg.values():
+        before = round(entry["cost_before_waste"], 2)
+        after = round(entry["cost_after_waste"], 2)
+        diff = round(after - before, 2)
+        waste_pct = round(((after - before) / before * 100), 2) if before > 0 else 0.0
+        rows.append({
+            **entry,
+            "cost_before_waste": before,
+            "cost_after_waste": after,
+            "waste_value": diff,
+            "waste_percentage": waste_pct,
+        })
+        total_before += before
+        total_after += after
+    
+    # ترتيب: الأعلى هدراً أولاً
+    rows.sort(key=lambda r: r["waste_value"], reverse=True)
+    
+    total_diff = round(total_after - total_before, 2)
+    total_pct = round(((total_after - total_before) / total_before * 100), 2) if total_before > 0 else 0.0
+    
+    return {
+        "rows": rows,
+        "summary": {
+            "total_cost_before_waste": round(total_before, 2),
+            "total_cost_after_waste": round(total_after, 2),
+            "total_waste_value": total_diff,
+            "total_waste_percentage": total_pct,
+            "items_count": len(rows),
+            "movements_count": len(mfg_movements),
+            "period": {"start": start_date, "end": end_date},
+        },
+        "filters": {
+            "branch_id": branch_id,
+            "receiving_branch_id": receiving_branch_id,
+            "group_by": group_by,
+        },
+    }
 
