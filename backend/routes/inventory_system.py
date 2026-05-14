@@ -4009,3 +4009,127 @@ async def suggest_purchase_quantities(
         })
     
     return {"suggestions": suggestions}
+
+
+
+# ==================== STOCKOUT PREDICTIONS (تنبؤ النفاد) ====================
+
+@router.get("/raw-materials/stockout-predictions")
+async def stockout_predictions(
+    days_lookback: int = 30,
+    current_user: dict = Depends(get_current_user),
+):
+    """تنبؤ ذكي بنفاد المخزون لكل مادة خام.
+    
+    لكل مادة:
+    - يحسب متوسط الاستهلاك اليومي خلال آخر `days_lookback`.
+    - يحسب الأيام المتبقية = current_stock / daily_avg.
+    - تاريخ النفاد المتوقع = today + days_remaining.
+    - يصنف الحالة: critical (≤3 أيام) | warning (≤7 أيام) | safe (>7 أيام) | no_consumption.
+    
+    متاح للمالك/المدير/أمين المخزن.
+    """
+    role = (current_user or {}).get("role", "")
+    allowed_roles = ("admin", "super_admin", "manager", "branch_manager",
+                     "warehouse", "warehouse_keeper", "stock_keeper")
+    if role not in allowed_roles:
+        raise HTTPException(status_code=403, detail="هذه الميزة متاحة للمالك/المدير/أمين المخزن")
+    
+    db = get_db()
+    tenant_id = current_user.get("tenant_id")
+    
+    period_start = (datetime.now(timezone.utc) - timedelta(days=days_lookback)).isoformat()
+    
+    OUTGOING_TYPES = [
+        "warehouse_to_manufacturing", "raw_material_to_manufacturing",
+        "manufacturing_transfer", "manufacturing_consumption",
+        "transfer_to_branch", "branch_request_fulfilled", "out",
+    ]
+    
+    # كل المواد الخام
+    mq = {}
+    if tenant_id:
+        mq["$or"] = [
+            {"tenant_id": tenant_id},
+            {"tenant_id": {"$exists": False}},
+            {"tenant_id": None},
+        ]
+    materials = await db.raw_materials.find(mq, {"_id": 0}).to_list(5000)
+    
+    predictions = []
+    for mat in materials:
+        mid = mat.get("id")
+        current_stock = float(mat.get("quantity", 0) or 0)
+        min_qty = float(mat.get("min_quantity", 0) or 0)
+        unit = mat.get("unit", "")
+        
+        cq = {
+            "material_id": mid,
+            "type": {"$in": OUTGOING_TYPES},
+            "created_at": {"$gte": period_start},
+        }
+        if tenant_id:
+            cq["$or"] = [
+                {"tenant_id": tenant_id},
+                {"tenant_id": {"$exists": False}},
+                {"tenant_id": None},
+            ]
+        total_consumed = 0.0
+        async for m in db.inventory_movements.find(cq, {"_id": 0, "quantity": 1}):
+            total_consumed += float(m.get("quantity", 0) or 0)
+        
+        daily_avg = total_consumed / days_lookback if days_lookback > 0 else 0
+        
+        if daily_avg > 0:
+            days_remaining = current_stock / daily_avg
+            stockout_date = (datetime.now(timezone.utc) + timedelta(days=days_remaining)).date().isoformat()
+        else:
+            days_remaining = None  # لا استهلاك → غير محدد
+            stockout_date = None
+        
+        # التصنيف
+        if daily_avg == 0:
+            status = "no_consumption"
+        elif current_stock <= 0:
+            status = "out_of_stock"
+        elif days_remaining is not None and days_remaining <= 3:
+            status = "critical"
+        elif days_remaining is not None and days_remaining <= 7:
+            status = "warning"
+        else:
+            status = "safe"
+        
+        predictions.append({
+            "material_id": mid,
+            "name": mat.get("name"),
+            "unit": unit,
+            "current_stock": round(current_stock, 2),
+            "min_quantity": round(min_qty, 2),
+            "daily_avg": round(daily_avg, 3),
+            "weekly_avg": round(daily_avg * 7, 2),
+            "days_remaining": round(days_remaining, 1) if days_remaining is not None else None,
+            "stockout_date": stockout_date,
+            "status": status,
+            "below_min": current_stock <= min_qty and min_qty > 0,
+        })
+    
+    # ترتيب: out_of_stock → critical → warning → below_min → safe → no_consumption
+    status_order = {
+        "out_of_stock": 0, "critical": 1, "warning": 2,
+        "safe": 3, "no_consumption": 4,
+    }
+    predictions.sort(key=lambda p: (
+        status_order.get(p["status"], 99),
+        p["days_remaining"] if p["days_remaining"] is not None else 99999,
+    ))
+    
+    summary = {
+        "out_of_stock": sum(1 for p in predictions if p["status"] == "out_of_stock"),
+        "critical": sum(1 for p in predictions if p["status"] == "critical"),
+        "warning": sum(1 for p in predictions if p["status"] == "warning"),
+        "safe": sum(1 for p in predictions if p["status"] == "safe"),
+        "no_consumption": sum(1 for p in predictions if p["status"] == "no_consumption"),
+        "total": len(predictions),
+        "lookback_days": days_lookback,
+    }
+    return {"predictions": predictions, "summary": summary}

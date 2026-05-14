@@ -67,6 +67,7 @@ import {
   TabsList,
   TabsTrigger,
 } from '../components/ui/tabs';
+import StockoutPredictionDialog, { StockoutPredictionBanner } from '../components/StockoutPrediction';
 const API = API_URL;
 export default function WarehouseManufacturing() {
   const navigate = useNavigate();
@@ -115,6 +116,7 @@ export default function WarehouseManufacturing() {
   // === طلب شراء جديد للمشتريات (يبدأ بحالة pending_owner_approval) ===
   const [showPurchaseRequestModal, setShowPurchaseRequestModal] = useState(false);
   const [purchaseRequestItems, setPurchaseRequestItems] = useState([{ raw_material_id: '', name: '', quantity: 0, unit: 'kg', notes: '' }]);
+  const [showStockoutDialog, setShowStockoutDialog] = useState(false);
   const [purchaseRequestPriority, setPurchaseRequestPriority] = useState('normal');
   const [purchaseRequestNotes, setPurchaseRequestNotes] = useState('');
   const [warehouseRequestsList, setWarehouseRequestsList] = useState([]);
@@ -1271,6 +1273,9 @@ export default function WarehouseManufacturing() {
           </TabsList>
           {/* المخزن (المواد الخام) */}
           <TabsContent value="warehouse" className="space-y-4">
+            {/* بانر التنبؤ بالنفاد */}
+            <StockoutPredictionBanner onOpenDetails={() => setShowStockoutDialog(true)} />
+            
             {/* زر طلب شراء جديد */}
             {(isAdmin || isWarehouseKeeper) && (
               <Card className="border-green-500/30 bg-green-500/5">
@@ -2601,6 +2606,12 @@ export default function WarehouseManufacturing() {
           </TabsContent>
         </Tabs>
       </main>
+      {/* Dialog: التنبؤ الذكي بنفاد المخزون */}
+      <StockoutPredictionDialog
+        open={showStockoutDialog}
+        onOpenChange={setShowStockoutDialog}
+      />
+
       {/* Dialog: تفاصيل حركة المخزن */}
       <Dialog open={!!selectedMovement} onOpenChange={() => setSelectedMovement(null)}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto" data-testid="movement-details-dialog">

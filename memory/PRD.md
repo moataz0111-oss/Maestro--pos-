@@ -26,6 +26,14 @@ Multi-tenant POS system with biometric integration (ZKTeco), thermal receipt pri
 - Reports filter by branch
 - Printers filter by branch in Settings
 
+## Smart Stockout Prediction (May 14, 2026)
+- **New endpoint** `GET /api/raw-materials/stockout-predictions` — calculates daily consumption from last 30 days of outgoing movements; predicts stockout date for each raw material.
+- **Status classification**: out_of_stock | critical (≤3 days) | warning (≤7 days) | safe | no_consumption.
+- **Banner in المخزن tab**: shows up only when there are urgent/warning materials; auto-displays top 3 critical items with days remaining; clickable to open full dialog.
+- **Full prediction dialog**: 5 status filter cards + bar chart with reference lines at 3/7 days + detailed table with stockout dates.
+- **RBAC**: visible to admin/manager/owner + warehouse_keeper (per user request). Backend returns 403 for other roles.
+- New component: `/app/frontend/src/components/StockoutPrediction.js`.
+
 ## Smart Quantity Suggestion + Locked Unit (May 14, 2026)
 - **New endpoint** `POST /api/warehouse-purchase-requests/suggest-quantities` — analyzes last 30 days of outgoing movements per material, computes daily/weekly average consumption, target stock (max of min*2 or 2-week supply), and suggests purchase qty.
 - **New button** `✨ اقتراح ذكي` in purchase request modal — fills suggested quantities for all selected materials at once (still editable manually).
