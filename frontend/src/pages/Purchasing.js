@@ -127,7 +127,8 @@ export default function Purchasing() {
       const [invoicesRes, suppliersRes, requestsRes] = await Promise.all([
         axios.get(`${API}/purchase-invoices`, { headers }).catch(() => ({ data: [] })),
         axios.get(`${API}/purchase-suppliers`, { headers }).catch(() => ({ data: [] })),
-        axios.get(`${API}/warehouse-purchase-requests`, { headers, params: { status: 'approved_by_owner' } }).catch(() => ({ data: [] }))
+        // اجلب الطلبات المعلقة + المعتمدة معاً (المالك يحتاج رؤية المعلقات للموافقة)
+        axios.get(`${API}/warehouse-purchase-requests`, { headers }).catch(() => ({ data: [] }))
       ]);
       
       setInvoices(invoicesRes.data || []);
@@ -311,6 +312,7 @@ export default function Purchasing() {
         invoice_number: invoiceForm.invoice_number,
         items: invoiceForm.items.map(it => ({
           name: it.name,
+          raw_material_id: it.raw_material_id || null,
           quantity: parseFloat(it.quantity) || 0,
           unit: it.unit,
           cost_per_unit: parseFloat(it.unit_price) || 0,
@@ -477,9 +479,9 @@ export default function Purchasing() {
           <TabsTrigger value="requests" className="gap-2 relative">
             <Package className="h-4 w-4" />
             {t('طلبات المخزن')}
-            {warehouseRequests.filter(r => r.status === 'approved_by_owner').length > 0 && (
+            {warehouseRequests.filter(r => r.status === 'pending_owner_approval' || r.status === 'approved_by_owner').length > 0 && (
               <Badge className="absolute -top-2 -right-2 bg-red-500 text-white text-xs px-1.5 py-0.5 rounded-full">
-                {warehouseRequests.filter(r => r.status === 'approved_by_owner').length}
+                {warehouseRequests.filter(r => r.status === 'pending_owner_approval' || r.status === 'approved_by_owner').length}
               </Badge>
             )}
           </TabsTrigger>
@@ -686,17 +688,19 @@ export default function Purchasing() {
               ) : (
                 <div className="space-y-4">
                   {warehouseRequests.map(request => (
-                    <div key={request.id} className={`p-4 border rounded-lg ${request.status === 'approved_by_owner' ? 'border-orange-500 bg-orange-500/5' : request.status === 'priced_by_purchasing' ? 'border-blue-500 bg-blue-500/5' : request.status === 'received_by_warehouse' ? 'border-green-500 bg-green-500/5' : ''}`}>
+                    <div key={request.id} className={`p-4 border rounded-lg ${request.status === 'pending_owner_approval' ? 'border-amber-500 bg-amber-500/5' : request.status === 'approved_by_owner' ? 'border-orange-500 bg-orange-500/5' : request.status === 'priced_by_purchasing' ? 'border-blue-500 bg-blue-500/5' : request.status === 'received_by_warehouse' ? 'border-green-500 bg-green-500/5' : ''}`}>
                       <div className="flex items-start justify-between mb-3">
                         <div className="flex items-center gap-3">
                           <span className="font-bold text-lg">{t('طلب')} #{request.request_number}</span>
                           <Badge className={
+                            request.status === 'pending_owner_approval' ? 'bg-amber-500/20 text-amber-700' :
                             request.status === 'approved_by_owner' ? 'bg-orange-500/20 text-orange-500' :
                             request.status === 'priced_by_purchasing' ? 'bg-blue-500/20 text-blue-500' :
                             request.status === 'received_by_warehouse' ? 'bg-green-500/20 text-green-500' :
                             'bg-gray-500/20 text-gray-500'
                           }>
-                            {request.status === 'approved_by_owner' ? t('معتمد — جاهز للتسعير') :
+                            {request.status === 'pending_owner_approval' ? t('بانتظار موافقة المالك') :
+                             request.status === 'approved_by_owner' ? t('معتمد — جاهز للتسعير') :
                              request.status === 'priced_by_purchasing' ? t('تم التسعير — جاهز للاستلام') :
                              request.status === 'received_by_warehouse' ? t('تم الاستلام نهائياً') : request.status}
                           </Badge>
@@ -737,7 +741,59 @@ export default function Purchasing() {
                       )}
                       
                       {/* أزرار الإجراءات */}
-                      <div className="flex gap-2">
+                      <div className="flex gap-2 flex-wrap">
+                        {request.status === 'pending_owner_approval' && (
+                          <>
+                            <Button
+                              onClick={async () => {
+                                try {
+                                  await axios.post(`${API}/warehouse-purchase-requests/${request.id}/approve`, {}, { headers });
+                                  toast.success(t('تمت الموافقة — افتح الفاتورة الآن'));
+                                  // فتح نافذة الفاتورة مع ملء المواد تلقائياً
+                                  setInvoiceForm(prev => ({
+                                    ...prev,
+                                    items: request.items?.map(item => ({
+                                      raw_material_id: item.raw_material_id || null,
+                                      name: item.material_name || item.name,
+                                      quantity: item.quantity,
+                                      unit: item.unit || 'كغم',
+                                      unit_price: 0,
+                                      total: 0
+                                    })) || [],
+                                    request_id: request.id
+                                  }));
+                                  setShowInvoiceDialog(true);
+                                  fetchData();
+                                } catch (err) {
+                                  toast.error(err?.response?.data?.detail || t('فشل الموافقة'));
+                                }
+                              }}
+                              className="bg-emerald-500 hover:bg-emerald-600"
+                              data-testid={`approve-request-${request.id}`}
+                            >
+                              <CheckCircle className="h-4 w-4 ml-2" />
+                              {t('موافقة وتحويل لفاتورة')}
+                            </Button>
+                            <Button
+                              variant="outline"
+                              onClick={async () => {
+                                const reason = window.prompt(t('سبب الرفض (اختياري):'), '') || '';
+                                try {
+                                  await axios.post(`${API}/warehouse-purchase-requests/${request.id}/reject`, { reason }, { headers });
+                                  toast.success(t('تم رفض الطلب'));
+                                  fetchData();
+                                } catch (err) {
+                                  toast.error(err?.response?.data?.detail || t('فشل'));
+                                }
+                              }}
+                              className="border-red-500/40 text-red-600 hover:bg-red-500/10"
+                              data-testid={`reject-request-${request.id}`}
+                            >
+                              <XCircle className="h-4 w-4 ml-2" />
+                              {t('رفض')}
+                            </Button>
+                          </>
+                        )}
                         {request.status === 'approved_by_owner' && (
                           <Button
                             onClick={() => {
@@ -745,6 +801,7 @@ export default function Purchasing() {
                               setInvoiceForm(prev => ({
                                 ...prev,
                                 items: request.items?.map(item => ({
+                                  raw_material_id: item.raw_material_id || null,
                                   name: item.material_name || item.name,
                                   quantity: item.quantity,
                                   unit: item.unit || 'كغم',

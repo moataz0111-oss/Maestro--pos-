@@ -103,7 +103,7 @@
   },
   
   "test_credentials": {
-    "api_url": "https://biometric-hr-system.preview.emergentagent.com",
+    "api_url": "https://smart-inventory-hub-28.preview.emergentagent.com",
     "owner": {
       "email": "owner@maestroegp.com",
       "password": "owner123",

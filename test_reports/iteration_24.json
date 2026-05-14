@@ -96,7 +96,7 @@
   },
   
   "test_credentials": {
-    "api_url": "https://biometric-hr-system.preview.emergentagent.com",
+    "api_url": "https://smart-inventory-hub-28.preview.emergentagent.com",
     "admin_email": "admin@maestroegp.com",
     "admin_password": "admin123",
     "super_admin_email": "owner@maestroegp.com",

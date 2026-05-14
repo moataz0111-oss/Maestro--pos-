@@ -1,0 +1,45 @@
+{
+  "summary": "Backend regression for iter181: tested 12 recently-implemented features (branch daily stock count w/ variance and loss distribution, shift-close blocking when count missing, inventory-movements with filters, smart purchase suggestions, approve & convert to invoice, monthly department stocktake, salary receipt print data, biometric-queue/pending, waste-efficiency report, stockout predictions, manufactured-products cost fields). Created /app/backend/tests/test_iter181_recent_features.py (25 tests). 22 passed, 2 skipped (no seed data: empty branch inventory + no payroll rows), 1 failed: legacy manufactured products miss the new before/after-waste cost fields.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {
+        "endpoint": "GET /api/manufactured-products",
+        "issue": "Legacy products (created before the cost_before_waste/cost_after_waste feature) are returned without 'production_cost', 'raw_material_cost_after_waste', and 'cost_before_waste' fields. 2 of 3 tenant products are missing these keys, so the frontend product card will show empty 'before/after waste' values for older items. The handler must compute these on-the-fly from the recipe (same formula used in create), or run a one-shot migration."
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter181_recent_features.py",
+    "/app/test_reports/pytest/iter181.xml"
+  ],
+  "action_items": [
+    "GET /api/manufactured-products should back-fill cost_before_waste / raw_material_cost_after_waste / production_cost from the recipe when missing (or migrate legacy docs). Currently only newly-created products carry these fields, so product cards will be incomplete for older manufactured products.",
+    "Optional: enforce the 'last 5 days of month' window inside POST /api/department-stock-count/submit (currently the endpoint accepts submissions any day; only the GET /is-due flag drives UI button visibility).",
+    "Re-run the variance & salary-receipt tests after seed data is added (currently skipped because tenant has empty branch inventory and zero payroll records)."
+  ],
+  "critical_code_review_comments": [
+    "/app/backend/server.py is 22,503 lines — must be split into routers (biometric-queue, tenants, etc.).",
+    "GET /api/biometric-queue/pending is intentionally unauthenticated (local agent poll) and atomically claims jobs by flipping status to 'processing' — confirmed working. Make sure rate-limiting / token-from-tenant is added before production exposure.",
+    "/app/backend/routes/inventory_system.py is 4,135 lines — split waste-efficiency, suggestions and stockout-predictions into their own modules.",
+    "branch_stock_count.submit deletes all prior 'branch_loss' movements for the day before reinserting — good idempotency. But it does not also reverse-adjust raw-material warehouse stock for the auto-distributed loss; recipe_breakdown is only stored on the movement, never decremented from raw_materials.quantity. Verify the business expectation.",
+    "price-and-create-invoice: raw_material_id back-fill from request-items-by-name works as designed (test passes). Status guard requires 'approved_by_owner' — admin role uses owner-equivalent approval and reached this state in tests."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter181_recent_features.py (new)"
+  ],
+  "success_rate": {
+    "backend": "92% (22/24 executable tests passing; 1 legitimate failure on legacy products, 2 skipped due to missing seed data)"
+  },
+  "test_credentials": "Admin (Tenant): hanialdujaili@gmail.com / Hani@2024",
+  "seed_data_creation": "Created via API during test run: 1 warehouse_purchase_request (approved & converted to a purchases_new invoice). 1+ branch_stock_counts row for today's date for the admin's primary branch (notes prefixed 'TEST_iter181').",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Test file /app/backend/tests/test_iter181_recent_features.py covers all 12 recently-added endpoints. After main agent patches GET /manufactured-products to compute/backfill cost_before_waste & raw_material_cost_after_waste for legacy products, rerun: pytest /app/backend/tests/test_iter181_recent_features.py::TestManufacturingCost -v. Skipped tests need seed data: (a) at least one branch_inventory row (>0 qty) for the admin branch so the variance test exercises variance/loss-distribution and the recipe-breakdown branch, (b) at least one payroll row so HR receipt print-data is verified. Cash-register close-block test currently passes whether the count was already submitted earlier in the run or not — to deterministically validate the 409+STOCK_COUNT_REQUIRED contract, seed inventory but DO NOT submit a count, then call /api/cash-register/close.",
+  "rca of the issue": "GET /api/manufactured-products simply returns documents from manufactured_products as stored. The new cost_before_waste / production_cost / raw_material_cost_after_waste keys are only written inside POST /manufactured-products (create). Documents inserted before the feature ship date never receive those keys, so they leak as missing. Fix: in get_manufactured_products(), if a doc lacks these keys, recompute from doc['recipe'] using the same formula (qty * cost_per_unit before waste, qty * cost_per_unit/(1-waste_percentage/100) after waste). Alternatively, add a one-time migration script under /app/backend/seed_data.py or similar to populate the legacy docs."
+}
