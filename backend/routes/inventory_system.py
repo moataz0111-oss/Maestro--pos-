@@ -2507,6 +2507,44 @@ async def create_manufactured_product(
     del product_doc["_id"]
     return product_doc
 
+def _backfill_cost_fields(product: dict) -> dict:
+    """احتساب حقول التكلفة (قبل/بعد الهدر) من الوصفة للمنتجات القديمة التي لا تحملها."""
+    has_before = product.get("cost_before_waste") is not None or product.get("raw_material_cost") is not None
+    has_after = product.get("raw_material_cost_after_waste") is not None
+    has_production = product.get("production_cost") is not None
+    if has_before and has_after and has_production:
+        return product
+
+    cost_before = 0.0
+    cost_after = 0.0
+    for ing in product.get("recipe", []) or []:
+        try:
+            qty = float(ing.get("quantity", 0) or 0)
+            cpu = float(ing.get("cost_per_unit", 0) or 0)
+            waste_pct = float(ing.get("waste_percentage", 0) or 0)
+        except (TypeError, ValueError):
+            continue
+        base = qty * cpu
+        cost_before += base
+        if 0 < waste_pct < 100:
+            effective_cpu = cpu / (1 - waste_pct / 100)
+        else:
+            effective_cpu = cpu
+        cost_after += qty * effective_cpu
+
+    cost_before = round(cost_before, 2)
+    cost_after = round(cost_after, 2)
+    if product.get("raw_material_cost") is None:
+        product["raw_material_cost"] = cost_before
+    if product.get("cost_before_waste") is None:
+        product["cost_before_waste"] = cost_before
+    if product.get("raw_material_cost_after_waste") is None:
+        product["raw_material_cost_after_waste"] = cost_after
+    if product.get("production_cost") is None:
+        product["production_cost"] = cost_after
+    return product
+
+
 @router.get("/manufactured-products")
 async def get_manufactured_products():
     """جلب جميع المنتجات المصنعة"""
@@ -2523,6 +2561,8 @@ async def get_manufactured_products():
         product["transferred_quantity"] = transferred
         product["remaining_quantity"] = remaining
         product["quantity"] = remaining  # تحديث الكمية لتتوافق
+        # ⭐ ملء حقول التكلفة (قبل/بعد الهدر) للمنتجات القديمة
+        _backfill_cost_fields(product)
     
     return products
 
@@ -2533,6 +2573,7 @@ async def get_manufactured_product(product_id: str):
     product = await db.manufactured_products.find_one({"id": product_id}, {"_id": 0})
     if not product:
         raise HTTPException(status_code=404, detail="المنتج غير موجود")
+    _backfill_cost_fields(product)
     return product
 
 @router.post("/manufactured-products/{product_id}/produce")

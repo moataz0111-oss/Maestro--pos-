@@ -26,6 +26,12 @@ Multi-tenant POS system with biometric integration (ZKTeco), thermal receipt pri
 - Reports filter by branch
 - Printers filter by branch in Settings
 
+## Bug Fix (May 14, 2026 — iter181) — Legacy Manufactured Products Cost Backfill + Monthly Stocktake Window Enforcement
+- **GET `/api/manufactured-products`** & **`GET /api/manufactured-products/{id}`** now compute `cost_before_waste`, `raw_material_cost`, `raw_material_cost_after_waste`, `production_cost` on the fly from the recipe for documents created before the cost-before/after-waste feature shipped. Frontend product cards no longer show empty values for legacy items.
+- **POST `/api/department-stock-count/submit`** now enforces the "last 5 days of month" window server-side (returns `403` outside the window when `period == current_period`), matching the existing UI button-visibility logic.
+- Regression file: `/app/backend/tests/test_iter181_recent_features.py` — 23/23 executable tests pass (2 skipped due to empty seed data: no branch_inventory rows for the admin branch, zero payroll records).
+
+
 ## Salary Receipt Printing + Biometric Agent Update (May 14, 2026)
 - **Salary receipt printing** (`/app/frontend/src/pages/HR.js`):
   - Print opens in new window with isolated content (no UI bleed).

@@ -196,6 +196,14 @@ async def submit_count(payload: StockCountSubmit, current_user: dict = Depends(g
     coll_name = DEPARTMENT_COLLECTIONS.get(payload.department)
     if not coll_name:
         raise HTTPException(status_code=400, detail="قسم غير معروف")
+
+    # 🔒 فرض نافذة الـ 5 أيام الأخيرة من الشهر — إلا إذا كانت الفترة المقدمة فترة سابقة
+    is_due, _ = _is_due_window()
+    if period == _current_period() and not is_due:
+        raise HTTPException(
+            status_code=403,
+            detail="الجرد الشهري متاح فقط خلال آخر 5 أيام من الشهر",
+        )
     
     items_template = await _build_template(db, payload.department, period, tenant_id)
     template_map = {it["item_id"]: it for it in items_template}
