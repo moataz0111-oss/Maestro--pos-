@@ -2159,6 +2159,101 @@ public class JobReceiptRenderer {
             }
         } -ArgumentList $backendUrl, $agentLog
         "$(Get-Date) - Print Queue polling job started (ID: $($pollingJob.Id))" | Out-File $agentLog -Append
+        
+        # =============================================================
+        # === Biometric Queue Polling (مزامنة البصمة من قائمة الانتظار) ===
+        # =============================================================
+        # هذا الـ Job يسحب جوبات البصمة المعلقة من backend ويُنفذها محلياً
+        # عبر استدعاء endpoints هذا الـ agent نفسه (/zk-test, /zk-sync, /zk-users, /zk-push-user...)
+        # ثم يرسل النتيجة لـ /api/biometric-queue/{id}/result.
+        $bioPollingJob = Start-Job -ScriptBlock {
+            param($apiUrl, $agentLog, $localAgentPort, $branchId)
+            $local = "http://127.0.0.1:$localAgentPort"
+            while ($true) {
+              try {
+                while ($true) {
+                  try {
+                    $uri = "$apiUrl/api/biometric-queue/pending?limit=5"
+                    if ($branchId) { $uri += "&branch_id=$branchId" }
+                    $r = Invoke-WebRequest -Uri $uri -UseBasicParsing -TimeoutSec 5
+                    if ($r.StatusCode -eq 200) {
+                      $jobs = $r.Content | ConvertFrom-Json
+                      if ($jobs -and $jobs.Count -gt 0) {
+                        foreach ($job in $jobs) {
+                          try {
+                            $jt = $job.type
+                            $params = $job.params
+                            "$(Get-Date) - BIO JOB claimed: id=$($job.id) type=$jt" | Out-File $agentLog -Append
+                            
+                            # توجيه الجوب للـ endpoint المحلي المناسب
+                            $localPath = $null
+                            switch ($jt) {
+                              'zk-test'         { $localPath = '/zk-test' }
+                              'zk-sync'         { $localPath = '/zk-sync' }
+                              'zk-users'        { $localPath = '/zk-users' }
+                              'zk-push-user'    { $localPath = '/zk-push-user' }
+                              'zk-delete-user'  { $localPath = '/zk-delete-user' }
+                              'zk-face-photo'   { $localPath = '/zk-face-photo' }
+                              'zk-probe-device' { $localPath = '/zk-probe-device' }
+                              default           { $localPath = $null }
+                            }
+                            
+                            if (-not $localPath) {
+                              $body = (@{success=$false; error="Unsupported job type: $jt"} | ConvertTo-Json -Compress)
+                              try { Invoke-WebRequest -Uri "$apiUrl/api/biometric-queue/$($job.id)/result" -Method POST -ContentType 'application/json' -Body $body -UseBasicParsing -TimeoutSec 10 | Out-Null } catch {}
+                              continue
+                            }
+                            
+                            # ابني payload للـ endpoint المحلي
+                            $localBody = ($params | ConvertTo-Json -Compress -Depth 8)
+                            $resultText = $null
+                            $isSuccess = $false
+                            try {
+                              $lr = Invoke-WebRequest -Uri "$local$localPath" -Method POST -ContentType 'application/json' -Body $localBody -UseBasicParsing -TimeoutSec 120
+                              $resultText = $lr.Content
+                              try { $parsed = $resultText | ConvertFrom-Json; $isSuccess = [bool]$parsed.success } catch { $isSuccess = $false }
+                            } catch {
+                              $resultText = (@{success=$false; error="$_"} | ConvertTo-Json -Compress)
+                              $isSuccess = $false
+                            }
+                            
+                            # أرسل النتيجة لـ backend
+                            try {
+                              $resultObj = $null
+                              try { $resultObj = $resultText | ConvertFrom-Json } catch {}
+                              $payload = @{
+                                success = $isSuccess
+                                result  = $resultObj
+                              }
+                              if (-not $isSuccess -and $resultObj -and $resultObj.message) { $payload.error = $resultObj.message }
+                              $payloadJson = ($payload | ConvertTo-Json -Compress -Depth 10)
+                              Invoke-WebRequest -Uri "$apiUrl/api/biometric-queue/$($job.id)/result" -Method POST -ContentType 'application/json' -Body $payloadJson -UseBasicParsing -TimeoutSec 10 | Out-Null
+                              "$(Get-Date) - BIO JOB result sent: id=$($job.id) success=$isSuccess" | Out-File $agentLog -Append
+                            } catch {
+                              "$(Get-Date) - BIO JOB result FAILED to send: id=$($job.id) err=$_" | Out-File $agentLog -Append
+                            }
+                          } catch {
+                            "$(Get-Date) - BIO JOB exception: $_" | Out-File $agentLog -Append
+                            try {
+                              $errBody = (@{success=$false; error="$_"} | ConvertTo-Json -Compress)
+                              Invoke-WebRequest -Uri "$apiUrl/api/biometric-queue/$($job.id)/result" -Method POST -ContentType 'application/json' -Body $errBody -UseBasicParsing -TimeoutSec 10 | Out-Null
+                            } catch {}
+                          }
+                        }
+                      }
+                    }
+                  } catch {
+                    # تجاهل أخطاء الشبكة العابرة (الـ backend مؤقتاً غير متاح أو timeout)
+                  }
+                  Start-Sleep -Seconds 4
+                }
+              } catch {
+                "$(Get-Date) - FATAL bio polling crashed: $_ - Restarting..." | Out-File $agentLog -Append
+                Start-Sleep -Seconds 2
+              }
+            }
+        } -ArgumentList $backendUrl, $agentLog, $port, "{{BRANCH_ID}}"
+        "$(Get-Date) - Biometric Queue polling job started (ID: $($bioPollingJob.Id))" | Out-File $agentLog -Append
     }
 
     while ($listener.IsListening) {

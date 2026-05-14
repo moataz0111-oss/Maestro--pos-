@@ -26,6 +26,17 @@ Multi-tenant POS system with biometric integration (ZKTeco), thermal receipt pri
 - Reports filter by branch
 - Printers filter by branch in Settings
 
+## Salary Receipt Printing + Biometric Agent Update (May 14, 2026)
+- **Salary receipt printing** (`/app/frontend/src/pages/HR.js`):
+  - Print opens in new window with isolated content (no UI bleed).
+  - Two formats: **A5/A4** (formal styled with green border + signatures) and **80mm thermal printer** (compact).
+  - **Reprint from history**: 🧾 blue icon next to delete button in salary history dialog — owner can reprint any past payment any time.
+- **Biometric agent v6.5.0** (`/app/backend/static/print_server.ps1`):
+  - New background polling loop fetches biometric jobs from `/api/biometric-queue/pending` every 4s.
+  - Supports: zk-test, zk-sync, zk-users, zk-push-user, zk-delete-user, zk-face-photo, zk-probe-device.
+  - Routes each job to the local agent's matching endpoint (e.g., `/zk-sync`) and posts result back to `/api/biometric-queue/{id}/result`.
+  - Branch ID auto-injected via template `{{BRANCH_ID}}` for per-branch filtering.
+
 ## Monthly Department Stocktake (May 14, 2026)
 - **New backend module**: `/app/backend/routes/department_stock_count.py` with endpoints `is-due`, `template`, `submit`, `history`.
 - **Covers 3 departments**: `manufacturing` (manufacturing_inventory), `warehouse_raw` (raw_materials), `packaging` (packaging_materials).

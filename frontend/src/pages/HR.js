@@ -570,10 +570,92 @@ export default function HR() {
     }
   };
 
-  // 🧾 طباعة الإيصال
-  const printReceipt = () => {
+  // 🧾 طباعة الإيصال (نافذة مستقلة لطباعة المحتوى فقط)
+  const printReceipt = (variant = 'a4') => {
     if (!receiptData) return;
-    window.print();
+    const printWindow = window.open('', '_blank', 'width=800,height=900');
+    if (!printWindow) {
+      toast.error(t('فضلاً اسمح بالنوافذ المنبثقة للطباعة'));
+      return;
+    }
+    const methodLabel = receiptData.payment_method === 'cash' ? 'نقدي'
+                       : receiptData.payment_method === 'bank' ? 'تحويل بنكي' : 'أخرى';
+    const isThermal = variant === 'thermal';
+    const css = isThermal ? `
+      @page { size: 80mm auto; margin: 4mm; }
+      body { font-family: -apple-system, system-ui, Tahoma, sans-serif; direction: rtl; margin: 0; padding: 4px; font-size: 12px; }
+      .receipt { width: 72mm; }
+      h2 { font-size: 14px; text-align: center; margin: 2px 0; }
+      .label { color: #555; }
+      .row { display: flex; justify-content: space-between; padding: 2px 0; border-bottom: 1px dashed #ddd; }
+      .amount-box { border: 2px dashed #000; padding: 6px; text-align: center; margin: 6px 0; }
+      .amount-num { font-size: 18px; font-weight: bold; }
+      .signature { display: flex; justify-content: space-between; margin-top: 12px; font-size: 10px; }
+      .signature div { flex: 1; text-align: center; }
+      .signature .line { border-top: 1px solid #000; margin-top: 16px; padding-top: 2px; }
+      .footer { text-align: center; font-size: 9px; color: #777; margin-top: 8px; }
+    ` : `
+      @page { size: A5; margin: 12mm; }
+      body { font-family: -apple-system, system-ui, Tahoma, sans-serif; direction: rtl; margin: 0; padding: 18px; color: #1a1a1a; }
+      .receipt { max-width: 600px; margin: 0 auto; border: 2px solid #10b981; border-radius: 8px; padding: 18px; }
+      .header { text-align: center; border-bottom: 2px dashed #10b981; padding-bottom: 10px; margin-bottom: 12px; }
+      h2 { font-size: 20px; margin: 0; }
+      .sub { color: #555; font-size: 12px; margin-top: 4px; }
+      .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 12px; font-size: 14px; margin: 12px 0; }
+      .label { color: #555; }
+      .value { font-weight: bold; }
+      .amount-box { background: #d1fae5; border: 2px solid #10b981; border-radius: 8px; padding: 14px; text-align: center; margin: 16px 0; }
+      .amount-label { font-size: 12px; color: #047857; }
+      .amount-num { font-size: 28px; font-weight: bold; color: #047857; margin-top: 4px; }
+      .amount-words { font-size: 11px; color: #047857; margin-top: 4px; }
+      .signature { display: flex; gap: 24px; margin-top: 24px; padding-top: 12px; border-top: 1px solid #ccc; }
+      .signature > div { flex: 1; text-align: center; font-size: 12px; }
+      .signature .line { border-top: 2px solid #333; margin-top: 36px; padding-top: 4px; color: #555; }
+      .footer { text-align: center; font-size: 10px; color: #888; margin-top: 16px; padding-top: 8px; border-top: 1px dashed #ddd; }
+    `;
+    const html = `<!doctype html><html dir="rtl"><head><meta charset="utf-8"><title>${t('إيصال صرف')} - ${receiptData.employee_name}</title><style>${css}</style></head>
+<body>
+  <div class="receipt">
+    <div class="header">
+      <h2>${receiptData.company_name || ''}</h2>
+      <div class="sub">${t('إيصال صرف نقدي - راتب موظف')}</div>
+    </div>
+    ${isThermal ? `
+      <div class="row"><span class="label">${t('رقم الإيصال')}</span><span>${(receiptData.id || '').slice(0,8).toUpperCase()}</span></div>
+      <div class="row"><span class="label">${t('التاريخ')}</span><span>${receiptData.payment_date}</span></div>
+      <div class="row"><span class="label">${t('الموظف')}</span><span>${receiptData.employee_name}</span></div>
+      <div class="row"><span class="label">${t('طريقة الدفع')}</span><span>${methodLabel}</span></div>
+      ${receiptData.notes ? `<div class="row"><span class="label">${t('ملاحظات')}</span><span>${receiptData.notes}</span></div>` : ''}
+    ` : `
+      <div class="grid">
+        <span class="label">${t('رقم الإيصال')}:</span><span class="value">${(receiptData.id || '').slice(0,8).toUpperCase()}</span>
+        <span class="label">${t('التاريخ')}:</span><span class="value">${receiptData.payment_date}</span>
+        <span class="label">${t('اسم الموظف')}:</span><span class="value">${receiptData.employee_name}</span>
+        <span class="label">${t('طريقة الدفع')}:</span><span class="value">${methodLabel}</span>
+        ${receiptData.employee_position ? `<span class="label">${t('المنصب')}:</span><span class="value">${receiptData.employee_position}</span>` : ''}
+        ${receiptData.notes ? `<span class="label">${t('ملاحظات')}:</span><span class="value">${receiptData.notes}</span>` : ''}
+      </div>
+    `}
+    <div class="amount-box">
+      <div class="amount-label">${t('المبلغ المُصرَف')}</div>
+      <div class="amount-num">${formatPrice(receiptData.amount)}</div>
+    </div>
+    <div class="signature">
+      <div>
+        <div>${t('توقيع المستلم')}</div>
+        <div class="line">${receiptData.employee_name}</div>
+      </div>
+      <div>
+        <div>${t('توقيع المُصرف')}</div>
+        <div class="line">${receiptData.paid_by_name || '—'}</div>
+      </div>
+    </div>
+    <div class="footer">${t('تم إنشاء هذا الإيصال من نظام Maestro EGP')} • ${new Date().toLocaleString('ar-EG')}</div>
+  </div>
+  <script>window.onload = () => { window.print(); setTimeout(() => window.close(), 500); };</script>
+</body></html>`;
+    printWindow.document.write(html);
+    printWindow.document.close();
   };
 
   // Employee handlers
@@ -4271,17 +4353,33 @@ export default function HR() {
                             <td className="p-2 text-xs text-muted-foreground">{p.notes || '-'}</td>
                             <td className="p-2 text-center text-xs">{p.paid_by_name || '-'}</td>
                             <td className="p-2 text-center">
-                              {user?.role === 'admin' || user?.role === 'super_admin' ? (
+                              <div className="flex items-center justify-center gap-1">
                                 <Button
                                   size="sm"
                                   variant="ghost"
-                                  className="text-red-500 hover:bg-red-500/10"
-                                  onClick={() => deletePayment(p.id)}
-                                  data-testid={`delete-payment-${p.id}`}
+                                  className="text-blue-500 hover:bg-blue-500/10 h-8 w-8 p-0"
+                                  onClick={() => setReceiptData({
+                                    ...p,
+                                    company_name: user?.tenant_name || user?.business_name || 'Maestro POS',
+                                    employee_name: p.employee_name || historyDialog?.employee_name,
+                                  })}
+                                  title={t('إعادة طباعة الإيصال')}
+                                  data-testid={`reprint-payment-${p.id}`}
                                 >
-                                  <Trash2 className="h-4 w-4" />
+                                  🧾
                                 </Button>
-                              ) : '-'}
+                                {(user?.role === 'admin' || user?.role === 'super_admin') && (
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="text-red-500 hover:bg-red-500/10 h-8 w-8 p-0"
+                                    onClick={() => deletePayment(p.id)}
+                                    data-testid={`delete-payment-${p.id}`}
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                )}
+                              </div>
                             </td>
                           </tr>
                         ))}
@@ -4339,16 +4437,24 @@ export default function HR() {
                     </div>
                   </div>
                 </div>
-                <DialogFooter>
+                <DialogFooter className="gap-2">
                   <Button variant="outline" onClick={() => setReceiptData(null)} data-testid="close-receipt-btn">
                     {t('إغلاق')}
                   </Button>
                   <Button
-                    onClick={printReceipt}
+                    variant="outline"
+                    onClick={() => printReceipt('thermal')}
+                    className="border-orange-500/40 text-orange-700 hover:bg-orange-500/10"
+                    data-testid="print-thermal-receipt-btn"
+                  >
+                    🖨 {t('طابعة حرارية 80mm')}
+                  </Button>
+                  <Button
+                    onClick={() => printReceipt('a4')}
                     className="bg-emerald-500 hover:bg-emerald-600 text-white"
                     data-testid="print-receipt-btn"
                   >
-                    {t('طباعة')}
+                    📄 {t('طباعة A5/A4')}
                   </Button>
                 </DialogFooter>
               </>
