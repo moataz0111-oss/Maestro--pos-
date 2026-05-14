@@ -71,6 +71,7 @@ export default function PurchasesPage() {
   const [suppliers, setSuppliers] = useState([]);
   const [purchaseRequests, setPurchaseRequests] = useState([]);
   const [rawMaterials, setRawMaterials] = useState([]);
+  const [lastPrices, setLastPrices] = useState({ by_id: {}, by_name: {} });
   
   // Dialog states
   const [showPurchaseDialog, setShowPurchaseDialog] = useState(false);
@@ -158,6 +159,44 @@ export default function PurchasesPage() {
       if (m) return parseFloat(m.cost_per_unit || 0);
     }
     return 0;
+  };
+
+  // ابحث في خريطة آخر الأسعار عن سجل صنف
+  const lookupLastPrice = (item) => {
+    if (!lastPrices) return null;
+    if (item.raw_material_id && lastPrices.by_id?.[item.raw_material_id]) {
+      return lastPrices.by_id[item.raw_material_id];
+    }
+    const nm = (item.name || '').trim();
+    if (nm && lastPrices.by_name?.[nm]) {
+      return lastPrices.by_name[nm];
+    }
+    return null;
+  };
+
+  // جلب آخر سعر شراء لأصناف الطلب (للمقارنة داخل الجدول)
+  const fetchLastPrices = async (items) => {
+    try {
+      const material_ids = Array.from(new Set(
+        (items || []).map(it => it.raw_material_id).filter(Boolean)
+      ));
+      const names = Array.from(new Set(
+        (items || []).map(it => (it.material_name || it.name || '').trim()).filter(Boolean)
+      ));
+      if (material_ids.length === 0 && names.length === 0) {
+        setLastPrices({ by_id: {}, by_name: {} });
+        return;
+      }
+      const res = await axios.post(
+        `${API}/raw-materials/last-purchase-prices`,
+        { material_ids, names },
+        { headers }
+      );
+      setLastPrices(res.data || { by_id: {}, by_name: {} });
+    } catch (e) {
+      // فشل صامت — الجدول يعمل بدون هذه البيانات
+      setLastPrices({ by_id: {}, by_name: {} });
+    }
   };
 
   // بناء أصناف الفاتورة من طلب مخزن مع ملء الأسعار تلقائياً من المخزن
@@ -785,24 +824,31 @@ export default function PurchasesPage() {
                       >
                         <div className="flex items-center justify-between mb-2">
                           <span className="font-bold">{t('طلب')} #{request.request_number}</span>
-                          <Badge className={
-                            request.status === 'pending_owner_approval' ? 'bg-amber-500/20 text-amber-700' :
-                            request.status === 'approved_by_owner' ? 'bg-orange-500/20 text-orange-500' :
-                            request.status === 'priced_by_purchasing' ? 'bg-blue-500/20 text-blue-500' :
-                            request.status === 'received_by_warehouse' ? 'bg-green-500/20 text-green-500' :
-                            request.status === 'pending' ? 'bg-yellow-500/20 text-yellow-500' :
-                            request.status === 'approved' ? 'bg-blue-500/20 text-blue-500' :
-                            request.status === 'purchased' ? 'bg-green-500/20 text-green-500' :
-                            'bg-gray-500/20 text-gray-500'
-                          }>
-                            {request.status === 'pending_owner_approval' ? t('بانتظار موافقة المالك') :
-                             request.status === 'approved_by_owner' ? t('معتمد — جاهز للتسعير') :
-                             request.status === 'priced_by_purchasing' ? t('تم التسعير — جاهز للاستلام') :
-                             request.status === 'received_by_warehouse' ? t('تم الاستلام نهائياً') :
-                             request.status === 'pending' ? t('قيد الانتظار') :
-                             request.status === 'approved' ? t('تمت الموافقة') :
-                             request.status === 'purchased' ? t('تم الشراء') : request.status}
-                          </Badge>
+                          <div className="flex items-center gap-2">
+                            {(request.purchase_invoice_ids?.length > 0 && request.status === 'approved_by_owner') && (
+                              <Badge className="bg-amber-500/20 text-amber-700 border border-amber-500/40" data-testid={`request-${request.id}-partial-badge`}>
+                                {t('شراء جزئي — متبقي')}
+                              </Badge>
+                            )}
+                            <Badge className={
+                              request.status === 'pending_owner_approval' ? 'bg-amber-500/20 text-amber-700' :
+                              request.status === 'approved_by_owner' ? 'bg-orange-500/20 text-orange-500' :
+                              request.status === 'priced_by_purchasing' ? 'bg-blue-500/20 text-blue-500' :
+                              request.status === 'received_by_warehouse' ? 'bg-green-500/20 text-green-500' :
+                              request.status === 'pending' ? 'bg-yellow-500/20 text-yellow-500' :
+                              request.status === 'approved' ? 'bg-blue-500/20 text-blue-500' :
+                              request.status === 'purchased' ? 'bg-green-500/20 text-green-500' :
+                              'bg-gray-500/20 text-gray-500'
+                            }>
+                              {request.status === 'pending_owner_approval' ? t('بانتظار موافقة المالك') :
+                               request.status === 'approved_by_owner' ? t('معتمد — جاهز للتسعير') :
+                               request.status === 'priced_by_purchasing' ? t('تم التسعير — جاهز للاستلام') :
+                               request.status === 'received_by_warehouse' ? t('تم الاستلام نهائياً') :
+                               request.status === 'pending' ? t('قيد الانتظار') :
+                               request.status === 'approved' ? t('تمت الموافقة') :
+                               request.status === 'purchased' ? t('تم الشراء') : request.status}
+                            </Badge>
+                          </div>
                         </div>
                         <div className="text-sm text-muted-foreground mb-3">
                           {request.items?.map((item, idx) => (
@@ -811,6 +857,14 @@ export default function PurchasesPage() {
                             </span>
                           ))}
                         </div>
+                        {request.purchase_invoice_ids?.length > 0 && (
+                          <p className="text-xs text-blue-600 mb-2" data-testid={`request-${request.id}-invoices-count`}>
+                            🧾 {t('عدد الفواتير المرتبطة')}: {request.purchase_invoice_ids.length}
+                            {request.last_partial_at && (
+                              <span className="opacity-70 mr-2">· {t('آخر فاتورة جزئية')}: {new Date(request.last_partial_at).toLocaleDateString('ar-EG')}</span>
+                            )}
+                          </p>
+                        )}
                         {request.owner_approved_by_name && (
                           <p className="text-xs text-emerald-600 mb-2" data-testid={`request-${request.id}-approved-by`}>
                             ✓ {t('معتمد من')}: {request.owner_approved_by_name}
@@ -836,6 +890,7 @@ export default function PurchasesPage() {
                                       total_amount: total,
                                     }));
                                     setShowPurchaseDialog(true);
+                                    fetchLastPrices(items);
                                     fetchData();
                                   } catch (err) {
                                     toast.error(err?.response?.data?.detail || t('فشل الموافقة'));
@@ -882,6 +937,7 @@ export default function PurchasesPage() {
                                   total_amount: total,
                                 }));
                                 setShowPurchaseDialog(true);
+                                fetchLastPrices(items);
                               }}
                               className="bg-blue-500 hover:bg-blue-600"
                               data-testid={`pn-price-request-${request.id}`}
@@ -1234,6 +1290,27 @@ export default function PurchasesPage() {
                           placeholder={t('السعر')}
                           data-testid={`purchase-item-price-${index}`}
                         />
+                        {(() => {
+                          const lp = lookupLastPrice(item);
+                          if (!lp) return (
+                            <div className="text-[10px] text-muted-foreground/70 text-center mt-0.5" data-testid={`purchase-item-lastprice-${index}`}>
+                              {t('آخر سعر: غير متوفر')}
+                            </div>
+                          );
+                          const current = parseFloat(item.cost_per_unit) || 0;
+                          const last = parseFloat(lp.cost) || 0;
+                          const diff = current - last;
+                          const diffPct = last > 0 ? (diff / last) * 100 : 0;
+                          const tone = diff > 0.005 ? 'text-red-600' : diff < -0.005 ? 'text-emerald-600' : 'text-muted-foreground';
+                          const arrow = diff > 0.005 ? '↑' : diff < -0.005 ? '↓' : '=';
+                          const dateStr = lp.date ? new Date(lp.date).toLocaleDateString('ar-EG', { year: 'numeric', month: 'short', day: 'numeric' }) : '';
+                          return (
+                            <div className={`text-[10px] text-center mt-0.5 leading-tight ${tone}`} data-testid={`purchase-item-lastprice-${index}`} title={lp.supplier_name ? `${lp.supplier_name} — ${lp.invoice_number || ''}` : ''}>
+                              {t('آخر سعر')}: <span className="font-bold">{formatPrice(last)}</span> {arrow}{Math.abs(diffPct).toFixed(1)}%
+                              {dateStr && <span className="opacity-70 mx-1">· {dateStr}</span>}
+                            </div>
+                          );
+                        })()}
                       </div>
                       <div className="col-span-1 md:col-span-2 text-sm font-bold text-primary text-center" data-testid={`purchase-item-total-${index}`}>
                         {formatPrice(item.total_cost)}

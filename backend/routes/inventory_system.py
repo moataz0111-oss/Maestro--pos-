@@ -1348,6 +1348,67 @@ async def get_raw_materials(current_user: dict = Depends(get_current_user)):
     
     return materials
 
+@router.post("/raw-materials/last-purchase-prices")
+async def get_last_purchase_prices(payload: dict, current_user: dict = Depends(get_current_user)):
+    """جلب آخر سعر شراء + التاريخ + اسم المورد لكل مادة خام.
+
+    Body: { material_ids: [str], names: [str] (optional fallback) }
+    Returns: { by_id: {material_id: {cost, date, supplier_name, invoice_number}},
+              by_name: {name: {cost, date, supplier_name, invoice_number}} }
+    """
+    db = get_db()
+    tenant_id = get_user_tenant_id(current_user)
+
+    material_ids = [mid for mid in (payload.get("material_ids") or []) if mid]
+    names = [(n or "").strip() for n in (payload.get("names") or []) if n]
+
+    by_id: Dict[str, Dict[str, Any]] = {}
+    by_name: Dict[str, Dict[str, Any]] = {}
+
+    query: Dict[str, Any] = {}
+    if tenant_id:
+        query["tenant_id"] = tenant_id
+    # احصر بالفواتير التي تحتوي على أحد هذه المواد أو الأسماء — لتقليل النقل
+    or_conditions = []
+    if material_ids:
+        or_conditions.append({"items.raw_material_id": {"$in": material_ids}})
+    if names:
+        or_conditions.append({"items.name": {"$in": names}})
+    if or_conditions:
+        query["$or"] = or_conditions
+
+    # رتّب حسب الأحدث
+    cursor = db.purchases_new.find(query, {"_id": 0}).sort([("created_at", -1)]).limit(500)
+    needed_ids = set(material_ids)
+    needed_names = set(names)
+    async for inv in cursor:
+        if not (needed_ids or needed_names):
+            break
+        inv_date = inv.get("created_at")
+        sup_name = inv.get("supplier_name") or ""
+        inv_no = inv.get("invoice_number") or ""
+        for it in (inv.get("items") or []):
+            rm_id = it.get("raw_material_id")
+            iname = (it.get("name") or "").strip()
+            cost = float(it.get("cost_per_unit") or 0)
+            if cost <= 0:
+                continue
+            entry = {
+                "cost": round(cost, 2),
+                "date": inv_date,
+                "supplier_name": sup_name,
+                "invoice_number": inv_no,
+            }
+            if rm_id and rm_id in needed_ids and rm_id not in by_id:
+                by_id[rm_id] = entry
+                needed_ids.discard(rm_id)
+            if iname and iname in needed_names and iname not in by_name:
+                by_name[iname] = entry
+                needed_names.discard(iname)
+
+    return {"by_id": by_id, "by_name": by_name}
+
+
 @router.get("/raw-materials-new/alerts/low-stock")
 async def get_raw_materials_low_stock(current_user: dict = Depends(get_current_user)):
     """تنبيهات المواد الخام المنخفضة تحت الحد الأدنى — للمالك فقط"""
