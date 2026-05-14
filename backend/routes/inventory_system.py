@@ -712,7 +712,81 @@ async def price_request_and_create_invoice(
         rname = (ri.get("name") or "").strip()
         if rname and ri.get("raw_material_id"):
             request_items_by_name[rname] = ri.get("raw_material_id")
-    
+
+    # === فرض تبرير زيادة السعر +10% أو أكثر ===
+    PRICE_INCREASE_THRESHOLD_PCT = 10.0
+    reasons_by_id = (payload.get("price_increase_reasons") or {}).get("by_id") or {}
+    reasons_by_name = (payload.get("price_increase_reasons") or {}).get("by_name") or {}
+    missing_justifications = []
+    price_increase_log = []
+
+    # جلب آخر سعر شراء لكل صنف (من purchases_new) ومقارنته بالسعر الحالي
+    for item in items:
+        new_cost = float(item.get("cost_per_unit", 0) or 0)
+        if new_cost <= 0:
+            continue
+        iname = (item.get("name") or "").strip()
+        rm_id = item.get("raw_material_id") or request_items_by_name.get(iname)
+        # ابحث عن آخر فاتورة شراء تحتوي على هذا الصنف
+        match_query: Dict[str, Any] = {}
+        if tenant_id:
+            match_query["tenant_id"] = tenant_id
+        if rm_id:
+            match_query["items.raw_material_id"] = rm_id
+        else:
+            match_query["items.name"] = iname
+        last_inv = await db.purchases_new.find_one(
+            match_query, {"_id": 0}, sort=[("created_at", -1)]
+        )
+        if not last_inv:
+            continue
+        last_cost = 0.0
+        for li in (last_inv.get("items") or []):
+            if rm_id and li.get("raw_material_id") == rm_id:
+                last_cost = float(li.get("cost_per_unit", 0) or 0)
+                break
+            if (not rm_id) and (li.get("name") or "").strip() == iname:
+                last_cost = float(li.get("cost_per_unit", 0) or 0)
+                break
+        if last_cost <= 0:
+            continue
+        diff_pct = ((new_cost - last_cost) / last_cost) * 100.0
+        if diff_pct >= PRICE_INCREASE_THRESHOLD_PCT:
+            key = rm_id or iname
+            reason = (reasons_by_id.get(rm_id) if rm_id else None) or reasons_by_name.get(iname) or ""
+            reason = (reason or "").strip()
+            if not reason:
+                missing_justifications.append({
+                    "raw_material_id": rm_id,
+                    "name": iname,
+                    "new_cost": round(new_cost, 2),
+                    "last_cost": round(last_cost, 2),
+                    "diff_pct": round(diff_pct, 2),
+                })
+            else:
+                price_increase_log.append({
+                    "raw_material_id": rm_id,
+                    "name": iname,
+                    "new_cost": round(new_cost, 2),
+                    "last_cost": round(last_cost, 2),
+                    "diff_pct": round(diff_pct, 2),
+                    "reason": reason,
+                    "supplier_name": last_inv.get("supplier_name"),
+                    "last_invoice_number": last_inv.get("invoice_number"),
+                    "last_purchase_date": last_inv.get("created_at"),
+                })
+
+    if missing_justifications:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "code": "PRICE_INCREASE_REASON_REQUIRED",
+                "message": "يتطلب تبرير زيادة السعر +10% أو أكثر لبعض الأصناف",
+                "threshold_pct": PRICE_INCREASE_THRESHOLD_PCT,
+                "items_requiring_reason": missing_justifications,
+            },
+        )
+
     for item in items:
         item_dict = dict(item)
         item_dict["total_cost"] = float(item.get("quantity", 0)) * float(item.get("cost_per_unit", 0))
@@ -765,6 +839,7 @@ async def price_request_and_create_invoice(
         "status": "pending",
         "notes": payload.get("notes"),
         "linked_request_id": request_id,
+        "price_increase_log": price_increase_log,  # ⭐ سجل تبريرات زيادة السعر +10% للمراجعة
         "created_by": current_user.get("id"),
         "created_at": datetime.now(timezone.utc).isoformat(),
         "tenant_id": current_user.get("tenant_id"),
@@ -983,29 +1058,45 @@ async def get_inventory_movements(
 @router.post("/warehouse-purchase-requests/{request_id}/confirm-receipt")
 async def confirm_warehouse_receipt(
     request_id: str,
+    payload: Optional[dict] = None,
     current_user: dict = Depends(get_current_user)
 ):
-    """المخزن يؤكد استلام البضاعة → يُغلق الطلب نهائياً + يُضيف الكميات للمخزون.
-    
-    يستدعي نفس منطق /purchases-new/{id}/send-to-warehouse:
-    - يُحدّث raw_materials (كمية + متوسط تكلفة مرجح)
-    - يُنشئ مادة جديدة إن لم توجد
-    - يُحدّث حالة الفاتورة إلى sent_to_warehouse
+    """المخزن يؤكد استلام البضاعة → يُضيف الكميات للمخزون + يُنشئ حركة مخزن لكل فاتورة.
+
+    يدعم الفواتير الجزئية: لكل فاتورة شراء مرتبطة، يُنشئ حركة مخزن منفصلة + يُحدث حالة الفاتورة.
+    Body اختياري: { purchase_id: str } — لاستلام فاتورة واحدة فقط من بين عدة فواتير جزئية.
+    عند استلام كل الفواتير، يُغلق الطلب نهائياً (`received_by_warehouse`).
     """
     db = get_db()
     req = await db.warehouse_purchase_requests.find_one({"id": request_id})
     if not req:
         raise HTTPException(status_code=404, detail="الطلب غير موجود")
-    if req.get("status") != "priced_by_purchasing":
+    if req.get("status") not in ("priced_by_purchasing", "approved_by_owner"):
+        # نسمح بـ approved_by_owner لأنّ الطلب قد يكون مفتوحاً بسبب فواتير جزئية سابقة
         raise HTTPException(status_code=400, detail="الطلب غير جاهز للاستلام")
-    
-    purchase_id = req.get("purchase_invoice_id")
-    purchase = await db.purchases_new.find_one({"id": purchase_id}) if purchase_id else None
-    
+
+    # حدد قائمة الفواتير المراد استلامها
+    target_purchase_id = (payload or {}).get("purchase_id") if payload else None
+    all_invoice_ids = list(req.get("purchase_invoice_ids") or [])
+    if req.get("purchase_invoice_id") and req.get("purchase_invoice_id") not in all_invoice_ids:
+        all_invoice_ids.append(req.get("purchase_invoice_id"))
+    if not all_invoice_ids:
+        raise HTTPException(status_code=400, detail="لا توجد فواتير شراء مرتبطة بهذا الطلب")
+
+    invoice_ids_to_process = [target_purchase_id] if target_purchase_id else all_invoice_ids
+
     # إضافة المواد للمخزن (نفس منطق send-to-warehouse) — نظام طبقات FIFO
     movements_logged = 0
+    received_purchase_ids = []
     tenant_id = current_user.get("tenant_id")
-    if purchase and purchase.get("status") == "pending":
+    for purchase_id in invoice_ids_to_process:
+        purchase = await db.purchases_new.find_one({"id": purchase_id}) if purchase_id else None
+        if not purchase:
+            continue
+        if purchase.get("status") != "pending":
+            # هذه الفاتورة استُلمت سابقاً — تخطَّها
+            continue
+
         for item in purchase.get("items", []):
             item_qty = float(item.get("quantity", 0) or 0)
             item_cost = float(item.get("cost_per_unit", 0) or 0)
@@ -1091,8 +1182,8 @@ async def confirm_warehouse_receipt(
                     source_id=purchase_id,
                     source_number=str(purchase.get("purchase_number") or ""),
                 )
-            
-            # === تسجيل حركة دخول (IN) في inventory_movements ===
+
+            # === تسجيل حركة دخول (IN) في inventory_movements — منفصلة لكل فاتورة ===
             await db.inventory_movements.insert_one({
                 "id": str(uuid.uuid4()),
                 "type": "in",
@@ -1106,6 +1197,7 @@ async def confirm_warehouse_receipt(
                 "reference_type": "purchase_invoice",
                 "reference_id": purchase_id,
                 "reference_number": purchase.get("purchase_number"),
+                "invoice_image_url": purchase.get("invoice_image_url"),  # ⭐ صورة كل فاتورة منفصلة
                 "request_id": request_id,
                 "request_number": req.get("request_number"),
                 "supplier_name": purchase.get("supplier_name"),
@@ -1116,7 +1208,7 @@ async def confirm_warehouse_receipt(
                 "tenant_id": current_user.get("tenant_id"),
             })
             movements_logged += 1
-        
+
         # حدّث حالة الفاتورة
         await db.purchases_new.update_one(
             {"id": purchase_id},
@@ -1126,17 +1218,44 @@ async def confirm_warehouse_receipt(
                 "sent_to_warehouse_by": current_user.get("id"),
             }}
         )
-    
-    await db.warehouse_purchase_requests.update_one(
-        {"id": request_id},
-        {"$set": {
-            "status": "received_by_warehouse",
-            "warehouse_received_by": current_user.get("id"),
-            "warehouse_received_by_name": current_user.get("full_name") or current_user.get("username"),
-            "warehouse_received_at": datetime.now(timezone.utc).isoformat(),
-        }}
-    )
-    return {"message": "تم تأكيد الاستلام وإضافة المواد للمخزون", "request_id": request_id, "purchase_id": purchase_id}
+        received_purchase_ids.append(purchase_id)
+
+    # تحقق: هل استُلمت كل الفواتير المرتبطة؟
+    pending_invoices = await db.purchases_new.count_documents({
+        "id": {"$in": all_invoice_ids},
+        "status": "pending",
+    })
+
+    if pending_invoices == 0 and not (req.get("items") or []):
+        # كل الفواتير استُلمت ولا كميات متبقية في الطلب → أغلق نهائياً
+        await db.warehouse_purchase_requests.update_one(
+            {"id": request_id},
+            {"$set": {
+                "status": "received_by_warehouse",
+                "warehouse_received_by": current_user.get("id"),
+                "warehouse_received_by_name": current_user.get("full_name") or current_user.get("username"),
+                "warehouse_received_at": datetime.now(timezone.utc).isoformat(),
+            }}
+        )
+    elif pending_invoices == 0 and req.get("status") == "priced_by_purchasing":
+        # كل الفواتير استُلمت، الطلب كان priced_by_purchasing → أغلق
+        await db.warehouse_purchase_requests.update_one(
+            {"id": request_id},
+            {"$set": {
+                "status": "received_by_warehouse",
+                "warehouse_received_by": current_user.get("id"),
+                "warehouse_received_by_name": current_user.get("full_name") or current_user.get("username"),
+                "warehouse_received_at": datetime.now(timezone.utc).isoformat(),
+            }}
+        )
+
+    return {
+        "message": f"تم استلام {len(received_purchase_ids)} فاتورة وإضافة {movements_logged} حركة مخزن",
+        "request_id": request_id,
+        "received_purchase_ids": received_purchase_ids,
+        "movements_logged": movements_logged,
+        "pending_invoices_left": pending_invoices,
+    }
 
 
 @router.get("/warehouse-purchase-requests")

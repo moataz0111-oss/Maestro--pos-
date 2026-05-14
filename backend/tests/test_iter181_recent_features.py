@@ -351,6 +351,11 @@ class TestWarehousePurchaseRequestFlow:
             "payment_method": "cash",
             "payment_status": "paid",
             "notes": "TEST_iter181 invoice",
+            # provide reason in case price exceeds last-purchase by +10% (new validation)
+            "price_increase_reasons": {
+                "by_id": {rm["id"]: "TEST_regression_iter181"},
+                "by_name": {rm["name"]: "TEST_regression_iter181"},
+            },
         }
         r = api.post(
             f"{BASE_URL}/api/warehouse-purchase-requests/{req_id}/price-and-create-invoice",

@@ -116,6 +116,8 @@ export default function PurchasesPage() {
   
   const [filterStatus, setFilterStatus] = useState('all');
   const [uploadFile, setUploadFile] = useState(null);
+  // تبريرات زيادة السعر +10% (مطلوبة قبل الحفظ)
+  const [reasonsDialog, setReasonsDialog] = useState({ open: false, items: [], reasons: {} });
   const token = localStorage.getItem('token');
   const headers = { Authorization: `Bearer ${token}` };
   useEffect(() => {
@@ -441,15 +443,37 @@ export default function PurchasesPage() {
   }, [cameraStream]);
 
   // إنشاء فاتورة شراء
-  const handleCreatePurchase = async () => {
-    if (!purchaseForm.supplier_id || purchaseForm.items.length === 0) {
-      toast.error(t('الرجاء اختيار المورد وإضافة أصناف'));
-      return;
+  const PRICE_INCREASE_THRESHOLD_PCT = 10;
+
+  // أصناف ارتفعت أسعارها +10% أو أكثر مقارنةً بآخر شراء (تحتاج تبريراً)
+  const detectItemsNeedingReason = () => {
+    const flagged = [];
+    for (const it of purchaseForm.items) {
+      const lp = lookupLastPrice(it);
+      if (!lp) continue;
+      const newCost = parseFloat(it.cost_per_unit) || 0;
+      const lastCost = parseFloat(lp.cost) || 0;
+      if (lastCost <= 0 || newCost <= 0) continue;
+      const diffPct = ((newCost - lastCost) / lastCost) * 100;
+      if (diffPct >= PRICE_INCREASE_THRESHOLD_PCT) {
+        flagged.push({
+          raw_material_id: it.raw_material_id || null,
+          name: it.name,
+          new_cost: newCost,
+          last_cost: lastCost,
+          diff_pct: diffPct,
+          last_supplier: lp.supplier_name || '',
+          last_date: lp.date || null,
+        });
+      }
     }
-    
+    return flagged;
+  };
+
+  // تنفيذ الإرسال الفعلي (بعد جمع التبريرات إن لزم)
+  const submitPurchaseInvoice = async (reasonsPayload = null) => {
     setSubmitting(true);
     try {
-      // إذا كانت الفاتورة مرتبطة بطلب مخزن، استخدم المسار الذي يحدّث حالة الطلب أيضاً
       if (purchaseForm.request_id) {
         await axios.post(
           `${API}/warehouse-purchase-requests/${purchaseForm.request_id}/price-and-create-invoice`,
@@ -468,6 +492,7 @@ export default function PurchasesPage() {
             payment_status: purchaseForm.payment_status,
             notes: purchaseForm.notes,
             partial: !!purchaseForm.partial,
+            price_increase_reasons: reasonsPayload || undefined,
           },
           { headers }
         );
@@ -493,12 +518,55 @@ export default function PurchasesPage() {
         request_id: null,
         partial: false
       });
+      setReasonsDialog({ open: false, items: [], reasons: {} });
       fetchData();
     } catch (error) {
-      toast.error(error.response?.data?.detail || t('فشل في إنشاء الفاتورة'));
+      const detail = error.response?.data?.detail;
+      if (detail && typeof detail === 'object' && detail.code === 'PRICE_INCREASE_REASON_REQUIRED') {
+        // Backend ردّ بأن التبرير مطلوب — افتح الـ dialog
+        setReasonsDialog({
+          open: true,
+          items: detail.items_requiring_reason || [],
+          reasons: {}
+        });
+        toast.warning(t('يتطلب تبرير زيادة السعر لبعض الأصناف'));
+      } else {
+        toast.error(detail || t('فشل في إنشاء الفاتورة'));
+      }
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const handleCreatePurchase = async () => {
+    if (!purchaseForm.supplier_id || purchaseForm.items.length === 0) {
+      toast.error(t('الرجاء اختيار المورد وإضافة أصناف'));
+      return;
+    }
+    // فحص محلي لزيادة الأسعار +10% — افتح الـ dialog قبل الإرسال
+    const flagged = detectItemsNeedingReason();
+    if (flagged.length > 0) {
+      setReasonsDialog({ open: true, items: flagged, reasons: {} });
+      return;
+    }
+    await submitPurchaseInvoice(null);
+  };
+
+  // عند تأكيد التبريرات: حوّلها إلى by_id / by_name وأرسلها
+  const handleConfirmReasons = async () => {
+    const by_id = {};
+    const by_name = {};
+    for (const it of reasonsDialog.items) {
+      const key = it.raw_material_id || it.name;
+      const reason = (reasonsDialog.reasons[key] || '').trim();
+      if (!reason) {
+        toast.error(t('الرجاء كتابة سبب لكل صنف'));
+        return;
+      }
+      if (it.raw_material_id) by_id[it.raw_material_id] = reason;
+      else by_name[it.name] = reason;
+    }
+    await submitPurchaseInvoice({ by_id, by_name });
   };
   // رفع صورة الفاتورة
   const handleUploadInvoice = async (purchaseId) => {
@@ -1381,6 +1449,71 @@ export default function PurchasesPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      {/* Dialog: تبرير زيادة السعر +10% أو أكثر */}
+      <Dialog open={reasonsDialog.open} onOpenChange={(open) => setReasonsDialog(prev => ({ ...prev, open }))}>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto" data-testid="price-reasons-dialog">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-600">
+              <AlertCircle className="h-5 w-5" />
+              {t('تبرير زيادة السعر مطلوب')}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="rounded-md bg-amber-500/10 border border-amber-500/30 px-3 py-2 text-sm text-amber-700">
+              {t('الأصناف التالية ارتفعت أسعارها 10% أو أكثر مقارنةً بآخر شراء. يجب كتابة سبب واضح لكل صنف للحفاظ على سجل مراجعة شفاف.')}
+            </div>
+            {reasonsDialog.items.map((it) => {
+              const key = it.raw_material_id || it.name;
+              return (
+                <div key={key} className="border rounded-md p-3 bg-muted/20" data-testid={`reason-item-${key}`}>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="font-bold">{it.name}</span>
+                    <Badge className="bg-red-500/20 text-red-600 border border-red-500/40">
+                      ↑ {Math.round(it.diff_pct * 10) / 10}%
+                    </Badge>
+                  </div>
+                  <div className="text-xs text-muted-foreground mb-2 flex items-center gap-3 flex-wrap">
+                    <span>{t('السعر الحالي')}: <span className="font-bold text-red-600">{formatPrice(it.new_cost)}</span></span>
+                    <span>{t('آخر سعر')}: <span className="font-bold">{formatPrice(it.last_cost)}</span></span>
+                    {it.last_supplier && <span>· {t('المورد السابق')}: {it.last_supplier}</span>}
+                    {it.last_date && <span>· {new Date(it.last_date).toLocaleDateString('ar-EG')}</span>}
+                  </div>
+                  <Label className="text-xs mb-1 block">{t('السبب (مطلوب)')}:</Label>
+                  <Textarea
+                    rows={2}
+                    placeholder={t('مثال: ارتفاع عالمي للسلعة / تغيير مورد / موسم / فاتورة استعجال...')}
+                    value={reasonsDialog.reasons[key] || ''}
+                    onChange={(e) => setReasonsDialog(prev => ({
+                      ...prev,
+                      reasons: { ...prev.reasons, [key]: e.target.value }
+                    }))}
+                    data-testid={`reason-input-${key}`}
+                  />
+                </div>
+              );
+            })}
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setReasonsDialog({ open: false, items: [], reasons: {} })}
+              data-testid="reasons-cancel-btn"
+            >
+              {t('إلغاء')}
+            </Button>
+            <Button
+              onClick={handleConfirmReasons}
+              disabled={submitting}
+              className="bg-amber-600 hover:bg-amber-700"
+              data-testid="reasons-confirm-btn"
+            >
+              {submitting ? <RefreshCw className="h-4 w-4 animate-spin ml-2" /> : <CheckCircle className="h-4 w-4 ml-2" />}
+              {t('تأكيد التبريرات وحفظ الفاتورة')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Dialog: رفع صورة الفاتورة */}
       <Dialog open={!!showUploadDialog} onOpenChange={() => setShowUploadDialog(null)}>
         <DialogContent>
