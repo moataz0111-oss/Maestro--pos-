@@ -91,7 +91,8 @@ export default function PurchasesPage() {
     payment_method: 'cash',
     payment_status: 'paid',
     notes: '',
-    imagePreview: null
+    imagePreview: null,
+    request_id: null
   });
   
   const [supplierForm, setSupplierForm] = useState({
@@ -357,8 +358,32 @@ export default function PurchasesPage() {
     
     setSubmitting(true);
     try {
-      await axios.post(`${API}/purchases-new`, purchaseForm, { headers });
-      toast.success(t('تم إنشاء فاتورة الشراء بنجاح'));
+      // إذا كانت الفاتورة مرتبطة بطلب مخزن، استخدم المسار الذي يحدّث حالة الطلب أيضاً
+      if (purchaseForm.request_id) {
+        await axios.post(
+          `${API}/warehouse-purchase-requests/${purchaseForm.request_id}/price-and-create-invoice`,
+          {
+            supplier_id: purchaseForm.supplier_id,
+            invoice_number: purchaseForm.invoice_number,
+            items: purchaseForm.items.map(it => ({
+              raw_material_id: it.raw_material_id || null,
+              name: it.name,
+              quantity: parseFloat(it.quantity) || 0,
+              unit: it.unit,
+              cost_per_unit: parseFloat(it.cost_per_unit) || 0,
+            })),
+            total_amount: purchaseForm.total_amount,
+            payment_method: purchaseForm.payment_method,
+            payment_status: purchaseForm.payment_status,
+            notes: purchaseForm.notes,
+          },
+          { headers }
+        );
+        toast.success(t('تم تسعير الطلب وإنشاء فاتورة الشراء — أرسلها للمخزن'));
+      } else {
+        await axios.post(`${API}/purchases-new`, purchaseForm, { headers });
+        toast.success(t('تم إنشاء فاتورة الشراء بنجاح'));
+      }
       setShowPurchaseDialog(false);
       setPurchaseForm({
         supplier_id: '',
@@ -368,7 +393,8 @@ export default function PurchasesPage() {
         payment_method: 'cash',
         payment_status: 'paid',
         notes: '',
-        imagePreview: null
+        imagePreview: null,
+        request_id: null
       });
       fetchData();
     } catch (error) {
@@ -691,27 +717,131 @@ export default function PurchasesPage() {
                     {purchaseRequests.map(request => (
                       <div 
                         key={request.id} 
-                        className="p-4 border rounded-lg hover:bg-muted/50 transition-colors"
+                        className={`p-4 border rounded-lg transition-colors ${
+                          request.status === 'pending_owner_approval' ? 'border-amber-500 bg-amber-500/5' :
+                          request.status === 'approved_by_owner' ? 'border-orange-500 bg-orange-500/5' :
+                          request.status === 'priced_by_purchasing' ? 'border-blue-500 bg-blue-500/5' :
+                          request.status === 'received_by_warehouse' ? 'border-green-500 bg-green-500/5' :
+                          'hover:bg-muted/50'
+                        }`}
                       >
                         <div className="flex items-center justify-between mb-2">
                           <span className="font-bold">{t('طلب')} #{request.request_number}</span>
                           <Badge className={
+                            request.status === 'pending_owner_approval' ? 'bg-amber-500/20 text-amber-700' :
+                            request.status === 'approved_by_owner' ? 'bg-orange-500/20 text-orange-500' :
+                            request.status === 'priced_by_purchasing' ? 'bg-blue-500/20 text-blue-500' :
+                            request.status === 'received_by_warehouse' ? 'bg-green-500/20 text-green-500' :
                             request.status === 'pending' ? 'bg-yellow-500/20 text-yellow-500' :
                             request.status === 'approved' ? 'bg-blue-500/20 text-blue-500' :
                             request.status === 'purchased' ? 'bg-green-500/20 text-green-500' :
                             'bg-gray-500/20 text-gray-500'
                           }>
-                            {request.status === 'pending' ? t('قيد الانتظار') :
+                            {request.status === 'pending_owner_approval' ? t('بانتظار موافقة المالك') :
+                             request.status === 'approved_by_owner' ? t('معتمد — جاهز للتسعير') :
+                             request.status === 'priced_by_purchasing' ? t('تم التسعير — جاهز للاستلام') :
+                             request.status === 'received_by_warehouse' ? t('تم الاستلام نهائياً') :
+                             request.status === 'pending' ? t('قيد الانتظار') :
                              request.status === 'approved' ? t('تمت الموافقة') :
                              request.status === 'purchased' ? t('تم الشراء') : request.status}
                           </Badge>
                         </div>
-                        <div className="text-sm text-muted-foreground">
+                        <div className="text-sm text-muted-foreground mb-3">
                           {request.items?.map((item, idx) => (
                             <span key={idx} className="ml-2">
-                              {item.name} ({item.quantity} {item.unit})
+                              {item.material_name || item.name} ({item.quantity} {item.unit})
                             </span>
                           ))}
+                        </div>
+                        {request.owner_approved_by_name && (
+                          <p className="text-xs text-emerald-600 mb-2" data-testid={`request-${request.id}-approved-by`}>
+                            ✓ {t('معتمد من')}: {request.owner_approved_by_name}
+                          </p>
+                        )}
+                        {/* أزرار الإجراءات: موافقة + تحويل لفاتورة */}
+                        <div className="flex gap-2 flex-wrap">
+                          {request.status === 'pending_owner_approval' && (
+                            <>
+                              <Button
+                                size="sm"
+                                onClick={async () => {
+                                  try {
+                                    await axios.post(`${API}/warehouse-purchase-requests/${request.id}/approve`, {}, { headers });
+                                    toast.success(t('تمت الموافقة — أكمل بيانات الفاتورة الآن'));
+                                    setPurchaseForm(prev => ({
+                                      ...prev,
+                                      request_id: request.id,
+                                      invoice_number: '',
+                                      items: (request.items || []).map(item => ({
+                                        raw_material_id: item.raw_material_id || null,
+                                        name: item.material_name || item.name,
+                                        quantity: parseFloat(item.quantity) || 0,
+                                        unit: item.unit || 'كغم',
+                                        cost_per_unit: 0,
+                                        total_cost: 0,
+                                      })),
+                                      total_amount: 0,
+                                    }));
+                                    setShowPurchaseDialog(true);
+                                    fetchData();
+                                  } catch (err) {
+                                    toast.error(err?.response?.data?.detail || t('فشل الموافقة'));
+                                  }
+                                }}
+                                className="bg-emerald-500 hover:bg-emerald-600"
+                                data-testid={`pn-approve-request-${request.id}`}
+                              >
+                                <CheckCircle className="h-4 w-4 ml-2" />
+                                {t('موافقة وتحويل لفاتورة')}
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={async () => {
+                                  const reason = window.prompt(t('سبب الرفض (اختياري):'), '') || '';
+                                  try {
+                                    await axios.post(`${API}/warehouse-purchase-requests/${request.id}/reject`, { reason }, { headers });
+                                    toast.success(t('تم رفض الطلب'));
+                                    fetchData();
+                                  } catch (err) {
+                                    toast.error(err?.response?.data?.detail || t('فشل'));
+                                  }
+                                }}
+                                className="border-red-500/40 text-red-600 hover:bg-red-500/10"
+                                data-testid={`pn-reject-request-${request.id}`}
+                              >
+                                <X className="h-4 w-4 ml-2" />
+                                {t('رفض')}
+                              </Button>
+                            </>
+                          )}
+                          {request.status === 'approved_by_owner' && (
+                            <Button
+                              size="sm"
+                              onClick={() => {
+                                setPurchaseForm(prev => ({
+                                  ...prev,
+                                  request_id: request.id,
+                                  invoice_number: '',
+                                  items: (request.items || []).map(item => ({
+                                    raw_material_id: item.raw_material_id || null,
+                                    name: item.material_name || item.name,
+                                    quantity: parseFloat(item.quantity) || 0,
+                                    unit: item.unit || 'كغم',
+                                    cost_per_unit: 0,
+                                    total_cost: 0,
+                                  })),
+                                  total_amount: 0,
+                                }));
+                                setShowPurchaseDialog(true);
+                              }}
+                              className="bg-blue-500 hover:bg-blue-600"
+                              data-testid={`pn-price-request-${request.id}`}
+                            >
+                              <FileText className="h-4 w-4 ml-2" />
+                              {t('تسعير وإنشاء فاتورة')}
+                            </Button>
+                          )}
                         </div>
                       </div>
                     ))}
@@ -804,9 +934,16 @@ export default function PurchasesPage() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <ShoppingCart className="h-5 w-5 text-primary" />
-              إنشاء فاتورة شراء جديدة
+              {purchaseForm.request_id ? t('تسعير طلب مخزن — إنشاء فاتورة') : t('إنشاء فاتورة شراء جديدة')}
             </DialogTitle>
           </DialogHeader>
+          
+          {purchaseForm.request_id && (
+            <div className="rounded-md bg-emerald-500/10 border border-emerald-500/30 px-3 py-2 text-sm text-emerald-700 flex items-center gap-2" data-testid="linked-request-banner">
+              <CheckCircle className="h-4 w-4" />
+              {t('هذه الفاتورة مرتبطة بطلب مخزن. الكميات مُعبأة تلقائياً — أكمل المورد والأسعار فقط.')}
+            </div>
+          )}
           
           <div className="space-y-4">
             {/* قسم صورة الفاتورة */}
