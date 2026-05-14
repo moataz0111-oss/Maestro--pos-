@@ -3903,3 +3903,109 @@ async def waste_efficiency_report(
         },
     }
 
+
+
+
+# ==================== PURCHASE REQUEST AUTO-SUGGESTIONS ====================
+
+@router.post("/warehouse-purchase-requests/suggest-quantities")
+async def suggest_purchase_quantities(
+    payload: dict,
+    current_user: dict = Depends(get_current_user),
+):
+    """يقترح كميات شراء ذكية لمواد خام محددة بناءً على استهلاكها التاريخي.
+    
+    Body: { "material_ids": [str], "days": 30 (default), "coverage_days": 7 (default) }
+    """
+    db = get_db()
+    tenant_id = current_user.get("tenant_id")
+    
+    material_ids = payload.get("material_ids", []) or []
+    days = int(payload.get("days", 30) or 30)
+    coverage_days = int(payload.get("coverage_days", 7) or 7)
+    
+    if not material_ids:
+        return {"suggestions": []}
+    
+    period_start = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+    
+    OUTGOING_TYPES = [
+        "warehouse_to_manufacturing", "raw_material_to_manufacturing",
+        "manufacturing_transfer", "manufacturing_consumption",
+        "transfer_to_branch", "branch_request_fulfilled", "out",
+    ]
+    
+    suggestions = []
+    for mid in material_ids:
+        mq = {"id": mid}
+        if tenant_id:
+            mq["$or"] = [
+                {"tenant_id": tenant_id},
+                {"tenant_id": {"$exists": False}},
+                {"tenant_id": None},
+            ]
+        material = await db.raw_materials.find_one(mq, {"_id": 0})
+        if not material:
+            continue
+        
+        current_stock = float(material.get("quantity", 0) or 0)
+        min_qty = float(material.get("min_quantity", 0) or 0)
+        unit = material.get("unit", "")
+        
+        consumption_query = {
+            "material_id": mid,
+            "type": {"$in": OUTGOING_TYPES},
+            "created_at": {"$gte": period_start},
+        }
+        if tenant_id:
+            consumption_query["$or"] = [
+                {"tenant_id": tenant_id},
+                {"tenant_id": {"$exists": False}},
+                {"tenant_id": None},
+            ]
+        total_consumed = 0.0
+        async for m in db.inventory_movements.find(consumption_query, {"_id": 0, "quantity": 1}):
+            total_consumed += float(m.get("quantity", 0) or 0)
+        
+        daily_avg = total_consumed / days if days > 0 else 0
+        weekly_avg = daily_avg * 7
+        
+        target_stock = max(min_qty * 2, daily_avg * coverage_days * 2)
+        suggested = max(0.0, target_stock - current_stock)
+        
+        if suggested >= 100:
+            suggested = round(suggested / 10) * 10
+        elif suggested >= 10:
+            suggested = round(suggested / 5) * 5
+        else:
+            suggested = round(suggested, 2)
+        
+        if total_consumed == 0 and current_stock < min_qty:
+            suggested = max(suggested, round((min_qty * 2) - current_stock, 2))
+        
+        reason_parts = []
+        if daily_avg > 0:
+            reason_parts.append(f"متوسط الاستهلاك اليومي ≈ {daily_avg:.2f} {unit}")
+            reason_parts.append(f"الأسبوعي ≈ {weekly_avg:.1f} {unit}")
+        if current_stock <= min_qty:
+            reason_parts.append(f"⚠️ المتوفر ({current_stock:g}) ≤ الحد الأدنى ({min_qty:g})")
+        if not reason_parts:
+            reason_parts.append("لا يوجد استهلاك مسجل خلال الفترة")
+        
+        suggestions.append({
+            "raw_material_id": mid,
+            "name": material.get("name"),
+            "unit": unit,
+            "current_stock": round(current_stock, 2),
+            "min_quantity": round(min_qty, 2),
+            "total_consumed_period": round(total_consumed, 2),
+            "daily_avg": round(daily_avg, 2),
+            "weekly_avg": round(weekly_avg, 2),
+            "target_stock": round(target_stock, 2),
+            "suggested_qty": float(suggested),
+            "coverage_days": coverage_days,
+            "period_days": days,
+            "reason": " • ".join(reason_parts),
+        })
+    
+    return {"suggestions": suggestions}

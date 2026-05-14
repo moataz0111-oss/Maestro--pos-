@@ -26,6 +26,12 @@ Multi-tenant POS system with biometric integration (ZKTeco), thermal receipt pri
 - Reports filter by branch
 - Printers filter by branch in Settings
 
+## Smart Quantity Suggestion + Locked Unit (May 14, 2026)
+- **New endpoint** `POST /api/warehouse-purchase-requests/suggest-quantities` — analyzes last 30 days of outgoing movements per material, computes daily/weekly average consumption, target stock (max of min*2 or 2-week supply), and suggests purchase qty.
+- **New button** `✨ اقتراح ذكي` in purchase request modal — fills suggested quantities for all selected materials at once (still editable manually).
+- **Inline reasoning per item** showing: daily/weekly avg, current vs min stock warning, recommended qty.
+- **Unit field locked (read-only)**: `🔒 مرتبطة بالمخزن` badge — unit always comes from selected raw material, never editable, ensures consistency.
+
 ## Daily Stock Count History + Pattern Analysis (May 11, 2026)
 - **New component**: `StockCountHistoryDialog` — opens via "سجل الجرود" button next to "إدخال الجرد اليومي" in `مخزون الفروع` tab.
 - **Digital signature per count**: shows submitter name + submission timestamp for every past count.

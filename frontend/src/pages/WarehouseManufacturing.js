@@ -4015,16 +4015,56 @@ export default function WarehouseManufacturing() {
 
             {/* جدول الأصناف */}
             <div>
-              <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
                 <Label className="text-base font-bold">{t('الأصناف المطلوبة')}</Label>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setPurchaseRequestItems(prev => [...prev, { raw_material_id: '', name: '', quantity: 0, unit: 'kg', notes: '' }])}
-                  data-testid="pr-add-item-btn"
-                >
-                  <Plus className="h-3 w-3 ml-1" /> {t('إضافة صنف')}
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="border-purple-500/40 text-purple-600 hover:bg-purple-500/10"
+                    data-testid="pr-suggest-btn"
+                    onClick={async () => {
+                      const ids = purchaseRequestItems.filter(i => i.raw_material_id).map(i => i.raw_material_id);
+                      if (ids.length === 0) {
+                        toast.error(t('اختر مادة خام واحدة على الأقل أولاً'));
+                        return;
+                      }
+                      try {
+                        const res = await axios.post(`${API}/warehouse-purchase-requests/suggest-quantities`, {
+                          material_ids: ids,
+                          days: 30,
+                          coverage_days: 7,
+                        });
+                        const suggestions = res.data?.suggestions || [];
+                        const byId = {};
+                        suggestions.forEach(s => { byId[s.raw_material_id] = s; });
+                        const updated = purchaseRequestItems.map(it => {
+                          const s = byId[it.raw_material_id];
+                          if (!s) return it;
+                          return {
+                            ...it,
+                            quantity: s.suggested_qty,
+                            _suggestion: s,
+                          };
+                        });
+                        setPurchaseRequestItems(updated);
+                        toast.success(t('تم اقتراح الكميات بناءً على آخر 30 يوماً ✓'));
+                      } catch (_e) {
+                        toast.error(t('فشل اقتراح الكميات'));
+                      }
+                    }}
+                  >
+                    ✨ {t('اقتراح ذكي')}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setPurchaseRequestItems(prev => [...prev, { raw_material_id: '', name: '', quantity: 0, unit: 'kg', notes: '' }])}
+                    data-testid="pr-add-item-btn"
+                  >
+                    <Plus className="h-3 w-3 ml-1" /> {t('إضافة صنف')}
+                  </Button>
+                </div>
               </div>
               <div className="space-y-2">
                 {purchaseRequestItems.map((item, idx) => (
@@ -4078,25 +4118,20 @@ export default function WarehouseManufacturing() {
                       />
                     </div>
                     <div className="col-span-3">
-                      <Label className="text-xs">{t('الوحدة')}</Label>
-                      <Select
-                        value={item.unit}
-                        onValueChange={(val) => {
-                          const v = [...purchaseRequestItems];
-                          v[idx].unit = val;
-                          setPurchaseRequestItems(v);
-                        }}
-                      >
-                        <SelectTrigger><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="kg">{t('كجم')}</SelectItem>
-                          <SelectItem value="g">{t('جرام')}</SelectItem>
-                          <SelectItem value="liter">{t('لتر')}</SelectItem>
-                          <SelectItem value="piece">{t('قطعة')}</SelectItem>
-                          <SelectItem value="box">{t('كرتون')}</SelectItem>
-                          <SelectItem value="pack">{t('علبة')}</SelectItem>
-                        </SelectContent>
-                      </Select>
+                      <Label className="text-xs flex items-center gap-1">
+                        {t('الوحدة')}
+                        {item.raw_material_id && (
+                          <span className="text-[9px] text-emerald-600 bg-emerald-500/10 px-1 rounded">🔒 مرتبطة بالمخزن</span>
+                        )}
+                      </Label>
+                      <Input
+                        value={item.unit || ''}
+                        readOnly
+                        disabled
+                        className="bg-muted/50 cursor-not-allowed"
+                        placeholder={t('تُملأ تلقائياً')}
+                        data-testid={`pr-item-unit-${idx}`}
+                      />
                     </div>
                     <div className="col-span-1">
                       {purchaseRequestItems.length > 1 && (
@@ -4114,6 +4149,14 @@ export default function WarehouseManufacturing() {
                         </Button>
                       )}
                     </div>
+                    {item._suggestion && (
+                      <div className="col-span-12 -mt-1 text-[11px] p-2 rounded bg-purple-500/5 border border-purple-500/20" data-testid={`pr-item-suggestion-${idx}`}>
+                        <span className="text-purple-600 font-semibold">✨ {t('اقتراح ذكي')}:</span>{' '}
+                        <span className="text-muted-foreground">{item._suggestion.reason}</span>{' '}
+                        <span className="text-emerald-600">— {t('يُنصح بشراء')} <strong>{item._suggestion.suggested_qty.toLocaleString()}</strong> {item._suggestion.unit}</span>
+                        <span className="text-[10px] text-muted-foreground"> ({t('يمكنك التعديل يدوياً')})</span>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -4133,9 +4176,11 @@ export default function WarehouseManufacturing() {
                   toast.error(t('اختر مادة خام واحدة على الأقل بكمية صالحة'));
                   return;
                 }
+                // إزالة خاصية _suggestion من العناصر قبل الإرسال
+                const cleanItems = valid.map(({ _suggestion, ...rest }) => rest);
                 try {
                   await axios.post(`${API}/warehouse-purchase-requests`, {
-                    items: valid,
+                    items: cleanItems,
                     priority: purchaseRequestPriority,
                     notes: purchaseRequestNotes,
                   });
