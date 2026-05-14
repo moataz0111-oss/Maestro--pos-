@@ -780,17 +780,74 @@ async def price_request_and_create_invoice(
             {"$set": {"purchase_id": purchase_id}}
         )
     
-    # تحديث طلب المخزن
-    await db.warehouse_purchase_requests.update_one(
-        {"id": request_id},
-        {"$set": {
-            "status": "priced_by_purchasing",
-            "purchasing_handled_by": current_user.get("id"),
-            "purchasing_handled_by_name": current_user.get("full_name") or current_user.get("username"),
-            "purchasing_handled_at": datetime.now(timezone.utc).isoformat(),
-            "purchase_invoice_id": purchase_id,
-        }}
-    )
+    # تحديث طلب المخزن — يدعم الفواتير الجزئية
+    is_partial = bool(payload.get("partial"))
+    invoice_ids = list(req.get("purchase_invoice_ids") or [])
+    if req.get("purchase_invoice_id") and req.get("purchase_invoice_id") not in invoice_ids:
+        invoice_ids.append(req.get("purchase_invoice_id"))
+    invoice_ids.append(purchase_id)
+
+    if is_partial:
+        # نقص الكميات المشتراة من بنود الطلب (لإبقاء المتبقي مفتوحاً)
+        purchased_qty_by_key = {}
+        for it in items_with_totals:
+            rm_id = it.get("raw_material_id")
+            iname = (it.get("name") or "").strip()
+            key = rm_id or f"name::{iname}"
+            purchased_qty_by_key[key] = purchased_qty_by_key.get(key, 0.0) + float(it.get("quantity", 0) or 0)
+
+        updated_items = []
+        for ri in (req.get("items") or []):
+            rm_id = ri.get("raw_material_id")
+            iname = (ri.get("name") or "").strip()
+            key = rm_id or f"name::{iname}"
+            remaining = float(ri.get("quantity", 0) or 0) - purchased_qty_by_key.get(key, 0.0)
+            if remaining < 0:
+                remaining = 0.0
+            if remaining > 0:
+                new_ri = dict(ri)
+                new_ri["quantity"] = remaining
+                updated_items.append(new_ri)
+
+        if updated_items:
+            # ابقَ الطلب مفتوحاً (معتمد من المالك) للسماح بفواتير أخرى للباقي
+            await db.warehouse_purchase_requests.update_one(
+                {"id": request_id},
+                {"$set": {
+                    "status": "approved_by_owner",
+                    "items": updated_items,
+                    "purchasing_handled_by": current_user.get("id"),
+                    "purchasing_handled_by_name": current_user.get("full_name") or current_user.get("username"),
+                    "purchasing_handled_at": datetime.now(timezone.utc).isoformat(),
+                    "purchase_invoice_ids": invoice_ids,
+                    "last_partial_at": datetime.now(timezone.utc).isoformat(),
+                }}
+            )
+        else:
+            # لم يتبقَّ شيء — أغلق الطلب رسمياً
+            await db.warehouse_purchase_requests.update_one(
+                {"id": request_id},
+                {"$set": {
+                    "status": "priced_by_purchasing",
+                    "purchasing_handled_by": current_user.get("id"),
+                    "purchasing_handled_by_name": current_user.get("full_name") or current_user.get("username"),
+                    "purchasing_handled_at": datetime.now(timezone.utc).isoformat(),
+                    "purchase_invoice_id": purchase_id,
+                    "purchase_invoice_ids": invoice_ids,
+                }}
+            )
+    else:
+        await db.warehouse_purchase_requests.update_one(
+            {"id": request_id},
+            {"$set": {
+                "status": "priced_by_purchasing",
+                "purchasing_handled_by": current_user.get("id"),
+                "purchasing_handled_by_name": current_user.get("full_name") or current_user.get("username"),
+                "purchasing_handled_at": datetime.now(timezone.utc).isoformat(),
+                "purchase_invoice_id": purchase_id,
+                "purchase_invoice_ids": invoice_ids,
+            }}
+        )
     
     return {
         "message": "تم تسعير الطلب وإنشاء الفاتورة. أرفق صورة الفاتورة ثم أرسلها للمخزن.",
@@ -798,6 +855,7 @@ async def price_request_and_create_invoice(
         "purchase_number": purchase_number,
         "price_alerts": detected_alerts,  # تنبيهات الزيادة/النقصان (إن وُجدت)
         "price_alerts_count": len(detected_alerts),
+        "partial": is_partial,
     }
 
 

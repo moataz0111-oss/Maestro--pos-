@@ -70,6 +70,7 @@ export default function PurchasesPage() {
   const [purchases, setPurchases] = useState([]);
   const [suppliers, setSuppliers] = useState([]);
   const [purchaseRequests, setPurchaseRequests] = useState([]);
+  const [rawMaterials, setRawMaterials] = useState([]);
   
   // Dialog states
   const [showPurchaseDialog, setShowPurchaseDialog] = useState(false);
@@ -92,7 +93,8 @@ export default function PurchasesPage() {
     payment_status: 'paid',
     notes: '',
     imagePreview: null,
-    request_id: null
+    request_id: null,
+    partial: false
   });
   
   const [supplierForm, setSupplierForm] = useState({
@@ -121,15 +123,17 @@ export default function PurchasesPage() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [purchasesRes, suppliersRes, requestsRes] = await Promise.all([
+      const [purchasesRes, suppliersRes, requestsRes, materialsRes] = await Promise.all([
         axios.get(`${API}/purchases-new`, { headers }),
         axios.get(`${API}/suppliers`, { headers }),
-        axios.get(`${API}/warehouse-purchase-requests`, { headers })
+        axios.get(`${API}/warehouse-purchase-requests`, { headers }),
+        axios.get(`${API}/raw-materials`, { headers }).catch(() => ({ data: [] }))
       ]);
       
       setPurchases(purchasesRes.data || []);
       setSuppliers(suppliersRes.data || []);
       setPurchaseRequests(requestsRes.data || []);
+      setRawMaterials(materialsRes.data || []);
     } catch (error) {
       console.error('Error fetching data:', error);
       // إذا كان خطأ 404، هذا يعني أن الـ API لم يتم تحميله بعد
@@ -139,6 +143,54 @@ export default function PurchasesPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  // ابحث عن آخر سعر للمادة الخام (cost_per_unit) لملء الفاتورة تلقائياً
+  const lookupLastCost = (item) => {
+    if (!rawMaterials || rawMaterials.length === 0) return 0;
+    if (item.raw_material_id) {
+      const m = rawMaterials.find(r => r.id === item.raw_material_id);
+      if (m) return parseFloat(m.cost_per_unit || 0);
+    }
+    const targetName = (item.material_name || item.name || '').trim();
+    if (targetName) {
+      const m = rawMaterials.find(r => (r.name || '').trim() === targetName);
+      if (m) return parseFloat(m.cost_per_unit || 0);
+    }
+    return 0;
+  };
+
+  // بناء أصناف الفاتورة من طلب مخزن مع ملء الأسعار تلقائياً من المخزن
+  const buildItemsFromRequest = (request) => {
+    return (request.items || []).map(item => {
+      const lastCost = lookupLastCost(item);
+      const qty = parseFloat(item.quantity) || 0;
+      return {
+        raw_material_id: item.raw_material_id || null,
+        name: item.material_name || item.name,
+        quantity: qty,
+        unit: item.unit || 'كغم',
+        cost_per_unit: lastCost,
+        total_cost: qty * lastCost,
+      };
+    });
+  };
+
+  // تحديث صنف في purchaseForm.items وإعادة حساب الإجمالي
+  const updatePurchaseItem = (index, field, value) => {
+    setPurchaseForm(prev => {
+      const items = [...prev.items];
+      const it = { ...items[index] };
+      if (field === 'quantity' || field === 'cost_per_unit') {
+        it[field] = parseFloat(value) || 0;
+        it.total_cost = (parseFloat(it.quantity) || 0) * (parseFloat(it.cost_per_unit) || 0);
+      } else {
+        it[field] = value;
+      }
+      items[index] = it;
+      const total_amount = items.reduce((sum, x) => sum + (parseFloat(x.total_cost) || 0), 0);
+      return { ...prev, items, total_amount };
+    });
   };
   // إضافة مورد جديد
   const handleAddSupplier = async (e) => {
@@ -376,10 +428,15 @@ export default function PurchasesPage() {
             payment_method: purchaseForm.payment_method,
             payment_status: purchaseForm.payment_status,
             notes: purchaseForm.notes,
+            partial: !!purchaseForm.partial,
           },
           { headers }
         );
-        toast.success(t('تم تسعير الطلب وإنشاء فاتورة الشراء — أرسلها للمخزن'));
+        toast.success(
+          purchaseForm.partial
+            ? t('فاتورة جزئية مُنشأة — الطلب لا يزال مفتوحاً للباقي')
+            : t('تم تسعير الطلب وإنشاء فاتورة الشراء — أرسلها للمخزن')
+        );
       } else {
         await axios.post(`${API}/purchases-new`, purchaseForm, { headers });
         toast.success(t('تم إنشاء فاتورة الشراء بنجاح'));
@@ -394,7 +451,8 @@ export default function PurchasesPage() {
         payment_status: 'paid',
         notes: '',
         imagePreview: null,
-        request_id: null
+        request_id: null,
+        partial: false
       });
       fetchData();
     } catch (error) {
@@ -768,19 +826,14 @@ export default function PurchasesPage() {
                                   try {
                                     await axios.post(`${API}/warehouse-purchase-requests/${request.id}/approve`, {}, { headers });
                                     toast.success(t('تمت الموافقة — أكمل بيانات الفاتورة الآن'));
+                                    const items = buildItemsFromRequest(request);
+                                    const total = items.reduce((s, x) => s + (x.total_cost || 0), 0);
                                     setPurchaseForm(prev => ({
                                       ...prev,
                                       request_id: request.id,
                                       invoice_number: '',
-                                      items: (request.items || []).map(item => ({
-                                        raw_material_id: item.raw_material_id || null,
-                                        name: item.material_name || item.name,
-                                        quantity: parseFloat(item.quantity) || 0,
-                                        unit: item.unit || 'كغم',
-                                        cost_per_unit: 0,
-                                        total_cost: 0,
-                                      })),
-                                      total_amount: 0,
+                                      items,
+                                      total_amount: total,
                                     }));
                                     setShowPurchaseDialog(true);
                                     fetchData();
@@ -819,19 +872,14 @@ export default function PurchasesPage() {
                             <Button
                               size="sm"
                               onClick={() => {
+                                const items = buildItemsFromRequest(request);
+                                const total = items.reduce((s, x) => s + (x.total_cost || 0), 0);
                                 setPurchaseForm(prev => ({
                                   ...prev,
                                   request_id: request.id,
                                   invoice_number: '',
-                                  items: (request.items || []).map(item => ({
-                                    raw_material_id: item.raw_material_id || null,
-                                    name: item.material_name || item.name,
-                                    quantity: parseFloat(item.quantity) || 0,
-                                    unit: item.unit || 'كغم',
-                                    cost_per_unit: 0,
-                                    total_cost: 0,
-                                  })),
-                                  total_amount: 0,
+                                  items,
+                                  total_amount: total,
                                 }));
                                 setShowPurchaseDialog(true);
                               }}
@@ -1135,28 +1183,68 @@ export default function PurchasesPage() {
               </div>
             </div>
             
-            {/* قائمة الأصناف */}
+            {/* قائمة الأصناف — قابلة للتعديل (الكمية + السعر) */}
             {purchaseForm.items.length > 0 && (
               <div className="border rounded-lg overflow-hidden">
-                <div className="bg-muted/50 px-3 py-2 font-medium text-sm">
-                  الأصناف ({purchaseForm.items.length})
+                <div className="bg-muted/50 px-3 py-2 font-medium text-sm flex items-center justify-between">
+                  <span>{t('الأصناف')} ({purchaseForm.items.length})</span>
+                  {purchaseForm.request_id && (
+                    <span className="text-xs text-muted-foreground">
+                      {t('عدّل الكمية أو السعر — يمكنك تخفيض كميات أصناف وشراء الباقي بفاتورة لاحقة')}
+                    </span>
+                  )}
                 </div>
                 <div className="divide-y">
+                  {/* Header */}
+                  <div className="hidden md:grid md:grid-cols-12 gap-2 px-3 py-1 bg-muted/30 text-xs font-medium text-muted-foreground">
+                    <div className="md:col-span-4">{t('الصنف')}</div>
+                    <div className="md:col-span-2 text-center">{t('الكمية')}</div>
+                    <div className="md:col-span-1 text-center">{t('الوحدة')}</div>
+                    <div className="md:col-span-2 text-center">{t('السعر/وحدة')}</div>
+                    <div className="md:col-span-2 text-center">{t('الإجمالي')}</div>
+                    <div className="md:col-span-1"></div>
+                  </div>
                   {purchaseForm.items.map((item, index) => (
-                    <div key={index} className="px-3 py-2 flex items-center justify-between">
-                      <div>
-                        <span className="font-medium">{item.name}</span>
-                        <span className="text-muted-foreground text-sm mr-2">
-                          ({item.quantity} {item.unit} × {formatPrice(item.cost_per_unit)})
-                        </span>
+                    <div key={index} className="grid grid-cols-12 gap-2 px-3 py-2 items-center" data-testid={`purchase-item-row-${index}`}>
+                      <div className="col-span-12 md:col-span-4 font-medium text-sm truncate">
+                        {item.name}
                       </div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold text-primary">{formatPrice(item.total_cost)}</span>
+                      <div className="col-span-4 md:col-span-2">
+                        <Input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          value={item.quantity}
+                          onChange={(e) => updatePurchaseItem(index, 'quantity', e.target.value)}
+                          className="h-8 text-sm text-center"
+                          data-testid={`purchase-item-qty-${index}`}
+                        />
+                      </div>
+                      <div className="col-span-2 md:col-span-1 text-xs text-muted-foreground text-center">
+                        {item.unit}
+                      </div>
+                      <div className="col-span-4 md:col-span-2">
+                        <Input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          value={item.cost_per_unit}
+                          onChange={(e) => updatePurchaseItem(index, 'cost_per_unit', e.target.value)}
+                          className="h-8 text-sm text-center"
+                          placeholder={t('السعر')}
+                          data-testid={`purchase-item-price-${index}`}
+                        />
+                      </div>
+                      <div className="col-span-1 md:col-span-2 text-sm font-bold text-primary text-center" data-testid={`purchase-item-total-${index}`}>
+                        {formatPrice(item.total_cost)}
+                      </div>
+                      <div className="col-span-1 flex justify-end">
                         <Button
                           variant="ghost"
                           size="icon"
                           className="h-7 w-7 text-destructive"
                           onClick={() => removeItemFromPurchase(index)}
+                          data-testid={`purchase-item-remove-${index}`}
                         >
                           <X className="h-4 w-4" />
                         </Button>
@@ -1166,7 +1254,7 @@ export default function PurchasesPage() {
                 </div>
                 <div className="bg-primary/10 px-3 py-2 flex justify-between items-center">
                   <span className="font-medium">{t('الإجمالي:')}</span>
-                  <span className="font-bold text-lg text-primary">{formatPrice(purchaseForm.total_amount)}</span>
+                  <span className="font-bold text-lg text-primary" data-testid="purchase-total-amount">{formatPrice(purchaseForm.total_amount)}</span>
                 </div>
               </div>
             )}
@@ -1181,6 +1269,25 @@ export default function PurchasesPage() {
                 rows={2}
               />
             </div>
+
+            {/* فاتورة جزئية — فقط عند ربط الفاتورة بطلب مخزن */}
+            {purchaseForm.request_id && (
+              <label className="flex items-start gap-3 rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2 cursor-pointer" data-testid="partial-invoice-toggle">
+                <input
+                  type="checkbox"
+                  checked={!!purchaseForm.partial}
+                  onChange={(e) => setPurchaseForm(prev => ({ ...prev, partial: e.target.checked }))}
+                  className="mt-0.5 h-4 w-4 cursor-pointer accent-amber-600"
+                  data-testid="partial-invoice-checkbox"
+                />
+                <div className="flex-1 text-sm">
+                  <div className="font-medium text-amber-700">{t('فاتورة جزئية — أبقِ الطلب مفتوحاً لشراء الباقي')}</div>
+                  <div className="text-xs text-muted-foreground mt-0.5">
+                    {t('فعّل هذا الخيار إذا كنت تشتري جزءاً فقط الآن. ستُخصم الكميات المُشتراة من الطلب، ويبقى المتبقي متاحاً لفاتورة لاحقة.')}
+                  </div>
+                </div>
+              </label>
+            )}
           </div>
           
           <DialogFooter>
