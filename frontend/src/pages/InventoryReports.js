@@ -48,6 +48,7 @@ import {
   TabsList,
   TabsTrigger,
 } from '../components/ui/tabs';
+import MonthlyStocktakeHistory from '../components/MonthlyStocktakeHistory';
 const API = API_URL;
 export default function InventoryReports() {
   const navigate = useNavigate();
@@ -331,7 +332,7 @@ export default function InventoryReports() {
         </div>
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid grid-cols-4 w-full max-w-2xl">
+          <TabsList className="grid grid-cols-5 w-full max-w-3xl">
             <TabsTrigger value="overview" className="gap-2" data-testid="tab-overview">
               <PieChart className="h-4 w-4" />
               {t('نظرة عامة')}
@@ -347,6 +348,10 @@ export default function InventoryReports() {
             <TabsTrigger value="branches" className="gap-2" data-testid="tab-branches">
               <Building2 className="h-4 w-4" />
               {t('الفروع')}
+            </TabsTrigger>
+            <TabsTrigger value="stocktake" className="gap-2" data-testid="tab-stocktake">
+              <Package className="h-4 w-4" />
+              {t('الجرود الشهرية')}
             </TabsTrigger>
           </TabsList>
           {/* نظرة عامة */}
@@ -702,6 +707,10 @@ export default function InventoryReports() {
                 </div>
               </CardContent>
             </Card>
+          </TabsContent>
+          {/* الجرود الشهرية */}
+          <TabsContent value="stocktake" className="space-y-4">
+            <MonthlyStocktakeHistory />
           </TabsContent>
         </Tabs>
       </main>

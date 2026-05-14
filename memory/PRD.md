@@ -26,6 +26,15 @@ Multi-tenant POS system with biometric integration (ZKTeco), thermal receipt pri
 - Reports filter by branch
 - Printers filter by branch in Settings
 
+## Monthly Department Stocktake (May 14, 2026)
+- **New backend module**: `/app/backend/routes/department_stock_count.py` with endpoints `is-due`, `template`, `submit`, `history`.
+- **Covers 3 departments**: `manufacturing` (manufacturing_inventory), `warehouse_raw` (raw_materials), `packaging` (packaging_materials).
+- **Auto-visibility window**: button shows only days 25 to end-of-month, then disappears on day 1 of new month.
+- **Stocktake variance** auto-saves as `inventory_movements` with type `stocktake_variance` (is_loss/is_surplus flags).
+- **Frontend**:
+  - `MonthlyStocktakeButton` component placed in 3 tabs (التصنيع, المخزن, الورقيات) of WarehouseManufacturing page.
+  - `MonthlyStocktakeHistory` component as new "الجرود الشهرية" tab in InventoryReports page — shows filter cards per department + expandable details per stocktake.
+
 ## Smart Stockout Prediction (May 14, 2026)
 - **New endpoint** `GET /api/raw-materials/stockout-predictions` — calculates daily consumption from last 30 days of outgoing movements; predicts stockout date for each raw material.
 - **Status classification**: out_of_stock | critical (≤3 days) | warning (≤7 days) | safe | no_consumption.

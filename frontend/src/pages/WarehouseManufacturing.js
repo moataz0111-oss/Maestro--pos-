@@ -68,6 +68,7 @@ import {
   TabsTrigger,
 } from '../components/ui/tabs';
 import StockoutPredictionDialog, { StockoutPredictionBanner } from '../components/StockoutPrediction';
+import { MonthlyStocktakeButton } from '../components/MonthlyStocktake';
 const API = API_URL;
 export default function WarehouseManufacturing() {
   const navigate = useNavigate();
@@ -1273,8 +1274,13 @@ export default function WarehouseManufacturing() {
           </TabsList>
           {/* المخزن (المواد الخام) */}
           <TabsContent value="warehouse" className="space-y-4">
-            {/* بانر التنبؤ بالنفاد */}
-            <StockoutPredictionBanner onOpenDetails={() => setShowStockoutDialog(true)} />
+            {/* بانر التنبؤ بالنفاد + زر الجرد الشهري */}
+            <div className="flex items-start gap-2 flex-wrap">
+              <div className="flex-1 min-w-[300px]">
+                <StockoutPredictionBanner onOpenDetails={() => setShowStockoutDialog(true)} />
+              </div>
+              <MonthlyStocktakeButton department="warehouse_raw" />
+            </div>
             
             {/* زر طلب شراء جديد */}
             {(isAdmin || isWarehouseKeeper) && (
@@ -1731,6 +1737,10 @@ export default function WarehouseManufacturing() {
           
           {/* الورقيات/التغليف */}
           <TabsContent value="packaging" className="space-y-4">
+            {/* زر الجرد الشهري */}
+            <div className="flex justify-end">
+              <MonthlyStocktakeButton department="packaging" />
+            </div>
             {/* زر إضافة مادة تغليف جديدة */}
             <Card className="border-amber-500/30 bg-amber-500/5">
               <CardContent className="p-4">
@@ -1890,6 +1900,10 @@ export default function WarehouseManufacturing() {
           
           {/* التصنيع */}
           <TabsContent value="manufacturing" className="space-y-4">
+            {/* زر الجرد الشهري */}
+            <div className="flex justify-end">
+              <MonthlyStocktakeButton department="manufacturing" />
+            </div>
             {/* زر طلب مواد من المخزن */}
             <Card className="border-orange-500/30 bg-orange-500/5">
               <CardContent className="p-4">
