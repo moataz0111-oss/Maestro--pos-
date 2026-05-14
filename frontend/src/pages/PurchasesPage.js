@@ -543,6 +543,22 @@ export default function PurchasesPage() {
       toast.error(t('الرجاء اختيار المورد وإضافة أصناف'));
       return;
     }
+    // إذا حُذفت أصناف من الطلب الأصلي، فعّل تلقائياً وضع "فاتورة جزئية" لحماية البيانات
+    if (purchaseForm.request_id && !purchaseForm.partial) {
+      const origReq = purchaseRequests.find(r => r.id === purchaseForm.request_id);
+      const origCount = origReq?.items?.length || 0;
+      if (origCount > purchaseForm.items.length) {
+        const ok = window.confirm(
+          t('لقد حذفت بعض الأصناف من الطلب الأصلي. هل تريد تفعيل وضع "فاتورة جزئية" للحفاظ على الأصناف المحذوفة وشرائها لاحقاً من مورد آخر؟')
+        );
+        if (ok) {
+          setPurchaseForm(prev => ({ ...prev, partial: true }));
+          // re-trigger after state update via microtask
+          setTimeout(() => handleCreatePurchase(), 50);
+          return;
+        }
+      }
+    }
     // فحص محلي لزيادة الأسعار +10% — افتح الـ dialog قبل الإرسال
     const flagged = detectItemsNeedingReason();
     if (flagged.length > 0) {
@@ -1110,12 +1126,27 @@ export default function PurchasesPage() {
             </DialogTitle>
           </DialogHeader>
           
-          {purchaseForm.request_id && (
-            <div className="rounded-md bg-emerald-500/10 border border-emerald-500/30 px-3 py-2 text-sm text-emerald-700 flex items-center gap-2" data-testid="linked-request-banner">
-              <CheckCircle className="h-4 w-4" />
-              {t('هذه الفاتورة مرتبطة بطلب مخزن. الكميات مُعبأة تلقائياً — أكمل المورد والأسعار فقط.')}
-            </div>
-          )}
+          {purchaseForm.request_id && (() => {
+            const totalItemsCount = purchaseRequests.find(r => r.id === purchaseForm.request_id)?.items?.length || 0;
+            const selectedCount = purchaseForm.items.length;
+            const someRemoved = selectedCount < totalItemsCount;
+            return (
+              <>
+                <div className="rounded-md bg-emerald-500/10 border border-emerald-500/30 px-3 py-2 text-sm text-emerald-700 flex items-center gap-2" data-testid="linked-request-banner">
+                  <CheckCircle className="h-4 w-4" />
+                  {t('هذه الفاتورة مرتبطة بطلب مخزن. الكميات مُعبأة تلقائياً — أكمل المورد والأسعار فقط.')}
+                </div>
+                <div className="rounded-md bg-blue-500/10 border border-blue-500/30 px-3 py-2 text-sm text-blue-700">
+                  💡 <strong>{t('نصيحة')}:</strong> {t('يمكنك تجزئة الطلب على عدة موردين أو فئات (مجمدات / خضروات...) — احذف الأصناف التي ستشتريها لاحقاً بواسطة زر ❌، ثم فعّل')} <strong>{t('فاتورة جزئية')}</strong> {t('لإبقاء الباقي مفتوحاً لفاتورة أخرى بمورد آخر.')}
+                </div>
+                {someRemoved && (
+                  <div className="rounded-md bg-amber-500/15 border border-amber-500/40 px-3 py-2 text-sm text-amber-700 flex items-center gap-2" data-testid="items-removed-hint">
+                    ⚠️ <span>{t('اخترتَ')} <strong>{selectedCount}</strong> {t('من أصل')} <strong>{totalItemsCount}</strong> {t('صنف. سيتم الاحتفاظ بالأصناف المحذوفة في الطلب لفاتورة لاحقة (تأكد من تفعيل فاتورة جزئية).')}</span>
+                  </div>
+                )}
+              </>
+            );
+          })()}
           
           <div className="space-y-4">
             {/* قسم صورة الفاتورة */}

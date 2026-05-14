@@ -1467,6 +1467,111 @@ async def get_raw_materials(current_user: dict = Depends(get_current_user)):
     
     return materials
 
+@router.get("/reports/price-increases")
+async def get_price_increase_report(
+    days: int = 30,
+    material_id: Optional[str] = None,
+    supplier_id: Optional[str] = None,
+    min_pct: float = 10.0,
+    current_user: dict = Depends(get_current_user),
+):
+    """تقرير تبريرات زيادة أسعار الشراء +N% خلال آخر X يوم.
+
+    يجمع كل سجلات `price_increase_log` من فواتير `purchases_new` ضمن النطاق المحدد.
+    يدعم الفلترة بالمادة الخام، المورد، ونسبة الزيادة الأدنى.
+    """
+    db = get_db()
+    tenant_id = get_user_tenant_id(current_user)
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=max(1, int(days)))).isoformat()
+
+    query: Dict[str, Any] = {
+        "price_increase_log": {"$exists": True, "$ne": []},
+        "created_at": {"$gte": cutoff},
+    }
+    if tenant_id:
+        query["tenant_id"] = tenant_id
+    if supplier_id:
+        query["supplier_id"] = supplier_id
+
+    rows: List[Dict[str, Any]] = []
+    summary_by_supplier: Dict[str, Dict[str, Any]] = {}
+    summary_by_material: Dict[str, Dict[str, Any]] = {}
+
+    async for inv in db.purchases_new.find(query, {"_id": 0}).sort([("created_at", -1)]).limit(2000):
+        for entry in (inv.get("price_increase_log") or []):
+            diff_pct = float(entry.get("diff_pct") or 0)
+            if diff_pct < min_pct:
+                continue
+            if material_id and entry.get("raw_material_id") != material_id:
+                continue
+            old_c = float(entry.get("last_cost") or 0)
+            new_c = float(entry.get("new_cost") or 0)
+            # نحتاج إلى quantity لاحتساب القيمة المالية للزيادة
+            qty = 0.0
+            for it in (inv.get("items") or []):
+                if entry.get("raw_material_id") and it.get("raw_material_id") == entry.get("raw_material_id"):
+                    qty = float(it.get("quantity") or 0)
+                    break
+                if (not entry.get("raw_material_id")) and (it.get("name") or "").strip() == entry.get("name"):
+                    qty = float(it.get("quantity") or 0)
+                    break
+            cost_impact = (new_c - old_c) * qty
+
+            row = {
+                "invoice_id": inv.get("id"),
+                "invoice_number": inv.get("invoice_number"),
+                "invoice_date": inv.get("created_at"),
+                "supplier_id": inv.get("supplier_id"),
+                "supplier_name": inv.get("supplier_name"),
+                "purchaser_name": inv.get("created_by_name") or "",
+                "raw_material_id": entry.get("raw_material_id"),
+                "material_name": entry.get("name"),
+                "old_cost": round(old_c, 2),
+                "new_cost": round(new_c, 2),
+                "diff_pct": round(diff_pct, 2),
+                "quantity": qty,
+                "cost_impact": round(cost_impact, 2),
+                "reason": entry.get("reason") or "",
+                "last_supplier_name": entry.get("supplier_name") or "",
+                "last_invoice_number": entry.get("last_invoice_number") or "",
+                "last_purchase_date": entry.get("last_purchase_date"),
+            }
+            rows.append(row)
+
+            # تجميع حسب المورد
+            sup_key = inv.get("supplier_id") or "unknown"
+            s = summary_by_supplier.setdefault(sup_key, {
+                "supplier_id": sup_key,
+                "supplier_name": inv.get("supplier_name") or "غير محدد",
+                "count": 0, "avg_pct": 0.0, "total_impact": 0.0,
+            })
+            s["count"] += 1
+            s["avg_pct"] = ((s["avg_pct"] * (s["count"] - 1)) + diff_pct) / s["count"]
+            s["total_impact"] += cost_impact
+
+            # تجميع حسب المادة
+            mat_key = entry.get("raw_material_id") or entry.get("name") or "unknown"
+            m = summary_by_material.setdefault(mat_key, {
+                "raw_material_id": entry.get("raw_material_id"),
+                "material_name": entry.get("name") or "غير محدد",
+                "count": 0, "max_pct": 0.0, "total_impact": 0.0,
+            })
+            m["count"] += 1
+            if diff_pct > m["max_pct"]:
+                m["max_pct"] = diff_pct
+            m["total_impact"] += cost_impact
+
+    total_impact = round(sum(r["cost_impact"] for r in rows), 2)
+    return {
+        "rows": rows,
+        "total_rows": len(rows),
+        "total_cost_impact": total_impact,
+        "by_supplier": sorted(summary_by_supplier.values(), key=lambda x: -x["total_impact"]),
+        "by_material": sorted(summary_by_material.values(), key=lambda x: -x["total_impact"]),
+        "filters": {"days": days, "min_pct": min_pct, "material_id": material_id, "supplier_id": supplier_id},
+    }
+
+
 @router.post("/raw-materials/last-purchase-prices")
 async def get_last_purchase_prices(payload: dict, current_user: dict = Depends(get_current_user)):
     """جلب آخر سعر شراء + التاريخ + اسم المورد لكل مادة خام.

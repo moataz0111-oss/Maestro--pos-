@@ -72,6 +72,7 @@ const DriverApp = lazy(() => import("./pages/DriverApp"));
 const InventoryReports = lazy(() => import("./pages/InventoryReports"));
 const SystemContact = lazy(() => import("./pages/SystemContact"));
 const BreakEvenReport = lazy(() => import("./pages/BreakEvenReport"));
+const PriceIncreaseReport = lazy(() => import("./pages/PriceIncreaseReport"));
 const OwnerWallet = lazy(() => import("./pages/OwnerWallet"));
 const ExternalBranchesManagement = lazy(() => import("./pages/ExternalBranchesManagement"));
 
@@ -517,6 +518,15 @@ function AppRoutes() {
         element={
           <ProtectedRoute>
             <InventoryReports />
+          </ProtectedRoute>
+        } 
+      />
+      {/* تقرير زيادة أسعار الشراء */}
+      <Route 
+        path="/reports/price-increases" 
+        element={
+          <ProtectedRoute>
+            <PriceIncreaseReport />
           </ProtectedRoute>
         } 
       />

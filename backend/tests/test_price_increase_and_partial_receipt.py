@@ -193,7 +193,43 @@ class TestPriceIncreaseJustification:
         assert r.status_code == 200, r.text
 
 
-class TestMultiInvoiceReceipt:
+class TestPriceIncreaseReportEndpoint:
+    def test_report_returns_structure_and_rows(self, auth, material, supplier):
+        # Ensure there's at least one priced invoice with a reason (from prior tests)
+        r = requests.get(
+            f"{BASE_URL}/api/reports/price-increases?days=30&min_pct=10",
+            headers=auth, timeout=20,
+        )
+        assert r.status_code == 200, r.text
+        data = r.json()
+        assert "rows" in data and "total_rows" in data and "total_cost_impact" in data
+        assert "by_supplier" in data and "by_material" in data
+        # Each row carries the audit fields
+        if data["rows"]:
+            row = data["rows"][0]
+            for field in ("material_name", "old_cost", "new_cost", "diff_pct", "reason", "supplier_name", "invoice_number", "cost_impact"):
+                assert field in row, f"missing {field} in row"
+            assert row["diff_pct"] >= 10.0
+
+    def test_report_filter_by_supplier(self, auth, supplier):
+        r = requests.get(
+            f"{BASE_URL}/api/reports/price-increases?days=30&supplier_id={supplier['id']}",
+            headers=auth, timeout=20,
+        )
+        assert r.status_code == 200
+        data = r.json()
+        for row in data["rows"]:
+            assert row["supplier_id"] == supplier["id"]
+
+    def test_report_filter_by_min_pct(self, auth):
+        r = requests.get(
+            f"{BASE_URL}/api/reports/price-increases?days=30&min_pct=100",
+            headers=auth, timeout=20,
+        )
+        assert r.status_code == 200
+        for row in r.json()["rows"]:
+            assert row["diff_pct"] >= 100.0
+
     def test_partial_then_full_receipt_creates_separate_movements(self, auth, material, supplier):
         """End-to-end: 1 request → 2 partial invoices → confirm receipt processes both."""
         req_id = _create_and_approve_request(auth, material, qty=20)
