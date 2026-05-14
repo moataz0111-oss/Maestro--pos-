@@ -705,14 +705,27 @@ async def price_request_and_create_invoice(
     items_with_totals = []
     detected_alerts = []
     tenant_id = current_user.get("tenant_id")
+    
+    # خريطة: اسم → raw_material_id من الطلب الأصلي (للحفاظ على الربط)
+    request_items_by_name = {}
+    for ri in (req.get("items") or []):
+        rname = (ri.get("name") or "").strip()
+        if rname and ri.get("raw_material_id"):
+            request_items_by_name[rname] = ri.get("raw_material_id")
+    
     for item in items:
         item_dict = dict(item)
         item_dict["total_cost"] = float(item.get("quantity", 0)) * float(item.get("cost_per_unit", 0))
+        # احفظ raw_material_id من الطلب الأصلي إن لم يكن مُحدداً
+        if not item_dict.get("raw_material_id"):
+            iname = (item.get("name") or "").strip()
+            if iname in request_items_by_name:
+                item_dict["raw_material_id"] = request_items_by_name[iname]
         items_with_totals.append(item_dict)
 
         # === كشف فرق السعر vs raw_materials.cost_per_unit ===
-        # نبحث المادة بالاسم (إن لم يتم تمرير material_id)
-        material_id = item.get("material_id")
+        # نبحث المادة بالـ id إن وُجد، وإلا بالاسم
+        material_id = item_dict.get("raw_material_id") or item.get("material_id")
         if not material_id:
             mq = {"name": item.get("name")}
             if tenant_id:
@@ -938,10 +951,23 @@ async def confirm_warehouse_receipt(
         for item in purchase.get("items", []):
             item_qty = float(item.get("quantity", 0) or 0)
             item_cost = float(item.get("cost_per_unit", 0) or 0)
-            mq = {"name": item.get("name")}
-            if tenant_id:
-                mq["tenant_id"] = tenant_id
-            raw_material = await db.raw_materials.find_one(mq)
+            # تطابق بالـ raw_material_id أولاً (الأدق)، ثم بالاسم
+            raw_material = None
+            preset_id = item.get("raw_material_id") or item.get("material_id")
+            if preset_id:
+                rmq = {"id": preset_id}
+                if tenant_id:
+                    rmq["$or"] = [
+                        {"tenant_id": tenant_id},
+                        {"tenant_id": {"$exists": False}},
+                        {"tenant_id": None},
+                    ]
+                raw_material = await db.raw_materials.find_one(rmq)
+            if not raw_material:
+                mq = {"name": item.get("name")}
+                if tenant_id:
+                    mq["tenant_id"] = tenant_id
+                raw_material = await db.raw_materials.find_one(mq)
             if raw_material:
                 # زِد الكمية فقط — لا تُحدّث cost_per_unit (سيُحدَّد من أقدم طبقة)
                 new_quantity = float(raw_material.get("quantity", 0) or 0) + item_qty

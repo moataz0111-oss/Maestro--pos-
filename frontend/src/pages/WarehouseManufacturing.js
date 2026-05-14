@@ -114,7 +114,7 @@ export default function WarehouseManufacturing() {
   
   // === طلب شراء جديد للمشتريات (يبدأ بحالة pending_owner_approval) ===
   const [showPurchaseRequestModal, setShowPurchaseRequestModal] = useState(false);
-  const [purchaseRequestItems, setPurchaseRequestItems] = useState([{ name: '', quantity: 0, unit: 'kg', notes: '' }]);
+  const [purchaseRequestItems, setPurchaseRequestItems] = useState([{ raw_material_id: '', name: '', quantity: 0, unit: 'kg', notes: '' }]);
   const [purchaseRequestPriority, setPurchaseRequestPriority] = useState('normal');
   const [purchaseRequestNotes, setPurchaseRequestNotes] = useState('');
   const [warehouseRequestsList, setWarehouseRequestsList] = useState([]);
@@ -1285,7 +1285,7 @@ export default function WarehouseManufacturing() {
                     </div>
                     <Button
                       onClick={() => {
-                        setPurchaseRequestItems([{ name: '', quantity: 0, unit: 'kg', notes: '' }]);
+                        setPurchaseRequestItems([{ raw_material_id: '', name: '', quantity: 0, unit: 'kg', notes: '' }]);
                         setPurchaseRequestNotes('');
                         setPurchaseRequestPriority('normal');
                         setShowPurchaseRequestModal(true);
@@ -4020,7 +4020,7 @@ export default function WarehouseManufacturing() {
                 <Button
                   size="sm"
                   variant="outline"
-                  onClick={() => setPurchaseRequestItems(prev => [...prev, { name: '', quantity: 0, unit: 'kg', notes: '' }])}
+                  onClick={() => setPurchaseRequestItems(prev => [...prev, { raw_material_id: '', name: '', quantity: 0, unit: 'kg', notes: '' }])}
                   data-testid="pr-add-item-btn"
                 >
                   <Plus className="h-3 w-3 ml-1" /> {t('إضافة صنف')}
@@ -4031,16 +4031,38 @@ export default function WarehouseManufacturing() {
                   <div key={idx} className="grid grid-cols-12 gap-2 items-end p-2 rounded border border-border bg-card/50">
                     <div className="col-span-5">
                       <Label className="text-xs">{t('الصنف')}</Label>
-                      <Input
-                        value={item.name}
-                        onChange={(e) => {
+                      <Select
+                        value={item.raw_material_id || ''}
+                        onValueChange={(val) => {
                           const v = [...purchaseRequestItems];
-                          v[idx].name = e.target.value;
+                          const mat = rawMaterials.find(m => m.id === val);
+                          v[idx].raw_material_id = val;
+                          v[idx].name = mat ? mat.name : '';
+                          // تعبئة الوحدة تلقائياً من المادة الخام
+                          if (mat && mat.unit) v[idx].unit = mat.unit;
                           setPurchaseRequestItems(v);
                         }}
-                        placeholder={t('اسم الصنف')}
-                        data-testid={`pr-item-name-${idx}`}
-                      />
+                      >
+                        <SelectTrigger data-testid={`pr-item-name-${idx}`}>
+                          <SelectValue placeholder={t('اختر مادة خام من المخزن')} />
+                        </SelectTrigger>
+                        <SelectContent className="max-h-72">
+                          {rawMaterials.length === 0 ? (
+                            <div className="px-3 py-2 text-xs text-muted-foreground">{t('لا توجد مواد خام — أضفها من المخزن أولاً')}</div>
+                          ) : (
+                            rawMaterials.map(m => (
+                              <SelectItem key={m.id} value={m.id}>
+                                <div className="flex items-center justify-between gap-3 w-full">
+                                  <span>{m.name}</span>
+                                  <span className={`text-[10px] ${m.quantity <= m.min_quantity ? 'text-red-500 font-bold' : 'text-muted-foreground'}`}>
+                                    {t('متوفر')}: {(m.quantity || 0).toLocaleString()} {m.unit}
+                                  </span>
+                                </div>
+                              </SelectItem>
+                            ))
+                          )}
+                        </SelectContent>
+                      </Select>
                     </div>
                     <div className="col-span-3">
                       <Label className="text-xs">{t('الكمية')}</Label>
@@ -4106,9 +4128,9 @@ export default function WarehouseManufacturing() {
               className="bg-green-500 hover:bg-green-600"
               data-testid="pr-submit-btn"
               onClick={async () => {
-                const valid = purchaseRequestItems.filter(i => (i.name || '').trim() && parseFloat(i.quantity) > 0);
+                const valid = purchaseRequestItems.filter(i => (i.raw_material_id || '').trim() && parseFloat(i.quantity) > 0);
                 if (valid.length === 0) {
-                  toast.error(t('أضف صنفاً واحداً على الأقل بكمية صالحة'));
+                  toast.error(t('اختر مادة خام واحدة على الأقل بكمية صالحة'));
                   return;
                 }
                 try {
