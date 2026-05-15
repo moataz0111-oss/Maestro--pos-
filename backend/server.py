@@ -5932,6 +5932,24 @@ async def get_next_order_number(branch_id: str, business_date: Optional[str] = N
 async def create_order(order: OrderCreate, current_user: dict = Depends(get_current_user)):
     tenant_id = get_user_tenant_id(current_user)
     
+    # ⭐ تحقق الصلاحية: "آجل بدون شركة توصيل" مسموح فقط للمالك/المدير العام
+    # أو لمن لديه صلاحية "allow_credit_without_delivery"
+    if (order.payment_method or "").lower() == "credit":
+        has_delivery_company = bool(
+            getattr(order, "delivery_app", None)
+            or getattr(order, "delivery_app_name", None)
+            or getattr(order, "delivery_commission", 0) or 0 > 0
+        )
+        if not has_delivery_company:
+            privileged_roles = {"admin", "manager", "super_admin", "branch_manager", "owner"}
+            user_role = (current_user.get("role") or "").lower()
+            user_perms = current_user.get("permissions") or []
+            if user_role not in privileged_roles and "allow_credit_without_delivery" not in user_perms:
+                raise HTTPException(
+                    status_code=403,
+                    detail="غير مسموح بإنشاء طلب آجل بدون شركة توصيل. اطلب من المالك تفعيل صلاحية 'آجل بدون شركة توصيل'.",
+                )
+    
     # ===== Idempotency: منع إنشاء طلب مكرر خلال 30 ثانية =====
     # السبب الجذري للطلب المكرر #11 في فرع السيدية: ضغط مزدوج/إعادة محاولة من POS
     # نقارن: tenant + branch + cashier + customer + items hash + total

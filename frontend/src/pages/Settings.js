@@ -504,6 +504,7 @@ export default function Settings() {
     { id: 'pos_transfer_table', name: 'نقل الطاولة', description: 'نقل طلب من طاولة لأخرى', group: 'عمليات نقطة البيع' },
     { id: 'pos_day_management', name: 'إدارة اليوم', description: 'إدارة يوم المبيعات', group: 'عمليات نقطة البيع' },
     { id: 'shifts_close', name: 'إغلاق الصندوق', description: 'إغلاق صندوق الوردية', group: 'عمليات نقطة البيع' },
+    { id: 'allow_credit_without_delivery', name: 'آجل بدون شركة توصيل', description: 'السماح بإنشاء طلب آجل بدون اختيار شركة توصيل (مغلقة افتراضياً لغير المالك/المدير العام)', group: 'عمليات نقطة البيع' },
     
     // صلاحيات الميزات الخاصة
     { id: 'receive_calls', name: 'استلام المكالمات', description: 'استقبال المكالمات الواردة من العملاء', group: 'الميزات الخاصة' },

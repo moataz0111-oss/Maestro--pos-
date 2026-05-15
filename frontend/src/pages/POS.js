@@ -3686,7 +3686,17 @@ export default function POS() {
               { id: 'cash', label: t('نقدي'), icon: Banknote },
               { id: 'card', label: t('بطاقة'), icon: CreditCard },
               { id: 'credit', label: t('آجل'), icon: Clock },
-            ].map(method => (
+            ]
+              // ⭐ زر "آجل" مخفي للموظفين العاديين عند عدم اختيار شركة توصيل
+              //    إلا إذا كان مالك/مدير عام أو لديه صلاحية "allow_credit_without_delivery"
+              .filter(method => {
+                if (method.id !== 'credit') return true;
+                if (isOwner) return true;
+                if (deliveryApp) return true;
+                if (hasPermission('allow_credit_without_delivery')) return true;
+                return false;
+              })
+              .map(method => (
               <Button
                 key={method.id}
                 variant={paymentMethod === method.id ? 'default' : 'outline'}
