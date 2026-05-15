@@ -114,6 +114,8 @@ export default function WarehouseManufacturing() {
 
   // === تعديل/حذف مادة خام (للمالك، قبل التحويل فقط) ===
   const [editRawMaterial, setEditRawMaterial] = useState(null);  // null أو الكائن
+  // ⭐ تصحيح إداري لمادة محوّلة (تخطئ إدخال غرام بدل كغم مثلاً)
+  const [adminCorrection, setAdminCorrection] = useState(null);
   const [deleteRawMaterial, setDeleteRawMaterial] = useState(null);  // null أو الكائن
   
   // === طلب شراء جديد للمشتريات (يبدأ بحالة pending_owner_approval) ===
@@ -1741,6 +1743,27 @@ export default function WarehouseManufacturing() {
                           >
                             <Pencil className="h-4 w-4" />
                           </Button>
+                          {/* ⭐ تصحيح إداري — يعمل حتى بعد التحويل (للأخطاء مثل غرام/كغم) */}
+                          {material.is_transferred && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="border-amber-500 text-amber-600 hover:bg-amber-50"
+                              onClick={() => setAdminCorrection({
+                                material_id: material.id,
+                                name: material.name,
+                                quantity: material.quantity,
+                                min_quantity: material.min_quantity,
+                                unit: material.unit,
+                                cost_per_unit: material.cost_per_unit,
+                                reason: '',
+                              })}
+                              title={t('تصحيح إداري لخطأ إدخال (مثل غرام/كغم)')}
+                              data-testid={`admin-correct-btn-${material.id}`}
+                            >
+                              ⚡
+                            </Button>
+                          )}
                           <Button
                             variant="outline"
                             size="sm"
@@ -4763,6 +4786,107 @@ export default function WarehouseManufacturing() {
               data-testid="delete-rm-confirm-btn"
             >
               {submitting ? t('جاري الحذف...') : t('نعم، احذف')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog: تصحيح إداري لمادة خام محوّلة */}
+      <Dialog open={!!adminCorrection} onOpenChange={(o) => !o && setAdminCorrection(null)}>
+        <DialogContent className="max-w-lg" data-testid="admin-correction-dialog">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-amber-700">
+              ⚡ {t('تصحيح إداري')} — {adminCorrection?.name}
+            </DialogTitle>
+          </DialogHeader>
+          {adminCorrection && (
+            <div className="space-y-3">
+              <div className="rounded-md bg-amber-500/10 border border-amber-500/30 px-3 py-2 text-sm text-amber-700">
+                💡 {t('للأخطاء الشائعة (إدخال غرام بدل كغم). كل تصحيح يُسجَّل بالتاريخ والمستخدم في سجل المراجعة.')}
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-xs">{t('الكمية')}</Label>
+                  <Input
+                    type="number" step="0.001" min="0"
+                    value={adminCorrection.quantity}
+                    onChange={(e) => setAdminCorrection(prev => ({ ...prev, quantity: parseFloat(e.target.value) || 0 }))}
+                    data-testid="correction-quantity"
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs">{t('الحد الأدنى')}</Label>
+                  <Input
+                    type="number" step="0.001" min="0"
+                    value={adminCorrection.min_quantity}
+                    onChange={(e) => setAdminCorrection(prev => ({ ...prev, min_quantity: parseFloat(e.target.value) || 0 }))}
+                    data-testid="correction-min-quantity"
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs">{t('الوحدة')}</Label>
+                  <Select
+                    value={adminCorrection.unit}
+                    onValueChange={(v) => setAdminCorrection(prev => ({ ...prev, unit: v }))}
+                  >
+                    <SelectTrigger data-testid="correction-unit"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {['كغم','غرام','لتر','مل','قطعة','علبة','كرتون'].map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-xs">{t('التكلفة/وحدة')}</Label>
+                  <Input
+                    type="number" step="1" min="0"
+                    value={adminCorrection.cost_per_unit}
+                    onChange={(e) => setAdminCorrection(prev => ({ ...prev, cost_per_unit: parseFloat(e.target.value) || 0 }))}
+                    data-testid="correction-cost"
+                  />
+                </div>
+              </div>
+              <div>
+                <Label className="text-xs">{t('سبب التصحيح')} *</Label>
+                <Textarea
+                  rows={2}
+                  placeholder={t('مثال: إدخال خاطئ بالغرام بدل الكغم')}
+                  value={adminCorrection.reason}
+                  onChange={(e) => setAdminCorrection(prev => ({ ...prev, reason: e.target.value }))}
+                  data-testid="correction-reason"
+                />
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAdminCorrection(null)} data-testid="correction-cancel">
+              {t('إلغاء')}
+            </Button>
+            <Button
+              className="bg-amber-600 hover:bg-amber-700"
+              disabled={submitting || !adminCorrection?.reason?.trim()}
+              onClick={async () => {
+                try {
+                  setSubmitting(true);
+                  await axios.post(`${API}/raw-materials-new/${adminCorrection.material_id}/admin-correct`, {
+                    quantity: parseFloat(adminCorrection.quantity) || 0,
+                    min_quantity: parseFloat(adminCorrection.min_quantity) || 0,
+                    unit: adminCorrection.unit,
+                    cost_per_unit: parseFloat(adminCorrection.cost_per_unit) || 0,
+                    reason: adminCorrection.reason,
+                  }, { headers });
+                  toast.success(t('تم التصحيح وتسجيله في سجل المراجعة'));
+                  setAdminCorrection(null);
+                  fetchData();
+                } catch (err) {
+                  toast.error(err?.response?.data?.detail || t('فشل التصحيح'));
+                } finally {
+                  setSubmitting(false);
+                }
+              }}
+              data-testid="correction-confirm"
+            >
+              {submitting ? <RefreshCw className="h-4 w-4 animate-spin ml-2" /> : <CheckCircle className="h-4 w-4 ml-2" />}
+              {t('تطبيق التصحيح')}
             </Button>
           </DialogFooter>
         </DialogContent>

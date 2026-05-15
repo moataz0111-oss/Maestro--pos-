@@ -1681,6 +1681,101 @@ async def get_raw_materials_low_stock(current_user: dict = Depends(get_current_u
     }
 
 
+@router.post("/raw-materials-new/{material_id}/admin-correct")
+async def admin_correct_raw_material(
+    material_id: str,
+    payload: dict,
+    current_user: dict = Depends(get_current_user),
+):
+    """⚡ تصحيح إداري لمادة خام محوّلة — للمالك/المدير العام فقط.
+
+    يسمح بتعديل الكمية / الحد الأدنى / الوحدة / التكلفة لمادة مرّ عليها تحويل
+    (مثل خطأ إدخال غرام بدل كغم). يُسجَّل التصحيح في `inventory_corrections`.
+
+    Body (كل الحقول اختيارية، يُحدّث ما يُرسَل فقط):
+        quantity, min_quantity, unit, cost_per_unit, reason
+    """
+    db = get_db()
+    privileged = {"admin", "manager", "super_admin", "branch_manager", "owner"}
+    role = (current_user.get("role") or "").lower()
+    if role not in privileged:
+        raise HTTPException(status_code=403, detail="غير مسموح — التصحيح الإداري للمالك/المدير فقط")
+
+    mat = await db.raw_materials.find_one({"id": material_id}, {"_id": 0})
+    if not mat:
+        raise HTTPException(status_code=404, detail="المادة غير موجودة")
+
+    update: Dict[str, Any] = {}
+    diff_log: Dict[str, Any] = {}
+
+    def _set_if(field, caster):
+        if field in payload and payload[field] is not None:
+            new_val = caster(payload[field])
+            update[field] = new_val
+            diff_log[field] = {"old": mat.get(field), "new": new_val}
+
+    _set_if("quantity", float)
+    _set_if("min_quantity", float)
+    _set_if("cost_per_unit", float)
+    _set_if("unit", str)
+
+    if not update:
+        raise HTTPException(status_code=400, detail="لا حقول للتحديث")
+
+    update["last_updated"] = datetime.now(timezone.utc).isoformat()
+    update["last_admin_correction_at"] = update["last_updated"]
+    update["last_admin_correction_by"] = current_user.get("id")
+
+    await db.raw_materials.update_one({"id": material_id}, {"$set": update})
+
+    # 🔁 لو تغيّرت الكمية: حدّث طبقات FIFO النشطة لتطابق الكمية الجديدة
+    if "quantity" in update:
+        new_qty = update["quantity"]
+        # أبسط منهج: امسح كل طبقات NS النشطة وأنشئ طبقة واحدة جديدة بالتكلفة الحالية
+        cost_for_layer = update.get("cost_per_unit", float(mat.get("cost_per_unit") or 0))
+        try:
+            await db.cost_layers.update_many(
+                {"material_id": material_id, "active": True},
+                {"$set": {"active": False, "remaining_quantity": 0, "closed_reason": "admin_correction"}}
+            )
+            if new_qty > 0:
+                await db.cost_layers.insert_one({
+                    "id": str(uuid.uuid4()),
+                    "material_id": material_id,
+                    "material_name": mat.get("name"),
+                    "unit": update.get("unit") or mat.get("unit"),
+                    "quantity": new_qty,
+                    "remaining_quantity": new_qty,
+                    "unit_cost": cost_for_layer,
+                    "active": True,
+                    "source": "admin_correction",
+                    "tenant_id": mat.get("tenant_id"),
+                    "created_at": datetime.now(timezone.utc).isoformat(),
+                })
+        except Exception:
+            pass
+
+    # سجل التصحيح للمراجعة
+    await db.inventory_corrections.insert_one({
+        "id": str(uuid.uuid4()),
+        "material_id": material_id,
+        "material_name": mat.get("name"),
+        "diff": diff_log,
+        "reason": (payload.get("reason") or "").strip(),
+        "performed_by": current_user.get("id"),
+        "performed_by_name": current_user.get("full_name") or current_user.get("username"),
+        "performed_by_role": role,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "tenant_id": mat.get("tenant_id"),
+    })
+
+    return {
+        "message": "تم التصحيح الإداري وتسجيله في سجل المراجعة",
+        "material_id": material_id,
+        "changes": diff_log,
+    }
+
+
 @router.get("/raw-materials-new/{material_id}")
 async def get_raw_material(material_id: str, current_user: dict = Depends(get_current_user)):
     """جلب مادة خام محددة"""
