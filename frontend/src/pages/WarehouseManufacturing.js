@@ -235,6 +235,55 @@ export default function WarehouseManufacturing() {
     return () => clearInterval(id);
   }, []);
 
+  // ⭐ إشعارات قسم التصنيع — Toast فوري عند تنفيذ جزئي من المخزن
+  const acknowledgedRef = React.useRef(new Set());
+  useEffect(() => {
+    const fetchMfgNotifications = async () => {
+      try {
+        const res = await axios.get(`${API}/manufacturing-notifications/unread`, { headers });
+        const items = res.data || [];
+        for (const n of items) {
+          if (acknowledgedRef.current.has(n.id)) continue;
+          acknowledgedRef.current.add(n.id);
+          // ابنِ ملخص الأصناف للنص
+          const summary = (n.items_summary || []).slice(0, 3).map(it =>
+            `${it.material_name}: ${it.sent_quantity}/${it.original_quantity} ${it.unit}`
+          ).join(' · ');
+          const more = (n.items_summary?.length || 0) > 3 ? ` + ${n.items_summary.length - 3} ${t('صنف')}` : '';
+          const msg = `🚨 ${t('وصل تحويل جزئي')} #${n.request_number}: ${summary}${more}`;
+          const sub = n.notes_to_manufacturing || t('بانتظار شراء الباقي');
+
+          const ackNotification = async (action) => {
+            try {
+              await axios.post(`${API}/manufacturing-notifications/${n.id}/ack`, { action }, { headers });
+            } catch (_) { /* silent */ }
+            // أعد تحميل البيانات لتحديث طلبات التصنيع
+            fetchData();
+          };
+
+          toast(msg, {
+            description: `${sub} — ${t('من')}: ${n.from_warehouse_user || '-'}`,
+            duration: 30000,
+            action: {
+              label: t('اعتمد واستخدم فوراً'),
+              onClick: () => ackNotification('accept'),
+            },
+            cancel: {
+              label: t('انتظر اكتمال الطلب'),
+              onClick: () => ackNotification('wait'),
+            },
+            className: 'border-amber-500 bg-amber-50',
+            id: `mfg-partial-${n.id}`,
+          });
+        }
+      } catch (_) { /* silent */ }
+    };
+    fetchMfgNotifications();
+    const intervalId = setInterval(fetchMfgNotifications, 20000);
+    return () => clearInterval(intervalId);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const approvePurchaseRequest = async (id) => {
     try {
       await axios.post(`${API}/warehouse-purchase-requests/${id}/approve`);

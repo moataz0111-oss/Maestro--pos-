@@ -2428,6 +2428,47 @@ async def create_manufacturing_request(request_data: dict):
     del request_doc["_id"]
     return request_doc
 
+@router.get("/manufacturing-notifications/unread")
+async def get_unread_manufacturing_notifications(current_user: dict = Depends(get_current_user)):
+    """جلب إشعارات قسم التصنيع غير المُعتمدة (للـ Toast الفوري)."""
+    db = get_db()
+    tenant_id = get_user_tenant_id(current_user)
+    query: Dict[str, Any] = {"status": "unread"}
+    if tenant_id:
+        query["tenant_id"] = tenant_id
+    notifications = await db.manufacturing_notifications.find(
+        query, {"_id": 0}
+    ).sort([("created_at", -1)]).limit(200).to_list(200)
+    return notifications
+
+
+@router.post("/manufacturing-notifications/{notification_id}/ack")
+async def ack_manufacturing_notification(
+    notification_id: str,
+    payload: Optional[dict] = None,
+    current_user: dict = Depends(get_current_user),
+):
+    """اعتماد إشعار من قسم التصنيع (اضغطه ليختفي وتُسجل اللاحقة).
+
+    Body اختياري: { action: 'accept' | 'wait' } — لتوضيح قرار المصنع.
+    """
+    db = get_db()
+    action = (payload or {}).get("action") or "ack"
+    res = await db.manufacturing_notifications.update_one(
+        {"id": notification_id},
+        {"$set": {
+            "status": "acknowledged",
+            "acknowledged_at": datetime.now(timezone.utc).isoformat(),
+            "acknowledged_by": current_user.get("id"),
+            "acknowledged_by_name": current_user.get("full_name") or current_user.get("username"),
+            "acknowledgement_action": action,
+        }}
+    )
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="الإشعار غير موجود")
+    return {"message": "تم اعتماد الإشعار", "action": action}
+
+
 @router.get("/manufacturing-requests")
 async def get_manufacturing_requests(status: Optional[str] = None):
     """جلب طلبات التصنيع من المخزن — مع تحديث available_quantity وقت العرض"""
@@ -2632,6 +2673,30 @@ async def fulfill_manufacturing_request(
                 "$push": {"fulfillment_log": partial_log_entry},
             }
         )
+
+        # ⭐ إشعار فوري لقسم التصنيع
+        try:
+            await db.manufacturing_notifications.insert_one({
+                "id": str(uuid.uuid4()),
+                "type": "partial_transfer",
+                "request_id": request_id,
+                "request_number": request.get("request_number"),
+                "items_summary": [{
+                    "material_name": it.get("material_name"),
+                    "sent_quantity": it.get("quantity"),
+                    "original_quantity": it.get("original_quantity"),
+                    "unit": it.get("unit"),
+                } for it in items_to_fulfill],
+                "items_count": len(items_to_fulfill),
+                "any_remaining": any_remaining,
+                "notes_to_manufacturing": partial_log_entry["notes_to_manufacturing"],
+                "from_warehouse_user": current_user.get("full_name") or current_user.get("username"),
+                "status": "unread",
+                "created_at": now_iso,
+                "tenant_id": tenant_id,
+            })
+        except Exception:
+            pass  # لا تُفشل العملية بسبب خطأ في الإشعار
     else:
         # تنفيذ كامل (سلوك قديم)
         await db.manufacturing_requests.update_one(
