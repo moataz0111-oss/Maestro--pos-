@@ -372,7 +372,8 @@ export default function WarehouseManufacturing() {
   
   const [newIngredient, setNewIngredient] = useState({
     raw_material_id: '',
-    quantity: 0
+    quantity: 0,
+    input_unit: '' // الوحدة التي اختارها المستخدم لإدخال الكمية (يُحوَّل لوحدة المادة)
   });
   
   const [produceQuantity, setProduceQuantity] = useState(1);
@@ -796,6 +797,41 @@ export default function WarehouseManufacturing() {
     }
   };
   
+  // 🔁 تحويل وحدات الوزن/الحجم — يُرجع الكمية بوحدة المادة الأصلية + ملاحظة بالتحويل
+  // مثال: المستخدم أدخل 100 غرام، والمادة بالكغم → يُحوَّل إلى 0.1 كغم.
+  const _UNIT_GROUPS = {
+    weight: { 'غرام': 0.001, 'كغم': 1, 'كيلو': 1, 'كجم': 1, 'gram': 0.001, 'kg': 1 },
+    volume: { 'مل': 0.001, 'لتر': 1, 'ml': 0.001, 'liter': 1, 'l': 1 },
+    count: { 'قطعة': 1, 'حبة': 1, 'piece': 1 },
+  };
+  const _findUnitGroup = (u) => {
+    if (!u) return null;
+    const k = String(u).trim();
+    for (const [g, units] of Object.entries(_UNIT_GROUPS)) {
+      if (Object.prototype.hasOwnProperty.call(units, k)) return g;
+    }
+    return null;
+  };
+  const convertQuantityToMaterialUnit = (qty, inputUnit, materialUnit) => {
+    const n = Number(qty) || 0;
+    if (!inputUnit || inputUnit === materialUnit) return { qty: n, converted: false };
+    const gIn = _findUnitGroup(inputUnit);
+    const gMat = _findUnitGroup(materialUnit);
+    if (!gIn || !gMat || gIn !== gMat) return { qty: n, converted: false }; // لا تحويل بين عائلات مختلفة
+    const baseIn = _UNIT_GROUPS[gIn][inputUnit];   // قيمة الإدخال بالوحدة الأساسية
+    const baseMat = _UNIT_GROUPS[gMat][materialUnit];
+    const inBaseQty = n * baseIn;
+    const converted = inBaseQty / baseMat;
+    return { qty: converted, converted: true, fromUnit: inputUnit, toUnit: materialUnit };
+  };
+
+  // قائمة وحدات الإدخال المتاحة لمادة معيّنة (نفس عائلتها)
+  const availableInputUnitsFor = (materialUnit) => {
+    const g = _findUnitGroup(materialUnit);
+    if (!g) return [materialUnit].filter(Boolean);
+    return Object.keys(_UNIT_GROUPS[g]).filter(u => !['gram','kg','ml','liter','l','piece'].includes(u));
+  };
+
   // إضافة مكون للوصفة
   const addIngredientToRecipe = () => {
     if (!newIngredient.raw_material_id || newIngredient.quantity <= 0) {
@@ -823,19 +859,28 @@ export default function WarehouseManufacturing() {
     
     const matId = material.material_id || material.raw_material_id;
     const matName = material.material_name || material.raw_material_name || rawMaster?.name || '';
+    // 🔁 حوّل الكمية المُدخلة بوحدة المستخدم إلى وحدة المادة الأصلية
+    const inputUnit = newIngredient.input_unit || material.unit;
+    const conv = convertQuantityToMaterialUnit(newIngredient.quantity, inputUnit, material.unit);
+    if (conv.converted) {
+      toast.info(`${t('تم تحويل')} ${newIngredient.quantity} ${inputUnit} → ${conv.qty.toFixed(3)} ${material.unit}`);
+    }
     setProductForm(prev => ({
       ...prev,
       recipe: [...prev.recipe, {
         raw_material_id: matId,
         raw_material_name: matName,
-        quantity: newIngredient.quantity,
+        quantity: conv.qty,
         unit: material.unit,
         cost_per_unit: material.cost_per_unit || 0,
         waste_percentage: wastePct,
+        // معلومات التحويل (للعرض)
+        input_unit: inputUnit,
+        input_quantity: Number(newIngredient.quantity) || 0,
       }]
     }));
     
-    setNewIngredient({ raw_material_id: '', quantity: 0 });
+    setNewIngredient({ raw_material_id: '', quantity: 0, input_unit: '' });
   };
   // حذف مكون من الوصفة
   const removeIngredientFromRecipe = (index) => {
@@ -857,6 +902,39 @@ export default function WarehouseManufacturing() {
       const effectiveCost = wastePct > 0 ? baseCost / (1 - wastePct / 100) : baseCost;
       return sum + (ing.quantity * effectiveCost);
     }, 0);
+  };
+
+  // ⭐ مجموع وزن المكونات (للوزن فقط — يتجاهل المكونات الحجمية أو القطعية)
+  // يُرجع: { total_grams, has_weight_ingredients }
+  const calculateRecipeTotalWeight = () => {
+    let totalGrams = 0;
+    let hasWeight = false;
+    for (const ing of productForm.recipe) {
+      const grp = _findUnitGroup(ing.unit);
+      if (grp !== 'weight') continue;
+      hasWeight = true;
+      // حوّل لـ غرام (الوحدة الأساسية)
+      const factor = _UNIT_GROUPS.weight[ing.unit] || 0;
+      totalGrams += Number(ing.quantity || 0) * factor * 1000; // base×1000 = grams
+    }
+    return { total_grams: totalGrams, has_weight: hasWeight };
+  };
+
+  // ⭐ احتساب عدد القطع المنتجة من الدفعة (إذا كان وزن القطعة محدداً)
+  const calculatePiecesFromBatch = () => {
+    const { total_grams, has_weight } = calculateRecipeTotalWeight();
+    if (!has_weight) return null;
+    const pw = Number(productForm.piece_weight || 0);
+    if (!pw || pw <= 0) return null;
+    const pwUnit = productForm.piece_weight_unit || 'غرام';
+    const factor = _UNIT_GROUPS.weight[pwUnit] || 0.001;
+    const pieceGrams = pw * factor * 1000;
+    if (pieceGrams <= 0) return null;
+    return {
+      total_grams,
+      piece_grams: pieceGrams,
+      pieces_count: Math.floor(total_grams / pieceGrams),
+    };
   };
   // إضافة منتج مصنع
   const handleAddProduct = async (e) => {
@@ -3280,12 +3358,15 @@ export default function WarehouseManufacturing() {
                 </div>
               ) : (
                 <>
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 flex-wrap">
                     <Select 
                       value={newIngredient.raw_material_id} 
-                      onValueChange={(v) => setNewIngredient(prev => ({ ...prev, raw_material_id: v }))}
+                      onValueChange={(v) => {
+                        const m = manufacturingInventory.find(x => (x.material_id || x.raw_material_id) === v);
+                        setNewIngredient(prev => ({ ...prev, raw_material_id: v, input_unit: m?.unit || '' }));
+                      }}
                     >
-                      <SelectTrigger className="flex-1 bg-background">
+                      <SelectTrigger className="flex-1 min-w-[200px] bg-background">
                         <SelectValue placeholder={t('اختر مادة خام...')} />
                       </SelectTrigger>
                       <SelectContent>
@@ -3308,12 +3389,35 @@ export default function WarehouseManufacturing() {
                       value={newIngredient.quantity || ''}
                       onChange={(e) => setNewIngredient(prev => ({ ...prev, quantity: parseFloat(e.target.value) || 0 }))}
                       className="w-24 bg-background"
+                      data-testid="recipe-new-qty"
                     />
+                    {/* ⭐ اختيار وحدة الإدخال (غرام/كغم/مل/لتر/قطعة) — تُحوَّل تلقائياً لوحدة المادة */}
+                    {newIngredient.raw_material_id && (() => {
+                      const m = manufacturingInventory.find(x => (x.material_id || x.raw_material_id) === newIngredient.raw_material_id);
+                      const units = availableInputUnitsFor(m?.unit);
+                      if (units.length <= 1) {
+                        return <div className="text-xs text-muted-foreground self-center px-2">{m?.unit}</div>;
+                      }
+                      return (
+                        <Select
+                          value={newIngredient.input_unit || m?.unit}
+                          onValueChange={(v) => setNewIngredient(prev => ({ ...prev, input_unit: v }))}
+                        >
+                          <SelectTrigger className="w-24 bg-background" data-testid="recipe-new-unit">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {units.map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                      );
+                    })()}
                     <Button
                       type="button"
                       size="icon"
                       className="bg-green-500 hover:bg-green-600"
                       onClick={addIngredientToRecipe}
+                      data-testid="recipe-add-ingredient-btn"
                     >
                       <Plus className="h-4 w-4" />
                     </Button>
@@ -3373,6 +3477,44 @@ export default function WarehouseManufacturing() {
                           <p className="font-bold text-emerald-600 tabular-nums" data-testid="recipe-total-after-waste">{formatPrice(calculateRecipeCostAfterWaste())}</p>
                         </div>
                       </div>
+
+                      {/* ⭐ مجموع الوزن + عدد القطع المتوقع — يظهر فقط للوصفات الوزنية */}
+                      {(() => {
+                        const piecesInfo = calculatePiecesFromBatch();
+                        const { total_grams, has_weight } = calculateRecipeTotalWeight();
+                        if (!has_weight) return null;
+                        const totalKg = total_grams / 1000;
+                        const costAfter = calculateRecipeCostAfterWaste();
+                        return (
+                          <div className="mt-2 p-3 rounded-lg bg-amber-500/10 border-2 border-amber-500/40 space-y-1.5" data-testid="batch-pieces-summary">
+                            <div className="flex items-center justify-between text-sm">
+                              <span className="font-medium text-amber-800">⚖️ {t('إجمالي وزن الخلطة')}</span>
+                              <span className="font-bold tabular-nums">{totalKg.toFixed(3)} {t('كغم')} · {total_grams.toFixed(0)} {t('غرام')}</span>
+                            </div>
+                            {piecesInfo ? (
+                              <>
+                                <div className="flex items-center justify-between text-sm">
+                                  <span className="font-medium text-amber-800">🔢 {t('عدد القطع المتوقع')}</span>
+                                  <span className="font-bold text-amber-700 tabular-nums text-lg" data-testid="pieces-count">{piecesInfo.pieces_count} {t('قطعة')}</span>
+                                </div>
+                                <div className="flex items-center justify-between text-sm pt-1 border-t border-amber-500/30">
+                                  <span className="text-muted-foreground">💰 {t('تكلفة القطعة الواحدة')}</span>
+                                  <span className="font-bold text-emerald-700 tabular-nums" data-testid="cost-per-piece">
+                                    {piecesInfo.pieces_count > 0 ? formatPrice(costAfter / piecesInfo.pieces_count) : '-'}
+                                  </span>
+                                </div>
+                                <p className="text-[11px] text-muted-foreground">
+                                  {totalKg.toFixed(2)} {t('كغم')} ÷ {productForm.piece_weight} {productForm.piece_weight_unit || t('غرام')} = {piecesInfo.pieces_count} {t('قطعة')}
+                                </p>
+                              </>
+                            ) : (
+                              <p className="text-[11px] text-amber-700">
+                                💡 {t('أدخل "وزن القطعة" في أعلى النموذج لاحتساب عدد القطع وسعر كل قطعة تلقائياً')}
+                              </p>
+                            )}
+                          </div>
+                        );
+                      })()}
                     </div>
                   ) : (
                     <p className="text-sm text-muted-foreground text-center py-4">{t('لم تتم إضافة مكونات بعد')}</p>
