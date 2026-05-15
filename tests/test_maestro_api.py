@@ -12,7 +12,7 @@ import requests
 import os
 import uuid
 
-BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://smart-inventory-hub-28.preview.emergentagent.com').rstrip('/')
+BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://recipe-editor-2.preview.emergentagent.com').rstrip('/')
 
 class TestAuth:
     """Authentication tests"""

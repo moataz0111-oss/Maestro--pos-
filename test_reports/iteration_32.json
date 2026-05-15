@@ -82,7 +82,7 @@
   },
   
   "test_credentials": {
-    "api_url": "https://smart-inventory-hub-28.preview.emergentagent.com",
+    "api_url": "https://recipe-editor-2.preview.emergentagent.com",
     "client_graffiti": {
       "email": "hanialdujaili@gmail.com",
       "password": "graffiti123",

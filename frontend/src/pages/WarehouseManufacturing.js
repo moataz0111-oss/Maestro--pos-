@@ -377,6 +377,21 @@ export default function WarehouseManufacturing() {
     quantity: 0,
     input_unit: '' // الوحدة التي اختارها المستخدم لإدخال الكمية (يُحوَّل لوحدة المادة)
   });
+
+  // ⭐ تعديل وصفة منتج مصنّع موجود
+  const [showEditRecipeDialog, setShowEditRecipeDialog] = useState(null); // المنتج الجاري تعديله
+  const [editRecipeForm, setEditRecipeForm] = useState({
+    recipe: [],
+    piece_weight: '',
+    piece_weight_unit: 'غرام',
+    reason: '',
+  });
+  const [editNewIngredient, setEditNewIngredient] = useState({
+    raw_material_id: '',
+    quantity: 0,
+    input_unit: '',
+  });
+  const [savingRecipe, setSavingRecipe] = useState(false);
   
   const [produceQuantity, setProduceQuantity] = useState(1);
   const [addStockQuantity, setAddStockQuantity] = useState(1);  // كمية زيادة المخزون
@@ -890,6 +905,128 @@ export default function WarehouseManufacturing() {
       ...prev,
       recipe: prev.recipe.filter((_, i) => i !== index)
     }));
+  };
+
+  // ===================== ⭐ تعديل وصفة منتج موجود =====================
+  const openEditRecipe = (product) => {
+    setEditRecipeForm({
+      recipe: (product.recipe || []).map(ing => ({
+        raw_material_id: ing.raw_material_id,
+        raw_material_name: ing.raw_material_name,
+        quantity: Number(ing.quantity) || 0,
+        unit: ing.unit,
+        cost_per_unit: Number(ing.cost_per_unit) || 0,
+        waste_percentage: Number(ing.waste_percentage) || 0,
+        input_unit: ing.input_unit || ing.unit,
+        input_quantity: ing.input_quantity ?? ing.quantity,
+      })),
+      piece_weight: product.piece_weight ?? '',
+      piece_weight_unit: product.piece_weight_unit || 'غرام',
+      reason: '',
+    });
+    setEditNewIngredient({ raw_material_id: '', quantity: 0, input_unit: '' });
+    setShowEditRecipeDialog(product);
+  };
+
+  const addIngredientToEditRecipe = () => {
+    if (!editNewIngredient.raw_material_id || editNewIngredient.quantity <= 0) {
+      toast.error(t('اختر مادة خام وحدد الكمية'));
+      return;
+    }
+    const material = manufacturingInventory.find(m =>
+      (m.material_id || m.raw_material_id) === editNewIngredient.raw_material_id
+    );
+    if (!material) {
+      toast.error(t('المادة غير موجودة في مخزون التصنيع'));
+      return;
+    }
+    const rawMaster = rawMaterials.find(m => m.id === editNewIngredient.raw_material_id);
+    const wastePct = rawMaster?.waste_percentage || material.waste_percentage || 0;
+
+    const exists = editRecipeForm.recipe.find(r => r.raw_material_id === editNewIngredient.raw_material_id);
+    if (exists) {
+      toast.error(t('هذه المادة موجودة بالفعل في الوصفة'));
+      return;
+    }
+    const matId = material.material_id || material.raw_material_id;
+    const matName = material.material_name || material.raw_material_name || rawMaster?.name || '';
+    const inputUnit = editNewIngredient.input_unit || material.unit;
+    const conv = convertQuantityToMaterialUnit(editNewIngredient.quantity, inputUnit, material.unit);
+    if (conv.converted) {
+      toast.info(`${t('تم تحويل')} ${editNewIngredient.quantity} ${inputUnit} → ${conv.qty.toFixed(3)} ${material.unit}`);
+    }
+    setEditRecipeForm(prev => ({
+      ...prev,
+      recipe: [...prev.recipe, {
+        raw_material_id: matId,
+        raw_material_name: matName,
+        quantity: conv.qty,
+        unit: material.unit,
+        cost_per_unit: material.cost_per_unit || 0,
+        waste_percentage: wastePct,
+        input_unit: inputUnit,
+        input_quantity: Number(editNewIngredient.quantity) || 0,
+      }]
+    }));
+    setEditNewIngredient({ raw_material_id: '', quantity: 0, input_unit: '' });
+  };
+
+  const removeIngredientFromEditRecipe = (index) => {
+    setEditRecipeForm(prev => ({
+      ...prev,
+      recipe: prev.recipe.filter((_, i) => i !== index)
+    }));
+  };
+
+  const updateEditIngredientQty = (index, qty) => {
+    setEditRecipeForm(prev => ({
+      ...prev,
+      recipe: prev.recipe.map((ing, i) => i === index ? { ...ing, quantity: parseFloat(qty) || 0 } : ing)
+    }));
+  };
+
+  const calculateEditRecipeCost = () => {
+    return editRecipeForm.recipe.reduce((s, ing) => s + (Number(ing.quantity || 0) * Number(ing.cost_per_unit || 0)), 0);
+  };
+  const calculateEditRecipeCostAfterWaste = () => {
+    return editRecipeForm.recipe.reduce((s, ing) => {
+      const baseCost = Number(ing.cost_per_unit || 0);
+      const wastePct = Number(ing.waste_percentage || 0);
+      const effective = wastePct > 0 && wastePct < 100 ? baseCost / (1 - wastePct / 100) : baseCost;
+      return s + Number(ing.quantity || 0) * effective;
+    }, 0);
+  };
+
+  const handleUpdateRecipe = async () => {
+    if (!showEditRecipeDialog) return;
+    if (editRecipeForm.recipe.length === 0) {
+      toast.error(t('الوصفة لا يمكن أن تكون فارغة'));
+      return;
+    }
+    setSavingRecipe(true);
+    try {
+      const payload = {
+        recipe: editRecipeForm.recipe.map(ing => ({
+          raw_material_id: ing.raw_material_id,
+          raw_material_name: ing.raw_material_name,
+          quantity: Number(ing.quantity) || 0,
+          unit: ing.unit,
+          cost_per_unit: Number(ing.cost_per_unit) || 0,
+          waste_percentage: Number(ing.waste_percentage) || 0,
+        })),
+        piece_weight: editRecipeForm.piece_weight !== '' ? Number(editRecipeForm.piece_weight) : null,
+        piece_weight_unit: editRecipeForm.piece_weight_unit || null,
+        reason: editRecipeForm.reason || '',
+      };
+      await axios.patch(`${API}/manufactured-products/${showEditRecipeDialog.id}/recipe`, payload, { headers });
+      toast.success(t('تم تحديث الوصفة بنجاح'));
+      setShowEditRecipeDialog(null);
+      fetchData();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || t('فشل في تحديث الوصفة'));
+    } finally {
+      setSavingRecipe(false);
+    }
   };
   // حساب تكلفة الوصفة (قيمتان: قبل الهدر + بعد الهدر)
   const calculateRecipeCost = () => {
@@ -2333,6 +2470,15 @@ export default function WarehouseManufacturing() {
                                 <Plus className="h-4 w-4 ml-2" />
                                 {t('زيادة الكمية')}
                               </Button>
+                              <Button
+                                onClick={() => openEditRecipe(product)}
+                                variant="outline"
+                                className="border-amber-500 text-amber-700 hover:bg-amber-50"
+                                data-testid={`edit-recipe-btn-${product.id}`}
+                              >
+                                <Pencil className="h-4 w-4 ml-2" />
+                                {t('تعديل الوصفة')}
+                              </Button>
                             </div>
                           </div>
                         </CardContent>
@@ -3555,6 +3701,223 @@ export default function WarehouseManufacturing() {
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+      {/* ⭐ Dialog: تعديل وصفة منتج موجود */}
+      <Dialog open={!!showEditRecipeDialog} onOpenChange={(o) => !o && setShowEditRecipeDialog(null)}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto" data-testid="edit-recipe-dialog">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Pencil className="h-5 w-5 text-amber-600" />
+              {t('تعديل وصفة')}: {showEditRecipeDialog?.name}
+            </DialogTitle>
+          </DialogHeader>
+
+          {showEditRecipeDialog && (
+            <div className="space-y-4">
+              {/* تحذير */}
+              <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/40 text-amber-800 text-sm">
+                ⚠️ {t('تعديل الوصفة سيُعيد احتساب تكلفة الإنتاج (قبل وبعد الهدر) وهامش الربح لهذا المنتج. لن يؤثر على الكميات المُنتَجة سابقاً.')}
+              </div>
+
+              {/* وزن القطعة (اختياري) */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-xs">{t('وزن القطعة (اختياري)')}</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={editRecipeForm.piece_weight}
+                    onChange={(e) => setEditRecipeForm(prev => ({ ...prev, piece_weight: e.target.value }))}
+                    data-testid="edit-recipe-piece-weight"
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs">{t('وحدة الوزن')}</Label>
+                  <Select
+                    value={editRecipeForm.piece_weight_unit}
+                    onValueChange={(v) => setEditRecipeForm(prev => ({ ...prev, piece_weight_unit: v }))}
+                  >
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="غرام">{t('غرام')}</SelectItem>
+                      <SelectItem value="كغم">{t('كغم')}</SelectItem>
+                      <SelectItem value="مل">{t('مل')}</SelectItem>
+                      <SelectItem value="لتر">{t('لتر')}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              {/* إضافة مكون جديد */}
+              <div className="p-3 bg-purple-500/5 border border-purple-500/30 rounded-lg space-y-2">
+                <Label className="flex items-center gap-2 font-bold">
+                  <Plus className="h-4 w-4 text-purple-600" />
+                  {t('إضافة مكون جديد')}
+                </Label>
+                <div className="flex gap-2 flex-wrap">
+                  <Select
+                    value={editNewIngredient.raw_material_id}
+                    onValueChange={(v) => {
+                      const m = manufacturingInventory.find(x => (x.material_id || x.raw_material_id) === v);
+                      setEditNewIngredient(prev => ({ ...prev, raw_material_id: v, input_unit: m?.unit || '' }));
+                    }}
+                  >
+                    <SelectTrigger className="flex-1 min-w-[200px] bg-background" data-testid="edit-recipe-select-material">
+                      <SelectValue placeholder={t('اختر مادة خام...')} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {manufacturingInventory.map(material => {
+                        const mid = material.material_id || material.raw_material_id;
+                        const mname = material.material_name || material.raw_material_name || rawMaterials.find(r => r.id === mid)?.name || '—';
+                        return (
+                          <SelectItem key={mid} value={mid}>
+                            {mname} ({material.quantity} {material.unit})
+                          </SelectItem>
+                        );
+                      })}
+                    </SelectContent>
+                  </Select>
+                  <Input
+                    type="number"
+                    min="0.01"
+                    step="0.01"
+                    placeholder={t('الكمية')}
+                    value={editNewIngredient.quantity || ''}
+                    onChange={(e) => setEditNewIngredient(prev => ({ ...prev, quantity: parseFloat(e.target.value) || 0 }))}
+                    className="w-24 bg-background"
+                    data-testid="edit-recipe-new-qty"
+                  />
+                  {editNewIngredient.raw_material_id && (() => {
+                    const m = manufacturingInventory.find(x => (x.material_id || x.raw_material_id) === editNewIngredient.raw_material_id);
+                    const units = availableInputUnitsFor(m?.unit);
+                    if (units.length <= 1) {
+                      return <div className="text-xs text-muted-foreground self-center px-2">{m?.unit}</div>;
+                    }
+                    return (
+                      <Select
+                        value={editNewIngredient.input_unit || m?.unit}
+                        onValueChange={(v) => setEditNewIngredient(prev => ({ ...prev, input_unit: v }))}
+                      >
+                        <SelectTrigger className="w-24 bg-background">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {units.map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    );
+                  })()}
+                  <Button
+                    type="button"
+                    size="icon"
+                    className="bg-green-500 hover:bg-green-600"
+                    onClick={addIngredientToEditRecipe}
+                    data-testid="edit-recipe-add-ingredient-btn"
+                  >
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+
+              {/* قائمة المكونات الحالية */}
+              <div className="space-y-2">
+                <Label className="font-bold">{t('المكونات الحالية')} ({editRecipeForm.recipe.length})</Label>
+                {editRecipeForm.recipe.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-4">{t('لا توجد مكونات. أضف مكوّناً على الأقل.')}</p>
+                ) : (
+                  <div className="space-y-2 max-h-64 overflow-y-auto">
+                    {editRecipeForm.recipe.map((ing, index) => {
+                      const baseCost = ing.cost_per_unit || 0;
+                      const wastePct = ing.waste_percentage || 0;
+                      const effectiveCost = wastePct > 0 && wastePct < 100 ? baseCost / (1 - wastePct / 100) : baseCost;
+                      const costAfter = Number(ing.quantity || 0) * effectiveCost;
+                      return (
+                        <div key={index} className="bg-background border rounded-lg px-3 py-2 space-y-1" data-testid={`edit-recipe-ingredient-${index}`}>
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2 flex-1">
+                              <Beaker className="h-4 w-4 text-purple-500" />
+                              <span className="font-medium flex-1">{ing.raw_material_name}</span>
+                              {wastePct > 0 && (
+                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-orange-100 dark:bg-orange-950/40 text-orange-700">
+                                  {t('هدر')} {wastePct}%
+                                </span>
+                              )}
+                            </div>
+                            <Input
+                              type="number"
+                              min="0"
+                              step="0.001"
+                              value={ing.quantity}
+                              onChange={(e) => updateEditIngredientQty(index, e.target.value)}
+                              className="w-24 h-8"
+                              data-testid={`edit-recipe-qty-${index}`}
+                            />
+                            <span className="text-xs text-muted-foreground w-12">{ing.unit}</span>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-red-500"
+                              onClick={() => removeIngredientFromEditRecipe(index)}
+                              data-testid={`edit-recipe-remove-${index}`}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+                          <div className="text-[11px] text-muted-foreground pl-6">
+                            {t('بعد الهدر:')} <span className="font-medium text-emerald-600 tabular-nums">{formatPrice(costAfter)}</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* إجمالي التكلفة الجديدة */}
+              {editRecipeForm.recipe.length > 0 && (
+                <div className="grid grid-cols-2 gap-2 pt-2 border-t">
+                  <div className="p-2 rounded bg-blue-500/5 border border-blue-300/30">
+                    <p className="text-[10px] text-muted-foreground">{t('إجمالي قبل الهدر')}</p>
+                    <p className="font-bold text-blue-600 tabular-nums" data-testid="edit-recipe-total-before">{formatPrice(calculateEditRecipeCost())}</p>
+                  </div>
+                  <div className="p-2 rounded bg-emerald-500/10 border-2 border-emerald-500/40">
+                    <p className="text-[10px] text-muted-foreground">⭐ {t('إجمالي بعد الهدر (تكلفة الإنتاج الجديدة)')}</p>
+                    <p className="font-bold text-emerald-600 tabular-nums" data-testid="edit-recipe-total-after">{formatPrice(calculateEditRecipeCostAfterWaste())}</p>
+                  </div>
+                </div>
+              )}
+
+              {/* سبب التعديل */}
+              <div>
+                <Label className="text-xs">{t('سبب التعديل (اختياري — للسجل)')}</Label>
+                <Textarea
+                  rows={2}
+                  value={editRecipeForm.reason}
+                  onChange={(e) => setEditRecipeForm(prev => ({ ...prev, reason: e.target.value }))}
+                  placeholder={t('مثال: تعديل النسب بناءً على وصفة محدّثة من الشيف')}
+                  data-testid="edit-recipe-reason"
+                />
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowEditRecipeDialog(null)} data-testid="edit-recipe-cancel">
+              {t('إلغاء')}
+            </Button>
+            <Button
+              onClick={handleUpdateRecipe}
+              disabled={savingRecipe || editRecipeForm.recipe.length === 0}
+              className="bg-amber-600 hover:bg-amber-700"
+              data-testid="edit-recipe-save"
+            >
+              {savingRecipe ? <RefreshCw className="h-4 w-4 animate-spin ml-2" /> : <CheckCircle className="h-4 w-4 ml-2" />}
+              {t('حفظ التعديلات')}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
       {/* Dialog: تصنيع منتج */}

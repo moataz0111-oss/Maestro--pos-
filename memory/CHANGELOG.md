@@ -1,5 +1,33 @@
 # Maestro EGP - Changelog
 
+## Session: May 15, 2026 — Edit Existing Manufactured Product Recipes
+
+### الميزة الجديدة
+السماح بتعديل وصفة منتج مصنّع موجود (إضافة/حذف/تعديل المكونات والكميات) مع إعادة احتساب تكلفة الإنتاج (قبل/بعد الهدر) وهامش الربح تلقائياً.
+
+### الباك إند (`/app/backend/routes/inventory_system.py`)
+- **PATCH `/api/manufactured-products/{product_id}/recipe`**: نقطة جديدة تتلقى `recipe[]` (RecipeIngredient)، `piece_weight`, `piece_weight_unit`, `reason`.
+- تعيد احتساب: `raw_material_cost`, `cost_before_waste`, `raw_material_cost_after_waste`, `production_cost`, `profit_margin`، مع تحديث `last_updated`.
+- ترفض الوصفة الفارغة (400) وتعيد 404 لمنتج غير موجود.
+- تسجّل عملية التعديل في `audit_logs` (السبب، عدد المكونات قبل/بعد، التكلفة قبل/بعد، المستخدم).
+
+### الواجهة الأمامية (`/app/frontend/src/pages/WarehouseManufacturing.js`)
+- زر **"تعديل الوصفة"** على بطاقة كل منتج مصنّع (بجوار "تصنيع" و "زيادة الكمية").
+- **Dialog مخصص** (`edit-recipe-dialog`): يُعبّأ مسبقاً بالمكونات الحالية، يدعم:
+  - تعديل كمية أي مكوّن inline
+  - حذف مكوّن
+  - إضافة مكوّن جديد من مخزون التصنيع (مع تحويل الوحدات تلقائياً)
+  - وزن القطعة + الوحدة (لإعادة احتساب عدد القطع)
+  - حقل سبب التعديل (للسجل)
+  - عرض الإجمالي قبل/بعد الهدر (يُحدَّث لحظياً)
+  - تحذير واضح بأن التعديل لن يؤثر على الكميات المُنتجة سابقاً
+
+### الاختبار: ✅ 4/4 pytest + smoke UI
+- `/app/backend/tests/test_manufactured_recipe_edit.py`: 404، رفض الوصفة الفارغة، إعادة احتساب التكلفة (200×10 + هدر 20% = 2500)، استمرار التعديلات في GET.
+
+---
+
+
 ## Session: Apr 29, 2026 - Customer-Bound Coupons (Auto-Apply at POS)
 
 ### الميزة الجديدة

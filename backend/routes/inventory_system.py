@@ -3189,6 +3189,99 @@ async def get_manufactured_product(product_id: str):
     _backfill_cost_fields(product)
     return product
 
+# ⭐ تعديل وصفة منتج مصنّع موجود (إضافة/حذف/تعديل مكونات + إعادة احتساب التكلفة)
+class ManufacturedProductRecipeUpdate(BaseModel):
+    recipe: List[RecipeIngredient]
+    piece_weight: Optional[float] = None
+    piece_weight_unit: Optional[str] = None
+    reason: Optional[str] = None  # سبب التعديل (للتدقيق)
+
+
+@router.patch("/manufactured-products/{product_id}/recipe")
+async def update_manufactured_product_recipe(
+    product_id: str,
+    payload: ManufacturedProductRecipeUpdate,
+    current_user: dict = Depends(get_current_user),
+):
+    """تعديل وصفة منتج مصنّع موجود — يعيد احتساب التكلفة قبل/بعد الهدر وهامش الربح."""
+    db = get_db()
+    product = await db.manufactured_products.find_one({"id": product_id})
+    if not product:
+        raise HTTPException(status_code=404, detail="المنتج غير موجود")
+
+    if not payload.recipe or len(payload.recipe) == 0:
+        raise HTTPException(status_code=400, detail="الوصفة لا يمكن أن تكون فارغة")
+
+    # احتساب التكلفة الجديدة
+    raw_material_cost = 0.0
+    raw_material_cost_after_waste = 0.0
+    recipe_items = []
+    for ingredient in payload.recipe:
+        base_cost = ingredient.quantity * ingredient.cost_per_unit
+        raw_material_cost += base_cost
+        waste_pct = ingredient.waste_percentage or 0
+        if 0 < waste_pct < 100:
+            effective_cpu = ingredient.cost_per_unit / (1 - waste_pct / 100)
+        else:
+            effective_cpu = ingredient.cost_per_unit
+        raw_material_cost_after_waste += ingredient.quantity * effective_cpu
+        recipe_items.append(ingredient.model_dump())
+
+    new_production_cost = round(raw_material_cost_after_waste, 2)
+    selling_price = product.get("selling_price", 0) or 0
+    new_profit_margin = round(selling_price - new_production_cost, 2) if selling_price > 0 else 0
+
+    update_fields = {
+        "recipe": recipe_items,
+        "raw_material_cost": round(raw_material_cost, 2),
+        "raw_material_cost_after_waste": round(raw_material_cost_after_waste, 2),
+        "cost_before_waste": round(raw_material_cost, 2),
+        "production_cost": new_production_cost,
+        "profit_margin": new_profit_margin,
+        "last_updated": datetime.now(timezone.utc).isoformat(),
+    }
+    if payload.piece_weight is not None:
+        update_fields["piece_weight"] = payload.piece_weight
+    if payload.piece_weight_unit is not None:
+        update_fields["piece_weight_unit"] = payload.piece_weight_unit
+
+    await db.manufactured_products.update_one(
+        {"id": product_id},
+        {"$set": update_fields},
+    )
+
+    # سجل تدقيق
+    try:
+        old_cost = product.get("production_cost") or product.get("raw_material_cost_after_waste") or 0
+        await db.audit_logs.insert_one({
+            "id": str(uuid.uuid4()),
+            "action": "manufactured_product_recipe_update",
+            "entity_type": "manufactured_product",
+            "entity_id": product_id,
+            "entity_name": product.get("name"),
+            "user_id": current_user.get("id"),
+            "user_email": current_user.get("email"),
+            "tenant_id": current_user.get("tenant_id"),
+            "details": {
+                "reason": payload.reason or "",
+                "old_recipe_count": len(product.get("recipe", []) or []),
+                "new_recipe_count": len(recipe_items),
+                "old_production_cost": old_cost,
+                "new_production_cost": new_production_cost,
+            },
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        })
+    except Exception:
+        pass
+
+    updated = await db.manufactured_products.find_one({"id": product_id}, {"_id": 0})
+    return {
+        "success": True,
+        "message": "تم تحديث الوصفة بنجاح",
+        "product": updated,
+    }
+
+
 @router.post("/manufactured-products/{product_id}/produce")
 async def produce_product(
     product_id: str,
