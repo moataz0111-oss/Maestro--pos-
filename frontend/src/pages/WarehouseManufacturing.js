@@ -803,8 +803,10 @@ export default function WarehouseManufacturing() {
       return;
     }
     
-    // البحث في مخزون التصنيع
-    const material = manufacturingInventory.find(m => m.raw_material_id === newIngredient.raw_material_id);
+    // البحث في مخزون التصنيع (يدعم كلا اسمي الحقول للتوافق مع البيانات القديمة)
+    const material = manufacturingInventory.find(m =>
+      (m.material_id || m.raw_material_id) === newIngredient.raw_material_id
+    );
     if (!material) {
       toast.error(t('المادة غير موجودة في مخزون التصنيع'));
       return;
@@ -819,11 +821,13 @@ export default function WarehouseManufacturing() {
       return;
     }
     
+    const matId = material.material_id || material.raw_material_id;
+    const matName = material.material_name || material.raw_material_name || rawMaster?.name || '';
     setProductForm(prev => ({
       ...prev,
       recipe: [...prev.recipe, {
-        raw_material_id: material.raw_material_id,
-        raw_material_name: material.raw_material_name,
+        raw_material_id: matId,
+        raw_material_name: matName,
         quantity: newIngredient.quantity,
         unit: material.unit,
         cost_per_unit: material.cost_per_unit || 0,
@@ -2062,13 +2066,37 @@ export default function WarehouseManufacturing() {
                   </div>
                 ) : (
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                    {manufacturingInventory.map(item => (
-                      <div key={item.id} className="p-3 bg-purple-500/10 rounded-lg">
-                        <p className="font-medium">{item.raw_material_name}</p>
-                        <p className="text-lg font-bold text-purple-500">{item.quantity} {item.unit}</p>
-                        <p className="text-xs text-muted-foreground">{formatPrice(item.quantity * (item.cost_per_unit || 0))}</p>
-                      </div>
-                    ))}
+                    {manufacturingInventory.map(item => {
+                      // اربط بـ raw_materials للحصول على نسبة الهدر + الاسم الكامل
+                      const master = rawMaterials.find(rm => rm.id === item.material_id);
+                      const name = item.material_name || master?.name || t('بدون اسم');
+                      const wastePct = parseFloat(master?.waste_percentage || 0);
+                      const costPerUnit = parseFloat(item.cost_per_unit || 0);
+                      const totalBeforeWaste = item.quantity * costPerUnit;
+                      const costAfterWaste = wastePct > 0 && wastePct < 100
+                        ? costPerUnit / (1 - wastePct / 100)
+                        : costPerUnit;
+                      const totalAfterWaste = item.quantity * costAfterWaste;
+                      const hasWaste = wastePct > 0;
+                      return (
+                        <div key={item.id} className="p-3 bg-purple-500/10 rounded-lg border border-purple-500/20" data-testid={`mfg-inv-card-${item.material_id}`}>
+                          <p className="font-medium truncate" title={name}>{name}</p>
+                          <p className="text-lg font-bold text-purple-600">{item.quantity} {item.unit}</p>
+                          {hasWaste ? (
+                            <div className="mt-1.5 space-y-0.5">
+                              <div className="text-[11px] text-muted-foreground line-through">
+                                {t('قبل الهدر')}: {formatPrice(totalBeforeWaste)}
+                              </div>
+                              <div className="text-xs font-bold text-emerald-700">
+                                {t('بعد الهدر')} (-{wastePct}%): {formatPrice(totalAfterWaste)}
+                              </div>
+                            </div>
+                          ) : (
+                            <p className="text-xs text-muted-foreground mt-1">{formatPrice(totalBeforeWaste)}</p>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </CardContent>
@@ -3261,11 +3289,15 @@ export default function WarehouseManufacturing() {
                         <SelectValue placeholder={t('اختر مادة خام...')} />
                       </SelectTrigger>
                       <SelectContent>
-                        {manufacturingInventory.map(material => (
-                          <SelectItem key={material.raw_material_id} value={material.raw_material_id}>
-                            {material.raw_material_name} ({material.quantity} {material.unit})
-                          </SelectItem>
-                        ))}
+                        {manufacturingInventory.map(material => {
+                          const mid = material.material_id || material.raw_material_id;
+                          const mname = material.material_name || material.raw_material_name || rawMaterials.find(r => r.id === mid)?.name || '—';
+                          return (
+                            <SelectItem key={mid} value={mid}>
+                              {mname} ({material.quantity} {material.unit})
+                            </SelectItem>
+                          );
+                        })}
                       </SelectContent>
                     </Select>
                     <Input
