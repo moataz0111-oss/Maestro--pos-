@@ -103,6 +103,8 @@ export default function WarehouseManufacturing() {
   const [stats, setStats] = useState(null);
   const [branchRequests, setBranchRequests] = useState([]);  // طلبات الفروع
   const [manufacturingRequests, setManufacturingRequests] = useState([]);  // طلبات من المخزن
+  // ⭐ Dialog: التنفيذ الجزئي لطلب التصنيع (تعديل الكميات حسب المتوفر)
+  const [mfgFulfillDialog, setMfgFulfillDialog] = useState({ open: false, request: null, qtyOverrides: {}, partial: false, notes: '' });
   const [warehouseNotifications, setWarehouseNotifications] = useState([]);  // إشعارات المخزن
   
   // Packaging materials states (مواد التغليف)
@@ -1015,19 +1017,33 @@ export default function WarehouseManufacturing() {
   };
   
   // تنفيذ طلب المواد من المخزن
-  const handleFulfillManufacturingRequest = async (requestId) => {
+  const handleFulfillManufacturingRequest = async (requestId, customItems = null, partial = false, notesToMfg = '') => {
     setSubmitting(true);
     try {
-      await axios.post(`${API}/manufacturing-requests/${requestId}/fulfill`, {}, { headers });
-      toast.success(t('تم تنفيذ الطلب وتحويل المواد للتصنيع'));
+      const body = {};
+      if (customItems) body.items = customItems;
+      if (partial) {
+        body.partial = true;
+        if (notesToMfg) body.notes_to_manufacturing = notesToMfg;
+      }
+      const res = await axios.post(`${API}/manufacturing-requests/${requestId}/fulfill`, body, { headers });
+      const isPartial = res.data?.partial;
+      toast.success(isPartial
+        ? t('تم التنفيذ الجزئي — تم إخطار قسم التصنيع بالكميات المتبقية')
+        : t('تم تنفيذ الطلب وتحويل المواد للتصنيع'));
+      // أغلق dialog إن كان مفتوحاً
+      setMfgFulfillDialog({ open: false, request: null, qtyOverrides: {}, partial: false, notes: '' });
       fetchData();
     } catch (error) {
       const detail = error.response?.data?.detail;
       if (typeof detail === 'object' && detail.insufficient_materials) {
-        const materials = detail.insufficient_materials.map(m => `${m.name}: طلب ${m.needed} متوفر ${m.available}`).join('\n');
-        toast.error(t('مواد غير كافية') + ':\n' + materials);
+        // ⭐ استخدم `requested` (Backend) بدلاً من `needed` (كانت تظهر undefined)
+        const materials = detail.insufficient_materials
+          .map(m => `${m.name}: ${t('طلب')} ${m.requested} · ${t('متوفر')} ${m.available}`)
+          .join('\n');
+        toast.error(`${t('مواد غير كافية')}:\n${materials}`);
       } else {
-        toast.error(detail || t('فشل في تنفيذ الطلب'));
+        toast.error((typeof detail === 'string' ? detail : detail?.message) || t('فشل في تنفيذ الطلب'));
       }
     } finally {
       setSubmitting(false);
@@ -1644,17 +1660,19 @@ export default function WarehouseManufacturing() {
                 ) : (
                   <div className="space-y-4">
                     {manufacturingRequests.map(request => (
-                      <div key={request.id} className={`p-4 border rounded-lg ${request.status === 'pending' ? 'border-orange-500 bg-orange-500/5' : request.status === 'fulfilled' ? 'border-green-500 bg-green-500/5' : 'border-gray-300'}`}>
+                      <div key={request.id} className={`p-4 border rounded-lg ${request.status === 'pending' ? 'border-orange-500 bg-orange-500/5' : request.status === 'partially_fulfilled' ? 'border-amber-500 bg-amber-500/5' : request.status === 'fulfilled' ? 'border-green-500 bg-green-500/5' : 'border-gray-300'}`}>
                         <div className="flex items-start justify-between mb-3">
                           <div className="flex items-center gap-3">
                             <span className="font-bold text-lg">{t('طلب')} #{request.request_number}</span>
                             <Badge className={
                               request.status === 'pending' ? 'bg-orange-500/20 text-orange-500' :
+                              request.status === 'partially_fulfilled' ? 'bg-amber-500/20 text-amber-700' :
                               request.status === 'fulfilled' ? 'bg-green-500/20 text-green-500' :
                               request.status === 'rejected' ? 'bg-red-500/20 text-red-500' :
                               'bg-gray-500/20 text-gray-500'
                             }>
                               {request.status === 'pending' ? t('بانتظار التنفيذ') :
+                               request.status === 'partially_fulfilled' ? t('تنفيذ جزئي — متبقي') :
                                request.status === 'fulfilled' ? t('تم التنفيذ') :
                                request.status === 'rejected' ? t('مرفوض') : request.status}
                             </Badge>
@@ -1705,22 +1723,54 @@ export default function WarehouseManufacturing() {
                           </p>
                         )}
                         
+                        {/* سجل التنفيذ الجزئي السابق */}
+                        {(request.fulfillment_log || []).length > 0 && (
+                          <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-2 mb-3 text-xs" data-testid={`mfg-fulfillment-log-${request.id}`}>
+                            <p className="font-medium text-amber-700 mb-1">📦 {t('تنفيذات سابقة')}: {request.fulfillment_log.length}</p>
+                            {request.fulfillment_log.slice(-2).map((log, i) => (
+                              <p key={i} className="text-muted-foreground">
+                                · {new Date(log.fulfilled_at).toLocaleDateString('ar-EG')} — {log.fulfilled_by_name} — {log.items.length} {t('صنف')}
+                              </p>
+                            ))}
+                          </div>
+                        )}
+                        
                         {/* أزرار الإجراءات */}
-                        {request.status === 'pending' && (
-                          <div className="flex gap-2">
+                        {(request.status === 'pending' || request.status === 'partially_fulfilled') && (
+                          <div className="flex gap-2 flex-wrap">
                             <Button
                               onClick={() => handleFulfillManufacturingRequest(request.id)}
-                              className="flex-1 bg-green-500 hover:bg-green-600"
+                              className="flex-1 min-w-[180px] bg-green-500 hover:bg-green-600"
                               disabled={submitting}
+                              data-testid={`mfg-fulfill-full-${request.id}`}
                             >
                               {submitting ? <RefreshCw className="h-4 w-4 animate-spin ml-2" /> : <CheckCircle className="h-4 w-4 ml-2" />}
-                              {t('تنفيذ وتحويل للتصنيع')}
+                              {t('تنفيذ كامل وتحويل للتصنيع')}
+                            </Button>
+                            <Button
+                              onClick={() => {
+                                const overrides = {};
+                                (request.items || []).forEach(it => {
+                                  // افتراضياً: المتوفر فعلياً أو المطلوب (أيهما أقل)
+                                  const avail = Number(it.available_quantity || 0);
+                                  const req = Number(it.quantity || 0);
+                                  overrides[it.material_id] = Math.min(avail, req);
+                                });
+                                setMfgFulfillDialog({ open: true, request, qtyOverrides: overrides, partial: true, notes: '' });
+                              }}
+                              className="bg-amber-500 hover:bg-amber-600 text-white"
+                              disabled={submitting}
+                              data-testid={`mfg-fulfill-partial-${request.id}`}
+                            >
+                              <Pencil className="h-4 w-4 ml-2" />
+                              {t('تنفيذ جزئي / تعديل الكميات')}
                             </Button>
                             <Button
                               variant="outline"
                               onClick={() => handleRejectManufacturingRequest(request.id)}
                               className="border-red-500 text-red-500 hover:bg-red-50"
                               disabled={submitting}
+                              data-testid={`mfg-reject-${request.id}`}
                             >
                               <X className="h-4 w-4 ml-2" />
                               {t('رفض')}
@@ -4490,6 +4540,124 @@ export default function WarehouseManufacturing() {
               data-testid="delete-rm-confirm-btn"
             >
               {submitting ? t('جاري الحذف...') : t('نعم، احذف')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog: التنفيذ الجزئي لطلب التصنيع — تعديل الكميات */}
+      <Dialog open={mfgFulfillDialog.open} onOpenChange={(open) => setMfgFulfillDialog(prev => ({ ...prev, open }))}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto" data-testid="mfg-partial-dialog">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-amber-700">
+              <Pencil className="h-5 w-5" />
+              {t('تنفيذ جزئي — تعديل الكميات حسب المتوفر')}
+            </DialogTitle>
+          </DialogHeader>
+          {mfgFulfillDialog.request && (
+            <div className="space-y-4">
+              <div className="rounded-md bg-blue-500/10 border border-blue-500/30 px-3 py-2 text-sm text-blue-700">
+                💡 {t('عدّل الكمية المُرسلة لكل صنف. ضع 0 لأي صنف لا يمكن إرساله الآن. الكميات المتبقية ستبقى في الطلب لتنفيذ لاحق عند توفّر المواد.')}
+              </div>
+              <div className="border rounded-lg overflow-hidden">
+                <div className="grid grid-cols-12 gap-2 bg-muted/40 px-3 py-2 text-xs font-medium">
+                  <div className="col-span-4">{t('المادة')}</div>
+                  <div className="col-span-2 text-center">{t('المطلوب')}</div>
+                  <div className="col-span-2 text-center">{t('المتوفر')}</div>
+                  <div className="col-span-3 text-center">{t('سيُرسَل الآن')}</div>
+                  <div className="col-span-1 text-center">⚙</div>
+                </div>
+                {(mfgFulfillDialog.request.items || []).map((it) => {
+                  const avail = Number(it.available_quantity || 0);
+                  const req = Number(it.quantity || 0);
+                  const cur = Number(mfgFulfillDialog.qtyOverrides[it.material_id] ?? 0);
+                  const max = Math.min(avail, req);
+                  return (
+                    <div key={it.material_id} className="grid grid-cols-12 gap-2 px-3 py-2 items-center border-t text-sm" data-testid={`mfg-row-${it.material_id}`}>
+                      <div className="col-span-4 font-medium truncate">{it.material_name}</div>
+                      <div className="col-span-2 text-center">{req} {it.unit}</div>
+                      <div className={`col-span-2 text-center font-bold ${avail >= req ? 'text-green-600' : avail > 0 ? 'text-amber-600' : 'text-red-600'}`}>
+                        {avail}
+                      </div>
+                      <div className="col-span-3 flex items-center gap-1">
+                        <Input
+                          type="number"
+                          min="0"
+                          max={max}
+                          step="0.01"
+                          value={cur}
+                          onChange={(e) => {
+                            let v = parseFloat(e.target.value) || 0;
+                            if (v < 0) v = 0;
+                            if (v > max) v = max;
+                            setMfgFulfillDialog(prev => ({
+                              ...prev,
+                              qtyOverrides: { ...prev.qtyOverrides, [it.material_id]: v }
+                            }));
+                          }}
+                          className="h-8 text-sm text-center"
+                          data-testid={`mfg-qty-${it.material_id}`}
+                        />
+                      </div>
+                      <div className="col-span-1 text-center">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 w-7 p-0"
+                          title={t('استخدم الحد الأقصى المتوفر')}
+                          onClick={() => setMfgFulfillDialog(prev => ({
+                            ...prev,
+                            qtyOverrides: { ...prev.qtyOverrides, [it.material_id]: max }
+                          }))}
+                          data-testid={`mfg-max-${it.material_id}`}
+                        >
+                          ↑
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              <div>
+                <Label className="text-sm mb-1 block">{t('رسالة لقسم التصنيع (اختيارية)')}</Label>
+                <Textarea
+                  rows={2}
+                  placeholder={t('مثال: تم إرسال جزء فقط لقلة المخزون — سيُرسل الباقي يوم الأحد')}
+                  value={mfgFulfillDialog.notes}
+                  onChange={(e) => setMfgFulfillDialog(prev => ({ ...prev, notes: e.target.value }))}
+                  data-testid="mfg-notes-to-manufacturing"
+                />
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setMfgFulfillDialog({ open: false, request: null, qtyOverrides: {}, partial: false, notes: '' })} data-testid="mfg-partial-cancel">
+              {t('إلغاء')}
+            </Button>
+            <Button
+              className="bg-amber-600 hover:bg-amber-700"
+              disabled={submitting || !mfgFulfillDialog.request}
+              onClick={() => {
+                const items = (mfgFulfillDialog.request?.items || []).map(it => ({
+                  material_id: it.material_id,
+                  quantity: Number(mfgFulfillDialog.qtyOverrides[it.material_id] || 0),
+                }));
+                const totalSent = items.reduce((s, x) => s + (x.quantity || 0), 0);
+                if (totalSent <= 0) {
+                  toast.error(t('يجب إرسال كمية واحدة على الأقل'));
+                  return;
+                }
+                handleFulfillManufacturingRequest(
+                  mfgFulfillDialog.request.id,
+                  items,
+                  true,
+                  mfgFulfillDialog.notes
+                );
+              }}
+              data-testid="mfg-partial-confirm"
+            >
+              {submitting ? <RefreshCw className="h-4 w-4 animate-spin ml-2" /> : <CheckCircle className="h-4 w-4 ml-2" />}
+              {t('تنفيذ جزئي وإشعار التصنيع')}
             </Button>
           </DialogFooter>
         </DialogContent>

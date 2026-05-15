@@ -2430,7 +2430,7 @@ async def create_manufacturing_request(request_data: dict):
 
 @router.get("/manufacturing-requests")
 async def get_manufacturing_requests(status: Optional[str] = None):
-    """جلب طلبات التصنيع من المخزن"""
+    """جلب طلبات التصنيع من المخزن — مع تحديث available_quantity وقت العرض"""
     db = get_db()
     
     query = {}
@@ -2438,70 +2438,118 @@ async def get_manufacturing_requests(status: Optional[str] = None):
         query["status"] = status
     
     requests = await db.manufacturing_requests.find(query, {"_id": 0}).sort("created_at", -1).to_list(1000)
+    
+    # 🔄 تحديث available_quantity لكل صنف من raw_materials الحالية
+    # (الكميات المحفوظة قديمة وقد تغيّرت منذ إنشاء الطلب)
+    material_ids = set()
+    for req in requests:
+        for it in (req.get("items") or []):
+            if it.get("material_id"):
+                material_ids.add(it["material_id"])
+    if material_ids:
+        mats = await db.raw_materials.find(
+            {"id": {"$in": list(material_ids)}},
+            {"_id": 0, "id": 1, "quantity": 1},
+        ).to_list(2000)
+        qty_by_id = {m["id"]: float(m.get("quantity") or 0) for m in mats}
+        for req in requests:
+            for it in (req.get("items") or []):
+                mid = it.get("material_id")
+                if mid:
+                    it["available_quantity"] = qty_by_id.get(mid, 0)
+    
     return requests
 
 @router.post("/manufacturing-requests/{request_id}/fulfill")
 async def fulfill_manufacturing_request(
     request_id: str,
+    payload: Optional[dict] = None,
     current_user: dict = Depends(get_current_user)
 ):
-    """تنفيذ طلب التصنيع (تحويل المواد من المخزن للتصنيع) — مع استهلاك FIFO."""
+    """تنفيذ طلب التصنيع — يدعم التنفيذ الجزئي بكميات مُعدّلة من المخزن.
+
+    Body اختياري:
+        - items: [{material_id, quantity}] — كميات مُخصّصة (للتجزئة)
+        - partial: bool — إذا true، يبقى الطلب مفتوحاً للباقي
+        - notes_to_manufacturing: str — رسالة من المخزن لقسم التصنيع
+    إذا لم يُرسَل payload: يُنفّذ الكميات الأصلية كاملةً (السلوك القديم).
+    """
     db = get_db()
     tenant_id = current_user.get("tenant_id")
+    payload = payload or {}
     
-    # جلب الطلب
     request = await db.manufacturing_requests.find_one({"id": request_id}, {"_id": 0})
     if not request:
         raise HTTPException(status_code=404, detail="الطلب غير موجود")
-    
-    if request.get("status") != "pending":
+    if request.get("status") not in ("pending", "partially_fulfilled"):
         raise HTTPException(status_code=400, detail="لا يمكن تنفيذ هذا الطلب")
-    
-    # التحقق من توفر الكميات
+
+    # حدد الكميات الفعلية المراد إرسالها
+    custom_items = payload.get("items") or []
+    is_partial = bool(payload.get("partial"))
+    notes_to_mfg = (payload.get("notes_to_manufacturing") or "").strip()
+
+    custom_qty_by_mid: Dict[str, float] = {}
+    for ci in custom_items:
+        mid = ci.get("material_id")
+        if mid:
+            custom_qty_by_mid[mid] = max(0.0, float(ci.get("quantity") or 0))
+
+    # ابنِ قائمة المواد المراد تنفيذها (يتجاهل الأصناف ذات الكمية صفر)
+    items_to_fulfill = []
+    for item in (request.get("items") or []):
+        mid = item.get("material_id")
+        original_qty = float(item.get("quantity") or 0)
+        send_qty = custom_qty_by_mid.get(mid, original_qty) if custom_items else original_qty
+        if send_qty <= 0:
+            continue
+        if send_qty > original_qty:
+            send_qty = original_qty  # لا تُرسل أكثر مما طُلب
+        items_to_fulfill.append({**item, "quantity": send_qty, "original_quantity": original_qty})
+
+    if not items_to_fulfill:
+        raise HTTPException(status_code=400, detail="لا توجد كميات للتنفيذ")
+
+    # التحقق من توفر المواد للكميات المُخصّصة
     insufficient = []
-    for item in request.get("items", []):
+    for item in items_to_fulfill:
         material = await db.raw_materials.find_one({"id": item.get("material_id")}, {"_id": 0})
-        if not material or material.get("quantity", 0) < item.get("quantity", 0):
+        avail = float(material.get("quantity", 0) or 0) if material else 0
+        if avail < float(item.get("quantity") or 0):
             insufficient.append({
                 "name": item.get("material_name"),
                 "requested": item.get("quantity"),
-                "available": material.get("quantity", 0) if material else 0
+                "available": avail,
             })
-    
     if insufficient:
         raise HTTPException(
             status_code=400,
             detail={
                 "message": "كمية غير كافية في المخزن",
-                "insufficient_materials": insufficient
-            }
+                "insufficient_materials": insufficient,
+            },
         )
-    
-    # تنفيذ التحويل - خصم من المخزن وإضافة لمخزون التصنيع
+
+    # تنفيذ التحويل
     cost_changed_materials = []
-    for item in request.get("items", []):
+    for item in items_to_fulfill:
         material_id = item.get("material_id")
-        quantity = item.get("quantity")
-        
-        # === مُصالحة دفاعية: حُلّ أي انجراف بين الطبقات و raw_materials.quantity قبل الاستهلاك ===
+        quantity = float(item.get("quantity") or 0)
+
         try:
             await reconcile_layers_with_quantity(db, material_id, tenant_id)
         except Exception:
-            pass  # لا تُفشل الطلب بسبب المُصالحة
-        
-        # السعر الحالي قبل الاستهلاك (للمقارنة بعد FIFO)
+            pass
+
         before_mat = await db.raw_materials.find_one({"id": material_id}, {"_id": 0, "cost_per_unit": 1})
         cost_before = float(before_mat.get("cost_per_unit", 0) or 0) if before_mat else 0
-        
-        # === FIFO: خصم من الطبقات الأقدم أولاً ===
-        # consume_fifo يُحدّث: layers + raw_materials.cost_per_unit (لأقدم طبقة نشطة)
+
         fifo_result = await consume_fifo(
             db,
             material_id=material_id,
             quantity=quantity,
             tenant_id=tenant_id,
         )
-        # تحديث raw_materials.quantity (consume_fifo لا يُعدّلها)
         await db.raw_materials.update_one(
             {"id": material_id},
             {
@@ -2509,13 +2557,11 @@ async def fulfill_manufacturing_request(
                 "$set": {"last_updated": datetime.now(timezone.utc).isoformat()}
             }
         )
-        # التكلفة المرجّحة لما تم استهلاكه (للتحويل لمخزون التصنيع)
         weighted_cost = fifo_result.get("weighted_avg_cost") or item.get("cost_per_unit", 0)
         new_effective = fifo_result.get("new_effective_cost")
         if new_effective is not None and abs(new_effective - cost_before) > 0.001:
             cost_changed_materials.append(material_id)
-        
-        # إضافة لمخزون التصنيع
+
         existing = await db.manufacturing_inventory.find_one({"material_id": material_id})
         if existing:
             await db.manufacturing_inventory.update_one(
@@ -2524,12 +2570,11 @@ async def fulfill_manufacturing_request(
                     "$inc": {"quantity": quantity},
                     "$set": {
                         "last_updated": datetime.now(timezone.utc).isoformat(),
-                        "cost_per_unit": weighted_cost,  # تحديث للتكلفة المرجّحة الأخيرة
+                        "cost_per_unit": weighted_cost,
                     }
                 }
             )
         else:
-            material = await db.raw_materials.find_one({"id": material_id}, {"_id": 0})
             await db.manufacturing_inventory.insert_one({
                 "id": str(uuid.uuid4()),
                 "material_id": material_id,
@@ -2540,36 +2585,101 @@ async def fulfill_manufacturing_request(
                 "last_updated": datetime.now(timezone.utc).isoformat(),
                 "created_at": datetime.now(timezone.utc).isoformat()
             })
-    
-    # تحديث حالة الطلب
-    await db.manufacturing_requests.update_one(
-        {"id": request_id},
-        {"$set": {
-            "status": "fulfilled",
-            "fulfilled_at": datetime.now(timezone.utc).isoformat()
-        }}
-    )
-    
-    # تسجيل الحركة
+
+    # تحديث حالة الطلب — partial أم fulfilled
+    now_iso = datetime.now(timezone.utc).isoformat()
+
+    if is_partial:
+        # خفّض كميات الطلب الأصلي بالكميات المرسلة، وأبقِه pending إن بقي شيء
+        updated_items = []
+        any_remaining = False
+        for orig in (request.get("items") or []):
+            mid = orig.get("material_id")
+            sent_qty = next((float(it["quantity"]) for it in items_to_fulfill if it.get("material_id") == mid), 0.0)
+            remaining = float(orig.get("quantity") or 0) - sent_qty
+            if remaining < 0:
+                remaining = 0.0
+            if remaining > 0:
+                any_remaining = True
+                new_item = dict(orig)
+                new_item["quantity"] = remaining
+                updated_items.append(new_item)
+
+        # سجل التنفيذ الجزئي (للتدقيق وإشعار التصنيع)
+        partial_log_entry = {
+            "fulfilled_at": now_iso,
+            "fulfilled_by": current_user.get("id"),
+            "fulfilled_by_name": current_user.get("full_name") or current_user.get("username"),
+            "items": [{
+                "material_id": it.get("material_id"),
+                "material_name": it.get("material_name"),
+                "sent_quantity": it.get("quantity"),
+                "original_quantity": it.get("original_quantity"),
+                "unit": it.get("unit"),
+            } for it in items_to_fulfill],
+            "notes_to_manufacturing": notes_to_mfg or "تم إرسال كمية أقل من المطلوب — بانتظار توفر المواد المتبقية",
+        }
+
+        await db.manufacturing_requests.update_one(
+            {"id": request_id},
+            {
+                "$set": {
+                    "status": "partially_fulfilled" if any_remaining else "fulfilled",
+                    "items": updated_items if any_remaining else (request.get("items") or []),
+                    "last_partial_at": now_iso,
+                    "fulfilled_at": now_iso if not any_remaining else None,
+                },
+                "$push": {"fulfillment_log": partial_log_entry},
+            }
+        )
+    else:
+        # تنفيذ كامل (سلوك قديم)
+        await db.manufacturing_requests.update_one(
+            {"id": request_id},
+            {"$set": {
+                "status": "fulfilled",
+                "fulfilled_at": now_iso,
+                "fulfilled_by": current_user.get("id"),
+                "fulfilled_by_name": current_user.get("full_name") or current_user.get("username"),
+            }}
+        )
+
+    # حركة المخزن
     await db.inventory_movements.insert_one({
         "id": str(uuid.uuid4()),
         "type": "warehouse_to_manufacturing",
+        "subtype": "partial" if is_partial else "full",
         "request_id": request_id,
+        "request_number": request.get("request_number"),
         "from_location": "warehouse",
         "to_location": "manufacturing",
-        "items": request.get("items", []),
-        "created_at": datetime.now(timezone.utc).isoformat()
+        "items": [{
+            "material_id": it.get("material_id"),
+            "material_name": it.get("material_name"),
+            "quantity": it.get("quantity"),
+            "original_quantity": it.get("original_quantity"),
+            "unit": it.get("unit"),
+        } for it in items_to_fulfill],
+        "notes_to_manufacturing": notes_to_mfg if is_partial else None,
+        "performed_by": current_user.get("id"),
+        "performed_by_name": current_user.get("full_name") or current_user.get("username"),
+        "created_at": now_iso,
+        "tenant_id": tenant_id,
     })
-    
-    # === تحديث تكلفة المنتجات المصنعة و POS تلقائياً للمواد التي تغيّر سعرها ===
+
+    # نشر تكلفة المنتجات المُصنّعة
     propagated_summary = []
     for mid in cost_changed_materials:
         result = await propagate_cost_to_products(db, material_id=mid, tenant_id=tenant_id)
         propagated_summary.append({"material_id": mid, **result})
-    
+
     return {
-        "message": "تم تنفيذ الطلب وتحويل المواد للتصنيع",
+        "message": ("تم تنفيذ جزئي — أُرسل ما يتوفر ويبقى الباقي بانتظار شراء المواد"
+                    if is_partial else "تم تنفيذ الطلب وتحويل المواد للتصنيع"),
         "request_id": request_id,
+        "partial": is_partial,
+        "items_fulfilled": len(items_to_fulfill),
+        "notes_to_manufacturing": notes_to_mfg if is_partial else None,
         "cost_propagation": propagated_summary,
     }
 
