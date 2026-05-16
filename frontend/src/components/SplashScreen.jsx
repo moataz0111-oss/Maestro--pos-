@@ -55,7 +55,7 @@ export default function SplashScreen({ durationMs = 4000, onComplete }) {
 
   return (
     <div
-      className={`fixed inset-0 z-[9999] flex items-center justify-center transition-opacity duration-500 ${phase === 'out' ? 'opacity-0' : 'opacity-100'}`}
+      className={`fixed inset-0 z-[2147483647] flex items-center justify-center transition-opacity duration-500 ${phase === 'out' ? 'opacity-0' : 'opacity-100'}`}
       data-testid="splash-screen"
       style={{
         backgroundImage: bgUrl

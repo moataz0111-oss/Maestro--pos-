@@ -597,18 +597,17 @@ function AutoSyncRunner() {
 }
 
 // ⭐ شاشة Splash العالمية: تظهر بعد تسجيل الدخول مباشرة لمدة 4 ثوانٍ
-// تقرأ علامة `show_post_login_splash` من sessionStorage وتُزيلها بعد العرض
+// تستمع لحدث `show-splash` المُطلَق من Login.js وتغطي كل المحتوى أثناء التحميل
 function PostLoginSplash() {
   const [show, setShow] = useState(() => sessionStorage.getItem('show_post_login_splash') === '1');
   useEffect(() => {
-    // عند تغيير المسار، نتحقق مرة أخرى (لتغطية إعادة الانتقال بعد التسجيل)
-    const interval = setInterval(() => {
-      if (!show && sessionStorage.getItem('show_post_login_splash') === '1') {
-        setShow(true);
-      }
-    }, 200);
-    return () => clearInterval(interval);
-  }, [show]);
+    const handler = () => {
+      sessionStorage.setItem('show_post_login_splash', '1');
+      setShow(true);
+    };
+    window.addEventListener('show-splash', handler);
+    return () => window.removeEventListener('show-splash', handler);
+  }, []);
   if (!show) return null;
   return (
     <SplashScreen

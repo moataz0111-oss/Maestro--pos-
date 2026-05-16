@@ -218,9 +218,11 @@ export default function Login() {
         if (response.data.token) {
           localStorage.setItem('super_admin_token', response.data.token);
           localStorage.setItem('super_admin_user', JSON.stringify(response.data.user));
-          // ⭐ علامة لشاشة Splash العالمية
+          // ⭐ تشغيل Splash فوراً قبل التنقل لتغطية أي وميض للداش
           sessionStorage.setItem('show_post_login_splash', '1');
-          navigate('/super-admin');
+          window.dispatchEvent(new Event('show-splash'));
+          // تأخير صغير جداً ليضمن أن Splash مرسوم قبل الانتقال
+          setTimeout(() => navigate('/super-admin'), 50);
         } else {
           setError(t('فشل تسجيل الدخول'));
         }
@@ -234,9 +236,11 @@ export default function Login() {
     const result = await login(email, password);
     
     if (result.success) {
-      // ⭐ علامة لشاشة Splash العالمية
+      // ⭐ تشغيل Splash فوراً قبل التنقل لتغطية أي وميض للداش
       sessionStorage.setItem('show_post_login_splash', '1');
-      navigate('/');
+      window.dispatchEvent(new Event('show-splash'));
+      // تأخير صغير ليضمن أن Splash مرسوم قبل الانتقال
+      setTimeout(() => navigate('/'), 50);
     } else if (result.redirectToSuperAdmin) {
       // تحويل مالك النظام إلى بوابة المالك
       setIsOwnerLogin(true);

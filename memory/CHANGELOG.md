@@ -1,5 +1,29 @@
 # Maestro EGP - Changelog
 
+## Session: May 16, 2026 — Eliminate Dashboard Flicker Before Splash
+
+### المتطلب
+"اريدها تظهر هذه الشاشة بعد تسجيل الدخول وقبل ان يظهر الداش للنظام" — منع أي وميض للداشبورد قبل ظهور Splash.
+
+### السبب الجذري
+كان `PostLoginSplash` يستخدم `setInterval(200ms)` للتحقق من sessionStorage. هذا يسمح بـ ~200ms من ظهور الداش قبل أن يكتشف الـ flag.
+
+### الحل
+- **`App.js → PostLoginSplash`**: استبدال polling بـ `window.addEventListener('show-splash')` للاستجابة الفورية.
+- **`Login.js`**:
+  - عند نجاح login: `sessionStorage.setItem` + `window.dispatchEvent(new Event('show-splash'))` + `setTimeout(navigate, 50ms)`.
+  - التأخير 50ms يضمن أن React يفرغ تحديث `show=true` ويرسم Splash قبل أن يبدأ التنقل والـ mounting للدashboard.
+- **`SplashScreen.jsx`**: رفع `z-index` إلى `2147483647` (أقصى قيمة 32-bit signed) لضمان تغطية أي مكوّن آخر (Toaster، modals، popups).
+
+### الاختبار: ✅ Smoke UI
+- لقطة عند 150ms بعد click: شاشة Login (API لا يزال في تنفيذ).
+- لقطة عند 2.1s: Splash كامل يغطّي كل شيء، URL = `/`.
+- لقطة عند 4.6s: Splash اختفى، Dashboard يظهر بسلاسة.
+- **لا توجد لحظة يظهر فيها الداش بدون Splash** بعد نجاح login.
+
+---
+
+
 ## Session: May 16, 2026 — Animated Logo + Animated Text in Splash
 
 ### المتطلب
