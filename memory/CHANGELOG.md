@@ -1,5 +1,32 @@
 # Maestro EGP - Changelog
 
+## Session: May 16, 2026 — Simplify Product↔Manufactured Link (Show Pieces, Not Raw Materials)
+
+### المشكلتان
+1. شاشة "ربط منتج بمنتج مصنع" في Settings كانت تعرض **مكونات المواد الخام** (لحم، لية، ...) — وهذا مُربك ولا يعكس منطق الخصم الفعلي (الذي يخصم من مخزون المنتج المصنع وليس من المواد الخام).
+2. الكميات في القائمة المنسدلة كانت تظهر `mp.quantity` المخزّن (الذي قد يكون مغلوطاً مثل 500 بدل 497.233 الحقيقي).
+
+### الحلول
+**Frontend — `Settings.js`**:
+- إزالة جدول "المكونات وكمياتها" بالكامل من حواري إضافة/تعديل المنتج.
+- استبداله بـ **صندوق مبسّط** (`mfg-link-summary` / `edit-mfg-link-summary`):
+  - اسم المنتج المصنع + Input لـ **عدد الوحدات المُستهلَكة** (`manufactured_consumption_qty`، افتراضي 1).
+  - عرض `تكلفة الإنتاج للوحدة` و `التكلفة لهذا المنتج` (= consumption × production_cost).
+  - وحدة "حبة/قطعة" تظهر بوضوح.
+- في القائمة المنسدلة: حساب **العائد الحقيقي للوصفة** (`totalGrams / pieceWeightGrams`) وعرضه بجوار الكمية المخزّنة. مثال: `لحم برغر (500 حبة) · القطعة: 120 غرام · عائد: 497.233 حبة`.
+
+**Backend — `server.py`**:
+- إضافة حقل جديد `manufactured_consumption_qty: float = 1.0` إلى `ProductCreate` و `ProductResponse`.
+- منطق احتساب التكلفة (`validate_and_calculate_costs`): `unit_cost × consumption_qty + operating_cost`. يفضّل `raw_material_cost_after_waste` على `raw_material_cost`.
+- منطق خصم المخزون عند البيع: `branch_inventory.quantity -= consumption_qty × item.quantity` (بدل 1:1).
+
+### الاختبار: ✅ 9/9 pytest
+- جديد: `test_manufactured_consumption_qty.py` — يتحقّق من إنشاء منتج بـ `manufactured_consumption_qty=2.5` ويستمر.
+- 4 اختبارات وصفة المنتج المصنع + 2 فحص branch_id للمرتجع + 2 صلاحية credit = جميعها تمر.
+
+---
+
+
 ## Session: May 16, 2026 — Critical POS Fixes (Credit Bypass + Refund Branch Scoping)
 
 ### المشكلة 1: خرق سياسة "آجل"

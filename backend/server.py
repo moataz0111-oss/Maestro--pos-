@@ -1357,6 +1357,7 @@ class ProductCreate(BaseModel):
     extras: List[Dict[str, Any]] = []  # الإضافات المتاحة للمنتج
     packaging_items: List[Dict[str, Any]] = []  # مواد التغليف المربوطة للخصم التلقائي
     recipe_quantities: List[Dict[str, Any]] = []  # كميات المكونات للوصفة
+    manufactured_consumption_qty: float = 1.0  # ⭐ كم وحدة من المنتج المصنع تُخصم لكل وحدة مباعة
 
 class ProductResponse(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -1380,6 +1381,7 @@ class ProductResponse(BaseModel):
     extras: List[Dict[str, Any]] = []  # الإضافات المتاحة للمنتج (جبنة إضافية، صوص، إلخ)
     packaging_items: List[Dict[str, Any]] = []  # مواد التغليف المربوطة للخصم التلقائي
     recipe_quantities: List[Dict[str, Any]] = []  # كميات المكونات للوصفة
+    manufactured_consumption_qty: float = 1.0  # ⭐ كم وحدة من المنتج المصنع تُخصم لكل وحدة مباعة
 
 # Inventory Models
 class InventoryItemCreate(BaseModel):
@@ -6102,10 +6104,13 @@ async def create_order(order: OrderCreate, current_user: dict = Depends(get_curr
             if manufactured_product_id:
                 mfg_product = await db.manufactured_products.find_one(
                     {"id": manufactured_product_id},
-                    {"_id": 0, "raw_material_cost": 1}
+                    {"_id": 0, "raw_material_cost": 1, "raw_material_cost_after_waste": 1, "production_cost": 1}
                 )
                 if mfg_product:
-                    base_cost = _sn(mfg_product.get("raw_material_cost")) + _sn(product.get("operating_cost"))
+                    # ⭐ نُفضّل التكلفة بعد الهدر إن وُجدت + معامل الاستهلاك
+                    unit_cost = _sn(mfg_product.get("raw_material_cost_after_waste")) or _sn(mfg_product.get("production_cost")) or _sn(mfg_product.get("raw_material_cost"))
+                    consumption_qty = float(product.get("manufactured_consumption_qty") or 1)
+                    base_cost = unit_cost * consumption_qty + _sn(product.get("operating_cost"))
             
             item_cost = base_cost * item.quantity + packaging_cost
         
@@ -6306,6 +6311,9 @@ async def create_order(order: OrderCreate, current_user: dict = Depends(get_curr
             # النظام الجديد: المنتجات المصنعة
             manufactured_product_id = product.get("manufactured_product_id")
             if manufactured_product_id:
+                # ⭐ قراءة معامل الاستهلاك (كم وحدة من المنتج المصنع تُخصم لكل وحدة مباعة) — افتراضي 1
+                consumption_qty = float(product.get("manufactured_consumption_qty") or 1)
+                deduct_amount = consumption_qty * item.quantity
                 # خصم من مخزون الفرع (branch_inventory)
                 branch_item = await db.branch_inventory.find_one({
                     "branch_id": order.branch_id,
@@ -6317,8 +6325,8 @@ async def create_order(order: OrderCreate, current_user: dict = Depends(get_curr
                         {"id": branch_item["id"]},
                         {
                             "$inc": {
-                                "quantity": -item.quantity,
-                                "sold_quantity": item.quantity  # زيادة الكمية المباعة
+                                "quantity": -deduct_amount,
+                                "sold_quantity": deduct_amount  # زيادة الكمية المباعة
                             },
                             "$set": {"last_updated": datetime.now(timezone.utc).isoformat()}
                         }
@@ -6328,7 +6336,7 @@ async def create_order(order: OrderCreate, current_user: dict = Depends(get_curr
                     await db.manufactured_products.update_one(
                         {"id": manufactured_product_id},
                         {
-                            "$inc": {"quantity": -item.quantity},
+                            "$inc": {"quantity": -deduct_amount},
                             "$set": {"last_updated": datetime.now(timezone.utc).isoformat()}
                         }
                     )
