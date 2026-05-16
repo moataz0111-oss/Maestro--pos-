@@ -1,5 +1,29 @@
 # Maestro EGP - Changelog
 
+## Session: May 16, 2026 — Pack-Based Unit Input for Count-Unit Raw Materials
+
+### المشكلة
+عند اختيار مادة خام وحدتها قطعية (قطعة/علبة/كرتون) لكنها تحتوي على وزن/حجم داخلي (مثل: علبة باربكيو صوص = 4.5 كغم)، كان منتقي وحدة الإدخال يعرض **قطعة/حبة فقط**، ولا يسمح للمستخدم بإدخال الكمية بالغرام/الكغم/الـمل/اللتر.
+
+### الحل (frontend فقط — `WarehouseManufacturing.js`)
+- **`availableInputUnitsFor(materialUnit, packUnit)`**: عند تمرير `packUnit` لمادة قطعية، يضيف وحدات عائلة `pack_unit` (وزن أو حجم) للقائمة.
+- **`_packInfoFor(materialId)`**: يجلب `pack_quantity` + `pack_unit` من قائمة المواد الخام الرئيسية.
+- **`convertWithPackInfo(qty, inputUnit, materialUnit, packInfo)`**: يحوّل كمية بوحدة وزن/حجم إلى عدد قطع باستخدام معلومات التعبئة. مثال: 9 كغم ÷ 4.5 كغم/قطعة = 2 قطعة.
+- تحديث منتقي الوحدات في **حواري إنشاء الوصفة** و **تعديل الوصفة** ليمررا `packInfo.pack_unit`.
+- تحديث منطق إضافة المكون (Add / Edit) ليُجرّب التحويل عبر `pack_info` عندما تختلف العائلات.
+- إضافة معلومة التعبئة في dropdown اختيار المادة (`كل قطعة = 4.5 كغم`).
+- Toast التحويل أصبح يُظهر مُعامل التحويل مثل `(4.5 كغم/قطعة)`.
+
+### الاختبار: ✅ Smoke UI End-to-End
+- إنشاء مادة خام وحدتها قطعة + pack_quantity=4.5 pack_unit=كغم.
+- تحويل 2 قطعة إلى التصنيع.
+- في حوار "تعديل الوصفة": منتقي الوحدة عرض `['قطعة','حبة','غرام','كغم','كيلو','كجم']`.
+- إدخال 9 كغم → التحويل لـ 2 قطعة بنجاح + Toast واضح.
+- العملية لا تكسر أي اختبارات pytest قائمة (4/4 من `test_manufactured_recipe_edit.py` تمر).
+
+---
+
+
 ## Session: May 15, 2026 — Edit Existing Manufactured Product Recipes
 
 ### الميزة الجديدة

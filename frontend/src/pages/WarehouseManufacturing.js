@@ -843,10 +843,46 @@ export default function WarehouseManufacturing() {
   };
 
   // قائمة وحدات الإدخال المتاحة لمادة معيّنة (نفس عائلتها)
-  const availableInputUnitsFor = (materialUnit) => {
+  // إن كانت المادة بوحدة قطعية لكن لها وزن داخلي (pack_quantity + pack_unit) — نُضيف وحدات الإدخال من عائلة الوزن/الحجم.
+  const availableInputUnitsFor = (materialUnit, packUnit) => {
     const g = _findUnitGroup(materialUnit);
     if (!g) return [materialUnit].filter(Boolean);
-    return Object.keys(_UNIT_GROUPS[g]).filter(u => !['gram','kg','ml','liter','l','piece'].includes(u));
+    const own = Object.keys(_UNIT_GROUPS[g]).filter(u => !['gram','kg','ml','liter','l','piece'].includes(u));
+    // إن كانت المادة "قطعية" (count) ولها pack_unit ضمن عائلة أخرى — أضف وحدات تلك العائلة
+    if (g === 'count' && packUnit) {
+      const pg = _findUnitGroup(packUnit);
+      if (pg && pg !== 'count') {
+        const extra = Object.keys(_UNIT_GROUPS[pg]).filter(u => !['gram','kg','ml','liter','l','piece'].includes(u));
+        return [...own, ...extra];
+      }
+    }
+    return own;
+  };
+
+  // البحث عن معلومات التعبئة (pack_quantity + pack_unit) لمادة من قائمة المواد الخام الرئيسية
+  const _packInfoFor = (materialId) => {
+    const m = rawMaterials.find(r => r.id === materialId);
+    if (!m) return null;
+    const pq = Number(m.pack_quantity || 0);
+    const pu = m.pack_unit;
+    if (pq > 0 && pu) return { pack_quantity: pq, pack_unit: pu };
+    return null;
+  };
+
+  // ⭐ تحويل بين عائلات مختلفة (وزن/حجم → قطعة) باستخدام pack info
+  // مثال: 9 كغم → قطعة (إذا كانت القطعة = 4.5 كغم) ⇒ 2 قطعة
+  const convertWithPackInfo = (qty, inputUnit, materialUnit, packInfo) => {
+    if (!packInfo) return null;
+    const gIn = _findUnitGroup(inputUnit);
+    const gPack = _findUnitGroup(packInfo.pack_unit);
+    if (!gIn || !gPack || gIn !== gPack) return null;
+    // حوّل كمية الإدخال إلى وحدة pack الأساسية
+    const baseIn = _UNIT_GROUPS[gIn][inputUnit];
+    const basePack = _UNIT_GROUPS[gPack][packInfo.pack_unit];
+    const qtyInPackUnit = (Number(qty) || 0) * baseIn / basePack;
+    // قسمة على وزن القطعة الواحدة → عدد القطع
+    const pieces = qtyInPackUnit / packInfo.pack_quantity;
+    return { qty: pieces, converted: true, fromUnit: inputUnit, toUnit: materialUnit, via: `${packInfo.pack_quantity} ${packInfo.pack_unit}/${materialUnit}` };
   };
 
   // إضافة مكون للوصفة
@@ -878,9 +914,15 @@ export default function WarehouseManufacturing() {
     const matName = material.material_name || material.raw_material_name || rawMaster?.name || '';
     // 🔁 حوّل الكمية المُدخلة بوحدة المستخدم إلى وحدة المادة الأصلية
     const inputUnit = newIngredient.input_unit || material.unit;
-    const conv = convertQuantityToMaterialUnit(newIngredient.quantity, inputUnit, material.unit);
+    let conv = convertQuantityToMaterialUnit(newIngredient.quantity, inputUnit, material.unit);
+    // إن كانت العائلتان مختلفتين (مثلاً قطعة ↔ كغم) — حاول استخدام معلومات التعبئة
+    if (!conv.converted && inputUnit !== material.unit) {
+      const packInfo = _packInfoFor(matId);
+      const packConv = convertWithPackInfo(newIngredient.quantity, inputUnit, material.unit, packInfo);
+      if (packConv) conv = packConv;
+    }
     if (conv.converted) {
-      toast.info(`${t('تم تحويل')} ${newIngredient.quantity} ${inputUnit} → ${conv.qty.toFixed(3)} ${material.unit}`);
+      toast.info(`${t('تم تحويل')} ${newIngredient.quantity} ${inputUnit} → ${conv.qty.toFixed(3)} ${material.unit}${conv.via ? ` (${conv.via})` : ''}`);
     }
     setProductForm(prev => ({
       ...prev,
@@ -951,9 +993,14 @@ export default function WarehouseManufacturing() {
     const matId = material.material_id || material.raw_material_id;
     const matName = material.material_name || material.raw_material_name || rawMaster?.name || '';
     const inputUnit = editNewIngredient.input_unit || material.unit;
-    const conv = convertQuantityToMaterialUnit(editNewIngredient.quantity, inputUnit, material.unit);
+    let conv = convertQuantityToMaterialUnit(editNewIngredient.quantity, inputUnit, material.unit);
+    if (!conv.converted && inputUnit !== material.unit) {
+      const packInfo = _packInfoFor(matId);
+      const packConv = convertWithPackInfo(editNewIngredient.quantity, inputUnit, material.unit, packInfo);
+      if (packConv) conv = packConv;
+    }
     if (conv.converted) {
-      toast.info(`${t('تم تحويل')} ${editNewIngredient.quantity} ${inputUnit} → ${conv.qty.toFixed(3)} ${material.unit}`);
+      toast.info(`${t('تم تحويل')} ${editNewIngredient.quantity} ${inputUnit} → ${conv.qty.toFixed(3)} ${material.unit}${conv.via ? ` (${conv.via})` : ''}`);
     }
     setEditRecipeForm(prev => ({
       ...prev,
@@ -3563,7 +3610,8 @@ export default function WarehouseManufacturing() {
                     {/* ⭐ اختيار وحدة الإدخال (غرام/كغم/مل/لتر/قطعة) — تُحوَّل تلقائياً لوحدة المادة */}
                     {newIngredient.raw_material_id && (() => {
                       const m = manufacturingInventory.find(x => (x.material_id || x.raw_material_id) === newIngredient.raw_material_id);
-                      const units = availableInputUnitsFor(m?.unit);
+                      const packInfo = _packInfoFor(newIngredient.raw_material_id);
+                      const units = availableInputUnitsFor(m?.unit, packInfo?.pack_unit);
                       if (units.length <= 1) {
                         return <div className="text-xs text-muted-foreground self-center px-2">{m?.unit}</div>;
                       }
@@ -3771,9 +3819,10 @@ export default function WarehouseManufacturing() {
                       {manufacturingInventory.map(material => {
                         const mid = material.material_id || material.raw_material_id;
                         const mname = material.material_name || material.raw_material_name || rawMaterials.find(r => r.id === mid)?.name || '—';
+                        const pi = _packInfoFor(mid);
                         return (
                           <SelectItem key={mid} value={mid}>
-                            {mname} ({material.quantity} {material.unit})
+                            {mname} ({material.quantity} {material.unit}){pi ? ` · ${t('كل')} ${material.unit} = ${pi.pack_quantity} ${pi.pack_unit}` : ''}
                           </SelectItem>
                         );
                       })}
@@ -3791,7 +3840,8 @@ export default function WarehouseManufacturing() {
                   />
                   {editNewIngredient.raw_material_id && (() => {
                     const m = manufacturingInventory.find(x => (x.material_id || x.raw_material_id) === editNewIngredient.raw_material_id);
-                    const units = availableInputUnitsFor(m?.unit);
+                    const packInfo = _packInfoFor(editNewIngredient.raw_material_id);
+                    const units = availableInputUnitsFor(m?.unit, packInfo?.pack_unit);
                     if (units.length <= 1) {
                       return <div className="text-xs text-muted-foreground self-center px-2">{m?.unit}</div>;
                     }
@@ -3800,7 +3850,7 @@ export default function WarehouseManufacturing() {
                         value={editNewIngredient.input_unit || m?.unit}
                         onValueChange={(v) => setEditNewIngredient(prev => ({ ...prev, input_unit: v }))}
                       >
-                        <SelectTrigger className="w-24 bg-background">
+                        <SelectTrigger className="w-24 bg-background" data-testid="edit-recipe-new-unit">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
