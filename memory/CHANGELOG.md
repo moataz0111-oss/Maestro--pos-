@@ -1,5 +1,33 @@
 # Maestro EGP - Changelog
 
+## Session: May 17, 2026 — Auto-Sync Recipe on Manual Stock Add
+
+### المتطلب
+"مزامنة تلقائية عند كل إنتاج/إضافة كمية يدوية بدون الحاجة لزر" — لا يحتاج المستخدم لضغط زر "مزامنة" يدوياً، النظام يقوم بها تلقائياً.
+
+### الحل
+**Backend — `inventory_system.py` (POST `/manufactured-products/{id}/add-stock`)**:
+- بعد زيادة `quantity` يدوياً، يتم احتساب `calc_yield` من الوصفة.
+- إذا كان `|calc_yield - new_quantity| >= 0.5`، تُحجَّم الوصفة تلقائياً بنفس الـ logic المستخدم في `/produce`.
+- تُسجَّل العملية في `inventory_movements` بإشعار `+ مزامنة الوصفة ×X.XXXX`.
+- الاستجابة تتضمن `recipe_scaled` و `scale_factor`.
+
+**Frontend — `WarehouseManufacturing.js`**:
+- `handleAddStock` يقرأ `recipe_scaled` ويُظهر Toast واضحاً عند المزامنة:
+  `تم زيادة الكمية بنجاح · تمت مزامنة الوصفة تلقائياً (×1.2)`
+
+### الاختبار: ✅ 7/7 pytest
+- جديد: `test_add_stock_auto_sync.py` — إضافة 10 حبات لمنتج يُنتج 8.333 ⇒ scale=1.2، الوصفة تُحدَّث إلى 1200g، quantity=10.
+- بقية الاختبارات (6) لا تزال تمر.
+
+### الفوائد
+- الوصفة دائماً متزامنة مع الكمية المُصنّعة.
+- زر "مزامنة الوصفة" اليدوي لا يزال موجوداً للحالات الاستثنائية (الكمية تأتت من قبل النظام الجديد).
+- المستخدم لا يحتاج لتذكّر المزامنة — كل عملية إنتاج/إضافة كمية تُحجّم الوصفة تلقائياً.
+
+---
+
+
 ## Session: May 17, 2026 — Sync Recipe with Produced Quantity
 
 ### المتطلب

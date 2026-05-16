@@ -1260,8 +1260,16 @@ export default function WarehouseManufacturing() {
     
     setSubmitting(true);
     try {
-      await axios.post(`${API}/manufactured-products/${showAddStockDialog.id}/add-stock?quantity=${addStockQuantity}`, {}, { headers });
-      toast.success(t('تم زيادة الكمية بنجاح'));
+      const res = await axios.post(`${API}/manufactured-products/${showAddStockDialog.id}/add-stock?quantity=${addStockQuantity}`, {}, { headers });
+      const d = res.data || {};
+      if (d.recipe_scaled) {
+        toast.success(
+          t('تم زيادة الكمية بنجاح') +
+          ` · ${t('تمت مزامنة الوصفة تلقائياً')} (×${d.scale_factor})`
+        );
+      } else {
+        toast.success(t('تم زيادة الكمية بنجاح'));
+      }
       setShowAddStockDialog(null);
       setAddStockQuantity(1);
       fetchData();

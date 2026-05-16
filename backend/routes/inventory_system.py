@@ -3527,7 +3527,8 @@ async def produce_product(
 
 @router.post("/manufactured-products/{product_id}/add-stock")
 async def add_product_stock(product_id: str, quantity: float = 1):
-    """زيادة كمية المنتج مباشرة (بدون خصم مواد خام) - للتعديل اليدوي"""
+    """زيادة كمية المنتج مباشرة (بدون خصم مواد خام) - للتعديل اليدوي.
+    ⭐ مزامنة تلقائية: تُحجَّم الوصفة لتطابق الكمية الجديدة (إن كان النمط Batch)."""
     db = get_db()
     
     product = await db.manufactured_products.find_one({"id": product_id})
@@ -3537,6 +3538,7 @@ async def add_product_stock(product_id: str, quantity: float = 1):
     if quantity <= 0:
         raise HTTPException(status_code=400, detail="الكمية يجب أن تكون أكبر من صفر")
     
+    now_iso = datetime.now(timezone.utc).isoformat()
     # زيادة الكمية فقط
     await db.manufactured_products.update_one(
         {"id": product_id},
@@ -3545,10 +3547,58 @@ async def add_product_stock(product_id: str, quantity: float = 1):
                 "quantity": quantity,
                 "total_produced": quantity
             },
-            "$set": {"last_updated": datetime.now(timezone.utc).isoformat()}
+            "$set": {"last_updated": now_iso}
         }
     )
-    
+
+    # ⭐ مزامنة تلقائية للوصفة لتطابق الكمية الجديدة
+    recipe_scaled = False
+    scale_factor = 1.0
+    fresh = await db.manufactured_products.find_one({"id": product_id})
+    _UNIT_W = {"غرام": 1.0, "كغم": 1000.0, "كيلو": 1000.0, "كجم": 1000.0, "gram": 1.0, "kg": 1000.0}
+    pw = float(fresh.get("piece_weight") or 0)
+    pwu = fresh.get("piece_weight_unit") or "غرام"
+    piece_grams = pw * _UNIT_W.get(pwu, 1.0)
+    total_grams = 0.0
+    for ing in (fresh.get("recipe") or []):
+        f = _UNIT_W.get(ing.get("unit"))
+        if f:
+            total_grams += (ing.get("quantity") or 0) * f
+    calc_yield = (total_grams / piece_grams) if (piece_grams > 0 and total_grams > 0) else 0
+    target_qty = float(fresh.get("quantity") or 0)
+    if calc_yield > 0 and target_qty > 0 and abs(calc_yield - target_qty) >= 0.5:
+        scale_factor = target_qty / calc_yield
+        new_recipe = []
+        for ing in (fresh.get("recipe") or []):
+            ni = dict(ing)
+            ni["quantity"] = round((ing.get("quantity") or 0) * scale_factor, 6)
+            new_recipe.append(ni)
+        rm_cost = 0.0
+        rm_cost_aw = 0.0
+        for i in new_recipe:
+            q = i.get("quantity", 0) or 0
+            cpu = i.get("cost_per_unit", 0) or 0
+            wp = i.get("waste_percentage", 0) or 0
+            rm_cost += q * cpu
+            eff = cpu / (1 - wp / 100) if 0 < wp < 100 else cpu
+            rm_cost_aw += q * eff
+        sp = fresh.get("selling_price", 0) or 0
+        new_pcost = round(rm_cost_aw, 2)
+        new_pmargin = round(sp - new_pcost, 2) if sp > 0 else 0
+        await db.manufactured_products.update_one(
+            {"id": product_id},
+            {"$set": {
+                "recipe": new_recipe,
+                "raw_material_cost": round(rm_cost, 2),
+                "raw_material_cost_after_waste": round(rm_cost_aw, 2),
+                "cost_before_waste": round(rm_cost, 2),
+                "production_cost": new_pcost,
+                "profit_margin": new_pmargin,
+                "last_updated": now_iso,
+            }}
+        )
+        recipe_scaled = True
+
     # تسجيل الحركة
     await db.inventory_movements.insert_one({
         "id": str(uuid.uuid4()),
@@ -3556,13 +3606,15 @@ async def add_product_stock(product_id: str, quantity: float = 1):
         "product_id": product_id,
         "product_name": product.get("name"),
         "quantity": quantity,
-        "notes": "إضافة يدوية للمخزون",
-        "created_at": datetime.now(timezone.utc).isoformat()
+        "notes": f"إضافة يدوية للمخزون{' + مزامنة الوصفة ×' + str(round(scale_factor, 4)) if recipe_scaled else ''}",
+        "created_at": now_iso,
     })
     
     return {
         "message": f"تم إضافة {quantity} {product.get('unit')} إلى {product.get('name')}",
-        "new_quantity": product.get("quantity", 0) + quantity
+        "new_quantity": product.get("quantity", 0) + quantity,
+        "recipe_scaled": recipe_scaled,
+        "scale_factor": round(scale_factor, 6) if recipe_scaled else 1.0,
     }
 
 # ==================== BRANCH ORDERS (طلبات الفروع من التصنيع) ====================
