@@ -955,6 +955,46 @@ export default function WarehouseManufacturing() {
     
     setNewIngredient({ raw_material_id: '', quantity: 0, input_unit: '' });
   };
+  // ⭐ مزامنة الوصفة لتطابق الكمية المُصنّعة فعلياً (ضبط نسبي للمكونات)
+  const syncRecipeToProducedQty = async (product) => {
+    try {
+      const _W = { 'غرام': 1, 'كغم': 1000, 'كيلو': 1000, 'كجم': 1000, 'gram': 1, 'kg': 1000 };
+      const pw = Number(product.piece_weight || 0);
+      const pwu = product.piece_weight_unit || 'غرام';
+      const pieceGrams = pw * (_W[pwu] || 1);
+      let totalGrams = 0;
+      for (const ing of (product.recipe || [])) {
+        const f = _W[ing.unit];
+        if (f) totalGrams += Number(ing.quantity || 0) * f;
+      }
+      const calcYield = (pieceGrams > 0 && totalGrams > 0) ? totalGrams / pieceGrams : 0;
+      const targetQty = Number(product.quantity || 0);
+      if (calcYield <= 0 || targetQty <= 0) {
+        toast.error(t('لا يمكن المزامنة — تأكد من وجود وزن قطعة + كمية مُصنّعة'));
+        return;
+      }
+      const scale = targetQty / calcYield;
+      const newRecipe = (product.recipe || []).map(ing => ({
+        raw_material_id: ing.raw_material_id,
+        raw_material_name: ing.raw_material_name,
+        quantity: Math.round((Number(ing.quantity) || 0) * scale * 1e6) / 1e6,
+        unit: ing.unit,
+        cost_per_unit: Number(ing.cost_per_unit) || 0,
+        waste_percentage: Number(ing.waste_percentage) || 0,
+      }));
+      await axios.patch(`${API}/manufactured-products/${product.id}/recipe`, {
+        recipe: newRecipe,
+        piece_weight: product.piece_weight,
+        piece_weight_unit: product.piece_weight_unit,
+        reason: `مزامنة الوصفة مع الكمية المُصنّعة (${targetQty} ${product.unit || 'حبة'}) — عامل التحجيم ×${scale.toFixed(6)}`,
+      }, { headers });
+      toast.success(t('تمت مزامنة الوصفة بنجاح') + ` (×${scale.toFixed(4)})`);
+      fetchData();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || t('فشلت المزامنة'));
+    }
+  };
+
   // حذف مكون من الوصفة
   const removeIngredientFromRecipe = (index) => {
     setProductForm(prev => ({
@@ -2597,12 +2637,26 @@ export default function WarehouseManufacturing() {
                                 return (
                                   <>
                                     {/* شريط العائد المحسوب */}
-                                    {calcYield > 0 && (
-                                      <div className="mb-2 p-2 rounded-md bg-amber-500/10 border border-amber-500/30 text-xs text-amber-800 flex items-center justify-between gap-2" data-testid="yield-banner">
-                                        <span>📐 {t('العائد المحسوب من الوصفة')}: <strong className="tabular-nums">{calcYield.toFixed(3)} {unitLabel}</strong></span>
-                                        <span className="text-[10px] text-muted-foreground">{t('وزن القطعة')} {pw} {pwu} · {t('إجمالي الوصفة')} {totalGrams.toFixed(0)} {t('غرام')}</span>
-                                      </div>
-                                    )}
+                                    {calcYield > 0 && (() => {
+                                      const diff = Math.abs(calcYield - storedQty);
+                                      const isOutOfSync = storedQty > 0 && diff >= 0.5;
+                                      return (
+                                        <div className={`mb-2 p-2 rounded-md border text-xs flex items-center justify-between gap-2 flex-wrap ${isOutOfSync ? 'bg-orange-500/10 border-orange-500/40 text-orange-800' : 'bg-amber-500/10 border-amber-500/30 text-amber-800'}`} data-testid="yield-banner">
+                                          <span>📐 {t('العائد المحسوب من الوصفة')}: <strong className="tabular-nums">{calcYield.toFixed(3)} {unitLabel}</strong></span>
+                                          <span className="text-[10px] text-muted-foreground">{t('وزن القطعة')} {pw} {pwu} · {t('إجمالي الوصفة')} {totalGrams.toFixed(0)} {t('غرام')}</span>
+                                          {isOutOfSync && (
+                                            <button
+                                              onClick={() => syncRecipeToProducedQty(product)}
+                                              className="text-[11px] font-bold px-2 py-1 rounded bg-orange-600 hover:bg-orange-700 text-white"
+                                              data-testid={`sync-recipe-${product.id}`}
+                                              title={t('مزامنة كميات المكونات لتطابق المنتج المُصنّع')}
+                                            >
+                                              🔧 {t('مزامنة الوصفة مع')} {storedQty} {unitLabel}
+                                            </button>
+                                          )}
+                                        </div>
+                                      );
+                                    })()}
                                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm mb-3">
                                       <div className="p-2 rounded-md bg-blue-500/5 border border-blue-300/30" data-testid="cost-before-waste-card">
                                         <p className="text-[11px] text-muted-foreground">{t('الكلفة قبل الهدر')}</p>
