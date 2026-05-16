@@ -7148,7 +7148,7 @@ async def get_refund(refund_id: str, current_user: dict = Depends(get_current_us
     return refund
 
 @api_router.get("/orders/{order_id}/refund-status")
-async def check_order_refund_status(order_id: str, current_user: dict = Depends(get_current_user)):
+async def check_order_refund_status(order_id: str, branch_id: Optional[str] = None, current_user: dict = Depends(get_current_user)):
     """التحقق من حالة إرجاع طلب معين"""
     tenant_id = get_user_tenant_id(current_user)
     
@@ -7160,17 +7160,23 @@ async def check_order_refund_status(order_id: str, current_user: dict = Depends(
     except ValueError:
         pass
     
-    # بناء الاستعلام مع tenant_id
+    # ⭐ فلترة صارمة على الفرع — أرقام الفواتير تتكرر بين الفروع
+    # نُحدّد الفرع من المعامل أو من فرع المستخدم الحالي
+    effective_branch_id = branch_id or current_user.get("branch_id")
+
+    # بناء الاستعلام مع tenant_id + branch_id (إن وُجد)
+    and_clauses = [{"$or": or_conditions}]
     if tenant_id:
-        order_query = {"$and": [{"$or": or_conditions}, {"tenant_id": tenant_id}]}
-    else:
-        order_query = {"$or": or_conditions}
+        and_clauses.append({"tenant_id": tenant_id})
+    if effective_branch_id:
+        and_clauses.append({"branch_id": effective_branch_id})
+    order_query = {"$and": and_clauses}
     
     # جلب آخر طلب بهذا الرقم (الأحدث)
     orders = await db.orders.find(order_query, {"_id": 0}).sort("created_at", -1).to_list(1)
     
     if not orders:
-        raise HTTPException(status_code=404, detail="الطلب غير موجود. تأكد من رقم الفاتورة")
+        raise HTTPException(status_code=404, detail="الطلب غير موجود في هذا الفرع. تأكد من رقم الفاتورة")
     
     order = orders[0]
     

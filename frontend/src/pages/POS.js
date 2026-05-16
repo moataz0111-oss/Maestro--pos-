@@ -1122,7 +1122,10 @@ export default function POS() {
     
     setRefundLoading(true);
     try {
-      const res = await axios.get(`${API}/orders/${refundOrderId}/refund-status`);
+      // ⭐ مرّر branch_id حتى لا يخلط أرقام الفواتير بين الفروع
+      const currentBranchId = getBranchIdForApi() || user?.branch_id;
+      const params = currentBranchId ? { branch_id: currentBranchId } : {};
+      const res = await axios.get(`${API}/orders/${refundOrderId}/refund-status`, { params });
       setRefundOrderInfo(res.data);
       
       if (res.data.is_refunded) {
@@ -3196,6 +3199,22 @@ export default function POS() {
                   setOrderType(type.id); 
                   playClick();
                   if (type.id !== 'dine_in') setSelectedTable(null);
+                  // ⭐ سياسة صارمة: عند الخروج من التوصيل قبل الحفظ
+                  // — نُعيد ضبط شركة التوصيل/السائق/العنوان دائماً
+                  // — وإن كان "آجل" مختاراً نُلغيه ونُلزم المستخدم بإعادة الاختيار
+                  //   (يمنع تجاوز السياسة حتى من قِبل المالك/المدير)
+                  if (type.id !== 'delivery') {
+                    if (deliveryApp || selectedDriver || deliveryAddress) {
+                      setDeliveryApp('');
+                      setSelectedDriver('');
+                      setDeliveryAddress('');
+                      toast.info(t('تم إلغاء شركة التوصيل لأن نوع الطلب تغيّر'));
+                    }
+                    if (paymentMethod === 'credit') {
+                      setPaymentMethod('');
+                      toast.warning(t('تم إلغاء "آجل" — يجب اختيار طريقة دفع جديدة بعد تغيير نوع الطلب'));
+                    }
+                  }
                 }}
                 disabled={editingOrder && editingOrder.order_type !== type.id}
                 data-testid={`order-type-${type.id}`}
@@ -3689,11 +3708,12 @@ export default function POS() {
             ]
               // ⭐ زر "آجل" مخفي للموظفين العاديين عند عدم اختيار شركة توصيل
               //    إلا إذا كان مالك/مدير عام أو لديه صلاحية "allow_credit_without_delivery"
+              //    ⚠️ السياسة الصارمة: يجب أن يكون نوع الطلب "delivery" AND شركة محددة (وليس فقط deliveryApp قديم من جلسة سابقة)
               .filter(method => {
                 if (method.id !== 'credit') return true;
                 if (isOwner) return true;
-                if (deliveryApp) return true;
                 if (hasPermission('allow_credit_without_delivery')) return true;
+                if (orderType === 'delivery' && deliveryApp) return true;
                 return false;
               })
               .map(method => (

@@ -1,5 +1,36 @@
 # Maestro EGP - Changelog
 
+## Session: May 16, 2026 — Critical POS Fixes (Credit Bypass + Refund Branch Scoping)
+
+### المشكلة 1: خرق سياسة "آجل"
+سيناريو: المستخدم يختار "توصيل" + شركة → "آجل" يصبح متاحاً → ثم يرجع لـ "داخلي/سفري" → "آجل" يبقى مفعّلاً ويُقبل (خرق صارخ للسياسة).
+
+**الحل (Frontend — `POS.js`)**:
+- عند تغيير `orderType` بعيداً عن `delivery` (قبل الحفظ):
+  - تُمسح تلقائياً: `deliveryApp`, `selectedDriver`, `deliveryAddress` مع Toast إعلامي.
+  - إذا كان `paymentMethod === 'credit'` يُلغى ويُجبر المستخدم على إعادة اختيار طريقة الدفع (حتى للمالك/المدير — لمنع الخرق).
+- شرط فلتر زر "آجل" أصبح أكثر صرامة: `orderType === 'delivery' && deliveryApp` معاً (بدل `deliveryApp` لوحده الذي قد يبقى ملوّثاً من حالة سابقة).
+- زر تغيير نوع الطلب يبقى `disabled` بعد الحفظ (`editingOrder.order_type !== type.id`).
+
+### المشكلة 2: بحث المرتجع يُرجع طلباً غير صحيح
+سيناريو: في فرع الجادرية، البحث عن فاتورة #8 يُرجع فاتورة من فرع آخر برقم #8 لأن الترقيم يتكرر عبر الفروع.
+
+**الحل (Backend — `server.py`)**:
+- `GET /api/orders/{order_id}/refund-status` يقبل الآن `branch_id` كـ query param.
+- يُفلتر الاستعلام بـ `branch_id` (يأتي من المعامل أو من `current_user.branch_id`).
+- رسالة الخطأ أوضح: "الطلب غير موجود في هذا الفرع".
+
+**الحل (Frontend — `POS.js`)**:
+- `searchOrderForRefund` يُمرّر `branch_id` تلقائياً من `getBranchIdForApi()` أو `user.branch_id`.
+
+### الاختبار: ✅ 8/8 pytest
+- `test_refund_branch_scoping.py`: branch_id مقبول، 404 لطلب غير موجود في الفرع.
+- `test_manufactured_recipe_edit.py`: 4/4 سليمة.
+- `test_credit_permission_gate.py`: 2/2 سليمة.
+
+---
+
+
 ## Session: May 16, 2026 — Notification Bell Replaces Disruptive Toasts
 
 ### المشكلة
