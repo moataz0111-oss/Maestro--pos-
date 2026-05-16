@@ -67,6 +67,7 @@ import {
   TabsList,
   TabsTrigger,
 } from '../components/ui/tabs';
+import { Popover, PopoverContent, PopoverTrigger } from '../components/ui/popover';
 import StockoutPredictionDialog, { StockoutPredictionBanner } from '../components/StockoutPrediction';
 import { MonthlyStocktakeButton } from '../components/MonthlyStocktake';
 const API = API_URL;
@@ -237,47 +238,14 @@ export default function WarehouseManufacturing() {
     return () => clearInterval(id);
   }, []);
 
-  // ⭐ إشعارات قسم التصنيع — Toast فوري عند تنفيذ جزئي من المخزن
-  const acknowledgedRef = React.useRef(new Set());
+  // ⭐ إشعارات قسم التصنيع — Bell + Popover بدلاً من Toast فوري متطاير
+  const [mfgNotifications, setMfgNotifications] = useState([]);
+  const [showNotifPopover, setShowNotifPopover] = useState(false);
   useEffect(() => {
     const fetchMfgNotifications = async () => {
       try {
         const res = await axios.get(`${API}/manufacturing-notifications/unread`, { headers });
-        const items = res.data || [];
-        for (const n of items) {
-          if (acknowledgedRef.current.has(n.id)) continue;
-          acknowledgedRef.current.add(n.id);
-          // ابنِ ملخص الأصناف للنص
-          const summary = (n.items_summary || []).slice(0, 3).map(it =>
-            `${it.material_name}: ${it.sent_quantity}/${it.original_quantity} ${it.unit}`
-          ).join(' · ');
-          const more = (n.items_summary?.length || 0) > 3 ? ` + ${n.items_summary.length - 3} ${t('صنف')}` : '';
-          const msg = `🚨 ${t('وصل تحويل جزئي')} #${n.request_number}: ${summary}${more}`;
-          const sub = n.notes_to_manufacturing || t('بانتظار شراء الباقي');
-
-          const ackNotification = async (action) => {
-            try {
-              await axios.post(`${API}/manufacturing-notifications/${n.id}/ack`, { action }, { headers });
-            } catch (_) { /* silent */ }
-            // أعد تحميل البيانات لتحديث طلبات التصنيع
-            fetchData();
-          };
-
-          toast(msg, {
-            description: `${sub} — ${t('من')}: ${n.from_warehouse_user || '-'}`,
-            duration: 30000,
-            action: {
-              label: t('اعتمد واستخدم فوراً'),
-              onClick: () => ackNotification('accept'),
-            },
-            cancel: {
-              label: t('انتظر اكتمال الطلب'),
-              onClick: () => ackNotification('wait'),
-            },
-            className: 'border-amber-500 bg-amber-50',
-            id: `mfg-partial-${n.id}`,
-          });
-        }
+        setMfgNotifications(res.data || []);
       } catch (_) { /* silent */ }
     };
     fetchMfgNotifications();
@@ -285,6 +253,14 @@ export default function WarehouseManufacturing() {
     return () => clearInterval(intervalId);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const ackMfgNotification = async (id, action) => {
+    try {
+      await axios.post(`${API}/manufacturing-notifications/${id}/ack`, { action }, { headers });
+    } catch (_) { /* silent */ }
+    setMfgNotifications(prev => prev.filter(n => n.id !== id));
+    fetchData();
+  };
 
   const approvePurchaseRequest = async (id) => {
     try {
@@ -1472,6 +1448,91 @@ export default function WarehouseManufacturing() {
           </div>
           
           <div className="flex items-center gap-2">
+            {/* ⭐ جرس الإشعارات: تنفيذات جزئية من المخزن */}
+            <Popover open={showNotifPopover} onOpenChange={setShowNotifPopover}>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="icon" className="relative" data-testid="mfg-notif-bell">
+                  <Bell className="h-4 w-4" />
+                  {mfgNotifications.length > 0 && (
+                    <span
+                      className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold rounded-full h-4 min-w-[16px] px-1 flex items-center justify-center"
+                      data-testid="mfg-notif-badge"
+                    >
+                      {mfgNotifications.length}
+                    </span>
+                  )}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent align="end" className="w-96 max-h-[70vh] overflow-y-auto p-0" data-testid="mfg-notif-panel">
+                <div className="p-3 border-b sticky top-0 bg-card z-10">
+                  <h3 className="font-bold text-sm flex items-center gap-2">
+                    <Bell className="h-4 w-4 text-amber-500" />
+                    {t('إشعارات التصنيع')}
+                    <span className="text-xs text-muted-foreground mr-auto">
+                      {mfgNotifications.length} {t('غير مقروء')}
+                    </span>
+                  </h3>
+                </div>
+                {mfgNotifications.length === 0 ? (
+                  <div className="p-6 text-center text-sm text-muted-foreground">
+                    <Bell className="h-8 w-8 mx-auto mb-2 opacity-30" />
+                    {t('لا توجد إشعارات جديدة')}
+                  </div>
+                ) : (
+                  <div className="divide-y">
+                    {mfgNotifications.map(n => (
+                      <div key={n.id} className="p-3 space-y-2 hover:bg-muted/30" data-testid={`mfg-notif-item-${n.id}`}>
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex-1 min-w-0">
+                            <p className="font-bold text-sm text-amber-700">
+                              🚨 {t('وصل تحويل جزئي')} #{n.request_number}
+                            </p>
+                            <p className="text-[11px] text-muted-foreground mt-0.5">
+                              {t('من')}: {n.from_warehouse_user || '-'} · {n.notes_to_manufacturing || t('بانتظار شراء الباقي')}
+                            </p>
+                          </div>
+                        </div>
+                        {/* تفاصيل الأصناف */}
+                        {n.items_summary && n.items_summary.length > 0 && (
+                          <div className="space-y-1 text-xs bg-muted/40 rounded p-2">
+                            {n.items_summary.map((it, i) => (
+                              <div key={i} className="flex items-center justify-between">
+                                <span className="font-medium">{it.material_name}</span>
+                                <span className="tabular-nums text-muted-foreground">
+                                  {it.sent_quantity} / {it.original_quantity} {it.unit}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        {/* أزرار الإجراءات */}
+                        <div className="flex gap-2">
+                          <Button
+                            size="sm"
+                            className="flex-1 bg-green-600 hover:bg-green-700 h-8 text-xs"
+                            onClick={() => ackMfgNotification(n.id, 'accept')}
+                            data-testid={`mfg-notif-accept-${n.id}`}
+                          >
+                            <CheckCircle className="h-3 w-3 ml-1" />
+                            {t('اعتمد واستخدم فوراً')}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="flex-1 h-8 text-xs"
+                            onClick={() => ackMfgNotification(n.id, 'wait')}
+                            data-testid={`mfg-notif-wait-${n.id}`}
+                          >
+                            <Clock className="h-3 w-3 ml-1" />
+                            {t('انتظر اكتمال الطلب')}
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </PopoverContent>
+            </Popover>
             {activeTab === 'warehouse' && (
               <>
                 <Button 
