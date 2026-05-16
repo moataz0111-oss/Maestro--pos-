@@ -401,17 +401,52 @@ export default function Login() {
           60%  { opacity: 1; filter: blur(0); }
           100% { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); letter-spacing: 0.02em; }
         }
+        /* ✦ وميض مستمر على كلمة Maestro */
+        .login-title-shimmer {
+          background: linear-gradient(90deg, #ffffff 0%, #fff7d6 25%, #ffd166 50%, #fff7d6 75%, #ffffff 100%);
+          background-size: 200% 100%;
+          -webkit-background-clip: text;
+          background-clip: text;
+          -webkit-text-fill-color: transparent;
+          color: transparent;
+          animation: login-shimmer 3.5s ease-in-out 2.1s infinite;
+        }
+        @keyframes login-shimmer {
+          0%   { background-position: 200% 0; }
+          100% { background-position: -200% 0; }
+        }
+        /* ✦ نبضة دقيقة مستمرة على كلمة EGP */
+        .login-title-egp {
+          display: inline-block;
+          animation: login-egp-pulse 2.6s ease-in-out 2.1s infinite;
+        }
+        @keyframes login-egp-pulse {
+          0%, 100% { transform: scale(1); filter: drop-shadow(0 0 8px rgba(255,209,102,0.4)); }
+          50%      { transform: scale(1.06); filter: drop-shadow(0 0 18px rgba(255,209,102,0.9)); }
+        }
+        /* ✦ قرص دائري داكن خلف السداسي */
+        .login-disc {
+          opacity: 0;
+          animation: login-disc-in 700ms cubic-bezier(0.22, 1, 0.36, 1) 100ms forwards;
+        }
+        .login-disc-ring {
+          opacity: 0;
+          animation: login-disc-ring-in 800ms cubic-bezier(0.22, 1, 0.36, 1) 250ms forwards;
+        }
+        @keyframes login-disc-in { to { opacity: 1; } }
+        @keyframes login-disc-ring-in { to { opacity: 0.7; } }
         .login-underline {
           width: 0;
           height: 3px;
-          margin-top: 12px;
+          margin-top: 14px;
           border-radius: 999px;
-          background: linear-gradient(90deg, transparent, #f59e0b, transparent);
+          background: linear-gradient(90deg, transparent 0%, #ffd166 30%, #f59e0b 50%, #ffd166 70%, transparent 100%);
+          box-shadow: 0 0 12px rgba(255,209,102,0.6);
           animation: login-line 1200ms cubic-bezier(0.22, 1, 0.36, 1) 1800ms forwards;
         }
         @keyframes login-line {
           0%   { width: 0; opacity: 0; }
-          100% { width: 200px; opacity: 1; }
+          100% { width: 220px; opacity: 1; }
         }
       `}</style>
 
@@ -529,6 +564,11 @@ export default function Login() {
                     <stop offset="50%" stopColor="#ffd166" />
                     <stop offset="100%" stopColor="#f59e0b" />
                   </linearGradient>
+                  <radialGradient id="loginDiscBg" cx="50%" cy="50%" r="50%">
+                    <stop offset="0%" stopColor="#1a1a2e" stopOpacity="0.95" />
+                    <stop offset="70%" stopColor="#0f0f1e" stopOpacity="0.9" />
+                    <stop offset="100%" stopColor="#000000" stopOpacity="0.85" />
+                  </radialGradient>
                   <filter id="loginGlow" x="-50%" y="-50%" width="200%" height="200%">
                     <feGaussianBlur stdDeviation="2.5" result="b" />
                     <feMerge>
@@ -537,15 +577,18 @@ export default function Login() {
                     </feMerge>
                   </filter>
                 </defs>
+                {/* ✦ قرص دائري داكن خلف السداسي */}
+                <circle cx="100" cy="100" r="86" fill="url(#loginDiscBg)" className="login-disc" />
+                {/* ✦ حلقة دائرية ذهبية ثابتة حول القرص */}
+                <circle cx="100" cy="100" r="86" stroke="url(#loginGold)" strokeWidth="2" fill="none" opacity="0.7" className="login-disc-ring" />
                 {/* خاتم خارجي يدور */}
                 <g className="login-ring-spin" style={{ transformOrigin: '100px 100px' }}>
-                  <circle cx="100" cy="100" r="92" stroke="url(#loginGold)" strokeWidth="2" fill="none" opacity="0.55" />
-                  <circle cx="100" cy="100" r="92" stroke="url(#loginGold)" strokeWidth="3" fill="none"
+                  <circle cx="100" cy="100" r="94" stroke="url(#loginGold)" strokeWidth="3" fill="none"
                           strokeDasharray="40 200" strokeLinecap="round" />
                 </g>
                 {/* السداسي */}
                 <polygon
-                  points="100,18 168,55 168,145 100,182 32,145 32,55"
+                  points="100,30 158,62 158,138 100,170 42,138 42,62"
                   fill="none"
                   stroke="url(#loginGold)"
                   strokeWidth="3.5"
@@ -576,42 +619,19 @@ export default function Login() {
               color: '#ffffff'
             }}
           >
-            Maestro{' '}
-            <span style={{
+            <span className="login-title-shimmer">Maestro</span>{' '}
+            <span className="login-title-egp" style={{
               background: 'linear-gradient(180deg, #ffd166 0%, #f59e0b 100%)',
               WebkitBackgroundClip: 'text',
               WebkitTextFillColor: 'transparent',
               backgroundClip: 'text'
             }}>EGP</span>
           </CardTitle>
-          {/* خط ذهبي تحت العنوان */}
-          <div className="login-underline mx-auto" />
           <CardDescription className="text-gray-300 mt-3 text-sm">
             {t('نظام نقاط البيع والتحكم بالتكاليف')}
           </CardDescription>
-          
-          {/* Background indicator dots */}
-          {hasBackgrounds && backgroundSettings.backgrounds.length > 1 && (
-            <div className="flex justify-center gap-2 mt-4">
-              {backgroundSettings.backgrounds.filter(b => b.is_active).map((_, index) => (
-                <button
-                  key={index}
-                  onClick={() => {
-                    setIsTransitioning(true);
-                    setTimeout(() => {
-                      setCurrentBgIndex(index);
-                      setIsTransitioning(false);
-                    }, 500);
-                  }}
-                  className={`w-2 h-2 rounded-full transition-all duration-300 ${
-                    index === currentBgIndex 
-                      ? 'bg-primary w-6' 
-                      : 'bg-white/30 hover:bg-white/50'
-                  }`}
-                />
-              ))}
-            </div>
-          )}
+          {/* ✦ الخط الذهبي تحت العنوان */}
+          <div className="login-underline mx-auto" data-testid="login-underline" />
         </CardHeader>
 
         <CardContent className="pt-6">
