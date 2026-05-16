@@ -1,5 +1,36 @@
 # Maestro EGP - Changelog
 
+## Session: May 16, 2026 — Animated Logo + Animated Text in Splash
+
+### المتطلب
+"اسم النظام وشعار النظام والاسم متحرك والشعار متحرك" — إضافة شعار للنظام مع تحريكه بشكل مستقل عن النص.
+
+### الحل
+**`SplashScreen.jsx`**:
+- إضافة شعار SVG هندسي ذهبي مكوّن من:
+  - حلقة خارجية متقطعة تدور 360° (6 ثوانٍ loop).
+  - سداسي رئيسي (hexagon) يُرسم تدريجياً (stroke-dasharray draw 1.4s).
+  - حرف **M** يُرسم بعد السداسي (0.8s delay، 1.2s draw).
+  - نقطة مركزية تنبض (2s loop).
+  - تدرّج ذهبي + glow filter.
+- حركة الشعار:
+  - دخول: scale من 0.4 + rotate -90° → 1.0 (1.1s easeOutExpo).
+  - تعويم مستمر: ±6px (3.6s ease-in-out).
+- النص "Maestro EGP" يدخل بعد بدء الشعار بـ 1.2s (blur + scale + letter-spacing animation).
+- تأخيرات الخط الذهبي وشريط التحميل أُعيد ترتيبها لتنسجم مع التتابع.
+
+**`public/index.html`** (initial splash قبل تشغيل React):
+- نسخة مطابقة من الشعار + النص بـ CSS-only animations.
+- نفس التتابع: ring spin، hex draw، M draw، dot pulse.
+
+### الاختبار: ✅ Smoke UI End-to-End
+- اللقطة عند 0.6s: حلقة ذهبية تبدأ في الرسم.
+- اللقطة عند 1.5s: الشعار مكتمل + نص ظاهر + خط ذهبي.
+- اللقطة عند 2.3s: استمرار الحركات المتزامنة (الشعار يعوم، الحلقة تدور، النقطة تنبض).
+
+---
+
+
 ## Session: May 16, 2026 — Maestro EGP Splash Screen
 
 ### المتطلب
