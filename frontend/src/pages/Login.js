@@ -112,7 +112,7 @@ export default function Login() {
   // Owner login states - المفتاح السري للمالك
   const [isOwnerLogin, setIsOwnerLogin] = useState(false);
   const [ownerSecretKey, setOwnerSecretKey] = useState('');
-  
+
   const { login } = useAuth();
   const navigate = useNavigate();
   
@@ -218,6 +218,8 @@ export default function Login() {
         if (response.data.token) {
           localStorage.setItem('super_admin_token', response.data.token);
           localStorage.setItem('super_admin_user', JSON.stringify(response.data.user));
+          // ⭐ علامة لشاشة Splash العالمية
+          sessionStorage.setItem('show_post_login_splash', '1');
           navigate('/super-admin');
         } else {
           setError(t('فشل تسجيل الدخول'));
@@ -232,6 +234,8 @@ export default function Login() {
     const result = await login(email, password);
     
     if (result.success) {
+      // ⭐ علامة لشاشة Splash العالمية
+      sessionStorage.setItem('show_post_login_splash', '1');
       navigate('/');
     } else if (result.redirectToSuperAdmin) {
       // تحويل مالك النظام إلى بوابة المالك

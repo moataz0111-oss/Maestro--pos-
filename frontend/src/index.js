@@ -51,12 +51,18 @@ const hideLoader = () => {
       loader.style.display = 'none';
     }, 300);
   }
+  // ⭐ إخفاء initial-splash الجديد
+  const splash = document.getElementById('initial-splash');
+  if (splash) {
+    splash.style.opacity = '0';
+    setTimeout(() => { splash.remove(); }, 450);
+  }
 };
 
 // Global error handler
 window.onerror = function(message, source, lineno, colno, error) {
   console.error('Global error:', message, source, lineno, colno, error);
-  const loader = document.getElementById('initial-loader');
+  const loader = document.getElementById('initial-loader') || document.getElementById('initial-splash');
   if (loader) {
     loader.innerHTML = `
       <div style="text-align: center; color: white; padding: 20px;">

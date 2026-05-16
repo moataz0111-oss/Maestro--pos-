@@ -1,5 +1,41 @@
 # Maestro EGP - Changelog
 
+## Session: May 16, 2026 — Maestro EGP Splash Screen
+
+### المتطلب
+- شاشة بداية أنيقة بعد تسجيل الدخول مدتها 4 ثوانٍ تعرض اسم النظام "Maestro EGP".
+- خلفية مطاعم قابلة للتخصيص من لوحة المالك.
+- استبدال الخلفية السوداء + الدائرة عند تحميل الصفحات بنفس التصميم.
+
+### الحلول
+**جديد — `/app/frontend/src/components/SplashScreen.jsx`**:
+- مكوّن قابل لإعادة الاستخدام (`durationMs` افتراضي 4000، `onComplete` callback).
+- يجلب خلفية عشوائية من `/api/login-backgrounds` (active) ويُخزّنها في sessionStorage cache.
+- "Maestro EGP" بحجم متجاوب (clamp 48px → 140px) — "Maestro" أبيض ساطع، "EGP" بتدرّج ذهبي.
+- أنيميشن: fade-in + scale + blur → 900ms (cubic-bezier easeOutExpo). خط ذهبي يتمدد تحت العنوان (1200ms بعد 600ms). شريط تحميل صغير (يبدأ بعد 1200ms).
+- طبقة تعتيم قابلة للتخصيص + glow ناعم.
+
+**`Login.js`**:
+- بعد تسجيل الدخول الناجح (مالك + سوبر أدمن): `sessionStorage.setItem('show_post_login_splash', '1')` ثم `navigate(...)`.
+
+**`App.js`**:
+- إضافة مكوّن `PostLoginSplash` عالمي داخل `BrowserRouter` — يراقب علامة `show_post_login_splash` ويعرض SplashScreen لـ 4 ثوانٍ ثم يحذف العلامة.
+- استبدال `PageLoader` بـ `FullSplash` في حالتيْن: ProtectedRoute Initial Loading + PublicRoute Initial Loading (تحلّ محل الخلفية السوداء).
+
+**`index.html`**:
+- إضافة `#initial-splash` CSS-only يظهر فوراً عند تحميل الصفحة (قبل تشغيل React) ليطابق نفس التصميم — يُزال تلقائياً عند mount.
+
+**`index.js`**:
+- توسعة `hideLoader` لإزالة `#initial-splash` أيضاً عند نجاح render.
+
+### الاختبار: ✅ Smoke UI End-to-End
+- شاشة Splash تظهر مدة ~3.5 ثانية ثم تُخفى وتنتقل إلى `/`.
+- الخلفية مطعم حقيقي (مأخوذة من إعدادات `login_backgrounds`).
+- التحميل الأولي للتطبيق يعرض نفس التصميم بدل الشاشة السوداء + الدائرة.
+
+---
+
+
 ## Session: May 16, 2026 — Batch Mode: Auto-Scale Recipe on Produce
 
 ### المتطلب

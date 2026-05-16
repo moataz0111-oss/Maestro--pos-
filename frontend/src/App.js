@@ -14,6 +14,7 @@ import React, { Suspense, lazy, useEffect, useState } from "react";
 import { t } from "./utils/translations";
 
 import { useAutoSync } from "./hooks/useAutoSync";
+import SplashScreen from "./components/SplashScreen";
 
 // Loading Component — شريط تحميل خفيف فوق الصفحة (غير معطّل للتنقل)
 const PageLoader = () => (
@@ -29,6 +30,11 @@ const PageLoader = () => (
       }
     `}</style>
   </>
+);
+
+// ⭐ FullSplash — تُستخدم بدل خلفية سوداء + دائرة عند الإقلاع الأول/الـ Suspense
+const FullSplash = () => (
+  <SplashScreen durationMs={60000} onComplete={() => {}} />
 );
 
 // === الصفحات الرئيسية - بدون lazy loading لتنقل لحظي ===
@@ -117,7 +123,7 @@ const ProtectedRoute = ({ children }) => {
   
   // فقط نعرض شاشة التحميل في التحميل الأولي جداً (أول مرة يفتح التطبيق)
   if (loading && !initialCheckDone && !hasCachedUser) {
-    return <PageLoader />;
+    return <FullSplash />;
   }
   
   // إذا لا يوجد token على الإطلاق، توجيه لصفحة الدخول
@@ -242,7 +248,7 @@ const PublicRoute = ({ children }) => {
   
   // Don't show loading for public routes after initial check
   if (showLoading && loading && !isAuthChecked()) {
-    return <PageLoader />;
+    return <FullSplash />;
   }
   
   // إذا كان مستخدم delivery، لا نعتبره authenticated للنظام الرئيسي
@@ -590,6 +596,31 @@ function AutoSyncRunner() {
   return null;
 }
 
+// ⭐ شاشة Splash العالمية: تظهر بعد تسجيل الدخول مباشرة لمدة 4 ثوانٍ
+// تقرأ علامة `show_post_login_splash` من sessionStorage وتُزيلها بعد العرض
+function PostLoginSplash() {
+  const [show, setShow] = useState(() => sessionStorage.getItem('show_post_login_splash') === '1');
+  useEffect(() => {
+    // عند تغيير المسار، نتحقق مرة أخرى (لتغطية إعادة الانتقال بعد التسجيل)
+    const interval = setInterval(() => {
+      if (!show && sessionStorage.getItem('show_post_login_splash') === '1') {
+        setShow(true);
+      }
+    }, 200);
+    return () => clearInterval(interval);
+  }, [show]);
+  if (!show) return null;
+  return (
+    <SplashScreen
+      durationMs={4000}
+      onComplete={() => {
+        sessionStorage.removeItem('show_post_login_splash');
+        setShow(false);
+      }}
+    />
+  );
+}
+
 function App() {
   return (
     <ErrorBoundary>
@@ -604,6 +635,7 @@ function App() {
                       <OfflineBanner />
                       <AppRoutes />
                       <AutoSyncRunner />
+                      <PostLoginSplash />
                       <Toaster position="top-center" richColors />
                       {/* Incoming Call Popup - يظهر في جميع الصفحات */}
                       <IncomingCallPopup />
