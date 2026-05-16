@@ -1,5 +1,38 @@
 # Maestro EGP - Changelog
 
+## Session: May 16, 2026 — Batch Mode: Auto-Scale Recipe on Produce
+
+### المتطلب
+"يقبل الزيادة ويزيد الكميات للوصفة أو المكونات ليعادل الرقم 500" — المستخدم يريد أنه إذا طلب تصنيع كمية أكبر من العائد الحقيقي للوصفة، يقبل النظام الطلب ويُحجّم كميات المكونات تلقائياً لتُنتج بالضبط الكمية المطلوبة (الوصفة دفعة batch وليست per-unit).
+
+### الحلول
+**Backend — `inventory_system.py` (POST `/manufactured-products/{id}/produce`)**:
+- اكتشاف "نمط الدفعة" تلقائياً: إذا كان `piece_weight` مُحدداً والوصفة تحتوي على مواد وزنية ⇒ `calculated_yield = total_grams / piece_grams`.
+- إذا كان `quantity > calculated_yield` (أو ≠) ⇒ يُحجَّم كل مكون بـ `scale_factor = quantity / calculated_yield`، وتُحفظ الوصفة المُحجَّمة في DB، وتُعاد احتساب التكاليف (قبل/بعد الهدر، هامش الربح).
+- استهلاك المواد الخام **مرة واحدة** (multiplier=1) لأن الوصفة تمثل الدفعة كاملة.
+- يُسجَّل في `audit_logs` (action: `recipe_auto_scaled_on_produce`) — تاريخ، عامل التحجيم، العائد قبل التحجيم.
+- في حال عدم وجود `piece_weight` ⇒ يعمل بالنمط القديم (per-unit، multiplier = quantity) — توافق رجعي كامل.
+- إصلاح ثانوي: `piece_weight` و`piece_weight_unit` لم يكونا يُحفظان عند إنشاء المنتج المصنّع — أُصلِح.
+- الاستجابة تتضمن الآن: `recipe_scaled`, `scale_factor`, `calculated_yield_before`, `batch_mode`.
+
+**Backend — `inventory_system.py` (POST `/manufactured-products`)**:
+- إضافة `piece_weight` و`piece_weight_unit` لـ `product_doc` (كانا مفقوديْن — هذا سبب فشل اكتشاف Batch Mode في الكثير من السيناريوهات).
+
+**Frontend — `WarehouseManufacturing.js`**:
+- حوار التصنيع يحسب الآن نفس `calc_yield` و`scale_factor`، يعرض بانر معلوماتي: `سيتم تعديل الوصفة تلقائياً بنسبة ×X.XXXX لتُنتج بالضبط N حبة`.
+- "مطلوب/متوفر" لكل مادة يستخدم `multiplier=scale` في batch mode (بدل ضرب الكمية × عدد الحبات الذي يُعطي أرقاماً خيالية).
+- Toast النجاح يُظهر عامل التحجيم عند تصنيع كميات تختلف عن العائد الأصلي.
+
+### الاختبار: ✅ 10/10 pytest
+- جديد: `test_produce_batch_scaling.py` — يُنشئ منتجاً بـ piece_weight=120 وغرام=1000، يطلب تصنيع 10، يتحقق:
+  - `scale_factor ≈ 1.2`
+  - الوصفة في DB → 1200g
+  - مخزون التصنيع نقص بـ ~1200g (وليس 10000g)
+  - المنتج المصنّع زاد بـ 10 وحدات
+
+---
+
+
 ## Session: May 16, 2026 — Simplify Product↔Manufactured Link (Show Pieces, Not Raw Materials)
 
 ### المشكلتان

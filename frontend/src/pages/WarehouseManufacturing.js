@@ -1185,8 +1185,16 @@ export default function WarehouseManufacturing() {
     
     setSubmitting(true);
     try {
-      await axios.post(`${API}/manufactured-products/${showProduceDialog.id}/produce?quantity=${produceQuantity}`, {}, { headers });
-      toast.success(t('تم التصنيع بنجاح'));
+      const res = await axios.post(`${API}/manufactured-products/${showProduceDialog.id}/produce?quantity=${produceQuantity}`, {}, { headers });
+      const d = res.data || {};
+      if (d.recipe_scaled) {
+        toast.success(
+          t('تم التصنيع بنجاح') +
+          ` · ${t('تم تعديل الوصفة تلقائياً لتُنتج بالضبط')} ${produceQuantity} ${showProduceDialog.unit || 'حبة'} (${t('عامل')}: ×${d.scale_factor})`
+        );
+      } else {
+        toast.success(t('تم التصنيع بنجاح'));
+      }
       setShowProduceDialog(null);
       setProduceQuantity(1);
       fetchData();
@@ -4124,49 +4132,75 @@ export default function WarehouseManufacturing() {
             <div className="space-y-4">
               <div className="p-4 bg-green-500/10 border border-green-500/30 rounded-lg">
                 <p className="text-sm font-medium text-green-700 mb-2">{t('المواد التي سيتم خصمها (مع المتوفر):')}</p>
-                <div className="space-y-1.5">
-                  {showProduceDialog.recipe?.map((ing, idx) => {
-                    const needed = (Number(ing.quantity) || 0) * produceQuantity;
-                    const invItem = manufacturingInventory.find(m => (m.material_id || m.raw_material_id) === ing.raw_material_id);
-                    const available = Number(invItem?.quantity) || 0;
-                    const isShort = available < needed;
-                    return (
-                      <div
-                        key={idx}
-                        className={`flex items-center justify-between text-sm p-2 rounded ${isShort ? 'bg-red-500/10 border border-red-500/40' : 'bg-background/50'}`}
-                        data-testid={`produce-row-${idx}`}
-                      >
-                        <div className="flex items-center gap-2">
-                          <Beaker className={`h-3.5 w-3.5 ${isShort ? 'text-red-600' : 'text-purple-500'}`} />
-                          <span className="font-medium">{ing.raw_material_name}</span>
-                          {isShort && (
-                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-500 text-white font-bold">{t('ناقص')}</span>
-                          )}
-                        </div>
-                        <div className="text-left tabular-nums">
-                          <div className={`font-bold ${isShort ? 'text-red-700' : 'text-foreground'}`}>
-                            {t('مطلوب:')} {formatRecipeQuantity(needed, ing.unit).text}
-                          </div>
-                          <div className={`text-[11px] ${isShort ? 'text-red-600' : 'text-muted-foreground'}`}>
-                            {t('متوفر:')} {formatRecipeQuantity(available, ing.unit).text}
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-                {/* ملخص: عدد المواد الناقصة */}
+                {/* ⭐ احتسب نمط الوصفة: batch (إذا piece_weight موجود ومجموع الوزن > 0) أم legacy */}
                 {(() => {
-                  const shortCount = (showProduceDialog.recipe || []).filter(ing => {
-                    const needed = (Number(ing.quantity) || 0) * produceQuantity;
-                    const invItem = manufacturingInventory.find(m => (m.material_id || m.raw_material_id) === ing.raw_material_id);
-                    return (Number(invItem?.quantity) || 0) < needed;
-                  }).length;
-                  if (shortCount === 0) return null;
+                  const _W = { 'غرام': 1, 'كغم': 1000, 'كيلو': 1000, 'كجم': 1000, 'gram': 1, 'kg': 1000 };
+                  const pw = Number(showProduceDialog.piece_weight || 0);
+                  const pwu = showProduceDialog.piece_weight_unit || 'غرام';
+                  const pieceGrams = pw * (_W[pwu] || 1);
+                  let totalGrams = 0;
+                  for (const ing of (showProduceDialog.recipe || [])) {
+                    const f = _W[ing.unit];
+                    if (f) totalGrams += Number(ing.quantity || 0) * f;
+                  }
+                  const calcYield = (pieceGrams > 0 && totalGrams > 0) ? totalGrams / pieceGrams : 0;
+                  const isBatch = calcYield > 0;
+                  const scale = isBatch && calcYield > 0 ? produceQuantity / calcYield : 1;
+                  const mult = isBatch ? scale : produceQuantity;  // batch: scale × 1 each ingredient; legacy: ×quantity
                   return (
-                    <div className="mt-2 p-2 rounded bg-red-500/15 border-2 border-red-500/40 text-red-700 text-sm font-bold text-center" data-testid="produce-shortfall-summary">
-                      ⚠️ {shortCount} {t('مادة ناقصة — اطلب تحويلها من المخزن قبل التصنيع')}
-                    </div>
+                    <>
+                      {isBatch && Math.abs(scale - 1) > 1e-4 && (
+                        <div className="mb-2 p-2 rounded bg-amber-500/10 border border-amber-500/30 text-xs text-amber-800">
+                          ℹ️ {t('سيتم تعديل الوصفة تلقائياً بنسبة')} <strong>×{scale.toFixed(4)}</strong> {t('لتُنتج بالضبط')} {produceQuantity} {showProduceDialog.unit || 'حبة'}
+                          <span className="block text-[10px] mt-0.5">{t('العائد الحالي من الوصفة')}: {calcYield.toFixed(3)} {showProduceDialog.unit || 'حبة'}</span>
+                        </div>
+                      )}
+                      <div className="space-y-1.5">
+                        {showProduceDialog.recipe?.map((ing, idx) => {
+                          const needed = (Number(ing.quantity) || 0) * mult;
+                          const invItem = manufacturingInventory.find(m => (m.material_id || m.raw_material_id) === ing.raw_material_id);
+                          const available = Number(invItem?.quantity) || 0;
+                          const isShort = available < needed;
+                          return (
+                            <div
+                              key={idx}
+                              className={`flex items-center justify-between text-sm p-2 rounded ${isShort ? 'bg-red-500/10 border border-red-500/40' : 'bg-background/50'}`}
+                              data-testid={`produce-row-${idx}`}
+                            >
+                              <div className="flex items-center gap-2">
+                                <Beaker className={`h-3.5 w-3.5 ${isShort ? 'text-red-600' : 'text-purple-500'}`} />
+                                <span className="font-medium">{ing.raw_material_name}</span>
+                                {isShort && (
+                                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-500 text-white font-bold">{t('ناقص')}</span>
+                                )}
+                              </div>
+                              <div className="text-left tabular-nums">
+                                <div className={`font-bold ${isShort ? 'text-red-700' : 'text-foreground'}`}>
+                                  {t('مطلوب:')} {formatRecipeQuantity(needed, ing.unit).text}
+                                </div>
+                                <div className={`text-[11px] ${isShort ? 'text-red-600' : 'text-muted-foreground'}`}>
+                                  {t('متوفر:')} {formatRecipeQuantity(available, ing.unit).text}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      {/* ملخص: عدد المواد الناقصة */}
+                      {(() => {
+                        const shortCount = (showProduceDialog.recipe || []).filter(ing => {
+                          const needed = (Number(ing.quantity) || 0) * mult;
+                          const invItem = manufacturingInventory.find(m => (m.material_id || m.raw_material_id) === ing.raw_material_id);
+                          return (Number(invItem?.quantity) || 0) < needed;
+                        }).length;
+                        if (shortCount === 0) return null;
+                        return (
+                          <div className="mt-2 p-2 rounded bg-red-500/15 border-2 border-red-500/40 text-red-700 text-sm font-bold text-center" data-testid="produce-shortfall-summary">
+                            ⚠️ {shortCount} {t('مادة ناقصة — اطلب تحويلها من المخزن قبل التصنيع')}
+                          </div>
+                        );
+                      })()}
+                    </>
                   );
                 })()}
               </div>

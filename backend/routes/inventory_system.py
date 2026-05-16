@@ -3102,6 +3102,8 @@ async def create_manufactured_product(
         "name": product.name,
         "name_en": product.name_en,
         "unit": product.unit,
+        "piece_weight": product.piece_weight,  # ⭐ وزن القطعة (للنمط Batch)
+        "piece_weight_unit": product.piece_weight_unit or "غرام",
         "recipe": recipe_items,
         "quantity": product.quantity,
         "min_quantity": product.min_quantity,
@@ -3294,32 +3296,126 @@ async def produce_product(
     quantity: int = 1,
     current_user: dict = Depends(get_current_user),
 ):
-    """تصنيع كمية من المنتج (خصم المواد الخام من مخزون التصنيع)"""
+    """تصنيع كمية من المنتج (خصم المواد الخام من مخزون التصنيع)
+
+    🔧 نمط الدفعة (Batch Mode):
+    إذا كان `piece_weight` مُحدداً والوصفة تحتوي على مواد وزنية (غرام/كغم) يمكن
+    احتساب عدد القطع الناتجة (calculated_yield = total_grams / piece_grams).
+    عندها تُعتبر الوصفة "دفعة كاملة" تُنتج `calculated_yield` قطعة.
+    عند طلب `quantity` قطعة: نُحجّم كميات المكونات بالنسبة `quantity / calculated_yield`
+    ونحفظ الوصفة المُحدَّثة (يطلب المستخدم ذلك صراحةً) ثم نستهلك المواد مرة واحدة.
+
+    في حال عدم وجود piece_weight، يعمل النظام بالنمط القديم (PER UNIT) ويُضرب
+    كل مكوّن في `quantity`.
+    """
     db = get_db()
-    
+
     product = await db.manufactured_products.find_one({"id": product_id})
     if not product:
         raise HTTPException(status_code=404, detail="المنتج غير موجود")
-    
-    # التحقق من توفر المواد الخام في مخزون التصنيع
+
+    # ───── احتساب العائد من الوصفة (إن أمكن) ─────
+    _UNIT_WEIGHT = {"غرام": 1.0, "كغم": 1000.0, "كيلو": 1000.0, "كجم": 1000.0, "gram": 1.0, "kg": 1000.0}
+    piece_weight = float(product.get("piece_weight") or 0)
+    piece_weight_unit = product.get("piece_weight_unit") or "غرام"
+    calculated_yield = 0.0
+    piece_grams = piece_weight * _UNIT_WEIGHT.get(piece_weight_unit, 1.0)
+    if piece_weight > 0 and piece_grams > 0:
+        total_grams = 0.0
+        for ing in (product.get("recipe") or []):
+            f = _UNIT_WEIGHT.get(ing.get("unit"))
+            if f:
+                total_grams += (ing.get("quantity") or 0) * f
+        if total_grams > 0:
+            calculated_yield = total_grams / piece_grams
+
+    is_batch_mode = calculated_yield > 0
+    now_iso = datetime.now(timezone.utc).isoformat()
+    tenant_id = current_user.get("tenant_id") if current_user else None
+    performed_by_name = (current_user or {}).get("full_name") or (current_user or {}).get("username")
+
+    # ───── إذا batch mode: حجّم الوصفة لتُطابق quantity المطلوبة ─────
+    recipe_scaled = False
+    scale_factor = 1.0
+    if is_batch_mode:
+        scale_factor = float(quantity) / calculated_yield
+        if abs(scale_factor - 1.0) > 1e-6:
+            new_recipe = []
+            for ing in (product.get("recipe") or []):
+                ni = dict(ing)
+                ni["quantity"] = round((ing.get("quantity") or 0) * scale_factor, 6)
+                new_recipe.append(ni)
+            # إعادة احتساب التكلفة
+            rm_cost = 0.0
+            rm_cost_aw = 0.0
+            for i in new_recipe:
+                q = i.get("quantity", 0) or 0
+                cpu = i.get("cost_per_unit", 0) or 0
+                wp = i.get("waste_percentage", 0) or 0
+                rm_cost += q * cpu
+                eff = cpu / (1 - wp / 100) if 0 < wp < 100 else cpu
+                rm_cost_aw += q * eff
+            sp = product.get("selling_price", 0) or 0
+            new_pcost = round(rm_cost_aw, 2)
+            new_pmargin = round(sp - new_pcost, 2) if sp > 0 else 0
+            await db.manufactured_products.update_one(
+                {"id": product_id},
+                {"$set": {
+                    "recipe": new_recipe,
+                    "raw_material_cost": round(rm_cost, 2),
+                    "raw_material_cost_after_waste": round(rm_cost_aw, 2),
+                    "cost_before_waste": round(rm_cost, 2),
+                    "production_cost": new_pcost,
+                    "profit_margin": new_pmargin,
+                    "last_updated": now_iso,
+                }}
+            )
+            product = await db.manufactured_products.find_one({"id": product_id})
+            recipe_scaled = True
+            # سجل تدقيق لإعادة الحجم
+            try:
+                await db.audit_logs.insert_one({
+                    "id": str(uuid.uuid4()),
+                    "action": "recipe_auto_scaled_on_produce",
+                    "entity_type": "manufactured_product",
+                    "entity_id": product_id,
+                    "entity_name": product.get("name"),
+                    "user_id": current_user.get("id"),
+                    "user_email": current_user.get("email"),
+                    "tenant_id": tenant_id,
+                    "details": {
+                        "requested_quantity": quantity,
+                        "calculated_yield_before": round(calculated_yield, 3),
+                        "scale_factor": round(scale_factor, 6),
+                    },
+                    "created_at": now_iso,
+                })
+            except Exception:
+                pass
+
+    # في batch mode الوصفة تُمثّل الدفعة الكاملة → استهلاك مرّة واحدة (multiplier=1)
+    # في legacy mode الوصفة per-unit → استهلاك × quantity
+    multiplier = 1 if is_batch_mode else quantity
+
+    # ───── التحقق من توفر المواد ─────
     insufficient = []
     for ingredient in product.get("recipe", []):
-        needed = ingredient.get("quantity", 0) * quantity
-        
+        needed = (ingredient.get("quantity", 0) or 0) * multiplier
+
         manufacturing_item = await db.manufacturing_inventory.find_one({
             "raw_material_id": ingredient.get("raw_material_id")
         })
-        
+
         available = manufacturing_item.get("quantity", 0) if manufacturing_item else 0
-        
+
         if available < needed:
             insufficient.append({
                 "name": ingredient.get("raw_material_name"),
-                "needed": needed,
-                "available": available,
+                "needed": round(needed, 3),
+                "available": round(available, 3),
                 "unit": ingredient.get("unit")
             })
-    
+
     if insufficient:
         raise HTTPException(
             status_code=400,
@@ -3328,19 +3424,15 @@ async def produce_product(
                 "insufficient_materials": insufficient
             }
         )
-    
-    now_iso = datetime.now(timezone.utc).isoformat()
-    tenant_id = current_user.get("tenant_id") if current_user else None
-    performed_by_name = (current_user or {}).get("full_name") or (current_user or {}).get("username")
-    
+
     # حساب تكلفة هذه الدفعة من الإنتاج (قبل/بعد الهدر)
     batch_cost_before_waste = 0.0
     batch_cost_after_waste = 0.0
     consumed_details = []
-    
+
     # خصم المواد الخام من مخزون التصنيع + تسجيل حركة استهلاك لكل مادة
     for ingredient in product.get("recipe", []):
-        needed = ingredient.get("quantity", 0) * quantity
+        needed = (ingredient.get("quantity", 0) or 0) * multiplier
         base_cost = ingredient.get("cost_per_unit", 0) or 0
         waste_pct = ingredient.get("waste_percentage", 0) or 0
         effective_cost = (base_cost / (1 - waste_pct / 100)) if (0 < waste_pct < 100) else base_cost
@@ -3351,14 +3443,14 @@ async def produce_product(
         consumed_details.append({
             "raw_material_id": ingredient.get("raw_material_id"),
             "raw_material_name": ingredient.get("raw_material_name"),
-            "quantity": needed,
+            "quantity": round(needed, 6),
             "unit": ingredient.get("unit"),
             "cost_per_unit": base_cost,
             "waste_percentage": waste_pct,
             "cost_before_waste": round(line_before, 2),
             "cost_after_waste": round(line_after, 2),
         })
-        
+
         await db.manufacturing_inventory.update_one(
             {"raw_material_id": ingredient.get("raw_material_id")},
             {
@@ -3374,7 +3466,7 @@ async def produce_product(
             "category": "manufacturing",
             "material_id": ingredient.get("raw_material_id"),
             "material_name": ingredient.get("raw_material_name"),
-            "quantity": needed,
+            "quantity": round(needed, 6),
             "unit": ingredient.get("unit"),
             "cost_per_unit": base_cost,
             "waste_percentage": waste_pct,
@@ -3426,6 +3518,10 @@ async def produce_product(
         "new_quantity": product.get("quantity", 0) + quantity,
         "cost_before_waste": round(batch_cost_before_waste, 2),
         "cost_after_waste": round(batch_cost_after_waste, 2),
+        "recipe_scaled": recipe_scaled,
+        "scale_factor": round(scale_factor, 6) if recipe_scaled else 1.0,
+        "calculated_yield_before": round(calculated_yield, 3) if is_batch_mode else None,
+        "batch_mode": is_batch_mode,
     }
 
 
