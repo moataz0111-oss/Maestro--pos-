@@ -838,7 +838,7 @@ export default function WarehouseManufacturing() {
     const baseIn = _UNIT_GROUPS[gIn][inputUnit];   // قيمة الإدخال بالوحدة الأساسية
     const baseMat = _UNIT_GROUPS[gMat][materialUnit];
     const inBaseQty = n * baseIn;
-    const converted = inBaseQty / baseMat;
+    const converted = Math.round((inBaseQty / baseMat) * 1e6) / 1e6; // قرّب لإزالة floating-point noise
     return { qty: converted, converted: true, fromUnit: inputUnit, toUnit: materialUnit };
   };
 
@@ -869,6 +869,43 @@ export default function WarehouseManufacturing() {
     return null;
   };
 
+  // ⭐ تنسيق ذكي للكميات في الواجهة:
+  // - يحذف floating-point noise (0.17500000000000002 → 0.175)
+  // - يُحوّل تلقائياً للوحدة الأنسب (0.175 كغم → 175 غرام)
+  // - يُرجع { value, unit, text }
+  const formatRecipeQuantity = (rawQty, rawUnit) => {
+    const qty = Number(rawQty) || 0;
+    const unit = rawUnit || '';
+    const grp = _findUnitGroup(unit);
+    let displayQty = qty;
+    let displayUnit = unit;
+    // تحويل وزن: إذا < 1 كغم → غرام
+    if (grp === 'weight') {
+      const baseFactor = _UNIT_GROUPS.weight[unit] || 1; // 0.001 لـ غرام، 1 لـ كغم
+      const grams = qty * baseFactor * 1000;
+      if (qty < 1 && ['كغم','كيلو','كجم','kg'].includes(unit) && grams >= 1) {
+        displayQty = grams;
+        displayUnit = 'غرام';
+      }
+    }
+    // تحويل حجم: إذا < 1 لتر → مل
+    if (grp === 'volume') {
+      const baseFactor = _UNIT_GROUPS.volume[unit] || 1;
+      const ml = qty * baseFactor * 1000;
+      if (qty < 1 && ['لتر','liter','l'].includes(unit) && ml >= 1) {
+        displayQty = ml;
+        displayUnit = 'مل';
+      }
+    }
+    // إزالة floating-point noise: قرّب إلى 3 خانات عشرية ثم أزل الأصفار اللاحقة
+    let rounded = Math.round(displayQty * 1000) / 1000;
+    let str = rounded.toString();
+    if (str.includes('.')) {
+      str = str.replace(/\.?0+$/, '');
+    }
+    return { value: rounded, unit: displayUnit, text: `${str} ${displayUnit}`.trim() };
+  };
+
   // ⭐ تحويل بين عائلات مختلفة (وزن/حجم → قطعة) باستخدام pack info
   // مثال: 9 كغم → قطعة (إذا كانت القطعة = 4.5 كغم) ⇒ 2 قطعة
   const convertWithPackInfo = (qty, inputUnit, materialUnit, packInfo) => {
@@ -882,7 +919,8 @@ export default function WarehouseManufacturing() {
     const qtyInPackUnit = (Number(qty) || 0) * baseIn / basePack;
     // قسمة على وزن القطعة الواحدة → عدد القطع
     const pieces = qtyInPackUnit / packInfo.pack_quantity;
-    return { qty: pieces, converted: true, fromUnit: inputUnit, toUnit: materialUnit, via: `${packInfo.pack_quantity} ${packInfo.pack_unit}/${materialUnit}` };
+    const piecesRounded = Math.round(pieces * 1e6) / 1e6;
+    return { qty: piecesRounded, converted: true, fromUnit: inputUnit, toUnit: materialUnit, via: `${packInfo.pack_quantity} ${packInfo.pack_unit}/${materialUnit}` };
   };
 
   // إضافة مكون للوصفة
@@ -2425,15 +2463,24 @@ export default function WarehouseManufacturing() {
                               <div className="grid grid-cols-3 gap-2 p-2 bg-muted/30 rounded-lg mb-3">
                                 <div className="text-center">
                                   <p className="text-xs text-muted-foreground">{t('إجمالي المُصنّع')}</p>
-                                  <p className="font-bold text-purple-500">{product.total_produced || product.quantity || 0}</p>
+                                  <p className="font-bold text-purple-500 tabular-nums" data-testid="stat-total-produced">
+                                    {Math.round(((product.total_produced || product.quantity || 0)) * 1000) / 1000}
+                                    <span className="text-xs text-muted-foreground mr-1">{product.unit || 'قطعة'}</span>
+                                  </p>
                                 </div>
                                 <div className="text-center border-x border-muted">
                                   <p className="text-xs text-muted-foreground">{t('المحول للفروع')}</p>
-                                  <p className="font-bold text-blue-500">{product.transferred_quantity || 0}</p>
+                                  <p className="font-bold text-blue-500 tabular-nums" data-testid="stat-transferred">
+                                    {Math.round(((product.transferred_quantity || 0)) * 1000) / 1000}
+                                    <span className="text-xs text-muted-foreground mr-1">{product.unit || 'قطعة'}</span>
+                                  </p>
                                 </div>
                                 <div className="text-center">
                                   <p className="text-xs text-muted-foreground">{t('المتبقي')}</p>
-                                  <p className="font-bold text-green-500">{product.quantity || 0}</p>
+                                  <p className="font-bold text-green-500 tabular-nums" data-testid="stat-remaining">
+                                    {Math.round(((product.quantity || 0)) * 1000) / 1000}
+                                    <span className="text-xs text-muted-foreground mr-1">{product.unit || 'قطعة'}</span>
+                                  </p>
                                 </div>
                               </div>
                               
@@ -2491,7 +2538,7 @@ export default function WarehouseManufacturing() {
                                         <Beaker className="h-3 w-3 text-purple-500" />
                                         <span>{ing.raw_material_name}</span>
                                       </div>
-                                      <span className="text-muted-foreground">{ing.quantity} {ing.unit}</span>
+                                      <span className="text-muted-foreground">{formatRecipeQuantity(ing.quantity, ing.unit).text}</span>
                                     </div>
                                   ))}
                                 </div>
@@ -3654,7 +3701,7 @@ export default function WarehouseManufacturing() {
                               <div className="flex items-center gap-2">
                                 <Beaker className="h-4 w-4 text-purple-500" />
                                 <span className="font-medium">{ing.raw_material_name}</span>
-                                <span className="text-xs text-muted-foreground">({ing.quantity} {ing.unit})</span>
+                                <span className="text-xs text-muted-foreground">({formatRecipeQuantity(ing.quantity, ing.unit).text})</span>
                                 {wastePct > 0 && (
                                   <span className="text-[10px] px-1.5 py-0.5 rounded bg-orange-100 dark:bg-orange-950/40 text-orange-700">
                                     {t('هدر')} {wastePct}%
@@ -3991,7 +4038,7 @@ export default function WarehouseManufacturing() {
                         <Beaker className="h-3 w-3 text-purple-500" />
                         <span>{ing.raw_material_name}</span>
                       </div>
-                      <span>{ing.quantity} {ing.unit}</span>
+                      <span>{formatRecipeQuantity(ing.quantity, ing.unit).text}</span>
                     </div>
                   ))}
                 </div>
@@ -4013,7 +4060,7 @@ export default function WarehouseManufacturing() {
                   {showProduceDialog.recipe?.map((ing, idx) => (
                     <div key={idx} className="flex items-center justify-between text-sm">
                       <span>{ing.raw_material_name}</span>
-                      <span className="font-bold">{(ing.quantity * produceQuantity).toFixed(2)} {ing.unit}</span>
+                      <span className="font-bold">{formatRecipeQuantity(ing.quantity * produceQuantity, ing.unit).text}</span>
                     </div>
                   ))}
                 </div>
@@ -4166,11 +4213,11 @@ export default function WarehouseManufacturing() {
                 <div className="grid grid-cols-2 gap-4 text-sm">
                   <div>
                     <p className="text-muted-foreground">{t('الكمية الحالية')}</p>
-                    <p className="font-bold text-green-500">{showAddStockDialog.quantity} {showAddStockDialog.unit}</p>
+                    <p className="font-bold text-green-500 tabular-nums">{Math.round((showAddStockDialog.quantity || 0) * 1000) / 1000} {showAddStockDialog.unit}</p>
                   </div>
                   <div>
                     <p className="text-muted-foreground">{t('إجمالي المُصنّع')}</p>
-                    <p className="font-bold text-purple-500">{showAddStockDialog.total_produced || showAddStockDialog.quantity || 0}</p>
+                    <p className="font-bold text-purple-500 tabular-nums">{Math.round((showAddStockDialog.total_produced || showAddStockDialog.quantity || 0) * 1000) / 1000} {showAddStockDialog.unit || 'قطعة'}</p>
                   </div>
                 </div>
               </div>

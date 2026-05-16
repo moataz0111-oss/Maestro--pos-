@@ -1,5 +1,30 @@
 # Maestro EGP - Changelog
 
+## Session: May 16, 2026 — Fix Floating-Point Display & Add Unit to Stats
+
+### المشاكل
+1. كميات المكونات في عرض الوصفة كانت تظهر بشكل: `0.17500000000000002 كغم` (floating-point noise).
+2. إحصائيات البطاقة (إجمالي المُصنّع/المحول/المتبقي) لم تكن تعرض الوحدة (حبة/قطعة/كغم).
+
+### الحلول (Frontend — `WarehouseManufacturing.js`)
+- **`formatRecipeQuantity(qty, unit)`**: دالة عرض ذكية:
+  - تحوّل تلقائياً للوحدة الأنسب: `0.175 كغم → 175 غرام`، `0.5 لتر → 500 مل`.
+  - تحذف floating-point noise بتقريب لـ 3 خانات عشرية وإزالة الأصفار اللاحقة.
+  - تُستخدم في: عرض الوصفة المختصرة بالبطاقة، حوار التصنيع (المواد المطلوبة والمواد المخصومة).
+- إضافة `Math.round(... × 1e6) / 1e6` في `convertQuantityToMaterialUnit` و `convertWithPackInfo` لتنظيف القيم المحوَّلة قبل تخزينها.
+- إحصائيات البطاقة (`stat-total-produced`, `stat-transferred`, `stat-remaining`) أصبحت تعرض القيمة + الوحدة (`product.unit`) بشكل واضح.
+- Add Stock dialog أيضاً يعرض الوحدة الآن.
+
+### الحلول (Backend — `inventory_system.py`)
+- في `PATCH /api/manufactured-products/{id}/recipe`: تقريب `quantity` و`cost_per_unit` لكل مكون قبل الحفظ (6 خانات عشرية) لمنع كتابة floating-point noise في قاعدة البيانات.
+
+### الاختبار: ✅ Smoke UI + 4/4 pytest
+- إحصائيات `لحم برغر`: 41 قطعة / 5 قطعة / 36 قطعة (واضحة بالوحدة).
+- وصفة `تشيز برجر`: 100 غرام / 1 قطعة / 30 غرام (بدون floating noise).
+
+---
+
+
 ## Session: May 16, 2026 — Pack-Based Unit Input for Count-Unit Raw Materials
 
 ### المشكلة

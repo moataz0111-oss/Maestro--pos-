@@ -3217,15 +3217,21 @@ async def update_manufactured_product_recipe(
     raw_material_cost_after_waste = 0.0
     recipe_items = []
     for ingredient in payload.recipe:
-        base_cost = ingredient.quantity * ingredient.cost_per_unit
+        # 🧹 تنظيف floating-point noise: قرّب لـ 6 خانات عشرية
+        qty = round(float(ingredient.quantity), 6)
+        cpu = round(float(ingredient.cost_per_unit), 6)
+        base_cost = qty * cpu
         raw_material_cost += base_cost
         waste_pct = ingredient.waste_percentage or 0
         if 0 < waste_pct < 100:
-            effective_cpu = ingredient.cost_per_unit / (1 - waste_pct / 100)
+            effective_cpu = cpu / (1 - waste_pct / 100)
         else:
-            effective_cpu = ingredient.cost_per_unit
-        raw_material_cost_after_waste += ingredient.quantity * effective_cpu
-        recipe_items.append(ingredient.model_dump())
+            effective_cpu = cpu
+        raw_material_cost_after_waste += qty * effective_cpu
+        item = ingredient.model_dump()
+        item["quantity"] = qty
+        item["cost_per_unit"] = cpu
+        recipe_items.append(item)
 
     new_production_cost = round(raw_material_cost_after_waste, 2)
     selling_price = product.get("selling_price", 0) or 0
