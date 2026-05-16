@@ -613,6 +613,7 @@ export default function Login() {
           
           <CardTitle 
             className="text-4xl font-black font-cairo login-title"
+            dir="ltr"
             style={{
               letterSpacing: '0.02em',
               textShadow: '0 4px 24px rgba(0,0,0,0.5), 0 0 40px rgba(255,200,80,0.25)',
