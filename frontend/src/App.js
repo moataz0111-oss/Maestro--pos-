@@ -596,7 +596,7 @@ function AutoSyncRunner() {
   return null;
 }
 
-// ⭐ شاشة Splash العالمية: تظهر بعد تسجيل الدخول مباشرة لمدة 4 ثوانٍ
+// ⭐ شاشة Splash العالمية: تظهر بعد تسجيل الدخول مباشرة لمدة 10 ثوانٍ
 // تستمع لحدث `show-splash` المُطلَق من Login.js وتغطي كل المحتوى أثناء التحميل
 function PostLoginSplash() {
   const [show, setShow] = useState(() => sessionStorage.getItem('show_post_login_splash') === '1');
@@ -611,11 +611,38 @@ function PostLoginSplash() {
   if (!show) return null;
   return (
     <SplashScreen
-      durationMs={4000}
+      durationMs={10000}
       onComplete={() => {
         sessionStorage.removeItem('show_post_login_splash');
         setShow(false);
       }}
+    />
+  );
+}
+
+// ⭐ Startup/Reload Splash — يظهر عند فتح/إعادة تحميل التطبيق
+// - أول فتح (تبويب جديد): 10 ثوانٍ
+// - إعادة تحميل (F5/refresh في نفس الجلسة): 5 ثوانٍ
+// - لا يظهر إذا كان هناك Splash بعد تسجيل الدخول
+function StartupSplash() {
+  const [show, setShow] = useState(() => {
+    // لا تُظهر إذا كان splash بعد تسجيل الدخول نشطاً
+    if (sessionStorage.getItem('show_post_login_splash') === '1') return false;
+    return true;
+  });
+  const [duration] = useState(() => {
+    // أول فتح للتبويب → 10s. وإلا (reload) → 5s.
+    const isReload = sessionStorage.getItem('app_session_started') === '1';
+    return isReload ? 5000 : 10000;
+  });
+  useEffect(() => {
+    sessionStorage.setItem('app_session_started', '1');
+  }, []);
+  if (!show) return null;
+  return (
+    <SplashScreen
+      durationMs={duration}
+      onComplete={() => setShow(false)}
     />
   );
 }
@@ -634,6 +661,7 @@ function App() {
                       <OfflineBanner />
                       <AppRoutes />
                       <AutoSyncRunner />
+                      <StartupSplash />
                       <PostLoginSplash />
                       <Toaster position="top-center" richColors />
                       {/* Incoming Call Popup - يظهر في جميع الصفحات */}

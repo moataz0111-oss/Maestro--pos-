@@ -535,29 +535,19 @@ export default function Login() {
         }}
       >
         <CardHeader className="text-center pb-2">
-          {/* ⭐ شعار M سداسي ذهبي متحرك — مطابق للـ SplashScreen */}
+          {/* ⭐ شعار M سداسي ذهبي متحرك — مطابق للـ SplashScreen (ثابت، يتجاهل أي شعار قديم محفوظ) */}
           <div 
             className="mx-auto mb-4 login-logo-wrap"
             data-testid="login-logo"
             style={{ filter: 'drop-shadow(0 6px 24px rgba(255,200,80,0.4))' }}
           >
-            {backgroundSettings?.logo_url ? (
-              <img 
-                src={backgroundSettings.logo_url.startsWith('/api') 
-                  ? `${API}${backgroundSettings.logo_url.replace('/api', '')}` 
-                  : backgroundSettings.logo_url} 
-                alt="Logo" 
-                className="w-24 h-24 object-cover rounded-full mx-auto"
-                onError={(e) => { e.target.style.display = 'none'; }}
-              />
-            ) : (
-              <svg
-                viewBox="0 0 200 200"
-                width="110"
-                height="110"
-                className="login-logo-svg mx-auto"
-                aria-hidden="true"
-              >
+            <svg
+              viewBox="0 0 200 200"
+              width="110"
+              height="110"
+              className="login-logo-svg mx-auto"
+              aria-hidden="true"
+            >
                 <defs>
                   <linearGradient id="loginGold" x1="0%" y1="0%" x2="100%" y2="100%">
                     <stop offset="0%" stopColor="#ffe7a0" />
@@ -608,7 +598,6 @@ export default function Login() {
                 />
                 <circle cx="100" cy="100" r="4" fill="url(#loginGold)" className="login-dot" />
               </svg>
-            )}
           </div>
           
           <CardTitle 
