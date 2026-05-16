@@ -1217,7 +1217,11 @@ export default function WarehouseManufacturing() {
     } catch (error) {
       const detail = error.response?.data?.detail;
       if (typeof detail === 'object' && detail.insufficient_materials) {
-        toast.error(t('مواد غير كافية'));
+        // ⭐ عرض تفصيل المواد الناقصة في Toast
+        const list = detail.insufficient_materials
+          .map(m => `• ${m.name}: ${t('مطلوب')} ${formatRecipeQuantity(m.needed, m.unit).text} · ${t('متوفر')} ${formatRecipeQuantity(m.available, m.unit).text}`)
+          .join('\n');
+        toast.error(`${t('مواد غير كافية')}\n${list}`, { duration: 10000, style: { whiteSpace: 'pre-line' } });
       } else {
         toast.error(detail || t('فشل في التصنيع'));
       }
@@ -2531,16 +2535,44 @@ export default function WarehouseManufacturing() {
                               </button>
                               
                               {selectedRecipe === product.id && (
-                                <div className="mt-2 p-3 bg-muted/30 rounded-lg space-y-1">
-                                  {product.recipe?.map((ing, idx) => (
-                                    <div key={idx} className="flex items-center justify-between text-sm">
-                                      <div className="flex items-center gap-2">
-                                        <Beaker className="h-3 w-3 text-purple-500" />
-                                        <span>{ing.raw_material_name}</span>
+                                <div className="mt-2 p-3 bg-muted/30 rounded-lg space-y-1.5">
+                                  {/* رأس الجدول */}
+                                  <div className="grid grid-cols-12 text-[10px] font-bold text-muted-foreground border-b pb-1 mb-1">
+                                    <div className="col-span-4">{t('المكوّن')}</div>
+                                    <div className="col-span-3 text-center">{t('الكمية')}</div>
+                                    <div className="col-span-2 text-center">{t('سعر/وحدة')}</div>
+                                    <div className="col-span-3 text-left">{t('التكلفة')}</div>
+                                  </div>
+                                  {product.recipe?.map((ing, idx) => {
+                                    const qty = Number(ing.quantity) || 0;
+                                    const cpu = Number(ing.cost_per_unit) || 0;
+                                    const wastePct = Number(ing.waste_percentage) || 0;
+                                    const effectiveCpu = (0 < wastePct && wastePct < 100) ? cpu / (1 - wastePct / 100) : cpu;
+                                    const lineCost = qty * effectiveCpu;
+                                    return (
+                                      <div key={idx} className="grid grid-cols-12 text-xs items-center" data-testid={`recipe-line-${idx}`}>
+                                        <div className="col-span-4 flex items-center gap-1.5 min-w-0">
+                                          <Beaker className="h-3 w-3 text-purple-500 shrink-0" />
+                                          <span className="truncate">{ing.raw_material_name}</span>
+                                          {wastePct > 0 && (
+                                            <span className="text-[9px] px-1 py-0.5 rounded bg-orange-100 dark:bg-orange-950/40 text-orange-700 shrink-0">
+                                              -{wastePct}%
+                                            </span>
+                                          )}
+                                        </div>
+                                        <div className="col-span-3 text-center text-muted-foreground tabular-nums">{formatRecipeQuantity(qty, ing.unit).text}</div>
+                                        <div className="col-span-2 text-center text-muted-foreground tabular-nums">{formatPrice(cpu)}</div>
+                                        <div className="col-span-3 text-left font-bold text-emerald-600 tabular-nums">{formatPrice(lineCost)}</div>
                                       </div>
-                                      <span className="text-muted-foreground">{formatRecipeQuantity(ing.quantity, ing.unit).text}</span>
+                                    );
+                                  })}
+                                  {/* الإجمالي */}
+                                  <div className="grid grid-cols-12 text-xs items-center border-t pt-1.5 mt-1 font-bold">
+                                    <div className="col-span-9 text-left text-muted-foreground">{t('إجمالي تكلفة الوصفة (بعد الهدر)')}</div>
+                                    <div className="col-span-3 text-left text-emerald-700 tabular-nums" data-testid="recipe-total-cost">
+                                      {formatPrice(product.raw_material_cost_after_waste ?? product.production_cost ?? 0)}
                                     </div>
-                                  ))}
+                                  </div>
                                 </div>
                               )}
                             </div>
@@ -4029,21 +4061,55 @@ export default function WarehouseManufacturing() {
           
           {showProduceDialog && (
             <div className="space-y-4">
-              <div className="p-4 bg-muted/30 rounded-lg">
-                <p className="text-sm text-muted-foreground mb-2">{t('المكونات المطلوبة لكل وحدة:')}</p>
-                <div className="space-y-1">
-                  {showProduceDialog.recipe?.map((ing, idx) => (
-                    <div key={idx} className="flex items-center justify-between text-sm">
-                      <div className="flex items-center gap-2">
-                        <Beaker className="h-3 w-3 text-purple-500" />
-                        <span>{ing.raw_material_name}</span>
+              <div className="p-4 bg-green-500/10 border border-green-500/30 rounded-lg">
+                <p className="text-sm font-medium text-green-700 mb-2">{t('المواد التي سيتم خصمها (مع المتوفر):')}</p>
+                <div className="space-y-1.5">
+                  {showProduceDialog.recipe?.map((ing, idx) => {
+                    const needed = (Number(ing.quantity) || 0) * produceQuantity;
+                    const invItem = manufacturingInventory.find(m => (m.material_id || m.raw_material_id) === ing.raw_material_id);
+                    const available = Number(invItem?.quantity) || 0;
+                    const isShort = available < needed;
+                    return (
+                      <div
+                        key={idx}
+                        className={`flex items-center justify-between text-sm p-2 rounded ${isShort ? 'bg-red-500/10 border border-red-500/40' : 'bg-background/50'}`}
+                        data-testid={`produce-row-${idx}`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <Beaker className={`h-3.5 w-3.5 ${isShort ? 'text-red-600' : 'text-purple-500'}`} />
+                          <span className="font-medium">{ing.raw_material_name}</span>
+                          {isShort && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-500 text-white font-bold">{t('ناقص')}</span>
+                          )}
+                        </div>
+                        <div className="text-left tabular-nums">
+                          <div className={`font-bold ${isShort ? 'text-red-700' : 'text-foreground'}`}>
+                            {t('مطلوب:')} {formatRecipeQuantity(needed, ing.unit).text}
+                          </div>
+                          <div className={`text-[11px] ${isShort ? 'text-red-600' : 'text-muted-foreground'}`}>
+                            {t('متوفر:')} {formatRecipeQuantity(available, ing.unit).text}
+                          </div>
+                        </div>
                       </div>
-                      <span>{formatRecipeQuantity(ing.quantity, ing.unit).text}</span>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
+                {/* ملخص: عدد المواد الناقصة */}
+                {(() => {
+                  const shortCount = (showProduceDialog.recipe || []).filter(ing => {
+                    const needed = (Number(ing.quantity) || 0) * produceQuantity;
+                    const invItem = manufacturingInventory.find(m => (m.material_id || m.raw_material_id) === ing.raw_material_id);
+                    return (Number(invItem?.quantity) || 0) < needed;
+                  }).length;
+                  if (shortCount === 0) return null;
+                  return (
+                    <div className="mt-2 p-2 rounded bg-red-500/15 border-2 border-red-500/40 text-red-700 text-sm font-bold text-center" data-testid="produce-shortfall-summary">
+                      ⚠️ {shortCount} {t('مادة ناقصة — اطلب تحويلها من المخزن قبل التصنيع')}
+                    </div>
+                  );
+                })()}
               </div>
-              
+
               <div>
                 <Label>{t('كمية التصنيع')}</Label>
                 <Input
@@ -4051,19 +4117,8 @@ export default function WarehouseManufacturing() {
                   min="1"
                   value={produceQuantity}
                   onChange={(e) => setProduceQuantity(parseInt(e.target.value) || 1)}
+                  data-testid="produce-quantity-input"
                 />
-              </div>
-              
-              <div className="p-4 bg-green-500/10 border border-green-500/30 rounded-lg">
-                <p className="text-sm font-medium text-green-500 mb-2">{t('المواد التي سيتم خصمها:')}</p>
-                <div className="space-y-1">
-                  {showProduceDialog.recipe?.map((ing, idx) => (
-                    <div key={idx} className="flex items-center justify-between text-sm">
-                      <span>{ing.raw_material_name}</span>
-                      <span className="font-bold">{formatRecipeQuantity(ing.quantity * produceQuantity, ing.unit).text}</span>
-                    </div>
-                  ))}
-                </div>
               </div>
             </div>
           )}
