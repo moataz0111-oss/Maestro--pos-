@@ -1,5 +1,26 @@
 # Maestro EGP - Changelog
 
+## Session: May 16, 2026 — Per-Piece Cost Display on Manufactured Product Cards
+
+### المشكلة
+بطاقة المنتج المصنّع كانت تعرض **تكلفة الدفعة** فقط (734,633 IQD مثلاً) بدون توضيح تكلفة الحبة الواحدة، مع سعر بيع 0 وهامش ربح سلبي ضخم. هذا يُربك صاحب المطعم في التسعير.
+
+### الحل (Frontend — `WarehouseManufacturing.js`)
+- **شريط العائد المحسوب**: قبل كروت التكلفة، شريط أصفر يعرض:
+  `📐 العائد المحسوب من الوصفة: 8.333 حبة · وزن القطعة 120 غرام · إجمالي الوصفة 1000 غرام`
+- **كروت التكلفة المُحسّنة**: كل كرت يعرض الآن قيمتين:
+  - القيمة الكبيرة (تكلفة الدفعة): كما هي
+  - تحتها سطر صغير: **"لكل حبة: X IQD"** (= batch_cost ÷ denom حيث denom = calc_yield || product.quantity || 1)
+- **هامش الربح**: يحسب الآن لكل حبة (`selling_price - unit_cost_after_waste`) بدلاً من (`selling_price - batch_cost`) الذي كان يُعطي قيماً سلبية كبيرة جداً.
+- تلوين هامش الربح: أخضر إيجابي / أحمر سلبي.
+
+### الاختبار: ✅ Smoke UI End-to-End
+- "تشيز برجر" يعرض الآن: الدفعة 1,410 IQD · لكل قطعة **39 IQD** · هامش الربح 3,461 IQD (لكل قطعة).
+- "TEST_burger_ed0a93": دفعة 10,000 IQD، quantity=0، fallback denom=1 ⇒ لكل حبة 10,000 (لا يوجد yield ولا quantity مخزّن، طبيعي).
+
+---
+
+
 ## Session: May 16, 2026 — Fix: Linked Product Cost = Per-Piece (Not Batch)
 
 ### المشكلة الحرجة

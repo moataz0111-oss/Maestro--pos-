@@ -2572,26 +2572,66 @@ export default function WarehouseManufacturing() {
                                 </div>
                               )}
                               
-                              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm mb-3">
-                                <div className="p-2 rounded-md bg-blue-500/5 border border-blue-300/30" data-testid="cost-before-waste-card">
-                                  <p className="text-[11px] text-muted-foreground">{t('الكلفة قبل الهدر')}</p>
-                                  <p className="font-bold text-blue-600 tabular-nums">{formatPrice(product.raw_material_cost ?? product.cost_before_waste ?? 0)}</p>
-                                  <p className="text-[10px] text-muted-foreground mt-0.5">{t('للمقارنة مع الفاتورة')}</p>
-                                </div>
-                                <div className="p-2 rounded-md bg-emerald-500/10 border-2 border-emerald-500/40" data-testid="cost-after-waste-card">
-                                  <p className="text-[11px] text-muted-foreground">⭐ {t('الكلفة بعد الهدر')}</p>
-                                  <p className="font-bold text-emerald-600 tabular-nums">{formatPrice(product.raw_material_cost_after_waste ?? product.production_cost ?? product.raw_material_cost ?? 0)}</p>
-                                  <p className="text-[10px] text-muted-foreground mt-0.5">{t('التكلفة الفعلية المعتمدة')}</p>
-                                </div>
-                                <div className="p-2 rounded-md bg-green-500/5 border border-green-300/30">
-                                  <p className="text-[11px] text-muted-foreground">{t('سعر البيع')}</p>
-                                  <p className="font-bold text-green-600 tabular-nums">{formatPrice(product.selling_price)}</p>
-                                </div>
-                                <div className="p-2 rounded-md bg-purple-500/5 border border-purple-300/30">
-                                  <p className="text-[11px] text-muted-foreground">{t('هامش الربح')}</p>
-                                  <p className="font-bold text-purple-600 tabular-nums">{formatPrice((product.selling_price || 0) - (product.raw_material_cost_after_waste ?? product.production_cost ?? product.raw_material_cost ?? 0))}</p>
-                                </div>
-                              </div>
+                              {(() => {
+                                // ⭐ حساب العائد المحسوب وتكاليف الحبة الواحدة
+                                const _W = { 'غرام': 1, 'كغم': 1000, 'كيلو': 1000, 'كجم': 1000, 'gram': 1, 'kg': 1000 };
+                                const pw = Number(product.piece_weight || 0);
+                                const pwu = product.piece_weight_unit || 'غرام';
+                                const pieceGrams = pw * (_W[pwu] || 1);
+                                let totalGrams = 0;
+                                for (const ing of (product.recipe || [])) {
+                                  const f = _W[ing.unit];
+                                  if (f) totalGrams += Number(ing.quantity || 0) * f;
+                                }
+                                const calcYield = (pieceGrams > 0 && totalGrams > 0) ? totalGrams / pieceGrams : 0;
+                                const storedQty = Number(product.quantity || 0);
+                                const denom = calcYield || storedQty || 1;
+                                const hasPerPiece = (calcYield > 0) || (storedQty > 1);
+                                const batchBefore = Number(product.raw_material_cost ?? product.cost_before_waste ?? 0);
+                                const batchAfter = Number(product.raw_material_cost_after_waste ?? product.production_cost ?? product.raw_material_cost ?? 0);
+                                const sellingPrice = Number(product.selling_price || 0);
+                                const unitBefore = batchBefore / denom;
+                                const unitAfter = batchAfter / denom;
+                                const unitMargin = sellingPrice - unitAfter;
+                                const unitLabel = product.unit || 'حبة';
+                                return (
+                                  <>
+                                    {/* شريط العائد المحسوب */}
+                                    {calcYield > 0 && (
+                                      <div className="mb-2 p-2 rounded-md bg-amber-500/10 border border-amber-500/30 text-xs text-amber-800 flex items-center justify-between gap-2" data-testid="yield-banner">
+                                        <span>📐 {t('العائد المحسوب من الوصفة')}: <strong className="tabular-nums">{calcYield.toFixed(3)} {unitLabel}</strong></span>
+                                        <span className="text-[10px] text-muted-foreground">{t('وزن القطعة')} {pw} {pwu} · {t('إجمالي الوصفة')} {totalGrams.toFixed(0)} {t('غرام')}</span>
+                                      </div>
+                                    )}
+                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm mb-3">
+                                      <div className="p-2 rounded-md bg-blue-500/5 border border-blue-300/30" data-testid="cost-before-waste-card">
+                                        <p className="text-[11px] text-muted-foreground">{t('الكلفة قبل الهدر')}</p>
+                                        <p className="font-bold text-blue-600 tabular-nums">{formatPrice(batchBefore)}</p>
+                                        {hasPerPiece && (
+                                          <p className="text-[10px] text-blue-700 mt-0.5 tabular-nums">{t('لكل')} {unitLabel}: <strong>{formatPrice(unitBefore)}</strong></p>
+                                        )}
+                                      </div>
+                                      <div className="p-2 rounded-md bg-emerald-500/10 border-2 border-emerald-500/40" data-testid="cost-after-waste-card">
+                                        <p className="text-[11px] text-muted-foreground">⭐ {t('الكلفة بعد الهدر')}</p>
+                                        <p className="font-bold text-emerald-600 tabular-nums">{formatPrice(batchAfter)}</p>
+                                        {hasPerPiece && (
+                                          <p className="text-[10px] text-emerald-700 mt-0.5 tabular-nums">{t('لكل')} {unitLabel}: <strong>{formatPrice(unitAfter)}</strong></p>
+                                        )}
+                                      </div>
+                                      <div className="p-2 rounded-md bg-green-500/5 border border-green-300/30">
+                                        <p className="text-[11px] text-muted-foreground">{t('سعر البيع')}</p>
+                                        <p className="font-bold text-green-600 tabular-nums">{formatPrice(sellingPrice)}</p>
+                                        <p className="text-[10px] text-muted-foreground mt-0.5">{t('لكل')} {unitLabel}</p>
+                                      </div>
+                                      <div className="p-2 rounded-md bg-purple-500/5 border border-purple-300/30">
+                                        <p className="text-[11px] text-muted-foreground">{t('هامش الربح')}</p>
+                                        <p className={`font-bold tabular-nums ${unitMargin >= 0 ? 'text-purple-600' : 'text-red-600'}`}>{formatPrice(unitMargin)}</p>
+                                        <p className="text-[10px] text-muted-foreground mt-0.5">{t('لكل')} {unitLabel}</p>
+                                      </div>
+                                    </div>
+                                  </>
+                                );
+                              })()}
                               
                               {/* Recipe */}
                               <button
