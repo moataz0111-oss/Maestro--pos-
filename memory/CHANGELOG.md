@@ -1,5 +1,37 @@
 # Maestro EGP - Changelog
 
+## Session: May 16, 2026 — Fix: Linked Product Cost = Per-Piece (Not Batch)
+
+### المشكلة الحرجة
+عند ربط منتج (مثل "كلاسيك برجر") بمنتج مصنّع (مثل "لحم برغر")، كانت **تكلفة الحبة الواحدة تظهر كتكلفة الدفعة الكاملة** (مثلاً 734,633 IQD بدلاً من ~1,509 IQD). هذا خطأ جسيم يُربك التسعير والمحاسبة.
+
+### السبب الجذري
+الكود كان يقرأ `raw_material_cost_after_waste` (وهو مجموع تكلفة كل الوصفة/الدفعة) ويستخدمه مباشرةً كتكلفة وحدة واحدة. لم يُقَسَّم على عدد القطع الناتجة.
+
+### الحل
+**Frontend — `Settings.js`**:
+- إضافة دالة مساعدة `_computeMfgUnitCost(mp)`:
+  - تحسب العائد من الوصفة (`calc_yield = totalGrams / pieceGrams`).
+  - تُقسّم `batch_cost ÷ (calc_yield || mp.quantity || 1)`.
+  - ترجع **تكلفة حبة واحدة فقط**.
+- استخدامها في 4 مواقع (Add Product / Edit Product · onValueChange + summary box).
+
+**Backend — `server.py` (`validate_and_calculate_costs`)**:
+- استبدال `unit_cost = batch_cost` بـ `unit_cost = batch_cost / denom` حيث `denom = calculated_yield || product.quantity || 1`.
+- يُستخدم `piece_weight` و`piece_weight_unit` و`recipe` للحساب الدقيق.
+
+### الاختبار: ✅ 11/11 pytest
+- جديد: `test_linked_product_per_unit_cost.py` — يُنشئ batch_cost=10,000 (1000g × 10) مع yield=8.333 ⇒ unit_cost ≈ 1,200. يتحقق أن تكلفة الطلب < 5,000 (لو كان الخطأ موجوداً لكانت ~10,000).
+- بقية الاختبارات (10): جميعها لا تزال تمر.
+
+### الأثر
+مثال "كلاسيك برجر" + "لحم برغر" (734,633 IQD ÷ 486.667 حبة):
+- قبل الإصلاح: التكلفة لحبة واحدة = 734,633 ❌
+- بعد الإصلاح: التكلفة لحبة واحدة = **1,509 IQD** ✅
+
+---
+
+
 ## Session: May 16, 2026 — Eliminate Dashboard Flicker Before Splash
 
 ### المتطلب

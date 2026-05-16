@@ -6104,11 +6104,25 @@ async def create_order(order: OrderCreate, current_user: dict = Depends(get_curr
             if manufactured_product_id:
                 mfg_product = await db.manufactured_products.find_one(
                     {"id": manufactured_product_id},
-                    {"_id": 0, "raw_material_cost": 1, "raw_material_cost_after_waste": 1, "production_cost": 1}
+                    {"_id": 0, "raw_material_cost": 1, "raw_material_cost_after_waste": 1, "production_cost": 1, "recipe": 1, "piece_weight": 1, "piece_weight_unit": 1, "quantity": 1}
                 )
                 if mfg_product:
-                    # ⭐ نُفضّل التكلفة بعد الهدر إن وُجدت + معامل الاستهلاك
-                    unit_cost = _sn(mfg_product.get("raw_material_cost_after_waste")) or _sn(mfg_product.get("production_cost")) or _sn(mfg_product.get("raw_material_cost"))
+                    # ⭐ تكلفة الدفعة (كل الوصفة) — ليس تكلفة الحبة الواحدة
+                    batch_cost = _sn(mfg_product.get("raw_material_cost_after_waste")) or _sn(mfg_product.get("production_cost")) or _sn(mfg_product.get("raw_material_cost"))
+                    # ⭐ احتساب عدد القطع الناتجة من الوصفة (calculated_yield)
+                    _UNIT_W = {"غرام": 1.0, "كغم": 1000.0, "كيلو": 1000.0, "كجم": 1000.0, "gram": 1.0, "kg": 1000.0}
+                    pw = float(mfg_product.get("piece_weight") or 0)
+                    pwu = mfg_product.get("piece_weight_unit") or "غرام"
+                    piece_grams = pw * _UNIT_W.get(pwu, 1.0)
+                    total_grams = 0.0
+                    for ing in (mfg_product.get("recipe") or []):
+                        f = _UNIT_W.get(ing.get("unit"))
+                        if f:
+                            total_grams += (ing.get("quantity") or 0) * f
+                    calc_yield = (total_grams / piece_grams) if (piece_grams > 0 and total_grams > 0) else 0
+                    # المقسوم عليه: العائد المحسوب أولاً، ثم quantity المخزّن، وإلا 1
+                    denom = calc_yield or float(mfg_product.get("quantity") or 0) or 1.0
+                    unit_cost = batch_cost / denom
                     consumption_qty = float(product.get("manufactured_consumption_qty") or 1)
                     base_cost = unit_cost * consumption_qty + _sn(product.get("operating_cost"))
             

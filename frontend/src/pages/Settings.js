@@ -706,6 +706,25 @@ export default function Settings() {
     });
   }, []);
 
+  // ⭐ احتساب تكلفة الوحدة الواحدة من المنتج المصنّع (حبة واحدة)
+  // = تكلفة الدفعة ÷ العائد المحسوب من الوصفة (أو الكمية المخزّنة إن لم يتوفر piece_weight)
+  const _computeMfgUnitCost = (mp) => {
+    if (!mp) return 0;
+    const batchCost = Number(mp.raw_material_cost_after_waste ?? mp.production_cost ?? mp.raw_material_cost ?? 0);
+    const _W = { 'غرام': 1, 'كغم': 1000, 'كيلو': 1000, 'كجم': 1000, 'gram': 1, 'kg': 1000 };
+    const pw = Number(mp.piece_weight || 0);
+    const pwu = mp.piece_weight_unit || 'غرام';
+    const pieceGrams = pw * (_W[pwu] || 1);
+    let totalGrams = 0;
+    for (const ing of (mp.recipe || [])) {
+      const f = _W[ing.unit];
+      if (f) totalGrams += Number(ing.quantity || 0) * f;
+    }
+    const calcYield = (pieceGrams > 0 && totalGrams > 0) ? totalGrams / pieceGrams : 0;
+    const denom = calcYield || Number(mp.quantity || 0) || 1;
+    return batchCost / denom;
+  };
+
   // دالة حساب التكلفة مع تحويل الوحدات (غرام/كغم/قطعة/مل/لتر)
   const calculateIngredientCost = (item, pieceWeight = null, pieceWeightUnit = 'غرام') => {
     const qty = item.quantity || 0;
@@ -4004,8 +4023,8 @@ export default function Settings() {
                                   if (v === 'none' || !selectedProduct) {
                                     setProductForm({ ...productForm, manufactured_product_id: null, recipe_quantities: [], manufactured_consumption_qty: 1, cost: '', manufactured_piece_weight: null, manufactured_piece_weight_unit: 'غرام' });
                                   } else {
-                                    // ⭐ ربط مبسّط: استهلاك 1 وحدة من المنتج المصنع لكل بيع — التكلفة = تكلفة الإنتاج بعد الهدر
-                                    const productionCost = Number(selectedProduct.raw_material_cost_after_waste ?? selectedProduct.production_cost ?? selectedProduct.raw_material_cost ?? 0);
+                                    // ⭐ ربط مبسّط: استهلاك 1 وحدة من المنتج المصنع لكل بيع — التكلفة = تكلفة الوحدة الواحدة (ليست الدفعة)
+                                    const productionCost = _computeMfgUnitCost(selectedProduct);
                                     setProductForm({ 
                                       ...productForm, 
                                       manufactured_product_id: v,
@@ -4058,7 +4077,7 @@ export default function Settings() {
                               {productForm.manufactured_product_id && (() => {
                                 const mp = manufacturedProducts.find(m => m.id === productForm.manufactured_product_id);
                                 if (!mp) return null;
-                                const productionCost = Number(mp.raw_material_cost_after_waste ?? mp.production_cost ?? mp.raw_material_cost ?? 0);
+                                const productionCost = _computeMfgUnitCost(mp);
                                 const consumptionQty = Number(productForm.manufactured_consumption_qty ?? 1);
                                 const totalLineCost = consumptionQty * productionCost;
                                 return (
@@ -4595,8 +4614,8 @@ export default function Settings() {
                                 if (v === 'none' || !selectedProduct) {
                                   setEditProductForm({ ...editProductForm, manufactured_product_id: null, recipe_quantities: [], manufactured_consumption_qty: 1 });
                                 } else {
-                                  // ⭐ ربط مبسّط: استهلاك وحدة واحدة افتراضياً (أو احتفظ بالقيمة السابقة)
-                                  const productionCost = Number(selectedProduct.raw_material_cost_after_waste ?? selectedProduct.production_cost ?? selectedProduct.raw_material_cost ?? 0);
+                                  // ⭐ ربط مبسّط: استهلاك وحدة واحدة افتراضياً (تكلفة الوحدة الواحدة، ليست الدفعة)
+                                  const productionCost = _computeMfgUnitCost(selectedProduct);
                                   const qty = Number(editProductForm.manufactured_consumption_qty || 1);
                                   setEditProductForm({ 
                                     ...editProductForm, 
@@ -4648,7 +4667,7 @@ export default function Settings() {
                             {editProductForm.manufactured_product_id && (() => {
                               const mp = manufacturedProducts.find(m => m.id === editProductForm.manufactured_product_id);
                               if (!mp) return null;
-                              const productionCost = Number(mp.raw_material_cost_after_waste ?? mp.production_cost ?? mp.raw_material_cost ?? 0);
+                              const productionCost = _computeMfgUnitCost(mp);
                               const consumptionQty = Number(editProductForm.manufactured_consumption_qty ?? 1);
                               const totalLineCost = consumptionQty * productionCost;
                               return (
