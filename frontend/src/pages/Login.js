@@ -342,10 +342,76 @@ export default function Login() {
         }
         
         .glass-effect {
-          background: rgba(255, 255, 255, 0.05);
-          backdrop-filter: blur(20px);
-          -webkit-backdrop-filter: blur(20px);
-          border: 1px solid rgba(255, 255, 255, 0.1);
+          background: rgba(15, 15, 30, 0.55);
+          backdrop-filter: blur(22px) saturate(140%);
+          -webkit-backdrop-filter: blur(22px) saturate(140%);
+          border: 1px solid rgba(255, 209, 102, 0.18);
+        }
+
+        /* ✦ Login Logo Animations — مطابقة لـ SplashScreen */
+        .login-logo-wrap {
+          animation: login-logo-enter 1100ms cubic-bezier(0.22, 1, 0.36, 1) both;
+          opacity: 0;
+        }
+        @keyframes login-logo-enter {
+          0%   { opacity: 0; transform: scale(0.4) rotate(-90deg); }
+          60%  { opacity: 1; transform: scale(1.08) rotate(5deg); }
+          100% { opacity: 1; transform: scale(1) rotate(0deg); }
+        }
+        .login-logo-svg {
+          animation: login-logo-float 3.6s ease-in-out 1.1s infinite;
+        }
+        @keyframes login-logo-float {
+          0%, 100% { transform: translateY(0); }
+          50%      { transform: translateY(-5px); }
+        }
+        .login-ring-spin {
+          animation: login-ring-spin 6s linear 1.1s infinite;
+          transform-box: fill-box;
+        }
+        @keyframes login-ring-spin {
+          to { transform: rotate(360deg); }
+        }
+        .login-hex {
+          stroke-dasharray: 720;
+          stroke-dashoffset: 720;
+          animation: login-hex-draw 1400ms cubic-bezier(0.65, 0, 0.35, 1) 200ms forwards;
+        }
+        @keyframes login-hex-draw { to { stroke-dashoffset: 0; } }
+        .login-m {
+          stroke-dasharray: 460;
+          stroke-dashoffset: 460;
+          animation: login-m-draw 1200ms cubic-bezier(0.65, 0, 0.35, 1) 800ms forwards;
+        }
+        @keyframes login-m-draw { to { stroke-dashoffset: 0; } }
+        .login-dot {
+          opacity: 0;
+          animation: login-dot-pulse 2s ease-in-out 1.6s infinite;
+        }
+        @keyframes login-dot-pulse {
+          0%, 100% { opacity: 0.3; transform: scale(0.6); transform-origin: 100px 100px; transform-box: fill-box; }
+          50%      { opacity: 1;   transform: scale(1.4); transform-origin: 100px 100px; transform-box: fill-box; }
+        }
+        .login-title {
+          animation: login-title-in 900ms cubic-bezier(0.22, 1, 0.36, 1) 1200ms both;
+          opacity: 0;
+        }
+        @keyframes login-title-in {
+          0%   { opacity: 0; transform: translateY(16px) scale(0.96); filter: blur(6px); letter-spacing: 0.15em; }
+          60%  { opacity: 1; filter: blur(0); }
+          100% { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); letter-spacing: 0.02em; }
+        }
+        .login-underline {
+          width: 0;
+          height: 3px;
+          margin-top: 12px;
+          border-radius: 999px;
+          background: linear-gradient(90deg, transparent, #f59e0b, transparent);
+          animation: login-line 1200ms cubic-bezier(0.22, 1, 0.36, 1) 1800ms forwards;
+        }
+        @keyframes login-line {
+          0%   { width: 0; opacity: 0; }
+          100% { width: 200px; opacity: 1; }
         }
       `}</style>
 
@@ -374,23 +440,35 @@ export default function Login() {
           />
         </>
       ) : (
-        /* Default Animated Background */
+        /* Default Animated Background — مطابق لـ SplashScreen */
         <>
-          <div className="absolute inset-0 bg-gradient-to-br from-gray-900 via-purple-900/50 to-gray-900" />
+          <div 
+            className="absolute inset-0"
+            style={{
+              background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f0f1e 100%)'
+            }}
+          />
           
-          {/* Animated gradient orbs */}
+          {/* بريق ذهبي ناعم في المنتصف */}
+          <div 
+            className="absolute inset-0 pointer-events-none"
+            style={{
+              background: 'radial-gradient(ellipse at center, rgba(255,200,80,0.18) 0%, transparent 60%)'
+            }}
+          />
+          
+          {/* كرات متوهجة ذهبية متحركة */}
           <div className="absolute inset-0 overflow-hidden">
-            <div className="absolute top-1/4 right-1/4 w-[500px] h-[500px] bg-gradient-to-br from-primary/30 to-purple-600/20 rounded-full blur-3xl animate-float" />
-            <div className="absolute bottom-1/4 left-1/4 w-[400px] h-[400px] bg-gradient-to-tr from-blue-600/20 to-primary/20 rounded-full blur-3xl animate-float" style={{ animationDelay: '1s' }} />
-            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-gradient-radial from-primary/10 to-transparent rounded-full blur-3xl" />
+            <div className="absolute top-1/4 right-1/4 w-[500px] h-[500px] bg-gradient-to-br from-amber-500/20 to-yellow-600/10 rounded-full blur-3xl animate-float" />
+            <div className="absolute bottom-1/4 left-1/4 w-[400px] h-[400px] bg-gradient-to-tr from-amber-400/15 to-orange-500/10 rounded-full blur-3xl animate-float" style={{ animationDelay: '1s' }} />
           </div>
           
-          {/* Grid pattern overlay */}
+          {/* شبكة ذهبية خفيفة */}
           <div 
             className="absolute inset-0 opacity-5"
             style={{
-              backgroundImage: `linear-gradient(rgba(212,175,55,0.1) 1px, transparent 1px),
-                               linear-gradient(90deg, rgba(212,175,55,0.1) 1px, transparent 1px)`,
+              backgroundImage: `linear-gradient(rgba(245,158,11,0.15) 1px, transparent 1px),
+                               linear-gradient(90deg, rgba(245,158,11,0.15) 1px, transparent 1px)`,
               backgroundSize: '50px 50px'
             }}
           />
@@ -415,13 +493,18 @@ export default function Login() {
 
       {/* Login Card */}
       <Card 
-        className="w-full max-w-md relative z-10 glass-effect border-white/10 shadow-2xl" 
+        className="w-full max-w-md relative z-10 glass-effect border-amber-500/20 shadow-2xl" 
         data-testid="login-card"
+        style={{
+          boxShadow: '0 25px 80px -15px rgba(0,0,0,0.6), 0 0 60px -20px rgba(255,200,80,0.25)'
+        }}
       >
         <CardHeader className="text-center pb-2">
-          {/* Logo - دائري مع تأثير الوميض */}
+          {/* ⭐ شعار M سداسي ذهبي متحرك — مطابق للـ SplashScreen */}
           <div 
-            className={`mx-auto mb-4 w-24 h-24 rounded-full flex items-center justify-center shadow-2xl overflow-hidden ${getLogoAnimation(backgroundSettings?.logo_animation || 'pulse')} ${!backgroundSettings?.logo_url ? 'bg-gradient-to-br from-primary to-yellow-600' : ''}`}
+            className="mx-auto mb-4 login-logo-wrap"
+            data-testid="login-logo"
+            style={{ filter: 'drop-shadow(0 6px 24px rgba(255,200,80,0.4))' }}
           >
             {backgroundSettings?.logo_url ? (
               <img 
@@ -429,26 +512,81 @@ export default function Login() {
                   ? `${API}${backgroundSettings.logo_url.replace('/api', '')}` 
                   : backgroundSettings.logo_url} 
                 alt="Logo" 
-                className="w-full h-full object-cover rounded-full"
-                onError={(e) => {
-                  // إذا فشل تحميل الشعار، عرض الحرف M كبديل
-                  e.target.style.display = 'none';
-                  e.target.parentElement.classList.add('bg-gradient-to-br', 'from-primary', 'to-yellow-600');
-                  e.target.parentElement.innerHTML = '<span class="text-4xl font-black text-black font-cairo">M</span>';
-                }}
+                className="w-24 h-24 object-cover rounded-full mx-auto"
+                onError={(e) => { e.target.style.display = 'none'; }}
               />
             ) : (
-              <span className="text-4xl font-black text-black font-cairo">M</span>
+              <svg
+                viewBox="0 0 200 200"
+                width="110"
+                height="110"
+                className="login-logo-svg mx-auto"
+                aria-hidden="true"
+              >
+                <defs>
+                  <linearGradient id="loginGold" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stopColor="#ffe7a0" />
+                    <stop offset="50%" stopColor="#ffd166" />
+                    <stop offset="100%" stopColor="#f59e0b" />
+                  </linearGradient>
+                  <filter id="loginGlow" x="-50%" y="-50%" width="200%" height="200%">
+                    <feGaussianBlur stdDeviation="2.5" result="b" />
+                    <feMerge>
+                      <feMergeNode in="b" />
+                      <feMergeNode in="SourceGraphic" />
+                    </feMerge>
+                  </filter>
+                </defs>
+                {/* خاتم خارجي يدور */}
+                <g className="login-ring-spin" style={{ transformOrigin: '100px 100px' }}>
+                  <circle cx="100" cy="100" r="92" stroke="url(#loginGold)" strokeWidth="2" fill="none" opacity="0.55" />
+                  <circle cx="100" cy="100" r="92" stroke="url(#loginGold)" strokeWidth="3" fill="none"
+                          strokeDasharray="40 200" strokeLinecap="round" />
+                </g>
+                {/* السداسي */}
+                <polygon
+                  points="100,18 168,55 168,145 100,182 32,145 32,55"
+                  fill="none"
+                  stroke="url(#loginGold)"
+                  strokeWidth="3.5"
+                  filter="url(#loginGlow)"
+                  className="login-hex"
+                />
+                {/* حرف M */}
+                <path
+                  d="M55 142 V70 L100 120 L145 70 V142"
+                  fill="none"
+                  stroke="url(#loginGold)"
+                  strokeWidth="9"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  filter="url(#loginGlow)"
+                  className="login-m"
+                />
+                <circle cx="100" cy="100" r="4" fill="url(#loginGold)" className="login-dot" />
+              </svg>
             )}
           </div>
           
           <CardTitle 
-            className="text-3xl font-black font-cairo"
-            style={{ color: backgroundSettings?.text_color || '#ffffff' }}
+            className="text-4xl font-black font-cairo login-title"
+            style={{
+              letterSpacing: '0.02em',
+              textShadow: '0 4px 24px rgba(0,0,0,0.5), 0 0 40px rgba(255,200,80,0.25)',
+              color: '#ffffff'
+            }}
           >
-            Maestro EGP
+            Maestro{' '}
+            <span style={{
+              background: 'linear-gradient(180deg, #ffd166 0%, #f59e0b 100%)',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+              backgroundClip: 'text'
+            }}>EGP</span>
           </CardTitle>
-          <CardDescription className="text-gray-300 mt-2">
+          {/* خط ذهبي تحت العنوان */}
+          <div className="login-underline mx-auto" />
+          <CardDescription className="text-gray-300 mt-3 text-sm">
             {t('نظام نقاط البيع والتحكم بالتكاليف')}
           </CardDescription>
           

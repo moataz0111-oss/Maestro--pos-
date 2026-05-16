@@ -1,5 +1,34 @@
 # Maestro EGP - Changelog
 
+
+## Session: Feb 16, 2026 — تحديث تصميم صفحة Login لمطابقة SplashScreen
+
+### المتطلب
+المستخدم لاحظ أن صفحة تسجيل الدخول قبل المصادقة لا تزال تعرض التصميم القديم (خلفية سوداء مع شعار دائري بسيط)، بينما شاشة البداية الجديدة بعد الدخول تستخدم تصميماً فاخراً (شعار M سداسي ذهبي متحرك). المطلوب توحيد الجمالية البصرية.
+
+### الحل
+**Frontend — `/app/frontend/src/pages/Login.js`**:
+- استبدال شعار الدائرة القديم (96×96 rounded-full بحرف M) بشعار SVG سداسي ذهبي متطابق مع SplashScreen:
+  - خاتم خارجي يدور (linear gradient ذهبي #ffe7a0 → #ffd166 → #f59e0b)
+  - مضلع سداسي يُرسم تدريجياً (stroke-dashoffset animation)
+  - حرف M يُرسم بعد السداسي
+  - نقطة مركزية تنبض
+  - تأثير glow ذهبي عبر SVG filter
+- تحديث عنوان "Maestro EGP" مع gradient ذهبي على كلمة EGP فقط + text-shadow ذهبي
+- إضافة خط ذهبي رفيع يُرسم تحت العنوان (login-underline animation)
+- تحديث الخلفية الاحتياطية من gradient بنفسجي إلى gradient داكن أزرق-نيلي (#1a1a2e → #16213e → #0f0f1e) مع كرات متوهجة ذهبية
+- تعميق glass-effect ليصبح rgba(15,15,30,0.55) مع backdrop-blur 22px وحواف ذهبية
+- إذا كان `logo_url` مخصصاً من Settings، يُعرض هذا الشعار بدلاً من SVG (لدعم الـ branding المُخصّص)
+
+### الاختبار: ✅ Screenshot Verified
+- صفحة /login تعرض الآن:
+  - شعار M سداسي ذهبي متحرك بالكامل
+  - "Maestro EGP" بنفس styling الـ SplashScreen
+  - خلفية المطعم + طبقة تعتيم + بطاقة زجاجية داكنة
+  - تجربة بصرية موحدة قبل وبعد تسجيل الدخول
+
+---
+
 ## Session: May 17, 2026 — Auto-Sync Recipe on Manual Stock Add
 
 ### المتطلب

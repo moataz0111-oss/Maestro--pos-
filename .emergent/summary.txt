@@ -1,0 +1,175 @@
+<analysis>**original_problem_statement**: 
+Multi-tenant POS system (React + FastAPI + MongoDB). The user requires critical enhancements across the Manufacturing, Inventory, HR, and Purchasing modules. Key requests include displaying exact manufacturing costs before/after waste, a warehouse movements log, Waste Efficiency Report, mandatory Daily Branch Stock Count, and partial fulfillment logic.
+Recently expanded requirements include: Editing recipes of existing manufactured products, pack-based unit input conversions (e.g., adding ingredients by piece when they have an inner weight), exact piece count tracking with auto-scaling recipes (if production quantity exceeds recipe yield, ingredients scale automatically), detailed per-piece cost breakdowns, strict POS credit gating upon order-type switching, branch-scoped refund searching, and a professional animated Maestro EGP Splash Screen post-login.
+**PRODUCT REQUIREMENTS**: Multi-tenant POS, ZKTeco biometric integration, complex accounting tracking, FIFO inventory, React/FastAPI stack, detailed waste/loss variance tracking, partial fulfillment logic, recipe batch auto-scaling, and robust permission gating.
+
+**User's preferred language**: Arabic (العربية)
+(INSTRUCT NEXT AGENT: You MUST automatically detect the user's primary language from their messages inside the <trajectory> tag and INSTRUCT next agent to respond in the user's preferred language, **Arabic**, only)
+
+**what currently exists?** 
+A stable, highly advanced full-stack POS application. The inventory/manufacturing module now features robust recipe editing, pack-to-weight unit conversions, and batch auto-scaling (scaling a recipe automatically when users produce or add stock beyond the initial yield). The POS enforces strict branch scoping for refunds and tightly gates Credit payments to delivery orders. The UI features a top-bar Notification Bell (replacing disruptive toasts) and a high-quality SVG animated Maestro EGP Splash screen that plays immediately upon login.
+
+**Last working item**: 
+    - Last item agent was working: **Login Page UI Modernization**. After successfully building the animated post-login Splash Screen, the user pointed out that the actual pre-login page () and app reload states still show the old, outdated design (a black background with an eclipse/circle SVG). The agent was just about to refactor  to match the new splash aesthetic.
+    - Status: IN PROGRESS
+    - Agent Testing Done: N
+    - Which testing method agent to use? Frontend screenshot tool.
+    - User Testing Done: N
+
+**All Pending/In progress Issue list**:  
+  Issue 1: Outdated Login Page UI
+     - Attempted fixes: The agent acknowledged the issue and located the old eclipse styling in , but context ended before any edits were made.
+     - Next debug checklist: Modify . Remove the old SVG circle/eclipse and hardcoded black background. Apply the modern background and branding elements consistent with the new  and user settings ().
+     - Why fix this issue and what will be achieved with the fix? Ensures a consistent, premium user experience from the moment the user opens the app, aligning the login screen with the newly approved animated splash screen.
+     - Status: IN PROGRESS
+     - Is recurring issue? N
+     - Should Test frontend/backend/both after fix? Frontend.
+     - Blocked on other issue: None.
+
+**In progress Task List**: 
+  (None. The Login Page issue is the only active task).
+
+**Upcoming and Future Tasks**
+    - (P2) Refactor : Break down the monolithic file (22k+ lines) into modular routes.
+    - (P2) Refactor Frontend Monoliths: Break down , , and .
+    - (P3) Data Migration for Recipes: Run a background cleanup migration to auto-sync old manufactured products' recipes with their actual historical stock quantities, ensuring legacy data matches the new auto-scaling logic.
+
+**Completed work in this session**
+- Built backend  and frontend UI for editing existing manufactured product recipes (DONE)
+- Implemented Pack-Based Unit Input (allows adding ingredients via 'pieces' that auto-convert to inner gram/kg weights) (DONE)
+- Cleaned up floating-point noise (e.g., 0.17500002) in the UI using smart formatting (DONE)
+- Improved the 'Produce' dialog to explicitly show required vs. available ingredients and highlight shortfalls in red (DONE)
+- Replaced disruptive vertical Toast notifications with a centralized top-bar Notification Bell & Popover for cross-module alerts (DONE)
+- Fixed POS Credit Bug: Auto-resets payment method to cash when switching order types away from 'Delivery' (DONE)
+- Fixed POS Refund Bug: Scoped refund search by  to prevent cross-branch order ID collisions (DONE)
+- Simplified 'Link to Manufactured Product' in Settings to use per-piece logic and calculate exact piece costs instead of batch costs (DONE)
+- Implemented Recipe Batch Auto-Scaling: Producing or adding manual stock beyond a recipe's yield now automatically scales the recipe's ingredient weights proportionately (DONE)
+- Created an animated 4-second SVG Splash Screen () that plays seamlessly post-login without dashboard flicker (DONE)
+
+**Earlier issues found/mentioned but not fixed**
+   - None.
+
+**Known issue recurrence from previous fork**
+  - None.
+
+**Code Architecture**
+
+
+**Key Technical Concepts**
+- React, FastAPI, MongoDB.
+- **Recipe Auto-Scaling**: Logic in backend that detects if  > , then applies a scale multiplier to all ingredients and updates the DB.
+- **Unit Conversions**: Handled via frontend helper maps () handling conversions between piece, pack, gram, kg, ml, L.
+
+**key DB schema**
+  - : Now robustly uses  and tracks  ingredients.
+  - : Holds  and .
+
+**changes in tech stack**
+  - None, but heavy reliance on creating individual  files in  to run isolated business logic assertions without breaking the main server.
+
+**All files of reference** 
+-  (Target for current UI fix)
+-  (New file acting as design reference for login page)
+-  (Heavily modified for recipe editing, stock adding, auto-scaling)
+-  (Modified for POS credit/refund fixes)
+-  (Modified for unit conversions, cost breakdowns, notification bell)
+-  (Modified for credit gating and refund branch scoping)
+-  (Modified for linked product piece costs)
+-  (Modified to trigger global splash screen)
+
+**Areas that need refactoring**:
+-  (Massive monolith).
+-  (React monolith, over 5.5k lines).
+-  (React monolith, over 7.5k lines).
+
+**key api endpoints**
+- 
+-  (Supports auto-scaling)
+-  (Supports auto-scaling)
+- 
+
+**Critical Info for New Agent** 
+- **Language:** Reply strictly in **Arabic**.
+- **Testing Standard:** The previous agent consistently wrote and executed new ============================= test session starts ==============================
+platform linux -- Python 3.11.15, pytest-9.0.2, pluggy-1.6.0
+rootdir: /app
+plugins: anyio-4.12.0
+collected 1607 items / 2 errors
+
+==================================== ERRORS ====================================
+__________ ERROR collecting backend/tests/test_profit_loss_iter85.py ___________
+backend/tests/test_profit_loss_iter85.py:11: in <module>
+    BASE_URL = os.environ.get('REACT_APP_BACKEND_URL').rstrip('/')
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   AttributeError: 'NoneType' object has no attribute 'rstrip'
+_______ ERROR collecting backend/tests/test_raw_material_lock_iter174.py _______
+backend/tests/test_raw_material_lock_iter174.py:17: in <module>
+    BASE_URL = os.environ.get("REACT_APP_BACKEND_URL").rstrip("/")
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   AttributeError: 'NoneType' object has no attribute 'rstrip'
+=========================== short test summary info ============================
+ERROR backend/tests/test_profit_loss_iter85.py - AttributeError: 'NoneType' o...
+ERROR backend/tests/test_raw_material_lock_iter174.py - AttributeError: 'None...
+!!!!!!!!!!!!!!!!!!! Interrupted: 2 errors during collection !!!!!!!!!!!!!!!!!!!!
+============================== 2 errors in 1.48s =============================== files for every backend feature/bugfix before modifying the frontend. This was highly successful. Continue this pattern.
+- **Cost Math:** Be highly vigilant regarding batch cost vs. piece cost. The app frequently deals with bulk recipes (e.g., 10kg of meat producing 80 burgers); ensure UI components display the *divided* per-piece cost where applicable.
+
+**documents and test reports created in this job** 
+  -  (Updated)
+  - 
+  - 
+  - 
+  - 
+  - 
+
+**Last 10 User Messages and any pending HUMAN messages** 
+1. (User) Reported insufficient materials generic error and requested cost breakdowns.
+2. (User) Rejected vertical toast notification; wanted it completely removed. (Agent added a Bell).
+3. (User) Reported POS Credit bypass bug and Refund Search cross-branch collision.
+4. (User) Reported Link to manufactured product showing ingredients instead of piece counts, and a slight error in piece math.
+5. (User) Explained that producing 500 pieces when yield is 497 should auto-scale the recipe up to match.
+6. (User) Requested a 4-second animated Splash Screen (Maestro EGP) with restaurant background immediately after login.
+7. (User) Clarified they wanted the logo and text to be animated independently.
+8. (User) Requested the splash screen show up *before* the dashboard loads, as there was a flicker.
+9. (User) Reported that adding manual stock didn't sync the recipe ingredients like producing did. (Agent added auto-sync to add-stock endpoints).
+10. (User) **PENDING**: Reported that the Login Page itself (before authentication) still shows the old black/eclipse background, failing to match the new Splash design.
+
+**Project Health Check:**
+- Broken: None.
+- Mocked: Thermal Printers and Biometric Devices (expected behaviour for preview env).
+
+**3rd Party Integrations** 
+- None newly added.
+
+**Testing status**
+  - Testing agent used after significant changes: NO (relied heavily on bash executed ============================= test session starts ==============================
+platform linux -- Python 3.11.15, pytest-9.0.2, pluggy-1.6.0
+rootdir: /app
+plugins: anyio-4.12.0
+collected 1607 items / 2 errors
+
+==================================== ERRORS ====================================
+__________ ERROR collecting backend/tests/test_profit_loss_iter85.py ___________
+backend/tests/test_profit_loss_iter85.py:11: in <module>
+    BASE_URL = os.environ.get('REACT_APP_BACKEND_URL').rstrip('/')
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   AttributeError: 'NoneType' object has no attribute 'rstrip'
+_______ ERROR collecting backend/tests/test_raw_material_lock_iter174.py _______
+backend/tests/test_raw_material_lock_iter174.py:17: in <module>
+    BASE_URL = os.environ.get("REACT_APP_BACKEND_URL").rstrip("/")
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   AttributeError: 'NoneType' object has no attribute 'rstrip'
+=========================== short test summary info ============================
+ERROR backend/tests/test_profit_loss_iter85.py - AttributeError: 'NoneType' o...
+ERROR backend/tests/test_raw_material_lock_iter174.py - AttributeError: 'None...
+!!!!!!!!!!!!!!!!!!! Interrupted: 2 errors during collection !!!!!!!!!!!!!!!!!!!!
+============================== 2 errors in 1.02s =============================== scripts).
+  - Troubleshoot agent used after agent stuck in loop: NO
+  - Test files created: Yes (multiple under ).
+  - Known regressions: None.
+
+**Credentials to test flow:**
+- Read  (Admin:  / )
+
+**What agent forgot to execute**
+- The UI refactor of the actual  page to match the visual style of the new .</analysis>
