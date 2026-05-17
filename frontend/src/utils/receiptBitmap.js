@@ -127,8 +127,9 @@ async function generateQR(url) {
   try {
     const qrCanvas = document.createElement('canvas');
     await QRCode.toCanvas(qrCanvas, url, {
-      width: 100,
-      margin: 1,
+      width: 240,
+      margin: 2,
+      errorCorrectionLevel: 'H',
       color: { dark: '#000000', light: '#FFFFFF' }
     });
     return qrCanvas;
@@ -137,11 +138,65 @@ async function generateQR(url) {
   }
 }
 
+// ⭐ Draw the new hexagonal "M" Maestro logo to canvas (monochrome for thermal)
+// Replaces the old system_logo image with a sharp printable vector-style logo.
+function drawMaestroHexLogo(ctx, cx, cy, size) {
+  ctx.save();
+  ctx.strokeStyle = '#000';
+  ctx.fillStyle = '#FFF';
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+
+  const r = size / 2;
+  // Outer hexagon
+  const hex = (radius) => {
+    const pts = [];
+    for (let i = 0; i < 6; i++) {
+      const a = (Math.PI / 3) * i - Math.PI / 2;
+      pts.push([cx + radius * Math.cos(a), cy + radius * Math.sin(a)]);
+    }
+    return pts;
+  };
+
+  // Filled circle background (printable as dark outline)
+  ctx.lineWidth = Math.max(2, size * 0.04);
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.stroke();
+
+  // Outer hexagon outline
+  const outer = hex(r * 0.86);
+  ctx.lineWidth = Math.max(2, size * 0.05);
+  ctx.beginPath();
+  outer.forEach(([px, py], i) => i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py));
+  ctx.closePath();
+  ctx.stroke();
+
+  // Letter M (V-shape strokes)
+  const mw = r * 0.95;       // half width of M base
+  const mh = r * 0.85;       // height of M
+  const left  = [cx - mw, cy - mh];
+  const right = [cx + mw, cy - mh];
+  const bottomLeft  = [cx - mw, cy + mh];
+  const bottomRight = [cx + mw, cy + mh];
+  const center = [cx, cy + mh * 0.25];
+
+  ctx.lineWidth = Math.max(3, size * 0.11);
+  ctx.beginPath();
+  ctx.moveTo(...bottomLeft);
+  ctx.lineTo(...left);
+  ctx.lineTo(...center);
+  ctx.lineTo(...right);
+  ctx.lineTo(...bottomRight);
+  ctx.stroke();
+
+  ctx.restore();
+}
+
 // ======== CUSTOMER RECEIPT (matches preview exactly) ========
 async function renderReceipt(order) {
-  const [logo, sysLogo, qrCanvas] = await Promise.all([
+  const [logo, qrCanvas] = await Promise.all([
     loadImg(order.logo_base64 || order.logo_url),
-    loadImg(order.system_logo_base64 || order.system_logo_url),
     generateQR(order.qr_url)
   ]);
 
@@ -425,25 +480,38 @@ async function renderReceipt(order) {
   y += drawC(x, thank, y, 22, true);
   y += 10;
 
-  // ===== SYSTEM LOGO (right after thank you - no date/time) =====
-  if (sysLogo) {
-    const sz = 80;
-    x.drawImage(sysLogo, (PW-sz)/2, y, sz, sz);
-    y += sz + 4;
+  // ===== SYSTEM LOGO (new hexagonal M Maestro logo - replaces old) =====
+  {
+    const sz = 90;
+    const cx = PW / 2;
+    const cy = y + sz / 2;
+    drawMaestroHexLogo(x, cx, cy, sz);
+    y += sz + 6;
   }
 
   // System name
-  y += drawC(x, order.system_name || 'Maestro EGP', y, 16, true);
+  const sysName = order.system_name || 'Maestro EGP';
+  y += drawC(x, sysName, y, 18, true);
+
+  // ⭐ Gold/black underline beneath system name (printable horizontal line)
+  {
+    const ulW = 180;
+    const ulX = (PW - ulW) / 2;
+    x.save();
+    x.fillStyle = '#000';
+    x.fillRect(ulX, y + 2, ulW, 2);
+    x.restore();
+    y += 10;
+  }
 
   // Contact message
   const contactMsg = order.contact_message || 'للتواصل معنا لشراء نسخة امسح الكود';
-  y += 2;
-  y += drawC(x, contactMsg, y, 11, true);
-  y += 4;
+  y += drawC(x, contactMsg, y, 12, true);
+  y += 6;
 
-  // ===== QR CODE =====
+  // ===== QR CODE (larger - 160px) =====
   if (qrCanvas) {
-    const qrSize = 80;
+    const qrSize = 160;
     x.drawImage(qrCanvas, (PW - qrSize) / 2, y, qrSize, qrSize);
     y += qrSize + 6;
   }

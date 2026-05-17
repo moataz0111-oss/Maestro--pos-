@@ -618,7 +618,7 @@ export default function Settings() {
   const [editCategoryForm, setEditCategoryForm] = useState(null);
   const [editCategoryDialogOpen, setEditCategoryDialogOpen] = useState(false);
   const [productForm, setProductForm] = useState({
-    name: '', name_en: '', category_id: '', price: '', cost: '', operating_cost: '', packaging_cost: '', image: '', description: '', barcode: '', manufactured_product_id: '', recipe_quantities: [], printer_ids: [], extras: [], packaging_items: []
+    name: '', name_en: '', category_id: '', price: '', cost: '', operating_cost: '', packaging_cost: '', image: '', description: '', barcode: '', manufactured_product_id: '', manufactured_links: [], recipe_quantities: [], printer_ids: [], extras: [], packaging_items: []
   });
   const [editProductForm, setEditProductForm] = useState(null);
   const [newExtraForm, setNewExtraForm] = useState({ name: '', name_en: '', price: '', quantity: 1, unit: 'قطعة', manufactured_product_id: '' });
@@ -1758,14 +1758,15 @@ export default function Settings() {
         cost: parseFloat(productForm.cost) || 0,
         operating_cost: parseFloat(productForm.operating_cost) || 0,
         packaging_cost: parseFloat(productForm.packaging_cost) || 0,
-        manufactured_product_id: productForm.manufactured_product_id || null,
+        manufactured_product_id: productForm.manufactured_product_id || (productForm.manufactured_links?.[0]?.manufactured_product_id) || null,
+        manufactured_links: (productForm.manufactured_links || []).filter(l => l.manufactured_product_id),
         recipe_quantities: productForm.recipe_quantities || [],
         extras: productForm.extras || [],
         packaging_items: productForm.packaging_items || []
       });
       toast.success(t('تم إنشاء المنتج'));
       setProductDialogOpen(false);
-      setProductForm({ name: '', name_en: '', category_id: '', price: '', cost: '', operating_cost: '', packaging_cost: '', image: '', description: '', barcode: '', manufactured_product_id: '', recipe_quantities: [], printer_ids: [], extras: [], packaging_items: [] });
+      setProductForm({ name: '', name_en: '', category_id: '', price: '', cost: '', operating_cost: '', packaging_cost: '', image: '', description: '', barcode: '', manufactured_product_id: '', manufactured_links: [], recipe_quantities: [], printer_ids: [], extras: [], packaging_items: [] });
       setNewExtraForm({ name: '', name_en: '', price: '', manufactured_product_id: '' });
       fetchData();
     } catch (error) {
@@ -1803,6 +1804,12 @@ export default function Settings() {
       barcode: p.barcode || '',
       is_available: p.is_available !== false,
       manufactured_product_id: p.manufactured_product_id || '',
+      // ⭐ ربط متعدد — إذا كانت البيانات قديمة (single link)، نُحوّلها إلى array
+      manufactured_links: (p.manufactured_links && p.manufactured_links.length > 0)
+        ? p.manufactured_links
+        : (p.manufactured_product_id
+            ? [{ manufactured_product_id: p.manufactured_product_id, consumption_qty: Number(p.manufactured_consumption_qty || 1) }]
+            : []),
       recipe_quantities: recipeQuantities,
       extras: p.extras || [],
       printer_ids: p.printer_ids || [],
@@ -1820,7 +1827,8 @@ export default function Settings() {
         cost: parseFloat(editProductForm.cost) || 0,
         operating_cost: parseFloat(editProductForm.operating_cost) || 0,
         packaging_cost: parseFloat(editProductForm.packaging_cost) || 0,
-        manufactured_product_id: editProductForm.manufactured_product_id || null,
+        manufactured_product_id: editProductForm.manufactured_product_id || (editProductForm.manufactured_links?.[0]?.manufactured_product_id) || null,
+        manufactured_links: (editProductForm.manufactured_links || []).filter(l => l.manufactured_product_id),
         recipe_quantities: editProductForm.recipe_quantities || [],
         extras: editProductForm.extras || [],
         packaging_items: editProductForm.packaging_items || []
@@ -2043,6 +2051,176 @@ export default function Settings() {
       </div>
     );
   }
+
+  // ⭐ MfgLinksEditor — قسم ربط متعدد بالمنتجات المُصنّعة (يدعم أكثر من منتج مُصنّع للمنتج الواحد)
+  // مثال: برجر = لحم برغر (1 حبة) + خبز (1 حبة) + صوص (50غ)
+  const MfgLinksEditor = ({ form, setForm, formKind = 'add' }) => {
+    const links = form?.manufactured_links || [];
+    const usedIds = new Set(links.map(l => l.manufactured_product_id).filter(Boolean));
+
+    // إعادة احتساب التكلفة الإجمالية كلما تغيّرت الروابط
+    const recalcAndSet = (newLinks) => {
+      let total = 0;
+      for (const lk of newLinks) {
+        const mp = manufacturedProducts.find(m => m.id === lk.manufactured_product_id);
+        if (mp) total += _computeMfgUnitCost(mp) * Number(lk.consumption_qty || 1);
+      }
+      setForm({
+        ...form,
+        manufactured_links: newLinks,
+        // مزامنة الحقل القديم للتوافق
+        manufactured_product_id: newLinks[0]?.manufactured_product_id || null,
+        manufactured_consumption_qty: Number(newLinks[0]?.consumption_qty || 1),
+        cost: total > 0 ? total.toFixed(0) : (form.cost || ''),
+      });
+    };
+
+    const addEmptyLink = () => {
+      recalcAndSet([...links, { manufactured_product_id: '', consumption_qty: 1 }]);
+    };
+    const updateLink = (idx, patch) => {
+      const next = links.map((lk, i) => i === idx ? { ...lk, ...patch } : lk);
+      recalcAndSet(next);
+    };
+    const removeLink = (idx) => {
+      recalcAndSet(links.filter((_, i) => i !== idx));
+    };
+
+    const totalCost = links.reduce((sum, lk) => {
+      const mp = manufacturedProducts.find(m => m.id === lk.manufactured_product_id);
+      return mp ? sum + _computeMfgUnitCost(mp) * Number(lk.consumption_qty || 1) : sum;
+    }, 0);
+
+    return (
+      <div className="p-3 bg-purple-500/10 border border-purple-500/30 rounded-lg space-y-3" data-testid={`mfg-links-editor-${formKind}`}>
+        <Label className="text-foreground font-medium flex items-center gap-2">
+          <Factory className="h-4 w-4 text-purple-500" />
+          {t('ربط بمنتجات مُصنّعة (للخصم التلقائي)')}
+        </Label>
+
+        {manufacturedProducts.length === 0 ? (
+          <p className="text-xs text-amber-600 bg-amber-500/10 p-2 rounded">
+            {t('لا توجد منتجات مصنعة حالياً. أضف منتجات من قسم المخزن والتصنيع أولاً')}
+          </p>
+        ) : (
+          <>
+            {/* قائمة الروابط الحالية */}
+            {links.length === 0 && (
+              <p className="text-xs text-muted-foreground">
+                {t('لا توجد منتجات مُصنّعة مرتبطة بعد. اضغط على "إضافة منتج مُصنّع" للبدء.')}
+              </p>
+            )}
+            {links.map((lk, idx) => {
+              const mp = manufacturedProducts.find(m => m.id === lk.manufactured_product_id);
+              const unitCost = mp ? _computeMfgUnitCost(mp) : 0;
+              const lineCost = unitCost * Number(lk.consumption_qty || 1);
+              return (
+                <div key={idx} className="p-3 bg-background/50 rounded-lg border border-purple-500/30 space-y-2" data-testid={`mfg-link-row-${idx}`}>
+                  <div className="flex items-center gap-2">
+                    <Select
+                      value={lk.manufactured_product_id || 'none'}
+                      onValueChange={(v) => {
+                        if (v === 'none') {
+                          updateLink(idx, { manufactured_product_id: '' });
+                        } else {
+                          const sel = manufacturedProducts.find(m => m.id === v);
+                          updateLink(idx, {
+                            manufactured_product_id: v,
+                            piece_weight: sel?.piece_weight,
+                            piece_weight_unit: sel?.piece_weight_unit || 'غرام',
+                          });
+                        }
+                      }}
+                    >
+                      <SelectTrigger className="flex-1 h-9" data-testid={`mfg-link-select-${idx}`}>
+                        <SelectValue placeholder={t('اختر المنتج المُصنّع')} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">{t('بدون')}</SelectItem>
+                        {manufacturedProducts
+                          .filter(m => m.id === lk.manufactured_product_id || !usedIds.has(m.id))
+                          .map(m => (
+                            <SelectItem key={m.id} value={m.id}>
+                              {m.name} ({m.quantity || 0} {m.unit || 'حبة'})
+                            </SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => removeLink(idx)}
+                      className="h-9 w-9 text-red-500 hover:text-red-700 hover:bg-red-500/10"
+                      data-testid={`mfg-link-remove-${idx}`}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+
+                  {mp && (
+                    <>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium flex-1">{t('الكمية المستهلكة لكل بيع')}</span>
+                        <Input
+                          type="number"
+                          min="0.01"
+                          step="0.01"
+                          value={lk.consumption_qty ?? 1}
+                          onChange={(e) => updateLink(idx, { consumption_qty: parseFloat(e.target.value) || 0 })}
+                          className="w-24 h-9 text-center"
+                          data-testid={`mfg-link-qty-${idx}`}
+                        />
+                        <span className="text-sm text-muted-foreground w-12">{mp.unit || 'حبة'}</span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 text-xs">
+                        <div className="p-2 rounded bg-muted/40">
+                          <p className="text-muted-foreground">{t('تكلفة الوحدة')}</p>
+                          <p className="font-bold tabular-nums">{formatPrice(unitCost)}</p>
+                        </div>
+                        <div className="p-2 rounded bg-emerald-500/10 border border-emerald-500/30">
+                          <p className="text-muted-foreground">{t('تكلفة هذا المكون')}</p>
+                          <p className="font-bold text-emerald-600 tabular-nums">{formatPrice(lineCost)}</p>
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
+              );
+            })}
+
+            {/* إجمالي التكلفة (مجموع كل الروابط) */}
+            {links.length > 0 && (
+              <div className="p-3 rounded-lg bg-emerald-500/10 border-2 border-emerald-500/40 flex items-center justify-between" data-testid={`mfg-links-total-${formKind}`}>
+                <span className="text-sm font-bold text-emerald-700 dark:text-emerald-400">
+                  ⭐ {t('إجمالي تكلفة المنتج النهائي')}
+                </span>
+                <span className="text-lg font-extrabold text-emerald-600 tabular-nums">{formatPrice(totalCost)}</span>
+              </div>
+            )}
+
+            {/* زرّا الإضافة */}
+            <div className="flex gap-2 pt-1">
+              <Button
+                type="button"
+                onClick={addEmptyLink}
+                disabled={links.length >= manufacturedProducts.length}
+                className="flex-1 h-9 bg-purple-500 hover:bg-purple-600 text-white"
+                data-testid={`mfg-links-add-btn-${formKind}`}
+              >
+                <Plus className="h-4 w-4 ml-1" />
+                {links.length === 0 ? t('ربط بمنتج مُصنّع') : t('إضافة منتج مُصنّع آخر')}
+              </Button>
+            </div>
+
+            <p className="text-xs text-muted-foreground">
+              {t('عند البيع: تُخصم كل المنتجات المُصنّعة المربوطة تلقائياً بكمياتها المحددة. التكلفة الإجمالية = مجموع تكاليف جميع المكونات.')}
+            </p>
+          </>
+        )}
+      </div>
+    );
+  };
 
   return (
     <div className="min-h-screen bg-background" data-testid="settings-page">
@@ -4010,119 +4188,8 @@ export default function Settings() {
                           )}
                         </div>
                         
-                        {/* ربط بالمنتج المصنع */}
-                        <div className="p-3 bg-purple-500/10 border border-purple-500/30 rounded-lg">
-                          <Label className="text-foreground font-medium mb-2 flex items-center gap-2">
-                            <Factory className="h-4 w-4 text-purple-500" />{t('ربط بمنتج مصنع (للخصم التلقائي)')}</Label>
-                          {manufacturedProducts.length > 0 ? (
-                            <>
-                              <Select 
-                                value={productForm.manufactured_product_id || 'none'} 
-                                onValueChange={(v) => {
-                                  const selectedProduct = manufacturedProducts.find(mp => mp.id === v);
-                                  if (v === 'none' || !selectedProduct) {
-                                    setProductForm({ ...productForm, manufactured_product_id: null, recipe_quantities: [], manufactured_consumption_qty: 1, cost: '', manufactured_piece_weight: null, manufactured_piece_weight_unit: 'غرام' });
-                                  } else {
-                                    // ⭐ ربط مبسّط: استهلاك 1 وحدة من المنتج المصنع لكل بيع — التكلفة = تكلفة الوحدة الواحدة (ليست الدفعة)
-                                    const productionCost = _computeMfgUnitCost(selectedProduct);
-                                    setProductForm({ 
-                                      ...productForm, 
-                                      manufactured_product_id: v,
-                                      recipe_quantities: [],  // لم نعد نستخدم تفصيل المواد الخام هنا
-                                      manufactured_consumption_qty: 1,
-                                      manufactured_piece_weight: selectedProduct.piece_weight,
-                                      manufactured_piece_weight_unit: selectedProduct.piece_weight_unit || 'غرام',
-                                      cost: productionCost.toFixed(0)
-                                    });
-                                  }
-                                }}
-                              >
-                                <SelectTrigger className="mt-2">
-                                  <SelectValue placeholder={t('اختر المنتج المصنع (اختياري)')} />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="none">{t('بدون ربط')}</SelectItem>
-                                  {manufacturedProducts.map(mp => {
-                                    // ⭐ احتساب العائد الحقيقي من الوصفة (لا الكمية المخزّنة)
-                                    const computeYield = () => {
-                                      const pw = Number(mp.piece_weight || 0);
-                                      const pwu = mp.piece_weight_unit || 'غرام';
-                                      if (!pw || pw <= 0) return null;
-                                      // مجموع وزن الوصفة بالغرام
-                                      const _W = { 'غرام': 1, 'كغم': 1000, 'كيلو': 1000, 'كجم': 1000, 'gram': 1, 'kg': 1000 };
-                                      let totalGrams = 0;
-                                      for (const ing of (mp.recipe || [])) {
-                                        const f = _W[ing.unit];
-                                        if (f) totalGrams += Number(ing.quantity || 0) * f;
-                                      }
-                                      if (totalGrams <= 0) return null;
-                                      const factor = _W[pwu] || 1;
-                                      const pg = pw * factor;
-                                      if (pg <= 0) return null;
-                                      return Math.round((totalGrams / pg) * 1000) / 1000;
-                                    };
-                                    const yieldVal = computeYield();
-                                    return (
-                                      <SelectItem key={mp.id} value={mp.id}>
-                                        {mp.name} ({mp.quantity} {mp.unit})
-                                        {mp.piece_weight && ` · ${t('القطعة')}: ${mp.piece_weight} ${mp.piece_weight_unit || 'غرام'}`}
-                                        {yieldVal !== null && ` · ${t('عائد')}: ${yieldVal} ${mp.unit}`}
-                                      </SelectItem>
-                                    );
-                                  })}
-                                </SelectContent>
-                              </Select>
-                              
-                              {/* ⭐ عرض مبسّط: كم وحدة من المنتج المصنع تُستهلك عند بيع وحدة من هذا المنتج */}
-                              {productForm.manufactured_product_id && (() => {
-                                const mp = manufacturedProducts.find(m => m.id === productForm.manufactured_product_id);
-                                if (!mp) return null;
-                                const productionCost = _computeMfgUnitCost(mp);
-                                const consumptionQty = Number(productForm.manufactured_consumption_qty ?? 1);
-                                const totalLineCost = consumptionQty * productionCost;
-                                return (
-                                  <div className="mt-3 p-3 bg-background/50 rounded-lg border border-purple-500/30 space-y-2" data-testid="mfg-link-summary">
-                                    <p className="text-sm font-medium text-purple-400">{t('استهلاك المنتج المصنع لكل بيع')}</p>
-                                    <div className="flex items-center gap-2">
-                                      <span className="flex-1 text-sm font-bold">{mp.name}</span>
-                                      <Input
-                                        type="number"
-                                        min="0.01"
-                                        step="0.01"
-                                        value={consumptionQty}
-                                        onChange={(e) => {
-                                          const q = parseFloat(e.target.value) || 0;
-                                          setProductForm({
-                                            ...productForm,
-                                            manufactured_consumption_qty: q,
-                                            cost: (q * productionCost).toFixed(0),
-                                          });
-                                        }}
-                                        className="w-24 h-9 text-center"
-                                        data-testid="mfg-consumption-qty"
-                                      />
-                                      <span className="text-sm text-muted-foreground w-12">{mp.unit || 'حبة'}</span>
-                                    </div>
-                                    <div className="grid grid-cols-2 gap-2 text-xs">
-                                      <div className="p-2 rounded bg-muted/40">
-                                        <p className="text-muted-foreground">{t('تكلفة الإنتاج للوحدة')}</p>
-                                        <p className="font-bold tabular-nums">{formatPrice(productionCost)}</p>
-                                      </div>
-                                      <div className="p-2 rounded bg-emerald-500/10 border border-emerald-500/40">
-                                        <p className="text-muted-foreground">⭐ {t('التكلفة لهذا المنتج')}</p>
-                                        <p className="font-bold text-emerald-600 tabular-nums">{formatPrice(totalLineCost)}</p>
-                                      </div>
-                                    </div>
-                                  </div>
-                                );
-                              })()}
-                              
-                              <p className="text-xs text-muted-foreground mt-2">{t('عند البيع: يُخصم العدد المحدد تلقائياً من مخزون المنتج المصنع. لتعديل المواد الخام للوصفة، اذهب لقسم المخزن والتصنيع.')}</p>
-                            </>
-                          ) : (
-                            <p className="text-xs text-amber-600 mt-2 bg-amber-500/10 p-2 rounded">{t('لا توجد منتجات مصنعة حالياً. أضف منتجات من قسم المخزن والتصنيع أولاً')}</p>
-                          )}
-                        </div>
+                        {/* ⭐ ربط متعدد بالمنتجات المُصنّعة (يدعم أكثر من منتج مصنّع) */}
+                        <MfgLinksEditor form={productForm} setForm={setProductForm} formKind="add" />
                         
                         {/* قسم الإضافات للمنتج الجديد */}
                         <div className="p-3 bg-orange-500/10 border border-orange-500/30 rounded-lg">
@@ -4601,118 +4668,8 @@ export default function Settings() {
                           label={t('صورة المنتج')}
                         />
                       </div>
-                      {/* ربط بمنتج مصنع */}
-                      <div className="p-3 bg-purple-500/10 border border-purple-500/30 rounded-lg">
-                        <Label className="text-foreground font-medium mb-2 flex items-center gap-2">
-                          <Factory className="h-4 w-4 text-purple-500" />{t('ربط بمنتج مصنع (للخصم التلقائي)')}</Label>
-                        {manufacturedProducts.length > 0 ? (
-                          <>
-                            <Select 
-                              value={editProductForm.manufactured_product_id || 'none'} 
-                              onValueChange={(v) => {
-                                const selectedProduct = manufacturedProducts.find(mp => mp.id === v);
-                                if (v === 'none' || !selectedProduct) {
-                                  setEditProductForm({ ...editProductForm, manufactured_product_id: null, recipe_quantities: [], manufactured_consumption_qty: 1 });
-                                } else {
-                                  // ⭐ ربط مبسّط: استهلاك وحدة واحدة افتراضياً (تكلفة الوحدة الواحدة، ليست الدفعة)
-                                  const productionCost = _computeMfgUnitCost(selectedProduct);
-                                  const qty = Number(editProductForm.manufactured_consumption_qty || 1);
-                                  setEditProductForm({ 
-                                    ...editProductForm, 
-                                    manufactured_product_id: v,
-                                    recipe_quantities: [],
-                                    manufactured_consumption_qty: qty,
-                                    manufactured_piece_weight: selectedProduct.piece_weight,
-                                    manufactured_piece_weight_unit: selectedProduct.piece_weight_unit || 'غرام',
-                                    cost: (qty * productionCost).toFixed(0)
-                                  });
-                                }
-                              }}
-                            >
-                              <SelectTrigger className="mt-2">
-                                <SelectValue placeholder={t('اختر المنتج المصنع (اختياري)')} />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="none">{t('بدون ربط')}</SelectItem>
-                                {manufacturedProducts.map(mp => {
-                                  const computeYield = () => {
-                                    const pw = Number(mp.piece_weight || 0);
-                                    const pwu = mp.piece_weight_unit || 'غرام';
-                                    if (!pw || pw <= 0) return null;
-                                    const _W = { 'غرام': 1, 'كغم': 1000, 'كيلو': 1000, 'كجم': 1000, 'gram': 1, 'kg': 1000 };
-                                    let totalGrams = 0;
-                                    for (const ing of (mp.recipe || [])) {
-                                      const f = _W[ing.unit];
-                                      if (f) totalGrams += Number(ing.quantity || 0) * f;
-                                    }
-                                    if (totalGrams <= 0) return null;
-                                    const factor = _W[pwu] || 1;
-                                    const pg = pw * factor;
-                                    if (pg <= 0) return null;
-                                    return Math.round((totalGrams / pg) * 1000) / 1000;
-                                  };
-                                  const yieldVal = computeYield();
-                                  return (
-                                    <SelectItem key={mp.id} value={mp.id}>
-                                      {mp.name} ({mp.quantity} {mp.unit})
-                                      {mp.piece_weight && ` · ${t('القطعة')}: ${mp.piece_weight} ${mp.piece_weight_unit || 'غرام'}`}
-                                      {yieldVal !== null && ` · ${t('عائد')}: ${yieldVal} ${mp.unit}`}
-                                    </SelectItem>
-                                  );
-                                })}
-                              </SelectContent>
-                            </Select>
-                            
-                            {/* ⭐ عرض مبسّط: كم وحدة من المنتج المصنع تُستهلك عند البيع */}
-                            {editProductForm.manufactured_product_id && (() => {
-                              const mp = manufacturedProducts.find(m => m.id === editProductForm.manufactured_product_id);
-                              if (!mp) return null;
-                              const productionCost = _computeMfgUnitCost(mp);
-                              const consumptionQty = Number(editProductForm.manufactured_consumption_qty ?? 1);
-                              const totalLineCost = consumptionQty * productionCost;
-                              return (
-                                <div className="mt-3 p-3 bg-background/50 rounded-lg border border-purple-500/30 space-y-2" data-testid="edit-mfg-link-summary">
-                                  <p className="text-sm font-medium text-purple-400">{t('استهلاك المنتج المصنع لكل بيع')}</p>
-                                  <div className="flex items-center gap-2">
-                                    <span className="flex-1 text-sm font-bold">{mp.name}</span>
-                                    <Input
-                                      type="number"
-                                      min="0.01"
-                                      step="0.01"
-                                      value={consumptionQty}
-                                      onChange={(e) => {
-                                        const q = parseFloat(e.target.value) || 0;
-                                        setEditProductForm({
-                                          ...editProductForm,
-                                          manufactured_consumption_qty: q,
-                                          cost: (q * productionCost).toFixed(0),
-                                        });
-                                      }}
-                                      className="w-24 h-9 text-center"
-                                      data-testid="edit-mfg-consumption-qty"
-                                    />
-                                    <span className="text-sm text-muted-foreground w-12">{mp.unit || 'حبة'}</span>
-                                  </div>
-                                  <div className="grid grid-cols-2 gap-2 text-xs">
-                                    <div className="p-2 rounded bg-muted/40">
-                                      <p className="text-muted-foreground">{t('تكلفة الإنتاج للوحدة')}</p>
-                                      <p className="font-bold tabular-nums">{formatPrice(productionCost)}</p>
-                                    </div>
-                                    <div className="p-2 rounded bg-emerald-500/10 border border-emerald-500/40">
-                                      <p className="text-muted-foreground">⭐ {t('التكلفة لهذا المنتج')}</p>
-                                      <p className="font-bold text-emerald-600 tabular-nums">{formatPrice(totalLineCost)}</p>
-                                    </div>
-                                  </div>
-                                </div>
-                              );
-                            })()}
-                            
-                            <p className="text-xs text-muted-foreground mt-2">{t('عند البيع: يُخصم العدد المحدد تلقائياً من مخزون المنتج المصنع. لتعديل المواد الخام للوصفة، اذهب لقسم المخزن والتصنيع.')}</p>
-                          </>
-                        ) : (
-                          <p className="text-xs text-amber-600 mt-2 bg-amber-500/10 p-2 rounded">{t('لا توجد منتجات مصنعة حالياً. أضف منتجات من قسم المخزن والتصنيع أولاً')}</p>
-                        )}
-                      </div>
+                      {/* ⭐ ربط متعدد بالمنتجات المُصنّعة (تعديل) */}
+                      <MfgLinksEditor form={editProductForm} setForm={setEditProductForm} formKind="edit" />
                       
                       {/* قسم الإضافات */}
                       <div className="p-3 bg-orange-500/10 border border-orange-500/30 rounded-lg">

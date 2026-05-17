@@ -1358,6 +1358,9 @@ class ProductCreate(BaseModel):
     packaging_items: List[Dict[str, Any]] = []  # مواد التغليف المربوطة للخصم التلقائي
     recipe_quantities: List[Dict[str, Any]] = []  # كميات المكونات للوصفة
     manufactured_consumption_qty: float = 1.0  # ⭐ كم وحدة من المنتج المصنع تُخصم لكل وحدة مباعة
+    # ⭐ ربط متعدد بالمنتجات المُصنّعة (يدعم أكثر من منتج مصنّع للمنتج الواحد)
+    # كل عنصر: {manufactured_product_id, consumption_qty, piece_weight?, piece_weight_unit?}
+    manufactured_links: List[Dict[str, Any]] = []
 
 class ProductResponse(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -1382,6 +1385,7 @@ class ProductResponse(BaseModel):
     packaging_items: List[Dict[str, Any]] = []  # مواد التغليف المربوطة للخصم التلقائي
     recipe_quantities: List[Dict[str, Any]] = []  # كميات المكونات للوصفة
     manufactured_consumption_qty: float = 1.0  # ⭐ كم وحدة من المنتج المصنع تُخصم لكل وحدة مباعة
+    manufactured_links: List[Dict[str, Any]] = []  # ⭐ ربط متعدد بالمنتجات المُصنّعة
 
 # Inventory Models
 class InventoryItemCreate(BaseModel):
@@ -6100,17 +6104,27 @@ async def create_order(order: OrderCreate, current_user: dict = Depends(get_curr
                 total_packaging_cost += packaging_cost
             
             # إذا كان المنتج مرتبط بمنتج مصنع، احصل على تكلفة المواد الخام
-            manufactured_product_id = product.get("manufactured_product_id")
-            if manufactured_product_id:
-                mfg_product = await db.manufactured_products.find_one(
-                    {"id": manufactured_product_id},
-                    {"_id": 0, "raw_material_cost": 1, "raw_material_cost_after_waste": 1, "production_cost": 1, "recipe": 1, "piece_weight": 1, "piece_weight_unit": 1, "quantity": 1}
-                )
-                if mfg_product:
-                    # ⭐ تكلفة الدفعة (كل الوصفة) — ليس تكلفة الحبة الواحدة
+            # ⭐ يدعم الآن `manufactured_links` (متعدد) مع fallback للحقل القديم `manufactured_product_id`
+            mfg_links = list(product.get("manufactured_links") or [])
+            if not mfg_links and product.get("manufactured_product_id"):
+                mfg_links = [{
+                    "manufactured_product_id": product.get("manufactured_product_id"),
+                    "consumption_qty": product.get("manufactured_consumption_qty") or 1,
+                }]
+            if mfg_links:
+                _UNIT_W = {"غرام": 1.0, "كغم": 1000.0, "كيلو": 1000.0, "كجم": 1000.0, "gram": 1.0, "kg": 1000.0}
+                links_unit_cost = 0.0
+                for link in mfg_links:
+                    mp_id = link.get("manufactured_product_id")
+                    if not mp_id:
+                        continue
+                    mfg_product = await db.manufactured_products.find_one(
+                        {"id": mp_id},
+                        {"_id": 0, "raw_material_cost": 1, "raw_material_cost_after_waste": 1, "production_cost": 1, "recipe": 1, "piece_weight": 1, "piece_weight_unit": 1, "quantity": 1}
+                    )
+                    if not mfg_product:
+                        continue
                     batch_cost = _sn(mfg_product.get("raw_material_cost_after_waste")) or _sn(mfg_product.get("production_cost")) or _sn(mfg_product.get("raw_material_cost"))
-                    # ⭐ احتساب عدد القطع الناتجة من الوصفة (calculated_yield)
-                    _UNIT_W = {"غرام": 1.0, "كغم": 1000.0, "كيلو": 1000.0, "كجم": 1000.0, "gram": 1.0, "kg": 1000.0}
                     pw = float(mfg_product.get("piece_weight") or 0)
                     pwu = mfg_product.get("piece_weight_unit") or "غرام"
                     piece_grams = pw * _UNIT_W.get(pwu, 1.0)
@@ -6120,11 +6134,12 @@ async def create_order(order: OrderCreate, current_user: dict = Depends(get_curr
                         if f:
                             total_grams += (ing.get("quantity") or 0) * f
                     calc_yield = (total_grams / piece_grams) if (piece_grams > 0 and total_grams > 0) else 0
-                    # المقسوم عليه: العائد المحسوب أولاً، ثم quantity المخزّن، وإلا 1
                     denom = calc_yield or float(mfg_product.get("quantity") or 0) or 1.0
                     unit_cost = batch_cost / denom
-                    consumption_qty = float(product.get("manufactured_consumption_qty") or 1)
-                    base_cost = unit_cost * consumption_qty + _sn(product.get("operating_cost"))
+                    consumption_qty = float(link.get("consumption_qty") or 1)
+                    links_unit_cost += unit_cost * consumption_qty
+                if links_unit_cost > 0:
+                    base_cost = links_unit_cost + _sn(product.get("operating_cost"))
             
             item_cost = base_cost * item.quantity + packaging_cost
         
@@ -6322,38 +6337,44 @@ async def create_order(order: OrderCreate, current_user: dict = Depends(get_curr
     for item in order.items:
         product = await db.products.find_one({"id": item.product_id})
         if product:
-            # النظام الجديد: المنتجات المصنعة
-            manufactured_product_id = product.get("manufactured_product_id")
-            if manufactured_product_id:
-                # ⭐ قراءة معامل الاستهلاك (كم وحدة من المنتج المصنع تُخصم لكل وحدة مباعة) — افتراضي 1
-                consumption_qty = float(product.get("manufactured_consumption_qty") or 1)
-                deduct_amount = consumption_qty * item.quantity
-                # خصم من مخزون الفرع (branch_inventory)
-                branch_item = await db.branch_inventory.find_one({
-                    "branch_id": order.branch_id,
-                    "product_id": manufactured_product_id
-                })
-                
-                if branch_item:
-                    await db.branch_inventory.update_one(
-                        {"id": branch_item["id"]},
-                        {
-                            "$inc": {
-                                "quantity": -deduct_amount,
-                                "sold_quantity": deduct_amount  # زيادة الكمية المباعة
-                            },
-                            "$set": {"last_updated": datetime.now(timezone.utc).isoformat()}
-                        }
-                    )
-                elif inventory_mode == "centralized":
-                    # في حالة المخزون المركزي، خصم من المنتجات المصنعة مباشرة
-                    await db.manufactured_products.update_one(
-                        {"id": manufactured_product_id},
-                        {
-                            "$inc": {"quantity": -deduct_amount},
-                            "$set": {"last_updated": datetime.now(timezone.utc).isoformat()}
-                        }
-                    )
+            # النظام الجديد: المنتجات المصنعة (يدعم ربط متعدد)
+            mfg_links = list(product.get("manufactured_links") or [])
+            if not mfg_links and product.get("manufactured_product_id"):
+                mfg_links = [{
+                    "manufactured_product_id": product.get("manufactured_product_id"),
+                    "consumption_qty": product.get("manufactured_consumption_qty") or 1,
+                }]
+            if mfg_links:
+                for link in mfg_links:
+                    mp_id = link.get("manufactured_product_id")
+                    if not mp_id:
+                        continue
+                    consumption_qty = float(link.get("consumption_qty") or 1)
+                    deduct_amount = consumption_qty * item.quantity
+                    # خصم من مخزون الفرع (branch_inventory)
+                    branch_item = await db.branch_inventory.find_one({
+                        "branch_id": order.branch_id,
+                        "product_id": mp_id
+                    })
+                    if branch_item:
+                        await db.branch_inventory.update_one(
+                            {"id": branch_item["id"]},
+                            {
+                                "$inc": {
+                                    "quantity": -deduct_amount,
+                                    "sold_quantity": deduct_amount
+                                },
+                                "$set": {"last_updated": datetime.now(timezone.utc).isoformat()}
+                            }
+                        )
+                    elif inventory_mode == "centralized":
+                        await db.manufactured_products.update_one(
+                            {"id": mp_id},
+                            {
+                                "$inc": {"quantity": -deduct_amount},
+                                "$set": {"last_updated": datetime.now(timezone.utc).isoformat()}
+                            }
+                        )
                 continue
             
             # النظام القديم: المنتجات النهائية
@@ -6553,11 +6574,24 @@ async def update_order_items(order_id: str, request: UpdateOrderItemsRequest, cu
         item_cost = 0
         if product:
             base_cost = _sn(product.get("cost")) + _sn(product.get("operating_cost"))
-            manufactured_product_id = product.get("manufactured_product_id")
-            if manufactured_product_id:
-                mfg_product = await db.manufactured_products.find_one({"id": manufactured_product_id}, {"_id": 0, "raw_material_cost": 1})
-                if mfg_product:
-                    base_cost = _sn(mfg_product.get("raw_material_cost")) + _sn(product.get("operating_cost"))
+            # ⭐ يدعم ربط متعدد بالمنتجات المُصنّعة
+            mfg_links = list(product.get("manufactured_links") or [])
+            if not mfg_links and product.get("manufactured_product_id"):
+                mfg_links = [{
+                    "manufactured_product_id": product.get("manufactured_product_id"),
+                    "consumption_qty": product.get("manufactured_consumption_qty") or 1,
+                }]
+            if mfg_links:
+                links_unit_cost = 0.0
+                for link in mfg_links:
+                    mp_id = link.get("manufactured_product_id")
+                    if not mp_id:
+                        continue
+                    mfg_product = await db.manufactured_products.find_one({"id": mp_id}, {"_id": 0, "raw_material_cost": 1})
+                    if mfg_product:
+                        links_unit_cost += _sn(mfg_product.get("raw_material_cost")) * float(link.get("consumption_qty") or 1)
+                if links_unit_cost > 0:
+                    base_cost = links_unit_cost + _sn(product.get("operating_cost"))
             item_cost = base_cost * item.quantity
         
         total_cost += item_cost
