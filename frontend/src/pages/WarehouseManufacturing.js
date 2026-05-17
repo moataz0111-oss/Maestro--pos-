@@ -44,7 +44,10 @@ import {
   TrendingDown,
   Pencil,
   Trash2,
-  DollarSign
+  DollarSign,
+  Edit,
+  Check,
+  AlertCircle
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -370,6 +373,9 @@ export default function WarehouseManufacturing() {
     quantity: 0,
     input_unit: '' // الوحدة التي اختارها المستخدم لإدخال الكمية (يُحوَّل لوحدة المادة)
   });
+
+  // ⭐ تعديل/تعريف pack info (محتوى العلبة/الكرتون) inline من شاشة الوصفة
+  const [packInfoEdit, setPackInfoEdit] = useState(null);
 
   // ⭐ تعديل وصفة منتج مصنّع موجود
   const [showEditRecipeDialog, setShowEditRecipeDialog] = useState(null); // المنتج الجاري تعديله
@@ -916,13 +922,31 @@ export default function WarehouseManufacturing() {
     return { qty: piecesRounded, converted: true, fromUnit: inputUnit, toUnit: materialUnit, via: `${packInfo.pack_quantity} ${packInfo.pack_unit}/${materialUnit}` };
   };
 
+  // ⭐ حفظ pack_info لمادة خام (يُحدّث rawMaterials لتمكين تحويل الوحدات)
+  const savePackInfo = async () => {
+    if (!packInfoEdit?.material_id || !packInfoEdit?.pack_quantity || !packInfoEdit?.pack_unit) {
+      toast.error(t('أكمل الكمية والوحدة'));
+      return;
+    }
+    try {
+      await axios.put(`${API}/raw-materials/${packInfoEdit.material_id}`, {
+        pack_quantity: Number(packInfoEdit.pack_quantity),
+        pack_unit: packInfoEdit.pack_unit,
+      }, { headers });
+      toast.success(t('تم حفظ محتوى العلبة'));
+      setPackInfoEdit(null);
+      await fetchData(); // إعادة تحميل rawMaterials ليحدّث الوحدات المتاحة في الـ select
+    } catch (error) {
+      showApiError(error, t('فشل في حفظ محتوى العلبة'));
+    }
+  };
+
   // إضافة مكون للوصفة
   const addIngredientToRecipe = () => {
     if (!newIngredient.raw_material_id || newIngredient.quantity <= 0) {
       toast.error(t('اختر مادة خام وحدد الكمية'));
       return;
     }
-    
     // البحث في مخزون التصنيع (يدعم كلا اسمي الحقول للتوافق مع البيانات القديمة)
     const material = manufacturingInventory.find(m =>
       (m.material_id || m.raw_material_id) === newIngredient.raw_material_id
@@ -3950,6 +3974,100 @@ export default function WarehouseManufacturing() {
                       <Plus className="h-4 w-4" />
                     </Button>
                   </div>
+
+                  {/* ⭐ inline panel لتعريف محتوى العلبة/الكرتون عند الحاجة */}
+                  {newIngredient.raw_material_id && (() => {
+                    const m = manufacturingInventory.find(x => (x.material_id || x.raw_material_id) === newIngredient.raw_material_id);
+                    const isPackUnit = ['علبة', 'كرتون'].includes(m?.unit);
+                    if (!isPackUnit) return null;
+                    const packInfo = _packInfoFor(newIngredient.raw_material_id);
+                    if (packInfo) {
+                      // pack info موجود — اعرضه مع زر تعديل
+                      return (
+                        <div className="flex items-center gap-2 p-2 bg-emerald-500/10 border border-emerald-500/30 rounded-lg text-xs">
+                          <span className="font-bold text-emerald-700 dark:text-emerald-400">
+                            ✓ {t('محتوى العلبة الواحدة')}:
+                          </span>
+                          <span className="font-mono">
+                            1 {m?.unit} = {packInfo.pack_quantity} {packInfo.pack_unit}
+                          </span>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            className="h-6 px-2 text-amber-600 hover:text-amber-700 ml-auto"
+                            onClick={() => setPackInfoEdit({
+                              material_id: newIngredient.raw_material_id,
+                              pack_quantity: packInfo.pack_quantity,
+                              pack_unit: packInfo.pack_unit,
+                              editing: true
+                            })}
+                            data-testid="pack-info-edit-btn"
+                          >
+                            <Edit className="h-3 w-3 ml-1" />{t('تعديل')}
+                          </Button>
+                        </div>
+                      );
+                    }
+                    // pack info غير موجود — أظهر panel لتعريفه
+                    return (
+                      <div className="p-3 bg-amber-500/10 border border-amber-500/40 rounded-lg space-y-2" data-testid="pack-info-setup-panel">
+                        <p className="text-xs font-bold text-amber-700 dark:text-amber-400 flex items-center gap-1">
+                          <AlertCircle className="h-3.5 w-3.5" />
+                          {t('عرّف محتوى العلبة/الكرتون الواحد لتتمكن من الإدخال بالغرام/الكيلو')}
+                        </p>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-mono whitespace-nowrap">1 {m?.unit} =</span>
+                          <Input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            placeholder={t('الكمية')}
+                            value={packInfoEdit?.material_id === newIngredient.raw_material_id ? packInfoEdit.pack_quantity : ''}
+                            onChange={(e) => setPackInfoEdit({
+                              material_id: newIngredient.raw_material_id,
+                              pack_quantity: parseFloat(e.target.value) || 0,
+                              pack_unit: packInfoEdit?.pack_unit || 'غرام'
+                            })}
+                            className="w-24 bg-background h-8"
+                            data-testid="pack-info-qty-input"
+                          />
+                          <Select
+                            value={packInfoEdit?.material_id === newIngredient.raw_material_id ? (packInfoEdit.pack_unit || 'غرام') : 'غرام'}
+                            onValueChange={(v) => setPackInfoEdit({
+                              material_id: newIngredient.raw_material_id,
+                              pack_quantity: packInfoEdit?.pack_quantity || 0,
+                              pack_unit: v
+                            })}
+                          >
+                            <SelectTrigger className="w-24 h-8 bg-background" data-testid="pack-info-unit-select">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="غرام">{t('غرام')}</SelectItem>
+                              <SelectItem value="كغم">{t('كغم')}</SelectItem>
+                              <SelectItem value="مل">{t('مل')}</SelectItem>
+                              <SelectItem value="لتر">{t('لتر')}</SelectItem>
+                              <SelectItem value="قطعة">{t('قطعة')}</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <Button
+                            type="button"
+                            size="sm"
+                            className="bg-amber-500 hover:bg-amber-600 text-white h-8"
+                            onClick={savePackInfo}
+                            disabled={!packInfoEdit?.pack_quantity || packInfoEdit?.material_id !== newIngredient.raw_material_id}
+                            data-testid="pack-info-save-btn"
+                          >
+                            <Check className="h-3.5 w-3.5 ml-1" />{t('حفظ')}
+                          </Button>
+                        </div>
+                        <p className="text-[11px] text-muted-foreground">
+                          {t('مثال: 1 علبة جبن = 500 غرام · 1 كرتون مايونيز = 12 قطعة · 1 علبة زيت = 1 لتر')}
+                        </p>
+                      </div>
+                    );
+                  })()}
                   
                   {productForm.recipe.length > 0 ? (
                     <div className="space-y-2 max-h-52 overflow-y-auto">

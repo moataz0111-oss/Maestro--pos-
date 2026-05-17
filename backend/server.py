@@ -12621,7 +12621,7 @@ async def update_raw_material(material_id: str, update: dict, current_user: dict
     if not material:
         raise HTTPException(status_code=404, detail="المادة غير موجودة")
     
-    allowed_fields = ["name", "name_en", "unit", "category", "min_stock", "current_stock", "price", "supplier_id", "is_active"]
+    allowed_fields = ["name", "name_en", "unit", "category", "min_stock", "current_stock", "price", "supplier_id", "is_active", "pack_quantity", "pack_unit", "waste_percentage"]
     update_data = {k: v for k, v in update.items() if k in allowed_fields and v is not None}
     
     if update_data:
