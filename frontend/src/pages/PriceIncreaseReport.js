@@ -15,6 +15,7 @@ import {
 import {
   ArrowRight, TrendingUp, AlertTriangle, RefreshCw, Filter, Building2, Package, Calendar,
 } from 'lucide-react';
+import { showApiError } from '../utils/apiError';
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -42,7 +43,7 @@ const PriceIncreaseReport = () => {
       const res = await axios.get(`${API}/reports/price-increases?${params.toString()}`, { headers });
       setData(res.data || { rows: [], total_rows: 0, total_cost_impact: 0, by_supplier: [], by_material: [] });
     } catch (err) {
-      toast.error(err?.response?.data?.detail || t('فشل تحميل التقرير'));
+      showApiError(err, t('فشل تحميل التقرير'));
     } finally {
       setLoading(false);
     }

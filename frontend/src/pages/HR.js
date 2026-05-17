@@ -8,6 +8,7 @@ import { useOffline } from '../context/OfflineContext';
 import offlineStorage from '../lib/offlineStorage';
 import db, { STORES } from '../lib/offlineDB';
 import { formatPrice } from '../utils/currency';
+import { showApiError } from '../utils/apiError';
 
 // تحويل الأسماء العربية للإنجليزية (للبصمة)
 const arabicToEnglish = (name) => {
@@ -526,7 +527,7 @@ export default function HR() {
       fetchDailyPayroll();
       fetchData(); // refresh المستحقات + تقرير الرواتب
     } catch (error) {
-      toast.error(error.response?.data?.detail || t('فشل في صرف الدفعة'));
+      showApiError(error, t('فشل في صرف الدفعة'));
     } finally {
       setPaymentSubmitting(false);
     }
@@ -566,7 +567,7 @@ export default function HR() {
       fetchDailyPayroll();
       fetchData();
     } catch (err) {
-      toast.error(err.response?.data?.detail || t('فشل في الحذف'));
+      showApiError(err, t('فشل في الحذف'));
     }
   };
 
@@ -702,7 +703,7 @@ export default function HR() {
       resetEmployeeForm();
       fetchData();
     } catch (error) {
-      toast.error(error.response?.data?.detail || t('فشل في إضافة الموظف'));
+      showApiError(error, t('فشل في إضافة الموظف'));
     }
   };
 
@@ -751,7 +752,7 @@ export default function HR() {
       resetEmployeeForm();
       fetchData();
     } catch (error) {
-      toast.error(error.response?.data?.detail || t('فشل في تحديث الموظف'));
+      showApiError(error, t('فشل في تحديث الموظف'));
     }
   };
 
@@ -819,7 +820,7 @@ export default function HR() {
       setAttendanceForm({ employee_id: '', date: new Date().toISOString().slice(0, 10), check_in: '', check_out: '', status: 'present', notes: '' });
       fetchData();
     } catch (error) {
-      toast.error(error.response?.data?.detail || t('فشل في تسجيل الحضور'));
+      showApiError(error, t('فشل في تسجيل الحضور'));
     }
   };
 
@@ -1079,7 +1080,7 @@ export default function HR() {
       toast.success(t('تمت الموافقة على الوقت الإضافي'));
       fetchData();
     } catch (error) {
-      toast.error(error.response?.data?.detail || t('فشل في الموافقة'));
+      showApiError(error, t('فشل في الموافقة'));
     }
   };
   
@@ -1090,7 +1091,7 @@ export default function HR() {
       toast.success(t('تم رفض الوقت الإضافي'));
       fetchData();
     } catch (error) {
-      toast.error(error.response?.data?.detail || t('فشل في الرفض'));
+      showApiError(error, t('فشل في الرفض'));
     }
   };
 
@@ -1108,7 +1109,7 @@ export default function HR() {
       setAdvanceForm({ employee_id: '', amount: '', reason: '', deduction_months: 1 });
       fetchData();
     } catch (error) {
-      toast.error(error.response?.data?.detail || t('فشل في تسجيل السلفة'));
+      showApiError(error, t('فشل في تسجيل السلفة'));
     }
   };
 
@@ -1123,7 +1124,7 @@ export default function HR() {
       setResetEligibility(res.data);
       setResetDeductionsDialogOpen(true);
     } catch (error) {
-      toast.error(error.response?.data?.detail || t('فشل في فحص الأهلية'));
+      showApiError(error, t('فشل في فحص الأهلية'));
     }
   };
 
@@ -1140,7 +1141,7 @@ export default function HR() {
       setResetEligibility(null);
       fetchData();
     } catch (error) {
-      toast.error(error.response?.data?.detail || t('فشل في التصفير'));
+      showApiError(error, t('فشل في التصفير'));
     } finally {
       setResetting(false);
     }
@@ -1161,7 +1162,7 @@ export default function HR() {
       setDeductionForm({ employee_id: '', deduction_type: 'absence', amount: '', hours: '', days: '', reason: '', date: new Date().toISOString().slice(0, 10) });
       fetchData();
     } catch (error) {
-      toast.error(error.response?.data?.detail || t('فشل في تسجيل الخصم'));
+      showApiError(error, t('فشل في تسجيل الخصم'));
     }
   };
 
@@ -1340,7 +1341,7 @@ export default function HR() {
       });
       setStatementData(res.data);
     } catch (error) {
-      toast.error(error.response?.data?.detail || t('فشل في جلب كشف الحساب'));
+      showApiError(error, t('فشل في جلب كشف الحساب'));
     } finally {
       setStatementLoading(false);
     }
@@ -1367,7 +1368,7 @@ export default function HR() {
       setBonusForm({ employee_id: '', bonus_type: 'performance', amount: '', hours: '', reason: '', date: new Date().toISOString().slice(0, 10) });
       fetchData();
     } catch (error) {
-      toast.error(error.response?.data?.detail || t('فشل في تسجيل المكافأة'));
+      showApiError(error, t('فشل في تسجيل المكافأة'));
     }
   };
 
@@ -1379,7 +1380,7 @@ export default function HR() {
       setPayrollPreview(res.data);
       setPayrollDialogOpen(true);
     } catch (error) {
-      toast.error(error.response?.data?.detail || t('فشل في حساب الراتب'));
+      showApiError(error, t('فشل في حساب الراتب'));
     }
   };
 
@@ -1401,7 +1402,7 @@ export default function HR() {
       setPayrollPreview(null);
       fetchData();
     } catch (error) {
-      toast.error(error.response?.data?.detail || t('فشل في إنشاء كشف الراتب'));
+      showApiError(error, t('فشل في إنشاء كشف الراتب'));
     }
   };
 
@@ -1413,7 +1414,7 @@ export default function HR() {
       toast.success(t('تم صرف الراتب'));
       fetchData();
     } catch (error) {
-      toast.error(error.response?.data?.detail || t('فشل في صرف الراتب'));
+      showApiError(error, t('فشل في صرف الراتب'));
     }
   };
 

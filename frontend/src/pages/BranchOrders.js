@@ -59,6 +59,7 @@ import WasteEfficiencyReport from '../components/WasteEfficiencyReport';
 import DailyStockCountDialog from '../components/DailyStockCountDialog';
 import StockCountHistoryDialog from '../components/StockCountHistoryDialog';
 import { useAuth } from '../context/AuthContext';
+import { showApiError } from '../utils/apiError';
 const API = API_URL;
 export default function BranchOrders() {
   const navigate = useNavigate();
@@ -271,7 +272,7 @@ export default function BranchOrders() {
       toast.success(t('تم تحديث الحالة'));
       fetchData();
     } catch (error) {
-      toast.error(error.response?.data?.detail || t('فشل في تحديث الحالة'));
+      showApiError(error, t('فشل في تحديث الحالة'));
     }
   };
   const getStatusColor = (status) => {

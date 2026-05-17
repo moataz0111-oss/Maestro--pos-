@@ -92,6 +92,7 @@ import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { ScrollArea } from '../components/ui/scroll-area';
 import { Separator } from '../components/ui/separator';
+import { showApiError } from '../utils/apiError';
 
 const API = API_URL;
 
@@ -543,7 +544,7 @@ export default function Dashboard() {
         }, 60000);
       }
     } catch (error) {
-      toast.error(error.response?.data?.detail || t('فشل في فتح الوردية'));
+      showApiError(error, t('فشل في فتح الوردية'));
     }
   };
 
@@ -1026,7 +1027,7 @@ export default function Dashboard() {
       }, 1500);
       
     } catch (error) {
-      toast.error(error.response?.data?.detail || t('فشل في إغلاق الصندوق'));
+      showApiError(error, t('فشل في إغلاق الصندوق'));
     } finally {
       setIsClosing(false);
     }
@@ -1425,7 +1426,7 @@ export default function Dashboard() {
       const tRes = await axios.get(`${API}/sales-target`);
       setSalesTarget(tRes.data);
     } catch (err) {
-      toast.error(err.response?.data?.detail || t('فشل في تحديد الهدف'));
+      showApiError(err, t('فشل في تحديد الهدف'));
     }
   };
 
@@ -2856,7 +2857,7 @@ export default function Dashboard() {
                           fetchDayStatus();
                           checkAndOpenShift();
                         } catch (err) {
-                          toast.error(err.response?.data?.detail || t('فشل في فتح الوردية'));
+                          showApiError(err, t('فشل في فتح الوردية'));
                         }
                       }}
                       data-testid="open-own-shift-btn"

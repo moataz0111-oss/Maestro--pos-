@@ -53,6 +53,7 @@ import {
   TabsList,
   TabsTrigger,
 } from '../components/ui/tabs';
+import { showApiError } from '../utils/apiError';
 
 const API = API_URL;
 
@@ -216,7 +217,7 @@ export default function Inventory() {
       });
       fetchData();
     } catch (error) {
-      toast.error(error.response?.data?.detail || t('فشل في إضافة الصنف'));
+      showApiError(error, t('فشل في إضافة الصنف'));
     }
   };
 
@@ -309,7 +310,7 @@ export default function Inventory() {
       setTransactionData({ quantity: 0, notes: '' });
       fetchData();
     } catch (error) {
-      toast.error(error.response?.data?.detail || t('فشل في تنفيذ العملية'));
+      showApiError(error, t('فشل في تنفيذ العملية'));
     }
   };
 

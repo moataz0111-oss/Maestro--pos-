@@ -29,6 +29,7 @@ import {
 import { toast } from 'sonner';
 
 import { API_URL } from '../utils/api';
+import { showApiError } from '../utils/apiError';
 const API = API_URL;
 
 export default function BiometricDevices({ branches = [], onDataRefresh }) {
@@ -205,7 +206,7 @@ export default function BiometricDevices({ branches = [], onDataRefresh }) {
       setDeviceForm({ name: '', ip_address: '', port: 4370, branch_id: '', device_type: 'fingerprint' });
       fetchDevices();
     } catch (error) {
-      toast.error(error.response?.data?.detail || t('فشل في إضافة الجهاز'));
+      showApiError(error, t('فشل في إضافة الجهاز'));
     }
   };
 

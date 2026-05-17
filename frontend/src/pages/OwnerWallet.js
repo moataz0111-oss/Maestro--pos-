@@ -59,6 +59,7 @@ import {
   SelectValue,
 } from '../components/ui/select';
 import { useNavigate } from 'react-router-dom';
+import { showApiError } from '../utils/apiError';
 
 const API = API_URL;
 
@@ -264,7 +265,7 @@ export default function OwnerWallet() {
       setNewDeposit({ amount: '', date: new Date().toISOString().split('T')[0], description: '', source: 'cash_sales', branch_id: '', external_source: '' });
       fetchData();
     } catch (error) {
-      toast.error(error.response?.data?.detail || t('فشل في إضافة الإيداع'));
+      showApiError(error, t('فشل في إضافة الإيداع'));
     }
   };
 
@@ -300,7 +301,7 @@ export default function OwnerWallet() {
       setNewWithdrawal({ amount: '', date: new Date().toISOString().split('T')[0], beneficiary: '', description: '', category: 'transfer', branch_id: '', external_source: '' });
       fetchData();
     } catch (error) {
-      toast.error(error.response?.data?.detail || t('فشل في إضافة السحب'));
+      showApiError(error, t('فشل في إضافة السحب'));
     }
   };
 
@@ -334,7 +335,7 @@ export default function OwnerWallet() {
       setNewProfitTransfer({ amount: '', month: selectedDate, description: '', branch_id: '', external_source: '' });
       fetchData();
     } catch (error) {
-      toast.error(error.response?.data?.detail || t('فشل في تحويل الأرباح'));
+      showApiError(error, t('فشل في تحويل الأرباح'));
     }
   };
 
@@ -360,7 +361,7 @@ export default function OwnerWallet() {
       setProfitWithdrawReason('');
       fetchData();
     } catch (error) {
-      toast.error(error.response?.data?.detail || t('فشل في سحب الأرباح'));
+      showApiError(error, t('فشل في سحب الأرباح'));
     } finally {
       setIsWithdrawingProfit(false);
     }

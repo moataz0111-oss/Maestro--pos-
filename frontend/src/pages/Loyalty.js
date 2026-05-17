@@ -33,6 +33,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
+import { showApiError } from '../utils/apiError';
 const API = API_URL;
 const TIER_ICONS = {
   bronze: '🥉',
@@ -134,7 +135,7 @@ export default function Loyalty() {
       setMemberForm({ customer_id: '', customer_name: '', phone: '', email: '', birthday: '', referred_by: '' });
       fetchData();
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'فشل في إضافة العضو');
+      showApiError(error, 'فشل في إضافة العضو');
     }
   };
   const handleSaveSettings = async () => {

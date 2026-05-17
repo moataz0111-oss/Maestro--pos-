@@ -70,6 +70,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from '../components/ui/popover';
 import StockoutPredictionDialog, { StockoutPredictionBanner } from '../components/StockoutPrediction';
 import { MonthlyStocktakeButton } from '../components/MonthlyStocktake';
+import { showApiError } from '../utils/apiError';
 const API = API_URL;
 
 // ⭐ Safe extraction of FastAPI error messages — يمنع React Error #31 عند تمرير
@@ -284,7 +285,7 @@ export default function WarehouseManufacturing() {
       toast.success(t('تمت الموافقة وأُرسل الطلب للمشتريات'));
       fetchPurchaseRequests();
     } catch (err) {
-      toast.error(safeDetail(err, t('فشل')));
+      showApiError(err, t('فشل'));
     }
   };
 
@@ -295,7 +296,7 @@ export default function WarehouseManufacturing() {
       toast.success(t('تم رفض الطلب'));
       fetchPurchaseRequests();
     } catch (err) {
-      toast.error(safeDetail(err, t('فشل')));
+      showApiError(err, t('فشل'));
     }
   };
   const [showAddPackagingStockDialog, setShowAddPackagingStockDialog] = useState(null);
@@ -489,7 +490,7 @@ export default function WarehouseManufacturing() {
       });
       fetchData();
     } catch (error) {
-      toast.error(safeDetail(error, t('فشل في إضافة المادة')));
+      showApiError(error, t('فشل في إضافة المادة'));
     } finally {
       setSubmitting(false);
     }
@@ -555,7 +556,7 @@ export default function WarehouseManufacturing() {
       });
       fetchData();
     } catch (error) {
-      toast.error(safeDetail(error, t('فشل في إضافة المادة')));
+      showApiError(error, t('فشل في إضافة المادة'));
     } finally {
       setSubmitting(false);
     }
@@ -580,7 +581,7 @@ export default function WarehouseManufacturing() {
       setAddPackagingStockQuantity(1);
       fetchData();
     } catch (error) {
-      toast.error(safeDetail(error, t('فشل في إضافة الكمية')));
+      showApiError(error, t('فشل في إضافة الكمية'));
     } finally {
       setSubmitting(false);
     }
@@ -637,7 +638,7 @@ export default function WarehouseManufacturing() {
       setPackagingRequestNotes('');
       fetchData();
     } catch (error) {
-      toast.error(safeDetail(error, t('فشل في إرسال الطلب')));
+      showApiError(error, t('فشل في إرسال الطلب'));
     } finally {
       setSubmitting(false);
     }
@@ -650,7 +651,7 @@ export default function WarehouseManufacturing() {
       toast.success(t('تمت الموافقة على الطلب'));
       fetchData();
     } catch (error) {
-      toast.error(safeDetail(error, t('فشل في الموافقة')));
+      showApiError(error, t('فشل في الموافقة'));
     }
   };
   
@@ -661,7 +662,7 @@ export default function WarehouseManufacturing() {
       toast.success(t('تم تحويل المواد للفرع بنجاح'));
       fetchData();
     } catch (error) {
-      toast.error(safeDetail(error, t('فشل في التحويل')));
+      showApiError(error, t('فشل في التحويل'));
     }
   };
   
@@ -701,7 +702,7 @@ export default function WarehouseManufacturing() {
       if (typeof detail === 'object' && detail.insufficient_materials) {
         toast.error(t('مواد غير كافية'));
       } else {
-        toast.error(safeDetail(error, t('فشل في التحويل')));
+        showApiError(error, t('فشل في التحويل'));
       }
     } finally {
       setSubmitting(false);
@@ -780,7 +781,7 @@ export default function WarehouseManufacturing() {
       setBranchTransferForm({ to_branch_id: '', items: [], notes: '' });
       fetchData();
     } catch (error) {
-      toast.error(safeDetail(error, t('فشل في التحويل')));
+      showApiError(error, t('فشل في التحويل'));
     } finally {
       setSubmitting(false);
     }
@@ -799,7 +800,7 @@ export default function WarehouseManufacturing() {
         const products = detail.insufficient_products.map(p => `${p.name}: طلب ${p.requested} متوفر ${p.available}`).join('\n');
         toast.error(`${t('كمية غير كافية')}\n${products}`);
       } else {
-        toast.error(safeDetail(error, t('فشل في تنفيذ الطلب')));
+        showApiError(error, t('فشل في تنفيذ الطلب'));
       }
     } finally {
       setSubmitting(false);
@@ -1007,7 +1008,7 @@ export default function WarehouseManufacturing() {
       toast.success(t('تمت مزامنة الوصفة بنجاح') + ` (×${scale.toFixed(4)})`);
       fetchData();
     } catch (error) {
-      toast.error(safeDetail(error, t('فشلت المزامنة')));
+      showApiError(error, t('فشلت المزامنة'));
     }
   };
 
@@ -1140,7 +1141,7 @@ export default function WarehouseManufacturing() {
       setShowEditRecipeDialog(null);
       fetchData();
     } catch (error) {
-      toast.error(safeDetail(error, t('فشل في تحديث الوصفة')));
+      showApiError(error, t('فشل في تحديث الوصفة'));
     } finally {
       setSavingRecipe(false);
     }
@@ -1230,7 +1231,7 @@ export default function WarehouseManufacturing() {
       });
       fetchData();
     } catch (error) {
-      toast.error(safeDetail(error, t('فشل في إضافة المنتج')));
+      showApiError(error, t('فشل في إضافة المنتج'));
     } finally {
       setSubmitting(false);
     }
@@ -1263,7 +1264,7 @@ export default function WarehouseManufacturing() {
           .join('\n');
         toast.error(`${t('مواد غير كافية')}\n${list}`, { duration: 10000, style: { whiteSpace: 'pre-line' } });
       } else {
-        toast.error(safeDetail(error, t('فشل في التصنيع')));
+        showApiError(error, t('فشل في التصنيع'));
       }
     } finally {
       setSubmitting(false);
@@ -1290,7 +1291,7 @@ export default function WarehouseManufacturing() {
       setAddStockQuantity(1);
       fetchData();
     } catch (error) {
-      toast.error(safeDetail(error, t('فشل في زيادة الكمية')));
+      showApiError(error, t('فشل في زيادة الكمية'));
     } finally {
       setSubmitting(false);
     }
@@ -1308,7 +1309,7 @@ export default function WarehouseManufacturing() {
       setAddRawMaterialStockQuantity(1);
       fetchData();
     } catch (error) {
-      toast.error(safeDetail(error, t('فشل في زيادة الكمية')));
+      showApiError(error, t('فشل في زيادة الكمية'));
     } finally {
       setSubmitting(false);
     }
@@ -1339,7 +1340,7 @@ export default function WarehouseManufacturing() {
       setEditRawMaterial(null);
       fetchData();
     } catch (error) {
-      toast.error(safeDetail(error, t('فشل في تحديث المادة')));
+      showApiError(error, t('فشل في تحديث المادة'));
     } finally {
       setSubmitting(false);
     }
@@ -1355,7 +1356,7 @@ export default function WarehouseManufacturing() {
       setDeleteRawMaterial(null);
       fetchData();
     } catch (error) {
-      toast.error(safeDetail(error, t('فشل في حذف المادة')));
+      showApiError(error, t('فشل في حذف المادة'));
     } finally {
       setSubmitting(false);
     }
@@ -1417,7 +1418,7 @@ export default function WarehouseManufacturing() {
       setMaterialRequestPriority('normal');
       fetchData();
     } catch (error) {
-      toast.error(safeDetail(error, t('فشل في إرسال الطلب')));
+      showApiError(error, t('فشل في إرسال الطلب'));
     } finally {
       setSubmitting(false);
     }
@@ -1482,7 +1483,7 @@ export default function WarehouseManufacturing() {
       toast.success(t('تم استلام المشتريات وإضافتها للمخزن'));
       fetchData();
     } catch (error) {
-      toast.error(safeDetail(error, t('فشل في استلام المشتريات')));
+      showApiError(error, t('فشل في استلام المشتريات'));
     } finally {
       setSubmitting(false);
     }
@@ -5296,7 +5297,7 @@ export default function WarehouseManufacturing() {
                   toast.success(t('تم إرسال الطلب للمالك بنجاح ✓'));
                   setShowPurchaseRequestModal(false);
                 } catch (err) {
-                  toast.error(safeDetail(err, t('فشل إرسال الطلب')));
+                  showApiError(err, t('فشل إرسال الطلب'));
                 }
               }}
             >
@@ -5666,7 +5667,7 @@ export default function WarehouseManufacturing() {
                   setAdminCorrection(null);
                   fetchData();
                 } catch (err) {
-                  toast.error(safeDetail(err, t('فشل التصحيح')));
+                  showApiError(err, t('فشل التصحيح'));
                 } finally {
                   setSubmitting(false);
                 }

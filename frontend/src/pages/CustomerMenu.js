@@ -51,6 +51,7 @@ import {
 import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
+import { showApiError } from '../utils/apiError';
 // Fix Leaflet marker icon
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
@@ -844,7 +845,7 @@ export default function CustomerMenu() {
         localStorage.removeItem(`cart_${tenantId}`);
       }
     } catch (error) {
-      toast.error(error.response?.data?.detail || t('فشل في إرسال الطلب'));
+      showApiError(error, t('فشل في إرسال الطلب'));
     } finally {
       setSubmitting(false);
     }

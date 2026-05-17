@@ -50,6 +50,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../components/ui/select';
+import { showApiError } from '../utils/apiError';
 
 const API = API_URL;
 
@@ -281,7 +282,7 @@ export default function Orders() {
       setFixRoutingOrder(null);
       fetchData();
     } catch (error) {
-      toast.error(error.response?.data?.detail || t('فشل في تصحيح المسار'));
+      showApiError(error, t('فشل في تصحيح المسار'));
     } finally {
       setFixSubmitting(false);
     }

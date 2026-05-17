@@ -140,6 +140,7 @@ import {
   TableRow,
 } from '../components/ui/table';
 import ImageUploader from '../components/ImageUploader';
+import { showApiError } from '../utils/apiError';
 
 const API = API_URL;
 
@@ -1120,7 +1121,7 @@ export default function Settings() {
       setStaffForm({ full_name: '', email: '', phone: '', password: '', role: 'cashier', branch_id: branches[0]?.id || '', job_title: '', permissions: [] });
       fetchStaffData();
     } catch (error) {
-      toast.error(error.response?.data?.detail || t('فشل في حفظ البيانات'));
+      showApiError(error, t('فشل في حفظ البيانات'));
     }
   };
 
@@ -1142,7 +1143,7 @@ export default function Settings() {
       setEditStaffForm(null);
       fetchStaffData();
     } catch (error) {
-      toast.error(error.response?.data?.detail || t('فشل في حفظ البيانات'));
+      showApiError(error, t('فشل في حفظ البيانات'));
     }
   };
 
@@ -1155,7 +1156,7 @@ export default function Settings() {
       toast.success(t('تم الحفظ بنجاح'));
       fetchStaffData();
     } catch (error) {
-      toast.error(error.response?.data?.detail || t('فشل في حفظ البيانات'));
+      showApiError(error, t('فشل في حفظ البيانات'));
     }
   };
 
@@ -1206,7 +1207,7 @@ export default function Settings() {
       await axios.post(`${API}/staff/${staffId}/reset-password`, { new_password: newPassword });
       toast.success(t('تم الحفظ بنجاح'));
     } catch (error) {
-      toast.error(error.response?.data?.detail || t('فشل في حفظ البيانات'));
+      showApiError(error, t('فشل في حفظ البيانات'));
     }
   };
 
@@ -1228,7 +1229,7 @@ export default function Settings() {
       setUserForm({ username: '', email: '', password: '', full_name: '', full_name_en: '', role: 'cashier', branch_id: '', permissions: [] });
       fetchData();
     } catch (error) {
-      toast.error(error.response?.data?.detail || t('فشل في حفظ البيانات'));
+      showApiError(error, t('فشل في حفظ البيانات'));
     }
   };
 
@@ -1241,7 +1242,7 @@ export default function Settings() {
       setBranchForm({ name: '', address: '', phone: '', phone2: '', email: '' });
       fetchData();
     } catch (error) {
-      toast.error(error.response?.data?.detail || t('فشل في حفظ البيانات'));
+      showApiError(error, t('فشل في حفظ البيانات'));
     }
   };
 
@@ -1288,7 +1289,7 @@ export default function Settings() {
       setEditBranchForm(null);
       fetchData();
     } catch (error) {
-      toast.error(error.response?.data?.detail || t('فشل في حفظ البيانات'));
+      showApiError(error, t('فشل في حفظ البيانات'));
     }
   };
 
@@ -1301,7 +1302,7 @@ export default function Settings() {
       toast.success(t('تم حذف الفرع بنجاح'));
       fetchData();
     } catch (error) {
-      toast.error(error.response?.data?.detail || t('فشل في حذف الفرع'));
+      showApiError(error, t('فشل في حذف الفرع'));
     }
   };
 
@@ -1318,7 +1319,7 @@ export default function Settings() {
       await axios.put(`${API}/users/${u.id}/reset-password`, { new_password: newPassword });
       toast.success(t('تم تغيير كلمة المرور للمستخدم') + ` ${u.full_name}`);
     } catch (error) {
-      toast.error(error.response?.data?.detail || t('فشل في حفظ البيانات'));
+      showApiError(error, t('فشل في حفظ البيانات'));
     }
   };
 
@@ -1334,7 +1335,7 @@ export default function Settings() {
       });
       fetchData();
     } catch (error) {
-      toast.error(error.response?.data?.detail || t('فشل في إضافة الطابعة'));
+      showApiError(error, t('فشل في إضافة الطابعة'));
     }
   };
 
@@ -1383,7 +1384,7 @@ export default function Settings() {
       setEditPrinterForm(null);
       fetchData();
     } catch (error) {
-      toast.error(error.response?.data?.detail || t('فشل في تحديث الطابعة'));
+      showApiError(error, t('فشل في تحديث الطابعة'));
     }
   };
 
@@ -1396,7 +1397,7 @@ export default function Settings() {
       toast.success(t('تم حذف الطابعة'));
       fetchData();
     } catch (error) {
-      toast.error(error.response?.data?.detail || t('فشل في حذف الطابعة'));
+      showApiError(error, t('فشل في حذف الطابعة'));
     }
   };
 
@@ -1642,7 +1643,7 @@ export default function Settings() {
       
     } catch (error) {
       console.error('Impersonate error:', error);
-      toast.error(error.response?.data?.detail || t('فشل في معاينة الحساب'));
+      showApiError(error, t('فشل في معاينة الحساب'));
     }
   };
 
@@ -1675,7 +1676,7 @@ export default function Settings() {
       setEditUserForm(null);
       fetchData();
     } catch (error) {
-      toast.error(error.response?.data?.detail || t('فشل في تحديث المستخدم'));
+      showApiError(error, t('فشل في تحديث المستخدم'));
     }
   };
 
@@ -1700,7 +1701,7 @@ export default function Settings() {
       setCategoryForm({ name: '', name_en: '', icon: '', image: '', color: '#D4AF37', sort_order: 0 });
       fetchData();
     } catch (error) {
-      toast.error(error.response?.data?.detail || t('فشل في إنشاء الفئة'));
+      showApiError(error, t('فشل في إنشاء الفئة'));
     }
   };
 
@@ -1721,7 +1722,7 @@ export default function Settings() {
       setEditCategoryForm(null);
       fetchData();
     } catch (error) {
-      toast.error(error.response?.data?.detail || t('فشل في تحديث الفئة'));
+      showApiError(error, t('فشل في تحديث الفئة'));
     }
   };
 
@@ -1734,7 +1735,7 @@ export default function Settings() {
       toast.success(t('تم حذف الفئة بنجاح'));
       fetchData();
     } catch (error) {
-      toast.error(error.response?.data?.detail || t('فشل في حذف الفئة'));
+      showApiError(error, t('فشل في حذف الفئة'));
     }
   };
 
@@ -1770,7 +1771,7 @@ export default function Settings() {
       setNewExtraForm({ name: '', name_en: '', price: '', manufactured_product_id: '' });
       fetchData();
     } catch (error) {
-      toast.error(error.response?.data?.detail || t('فشل في إنشاء المنتج'));
+      showApiError(error, t('فشل في إنشاء المنتج'));
     }
   };
 
@@ -1839,7 +1840,7 @@ export default function Settings() {
       setNewExtraForm({ name: '', name_en: '', price: '', quantity: 1, unit: 'قطعة', manufactured_product_id: '' });
       fetchData();
     } catch (error) {
-      toast.error(error.response?.data?.detail || t('فشل في تحديث المنتج'));
+      showApiError(error, t('فشل في تحديث المنتج'));
     }
   };
 
@@ -1852,7 +1853,7 @@ export default function Settings() {
       toast.success(t('تم حذف المنتج بنجاح'));
       fetchData();
     } catch (error) {
-      toast.error(error.response?.data?.detail || t('فشل في حذف المنتج'));
+      showApiError(error, t('فشل في حذف المنتج'));
     }
   };
 
@@ -1866,7 +1867,7 @@ export default function Settings() {
       setKitchenSectionForm({ name: '', name_en: '', color: '#D4AF37', icon: '🍳', printer_id: '', branch_id: '', sort_order: 0 });
       fetchData();
     } catch (error) {
-      toast.error(error.response?.data?.detail || t('فشل في إنشاء قسم المطبخ'));
+      showApiError(error, t('فشل في إنشاء قسم المطبخ'));
     }
   };
 
@@ -1893,7 +1894,7 @@ export default function Settings() {
       setEditKitchenSectionForm(null);
       fetchData();
     } catch (error) {
-      toast.error(error.response?.data?.detail || t('فشل في تحديث قسم المطبخ'));
+      showApiError(error, t('فشل في تحديث قسم المطبخ'));
     }
   };
 
@@ -1904,7 +1905,7 @@ export default function Settings() {
       toast.success(t('تم حذف قسم المطبخ'));
       fetchData();
     } catch (error) {
-      toast.error(error.response?.data?.detail || t('فشل في حذف قسم المطبخ'));
+      showApiError(error, t('فشل في حذف قسم المطبخ'));
     }
   };
 
@@ -1975,7 +1976,7 @@ export default function Settings() {
       toast.success(t('تم حذف شركة التوصيل'));
       fetchData();
     } catch (error) {
-      toast.error(error.response?.data?.detail || t('فشل في حذف شركة التوصيل'));
+      showApiError(error, t('فشل في حذف شركة التوصيل'));
     }
   };
 
@@ -7145,7 +7146,7 @@ export default function Settings() {
                             setCustomerForm({ name: '', phone: '', phone2: '', address: '', area: '', notes: '', is_blocked: false });
                             fetchData();
                           } catch (error) {
-                            toast.error(error.response?.data?.detail || t('فشل في إضافة العميل'));
+                            showApiError(error, t('فشل في إضافة العميل'));
                           }
                         }} className="space-y-4">
                           <div className="grid grid-cols-2 gap-4">
@@ -7342,7 +7343,7 @@ export default function Settings() {
                         setEditCustomerForm(null);
                         fetchData();
                       } catch (error) {
-                        toast.error(error.response?.data?.detail || t('فشل في تحديث العميل'));
+                        showApiError(error, t('فشل في تحديث العميل'));
                       }
                     }} className="space-y-4">
                       <div className="grid grid-cols-2 gap-4">

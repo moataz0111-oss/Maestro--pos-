@@ -72,6 +72,7 @@ import {
   TabsList,
   TabsTrigger,
 } from '../components/ui/tabs';
+import { showApiError } from '../utils/apiError';
 
 const API = API_URL;
 
@@ -2541,7 +2542,7 @@ export default function POS() {
         toast.success(t('تم حفظ التعديلات وطباعة الفاتورة'));
         fetchPendingOrders();
       } catch (error) {
-        toast.error(error.response?.data?.detail || t('فشل في حفظ الطلب'));
+        showApiError(error, t('فشل في حفظ الطلب'));
       } finally {
         setSubmitting(false);
       }

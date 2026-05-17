@@ -63,6 +63,7 @@ import {
   SelectValue,
 } from '../components/ui/select';
 import DriverTrackingMap from '../components/DriverTrackingMap';
+import { showApiError } from '../utils/apiError';
 
 const API = API_URL;
 
@@ -197,7 +198,7 @@ export default function Delivery() {
       setFormData({ name: '', phone: '', pin: '1234' });
       fetchData();
     } catch (error) {
-      toast.error(error.response?.data?.detail || t('فشل في إضافة السائق'));
+      showApiError(error, t('فشل في إضافة السائق'));
     }
   };
 
@@ -219,7 +220,7 @@ export default function Delivery() {
       setEditFormData({ id: '', name: '', phone: '', pin: '', is_active: true });
       fetchData();
     } catch (error) {
-      toast.error(error.response?.data?.detail || t('فشل في تعديل السائق'));
+      showApiError(error, t('فشل في تعديل السائق'));
     }
   };
 
@@ -232,7 +233,7 @@ export default function Delivery() {
       toast.success(t('تم حذف السائق'));
       fetchData();
     } catch (error) {
-      toast.error(error.response?.data?.detail || t('فشل في حذف السائق'));
+      showApiError(error, t('فشل في حذف السائق'));
     }
   };
 
@@ -271,7 +272,7 @@ export default function Delivery() {
       setSelectedDrivers([]);
       fetchData();
     } catch (error) {
-      toast.error(error.response?.data?.detail || t('فشل في حذف بعض السائقين'));
+      showApiError(error, t('فشل في حذف بعض السائقين'));
       fetchData();
     }
   };
@@ -370,7 +371,7 @@ export default function Delivery() {
         fetchDriverOrders(selectedDriver.id);
       }
     } catch (error) {
-      toast.error(error.response?.data?.detail || t('فشل في تحويل الطلب'));
+      showApiError(error, t('فشل في تحويل الطلب'));
     }
   };
 

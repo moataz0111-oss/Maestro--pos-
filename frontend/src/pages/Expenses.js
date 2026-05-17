@@ -40,6 +40,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../components/ui/select';
+import { showApiError } from '../utils/apiError';
 
 const API = API_URL;
 
@@ -318,7 +319,7 @@ export default function Expenses() {
       });
       fetchData();
     } catch (error) {
-      toast.error(error.response?.data?.detail || t('فشل في إضافة المصروف'));
+      showApiError(error, t('فشل في إضافة المصروف'));
     } finally {
       setSubmitting(false);
     }

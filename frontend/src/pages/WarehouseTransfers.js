@@ -34,6 +34,7 @@ import {
   Home
 } from 'lucide-react';
 import { toast, Toaster } from 'sonner';
+import { showApiError } from '../utils/apiError';
 const API = API_URL;
 export default function WarehouseTransfers() {
   const navigate = useNavigate();
@@ -114,7 +115,7 @@ export default function WarehouseTransfers() {
       setSelectedItems([]);
       fetchData();
     } catch (error) {
-      toast.error(error.response?.data?.detail || t('فشل في إنشاء التحويل'));
+      showApiError(error, t('فشل في إنشاء التحويل'));
     }
   };
   const handleTransferAction = async (transferId, action) => {
@@ -128,7 +129,7 @@ export default function WarehouseTransfers() {
       );
       fetchData();
     } catch (error) {
-      toast.error(error.response?.data?.detail || t('فشل في تنفيذ العملية'));
+      showApiError(error, t('فشل في تنفيذ العملية'));
     }
   };
   // Purchase Request handlers
@@ -145,7 +146,7 @@ export default function WarehouseTransfers() {
       setRequestForm({ branch_id: '', items: [{ name: '', quantity: '', unit: '', notes: '' }], priority: 'normal', notes: '' });
       fetchData();
     } catch (error) {
-      toast.error(error.response?.data?.detail || t('فشل في إنشاء الطلب'));
+      showApiError(error, t('فشل في إنشاء الطلب'));
     }
   };
   const handleRequestAction = async (requestId, action) => {
@@ -159,7 +160,7 @@ export default function WarehouseTransfers() {
       toast.success(t('تم تحديث الطلب'));
       fetchData();
     } catch (error) {
-      toast.error(error.response?.data?.detail || t('فشل في تنفيذ العملية'));
+      showApiError(error, t('فشل في تنفيذ العملية'));
     }
   };
   const addRequestItem = () => {

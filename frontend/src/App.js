@@ -15,6 +15,7 @@ import { t } from "./utils/translations";
 
 import { useAutoSync } from "./hooks/useAutoSync";
 import SplashScreen from "./components/SplashScreen";
+import ApiErrorModal from "./components/ApiErrorModal";
 
 // Loading Component — شريط تحميل خفيف فوق الصفحة (غير معطّل للتنقل)
 const PageLoader = () => (
@@ -663,6 +664,7 @@ function App() {
                       <AutoSyncRunner />
                       <StartupSplash />
                       <PostLoginSplash />
+                      <ApiErrorModal />
                       <Toaster position="top-center" richColors />
                       {/* Incoming Call Popup - يظهر في جميع الصفحات */}
                       <IncomingCallPopup />

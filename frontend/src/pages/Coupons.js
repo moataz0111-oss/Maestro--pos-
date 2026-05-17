@@ -35,6 +35,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
+import { showApiError } from '../utils/apiError';
 const API = API_URL;
 export default function Coupons() {
   const navigate = useNavigate();
@@ -143,7 +144,7 @@ export default function Coupons() {
       resetCouponForm();
       fetchData();
     } catch (error) {
-      toast.error(error.response?.data?.detail || t('فشل في حفظ الكوبون'));
+      showApiError(error, t('فشل في حفظ الكوبون'));
     }
   };
   const handleDeleteCoupon = async (id) => {
@@ -188,7 +189,7 @@ export default function Coupons() {
       resetPromotionForm();
       fetchData();
     } catch (error) {
-      toast.error(error.response?.data?.detail || t('فشل في حفظ العرض'));
+      showApiError(error, t('فشل في حفظ العرض'));
     }
   };
   const handleDeletePromotion = async (id) => {

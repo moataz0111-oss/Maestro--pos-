@@ -56,6 +56,7 @@ import {
   SelectValue,
 } from '../components/ui/select';
 import { useNavigate } from 'react-router-dom';
+import { showApiError } from '../utils/apiError';
 
 const API = API_URL;
 
@@ -165,7 +166,7 @@ export default function ExternalBranchesManagement() {
       });
       fetchData();
     } catch (error) {
-      toast.error(error.response?.data?.detail || t('فشل في تسجيل الفرع'));
+      showApiError(error, t('فشل في تسجيل الفرع'));
     }
   };
 

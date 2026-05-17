@@ -43,6 +43,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../components/ui/select';
+import { showApiError } from '../utils/apiError';
 
 const API = API_URL;
 
@@ -192,7 +193,7 @@ export default function Tables() {
       setFormData({ number: '', capacity: 4, section: 'داخلي' });
       fetchData();
     } catch (error) {
-      toast.error(error.response?.data?.detail || t('فشل في حفظ الطاولة'));
+      showApiError(error, t('فشل في حفظ الطاولة'));
     }
   };
 
@@ -244,7 +245,7 @@ export default function Tables() {
       setTableToDelete(null);
       fetchData();
     } catch (error) {
-      toast.error(error.response?.data?.detail || t('فشل في حذف الطاولة'));
+      showApiError(error, t('فشل في حذف الطاولة'));
     }
   };
 
@@ -275,7 +276,7 @@ export default function Tables() {
       setTargetTableId('');
       fetchData();
     } catch (error) {
-      toast.error(error.response?.data?.detail || t('فشل في تحويل الطلب'));
+      showApiError(error, t('فشل في تحويل الطلب'));
     }
   };
 

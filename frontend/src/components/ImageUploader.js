@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import axios from 'axios';
 import { API_URL, BACKEND_URL } from '../utils/api';
 import { Upload, X, Image as ImageIcon, Link, Loader2, Minimize2 } from 'lucide-react';
+import { showApiError } from '../utils/apiError';
 
 const API = API_URL;
 
@@ -172,7 +173,7 @@ export default function ImageUploader({
     } catch (error) {
       toast.dismiss();
       console.error('Upload error:', error);
-      toast.error(error.response?.data?.detail || 'فشل في رفع الصورة');
+      showApiError(error, 'فشل في رفع الصورة');
       setCompressionInfo(null);
     } finally {
       setUploading(false);

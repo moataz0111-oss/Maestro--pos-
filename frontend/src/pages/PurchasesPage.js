@@ -56,6 +56,7 @@ import {
   TabsList,
   TabsTrigger,
 } from '../components/ui/tabs';
+import { showApiError } from '../utils/apiError';
 const API = API_URL;
 export default function PurchasesPage() {
   const navigate = useNavigate();
@@ -249,7 +250,7 @@ export default function PurchasesPage() {
       setSupplierForm({ name: '', phone: '', email: '', address: '', company_name: '', notes: '' });
       fetchData();
     } catch (error) {
-      toast.error(error.response?.data?.detail || t('فشل في إضافة المورد'));
+      showApiError(error, t('فشل في إضافة المورد'));
     } finally {
       setSubmitting(false);
     }
@@ -608,7 +609,7 @@ export default function PurchasesPage() {
       setUploadFile(null);
       fetchData();
     } catch (error) {
-      toast.error(error.response?.data?.detail || t('فشل في رفع الصورة'));
+      showApiError(error, t('فشل في رفع الصورة'));
     } finally {
       setSubmitting(false);
     }
@@ -620,7 +621,7 @@ export default function PurchasesPage() {
       toast.success(t('تم إرسال المشتريات للمخزن بنجاح'));
       fetchData();
     } catch (error) {
-      toast.error(error.response?.data?.detail || t('فشل في الإرسال للمخزن'));
+      showApiError(error, t('فشل في الإرسال للمخزن'));
     }
   };
   const getStatusColor = (status) => {
@@ -977,7 +978,7 @@ export default function PurchasesPage() {
                                     fetchLastPrices(items);
                                     fetchData();
                                   } catch (err) {
-                                    toast.error(err?.response?.data?.detail || t('فشل الموافقة'));
+                                    showApiError(err, t('فشل الموافقة'));
                                   }
                                 }}
                                 className="bg-emerald-500 hover:bg-emerald-600"
@@ -996,7 +997,7 @@ export default function PurchasesPage() {
                                     toast.success(t('تم رفض الطلب'));
                                     fetchData();
                                   } catch (err) {
-                                    toast.error(err?.response?.data?.detail || t('فشل'));
+                                    showApiError(err, t('فشل'));
                                   }
                                 }}
                                 className="border-red-500/40 text-red-600 hover:bg-red-500/10"

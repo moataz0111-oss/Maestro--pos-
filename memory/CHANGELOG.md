@@ -1,6 +1,56 @@
 # Maestro EGP - Changelog
 
 
+## Session: Feb 16, 2026 — Global Safe Error Handler + Clickable Details Modal
+
+### المتطلبات
+1. **Bug Critical المستمر**: حتى بعد إصلاح `WarehouseManufacturing.js`، الـ React Error #31 ظهر مجدداً في صفحات أخرى لأن نمط `toast.error(error.response?.data?.detail || ...)` كان مستخدماً في **22+ ملف**.
+2. **Enhancement (Suggestion implementation)**: المستخدم وافق على المقترح: toast مع زر "عرض التفاصيل" يفتح modal يعرض الحقول الناقصة بصيغة منظمة.
+
+### الحل
+
+**`/app/frontend/src/utils/apiError.js`** (جديد):
+- `safeErrorMessage(error, fallback)`: يستخرج نصاً واحداً من خطأ axios/FastAPI:
+  - string detail → return as-is
+  - array (Pydantic v2) → join `.msg` strings
+  - object → extract `.msg` or `.message`
+  - else → fallback
+- `showApiError(error, fallback)`: يعرض toast.error مع زر action "عرض التفاصيل":
+  - يطلق `CustomEvent('maestro:show-api-error-details')` مع `{title, status, rows, rawDetail}`
+  - rows: مصفوفة مُسوّاة `{field, msg, type, input}` لكل خطأ Pydantic
+  - يتعامل مع `insufficient_materials` أيضاً (تنسيق خاص: مطلوب X — متوفر Y)
+- إذا لم تتوفر تفاصيل (نص مفرد فقط) → يعرض toast بدون زر تفاصيل
+
+**`/app/frontend/src/components/ApiErrorModal.jsx`** (جديد):
+- يستمع للحدث ويفتح Dialog عند استلامه
+- يعرض جدول RTL: **الحقل | الخطأ | النوع** بألوان (الحقل أصفر mono، النوع رمادي صغير)
+- شارة HTTP status (مثل: HTTP 422) بجانب العنوان
+- قسم قابل للطي "عرض البيانات الخام (JSON)" للمطوّرين
+- زر "نسخ التفاصيل" (Clipboard API) مع feedback بصري
+- زر "إغلاق"
+
+**`/app/frontend/src/App.js`**:
+- استيراد `ApiErrorModal` ووضعه في شجرة المكونات (بجانب `PostLoginSplash` و `StartupSplash`).
+
+**الاستبدال الشامل في 22 ملف**:
+- سكريبت Python يستبدل جميع `toast.error(error.response?.data?.detail || t('...'))` و variants (err., err?.) بـ `showApiError(error, ...)`.
+- يضيف `import { showApiError } from '...utils/apiError'` تلقائياً (مع إصلاح multi-line imports).
+- الملفات المعدّلة: Purchasing, Dashboard, CustomerMenu, OwnerWallet, Orders, BranchOrders, Coupons, HR, PriceIncreaseReport, SystemAdmin, Delivery, Inventory, ExternalBranchesManagement, WarehouseTransfers, PurchasesPage, Settings, Loyalty, POS, Tables, Expenses, WarehouseManufacturing, BiometricDevices, ImageUploader.
+
+### الاختبار: ✅ Screenshot Verified
+- اختبار 1: dispatchEvent يدوياً للـ Modal بـ 3 أخطاء Pydantic v2 (`name=missing`, `piece_weight=value_error`, `recipe.0.quantity=greater_than`) → Modal يظهر مع جدول كامل مرتّب.
+- اختبار 2: SplashScreen + Login + الـ Modal كلها تعمل بدون أي compilation error.
+- Lint: ✅ No issues على كل من `pages/` و `components/`.
+
+### الفوائد
+- **لا مزيد من React Error #31** على أي صفحة في التطبيق (حماية شاملة).
+- **UX احترافي**: الكاشير يرى رسالة مختصرة + زر "عرض التفاصيل" يكشف بالضبط أي حقل فشل ولماذا.
+- **Debugging سريع**: زر "نسخ التفاصيل" ينسخ JSON الخام لإرساله للدعم.
+- **توحيد**: نمط واحد للأخطاء عبر التطبيق كله، سهل الصيانة.
+
+---
+
+
 ## Session: Feb 16, 2026 — Fix React Crash #31 + Gram/Portion UX
 
 ### المتطلبات

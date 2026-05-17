@@ -55,6 +55,7 @@ import {
   TabsList,
   TabsTrigger,
 } from '../components/ui/tabs';
+import { showApiError } from '../utils/apiError';
 
 const API = BACKEND_URL + '/api';
 
@@ -351,7 +352,7 @@ export default function Purchasing() {
       });
       fetchData();
     } catch (error) {
-      toast.error(error.response?.data?.detail || t('فشل في حفظ الفاتورة'));
+      showApiError(error, t('فشل في حفظ الفاتورة'));
     } finally {
       setSubmitting(false);
     }
@@ -380,7 +381,7 @@ export default function Purchasing() {
       });
       fetchData();
     } catch (error) {
-      toast.error(error.response?.data?.detail || t('فشل في حفظ المورد'));
+      showApiError(error, t('فشل في حفظ المورد'));
     } finally {
       setSubmitting(false);
     }
@@ -394,7 +395,7 @@ export default function Purchasing() {
       toast.success(t('تم إرسال الطلب للمخزن — الكميات ستُضاف للمخزون'));
       fetchData();
     } catch (error) {
-      toast.error(error.response?.data?.detail || t('فشل في التحويل'));
+      showApiError(error, t('فشل في التحويل'));
     } finally {
       setSubmitting(false);
     }
@@ -423,7 +424,7 @@ export default function Purchasing() {
       toast.success(t('تم إرسال الفاتورة للمخزن بنجاح'));
       fetchData();
     } catch (error) {
-      toast.error(error.response?.data?.detail || t('فشل في إرسال الفاتورة للمخزن'));
+      showApiError(error, t('فشل في إرسال الفاتورة للمخزن'));
     } finally {
       setSendingToWarehouseId(null);
     }
@@ -765,7 +766,7 @@ export default function Purchasing() {
                                   setShowInvoiceDialog(true);
                                   fetchData();
                                 } catch (err) {
-                                  toast.error(err?.response?.data?.detail || t('فشل الموافقة'));
+                                  showApiError(err, t('فشل الموافقة'));
                                 }
                               }}
                               className="bg-emerald-500 hover:bg-emerald-600"
@@ -783,7 +784,7 @@ export default function Purchasing() {
                                   toast.success(t('تم رفض الطلب'));
                                   fetchData();
                                 } catch (err) {
-                                  toast.error(err?.response?.data?.detail || t('فشل'));
+                                  showApiError(err, t('فشل'));
                                 }
                               }}
                               className="border-red-500/40 text-red-600 hover:bg-red-500/10"

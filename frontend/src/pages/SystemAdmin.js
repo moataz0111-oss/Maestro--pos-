@@ -20,6 +20,7 @@ import {
   Shield,
   Clock
 } from 'lucide-react';
+import { showApiError } from '../utils/apiError';
 const API = API_URL;
 // إعداد axios مع token
 const getAuthHeaders = () => {
@@ -74,7 +75,7 @@ export default function SystemAdmin() {
       toast.success(res.data.message);
       fetchBackups();
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'فشل في إنشاء النسخة الاحتياطية');
+      showApiError(error, 'فشل في إنشاء النسخة الاحتياطية');
     } finally {
       setBackupLoading(false);
     }
