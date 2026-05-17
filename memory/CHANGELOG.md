@@ -1,6 +1,42 @@
 # Maestro EGP - Changelog
 
 
+## Session: Feb 17, 2026 — Bugfix: علبة/كرتون مفقودة من _UNIT_GROUPS تمنع التحويل بـ pack info
+
+### المتطلب/البلاغ
+المستخدم عرّف "1 علبة فطر = 4 كغم" في pack info، لكن عند إضافة المكون للوصفة، النظام لم يقبل الإدخال بالكيلو/الغرام — كان يعرض "علبة" فقط كوحدة إدخال.
+
+### السبب الجذري (Root Cause)
+في `_UNIT_GROUPS.count` كان يحوي فقط `{قطعة, حبة, piece}`. الوحدات `علبة` و `كرتون` و `صحن` كانت **مفقودة**. النتيجة:
+- `_findUnitGroup("علبة")` → يُرجع `null`
+- `availableInputUnitsFor("علبة", "كغم")` → يدخل في فرع fallback ويُرجع `["علبة"]` فقط (الـ select لا يظهر)
+- `convertWithPackInfo(..., 'علبة', ...)` يفشل لأن `_findUnitGroup` لم يميّز "علبة"
+
+### الحل
+**Frontend — `/app/frontend/src/pages/WarehouseManufacturing.js`**:
+- إضافة `'علبة': 1, 'كرتون': 1, 'صحن': 1` إلى `_UNIT_GROUPS.count`.
+- إضافة pack-info inline panel أيضاً في dialog **تعديل الوصفة** (`editNewIngredient`) — كان موجوداً فقط في dialog الإنشاء. الآن يظهر panel أصفر مع زر "حفظ" أو panel أخضر مع زر "تعديل" حسب وجود pack info.
+
+### الاختبار: ✅
+- ملف جديد `/app/frontend/src/__tests__/pack_unit_conversion.test.js` يختبر:
+  1. `_findUnitGroup('علبة') === 'count'` ✓
+  2. `_findUnitGroup('كرتون') === 'count'` ✓
+  3. `availableInputUnitsFor('علبة', 'كغم')` تتضمن `غرام/كغم` ✓
+  4. `2 كغم → 0.5 علبة` (pack=4كغم) ✓
+  5. `500 غرام → 0.125 علبة` ✓
+  6. `8 كغم → 2 علب` ✓
+  7. `1 لتر → 0.5 علبة` (للسوائل) ✓
+  8. عائلات مختلفة (كغم vs قطعة) → `null` ✓
+- Lint: ✅ no issues.
+
+### الفائدة
+الآن المستخدم يستطيع:
+1. تعريف "1 علبة فطر = 4 كغم" inline من شاشة الوصفة (الميزة المُضافة في الجلسة السابقة).
+2. **الإدخال بالكيلو/الغرام** في الكمية والنظام يخصم الجزء المناسب من العلبة تلقائياً.
+
+---
+
+
 ## Session: Feb 17, 2026 — Editable Names in Recipe & Raw Material Correction Dialogs
 
 ### المتطلب
