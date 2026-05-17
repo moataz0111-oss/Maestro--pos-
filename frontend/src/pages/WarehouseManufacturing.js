@@ -71,6 +71,22 @@ import { Popover, PopoverContent, PopoverTrigger } from '../components/ui/popove
 import StockoutPredictionDialog, { StockoutPredictionBanner } from '../components/StockoutPrediction';
 import { MonthlyStocktakeButton } from '../components/MonthlyStocktake';
 const API = API_URL;
+
+// ⭐ Safe extraction of FastAPI error messages — يمنع React Error #31 عند تمرير
+// مصفوفة كائنات Pydantic ValidationError إلى toast.error
+const safeDetail = (error, fallback = 'حدث خطأ') => {
+  const d = error?.response?.data?.detail;
+  if (!d) return fallback;
+  if (typeof d === 'string') return d;
+  if (Array.isArray(d)) {
+    // مصفوفة Pydantic v2 errors → استخرج .msg من أول خطأ
+    const msgs = d.map(e => (typeof e === 'string' ? e : (e?.msg || ''))).filter(Boolean);
+    return msgs.join(' · ') || fallback;
+  }
+  if (typeof d === 'object') return d.msg || d.message || fallback;
+  return String(d) || fallback;
+};
+
 export default function WarehouseManufacturing() {
   const navigate = useNavigate();
   const { user, hasRole } = useAuth();
@@ -268,7 +284,7 @@ export default function WarehouseManufacturing() {
       toast.success(t('تمت الموافقة وأُرسل الطلب للمشتريات'));
       fetchPurchaseRequests();
     } catch (err) {
-      toast.error(err?.response?.data?.detail || t('فشل'));
+      toast.error(safeDetail(err, t('فشل')));
     }
   };
 
@@ -279,7 +295,7 @@ export default function WarehouseManufacturing() {
       toast.success(t('تم رفض الطلب'));
       fetchPurchaseRequests();
     } catch (err) {
-      toast.error(err?.response?.data?.detail || t('فشل'));
+      toast.error(safeDetail(err, t('فشل')));
     }
   };
   const [showAddPackagingStockDialog, setShowAddPackagingStockDialog] = useState(null);
@@ -473,7 +489,7 @@ export default function WarehouseManufacturing() {
       });
       fetchData();
     } catch (error) {
-      toast.error(error.response?.data?.detail || t('فشل في إضافة المادة'));
+      toast.error(safeDetail(error, t('فشل في إضافة المادة')));
     } finally {
       setSubmitting(false);
     }
@@ -539,7 +555,7 @@ export default function WarehouseManufacturing() {
       });
       fetchData();
     } catch (error) {
-      toast.error(error.response?.data?.detail || t('فشل في إضافة المادة'));
+      toast.error(safeDetail(error, t('فشل في إضافة المادة')));
     } finally {
       setSubmitting(false);
     }
@@ -564,7 +580,7 @@ export default function WarehouseManufacturing() {
       setAddPackagingStockQuantity(1);
       fetchData();
     } catch (error) {
-      toast.error(error.response?.data?.detail || t('فشل في إضافة الكمية'));
+      toast.error(safeDetail(error, t('فشل في إضافة الكمية')));
     } finally {
       setSubmitting(false);
     }
@@ -621,7 +637,7 @@ export default function WarehouseManufacturing() {
       setPackagingRequestNotes('');
       fetchData();
     } catch (error) {
-      toast.error(error.response?.data?.detail || t('فشل في إرسال الطلب'));
+      toast.error(safeDetail(error, t('فشل في إرسال الطلب')));
     } finally {
       setSubmitting(false);
     }
@@ -634,7 +650,7 @@ export default function WarehouseManufacturing() {
       toast.success(t('تمت الموافقة على الطلب'));
       fetchData();
     } catch (error) {
-      toast.error(error.response?.data?.detail || t('فشل في الموافقة'));
+      toast.error(safeDetail(error, t('فشل في الموافقة')));
     }
   };
   
@@ -645,7 +661,7 @@ export default function WarehouseManufacturing() {
       toast.success(t('تم تحويل المواد للفرع بنجاح'));
       fetchData();
     } catch (error) {
-      toast.error(error.response?.data?.detail || t('فشل في التحويل'));
+      toast.error(safeDetail(error, t('فشل في التحويل')));
     }
   };
   
@@ -685,7 +701,7 @@ export default function WarehouseManufacturing() {
       if (typeof detail === 'object' && detail.insufficient_materials) {
         toast.error(t('مواد غير كافية'));
       } else {
-        toast.error(detail || t('فشل في التحويل'));
+        toast.error(safeDetail(error, t('فشل في التحويل')));
       }
     } finally {
       setSubmitting(false);
@@ -764,7 +780,7 @@ export default function WarehouseManufacturing() {
       setBranchTransferForm({ to_branch_id: '', items: [], notes: '' });
       fetchData();
     } catch (error) {
-      toast.error(error.response?.data?.detail || t('فشل في التحويل'));
+      toast.error(safeDetail(error, t('فشل في التحويل')));
     } finally {
       setSubmitting(false);
     }
@@ -783,7 +799,7 @@ export default function WarehouseManufacturing() {
         const products = detail.insufficient_products.map(p => `${p.name}: طلب ${p.requested} متوفر ${p.available}`).join('\n');
         toast.error(`${t('كمية غير كافية')}\n${products}`);
       } else {
-        toast.error(detail || t('فشل في تنفيذ الطلب'));
+        toast.error(safeDetail(error, t('فشل في تنفيذ الطلب')));
       }
     } finally {
       setSubmitting(false);
@@ -991,7 +1007,7 @@ export default function WarehouseManufacturing() {
       toast.success(t('تمت مزامنة الوصفة بنجاح') + ` (×${scale.toFixed(4)})`);
       fetchData();
     } catch (error) {
-      toast.error(error.response?.data?.detail || t('فشلت المزامنة'));
+      toast.error(safeDetail(error, t('فشلت المزامنة')));
     }
   };
 
@@ -1124,7 +1140,7 @@ export default function WarehouseManufacturing() {
       setShowEditRecipeDialog(null);
       fetchData();
     } catch (error) {
-      toast.error(error.response?.data?.detail || t('فشل في تحديث الوصفة'));
+      toast.error(safeDetail(error, t('فشل في تحديث الوصفة')));
     } finally {
       setSavingRecipe(false);
     }
@@ -1214,7 +1230,7 @@ export default function WarehouseManufacturing() {
       });
       fetchData();
     } catch (error) {
-      toast.error(error.response?.data?.detail || t('فشل في إضافة المنتج'));
+      toast.error(safeDetail(error, t('فشل في إضافة المنتج')));
     } finally {
       setSubmitting(false);
     }
@@ -1247,7 +1263,7 @@ export default function WarehouseManufacturing() {
           .join('\n');
         toast.error(`${t('مواد غير كافية')}\n${list}`, { duration: 10000, style: { whiteSpace: 'pre-line' } });
       } else {
-        toast.error(detail || t('فشل في التصنيع'));
+        toast.error(safeDetail(error, t('فشل في التصنيع')));
       }
     } finally {
       setSubmitting(false);
@@ -1274,7 +1290,7 @@ export default function WarehouseManufacturing() {
       setAddStockQuantity(1);
       fetchData();
     } catch (error) {
-      toast.error(error.response?.data?.detail || t('فشل في زيادة الكمية'));
+      toast.error(safeDetail(error, t('فشل في زيادة الكمية')));
     } finally {
       setSubmitting(false);
     }
@@ -1292,7 +1308,7 @@ export default function WarehouseManufacturing() {
       setAddRawMaterialStockQuantity(1);
       fetchData();
     } catch (error) {
-      toast.error(error.response?.data?.detail || t('فشل في زيادة الكمية'));
+      toast.error(safeDetail(error, t('فشل في زيادة الكمية')));
     } finally {
       setSubmitting(false);
     }
@@ -1323,7 +1339,7 @@ export default function WarehouseManufacturing() {
       setEditRawMaterial(null);
       fetchData();
     } catch (error) {
-      toast.error(error.response?.data?.detail || t('فشل في تحديث المادة'));
+      toast.error(safeDetail(error, t('فشل في تحديث المادة')));
     } finally {
       setSubmitting(false);
     }
@@ -1339,7 +1355,7 @@ export default function WarehouseManufacturing() {
       setDeleteRawMaterial(null);
       fetchData();
     } catch (error) {
-      toast.error(error.response?.data?.detail || t('فشل في حذف المادة'));
+      toast.error(safeDetail(error, t('فشل في حذف المادة')));
     } finally {
       setSubmitting(false);
     }
@@ -1401,7 +1417,7 @@ export default function WarehouseManufacturing() {
       setMaterialRequestPriority('normal');
       fetchData();
     } catch (error) {
-      toast.error(error.response?.data?.detail || t('فشل في إرسال الطلب'));
+      toast.error(safeDetail(error, t('فشل في إرسال الطلب')));
     } finally {
       setSubmitting(false);
     }
@@ -1466,7 +1482,7 @@ export default function WarehouseManufacturing() {
       toast.success(t('تم استلام المشتريات وإضافتها للمخزن'));
       fetchData();
     } catch (error) {
-      toast.error(error.response?.data?.detail || t('فشل في استلام المشتريات'));
+      toast.error(safeDetail(error, t('فشل في استلام المشتريات')));
     } finally {
       setSubmitting(false);
     }
@@ -3745,40 +3761,84 @@ export default function WarehouseManufacturing() {
                 </Select>
               </div>
               
-              {/* حقل وزن القطعة - يظهر فقط عند اختيار قطعة */}
-              {(productForm.unit === 'قطعة' || productForm.unit === 'حبة' || productForm.unit === 'صحن') && (
-                <div className="col-span-2">
-                  <Label>{t('وزن القطعة (اختياري)')}</Label>
-                  <div className="flex gap-2 mt-1">
-                    <Input
-                      type="number"
-                      min="0"
-                      step="1"
-                      placeholder={t('مثال: 100')}
-                      value={productForm.piece_weight}
-                      onChange={(e) => setProductForm(prev => ({ ...prev, piece_weight: e.target.value }))}
-                      className="flex-1"
-                    />
-                    <Select 
-                      value={productForm.piece_weight_unit} 
-                      onValueChange={(v) => setProductForm(prev => ({ ...prev, piece_weight_unit: v }))}
-                    >
-                      <SelectTrigger className="w-24">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="غرام">{t('غرام')}</SelectItem>
-                        <SelectItem value="كغم">{t('كغم')}</SelectItem>
-                        <SelectItem value="مل">{t('مل')}</SelectItem>
-                        <SelectItem value="لتر">{t('لتر')}</SelectItem>
-                      </SelectContent>
-                    </Select>
+              {/* ⭐ حقل وزن البورشن الواحد - يظهر لكل أنواع الوحدات بتسمية مناسبة */}
+              {(() => {
+                const u = productForm.unit;
+                const isPiece = ['قطعة', 'حبة', 'صحن'].includes(u);
+                const isWeight = ['غرام', 'كغم'].includes(u);
+                const isVolume = ['مل', 'لتر'].includes(u);
+                if (!isPiece && !isWeight && !isVolume) return null;
+
+                // التسمية الذكية حسب نوع الوحدة
+                const label = isPiece
+                  ? t('وزن القطعة الواحدة (اختياري)')
+                  : isWeight
+                    ? t('وزن البورشن الواحد')
+                    : t('حجم البورشن الواحد');
+                const hint = isPiece
+                  ? t('مثال: القطعة = 100 غرام من اللحم')
+                  : isWeight
+                    ? t('مثال: البورشن الواحد = 100 غرام → الكيلو = 10 بورشن')
+                    : t('مثال: البورشن الواحد = 250 مل → اللتر = 4 بورشن');
+                const defaultUnit = isVolume ? 'مل' : 'غرام';
+
+                // وحدات وزن متاحة
+                const allowedUnits = isVolume ? ['مل', 'لتر'] : ['غرام', 'كغم', 'مل', 'لتر'];
+
+                // ⭐ احتساب "X بورشن في الكيلو/اللتر" للعرض
+                const pw = Number(productForm.piece_weight || 0);
+                const pwu = productForm.piece_weight_unit || defaultUnit;
+                let derivedText = '';
+                if (pw > 0) {
+                  const W = { 'غرام': 1, 'كغم': 1000, 'مل': 1, 'لتر': 1000 };
+                  const pwInBase = pw * (W[pwu] || 1);
+                  if (pwInBase > 0) {
+                    const baseUnitLabel = (pwu === 'مل' || pwu === 'لتر') ? t('اللتر') : t('الكيلو');
+                    const baseUnitDiv = 1000; // 1 kg = 1000 g, 1 L = 1000 ml
+                    const portionsPerBase = Math.round((baseUnitDiv / pwInBase) * 100) / 100;
+                    if (portionsPerBase > 0 && Number.isFinite(portionsPerBase)) {
+                      derivedText = `${baseUnitLabel} = ${portionsPerBase} ${t('بورشن')}`;
+                    }
+                  }
+                }
+
+                return (
+                  <div className="col-span-2">
+                    <Label>{label}</Label>
+                    <div className="flex gap-2 mt-1">
+                      <Input
+                        type="number"
+                        min="0"
+                        step="1"
+                        placeholder={t('مثال: 100')}
+                        value={productForm.piece_weight}
+                        onChange={(e) => setProductForm(prev => ({ ...prev, piece_weight: e.target.value }))}
+                        className="flex-1"
+                        data-testid="product-piece-weight"
+                      />
+                      <Select
+                        value={productForm.piece_weight_unit}
+                        onValueChange={(v) => setProductForm(prev => ({ ...prev, piece_weight_unit: v }))}
+                      >
+                        <SelectTrigger className="w-24">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {allowedUnits.map(uu => (
+                            <SelectItem key={uu} value={uu}>{t(uu)}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">{hint}</p>
+                    {derivedText && (
+                      <p className="text-xs font-bold text-emerald-600 mt-1" data-testid="portion-derivation">
+                        ⭐ {derivedText}
+                      </p>
+                    )}
                   </div>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {t('مثال: القطعة = 100 غرام من اللحم')}
-                  </p>
-                </div>
-              )}
+                );
+              })()}
               
               <div className="rounded-lg p-3 bg-emerald-500/10 border border-emerald-500/30 space-y-2">
                 <Label className="flex items-center gap-2 font-bold text-emerald-700">
@@ -4018,10 +4078,10 @@ export default function WarehouseManufacturing() {
                 ⚠️ {t('تعديل الوصفة سيُعيد احتساب تكلفة الإنتاج (قبل وبعد الهدر) وهامش الربح لهذا المنتج. لن يؤثر على الكميات المُنتَجة سابقاً.')}
               </div>
 
-              {/* وزن القطعة (اختياري) */}
+              {/* وزن البورشن/القطعة (يظهر دائماً) */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <Label className="text-xs">{t('وزن القطعة (اختياري)')}</Label>
+                  <Label className="text-xs">{t('وزن البورشن/القطعة')}</Label>
                   <Input
                     type="number"
                     min="0"
@@ -4047,6 +4107,22 @@ export default function WarehouseManufacturing() {
                   </Select>
                 </div>
               </div>
+              {(() => {
+                const pw = Number(editRecipeForm.piece_weight || 0);
+                const pwu = editRecipeForm.piece_weight_unit || 'غرام';
+                if (pw <= 0) return null;
+                const W = { 'غرام': 1, 'كغم': 1000, 'مل': 1, 'لتر': 1000 };
+                const pwInBase = pw * (W[pwu] || 1);
+                if (pwInBase <= 0) return null;
+                const baseLabel = (pwu === 'مل' || pwu === 'لتر') ? t('اللتر') : t('الكيلو');
+                const portionsPerBase = Math.round((1000 / pwInBase) * 100) / 100;
+                if (!Number.isFinite(portionsPerBase) || portionsPerBase <= 0) return null;
+                return (
+                  <p className="text-xs font-bold text-emerald-600" data-testid="edit-portion-derivation">
+                    ⭐ {baseLabel} = {portionsPerBase} {t('بورشن')}
+                  </p>
+                );
+              })()}
 
               {/* إضافة مكون جديد */}
               <div className="p-3 bg-purple-500/5 border border-purple-500/30 rounded-lg space-y-2">
@@ -5220,7 +5296,7 @@ export default function WarehouseManufacturing() {
                   toast.success(t('تم إرسال الطلب للمالك بنجاح ✓'));
                   setShowPurchaseRequestModal(false);
                 } catch (err) {
-                  toast.error(err?.response?.data?.detail || t('فشل إرسال الطلب'));
+                  toast.error(safeDetail(err, t('فشل إرسال الطلب')));
                 }
               }}
             >
@@ -5590,7 +5666,7 @@ export default function WarehouseManufacturing() {
                   setAdminCorrection(null);
                   fetchData();
                 } catch (err) {
-                  toast.error(err?.response?.data?.detail || t('فشل التصحيح'));
+                  toast.error(safeDetail(err, t('فشل التصحيح')));
                 } finally {
                   setSubmitting(false);
                 }
