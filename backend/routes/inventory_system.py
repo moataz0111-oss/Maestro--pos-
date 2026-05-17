@@ -1718,6 +1718,9 @@ async def admin_correct_raw_material(
     _set_if("min_quantity", float)
     _set_if("cost_per_unit", float)
     _set_if("unit", str)
+    # ⭐ السماح بتعديل الاسم
+    _set_if("name", lambda v: str(v).strip())
+    _set_if("name_en", lambda v: str(v).strip())
 
     if not update:
         raise HTTPException(status_code=400, detail="لا حقول للتحديث")
@@ -3197,6 +3200,8 @@ class ManufacturedProductRecipeUpdate(BaseModel):
     piece_weight: Optional[float] = None
     piece_weight_unit: Optional[str] = None
     reason: Optional[str] = None  # سبب التعديل (للتدقيق)
+    name: Optional[str] = None  # ⭐ تعديل اسم الوصفة
+    name_en: Optional[str] = None
 
 
 @router.patch("/manufactured-products/{product_id}/recipe")
@@ -3252,6 +3257,11 @@ async def update_manufactured_product_recipe(
         update_fields["piece_weight"] = payload.piece_weight
     if payload.piece_weight_unit is not None:
         update_fields["piece_weight_unit"] = payload.piece_weight_unit
+    # ⭐ تعديل الاسم إن أُرسل
+    if payload.name is not None and payload.name.strip():
+        update_fields["name"] = payload.name.strip()
+    if payload.name_en is not None:
+        update_fields["name_en"] = payload.name_en.strip()
 
     await db.manufactured_products.update_one(
         {"id": product_id},

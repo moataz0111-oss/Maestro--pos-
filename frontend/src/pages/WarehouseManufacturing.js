@@ -384,6 +384,8 @@ export default function WarehouseManufacturing() {
     piece_weight: '',
     piece_weight_unit: 'غرام',
     reason: '',
+    name: '',
+    name_en: '',
   });
   const [editNewIngredient, setEditNewIngredient] = useState({
     raw_material_id: '',
@@ -1060,6 +1062,8 @@ export default function WarehouseManufacturing() {
       piece_weight: product.piece_weight ?? '',
       piece_weight_unit: product.piece_weight_unit || 'غرام',
       reason: '',
+      name: product.name || '',
+      name_en: product.name_en || '',
     });
     setEditNewIngredient({ raw_material_id: '', quantity: 0, input_unit: '' });
     setShowEditRecipeDialog(product);
@@ -1159,6 +1163,8 @@ export default function WarehouseManufacturing() {
         piece_weight: editRecipeForm.piece_weight !== '' ? Number(editRecipeForm.piece_weight) : null,
         piece_weight_unit: editRecipeForm.piece_weight_unit || null,
         reason: editRecipeForm.reason || '',
+        name: editRecipeForm.name || undefined,
+        name_en: editRecipeForm.name_en || undefined,
       };
       await axios.patch(`${API}/manufactured-products/${showEditRecipeDialog.id}/recipe`, payload, { headers });
       toast.success(t('تم تحديث الوصفة بنجاح'));
@@ -2135,7 +2141,8 @@ export default function WarehouseManufacturing() {
                               className="border-amber-500 text-amber-600 hover:bg-amber-50"
                               onClick={() => setAdminCorrection({
                                 material_id: material.id,
-                                name: material.name,
+                                name: material.name || '',
+                                name_en: material.name_en || '',
                                 quantity: material.quantity,
                                 min_quantity: material.min_quantity,
                                 unit: material.unit,
@@ -4197,6 +4204,30 @@ export default function WarehouseManufacturing() {
                 ⚠️ {t('تعديل الوصفة سيُعيد احتساب تكلفة الإنتاج (قبل وبعد الهدر) وهامش الربح لهذا المنتج. لن يؤثر على الكميات المُنتَجة سابقاً.')}
               </div>
 
+              {/* ⭐ تعديل اسم الوصفة */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-xs font-bold">{t('اسم الوصفة')} <span className="text-red-500">*</span></Label>
+                  <Input
+                    type="text"
+                    value={editRecipeForm.name}
+                    onChange={(e) => setEditRecipeForm(prev => ({ ...prev, name: e.target.value }))}
+                    placeholder={t('مثال: تدبيلة طحين')}
+                    data-testid="edit-recipe-name"
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs">{t('الاسم بالإنجليزية (اختياري)')}</Label>
+                  <Input
+                    type="text"
+                    value={editRecipeForm.name_en}
+                    onChange={(e) => setEditRecipeForm(prev => ({ ...prev, name_en: e.target.value }))}
+                    placeholder="e.g. Flour Marinade"
+                    data-testid="edit-recipe-name-en"
+                  />
+                </div>
+              </div>
+
               {/* وزن البورشن/القطعة (يظهر دائماً) */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -5711,6 +5742,29 @@ export default function WarehouseManufacturing() {
               <div className="rounded-md bg-amber-500/10 border border-amber-500/30 px-3 py-2 text-sm text-amber-700">
                 💡 {t('للأخطاء الشائعة (إدخال غرام بدل كغم). كل تصحيح يُسجَّل بالتاريخ والمستخدم في سجل المراجعة.')}
               </div>
+              {/* ⭐ تعديل اسم المادة الخام */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-xs font-bold">{t('اسم المادة')} <span className="text-red-500">*</span></Label>
+                  <Input
+                    type="text"
+                    value={adminCorrection.name || ''}
+                    onChange={(e) => setAdminCorrection(prev => ({ ...prev, name: e.target.value }))}
+                    placeholder={t('مثال: لحم برغر')}
+                    data-testid="correction-name"
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs">{t('الاسم بالإنجليزية (اختياري)')}</Label>
+                  <Input
+                    type="text"
+                    value={adminCorrection.name_en || ''}
+                    onChange={(e) => setAdminCorrection(prev => ({ ...prev, name_en: e.target.value }))}
+                    placeholder="e.g. Burger Beef"
+                    data-testid="correction-name-en"
+                  />
+                </div>
+              </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <Label className="text-xs">{t('الكمية')}</Label>
@@ -5775,6 +5829,8 @@ export default function WarehouseManufacturing() {
                 try {
                   setSubmitting(true);
                   await axios.post(`${API}/raw-materials-new/${adminCorrection.material_id}/admin-correct`, {
+                    name: (adminCorrection.name || '').trim() || undefined,
+                    name_en: (adminCorrection.name_en || '').trim() || undefined,
                     quantity: parseFloat(adminCorrection.quantity) || 0,
                     min_quantity: parseFloat(adminCorrection.min_quantity) || 0,
                     unit: adminCorrection.unit,

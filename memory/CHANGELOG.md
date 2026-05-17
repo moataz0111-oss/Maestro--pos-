@@ -1,6 +1,43 @@
 # Maestro EGP - Changelog
 
 
+## Session: Feb 17, 2026 — Editable Names in Recipe & Raw Material Correction Dialogs
+
+### المتطلب
+في dialogs التعديل، الاسم كان للقراءة فقط (يظهر في العنوان). المطلوب إضافة حقل قابل للتعديل في:
+1. Dialog "تعديل وصفة منتج مصنّع"
+2. Dialog "تصحيح إداري — مادة خام"
+
+### الحل
+
+**Backend**:
+- `/app/backend/routes/inventory_system.py`:
+  - `ManufacturedProductRecipeUpdate` model: أضفت حقلَي `name` و `name_en` (اختياريَين).
+  - `update_manufactured_product_recipe`: إذا أُرسل `name` (مع `.strip()` ≠ فارغ) → يُحدّث `update_fields["name"]`. مماثل لـ `name_en`.
+  - `admin_correct_raw_material`: أضفت `_set_if("name", ...)` و `_set_if("name_en", ...)` → يُسجَّل التغيير في `diff_log` لسجل المراجعة.
+
+**Frontend** — `/app/frontend/src/pages/WarehouseManufacturing.js`:
+- `editRecipeForm` state: أضفت `name` و `name_en` كقيم افتراضية فارغة.
+- `openEditRecipe(product)`: pre-fill يأخذ `product.name` و `product.name_en`.
+- `handleUpdateRecipe`: payload يرسل `name` و `name_en` (مع `undefined` لو فارغ كي لا يكسر validation).
+- Dialog UI: أضفت grid من حقلين (الاسم العربي/الإنجليزي) أعلى نموذج الوزن.
+- `setAdminCorrection({...})`: pre-fill يأخذ `material.name` و `material.name_en`.
+- Admin correction dialog UI: أضفت grid مماثل (الاسم العربي/الإنجليزي) أسفل التحذير.
+- POST لـ admin-correct: يرسل `name` و `name_en` (مع `.trim() || undefined`).
+
+### الاختبار: ✅ Backend curl
+- `POST /api/raw-materials-new/{id}/admin-correct` مع `name: "اختبار_تعديل_اسم"` → نجح + `diff_log` يحفظ `{old, new}`.
+- `PATCH /api/manufactured-products/{id}/recipe` مع `name: "اختبار_تعديل_وصفة"` → نجح + المنتج تحدّث اسمه.
+- إعادة الأسماء الأصلية بعد الاختبار.
+- Lint: ✅ no issues على الـ Python و JS.
+
+### الفوائد
+- المستخدم يستطيع تصحيح أخطاء التسمية مباشرة من dialog التعديل (بدلاً من فتح نموذج تعديل المادة الكامل).
+- كل تغيير في اسم المادة يُسجَّل في `diff_log` لـ audit trail.
+
+---
+
+
 ## Session: Feb 17, 2026 — Inline Pack Info Editor (تعريف محتوى العلبة/الكرتون)
 
 ### المتطلب
