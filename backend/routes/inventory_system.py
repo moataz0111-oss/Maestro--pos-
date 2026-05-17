@@ -26,6 +26,60 @@ from services.cost_layer_service import (
 
 router = APIRouter(prefix="/api", tags=["Inventory System"])
 
+# ==================== HELPERS ====================
+
+# خرائط تحويل الوحدات إلى وحدة أساسية (غرام أو مل تُعامل ك "غرام" للعائد)
+_UNIT_WEIGHT_MAP = {
+    "غرام": 1.0, "كغم": 1000.0, "كيلو": 1000.0, "كجم": 1000.0,
+    "gram": 1.0, "kg": 1000.0,
+    "مل": 1.0, "لتر": 1000.0, "ml": 1.0, "liter": 1000.0, "l": 1000.0,
+}
+_COUNT_UNITS = {"قطعة", "حبة", "علبة", "كرتون", "صحن", "piece"}
+
+
+async def _ingredient_weight_grams(db, ing: dict) -> float:
+    """
+    ⭐ يحسب الوزن الفعلي للمكوّن بالغرام، مع دعم تحويل العلبة/الكرتون عبر pack_info.
+
+    مثال: مكوّن بـ "2.4 علبة" حيث 1 علبة = 1500 غرام → النتيجة: 3600 غرام.
+    إذا كان الوحدة قياسية (غرام/كغم/مل/لتر) — يُستخدم الجدول مباشرة.
+    إذا كانت قطعية بدون pack_info — يُرجع 0 (لا يدخل في حساب العائد).
+    """
+    qty = float(ing.get("quantity") or 0)
+    unit = (ing.get("unit") or "").strip()
+    if qty <= 0:
+        return 0.0
+    # وحدات قياسية معروفة
+    factor = _UNIT_WEIGHT_MAP.get(unit)
+    if factor is not None:
+        return qty * factor
+    # وحدات قطعية: حاول استخدام pack_info من المادة الخام
+    if unit in _COUNT_UNITS:
+        material_id = ing.get("raw_material_id")
+        if material_id:
+            mat = await db.raw_materials.find_one(
+                {"id": material_id},
+                {"_id": 0, "pack_quantity": 1, "pack_unit": 1}
+            )
+            if mat and mat.get("pack_quantity") and mat.get("pack_unit"):
+                pack_qty = float(mat.get("pack_quantity") or 0)
+                pack_unit = mat.get("pack_unit") or "غرام"
+                pack_factor = _UNIT_WEIGHT_MAP.get(pack_unit, 0)
+                if pack_qty > 0 and pack_factor > 0:
+                    # 1 علبة = pack_qty * pack_factor غرام
+                    return qty * pack_qty * pack_factor
+    # غير قابل للتحويل → 0 (لا يُحسب)
+    return 0.0
+
+
+async def _compute_recipe_total_grams(db, recipe: list) -> float:
+    """يجمع وزن كل مكونات الوصفة بالغرام (مع دعم pack_info)."""
+    total = 0.0
+    for ing in (recipe or []):
+        total += await _ingredient_weight_grams(db, ing)
+    return total
+
+
 # ==================== MODELS ====================
 
 # --- الموردين ---
@@ -3324,18 +3378,13 @@ async def produce_product(
     if not product:
         raise HTTPException(status_code=404, detail="المنتج غير موجود")
 
-    # ───── احتساب العائد من الوصفة (إن أمكن) ─────
-    _UNIT_WEIGHT = {"غرام": 1.0, "كغم": 1000.0, "كيلو": 1000.0, "كجم": 1000.0, "gram": 1.0, "kg": 1000.0}
+    # ───── احتساب العائد من الوصفة (مع دعم pack_info للعلب/الكراتين) ─────
     piece_weight = float(product.get("piece_weight") or 0)
     piece_weight_unit = product.get("piece_weight_unit") or "غرام"
     calculated_yield = 0.0
-    piece_grams = piece_weight * _UNIT_WEIGHT.get(piece_weight_unit, 1.0)
+    piece_grams = piece_weight * _UNIT_WEIGHT_MAP.get(piece_weight_unit, 1.0)
     if piece_weight > 0 and piece_grams > 0:
-        total_grams = 0.0
-        for ing in (product.get("recipe") or []):
-            f = _UNIT_WEIGHT.get(ing.get("unit"))
-            if f:
-                total_grams += (ing.get("quantity") or 0) * f
+        total_grams = await _compute_recipe_total_grams(db, product.get("recipe") or [])
         if total_grams > 0:
             calculated_yield = total_grams / piece_grams
 
@@ -3561,19 +3610,14 @@ async def add_product_stock(product_id: str, quantity: float = 1):
         }
     )
 
-    # ⭐ مزامنة تلقائية للوصفة لتطابق الكمية الجديدة
+    # ⭐ مزامنة تلقائية للوصفة لتطابق الكمية الجديدة (مع دعم pack_info)
     recipe_scaled = False
     scale_factor = 1.0
     fresh = await db.manufactured_products.find_one({"id": product_id})
-    _UNIT_W = {"غرام": 1.0, "كغم": 1000.0, "كيلو": 1000.0, "كجم": 1000.0, "gram": 1.0, "kg": 1000.0}
     pw = float(fresh.get("piece_weight") or 0)
     pwu = fresh.get("piece_weight_unit") or "غرام"
-    piece_grams = pw * _UNIT_W.get(pwu, 1.0)
-    total_grams = 0.0
-    for ing in (fresh.get("recipe") or []):
-        f = _UNIT_W.get(ing.get("unit"))
-        if f:
-            total_grams += (ing.get("quantity") or 0) * f
+    piece_grams = pw * _UNIT_WEIGHT_MAP.get(pwu, 1.0)
+    total_grams = await _compute_recipe_total_grams(db, fresh.get("recipe") or [])
     calc_yield = (total_grams / piece_grams) if (piece_grams > 0 and total_grams > 0) else 0
     target_qty = float(fresh.get("quantity") or 0)
     if calc_yield > 0 and target_qty > 0 and abs(calc_yield - target_qty) >= 0.5:

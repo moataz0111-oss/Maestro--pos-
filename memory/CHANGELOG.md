@@ -1,6 +1,53 @@
 # Maestro EGP - Changelog
 
 
+## Session: Feb 17, 2026 — Critical Fix: Pack-aware Recipe Yield Calculation
+
+### المتطلب/البلاغ
+المستخدم لاحظ أن النظام يضرب كميات وصفته في ~2.4x تلقائياً عند إضافة كمية إنتاج. السبب: حساب `total_grams` كان يتجاهل العلب/الكراتين تماماً (حتى مع تعريف pack_info)، فيُحسب العائد بشكل أقل من الواقع، ثم الـ auto-scaling يضرب الكميات لتعويض الفرق → بيانات الوصفة الأصلية تُفقد.
+
+### السبب الجذري
+في `Produce` و `Add Stock` كان:
+```python
+_UNIT_WEIGHT = {"غرام": 1, "كغم": 1000, ...}  # لا يحوي علبة/كرتون/قطعة
+for ing in recipe:
+    f = _UNIT_WEIGHT.get(ing.get("unit"))
+    if f: total_grams += quantity * f  # المكونات بـ علبة → تُتجاهل!
+```
+مثال المستخدم: 1 علبة فطر (1500غ) + 1 كغم موزاريلا + 1 كغم كريمي + 0.5 كغم بصل + 1 كغم بقصم = **5000غ**، لكن النظام كان يحسب 2500غ فقط (تجاهل الـ علبة) → 83 قطعة بدلاً من 166.
+
+### الحل
+
+**Backend** — `/app/backend/routes/inventory_system.py`:
+- إضافة helpers موحّدة في رأس الملف:
+  - `_UNIT_WEIGHT_MAP` (يشمل غرام/كغم/مل/لتر بمعاملاتها)
+  - `_COUNT_UNITS = {"قطعة","حبة","علبة","كرتون","صحن","piece"}`
+  - `_ingredient_weight_grams(db, ing)` async — يبحث عن pack_info للوحدات القطعية ويحوّل إلى غرام عبر `pack_quantity * pack_unit_factor`.
+  - `_compute_recipe_total_grams(db, recipe)` async — يجمع وزن كل المكونات.
+- استبدال logic `total_grams` في:
+  - دالة `produce_manufactured_product` (احتساب calculated_yield)
+  - دالة `add_stock_to_manufactured_product` (مزامنة الوصفة)
+
+**Frontend** — `/app/frontend/src/pages/WarehouseManufacturing.js`:
+- توسيع `_W` ليشمل مل/لتر.
+- إضافة `_COUNT` set + lookup من `rawMaterials` لـ pack_info عند مواجهة وحدة قطعية.
+- النتيجة: شريط "العائد المحسوب" يعرض الرقم الصحيح فوراً.
+
+### الاختبار: ✅
+ملف جديد `/app/backend/tests/test_recipe_total_grams_pack_aware.py`:
+1. **سيناريو المستخدم بالضبط**: 1 علبة (1500غ) + 4×1كغم + 0.5 كغم = **5000غ** → 166.67 قطعة ✓
+2. **مكوّن بدون pack_info**: يُرجع 0 (آمن، لا يكسر) ✓
+3. **خلط 5 وحدات** (غرام/كغم/مل/لتر/علبة): جميعها تُحسب بدقة ✓
+
+### الفائدة
+- لا مزيد من auto-scaling غير المرغوب فيه: الوصفة تنتج الكمية الصحيحة من المرة الأولى.
+- المستخدم يرى العائد الحقيقي (166 قطعة بدلاً من 83) فور تعريفه pack_info.
+- بيانات الوصفة الأصلية تبقى محفوظة (لا تُغيَّر دون وعي المستخدم).
+- التقارير المالية أدق (تكلفة الحبة = batch_cost / yield الحقيقي).
+
+---
+
+
 ## Session: Feb 17, 2026 — Fix: Consistency Between Sales Report & Cash Close Report
 
 ### المتطلب/البلاغ
