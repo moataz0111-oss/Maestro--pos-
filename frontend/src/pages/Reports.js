@@ -3119,6 +3119,20 @@ export default function Reports() {
                             </div>
                           );
                         })}
+                        {/* ⭐ ملخّص الطلبات المعلقة منفصل عن طرق الدفع (لتطابق تقرير إغلاق الصندوق) */}
+                        {salesReport?.pending_orders_summary?.count > 0 && (
+                          <div
+                            className="mt-3 p-2 rounded-md bg-amber-500/10 border border-amber-500/30 flex justify-between items-center"
+                            data-testid="pending-orders-banner"
+                          >
+                            <span className="text-xs font-bold text-amber-700 dark:text-amber-400">
+                              ⚠️ {t('طلبات معلقة (لم تُحتسب كمبيعات)')}: {salesReport.pending_orders_summary.count}
+                            </span>
+                            <span className="font-bold text-amber-700 dark:text-amber-400 tabular-nums">
+                              {formatPrice(salesReport.pending_orders_summary.amount)}
+                            </span>
+                          </div>
+                        )}
                       </div>
                     </CardContent>
                   </Card>

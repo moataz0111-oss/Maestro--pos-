@@ -14408,15 +14408,15 @@ async def get_sales_report(
     # إضافة توصيل السائقين (إذا وجد)
     if driver_delivery_amount > 0:
         by_payment_method["توصيل سائقين"] = driver_delivery_amount
-    
-    # إضافة الطلبات المعلقة (منفصلة)
+
+    # ⚠️ الطلبات المعلقة (pending) لا تُحتسب كمبيعات/طريقة دفع — هي طلبات لم تُدفع بعد
+    # نعرضها كملخّص منفصل لتطابق تقرير إغلاق الصندوق (الذي يستثني المعلق)
     pending_amount = sum(_sn(o.get("total")) for o in pending_orders)
-    if pending_amount > 0:
-        by_payment_method["معلق"] = pending_amount
+    pending_count = len(pending_orders)
     
     return {
         "period": period,
-        "total_sales": total_sales,  # إجمالي كل المبيعات
+        "total_sales": total_sales,  # إجمالي كل المبيعات (بدون المعلقة)
         "total_orders": total_orders,
         "average_order_value": round(avg_order_value, 2),
         "by_type": {
@@ -14429,6 +14429,11 @@ async def get_sales_report(
             "cash": cash_orders_count,
             "card": card_orders_count,
             "credit": credit_orders_count
+        },
+        # ⭐ ملخّص الطلبات المعلقة منفصل (لا يدخل في طرق الدفع لتطابق تقرير إغلاق الصندوق)
+        "pending_orders_summary": {
+            "count": pending_count,
+            "amount": pending_amount,
         }
     }
 

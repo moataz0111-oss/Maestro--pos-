@@ -208,10 +208,10 @@ async def get_sales_report(
             by_product[pid]["quantity"] += item.get("quantity", 0)
             by_product[pid]["revenue"] += _sn(item.get("price")) * item.get("quantity", 0)
     
-    # إضافة المعلقة كبند منفصل
+    # ⚠️ الطلبات المعلقة لا تُحتسب كطريقة دفع (لم تُدفع بعد)
+    # نعرضها كملخّص منفصل لتطابق تقرير إغلاق الصندوق (الذي يستثني المعلق)
     pending_total = sum(_sn(o.get("total")) for o in pending_orders)
-    if pending_total > 0:
-        by_payment["معلق"] = pending_total
+    pending_count = len(pending_orders)
     
     total_delivery_sales = sum(app["total_sales"] for app in by_app.values())
     total_delivery_commission = sum(app["total_commission"] for app in by_app.values())
@@ -235,7 +235,12 @@ async def get_sales_report(
             "net_amount": total_delivery_net
         },
         "by_date": by_date,
-        "top_products": dict(sorted(by_product.items(), key=lambda x: x[1]["revenue"], reverse=True)[:10])
+        "top_products": dict(sorted(by_product.items(), key=lambda x: x[1]["revenue"], reverse=True)[:10]),
+        # ⭐ ملخّص الطلبات المعلقة منفصل عن طرق الدفع (لتطابق تقرير إغلاق الصندوق)
+        "pending_orders_summary": {
+            "count": pending_count,
+            "amount": pending_total,
+        }
     }
 
 # ==================== PURCHASES REPORT ====================

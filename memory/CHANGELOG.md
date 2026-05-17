@@ -1,6 +1,46 @@
 # Maestro EGP - Changelog
 
 
+## Session: Feb 17, 2026 — Fix: Consistency Between Sales Report & Cash Close Report
+
+### المتطلب/البلاغ
+المستخدم لاحظ تناقضاً في تقارير فرع السيدية:
+- **تقرير المبيعات**: يعرض "معلق: 5,000 IQD" تحت "حسب طريقة الدفع"
+- **تقرير إغلاق الصندوق**: لا يعرض أي طلب معلق
+
+السبب: "معلق" ليس طريقة دفع فعلية (الطلب لم يُدفع بعد). تقرير إغلاق الصندوق محقّ في استبعاده، لكن تقرير المبيعات كان يدمجه ضمن `by_payment_method`.
+
+### الحل
+**Backend** (`/app/backend/routes/reports_routes.py` + `/app/backend/server.py`):
+- إزالة `by_payment["معلق"] = pending_total` من كلا endpoints:
+  - `/api/reports/sales` (في `reports_routes.py`)
+  - `/api/smart-reports/sales` (في `server.py`)
+- إضافة حقل جديد منفصل في الاستجابة:
+  ```json
+  "pending_orders_summary": {"count": 9, "amount": 80000}
+  ```
+- النتيجة: `sum(by_payment_method.values()) == total_sales` (متطابق مع تقرير إغلاق الصندوق).
+
+**Frontend** — `/app/frontend/src/pages/Reports.js`:
+- إضافة بطاقة تنبيه (banner أصفر) داخل قسم "حسب طريقة الدفع" تعرض `pending_orders_summary.count` + `amount` فقط عند `count > 0`.
+- العنصر بـ `data-testid="pending-orders-banner"`.
+- النص: `⚠️ طلبات معلقة (لم تُحتسب كمبيعات): X — Y IQD`.
+
+### الاختبار: ✅
+- **Backend curl**: `/api/reports/sales` يُرجع الآن `{"by_payment_method": {"نقدي": 470210}, "pending_orders_summary": {"count": 9, "amount": 80000}, "total_sales": 470210}` ← المعلق منفصل + المجموع متطابق.
+- **pytest**: `test_pending_orders_separated.py`:
+  1. "معلق" غير موجود في by_payment_method ✓
+  2. pending_orders_summary مُعبّأ صحيحاً ✓
+  3. total_sales == sum(by_payment_method) ✓
+
+### الفائدة
+- التقريران الآن متطابقان تماماً في الحسابات.
+- المالك يرى الطلبات المعلّقة بوضوح (banner مميّز) دون أن تُربك حسابات الدخل.
+- "حسب طريقة الدفع" يعكس الآن فقط المبالغ المُحصَّلة فعلياً.
+
+---
+
+
 ## Session: Feb 17, 2026 — Bugfix: علبة/كرتون مفقودة من _UNIT_GROUPS تمنع التحويل بـ pack info
 
 ### المتطلب/البلاغ
