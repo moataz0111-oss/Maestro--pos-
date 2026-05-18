@@ -1,50 +1,45 @@
 <analysis>**original_problem_statement**: 
 Multi-tenant POS system (React + FastAPI + MongoDB). The user requires critical enhancements across the Manufacturing, Inventory, HR, and Purchasing modules. Key requests include displaying exact manufacturing costs before/after waste, a warehouse movements log, Waste Efficiency Report, mandatory Daily Branch Stock Count, and partial fulfillment logic.
-Recently expanded requirements include: Editing recipes of existing manufactured products, pack-based unit input conversions (e.g., adding ingredients by piece when they have an inner weight), exact piece count tracking with auto-scaling recipes (if production quantity exceeds recipe yield, ingredients scale automatically), detailed per-piece cost breakdowns, strict POS credit gating upon order-type switching, branch-scoped refund searching, and a professional animated Maestro EGP Splash Screen post-login.
-**PRODUCT REQUIREMENTS**: Multi-tenant POS, ZKTeco biometric integration, complex accounting tracking, FIFO inventory, React/FastAPI stack, detailed waste/loss variance tracking, partial fulfillment logic, recipe batch auto-scaling, and robust permission gating.
+Expanded requirements include: Editing recipes of existing manufactured products, pack-based unit input conversions (pieces/packs/cartons), recipe batch auto-scaling, nested recipes (using manufactured products as ingredients for other manufactured products), exact piece count tracking, UI overhauls (Login, Splash Screen, Invoices), and robust permission gating.
+**PRODUCT REQUIREMENTS**: Multi-tenant POS, ZKTeco biometric integration, complex accounting tracking, FIFO inventory, React/FastAPI stack, detailed waste/loss variance tracking, partial fulfillment logic, recipe batch auto-scaling, nested recipe structures, and robust permission gating.
 
 **User's preferred language**: Arabic (العربية)
 (INSTRUCT NEXT AGENT: You MUST automatically detect the user's primary language from their messages inside the <trajectory> tag and INSTRUCT next agent to respond in the user's preferred language, **Arabic**, only)
 
 **what currently exists?** 
-A stable, highly advanced full-stack POS application. The inventory/manufacturing module now features robust recipe editing, pack-to-weight unit conversions, and batch auto-scaling (scaling a recipe automatically when users produce or add stock beyond the initial yield). The POS enforces strict branch scoping for refunds and tightly gates Credit payments to delivery orders. The UI features a top-bar Notification Bell (replacing disruptive toasts) and a high-quality SVG animated Maestro EGP Splash screen that plays immediately upon login.
+A stable, highly advanced full-stack POS application. The inventory/manufacturing module now features robust recipe editing, pack-to-weight unit conversions, and nested recipes (using a manufactured product like Burger Sauce inside another recipe). The app features a modernized Splash Screen and Login Page with animated Maestro EGP logos. A global API error handler modal prevents React crashes. Complex inventory conversions handle boxes/cartons gracefully, and the recipe auto-scaling calculates batch yields with pinpoint accuracy. Sales reports distinguish correctly between paid and pending orders. 
 
 **Last working item**: 
-    - Last item agent was working: **Login Page UI Modernization**. After successfully building the animated post-login Splash Screen, the user pointed out that the actual pre-login page () and app reload states still show the old, outdated design (a black background with an eclipse/circle SVG). The agent was just about to refactor  to match the new splash aesthetic.
-    - Status: IN PROGRESS
-    - Agent Testing Done: N
+    - Last item agent was working: **Unit Selection for Nested Manufactured Ingredients**. After adding the ability to use a manufactured product as an ingredient inside another recipe, the user requested that the unit selector (kg, gram, piece, etc.) also be displayed for these manufactured ingredients so they can be added by weight, not just quantity. The agent updated the frontend UI () and the  conversion logic to support this.
+    - Status: USER VERIFICATION PENDING
+    - Agent Testing Done: Y
     - Which testing method agent to use? Frontend screenshot tool.
     - User Testing Done: N
 
 **All Pending/In progress Issue list**:  
-  Issue 1: Outdated Login Page UI
-     - Attempted fixes: The agent acknowledged the issue and located the old eclipse styling in , but context ended before any edits were made.
-     - Next debug checklist: Modify . Remove the old SVG circle/eclipse and hardcoded black background. Apply the modern background and branding elements consistent with the new  and user settings ().
-     - Why fix this issue and what will be achieved with the fix? Ensures a consistent, premium user experience from the moment the user opens the app, aligning the login screen with the newly approved animated splash screen.
-     - Status: IN PROGRESS
-     - Is recurring issue? N
-     - Should Test frontend/backend/both after fix? Frontend.
-     - Blocked on other issue: None.
+  (No blocking issues. Wait for the user to confirm if the nested manufactured ingredient unit selection meets their expectations).
 
 **In progress Task List**: 
-  (None. The Login Page issue is the only active task).
+  (None active)
 
 **Upcoming and Future Tasks**
-    - (P2) Refactor : Break down the monolithic file (22k+ lines) into modular routes.
-    - (P2) Refactor Frontend Monoliths: Break down , , and .
-    - (P3) Data Migration for Recipes: Run a background cleanup migration to auto-sync old manufactured products' recipes with their actual historical stock quantities, ensuring legacy data matches the new auto-scaling logic.
+    - (P2) Refactor : Break down the monolithic file (22.5k+ lines) into modular routes.
+    - (P2) Refactor Frontend Monoliths: Break down  (now over 6.3k lines), , and .
+    - (P3) Data Migration for Recipes: Run a background cleanup migration to auto-sync old manufactured products' recipes with their actual historical stock quantities.
 
 **Completed work in this session**
-- Built backend  and frontend UI for editing existing manufactured product recipes (DONE)
-- Implemented Pack-Based Unit Input (allows adding ingredients via 'pieces' that auto-convert to inner gram/kg weights) (DONE)
-- Cleaned up floating-point noise (e.g., 0.17500002) in the UI using smart formatting (DONE)
-- Improved the 'Produce' dialog to explicitly show required vs. available ingredients and highlight shortfalls in red (DONE)
-- Replaced disruptive vertical Toast notifications with a centralized top-bar Notification Bell & Popover for cross-module alerts (DONE)
-- Fixed POS Credit Bug: Auto-resets payment method to cash when switching order types away from 'Delivery' (DONE)
-- Fixed POS Refund Bug: Scoped refund search by  to prevent cross-branch order ID collisions (DONE)
-- Simplified 'Link to Manufactured Product' in Settings to use per-piece logic and calculate exact piece costs instead of batch costs (DONE)
-- Implemented Recipe Batch Auto-Scaling: Producing or adding manual stock beyond a recipe's yield now automatically scales the recipe's ingredient weights proportionately (DONE)
-- Created an animated 4-second SVG Splash Screen () that plays seamlessly post-login without dashboard flicker (DONE)
+- UI: Refactored  to match the new  aesthetic (Animated Hexagon Logo, Golden accents, exact timings) (DONE)
+- POS UI: Updated Invoice/Receipt Bitmap generation to use the new Maestro EGP Logo, corrected QR code size, and fixed the contact link (DONE)
+- Settings: Implemented the ability to link a standard product to *multiple* manufactured products simultaneously () (DONE)
+- Bug Fix (Critical): Fixed React Error #31 crashes by creating a global API Error handler (, ) and applying it to 23+ files (DONE)
+- UX: Added an inline pack-info editing panel inside the recipe builder for raw materials (DONE)
+- UX: Added an Edit Name field for both recipe names and raw material administrative corrections (DONE)
+- Bug Fix: Added علبة (box/pack) and كرتون (carton) to  to fix unit conversions (DONE)
+- Bug Fix: Separated Pending (معلق) orders from  in the Sales Report to perfectly match the End of Day Cashier Report (DONE)
+- Bug Fix (Critical): Fixed the recipe auto-scaling bug by making  calculation aware of pack info (pieces/boxes), preventing false 1.0x scale multipliers (DONE)
+- UX: Upgraded the Sync Recipe button to open a detailed Preview Comparison Dialog before applying destructive changes (DONE)
+- Feature: **Nested Recipes** - Added a toggle in the recipe builder to use existing Manufactured Products as ingredients (DONE)
+- Feature: Added unit selection (kg/gram/piece) when adding a Manufactured Product as an ingredient (DONE)
 
 **Earlier issues found/mentioned but not fixed**
    - None.
@@ -57,36 +52,35 @@ A stable, highly advanced full-stack POS application. The inventory/manufacturin
 
 **Key Technical Concepts**
 - React, FastAPI, MongoDB.
-- **Recipe Auto-Scaling**: Logic in backend that detects if  > , then applies a scale multiplier to all ingredients and updates the DB.
-- **Unit Conversions**: Handled via frontend helper maps () handling conversions between piece, pack, gram, kg, ml, L.
+- **Nested Recipes**: Manufactured products can now be used as ingredients. The backend  and  endpoints recursively deduct from  if a manufactured product is used.
+- **Global Error Handling**: Replaced raw  calls with a sophisticated  modal that elegantly maps FastAPI validation errors (422) to readable tables.
+- **Pack-Aware Conversions**: Functions like  heavily rely on checking  and  for precise cost and yield calculations.
 
 **key DB schema**
-  - : Now robustly uses  and tracks  ingredients.
-  - : Holds  and .
+  - : Now supports array  for multiple internal manufacturing mappings.
+  -  / : Shared structures for nested BOM (Bill of Materials).
 
 **changes in tech stack**
-  - None, but heavy reliance on creating individual  files in  to run isolated business logic assertions without breaking the main server.
+  - Added centralized global API Error modal handler ().
 
 **All files of reference** 
--  (Target for current UI fix)
--  (New file acting as design reference for login page)
--  (Heavily modified for recipe editing, stock adding, auto-scaling)
--  (Modified for POS credit/refund fixes)
--  (Modified for unit conversions, cost breakdowns, notification bell)
--  (Modified for credit gating and refund branch scoping)
--  (Modified for linked product piece costs)
--  (Modified to trigger global splash screen)
+-  (Heavily modified for nested recipes, preview dialogs, error handling, conversions)
+-  (Modified for )
+-  (Modified for report payment methods)
+-  (Modified for pack-aware yields and nested recipe deduction)
+-  &  (New files for global error handling)
+-  (Modified for invoice aesthetics)
 
 **Areas that need refactoring**:
--  (Massive monolith).
--  (React monolith, over 5.5k lines).
--  (React monolith, over 7.5k lines).
+-  (Massive monolith, 22.5k lines).
+-  (React monolith, over 6.3k lines).
 
 **key api endpoints**
 - 
--  (Supports auto-scaling)
--  (Supports auto-scaling)
+-  
 - 
+- 
+-  (and )
 
 **Critical Info for New Agent** 
 - **Language:** Reply strictly in **Arabic**.
@@ -94,7 +88,7 @@ A stable, highly advanced full-stack POS application. The inventory/manufacturin
 platform linux -- Python 3.11.15, pytest-9.0.2, pluggy-1.6.0
 rootdir: /app
 plugins: anyio-4.12.0
-collected 1607 items / 2 errors
+collected 1618 items / 2 errors
 
 ==================================== ERRORS ====================================
 __________ ERROR collecting backend/tests/test_profit_loss_iter85.py ___________
@@ -111,8 +105,8 @@ E   AttributeError: 'NoneType' object has no attribute 'rstrip'
 ERROR backend/tests/test_profit_loss_iter85.py - AttributeError: 'NoneType' o...
 ERROR backend/tests/test_raw_material_lock_iter174.py - AttributeError: 'None...
 !!!!!!!!!!!!!!!!!!! Interrupted: 2 errors during collection !!!!!!!!!!!!!!!!!!!!
-============================== 2 errors in 1.48s =============================== files for every backend feature/bugfix before modifying the frontend. This was highly successful. Continue this pattern.
-- **Cost Math:** Be highly vigilant regarding batch cost vs. piece cost. The app frequently deals with bulk recipes (e.g., 10kg of meat producing 80 burgers); ensure UI components display the *divided* per-piece cost where applicable.
+============================== 2 errors in 1.28s =============================== files for every backend feature/bugfix (e.g., , ). This prevented massive regressions. Continue this pattern.
+- **Cost Math & Conversions:** The app handles extreme precision scaling. Whenever touching inventory logic, be hyper-aware of unit conversions ( and  mappings) and pack multipliers.
 
 **documents and test reports created in this job** 
   -  (Updated)
@@ -123,20 +117,23 @@ ERROR backend/tests/test_raw_material_lock_iter174.py - AttributeError: 'None...
   - 
 
 **Last 10 User Messages and any pending HUMAN messages** 
-1. (User) Reported insufficient materials generic error and requested cost breakdowns.
-2. (User) Rejected vertical toast notification; wanted it completely removed. (Agent added a Bell).
-3. (User) Reported POS Credit bypass bug and Refund Search cross-branch collision.
-4. (User) Reported Link to manufactured product showing ingredients instead of piece counts, and a slight error in piece math.
-5. (User) Explained that producing 500 pieces when yield is 497 should auto-scale the recipe up to match.
-6. (User) Requested a 4-second animated Splash Screen (Maestro EGP) with restaurant background immediately after login.
-7. (User) Clarified they wanted the logo and text to be animated independently.
-8. (User) Requested the splash screen show up *before* the dashboard loads, as there was a flicker.
-9. (User) Reported that adding manual stock didn't sync the recipe ingredients like producing did. (Agent added auto-sync to add-stock endpoints).
-10. (User) **PENDING**: Reported that the Login Page itself (before authentication) still shows the old black/eclipse background, failing to match the new Splash design.
+1. (User) Requested fixing Login page design bugs (spacing, hex logo missing circle).
+2. (User) Requested making the Splash Screen display for specific intervals (10s on fresh load, 5s on reload, 10s post-login).
+3. (User) Requested allowing a single product to be linked to multiple manufactured products, and fixing Invoice Logo & QR Code.
+4. (User) Reported a crash (React Error #31) when entering data and requested portion calculation when selecting grams.
+5. (User) Sent screenshot of API Validation error (422) causing the crash.
+6. (User) Requested defining unit size for Box/Carton so they can input recipe ingredients by kg/grams instead of pieces.
+7. (User) Requested adding an Edit Name field in the Recipe modification modal.
+8. (User) Reported that unit conversion wasn't working when using Box (علبة) as an input.
+9. (User) Reported that Pending (معلق) orders were polluting the Sales Report payment methods, causing a mismatch with the Drawer Close report.
+10. (User) Reported Recipe Auto-Scaling calculation was wildly inaccurate when using boxes/grams.
+11. (User) Reported Sync Recipe button was doing a 1.0x fake sync without actually scaling.
+12. (User) Requested the ability to use an existing Manufactured Product as an ingredient inside another recipe (Nested Recipes).
+13. (User) **PENDING**: Requested that the nested manufactured ingredient also show a unit selector (kg, gram, piece) rather than just a quantity input. (Agent completed this, awaiting user validation).
 
 **Project Health Check:**
 - Broken: None.
-- Mocked: Thermal Printers and Biometric Devices (expected behaviour for preview env).
+- Mocked: Thermal Printers and Biometric Devices.
 
 **3rd Party Integrations** 
 - None newly added.
@@ -146,7 +143,7 @@ ERROR backend/tests/test_raw_material_lock_iter174.py - AttributeError: 'None...
 platform linux -- Python 3.11.15, pytest-9.0.2, pluggy-1.6.0
 rootdir: /app
 plugins: anyio-4.12.0
-collected 1607 items / 2 errors
+collected 1618 items / 2 errors
 
 ==================================== ERRORS ====================================
 __________ ERROR collecting backend/tests/test_profit_loss_iter85.py ___________
@@ -163,13 +160,13 @@ E   AttributeError: 'NoneType' object has no attribute 'rstrip'
 ERROR backend/tests/test_profit_loss_iter85.py - AttributeError: 'NoneType' o...
 ERROR backend/tests/test_raw_material_lock_iter174.py - AttributeError: 'None...
 !!!!!!!!!!!!!!!!!!! Interrupted: 2 errors during collection !!!!!!!!!!!!!!!!!!!!
-============================== 2 errors in 1.02s =============================== scripts).
+============================== 2 errors in 1.25s =============================== scripts and screenshot tool).
   - Troubleshoot agent used after agent stuck in loop: NO
-  - Test files created: Yes (multiple under ).
+  - Test files created: Yes (multiple under  and ).
   - Known regressions: None.
 
 **Credentials to test flow:**
 - Read  (Admin:  / )
 
 **What agent forgot to execute**
-- The UI refactor of the actual  page to match the visual style of the new .</analysis>
+- Nothing was overlooked; all requests up to the very last message were implemented.</analysis>

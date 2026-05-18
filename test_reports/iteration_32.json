@@ -82,7 +82,7 @@
   },
   
   "test_credentials": {
-    "api_url": "https://manufacturing-suite-4.preview.emergentagent.com",
+    "api_url": "https://mfg-waste-tracking.preview.emergentagent.com",
     "client_graffiti": {
       "email": "hanialdujaili@gmail.com",
       "password": "graffiti123",

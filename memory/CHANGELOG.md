@@ -1,6 +1,29 @@
 # Maestro EGP - Changelog
 
 
+## Session: Feb 19, 2026 — إصلاح 422 لإضافة منتج مُصنّع كمكوّن
+
+### المشكلة
+عند اختيار **منتج مُصنّع** (مثل المايونيز) كمكوّن في وصفة منتج آخر، كان السيرفر يرفض الطلب بـ HTTP 422:
+```
+recipe.0.raw_material_id — Field required
+```
+السبب: نموذج `RecipeIngredient` كان يفرض `raw_material_id` كحقل إلزامي، رغم أن الفرونتند يرسل `manufactured_product_id` فقط للمكونات من نوع منتج مُصنّع.
+
+### الحل
+**Backend** — `/app/backend/routes/inventory_system.py`:
+- جعل `raw_material_id` اختياري في `RecipeIngredient` (Optional[str]).
+- إضافة حقول `manufactured_product_id`, `source`, `pack_quantity`, `pack_unit` إلى النموذج.
+- إضافة `model_validator` يتطلب توفير أحد المعرّفين على الأقل (raw_material_id أو manufactured_product_id).
+- `model_config = {"extra": "allow"}` للتوافق مع أي حقول إضافية يرسلها الفرونتند.
+
+### التحقق
+- **pytest**: `tests/test_recipe_ingredient_model.py` (4 اختبارات نجحت).
+- **API live test**: POST /api/manufactured-products بحمولة المستخدم الأصلية → ✅ 200.
+- **API live test**: PATCH /api/manufactured-products/{id}/recipe بمكونات مختلطة → ✅ success.
+
+
+
 ## Session: Feb 18, 2026 — منتج مُصنّع كمكوّن في وصفة أخرى (Manufactured-as-Ingredient)
 
 ### المتطلب

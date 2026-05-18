@@ -995,19 +995,38 @@ export default function WarehouseManufacturing() {
         toast.error(t('هذا المنتج موجود بالفعل في الوصفة'));
         return;
       }
-      // احتساب تكلفة الوحدة للمنتج المُصنّع
+      // ⭐ تحويل الكمية المُدخلة إلى عدد حبات (وحدة المنتج الأصلية) بناءً على piece_weight
+      const _W = { 'غرام': 1, 'كغم': 1000, 'كيلو': 1000, 'كجم': 1000, 'gram': 1, 'kg': 1000, 'مل': 1, 'لتر': 1000, 'ml': 1, 'liter': 1000, 'l': 1000 };
+      const mpUnit = mp.unit || 'حبة';
+      const inputUnit = newIngredient.input_unit || mpUnit;
+      let qty = Number(newIngredient.quantity);
+      // إذا اختار المستخدم وحدة وزن مختلفة عن وحدة المنتج → حوّل عبر piece_weight
+      if (inputUnit !== mpUnit) {
+        const fIn = _W[inputUnit];
+        const pw = Number(mp.piece_weight || 0);
+        const pwu = mp.piece_weight_unit || 'غرام';
+        const fPw = _W[pwu];
+        if (fIn && pw > 0 && fPw) {
+          const pieceGrams = pw * fPw;
+          const qtyInGrams = qty * fIn;
+          const piecesCount = qtyInGrams / pieceGrams;
+          toast.info(`${t('تم تحويل')} ${qty} ${inputUnit} → ${piecesCount.toFixed(3)} ${mpUnit} (1 ${mpUnit} = ${pw} ${pwu})`);
+          qty = Math.round(piecesCount * 1e6) / 1e6;
+        }
+      }
       const unitCost = _computeMfgUnitCost ? _computeMfgUnitCost(mp) : 0;
       setProductForm(prev => ({
         ...prev,
         recipe: [...prev.recipe, {
-          // ⭐ مكوّن من نوع منتج مُصنّع
           manufactured_product_id: mp.id,
-          raw_material_name: mp.name, // للعرض
-          quantity: Number(newIngredient.quantity),
-          unit: mp.unit || 'حبة',
+          raw_material_name: mp.name,
+          quantity: qty,
+          unit: mpUnit,
           cost_per_unit: unitCost,
           waste_percentage: 0,
           source: 'manufactured',
+          input_unit: inputUnit,
+          input_quantity: Number(newIngredient.quantity) || 0,
         }]
       }));
       setNewIngredient({ source: 'manufactured', raw_material_id: '', manufactured_product_id: '', quantity: 0, input_unit: '' });
@@ -4248,7 +4267,7 @@ export default function WarehouseManufacturing() {
                       className="w-24 bg-background"
                       data-testid="recipe-new-qty"
                     />
-                    {/* ⭐ اختيار وحدة الإدخال — يظهر فقط للمواد الخام (المنتجات المُصنّعة تستخدم وحدتها الافتراضية) */}
+                    {/* ⭐ اختيار وحدة الإدخال للمواد الخام */}
                     {newIngredient.source === 'raw' && newIngredient.raw_material_id && (() => {
                       const m = manufacturingInventory.find(x => (x.material_id || x.raw_material_id) === newIngredient.raw_material_id);
                       const packInfo = _packInfoFor(newIngredient.raw_material_id);
@@ -4266,6 +4285,40 @@ export default function WarehouseManufacturing() {
                           </SelectTrigger>
                           <SelectContent>
                             {units.map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                      );
+                    })()}
+                    {/* ⭐ اختيار وحدة الإدخال للمنتج المُصنّع (وحدته الأصلية + عائلة piece_weight) */}
+                    {newIngredient.source === 'manufactured' && newIngredient.manufactured_product_id && (() => {
+                      const mp = manufacturedProducts.find(m => m.id === newIngredient.manufactured_product_id);
+                      if (!mp) return null;
+                      // الوحدة الأصلية للمنتج (حبة/قطعة/كغم) + عائلة piece_weight (غرام/كغم أو مل/لتر)
+                      const units = new Set([mp.unit || 'حبة']);
+                      const pwu = mp.piece_weight_unit;
+                      const pw = Number(mp.piece_weight || 0);
+                      if (pw > 0 && pwu) {
+                        // أضف عائلة الوزن
+                        if (['غرام','كغم','كيلو','كجم','gram','kg'].includes(pwu)) {
+                          units.add('غرام'); units.add('كغم');
+                        } else if (['مل','لتر','ml','liter','l'].includes(pwu)) {
+                          units.add('مل'); units.add('لتر');
+                        }
+                      }
+                      const arr = Array.from(units);
+                      if (arr.length <= 1) {
+                        return <div className="text-xs text-muted-foreground self-center px-2">{mp.unit || 'حبة'}</div>;
+                      }
+                      return (
+                        <Select
+                          value={newIngredient.input_unit || mp.unit || 'حبة'}
+                          onValueChange={(v) => setNewIngredient(prev => ({ ...prev, input_unit: v }))}
+                        >
+                          <SelectTrigger className="w-24 bg-background" data-testid="recipe-new-mfg-unit">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {arr.map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}
                           </SelectContent>
                         </Select>
                       );

@@ -4,7 +4,7 @@
 """
 
 from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, Form
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timezone, timedelta
 import uuid
@@ -223,12 +223,28 @@ class WarehouseTransferResponse(BaseModel):
 
 # --- التصنيع (المنتجات النهائية) ---
 class RecipeIngredient(BaseModel):
-    raw_material_id: str
+    # ⭐ raw_material_id اختياري لدعم المكونات من نوع منتج مُصنّع (nested recipes)
+    raw_material_id: Optional[str] = None
     raw_material_name: str
     quantity: float
     unit: str
     cost_per_unit: float = 0.0
     waste_percentage: Optional[float] = 0.0  # نسبة الهدر للمادة الخام
+    # ⭐ حقول المكوّن من نوع منتج مُصنّع (Nested Recipes)
+    manufactured_product_id: Optional[str] = None
+    source: Optional[str] = None  # "raw" | "manufactured"
+    # حقول pack-info الاختيارية (تُستخدم في احتساب الوزن/التكلفة)
+    pack_quantity: Optional[float] = None
+    pack_unit: Optional[str] = None
+
+    model_config = {"extra": "allow"}
+
+    @model_validator(mode="after")
+    def _validate_source(self):
+        # يجب توفير أحد المعرّفين: مادة خام أو منتج مُصنّع
+        if not self.raw_material_id and not self.manufactured_product_id:
+            raise ValueError("يجب توفير raw_material_id أو manufactured_product_id للمكوّن")
+        return self
 
 class ManufacturedProductCreate(BaseModel):
     name: str
