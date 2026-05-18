@@ -999,9 +999,11 @@ export default function WarehouseManufacturing() {
     setNewIngredient({ raw_material_id: '', quantity: 0, input_unit: '' });
   };
   // ⭐ مزامنة الوصفة لتطابق الكمية المُصنّعة فعلياً (ضبط نسبي للمكونات)
-  const syncRecipeToProducedQty = async (product) => {
+  // ⭐ Sync Recipe — Step 1: حساب الفرق وعرض معاينة قبل التطبيق
+  const [syncPreview, setSyncPreview] = useState(null);
+
+  const syncRecipeToProducedQty = (product) => {
     try {
-      // ⭐ نفس منطق العائد المحسوب في شريط البطاقة (يدعم pack_info للعلب/الكراتين)
       const _W = {
         'غرام': 1, 'كغم': 1000, 'كيلو': 1000, 'كجم': 1000, 'gram': 1, 'kg': 1000,
         'مل': 1, 'لتر': 1000, 'ml': 1, 'liter': 1000, 'l': 1000
@@ -1017,7 +1019,6 @@ export default function WarehouseManufacturing() {
         if (f) {
           totalGrams += q * f;
         } else if (_COUNT.has(ing.unit)) {
-          // ابحث عن pack_info من rawMaterials للوحدات القطعية
           const mat = rawMaterials?.find?.(r => r.id === ing.raw_material_id);
           if (mat && mat.pack_quantity && mat.pack_unit) {
             const pf = _W[mat.pack_unit] || 0;
@@ -1036,13 +1037,55 @@ export default function WarehouseManufacturing() {
         toast.info(t('الوصفة متطابقة مع الكمية المُصنّعة — لا حاجة للمزامنة'));
         return;
       }
-      const newRecipe = (product.recipe || []).map(ing => ({
-        raw_material_id: ing.raw_material_id,
-        raw_material_name: ing.raw_material_name,
-        quantity: Math.round((Number(ing.quantity) || 0) * scale * 1e6) / 1e6,
-        unit: ing.unit,
-        cost_per_unit: Number(ing.cost_per_unit) || 0,
-        waste_percentage: Number(ing.waste_percentage) || 0,
+
+      // بناء جدول المقارنة
+      const rows = (product.recipe || []).map(ing => {
+        const oldQty = Number(ing.quantity) || 0;
+        const newQty = Math.round(oldQty * scale * 1e6) / 1e6;
+        const oldCost = oldQty * (Number(ing.cost_per_unit) || 0);
+        const newCost = newQty * (Number(ing.cost_per_unit) || 0);
+        return {
+          raw_material_id: ing.raw_material_id,
+          name: ing.raw_material_name || rawMaterials?.find?.(r => r.id === ing.raw_material_id)?.name || '—',
+          unit: ing.unit,
+          oldQty,
+          newQty,
+          delta: newQty - oldQty,
+          oldCost,
+          newCost,
+          cost_per_unit: Number(ing.cost_per_unit) || 0,
+          waste_percentage: Number(ing.waste_percentage) || 0,
+        };
+      });
+      const totalOldCost = rows.reduce((s, r) => s + r.oldCost, 0);
+      const totalNewCost = rows.reduce((s, r) => s + r.newCost, 0);
+
+      setSyncPreview({
+        product,
+        scale,
+        calcYield,
+        targetQty,
+        rows,
+        totalOldCost,
+        totalNewCost,
+      });
+    } catch (e) {
+      toast.error(t('فشل في حساب المعاينة'));
+    }
+  };
+
+  // ⭐ Sync Recipe — Step 2: تطبيق المعاينة بعد تأكيد المستخدم
+  const applySyncPreview = async () => {
+    if (!syncPreview) return;
+    try {
+      const { product, scale, targetQty, rows } = syncPreview;
+      const newRecipe = rows.map(r => ({
+        raw_material_id: r.raw_material_id,
+        raw_material_name: r.name,
+        quantity: r.newQty,
+        unit: r.unit,
+        cost_per_unit: r.cost_per_unit,
+        waste_percentage: r.waste_percentage,
       }));
       await axios.patch(`${API}/manufactured-products/${product.id}/recipe`, {
         recipe: newRecipe,
@@ -1051,6 +1094,7 @@ export default function WarehouseManufacturing() {
         reason: `مزامنة الوصفة مع الكمية المُصنّعة (${targetQty} ${product.unit || 'حبة'}) — عامل التحجيم ×${scale.toFixed(6)}`,
       }, { headers });
       toast.success(t('تمت مزامنة الوصفة بنجاح') + ` (×${scale.toFixed(4)})`);
+      setSyncPreview(null);
       fetchData();
     } catch (error) {
       showApiError(error, t('فشلت المزامنة'));
@@ -3377,6 +3421,112 @@ export default function WarehouseManufacturing() {
         open={showStockoutDialog}
         onOpenChange={setShowStockoutDialog}
       />
+
+      {/* ⭐ Dialog: معاينة مزامنة الوصفة (Preview قبل التطبيق) */}
+      <Dialog open={!!syncPreview} onOpenChange={(o) => !o && setSyncPreview(null)}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto" data-testid="sync-preview-dialog">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-amber-600">
+              <RefreshCw className="h-5 w-5" />
+              {t('معاينة مزامنة الوصفة')} — {syncPreview?.product?.name}
+            </DialogTitle>
+          </DialogHeader>
+
+          {syncPreview && (
+            <div className="space-y-4">
+              {/* بطاقات الملخّص */}
+              <div className="grid grid-cols-3 gap-3">
+                <div className="p-3 rounded-lg bg-muted/40 border border-border/50">
+                  <p className="text-xs text-muted-foreground">{t('العائد المحسوب من الوصفة')}</p>
+                  <p className="text-xl font-bold tabular-nums">{syncPreview.calcYield.toFixed(2)} {syncPreview.product.unit || 'حبة'}</p>
+                </div>
+                <div className="p-3 rounded-lg bg-blue-500/10 border border-blue-500/30">
+                  <p className="text-xs text-blue-700 dark:text-blue-400">{t('الكمية المُصنّعة (الهدف)')}</p>
+                  <p className="text-xl font-bold tabular-nums text-blue-700 dark:text-blue-400">{syncPreview.targetQty} {syncPreview.product.unit || 'حبة'}</p>
+                </div>
+                <div className={`p-3 rounded-lg border ${syncPreview.scale > 1 ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-amber-500/10 border-amber-500/30'}`}>
+                  <p className={`text-xs ${syncPreview.scale > 1 ? 'text-emerald-700 dark:text-emerald-400' : 'text-amber-700 dark:text-amber-400'}`}>{t('عامل التحجيم')}</p>
+                  <p className={`text-xl font-bold tabular-nums ${syncPreview.scale > 1 ? 'text-emerald-700 dark:text-emerald-400' : 'text-amber-700 dark:text-amber-400'}`}>
+                    × {syncPreview.scale.toFixed(4)}
+                  </p>
+                </div>
+              </div>
+
+              {/* جدول المقارنة */}
+              <div className="rounded-lg border border-border/50 overflow-hidden">
+                <table className="w-full text-sm" data-testid="sync-preview-table">
+                  <thead className="bg-muted">
+                    <tr>
+                      <th className="px-3 py-2 text-right font-bold">{t('المكوّن')}</th>
+                      <th className="px-3 py-2 text-right font-bold">{t('الكمية الحالية')}</th>
+                      <th className="px-3 py-2 text-right font-bold">{t('بعد المزامنة')}</th>
+                      <th className="px-3 py-2 text-right font-bold">{t('الفرق')}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {syncPreview.rows.map((r, i) => {
+                      const delta = r.delta;
+                      const deltaColor = delta < 0 ? 'text-red-600' : delta > 0 ? 'text-emerald-600' : 'text-muted-foreground';
+                      const deltaPrefix = delta > 0 ? '+' : '';
+                      return (
+                        <tr key={i} className="border-t border-border/40 hover:bg-muted/30">
+                          <td className="px-3 py-2 font-medium">{r.name}</td>
+                          <td className="px-3 py-2 tabular-nums">{r.oldQty.toLocaleString('en-US', { maximumFractionDigits: 4 })} {r.unit}</td>
+                          <td className="px-3 py-2 tabular-nums font-bold">{r.newQty.toLocaleString('en-US', { maximumFractionDigits: 4 })} {r.unit}</td>
+                          <td className={`px-3 py-2 tabular-nums font-bold ${deltaColor}`}>
+                            {deltaPrefix}{delta.toLocaleString('en-US', { maximumFractionDigits: 4 })} {r.unit}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* بطاقة التكلفة الإجمالية */}
+              <div className="grid grid-cols-3 gap-3 p-3 rounded-lg bg-background border-2 border-amber-500/40">
+                <div>
+                  <p className="text-xs text-muted-foreground">{t('التكلفة الحالية')}</p>
+                  <p className="font-bold tabular-nums">{formatPrice(syncPreview.totalOldCost)}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">{t('التكلفة بعد المزامنة')}</p>
+                  <p className="font-bold tabular-nums text-amber-600">{formatPrice(syncPreview.totalNewCost)}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">{t('الفرق')}</p>
+                  <p className={`font-bold tabular-nums ${syncPreview.totalNewCost > syncPreview.totalOldCost ? 'text-emerald-600' : 'text-red-600'}`}>
+                    {syncPreview.totalNewCost > syncPreview.totalOldCost ? '+' : ''}{formatPrice(syncPreview.totalNewCost - syncPreview.totalOldCost)}
+                  </p>
+                </div>
+              </div>
+
+              {/* تنبيه إذا كان التغيير كبير */}
+              {Math.abs(syncPreview.scale - 1) > 0.5 && (
+                <div className="p-2 rounded-md bg-red-500/10 border border-red-500/30 text-xs text-red-700 dark:text-red-400 flex items-center gap-1">
+                  <AlertCircle className="h-3.5 w-3.5" />
+                  {t('انتباه: التغيير كبير (>50%). تأكد قبل التطبيق.')}
+                </div>
+              )}
+
+              {/* الأزرار */}
+              <div className="flex justify-end gap-2 pt-2 border-t border-border/40">
+                <Button variant="outline" onClick={() => setSyncPreview(null)} data-testid="sync-preview-cancel">
+                  {t('إلغاء')}
+                </Button>
+                <Button
+                  onClick={applySyncPreview}
+                  className="bg-amber-500 hover:bg-amber-600 text-white"
+                  data-testid="sync-preview-apply"
+                >
+                  <Check className="h-4 w-4 ml-1" />
+                  {t('تطبيق المزامنة')}
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Dialog: تفاصيل حركة المخزن */}
       <Dialog open={!!selectedMovement} onOpenChange={() => setSelectedMovement(null)}>
