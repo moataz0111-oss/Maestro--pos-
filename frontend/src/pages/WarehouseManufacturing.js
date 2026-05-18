@@ -1001,14 +1001,29 @@ export default function WarehouseManufacturing() {
   // ⭐ مزامنة الوصفة لتطابق الكمية المُصنّعة فعلياً (ضبط نسبي للمكونات)
   const syncRecipeToProducedQty = async (product) => {
     try {
-      const _W = { 'غرام': 1, 'كغم': 1000, 'كيلو': 1000, 'كجم': 1000, 'gram': 1, 'kg': 1000 };
+      // ⭐ نفس منطق العائد المحسوب في شريط البطاقة (يدعم pack_info للعلب/الكراتين)
+      const _W = {
+        'غرام': 1, 'كغم': 1000, 'كيلو': 1000, 'كجم': 1000, 'gram': 1, 'kg': 1000,
+        'مل': 1, 'لتر': 1000, 'ml': 1, 'liter': 1000, 'l': 1000
+      };
+      const _COUNT = new Set(['قطعة', 'حبة', 'علبة', 'كرتون', 'صحن', 'piece']);
       const pw = Number(product.piece_weight || 0);
       const pwu = product.piece_weight_unit || 'غرام';
       const pieceGrams = pw * (_W[pwu] || 1);
       let totalGrams = 0;
       for (const ing of (product.recipe || [])) {
+        const q = Number(ing.quantity || 0);
         const f = _W[ing.unit];
-        if (f) totalGrams += Number(ing.quantity || 0) * f;
+        if (f) {
+          totalGrams += q * f;
+        } else if (_COUNT.has(ing.unit)) {
+          // ابحث عن pack_info من rawMaterials للوحدات القطعية
+          const mat = rawMaterials?.find?.(r => r.id === ing.raw_material_id);
+          if (mat && mat.pack_quantity && mat.pack_unit) {
+            const pf = _W[mat.pack_unit] || 0;
+            if (pf > 0) totalGrams += q * Number(mat.pack_quantity) * pf;
+          }
+        }
       }
       const calcYield = (pieceGrams > 0 && totalGrams > 0) ? totalGrams / pieceGrams : 0;
       const targetQty = Number(product.quantity || 0);
@@ -1017,6 +1032,10 @@ export default function WarehouseManufacturing() {
         return;
       }
       const scale = targetQty / calcYield;
+      if (Math.abs(scale - 1.0) < 0.0001) {
+        toast.info(t('الوصفة متطابقة مع الكمية المُصنّعة — لا حاجة للمزامنة'));
+        return;
+      }
       const newRecipe = (product.recipe || []).map(ing => ({
         raw_material_id: ing.raw_material_id,
         raw_material_name: ing.raw_material_name,
