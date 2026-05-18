@@ -53,6 +53,19 @@ async def _ingredient_weight_grams(db, ing: dict) -> float:
     factor = _UNIT_WEIGHT_MAP.get(unit)
     if factor is not None:
         return qty * factor
+    # ⭐ مكوّن من نوع منتج مُصنّع — احسب الوزن عبر piece_weight × qty
+    if ing.get("manufactured_product_id"):
+        mfg = await db.manufactured_products.find_one(
+            {"id": ing["manufactured_product_id"]},
+            {"_id": 0, "piece_weight": 1, "piece_weight_unit": 1}
+        )
+        if mfg and mfg.get("piece_weight"):
+            pw = float(mfg.get("piece_weight") or 0)
+            pwu = mfg.get("piece_weight_unit") or "غرام"
+            pf = _UNIT_WEIGHT_MAP.get(pwu, 0)
+            if pw > 0 and pf > 0:
+                return qty * pw * pf
+        return 0.0
     # وحدات قطعية: حاول استخدام pack_info من المادة الخام
     if unit in _COUNT_UNITS:
         material_id = ing.get("raw_material_id")
@@ -3460,7 +3473,20 @@ async def produce_product(
     insufficient = []
     for ingredient in product.get("recipe", []):
         needed = (ingredient.get("quantity", 0) or 0) * multiplier
-
+        # ⭐ مكوّن من نوع منتج مُصنّع
+        if ingredient.get("manufactured_product_id"):
+            mfg = await db.manufactured_products.find_one({"id": ingredient["manufactured_product_id"]})
+            available = mfg.get("quantity", 0) if mfg else 0
+            if available < needed:
+                insufficient.append({
+                    "name": ingredient.get("raw_material_name") or (mfg.get("name") if mfg else "منتج مُصنّع"),
+                    "needed": round(needed, 3),
+                    "available": round(available, 3),
+                    "unit": ingredient.get("unit"),
+                    "source": "manufactured",
+                })
+            continue
+        # مكوّن من نوع مادة خام (السلوك الأصلي)
         manufacturing_item = await db.manufacturing_inventory.find_one({
             "raw_material_id": ingredient.get("raw_material_id")
         })
@@ -3479,7 +3505,7 @@ async def produce_product(
         raise HTTPException(
             status_code=400,
             detail={
-                "message": "مواد خام غير كافية في قسم التصنيع",
+                "message": "مواد غير كافية لإنتاج هذا المنتج",
                 "insufficient_materials": insufficient
             }
         )
@@ -3489,7 +3515,7 @@ async def produce_product(
     batch_cost_after_waste = 0.0
     consumed_details = []
 
-    # خصم المواد الخام من مخزون التصنيع + تسجيل حركة استهلاك لكل مادة
+    # خصم المكونات (مواد خام أو منتجات مُصنّعة) + تسجيل حركة استهلاك
     for ingredient in product.get("recipe", []):
         needed = (ingredient.get("quantity", 0) or 0) * multiplier
         base_cost = ingredient.get("cost_per_unit", 0) or 0
@@ -3499,6 +3525,42 @@ async def produce_product(
         line_after = needed * effective_cost
         batch_cost_before_waste += line_before
         batch_cost_after_waste += line_after
+
+        # ⭐ خصم من المنتجات المُصنّعة
+        if ingredient.get("manufactured_product_id"):
+            await db.manufactured_products.update_one(
+                {"id": ingredient["manufactured_product_id"]},
+                {"$inc": {"quantity": -needed}, "$set": {"last_updated": now_iso}}
+            )
+            consumed_details.append({
+                "manufactured_product_id": ingredient["manufactured_product_id"],
+                "name": ingredient.get("raw_material_name"),
+                "quantity": round(needed, 6),
+                "unit": ingredient.get("unit"),
+                "cost_per_unit": base_cost,
+                "waste_percentage": waste_pct,
+                "cost_before_waste": round(line_before, 2),
+                "cost_after_waste": round(line_after, 2),
+                "source": "manufactured",
+            })
+            # سجل حركة استهلاك منتج مُصنّع
+            await db.inventory_movements.insert_one({
+                "id": str(uuid.uuid4()),
+                "tenant_id": tenant_id,
+                "type": "manufactured_consumption",
+                "category": "manufacturing",
+                "product_id": ingredient["manufactured_product_id"],
+                "product_name": ingredient.get("raw_material_name"),
+                "quantity": -needed,
+                "unit": ingredient.get("unit"),
+                "reason": f"إنتاج {product.get('name')} ({quantity} {product.get('unit', 'حبة')})",
+                "user_id": current_user.get("id"),
+                "user_email": current_user.get("email"),
+                "created_at": now_iso,
+            })
+            continue
+
+        # خصم من المواد الخام (السلوك الأصلي)
         consumed_details.append({
             "raw_material_id": ingredient.get("raw_material_id"),
             "raw_material_name": ingredient.get("raw_material_name"),

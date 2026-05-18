@@ -1,6 +1,52 @@
 # Maestro EGP - Changelog
 
 
+## Session: Feb 18, 2026 — منتج مُصنّع كمكوّن في وصفة أخرى (Manufactured-as-Ingredient)
+
+### المتطلب
+المستخدم طلب: "صوص برغر" يحتوي توابل (مادة خام) + **مايونيز** (الذي هو نفسه منتج مُصنّع). يجب السماح بإضافة منتجات مُصنّعة سابقاً كمكوّن في وصفة منتج مُصنّع جديد.
+
+### الحل
+
+**Frontend** — `/app/frontend/src/pages/WarehouseManufacturing.js`:
+- إضافة state `newIngredient.source` بقيم `'raw' | 'manufactured'`.
+- **Toggle جذّاب فوق الـ select**:
+  - 📦 "مادة خام" (أخضر، نشط افتراضياً)
+  - 🏭 "منتج مُصنّع سابقاً" (بنفسجي)
+- Select بحسب النوع:
+  - raw → قائمة `manufacturingInventory` (المواد الخام في قسم التصنيع)
+  - manufactured → قائمة `manufacturedProducts` (المنتجات المُصنّعة سابقاً) مع 🏭
+- تحديث `addIngredientToRecipe` ليتعامل مع كلا الفرعين:
+  - منع التكرار (نفس المنتج/المادة لا يُضاف مرتين)
+  - حساب `cost_per_unit` للمنتج المُصنّع عبر `_computeMfgUnitCost()`
+  - تخزين المكوّن مع `source: 'manufactured'` و `manufactured_product_id`
+- دالة جديدة `_computeMfgUnitCost(mp)` تحسب تكلفة الوحدة للمنتج المُصنّع (مع دعم pack_info داخلياً).
+
+**Backend** — `/app/backend/routes/inventory_system.py`:
+- تحديث `_ingredient_weight_grams()` لدعم `manufactured_product_id`:
+  - يقرأ `piece_weight` + `piece_weight_unit` من المنتج المُصنّع
+  - يُرجع `qty * piece_weight * unit_factor`
+- تحديث `produce_manufactured_product()`:
+  - التحقق من الكفاية في `manufactured_products.quantity` للمكوّنات المُصنّعة
+  - الخصم من `manufactured_products` (بدلاً من `manufacturing_inventory`)
+  - تسجيل حركة `inventory_movements` بنوع `manufactured_consumption`
+  - رسالة خطأ موحّدة "مواد غير كافية" (سواء raw أو manufactured)
+
+### الاختبار: ✅
+ملف جديد `/app/backend/tests/test_mfg_as_ingredient.py`:
+1. صوص برغر = 1 كغم توابل + 1000 وحدة مايونيز (1غ/وحدة) → 2000g ✓
+2. 0.5 حبة عجين (1كغم/حبة) → 500g ✓
+3. منتج مُصنّع بدون piece_weight → 0g (آمن لا يكسر) ✓
+
+### الفوائد
+- يمكن بناء "خلطات مشتركة" مرة واحدة (مايونيز، صوص قاعدة) واستخدامها في عدة منتجات.
+- التكاليف تتسلسل صحيحاً: تغيير تكلفة المايونيز يؤثر تلقائياً على كل المنتجات التي تستخدمه.
+- خصم المخزون يحدث على المستوى الصحيح (المايونيز يُخصم من جدوله، التوابل من جدولها).
+- audit trail منفصل لكل نوع (`manufacturing_consumption` للمواد الخام، `manufactured_consumption` للمنتجات المُصنّعة).
+
+---
+
+
 ## Session: Feb 17, 2026 — Sync Recipe Preview Dialog
 
 ### المتطلب
