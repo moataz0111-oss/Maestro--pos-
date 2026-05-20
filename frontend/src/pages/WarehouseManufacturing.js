@@ -3105,6 +3105,7 @@ export default function WarehouseManufacturing() {
                                         if (ing.unit === pwu) continue;
                                         const mat = rawMaterials?.find?.(r => r.id === ing.raw_material_id);
                                         if (mat && mat.pack_unit === pwu && Number(mat.pack_quantity) > 1) {
+                                          const suggested = Number(mat.pack_quantity);
                                           return (
                                             <div className="mb-2 p-2 rounded-md border bg-yellow-500/10 border-yellow-500/40 text-yellow-800 text-[11px] flex items-start gap-2" data-testid="piece-weight-mismatch-warning">
                                               <span>⚠️</span>
@@ -3112,9 +3113,40 @@ export default function WarehouseManufacturing() {
                                                 <strong>{t('تحذير: قد يكون وزن القطعة غير دقيق')}</strong>
                                                 <p className="mt-1 text-[10px]">
                                                   {t('وزن القطعة الحالي = 1')} {pwu} {t('بينما المكوّن الأم')} ({ing.unit}) {t('يحتوي')} {mat.pack_quantity} {mat.pack_unit}.
-                                                  {' '}{t('إذا كانت كل قطعة من المنتج النهائي تحتوي علبة كاملة، عدّل وزن القطعة إلى')} <strong>{mat.pack_quantity}</strong>.
+                                                  {' '}{t('إذا كانت كل قطعة من المنتج النهائي تحتوي علبة كاملة، عدّل وزن القطعة إلى')} <strong>{suggested}</strong>.
                                                 </p>
                                               </div>
+                                              <button
+                                                type="button"
+                                                onClick={async () => {
+                                                  if (!window.confirm(`${t('تأكيد تعديل وزن القطعة إلى')} ${suggested} ${pwu}؟`)) return;
+                                                  try {
+                                                    await axios.patch(`${API}/manufactured-products/${product.id}/recipe`, {
+                                                      recipe: (product.recipe || []).map(r => ({
+                                                        raw_material_id: r.raw_material_id || null,
+                                                        manufactured_product_id: r.manufactured_product_id || null,
+                                                        raw_material_name: r.raw_material_name,
+                                                        quantity: r.quantity,
+                                                        unit: r.unit,
+                                                        cost_per_unit: r.cost_per_unit || 0,
+                                                        waste_percentage: r.waste_percentage || 0,
+                                                        source: r.source || (r.manufactured_product_id ? 'manufactured' : 'raw'),
+                                                      })),
+                                                      piece_weight: suggested,
+                                                      piece_weight_unit: pwu,
+                                                      reason: 'auto-fix piece_weight from pack_info',
+                                                    }, { headers });
+                                                    toast.success(`${t('تم تعديل وزن القطعة إلى')} ${suggested} ${pwu}`);
+                                                    fetchData();
+                                                  } catch (err) {
+                                                    showApiError(err, t('فشل التصحيح'));
+                                                  }
+                                                }}
+                                                className="px-2 py-1 rounded bg-yellow-600 hover:bg-yellow-700 text-white text-[10px] font-bold whitespace-nowrap"
+                                                data-testid={`auto-fix-piece-weight-${product.id}`}
+                                              >
+                                                🔧 {t('تصحيح إلى')} {suggested}
+                                              </button>
                                             </div>
                                           );
                                         }
