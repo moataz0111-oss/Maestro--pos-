@@ -1,6 +1,29 @@
 # Maestro EGP - Changelog
 
 
+## Session: Feb 20, 2026 (3) — Toggle منتج مُصنّع في مودال تعديل الوصفة
+
+### الميزة
+الآن مودال **تعديل الوصفة** يطابق مودال الإنشاء بالكامل: يمكن إضافة منتج مُصنّع سابقاً كمكوّن في الوصفة (Nested Recipe) ليس فقط مادة خام.
+
+### Frontend (`/app/frontend/src/pages/WarehouseManufacturing.js`)
+- `editNewIngredient` state يحوي الآن `source` و `manufactured_product_id`.
+- `addIngredientToEditRecipe` يدعم كلا الفرعين (raw / manufactured) مع:
+  - منع التكرار + منع استخدام المنتج داخل وصفته نفسه.
+  - تحويل الكمية المُدخلة عبر `piece_weight` (مل/كغم → حبة) بشكل دقيق.
+  - حساب تكلفة الوحدة المُصنّعة عبر `_computeMfgUnitCost`.
+- UI الجديد في مودال التعديل:
+  - Toggle (📦 مادة خام / 🏭 منتج مُصنّع سابقاً).
+  - Select ديناميكي يتغيّر بحسب النوع.
+  - وحدة الإدخال (units selector) لكلا النوعين (kg/gram/مل/لتر/قطعة...).
+  - فلترة المنتج المُصنّع الحالي من القائمة لمنع الـ self-reference.
+
+### التحقق
+- Linting (ESLint) pass ✅.
+- Frontend Preview غير متاح وقت الاختبار (وضع الخمول) — التحقق البصري يتم لاحقاً عند تشغيل المستخدم.
+
+
+
 ## Session: Feb 20, 2026 (2) — إثراء GET /manufacturing-inventory لمنع "بدون اسم"
 
 ### المشكلة

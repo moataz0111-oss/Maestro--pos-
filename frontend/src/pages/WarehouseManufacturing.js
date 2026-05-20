@@ -394,7 +394,9 @@ export default function WarehouseManufacturing() {
     name_en: '',
   });
   const [editNewIngredient, setEditNewIngredient] = useState({
+    source: 'raw',  // 'raw' | 'manufactured'
     raw_material_id: '',
+    manufactured_product_id: '',
     quantity: 0,
     input_unit: '',
   });
@@ -1227,7 +1229,70 @@ export default function WarehouseManufacturing() {
   };
 
   const addIngredientToEditRecipe = () => {
-    if (!editNewIngredient.raw_material_id || editNewIngredient.quantity <= 0) {
+    if (editNewIngredient.quantity <= 0) {
+      toast.error(t('حدد الكمية'));
+      return;
+    }
+    // ─── منتج مُصنّع كمكوّن ───
+    if (editNewIngredient.source === 'manufactured') {
+      if (!editNewIngredient.manufactured_product_id) {
+        toast.error(t('اختر المنتج المُصنّع'));
+        return;
+      }
+      const mp = manufacturedProducts.find(m => m.id === editNewIngredient.manufactured_product_id);
+      if (!mp) {
+        toast.error(t('المنتج المُصنّع غير موجود'));
+        return;
+      }
+      // منع التكرار + منع استخدام المنتج نفسه داخل وصفته
+      if (showEditRecipeDialog?.id === mp.id) {
+        toast.error(t('لا يمكن استخدام المنتج داخل وصفة نفسه'));
+        return;
+      }
+      const exists = editRecipeForm.recipe.find(r => r.manufactured_product_id === mp.id);
+      if (exists) {
+        toast.error(t('هذا المنتج موجود بالفعل في الوصفة'));
+        return;
+      }
+      // تحويل الكمية بحسب piece_weight (نفس منطق addIngredientToRecipe)
+      const _W = { 'غرام': 1, 'كغم': 1000, 'كيلو': 1000, 'كجم': 1000, 'gram': 1, 'kg': 1000, 'مل': 1, 'لتر': 1000, 'ml': 1, 'liter': 1000, 'l': 1000 };
+      const mpUnit = mp.unit || 'حبة';
+      const inputUnit = editNewIngredient.input_unit || mpUnit;
+      let qty = Number(editNewIngredient.quantity);
+      if (inputUnit !== mpUnit) {
+        const fIn = _W[inputUnit];
+        const pw = Number(mp.piece_weight || 0);
+        const pwu = mp.piece_weight_unit || 'غرام';
+        const fPw = _W[pwu];
+        if (fIn && pw > 0 && fPw) {
+          const pieceGrams = pw * fPw;
+          const qtyInGrams = qty * fIn;
+          const piecesCount = qtyInGrams / pieceGrams;
+          toast.info(`${t('تم تحويل')} ${qty} ${inputUnit} → ${piecesCount.toFixed(3)} ${mpUnit} (1 ${mpUnit} = ${pw} ${pwu})`);
+          qty = Math.round(piecesCount * 1e6) / 1e6;
+        }
+      }
+      const unitCost = _computeMfgUnitCost ? _computeMfgUnitCost(mp) : 0;
+      setEditRecipeForm(prev => ({
+        ...prev,
+        recipe: [...prev.recipe, {
+          manufactured_product_id: mp.id,
+          raw_material_name: mp.name,
+          quantity: qty,
+          unit: mpUnit,
+          cost_per_unit: unitCost,
+          waste_percentage: 0,
+          source: 'manufactured',
+          input_unit: inputUnit,
+          input_quantity: Number(editNewIngredient.quantity) || 0,
+        }]
+      }));
+      setEditNewIngredient({ source: 'manufactured', raw_material_id: '', manufactured_product_id: '', quantity: 0, input_unit: '' });
+      toast.success(t('تمت إضافة المنتج المُصنّع للوصفة'));
+      return;
+    }
+    // ─── مادة خام (السلوك الأصلي) ───
+    if (!editNewIngredient.raw_material_id) {
       toast.error(t('اختر مادة خام وحدد الكمية'));
       return;
     }
@@ -1267,11 +1332,12 @@ export default function WarehouseManufacturing() {
         unit: material.unit,
         cost_per_unit: material.cost_per_unit || 0,
         waste_percentage: wastePct,
+        source: 'raw',
         input_unit: inputUnit,
         input_quantity: Number(editNewIngredient.quantity) || 0,
       }]
     }));
-    setEditNewIngredient({ raw_material_id: '', quantity: 0, input_unit: '' });
+    setEditNewIngredient({ source: 'raw', raw_material_id: '', manufactured_product_id: '', quantity: 0, input_unit: '' });
   };
 
   const removeIngredientFromEditRecipe = (index) => {
@@ -4688,30 +4754,75 @@ export default function WarehouseManufacturing() {
                   <Plus className="h-4 w-4 text-purple-600" />
                   {t('إضافة مكون جديد')}
                 </Label>
-                <div className="flex gap-2 flex-wrap">
-                  <Select
-                    value={editNewIngredient.raw_material_id}
-                    onValueChange={(v) => {
-                      const m = manufacturingInventory.find(x => (x.material_id || x.raw_material_id) === v);
-                      setEditNewIngredient(prev => ({ ...prev, raw_material_id: v, input_unit: m?.unit || '' }));
-                    }}
+
+                {/* ⭐ Toggle: مادة خام / منتج مُصنّع */}
+                <div className="flex gap-2 p-1 rounded-md bg-muted/40 border">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={editNewIngredient.source === 'raw' ? 'default' : 'ghost'}
+                    onClick={() => setEditNewIngredient(prev => ({ ...prev, source: 'raw', manufactured_product_id: '' }))}
+                    className={editNewIngredient.source === 'raw' ? 'flex-1 bg-green-500 hover:bg-green-600 text-white' : 'flex-1'}
+                    data-testid="edit-src-raw-btn"
                   >
-                    <SelectTrigger className="flex-1 min-w-[200px] bg-background" data-testid="edit-recipe-select-material">
-                      <SelectValue placeholder={t('اختر مادة خام...')} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {manufacturingInventory.map(material => {
-                        const mid = material.material_id || material.raw_material_id;
-                        const mname = material.material_name || material.raw_material_name || rawMaterials.find(r => r.id === mid)?.name || '—';
-                        const pi = _packInfoFor(mid);
-                        return (
-                          <SelectItem key={mid} value={mid}>
-                            {mname} ({material.quantity} {material.unit}){pi ? ` · ${t('كل')} ${material.unit} = ${pi.pack_quantity} ${pi.pack_unit}` : ''}
+                    📦 {t('مادة خام')}
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={editNewIngredient.source === 'manufactured' ? 'default' : 'ghost'}
+                    onClick={() => setEditNewIngredient(prev => ({ ...prev, source: 'manufactured', raw_material_id: '' }))}
+                    className={editNewIngredient.source === 'manufactured' ? 'flex-1 bg-purple-500 hover:bg-purple-600 text-white' : 'flex-1'}
+                    data-testid="edit-src-mfg-btn"
+                  >
+                    🏭 {t('منتج مُصنّع سابقاً')}
+                  </Button>
+                </div>
+
+                <div className="flex gap-2 flex-wrap">
+                  {editNewIngredient.source === 'manufactured' ? (
+                    <Select
+                      value={editNewIngredient.manufactured_product_id}
+                      onValueChange={(v) => setEditNewIngredient(prev => ({ ...prev, manufactured_product_id: v }))}
+                    >
+                      <SelectTrigger className="flex-1 min-w-[200px] bg-background" data-testid="edit-recipe-mfg-select">
+                        <SelectValue placeholder={t('اختر منتج مُصنّع...')} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {manufacturedProducts.filter(mp => mp.id !== showEditRecipeDialog?.id).length === 0 ? (
+                          <div className="px-3 py-2 text-xs text-muted-foreground">{t('لا توجد منتجات مُصنّعة أخرى')}</div>
+                        ) : manufacturedProducts.filter(mp => mp.id !== showEditRecipeDialog?.id).map(mp => (
+                          <SelectItem key={mp.id} value={mp.id}>
+                            🏭 {mp.name} ({mp.quantity || 0} {mp.unit || 'حبة'})
                           </SelectItem>
-                        );
-                      })}
-                    </SelectContent>
-                  </Select>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <Select
+                      value={editNewIngredient.raw_material_id}
+                      onValueChange={(v) => {
+                        const m = manufacturingInventory.find(x => (x.material_id || x.raw_material_id) === v);
+                        setEditNewIngredient(prev => ({ ...prev, raw_material_id: v, input_unit: m?.unit || '' }));
+                      }}
+                    >
+                      <SelectTrigger className="flex-1 min-w-[200px] bg-background" data-testid="edit-recipe-select-material">
+                        <SelectValue placeholder={t('اختر مادة خام...')} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {manufacturingInventory.map(material => {
+                          const mid = material.material_id || material.raw_material_id;
+                          const mname = material.material_name || material.raw_material_name || rawMaterials.find(r => r.id === mid)?.name || '—';
+                          const pi = _packInfoFor(mid);
+                          return (
+                            <SelectItem key={mid} value={mid}>
+                              {mname} ({material.quantity} {material.unit}){pi ? ` · ${t('كل')} ${material.unit} = ${pi.pack_quantity} ${pi.pack_unit}` : ''}
+                            </SelectItem>
+                          );
+                        })}
+                      </SelectContent>
+                    </Select>
+                  )}
                   <Input
                     type="number"
                     min="0.01"
@@ -4722,7 +4833,8 @@ export default function WarehouseManufacturing() {
                     className="w-24 bg-background"
                     data-testid="edit-recipe-new-qty"
                   />
-                  {editNewIngredient.raw_material_id && (() => {
+                  {/* وحدة الإدخال لمادة خام */}
+                  {editNewIngredient.source === 'raw' && editNewIngredient.raw_material_id && (() => {
                     const m = manufacturingInventory.find(x => (x.material_id || x.raw_material_id) === editNewIngredient.raw_material_id);
                     const packInfo = _packInfoFor(editNewIngredient.raw_material_id);
                     const units = availableInputUnitsFor(m?.unit, packInfo?.pack_unit);
@@ -4739,6 +4851,37 @@ export default function WarehouseManufacturing() {
                         </SelectTrigger>
                         <SelectContent>
                           {units.map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    );
+                  })()}
+                  {/* وحدة الإدخال لمنتج مُصنّع */}
+                  {editNewIngredient.source === 'manufactured' && editNewIngredient.manufactured_product_id && (() => {
+                    const mp = manufacturedProducts.find(m => m.id === editNewIngredient.manufactured_product_id);
+                    if (!mp) return null;
+                    const units = new Set([mp.unit || 'حبة']);
+                    const pwu = mp.piece_weight_unit;
+                    if (pwu) {
+                      if (['غرام', 'gram', 'كغم', 'kg', 'كيلو', 'كجم'].includes(pwu)) {
+                        units.add('غرام'); units.add('كغم');
+                      } else if (['مل', 'ml', 'لتر', 'liter', 'l'].includes(pwu)) {
+                        units.add('مل'); units.add('لتر');
+                      }
+                    }
+                    const list = Array.from(units);
+                    if (list.length <= 1) {
+                      return <div className="text-xs text-muted-foreground self-center px-2">{mp.unit || 'حبة'}</div>;
+                    }
+                    return (
+                      <Select
+                        value={editNewIngredient.input_unit || (mp.unit || 'حبة')}
+                        onValueChange={(v) => setEditNewIngredient(prev => ({ ...prev, input_unit: v }))}
+                      >
+                        <SelectTrigger className="w-24 bg-background" data-testid="edit-recipe-mfg-new-unit">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {list.map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}
                         </SelectContent>
                       </Select>
                     );
