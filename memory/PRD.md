@@ -26,6 +26,17 @@ Multi-tenant POS system with biometric integration (ZKTeco), thermal receipt pri
 - Reports filter by branch
 - Printers filter by branch in Settings
 
+
+## Bug Fix (Feb 20, 2026 — Session 20) — MfgLinksEditor Sub-Unit Pricing & Missing Products
+- **Issue**: Products linked to manufactured products (e.g., burger ↔ sliced cheese) showed the entire piece cost (e.g., 4600 IQD/block) instead of the per-slice cost (100 IQD/slice). Some manufactured products were missing from the dropdown due to over-aggressive dedup filter.
+- **Fix (frontend `Settings.js`)**:
+  - Added `_computeMfgSubUnitCost(mp)` and `_hasSubUnit(mp)` helpers.
+  - Enhanced `_computeMfgUnitCost` with fallback yield for count-based recipes (e.g., 138 slices ÷ 46 slices/piece = 3 pieces).
+  - `MfgLinksEditor` now supports per-link `consumption_unit` selector (main unit vs sub-unit), dual-cost display, and removed dedup filter so all manufactured products are always visible.
+- **Fix (backend `server.py`)**: Order cost calculation, inventory deduction, and order-edit cost recalc all convert `consumption_qty` from sub-unit to main unit (`qty / piece_weight`) before computing cost / deducting stock. Legacy links without `consumption_unit` continue to behave as before (default = main unit).
+- **Tests**: 6 new Jest tests + 5 new pytest tests, all passing. 27/27 manufactured-product tests still pass.
+
+
 ## Bug Fix (May 14, 2026 — iter181) — Legacy Manufactured Products Cost Backfill + Monthly Stocktake Window Enforcement
 - **GET `/api/manufactured-products`** & **`GET /api/manufactured-products/{id}`** now compute `cost_before_waste`, `raw_material_cost`, `raw_material_cost_after_waste`, `production_cost` on the fly from the recipe for documents created before the cost-before/after-waste feature shipped. Frontend product cards no longer show empty values for legacy items.
 - **POST `/api/department-stock-count/submit`** now enforces the "last 5 days of month" window server-side (returns `403` outside the window when `period == current_period`), matching the existing UI button-visibility logic.

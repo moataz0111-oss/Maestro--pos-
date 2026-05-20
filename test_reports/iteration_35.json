@@ -108,7 +108,7 @@
   },
   
   "test_credentials": {
-    "api_url": "https://mfg-waste-tracking.preview.emergentagent.com",
+    "api_url": "https://nested-recipe-lab.preview.emergentagent.com",
     "owner": {
       "email": "owner@maestroegp.com",
       "password": "owner123",

@@ -707,23 +707,51 @@ export default function Settings() {
     });
   }, []);
 
-  // ⭐ احتساب تكلفة الوحدة الواحدة من المنتج المصنّع (حبة واحدة)
+  // ⭐ احتساب تكلفة الوحدة الواحدة من المنتج المصنّع (حبة واحدة من mp.unit)
   // = تكلفة الدفعة ÷ العائد المحسوب من الوصفة (أو الكمية المخزّنة إن لم يتوفر piece_weight)
   const _computeMfgUnitCost = (mp) => {
     if (!mp) return 0;
     const batchCost = Number(mp.raw_material_cost_after_waste ?? mp.production_cost ?? mp.raw_material_cost ?? 0);
-    const _W = { 'غرام': 1, 'كغم': 1000, 'كيلو': 1000, 'كجم': 1000, 'gram': 1, 'kg': 1000 };
+    const _W = { 'غرام': 1, 'كغم': 1000, 'كيلو': 1000, 'كجم': 1000, 'gram': 1, 'kg': 1000, 'مل': 1, 'لتر': 1000 };
+    const _COUNT = new Set(['قطعة','حبة','علبة','كرتون','صحن','piece']);
     const pw = Number(mp.piece_weight || 0);
     const pwu = mp.piece_weight_unit || 'غرام';
     const pieceGrams = pw * (_W[pwu] || 1);
     let totalGrams = 0;
     for (const ing of (mp.recipe || [])) {
+      const q = Number(ing.quantity || 0);
       const f = _W[ing.unit];
-      if (f) totalGrams += Number(ing.quantity || 0) * f;
+      if (f) totalGrams += q * f;
     }
-    const calcYield = (pieceGrams > 0 && totalGrams > 0) ? totalGrams / pieceGrams : 0;
+    let calcYield = (pieceGrams > 0 && totalGrams > 0) ? totalGrams / pieceGrams : 0;
+    // ⭐ احتساب عائد بديل للوصفات القطعية (مثل شريحة جبن: 3 قطعة×46 شريحة = 138 شريحة ÷ 46 شريحة/حبة = 3 حبات)
+    if (calcYield === 0 && pw > 0) {
+      let sumInPwu = 0;
+      for (const ing of (mp.recipe || [])) {
+        const qty = Number(ing.quantity || 0);
+        if (ing.unit === pwu) { sumInPwu += qty; }
+      }
+      if (sumInPwu > 0) calcYield = sumInPwu / pw;
+    }
     const denom = calcYield || Number(mp.quantity || 0) || 1;
     return batchCost / denom;
+  };
+
+  // ⭐ احتساب تكلفة الوحدة الفرعية الأصغر (شريحة/غرام) من المنتج المصنّع
+  // = تكلفة كل حبة ÷ piece_weight (مثلاً: 1 حبة جبن = 46 شريحة → تكلفة الشريحة = تكلفة الحبة ÷ 46)
+  const _computeMfgSubUnitCost = (mp) => {
+    if (!mp) return 0;
+    const pw = Number(mp.piece_weight || 0);
+    if (pw <= 0) return 0;
+    return _computeMfgUnitCost(mp) / pw;
+  };
+
+  // ⭐ هل يوجد للمنتج المصنّع وحدة فرعية مختلفة عن الوحدة الرئيسية؟
+  const _hasSubUnit = (mp) => {
+    if (!mp) return false;
+    const pw = Number(mp.piece_weight || 0);
+    const pwu = mp.piece_weight_unit || '';
+    return pw > 0 && pwu && pwu !== (mp.unit || 'حبة');
   };
 
   // دالة حساب التكلفة مع تحويل الوحدات (غرام/كغم/قطعة/مل/لتر)
@@ -2057,15 +2085,21 @@ export default function Settings() {
   // مثال: برجر = لحم برغر (1 حبة) + خبز (1 حبة) + صوص (50غ)
   const MfgLinksEditor = ({ form, setForm, formKind = 'add' }) => {
     const links = form?.manufactured_links || [];
-    const usedIds = new Set(links.map(l => l.manufactured_product_id).filter(Boolean));
+
+    // ⭐ احتساب تكلفة سطر واحد مع مراعاة وحدة الاستهلاك (حبة/شريحة)
+    const _linkLineCost = (lk) => {
+      const mp = manufacturedProducts.find(m => m.id === lk.manufactured_product_id);
+      if (!mp) return 0;
+      const qty = Number(lk.consumption_qty || 0);
+      const consumptionUnit = lk.consumption_unit || mp.unit || 'حبة';
+      const isSubUnit = _hasSubUnit(mp) && consumptionUnit === mp.piece_weight_unit;
+      const perUnit = isSubUnit ? _computeMfgSubUnitCost(mp) : _computeMfgUnitCost(mp);
+      return perUnit * qty;
+    };
 
     // إعادة احتساب التكلفة الإجمالية كلما تغيّرت الروابط
     const recalcAndSet = (newLinks) => {
-      let total = 0;
-      for (const lk of newLinks) {
-        const mp = manufacturedProducts.find(m => m.id === lk.manufactured_product_id);
-        if (mp) total += _computeMfgUnitCost(mp) * Number(lk.consumption_qty || 1);
-      }
+      const total = newLinks.reduce((sum, lk) => sum + _linkLineCost(lk), 0);
       setForm({
         ...form,
         manufactured_links: newLinks,
@@ -2077,7 +2111,7 @@ export default function Settings() {
     };
 
     const addEmptyLink = () => {
-      recalcAndSet([...links, { manufactured_product_id: '', consumption_qty: 1 }]);
+      recalcAndSet([...links, { manufactured_product_id: '', consumption_qty: 1, consumption_unit: '' }]);
     };
     const updateLink = (idx, patch) => {
       const next = links.map((lk, i) => i === idx ? { ...lk, ...patch } : lk);
@@ -2087,10 +2121,7 @@ export default function Settings() {
       recalcAndSet(links.filter((_, i) => i !== idx));
     };
 
-    const totalCost = links.reduce((sum, lk) => {
-      const mp = manufacturedProducts.find(m => m.id === lk.manufactured_product_id);
-      return mp ? sum + _computeMfgUnitCost(mp) * Number(lk.consumption_qty || 1) : sum;
-    }, 0);
+    const totalCost = links.reduce((sum, lk) => sum + _linkLineCost(lk), 0);
 
     return (
       <div className="p-3 bg-purple-500/10 border border-purple-500/30 rounded-lg space-y-3" data-testid={`mfg-links-editor-${formKind}`}>
@@ -2113,7 +2144,14 @@ export default function Settings() {
             )}
             {links.map((lk, idx) => {
               const mp = manufacturedProducts.find(m => m.id === lk.manufactured_product_id);
-              const unitCost = mp ? _computeMfgUnitCost(mp) : 0;
+              const mainUnit = mp?.unit || 'حبة';
+              const hasSub = mp ? _hasSubUnit(mp) : false;
+              const subUnit = mp?.piece_weight_unit || '';
+              const consumptionUnit = lk.consumption_unit || mainUnit;
+              const isSubUnit = hasSub && consumptionUnit === subUnit;
+              const perPieceCost = mp ? _computeMfgUnitCost(mp) : 0;
+              const perSubUnitCost = mp ? _computeMfgSubUnitCost(mp) : 0;
+              const unitCost = isSubUnit ? perSubUnitCost : perPieceCost;
               const lineCost = unitCost * Number(lk.consumption_qty || 1);
               return (
                 <div key={idx} className="p-3 bg-background/50 rounded-lg border border-purple-500/30 space-y-2" data-testid={`mfg-link-row-${idx}`}>
@@ -2122,13 +2160,14 @@ export default function Settings() {
                       value={lk.manufactured_product_id || 'none'}
                       onValueChange={(v) => {
                         if (v === 'none') {
-                          updateLink(idx, { manufactured_product_id: '' });
+                          updateLink(idx, { manufactured_product_id: '', consumption_unit: '' });
                         } else {
                           const sel = manufacturedProducts.find(m => m.id === v);
                           updateLink(idx, {
                             manufactured_product_id: v,
                             piece_weight: sel?.piece_weight,
                             piece_weight_unit: sel?.piece_weight_unit || 'غرام',
+                            consumption_unit: sel?.unit || 'حبة',
                           });
                         }
                       }}
@@ -2138,13 +2177,15 @@ export default function Settings() {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="none">{t('بدون')}</SelectItem>
-                        {manufacturedProducts
-                          .filter(m => m.id === lk.manufactured_product_id || !usedIds.has(m.id))
-                          .map(m => (
+                        {/* ⭐ عرض جميع المنتجات المُصنّعة بدون تصفية لمنع اختفاء عناصر */}
+                        {manufacturedProducts.map(m => {
+                          const subInfo = _hasSubUnit(m) ? ` · 1 ${m.unit || 'حبة'} = ${m.piece_weight} ${m.piece_weight_unit}` : '';
+                          return (
                             <SelectItem key={m.id} value={m.id}>
-                              {m.name} ({m.quantity || 0} {m.unit || 'حبة'})
+                              {m.name} ({m.quantity || 0} {m.unit || 'حبة'}){subInfo}
                             </SelectItem>
-                          ))}
+                          );
+                        })}
                       </SelectContent>
                     </Select>
                     <Button
@@ -2161,27 +2202,51 @@ export default function Settings() {
 
                   {mp && (
                     <>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-sm font-medium flex-1">{t('الكمية المستهلكة لكل بيع')}</span>
                         <Input
                           type="number"
-                          min="0.01"
-                          step="0.01"
+                          min="0.001"
+                          step="0.001"
                           value={lk.consumption_qty ?? 1}
                           onChange={(e) => updateLink(idx, { consumption_qty: parseFloat(e.target.value) || 0 })}
                           className="w-24 h-9 text-center"
                           data-testid={`mfg-link-qty-${idx}`}
                         />
-                        <span className="text-sm text-muted-foreground w-12">{mp.unit || 'حبة'}</span>
+                        {/* ⭐ اختيار وحدة الاستهلاك (وحدة رئيسية أو فرعية) */}
+                        {hasSub ? (
+                          <Select
+                            value={consumptionUnit}
+                            onValueChange={(v) => updateLink(idx, { consumption_unit: v })}
+                          >
+                            <SelectTrigger className="w-28 h-9" data-testid={`mfg-link-unit-${idx}`}>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value={mainUnit}>{mainUnit}</SelectItem>
+                              <SelectItem value={subUnit}>{subUnit}</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        ) : (
+                          <span className="text-sm text-muted-foreground w-20 text-center" data-testid={`mfg-link-unit-static-${idx}`}>{mainUnit}</span>
+                        )}
                       </div>
+
+                      {/* ⭐ شريط معلومات الوحدة الفرعية (شريحة/غرام) */}
+                      {hasSub && (
+                        <div className="text-[11px] bg-amber-500/10 border border-amber-500/30 rounded px-2 py-1 text-amber-800 dark:text-amber-300" data-testid={`mfg-link-sub-info-${idx}`}>
+                          {`1 ${mainUnit} = ${mp.piece_weight} ${subUnit} · ${t('سعر')} ${subUnit} = ${formatPrice(perSubUnitCost)}`}
+                        </div>
+                      )}
+
                       <div className="grid grid-cols-2 gap-2 text-xs">
                         <div className="p-2 rounded bg-muted/40">
-                          <p className="text-muted-foreground">{t('تكلفة الوحدة')}</p>
-                          <p className="font-bold tabular-nums">{formatPrice(unitCost)}</p>
+                          <p className="text-muted-foreground">{t('تكلفة الوحدة')} ({consumptionUnit})</p>
+                          <p className="font-bold tabular-nums" data-testid={`mfg-link-unit-cost-${idx}`}>{formatPrice(unitCost)}</p>
                         </div>
                         <div className="p-2 rounded bg-emerald-500/10 border border-emerald-500/30">
                           <p className="text-muted-foreground">{t('تكلفة هذا المكون')}</p>
-                          <p className="font-bold text-emerald-600 tabular-nums">{formatPrice(lineCost)}</p>
+                          <p className="font-bold text-emerald-600 tabular-nums" data-testid={`mfg-link-line-cost-${idx}`}>{formatPrice(lineCost)}</p>
                         </div>
                       </div>
                     </>
@@ -2205,7 +2270,6 @@ export default function Settings() {
               <Button
                 type="button"
                 onClick={addEmptyLink}
-                disabled={links.length >= manufacturedProducts.length}
                 className="flex-1 h-9 bg-purple-500 hover:bg-purple-600 text-white"
                 data-testid={`mfg-links-add-btn-${formKind}`}
               >

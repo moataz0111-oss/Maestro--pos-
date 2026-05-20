@@ -6120,7 +6120,7 @@ async def create_order(order: OrderCreate, current_user: dict = Depends(get_curr
                         continue
                     mfg_product = await db.manufactured_products.find_one(
                         {"id": mp_id},
-                        {"_id": 0, "raw_material_cost": 1, "raw_material_cost_after_waste": 1, "production_cost": 1, "recipe": 1, "piece_weight": 1, "piece_weight_unit": 1, "quantity": 1}
+                        {"_id": 0, "raw_material_cost": 1, "raw_material_cost_after_waste": 1, "production_cost": 1, "recipe": 1, "piece_weight": 1, "piece_weight_unit": 1, "quantity": 1, "unit": 1}
                     )
                     if not mfg_product:
                         continue
@@ -6137,6 +6137,11 @@ async def create_order(order: OrderCreate, current_user: dict = Depends(get_curr
                     denom = calc_yield or float(mfg_product.get("quantity") or 0) or 1.0
                     unit_cost = batch_cost / denom
                     consumption_qty = float(link.get("consumption_qty") or 1)
+                    # ⭐ تحويل الوحدة الفرعية (شريحة/غرام) إلى الوحدة الرئيسية
+                    consumption_unit = link.get("consumption_unit") or mfg_product.get("unit") or "حبة"
+                    main_unit = mfg_product.get("unit") or "حبة"
+                    if consumption_unit == pwu and consumption_unit != main_unit and pw > 0:
+                        consumption_qty = consumption_qty / pw
                     links_unit_cost += unit_cost * consumption_qty
                 if links_unit_cost > 0:
                     base_cost = links_unit_cost + _sn(product.get("operating_cost"))
@@ -6350,6 +6355,19 @@ async def create_order(order: OrderCreate, current_user: dict = Depends(get_curr
                     if not mp_id:
                         continue
                     consumption_qty = float(link.get("consumption_qty") or 1)
+                    # ⭐ تحويل الوحدة الفرعية إلى الوحدة الرئيسية للخصم الصحيح من المخزون
+                    consumption_unit = link.get("consumption_unit")
+                    if consumption_unit:
+                        mp_doc = await db.manufactured_products.find_one(
+                            {"id": mp_id},
+                            {"_id": 0, "unit": 1, "piece_weight": 1, "piece_weight_unit": 1}
+                        )
+                        if mp_doc:
+                            main_unit = mp_doc.get("unit") or "حبة"
+                            pwu = mp_doc.get("piece_weight_unit") or ""
+                            pw = float(mp_doc.get("piece_weight") or 0)
+                            if consumption_unit == pwu and consumption_unit != main_unit and pw > 0:
+                                consumption_qty = consumption_qty / pw
                     deduct_amount = consumption_qty * item.quantity
                     # خصم من مخزون الفرع (branch_inventory)
                     branch_item = await db.branch_inventory.find_one({
@@ -6587,9 +6605,17 @@ async def update_order_items(order_id: str, request: UpdateOrderItemsRequest, cu
                     mp_id = link.get("manufactured_product_id")
                     if not mp_id:
                         continue
-                    mfg_product = await db.manufactured_products.find_one({"id": mp_id}, {"_id": 0, "raw_material_cost": 1})
+                    mfg_product = await db.manufactured_products.find_one({"id": mp_id}, {"_id": 0, "raw_material_cost": 1, "unit": 1, "piece_weight": 1, "piece_weight_unit": 1})
                     if mfg_product:
-                        links_unit_cost += _sn(mfg_product.get("raw_material_cost")) * float(link.get("consumption_qty") or 1)
+                        consumption_qty = float(link.get("consumption_qty") or 1)
+                        # ⭐ تحويل الوحدة الفرعية إلى الوحدة الرئيسية
+                        consumption_unit = link.get("consumption_unit") or mfg_product.get("unit") or "حبة"
+                        main_unit = mfg_product.get("unit") or "حبة"
+                        pwu = mfg_product.get("piece_weight_unit") or ""
+                        pw = float(mfg_product.get("piece_weight") or 0)
+                        if consumption_unit == pwu and consumption_unit != main_unit and pw > 0:
+                            consumption_qty = consumption_qty / pw
+                        links_unit_cost += _sn(mfg_product.get("raw_material_cost")) * consumption_qty
                 if links_unit_cost > 0:
                     base_cost = links_unit_cost + _sn(product.get("operating_cost"))
             item_cost = base_cost * item.quantity
@@ -20527,7 +20553,7 @@ async def get_menu_link(request: Request, current_user: dict = Depends(get_curre
         base_url = f"{parsed.scheme}://{parsed.netloc}"
     else:
         # fallback للـ environment variable
-        base_url = os.environ.get('REACT_APP_BACKEND_URL', 'https://mfg-waste-tracking.preview.emergentagent.com')
+        base_url = os.environ.get('REACT_APP_BACKEND_URL', 'https://nested-recipe-lab.preview.emergentagent.com')
     
     menu_url = f"{base_url}/menu/{tenant.get('menu_slug', tenant_id)}"
     
