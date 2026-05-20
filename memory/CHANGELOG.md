@@ -1,6 +1,30 @@
 # Maestro EGP - Changelog
 
 
+## Session: Feb 20, 2026 (15) — تصحيح "سعر القطعة الواحدة" للوصفات القطعية
+
+### المشكلة
+"بان 5انش" — الوصفة: 24 قطعة بان × 400 IQD = 9,697 IQD بعد الهدر. piece_weight = 1 قطعة. لكن "سعر القطعة الواحدة" يعرض 9,697 IQD (الإجمالي) بدلاً من 404 IQD (للوحدة).
+
+### السبب
+دالة `calcYield` كانت تعتمد فقط على حساب الوزن بالغرام. الوصفات القطعية (بدون pack_info) → calcYield=0 → denominator يصير 1 → unitAfter = الإجمالي.
+
+### الحل
+**Frontend** (`/app/frontend/src/pages/WarehouseManufacturing.js`):
+- إضافة `countYield` كمسار بديل: إذا `calcYield=0` و `piece_weight>0` و `piece_weight_unit ∈ count_units`، نُحسب مجموع كميات المكونات بنفس الوحدة ÷ piece_weight.
+- `finalYield = calcYield || countYield` → يُستخدم في حساب unitBefore/unitAfter.
+- شريط "العائد المحسوب" يعرض `finalYield` مع تلميح ذكي (قطعية vs بالغرام).
+
+### الأثر
+- بان 5انش (24 قطعة، piece_weight=1) → عائد = 24 → سعر القطعة = 9697/24 = **404 IQD** ✅
+- يعمل لكل الوصفات القطعية البحتة (بان كانتاكي 4,545، خبز تورتيلا 6,263، الخ).
+
+### التحقق
+- Jest: 3/3 ✅ (`unit_cost_count_recipe.test.js`)
+- ESLint: pass ✅
+
+
+
 ## Session: Feb 20, 2026 (14) — توسيع dropdown وحدة الوزن لكل الوحدات
 
 ### المشكلة

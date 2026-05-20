@@ -3030,9 +3030,20 @@ export default function WarehouseManufacturing() {
                                   }
                                 }
                                 const calcYield = (pieceGrams > 0 && totalGrams > 0) ? totalGrams / pieceGrams : 0;
+                                // ⭐ احتساب عائد بديل للوصفات القطعية: مجموع كميات مكونات بنفس وحدة piece_weight_unit
+                                // مفيد لما تكون الوصفة "24 قطعة" والمنتج "1 قطعة لكل بورشن" → العائد = 24
+                                let countYield = 0;
+                                if (calcYield === 0 && pw > 0 && _COUNT.has(pwu)) {
+                                  let sumSameUnit = 0;
+                                  for (const ing of (product.recipe || [])) {
+                                    if (ing.unit === pwu) sumSameUnit += Number(ing.quantity || 0);
+                                  }
+                                  if (sumSameUnit > 0) countYield = sumSameUnit / pw;
+                                }
+                                const finalYield = calcYield || countYield;
                                 const storedQty = Number(product.quantity || 0);
-                                const denom = calcYield || storedQty || 1;
-                                const hasPerPiece = (calcYield > 0) || (storedQty > 1);
+                                const denom = finalYield || storedQty || 1;
+                                const hasPerPiece = (finalYield > 0) || (storedQty > 1);
                                 const batchBefore = Number(product.raw_material_cost ?? product.cost_before_waste ?? 0);
                                 const batchAfter = Number(product.raw_material_cost_after_waste ?? product.production_cost ?? product.raw_material_cost ?? 0);
                                 const unitBefore = batchBefore / denom;
@@ -3041,13 +3052,16 @@ export default function WarehouseManufacturing() {
                                 return (
                                   <>
                                     {/* شريط العائد المحسوب */}
-                                    {calcYield > 0 && (() => {
-                                      const diff = Math.abs(calcYield - storedQty);
+                                    {finalYield > 0 && (() => {
+                                      const diff = Math.abs(finalYield - storedQty);
                                       const isOutOfSync = storedQty > 0 && diff >= 0.5;
+                                      const yieldHint = calcYield > 0
+                                        ? `${t('وزن القطعة')} ${pw} ${pwu} · ${t('إجمالي الوصفة')} ${totalGrams.toFixed(0)} ${t('غرام')}`
+                                        : `${t('وزن القطعة')} ${pw} ${pwu} · ${t('قطعية')}`;
                                       return (
                                         <div className={`mb-2 p-2 rounded-md border text-xs flex items-center justify-between gap-2 flex-wrap ${isOutOfSync ? 'bg-orange-500/10 border-orange-500/40 text-orange-800' : 'bg-amber-500/10 border-amber-500/30 text-amber-800'}`} data-testid="yield-banner">
-                                          <span>📐 {t('العائد المحسوب من الوصفة')}: <strong className="tabular-nums">{calcYield.toFixed(3)} {unitLabel}</strong></span>
-                                          <span className="text-[10px] text-muted-foreground">{t('وزن القطعة')} {pw} {pwu} · {t('إجمالي الوصفة')} {totalGrams.toFixed(0)} {t('غرام')}</span>
+                                          <span>📐 {t('العائد المحسوب من الوصفة')}: <strong className="tabular-nums">{finalYield.toFixed(3)} {unitLabel}</strong></span>
+                                          <span className="text-[10px] text-muted-foreground">{yieldHint}</span>
                                           {isOutOfSync && (
                                             <button
                                               onClick={() => syncRecipeToProducedQty(product)}
