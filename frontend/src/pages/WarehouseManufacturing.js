@@ -480,8 +480,9 @@ export default function WarehouseManufacturing() {
     setSubmitting(true);
     try {
       const payload = { ...rawMaterialForm };
-      // تنظيف pack_* — إن لم تكن الوحدة قطعة/علبة/كرتون، نُلغيها كي لا تُحفظ بالخطأ
-      if (!['قطعة', 'علبة', 'كرتون'].includes(payload.unit)) {
+      // ⭐ تنظيف pack_* — مسموح لكل الوحدات القطعية (قطعة/حبة/علبة/كرتون/صحن)
+      const _COUNT_UNITS_FOR_PACK = ['قطعة', 'حبة', 'علبة', 'كرتون', 'صحن'];
+      if (!_COUNT_UNITS_FOR_PACK.includes(payload.unit)) {
         payload.pack_quantity = null;
         payload.pack_unit = null;
       } else {
@@ -1618,10 +1619,10 @@ export default function WarehouseManufacturing() {
         min_quantity: parseFloat(editRawMaterial.min_quantity) || 0,
         category: editRawMaterial.category || null,
         waste_percentage: parseFloat(editRawMaterial.waste_percentage) || 0,
-        pack_quantity: ['قطعة', 'علبة', 'كرتون'].includes(editRawMaterial.unit)
+        pack_quantity: ['قطعة', 'حبة', 'علبة', 'كرتون', 'صحن'].includes(editRawMaterial.unit)
           ? (parseFloat(editRawMaterial.pack_quantity) || null)
           : null,
-        pack_unit: ['قطعة', 'علبة', 'كرتون'].includes(editRawMaterial.unit) && parseFloat(editRawMaterial.pack_quantity) > 0
+        pack_unit: ['قطعة', 'حبة', 'علبة', 'كرتون', 'صحن'].includes(editRawMaterial.unit) && parseFloat(editRawMaterial.pack_quantity) > 0
           ? (editRawMaterial.pack_unit || 'غرام')
           : null,
       };
@@ -3992,8 +3993,8 @@ export default function WarehouseManufacturing() {
               </div>
             </div>
 
-            {/* تعريف الوحدة (اختياري) — يظهر فقط عند اختيار قطعة/علبة/كرتون */}
-            {['قطعة', 'علبة', 'كرتون'].includes(rawMaterialForm.unit) && (
+            {/* تعريف الوحدة (اختياري) — يظهر لكل الوحدات القطعية */}
+            {['قطعة', 'حبة', 'علبة', 'كرتون', 'صحن'].includes(rawMaterialForm.unit) && (
               <div className="rounded-lg border border-amber-300/60 bg-amber-50/40 dark:bg-amber-900/10 p-3 space-y-2">
                 <div className="flex items-center gap-2 text-sm font-semibold text-amber-700 dark:text-amber-300">
                   <Package className="h-4 w-4" />
@@ -4456,10 +4457,11 @@ export default function WarehouseManufacturing() {
                     </Button>
                   </div>
 
-                  {/* ⭐ inline panel لتعريف محتوى العلبة/الكرتون عند الحاجة */}
+                  {/* ⭐ inline panel لتعريف محتوى الوحدة القطعية (قطعة/علبة/كرتون...) عند الحاجة */}
                   {newIngredient.raw_material_id && (() => {
                     const m = manufacturingInventory.find(x => (x.material_id || x.raw_material_id) === newIngredient.raw_material_id);
-                    const isPackUnit = ['علبة', 'كرتون'].includes(m?.unit);
+                    // ⭐ يدعم كل الوحدات القطعية ليُمكّن المستخدم من تعريف وزن "1 قطعة = X غرام" مثلاً
+                    const isPackUnit = ['قطعة', 'حبة', 'علبة', 'كرتون', 'صحن'].includes(m?.unit);
                     if (!isPackUnit) return null;
                     const packInfo = _packInfoFor(newIngredient.raw_material_id);
                     if (packInfo) {
@@ -4467,7 +4469,7 @@ export default function WarehouseManufacturing() {
                       return (
                         <div className="flex items-center gap-2 p-2 bg-emerald-500/10 border border-emerald-500/30 rounded-lg text-xs">
                           <span className="font-bold text-emerald-700 dark:text-emerald-400">
-                            ✓ {t('محتوى العلبة الواحدة')}:
+                            ✓ {t('محتوى الوحدة')}:
                           </span>
                           <span className="font-mono">
                             1 {m?.unit} = {packInfo.pack_quantity} {packInfo.pack_unit}
@@ -4495,7 +4497,7 @@ export default function WarehouseManufacturing() {
                       <div className="p-3 bg-amber-500/10 border border-amber-500/40 rounded-lg space-y-2" data-testid="pack-info-setup-panel">
                         <p className="text-xs font-bold text-amber-700 dark:text-amber-400 flex items-center gap-1">
                           <AlertCircle className="h-3.5 w-3.5" />
-                          {t('عرّف محتوى العلبة/الكرتون الواحد لتتمكن من الإدخال بالغرام/الكيلو')}
+                          {t('عرّف وزن/حجم الوحدة الواحدة لتتمكن من الإدخال بالغرام/الكيلو/المل')}
                         </p>
                         <div className="flex items-center gap-2">
                           <span className="text-sm font-mono whitespace-nowrap">1 {m?.unit} =</span>
@@ -4897,17 +4899,17 @@ export default function WarehouseManufacturing() {
                   </Button>
                 </div>
 
-                {/* ⭐ inline panel لتعريف محتوى العلبة/الكرتون أثناء تعديل الوصفة */}
+                {/* ⭐ inline panel لتعريف محتوى الوحدة القطعية أثناء تعديل الوصفة */}
                 {editNewIngredient.raw_material_id && (() => {
                   const m = manufacturingInventory.find(x => (x.material_id || x.raw_material_id) === editNewIngredient.raw_material_id);
-                  const isPackUnit = ['علبة', 'كرتون'].includes(m?.unit);
+                  const isPackUnit = ['قطعة', 'حبة', 'علبة', 'كرتون', 'صحن'].includes(m?.unit);
                   if (!isPackUnit) return null;
                   const packInfo = _packInfoFor(editNewIngredient.raw_material_id);
                   if (packInfo) {
                     return (
                       <div className="flex items-center gap-2 p-2 bg-emerald-500/10 border border-emerald-500/30 rounded-lg text-xs">
                         <span className="font-bold text-emerald-700 dark:text-emerald-400">
-                          ✓ {t('محتوى العلبة الواحدة')}:
+                          ✓ {t('محتوى الوحدة')}:
                         </span>
                         <span className="font-mono">1 {m?.unit} = {packInfo.pack_quantity} {packInfo.pack_unit}</span>
                         <Button
@@ -4928,7 +4930,7 @@ export default function WarehouseManufacturing() {
                     <div className="p-3 bg-amber-500/10 border border-amber-500/40 rounded-lg space-y-2">
                       <p className="text-xs font-bold text-amber-700 dark:text-amber-400 flex items-center gap-1">
                         <AlertCircle className="h-3.5 w-3.5" />
-                        {t('عرّف محتوى العلبة/الكرتون لتتمكن من الإدخال بالغرام/الكيلو')}
+                        {t('عرّف وزن/حجم الوحدة الواحدة لتتمكن من الإدخال بالغرام/الكيلو/المل')}
                       </p>
                       <div className="flex items-center gap-2">
                         <span className="text-sm font-mono whitespace-nowrap">1 {m?.unit} =</span>
@@ -6266,8 +6268,8 @@ export default function WarehouseManufacturing() {
                 </div>
               </div>
 
-              {/* تعريف الوحدة (اختياري) — يظهر فقط عند اختيار قطعة/علبة/كرتون */}
-              {['قطعة', 'علبة', 'كرتون'].includes(editRawMaterial.unit) && (
+              {/* تعريف الوحدة (اختياري) — يظهر لكل الوحدات القطعية */}
+              {['قطعة', 'حبة', 'علبة', 'كرتون', 'صحن'].includes(editRawMaterial.unit) && (
                 <div className="rounded-lg border border-amber-300/60 bg-amber-50/40 dark:bg-amber-900/10 p-3 space-y-2">
                   <div className="flex items-center gap-2 text-sm font-semibold text-amber-700 dark:text-amber-300">
                     <Package className="h-4 w-4" />
