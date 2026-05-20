@@ -854,19 +854,23 @@ export default function WarehouseManufacturing() {
 
   // قائمة وحدات الإدخال المتاحة لمادة معيّنة (نفس عائلتها)
   // إن كانت المادة بوحدة قطعية لكن لها وزن داخلي (pack_quantity + pack_unit) — نُضيف وحدات الإدخال من عائلة الوزن/الحجم.
+  // ⭐ كذلك نُضيف pack_unit نفسه دائماً (حتى لو كان وحدة مخصّصة مثل "شريحة") لأنه قابل للتحويل عبر pack_quantity.
   const availableInputUnitsFor = (materialUnit, packUnit) => {
     const g = _findUnitGroup(materialUnit);
     if (!g) return [materialUnit].filter(Boolean);
     const own = Object.keys(_UNIT_GROUPS[g]).filter(u => !['gram','kg','ml','liter','l','piece'].includes(u));
-    // إن كانت المادة "قطعية" (count) ولها pack_unit ضمن عائلة أخرى — أضف وحدات تلك العائلة
+    let extras = [];
     if (g === 'count' && packUnit) {
       const pg = _findUnitGroup(packUnit);
       if (pg && pg !== 'count') {
-        const extra = Object.keys(_UNIT_GROUPS[pg]).filter(u => !['gram','kg','ml','liter','l','piece'].includes(u));
-        return [...own, ...extra];
+        extras = Object.keys(_UNIT_GROUPS[pg]).filter(u => !['gram','kg','ml','liter','l','piece'].includes(u));
+      }
+      // ⭐ pack_unit الحرّ (وحدة مخصّصة كـ "شريحة"/"كأس"/"حصة") — أضفه كخيار مستقل
+      if (!extras.includes(packUnit) && !own.includes(packUnit)) {
+        extras.push(packUnit);
       }
     }
-    return own;
+    return [...own, ...extras];
   };
 
   // البحث عن معلومات التعبئة (pack_quantity + pack_unit) لمادة من قائمة المواد الخام الرئيسية
@@ -916,10 +920,17 @@ export default function WarehouseManufacturing() {
     return { value: rounded, unit: displayUnit, text: `${str} ${displayUnit}`.trim() };
   };
 
-  // ⭐ تحويل بين عائلات مختلفة (وزن/حجم → قطعة) باستخدام pack info
+  // ⭐ تحويل بين عائلات مختلفة (وزن/حجم/وحدة مخصّصة → قطعة) باستخدام pack info
   // مثال: 9 كغم → قطعة (إذا كانت القطعة = 4.5 كغم) ⇒ 2 قطعة
+  // مثال: 92 شريحة → قطعة (إذا كانت القطعة = 46 شريحة) ⇒ 2 قطعة
   const convertWithPackInfo = (qty, inputUnit, materialUnit, packInfo) => {
     if (!packInfo) return null;
+    // ⭐ حالة خاصة: pack_unit هو وحدة مخصّصة (مثل "شريحة") والـ input matches it مباشرة
+    if (inputUnit === packInfo.pack_unit && packInfo.pack_quantity > 0) {
+      const pieces = (Number(qty) || 0) / packInfo.pack_quantity;
+      const piecesRounded = Math.round(pieces * 1e6) / 1e6;
+      return { qty: piecesRounded, converted: true, fromUnit: inputUnit, toUnit: materialUnit, via: `${packInfo.pack_quantity} ${packInfo.pack_unit}/${materialUnit}` };
+    }
     const gIn = _findUnitGroup(inputUnit);
     const gPack = _findUnitGroup(packInfo.pack_unit);
     if (!gIn || !gPack || gIn !== gPack) return null;
@@ -4532,6 +4543,10 @@ export default function WarehouseManufacturing() {
                               <SelectItem value="مل">{t('مل')}</SelectItem>
                               <SelectItem value="لتر">{t('لتر')}</SelectItem>
                               <SelectItem value="قطعة">{t('قطعة')}</SelectItem>
+                              <SelectItem value="حبة">{t('حبة')}</SelectItem>
+                              <SelectItem value="شريحة">{t('شريحة')}</SelectItem>
+                              <SelectItem value="حصة">{t('حصة')}</SelectItem>
+                              <SelectItem value="كأس">{t('كأس')}</SelectItem>
                             </SelectContent>
                           </Select>
                           <Button
@@ -4959,6 +4974,10 @@ export default function WarehouseManufacturing() {
                             <SelectItem value="مل">{t('مل')}</SelectItem>
                             <SelectItem value="لتر">{t('لتر')}</SelectItem>
                             <SelectItem value="قطعة">{t('قطعة')}</SelectItem>
+                            <SelectItem value="حبة">{t('حبة')}</SelectItem>
+                            <SelectItem value="شريحة">{t('شريحة')}</SelectItem>
+                            <SelectItem value="حصة">{t('حصة')}</SelectItem>
+                            <SelectItem value="كأس">{t('كأس')}</SelectItem>
                           </SelectContent>
                         </Select>
                         <Button
