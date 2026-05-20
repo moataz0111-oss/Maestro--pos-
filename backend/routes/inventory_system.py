@@ -2187,11 +2187,27 @@ async def transfer_to_manufacturing(transfer: WarehouseToManufacturingCreate):
     for item in items_with_details:
         existing = await db.manufacturing_inventory.find_one({"raw_material_id": item["raw_material_id"]})
         if existing:
+            # ⭐ مزامنة تكلفة الوحدة بطريقة المتوسط المُرجّح (Weighted Average)
+            # إن كانت الكمية الحالية = 0 (نفذ المخزن) → استخدم سعر التحويل الجديد مباشرة.
+            old_qty = float(existing.get("quantity") or 0)
+            old_cpu = float(existing.get("cost_per_unit") or 0)
+            new_qty = float(item["quantity"])
+            new_cpu = float(item["cost_per_unit"])
+            total_qty = old_qty + new_qty
+            if old_qty <= 0:
+                weighted_cpu = new_cpu  # المخزن السابق نفذ → السعر الجديد
+            elif total_qty > 0:
+                weighted_cpu = (old_qty * old_cpu + new_qty * new_cpu) / total_qty
+            else:
+                weighted_cpu = old_cpu
             await db.manufacturing_inventory.update_one(
                 {"raw_material_id": item["raw_material_id"]},
                 {
                     "$inc": {"quantity": item["quantity"]},
-                    "$set": {"last_updated": datetime.now(timezone.utc).isoformat()}
+                    "$set": {
+                        "cost_per_unit": round(weighted_cpu, 6),
+                        "last_updated": datetime.now(timezone.utc).isoformat(),
+                    }
                 }
             )
         else:
@@ -3234,15 +3250,15 @@ async def get_manufacturing_inventory():
     for it in inventory:
         linked = it.get("material_id") or it.get("raw_material_id")
         master = masters_map.get(linked) if linked else None
-        # توحيد الحقول: اضمن كلا الاسمَين والمعرّفَين والاسم من المرجع
         master_name = (master or {}).get("name")
         master_unit = (master or {}).get("unit")
-        # الاسم: ما هو موجود فعلاً، وإلا من المادة الخام
-        name = it.get("material_name") or it.get("raw_material_name") or master_name
+        # ⭐ الأولوية للاسم الموجود في raw_materials (المرجع المُحدّث)،
+        # نتراجع إلى الاسم المخزّن محلياً فقط إن لم يكن هناك مرجع.
+        name = master_name or it.get("material_name") or it.get("raw_material_name")
         if name:
             it["material_name"] = name
             it["raw_material_name"] = name
-        # الوحدة: أولوية لما في sjelسجل المادة الخام (لتعكس آخر تصحيح إداري)
+        # الوحدة: أولوية لما في سجل المادة الخام (لتعكس آخر تصحيح إداري)
         if master_unit:
             it["unit"] = master_unit
         # المعرّفات (توحيد)
