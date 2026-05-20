@@ -3609,27 +3609,44 @@ async def update_manufactured_product_recipe(
         update_fields["piece_weight"] = payload.piece_weight
     if payload.piece_weight_unit is not None:
         update_fields["piece_weight_unit"] = payload.piece_weight_unit
-        # ⭐ مزامنة جميع الإعدادات: عند تغيير وحدة الوزن من مل↔لتر أو غرام↔كغم،
-        # نُحدّث product.unit أيضاً ونحوّل القيم العددية (الكمية/الإنتاج/المحول) تلقائياً
-        # لضمان تطابق العرض في كل البطاقات/التقارير.
+        # ⭐ مزامنة جميع الإعدادات: عند تغيير وحدة الوزن، نُحدّث product.unit أيضاً
+        # ونحوّل القيم العددية (الكمية/الإنتاج/المحول) لضمان تطابق العرض في كل البطاقات.
         old_unit = (product.get("unit") or "").strip()
         new_pwu = payload.piece_weight_unit.strip()
         _FAMILY = {
             "weight": {"غرام": 1, "كغم": 1000, "كيلو": 1000, "كجم": 1000, "gram": 1, "kg": 1000},
             "volume": {"مل": 1, "لتر": 1000, "ml": 1, "liter": 1000, "l": 1000},
         }
+        _COUNT_UNITS = {"قطعة", "حبة", "علبة", "كرتون", "صحن", "piece"}
+
         def _fam(u: str):
             for k, vals in _FAMILY.items():
                 if u in vals:
                     return k, vals[u]
+            if u in _COUNT_UNITS:
+                return "count", 1.0
             return None, None
+
         old_fam, old_factor = _fam(old_unit)
         new_fam, new_factor = _fam(new_pwu)
-        if old_fam and old_fam == new_fam and old_unit != new_pwu:
+        ratio = None
+        if old_fam and new_fam and old_unit != new_pwu:
+            if old_fam == new_fam and old_fam in ("weight", "volume"):
+                # نفس العائلة (مل↔لتر، غرام↔كغم): تحويل خطي بالنسبة بين الوحدتين
+                ratio = old_factor / new_factor
+            elif old_fam == "count" and new_fam in ("weight", "volume"):
+                # 🔧 قطعة → لتر/كغم: استخدم piece_weight (وزن القطعة الواحدة) كمعامل التحويل
+                # نُفضّل piece_weight الجديد (المُرسَل)، وإلا القديم المخزّن
+                pw_new = payload.piece_weight if payload.piece_weight is not None else product.get("piece_weight")
+                if isinstance(pw_new, (int, float)) and pw_new > 0:
+                    ratio = float(pw_new)  # 1 قطعة = pw_new وحدة جديدة
+            elif old_fam in ("weight", "volume") and new_fam == "count":
+                # حالة عكسية نادرة (لتر → قطعة)
+                pw_new = payload.piece_weight if payload.piece_weight is not None else product.get("piece_weight")
+                if isinstance(pw_new, (int, float)) and pw_new > 0:
+                    ratio = 1.0 / float(pw_new)
+        if ratio is not None:
             update_fields["unit"] = new_pwu
-            # نسبة التحويل: عدد new_unit في وحدة قديمة واحدة
-            ratio = old_factor / new_factor
-            # حوّل القيم العددية المخزّنة
             for fld in ("quantity", "total_produced", "transferred_quantity", "remaining_quantity"):
                 val = product.get(fld)
                 if isinstance(val, (int, float)) and val:
