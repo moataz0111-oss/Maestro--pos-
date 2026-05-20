@@ -3098,6 +3098,29 @@ export default function WarehouseManufacturing() {
                                 const unitLabel = product.unit || 'حبة';
                                 return (
                                   <>
+                                    {/* ⚠️ تحذير ذكي: اكتشاف تضارب piece_weight=1 مع وجود pack_info أكبر */}
+                                    {(() => {
+                                      if (Number(pw) !== 1 || !pwu) return null;
+                                      for (const ing of (product.recipe || [])) {
+                                        if (ing.unit === pwu) continue;
+                                        const mat = rawMaterials?.find?.(r => r.id === ing.raw_material_id);
+                                        if (mat && mat.pack_unit === pwu && Number(mat.pack_quantity) > 1) {
+                                          return (
+                                            <div className="mb-2 p-2 rounded-md border bg-yellow-500/10 border-yellow-500/40 text-yellow-800 text-[11px] flex items-start gap-2" data-testid="piece-weight-mismatch-warning">
+                                              <span>⚠️</span>
+                                              <div className="flex-1">
+                                                <strong>{t('تحذير: قد يكون وزن القطعة غير دقيق')}</strong>
+                                                <p className="mt-1 text-[10px]">
+                                                  {t('وزن القطعة الحالي = 1')} {pwu} {t('بينما المكوّن الأم')} ({ing.unit}) {t('يحتوي')} {mat.pack_quantity} {mat.pack_unit}.
+                                                  {' '}{t('إذا كانت كل قطعة من المنتج النهائي تحتوي علبة كاملة، عدّل وزن القطعة إلى')} <strong>{mat.pack_quantity}</strong>.
+                                                </p>
+                                              </div>
+                                            </div>
+                                          );
+                                        }
+                                      }
+                                      return null;
+                                    })()}
                                     {/* شريط العائد المحسوب */}
                                     {finalYield > 0 && (() => {
                                       const diff = Math.abs(finalYield - storedQty);
