@@ -93,6 +93,40 @@ async def _compute_recipe_total_grams(db, recipe: list) -> float:
     return total
 
 
+async def _resolve_ingredient_ids(db, ing: dict, tenant_id: Optional[str] = None) -> dict:
+    """🔧 محاولة الربط التلقائي للمكوّن بالاسم إن كان كلا المعرّفين فارغ.
+
+    يستخدم لتعافي البيانات القديمة (Legacy) التي حُفظت بدون manufactured_product_id
+    أو raw_material_id. يبحث أولاً في raw_materials، ثم في manufactured_products.
+    يُعيد القاموس بعد التعديل (in-place).
+    """
+    if ing.get("raw_material_id") or ing.get("manufactured_product_id"):
+        return ing
+    name = (ing.get("raw_material_name") or "").strip()
+    if not name:
+        return ing
+    # بحث بالاسم في المواد الخام أولاً
+    name_regex = {"$regex": f"^{name}\\s*$", "$options": "i"}
+    rm = await db.raw_materials.find_one({"name": name_regex}, {"_id": 0, "id": 1})
+    if rm and rm.get("id"):
+        ing["raw_material_id"] = rm["id"]
+        if not ing.get("source"):
+            ing["source"] = "raw"
+        return ing
+    # ثم المنتجات المُصنّعة
+    mp_query = {"name": name_regex}
+    if tenant_id:
+        mp_query["tenant_id"] = tenant_id
+    mp = await db.manufactured_products.find_one(mp_query, {"_id": 0, "id": 1})
+    if not mp and tenant_id:
+        # fallback بدون tenant
+        mp = await db.manufactured_products.find_one({"name": name_regex}, {"_id": 0, "id": 1})
+    if mp and mp.get("id"):
+        ing["manufactured_product_id"] = mp["id"]
+        ing["source"] = "manufactured"
+    return ing
+
+
 # ==================== MODELS ====================
 
 # --- الموردين ---
@@ -241,9 +275,8 @@ class RecipeIngredient(BaseModel):
 
     @model_validator(mode="after")
     def _validate_source(self):
-        # يجب توفير أحد المعرّفين: مادة خام أو منتج مُصنّع
-        if not self.raw_material_id and not self.manufactured_product_id:
-            raise ValueError("يجب توفير raw_material_id أو manufactured_product_id للمكوّن")
+        # ملاحظة: لا نرفع خطأ حتى نسمح بحفظ المكونات القديمة (الباقية بدون معرّفات)
+        # سيتم محاولة الربط التلقائي بالاسم في طبقة المعالجة.
         return self
 
 class ManufacturedProductCreate(BaseModel):
@@ -3177,7 +3210,10 @@ async def create_manufactured_product(
         else:
             effective_cost_per_unit = ingredient.cost_per_unit
         raw_material_cost_after_waste += ingredient.quantity * effective_cost_per_unit
-        recipe_items.append(ingredient.model_dump())
+        item = ingredient.model_dump()
+        # 🔧 محاولة الربط بالاسم إن كان كلا المعرّفين فارغ (تعافي البيانات القديمة)
+        item = await _resolve_ingredient_ids(db, item, tenant_id)
+        recipe_items.append(item)
 
     # 🎯 تكلفة التصنيع المعتمدة = بعد الهدر (يُستخدم في احتساب تكلفة المبيعات)
     production_cost = product.production_cost if product.production_cost is not None else round(raw_material_cost_after_waste, 2)
@@ -3267,6 +3303,116 @@ async def get_manufactured_products():
     
     return products
 
+
+# ⭐ مزامنة شاملة: ربط المكونات اليتيمة (orphan) بأسمائها تلقائياً
+# ⚠️ يجب التسجيل قبل `/manufactured-products/{product_id}` لتجنب تصادم المسار
+@router.post("/manufactured-products/sync-orphan-ingredients")
+async def sync_orphan_ingredients(
+    dry_run: bool = False,
+    current_user: dict = Depends(get_current_user),
+):
+    """فحص جميع المنتجات المُصنّعة وربط المكونات بدون معرّفات (raw_material_id / manufactured_product_id)
+    بأسمائها تلقائياً.
+
+    - يبحث أولاً في `raw_materials`، ثم في `manufactured_products`.
+    - `dry_run=true` يُرجع تقريراً بدون تطبيق أي تعديل.
+    - يُرجع: عدد المنتجات المفحوصة، اليتامى الموجودون، الذين تم ربطهم، غير المتطابقين.
+    """
+    db = get_db()
+    tenant_id = current_user.get("tenant_id")
+
+    query = {}
+    if tenant_id:
+        query["tenant_id"] = tenant_id
+
+    products = await db.manufactured_products.find(query, {"_id": 0}).to_list(2000)
+
+    scanned = len(products)
+    orphans_total = 0
+    linked = 0
+    unmatched = []
+    products_updated = 0
+    products_touched = []
+
+    for prod in products:
+        recipe = prod.get("recipe") or []
+        changed = False
+        prod_linked = []
+        prod_unmatched = []
+        for ing in recipe:
+            if ing.get("raw_material_id") or ing.get("manufactured_product_id"):
+                continue
+            orphans_total += 1
+            before_raw = ing.get("raw_material_id")
+            before_mfg = ing.get("manufactured_product_id")
+            await _resolve_ingredient_ids(db, ing, tenant_id)
+            if ing.get("raw_material_id") != before_raw or ing.get("manufactured_product_id") != before_mfg:
+                linked += 1
+                changed = True
+                prod_linked.append({
+                    "name": ing.get("raw_material_name"),
+                    "raw_material_id": ing.get("raw_material_id"),
+                    "manufactured_product_id": ing.get("manufactured_product_id"),
+                    "source": ing.get("source"),
+                })
+            else:
+                prod_unmatched.append(ing.get("raw_material_name"))
+                unmatched.append({
+                    "product_id": prod.get("id"),
+                    "product_name": prod.get("name"),
+                    "ingredient_name": ing.get("raw_material_name"),
+                })
+        if changed:
+            products_updated += 1
+            products_touched.append({
+                "id": prod.get("id"),
+                "name": prod.get("name"),
+                "linked": prod_linked,
+                "unmatched": prod_unmatched,
+            })
+            if not dry_run:
+                await db.manufactured_products.update_one(
+                    {"id": prod.get("id")},
+                    {"$set": {
+                        "recipe": recipe,
+                        "last_updated": datetime.now(timezone.utc).isoformat(),
+                    }},
+                )
+
+    # سجل تدقيق
+    if not dry_run and products_updated:
+        try:
+            await db.audit_logs.insert_one({
+                "id": str(uuid.uuid4()),
+                "action": "sync_orphan_ingredients",
+                "entity_type": "manufactured_product",
+                "user_id": current_user.get("id"),
+                "user_email": current_user.get("email"),
+                "tenant_id": tenant_id,
+                "details": {
+                    "scanned": scanned,
+                    "orphans_total": orphans_total,
+                    "linked": linked,
+                    "products_updated": products_updated,
+                },
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            })
+        except Exception:
+            pass
+
+    return {
+        "success": True,
+        "dry_run": dry_run,
+        "scanned": scanned,
+        "orphans_total": orphans_total,
+        "linked": linked,
+        "unmatched_count": len(unmatched),
+        "products_updated": products_updated,
+        "products": products_touched,
+        "unmatched": unmatched[:50],
+    }
+
+
 @router.get("/manufactured-products/{product_id}")
 async def get_manufactured_product(product_id: str):
     """جلب منتج مصنع محدد"""
@@ -3276,6 +3422,7 @@ async def get_manufactured_product(product_id: str):
         raise HTTPException(status_code=404, detail="المنتج غير موجود")
     _backfill_cost_fields(product)
     return product
+
 
 # ⭐ تعديل وصفة منتج مصنّع موجود (إضافة/حذف/تعديل مكونات + إعادة احتساب التكلفة)
 class ManufacturedProductRecipeUpdate(BaseModel):
@@ -3306,6 +3453,7 @@ async def update_manufactured_product_recipe(
     raw_material_cost = 0.0
     raw_material_cost_after_waste = 0.0
     recipe_items = []
+    tenant_id = current_user.get("tenant_id")
     for ingredient in payload.recipe:
         # 🧹 تنظيف floating-point noise: قرّب لـ 6 خانات عشرية
         qty = round(float(ingredient.quantity), 6)
@@ -3321,6 +3469,8 @@ async def update_manufactured_product_recipe(
         item = ingredient.model_dump()
         item["quantity"] = qty
         item["cost_per_unit"] = cpu
+        # 🔧 الربط التلقائي للمكوّن بالاسم إن لزم
+        item = await _resolve_ingredient_ids(db, item, tenant_id)
         recipe_items.append(item)
 
     new_production_cost = round(raw_material_cost_after_waste, 2)

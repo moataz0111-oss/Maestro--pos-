@@ -146,6 +146,10 @@ export default function WarehouseManufacturing() {
   const [purchaseRequestPriority, setPurchaseRequestPriority] = useState('normal');
   const [purchaseRequestNotes, setPurchaseRequestNotes] = useState('');
   const [warehouseRequestsList, setWarehouseRequestsList] = useState([]);
+
+  // === مزامنة شاملة للوصفات اليتيمة ===
+  const [syncOrphansResult, setSyncOrphansResult] = useState(null);  // {success, scanned, orphans_total, linked, ...}
+  const [syncOrphansLoading, setSyncOrphansLoading] = useState(false);
   
   // === Owner notification & details modal ===
   const [showOwnerDetailsModal, setShowOwnerDetailsModal] = useState(false);
@@ -1305,14 +1309,25 @@ export default function WarehouseManufacturing() {
     setSavingRecipe(true);
     try {
       const payload = {
-        recipe: editRecipeForm.recipe.map(ing => ({
-          raw_material_id: ing.raw_material_id,
-          raw_material_name: ing.raw_material_name,
-          quantity: Number(ing.quantity) || 0,
-          unit: ing.unit,
-          cost_per_unit: Number(ing.cost_per_unit) || 0,
-          waste_percentage: Number(ing.waste_percentage) || 0,
-        })),
+        recipe: editRecipeForm.recipe.map(ing => {
+          const base = {
+            raw_material_name: ing.raw_material_name,
+            quantity: Number(ing.quantity) || 0,
+            unit: ing.unit,
+            cost_per_unit: Number(ing.cost_per_unit) || 0,
+            waste_percentage: Number(ing.waste_percentage) || 0,
+          };
+          // ⭐ احفظ المعرّف الصحيح بحسب نوع المكوّن (مادة خام أو منتج مُصنّع)
+          if (ing.manufactured_product_id) {
+            base.manufactured_product_id = ing.manufactured_product_id;
+            base.source = ing.source || 'manufactured';
+            if (ing.raw_material_id) base.raw_material_id = ing.raw_material_id;
+          } else {
+            base.raw_material_id = ing.raw_material_id;
+            if (ing.source) base.source = ing.source;
+          }
+          return base;
+        }),
         piece_weight: editRecipeForm.piece_weight !== '' ? Number(editRecipeForm.piece_weight) : null,
         piece_weight_unit: editRecipeForm.piece_weight_unit || null,
         reason: editRecipeForm.reason || '',
@@ -1376,6 +1391,30 @@ export default function WarehouseManufacturing() {
       pieces_count: Math.floor(total_grams / pieceGrams),
     };
   };
+  // 🔧 مزامنة شاملة: ربط مكونات الوصفات اليتيمة بأسمائها تلقائياً
+  const handleSyncOrphanIngredients = async () => {
+    if (!window.confirm(t('سيتم فحص جميع الوصفات وربط المكونات اليتيمة بأسمائها تلقائياً. هل تريد المتابعة؟'))) {
+      return;
+    }
+    setSyncOrphansLoading(true);
+    try {
+      const res = await axios.post(`${API}/manufactured-products/sync-orphan-ingredients`, {}, { headers });
+      setSyncOrphansResult(res.data);
+      if (res.data.linked > 0) {
+        toast.success(`${t('تمت المزامنة')}: ${res.data.linked} ${t('مكوّن مربوط من أصل')} ${res.data.orphans_total}`);
+        fetchData();
+      } else if (res.data.orphans_total === 0) {
+        toast.info(t('لا توجد مكونات يتيمة. كل الوصفات سليمة!'));
+      } else {
+        toast.info(`${t('لم يتم ربط أي مكوّن')} (${res.data.unmatched_count} ${t('غير متطابق')})`);
+      }
+    } catch (error) {
+      showApiError(error, t('فشل في المزامنة الشاملة'));
+    } finally {
+      setSyncOrphansLoading(false);
+    }
+  };
+
   // إضافة منتج مصنع
   const handleAddProduct = async (e) => {
     e.preventDefault();
@@ -1811,6 +1850,17 @@ export default function WarehouseManufacturing() {
             )}
             {activeTab === 'manufacturing' && (
               <>
+                <Button
+                  variant="outline"
+                  onClick={handleSyncOrphanIngredients}
+                  disabled={syncOrphansLoading}
+                  className="border-amber-500 text-amber-600 hover:bg-amber-50"
+                  data-testid="sync-orphan-ingredients-btn"
+                  title={t('فحص جميع الوصفات وربط المكونات بدون معرّفات بأسمائها تلقائياً')}
+                >
+                  <RefreshCw className={`h-4 w-4 ml-2 ${syncOrphansLoading ? 'animate-spin' : ''}`} />
+                  {syncOrphansLoading ? t('جاري المزامنة...') : t('مزامنة شاملة')}
+                </Button>
                 <Button 
                   variant="outline"
                   onClick={() => setShowBranchTransferDialog(true)}
@@ -6398,6 +6448,100 @@ export default function WarehouseManufacturing() {
             >
               {submitting ? <RefreshCw className="h-4 w-4 animate-spin ml-2" /> : <CheckCircle className="h-4 w-4 ml-2" />}
               {t('تنفيذ جزئي وإشعار التصنيع')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 🔧 Dialog: نتيجة المزامنة الشاملة للمكونات اليتيمة */}
+      <Dialog open={!!syncOrphansResult} onOpenChange={(open) => !open && setSyncOrphansResult(null)}>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto" data-testid="sync-orphans-result-dialog">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <RefreshCw className="h-5 w-5 text-amber-500" />
+              {t('تقرير المزامنة الشاملة')}
+            </DialogTitle>
+          </DialogHeader>
+          {syncOrphansResult && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3 text-center">
+                  <p className="text-xs text-muted-foreground">{t('مفحوصة')}</p>
+                  <p className="text-2xl font-bold text-blue-500">{syncOrphansResult.scanned}</p>
+                </div>
+                <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-3 text-center">
+                  <p className="text-xs text-muted-foreground">{t('يتيمة')}</p>
+                  <p className="text-2xl font-bold text-amber-500">{syncOrphansResult.orphans_total}</p>
+                </div>
+                <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-3 text-center">
+                  <p className="text-xs text-muted-foreground">{t('مربوطة')}</p>
+                  <p className="text-2xl font-bold text-green-500">{syncOrphansResult.linked}</p>
+                </div>
+                <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 text-center">
+                  <p className="text-xs text-muted-foreground">{t('غير متطابقة')}</p>
+                  <p className="text-2xl font-bold text-red-500">{syncOrphansResult.unmatched_count}</p>
+                </div>
+              </div>
+
+              {syncOrphansResult.products && syncOrphansResult.products.length > 0 && (
+                <div>
+                  <h4 className="font-bold mb-2 text-green-600">
+                    {t('وصفات تم تعديلها')} ({syncOrphansResult.products_updated})
+                  </h4>
+                  <div className="space-y-2 max-h-64 overflow-y-auto">
+                    {syncOrphansResult.products.map((p) => (
+                      <div key={p.id} className="border rounded-lg p-3 bg-card">
+                        <p className="font-semibold mb-1">{p.name}</p>
+                        {p.linked && p.linked.length > 0 && (
+                          <ul className="text-xs space-y-1">
+                            {p.linked.map((l, idx) => (
+                              <li key={idx} className="flex items-center gap-2 text-green-600">
+                                <Check className="h-3 w-3" />
+                                <span>{l.name}</span>
+                                <span className="px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
+                                  {l.source === 'manufactured' ? '🏭 منتج مُصنّع' : '📦 مادة خام'}
+                                </span>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                        {p.unmatched && p.unmatched.length > 0 && (
+                          <ul className="text-xs space-y-1 mt-1">
+                            {p.unmatched.map((n, idx) => (
+                              <li key={idx} className="flex items-center gap-2 text-red-500">
+                                <X className="h-3 w-3" />
+                                <span>{n}</span>
+                                <span className="text-muted-foreground">({t('غير موجود في الجدولين')})</span>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {syncOrphansResult.unmatched && syncOrphansResult.unmatched.length > 0 && (
+                <div className="bg-red-500/5 border border-red-500/20 rounded-lg p-3">
+                  <p className="text-xs text-muted-foreground mb-1">
+                    💡 {t('المكونات أدناه لم يتم العثور على تطابق لها — يُفضّل تعديلها يدوياً أو إنشاؤها كمادة خام/منتج مُصنّع.')}
+                  </p>
+                </div>
+              )}
+
+              {syncOrphansResult.orphans_total === 0 && (
+                <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-4 text-center">
+                  <Check className="h-8 w-8 mx-auto text-green-500 mb-2" />
+                  <p className="font-bold text-green-600">{t('كل الوصفات سليمة!')}</p>
+                  <p className="text-xs text-muted-foreground">{t('لا توجد مكونات يتيمة في النظام.')}</p>
+                </div>
+              )}
+            </div>
+          )}
+          <DialogFooter>
+            <Button onClick={() => setSyncOrphansResult(null)} data-testid="sync-orphans-close-btn">
+              {t('إغلاق')}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -11,9 +11,11 @@ import sys
 import pytest
 from pathlib import Path
 
+# مسموح: pytest باستيراد مباشر
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from routes.inventory_system import RecipeIngredient, ManufacturedProductCreate
+_ = pytest  # silence unused import
 
 
 def test_recipe_ingredient_accepts_manufactured_only():
@@ -45,15 +47,17 @@ def test_recipe_ingredient_accepts_raw_material_only():
     assert ing.manufactured_product_id is None
 
 
-def test_recipe_ingredient_rejects_when_both_missing():
-    """يجب رفض المكوّن إذا لم يُحدد أي معرّف."""
-    with pytest.raises(ValueError):
-        RecipeIngredient(
-            raw_material_name="مجهول",
-            quantity=1,
-            unit="كغم",
-            cost_per_unit=100,
-        )
+def test_recipe_ingredient_accepts_orphan_for_legacy_compatibility():
+    """⭐ يجب قبول مكوّن بدون أي معرّف (للتوافق مع البيانات القديمة).
+    سيتم محاولة الربط التلقائي بالاسم في طبقة المعالجة (handler)."""
+    ing = RecipeIngredient(
+        raw_material_name="مايونيز قديم",
+        quantity=1,
+        unit="كغم",
+        cost_per_unit=100,
+    )
+    assert ing.raw_material_id is None
+    assert ing.manufactured_product_id is None
 
 
 def test_manufactured_product_create_with_mixed_recipe():
@@ -92,6 +96,6 @@ def test_manufactured_product_create_with_mixed_recipe():
 if __name__ == "__main__":
     test_recipe_ingredient_accepts_manufactured_only()
     test_recipe_ingredient_accepts_raw_material_only()
-    test_recipe_ingredient_rejects_when_both_missing()
+    test_recipe_ingredient_accepts_orphan_for_legacy_compatibility()
     test_manufactured_product_create_with_mixed_recipe()
     print("✅ كل الاختبارات نجحت!")

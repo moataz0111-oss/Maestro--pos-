@@ -1,6 +1,51 @@
 # Maestro EGP - Changelog
 
 
+## Session: Feb 19, 2026 (3) — مزامنة شاملة للوصفات اليتيمة
+
+### الميزة
+زر جديد **🔄 مزامنة شاملة** في رأس صفحة المخزن والتصنيع (تبويب التصنيع) يفحص جميع المنتجات المُصنّعة دفعة واحدة ويربط أي مكوّن بدون `raw_material_id`/`manufactured_product_id` بأسمه تلقائياً.
+
+### Backend (`/app/backend/routes/inventory_system.py`)
+- Endpoint جديد: `POST /api/manufactured-products/sync-orphan-ingredients?dry_run=true|false`
+- يدعم وضع المعاينة (dry_run) قبل تطبيق التغييرات.
+- يحترم Tenant.
+- يُرجع تقريراً مفصّلاً: المفحوصة، اليتامى، المربوطة، غير المتطابقة + قائمة بكل منتج وتفاصيل ما تم ربطه.
+- يكتب سجل تدقيق (`audit_logs.action="sync_orphan_ingredients"`).
+
+### Frontend (`/app/frontend/src/pages/WarehouseManufacturing.js`)
+- زر جديد `data-testid="sync-orphan-ingredients-btn"` بلون كهرماني مع أيقونة `RefreshCw`.
+- Dialog تقرير غني بـ 4 بطاقات إحصاء (مفحوصة/يتيمة/مربوطة/غير متطابقة) + قائمة تفصيلية لكل منتج مع تمييز نوع المصدر (🏭 منتج مُصنّع / 📦 مادة خام).
+- توست بنتيجة سريعة + إعادة جلب البيانات تلقائياً بعد النجاح.
+- نافذة تأكيد قبل التشغيل.
+
+### التحقق
+- API live test: تم زرع 1 منتج بـ 3 مكونات يتيمة → الـ endpoint ربط 2 منهم (مايونيز → mfg, طماطم → raw) وأبلغ عن 1 غير متطابق. ✅
+- dry_run وreal run كلاهما يعمل بشكل صحيح.
+- Linting: pass (Python ruff + JS ESLint).
+
+
+
+## Session: Feb 19, 2026 (2) — تعافي تلقائي لتعديل الوصفات القديمة
+
+### المشكلة الجديدة
+عند فتح وصفة محفوظة قبل ميزة "المنتج المُصنّع كمكوّن" — السجل في DB يحوي مكوّناً (مثلاً "مايونيز") بـ `raw_material_id: null` و **بدون** `manufactured_product_id`. كل محاولة لحفظ التعديلات كانت تفشل بسبب الـ validator الجديد.
+
+### الحل
+**Backend** (`/app/backend/routes/inventory_system.py`):
+1. **تخفيف الـ Pydantic validator**: لا يرفع خطأ عند غياب المعرّفين — يُسمح بالحفظ للحفاظ على التوافق مع البيانات القديمة.
+2. **دالة جديدة** `_resolve_ingredient_ids(db, ing, tenant_id)`: تحاول الربط التلقائي بالاسم (raw_materials → manufactured_products) عند غياب المعرّفات. تُحترم Tenant.
+3. تطبيق الـ resolver في كل من POST `/manufactured-products` و PATCH `/manufactured-products/{id}/recipe`.
+
+**Frontend** (`/app/frontend/src/pages/WarehouseManufacturing.js`):
+- `handleUpdateRecipe` الآن يحافظ على `manufactured_product_id` و`source` للمكونات الموجودة عند الحفظ (كانت تُحذف).
+
+### التحقق
+- pytest: `test_recipe_ingredient_model.py` (4) + `test_ingredient_auto_resolve.py` (4) → كلها نجحت ✅.
+- API live test: حمولة المستخدم الأصلية بمكوّن "مايونيز " (مع مسافة ذيلية، بدون IDs) تم ربطها تلقائياً بـ `manufactured_product_id` الصحيح وحُفظت بنجاح.
+
+
+
 ## Session: Feb 19, 2026 — إصلاح 422 لإضافة منتج مُصنّع كمكوّن
 
 ### المشكلة
