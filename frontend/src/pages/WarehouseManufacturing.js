@@ -5468,14 +5468,15 @@ export default function WarehouseManufacturing() {
             <div>
               <Label className="mb-2 block">{t('المنتجات المصنعة المتاحة')}</Label>
               <div className="border rounded-lg max-h-48 overflow-y-auto p-2">
-                {manufacturingInventory.filter(m => m.quantity > 0).length === 0 ? (
+                {manufacturedProducts.filter(m => (m.quantity || 0) > 0).length === 0 ? (
                   <p className="text-center text-muted-foreground py-4">{t('لا توجد منتجات متاحة')}</p>
                 ) : (
                   <div className="grid grid-cols-2 gap-2">
-                    {manufacturingInventory.filter(m => m.quantity > 0).map(product => (
+                    {manufacturedProducts.filter(m => (m.quantity || 0) > 0).map(product => (
                       <div 
                         key={product.id}
                         className="flex items-center justify-between p-2 bg-muted/50 rounded cursor-pointer hover:bg-muted"
+                        data-testid={`branch-transfer-mfg-${product.id}`}
                         onClick={() => addItemToBranchTransfer({
                           id: product.id,
                           name: product.name,
@@ -5483,8 +5484,8 @@ export default function WarehouseManufacturing() {
                           unit: product.unit || 'قطعة'
                         })}
                       >
-                        <span className="text-sm">{product.name}</span>
-                        <Badge variant="outline">{product.quantity} {product.unit || 'قطعة'}</Badge>
+                        <span className="text-sm font-medium text-foreground truncate">{product.name || t('بدون اسم')}</span>
+                        <Badge variant="outline" className="shrink-0">{Math.round((product.quantity || 0) * 1000) / 1000} {product.unit || 'قطعة'}</Badge>
                       </div>
                     ))}
                   </div>
