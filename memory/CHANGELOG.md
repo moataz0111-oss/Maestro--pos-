@@ -1,6 +1,28 @@
 # Maestro EGP - Changelog
 
 
+## Session: Feb 20, 2026 (11) — حذف سجل من مخزون التصنيع
+
+### الميزة
+زر حذف 🗑️ على كل بطاقة في "مخزون قسم التصنيع" (يظهر عند المرور بالماوس) — يحذف السجل ويسمح بإعادة التحويل بسعر جديد. مفيد عند تضارب الأسعار أو وجود سجلات قديمة.
+
+### Backend (`/app/backend/routes/inventory_system.py`)
+- `DELETE /api/manufacturing-inventory/{item_id}` جديد.
+- صلاحية: admin/super_admin/owner/manager فقط.
+- يخصم `transferred_to_manufacturing` من المادة الخام الأم (لاستعادة الكمية للحساب).
+- يكتب audit_log كامل (الاسم، الكمية، الوحدة، السعر، المادة المرتبطة).
+
+### Frontend (`/app/frontend/src/pages/WarehouseManufacturing.js`)
+- `handleDeleteMfgInventoryItem` يطلب تأكيداً قبل الحذف.
+- زر حذف بـ `data-testid="mfg-inv-delete-{id}"` يظهر بـ opacity تدريجية على hover.
+- نداء `fetchData()` بعد النجاح لتحديث القائمة.
+
+### التحقق
+- API live test: 404 للسجل غير الموجود ✅.
+- Python ruff + JS ESLint: pass ✅.
+
+
+
 ## Session: Feb 20, 2026 (10) — ربط manufacturing_inventory الفوري مع raw_materials
 
 ### المشكلتان

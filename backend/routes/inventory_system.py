@@ -3227,6 +3227,62 @@ async def get_warehouse_transactions(type: Optional[str] = None):
 
 # ==================== MANUFACTURING INVENTORY (مخزون التصنيع) ====================
 
+# ⭐ DELETE: حذف سجل من مخزون التصنيع (لاستخدامه عند تضارب الأسعار أو سجل قديم)
+@router.delete("/manufacturing-inventory/{item_id}")
+async def delete_manufacturing_inventory_item(
+    item_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """حذف سجل واحد من مخزون قسم التصنيع.
+    صلاحية: مدير/سوبر/مالك فقط. يُعيد للمادة المعدّل المرتبط فرصة لإعادة التحويل بسعر صحيح.
+    """
+    role = (current_user.get("role") or "").lower()
+    if role not in {"admin", "super_admin", "owner", "manager"}:
+        raise HTTPException(status_code=403, detail="غير مسموح — للمدير/المالك فقط")
+    db = get_db()
+    item = await db.manufacturing_inventory.find_one({"id": item_id}, {"_id": 0})
+    if not item:
+        raise HTTPException(status_code=404, detail="السجل غير موجود")
+    # ضع علامة عودة على المادة الخام (اختياري): اخصم transferred_to_manufacturing
+    linked = item.get("raw_material_id") or item.get("material_id")
+    qty = float(item.get("quantity") or 0)
+    if linked and qty > 0:
+        try:
+            await db.raw_materials.update_one(
+                {"id": linked},
+                {"$inc": {"transferred_to_manufacturing": -qty},
+                 "$set": {"last_updated": datetime.now(timezone.utc).isoformat()}}
+            )
+        except Exception:
+            pass
+    # سجل تدقيق
+    try:
+        await db.audit_logs.insert_one({
+            "id": str(uuid.uuid4()),
+            "action": "delete_manufacturing_inventory",
+            "entity_type": "manufacturing_inventory",
+            "entity_id": item_id,
+            "user_id": current_user.get("id"),
+            "user_email": current_user.get("email"),
+            "details": {
+                "name": item.get("material_name") or item.get("raw_material_name"),
+                "quantity": qty,
+                "unit": item.get("unit"),
+                "cost_per_unit": item.get("cost_per_unit"),
+                "linked_raw_material_id": linked,
+            },
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        })
+    except Exception:
+        pass
+    result = await db.manufacturing_inventory.delete_one({"id": item_id})
+    return {
+        "success": True,
+        "deleted": result.deleted_count,
+        "message": "تم حذف السجل بنجاح. يمكنك الآن إعادة التحويل بسعر صحيح.",
+    }
+
+
 @router.get("/manufacturing-inventory")
 async def get_manufacturing_inventory():
     """جلب مخزون قسم التصنيع (المواد الخام المستلمة).

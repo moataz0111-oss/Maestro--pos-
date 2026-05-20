@@ -1488,6 +1488,21 @@ export default function WarehouseManufacturing() {
       pieces_count: Math.floor(total_grams / pieceGrams),
     };
   };
+  // 🗑️ حذف سجل من مخزون قسم التصنيع
+  const handleDeleteMfgInventoryItem = async (item) => {
+    const name = item.material_name || item.raw_material_name || t('السجل');
+    if (!window.confirm(`${t('حذف')} "${name}" ${t('من مخزون التصنيع؟')}\n${t('سيُعاد فتحه للتحويل بسعر جديد. هذه العملية لا يمكن التراجع عنها.')}`)) {
+      return;
+    }
+    try {
+      await axios.delete(`${API}/manufacturing-inventory/${item.id}`, { headers });
+      toast.success(`${t('تم حذف')} ${name} ${t('من قسم التصنيع')}`);
+      fetchData();
+    } catch (error) {
+      showApiError(error, t('فشل حذف السجل'));
+    }
+  };
+
   // 🔧 مزامنة شاملة: ربط مكونات الوصفات اليتيمة بأسمائها تلقائياً
   const handleSyncOrphanIngredients = async () => {
     if (!window.confirm(t('سيتم فحص جميع الوصفات وربط المكونات اليتيمة بأسمائها تلقائياً. هل تريد المتابعة؟'))) {
@@ -2877,8 +2892,18 @@ export default function WarehouseManufacturing() {
                       // ⭐ الوحدة المعروضة: نُفضّل وحدة المادة الأصلية (إن وُجدت) لتعكس آخر تصحيح إداري
                       const displayUnit = master?.unit || item.unit || '';
                       return (
-                        <div key={item.id} className="p-3 bg-purple-500/10 rounded-lg border border-purple-500/20" data-testid={`mfg-inv-card-${linkedId}`}>
-                          <p className="font-medium truncate" title={name}>{name}</p>
+                        <div key={item.id} className="relative p-3 bg-purple-500/10 rounded-lg border border-purple-500/20 group" data-testid={`mfg-inv-card-${linkedId}`}>
+                          {/* 🗑️ زر الحذف — يظهر عند المرور */}
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteMfgInventoryItem(item)}
+                            className="absolute top-1.5 left-1.5 p-1 rounded text-red-500 hover:bg-red-500/10 opacity-0 group-hover:opacity-100 transition-opacity"
+                            title={t('حذف من قسم التصنيع')}
+                            data-testid={`mfg-inv-delete-${linkedId}`}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                          <p className="font-medium truncate pr-5" title={name}>{name}</p>
                           <p className="text-lg font-bold text-purple-600">{item.quantity} {displayUnit}</p>
                           {hasWaste ? (
                             <div className="mt-1.5 space-y-0.5">
