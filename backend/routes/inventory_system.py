@@ -3421,6 +3421,72 @@ def _backfill_cost_fields(product: dict) -> dict:
     return product
 
 
+# ⭐ حساب موحّد لتكلفة وعائد الوحدة (يطابق منطق WarehouseManufacturing.js — يدعم pack_info)
+async def _enrich_unit_cost_fields(db, product: dict) -> dict:
+    """يحسب `computed_yield` و `unit_cost_after_waste` و `unit_cost_before_waste`
+    باستخدام piece_weight + pack_info من raw_materials. مصدر واحد للحقيقة لجميع
+    الواجهات (بطاقات التصنيع + MfgLinksEditor + الباكند للطلبات).
+    """
+    UNIT_W = {"غرام": 1.0, "كغم": 1000.0, "كيلو": 1000.0, "كجم": 1000.0,
+              "gram": 1.0, "kg": 1000.0, "مل": 1.0, "لتر": 1000.0, "ml": 1.0, "liter": 1000.0, "l": 1000.0}
+    COUNT_UNITS = {"قطعة", "حبة", "علبة", "كرتون", "صحن", "piece"}
+
+    pw = float(product.get("piece_weight") or 0)
+    pwu = product.get("piece_weight_unit") or "غرام"
+    piece_grams = pw * UNIT_W.get(pwu, 1.0)
+
+    # اجلب raw_materials المرتبطة لاستخراج pack_info
+    raw_ids = [ing.get("raw_material_id") for ing in (product.get("recipe") or []) if ing.get("raw_material_id")]
+    raw_map = {}
+    if raw_ids:
+        async for mat in db.raw_materials.find({"id": {"$in": raw_ids}}, {"_id": 0, "id": 1, "pack_quantity": 1, "pack_unit": 1}):
+            raw_map[mat["id"]] = mat
+
+    # حساب إجمالي الوصفة (مع pack_info لمكونات قطعية)
+    total_grams = 0.0
+    for ing in (product.get("recipe") or []):
+        qty = float(ing.get("quantity") or 0)
+        unit = ing.get("unit")
+        f = UNIT_W.get(unit)
+        if f:
+            total_grams += qty * f
+        elif unit in COUNT_UNITS:
+            mat = raw_map.get(ing.get("raw_material_id"))
+            if mat and mat.get("pack_quantity") and mat.get("pack_unit"):
+                pf = UNIT_W.get(mat.get("pack_unit"), 0)
+                if pf > 0:
+                    total_grams += qty * float(mat["pack_quantity"]) * pf
+
+    calc_yield = (total_grams / piece_grams) if (piece_grams > 0 and total_grams > 0) else 0.0
+
+    # عائد بديل قطعي (لوحدات فرعية كـ شريحة)
+    count_yield = 0.0
+    if calc_yield == 0 and pw > 0:
+        sum_in_pwu = 0.0
+        for ing in (product.get("recipe") or []):
+            qty = float(ing.get("quantity") or 0)
+            if ing.get("unit") == pwu:
+                sum_in_pwu += qty
+                continue
+            mat = raw_map.get(ing.get("raw_material_id"))
+            if mat and mat.get("pack_unit") == pwu and float(mat.get("pack_quantity") or 0) > 0:
+                sum_in_pwu += qty * float(mat["pack_quantity"])
+        if sum_in_pwu > 0:
+            count_yield = sum_in_pwu / pw
+
+    final_yield = calc_yield or count_yield
+    stored_qty = float(product.get("quantity") or 0)
+    denom = final_yield or stored_qty or 1.0
+
+    batch_after = float(product.get("raw_material_cost_after_waste") or product.get("production_cost") or product.get("raw_material_cost") or 0)
+    batch_before = float(product.get("cost_before_waste") or product.get("raw_material_cost") or 0)
+
+    product["computed_yield"] = round(final_yield, 6)
+    product["unit_cost_after_waste"] = round(batch_after / denom, 6)
+    product["unit_cost_before_waste"] = round(batch_before / denom, 6)
+    return product
+
+
 @router.get("/manufactured-products")
 async def get_manufactured_products():
     """جلب جميع المنتجات المصنعة"""
@@ -3439,6 +3505,8 @@ async def get_manufactured_products():
         product["quantity"] = remaining  # تحديث الكمية لتتوافق
         # ⭐ ملء حقول التكلفة (قبل/بعد الهدر) للمنتجات القديمة
         _backfill_cost_fields(product)
+        # ⭐ حساب موحّد لتكلفة الوحدة (يدعم pack_info) — مصدر واحد للحقيقة
+        await _enrich_unit_cost_fields(db, product)
     
     return products
 
@@ -3612,6 +3680,7 @@ async def get_manufactured_product(product_id: str):
     if not product:
         raise HTTPException(status_code=404, detail="المنتج غير موجود")
     _backfill_cost_fields(product)
+    await _enrich_unit_cost_fields(db, product)
     return product
 
 

@@ -14,6 +14,9 @@ const _W = { 'غرام': 1, 'كغم': 1000, 'كيلو': 1000, 'كجم': 1000, 'g
 
 const _computeMfgUnitCost = (mp) => {
   if (!mp) return 0;
+  // ⭐ Backend-computed value takes priority (single source of truth)
+  const fromBackend = Number(mp.unit_cost_after_waste);
+  if (fromBackend > 0) return fromBackend;
   const batchCost = Number(mp.raw_material_cost_after_waste ?? mp.production_cost ?? mp.raw_material_cost ?? 0);
   const pw = Number(mp.piece_weight || 0);
   const pwu = mp.piece_weight_unit || 'غرام';
@@ -126,5 +129,17 @@ describe('MfgLinksEditor cost calculation', () => {
     const mp = { unit: 'كغم', piece_weight: 0, piece_weight_unit: '' };
     expect(_hasSubUnit(mp)).toBe(false);
     expect(_computeMfgSubUnitCost(mp)).toBe(0);
+  });
+
+  test('Backend-computed unit_cost_after_waste takes priority over local calculation', () => {
+    // Even if local calc would yield a different value, the backend value wins.
+    const mp = {
+      unit: 'حبة',
+      piece_weight: 0,
+      raw_material_cost_after_waste: 50000,
+      quantity: 100,
+      unit_cost_after_waste: 1473,
+    };
+    expect(_computeMfgUnitCost(mp)).toBe(1473);
   });
 });

@@ -708,12 +708,16 @@ export default function Settings() {
   }, []);
 
   // ⭐ احتساب تكلفة الوحدة الواحدة من المنتج المصنّع (حبة واحدة من mp.unit)
-  // = تكلفة الدفعة ÷ العائد المحسوب من الوصفة (أو الكمية المخزّنة إن لم يتوفر piece_weight)
+  // يستخدم `unit_cost_after_waste` المحسوب في الباكند إن توفر (مصدر واحد للحقيقة)،
+  // ويعود لحساب محلي مبسط للبيانات القديمة فقط.
   const _computeMfgUnitCost = (mp) => {
     if (!mp) return 0;
+    // ⭐ المسار الموحّد: استخدم الحقل المحسوب من الباكند مباشرة
+    const fromBackend = Number(mp.unit_cost_after_waste);
+    if (fromBackend > 0) return fromBackend;
+    // مسار احتياطي (legacy data): حساب محلي مبسط
     const batchCost = Number(mp.raw_material_cost_after_waste ?? mp.production_cost ?? mp.raw_material_cost ?? 0);
     const _W = { 'غرام': 1, 'كغم': 1000, 'كيلو': 1000, 'كجم': 1000, 'gram': 1, 'kg': 1000, 'مل': 1, 'لتر': 1000 };
-    const _COUNT = new Set(['قطعة','حبة','علبة','كرتون','صحن','piece']);
     const pw = Number(mp.piece_weight || 0);
     const pwu = mp.piece_weight_unit || 'غرام';
     const pieceGrams = pw * (_W[pwu] || 1);
@@ -724,7 +728,6 @@ export default function Settings() {
       if (f) totalGrams += q * f;
     }
     let calcYield = (pieceGrams > 0 && totalGrams > 0) ? totalGrams / pieceGrams : 0;
-    // ⭐ احتساب عائد بديل للوصفات القطعية (مثل شريحة جبن: 3 قطعة×46 شريحة = 138 شريحة ÷ 46 شريحة/حبة = 3 حبات)
     if (calcYield === 0 && pw > 0) {
       let sumInPwu = 0;
       for (const ing of (mp.recipe || [])) {
