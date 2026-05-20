@@ -1400,11 +1400,13 @@ export default function WarehouseManufacturing() {
     try {
       const res = await axios.post(`${API}/manufactured-products/sync-orphan-ingredients`, {}, { headers });
       setSyncOrphansResult(res.data);
-      if (res.data.linked > 0) {
-        toast.success(`${t('تمت المزامنة')}: ${res.data.linked} ${t('مكوّن مربوط من أصل')} ${res.data.orphans_total}`);
+      const linkedCount = res.data.linked || 0;
+      const miSynced = res.data.mfg_inventory_synced || 0;
+      if (linkedCount > 0 || miSynced > 0) {
+        toast.success(`${t('تمت المزامنة')}: ${linkedCount} ${t('مكوّن')} + ${miSynced} ${t('سجل تصنيع')}`);
         fetchData();
-      } else if (res.data.orphans_total === 0) {
-        toast.info(t('لا توجد مكونات يتيمة. كل الوصفات سليمة!'));
+      } else if (res.data.orphans_total === 0 && (res.data.mfg_inventory_orphans || []).length === 0) {
+        toast.info(t('لا توجد مشاكل. كل البيانات سليمة!'));
       } else {
         toast.info(`${t('لم يتم ربط أي مكوّن')} (${res.data.unmatched_count} ${t('غير متطابق')})`);
       }
@@ -2763,8 +2765,10 @@ export default function WarehouseManufacturing() {
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                     {manufacturingInventory.map(item => {
                       // اربط بـ raw_materials للحصول على نسبة الهدر + الاسم الكامل
-                      const master = rawMaterials.find(rm => rm.id === item.material_id);
-                      const name = item.material_name || master?.name || t('بدون اسم');
+                      // ⭐ دعم كلا اسمي الحقول (material_id / raw_material_id) للتوافق مع البيانات القديمة
+                      const linkedId = item.material_id || item.raw_material_id;
+                      const master = rawMaterials.find(rm => rm.id === linkedId);
+                      const name = item.material_name || item.raw_material_name || master?.name || t('بدون اسم');
                       const wastePct = parseFloat(master?.waste_percentage || 0);
                       const costPerUnit = parseFloat(item.cost_per_unit || 0);
                       const totalBeforeWaste = item.quantity * costPerUnit;
@@ -2773,10 +2777,12 @@ export default function WarehouseManufacturing() {
                         : costPerUnit;
                       const totalAfterWaste = item.quantity * costAfterWaste;
                       const hasWaste = wastePct > 0;
+                      // ⭐ الوحدة المعروضة: نُفضّل وحدة المادة الأصلية (إن وُجدت) لتعكس آخر تصحيح إداري
+                      const displayUnit = master?.unit || item.unit || '';
                       return (
-                        <div key={item.id} className="p-3 bg-purple-500/10 rounded-lg border border-purple-500/20" data-testid={`mfg-inv-card-${item.material_id}`}>
+                        <div key={item.id} className="p-3 bg-purple-500/10 rounded-lg border border-purple-500/20" data-testid={`mfg-inv-card-${linkedId}`}>
                           <p className="font-medium truncate" title={name}>{name}</p>
-                          <p className="text-lg font-bold text-purple-600">{item.quantity} {item.unit}</p>
+                          <p className="text-lg font-bold text-purple-600">{item.quantity} {displayUnit}</p>
                           {hasWaste ? (
                             <div className="mt-1.5 space-y-0.5">
                               <div className="text-[11px] text-muted-foreground line-through">
@@ -6482,6 +6488,24 @@ export default function WarehouseManufacturing() {
                   <p className="text-2xl font-bold text-red-500">{syncOrphansResult.unmatched_count}</p>
                 </div>
               </div>
+
+              {/* ⭐ مزامنة قسم التصنيع (الوحدات/الأسماء/التكاليف) */}
+              {(syncOrphansResult.mfg_inventory_scanned > 0 || syncOrphansResult.mfg_inventory_synced > 0) && (
+                <div className="grid grid-cols-3 gap-3 border-t pt-3">
+                  <div className="bg-purple-500/10 border border-purple-500/30 rounded-lg p-3 text-center">
+                    <p className="text-xs text-muted-foreground">{t('سجلات قسم التصنيع')}</p>
+                    <p className="text-xl font-bold text-purple-500">{syncOrphansResult.mfg_inventory_scanned || 0}</p>
+                  </div>
+                  <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-lg p-3 text-center">
+                    <p className="text-xs text-muted-foreground">{t('تمت مزامنتها')}</p>
+                    <p className="text-xl font-bold text-emerald-600">{syncOrphansResult.mfg_inventory_synced || 0}</p>
+                  </div>
+                  <div className="bg-orange-500/10 border border-orange-500/30 rounded-lg p-3 text-center">
+                    <p className="text-xs text-muted-foreground">{t('بدون مرجع')}</p>
+                    <p className="text-xl font-bold text-orange-500">{(syncOrphansResult.mfg_inventory_orphans || []).length}</p>
+                  </div>
+                </div>
+              )}
 
               {syncOrphansResult.products && syncOrphansResult.products.length > 0 && (
                 <div>

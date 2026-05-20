@@ -1847,6 +1847,28 @@ async def admin_correct_raw_material(
 
     await db.raw_materials.update_one({"id": material_id}, {"$set": update})
 
+    # 🔧 مزامنة manufacturing_inventory: عند تصحيح الوحدة/الاسم/التكلفة على المادة الخام،
+    # يجب أن ينعكس فوراً على سجل قسم التصنيع المرتبط بنفس المادة (لمنع عرض وحدة قديمة كـ كغم
+    # بينما المادة فعلياً قطعة بعد التصحيح). الكمية لا تُمسّ هنا.
+    mi_sync: Dict[str, Any] = {}
+    if "unit" in update:
+        mi_sync["unit"] = update["unit"]
+    if "name" in update:
+        mi_sync["material_name"] = update["name"]
+        mi_sync["raw_material_name"] = update["name"]
+    if "cost_per_unit" in update:
+        mi_sync["cost_per_unit"] = update["cost_per_unit"]
+    if mi_sync:
+        mi_sync["last_updated"] = update["last_updated"]
+        try:
+            # نُحدّث جميع السجلات المرتبطة (سواء حُفظت بـ material_id أو raw_material_id)
+            await db.manufacturing_inventory.update_many(
+                {"$or": [{"material_id": material_id}, {"raw_material_id": material_id}]},
+                {"$set": mi_sync},
+            )
+        except Exception:
+            pass
+
     # 🔁 لو تغيّرت الكمية: حدّث طبقات FIFO النشطة لتطابق الكمية الجديدة
     if "quantity" in update:
         new_qty = update["quantity"]
@@ -3400,6 +3422,54 @@ async def sync_orphan_ingredients(
         except Exception:
             pass
 
+    # ─── 🔧 المرحلة الثانية: مزامنة manufacturing_inventory مع raw_materials ───
+    # ربط السجلات بدون أسماء + مزامنة الوحدات والأسماء والتكاليف من المادة الخام الأصلية
+    # ملاحظة: لا نُصفّي بـ tenant_id لأن `manufacturing_inventory` تاريخياً ليست مفصولة بالـ tenant
+    mi_items = await db.manufacturing_inventory.find({}, {"_id": 0}).to_list(5000)
+    mi_synced = 0
+    mi_orphans = []
+    for mi in mi_items:
+        linked_id = mi.get("material_id") or mi.get("raw_material_id")
+        if not linked_id:
+            # حاول الربط بالاسم (مادة خام)
+            nm = (mi.get("material_name") or mi.get("raw_material_name") or "").strip()
+            if nm:
+                import re as _re
+                rm = await db.raw_materials.find_one({"name": {"$regex": f"^{_re.escape(nm)}\\s*$", "$options": "i"}}, {"_id": 0})
+                if rm:
+                    linked_id = rm.get("id")
+        if not linked_id:
+            mi_orphans.append({"id": mi.get("id"), "name": mi.get("material_name") or mi.get("raw_material_name")})
+            continue
+        rm = await db.raw_materials.find_one({"id": linked_id}, {"_id": 0})
+        if not rm:
+            continue
+        # افحص الفروقات وحدّث ما يلزم
+        changes: Dict[str, Any] = {}
+        if mi.get("unit") != rm.get("unit") and rm.get("unit"):
+            changes["unit"] = rm.get("unit")
+        # أعد الاسم لكلا الحقلين للحفاظ على التوافق
+        if rm.get("name"):
+            if mi.get("material_name") != rm.get("name"):
+                changes["material_name"] = rm.get("name")
+            if mi.get("raw_material_name") != rm.get("name"):
+                changes["raw_material_name"] = rm.get("name")
+        # احفظ معرّف الربط للتوحيد
+        if not mi.get("material_id"):
+            changes["material_id"] = linked_id
+        if not mi.get("raw_material_id"):
+            changes["raw_material_id"] = linked_id
+        # تكلفة الوحدة
+        if rm.get("cost_per_unit") is not None and mi.get("cost_per_unit") != rm.get("cost_per_unit"):
+            # نُحدّث فقط إذا الوحدتان متطابقتان (لتجنّب فقدان المعنى عند تغيير وحدات)
+            if (changes.get("unit") or mi.get("unit")) == rm.get("unit"):
+                changes["cost_per_unit"] = rm.get("cost_per_unit")
+        if changes:
+            changes["last_updated"] = datetime.now(timezone.utc).isoformat()
+            if not dry_run:
+                await db.manufacturing_inventory.update_one({"id": mi.get("id")}, {"$set": changes})
+            mi_synced += 1
+
     return {
         "success": True,
         "dry_run": dry_run,
@@ -3410,6 +3480,10 @@ async def sync_orphan_ingredients(
         "products_updated": products_updated,
         "products": products_touched,
         "unmatched": unmatched[:50],
+        # ⭐ تقرير مزامنة قسم التصنيع
+        "mfg_inventory_scanned": len(mi_items),
+        "mfg_inventory_synced": mi_synced,
+        "mfg_inventory_orphans": mi_orphans[:20],
     }
 
 

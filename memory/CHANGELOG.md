@@ -1,6 +1,35 @@
 # Maestro EGP - Changelog
 
 
+## Session: Feb 20, 2026 — إصلاح تضارب الوحدات + "بدون اسم" في قسم التصنيع
+
+### المشاكل
+1. **تضارب الوحدات**: عند التصحيح الإداري لمادة (مثلاً ونشيستر صوص من كغم → قطعة)، تظل وحدة سجل `manufacturing_inventory` على القديمة (كغم) فيظهر "كغم 10" بدلاً من "قطعة 10"، ما يسبب أخطاء حسابية عند ربط الوصفات.
+2. **"بدون اسم"**: بعض سجلات `manufacturing_inventory` المنقولة قديماً تستخدم `material_id`/`material_name` بينما المستجدة تستخدم `raw_material_id`/`raw_material_name`، والفرونتند كان يقرأ حقلاً واحداً فقط.
+
+### الحلول
+
+**Backend** (`/app/backend/routes/inventory_system.py`):
+- `admin-correct` يُزامن الآن `manufacturing_inventory` تلقائياً (unit/name/cost) عند أي تصحيح إداري للمادة الخام.
+- `sync-orphan-ingredients` تم توسيعه ليفحص `manufacturing_inventory` أيضاً:
+  - يربط السجلات بدون مرجع بالاسم.
+  - يُزامن `unit`, `material_name`, `raw_material_name`, `cost_per_unit` مع المادة الخام الأصلية.
+  - يُوحّد حفظ كل من `material_id` و `raw_material_id`.
+
+**Frontend** (`/app/frontend/src/pages/WarehouseManufacturing.js`):
+- بطاقة `manufacturingInventory` تقرأ الآن كلا من `material_name || raw_material_name` ومن `material_id || raw_material_id` للوصول إلى المادة الأم.
+- الوحدة المعروضة = `master?.unit || item.unit` لتعكس آخر تصحيح إداري فوراً حتى قبل تشغيل المزامنة.
+- نافذة "تقرير المزامنة" أضيف لها 3 بطاقات جديدة (سجلات قسم التصنيع / تمت مزامنتها / بدون مرجع).
+- تحديث رسالة التوست لتذكر عدد سجلات قسم التصنيع المتزامنة.
+
+### التحقق
+- Live test: تصحيح إداري (unit + name + cost) → manufacturing_inventory تزامن فوراً ✅.
+- DRY-RUN: 11 سجل مفحوص، 5 يحتاجون مزامنة.
+- pytest: 10 اختبارات نجحت (`test_admin_correct_mi_sync.py` جديد).
+- Linting: Python + JS pass.
+
+
+
 ## Session: Feb 19, 2026 (3) — مزامنة شاملة للوصفات اليتيمة
 
 ### الميزة
