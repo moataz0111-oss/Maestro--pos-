@@ -3609,6 +3609,31 @@ async def update_manufactured_product_recipe(
         update_fields["piece_weight"] = payload.piece_weight
     if payload.piece_weight_unit is not None:
         update_fields["piece_weight_unit"] = payload.piece_weight_unit
+        # ⭐ مزامنة جميع الإعدادات: عند تغيير وحدة الوزن من مل↔لتر أو غرام↔كغم،
+        # نُحدّث product.unit أيضاً ونحوّل القيم العددية (الكمية/الإنتاج/المحول) تلقائياً
+        # لضمان تطابق العرض في كل البطاقات/التقارير.
+        old_unit = (product.get("unit") or "").strip()
+        new_pwu = payload.piece_weight_unit.strip()
+        _FAMILY = {
+            "weight": {"غرام": 1, "كغم": 1000, "كيلو": 1000, "كجم": 1000, "gram": 1, "kg": 1000},
+            "volume": {"مل": 1, "لتر": 1000, "ml": 1, "liter": 1000, "l": 1000},
+        }
+        def _fam(u: str):
+            for k, vals in _FAMILY.items():
+                if u in vals:
+                    return k, vals[u]
+            return None, None
+        old_fam, old_factor = _fam(old_unit)
+        new_fam, new_factor = _fam(new_pwu)
+        if old_fam and old_fam == new_fam and old_unit != new_pwu:
+            update_fields["unit"] = new_pwu
+            # نسبة التحويل: عدد new_unit في وحدة قديمة واحدة
+            ratio = old_factor / new_factor
+            # حوّل القيم العددية المخزّنة
+            for fld in ("quantity", "total_produced", "transferred_quantity", "remaining_quantity"):
+                val = product.get(fld)
+                if isinstance(val, (int, float)) and val:
+                    update_fields[fld] = round(val * ratio, 6)
     # ⭐ تعديل الاسم إن أُرسل
     if payload.name is not None and payload.name.strip():
         update_fields["name"] = payload.name.strip()

@@ -1,6 +1,36 @@
 # Maestro EGP - Changelog
 
 
+## Session: Feb 20, 2026 (8) — مزامنة تلقائية لوحدة المنتج عند تعديل piece_weight_unit
+
+### المشكلة
+عند تعديل وحدة الوزن (`piece_weight_unit`) من مل ↔ لتر أو غرام ↔ كغم في مودال تعديل الوصفة، الـ `product.unit` يظل على القيمة القديمة → بطاقة المنتج تعرض وحدات متضاربة:
+- "القطعة = 3 **لتر**" (من piece_weight_unit الجديد)
+- "المتبقي: 0 **مل**" (من product.unit القديم)
+- "العائد المحسوب: 20,000 **مل**" (من product.unit القديم)
+
+### الحل
+**Backend** (`/app/backend/routes/inventory_system.py`):
+PATCH `/manufactured-products/{id}/recipe` يكتشف الآن تلقائياً:
+1. إن كانت `piece_weight_unit` الجديدة في **نفس عائلة** `product.unit` القديمة (weight أو volume) ومختلفة عنها →
+2. يُحدّث `product.unit` ليساوي `piece_weight_unit` الجديدة.
+3. يُحوّل القيم العددية (quantity / total_produced / transferred_quantity / remaining_quantity) بالنسبة الصحيحة (مل → لتر: ÷1000، لتر → مل: ×1000، الخ).
+
+### الأثر
+بعد التحديث، كل بطاقات المنتج وتقاريره تعرض **وحدة واحدة موحّدة** = آخر اختيار للمستخدم في piece_weight_unit.
+
+### التحقق
+- pytest: 6/6 ✅
+  - مل → لتر (تقسيم القيم على 1000) ✅
+  - لتر → مل (ضرب القيم في 1000) ✅
+  - غرام → كغم ✅
+  - عائلتان مختلفتان (مل → كغم) → لا مزامنة ✅
+  - نفس الوحدة → no-op ✅
+  - وحدة غير معروفة (قطعة) → لا مزامنة ✅
+- ruff lint: pass ✅
+
+
+
 ## Session: Feb 20, 2026 (7) — إزالة الـ fallback المخفي لحقل اختيار الوحدة
 
 ### المشكلة
