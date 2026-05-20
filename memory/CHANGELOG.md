@@ -1,6 +1,29 @@
 # Maestro EGP - Changelog
 
 
+## Session: Feb 20, 2026 (12) — إصلاح خطأ float_parsing عند تعديل الوصفة
+
+### المشكلة
+عند تعديل وصفة، الفرونتند كان يرسل `piece_weight: ""` (سلسلة فارغة) في بعض الحالات، فيرفض Pydantic الطلب بـ:
+```
+float_parsing — Input should be a valid number — input: ""
+```
+
+### الحل
+**Frontend** (`/app/frontend/src/pages/WarehouseManufacturing.js`):
+- تطبيع قوي لـ `piece_weight`: يقبل `''`, `null`, `undefined`, و`NaN` ويحوّلها لـ `null`.
+- يضمن فقط أرقام صالحة (Number.isFinite) تُرسَل للسيرفر.
+
+**Backend** (`/app/backend/routes/inventory_system.py`):
+- إضافة `@model_validator(mode="before")` على `ManufacturedProductRecipeUpdate` يُحوّل النصوص الفارغة إلى `None` لجميع الحقول (`piece_weight`, `piece_weight_unit`, `reason`, `name`, `name_en`).
+- دفاع مزدوج: حتى لو وصلت سلسلة فارغة من العميل، السيرفر يستوعبها بدلاً من 422.
+
+### التحقق
+- API live: POST بـ `piece_weight:""` و `piece_weight_unit:""` → تجاوز validation بنجاح ✅ (404 المنتج غير موجود — السلوك المتوقع).
+- Python ruff + JS ESLint: pass ✅.
+
+
+
 ## Session: Feb 20, 2026 (11) — حذف سجل من مخزون التصنيع
 
 ### الميزة

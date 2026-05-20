@@ -3624,6 +3624,18 @@ class ManufacturedProductRecipeUpdate(BaseModel):
     name: Optional[str] = None  # ⭐ تعديل اسم الوصفة
     name_en: Optional[str] = None
 
+    @model_validator(mode="before")
+    @classmethod
+    def _coerce_empty_to_none(cls, data):
+        """⭐ تطبيع: قيم نصية فارغة → None لتجنّب أخطاء float_parsing."""
+        if not isinstance(data, dict):
+            return data
+        for key in ("piece_weight", "piece_weight_unit", "reason", "name", "name_en"):
+            v = data.get(key)
+            if isinstance(v, str) and v.strip() == "":
+                data[key] = None
+        return data
+
 
 @router.patch("/manufactured-products/{product_id}/recipe")
 async def update_manufactured_product_recipe(

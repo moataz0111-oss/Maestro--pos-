@@ -1425,7 +1425,12 @@ export default function WarehouseManufacturing() {
           }
           return base;
         }),
-        piece_weight: editRecipeForm.piece_weight !== '' ? Number(editRecipeForm.piece_weight) : null,
+        piece_weight: (() => {
+          const v = editRecipeForm.piece_weight;
+          if (v === '' || v === null || v === undefined) return null;
+          const n = Number(v);
+          return Number.isFinite(n) ? n : null;
+        })(),
         piece_weight_unit: editRecipeForm.piece_weight_unit || null,
         reason: editRecipeForm.reason || '',
         name: editRecipeForm.name || undefined,
