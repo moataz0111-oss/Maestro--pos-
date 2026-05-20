@@ -2881,8 +2881,6 @@ export default function WarehouseManufacturing() {
                 ) : (
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                     {manufacturingInventory.map(item => {
-                      // اربط بـ raw_materials للحصول على نسبة الهدر + الاسم الكامل
-                      // ⭐ دعم كلا اسمي الحقول (material_id / raw_material_id) للتوافق مع البيانات القديمة
                       const linkedId = item.material_id || item.raw_material_id;
                       const master = rawMaterials.find(rm => rm.id === linkedId);
                       const name = item.material_name || item.raw_material_name || master?.name || t('بدون اسم');
@@ -2894,11 +2892,14 @@ export default function WarehouseManufacturing() {
                         : costPerUnit;
                       const totalAfterWaste = item.quantity * costAfterWaste;
                       const hasWaste = wastePct > 0;
-                      // ⭐ الوحدة المعروضة: نُفضّل وحدة المادة الأصلية (إن وُجدت) لتعكس آخر تصحيح إداري
                       const displayUnit = master?.unit || item.unit || '';
+                      // ⭐ pack_info للسعر المُفرد: 1 قطعة = N شريحة → سعر الشريحة الواحدة
+                      const packQty = Number(master?.pack_quantity || 0);
+                      const packUnit = master?.pack_unit;
+                      const hasPack = packQty > 0 && packUnit;
+                      const pricePerPack = hasPack ? (costAfterWaste / packQty) : 0;
                       return (
                         <div key={item.id} className="relative p-3 bg-purple-500/10 rounded-lg border border-purple-500/20 group" data-testid={`mfg-inv-card-${linkedId}`}>
-                          {/* 🗑️ زر الحذف — يظهر عند المرور */}
                           <button
                             type="button"
                             onClick={() => handleDeleteMfgInventoryItem(item)}
@@ -2921,6 +2922,18 @@ export default function WarehouseManufacturing() {
                             </div>
                           ) : (
                             <p className="text-xs text-muted-foreground mt-1">{formatPrice(totalBeforeWaste)}</p>
+                          )}
+                          {/* ⭐ تفصيل السعر بوحدتين عند وجود pack_info */}
+                          {hasPack && (
+                            <div className="mt-2 pt-2 border-t border-purple-300/30 space-y-0.5" data-testid={`mfg-inv-pack-detail-${linkedId}`}>
+                              <div className="text-[11px] font-semibold text-purple-700 dark:text-purple-300">
+                                💰 1 {displayUnit} = <span className="font-mono">{formatPrice(costAfterWaste)}</span>
+                                <span className="text-muted-foreground"> ({packQty} {packUnit})</span>
+                              </div>
+                              <div className="text-[11px] font-bold text-amber-700 dark:text-amber-400">
+                                ↳ 1 {packUnit} = <span className="font-mono">{formatPrice(pricePerPack)}</span>
+                              </div>
+                            </div>
                           )}
                         </div>
                       );
@@ -3031,14 +3044,30 @@ export default function WarehouseManufacturing() {
                                 }
                                 const calcYield = (pieceGrams > 0 && totalGrams > 0) ? totalGrams / pieceGrams : 0;
                                 // ⭐ احتساب عائد بديل للوصفات القطعية: مجموع كميات مكونات بنفس وحدة piece_weight_unit
-                                // مفيد لما تكون الوصفة "24 قطعة" والمنتج "1 قطعة لكل بورشن" → العائد = 24
+                                // مع دعم pack_info: مكوّن "3 قطعة" (1 قطعة = 46 شريحة) و piece_weight_unit="شريحة" → 138 شريحة
                                 let countYield = 0;
-                                if (calcYield === 0 && pw > 0 && _COUNT.has(pwu)) {
-                                  let sumSameUnit = 0;
+                                if (calcYield === 0 && pw > 0) {
+                                  let sumInPwu = 0;
                                   for (const ing of (product.recipe || [])) {
-                                    if (ing.unit === pwu) sumSameUnit += Number(ing.quantity || 0);
+                                    const qty = Number(ing.quantity || 0);
+                                    if (ing.unit === pwu) {
+                                      sumInPwu += qty;
+                                      continue;
+                                    }
+                                    // تحقّق من pack_info على المادة الخام
+                                    const mat = rawMaterials?.find?.(r => r.id === ing.raw_material_id);
+                                    if (mat && mat.pack_unit === pwu && Number(mat.pack_quantity) > 0) {
+                                      sumInPwu += qty * Number(mat.pack_quantity);
+                                    } else if (mat && mat.pack_unit && pwu && _COUNT.has(pwu) && _COUNT.has(mat.pack_unit) === false) {
+                                      // تحويل عبر العائلة (مثلاً ing بـ كغم → غرام)
+                                      const f = _W[ing.unit];
+                                      const pf = _W[pwu];
+                                      if (f && pf && f === pf) {
+                                        // نفس العائلة → تحويل خطي
+                                      }
+                                    }
                                   }
-                                  if (sumSameUnit > 0) countYield = sumSameUnit / pw;
+                                  if (sumInPwu > 0) countYield = sumInPwu / pw;
                                 }
                                 const finalYield = calcYield || countYield;
                                 const storedQty = Number(product.quantity || 0);
@@ -3097,6 +3126,17 @@ export default function WarehouseManufacturing() {
                                         <p className="text-[10px] text-amber-700 mt-0.5">
                                           {t('حسب الخلطة')} · {t('لكل')} {unitLabel}
                                         </p>
+                                        {/* ⭐ تفصيل بوحدة فرعية لو piece_weight و piece_weight_unit مختلفة */}
+                                        {pw > 0 && pwu && pwu !== unitLabel && (
+                                          <div className="mt-1.5 pt-1.5 border-t border-amber-300/30">
+                                            <p className="text-[10px] text-muted-foreground">
+                                              1 {unitLabel} = {pw} {pwu}
+                                            </p>
+                                            <p className="text-[11px] font-bold text-orange-700 dark:text-orange-400 tabular-nums">
+                                              ↳ 1 {pwu} = {formatPrice(unitAfter / pw)}
+                                            </p>
+                                          </div>
+                                        )}
                                       </div>
                                     </div>
                                   </>
