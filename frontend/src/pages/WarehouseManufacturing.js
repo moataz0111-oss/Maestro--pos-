@@ -1154,12 +1154,30 @@ export default function WarehouseManufacturing() {
         }
       }
       const calcYield = (pieceGrams > 0 && totalGrams > 0) ? totalGrams / pieceGrams : 0;
+      // ⭐ عائد بديل للوصفات القطعية مع pack_info (مثل: 3 قطعة @ 46 شريحة = 138 شريحة → /1 = 138)
+      let countYield = 0;
+      if (calcYield === 0 && pw > 0) {
+        let sumInPwu = 0;
+        for (const ing of (product.recipe || [])) {
+          const qty = Number(ing.quantity || 0);
+          if (ing.unit === pwu) {
+            sumInPwu += qty;
+            continue;
+          }
+          const mat = rawMaterials?.find?.(r => r.id === ing.raw_material_id);
+          if (mat && mat.pack_unit === pwu && Number(mat.pack_quantity) > 0) {
+            sumInPwu += qty * Number(mat.pack_quantity);
+          }
+        }
+        if (sumInPwu > 0) countYield = sumInPwu / pw;
+      }
+      const finalYield = calcYield || countYield;
       const targetQty = Number(product.quantity || 0);
-      if (calcYield <= 0 || targetQty <= 0) {
+      if (finalYield <= 0 || targetQty <= 0) {
         toast.error(t('لا يمكن المزامنة — تأكد من وجود وزن قطعة + كمية مُصنّعة'));
         return;
       }
-      const scale = targetQty / calcYield;
+      const scale = targetQty / finalYield;
       if (Math.abs(scale - 1.0) < 0.0001) {
         toast.info(t('الوصفة متطابقة مع الكمية المُصنّعة — لا حاجة للمزامنة'));
         return;
@@ -1190,7 +1208,7 @@ export default function WarehouseManufacturing() {
       setSyncPreview({
         product,
         scale,
-        calcYield,
+        calcYield: finalYield,  // ⭐ يستخدم finalYield (يشمل countYield)
         targetQty,
         rows,
         totalOldCost,
@@ -3119,24 +3137,59 @@ export default function WarehouseManufacturing() {
                                           <p className="text-[10px] text-emerald-700 mt-0.5 tabular-nums">{t('لكل')} {unitLabel}: <strong>{formatPrice(unitAfter)}</strong></p>
                                         )}
                                       </div>
-                                      {/* ⭐ سعر القطعة الواحدة من الخلطة — بديل سعر البيع/هامش الربح */}
+                                      {/* ⭐ سعر القطعة الواحدة من الخلطة */}
                                       <div className="p-2 rounded-md bg-amber-500/5 border border-amber-300/40" data-testid="cost-per-unit-card">
-                                        <p className="text-[11px] text-muted-foreground">{t('سعر القطعة الواحدة')}</p>
-                                        <p className="font-bold text-amber-600 tabular-nums">{formatPrice(unitAfter)}</p>
-                                        <p className="text-[10px] text-amber-700 mt-0.5">
-                                          {t('حسب الخلطة')} · {t('لكل')} {unitLabel}
-                                        </p>
-                                        {/* ⭐ تفصيل بوحدة فرعية لو piece_weight و piece_weight_unit مختلفة */}
-                                        {pw > 0 && pwu && pwu !== unitLabel && (
-                                          <div className="mt-1.5 pt-1.5 border-t border-amber-300/30">
-                                            <p className="text-[10px] text-muted-foreground">
-                                              1 {unitLabel} = {pw} {pwu}
-                                            </p>
-                                            <p className="text-[11px] font-bold text-orange-700 dark:text-orange-400 tabular-nums">
-                                              ↳ 1 {pwu} = {formatPrice(unitAfter / pw)}
-                                            </p>
-                                          </div>
-                                        )}
+                                        {(() => {
+                                          // اكتشف وجود مكوّن "أب" بـ pack_info يتطابق مع piece_weight_unit
+                                          let parent = null;
+                                          if (pw > 0 && pwu) {
+                                            for (const ing of (product.recipe || [])) {
+                                              if (ing.unit === pwu) continue;
+                                              const mat = rawMaterials?.find?.(r => r.id === ing.raw_material_id);
+                                              if (mat && mat.pack_unit === pwu && Number(mat.pack_quantity) > 0) {
+                                                parent = { unit: ing.unit, packQty: Number(mat.pack_quantity), packUnit: mat.pack_unit };
+                                                break;
+                                              }
+                                            }
+                                          }
+                                          if (parent) {
+                                            const parentCost = unitAfter * parent.packQty;
+                                            return (
+                                              <>
+                                                <p className="text-[11px] text-muted-foreground">{t('سعر الوحدة الواحدة')}</p>
+                                                <p className="font-bold text-amber-600 tabular-nums">{formatPrice(parentCost)}</p>
+                                                <p className="text-[10px] text-amber-700 mt-0.5">
+                                                  1 {parent.unit} = {parent.packQty} {parent.packUnit}
+                                                </p>
+                                                <div className="mt-1.5 pt-1.5 border-t border-amber-300/30">
+                                                  <p className="text-[11px] font-bold text-orange-700 dark:text-orange-400 tabular-nums">
+                                                    ↳ 1 {parent.packUnit} = {formatPrice(unitAfter)}
+                                                  </p>
+                                                </div>
+                                              </>
+                                            );
+                                          }
+                                          // وضع افتراضي: لا pack_info
+                                          return (
+                                            <>
+                                              <p className="text-[11px] text-muted-foreground">{t('سعر القطعة الواحدة')}</p>
+                                              <p className="font-bold text-amber-600 tabular-nums">{formatPrice(unitAfter)}</p>
+                                              <p className="text-[10px] text-amber-700 mt-0.5">
+                                                {t('حسب الخلطة')} · {t('لكل')} {unitLabel}
+                                              </p>
+                                              {pw > 0 && pwu && pwu !== unitLabel && (
+                                                <div className="mt-1.5 pt-1.5 border-t border-amber-300/30">
+                                                  <p className="text-[10px] text-muted-foreground">
+                                                    1 {unitLabel} = {pw} {pwu}
+                                                  </p>
+                                                  <p className="text-[11px] font-bold text-orange-700 dark:text-orange-400 tabular-nums">
+                                                    ↳ 1 {pwu} = {formatPrice(unitAfter / pw)}
+                                                  </p>
+                                                </div>
+                                              )}
+                                            </>
+                                          );
+                                        })()}
                                       </div>
                                     </div>
                                   </>
