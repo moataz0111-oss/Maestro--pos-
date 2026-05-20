@@ -4266,8 +4266,10 @@ export default function WarehouseManufacturing() {
                     : t('مثال: البورشن الواحد = 250 مل → اللتر = 4 بورشن');
                 const defaultUnit = isVolume ? 'مل' : 'غرام';
 
-                // وحدات وزن متاحة
-                const allowedUnits = isVolume ? ['مل', 'لتر'] : ['غرام', 'كغم', 'مل', 'لتر'];
+                // وحدات وزن/تعبئة متاحة — تشمل كل الوحدات الشائعة (وزن/حجم/قطعية/تعبئة)
+                const allowedUnits = isVolume
+                  ? ['مل', 'لتر', 'كأس', 'زجاجة', 'علبة', 'كرتون']
+                  : ['غرام', 'كغم', 'مل', 'لتر', 'قطعة', 'حبة', 'شريحة', 'حصة', 'كأس', 'صحن', 'علبة', 'كرتون', 'كيس', 'باكيت', 'رول', 'زجاجة', 'ربطة'];
 
                 // ⭐ احتساب "X بورشن في الكيلو/اللتر" للعرض
                 const pw = Number(productForm.piece_weight || 0);
@@ -4783,11 +4785,27 @@ export default function WarehouseManufacturing() {
                     onValueChange={(v) => setEditRecipeForm(prev => ({ ...prev, piece_weight_unit: v }))}
                   >
                     <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="max-h-72">
+                      {/* وزن */}
                       <SelectItem value="غرام">{t('غرام')}</SelectItem>
                       <SelectItem value="كغم">{t('كغم')}</SelectItem>
+                      {/* حجم */}
                       <SelectItem value="مل">{t('مل')}</SelectItem>
                       <SelectItem value="لتر">{t('لتر')}</SelectItem>
+                      {/* قطعية وتعبئة */}
+                      <SelectItem value="قطعة">{t('قطعة')}</SelectItem>
+                      <SelectItem value="حبة">{t('حبة')}</SelectItem>
+                      <SelectItem value="شريحة">{t('شريحة')}</SelectItem>
+                      <SelectItem value="حصة">{t('حصة')}</SelectItem>
+                      <SelectItem value="كأس">{t('كأس')}</SelectItem>
+                      <SelectItem value="صحن">{t('صحن')}</SelectItem>
+                      <SelectItem value="علبة">{t('علبة')}</SelectItem>
+                      <SelectItem value="كرتون">{t('كرتون')}</SelectItem>
+                      <SelectItem value="كيس">{t('كيس')}</SelectItem>
+                      <SelectItem value="باكيت">{t('باكيت')}</SelectItem>
+                      <SelectItem value="رول">{t('رول')}</SelectItem>
+                      <SelectItem value="زجاجة">{t('زجاجة')}</SelectItem>
+                      <SelectItem value="ربطة">{t('ربطة')}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
