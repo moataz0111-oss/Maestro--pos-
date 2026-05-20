@@ -3035,10 +3035,8 @@ export default function WarehouseManufacturing() {
                                 const hasPerPiece = (calcYield > 0) || (storedQty > 1);
                                 const batchBefore = Number(product.raw_material_cost ?? product.cost_before_waste ?? 0);
                                 const batchAfter = Number(product.raw_material_cost_after_waste ?? product.production_cost ?? product.raw_material_cost ?? 0);
-                                const sellingPrice = Number(product.selling_price || 0);
                                 const unitBefore = batchBefore / denom;
                                 const unitAfter = batchAfter / denom;
-                                const unitMargin = sellingPrice - unitAfter;
                                 const unitLabel = product.unit || 'حبة';
                                 return (
                                   <>
@@ -3063,7 +3061,7 @@ export default function WarehouseManufacturing() {
                                         </div>
                                       );
                                     })()}
-                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm mb-3">
+                                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm mb-3">
                                       <div className="p-2 rounded-md bg-blue-500/5 border border-blue-300/30" data-testid="cost-before-waste-card">
                                         <p className="text-[11px] text-muted-foreground">{t('الكلفة قبل الهدر')}</p>
                                         <p className="font-bold text-blue-600 tabular-nums">{formatPrice(batchBefore)}</p>
@@ -3078,15 +3076,13 @@ export default function WarehouseManufacturing() {
                                           <p className="text-[10px] text-emerald-700 mt-0.5 tabular-nums">{t('لكل')} {unitLabel}: <strong>{formatPrice(unitAfter)}</strong></p>
                                         )}
                                       </div>
-                                      <div className="p-2 rounded-md bg-green-500/5 border border-green-300/30">
-                                        <p className="text-[11px] text-muted-foreground">{t('سعر البيع')}</p>
-                                        <p className="font-bold text-green-600 tabular-nums">{formatPrice(sellingPrice)}</p>
-                                        <p className="text-[10px] text-muted-foreground mt-0.5">{t('لكل')} {unitLabel}</p>
-                                      </div>
-                                      <div className="p-2 rounded-md bg-purple-500/5 border border-purple-300/30">
-                                        <p className="text-[11px] text-muted-foreground">{t('هامش الربح')}</p>
-                                        <p className={`font-bold tabular-nums ${unitMargin >= 0 ? 'text-purple-600' : 'text-red-600'}`}>{formatPrice(unitMargin)}</p>
-                                        <p className="text-[10px] text-muted-foreground mt-0.5">{t('لكل')} {unitLabel}</p>
+                                      {/* ⭐ سعر القطعة الواحدة من الخلطة — بديل سعر البيع/هامش الربح */}
+                                      <div className="p-2 rounded-md bg-amber-500/5 border border-amber-300/40" data-testid="cost-per-unit-card">
+                                        <p className="text-[11px] text-muted-foreground">{t('سعر القطعة الواحدة')}</p>
+                                        <p className="font-bold text-amber-600 tabular-nums">{formatPrice(unitAfter)}</p>
+                                        <p className="text-[10px] text-amber-700 mt-0.5">
+                                          {t('حسب الخلطة')} · {t('لكل')} {unitLabel}
+                                        </p>
                                       </div>
                                     </div>
                                   </>
