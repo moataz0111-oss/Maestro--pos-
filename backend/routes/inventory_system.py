@@ -2198,7 +2198,9 @@ async def transfer_to_manufacturing(transfer: WarehouseToManufacturingCreate):
             await db.manufacturing_inventory.insert_one({
                 "id": str(uuid.uuid4()),
                 "raw_material_id": item["raw_material_id"],
+                "material_id": item["raw_material_id"],  # توحيد الحقلين
                 "raw_material_name": item["raw_material_name"],
+                "material_name": item["raw_material_name"],  # توحيد الحقلين
                 "quantity": item["quantity"],
                 "unit": item["unit"],
                 "cost_per_unit": item["cost_per_unit"],
@@ -2852,10 +2854,20 @@ async def fulfill_manufacturing_request(
                 }
             )
         else:
+            # 🔧 تأكيد الاسم: لو الـ item لا يحمل اسماً ابحث في raw_materials
+            mat_name = item.get("material_name") or item.get("raw_material_name")
+            if not mat_name and material_id:
+                _m = await db.raw_materials.find_one({"id": material_id}, {"_id": 0, "name": 1, "unit": 1})
+                if _m:
+                    mat_name = _m.get("name")
+                    if not item.get("unit"):
+                        item["unit"] = _m.get("unit")
             await db.manufacturing_inventory.insert_one({
                 "id": str(uuid.uuid4()),
                 "material_id": material_id,
-                "material_name": item.get("material_name"),
+                "raw_material_id": material_id,  # توحيد الحقلين
+                "material_name": mat_name,
+                "raw_material_name": mat_name,
                 "quantity": quantity,
                 "unit": item.get("unit"),
                 "cost_per_unit": weighted_cost,
@@ -3201,9 +3213,42 @@ async def get_warehouse_transactions(type: Optional[str] = None):
 
 @router.get("/manufacturing-inventory")
 async def get_manufacturing_inventory():
-    """جلب مخزون قسم التصنيع (المواد الخام المستلمة)"""
+    """جلب مخزون قسم التصنيع (المواد الخام المستلمة).
+
+    🔧 يُثري كل سجل بالاسم/الوحدة من `raw_materials` إن كانت مفقودة محلياً،
+    لمنع ظهور "بدون اسم" حتى قبل تشغيل المزامنة الشاملة.
+    """
     db = get_db()
     inventory = await db.manufacturing_inventory.find({}, {"_id": 0}).to_list(1000)
+
+    # نُجمّع كل المعرّفات لاستعلام raw_materials دفعة واحدة (أداء أفضل)
+    ids = list({(it.get("material_id") or it.get("raw_material_id")) for it in inventory if (it.get("material_id") or it.get("raw_material_id"))})
+    masters_map = {}
+    if ids:
+        masters = await db.raw_materials.find(
+            {"id": {"$in": ids}},
+            {"_id": 0, "id": 1, "name": 1, "unit": 1, "cost_per_unit": 1}
+        ).to_list(len(ids))
+        masters_map = {m["id"]: m for m in masters}
+
+    for it in inventory:
+        linked = it.get("material_id") or it.get("raw_material_id")
+        master = masters_map.get(linked) if linked else None
+        # توحيد الحقول: اضمن كلا الاسمَين والمعرّفَين والاسم من المرجع
+        master_name = (master or {}).get("name")
+        master_unit = (master or {}).get("unit")
+        # الاسم: ما هو موجود فعلاً، وإلا من المادة الخام
+        name = it.get("material_name") or it.get("raw_material_name") or master_name
+        if name:
+            it["material_name"] = name
+            it["raw_material_name"] = name
+        # الوحدة: أولوية لما في sjelسجل المادة الخام (لتعكس آخر تصحيح إداري)
+        if master_unit:
+            it["unit"] = master_unit
+        # المعرّفات (توحيد)
+        if linked:
+            it["material_id"] = linked
+            it["raw_material_id"] = linked
     return inventory
 
 # ==================== MANUFACTURED PRODUCTS (المنتجات المصنعة) ====================
