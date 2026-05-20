@@ -4420,24 +4420,23 @@ export default function WarehouseManufacturing() {
                       className="w-24 bg-background"
                       data-testid="recipe-new-qty"
                     />
-                    {/* ⭐ اختيار وحدة الإدخال للمواد الخام */}
+                    {/* ⭐ اختيار وحدة الإدخال للمواد الخام — يظهر دائماً */}
                     {newIngredient.source === 'raw' && newIngredient.raw_material_id && (() => {
                       const m = manufacturingInventory.find(x => (x.material_id || x.raw_material_id) === newIngredient.raw_material_id);
                       const packInfo = _packInfoFor(newIngredient.raw_material_id);
-                      const units = availableInputUnitsFor(m?.unit, packInfo?.pack_unit);
-                      if (units.length <= 1) {
-                        return <div className="text-xs text-muted-foreground self-center px-2">{m?.unit}</div>;
-                      }
+                      const matUnit = m?.unit || 'كغم';
+                      const units = availableInputUnitsFor(matUnit, packInfo?.pack_unit);
+                      const finalUnits = units.length > 0 ? units : [matUnit];
                       return (
                         <Select
-                          value={newIngredient.input_unit || m?.unit}
+                          value={newIngredient.input_unit || matUnit}
                           onValueChange={(v) => setNewIngredient(prev => ({ ...prev, input_unit: v }))}
                         >
                           <SelectTrigger className="w-24 bg-background" data-testid="recipe-new-unit">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
-                            {units.map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}
+                            {finalUnits.map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}
                           </SelectContent>
                         </Select>
                       );
@@ -4869,24 +4868,24 @@ export default function WarehouseManufacturing() {
                     className="w-24 bg-background"
                     data-testid="edit-recipe-new-qty"
                   />
-                  {/* وحدة الإدخال لمادة خام */}
+                  {/* ⭐ وحدة الإدخال لمادة خام — تظهر دائماً عند اختيار مادة */}
                   {editNewIngredient.source === 'raw' && editNewIngredient.raw_material_id && (() => {
                     const m = manufacturingInventory.find(x => (x.material_id || x.raw_material_id) === editNewIngredient.raw_material_id);
                     const packInfo = _packInfoFor(editNewIngredient.raw_material_id);
-                    const units = availableInputUnitsFor(m?.unit, packInfo?.pack_unit);
-                    if (units.length <= 1) {
-                      return <div className="text-xs text-muted-foreground self-center px-2">{m?.unit}</div>;
-                    }
+                    const matUnit = m?.unit || 'كغم';
+                    const units = availableInputUnitsFor(matUnit, packInfo?.pack_unit);
+                    // ⚡ ضمانة: لو القائمة فارغة لأي سبب، اعرض الوحدة الأصلية فقط
+                    const finalUnits = units.length > 0 ? units : [matUnit];
                     return (
                       <Select
-                        value={editNewIngredient.input_unit || m?.unit}
+                        value={editNewIngredient.input_unit || matUnit}
                         onValueChange={(v) => setEditNewIngredient(prev => ({ ...prev, input_unit: v }))}
                       >
                         <SelectTrigger className="w-24 bg-background" data-testid="edit-recipe-new-unit">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          {units.map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}
+                          {finalUnits.map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}
                         </SelectContent>
                       </Select>
                     );
