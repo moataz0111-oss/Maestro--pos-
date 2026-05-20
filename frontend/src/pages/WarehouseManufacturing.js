@@ -852,23 +852,42 @@ export default function WarehouseManufacturing() {
     return { qty: converted, converted: true, fromUnit: inputUnit, toUnit: materialUnit };
   };
 
-  // قائمة وحدات الإدخال المتاحة لمادة معيّنة (نفس عائلتها)
-  // إن كانت المادة بوحدة قطعية لكن لها وزن داخلي (pack_quantity + pack_unit) — نُضيف وحدات الإدخال من عائلة الوزن/الحجم.
-  // ⭐ كذلك نُضيف pack_unit نفسه دائماً (حتى لو كان وحدة مخصّصة مثل "شريحة") لأنه قابل للتحويل عبر pack_quantity.
+  // قائمة وحدات الإدخال المتاحة لمادة معيّنة (نفس عائلتها).
+  // ⭐ ضمانة: لكل مادة وزنية تظهر "غرام" + "كغم" حتى لو كانت الوحدة "kg" بالإنجليزية.
+  //         لكل مادة حجمية تظهر "مل" + "لتر".
+  //         لكل مادة قطعية، تتوسّع بحسب pack_info (وزن/حجم/وحدة مخصّصة).
   const availableInputUnitsFor = (materialUnit, packUnit) => {
     const g = _findUnitGroup(materialUnit);
     if (!g) return [materialUnit].filter(Boolean);
-    const own = Object.keys(_UNIT_GROUPS[g]).filter(u => !['gram','kg','ml','liter','l','piece'].includes(u));
+
+    // قائمة "الوحدات الأساسية" المعروضة لكل عائلة (عربية فقط، نتجنّب التكرار الإنجليزي)
+    const _BASE = {
+      weight: ['غرام', 'كغم'],
+      volume: ['مل', 'لتر'],
+      count: ['قطعة', 'حبة', 'علبة', 'كرتون', 'صحن'],
+    };
+    const own = _BASE[g] || [];
+
     let extras = [];
     if (g === 'count' && packUnit) {
       const pg = _findUnitGroup(packUnit);
       if (pg && pg !== 'count') {
-        extras = Object.keys(_UNIT_GROUPS[pg]).filter(u => !['gram','kg','ml','liter','l','piece'].includes(u));
+        extras = _BASE[pg] || [];
       }
       // ⭐ pack_unit الحرّ (وحدة مخصّصة كـ "شريحة"/"كأس"/"حصة") — أضفه كخيار مستقل
       if (!extras.includes(packUnit) && !own.includes(packUnit)) {
         extras.push(packUnit);
       }
+    }
+
+    // اضمن وجود الوحدة الأصلية للمادة (مثلاً "kg" بالإنجليزية) في القائمة لتفادي خطأ
+    const normalized = String(materialUnit || '').trim();
+    if (normalized && !own.includes(normalized) && !extras.includes(normalized)) {
+      // إن كانت مرادفاً (kg/kilo → كغم) فلا نضيفها، نكتفي بالعربية
+      const isAliasOfBase = ['kg', 'kilo', 'كيلو', 'كجم', 'gram'].includes(normalized.toLowerCase())
+        || ['ml', 'liter', 'l'].includes(normalized.toLowerCase())
+        || ['piece'].includes(normalized.toLowerCase());
+      if (!isAliasOfBase) extras.unshift(normalized);
     }
     return [...own, ...extras];
   };

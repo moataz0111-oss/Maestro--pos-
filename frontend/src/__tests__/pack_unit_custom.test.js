@@ -21,16 +21,22 @@ function _findUnitGroup(u) {
 function availableInputUnitsFor(materialUnit, packUnit) {
   const g = _findUnitGroup(materialUnit);
   if (!g) return [materialUnit].filter(Boolean);
-  const own = Object.keys(_UNIT_GROUPS[g]).filter(u => !['gram','kg','ml','liter','l','piece'].includes(u));
+  const _BASE = {
+    weight: ['غرام', 'كغم'],
+    volume: ['مل', 'لتر'],
+    count: ['قطعة', 'حبة', 'علبة', 'كرتون', 'صحن'],
+  };
+  const own = _BASE[g] || [];
   let extras = [];
   if (g === 'count' && packUnit) {
     const pg = _findUnitGroup(packUnit);
-    if (pg && pg !== 'count') {
-      extras = Object.keys(_UNIT_GROUPS[pg]).filter(u => !['gram','kg','ml','liter','l','piece'].includes(u));
-    }
-    if (!extras.includes(packUnit) && !own.includes(packUnit)) {
-      extras.push(packUnit);
-    }
+    if (pg && pg !== 'count') extras = _BASE[pg] || [];
+    if (!extras.includes(packUnit) && !own.includes(packUnit)) extras.push(packUnit);
+  }
+  const normalized = String(materialUnit || '').trim();
+  if (normalized && !own.includes(normalized) && !extras.includes(normalized)) {
+    const isAlias = ['kg','kilo','كيلو','كجم','gram','ml','liter','l','piece'].includes(normalized.toLowerCase());
+    if (!isAlias) extras.unshift(normalized);
   }
   return [...own, ...extras];
 }
@@ -76,5 +82,33 @@ describe('Pack-unit custom support (شريحة/حصة/كأس)', () => {
 
   test('no packInfo → null', () => {
     expect(convertWithPackInfo(5, 'غرام', 'قطعة', null)).toBeNull();
+  });
+
+  // ⭐ اختبارات جديدة: ضمانة عرض الوحدات الفرعية لكل مادة وزنية/حجمية
+  test('material in كغم → dropdown يحتوي غرام و كغم (للسماح بإدخال غرام)', () => {
+    const units = availableInputUnitsFor('كغم', null);
+    expect(units).toContain('غرام');
+    expect(units).toContain('كغم');
+    expect(units.length).toBeGreaterThanOrEqual(2);
+  });
+
+  test('material in kg (إنجليزية) → dropdown يحتوي غرام و كغم (دون تكرار kg)', () => {
+    const units = availableInputUnitsFor('kg', null);
+    expect(units).toContain('غرام');
+    expect(units).toContain('كغم');
+    // "kg" alias لـ كغم، يجب ألّا يُكرّر
+    expect(units).not.toContain('kg');
+  });
+
+  test('material in لتر → dropdown يحتوي مل و لتر', () => {
+    const units = availableInputUnitsFor('لتر', null);
+    expect(units).toContain('مل');
+    expect(units).toContain('لتر');
+  });
+
+  test('material in غرام → dropdown يحتوي غرام و كغم', () => {
+    const units = availableInputUnitsFor('غرام', null);
+    expect(units).toContain('غرام');
+    expect(units).toContain('كغم');
   });
 });
