@@ -2242,19 +2242,6 @@ export default function Settings() {
                         </div>
                       )}
 
-                      {/* ⚠️ تحذير ذكي: piece_weight=1 مع وحدة فرعية مختلفة (إعداد قد يكون خاطئ) */}
-                      {hasSub && Number(mp.piece_weight) === 1 && (
-                        <div className="text-[11px] bg-red-500/10 border border-red-500/40 rounded px-2 py-1 text-red-700 dark:text-red-400 flex items-start gap-2" data-testid={`mfg-link-warning-piece-weight-${idx}`}>
-                          <span>⚠️</span>
-                          <div className="flex-1">
-                            <strong>{t('انتباه: قد يكون وزن القطعة غير دقيق')}</strong>
-                            <p className="mt-0.5">
-                              {t('المنتج "')}{mp.name}{t('" مُعرَّف بـ 1 ')}{mainUnit}{t(' = 1 ')}{subUnit}{t('. إذا كانت كل ')}{mainUnit}{t(' تحتوي عدة ')}{subUnit}{t(' (مثلاً 46) → اذهب إلى صفحة "المخزن والتصنيع" وعدّل وزن القطعة في الوصفة.')}
-                            </p>
-                          </div>
-                        </div>
-                      )}
-
                       <div className="grid grid-cols-2 gap-2 text-xs">
                         <div className="p-2 rounded bg-muted/40">
                           <p className="text-muted-foreground">{t('تكلفة الوحدة')} ({consumptionUnit})</p>

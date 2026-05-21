@@ -3098,61 +3098,6 @@ export default function WarehouseManufacturing() {
                                 const unitLabel = product.unit || 'حبة';
                                 return (
                                   <>
-                                    {/* ⚠️ تحذير ذكي: اكتشاف تضارب piece_weight=1 مع وجود pack_info أكبر */}
-                                    {(() => {
-                                      if (Number(pw) !== 1 || !pwu) return null;
-                                      for (const ing of (product.recipe || [])) {
-                                        if (ing.unit === pwu) continue;
-                                        const mat = rawMaterials?.find?.(r => r.id === ing.raw_material_id);
-                                        if (mat && mat.pack_unit === pwu && Number(mat.pack_quantity) > 1) {
-                                          const suggested = Number(mat.pack_quantity);
-                                          return (
-                                            <div className="mb-2 p-2 rounded-md border bg-yellow-500/10 border-yellow-500/40 text-yellow-800 text-[11px] flex items-start gap-2" data-testid="piece-weight-mismatch-warning">
-                                              <span>⚠️</span>
-                                              <div className="flex-1">
-                                                <strong>{t('تحذير: قد يكون وزن القطعة غير دقيق')}</strong>
-                                                <p className="mt-1 text-[10px]">
-                                                  {t('وزن القطعة الحالي = 1')} {pwu} {t('بينما المكوّن الأم')} ({ing.unit}) {t('يحتوي')} {mat.pack_quantity} {mat.pack_unit}.
-                                                  {' '}{t('إذا كانت كل قطعة من المنتج النهائي تحتوي علبة كاملة، عدّل وزن القطعة إلى')} <strong>{suggested}</strong>.
-                                                </p>
-                                              </div>
-                                              <button
-                                                type="button"
-                                                onClick={async () => {
-                                                  if (!window.confirm(`${t('تأكيد تعديل وزن القطعة إلى')} ${suggested} ${pwu}؟`)) return;
-                                                  try {
-                                                    await axios.patch(`${API}/manufactured-products/${product.id}/recipe`, {
-                                                      recipe: (product.recipe || []).map(r => ({
-                                                        raw_material_id: r.raw_material_id || null,
-                                                        manufactured_product_id: r.manufactured_product_id || null,
-                                                        raw_material_name: r.raw_material_name,
-                                                        quantity: r.quantity,
-                                                        unit: r.unit,
-                                                        cost_per_unit: r.cost_per_unit || 0,
-                                                        waste_percentage: r.waste_percentage || 0,
-                                                        source: r.source || (r.manufactured_product_id ? 'manufactured' : 'raw'),
-                                                      })),
-                                                      piece_weight: suggested,
-                                                      piece_weight_unit: pwu,
-                                                      reason: 'auto-fix piece_weight from pack_info',
-                                                    }, { headers });
-                                                    toast.success(`${t('تم تعديل وزن القطعة إلى')} ${suggested} ${pwu}`);
-                                                    fetchData();
-                                                  } catch (err) {
-                                                    showApiError(err, t('فشل التصحيح'));
-                                                  }
-                                                }}
-                                                className="px-2 py-1 rounded bg-yellow-600 hover:bg-yellow-700 text-white text-[10px] font-bold whitespace-nowrap"
-                                                data-testid={`auto-fix-piece-weight-${product.id}`}
-                                              >
-                                                🔧 {t('تصحيح إلى')} {suggested}
-                                              </button>
-                                            </div>
-                                          );
-                                        }
-                                      }
-                                      return null;
-                                    })()}
                                     {/* شريط العائد المحسوب */}
                                     {finalYield > 0 && (() => {
                                       const diff = Math.abs(finalYield - storedQty);
@@ -3331,6 +3276,31 @@ export default function WarehouseManufacturing() {
                               >
                                 <Pencil className="h-4 w-4 ml-2" />
                                 {t('تعديل الوصفة')}
+                              </Button>
+                              <Button
+                                onClick={async () => {
+                                  const confirmed = window.confirm(
+                                    `${t('تأكيد تصفير كمية')} "${product.name}"؟\n\n` +
+                                    `${t('إجمالي المُصنّع:')} ${product.total_produced || 0} ${product.unit || 'قطعة'}\n` +
+                                    `${t('المحول للفروع:')} ${product.transferred_quantity || 0}\n` +
+                                    `${t('المتبقي:')} ${product.quantity || 0}\n\n` +
+                                    `${t('سيتم تصفير الكل إلى صفر. لا يمكن التراجع.')}`
+                                  );
+                                  if (!confirmed) return;
+                                  try {
+                                    await axios.post(`${API}/manufactured-products/${product.id}/reset-quantity`, {}, { headers });
+                                    toast.success(`${t('تم تصفير كمية')} ${product.name}`);
+                                    fetchData();
+                                  } catch (err) {
+                                    showApiError(err, t('فشل التصفير'));
+                                  }
+                                }}
+                                variant="outline"
+                                className="border-red-500 text-red-600 hover:bg-red-50"
+                                data-testid={`reset-quantity-btn-${product.id}`}
+                              >
+                                <RefreshCw className="h-4 w-4 ml-2" />
+                                {t('تصفير الكمية')}
                               </Button>
                             </div>
                           </div>
@@ -4428,10 +4398,10 @@ export default function WarehouseManufacturing() {
                     : t('مثال: البورشن الواحد = 250 مل → اللتر = 4 بورشن');
                 const defaultUnit = isVolume ? 'مل' : 'غرام';
 
-                // وحدات وزن/تعبئة متاحة — تشمل كل الوحدات الشائعة (وزن/حجم/قطعية/تعبئة)
+                // وحدات وزن/تعبئة متاحة — تشمل كل الوحدات الشائعة (وزن/حجم/قطعية/تعبئة/تقديم)
                 const allowedUnits = isVolume
-                  ? ['مل', 'لتر', 'كأس', 'زجاجة', 'علبة', 'كرتون']
-                  : ['غرام', 'كغم', 'مل', 'لتر', 'قطعة', 'حبة', 'شريحة', 'حصة', 'كأس', 'صحن', 'علبة', 'كرتون', 'كيس', 'باكيت', 'رول', 'زجاجة', 'ربطة'];
+                  ? ['مل', 'لتر', 'كأس', 'كاب', 'قدح', 'صحن', 'زجاجة', 'علبة', 'كرتون']
+                  : ['غرام', 'كغم', 'مل', 'لتر', 'قطعة', 'حبة', 'شريحة', 'حصة', 'كأس', 'كاب', 'قدح', 'صحن', 'علبة', 'كرتون', 'كيس', 'باكيت', 'رول', 'زجاجة', 'ربطة'];
 
                 // ⭐ احتساب "X بورشن في الكيلو/اللتر" للعرض
                 const pw = Number(productForm.piece_weight || 0);
@@ -4954,12 +4924,14 @@ export default function WarehouseManufacturing() {
                       {/* حجم */}
                       <SelectItem value="مل">{t('مل')}</SelectItem>
                       <SelectItem value="لتر">{t('لتر')}</SelectItem>
-                      {/* قطعية وتعبئة */}
+                      {/* قطعية وتعبئة وتقديم */}
                       <SelectItem value="قطعة">{t('قطعة')}</SelectItem>
                       <SelectItem value="حبة">{t('حبة')}</SelectItem>
                       <SelectItem value="شريحة">{t('شريحة')}</SelectItem>
                       <SelectItem value="حصة">{t('حصة')}</SelectItem>
                       <SelectItem value="كأس">{t('كأس')}</SelectItem>
+                      <SelectItem value="كاب">{t('كاب')}</SelectItem>
+                      <SelectItem value="قدح">{t('قدح')}</SelectItem>
                       <SelectItem value="صحن">{t('صحن')}</SelectItem>
                       <SelectItem value="علبة">{t('علبة')}</SelectItem>
                       <SelectItem value="كرتون">{t('كرتون')}</SelectItem>

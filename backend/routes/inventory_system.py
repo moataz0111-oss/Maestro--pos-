@@ -4213,6 +4213,55 @@ async def add_product_stock(product_id: str, quantity: float = 1):
         "scale_factor": round(scale_factor, 6) if recipe_scaled else 1.0,
     }
 
+
+# ⭐ تصفير كمية المنتج المصنّع (لإعادة ضبط المخزون عند وجود اختلاف بين الوحدات المخزنة)
+@router.post("/manufactured-products/{product_id}/reset-quantity")
+async def reset_product_quantity(product_id: str, current_user: dict = Depends(get_current_user)):
+    """تصفير كل كميات المنتج المصنّع: total_produced=0, transferred_quantity=0, quantity=0.
+    مفيد عندما يكون المخزون مخزّن بوحدة خاطئة (مثلاً غرام بدل قطعة) ويُراد إعادة الحساب."""
+    db = get_db()
+    product = await db.manufactured_products.find_one({"id": product_id})
+    if not product:
+        raise HTTPException(status_code=404, detail="المنتج غير موجود")
+
+    now_iso = datetime.now(timezone.utc).isoformat()
+    await db.manufactured_products.update_one(
+        {"id": product_id},
+        {
+            "$set": {
+                "quantity": 0,
+                "total_produced": 0,
+                "transferred_quantity": 0,
+                "last_updated": now_iso,
+            }
+        }
+    )
+
+    # سجل في حركة المخزون للتدقيق
+    await db.manufacturing_movements.insert_one({
+        "id": str(uuid.uuid4()),
+        "type": "reset_quantity",
+        "product_id": product_id,
+        "product_name": product.get("name"),
+        "quantity": 0,
+        "previous_quantity": product.get("quantity", 0),
+        "previous_total_produced": product.get("total_produced", 0),
+        "previous_transferred": product.get("transferred_quantity", 0),
+        "notes": "تصفير يدوي للكمية",
+        "user_id": current_user.get("id"),
+        "created_at": now_iso,
+    })
+
+    return {
+        "message": f"تم تصفير كمية {product.get('name')}",
+        "previous": {
+            "quantity": product.get("quantity", 0),
+            "total_produced": product.get("total_produced", 0),
+            "transferred_quantity": product.get("transferred_quantity", 0),
+        },
+    }
+
+
 # ==================== BRANCH ORDERS (طلبات الفروع من التصنيع) ====================
 
 @router.post("/branch-orders-new")

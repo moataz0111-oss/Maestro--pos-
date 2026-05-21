@@ -1,6 +1,28 @@
 # Maestro EGP - Changelog
 
 
+## Session: May 21, 2026 (22) — وحدات تقديم + زر تصفير + إزالة auto-fix piece_weight
+
+### الإضافة
+1. **وحدات تقديم جديدة**: أُضيفت `كاب` و `قدح` إلى dropdown وحدة الوزن في كلٍ من نموذج إضافة منتج جديد (`allowedUnits`) وتعديل الوصفة (`editRecipeForm.piece_weight_unit`). كما أُضيف `صحن` إلى قائمة `isVolume`.
+2. **زر "تصفير الكمية"** أحمر على كل بطاقة منتج مُصنّع — يستدعي `POST /api/manufactured-products/{id}/reset-quantity` ويصفّر `total_produced`/`transferred_quantity`/`quantity` معاً. مع تأكيد قبل التنفيذ + تسجيل حركة في `manufacturing_movements` للتدقيق.
+3. **حذف تحذير وزر "تصحيح إلى X"** كلياً من بطاقات `WarehouseManufacturing` و من `MfgLinksEditor` — لأن `piece_weight` هو **تعريف ثابت لوحدة البيع** ولا يجب أن يتغير تلقائياً بتغير الوصفة.
+
+### الباكند
+- `POST /api/manufactured-products/{id}/reset-quantity` جديد في `inventory_system.py`.
+- يسجل الحركة في `manufacturing_movements` مع `previous_*` للتدقيق التاريخي.
+
+### الاختبارات
+- `backend/tests/test_reset_quantity.py` — 2 pytest (نجاح، 404).
+- إجمالي: 11/11 pytest نجحت ✅
+
+### الأثر
+- المستخدم يمكنه الآن تصحيح المخزون الخاطئ (مثلاً 2199 غرام بدل 13 قطعة) بنقرة واحدة.
+- لا يوجد تدخل تلقائي بـ piece_weight — تعريف وحدة البيع محمي ومستقر.
+- وحدات التقديم العراقية متاحة في كل القوائم.
+
+
+
 ## Session: Feb 20, 2026 (20) — إصلاح حاسم لمحرر `MfgLinksEditor`
 
 ### المشكلة
