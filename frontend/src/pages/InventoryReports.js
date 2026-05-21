@@ -129,14 +129,22 @@ export default function InventoryReports() {
     }
   };
   const calculateMetrics = (raw, products, orders, purchases, branches) => {
+    // ⭐ helper: سعر الوحدة الواحدة (يفضل القيمة المحسوبة من الباكند)
+    const _unitCost = (p) => Number(p?.unit_cost_after_waste ?? 0) || (
+      // fallback للبيانات القديمة فقط: تكلفة الدفعة ÷ الكمية
+      (Number(p?.quantity) || 0) > 0
+        ? Number(p?.raw_material_cost_after_waste || p?.production_cost || p?.raw_material_cost || 0) / Number(p.quantity)
+        : 0
+    );
+
     // إجمالي قيمة المواد الخام
     const totalRawMaterialValue = raw.reduce(
       (sum, m) => sum + (m.quantity || 0) * (m.cost_per_unit || 0), 0
     );
     
-    // إجمالي قيمة المنتجات المصنعة
+    // ⭐ إجمالي قيمة المنتجات المصنعة = الكمية × سعر الوحدة (وليس × تكلفة الدفعة!)
     const totalManufacturedValue = products.reduce(
-      (sum, p) => sum + (p.quantity || 0) * (p.raw_material_cost || 0), 0
+      (sum, p) => sum + (p.quantity || 0) * _unitCost(p), 0
     );
     
     // إجمالي المشتريات
@@ -149,10 +157,10 @@ export default function InventoryReports() {
       (sum, o) => sum + (o.total_cost || 0), 0
     );
     
-    // متوسط هامش الربح
+    // ⭐ متوسط هامش الربح = (سعر البيع - تكلفة الوحدة) ÷ سعر البيع
     const margins = products
       .filter(p => p.selling_price > 0)
-      .map(p => ((p.selling_price - p.raw_material_cost) / p.selling_price) * 100);
+      .map(p => ((p.selling_price - _unitCost(p)) / p.selling_price) * 100);
     const avgProfitMargin = margins.length > 0
       ? margins.reduce((a, b) => a + b, 0) / margins.length
       : 0;
@@ -209,13 +217,20 @@ export default function InventoryReports() {
         cost: m.cost_per_unit,
         value: m.quantity * m.cost_per_unit
       })),
-      manufacturedProducts: manufacturedProducts.map(p => ({
-        name: p.name,
-        quantity: p.quantity,
-        cost: p.raw_material_cost,
-        sellingPrice: p.selling_price,
-        profitMargin: p.profit_margin
-      }))
+      manufacturedProducts: manufacturedProducts.map(p => {
+        const unitCost = Number(p?.unit_cost_after_waste ?? 0) || (
+          (Number(p?.quantity) || 0) > 0
+            ? Number(p?.raw_material_cost_after_waste || p?.production_cost || p?.raw_material_cost || 0) / Number(p.quantity)
+            : 0
+        );
+        return {
+          name: p.name,
+          quantity: p.quantity,
+          cost: unitCost,
+          sellingPrice: p.selling_price,
+          profitMargin: (Number(p.selling_price) || 0) - unitCost
+        };
+      })
     };
     
     const blob = new Blob([JSON.stringify(reportData, null, 2)], { type: 'application/json' });
@@ -423,7 +438,7 @@ export default function InventoryReports() {
                             <div>
                               <p className="font-medium">{product.name}</p>
                               <p className="text-xs text-muted-foreground">
-                                {t('تكلفة')}: {formatPrice(product.raw_material_cost)} | {t('بيع')}: {formatPrice(product.selling_price)}
+                                {t('تكلفة')}: {formatPrice(Number(product?.unit_cost_after_waste ?? 0) || ((Number(product?.quantity) || 0) > 0 ? Number(product?.raw_material_cost_after_waste || product?.production_cost || product?.raw_material_cost || 0) / Number(product.quantity) : 0))} | {t('بيع')}: {formatPrice(product.selling_price)}
                               </p>
                             </div>
                           </div>
@@ -579,17 +594,24 @@ export default function InventoryReports() {
                       </thead>
                       <tbody>
                         {manufacturedProducts.map(product => {
+                          // ⭐ سعر الوحدة الواحدة (يفضل القيمة المحسوبة من الباكند)
+                          const unitCost = Number(product?.unit_cost_after_waste ?? 0) || (
+                            (Number(product?.quantity) || 0) > 0
+                              ? Number(product?.raw_material_cost_after_waste || product?.production_cost || product?.raw_material_cost || 0) / Number(product.quantity)
+                              : 0
+                          );
                           const profitPercentage = product.selling_price > 0
-                            ? ((product.profit_margin / product.selling_price) * 100).toFixed(1)
+                            ? (((product.selling_price - unitCost) / product.selling_price) * 100).toFixed(1)
                             : 0;
-                          const totalValue = (product.quantity || 0) * (product.raw_material_cost || 0);
+                          const totalValue = (product.quantity || 0) * unitCost;
+                          const unitProfit = (product.selling_price || 0) - unitCost;
                           return (
                             <tr key={product.id} className="border-b hover:bg-muted/30">
                               <td className="p-3 font-medium">{product.name}</td>
                               <td className="p-3">{product.quantity} {product.unit}</td>
-                              <td className="p-3 text-blue-500">{formatPrice(product.raw_material_cost)}</td>
+                              <td className="p-3 text-blue-500">{formatPrice(unitCost)}</td>
                               <td className="p-3 text-green-500">{formatPrice(product.selling_price)}</td>
-                              <td className="p-3 font-bold text-primary">{formatPrice(product.profit_margin)}</td>
+                              <td className="p-3 font-bold text-primary">{formatPrice(unitProfit)}</td>
                               <td className="p-3">
                                 <Badge className={
                                   profitPercentage >= 50 ? 'bg-green-500/20 text-green-500' :
@@ -608,7 +630,14 @@ export default function InventoryReports() {
                         <tr className="bg-primary/10">
                           <td className="p-3 font-bold" colSpan={4}>{t('الإجمالي')}</td>
                           <td className="p-3 font-bold text-primary">
-                            {formatPrice(manufacturedProducts.reduce((s, p) => s + (p.profit_margin || 0), 0))}
+                            {formatPrice(manufacturedProducts.reduce((s, p) => {
+                              const uc = Number(p?.unit_cost_after_waste ?? 0) || (
+                                (Number(p?.quantity) || 0) > 0
+                                  ? Number(p?.raw_material_cost_after_waste || p?.production_cost || p?.raw_material_cost || 0) / Number(p.quantity)
+                                  : 0
+                              );
+                              return s + ((Number(p.selling_price) || 0) - uc);
+                            }, 0))}
                           </td>
                           <td className="p-3 font-bold">{metrics.avgProfitMargin.toFixed(1)}%</td>
                           <td className="p-3 font-bold">{formatPrice(metrics.totalManufacturedValue)}</td>

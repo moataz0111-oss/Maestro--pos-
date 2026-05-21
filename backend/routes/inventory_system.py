@@ -2427,14 +2427,23 @@ async def create_branch_request(request_data: dict, current_user: dict = Depends
         # جلب المنتج المصنع
         product = await db.manufactured_products.find_one({"id": product_id}, {"_id": 0})
         if product:
-            cost = product.get("raw_material_cost", 0) * quantity
+            # ⭐ سعر الوحدة الواحدة (وليس تكلفة الدفعة كاملة)
+            _backfill_cost_fields(product)
+            await _enrich_unit_cost_fields(db, product)
+            unit_cost = float(product.get("unit_cost_after_waste") or 0)
+            if unit_cost == 0:
+                # fallback للبيانات القديمة جداً
+                p_qty = float(product.get("quantity") or 0)
+                p_batch = float(product.get("raw_material_cost_after_waste") or product.get("production_cost") or product.get("raw_material_cost") or 0)
+                unit_cost = (p_batch / p_qty) if p_qty > 0 else 0
+            cost = unit_cost * quantity
             total_cost += cost
             items_with_details.append({
                 "product_id": product_id,
                 "product_name": product.get("name"),
                 "quantity": quantity,
                 "unit": product.get("unit", "قطعة"),
-                "cost_per_unit": product.get("raw_material_cost", 0),
+                "cost_per_unit": unit_cost,
                 "total_cost": cost,
                 "available_quantity": product.get("quantity", 0)
             })
