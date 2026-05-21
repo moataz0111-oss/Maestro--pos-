@@ -2997,27 +2997,37 @@ export default function WarehouseManufacturing() {
                               
                               {/* إحصائيات الكمية */}
                               <div className="grid grid-cols-3 gap-2 p-2 bg-muted/30 rounded-lg mb-3">
-                                <div className="text-center">
-                                  <p className="text-xs text-muted-foreground">{t('إجمالي المُصنّع')}</p>
-                                  <p className="font-bold text-purple-500 tabular-nums" data-testid="stat-total-produced">
-                                    {Math.round(((product.total_produced || product.quantity || 0)) * 1000) / 1000}
-                                    <span className="text-xs text-muted-foreground mr-1">{product.unit || 'قطعة'}</span>
-                                  </p>
-                                </div>
-                                <div className="text-center border-x border-muted">
-                                  <p className="text-xs text-muted-foreground">{t('المحول للفروع')}</p>
-                                  <p className="font-bold text-blue-500 tabular-nums" data-testid="stat-transferred">
-                                    {Math.round(((product.transferred_quantity || 0)) * 1000) / 1000}
-                                    <span className="text-xs text-muted-foreground mr-1">{product.unit || 'قطعة'}</span>
-                                  </p>
-                                </div>
-                                <div className="text-center">
-                                  <p className="text-xs text-muted-foreground">{t('المتبقي')}</p>
-                                  <p className="font-bold text-green-500 tabular-nums" data-testid="stat-remaining">
-                                    {Math.round(((product.quantity || 0)) * 1000) / 1000}
-                                    <span className="text-xs text-muted-foreground mr-1">{product.unit || 'قطعة'}</span>
-                                  </p>
-                                </div>
+                                {(() => {
+                                  const _COUNT_UNITS = new Set(['قطعة','حبة','شريحة','حصة','كأس','كاب','قدح','صحن','علبة','كرتون','كيس','باكيت','رول','زجاجة','ربطة','piece']);
+                                  const _WEIGHT_UNITS = new Set(['غرام','كغم','كيلو','كجم','مل','لتر','gram','kg','ml','l','liter']);
+                                  const useSmartUnit = product.piece_weight_unit && _COUNT_UNITS.has(product.piece_weight_unit) && _WEIGHT_UNITS.has(product.unit);
+                                  const dispUnit = useSmartUnit ? product.piece_weight_unit : (product.unit || 'قطعة');
+                                  return (
+                                    <>
+                                      <div className="text-center">
+                                        <p className="text-xs text-muted-foreground">{t('إجمالي المُصنّع')}</p>
+                                        <p className="font-bold text-purple-500 tabular-nums" data-testid="stat-total-produced">
+                                          {Math.round(((product.total_produced || product.quantity || 0)) * 1000) / 1000}
+                                          <span className="text-xs text-muted-foreground mr-1">{dispUnit}</span>
+                                        </p>
+                                      </div>
+                                      <div className="text-center border-x border-muted">
+                                        <p className="text-xs text-muted-foreground">{t('المحول للفروع')}</p>
+                                        <p className="font-bold text-blue-500 tabular-nums" data-testid="stat-transferred">
+                                          {Math.round(((product.transferred_quantity || 0)) * 1000) / 1000}
+                                          <span className="text-xs text-muted-foreground mr-1">{dispUnit}</span>
+                                        </p>
+                                      </div>
+                                      <div className="text-center">
+                                        <p className="text-xs text-muted-foreground">{t('المتبقي')}</p>
+                                        <p className="font-bold text-green-500 tabular-nums" data-testid="stat-remaining">
+                                          {Math.round(((product.quantity || 0)) * 1000) / 1000}
+                                          <span className="text-xs text-muted-foreground mr-1">{dispUnit}</span>
+                                        </p>
+                                      </div>
+                                    </>
+                                  );
+                                })()}
                               </div>
                               
                               {/* شريط التقدم */}
@@ -3095,7 +3105,11 @@ export default function WarehouseManufacturing() {
                                 const batchAfter = Number(product.raw_material_cost_after_waste ?? product.production_cost ?? product.raw_material_cost ?? 0);
                                 const unitBefore = batchBefore / denom;
                                 const unitAfter = batchAfter / denom;
-                                const unitLabel = product.unit || 'حبة';
+                                // ⭐ وحدة العرض الذكية: إذا كان piece_weight_unit وحدة قطعية و product.unit وزنية → استخدم piece_weight_unit
+                                const _COUNT_UNITS_DISP = new Set(['قطعة','حبة','شريحة','حصة','كأس','كاب','قدح','صحن','علبة','كرتون','كيس','باكيت','رول','زجاجة','ربطة','piece']);
+                                const _WEIGHT_UNITS_DISP = new Set(['غرام','كغم','كيلو','كجم','مل','لتر','gram','kg','ml','l','liter']);
+                                const _useSmartUnit = product.piece_weight_unit && _COUNT_UNITS_DISP.has(product.piece_weight_unit) && _WEIGHT_UNITS_DISP.has(product.unit);
+                                const unitLabel = _useSmartUnit ? product.piece_weight_unit : (product.unit || 'حبة');
                                 return (
                                   <>
                                     {/* شريط العائد المحسوب */}
