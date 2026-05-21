@@ -4526,7 +4526,14 @@ async def get_inventory_statistics():
     
     # إحصائيات المنتجات المصنعة
     products = await db.manufactured_products.find({}, {"_id": 0}).to_list(1000)
-    total_products_value = sum(p.get("quantity", 0) * p.get("raw_material_cost", 0) for p in products)
+    # ⭐ احتساب القيمة الإجمالية بسعر الوحدة الواحدة (وليس بتكلفة الدفعة كاملة)
+    total_products_value = 0.0
+    for p in products:
+        _backfill_cost_fields(p)
+        await _enrich_unit_cost_fields(db, p)
+        qty = float(p.get("quantity", 0) or 0)
+        unit_cost = float(p.get("unit_cost_after_waste", 0) or 0)
+        total_products_value += qty * unit_cost
     low_stock_products = [p for p in products if p.get("quantity", 0) <= p.get("min_quantity", 0)]
     
     # إحصائيات المشتريات

@@ -1,6 +1,41 @@
 # Maestro EGP - Changelog
 
 
+## Session: May 21, 2026 (24) — إصلاح Bug خطير في إحصائيات المنتجات المُصنّعة
+
+### المشكلة
+بطاقة "المنتجات المصنعة" في صفحة المخزن والتصنيع كانت تعرض إجمالي قيمة هائل غير منطقي (339,994,050 IQD لـ 48 منتج فقط).
+
+### السبب الجذري
+في `GET /api/inventory-stats` كان السطر:
+```python
+total_products_value = sum(p.get("quantity", 0) * p.get("raw_material_cost", 0) for p in products)
+```
+يضرب `quantity` (كمية المخزون) × `raw_material_cost` (تكلفة الدفعة كاملة!) بدل سعر الوحدة الواحدة.
+
+**مثال "أرز ريزو":** 6000 حصة × 2,349,964 (تكلفة الدفعة كاملة) = **14 مليار IQD** بدل 2.35 مليون.
+
+### الحل
+يستدعي الآن `_enrich_unit_cost_fields()` على كل منتج ليحصل على `unit_cost_after_waste` (تكلفة الوحدة الواحدة) ثم يضربها × `quantity`:
+```python
+for p in products:
+    _backfill_cost_fields(p)
+    await _enrich_unit_cost_fields(db, p)
+    total_products_value += float(p.get("quantity", 0)) * float(p.get("unit_cost_after_waste", 0))
+```
+
+### الاختبارات
+- `backend/tests/test_inventory_stats_unit_cost.py` (2 pytest):
+  - يحقق سيناريو "أرز ريزو" بالضبط: 6000 × ~392 = ~2.35M بدل 14B.
+  - يحقق حالة نصف المخزون: 3000 × ~392 = ~1.18M.
+- 2/2 ناجحة ✅
+
+### الأثر التجاري
+- البطاقة ستظهر القيمة الصحيحة (الأرجح ملايين قليلة لا مئات الملايين).
+- إحصائيات لوحة التحكم والتقارير المعتمدة على هذا المخطط ستكون دقيقة.
+
+
+
 ## Session: May 21, 2026 (23) — وحدة العرض الذكية (Smart Display Unit)
 
 ### المشكلة
