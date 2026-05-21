@@ -2089,6 +2089,10 @@ export default function POS() {
       const selectedTableObj = tables.find(t => t.id === selectedTable);
       const tableNumber = selectedTableObj?.number;
       
+      const subtotalCalc = cart.reduce((sum, item) => sum + ((item.price * item.quantity) + (item.selectedExtras || []).reduce((s, e) => s + (e.price * (e.quantity || 1)), 0)), 0);
+      const totalDiscountVal = (discount || 0) + (couponDiscount || 0);
+      const totalCalc = Math.max(0, subtotalCalc - Math.min(subtotalCalc, totalDiscountVal));
+      
       const offlineOrder = {
         order_type: orderType,
         table_id: orderType === 'dine_in' ? selectedTable : null,
@@ -2099,17 +2103,24 @@ export default function POS() {
         buzzer_number: orderType === 'takeaway' ? buzzerNumber : null,
         items: cart.map(item => ({
           product_id: item.product_id || item.id,
+          product_name: item.product_name || item.name,
           name: item.name,
           price: item.price,
           quantity: item.quantity,
+          cost: item.cost || 0,
           notes: item.notes || '',
           extras: item.selectedExtras || []
         })),
-        subtotal: cart.reduce((sum, item) => sum + ((item.price * item.quantity) + (item.selectedExtras || []).reduce((s, e) => s + (e.price * (e.quantity || 1)), 0)), 0),
-        total: cart.reduce((sum, item) => sum + ((item.price * item.quantity) + (item.selectedExtras || []).reduce((s, e) => s + (e.price * (e.quantity || 1)), 0)), 0) - discount,
+        subtotal: subtotalCalc,
+        total: totalCalc,
+        total_amount: totalCalc,
         discount: discount,
         discount_type: discountType,
         discount_value: discount,
+        coupon_id: appliedCoupon?.id || null,
+        coupon_code: appliedCoupon?.code || null,
+        coupon_name: appliedCoupon?.name || null,
+        coupon_discount: couponDiscount || 0,
         tax: 0,
         branch_id: currentBranchId,
         payment_method: paymentMethod,
@@ -2148,10 +2159,77 @@ export default function POS() {
         }
       }
       
+      // ⭐ طباعة الفاتورة وإرسال للمطبخ بنفس flow الـ Online (هام: المطعم يحتاج فاتورة + ورقة مطبخ حتى Offline)
+      try {
+        const restaurantName = restaurantSettings?.name_ar || restaurantSettings?.name || '';
+        const offlineOrderNumber = savedOrder.offline_id || savedOrder.id;
+        const orderForPrint = {
+          ...buildPrintOrderData(offlineOrderNumber),
+          order_number: offlineOrderNumber,
+          id: offlineOrderNumber,
+        };
+        const itemsForPrint = cart.map(item => ({
+          product_id: item.product_id || item.id,
+          product_name: item.product_name || item.name,
+          name: item.product_name || item.name,
+          price: item.price,
+          quantity: item.quantity,
+          notes: item.notes || '',
+          extras: item.selectedExtras || []
+        }));
+        
+        const printPromises = [];
+        // 1. طباعة الفاتورة على طابعة الكاشير
+        let cashierPrinter = availablePrinters.find(p => p.print_mode === 'full_receipt');
+        if (!cashierPrinter) cashierPrinter = availablePrinters.find(p => p.connection_type === 'usb' && p.usb_printer_name);
+        if (cashierPrinter) {
+          const cashierOrderData = {
+            ...orderForPrint,
+            items: itemsForPrint,
+            total: totalCalc,
+            subtotal: subtotalCalc,
+            discount: discount || 0,
+            coupon_id: appliedCoupon?.id || null,
+            coupon_code: appliedCoupon?.code || null,
+            coupon_name: appliedCoupon?.name || null,
+            coupon_discount: couponDiscount || 0,
+            customer_name: customerName || '',
+            payment_method: paymentMethod || '',
+            cashier_name: user?.name || user?.full_name || '',
+            is_paid: true,
+            is_offline: true
+          };
+          printPromises.push(
+            sendReceiptPrint(cashierPrinter, cashierOrderData).then(r => {
+              if (!r.success) toast.error(t('فشل طباعة فاتورة الكاشير: ') + (r.message || ''));
+            }).catch(e => console.error('[Offline] Cashier print err:', e))
+          );
+        }
+        // 2. إرسال الطلبات لطابعات المطبخ
+        const kitchenPrinters = availablePrinters.filter(p => 
+          (p.print_mode === 'orders_only' || p.print_mode === 'selected_products') &&
+          ((p.connection_type === 'usb' && p.usb_printer_name) || (p.connection_type !== 'usb' && p.ip_address))
+        );
+        if (kitchenPrinters.length > 0) {
+          printPromises.push(
+            printOrderToAllPrinters(orderForPrint, itemsForPrint, products, kitchenPrinters, restaurantName).then(r => {
+              if (!r.success) {
+                toast.error(t('فشل طباعة طلبات المطبخ'));
+                r.results?.filter(x => !x.success).forEach(f => toast.error(`${f.printer_name}: ${f.message}`));
+              }
+            }).catch(e => console.error('[Offline] Kitchen print err:', e))
+          );
+        }
+        // لا ننتظر الطباعات
+        Promise.all(printPromises).catch(() => {});
+      } catch (printErr) {
+        console.error('[Offline] Print error:', printErr);
+      }
+      
       playSuccess();
       toast.success(
         <div>
-          <div>✅ {t('تم حفظ الطلب محلياً')}</div>
+          <div>✅ {t('تم حفظ الطلب وطباعته')}</div>
           <div className="text-sm opacity-80">#{savedOrder.offline_id}</div>
           <div className="text-xs opacity-60">{t('سيتم رفعه عند عودة الاتصال')}</div>
         </div>,
@@ -2172,15 +2250,20 @@ export default function POS() {
       
       // إضافة الطلب مباشرة للـ pendingOrders state بدون انتظار fetchPendingOrders
       setPendingOrders(prev => {
-        // تأكد من عدم التكرار
-        const exists = prev.some(o => o.id === savedOrder.id || o.offline_id === savedOrder.offline_id);
+        // تأكد من عدم التكرار (dedup قوي: id, offline_id, order_number)
+        const exists = prev.some(o => 
+          (savedOrder.id && o.id === savedOrder.id) || 
+          (savedOrder.offline_id && o.offline_id === savedOrder.offline_id) ||
+          (savedOrder.offline_id && o.id === savedOrder.offline_id)
+        );
         if (exists) return prev;
         console.log('📦 إضافة الطلب للطلبات المعلقة:', savedOrder.offline_id);
         return [savedOrder, ...prev];
       });
       
-      // تحديث الطلبات المعلقة (كـ backup)
-      setTimeout(() => fetchPendingOrders(), 500);
+      // تحديث الطلبات المعلقة (كـ backup) — بدون fetchPendingOrders فوري لمنع التكرار
+      // (الطلب موجود بالفعل في state، fetchPendingOrders قد يضيفه مجدداً قبل ما يخلص الـ commit)
+      // setTimeout(() => fetchPendingOrders(), 500);  // ❌ مُزال لمنع تكرار الطلبات
       
       return savedOrder;
     };

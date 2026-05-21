@@ -1,6 +1,47 @@
 # Maestro EGP - Changelog
 
 
+## Session: May 21, 2026 (25) — تكافؤ Offline ↔ Online للطلبات في POS
+
+### المشاكل المُبلَّغ عنها
+1. **تكرار الطلبات** في وضع Offline (يظهر مرتين في قائمة الطلبات المعلقة)
+2. **لا يطبع فاتورة** على طابعة الكاشير عند الدفع في Offline
+3. **لا يرسل للمطبخ** (طابعات المطبخ + KDS) في Offline
+4. حقل "الأجل" المخفي للكاشير يظهر في Offline (هذا سلوك صحيح وموجود في Online أيضاً، لذا لا تغيير منطقي)
+
+### الحل في `POS.js → saveOrderOffline`
+1. **dedup قوي مضاعف**: فحص `id`، `offline_id`، و الـ cross-match بينهما عند إضافة الطلب لـ `pendingOrders`.
+2. **إزالة `setTimeout(fetchPendingOrders, 500)`** بعد الحفظ Offline — كانت تسبب تكرار الطلب لأنها تجلب من IndexedDB قبل أن يكتمل الـ commit.
+3. **طباعة الفاتورة على طابعة الكاشير**: نفس flow الـ Online بالضبط — يبحث عن طابعة `full_receipt` أو `usb`، يستدعي `sendReceiptPrint` مع `is_paid: true, is_offline: true`.
+4. **إرسال للمطبخ**: نفس flow الـ Online — يفلتر `orders_only`/`selected_products`، يستدعي `printOrderToAllPrinters`.
+5. **حقول كاملة على الطلب Offline**: `product_name`, `cost`, `total_amount`, `coupon_*`, `subtotal` — لتكافؤ كامل مع Online للـ KDS والمزامنة لاحقاً.
+
+### الـ Backend
+- `POST /api/sync/orders` كان يدعم idempotency أصلاً عبر `offline_id` (راجع `sync_routes.py:140-152`). لا تغيير مطلوب.
+
+### Kitchen Display (KDS)
+- يقرأ من `offlineStorage.getTodayOrders()` عند `isOffline` — يعمل بالفعل ✅
+- الآن مع الحقول الكاملة على الطلب Offline (خاصةً `product_name` و `cashier_name`)، تظهر الطلبات بنفس تنسيق Online.
+
+### الاختبارات
+- `frontend/src/__tests__/offline_order_parity.test.js` — 11/11 jest ✅
+  - product_name على كل عنصر
+  - حساب total مع discount + coupon
+  - الكوبون يُحفظ كلياً
+  - extras داخل subtotal
+  - delivery_app فقط لـ delivery
+  - table_id فقط لـ dine_in
+  - cashier_id/cashier_name محفوظان
+  - dedup: id، offline_id، cross-match، no false positives
+
+### الأثر التجاري
+- المطعم يستلم **فاتورة مطبوعة + ورقة مطبخ** فور الدفع Offline (نفس Online).
+- لا تكرار في الطلبات.
+- المزامنة لاحقاً ترفع الطلب مرة واحدة (offline_id idempotent على الباكند).
+- KDS يعرض الطلبات Offline بنفس الجودة.
+
+
+
 ## Session: May 21, 2026 (24) — إصلاح Bug خطير في إحصائيات المنتجات المُصنّعة
 
 ### المشكلة
