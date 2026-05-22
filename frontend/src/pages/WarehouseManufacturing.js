@@ -404,6 +404,7 @@ export default function WarehouseManufacturing() {
   
   const [produceQuantity, setProduceQuantity] = useState(1);
   const [addStockQuantity, setAddStockQuantity] = useState(1);  // كمية زيادة المخزون
+  const [addStockUnit, setAddStockUnit] = useState('');  // ⭐ وحدة الزيادة (قطعة/غرام/شريحة...)
   const [addRawMaterialStockQuantity, setAddRawMaterialStockQuantity] = useState(1);  // كمية زيادة المادة الخام
   
   // طلبات المواد الخام
@@ -1634,20 +1635,43 @@ export default function WarehouseManufacturing() {
   const handleAddStock = async () => {
     if (!showAddStockDialog || addStockQuantity <= 0) return;
     
+    // ⭐ تحويل الكمية المُدخلة إلى وحدة المنتج الأصلية (unit) إذا اختار المستخدم وحدة فرعية
+    let qtyInProductUnit = addStockQuantity;
+    const mainUnit = showAddStockDialog.unit;
+    const pwu = showAddStockDialog.piece_weight_unit;
+    const pw = Number(showAddStockDialog.piece_weight || 0);
+    const _WT = { 'غرام': 1, 'كغم': 1000, 'كيلو': 1000, 'كجم': 1000, 'مل': 1, 'لتر': 1000 };
+    if (addStockUnit && addStockUnit !== mainUnit && pw > 0) {
+      // مثال: المنتج بـ "قطعة" و piece_weight=550 غرام، المستخدم أدخل 1100 غرام → 1100/550 = 2 قطعة
+      if (addStockUnit === pwu) {
+        qtyInProductUnit = addStockQuantity / pw;
+      } else if (_WT[addStockUnit] && _WT[pwu]) {
+        // كلاهما وزن: حوّل إلى الوحدة الأصغر ثم اقسم على piece_weight
+        const inputInBaseGrams = addStockQuantity * _WT[addStockUnit];
+        const pieceInBaseGrams = pw * _WT[pwu];
+        if (pieceInBaseGrams > 0) qtyInProductUnit = inputInBaseGrams / pieceInBaseGrams;
+      }
+    }
+    
     setSubmitting(true);
     try {
-      const res = await axios.post(`${API}/manufactured-products/${showAddStockDialog.id}/add-stock?quantity=${addStockQuantity}`, {}, { headers });
+      const res = await axios.post(`${API}/manufactured-products/${showAddStockDialog.id}/add-stock?quantity=${qtyInProductUnit}`, {}, { headers });
       const d = res.data || {};
+      const inputUnitLabel = addStockUnit || mainUnit;
+      const conversionMsg = (qtyInProductUnit !== addStockQuantity)
+        ? ` · ${addStockQuantity} ${inputUnitLabel} ≈ ${qtyInProductUnit.toFixed(3)} ${mainUnit}`
+        : '';
       if (d.recipe_scaled) {
         toast.success(
-          t('تم زيادة الكمية بنجاح') +
+          t('تم زيادة الكمية بنجاح') + conversionMsg +
           ` · ${t('تمت مزامنة الوصفة تلقائياً')} (×${d.scale_factor})`
         );
       } else {
-        toast.success(t('تم زيادة الكمية بنجاح'));
+        toast.success(t('تم زيادة الكمية بنجاح') + conversionMsg);
       }
       setShowAddStockDialog(null);
       setAddStockQuantity(1);
+      setAddStockUnit('');
       fetchData();
     } catch (error) {
       showApiError(error, t('فشل في زيادة الكمية'));
@@ -5566,7 +5590,7 @@ export default function WarehouseManufacturing() {
       </Dialog>
       
       {/* Dialog: زيادة كمية المنتج */}
-      <Dialog open={!!showAddStockDialog} onOpenChange={() => { setShowAddStockDialog(null); setAddStockQuantity(1); }}>
+      <Dialog open={!!showAddStockDialog} onOpenChange={() => { setShowAddStockDialog(null); setAddStockQuantity(1); setAddStockUnit(''); }}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -5598,16 +5622,18 @@ export default function WarehouseManufacturing() {
                     type="button"
                     variant="outline" 
                     size="icon"
-                    onClick={() => setAddStockQuantity(Math.max(1, addStockQuantity - 1))}
+                    onClick={() => setAddStockQuantity(Math.max(0.001, addStockQuantity - 1))}
                   >
                     <Minus className="h-4 w-4" />
                   </Button>
                   <Input
                     type="number"
-                    min="1"
+                    min="0.001"
+                    step="0.001"
                     value={addStockQuantity}
                     onChange={(e) => setAddStockQuantity(parseFloat(e.target.value) || 1)}
                     className="w-24 text-center text-lg font-bold"
+                    data-testid="add-stock-qty-input"
                   />
                   <Button 
                     type="button"
@@ -5617,14 +5643,57 @@ export default function WarehouseManufacturing() {
                   >
                     <Plus className="h-4 w-4" />
                   </Button>
-                  <span className="text-sm text-muted-foreground">{showAddStockDialog.unit}</span>
+                  {/* ⭐ dropdown اختيار الوحدة (الوحدة الأصلية + الوحدة الفرعية إن وجدت) */}
+                  {(() => {
+                    const mainUnit = showAddStockDialog.unit || 'قطعة';
+                    const pwu = showAddStockDialog.piece_weight_unit;
+                    const pw = Number(showAddStockDialog.piece_weight || 0);
+                    const hasSub = pw > 0 && pwu && pwu !== mainUnit;
+                    if (!hasSub) {
+                      return <span className="text-sm text-muted-foreground w-20" data-testid="add-stock-unit-static">{mainUnit}</span>;
+                    }
+                    return (
+                      <Select
+                        value={addStockUnit || mainUnit}
+                        onValueChange={(v) => setAddStockUnit(v)}
+                      >
+                        <SelectTrigger className="w-28 h-10" data-testid="add-stock-unit-select">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value={mainUnit}>{mainUnit}</SelectItem>
+                          <SelectItem value={pwu}>{pwu}</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    );
+                  })()}
                 </div>
+                {/* معلومة الوحدة الفرعية */}
+                {Number(showAddStockDialog.piece_weight || 0) > 0 && showAddStockDialog.piece_weight_unit && showAddStockDialog.piece_weight_unit !== showAddStockDialog.unit && (
+                  <p className="text-[11px] text-amber-700 dark:text-amber-300 mt-1">
+                    💡 1 {showAddStockDialog.unit} = {showAddStockDialog.piece_weight} {showAddStockDialog.piece_weight_unit}
+                  </p>
+                )}
               </div>
               
               <div className="p-3 bg-green-500/10 rounded-lg text-center">
                 <p className="text-sm text-muted-foreground">{t('الكمية بعد الإضافة')}</p>
                 <p className="text-xl font-bold text-green-500">
-                  {(showAddStockDialog.quantity || 0) + addStockQuantity} {showAddStockDialog.unit}
+                  {(() => {
+                    const mainUnit = showAddStockDialog.unit;
+                    const pwu = showAddStockDialog.piece_weight_unit;
+                    const pw = Number(showAddStockDialog.piece_weight || 0);
+                    const _WT = { 'غرام': 1, 'كغم': 1000, 'كيلو': 1000, 'كجم': 1000, 'مل': 1, 'لتر': 1000 };
+                    let qtyInProduct = addStockQuantity;
+                    if (addStockUnit && addStockUnit !== mainUnit && pw > 0) {
+                      if (addStockUnit === pwu) qtyInProduct = addStockQuantity / pw;
+                      else if (_WT[addStockUnit] && _WT[pwu]) {
+                        qtyInProduct = (addStockQuantity * _WT[addStockUnit]) / (pw * _WT[pwu]);
+                      }
+                    }
+                    const total = (showAddStockDialog.quantity || 0) + qtyInProduct;
+                    return `${total.toFixed(3)} ${mainUnit}`;
+                  })()}
                 </p>
               </div>
               
@@ -5635,7 +5704,7 @@ export default function WarehouseManufacturing() {
           )}
           
           <DialogFooter>
-            <Button variant="outline" onClick={() => { setShowAddStockDialog(null); setAddStockQuantity(1); }}>
+            <Button variant="outline" onClick={() => { setShowAddStockDialog(null); setAddStockQuantity(1); setAddStockUnit(''); }}>
               {t('إلغاء')}
             </Button>
             <Button 
