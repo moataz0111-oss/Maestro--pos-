@@ -3112,6 +3112,36 @@ export default function WarehouseManufacturing() {
                                 const unitLabel = _useSmartUnit ? product.piece_weight_unit : (product.unit || 'حبة');
                                 return (
                                   <>
+                                    {/* ⚠️ تحذير: مكونات قطعية بدون وزن — يؤدي لحساب يحاسب خاطئ */}
+                                    {(() => {
+                                      const _COUNT_INGS = new Set(['قطعة','حبة','علبة','كرتون','صحن','piece']);
+                                      const _WT = new Set(['غرام','كغم','كيلو','كجم','مل','لتر','gram','kg','ml','l','liter']);
+                                      const missing = (product.recipe || []).filter(ing => {
+                                        if (!_COUNT_INGS.has(ing.unit)) return false;
+                                        const mat = rawMaterials?.find?.(r => r.id === ing.raw_material_id);
+                                        if (!mat) return false;
+                                        // مفقود: pack_quantity أو pack_unit (يجب أن يكون وزني)
+                                        return !mat.pack_quantity || !mat.pack_unit || !_WT.has(mat.pack_unit);
+                                      });
+                                      if (missing.length === 0) return null;
+                                      return (
+                                        <div className="mb-2 p-2 rounded-md border bg-red-500/10 border-red-500/40 text-red-700 text-[11px]" data-testid="missing-pack-info-warning">
+                                          <div className="font-bold">⚠️ {t('تنبيه: حساب التكلفة قد يكون غير دقيق')}</div>
+                                          <div className="mt-1">
+                                            {t('المكونات التالية بدون وزن محدد:')}
+                                            {' '}
+                                            {missing.map((ing, i) => (
+                                              <span key={i} className="font-medium">
+                                                {i > 0 ? '، ' : ''}{ing.raw_material_name || ing.name}
+                                              </span>
+                                            ))}
+                                          </div>
+                                          <div className="mt-1 text-[10px]">
+                                            {t('الحل: اذهب إلى صفحة "المواد الخام" → عدّل المادة → أدخل "وزن العبوة" (pack_quantity) و"وحدة الوزن" (pack_unit = غرام/كغم) حتى يحسب النظام التكلفة الصحيحة.')}
+                                          </div>
+                                        </div>
+                                      );
+                                    })()}
                                     {/* شريط العائد المحسوب */}
                                     {finalYield > 0 && (() => {
                                       const diff = Math.abs(finalYield - storedQty);
