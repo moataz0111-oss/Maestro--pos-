@@ -538,6 +538,44 @@ async def create_purchase(purchase: PurchaseCreate):
     del purchase_doc["_id"]
     return purchase_doc
 
+
+# ⭐ حذف فاتورة شراء (للتصحيح عند إدخال قيم خاطئة)
+@router.delete("/purchases-new/{purchase_id}")
+async def delete_purchase(purchase_id: str, current_user: dict = Depends(get_current_user)):
+    """حذف فاتورة شراء — يخصم الإجمالي من المورد ويسجل في audit log."""
+    db = get_db()
+    purchase = await db.purchases_new.find_one({"id": purchase_id}, {"_id": 0})
+    if not purchase:
+        raise HTTPException(status_code=404, detail="الفاتورة غير موجودة")
+    
+    # تأكد أن الفاتورة لم تُرسل للمخزن بعد (لمنع كسر المخزون)
+    if purchase.get("status") == "sent_to_warehouse":
+        raise HTTPException(status_code=400, detail="لا يمكن حذف فاتورة أُرسلت للمخزن بالفعل")
+    
+    # خصم الإجمالي من إجمالي المورد
+    if purchase.get("supplier_id"):
+        await db.suppliers.update_one(
+            {"id": purchase["supplier_id"]},
+            {"$inc": {"total_purchases": -float(purchase.get("total_amount", 0))}}
+        )
+    
+    await db.purchases_new.delete_one({"id": purchase_id})
+    
+    # سجل audit
+    await db.audit_logs.insert_one({
+        "id": str(uuid.uuid4()),
+        "action": "delete_purchase",
+        "purchase_id": purchase_id,
+        "purchase_number": purchase.get("purchase_number"),
+        "supplier_name": purchase.get("supplier_name"),
+        "total_amount": purchase.get("total_amount"),
+        "deleted_by": current_user.get("id"),
+        "deleted_at": datetime.now(timezone.utc).isoformat(),
+    })
+    
+    return {"message": f"تم حذف الفاتورة #{purchase.get('purchase_number')}", "deleted_amount": purchase.get("total_amount", 0)}
+
+
 @router.post("/purchases-new/{purchase_id}/upload-invoice")
 async def upload_invoice_image(
     purchase_id: str,

@@ -306,6 +306,21 @@ export default function Purchasing() {
       return;
     }
     
+    // ⭐ تنبيه عند إجمالي مرتفع جداً (لمنع الأخطاء الإدخالية مثل 73 مليون لفاتورة توابل)
+    const totalToSave = calculateTotal();
+    if (totalToSave > 10_000_000) {
+      const formattedTotal = new Intl.NumberFormat('en-US').format(totalToSave);
+      const confirmHuge = window.confirm(
+        `${t('تحذير: إجمالي الفاتورة مرتفع جداً')}: ${formattedTotal} IQD\n\n` +
+        `${t('هل أنت متأكد من القيم المُدخلة؟ تحقق من الكميات وأسعار الوحدات.')}\n\n` +
+        `${t('اضغط موافق للمتابعة، أو إلغاء للمراجعة.')}`
+      );
+      if (!confirmHuge) {
+        setSubmitting(false);
+        return;
+      }
+    }
+    
     setSubmitting(true);
     try {
       const formData = {

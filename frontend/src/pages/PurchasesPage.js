@@ -566,6 +566,18 @@ export default function PurchasesPage() {
       setReasonsDialog({ open: true, items: flagged, reasons: {} });
       return;
     }
+    // ⭐ تحذير عند إجمالي مرتفع جداً (لمنع الأخطاء الإدخالية مثل 73 مليون لفاتورة توابل)
+    const totalToSave = Number(purchaseForm.total_amount || 0);
+    if (totalToSave > 10_000_000) {
+      const formattedTotal = new Intl.NumberFormat('en-US').format(totalToSave);
+      const confirmHuge = window.confirm(
+        `${t('⚠️ تحذير: إجمالي الفاتورة مرتفع جداً')}\n\n` +
+        `${t('الإجمالي:')} ${formattedTotal} IQD\n\n` +
+        `${t('هل أنت متأكد من القيم المُدخلة؟ راجع الكميات وأسعار الوحدات قبل الحفظ.')}\n\n` +
+        `${t('اضغط موافق للمتابعة، أو إلغاء للمراجعة.')}`
+      );
+      if (!confirmHuge) return;
+    }
     await submitPurchaseInvoice(null);
   };
 
@@ -820,6 +832,32 @@ export default function PurchasesPage() {
                               >
                                 <Send className="h-4 w-4 ml-1" />
                                 {t('إرسال')}
+                              </Button>
+                            )}
+                            
+                            {/* ⭐ زر حذف الفاتورة (فقط إذا لم تُرسل للمخزن بعد) */}
+                            {purchase.status !== 'sent_to_warehouse' && (
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={async () => {
+                                  const confirmMsg = `${t('تأكيد حذف فاتورة #')} ${purchase.purchase_number}؟\n\n` +
+                                    `${t('المورد:')} ${purchase.supplier_name || '?'}\n` +
+                                    `${t('الإجمالي:')} ${new Intl.NumberFormat('en-US').format(purchase.total_amount || 0)} IQD\n\n` +
+                                    `${t('سيتم خصم الإجمالي من رصيد المورد. لا يمكن التراجع.')}`;
+                                  if (!window.confirm(confirmMsg)) return;
+                                  try {
+                                    await axios.delete(`${API}/purchases-new/${purchase.id}`, { headers });
+                                    toast.success(t('تم حذف الفاتورة'));
+                                    fetchData();
+                                  } catch (err) {
+                                    showApiError(err, t('فشل في حذف الفاتورة'));
+                                  }
+                                }}
+                                className="text-red-500 hover:bg-red-500/10"
+                                data-testid={`delete-purchase-${purchase.id}`}
+                              >
+                                <Trash2 className="h-4 w-4" />
                               </Button>
                             )}
                           </div>
