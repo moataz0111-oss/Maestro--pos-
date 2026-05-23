@@ -1,6 +1,48 @@
 # Maestro EGP - Changelog
 
 
+## Session: Feb 21, 2026 (HOTFIX حرج) — 💰 إصلاح "إجمالي تكلفة المنتج النهائي" 49,273 → 1,521
+
+### المشكلة المُبلَّغة (محاسبية حرجة)
+في `MfgLinksEditor`، الإجمالي يعرض **49,273 IQD** بدلاً من **1,521 IQD** الصحيح:
+- لحم برغر: 1 حبة → 1,473 IQD ✓ (يظهر صح في الـ row)
+- جرافيتي صوص: 20 غرام → 48 IQD ✓ (يظهر صح في الـ row)
+- المتوقَّع: 1,473 + 48 = **1,521 IQD**
+- المعروض: **49,273 IQD** ❌
+
+### السبب الجذري
+انعدام التطابق بين منطقين في نفس الملف:
+- **العرض في كل row** (السطر 2206): `_convertConsumptionToMain(1, "غرام", "كغم", ...)` = 0.001 → سعر الغرام = 2 IQD → lineCost = 40-48 ✓
+- **الإجمالي عبر `_linkLineCost`** (السطر 2138-2145): يستخدم منطق `isSubUnit` القديم → لا يُحوّل "غرام" إلى "كغم" → يضرب سعر الكغم × 20 = **49,260** ❌
+
+دالة `_linkLineCost` لم تُحدَّث مع باقي الكود.
+
+### الإصلاح
+استبدلت `_linkLineCost` بالكامل لتستخدم `_convertConsumptionToMain` (نفس منطق العرض الـ row):
+```js
+const _linkLineCost = (lk) => {
+  const mp = manufacturedProducts.find(m => m.id === lk.manufactured_product_id);
+  if (!mp) return 0;
+  const qty = Number(lk.consumption_qty || 0);
+  if (qty <= 0) return 0;
+  const mainUnit = mp.unit || 'حبة';
+  const consumptionUnit = lk.consumption_unit || mainUnit;
+  const perPieceCost = _computeMfgUnitCost(mp);
+  const qtyInMain = _convertConsumptionToMain(qty, consumptionUnit, mainUnit, mp.piece_weight, mp.piece_weight_unit);
+  return perPieceCost * qtyInMain;
+};
+```
+
+### الحماية ضد تكرار المشكلة
+**`mfg_link_total_consistency.test.js`** (جديد): **5 اختبارات jest** تضمن أن `_linkLineCost` (الذي يدخل في `totalCost`) يطابق دائماً `lineCost` المعروض في الـ row. السيناريو الفعلي للعميل مُغطّى صراحةً: **1,521 IQD وليس 49,273**.
+
+### التحقّق
+- **18/18 jest ✅** (5 تطابق + 13 dropdown).
+- **10/10 backend pytest ✅** (smoke + converters + enrich + yield).
+- **`pre_deploy_check.py` → ✅ All 5 checks passed**.
+- Lint ✅ على Settings.js.
+
+
 ## Session: Feb 21, 2026 (URGENT HOTFIX) — 🚨 إصلاح شاشة بيضاء على VPS الإنتاج
 
 ### المشكلة

@@ -2139,10 +2139,13 @@ export default function Settings() {
       const mp = manufacturedProducts.find(m => m.id === lk.manufactured_product_id);
       if (!mp) return 0;
       const qty = Number(lk.consumption_qty || 0);
-      const consumptionUnit = lk.consumption_unit || mp.unit || 'حبة';
-      const isSubUnit = _hasSubUnit(mp) && consumptionUnit === mp.piece_weight_unit;
-      const perUnit = isSubUnit ? _computeMfgSubUnitCost(mp) : _computeMfgUnitCost(mp);
-      return perUnit * qty;
+      if (qty <= 0) return 0;
+      const mainUnit = mp.unit || 'حبة';
+      const consumptionUnit = lk.consumption_unit || mainUnit;
+      const perPieceCost = _computeMfgUnitCost(mp);
+      // ⭐ تحويل أي وحدة (كغم/غرام/شريحة/قطعة) → main_unit ثم ضرب بسعر main_unit
+      const qtyInMain = _convertConsumptionToMain(qty, consumptionUnit, mainUnit, mp.piece_weight, mp.piece_weight_unit);
+      return perPieceCost * qtyInMain;
     };
 
     // إعادة احتساب التكلفة الإجمالية كلما تغيّرت الروابط
