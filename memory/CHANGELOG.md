@@ -1,6 +1,47 @@
 # Maestro EGP - Changelog
 
 
+## Session: Feb 21, 2026 (HOTFIX حرج) — 🥩 إصلاح بطاقة "سعر القطعة" للحم المفروم 158,487 → 634 IQD
+
+### المشكلة المُبلَّغة (محاسبية كارثية)
+"لحم مفروم" (piece_weight=60 غرام، batch=108,299 IQD) يعرض:
+- ❌ "سعر الوحدة الواحدة: 158,487 IQD"
+- ❌ "قطعة = 250 غرام"  
+- ❌ "1 غرام = 1,634 IQD"
+
+المتوقَّع: 108,299 ÷ (10,250/60) = **634 IQD/قطعة، 10.57 IQD/غرام**.
+
+### السبب الجذري
+في `WarehouseManufacturing.js` (السطر 3282-3294)، حلقة "parent detection" كانت تبحث عن أي مكوّن في الوصفة لديه raw_material بـ `pack_unit === piece_weight_unit`. عند العثور عليه، يَحسب: `parentCost = unit_cost × pack_quantity`.
+
+للحم مفروم: مكوّن "صويا صوص" raw_material له `pack_quantity=250, pack_unit="غرام"`. الكود التقطه خطأً كـ "تعريف القطعة الأم" → عرض "1 قطعة = 250 غرام" + `parentCost = 634 × 250 = 158,487` ❌.
+
+**المشكلة الأساسية**: pack_info الخاص بمادة خام مستهلكة في الوصفة لا يُعرّف حجم القطعة النهائية للمنتج المُصنّع. `mp.piece_weight` هو مصدر الحقيقة الوحيد.
+
+### الإصلاح
+```js
+const hasOwnPieceDef = pw > 0 && !!pwu;
+if (!hasOwnPieceDef) {
+  // فقط في غياب piece_weight نستخدم parent detection (للبيانات القديمة)
+}
+```
+عند وجود `piece_weight` للمنتج → يتجاوز "parent" تماماً ويستخدم المسار الافتراضي:
+- "سعر القطعة الواحدة" = `unit_cost_after_waste` (634)
+- "1 قطعة = 60 غرام"
+- "↳ 1 غرام = 634/60 = 10.57 IQD" ✅
+
+### الحماية ضد التكرار
+**`cost_per_piece_card.test.js`** (3 اختبارات jest):
+- لحم مفروم scenario → parent = null ✓
+- بيانات قديمة (بدون piece_weight) → parent يعمل كالسابق ✓
+- الرياضيات الكاملة محسوبة (634 IQD/قطعة، 10.57 IQD/غرام) ✓
+
+### تنظيف إضافي
+- إصلاح `pack_unit_conversion.test.js` ليستخدم Jest API (كان قديماً يستخدم `process.exit`).
+- إجمالي frontend: **94/94 jest ✅** (كل الاختبارات بدون فشل).
+- إجمالي backend: **27/27 pytest ✅** (شامل smoke + converters + enrich + yield + import).
+
+
 ## Session: Feb 21, 2026 (HOTFIX حرج) — 💰 إصلاح "إجمالي تكلفة المنتج النهائي" 49,273 → 1,521
 
 ### المشكلة المُبلَّغة (محاسبية حرجة)

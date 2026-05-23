@@ -3280,9 +3280,13 @@ export default function WarehouseManufacturing() {
                                       {/* ⭐ سعر القطعة الواحدة من الخلطة */}
                                       <div className="p-2 rounded-md bg-amber-500/5 border border-amber-300/40" data-testid="cost-per-unit-card">
                                         {(() => {
-                                          // اكتشف وجود مكوّن "أب" بـ pack_info يتطابق مع piece_weight_unit
+                                          // ⭐ قاعدة دقيقة: piece_weight للمنتج هو مصدر الحقيقة لتعريف القطعة.
+                                          // لا نبحث عن "أب" pack_info إلا حين لا يكون للمنتج piece_weight صريح
+                                          // (وإلا سنُحاسب بشكل خاطئ، مثل: قطعة لحم مفروم 60غ تُعرض كـ 250غ
+                                          // فقط لأن المادة الخام "لحم" لها pack_quantity=250).
                                           let parent = null;
-                                          if (pw > 0 && pwu) {
+                                          const hasOwnPieceDef = pw > 0 && !!pwu;
+                                          if (!hasOwnPieceDef) {
                                             for (const ing of (product.recipe || [])) {
                                               if (ing.unit === pwu) continue;
                                               const mat = rawMaterials?.find?.(r => r.id === ing.raw_material_id);

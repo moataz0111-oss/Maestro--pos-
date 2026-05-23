@@ -45,42 +45,38 @@ const availableInputUnitsFor = (materialUnit, packUnit) => {
 };
 
 // ===== Tests =====
-function assertEqual(actual, expected, msg) {
-  if (JSON.stringify(actual) !== JSON.stringify(expected)) {
-    console.error(`❌ ${msg} — expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`);
-    process.exit(1);
-  } else {
-    console.log(`✅ ${msg}`);
-  }
+function assertEqual(actual, expected) {
+  expect(JSON.stringify(actual)).toBe(JSON.stringify(expected));
 }
 
-// Test 1: علبة موجودة الآن في count group
-assertEqual(_findUnitGroup('علبة'), 'count', 'علبة ⇒ count group');
-assertEqual(_findUnitGroup('كرتون'), 'count', 'كرتون ⇒ count group');
+describe('Pack unit conversion (legacy file wrapped for Jest)', () => {
+  test('علبة ⇒ count group', () => {
+    assertEqual(_findUnitGroup('علبة'), 'count');
+    assertEqual(_findUnitGroup('كرتون'), 'count');
+  });
 
-// Test 2: availableInputUnitsFor for علبة with pack=كغم should include weight units
-const units = availableInputUnitsFor('علبة', 'كغم');
-const hasWeight = units.includes('غرام') && units.includes('كغم');
-assertEqual(hasWeight, true, 'availableInputUnitsFor("علبة","كغم") تتضمن غرام/كغم');
+  test('availableInputUnitsFor("علبة","كغم") includes weight units', () => {
+    const units = availableInputUnitsFor('علبة', 'كغم');
+    assertEqual(units.includes('غرام') && units.includes('كغم'), true);
+  });
 
-// Test 3: convertWithPackInfo: 2 كغم → 0.5 علبة (إذا 1 علبة = 4 كغم)
-const conv1 = convertWithPackInfo(2, 'كغم', 'علبة', { pack_quantity: 4, pack_unit: 'كغم' });
-assertEqual(conv1.qty, 0.5, '2 كغم ⇒ 0.5 علبة (pack=4كغم)');
+  test('2 كغم ⇒ 0.5 علبة (pack=4كغم)', () => {
+    assertEqual(convertWithPackInfo(2, 'كغم', 'علبة', { pack_quantity: 4, pack_unit: 'كغم' }).qty, 0.5);
+  });
 
-// Test 4: 500 غرام → 0.125 علبة (1 علبة = 4 كغم = 4000 غرام)
-const conv2 = convertWithPackInfo(500, 'غرام', 'علبة', { pack_quantity: 4, pack_unit: 'كغم' });
-assertEqual(conv2.qty, 0.125, '500 غرام ⇒ 0.125 علبة (pack=4كغم)');
+  test('500 غرام ⇒ 0.125 علبة (pack=4كغم)', () => {
+    assertEqual(convertWithPackInfo(500, 'غرام', 'علبة', { pack_quantity: 4, pack_unit: 'كغم' }).qty, 0.125);
+  });
 
-// Test 5: 8 كغم → 2 علب
-const conv3 = convertWithPackInfo(8, 'كغم', 'علبة', { pack_quantity: 4, pack_unit: 'كغم' });
-assertEqual(conv3.qty, 2, '8 كغم ⇒ 2 علب');
+  test('8 كغم ⇒ 2 علب', () => {
+    assertEqual(convertWithPackInfo(8, 'كغم', 'علبة', { pack_quantity: 4, pack_unit: 'كغم' }).qty, 2);
+  });
 
-// Test 6: 1 لتر → 0.5 علبة (pack = 2 لتر)
-const conv4 = convertWithPackInfo(1, 'لتر', 'علبة', { pack_quantity: 2, pack_unit: 'لتر' });
-assertEqual(conv4.qty, 0.5, '1 لتر ⇒ 0.5 علبة (pack=2لتر)');
+  test('1 لتر ⇒ 0.5 علبة (pack=2لتر)', () => {
+    assertEqual(convertWithPackInfo(1, 'لتر', 'علبة', { pack_quantity: 2, pack_unit: 'لتر' }).qty, 0.5);
+  });
 
-// Test 7: input في عائلة مختلفة عن pack → null
-const conv5 = convertWithPackInfo(1, 'كغم', 'علبة', { pack_quantity: 12, pack_unit: 'قطعة' });
-assertEqual(conv5, null, 'كغم vs pack=قطعة ⇒ null (عائلتان مختلفتان)');
-
-console.log('\n🎉 All pack conversion tests passed!');
+  test('كغم vs pack=قطعة ⇒ null (different families)', () => {
+    assertEqual(convertWithPackInfo(1, 'كغم', 'علبة', { pack_quantity: 12, pack_unit: 'قطعة' }), null);
+  });
+});
