@@ -3543,6 +3543,17 @@ async def _enrich_unit_cost_fields(db, product: dict) -> dict:
 
     calc_yield = (total_grams / piece_grams) if (piece_grams > 0 and total_grams > 0) else 0.0
 
+    # ⭐ تصحيح حرج: إذا كانت الوحدة الرئيسية (main_unit) وزنية (غرام/كغم/مل/لتر)،
+    # فإن piece_weight لا يُحدّد الوحدة الرئيسية بل وحدة فرعية افتراضية. في هذه
+    # الحالة، الـ yield الصحيح = total_grams ÷ factor(main_unit) (كم وحدة من main_unit).
+    # مثال: لحم مفروم بـ main_unit="غرام"، piece_weight=60، total_grams=10,250
+    #   → yield الصحيح = 10,250 / 1 = 10,250 غرام
+    #   → unit_cost = 108,299 / 10,250 = 10.57 IQD/غرام (ليس 634 IQD لكل قطعة 60غ).
+    main_unit_str = (product.get("unit") or "").strip()
+    main_unit_factor = UNIT_W.get(main_unit_str)
+    if main_unit_factor and total_grams > 0:
+        calc_yield = total_grams / main_unit_factor
+
     # عائد بديل قطعي (لوحدات فرعية كـ شريحة)
     # ⭐ يدعم تحويل count→count: إذا pack_unit وحدة عدّ (غير وزنية) و pwu وحدة عدّ أيضاً،
     #    نعتبر كل "pack_quantity" من المادة الخام = pack_quantity من وحدات المنتج الفرعية.

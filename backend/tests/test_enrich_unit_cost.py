@@ -291,3 +291,70 @@ def test_count_pack_not_applied_when_pwu_is_weight():
     # unit_cost = 27500/5 = 5500 (NOT 550)
     assert abs(product["unit_cost_after_waste"] - 5500.0) < 0.01
 
+
+
+
+# ============================================================================
+# 🥩 Weight-based main unit (لحم مفروم scenario — May 23, 2026 hotfix)
+# ============================================================================
+# When main_unit is itself a weight unit (غرام/كغم), piece_weight is just an
+# informational sub-unit hint, NOT a yield divisor. The yield must be measured
+# in main_unit itself.
+
+def test_weight_main_unit_yield_is_total_grams():
+    """لحم مفروم: unit='غرام', piece_weight=60, total_grams=10,250 → yield = 10,250 غرام."""
+    db = _make_db_with_raw_materials([
+        {"id": "lahm", "pack_quantity": 0, "pack_unit": ""},
+    ])
+    product = {
+        "unit": "غرام",  # ⭐ main unit is weight itself
+        "piece_weight": 60,
+        "piece_weight_unit": "غرام",
+        "raw_material_cost_after_waste": 108299,
+        "cost_before_waste": 92344,
+        "quantity": 1,
+        "recipe": [
+            {"raw_material_id": "lahm", "unit": "غرام", "quantity": 10250},
+        ],
+    }
+    asyncio.run(_enrich_unit_cost_fields(db, product))
+    assert abs(product["computed_yield"] - 10250.0) < 0.01
+    assert abs(product["unit_cost_after_waste"] - 10.566731707) < 0.001
+
+
+def test_weight_main_unit_kg_to_grams():
+    """منتج بـ unit='كغم' وبه وصفة بالغرام → yield بالـ كغم."""
+    db = _make_db_with_raw_materials([])
+    product = {
+        "unit": "كغم",
+        "piece_weight": 1,
+        "piece_weight_unit": "كغم",
+        "raw_material_cost_after_waste": 20000,
+        "cost_before_waste": 20000,
+        "quantity": 1,
+        "recipe": [
+            {"raw_material_id": "x", "unit": "غرام", "quantity": 2000},
+        ],
+    }
+    asyncio.run(_enrich_unit_cost_fields(db, product))
+    assert abs(product["computed_yield"] - 2.0) < 0.001
+    assert abs(product["unit_cost_after_waste"] - 10000.0) < 0.01
+
+
+def test_count_main_unit_yield_uses_piece_weight_unchanged():
+    """Regression: لما main_unit عدّية (قطعة/حبة), السلوك القديم يظل."""
+    db = _make_db_with_raw_materials([])
+    product = {
+        "unit": "قطعة",
+        "piece_weight": 60,
+        "piece_weight_unit": "غرام",
+        "raw_material_cost_after_waste": 60000,
+        "cost_before_waste": 60000,
+        "quantity": 1,
+        "recipe": [
+            {"raw_material_id": "x", "unit": "كغم", "quantity": 6},
+        ],
+    }
+    asyncio.run(_enrich_unit_cost_fields(db, product))
+    assert abs(product["computed_yield"] - 100.0) < 0.001
+    assert abs(product["unit_cost_after_waste"] - 600.0) < 0.01

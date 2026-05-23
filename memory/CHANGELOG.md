@@ -1,6 +1,41 @@
 # Maestro EGP - Changelog
 
 
+## Session: Feb 21, 2026 (HOTFIX حاسم) — 🥩 إصلاح حساب اليلد للمنتجات بوحدة وزنية رئيسية
+
+### المشكلة الجذرية المُكتشَفة من بيانات العميل
+"لحم مفروم" مع `unit="غرام"` (الوحدة الرئيسية وزنية) + `piece_weight=60` + `total_grams=10,250`:
+- ❌ النظام كان يحسب: yield = 10,250 / 60 = 170.833 (افتراض: 170 "قطعة 60غ") → unit_cost = 108,299/170.833 = **634 IQD لكل غرام** (خطأ كارثي).
+- ✅ المتوقَّع: yield = 10,250 غرام → unit_cost = 108,299/10,250 = **10.57 IQD/غرام**.
+
+### السبب
+عندما تكون `main_unit` نفسها وزنية (غرام/كغم/مل/لتر)، يجب قياس الـ yield بـ `main_unit` مباشرة، تجاهل `piece_weight` (لأنه فقط معلومة فرعية). الكود السابق كان يستخدم `piece_weight` كقاسم دائماً.
+
+### الإصلاح
+في `routes/inventory_system.py` (`_enrich_unit_cost_fields`):
+```python
+main_unit_factor = UNIT_W.get(main_unit_str)
+if main_unit_factor and total_grams > 0:
+    calc_yield = total_grams / main_unit_factor
+```
+نفس المنطق طُبِّق في الـ Frontend (`WarehouseManufacturing.js`).
+
+### الأثر على MfgLinksEditor
+- لحم مفروم: cost = 10.57 IQD/غرام ✓
+- ربط منتج بـ 60 غرام لحم → lineCost = 10.57 × 60 = **634 IQD** ✓ (دقّة 100%)
+
+### الاختبارات الجديدة
+- `test_weight_main_unit_yield_is_total_grams`: لحم مفروم scenario ✅
+- `test_weight_main_unit_kg_to_grams`: منتج بـ كغم مع وصفة بالغرام ✅
+- `test_count_main_unit_yield_uses_piece_weight_unchanged`: regression للوحدات العدّية ✅
+
+### الإحصائيات الإجمالية بعد كل HOTFIX
+- **30/30 backend pytest ✅**
+- **94/94 frontend jest ✅**
+- **5/5 pre-deploy checks ✅**
+- **0 backwards-compatibility breaks**.
+
+
 ## Session: Feb 21, 2026 (HOTFIX حرج) — 🥩 إصلاح بطاقة "سعر القطعة" للحم المفروم 158,487 → 634 IQD
 
 ### المشكلة المُبلَّغة (محاسبية كارثية)

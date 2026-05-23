@@ -3163,7 +3163,14 @@ export default function WarehouseManufacturing() {
                                     }
                                   }
                                 }
-                                const calcYield = (pieceGrams > 0 && totalGrams > 0) ? totalGrams / pieceGrams : 0;
+                                const calcYieldRaw = (pieceGrams > 0 && totalGrams > 0) ? totalGrams / pieceGrams : 0;
+                                // ⭐ تصحيح: إذا main_unit وزنية (غرام/كغم/مل/لتر) → yield = totalGrams/main_factor
+                                //   (مثال: لحم مفروم unit="غرام", piece_weight=60, total=10,250
+                                //    → yield = 10,250/1 = 10,250 غرام، unit_cost = 10.57/غرام).
+                                const mainUnitFactor = _W[product.unit];
+                                const calcYield = (mainUnitFactor && totalGrams > 0)
+                                  ? totalGrams / mainUnitFactor
+                                  : calcYieldRaw;
                                 // ⭐ احتساب عائد بديل للوصفات القطعية (يطابق منطق Backend _enrich_unit_cost_fields):
                                 //   - إذا pack_unit == piece_weight_unit (نص متطابق) → عائد مباشر
                                 //   - إذا كلاهما وحدات عدّية (count, ليست وزنية) → نفترض التكافؤ count↔count
