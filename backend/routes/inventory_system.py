@@ -3544,6 +3544,11 @@ async def _enrich_unit_cost_fields(db, product: dict) -> dict:
     calc_yield = (total_grams / piece_grams) if (piece_grams > 0 and total_grams > 0) else 0.0
 
     # عائد بديل قطعي (لوحدات فرعية كـ شريحة)
+    # ⭐ يدعم تحويل count→count: إذا pack_unit وحدة عدّ (غير وزنية) و pwu وحدة عدّ أيضاً،
+    #    نعتبر كل "pack_quantity" من المادة الخام = pack_quantity من وحدات المنتج الفرعية.
+    #    مثال: 1 قطعة لحم بقري مقدد = 10 شرائح (pack_quantity=10, pack_unit="قطعة"),
+    #          والمنتج "بكن بقري" piece_weight_unit="شريحة" → 5 قطعة × 10 = 50 شريحة → ÷1 = 50 قطعة-منتج.
+    pwu_is_weight = pwu in UNIT_W
     count_yield = 0.0
     if calc_yield == 0 and pw > 0:
         sum_in_pwu = 0.0
@@ -3553,7 +3558,14 @@ async def _enrich_unit_cost_fields(db, product: dict) -> dict:
                 sum_in_pwu += qty
                 continue
             ipq, ipu = _ingredient_pack_info(ing)
-            if ipu == pwu and ipq > 0:
+            if ipq <= 0 or not ipu:
+                continue
+            if ipu == pwu:
+                # تطابق مباشر للوحدة
+                sum_in_pwu += qty * ipq
+            elif (not pwu_is_weight) and (ipu not in UNIT_W):
+                # كلا الوحدتين عدّية (count) ومختلفتان نصياً — نفترض التكافؤ
+                # (مثال: pack_unit="قطعة" + piece_weight_unit="شريحة")
                 sum_in_pwu += qty * ipq
         if sum_in_pwu > 0:
             count_yield = sum_in_pwu / pw

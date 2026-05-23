@@ -1,6 +1,29 @@
 # Maestro EGP - Changelog
 
 
+## Session: Feb 21, 2026 (continued) — 🥓 دعم pack_info العدّية (Count→Count) + إصلاح auto-commit نهائياً
+
+### المشكلة 1 (محاسبية): "بكن بقري" يُحسب بسعر 27,500 IQD بدلاً من 550 IQD
+- **بيانات المستخدم الفعلية**: مادة خام "لحم بقري مقدد" بـ `pack_quantity=10, pack_unit="قطعة"` (1 علبة = 10 شرائح). المنتج "بكن بقري" بـ `piece_weight=1, piece_weight_unit="شريحة"`. الوصفة: 5 قطعة لحم بقري = 27,500 IQD.
+- **المتوقَّع**: 5 × 10 = 50 شريحة → 27,500 ÷ 50 = **550 IQD/قطعة-منتج**.
+- **السبب**: الكود السابق كان يدعم فقط pack_info الوزنية (غرام/كغم). أي `pack_unit` عدّي ("قطعة"، "شريحة"...) كان يُرجع 0 → `final_yield=0` → fallback إلى `stored_qty=1` → 27,500 IQD.
+- **الحل**: في `_enrich_unit_cost_fields` (count_yield path) — إذا كان `piece_weight_unit` و `pack_unit` كلاهما **وحدات عدّية** (غير وزنية)، نفترض التكافؤ ونحسب: `5 × 10 / 1 = 50 شريحة`. مع حماية صريحة: لا نُطبّق هذا إذا كان `pwu` وزنياً (تجنّباً للالتباس).
+
+### المشكلة 2 (بنية تحتية): فشل auto-commit + "Save to GitHub" وهمي
+- سكربت Emergent auto-commit كان يفشل بسبب مجلدات `__pycache__` (gitignored) تظهر كمُعدَّلة عند تشغيل pytest → `git add` يفشل → لا commit جديد → "Save to GitHub" يدفع لا شيء (لكن يعرض "نجح").
+- **الحل الدائم**:
+  - حذف جميع مجلدات `__pycache__` الموجودة.
+  - `/app/backend/conftest.py`: `sys.dont_write_bytecode = True`.
+  - `/app/backend/pytest.ini`: `-p no:cacheprovider` + `cache_dir = /tmp/.pytest_cache`.
+- **التحقق**: commit جديد `3dc15322` نجح تلقائياً فوق `cb1314f7`.
+
+### الاختبارات الجديدة
+- `test_count_based_pack_info_with_different_count_units`: 5 قطعة × 10 شرائح/قطعة → 50 شريحة → 550 IQD/قطعة-منتج ✅
+- `test_count_based_pack_info_matching_pwu_string`: نفس السلوك حين `pack_unit` و `pwu` متطابقان نصياً ✅
+- `test_count_pack_not_applied_when_pwu_is_weight`: حماية — لا يُطبّق count→count إذا `pwu` وزني ✅
+- إجمالي: **17/17 pytest ✅** (11 enrich + 6 yield variance)، صفر `__pycache__` بعد التشغيل.
+
+
 ## Session: Feb 21, 2026 (continued) — 📊 ميزة تعقّب فرق العائد (Yield Variance Tracking)
 
 ### الهدف

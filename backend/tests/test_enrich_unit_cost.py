@@ -214,3 +214,80 @@ def test_count_unit_variant_qatae():
     }
     asyncio.run(_enrich_unit_cost_fields(db, product))
     assert abs(product["computed_yield"] - 91.666667) < 0.001
+
+
+# ============================================================================
+# 🥓 Count-based pack_info scenario (real customer data: "بكن بقري")
+# ============================================================================
+# Raw material: "لحم بقري مقدد" - 1 قطعة (كرتون) = 10 قطعة (شرائح صغيرة).
+# Manufactured "بكن بقري": piece_weight=1, piece_weight_unit="شريحة".
+# Recipe: 5 قطعة من اللحم المقدد → 5 × 10 = 50 شريحة → yield = 50 قطعة-منتج.
+# Cost: 5 × 5,500 = 27,500 IQD ÷ 50 = 550 IQD per قطعة-منتج.
+# Bug before fix: pack_unit="قطعة" was rejected (not weight), so yield=0,
+# denom fell back to stored_qty (1) → unit_cost = 27,500 IQD ❌
+
+def test_count_based_pack_info_with_different_count_units():
+    """5 قطع لحم × 10 شرائح/قطعة = 50 شريحة → 550 IQD/قطعة-منتج."""
+    db = _make_db_with_raw_materials([
+        {"id": "beef-bacon", "pack_quantity": 10, "pack_unit": "قطعة"},
+    ])
+    product = {
+        "unit": "قطعة",
+        "piece_weight": 1,
+        "piece_weight_unit": "شريحة",
+        "raw_material_cost_after_waste": 27500,
+        "cost_before_waste": 27500,
+        "quantity": 1,  # current stored — should NOT influence unit_cost
+        "recipe": [
+            {"raw_material_id": "beef-bacon", "unit": "قطعة", "quantity": 5},
+        ],
+    }
+    asyncio.run(_enrich_unit_cost_fields(db, product))
+    assert abs(product["computed_yield"] - 50.0) < 0.001
+    assert abs(product["unit_cost_after_waste"] - 550.0) < 0.01
+
+
+def test_count_based_pack_info_matching_pwu_string():
+    """If pack_unit and piece_weight_unit are both 'شريحة', behaves identically."""
+    db = _make_db_with_raw_materials([
+        {"id": "beef-bacon", "pack_quantity": 10, "pack_unit": "شريحة"},
+    ])
+    product = {
+        "unit": "قطعة",
+        "piece_weight": 1,
+        "piece_weight_unit": "شريحة",
+        "raw_material_cost_after_waste": 27500,
+        "cost_before_waste": 27500,
+        "quantity": 1,
+        "recipe": [
+            {"raw_material_id": "beef-bacon", "unit": "قطعة", "quantity": 5},
+        ],
+    }
+    asyncio.run(_enrich_unit_cost_fields(db, product))
+    assert abs(product["computed_yield"] - 50.0) < 0.001
+    assert abs(product["unit_cost_after_waste"] - 550.0) < 0.01
+
+
+def test_count_pack_not_applied_when_pwu_is_weight():
+    """Safety: if piece_weight_unit is weight (غرام), count-based pack_unit
+    must NOT trigger the count_yield path (avoids unit-confusion bugs)."""
+    db = _make_db_with_raw_materials([
+        {"id": "x", "pack_quantity": 10, "pack_unit": "قطعة"},  # count pack
+    ])
+    product = {
+        "unit": "قطعة",
+        "piece_weight": 30,
+        "piece_weight_unit": "غرام",  # weight piece
+        "raw_material_cost_after_waste": 27500,
+        "cost_before_waste": 27500,
+        "quantity": 5,
+        "recipe": [
+            {"raw_material_id": "x", "unit": "قطعة", "quantity": 5},
+        ],
+    }
+    asyncio.run(_enrich_unit_cost_fields(db, product))
+    # Since pwu="غرام" but pack_unit="قطعة", calc_yield can't compute (no grams).
+    # count_yield should NOT activate (pwu is weight) → fallback to stored_qty=5.
+    # unit_cost = 27500/5 = 5500 (NOT 550)
+    assert abs(product["unit_cost_after_waste"] - 5500.0) < 0.01
+
