@@ -757,6 +757,51 @@ export default function Settings() {
     return pw > 0 && pwu && pwu !== (mp.unit || 'حبة');
   };
 
+  // ⭐ بناء قائمة الوحدات المتاحة لربط منتج مُصنّع: الوحدة الرئيسية + فرعية + وحدات نفس العائلة
+  const _LINK_UNIT_FAMILIES = {
+    weight: ['غرام', 'كغم', 'كيلو', 'كجم'],
+    volume: ['مل', 'لتر'],
+  };
+  const _getMfgLinkUnitOptions = (mp) => {
+    if (!mp) return ['حبة'];
+    const opts = [];
+    const add = (u) => { if (u && !opts.includes(u)) opts.push(u); };
+    const mainUnit = mp.unit || 'حبة';
+    const pwu = mp.piece_weight_unit || '';
+    const pw = Number(mp.piece_weight || 0);
+    add(mainUnit);
+    if (pw > 0 && pwu) add(pwu);
+    // أضف وحدات العائلة الوزنية إن كان أي من mainUnit/pwu ينتمي إليها
+    for (const [, fam] of Object.entries(_LINK_UNIT_FAMILIES)) {
+      if (fam.includes(mainUnit) || (pw > 0 && fam.includes(pwu))) {
+        fam.forEach(u => add(u));
+      }
+    }
+    return opts;
+  };
+
+  // ⭐ تحويل تكلفة الوحدة المختارة باستخدام نفس منطق Backend
+  const _LINK_WEIGHT_MAP_FE = {
+    'غرام': 1, 'كغم': 1000, 'كيلو': 1000, 'كجم': 1000, 'gram': 1, 'kg': 1000,
+    'مل': 1, 'لتر': 1000, 'ml': 1, 'liter': 1000, 'l': 1000,
+  };
+  const _convertConsumptionToMain = (qty, cu, mu, pw, pwu) => {
+    const _cu = (cu || '').trim();
+    const _mu = (mu || '').trim();
+    const _pwu = (pwu || '').trim();
+    const _pw = Number(pw || 0);
+    if (!_cu || _cu === _mu) return qty;
+    if (_cu === _pwu && _pw > 0) return qty / _pw;
+    const cuF = _LINK_WEIGHT_MAP_FE[_cu];
+    const muF = _LINK_WEIGHT_MAP_FE[_mu];
+    if (cuF != null && muF != null) return (qty * cuF) / muF;
+    const pwuF = _LINK_WEIGHT_MAP_FE[_pwu];
+    if (cuF != null && pwuF != null && _pw > 0) {
+      return (qty * cuF / pwuF) / _pw;
+    }
+    return qty;
+  };
+
   // دالة حساب التكلفة مع تحويل الوحدات (غرام/كغم/قطعة/مل/لتر)
   const calculateIngredientCost = (item, pieceWeight = null, pieceWeightUnit = 'غرام') => {
     const qty = item.quantity || 0;
@@ -2151,10 +2196,12 @@ export default function Settings() {
               const hasSub = mp ? _hasSubUnit(mp) : false;
               const subUnit = mp?.piece_weight_unit || '';
               const consumptionUnit = lk.consumption_unit || mainUnit;
-              const isSubUnit = hasSub && consumptionUnit === subUnit;
+              const unitOptions = mp ? _getMfgLinkUnitOptions(mp) : [mainUnit];
               const perPieceCost = mp ? _computeMfgUnitCost(mp) : 0;
               const perSubUnitCost = mp ? _computeMfgSubUnitCost(mp) : 0;
-              const unitCost = isSubUnit ? perSubUnitCost : perPieceCost;
+              // ⭐ تكلفة الوحدة المختارة = تكلفة وحدة رئيسية × عدد الوحدات الرئيسية في وحدة الاستهلاك
+              const qtyInMain = mp ? _convertConsumptionToMain(1, consumptionUnit, mainUnit, mp.piece_weight, mp.piece_weight_unit) : 1;
+              const unitCost = perPieceCost * qtyInMain;
               const lineCost = unitCost * Number(lk.consumption_qty || 1);
               return (
                 <div key={idx} className="p-3 bg-background/50 rounded-lg border border-purple-500/30 space-y-2" data-testid={`mfg-link-row-${idx}`}>
@@ -2216,23 +2263,22 @@ export default function Settings() {
                           className="w-24 h-9 text-center"
                           data-testid={`mfg-link-qty-${idx}`}
                         />
-                        {/* ⭐ اختيار وحدة الاستهلاك (وحدة رئيسية أو فرعية) */}
-                        {hasSub ? (
-                          <Select
-                            value={consumptionUnit}
-                            onValueChange={(v) => updateLink(idx, { consumption_unit: v })}
-                          >
-                            <SelectTrigger className="w-28 h-9" data-testid={`mfg-link-unit-${idx}`}>
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value={mainUnit}>{mainUnit}</SelectItem>
-                              <SelectItem value={subUnit}>{subUnit}</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        ) : (
-                          <span className="text-sm text-muted-foreground w-20 text-center" data-testid={`mfg-link-unit-static-${idx}`}>{mainUnit}</span>
-                        )}
+                        {/* ⭐ اختيار وحدة الاستهلاك — dropdown دائماً مع كل الوحدات المنطقية */}
+                        <Select
+                          value={consumptionUnit}
+                          onValueChange={(v) => updateLink(idx, { consumption_unit: v })}
+                        >
+                          <SelectTrigger className="w-28 h-9" data-testid={`mfg-link-unit-${idx}`}>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {unitOptions.map(u => (
+                              <SelectItem key={u} value={u}>
+                                {u}{u === mainUnit ? ' ★' : (u === subUnit ? ' ◇' : '')}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       </div>
 
                       {/* ⭐ شريط معلومات الوحدة الفرعية (شريحة/غرام) */}

@@ -1,6 +1,40 @@
 # Maestro EGP - Changelog
 
 
+## Session: Feb 21, 2026 (continued) — 🎛️ Dropdown ديناميكي لوحدة الاستهلاك في MfgLinksEditor
+
+### الطلب (مُبلَّغ من المستخدم بصورة)
+في صفحة "ربط منتج بمنتجات مُصنّعة" (Settings → MfgLinksEditor)، تظهر الوحدة بجانب "الكمية المستهلكة لكل بيع" كنص ثابت ("حبة"، "قطعة"، "كغم"). المستخدم يريد قائمة منسدلة (dropdown) ليختار وحدة مختلفة حسب الحاجة:
+- ربط لحم برغر بـ "كغم" بدلاً من "حبة".
+- ربط جرافيتي صوص بـ "غرام" بدلاً من "كغم" (للاستهلاك بكميات صغيرة).
+
+### Backend (`/app/backend/server.py`)
+1. **`utils/link_units.py`** (جديد): دالة `convert_link_consumption_to_main(qty, cu, mu, pw, pwu)` تُحوّل الكمية من أي وحدة إلى الوحدة الرئيسية. تدعم 4 حالات:
+   - A) نفس الوحدة → بدون تغيير.
+   - B) sub→main عبر `piece_weight` (مثل شريحة→حبة).
+   - C) نفس العائلة الوزنية (كغم↔غرام، لتر↔مل).
+   - D) جسر عبر `piece_weight_unit` (مثل كغم→غرام→حبة).
+2. **`server.py`**: استبدلت 3 مواضع كانت تستخدم منطق `consumption_unit == pwu` فقط بـ `_convert_link_consumption_to_main` (في حساب التكلفة، خصم المخزون، وتعديل الطلب).
+
+### Frontend (`/app/frontend/src/pages/Settings.js`)
+1. **`_getMfgLinkUnitOptions(mp)`**: تبني قائمة الوحدات المتاحة ديناميكياً:
+   - الوحدة الرئيسية (★).
+   - الوحدة الفرعية (◇) إن وُجد `piece_weight`.
+   - وحدات نفس العائلة الوزنية (غرام/كغم/كيلو/كجم) أو الحجمية (مل/لتر) إن انتمى أي من الوحدتين لإحداها.
+2. **`_convertConsumptionToMain`** (frontend): نسخة طبق الأصل من backend converter لحساب تكلفة الوحدة المختارة فوراً.
+3. **Dropdown دائماً**: استبدلت الـ ternary `hasSub ? Select : span` بـ `<Select>` دائم مع كل الخيارات + بادئة (★/◇).
+
+### الاختبارات
+- `backend/tests/test_link_consumption_converter.py`: **8/8 pytest ✅** (نفس الوحدة، sub↔main، كغم↔غرام، لتر↔مل، الجسر، الحالة غير المعروفة).
+- `frontend/__tests__/mfg_link_unit_dropdown.test.js`: **13/13 jest ✅** (5 اختبارات للـ options + 8 للتحويل).
+- **إجمالي**: 25 backend + 25 frontend = 50 اختبار يمر ✅.
+
+### الأثر
+- المستخدم يستطيع الآن ربط أي منتج بأي وحدة منطقية بنقرة واحدة.
+- الحسابات (تكلفة الوحدة + تكلفة المكون + خصم المخزون) دقيقة في كل سيناريو.
+- التوافق العكسي: روابط بدون `consumption_unit` تستخدم `mp.unit` افتراضياً (لا تغيير على البيانات القديمة).
+
+
 ## Session: Feb 21, 2026 (continued) — 🎯 إصلاح Frontend ليُستخدم unit_cost_after_waste من Backend
 
 ### المشكلة (مُبلَّغ من المستخدم بصورة فعلية)

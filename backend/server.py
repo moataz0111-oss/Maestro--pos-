@@ -1101,6 +1101,13 @@ def _sn(val, default=0):
     except (TypeError, ValueError):
         return default
 
+
+# ============================================================================
+# 🧮 Unit conversion for manufactured product links (MfgLinksEditor)
+# ============================================================================
+# See utils/link_units.py for pure-Python helper (unit-testable in isolation).
+from utils.link_units import convert_link_consumption_to_main as _convert_link_consumption_to_main  # noqa: E402
+
 # ==================== MODELS ====================
 
 class UserRole:
@@ -6137,11 +6144,12 @@ async def create_order(order: OrderCreate, current_user: dict = Depends(get_curr
                     denom = calc_yield or float(mfg_product.get("quantity") or 0) or 1.0
                     unit_cost = batch_cost / denom
                     consumption_qty = float(link.get("consumption_qty") or 1)
-                    # ⭐ تحويل الوحدة الفرعية (شريحة/غرام) إلى الوحدة الرئيسية
+                    # ⭐ تحويل الوحدة المختارة (أيّاً كانت) إلى الوحدة الرئيسية
                     consumption_unit = link.get("consumption_unit") or mfg_product.get("unit") or "حبة"
                     main_unit = mfg_product.get("unit") or "حبة"
-                    if consumption_unit == pwu and consumption_unit != main_unit and pw > 0:
-                        consumption_qty = consumption_qty / pw
+                    consumption_qty = _convert_link_consumption_to_main(
+                        consumption_qty, consumption_unit, main_unit, pw, pwu
+                    )
                     links_unit_cost += unit_cost * consumption_qty
                 if links_unit_cost > 0:
                     base_cost = links_unit_cost + _sn(product.get("operating_cost"))
@@ -6355,7 +6363,7 @@ async def create_order(order: OrderCreate, current_user: dict = Depends(get_curr
                     if not mp_id:
                         continue
                     consumption_qty = float(link.get("consumption_qty") or 1)
-                    # ⭐ تحويل الوحدة الفرعية إلى الوحدة الرئيسية للخصم الصحيح من المخزون
+                    # ⭐ تحويل الوحدة المختارة إلى الوحدة الرئيسية للخصم الصحيح من المخزون
                     consumption_unit = link.get("consumption_unit")
                     if consumption_unit:
                         mp_doc = await db.manufactured_products.find_one(
@@ -6363,11 +6371,13 @@ async def create_order(order: OrderCreate, current_user: dict = Depends(get_curr
                             {"_id": 0, "unit": 1, "piece_weight": 1, "piece_weight_unit": 1}
                         )
                         if mp_doc:
-                            main_unit = mp_doc.get("unit") or "حبة"
-                            pwu = mp_doc.get("piece_weight_unit") or ""
-                            pw = float(mp_doc.get("piece_weight") or 0)
-                            if consumption_unit == pwu and consumption_unit != main_unit and pw > 0:
-                                consumption_qty = consumption_qty / pw
+                            consumption_qty = _convert_link_consumption_to_main(
+                                consumption_qty,
+                                consumption_unit,
+                                mp_doc.get("unit") or "حبة",
+                                float(mp_doc.get("piece_weight") or 0),
+                                mp_doc.get("piece_weight_unit") or "",
+                            )
                     deduct_amount = consumption_qty * item.quantity
                     # خصم من مخزون الفرع (branch_inventory)
                     branch_item = await db.branch_inventory.find_one({
@@ -6608,13 +6618,15 @@ async def update_order_items(order_id: str, request: UpdateOrderItemsRequest, cu
                     mfg_product = await db.manufactured_products.find_one({"id": mp_id}, {"_id": 0, "raw_material_cost": 1, "unit": 1, "piece_weight": 1, "piece_weight_unit": 1})
                     if mfg_product:
                         consumption_qty = float(link.get("consumption_qty") or 1)
-                        # ⭐ تحويل الوحدة الفرعية إلى الوحدة الرئيسية
+                        # ⭐ تحويل الوحدة المختارة إلى الوحدة الرئيسية
                         consumption_unit = link.get("consumption_unit") or mfg_product.get("unit") or "حبة"
-                        main_unit = mfg_product.get("unit") or "حبة"
-                        pwu = mfg_product.get("piece_weight_unit") or ""
-                        pw = float(mfg_product.get("piece_weight") or 0)
-                        if consumption_unit == pwu and consumption_unit != main_unit and pw > 0:
-                            consumption_qty = consumption_qty / pw
+                        consumption_qty = _convert_link_consumption_to_main(
+                            consumption_qty,
+                            consumption_unit,
+                            mfg_product.get("unit") or "حبة",
+                            float(mfg_product.get("piece_weight") or 0),
+                            mfg_product.get("piece_weight_unit") or "",
+                        )
                         links_unit_cost += _sn(mfg_product.get("raw_material_cost")) * consumption_qty
                 if links_unit_cost > 0:
                     base_cost = links_unit_cost + _sn(product.get("operating_cost"))
