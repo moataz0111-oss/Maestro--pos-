@@ -34,7 +34,7 @@ _UNIT_WEIGHT_MAP = {
     "gram": 1.0, "kg": 1000.0,
     "مل": 1.0, "لتر": 1000.0, "ml": 1.0, "liter": 1000.0, "l": 1000.0,
 }
-_COUNT_UNITS = {"قطعة", "حبة", "علبة", "كرتون", "صحن", "piece"}
+_COUNT_UNITS = {"قطعة", "قطع", "حبة", "حبات", "علبة", "علب", "كرتون", "كراتين", "صحن", "piece", "pieces", "unit"}
 
 
 async def _ingredient_weight_grams(db, ing: dict) -> float:
@@ -53,6 +53,13 @@ async def _ingredient_weight_grams(db, ing: dict) -> float:
     factor = _UNIT_WEIGHT_MAP.get(unit)
     if factor is not None:
         return qty * factor
+    # ⭐ snapshot للحزمة على المكوّن نفسه (إن وُجد)
+    ipq = float(ing.get("pack_quantity") or 0)
+    ipu = ing.get("pack_unit")
+    if ipq > 0 and ipu:
+        pf = _UNIT_WEIGHT_MAP.get(ipu, 0)
+        if pf > 0:
+            return qty * ipq * pf
     # ⭐ مكوّن من نوع منتج مُصنّع — احسب الوزن عبر piece_weight × qty
     if ing.get("manufactured_product_id"):
         mfg = await db.manufactured_products.find_one(
@@ -67,7 +74,7 @@ async def _ingredient_weight_grams(db, ing: dict) -> float:
                 return qty * pw * pf
         return 0.0
     # وحدات قطعية: حاول استخدام pack_info من المادة الخام
-    if unit in _COUNT_UNITS:
+    if unit in _COUNT_UNITS or not unit:
         material_id = ing.get("raw_material_id")
         if material_id:
             mat = await db.raw_materials.find_one(
@@ -3473,36 +3480,66 @@ async def _enrich_unit_cost_fields(db, product: dict) -> dict:
     """يحسب `computed_yield` و `unit_cost_after_waste` و `unit_cost_before_waste`
     باستخدام piece_weight + pack_info من raw_materials. مصدر واحد للحقيقة لجميع
     الواجهات (بطاقات التصنيع + MfgLinksEditor + الباكند للطلبات).
+
+    يدعم 3 مصادر لمعلومات الحزمة (pack_info) بترتيب الأولوية:
+      1) pack_quantity/pack_unit المخزّنة على المكوّن نفسه (snapshot).
+      2) pack_quantity/pack_unit من raw_materials المرتبطة.
+      3) piece_weight/piece_weight_unit من المنتج المُصنّع الوسيط (nested recipes).
     """
     UNIT_W = {"غرام": 1.0, "كغم": 1000.0, "كيلو": 1000.0, "كجم": 1000.0,
               "gram": 1.0, "kg": 1000.0, "مل": 1.0, "لتر": 1000.0, "ml": 1.0, "liter": 1000.0, "l": 1000.0}
-    COUNT_UNITS = {"قطعة", "حبة", "علبة", "كرتون", "صحن", "piece"}
+    COUNT_UNITS = {"قطعة", "قطع", "حبة", "حبات", "علبة", "علب", "كرتون", "كراتين", "صحن", "piece", "pieces", "unit"}
 
     pw = float(product.get("piece_weight") or 0)
     pwu = product.get("piece_weight_unit") or "غرام"
     piece_grams = pw * UNIT_W.get(pwu, 1.0)
 
+    recipe = product.get("recipe") or []
+
     # اجلب raw_materials المرتبطة لاستخراج pack_info
-    raw_ids = [ing.get("raw_material_id") for ing in (product.get("recipe") or []) if ing.get("raw_material_id")]
+    raw_ids = [ing.get("raw_material_id") for ing in recipe if ing.get("raw_material_id")]
     raw_map = {}
     if raw_ids:
         async for mat in db.raw_materials.find({"id": {"$in": raw_ids}}, {"_id": 0, "id": 1, "pack_quantity": 1, "pack_unit": 1}):
             raw_map[mat["id"]] = mat
 
+    # ⭐ اجلب المنتجات المُصنّعة الوسيطة لاستخراج piece_weight (Nested Recipes)
+    mfg_ids = [ing.get("manufactured_product_id") for ing in recipe if ing.get("manufactured_product_id")]
+    mfg_map = {}
+    if mfg_ids:
+        async for m in db.manufactured_products.find({"id": {"$in": mfg_ids}}, {"_id": 0, "id": 1, "piece_weight": 1, "piece_weight_unit": 1}):
+            mfg_map[m["id"]] = m
+
+    def _ingredient_pack_info(ing):
+        """يُرجع (pack_quantity, pack_unit) للمكوّن من أي مصدر متاح، أو (0, None)."""
+        # 1) snapshot على المكوّن نفسه
+        ipq = float(ing.get("pack_quantity") or 0)
+        ipu = ing.get("pack_unit")
+        if ipq > 0 and ipu:
+            return ipq, ipu
+        # 2) من المادة الخام
+        mat = raw_map.get(ing.get("raw_material_id"))
+        if mat and float(mat.get("pack_quantity") or 0) > 0 and mat.get("pack_unit"):
+            return float(mat["pack_quantity"]), mat["pack_unit"]
+        # 3) من المنتج المُصنّع الوسيط (piece_weight يلعب دور pack_quantity)
+        mfg = mfg_map.get(ing.get("manufactured_product_id"))
+        if mfg and float(mfg.get("piece_weight") or 0) > 0:
+            return float(mfg["piece_weight"]), mfg.get("piece_weight_unit") or "غرام"
+        return 0.0, None
+
     # حساب إجمالي الوصفة (مع pack_info لمكونات قطعية)
     total_grams = 0.0
-    for ing in (product.get("recipe") or []):
+    for ing in recipe:
         qty = float(ing.get("quantity") or 0)
-        unit = ing.get("unit")
+        unit = (ing.get("unit") or "").strip()
         f = UNIT_W.get(unit)
         if f:
             total_grams += qty * f
-        elif unit in COUNT_UNITS:
-            mat = raw_map.get(ing.get("raw_material_id"))
-            if mat and mat.get("pack_quantity") and mat.get("pack_unit"):
-                pf = UNIT_W.get(mat.get("pack_unit"), 0)
-                if pf > 0:
-                    total_grams += qty * float(mat["pack_quantity"]) * pf
+        elif unit in COUNT_UNITS or not unit:
+            ipq, ipu = _ingredient_pack_info(ing)
+            pf = UNIT_W.get(ipu, 0) if ipu else 0
+            if ipq > 0 and pf > 0:
+                total_grams += qty * ipq * pf
 
     calc_yield = (total_grams / piece_grams) if (piece_grams > 0 and total_grams > 0) else 0.0
 
@@ -3510,14 +3547,14 @@ async def _enrich_unit_cost_fields(db, product: dict) -> dict:
     count_yield = 0.0
     if calc_yield == 0 and pw > 0:
         sum_in_pwu = 0.0
-        for ing in (product.get("recipe") or []):
+        for ing in recipe:
             qty = float(ing.get("quantity") or 0)
             if ing.get("unit") == pwu:
                 sum_in_pwu += qty
                 continue
-            mat = raw_map.get(ing.get("raw_material_id"))
-            if mat and mat.get("pack_unit") == pwu and float(mat.get("pack_quantity") or 0) > 0:
-                sum_in_pwu += qty * float(mat["pack_quantity"])
+            ipq, ipu = _ingredient_pack_info(ing)
+            if ipu == pwu and ipq > 0:
+                sum_in_pwu += qty * ipq
         if sum_in_pwu > 0:
             count_yield = sum_in_pwu / pw
 
@@ -3898,6 +3935,7 @@ async def update_manufactured_product_recipe(
 async def produce_product(
     product_id: str,
     quantity: int = 1,
+    actual_yield: Optional[float] = None,
     current_user: dict = Depends(get_current_user),
 ):
     """تصنيع كمية من المنتج (خصم المواد الخام من مخزون التصنيع)
@@ -3911,6 +3949,11 @@ async def produce_product(
 
     في حال عدم وجود piece_weight، يعمل النظام بالنمط القديم (PER UNIT) ويُضرب
     كل مكوّن في `quantity`.
+
+    📊 Yield Variance Tracking:
+    إن مُرّر `actual_yield`، يُسجَّل في collection `yield_variances` الفرق بين
+    `quantity` (المتوقَّع) و `actual_yield` (الفعلي) لتعقّب الهدر الخفي.
+    تُضاف `actual_yield` إلى المخزون بدلاً من `quantity` (إذا اختلفا).
     """
     db = get_db()
 
@@ -4129,13 +4172,18 @@ async def produce_product(
             "created_at": now_iso,
         })
     
-    # زيادة كمية المنتج المصنع وإجمالي الإنتاج
+    # 📊 Yield Variance: العدد الفعلي المُنتَج (إن لم يُمرَّر، يُعتبر مساوياً للمطلوب)
+    effective_yield = float(actual_yield) if (actual_yield is not None and actual_yield >= 0) else float(quantity)
+    yield_variance = effective_yield - float(quantity)
+    yield_variance_pct = (yield_variance / float(quantity) * 100.0) if quantity > 0 else 0.0
+
+    # زيادة كمية المنتج المصنع وإجمالي الإنتاج (باستخدام العدد الفعلي)
     await db.manufactured_products.update_one(
         {"id": product_id},
         {
             "$inc": {
-                "quantity": quantity,
-                "total_produced": quantity
+                "quantity": effective_yield,
+                "total_produced": effective_yield
             },
             "$set": {"last_updated": now_iso}
         }
@@ -4150,26 +4198,110 @@ async def produce_product(
         "product_id": product_id,
         "product_name": product.get("name"),
         "material_name": product.get("name"),
-        "quantity": quantity,
+        "quantity": effective_yield,
         "unit": product.get("unit"),
         "total_value": round(batch_cost_after_waste, 2),
         "cost_before_waste": round(batch_cost_before_waste, 2),
         "cost_after_waste": round(batch_cost_after_waste, 2),
         "consumed_ingredients": consumed_details,
         "performed_by_name": performed_by_name,
-        "notes": f"تصنيع {quantity} {product.get('unit')} من {product.get('name')}",
+        "notes": f"تصنيع {effective_yield} {product.get('unit')} من {product.get('name')}"
+                 + (f" (المتوقّع: {quantity}، فرق: {yield_variance:+.3f})" if abs(yield_variance) > 1e-6 else ""),
         "created_at": now_iso,
     })
-    
+
+    # 📊 سجل فرق العائد (Yield Variance) — يُحفظ دائماً عند تمرير actual_yield (حتى لو كان الفرق صفر)
+    variance_record = None
+    if actual_yield is not None:
+        cost_per_unit_after = (batch_cost_after_waste / effective_yield) if effective_yield > 0 else 0.0
+        variance_value = round(yield_variance * cost_per_unit_after, 2)  # القيمة المالية للفرق
+        variance_record = {
+            "id": str(uuid.uuid4()),
+            "tenant_id": tenant_id,
+            "product_id": product_id,
+            "product_name": product.get("name"),
+            "unit": product.get("unit"),
+            "expected_yield": float(quantity),
+            "actual_yield": effective_yield,
+            "variance": round(yield_variance, 6),
+            "variance_pct": round(yield_variance_pct, 3),
+            "variance_value": variance_value,
+            "batch_cost_before_waste": round(batch_cost_before_waste, 2),
+            "batch_cost_after_waste": round(batch_cost_after_waste, 2),
+            "cost_per_unit_after": round(cost_per_unit_after, 4),
+            "performed_by_id": current_user.get("id"),
+            "performed_by_name": performed_by_name,
+            "created_at": now_iso,
+        }
+        await db.yield_variances.insert_one(dict(variance_record))
+        variance_record.pop("_id", None)
+
     return {
-        "message": f"تم تصنيع {quantity} {product.get('unit')} من {product.get('name')}",
-        "new_quantity": product.get("quantity", 0) + quantity,
+        "message": f"تم تصنيع {effective_yield} {product.get('unit')} من {product.get('name')}",
+        "new_quantity": product.get("quantity", 0) + effective_yield,
         "cost_before_waste": round(batch_cost_before_waste, 2),
         "cost_after_waste": round(batch_cost_after_waste, 2),
         "recipe_scaled": recipe_scaled,
         "scale_factor": round(scale_factor, 6) if recipe_scaled else 1.0,
         "calculated_yield_before": round(calculated_yield, 3) if is_batch_mode else None,
         "batch_mode": is_batch_mode,
+        "expected_yield": float(quantity),
+        "actual_yield": effective_yield,
+        "yield_variance": round(yield_variance, 6),
+        "yield_variance_pct": round(yield_variance_pct, 3),
+        "yield_variance_record": variance_record,
+    }
+
+
+# ============================================================================
+# 📊 Yield Variance — تقرير فروقات العائد المتوقّع مقابل الفعلي
+# ============================================================================
+
+@router.get("/yield-variances")
+async def get_yield_variances(
+    product_id: Optional[str] = None,
+    days: int = 30,
+    limit: int = 200,
+    current_user: dict = Depends(get_current_user),
+):
+    """يُرجع سجلات فروقات العائد (Yield Variances) للمنتجات المُصنّعة.
+
+    Filters:
+      - product_id: قصر السجلات على منتج واحد.
+      - days: عدد الأيام الماضية (الافتراضي 30).
+      - limit: حدّ أقصى للسجلات (الافتراضي 200).
+    """
+    db = get_db()
+    tenant_id = current_user.get("tenant_id") if current_user else None
+
+    query: Dict[str, Any] = {}
+    if tenant_id:
+        query["tenant_id"] = tenant_id
+    if product_id:
+        query["product_id"] = product_id
+    if days and days > 0:
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+        query["created_at"] = {"$gte": cutoff}
+
+    rows = await db.yield_variances.find(query, {"_id": 0}).sort("created_at", -1).to_list(limit)
+
+    # ملخّص إجمالي
+    total_records = len(rows)
+    total_variance_value = round(sum(float(r.get("variance_value") or 0) for r in rows), 2)
+    total_expected = round(sum(float(r.get("expected_yield") or 0) for r in rows), 3)
+    total_actual = round(sum(float(r.get("actual_yield") or 0) for r in rows), 3)
+    total_units_variance = round(total_actual - total_expected, 3)
+
+    return {
+        "records": rows,
+        "summary": {
+            "total_records": total_records,
+            "total_expected_yield": total_expected,
+            "total_actual_yield": total_actual,
+            "total_units_variance": total_units_variance,
+            "total_variance_value": total_variance_value,
+        },
+        "filters": {"product_id": product_id, "days": days, "limit": limit},
     }
 
 

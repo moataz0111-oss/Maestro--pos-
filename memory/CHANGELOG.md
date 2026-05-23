@@ -1,6 +1,81 @@
 # Maestro EGP - Changelog
 
 
+## Session: Feb 21, 2026 (continued) — 📊 ميزة تعقّب فرق العائد (Yield Variance Tracking)
+
+### الهدف
+تتبّع الفرق بين العائد المتوقَّع من الوصفة (`computed_yield`) والعدد الفعلي المُنتَج بعد التصنيع — لرصد الهدر الخفي وحفظه آليًا.
+
+### Backend (`/app/backend/routes/inventory_system.py`)
+1. **`POST /api/manufactured-products/{id}/produce`** يقبل الآن param اختياري `actual_yield`:
+   - إذا مُرّر، يُضاف إلى المخزون بدلاً من `quantity` المطلوبة.
+   - يُحسب الفرق `variance = actual - expected` و النسبة المئوية و **قيمة الفرق المالية** (`variance × unit_cost_after`).
+   - يُحفظ سجل في collection جديد `yield_variances` مع بيانات كاملة (المنتج، المستخدم، التكلفة، التاريخ، tenant).
+   - الرد يتضمن `expected_yield`, `actual_yield`, `yield_variance`, `yield_variance_pct`, `yield_variance_record`.
+2. **`GET /api/yield-variances`** (جديد): يجلب السجلات مع فلاتر `product_id`, `days`, `limit`، ويعيد ملخصًا إجماليًا (عدد الدفعات، إجمالي المتوقَّع/الفعلي، فرق الوحدات الإجمالي، قيمة الفرق الإجمالية).
+
+### Frontend (`/app/frontend/src/pages/WarehouseManufacturing.js`)
+1. **حقل "العدد الفعلي المُنتَج"** داخل حوار التصنيع — اختياري مع معاينة فورية للفرق (إيجابي/سلبي/نسبة %).
+2. **زر "فرق العائد"** على بطاقة كل منتج → يفتح تقرير مفصل.
+3. **حوار التقرير**:
+   - فلاتر (منتج، فترة 7/30/90/365 يوم) + زر تحديث.
+   - 4 بطاقات ملخّص (عدد الدفعات، المتوقَّع، الفعلي، فرق الوحدات + قيمة مالية).
+   - جدول كامل بالسجلات (تاريخ، منتج، متوقَّع، فعلي، فرق، %، قيمة، بواسطة).
+4. **Toast ذكي** عند التصنيع: تحذير أحمر للهدر، نجاح أخضر للعائد الإضافي.
+
+### الاختبارات
+- `backend/tests/test_yield_variance.py`: **6/6 pytest ✅**
+  - بدون actual_yield → لا سجل.
+  - actual = expected → سجل صفر.
+  - under-yield → variance سلبي + المخزون يعكس الفعلي.
+  - over-yield → variance إيجابي + المخزون يعكس الفعلي.
+  - `GET /yield-variances` يعيد سجلات + ملخص صحيح.
+  - فلتر `product_id` يعمل.
+- `frontend/__tests__/yield_variance_preview.test.js`: **7/7 jest ✅** (تشمل سيناريو Beef Bacon).
+- إجمالي backend tests: **21/21 ✅** (8 إصلاح pack_quantity + 6 yield variance + 7 سابقة).
+
+### قيمة العمل
+- **محاسبيًا**: كل غرام/شريحة مفقودة بين النظري والفعلي تُحفظ بقيمتها المالية → تقارير هدر دقيقة.
+- **تشغيليًا**: يكشف اختلالات الوصفات (مثلاً: piece_weight خاطئ → variance ثابت سلبي على كل دفعة).
+- **التوافق**: السلوك القديم محفوظ — إن لم يُمرَّر `actual_yield`، لا يُسجَّل شيء (Backward compatible).
+
+
+## Session: Feb 21, 2026 — إصلاح حساب عائد الوصفة (Beef Bacon) باستخدام pack_info متعدد المصادر
+
+### المشكلة (مُبلَّغ من العميل)
+شريحة "Beef Bacon" تظهر بسعر **917 IQD** بدلًا من السعر الصحيح **300 IQD**.
+- مادة خام "Beef": تكلفة = 5500 IQD/قطعة، `pack_quantity=550 غرام/قطعة`.
+- الوصفة: 5 قطع لحم → 27500 IQD (دفعة).
+- المنتج النهائي: شريحة بوزن 30 غرام (`piece_weight=30`, `piece_weight_unit="غرام"`).
+- المتوقَّع: 5 × 550 = 2750 غرام ÷ 30 = **91.67 شريحة** ÷ 27500 = **~300 IQD/شريحة**.
+
+### السبب الجذري
+في `_enrich_unit_cost_fields` و `_ingredient_weight_grams` داخل `routes/inventory_system.py`:
+- لم تُؤخذ بعين الاعتبار `pack_quantity`/`pack_unit` المخزّنة **على المكوّن نفسه** (snapshot).
+- لم يُدعَم المكوّن من نوع `manufactured_product_id` (Nested Recipes) داخل `_enrich_unit_cost_fields`.
+- `_COUNT_UNITS` لم يحتوِ على بعض الصيغ الشائعة (`قطع`, `حبات`, `علب`, `كراتين`, `pieces`, `unit`).
+- نتيجةً لذلك: `total_grams=0` → `final_yield=0` → fallback إلى `stored_qty=30` (الكمية المتبقية) → unit_cost = 27500/30 ≈ **917**.
+
+### الحل
+1. **`_enrich_unit_cost_fields`**: helper جديد `_ingredient_pack_info(ing)` يبحث عن pack_info بثلاث طبقات:
+   - ① snapshot على المكوّن نفسه (`ing.pack_quantity` / `ing.pack_unit`).
+   - ② من `raw_materials` المرتبطة.
+   - ③ من `manufactured_products` الوسيطة (`piece_weight` يلعب دور pack_quantity).
+2. **batch-fetch** للمنتجات المُصنّعة الوسيطة لتجنّب N+1.
+3. **`_ingredient_weight_grams`**: نفس الأولوية الثلاثية + توسيع `_COUNT_UNITS`.
+4. توحيد قائمة الوحدات القطعية في الموضعين.
+
+### الاختبارات (regression)
+- `backend/tests/test_enrich_unit_cost.py`: **8/8 pytest ✅** (4 جديدة):
+  - `test_beef_bacon_pack_quantity_from_raw_material` → unit_cost ≈ 300 IQD/شريحة.
+  - `test_pack_info_snapshot_on_ingredient_takes_priority` → snapshot على المكوّن يعمل.
+  - `test_nested_manufactured_product_intermediate` → piece_weight لمنتج وسيط يعمل.
+  - `test_count_unit_variant_qatae` → "قطع" تُعالَج مثل "قطعة".
+
+### الأثر
+- جميع بطاقات منتجات التصنيع و MfgLinksEditor و حسابات تكلفة الطلبات في POS تستخدم نفس `unit_cost_after_waste` الصحيح من الباكند (مصدر واحد للحقيقة).
+
+
 ## Session: May 23, 2026 (30) — تصحيح حوار "زيادة الكمية" للمنتجات الوزنية
 
 ### المشكلة

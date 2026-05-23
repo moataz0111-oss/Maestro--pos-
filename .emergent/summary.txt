@@ -1,19 +1,142 @@
-<analysis>**original_problem_statement**: 
-Multi-tenant POS system (React + FastAPI + MongoDB). The user requires critical enhancements across the Manufacturing, Inventory, HR, and Purchasing modules. Key requests include displaying exact manufacturing costs before/after waste, a warehouse movements log, Waste Efficiency Report, mandatory Daily Branch Stock Count, and partial fulfillment logic.
-Expanded requirements include: Editing recipes of existing manufactured products, pack-based unit input conversions (pieces/packs/cartons), recipe batch auto-scaling, nested recipes (using manufactured products as ingredients for other manufactured products), exact piece count tracking, UI overhauls, and robust permission gating.
-**PRODUCT REQUIREMENTS**: Multi-tenant POS, complex accounting tracking, FIFO inventory, detailed waste/loss variance tracking, recipe batch auto-scaling, nested recipe structures, and robust permission gating.
+<analysis>Here is the handoff summary based on the provided LLM history:
+
+**original_problem_statement**: 
+Multi-tenant POS system (React + FastAPI + MongoDB). The user requires critical bug fixes and enhancements across the Manufacturing, Inventory, POS Offline mode, and Purchasing modules. Key requests include fixing offline mode bugs (duplicate orders, missing receipt/kitchen prints), fixing massive calculation errors in inventory reports (batch cost vs. unit cost), adding a Reset Quantity feature, supporting unit conversions in the Increase Quantity modal, and fixing complex recipe yield math for items using raw materials counted in pieces but consumed by weight (e.g., slices of beef bacon).
+**PRODUCT REQUIREMENTS**: Multi-tenant POS, offline-first capabilities using IndexedDB, FIFO inventory, complex accounting tracking, detailed waste/loss variance tracking, recipe batch auto-scaling, and deep unit conversions (Packs/Pieces to Grams/Slices).
 
 **User's preferred language**: Arabic (العربية)
 (INSTRUCT NEXT AGENT: You MUST automatically detect the user's primary language from their messages inside the <trajectory> tag and INSTRUCT next agent to respond in the user's preferred language, **Arabic**, only)
 
 **what currently exists?** 
-A highly advanced, stable full-stack POS application. The inventory/manufacturing module handles complex nested recipes (using manufactured products as ingredients), pack-to-weight unit conversions, and exact piece tracking. The backend has robust Pydantic validation and auto-syncing between  and . The frontend features an advanced Recipe Builder with smart warnings for unit mismatches, dual-cost display (Total vs. Sub-unit), and bulk-sync capabilities. High test coverage via ============================= test session starts ==============================
-platform linux -- Python 3.11.15, pytest-9.0.2, pluggy-1.6.0
+A highly advanced, stable full-stack POS application. The backend calculates  using a single source of truth (). The POS has a robust Offline mode that relies on IndexedDB, which has just been overhauled to prevent order duplication and support offline receipt/kitchen printing. The frontend features smart unit displays (showing pieces/portions instead of raw grams) and an advanced unit-conversion modal for increasing stock. High test coverage via ============================= test session starts ==============================
+platform linux -- Python 3.11.15, pytest-9.0.3, pluggy-1.6.0
 rootdir: /app
-plugins: anyio-4.12.0
-collected 1641 items / 2 errors
+plugins: anyio-4.13.0, asyncio-1.3.0
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 1510 items / 23 errors
 
 ==================================== ERRORS ====================================
+__________ ERROR collecting backend/tests/test_add_stock_auto_sync.py __________
+backend/tests/test_add_stock_auto_sync.py:6: in <module>
+    BASE_URL = open("/app/frontend/.env").read().split("REACT_APP_BACKEND_URL=")[-1].split("\n")[0].strip()
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   FileNotFoundError: [Errno 2] No such file or directory: '/app/frontend/.env'
+__________ ERROR collecting backend/tests/test_cancel_item_iter169.py __________
+backend/tests/test_cancel_item_iter169.py:32: in <module>
+    assert BASE_URL, "REACT_APP_BACKEND_URL must be set"
+E   AssertionError: REACT_APP_BACKEND_URL must be set
+E   assert None
+_______ ERROR collecting backend/tests/test_coupons_customer_iter170.py ________
+backend/tests/test_coupons_customer_iter170.py:35: in <module>
+    assert BASE_URL, "REACT_APP_BACKEND_URL must be set"
+E   AssertionError: REACT_APP_BACKEND_URL must be set
+E   assert None
+________ ERROR collecting backend/tests/test_credit_permission_gate.py _________
+backend/tests/test_credit_permission_gate.py:14: in <module>
+    BASE_URL = open("/app/frontend/.env").read().split("REACT_APP_BACKEND_URL=")[-1].split("\n")[0].strip()
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   FileNotFoundError: [Errno 2] No such file or directory: '/app/frontend/.env'
+___________ ERROR collecting backend/tests/test_enrich_unit_cost.py ____________
+ImportError while importing test module '/app/backend/tests/test_enrich_unit_cost.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/local/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_enrich_unit_cost.py:15: in <module>
+    from routes.inventory_system import _enrich_unit_cost_fields
+backend/routes/inventory_system.py:15: in <module>
+    from .shared import get_database, get_current_user, get_user_tenant_id, UserRole
+backend/routes/shared.py:7: in <module>
+    from motor.motor_asyncio import AsyncIOMotorClient
+E   ModuleNotFoundError: No module named 'motor'
+________ ERROR collecting backend/tests/test_expense_delete_iter168.py _________
+backend/tests/test_expense_delete_iter168.py:31: in <module>
+    BASE_URL = _load_base_url()
+               ^^^^^^^^^^^^^^^^
+backend/tests/test_expense_delete_iter168.py:28: in _load_base_url
+    raise RuntimeError("REACT_APP_BACKEND_URL not configured")
+E   RuntimeError: REACT_APP_BACKEND_URL not configured
+___ ERROR collecting backend/tests/test_fifo_fulfill_propagation_iter173.py ____
+ImportError while importing test module '/app/backend/tests/test_fifo_fulfill_propagation_iter173.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/local/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_fifo_fulfill_propagation_iter173.py:23: in <module>
+    from motor.motor_asyncio import AsyncIOMotorClient
+E   ModuleNotFoundError: No module named 'motor'
+_______ ERROR collecting backend/tests/test_inventory_stats_unit_cost.py _______
+ImportError while importing test module '/app/backend/tests/test_inventory_stats_unit_cost.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/local/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_inventory_stats_unit_cost.py:67: in <module>
+    from routes import inventory_system  # noqa: E402
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/routes/inventory_system.py:15: in <module>
+    from .shared import get_database, get_current_user, get_user_tenant_id, UserRole
+backend/routes/shared.py:7: in <module>
+    from motor.motor_asyncio import AsyncIOMotorClient
+E   ModuleNotFoundError: No module named 'motor'
+________ ERROR collecting backend/tests/test_iter181_recent_features.py ________
+backend/tests/test_iter181_recent_features.py:29: in <module>
+    with open("/app/frontend/.env") as f:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   FileNotFoundError: [Errno 2] No such file or directory: '/app/frontend/.env'
+_____ ERROR collecting backend/tests/test_linked_product_per_unit_cost.py ______
+backend/tests/test_linked_product_per_unit_cost.py:15: in <module>
+    BASE_URL = open("/app/frontend/.env").read().split("REACT_APP_BACKEND_URL=")[-1].split("\n")[0].strip()
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   FileNotFoundError: [Errno 2] No such file or directory: '/app/frontend/.env'
+_____ ERROR collecting backend/tests/test_manufactured_consumption_qty.py ______
+backend/tests/test_manufactured_consumption_qty.py:6: in <module>
+    BASE_URL = open("/app/frontend/.env").read().split("REACT_APP_BACKEND_URL=")[-1].split("\n")[0].strip()
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   FileNotFoundError: [Errno 2] No such file or directory: '/app/frontend/.env'
+_______ ERROR collecting backend/tests/test_manufactured_recipe_edit.py ________
+backend/tests/test_manufactured_recipe_edit.py:14: in <module>
+    BASE_URL = open("/app/frontend/.env").read().split("REACT_APP_BACKEND_URL=")[-1].split("\n")[0].strip()
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   FileNotFoundError: [Errno 2] No such file or directory: '/app/frontend/.env'
+_____ ERROR collecting backend/tests/test_manufacturing_partial_fulfill.py _____
+backend/tests/test_manufacturing_partial_fulfill.py:14: in <module>
+    BASE_URL = open("/app/frontend/.env").read().split("REACT_APP_BACKEND_URL=")[-1].split("\n")[0].strip()
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   FileNotFoundError: [Errno 2] No such file or directory: '/app/frontend/.env'
+____________ ERROR collecting backend/tests/test_multi_mfg_links.py ____________
+ImportError while importing test module '/app/backend/tests/test_multi_mfg_links.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/local/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_multi_mfg_links.py:11: in <module>
+    from motor.motor_asyncio import AsyncIOMotorClient
+E   ModuleNotFoundError: No module named 'motor'
+____ ERROR collecting backend/tests/test_offline_order_numbering_iter177.py ____
+ImportError while importing test module '/app/backend/tests/test_offline_order_numbering_iter177.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/local/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_offline_order_numbering_iter177.py:17: in <module>
+    from pymongo import MongoClient
+E   ModuleNotFoundError: No module named 'pymongo'
+__ ERROR collecting backend/tests/test_price_increase_and_partial_receipt.py ___
+backend/tests/test_price_increase_and_partial_receipt.py:13: in <module>
+    open("/app/frontend/.env").read().split("REACT_APP_BACKEND_URL=")[-1].split("\n")[0].strip(),
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   FileNotFoundError: [Errno 2] No such file or directory: '/app/frontend/.env'
+_________ ERROR collecting backend/tests/test_produce_batch_scaling.py _________
+backend/tests/test_produce_batch_scaling.py:18: in <module>
+    BASE_URL = open("/app/frontend/.env").read().split("REACT_APP_BACKEND_URL=")[-1].split("\n")[0].strip()
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   FileNotFoundError: [Errno 2] No such file or directory: '/app/frontend/.env'
 __________ ERROR collecting backend/tests/test_profit_loss_iter85.py ___________
 backend/tests/test_profit_loss_iter85.py:11: in <module>
     BASE_URL = os.environ.get('REACT_APP_BACKEND_URL').rstrip('/')
@@ -24,189 +147,498 @@ backend/tests/test_raw_material_lock_iter174.py:17: in <module>
     BASE_URL = os.environ.get("REACT_APP_BACKEND_URL").rstrip("/")
                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 E   AttributeError: 'NoneType' object has no attribute 'rstrip'
-=============================== warnings summary ===============================
-../root/.venv/lib/python3.11/site-packages/starlette/formparsers.py:12
-  /root/.venv/lib/python3.11/site-packages/starlette/formparsers.py:12: PendingDeprecationWarning: Please use `import python_multipart` instead.
-    import multipart
-
--- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+________ ERROR collecting backend/tests/test_recipe_ingredient_model.py ________
+ImportError while importing test module '/app/backend/tests/test_recipe_ingredient_model.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/local/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_recipe_ingredient_model.py:17: in <module>
+    from routes.inventory_system import RecipeIngredient, ManufacturedProductCreate
+backend/routes/inventory_system.py:15: in <module>
+    from .shared import get_database, get_current_user, get_user_tenant_id, UserRole
+backend/routes/shared.py:7: in <module>
+    from motor.motor_asyncio import AsyncIOMotorClient
+E   ModuleNotFoundError: No module named 'motor'
+_________ ERROR collecting backend/tests/test_refund_branch_scoping.py _________
+backend/tests/test_refund_branch_scoping.py:11: in <module>
+    BASE_URL = open("/app/frontend/.env").read().split("REACT_APP_BACKEND_URL=")[-1].split("\n")[0].strip()
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   FileNotFoundError: [Errno 2] No such file or directory: '/app/frontend/.env'
+_____ ERROR collecting backend/tests/test_smart_reports_periods_iter167.py _____
+backend/tests/test_smart_reports_periods_iter167.py:28: in <module>
+    BASE_URL = _load_backend_url()
+               ^^^^^^^^^^^^^^^^^^^
+backend/tests/test_smart_reports_periods_iter167.py:25: in _load_backend_url
+    raise RuntimeError("REACT_APP_BACKEND_URL not set")
+E   RuntimeError: REACT_APP_BACKEND_URL not set
+_______ ERROR collecting backend/tests/test_sync_routing_fix_iter178.py ________
+ImportError while importing test module '/app/backend/tests/test_sync_routing_fix_iter178.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/local/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_sync_routing_fix_iter178.py:20: in <module>
+    from pymongo import MongoClient
+E   ModuleNotFoundError: No module named 'pymongo'
 =========================== short test summary info ============================
+ERROR backend/tests/test_add_stock_auto_sync.py - FileNotFoundError: [Errno 2...
+ERROR backend/tests/test_cancel_item_iter169.py - AssertionError: REACT_APP_B...
+ERROR backend/tests/test_coupons_customer_iter170.py - AssertionError: REACT_...
+ERROR backend/tests/test_credit_permission_gate.py - FileNotFoundError: [Errn...
+ERROR backend/tests/test_enrich_unit_cost.py
+ERROR backend/tests/test_expense_delete_iter168.py - RuntimeError: REACT_APP_...
+ERROR backend/tests/test_fifo_fulfill_propagation_iter173.py
+ERROR backend/tests/test_inventory_stats_unit_cost.py
+ERROR backend/tests/test_iter181_recent_features.py - FileNotFoundError: [Err...
+ERROR backend/tests/test_linked_product_per_unit_cost.py - FileNotFoundError:...
+ERROR backend/tests/test_manufactured_consumption_qty.py - FileNotFoundError:...
+ERROR backend/tests/test_manufactured_recipe_edit.py - FileNotFoundError: [Er...
+ERROR backend/tests/test_manufacturing_partial_fulfill.py - FileNotFoundError...
+ERROR backend/tests/test_multi_mfg_links.py
+ERROR backend/tests/test_offline_order_numbering_iter177.py
+ERROR backend/tests/test_price_increase_and_partial_receipt.py - FileNotFound...
+ERROR backend/tests/test_produce_batch_scaling.py - FileNotFoundError: [Errno...
 ERROR backend/tests/test_profit_loss_iter85.py - AttributeError: 'NoneType' o...
 ERROR backend/tests/test_raw_material_lock_iter174.py - AttributeError: 'None...
-!!!!!!!!!!!!!!!!!!! Interrupted: 2 errors during collection !!!!!!!!!!!!!!!!!!!!
-========================= 1 warning, 2 errors in 1.76s ========================= and .
+ERROR backend/tests/test_recipe_ingredient_model.py
+ERROR backend/tests/test_refund_branch_scoping.py - FileNotFoundError: [Errno...
+ERROR backend/tests/test_smart_reports_periods_iter167.py - RuntimeError: REA...
+ERROR backend/tests/test_sync_routing_fix_iter178.py
+!!!!!!!!!!!!!!!!!!! Interrupted: 23 errors during collection !!!!!!!!!!!!!!!!!!!
+============================== 23 errors in 3.59s ============================== and .
 
 **Last working item**: 
-    - Last item agent was working: **Fixing  display and calculations**. User reported that in the  (used for linking standard products to manufactured products), the unit prices are calculating incorrectly (not grabbing the smallest unit/gram correctly for count-based sub-units like slices), and some manufactured products are missing from the list entirely. 
+    - Last item agent was working: **Fixing Recipe Yield Math for Beef Bacon**. The user reported that a slice of beef bacon costs 917 IQD instead of the correct 300 IQD. The raw material is Beef (cost: 5500 IQD/piece). The recipe uses 5 pieces. Each piece weighs 550g (pack_quantity). The slice weight is 30g. 
+    Math: 5 pieces * 550g = 2750g. 2750g / 30g = 91.67 slices. 27,500 IQD / 91.67 = ~300 IQD per slice.
+    The agent was inspecting  to ensure  and  from the raw material are correctly pulled and multiplied when calculating the recipe yield for weight-based consumption.
     - Status: IN PROGRESS
     - Agent Testing Done: N
-    - Which testing method agent to use? Frontend screenshot tool / Jest tests.
+    - Which testing method agent to use? backend testing agent / local ============================= test session starts ==============================
+platform linux -- Python 3.11.15, pytest-9.0.3, pluggy-1.6.0
+rootdir: /app
+plugins: anyio-4.13.0, asyncio-1.3.0
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 1510 items / 23 errors
+
+==================================== ERRORS ====================================
+__________ ERROR collecting backend/tests/test_add_stock_auto_sync.py __________
+backend/tests/test_add_stock_auto_sync.py:6: in <module>
+    BASE_URL = open("/app/frontend/.env").read().split("REACT_APP_BACKEND_URL=")[-1].split("\n")[0].strip()
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   FileNotFoundError: [Errno 2] No such file or directory: '/app/frontend/.env'
+__________ ERROR collecting backend/tests/test_cancel_item_iter169.py __________
+backend/tests/test_cancel_item_iter169.py:32: in <module>
+    assert BASE_URL, "REACT_APP_BACKEND_URL must be set"
+E   AssertionError: REACT_APP_BACKEND_URL must be set
+E   assert None
+_______ ERROR collecting backend/tests/test_coupons_customer_iter170.py ________
+backend/tests/test_coupons_customer_iter170.py:35: in <module>
+    assert BASE_URL, "REACT_APP_BACKEND_URL must be set"
+E   AssertionError: REACT_APP_BACKEND_URL must be set
+E   assert None
+________ ERROR collecting backend/tests/test_credit_permission_gate.py _________
+backend/tests/test_credit_permission_gate.py:14: in <module>
+    BASE_URL = open("/app/frontend/.env").read().split("REACT_APP_BACKEND_URL=")[-1].split("\n")[0].strip()
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   FileNotFoundError: [Errno 2] No such file or directory: '/app/frontend/.env'
+___________ ERROR collecting backend/tests/test_enrich_unit_cost.py ____________
+ImportError while importing test module '/app/backend/tests/test_enrich_unit_cost.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/local/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_enrich_unit_cost.py:15: in <module>
+    from routes.inventory_system import _enrich_unit_cost_fields
+backend/routes/inventory_system.py:15: in <module>
+    from .shared import get_database, get_current_user, get_user_tenant_id, UserRole
+backend/routes/shared.py:7: in <module>
+    from motor.motor_asyncio import AsyncIOMotorClient
+E   ModuleNotFoundError: No module named 'motor'
+________ ERROR collecting backend/tests/test_expense_delete_iter168.py _________
+backend/tests/test_expense_delete_iter168.py:31: in <module>
+    BASE_URL = _load_base_url()
+               ^^^^^^^^^^^^^^^^
+backend/tests/test_expense_delete_iter168.py:28: in _load_base_url
+    raise RuntimeError("REACT_APP_BACKEND_URL not configured")
+E   RuntimeError: REACT_APP_BACKEND_URL not configured
+___ ERROR collecting backend/tests/test_fifo_fulfill_propagation_iter173.py ____
+ImportError while importing test module '/app/backend/tests/test_fifo_fulfill_propagation_iter173.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/local/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_fifo_fulfill_propagation_iter173.py:23: in <module>
+    from motor.motor_asyncio import AsyncIOMotorClient
+E   ModuleNotFoundError: No module named 'motor'
+_______ ERROR collecting backend/tests/test_inventory_stats_unit_cost.py _______
+ImportError while importing test module '/app/backend/tests/test_inventory_stats_unit_cost.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/local/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_inventory_stats_unit_cost.py:67: in <module>
+    from routes import inventory_system  # noqa: E402
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/routes/inventory_system.py:15: in <module>
+    from .shared import get_database, get_current_user, get_user_tenant_id, UserRole
+backend/routes/shared.py:7: in <module>
+    from motor.motor_asyncio import AsyncIOMotorClient
+E   ModuleNotFoundError: No module named 'motor'
+________ ERROR collecting backend/tests/test_iter181_recent_features.py ________
+backend/tests/test_iter181_recent_features.py:29: in <module>
+    with open("/app/frontend/.env") as f:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   FileNotFoundError: [Errno 2] No such file or directory: '/app/frontend/.env'
+_____ ERROR collecting backend/tests/test_linked_product_per_unit_cost.py ______
+backend/tests/test_linked_product_per_unit_cost.py:15: in <module>
+    BASE_URL = open("/app/frontend/.env").read().split("REACT_APP_BACKEND_URL=")[-1].split("\n")[0].strip()
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   FileNotFoundError: [Errno 2] No such file or directory: '/app/frontend/.env'
+_____ ERROR collecting backend/tests/test_manufactured_consumption_qty.py ______
+backend/tests/test_manufactured_consumption_qty.py:6: in <module>
+    BASE_URL = open("/app/frontend/.env").read().split("REACT_APP_BACKEND_URL=")[-1].split("\n")[0].strip()
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   FileNotFoundError: [Errno 2] No such file or directory: '/app/frontend/.env'
+_______ ERROR collecting backend/tests/test_manufactured_recipe_edit.py ________
+backend/tests/test_manufactured_recipe_edit.py:14: in <module>
+    BASE_URL = open("/app/frontend/.env").read().split("REACT_APP_BACKEND_URL=")[-1].split("\n")[0].strip()
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   FileNotFoundError: [Errno 2] No such file or directory: '/app/frontend/.env'
+_____ ERROR collecting backend/tests/test_manufacturing_partial_fulfill.py _____
+backend/tests/test_manufacturing_partial_fulfill.py:14: in <module>
+    BASE_URL = open("/app/frontend/.env").read().split("REACT_APP_BACKEND_URL=")[-1].split("\n")[0].strip()
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   FileNotFoundError: [Errno 2] No such file or directory: '/app/frontend/.env'
+____________ ERROR collecting backend/tests/test_multi_mfg_links.py ____________
+ImportError while importing test module '/app/backend/tests/test_multi_mfg_links.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/local/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_multi_mfg_links.py:11: in <module>
+    from motor.motor_asyncio import AsyncIOMotorClient
+E   ModuleNotFoundError: No module named 'motor'
+____ ERROR collecting backend/tests/test_offline_order_numbering_iter177.py ____
+ImportError while importing test module '/app/backend/tests/test_offline_order_numbering_iter177.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/local/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_offline_order_numbering_iter177.py:17: in <module>
+    from pymongo import MongoClient
+E   ModuleNotFoundError: No module named 'pymongo'
+__ ERROR collecting backend/tests/test_price_increase_and_partial_receipt.py ___
+backend/tests/test_price_increase_and_partial_receipt.py:13: in <module>
+    open("/app/frontend/.env").read().split("REACT_APP_BACKEND_URL=")[-1].split("\n")[0].strip(),
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   FileNotFoundError: [Errno 2] No such file or directory: '/app/frontend/.env'
+_________ ERROR collecting backend/tests/test_produce_batch_scaling.py _________
+backend/tests/test_produce_batch_scaling.py:18: in <module>
+    BASE_URL = open("/app/frontend/.env").read().split("REACT_APP_BACKEND_URL=")[-1].split("\n")[0].strip()
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   FileNotFoundError: [Errno 2] No such file or directory: '/app/frontend/.env'
+__________ ERROR collecting backend/tests/test_profit_loss_iter85.py ___________
+backend/tests/test_profit_loss_iter85.py:11: in <module>
+    BASE_URL = os.environ.get('REACT_APP_BACKEND_URL').rstrip('/')
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   AttributeError: 'NoneType' object has no attribute 'rstrip'
+_______ ERROR collecting backend/tests/test_raw_material_lock_iter174.py _______
+backend/tests/test_raw_material_lock_iter174.py:17: in <module>
+    BASE_URL = os.environ.get("REACT_APP_BACKEND_URL").rstrip("/")
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   AttributeError: 'NoneType' object has no attribute 'rstrip'
+________ ERROR collecting backend/tests/test_recipe_ingredient_model.py ________
+ImportError while importing test module '/app/backend/tests/test_recipe_ingredient_model.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/local/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_recipe_ingredient_model.py:17: in <module>
+    from routes.inventory_system import RecipeIngredient, ManufacturedProductCreate
+backend/routes/inventory_system.py:15: in <module>
+    from .shared import get_database, get_current_user, get_user_tenant_id, UserRole
+backend/routes/shared.py:7: in <module>
+    from motor.motor_asyncio import AsyncIOMotorClient
+E   ModuleNotFoundError: No module named 'motor'
+_________ ERROR collecting backend/tests/test_refund_branch_scoping.py _________
+backend/tests/test_refund_branch_scoping.py:11: in <module>
+    BASE_URL = open("/app/frontend/.env").read().split("REACT_APP_BACKEND_URL=")[-1].split("\n")[0].strip()
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   FileNotFoundError: [Errno 2] No such file or directory: '/app/frontend/.env'
+_____ ERROR collecting backend/tests/test_smart_reports_periods_iter167.py _____
+backend/tests/test_smart_reports_periods_iter167.py:28: in <module>
+    BASE_URL = _load_backend_url()
+               ^^^^^^^^^^^^^^^^^^^
+backend/tests/test_smart_reports_periods_iter167.py:25: in _load_backend_url
+    raise RuntimeError("REACT_APP_BACKEND_URL not set")
+E   RuntimeError: REACT_APP_BACKEND_URL not set
+_______ ERROR collecting backend/tests/test_sync_routing_fix_iter178.py ________
+ImportError while importing test module '/app/backend/tests/test_sync_routing_fix_iter178.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/local/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_sync_routing_fix_iter178.py:20: in <module>
+    from pymongo import MongoClient
+E   ModuleNotFoundError: No module named 'pymongo'
+=========================== short test summary info ============================
+ERROR backend/tests/test_add_stock_auto_sync.py - FileNotFoundError: [Errno 2...
+ERROR backend/tests/test_cancel_item_iter169.py - AssertionError: REACT_APP_B...
+ERROR backend/tests/test_coupons_customer_iter170.py - AssertionError: REACT_...
+ERROR backend/tests/test_credit_permission_gate.py - FileNotFoundError: [Errn...
+ERROR backend/tests/test_enrich_unit_cost.py
+ERROR backend/tests/test_expense_delete_iter168.py - RuntimeError: REACT_APP_...
+ERROR backend/tests/test_fifo_fulfill_propagation_iter173.py
+ERROR backend/tests/test_inventory_stats_unit_cost.py
+ERROR backend/tests/test_iter181_recent_features.py - FileNotFoundError: [Err...
+ERROR backend/tests/test_linked_product_per_unit_cost.py - FileNotFoundError:...
+ERROR backend/tests/test_manufactured_consumption_qty.py - FileNotFoundError:...
+ERROR backend/tests/test_manufactured_recipe_edit.py - FileNotFoundError: [Er...
+ERROR backend/tests/test_manufacturing_partial_fulfill.py - FileNotFoundError...
+ERROR backend/tests/test_multi_mfg_links.py
+ERROR backend/tests/test_offline_order_numbering_iter177.py
+ERROR backend/tests/test_price_increase_and_partial_receipt.py - FileNotFound...
+ERROR backend/tests/test_produce_batch_scaling.py - FileNotFoundError: [Errno...
+ERROR backend/tests/test_profit_loss_iter85.py - AttributeError: 'NoneType' o...
+ERROR backend/tests/test_raw_material_lock_iter174.py - AttributeError: 'None...
+ERROR backend/tests/test_recipe_ingredient_model.py
+ERROR backend/tests/test_refund_branch_scoping.py - FileNotFoundError: [Errno...
+ERROR backend/tests/test_smart_reports_periods_iter167.py - RuntimeError: REA...
+ERROR backend/tests/test_sync_routing_fix_iter178.py
+!!!!!!!!!!!!!!!!!!! Interrupted: 23 errors during collection !!!!!!!!!!!!!!!!!!!
+============================== 23 errors in 1.00s ==============================
     - User Testing Done: N
 
 **All Pending/In progress Issue list**:  
-  Issue 1: Fix  price calculations and missing products (P0)
-  Issue 2: Emergent Auto-commit/GitHub Sync Stalled (P0 - EXTERNAL)
+  Issue 1: Fix Recipe Yield Math utilizing Raw Material  (P0)
+  Issue 2: Emergent Auto-commit/GitHub Sync Stalled / Bad Gateway (P2 - EXTERNAL)
 
   Issues Detail:
-  - Issue 1: Fix  price calculations and missing products
-     - Attempted fixes: Agent was just locating the component (, lines ~2056, 4193, 4673) before the session ended.
+  - Issue 1: Fix Recipe Yield Math utilizing Raw Material 
+     - Attempted fixes: Agent confirmed the math formula but the session ended while grep-ing  in . 
      - Next debug checklist: 
-        - Check  in .
-        - Ensure the list of manufactured products passed to it is not filtered incorrectly (preventing some items from showing).
-        - Update the unit cost logic in the editor to utilize  and  so it displays the smallest unit price accurately (e.g., price per slice instead of price per whole piece).
-     - Why fix this issue and what will be achieved with the fix? Ensures accurate POS selling price linking and resolves the final bug reported by the user regarding cost discrepancies.
+        - Check  and  in .
+        - Ensure that when calculating  or , if the ingredient has  and  (e.g., 550 grams), it multiplies the quantity (5 pieces) by the  (550) to get the true weight, before dividing by  (30g).
+     - Why fix this issue and what will be achieved with the fix? Ensures highly accurate unit costs for manufacturing products, which dictates the selling profit margins.
      - Status: IN PROGRESS
      - Is recurring issue? N
-     - Should Test frontend/backend/both after fix? Frontend
+     - Should Test frontend/backend/both after fix? Backend (via pytest)
      - Blocked on other issue: None
 
-  - Issue 2: Emergent Auto-commit/GitHub Sync Stalled
-     - Attempted fixes: Agent analyzed logs, confirmed GitHub itself was up, and identified that Emergent's internal auto-commit service stopped working around 1:52 PM. Over 19+ local file changes are pending but Save to GitHub pushes an old HEAD silently.
-     - Next debug checklist: DO NOT run Unstaged changes after reset:
-M	.emergent/emergent.yml
-M	.gitignore
-M	backend/server.py
-M	backend/server.py.backup
-M	backend/tests/test_biometric_autosync_iter157.py
-M	backend/tests/test_branch_separation.py
-M	backend/tests/test_business_date_iter166.py
-M	backend/tests/test_comprehensive_iter117.py
-M	backend/tests/test_driver_app_push_iter57.py
-M	backend/tests/test_fifo_fulfill_propagation_iter173.py
-M	backend/tests/test_fifo_price_alerts.py
-M	backend/tests/test_hr_account_statement_iter170.py
-M	backend/tests/test_impersonation.py
-M	backend/tests/test_impersonation_logs_iter108.py
-M	backend/tests/test_iter175_send_to_warehouse.py
-M	backend/tests/test_iteration_25.py
-M	backend/tests/test_iteration_47.py
-M	backend/tests/test_low_stock_alerts.py
-M	backend/tests/test_menu_pwa_iter52.py
-M	backend/tests/test_multi_device_offline_sync_iter110.py
-M	backend/tests/test_new_features_iter96.py
-M	backend/tests/test_order_notifications_iter105.py
-M	backend/tests/test_owner_features_iter34.py
-M	backend/tests/test_permissions_iter102.py
-M	backend/tests/test_purchase_requests_iter123.py
-M	backend/tests/test_restaurant_settings.py
-M	backend/tests/test_system_settings_iter61.py
-M	backend_test.py
-M	frontend/yarn.lock
-M	memory/CALLCENTER_SETUP_GUIDE.md
-M	test_reports/iteration_114.json
-M	test_reports/iteration_116.json
-M	test_reports/iteration_117.json
-M	test_reports/iteration_16.json
-M	test_reports/iteration_165.json
-M	test_reports/iteration_17.json
-M	test_reports/iteration_18.json
-M	test_reports/iteration_19.json
-M	test_reports/iteration_20.json
-M	test_reports/iteration_21.json
-M	test_reports/iteration_22.json
-M	test_reports/iteration_23.json
-M	test_reports/iteration_24.json
-M	test_reports/iteration_25.json
-M	test_reports/iteration_26.json
-M	test_reports/iteration_27.json
-M	test_reports/iteration_29.json
-M	test_reports/iteration_30.json
-M	test_reports/iteration_31.json
-M	test_reports/iteration_32.json
-M	test_reports/iteration_33.json
-M	test_reports/iteration_34.json
-M	test_reports/iteration_35.json
-M	test_reports/iteration_36.json
-M	test_reports/iteration_37.json
-M	tests/test_iteration10_purchasing.py
-M	tests/test_iteration13_cash_register_driver_transfer.py
-M	tests/test_iteration16_customer_menu.py
-M	tests/test_iteration17_payment_notifications.py
-M	tests/test_iteration18_branch_orders_recipes.py
-M	tests/test_iteration19_branch_orders_recipe_deduction.py
-M	tests/test_iteration21_maestro.py
-M	tests/test_iteration22_comprehensive.py
-M	tests/test_iteration4_features.py
-M	tests/test_iteration5_features.py
-M	tests/test_iteration9_comprehensive.py
-M	tests/test_maestro_api.py
-M	tests/test_new_features.py or destructive git commands. The local files are correct and safe. Wait for the user to confirm Emergent support fixed the sync, or just continue coding locally.
-     - Why fix this issue and what will be achieved with the fix? Ensures user's code is safely backed up to their repo.
-     - Status: BLOCKED (Awaiting Emergent Support)
+  - Issue 2: Bad Gateway / Infrastructure instability
+     - Attempted fixes: The previous session experienced a complete pod wipe due to an Emergent infrastructure Bad Gateway. The agent successfully restored the code via .
+     - Next debug checklist: Be aware that platform tools might timeout or drop. Rely on standard bash if MCP tools fail. Do not overwrite  files.
+     - Why fix this issue and what will be achieved with the fix? Keeps the agent working safely.
+     - Status: RESOLVED (But monitor)
      - Is recurring issue? Y (Infrastructure)
      - Should Test frontend/backend/both after fix? NA
-     - Blocked on other issue: Emergent Platform Support
+     - Blocked on other issue: None
 
 **In progress Task List**: 
   (None active besides Issue 1)
 
 **Upcoming and Future Tasks**
     - (P2) Refactor : Break down the monolithic file (22.5k+ lines) into modular routes.
-    - (P2) Refactor Frontend Monolith: Break down  (now nearly 7k lines).
+    - (P2) Refactor Frontend Monolith: Break down  and .
     - (P3) Bulk delete + custom text input for completely freeform custom units.
 
 **Completed work in this session**
-- Bug Fix: Fixed 422 Validation Error on nested recipes by making  optional in Pydantic models (DONE)
-- Feature: Added  and a frontend bulk Sync Orphans button (DONE)
-- Bug Fix: Fixed unit mismatches and No Name items in  by auto-enriching data from  (DONE)
-- Feature: Added the nested product toggle (Raw Material / Manufactured) inside the Edit Recipe modal (DONE)
-- Bug Fix: Allowed custom sub-units (e.g., شريحة / slice) to appear in the recipe unit selection dropdown (DONE)
-- Bug Fix: Fixed issue where kg items didn't show the unit dropdown in the edit modal (DONE)
-- Feature: Auto-sync product unit and recompute costs when  is changed (DONE)
-- Bug Fix: Immediate sync of  edits to  names/costs (DONE)
-- Feature: Added  and UI trash icon for manual cleanup (DONE)
-- UI/UX: Removed Selling Price and Profit Margin from Manufactured product cards, replaced with Unit Cost (DONE)
-- Feature: Manufactured product unit dropdown now supports all 17 custom/standard units (DONE)
-- UI/UX: Dual-price display on cards showing both parent item cost and sub-item (e.g., slice) cost (DONE)
-- Feature: Smart yellow warning banner with Auto Correct button when  mismatches  (DONE)
+- Bug Fix:  single sub-unit price calculation fixed (DONE)
+- Bug Fix: Branch Transfer dialog was showing Raw Materials instead of Manufactured Products (DONE)
+- Feature: Unified backend unit cost calculation () serving as a single source of truth (DONE)
+- Feature: Added new serving units (cup, mug) to  dropdowns (DONE)
+- Feature: Added  and a red Zero Quantity button on frontend cards (DONE)
+- UI/UX: Removed the old Auto-correct piece weight UI and yellow warnings (DONE)
+- UI/UX: Smart Display Unit mapping (shows portion instead of grams dynamically) (DONE)
+- Bug Fix (CRITICAL): Fixed massive Inventory totals. Changed  to  in  and  (DONE)
+- Bug Fix (CRITICAL): POS Offline Mode overhaul. Fixed duplicate sync orders, enabled Offline receipt printing, enabled Offline KDS printing (DONE)
+- Feature: Added  to delete erroneous purchase invoices and added a >10M IQD safety warning (DONE)
+- Feature: Increase Quantity modal now has a unit dropdown to input raw grams that auto-converts to pieces (DONE)
 
 **Earlier issues found/mentioned but not fixed**
    - None.
 
 **Known issue recurrence from previous fork**
-  - None within the codebase itself. (The GitHub sync issue is platform-level).
+  - Issue recurrence in previous fork: Infrastructure Bad Gateway wiped the  folder. The agent had to  to restore.
+  - Recurrence count: 1
+  - Status: RESOLVED (Restored from GitHub)
 
 **Code Architecture**
 
 
 **Key Technical Concepts**
 - React, FastAPI, MongoDB.
-- **Pack-Aware Conversions:** Uses  and  deeply to convert between cartons, pieces, and slices/grams.
-- **Orphan Ingredients:** Ingredients added to recipes that lost their reference ID. Handled via auto-resolve backend scripts.
+- **Offline-First POS:** IndexedDB queues orders locally.  handles the push. De-duplication uses  and strict cross-matching.
+- **Single Source of Truth:**  uses  to compute accurate  which the frontend relies upon to prevent math mismatch.
 
 **key DB schema**
-  - : Holds raw materials transferred for use in recipes. Now strictly synced with  name and cost changes.
-  - : Holds recipes.
+  - : Holds recipes and batch info.
+  - : Holds supplier purchases. Now supports deletion.
+  - : POS orders.  is critical for dedup.
 
 **changes in tech stack**
   - None.
 
 **All files of reference** 
--  (Heavily modified for auto-resolving ingredients, sync endpoints, Pydantic relaxations, unit syncs, delete endpoints)
--  (Heavily modified for nested toggles, smart warnings, dual-cost UI, unit dropdowns)
--  (Created 5+ new python test files for regression)
--  (Created 2 new jest test files)
+-  (Added , , )
+-  (Added Reset button, Unit conversion modal, smart displays)
+-  (Offline order saving overhauled)
+-  (Fixed  math bugs)
+-  (Created , , , )
+-  (Created , , , )
 -  (Updated)
 
 **Areas that need refactoring**:
--  (Closing in on 7,000 lines).
--  (Now over 5,500 lines).
+-  (Over 6,900 lines).
+-  (Over 5,600 lines).
 
 **key api endpoints**
 -  (New)
 -  (New)
-- 
+-  (Math corrected)
 - 
 
 **Critical Info for New Agent** 
 - **Language:** Reply strictly in **Arabic**.
 - **TESTING:** The previous agent relied heavily on writing localized ============================= test session starts ==============================
-platform linux -- Python 3.11.15, pytest-9.0.2, pluggy-1.6.0
+platform linux -- Python 3.11.15, pytest-9.0.3, pluggy-1.6.0
 rootdir: /app
-plugins: anyio-4.12.0
-collected 1641 items / 2 errors
+plugins: anyio-4.13.0, asyncio-1.3.0
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 1510 items / 23 errors
 
 ==================================== ERRORS ====================================
+__________ ERROR collecting backend/tests/test_add_stock_auto_sync.py __________
+backend/tests/test_add_stock_auto_sync.py:6: in <module>
+    BASE_URL = open("/app/frontend/.env").read().split("REACT_APP_BACKEND_URL=")[-1].split("\n")[0].strip()
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   FileNotFoundError: [Errno 2] No such file or directory: '/app/frontend/.env'
+__________ ERROR collecting backend/tests/test_cancel_item_iter169.py __________
+backend/tests/test_cancel_item_iter169.py:32: in <module>
+    assert BASE_URL, "REACT_APP_BACKEND_URL must be set"
+E   AssertionError: REACT_APP_BACKEND_URL must be set
+E   assert None
+_______ ERROR collecting backend/tests/test_coupons_customer_iter170.py ________
+backend/tests/test_coupons_customer_iter170.py:35: in <module>
+    assert BASE_URL, "REACT_APP_BACKEND_URL must be set"
+E   AssertionError: REACT_APP_BACKEND_URL must be set
+E   assert None
+________ ERROR collecting backend/tests/test_credit_permission_gate.py _________
+backend/tests/test_credit_permission_gate.py:14: in <module>
+    BASE_URL = open("/app/frontend/.env").read().split("REACT_APP_BACKEND_URL=")[-1].split("\n")[0].strip()
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   FileNotFoundError: [Errno 2] No such file or directory: '/app/frontend/.env'
+___________ ERROR collecting backend/tests/test_enrich_unit_cost.py ____________
+ImportError while importing test module '/app/backend/tests/test_enrich_unit_cost.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/local/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_enrich_unit_cost.py:15: in <module>
+    from routes.inventory_system import _enrich_unit_cost_fields
+backend/routes/inventory_system.py:15: in <module>
+    from .shared import get_database, get_current_user, get_user_tenant_id, UserRole
+backend/routes/shared.py:7: in <module>
+    from motor.motor_asyncio import AsyncIOMotorClient
+E   ModuleNotFoundError: No module named 'motor'
+________ ERROR collecting backend/tests/test_expense_delete_iter168.py _________
+backend/tests/test_expense_delete_iter168.py:31: in <module>
+    BASE_URL = _load_base_url()
+               ^^^^^^^^^^^^^^^^
+backend/tests/test_expense_delete_iter168.py:28: in _load_base_url
+    raise RuntimeError("REACT_APP_BACKEND_URL not configured")
+E   RuntimeError: REACT_APP_BACKEND_URL not configured
+___ ERROR collecting backend/tests/test_fifo_fulfill_propagation_iter173.py ____
+ImportError while importing test module '/app/backend/tests/test_fifo_fulfill_propagation_iter173.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/local/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_fifo_fulfill_propagation_iter173.py:23: in <module>
+    from motor.motor_asyncio import AsyncIOMotorClient
+E   ModuleNotFoundError: No module named 'motor'
+_______ ERROR collecting backend/tests/test_inventory_stats_unit_cost.py _______
+ImportError while importing test module '/app/backend/tests/test_inventory_stats_unit_cost.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/local/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_inventory_stats_unit_cost.py:67: in <module>
+    from routes import inventory_system  # noqa: E402
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/routes/inventory_system.py:15: in <module>
+    from .shared import get_database, get_current_user, get_user_tenant_id, UserRole
+backend/routes/shared.py:7: in <module>
+    from motor.motor_asyncio import AsyncIOMotorClient
+E   ModuleNotFoundError: No module named 'motor'
+________ ERROR collecting backend/tests/test_iter181_recent_features.py ________
+backend/tests/test_iter181_recent_features.py:29: in <module>
+    with open("/app/frontend/.env") as f:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   FileNotFoundError: [Errno 2] No such file or directory: '/app/frontend/.env'
+_____ ERROR collecting backend/tests/test_linked_product_per_unit_cost.py ______
+backend/tests/test_linked_product_per_unit_cost.py:15: in <module>
+    BASE_URL = open("/app/frontend/.env").read().split("REACT_APP_BACKEND_URL=")[-1].split("\n")[0].strip()
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   FileNotFoundError: [Errno 2] No such file or directory: '/app/frontend/.env'
+_____ ERROR collecting backend/tests/test_manufactured_consumption_qty.py ______
+backend/tests/test_manufactured_consumption_qty.py:6: in <module>
+    BASE_URL = open("/app/frontend/.env").read().split("REACT_APP_BACKEND_URL=")[-1].split("\n")[0].strip()
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   FileNotFoundError: [Errno 2] No such file or directory: '/app/frontend/.env'
+_______ ERROR collecting backend/tests/test_manufactured_recipe_edit.py ________
+backend/tests/test_manufactured_recipe_edit.py:14: in <module>
+    BASE_URL = open("/app/frontend/.env").read().split("REACT_APP_BACKEND_URL=")[-1].split("\n")[0].strip()
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   FileNotFoundError: [Errno 2] No such file or directory: '/app/frontend/.env'
+_____ ERROR collecting backend/tests/test_manufacturing_partial_fulfill.py _____
+backend/tests/test_manufacturing_partial_fulfill.py:14: in <module>
+    BASE_URL = open("/app/frontend/.env").read().split("REACT_APP_BACKEND_URL=")[-1].split("\n")[0].strip()
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   FileNotFoundError: [Errno 2] No such file or directory: '/app/frontend/.env'
+____________ ERROR collecting backend/tests/test_multi_mfg_links.py ____________
+ImportError while importing test module '/app/backend/tests/test_multi_mfg_links.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/local/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_multi_mfg_links.py:11: in <module>
+    from motor.motor_asyncio import AsyncIOMotorClient
+E   ModuleNotFoundError: No module named 'motor'
+____ ERROR collecting backend/tests/test_offline_order_numbering_iter177.py ____
+ImportError while importing test module '/app/backend/tests/test_offline_order_numbering_iter177.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/local/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_offline_order_numbering_iter177.py:17: in <module>
+    from pymongo import MongoClient
+E   ModuleNotFoundError: No module named 'pymongo'
+__ ERROR collecting backend/tests/test_price_increase_and_partial_receipt.py ___
+backend/tests/test_price_increase_and_partial_receipt.py:13: in <module>
+    open("/app/frontend/.env").read().split("REACT_APP_BACKEND_URL=")[-1].split("\n")[0].strip(),
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   FileNotFoundError: [Errno 2] No such file or directory: '/app/frontend/.env'
+_________ ERROR collecting backend/tests/test_produce_batch_scaling.py _________
+backend/tests/test_produce_batch_scaling.py:18: in <module>
+    BASE_URL = open("/app/frontend/.env").read().split("REACT_APP_BACKEND_URL=")[-1].split("\n")[0].strip()
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   FileNotFoundError: [Errno 2] No such file or directory: '/app/frontend/.env'
 __________ ERROR collecting backend/tests/test_profit_loss_iter85.py ___________
 backend/tests/test_profit_loss_iter85.py:11: in <module>
     BASE_URL = os.environ.get('REACT_APP_BACKEND_URL').rstrip('/')
@@ -217,153 +649,69 @@ backend/tests/test_raw_material_lock_iter174.py:17: in <module>
     BASE_URL = os.environ.get("REACT_APP_BACKEND_URL").rstrip("/")
                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 E   AttributeError: 'NoneType' object has no attribute 'rstrip'
-=============================== warnings summary ===============================
-../root/.venv/lib/python3.11/site-packages/starlette/formparsers.py:12
-  /root/.venv/lib/python3.11/site-packages/starlette/formparsers.py:12: PendingDeprecationWarning: Please use `import python_multipart` instead.
-    import multipart
-
--- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+________ ERROR collecting backend/tests/test_recipe_ingredient_model.py ________
+ImportError while importing test module '/app/backend/tests/test_recipe_ingredient_model.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/local/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_recipe_ingredient_model.py:17: in <module>
+    from routes.inventory_system import RecipeIngredient, ManufacturedProductCreate
+backend/routes/inventory_system.py:15: in <module>
+    from .shared import get_database, get_current_user, get_user_tenant_id, UserRole
+backend/routes/shared.py:7: in <module>
+    from motor.motor_asyncio import AsyncIOMotorClient
+E   ModuleNotFoundError: No module named 'motor'
+_________ ERROR collecting backend/tests/test_refund_branch_scoping.py _________
+backend/tests/test_refund_branch_scoping.py:11: in <module>
+    BASE_URL = open("/app/frontend/.env").read().split("REACT_APP_BACKEND_URL=")[-1].split("\n")[0].strip()
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   FileNotFoundError: [Errno 2] No such file or directory: '/app/frontend/.env'
+_____ ERROR collecting backend/tests/test_smart_reports_periods_iter167.py _____
+backend/tests/test_smart_reports_periods_iter167.py:28: in <module>
+    BASE_URL = _load_backend_url()
+               ^^^^^^^^^^^^^^^^^^^
+backend/tests/test_smart_reports_periods_iter167.py:25: in _load_backend_url
+    raise RuntimeError("REACT_APP_BACKEND_URL not set")
+E   RuntimeError: REACT_APP_BACKEND_URL not set
+_______ ERROR collecting backend/tests/test_sync_routing_fix_iter178.py ________
+ImportError while importing test module '/app/backend/tests/test_sync_routing_fix_iter178.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/local/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_sync_routing_fix_iter178.py:20: in <module>
+    from pymongo import MongoClient
+E   ModuleNotFoundError: No module named 'pymongo'
 =========================== short test summary info ============================
+ERROR backend/tests/test_add_stock_auto_sync.py - FileNotFoundError: [Errno 2...
+ERROR backend/tests/test_cancel_item_iter169.py - AssertionError: REACT_APP_B...
+ERROR backend/tests/test_coupons_customer_iter170.py - AssertionError: REACT_...
+ERROR backend/tests/test_credit_permission_gate.py - FileNotFoundError: [Errn...
+ERROR backend/tests/test_enrich_unit_cost.py
+ERROR backend/tests/test_expense_delete_iter168.py - RuntimeError: REACT_APP_...
+ERROR backend/tests/test_fifo_fulfill_propagation_iter173.py
+ERROR backend/tests/test_inventory_stats_unit_cost.py
+ERROR backend/tests/test_iter181_recent_features.py - FileNotFoundError: [Err...
+ERROR backend/tests/test_linked_product_per_unit_cost.py - FileNotFoundError:...
+ERROR backend/tests/test_manufactured_consumption_qty.py - FileNotFoundError:...
+ERROR backend/tests/test_manufactured_recipe_edit.py - FileNotFoundError: [Er...
+ERROR backend/tests/test_manufacturing_partial_fulfill.py - FileNotFoundError...
+ERROR backend/tests/test_multi_mfg_links.py
+ERROR backend/tests/test_offline_order_numbering_iter177.py
+ERROR backend/tests/test_price_increase_and_partial_receipt.py - FileNotFound...
+ERROR backend/tests/test_produce_batch_scaling.py - FileNotFoundError: [Errno...
 ERROR backend/tests/test_profit_loss_iter85.py - AttributeError: 'NoneType' o...
 ERROR backend/tests/test_raw_material_lock_iter174.py - AttributeError: 'None...
-!!!!!!!!!!!!!!!!!!! Interrupted: 2 errors during collection !!!!!!!!!!!!!!!!!!!!
-========================= 1 warning, 2 errors in 1.66s ========================= and  files for every logical change. Maintain this! It prevents regressions in the highly complex math functions.
-- **GitHub Sync Bug:** The Emergent auto-commit service stopped working. The user is aware. **Do not execute Unstaged changes after reset:
-M	.emergent/emergent.yml
-M	.gitignore
-M	backend/server.py
-M	backend/server.py.backup
-M	backend/tests/test_biometric_autosync_iter157.py
-M	backend/tests/test_branch_separation.py
-M	backend/tests/test_business_date_iter166.py
-M	backend/tests/test_comprehensive_iter117.py
-M	backend/tests/test_driver_app_push_iter57.py
-M	backend/tests/test_fifo_fulfill_propagation_iter173.py
-M	backend/tests/test_fifo_price_alerts.py
-M	backend/tests/test_hr_account_statement_iter170.py
-M	backend/tests/test_impersonation.py
-M	backend/tests/test_impersonation_logs_iter108.py
-M	backend/tests/test_iter175_send_to_warehouse.py
-M	backend/tests/test_iteration_25.py
-M	backend/tests/test_iteration_47.py
-M	backend/tests/test_low_stock_alerts.py
-M	backend/tests/test_menu_pwa_iter52.py
-M	backend/tests/test_multi_device_offline_sync_iter110.py
-M	backend/tests/test_new_features_iter96.py
-M	backend/tests/test_order_notifications_iter105.py
-M	backend/tests/test_owner_features_iter34.py
-M	backend/tests/test_permissions_iter102.py
-M	backend/tests/test_purchase_requests_iter123.py
-M	backend/tests/test_restaurant_settings.py
-M	backend/tests/test_system_settings_iter61.py
-M	backend_test.py
-M	frontend/yarn.lock
-M	memory/CALLCENTER_SETUP_GUIDE.md
-M	test_reports/iteration_114.json
-M	test_reports/iteration_116.json
-M	test_reports/iteration_117.json
-M	test_reports/iteration_16.json
-M	test_reports/iteration_165.json
-M	test_reports/iteration_17.json
-M	test_reports/iteration_18.json
-M	test_reports/iteration_19.json
-M	test_reports/iteration_20.json
-M	test_reports/iteration_21.json
-M	test_reports/iteration_22.json
-M	test_reports/iteration_23.json
-M	test_reports/iteration_24.json
-M	test_reports/iteration_25.json
-M	test_reports/iteration_26.json
-M	test_reports/iteration_27.json
-M	test_reports/iteration_29.json
-M	test_reports/iteration_30.json
-M	test_reports/iteration_31.json
-M	test_reports/iteration_32.json
-M	test_reports/iteration_33.json
-M	test_reports/iteration_34.json
-M	test_reports/iteration_35.json
-M	test_reports/iteration_36.json
-M	test_reports/iteration_37.json
-M	tests/test_iteration10_purchasing.py
-M	tests/test_iteration13_cash_register_driver_transfer.py
-M	tests/test_iteration16_customer_menu.py
-M	tests/test_iteration17_payment_notifications.py
-M	tests/test_iteration18_branch_orders_recipes.py
-M	tests/test_iteration19_branch_orders_recipe_deduction.py
-M	tests/test_iteration21_maestro.py
-M	tests/test_iteration22_comprehensive.py
-M	tests/test_iteration4_features.py
-M	tests/test_iteration5_features.py
-M	tests/test_iteration9_comprehensive.py
-M	tests/test_maestro_api.py
-M	tests/test_new_features.py or M	.emergent/emergent.yml
-M	.gitignore
-M	backend/server.py
-M	backend/server.py.backup
-M	backend/tests/test_biometric_autosync_iter157.py
-M	backend/tests/test_branch_separation.py
-M	backend/tests/test_business_date_iter166.py
-M	backend/tests/test_comprehensive_iter117.py
-M	backend/tests/test_driver_app_push_iter57.py
-M	backend/tests/test_fifo_fulfill_propagation_iter173.py
-M	backend/tests/test_fifo_price_alerts.py
-M	backend/tests/test_hr_account_statement_iter170.py
-M	backend/tests/test_impersonation.py
-M	backend/tests/test_impersonation_logs_iter108.py
-M	backend/tests/test_iter175_send_to_warehouse.py
-M	backend/tests/test_iteration_25.py
-M	backend/tests/test_iteration_47.py
-M	backend/tests/test_low_stock_alerts.py
-M	backend/tests/test_menu_pwa_iter52.py
-M	backend/tests/test_multi_device_offline_sync_iter110.py
-M	backend/tests/test_new_features_iter96.py
-M	backend/tests/test_order_notifications_iter105.py
-M	backend/tests/test_owner_features_iter34.py
-M	backend/tests/test_permissions_iter102.py
-M	backend/tests/test_purchase_requests_iter123.py
-M	backend/tests/test_restaurant_settings.py
-M	backend/tests/test_system_settings_iter61.py
-M	backend_test.py
-M	frontend/yarn.lock
-M	memory/CALLCENTER_SETUP_GUIDE.md
-M	test_reports/iteration_114.json
-M	test_reports/iteration_116.json
-M	test_reports/iteration_117.json
-M	test_reports/iteration_16.json
-M	test_reports/iteration_165.json
-M	test_reports/iteration_17.json
-M	test_reports/iteration_18.json
-M	test_reports/iteration_19.json
-M	test_reports/iteration_20.json
-M	test_reports/iteration_21.json
-M	test_reports/iteration_22.json
-M	test_reports/iteration_23.json
-M	test_reports/iteration_24.json
-M	test_reports/iteration_25.json
-M	test_reports/iteration_26.json
-M	test_reports/iteration_27.json
-M	test_reports/iteration_29.json
-M	test_reports/iteration_30.json
-M	test_reports/iteration_31.json
-M	test_reports/iteration_32.json
-M	test_reports/iteration_33.json
-M	test_reports/iteration_34.json
-M	test_reports/iteration_35.json
-M	test_reports/iteration_36.json
-M	test_reports/iteration_37.json
-M	tests/test_iteration10_purchasing.py
-M	tests/test_iteration13_cash_register_driver_transfer.py
-M	tests/test_iteration16_customer_menu.py
-M	tests/test_iteration17_payment_notifications.py
-M	tests/test_iteration18_branch_orders_recipes.py
-M	tests/test_iteration19_branch_orders_recipe_deduction.py
-M	tests/test_iteration21_maestro.py
-M	tests/test_iteration22_comprehensive.py
-M	tests/test_iteration4_features.py
-M	tests/test_iteration5_features.py
-M	tests/test_iteration9_comprehensive.py
-M	tests/test_maestro_api.py
-M	tests/test_new_features.py**, as it will wipe the 19+ uncommitted local changes that represent the entire previous session's work. Just continue coding locally.
+ERROR backend/tests/test_recipe_ingredient_model.py
+ERROR backend/tests/test_refund_branch_scoping.py - FileNotFoundError: [Errno...
+ERROR backend/tests/test_smart_reports_periods_iter167.py - RuntimeError: REA...
+ERROR backend/tests/test_sync_routing_fix_iter178.py
+!!!!!!!!!!!!!!!!!!! Interrupted: 23 errors during collection !!!!!!!!!!!!!!!!!!!
+============================== 23 errors in 0.99s ============================== and  files for every logical change. Maintain this! It prevents regressions in the highly complex math functions without needing to boot the whole app.
+- **Calculation Precision:** The user is an accountant/manager. They track every single Dinar (IQD) and Gram. The difference between  and  is critical. Never multiply a current inventory quantity by a batch cost.
 
 **documents and test reports created in this job** 
   - 
@@ -374,33 +722,158 @@ M	tests/test_new_features.py**, as it will wipe the 19+ uncommitted local change
   - 
   - 
   - 
+  - 
 
 **Last 10 User Messages and any pending HUMAN messages** 
-1. (User) Complained unit cost for single pieces showed the total bulk price.
-2. (Agent) Fixed unit cost calculation and added jest tests.
-3. (User) Complained that sliced cheese didn't show the price per slice, only price per whole piece.
-4. (Agent) Added dual-display (showing both bulk price and sub-unit slice price) to the UI cards.
-5. (User) Reported recipe calculation failure because 7 pieces were treated as 7 slices instead of 322 slices.
-6. (Agent) Added a smart yellow warning banner when  doesn't match .
-7. (User) Showed the warning banner but asked for it to be fixed.
-8. (Agent) Added an Auto Correct button inside the yellow warning banner to instantly fix the math.
-9. (User) **PENDING**: Sent 4 screenshots showing that  is still displaying incorrect single-item prices (e.g. not grabbing the slice price) and is missing some manufactured products from the list entirely. 
+1. (User) Complained Rizo Rice showed grams instead of portions.
+2. (Agent) Implemented a smart display unit helper in frontend.
+3. (User) Showed massive 339M IQD inventory total.
+4. (Agent) Fixed backend  batch cost multiplier bug.
+5. (User) Complained Offline POS duplicates orders, doesn't print receipt, and doesn't send to KDS.
+6. (Agent) Overhauled POS.js  to perfectly match online parity.
+7. (User) Showed massive Inventory Reports bugs (320M for Burger).
+8. (Agent) Fixed 6 places in InventoryReports.js using the wrong multiplier.
+9. (User) Pointed out a 73M IQD erroneous purchase invoice.
+10. (Agent) Added DELETE endpoint and UI trash button for purchase invoices.
+11. (User) **PENDING:** Reported Beef Bacon price per slice is 917 IQD instead of 300 IQD. Pointed out that 5 pieces of beef = 2750 grams, and 1 slice = 30 grams. The agent realized the math logic needs to extract  (550) from the raw material, but the session ended before applying the fix.
 
 **Project Health Check:**
-- Broken: GitHub Push Sync (Emergent Infrastructure issue).
+- Broken: None.
 - Mocked: Thermal Printers / Biometrics.
 
 **3rd Party Integrations** 
-- None.
+- None active in this session scope.
 
 **Testing status**
   - Testing agent used after significant changes: NO (relied exclusively on local bash ============================= test session starts ==============================
-platform linux -- Python 3.11.15, pytest-9.0.2, pluggy-1.6.0
+platform linux -- Python 3.11.15, pytest-9.0.3, pluggy-1.6.0
 rootdir: /app
-plugins: anyio-4.12.0
-collected 1641 items / 2 errors
+plugins: anyio-4.13.0, asyncio-1.3.0
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 1510 items / 23 errors
 
 ==================================== ERRORS ====================================
+__________ ERROR collecting backend/tests/test_add_stock_auto_sync.py __________
+backend/tests/test_add_stock_auto_sync.py:6: in <module>
+    BASE_URL = open("/app/frontend/.env").read().split("REACT_APP_BACKEND_URL=")[-1].split("\n")[0].strip()
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   FileNotFoundError: [Errno 2] No such file or directory: '/app/frontend/.env'
+__________ ERROR collecting backend/tests/test_cancel_item_iter169.py __________
+backend/tests/test_cancel_item_iter169.py:32: in <module>
+    assert BASE_URL, "REACT_APP_BACKEND_URL must be set"
+E   AssertionError: REACT_APP_BACKEND_URL must be set
+E   assert None
+_______ ERROR collecting backend/tests/test_coupons_customer_iter170.py ________
+backend/tests/test_coupons_customer_iter170.py:35: in <module>
+    assert BASE_URL, "REACT_APP_BACKEND_URL must be set"
+E   AssertionError: REACT_APP_BACKEND_URL must be set
+E   assert None
+________ ERROR collecting backend/tests/test_credit_permission_gate.py _________
+backend/tests/test_credit_permission_gate.py:14: in <module>
+    BASE_URL = open("/app/frontend/.env").read().split("REACT_APP_BACKEND_URL=")[-1].split("\n")[0].strip()
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   FileNotFoundError: [Errno 2] No such file or directory: '/app/frontend/.env'
+___________ ERROR collecting backend/tests/test_enrich_unit_cost.py ____________
+ImportError while importing test module '/app/backend/tests/test_enrich_unit_cost.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/local/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_enrich_unit_cost.py:15: in <module>
+    from routes.inventory_system import _enrich_unit_cost_fields
+backend/routes/inventory_system.py:15: in <module>
+    from .shared import get_database, get_current_user, get_user_tenant_id, UserRole
+backend/routes/shared.py:7: in <module>
+    from motor.motor_asyncio import AsyncIOMotorClient
+E   ModuleNotFoundError: No module named 'motor'
+________ ERROR collecting backend/tests/test_expense_delete_iter168.py _________
+backend/tests/test_expense_delete_iter168.py:31: in <module>
+    BASE_URL = _load_base_url()
+               ^^^^^^^^^^^^^^^^
+backend/tests/test_expense_delete_iter168.py:28: in _load_base_url
+    raise RuntimeError("REACT_APP_BACKEND_URL not configured")
+E   RuntimeError: REACT_APP_BACKEND_URL not configured
+___ ERROR collecting backend/tests/test_fifo_fulfill_propagation_iter173.py ____
+ImportError while importing test module '/app/backend/tests/test_fifo_fulfill_propagation_iter173.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/local/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_fifo_fulfill_propagation_iter173.py:23: in <module>
+    from motor.motor_asyncio import AsyncIOMotorClient
+E   ModuleNotFoundError: No module named 'motor'
+_______ ERROR collecting backend/tests/test_inventory_stats_unit_cost.py _______
+ImportError while importing test module '/app/backend/tests/test_inventory_stats_unit_cost.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/local/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_inventory_stats_unit_cost.py:67: in <module>
+    from routes import inventory_system  # noqa: E402
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/routes/inventory_system.py:15: in <module>
+    from .shared import get_database, get_current_user, get_user_tenant_id, UserRole
+backend/routes/shared.py:7: in <module>
+    from motor.motor_asyncio import AsyncIOMotorClient
+E   ModuleNotFoundError: No module named 'motor'
+________ ERROR collecting backend/tests/test_iter181_recent_features.py ________
+backend/tests/test_iter181_recent_features.py:29: in <module>
+    with open("/app/frontend/.env") as f:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   FileNotFoundError: [Errno 2] No such file or directory: '/app/frontend/.env'
+_____ ERROR collecting backend/tests/test_linked_product_per_unit_cost.py ______
+backend/tests/test_linked_product_per_unit_cost.py:15: in <module>
+    BASE_URL = open("/app/frontend/.env").read().split("REACT_APP_BACKEND_URL=")[-1].split("\n")[0].strip()
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   FileNotFoundError: [Errno 2] No such file or directory: '/app/frontend/.env'
+_____ ERROR collecting backend/tests/test_manufactured_consumption_qty.py ______
+backend/tests/test_manufactured_consumption_qty.py:6: in <module>
+    BASE_URL = open("/app/frontend/.env").read().split("REACT_APP_BACKEND_URL=")[-1].split("\n")[0].strip()
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   FileNotFoundError: [Errno 2] No such file or directory: '/app/frontend/.env'
+_______ ERROR collecting backend/tests/test_manufactured_recipe_edit.py ________
+backend/tests/test_manufactured_recipe_edit.py:14: in <module>
+    BASE_URL = open("/app/frontend/.env").read().split("REACT_APP_BACKEND_URL=")[-1].split("\n")[0].strip()
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   FileNotFoundError: [Errno 2] No such file or directory: '/app/frontend/.env'
+_____ ERROR collecting backend/tests/test_manufacturing_partial_fulfill.py _____
+backend/tests/test_manufacturing_partial_fulfill.py:14: in <module>
+    BASE_URL = open("/app/frontend/.env").read().split("REACT_APP_BACKEND_URL=")[-1].split("\n")[0].strip()
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   FileNotFoundError: [Errno 2] No such file or directory: '/app/frontend/.env'
+____________ ERROR collecting backend/tests/test_multi_mfg_links.py ____________
+ImportError while importing test module '/app/backend/tests/test_multi_mfg_links.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/local/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_multi_mfg_links.py:11: in <module>
+    from motor.motor_asyncio import AsyncIOMotorClient
+E   ModuleNotFoundError: No module named 'motor'
+____ ERROR collecting backend/tests/test_offline_order_numbering_iter177.py ____
+ImportError while importing test module '/app/backend/tests/test_offline_order_numbering_iter177.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/local/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_offline_order_numbering_iter177.py:17: in <module>
+    from pymongo import MongoClient
+E   ModuleNotFoundError: No module named 'pymongo'
+__ ERROR collecting backend/tests/test_price_increase_and_partial_receipt.py ___
+backend/tests/test_price_increase_and_partial_receipt.py:13: in <module>
+    open("/app/frontend/.env").read().split("REACT_APP_BACKEND_URL=")[-1].split("\n")[0].strip(),
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   FileNotFoundError: [Errno 2] No such file or directory: '/app/frontend/.env'
+_________ ERROR collecting backend/tests/test_produce_batch_scaling.py _________
+backend/tests/test_produce_batch_scaling.py:18: in <module>
+    BASE_URL = open("/app/frontend/.env").read().split("REACT_APP_BACKEND_URL=")[-1].split("\n")[0].strip()
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   FileNotFoundError: [Errno 2] No such file or directory: '/app/frontend/.env'
 __________ ERROR collecting backend/tests/test_profit_loss_iter85.py ___________
 backend/tests/test_profit_loss_iter85.py:11: in <module>
     BASE_URL = os.environ.get('REACT_APP_BACKEND_URL').rstrip('/')
@@ -411,23 +884,74 @@ backend/tests/test_raw_material_lock_iter174.py:17: in <module>
     BASE_URL = os.environ.get("REACT_APP_BACKEND_URL").rstrip("/")
                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 E   AttributeError: 'NoneType' object has no attribute 'rstrip'
-=============================== warnings summary ===============================
-../root/.venv/lib/python3.11/site-packages/starlette/formparsers.py:12
-  /root/.venv/lib/python3.11/site-packages/starlette/formparsers.py:12: PendingDeprecationWarning: Please use `import python_multipart` instead.
-    import multipart
-
--- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+________ ERROR collecting backend/tests/test_recipe_ingredient_model.py ________
+ImportError while importing test module '/app/backend/tests/test_recipe_ingredient_model.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/local/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_recipe_ingredient_model.py:17: in <module>
+    from routes.inventory_system import RecipeIngredient, ManufacturedProductCreate
+backend/routes/inventory_system.py:15: in <module>
+    from .shared import get_database, get_current_user, get_user_tenant_id, UserRole
+backend/routes/shared.py:7: in <module>
+    from motor.motor_asyncio import AsyncIOMotorClient
+E   ModuleNotFoundError: No module named 'motor'
+_________ ERROR collecting backend/tests/test_refund_branch_scoping.py _________
+backend/tests/test_refund_branch_scoping.py:11: in <module>
+    BASE_URL = open("/app/frontend/.env").read().split("REACT_APP_BACKEND_URL=")[-1].split("\n")[0].strip()
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   FileNotFoundError: [Errno 2] No such file or directory: '/app/frontend/.env'
+_____ ERROR collecting backend/tests/test_smart_reports_periods_iter167.py _____
+backend/tests/test_smart_reports_periods_iter167.py:28: in <module>
+    BASE_URL = _load_backend_url()
+               ^^^^^^^^^^^^^^^^^^^
+backend/tests/test_smart_reports_periods_iter167.py:25: in _load_backend_url
+    raise RuntimeError("REACT_APP_BACKEND_URL not set")
+E   RuntimeError: REACT_APP_BACKEND_URL not set
+_______ ERROR collecting backend/tests/test_sync_routing_fix_iter178.py ________
+ImportError while importing test module '/app/backend/tests/test_sync_routing_fix_iter178.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/local/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_sync_routing_fix_iter178.py:20: in <module>
+    from pymongo import MongoClient
+E   ModuleNotFoundError: No module named 'pymongo'
 =========================== short test summary info ============================
+ERROR backend/tests/test_add_stock_auto_sync.py - FileNotFoundError: [Errno 2...
+ERROR backend/tests/test_cancel_item_iter169.py - AssertionError: REACT_APP_B...
+ERROR backend/tests/test_coupons_customer_iter170.py - AssertionError: REACT_...
+ERROR backend/tests/test_credit_permission_gate.py - FileNotFoundError: [Errn...
+ERROR backend/tests/test_enrich_unit_cost.py
+ERROR backend/tests/test_expense_delete_iter168.py - RuntimeError: REACT_APP_...
+ERROR backend/tests/test_fifo_fulfill_propagation_iter173.py
+ERROR backend/tests/test_inventory_stats_unit_cost.py
+ERROR backend/tests/test_iter181_recent_features.py - FileNotFoundError: [Err...
+ERROR backend/tests/test_linked_product_per_unit_cost.py - FileNotFoundError:...
+ERROR backend/tests/test_manufactured_consumption_qty.py - FileNotFoundError:...
+ERROR backend/tests/test_manufactured_recipe_edit.py - FileNotFoundError: [Er...
+ERROR backend/tests/test_manufacturing_partial_fulfill.py - FileNotFoundError...
+ERROR backend/tests/test_multi_mfg_links.py
+ERROR backend/tests/test_offline_order_numbering_iter177.py
+ERROR backend/tests/test_price_increase_and_partial_receipt.py - FileNotFound...
+ERROR backend/tests/test_produce_batch_scaling.py - FileNotFoundError: [Errno...
 ERROR backend/tests/test_profit_loss_iter85.py - AttributeError: 'NoneType' o...
 ERROR backend/tests/test_raw_material_lock_iter174.py - AttributeError: 'None...
-!!!!!!!!!!!!!!!!!!! Interrupted: 2 errors during collection !!!!!!!!!!!!!!!!!!!!
-========================= 1 warning, 2 errors in 1.21s =========================/).
+ERROR backend/tests/test_recipe_ingredient_model.py
+ERROR backend/tests/test_refund_branch_scoping.py - FileNotFoundError: [Errno...
+ERROR backend/tests/test_smart_reports_periods_iter167.py - RuntimeError: REA...
+ERROR backend/tests/test_sync_routing_fix_iter178.py
+!!!!!!!!!!!!!!!!!!! Interrupted: 23 errors during collection !!!!!!!!!!!!!!!!!!!
+============================== 23 errors in 1.02s ==============================/).
   - Troubleshoot agent used after agent stuck in loop: NO
-  - Test files created: Yes (7+ test files created).
+  - Test files created: Yes (8 test files created).
   - Known regressions: None.
 
 **Credentials to test flow:**
 - Read  (Admin:  / )
 
 **What agent forgot to execute**
-- Agent was interrupted before they could apply the final fix to  to correct the price rendering and product list filtering based on the user's very last message.</analysis>
+- The agent figured out the math required for the Beef Bacon yield calculation (5 pieces * 550g / 30g = 91.67 slices -> 27500 IQD / 91.67 = 300 IQD/slice) but the session ended while searching for where to inject the  multiplier inside .</analysis>

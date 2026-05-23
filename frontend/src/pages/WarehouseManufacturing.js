@@ -403,6 +403,11 @@ export default function WarehouseManufacturing() {
   const [savingRecipe, setSavingRecipe] = useState(false);
   
   const [produceQuantity, setProduceQuantity] = useState(1);
+  const [actualYield, setActualYield] = useState('');  // 📊 العدد الفعلي المُنتَج (اختياري) — لتسجيل فرق العائد
+  const [showYieldVarianceDialog, setShowYieldVarianceDialog] = useState(false);
+  const [yieldVarianceData, setYieldVarianceData] = useState({ records: [], summary: {} });
+  const [yieldVarianceFilter, setYieldVarianceFilter] = useState({ product_id: '', days: 30 });
+  const [loadingYieldVariance, setLoadingYieldVariance] = useState(false);
   const [addStockQuantity, setAddStockQuantity] = useState(1);  // كمية زيادة المخزون
   const [addStockUnit, setAddStockUnit] = useState('');  // ⭐ وحدة الزيادة (قطعة/غرام/شريحة...)
   const [addRawMaterialStockQuantity, setAddRawMaterialStockQuantity] = useState(1);  // كمية زيادة المادة الخام
@@ -1602,9 +1607,25 @@ export default function WarehouseManufacturing() {
     
     setSubmitting(true);
     try {
-      const res = await axios.post(`${API}/manufactured-products/${showProduceDialog.id}/produce?quantity=${produceQuantity}`, {}, { headers });
+      // 📊 actual_yield اختياري — إن أدخله المستخدم نمرّره لتسجيل الفرق
+      const ayNum = (actualYield === '' || actualYield === null) ? null : Number(actualYield);
+      const hasActual = ayNum !== null && !isNaN(ayNum) && ayNum >= 0;
+      const url = `${API}/manufactured-products/${showProduceDialog.id}/produce?quantity=${produceQuantity}` +
+        (hasActual ? `&actual_yield=${ayNum}` : '');
+      const res = await axios.post(url, {}, { headers });
       const d = res.data || {};
-      if (d.recipe_scaled) {
+      // 📊 إشعار فرق العائد إن وُجد
+      if (hasActual && Math.abs(Number(d.yield_variance) || 0) > 1e-6) {
+        const variance = Number(d.yield_variance);
+        const pct = Number(d.yield_variance_pct);
+        const sign = variance > 0 ? '+' : '';
+        const msg = `${t('فرق العائد')}: ${sign}${variance.toFixed(2)} ${showProduceDialog.unit || 'حبة'} (${sign}${pct.toFixed(2)}%)`;
+        if (variance < 0) {
+          toast.warning(`${t('تم التصنيع — لكن مع هدر')} · ${msg}`, { duration: 8000 });
+        } else {
+          toast.success(`${t('تم التصنيع — عائد إضافي')} · ${msg}`, { duration: 8000 });
+        }
+      } else if (d.recipe_scaled) {
         toast.success(
           t('تم التصنيع بنجاح') +
           ` · ${t('تم تعديل الوصفة تلقائياً لتُنتج بالضبط')} ${produceQuantity} ${showProduceDialog.unit || 'حبة'} (${t('عامل')}: ×${d.scale_factor})`
@@ -1614,6 +1635,7 @@ export default function WarehouseManufacturing() {
       }
       setShowProduceDialog(null);
       setProduceQuantity(1);
+      setActualYield('');
       fetchData();
     } catch (error) {
       const detail = error.response?.data?.detail;
@@ -1629,6 +1651,31 @@ export default function WarehouseManufacturing() {
     } finally {
       setSubmitting(false);
     }
+  };
+
+  // 📊 جلب سجلات فرق العائد (Yield Variance Report)
+  const fetchYieldVariances = async (filter = yieldVarianceFilter) => {
+    setLoadingYieldVariance(true);
+    try {
+      const params = new URLSearchParams();
+      if (filter.product_id) params.set('product_id', filter.product_id);
+      if (filter.days) params.set('days', String(filter.days));
+      const res = await axios.get(`${API}/yield-variances?${params.toString()}`, { headers });
+      setYieldVarianceData(res.data || { records: [], summary: {} });
+    } catch (error) {
+      showApiError(error, t('فشل في جلب تقرير فرق العائد'));
+      setYieldVarianceData({ records: [], summary: {} });
+    } finally {
+      setLoadingYieldVariance(false);
+    }
+  };
+
+  // فتح حوار التقرير
+  const openYieldVarianceDialog = (productId = '') => {
+    const f = { product_id: productId, days: 30 };
+    setYieldVarianceFilter(f);
+    setShowYieldVarianceDialog(true);
+    fetchYieldVariances(f);
   };
   
   // زيادة كمية المنتج مباشرة (بدون خصم مواد)
@@ -3384,6 +3431,15 @@ export default function WarehouseManufacturing() {
                               >
                                 <RefreshCw className="h-4 w-4 ml-2" />
                                 {t('تصفير الكمية')}
+                              </Button>
+                              <Button
+                                onClick={() => openYieldVarianceDialog(product.id)}
+                                variant="outline"
+                                className="border-blue-500 text-blue-600 hover:bg-blue-50"
+                                data-testid={`yield-variance-btn-${product.id}`}
+                              >
+                                <TrendingDown className="h-4 w-4 ml-2" />
+                                {t('فرق العائد')}
                               </Button>
                             </div>
                           </div>
@@ -5472,11 +5528,49 @@ export default function WarehouseManufacturing() {
                   data-testid="produce-quantity-input"
                 />
               </div>
+
+              {/* 📊 العدد الفعلي المُنتَج (اختياري) — لتسجيل فرق العائد */}
+              <div className="rounded-lg border border-blue-500/30 bg-blue-500/5 p-3 space-y-2">
+                <Label className="text-blue-700 flex items-center gap-1.5">
+                  📊 {t('العدد الفعلي المُنتَج')} <span className="text-[10px] text-muted-foreground">({t('اختياري — لتعقّب الهدر')})</span>
+                </Label>
+                <Input
+                  type="number"
+                  min="0"
+                  step="any"
+                  placeholder={`${t('اتركه فارغاً للاستخدام الافتراضي')}: ${produceQuantity}`}
+                  value={actualYield}
+                  onChange={(e) => setActualYield(e.target.value)}
+                  data-testid="produce-actual-yield-input"
+                />
+                {(() => {
+                  const ay = actualYield === '' ? null : Number(actualYield);
+                  if (ay === null || isNaN(ay) || ay < 0) return null;
+                  const variance = ay - produceQuantity;
+                  const pct = produceQuantity > 0 ? (variance / produceQuantity * 100) : 0;
+                  if (Math.abs(variance) < 1e-6) {
+                    return (
+                      <p className="text-xs text-green-700" data-testid="yield-variance-preview">
+                        ✓ {t('العائد الفعلي يطابق المتوقَّع')}
+                      </p>
+                    );
+                  }
+                  const positive = variance > 0;
+                  return (
+                    <p
+                      className={`text-xs font-semibold ${positive ? 'text-green-700' : 'text-red-700'}`}
+                      data-testid="yield-variance-preview"
+                    >
+                      {positive ? '⬆️' : '⚠️'} {t('فرق العائد')}: {positive ? '+' : ''}{variance.toFixed(2)} {showProduceDialog.unit || 'حبة'} ({positive ? '+' : ''}{pct.toFixed(2)}%)
+                    </p>
+                  );
+                })()}
+              </div>
             </div>
           )}
           
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowProduceDialog(null)}>
+            <Button variant="outline" onClick={() => { setShowProduceDialog(null); setActualYield(''); }}>
               {t('إلغاء')}</Button>
             <Button 
               onClick={handleProduce}
@@ -5489,6 +5583,165 @@ export default function WarehouseManufacturing() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* 📊 Dialog: تقرير فرق العائد (Yield Variance Report) */}
+      <Dialog open={showYieldVarianceDialog} onOpenChange={setShowYieldVarianceDialog}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto" data-testid="yield-variance-dialog">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <TrendingDown className="h-5 w-5 text-blue-500" />
+              {t('تقرير فرق العائد')} — {t('المتوقَّع مقابل الفعلي')}
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            {/* فلاتر */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 p-3 rounded-lg bg-muted/30 border">
+              <div>
+                <Label className="text-xs">{t('المنتج')}</Label>
+                <Select
+                  value={yieldVarianceFilter.product_id || 'all'}
+                  onValueChange={(v) => {
+                    const next = { ...yieldVarianceFilter, product_id: v === 'all' ? '' : v };
+                    setYieldVarianceFilter(next);
+                    fetchYieldVariances(next);
+                  }}
+                >
+                  <SelectTrigger data-testid="yield-variance-product-filter">
+                    <SelectValue placeholder={t('كل المنتجات')} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">{t('كل المنتجات')}</SelectItem>
+                    {(manufacturedProducts || []).map(p => (
+                      <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-xs">{t('الفترة (يوم)')}</Label>
+                <Select
+                  value={String(yieldVarianceFilter.days)}
+                  onValueChange={(v) => {
+                    const next = { ...yieldVarianceFilter, days: parseInt(v) };
+                    setYieldVarianceFilter(next);
+                    fetchYieldVariances(next);
+                  }}
+                >
+                  <SelectTrigger data-testid="yield-variance-days-filter">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="7">{t('آخر 7 أيام')}</SelectItem>
+                    <SelectItem value="30">{t('آخر 30 يوم')}</SelectItem>
+                    <SelectItem value="90">{t('آخر 90 يوم')}</SelectItem>
+                    <SelectItem value="365">{t('آخر سنة')}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex items-end">
+                <Button
+                  variant="outline"
+                  onClick={() => fetchYieldVariances(yieldVarianceFilter)}
+                  className="w-full"
+                  data-testid="yield-variance-refresh-btn"
+                >
+                  <RefreshCw className={`h-4 w-4 ml-2 ${loadingYieldVariance ? 'animate-spin' : ''}`} />
+                  {t('تحديث')}
+                </Button>
+              </div>
+            </div>
+
+            {/* الملخص */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+              <div className="rounded-lg border bg-card p-3" data-testid="yield-variance-summary-records">
+                <p className="text-[10px] text-muted-foreground">{t('عدد الدفعات')}</p>
+                <p className="text-xl font-bold tabular-nums">{yieldVarianceData.summary?.total_records || 0}</p>
+              </div>
+              <div className="rounded-lg border bg-card p-3">
+                <p className="text-[10px] text-muted-foreground">{t('المتوقَّع (إجمالي)')}</p>
+                <p className="text-xl font-bold tabular-nums">{Number(yieldVarianceData.summary?.total_expected_yield || 0).toFixed(2)}</p>
+              </div>
+              <div className="rounded-lg border bg-card p-3">
+                <p className="text-[10px] text-muted-foreground">{t('الفعلي (إجمالي)')}</p>
+                <p className="text-xl font-bold tabular-nums">{Number(yieldVarianceData.summary?.total_actual_yield || 0).toFixed(2)}</p>
+              </div>
+              <div
+                className={`rounded-lg border p-3 ${Number(yieldVarianceData.summary?.total_units_variance || 0) < 0 ? 'bg-red-500/10 border-red-500/40' : 'bg-green-500/10 border-green-500/40'}`}
+                data-testid="yield-variance-summary-variance"
+              >
+                <p className="text-[10px] text-muted-foreground">{t('فرق الوحدات الإجمالي')}</p>
+                <p className={`text-xl font-bold tabular-nums ${Number(yieldVarianceData.summary?.total_units_variance || 0) < 0 ? 'text-red-700' : 'text-green-700'}`}>
+                  {Number(yieldVarianceData.summary?.total_units_variance || 0) >= 0 ? '+' : ''}
+                  {Number(yieldVarianceData.summary?.total_units_variance || 0).toFixed(2)}
+                </p>
+                <p className="text-[10px] text-muted-foreground mt-1">
+                  {t('قيمة الفرق:')} <span className="font-semibold">{formatPrice(yieldVarianceData.summary?.total_variance_value || 0)}</span>
+                </p>
+              </div>
+            </div>
+
+            {/* جدول السجلات */}
+            <div className="rounded-lg border overflow-hidden">
+              <table className="w-full text-sm" data-testid="yield-variance-table">
+                <thead className="bg-muted/50 text-xs">
+                  <tr>
+                    <th className="p-2 text-right">{t('التاريخ')}</th>
+                    <th className="p-2 text-right">{t('المنتج')}</th>
+                    <th className="p-2 text-center">{t('متوقَّع')}</th>
+                    <th className="p-2 text-center">{t('فعلي')}</th>
+                    <th className="p-2 text-center">{t('فرق')}</th>
+                    <th className="p-2 text-center">{t('%')}</th>
+                    <th className="p-2 text-left">{t('قيمة الفرق')}</th>
+                    <th className="p-2 text-right">{t('بواسطة')}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(yieldVarianceData.records || []).length === 0 ? (
+                    <tr>
+                      <td colSpan={8} className="p-6 text-center text-muted-foreground" data-testid="yield-variance-empty">
+                        {loadingYieldVariance ? t('جاري التحميل...') : t('لا توجد سجلات')}
+                      </td>
+                    </tr>
+                  ) : (
+                    (yieldVarianceData.records || []).map((r, idx) => {
+                      const variance = Number(r.variance) || 0;
+                      const negative = variance < 0;
+                      return (
+                        <tr key={r.id || idx} className="border-t hover:bg-muted/30" data-testid={`yield-variance-row-${idx}`}>
+                          <td className="p-2 text-xs text-muted-foreground tabular-nums">
+                            {r.created_at ? new Date(r.created_at).toLocaleString('en-GB', { hour12: false }) : '-'}
+                          </td>
+                          <td className="p-2 font-medium">{r.product_name}</td>
+                          <td className="p-2 text-center tabular-nums">{Number(r.expected_yield).toFixed(2)}</td>
+                          <td className="p-2 text-center tabular-nums">{Number(r.actual_yield).toFixed(2)}</td>
+                          <td className={`p-2 text-center tabular-nums font-bold ${negative ? 'text-red-600' : variance > 0 ? 'text-green-600' : 'text-muted-foreground'}`}>
+                            {variance >= 0 ? '+' : ''}{variance.toFixed(2)}
+                          </td>
+                          <td className={`p-2 text-center tabular-nums ${negative ? 'text-red-600' : variance > 0 ? 'text-green-600' : 'text-muted-foreground'}`}>
+                            {Number(r.variance_pct) >= 0 ? '+' : ''}{Number(r.variance_pct).toFixed(2)}%
+                          </td>
+                          <td className={`p-2 text-left tabular-nums ${negative ? 'text-red-600' : variance > 0 ? 'text-green-600' : ''}`}>
+                            {formatPrice(r.variance_value || 0)}
+                          </td>
+                          <td className="p-2 text-xs text-muted-foreground text-right">{r.performed_by_name || '-'}</td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowYieldVarianceDialog(false)} data-testid="yield-variance-close-btn">
+              {t('إغلاق')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Dialog: تحويل للفرع */}
       <Dialog open={showBranchTransferDialog} onOpenChange={setShowBranchTransferDialog}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
