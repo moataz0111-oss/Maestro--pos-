@@ -1141,9 +1141,10 @@ export default function WarehouseManufacturing() {
         'غرام': 1, 'كغم': 1000, 'كيلو': 1000, 'كجم': 1000, 'gram': 1, 'kg': 1000,
         'مل': 1, 'لتر': 1000, 'ml': 1, 'liter': 1000, 'l': 1000
       };
-      const _COUNT = new Set(['قطعة', 'حبة', 'علبة', 'كرتون', 'صحن', 'piece']);
+      const _COUNT = new Set(['قطعة', 'قطع', 'حبة', 'حبات', 'علبة', 'علب', 'كرتون', 'كراتين', 'صحن', 'piece', 'pieces', 'unit']);
       const pw = Number(product.piece_weight || 0);
       const pwu = product.piece_weight_unit || 'غرام';
+      const pwuIsWeight = !!_W[pwu];
       const pieceGrams = pw * (_W[pwu] || 1);
       let totalGrams = 0;
       for (const ing of (product.recipe || [])) {
@@ -1151,7 +1152,7 @@ export default function WarehouseManufacturing() {
         const f = _W[ing.unit];
         if (f) {
           totalGrams += q * f;
-        } else if (_COUNT.has(ing.unit)) {
+        } else if (_COUNT.has(ing.unit) || !ing.unit) {
           const mat = rawMaterials?.find?.(r => r.id === ing.raw_material_id);
           if (mat && mat.pack_quantity && mat.pack_unit) {
             const pf = _W[mat.pack_unit] || 0;
@@ -1160,7 +1161,7 @@ export default function WarehouseManufacturing() {
         }
       }
       const calcYield = (pieceGrams > 0 && totalGrams > 0) ? totalGrams / pieceGrams : 0;
-      // ⭐ عائد بديل للوصفات القطعية مع pack_info (مثل: 3 قطعة @ 46 شريحة = 138 شريحة → /1 = 138)
+      // ⭐ عائد بديل للوصفات القطعية (يدعم count↔count مثل Backend)
       let countYield = 0;
       if (calcYield === 0 && pw > 0) {
         let sumInPwu = 0;
@@ -1171,8 +1172,13 @@ export default function WarehouseManufacturing() {
             continue;
           }
           const mat = rawMaterials?.find?.(r => r.id === ing.raw_material_id);
-          if (mat && mat.pack_unit === pwu && Number(mat.pack_quantity) > 0) {
-            sumInPwu += qty * Number(mat.pack_quantity);
+          if (!mat || !mat.pack_quantity || !mat.pack_unit) continue;
+          const ipq = Number(mat.pack_quantity);
+          const ipu = mat.pack_unit;
+          if (ipu === pwu) {
+            sumInPwu += qty * ipq;
+          } else if (!pwuIsWeight && !_W[ipu]) {
+            sumInPwu += qty * ipq;
           }
         }
         if (sumInPwu > 0) countYield = sumInPwu / pw;
@@ -3137,9 +3143,10 @@ export default function WarehouseManufacturing() {
                                   'غرام': 1, 'كغم': 1000, 'كيلو': 1000, 'كجم': 1000, 'gram': 1, 'kg': 1000,
                                   'مل': 1, 'لتر': 1000, 'ml': 1, 'liter': 1000, 'l': 1000
                                 };
-                                const _COUNT = new Set(['قطعة', 'حبة', 'علبة', 'كرتون', 'صحن', 'piece']);
+                                const _COUNT = new Set(['قطعة', 'قطع', 'حبة', 'حبات', 'علبة', 'علب', 'كرتون', 'كراتين', 'صحن', 'piece', 'pieces', 'unit']);
                                 const pw = Number(product.piece_weight || 0);
                                 const pwu = product.piece_weight_unit || 'غرام';
+                                const pwuIsWeight = !!_W[pwu];
                                 const pieceGrams = pw * (_W[pwu] || 1);
                                 let totalGrams = 0;
                                 for (const ing of (product.recipe || [])) {
@@ -3147,7 +3154,7 @@ export default function WarehouseManufacturing() {
                                   const f = _W[ing.unit];
                                   if (f) {
                                     totalGrams += q * f;
-                                  } else if (_COUNT.has(ing.unit)) {
+                                  } else if (_COUNT.has(ing.unit) || !ing.unit) {
                                     // ابحث عن pack_info من rawMaterials
                                     const mat = rawMaterials?.find?.(r => r.id === ing.raw_material_id);
                                     if (mat && mat.pack_quantity && mat.pack_unit) {
@@ -3157,8 +3164,9 @@ export default function WarehouseManufacturing() {
                                   }
                                 }
                                 const calcYield = (pieceGrams > 0 && totalGrams > 0) ? totalGrams / pieceGrams : 0;
-                                // ⭐ احتساب عائد بديل للوصفات القطعية: مجموع كميات مكونات بنفس وحدة piece_weight_unit
-                                // مع دعم pack_info: مكوّن "3 قطعة" (1 قطعة = 46 شريحة) و piece_weight_unit="شريحة" → 138 شريحة
+                                // ⭐ احتساب عائد بديل للوصفات القطعية (يطابق منطق Backend _enrich_unit_cost_fields):
+                                //   - إذا pack_unit == piece_weight_unit (نص متطابق) → عائد مباشر
+                                //   - إذا كلاهما وحدات عدّية (count, ليست وزنية) → نفترض التكافؤ count↔count
                                 let countYield = 0;
                                 if (calcYield === 0 && pw > 0) {
                                   let sumInPwu = 0;
@@ -3168,17 +3176,15 @@ export default function WarehouseManufacturing() {
                                       sumInPwu += qty;
                                       continue;
                                     }
-                                    // تحقّق من pack_info على المادة الخام
                                     const mat = rawMaterials?.find?.(r => r.id === ing.raw_material_id);
-                                    if (mat && mat.pack_unit === pwu && Number(mat.pack_quantity) > 0) {
-                                      sumInPwu += qty * Number(mat.pack_quantity);
-                                    } else if (mat && mat.pack_unit && pwu && _COUNT.has(pwu) && _COUNT.has(mat.pack_unit) === false) {
-                                      // تحويل عبر العائلة (مثلاً ing بـ كغم → غرام)
-                                      const f = _W[ing.unit];
-                                      const pf = _W[pwu];
-                                      if (f && pf && f === pf) {
-                                        // نفس العائلة → تحويل خطي
-                                      }
+                                    if (!mat || !mat.pack_quantity || !mat.pack_unit) continue;
+                                    const ipq = Number(mat.pack_quantity);
+                                    const ipu = mat.pack_unit;
+                                    if (ipu === pwu) {
+                                      sumInPwu += qty * ipq;
+                                    } else if (!pwuIsWeight && !_W[ipu]) {
+                                      // كلاهما عدّي → افترض التكافؤ
+                                      sumInPwu += qty * ipq;
                                     }
                                   }
                                   if (sumInPwu > 0) countYield = sumInPwu / pw;
@@ -3189,8 +3195,11 @@ export default function WarehouseManufacturing() {
                                 const hasPerPiece = (finalYield > 0) || (storedQty > 1);
                                 const batchBefore = Number(product.raw_material_cost ?? product.cost_before_waste ?? 0);
                                 const batchAfter = Number(product.raw_material_cost_after_waste ?? product.production_cost ?? product.raw_material_cost ?? 0);
-                                const unitBefore = batchBefore / denom;
-                                const unitAfter = batchAfter / denom;
+                                // ⭐ المسار الموحّد: استخدم unit_cost_after_waste من Backend عند توفّره (مصدر واحد للحقيقة)
+                                const backendUnitAfter = Number(product.unit_cost_after_waste || 0);
+                                const backendUnitBefore = Number(product.unit_cost_before_waste || 0);
+                                const unitBefore = backendUnitBefore > 0 ? backendUnitBefore : (batchBefore / denom);
+                                const unitAfter = backendUnitAfter > 0 ? backendUnitAfter : (batchAfter / denom);
                                 // ⭐ وحدة العرض الذكية: إذا كان piece_weight_unit وحدة قطعية و product.unit وزنية → استخدم piece_weight_unit
                                 const _COUNT_UNITS_DISP = new Set(['قطعة','حبة','شريحة','حصة','كأس','كاب','قدح','صحن','علبة','كرتون','كيس','باكيت','رول','زجاجة','ربطة','piece']);
                                 const _WEIGHT_UNITS_DISP = new Set(['غرام','كغم','كيلو','كجم','مل','لتر','gram','kg','ml','l','liter']);
@@ -3198,23 +3207,24 @@ export default function WarehouseManufacturing() {
                                 const unitLabel = _useSmartUnit ? product.piece_weight_unit : (product.unit || 'حبة');
                                 return (
                                   <>
-                                    {/* ⚠️ تحذير: مكونات قطعية بدون وزن — يؤدي لحساب يحاسب خاطئ */}
+                                    {/* ⚠️ تحذير: مكونات قطعية بدون pack_info مناسب لاحتساب التكلفة */}
                                     {(() => {
-                                      const _COUNT_INGS = new Set(['قطعة','حبة','علبة','كرتون','صحن','piece']);
-                                      const _WT = new Set(['غرام','كغم','كيلو','كجم','مل','لتر','gram','kg','ml','l','liter']);
+                                      // لا نُظهر التحذير إذا Backend وفّر unit_cost_after_waste أو لدينا finalYield > 0
+                                      if (backendUnitAfter > 0 || finalYield > 0) return null;
+                                      const _COUNT_INGS = new Set(['قطعة','قطع','حبة','حبات','علبة','علب','كرتون','كراتين','صحن','piece','pieces','unit']);
                                       const missing = (product.recipe || []).filter(ing => {
                                         if (!_COUNT_INGS.has(ing.unit)) return false;
                                         const mat = rawMaterials?.find?.(r => r.id === ing.raw_material_id);
                                         if (!mat) return false;
-                                        // مفقود: pack_quantity أو pack_unit (يجب أن يكون وزني)
-                                        return !mat.pack_quantity || !mat.pack_unit || !_WT.has(mat.pack_unit);
+                                        // مفقود: pack_quantity أو pack_unit
+                                        return !mat.pack_quantity || !mat.pack_unit;
                                       });
                                       if (missing.length === 0) return null;
                                       return (
                                         <div className="mb-2 p-2 rounded-md border bg-red-500/10 border-red-500/40 text-red-700 text-[11px]" data-testid="missing-pack-info-warning">
                                           <div className="font-bold">⚠️ {t('تنبيه: حساب التكلفة قد يكون غير دقيق')}</div>
                                           <div className="mt-1">
-                                            {t('المكونات التالية بدون وزن محدد:')}
+                                            {t('المكونات التالية بدون معلومات تعبئة:')}
                                             {' '}
                                             {missing.map((ing, i) => (
                                               <span key={i} className="font-medium">
@@ -3223,7 +3233,7 @@ export default function WarehouseManufacturing() {
                                             ))}
                                           </div>
                                           <div className="mt-1 text-[10px]">
-                                            {t('الحل: اذهب إلى صفحة "المواد الخام" → عدّل المادة → أدخل "وزن العبوة" (pack_quantity) و"وحدة الوزن" (pack_unit = غرام/كغم) حتى يحسب النظام التكلفة الصحيحة.')}
+                                            {t('الحل: اذهب إلى صفحة "المواد الخام" → عدّل المادة → أدخل "كمية التعبئة" (pack_quantity) و"وحدة التعبئة" (pack_unit) — يدعم النظام الوحدات الوزنية (غرام/كغم) والعدّية (قطعة/شريحة).')}
                                           </div>
                                         </div>
                                       );

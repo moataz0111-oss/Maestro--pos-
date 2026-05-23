@@ -1,6 +1,40 @@
 # Maestro EGP - Changelog
 
 
+## Session: Feb 21, 2026 (continued) — 🎯 إصلاح Frontend ليُستخدم unit_cost_after_waste من Backend
+
+### المشكلة (مُبلَّغ من المستخدم بصورة فعلية)
+بعد إصلاح Backend ودعم count→count، الواجهة لا تزال تعرض **27,500 IQD/قطعة-منتج** و **2,750 IQD/شريحة** لـ "بكن بقري" (المتوقَّع 550 IQD/شريحة).
+
+### السبب الجذري
+كان `WarehouseManufacturing.js` يقوم **بحساب محلي** لـ `unitAfter` و `countYield` متجاهلاً قيمة `unit_cost_after_waste` المحسوبة من Backend (مصدر الحقيقة):
+1. `countYield` المحلي يدعم فقط `pack_unit === piece_weight_unit` (نص متطابق فقط).
+2. لا توسعة لحالة count→count المختلفة (مثل `pack_unit="قطعة"` + `pwu="شريحة"`).
+3. التحذير "حساب التكلفة قد يكون غير دقيق" يتطلب pack_unit وزني (غرام/كغم) — يرفض pack_unit عدّي حتى لو كان صحيحاً.
+
+### الإصلاح
+1. **مصدر واحد للحقيقة**: `unitBefore` و `unitAfter` الآن يستخدمان `product.unit_cost_after_waste`/`unit_cost_before_waste` من Backend عند توفّرهما، ويعودان للحساب المحلي فقط كـ fallback.
+2. **توسيع `countYield` المحلي** ليُطابق منطق Backend `_enrich_unit_cost_fields`:
+   - `pack_unit === pwu` → تطابق مباشر.
+   - كلاهما عدّي (count, ليس وزني) → افتراض التكافؤ count↔count.
+3. **توسيع `_COUNT`** لإضافة صيغ شائعة (قطع، حبات، علب، كراتين، pieces، unit).
+4. **تحديث التحذير**: يتحقّق من `backendUnitAfter > 0 || finalYield > 0` قبل العرض. النص الجديد يدعم كلا الوحدتين (وزنية وعدّية).
+5. **توحيد `syncRecipeToProducedQty`** لاستخدام نفس المنطق.
+
+### الاختبارات
+- `frontend/__tests__/count_pack_yield.test.js`: **5/5 jest ✅**
+  - Beef Bacon: 50 وحدة + 550 IQD/قطعة ✅
+  - أمان: count_pack + weight_pwu → لا يُطبَّق ✅
+  - تطابق pack_unit و pwu نصياً (شريحة=شريحة) → 138 ✅
+- إجمالي frontend tests: **12/12 ✅**
+- إجمالي backend tests: **17/17 ✅** (لا تغييرات في backend).
+
+### الأثر
+- "بكن بقري" الآن يعرض 550 IQD/شريحة بدلاً من 2,750 IQD ✅
+- جميع المنتجات المُصنّعة بـ pack_info عدّية تُحسب بدقة محاسبية ✅
+- التحذير لا يظهر إلا عند الحاجة الفعلية (لا "false positive") ✅
+
+
 ## Session: Feb 21, 2026 (continued) — 🥓 دعم pack_info العدّية (Count→Count) + إصلاح auto-commit نهائياً
 
 ### المشكلة 1 (محاسبية): "بكن بقري" يُحسب بسعر 27,500 IQD بدلاً من 550 IQD
