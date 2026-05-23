@@ -1,6 +1,37 @@
 # Maestro EGP - Changelog
 
 
+## Session: Feb 21, 2026 (URGENT HOTFIX) — 🚨 إصلاح شاشة بيضاء على VPS الإنتاج
+
+### المشكلة
+بعد نشر تحديث Dropdown على VPS العميل، الموقع يعرض **شاشة بيضاء** فقط (Title يظهر لكن البودي فارغ).
+
+### السبب الجذري
+في `server.py` أضفتُ السطر:
+```python
+from utils.link_units import convert_link_consumption_to_main
+```
+هذا يُشغّل `utils/__init__.py` تلقائياً → الذي يستورد `utils/auth.py` → الذي يستورد `models.enums` (مجلد غير موجود). النتيجة:
+```
+ModuleNotFoundError: No module named 'models.enums'; 'models' is not a package
+```
+→ FastAPI لا يبدأ → كل API endpoints تُعيد 500 → الفرونت إند يفشل في جلب البيانات الأولية → **شاشة بيضاء**.
+
+### الإصلاح
+1. **نقلت الدالة مباشرة إلى `server.py`** (inline) لتجنّب تشغيل `utils/__init__.py`.
+2. أبقيتُ `utils/link_units.py` للاختبارات المعزولة فقط (mirror copy).
+3. **اختبار smoke test جديد** `test_server_import_smoke.py` يحرس ضد تكرار هذه الفئة من الأخطاء (يفشل فوراً إذا server.py لم يستطع الاستيراد).
+
+### التحقّق
+- `python3 -c "import server"` → ✅ ينجح ويُهيئ كل الخدمات.
+- 10/10 backend tests ✅ بما فيها smoke test الجديد.
+- 25/25 frontend tests ✅ لا تأثير.
+
+### الدرس
+- **القاعدة**: لا تستورد من package مع `__init__.py` نشط داخل server.py إلا بعد التأكد من أن كل سلسلة الاستيراد التابعة تعمل بشكل نظيف.
+- **الحارس**: smoke test يكشف هذا فوراً قبل النشر.
+
+
 ## Session: Feb 21, 2026 (continued) — 🎛️ Dropdown ديناميكي لوحدة الاستهلاك في MfgLinksEditor
 
 ### الطلب (مُبلَّغ من المستخدم بصورة)
