@@ -4,7 +4,7 @@ Reports Routes - تقارير المبيعات والمشتريات والمصر
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from typing import Optional, List, Dict, Any
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from io import BytesIO
 import logging
 
@@ -204,9 +204,16 @@ async def get_sales_report(
         for item in o.get("items", []):
             pid = item.get("product_name") or item.get("name") or "غير معروف"
             if pid not in by_product:
-                by_product[pid] = {"quantity": 0, "revenue": 0}
-            by_product[pid]["quantity"] += item.get("quantity", 0)
-            by_product[pid]["revenue"] += _sn(item.get("price")) * item.get("quantity", 0)
+                by_product[pid] = {"quantity": 0, "revenue": 0, "materials_cost": 0, "packaging_cost": 0}
+            qty = item.get("quantity", 0)
+            by_product[pid]["quantity"] += qty
+            by_product[pid]["revenue"] += _sn(item.get("price")) * qty
+            # ⭐ تفصيل تكلفة المواد والتغليف لكل منتج
+            item_cost = _sn(item.get("cost"))
+            item_pkg = _sn(item.get("packaging_cost"))
+            # احتساب التغليف لكل وحدة من المنتج
+            by_product[pid]["materials_cost"] += max(0.0, item_cost - item_pkg)
+            by_product[pid]["packaging_cost"] += item_pkg
     
     # ⚠️ الطلبات المعلقة لا تُحتسب كطريقة دفع (لم تُدفع بعد)
     # نعرضها كملخّص منفصل لتطابق تقرير إغلاق الصندوق (الذي يستثني المعلق)
@@ -236,12 +243,127 @@ async def get_sales_report(
         },
         "by_date": by_date,
         "top_products": dict(sorted(by_product.items(), key=lambda x: x[1]["revenue"], reverse=True)[:10]),
+        # ⭐ تفصيل التكاليف لكل منتج + حساب الربحية (للـ Drill-down في الواجهة)
+        "cost_breakdown_by_product": dict(
+            sorted(
+                {
+                    name: {
+                        **v,
+                        "total_cost": (v.get("materials_cost", 0) + v.get("packaging_cost", 0)),
+                        "profit": v.get("revenue", 0) - (v.get("materials_cost", 0) + v.get("packaging_cost", 0)),
+                        "profit_margin": (
+                            ((v.get("revenue", 0) - (v.get("materials_cost", 0) + v.get("packaging_cost", 0)))
+                             / v.get("revenue", 1) * 100)
+                            if v.get("revenue", 0) > 0 else 0
+                        ),
+                    }
+                    for name, v in by_product.items()
+                }.items(),
+                key=lambda x: x[1].get("materials_cost", 0) + x[1].get("packaging_cost", 0),
+                reverse=True,
+            )
+        ),
         # ⭐ ملخّص الطلبات المعلقة منفصل عن طرق الدفع (لتطابق تقرير إغلاق الصندوق)
         "pending_orders_summary": {
             "count": pending_count,
             "amount": pending_total,
         }
     }
+
+
+# ==================== WEEKLY LOW-PROFIT ALERT ====================
+@router.get("/weekly-low-profit")
+async def get_weekly_low_profit_products(
+    threshold: float = 10.0,
+    branch_id: Optional[str] = None,
+    current_user: dict = Depends(get_current_user),
+):
+    """يُرجع المنتجات ذات هامش ربح منخفض (< threshold%) في الأسبوع المنصرم (آخر 7 أيام).
+    يُستخدم لتنبيه المدير بالمنتجات الخاسرة قبل أن تتراكم الخسارة.
+
+    Response:
+        {
+            "week_id": "2026-W21",        # معرّف الأسبوع (للتجاهل لاحقاً في الواجهة)
+            "threshold": 10.0,
+            "from_date": "2026-05-17",
+            "to_date": "2026-05-24",
+            "products": [{"name", "revenue", "materials_cost", "packaging_cost",
+                          "total_cost", "profit", "profit_margin", "quantity"}],
+            "total_count": 5,
+            "total_loss": 12340.50,
+        }
+    """
+    db = get_database()
+    now = datetime.now(timezone.utc)
+    from_date = now - timedelta(days=7)
+    query: Dict[str, Any] = {
+        "status": {"$ne": OrderStatus.CANCELLED},
+        "created_at": {"$gte": from_date.isoformat(), "$lte": now.isoformat()},
+    }
+    query = build_tenant_query(current_user, query)
+    if branch_id:
+        query = build_branch_query(branch_id, query)
+
+    paid_orders = await db.orders.find(query, {"_id": 0}).to_list(length=10000)
+
+    by_product: Dict[str, Dict[str, float]] = {}
+    for o in paid_orders:
+        for item in o.get("items", []):
+            pid = item.get("product_name") or item.get("name") or "غير معروف"
+            if pid not in by_product:
+                by_product[pid] = {"quantity": 0, "revenue": 0, "materials_cost": 0, "packaging_cost": 0}
+            qty = item.get("quantity", 0)
+            try:
+                price = float(item.get("price") or 0)
+                cost = float(item.get("cost") or 0)
+                pkg = float(item.get("packaging_cost") or 0)
+            except (TypeError, ValueError):
+                continue
+            by_product[pid]["quantity"] += qty
+            by_product[pid]["revenue"] += price * qty
+            by_product[pid]["materials_cost"] += max(0.0, cost - pkg)
+            by_product[pid]["packaging_cost"] += pkg
+
+    low_profit: List[Dict[str, Any]] = []
+    total_loss = 0.0
+    for name, v in by_product.items():
+        rev = v.get("revenue", 0)
+        if rev <= 0:
+            continue
+        total_cost = v.get("materials_cost", 0) + v.get("packaging_cost", 0)
+        profit = rev - total_cost
+        margin = (profit / rev) * 100
+        if margin < threshold:
+            low_profit.append({
+                "name": name,
+                "quantity": v.get("quantity", 0),
+                "revenue": round(rev, 2),
+                "materials_cost": round(v.get("materials_cost", 0), 2),
+                "packaging_cost": round(v.get("packaging_cost", 0), 2),
+                "total_cost": round(total_cost, 2),
+                "profit": round(profit, 2),
+                "profit_margin": round(margin, 2),
+            })
+            if profit < 0:
+                total_loss += abs(profit)
+
+    # فرز تصاعدي حسب الهامش (الأسوأ أولاً)
+    low_profit.sort(key=lambda x: x["profit_margin"])
+
+    # week_id بصيغة ISO (السنة-W رقم_الأسبوع) — يستخدم في الواجهة لتجاهل الأسبوع الحالي
+    iso_year, iso_week, _ = now.isocalendar()
+    week_id = f"{iso_year}-W{iso_week:02d}"
+
+    return {
+        "week_id": week_id,
+        "threshold": threshold,
+        "from_date": from_date.date().isoformat(),
+        "to_date": now.date().isoformat(),
+        "products": low_profit,
+        "total_count": len(low_profit),
+        "total_loss": round(total_loss, 2),
+    }
+
 
 # ==================== PURCHASES REPORT ====================
 @router.get("/purchases")

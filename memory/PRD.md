@@ -27,6 +27,15 @@ Multi-tenant POS system with biometric integration (ZKTeco), thermal receipt pri
 - Printers filter by branch in Settings
 
 
+## Feature (May 24, 2026) — Weekly Low-Profit Alert Banner ✅
+A proactive once-weekly banner alerts the manager about products sold at low/negative profit margin in the past 7 days. Auto-dismissed for the current ISO week after review (localStorage `maestro_low_profit_dismissed_week`). Mounted globally in `App.js`.
+
+- Backend: `GET /api/reports/weekly-low-profit?threshold=10&branch_id=xxx` returns `{week_id, threshold, from_date, to_date, products[], total_count, total_loss}`.
+- Frontend: `src/components/WeeklyLowProfitAlert.jsx` (banner + drill-down dialog).
+- Tests: `backend/tests/test_weekly_low_profit_endpoint.py` (5 ✓), `frontend/src/__tests__/weekly_low_profit_alert.test.js` (8 ✓).
+- Regression fix: `OrderStatus.CANCELLED.value` → `OrderStatus.CANCELLED` (OrderStatus is a plain str class in `routes/shared.py`, not an Enum).
+
+
 ## Bug Fix (Feb 20, 2026 — Session 20) — MfgLinksEditor Sub-Unit Pricing & Missing Products
 - **Issue**: Products linked to manufactured products (e.g., burger ↔ sliced cheese) showed the entire piece cost (e.g., 4600 IQD/block) instead of the per-slice cost (100 IQD/slice). Some manufactured products were missing from the dropdown due to over-aggressive dedup filter.
 - **Fix (frontend `Settings.js`)**:

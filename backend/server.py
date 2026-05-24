@@ -1143,6 +1143,23 @@ def _convert_link_consumption_to_main(consumption_qty: float, consumption_unit: 
         return qty_in_pwu_base / pw
     return consumption_qty
 
+
+# ============================================================================
+# 🧮 Mfg product unit-cost lookup (uses authoritative _enrich_unit_cost_fields)
+# ============================================================================
+async def _get_mfg_unit_cost(db, mfg_product: dict) -> dict:
+    """يُرجع dict يحتوي `unit_cost_after_waste` و `computed_yield` للمنتج المُصنّع،
+    باستخدام نفس منطق `routes.inventory_system._enrich_unit_cost_fields` (مصدر
+    الحقيقة الوحيد). يحرس ضد تكلفة طلبات خاطئة في POS/التقارير.
+    """
+    from routes.inventory_system import _enrich_unit_cost_fields  # late import (circular safe)
+    await _enrich_unit_cost_fields(db, mfg_product)
+    return {
+        "unit_cost_after_waste": float(mfg_product.get("unit_cost_after_waste") or 0),
+        "unit_cost_before_waste": float(mfg_product.get("unit_cost_before_waste") or 0),
+        "computed_yield": float(mfg_product.get("computed_yield") or 0),
+    }
+
 # ==================== MODELS ====================
 
 class UserRole:
@@ -6154,7 +6171,8 @@ async def create_order(order: OrderCreate, current_user: dict = Depends(get_curr
                     "consumption_qty": product.get("manufactured_consumption_qty") or 1,
                 }]
             if mfg_links:
-                _UNIT_W = {"غرام": 1.0, "كغم": 1000.0, "كيلو": 1000.0, "كجم": 1000.0, "gram": 1.0, "kg": 1000.0}
+                # ⭐ نستخدم _enrich_unit_cost_fields كمصدر وحيد للحقيقة لـ unit_cost_after_waste.
+                #    يدعم: piece_weight, pack_info, count→count, weight main_unit (لحم مفروم), nested mfg.
                 links_unit_cost = 0.0
                 for link in mfg_links:
                     mp_id = link.get("manufactured_product_id")
@@ -6162,26 +6180,19 @@ async def create_order(order: OrderCreate, current_user: dict = Depends(get_curr
                         continue
                     mfg_product = await db.manufactured_products.find_one(
                         {"id": mp_id},
-                        {"_id": 0, "raw_material_cost": 1, "raw_material_cost_after_waste": 1, "production_cost": 1, "recipe": 1, "piece_weight": 1, "piece_weight_unit": 1, "quantity": 1, "unit": 1}
+                        {"_id": 0, "raw_material_cost": 1, "raw_material_cost_after_waste": 1,
+                         "production_cost": 1, "recipe": 1, "piece_weight": 1, "piece_weight_unit": 1,
+                         "quantity": 1, "unit": 1, "cost_before_waste": 1}
                     )
                     if not mfg_product:
                         continue
-                    batch_cost = _sn(mfg_product.get("raw_material_cost_after_waste")) or _sn(mfg_product.get("production_cost")) or _sn(mfg_product.get("raw_material_cost"))
+                    enrich = await _get_mfg_unit_cost(db, mfg_product)
+                    unit_cost = enrich["unit_cost_after_waste"]
                     pw = float(mfg_product.get("piece_weight") or 0)
                     pwu = mfg_product.get("piece_weight_unit") or "غرام"
-                    piece_grams = pw * _UNIT_W.get(pwu, 1.0)
-                    total_grams = 0.0
-                    for ing in (mfg_product.get("recipe") or []):
-                        f = _UNIT_W.get(ing.get("unit"))
-                        if f:
-                            total_grams += (ing.get("quantity") or 0) * f
-                    calc_yield = (total_grams / piece_grams) if (piece_grams > 0 and total_grams > 0) else 0
-                    denom = calc_yield or float(mfg_product.get("quantity") or 0) or 1.0
-                    unit_cost = batch_cost / denom
-                    consumption_qty = float(link.get("consumption_qty") or 1)
-                    # ⭐ تحويل الوحدة المختارة (أيّاً كانت) إلى الوحدة الرئيسية
-                    consumption_unit = link.get("consumption_unit") or mfg_product.get("unit") or "حبة"
                     main_unit = mfg_product.get("unit") or "حبة"
+                    consumption_qty = float(link.get("consumption_qty") or 1)
+                    consumption_unit = link.get("consumption_unit") or main_unit
                     consumption_qty = _convert_link_consumption_to_main(
                         consumption_qty, consumption_unit, main_unit, pw, pwu
                     )
@@ -6650,10 +6661,17 @@ async def update_order_items(order_id: str, request: UpdateOrderItemsRequest, cu
                     mp_id = link.get("manufactured_product_id")
                     if not mp_id:
                         continue
-                    mfg_product = await db.manufactured_products.find_one({"id": mp_id}, {"_id": 0, "raw_material_cost": 1, "unit": 1, "piece_weight": 1, "piece_weight_unit": 1})
+                    mfg_product = await db.manufactured_products.find_one(
+                        {"id": mp_id},
+                        {"_id": 0, "raw_material_cost": 1, "raw_material_cost_after_waste": 1,
+                         "production_cost": 1, "recipe": 1, "unit": 1, "piece_weight": 1,
+                         "piece_weight_unit": 1, "quantity": 1, "cost_before_waste": 1}
+                    )
                     if mfg_product:
+                        # ⭐ مصدر وحيد للحقيقة (نفس منطق _enrich_unit_cost_fields)
+                        enrich = await _get_mfg_unit_cost(db, mfg_product)
+                        unit_cost = enrich["unit_cost_after_waste"]
                         consumption_qty = float(link.get("consumption_qty") or 1)
-                        # ⭐ تحويل الوحدة المختارة إلى الوحدة الرئيسية
                         consumption_unit = link.get("consumption_unit") or mfg_product.get("unit") or "حبة"
                         consumption_qty = _convert_link_consumption_to_main(
                             consumption_qty,
@@ -6662,7 +6680,7 @@ async def update_order_items(order_id: str, request: UpdateOrderItemsRequest, cu
                             float(mfg_product.get("piece_weight") or 0),
                             mfg_product.get("piece_weight_unit") or "",
                         )
-                        links_unit_cost += _sn(mfg_product.get("raw_material_cost")) * consumption_qty
+                        links_unit_cost += unit_cost * consumption_qty
                 if links_unit_cost > 0:
                     base_cost = links_unit_cost + _sn(product.get("operating_cost"))
             item_cost = base_cost * item.quantity
@@ -6921,6 +6939,136 @@ class ItemCancellationRequest(BaseModel):
     quantity: float = 1
     price: float = 0
     reason: Optional[str] = "حذف من الطلب بعد الحفظ"
+
+
+@api_router.post("/orders/recompute-costs")
+async def recompute_order_costs(
+    days: int = 30,
+    dry_run: bool = True,
+    current_user: dict = Depends(get_current_user),
+):
+    """🔧 إعادة حساب تكلفة الطلبات القديمة باستخدام منطق التكلفة الموحَّد الحالي.
+
+    يُستخدم لتصحيح الطلبات التي حُسِبت بمنطق قديم خاطئ (قبل HOTFIX 24/05/2026).
+
+    Args:
+        days: عدد الأيام الماضية لإعادة حسابها (الافتراضي 30).
+        dry_run: إن True يعرض الفرق فقط دون كتابة. إن False يُحدِّث الـ DB.
+    """
+    # Only allow admin/owner roles
+    role = (current_user.get("role") or "").lower()
+    if role not in ("admin", "owner", "super_admin", "manager"):
+        raise HTTPException(status_code=403, detail="غير مصرّح")
+
+    tenant_id = get_user_tenant_id(current_user)
+    cutoff_date = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+    query: Dict[str, Any] = {"created_at": {"$gte": cutoff_date}}
+    if tenant_id:
+        query["tenant_id"] = tenant_id
+
+    orders = await db.orders.find(query, {"_id": 0}).to_list(length=10000)
+    summary = {
+        "examined": len(orders),
+        "updated": 0,
+        "unchanged": 0,
+        "total_old_cost": 0.0,
+        "total_new_cost": 0.0,
+        "total_cost_delta": 0.0,
+        "samples": [],
+    }
+
+    # cache منتجات لتقليل الـ DB hits
+    product_cache: Dict[str, dict] = {}
+    mfg_cache: Dict[str, dict] = {}
+
+    async def _get_product(pid):
+        if pid in product_cache:
+            return product_cache[pid]
+        p = await db.products.find_one({"id": pid}, {"_id": 0})
+        product_cache[pid] = p
+        return p
+
+    async def _get_mfg(mid):
+        if mid in mfg_cache:
+            return mfg_cache[mid]
+        m = await db.manufactured_products.find_one(
+            {"id": mid},
+            {"_id": 0, "raw_material_cost": 1, "raw_material_cost_after_waste": 1,
+             "production_cost": 1, "recipe": 1, "piece_weight": 1, "piece_weight_unit": 1,
+             "quantity": 1, "unit": 1, "cost_before_waste": 1}
+        )
+        mfg_cache[mid] = m
+        return m
+
+    for o in orders:
+        old_total = float(o.get("total_cost") or 0)
+        new_total = 0.0
+        new_items = []
+        for it in (o.get("items") or []):
+            product = await _get_product(it.get("product_id"))
+            packaging_cost = 0.0
+            new_item_cost = 0.0
+            if product:
+                base_cost = _sn(product.get("cost")) + _sn(product.get("operating_cost"))
+                packaging_cost = float(product.get("packaging_cost") or 0) * int(it.get("quantity", 1))
+                mfg_links = list(product.get("manufactured_links") or [])
+                if not mfg_links and product.get("manufactured_product_id"):
+                    mfg_links = [{
+                        "manufactured_product_id": product.get("manufactured_product_id"),
+                        "consumption_qty": product.get("manufactured_consumption_qty") or 1,
+                    }]
+                if mfg_links:
+                    links_unit_cost = 0.0
+                    for link in mfg_links:
+                        mp = await _get_mfg(link.get("manufactured_product_id"))
+                        if not mp:
+                            continue
+                        enrich = await _get_mfg_unit_cost(db, mp)
+                        unit_cost = enrich["unit_cost_after_waste"]
+                        pw = float(mp.get("piece_weight") or 0)
+                        pwu = mp.get("piece_weight_unit") or "غرام"
+                        main_unit = mp.get("unit") or "حبة"
+                        cq = float(link.get("consumption_qty") or 1)
+                        cq = _convert_link_consumption_to_main(
+                            cq, link.get("consumption_unit") or main_unit, main_unit, pw, pwu
+                        )
+                        links_unit_cost += unit_cost * cq
+                    if links_unit_cost > 0:
+                        base_cost = links_unit_cost + _sn(product.get("operating_cost"))
+                new_item_cost = base_cost * int(it.get("quantity", 1)) + packaging_cost
+            new_total += new_item_cost
+            it2 = dict(it)
+            it2["cost"] = round(new_item_cost, 2)
+            new_items.append(it2)
+
+        new_total = round(new_total, 2)
+        if abs(new_total - old_total) > 0.01:
+            summary["updated"] += 1
+            summary["total_cost_delta"] += (new_total - old_total)
+            summary["total_old_cost"] += old_total
+            summary["total_new_cost"] += new_total
+            if len(summary["samples"]) < 10:
+                summary["samples"].append({
+                    "order_id": o.get("id"),
+                    "created_at": o.get("created_at"),
+                    "old_total_cost": old_total,
+                    "new_total_cost": new_total,
+                    "delta": round(new_total - old_total, 2),
+                })
+            if not dry_run:
+                await db.orders.update_one(
+                    {"id": o.get("id")},
+                    {"$set": {"total_cost": new_total, "items": new_items,
+                              "cost_recomputed_at": datetime.now(timezone.utc).isoformat()}}
+                )
+        else:
+            summary["unchanged"] += 1
+
+    summary["dry_run"] = dry_run
+    summary["total_cost_delta"] = round(summary["total_cost_delta"], 2)
+    summary["total_old_cost"] = round(summary["total_old_cost"], 2)
+    summary["total_new_cost"] = round(summary["total_new_cost"], 2)
+    return summary
 
 
 @api_router.post("/orders/{order_id}/cancel-item")

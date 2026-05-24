@@ -211,7 +211,9 @@ const ComprehensiveReportTab = ({
 }) => {
   // فترة مختارة (dropdown) - تحسب تلقائياً startDate و endDate
   const [period, setPeriod] = useState('today');
-  
+  // ⭐ Dialogs لتفصيل تكلفة المواد والتغليف عند الضغط على البطاقات
+  const [showCostBreakdown, setShowCostBreakdown] = useState(null);  // 'materials' | 'packaging' | null
+
   // حساب نطاق التاريخ بناءً على الفترة المختارة
   const computeDateRange = (p) => {
     const now = new Date();
@@ -3054,22 +3056,30 @@ export default function Reports() {
 
                 {/* الصف الثاني: تفاصيل التكاليف (تكلفة المواد + التغليف) - تظهر دائماً */}
                 <div className={`grid grid-cols-1 ${dashboardSettings.showBreakEvenReport !== false ? 'md:grid-cols-3' : 'md:grid-cols-2'} gap-4`}>
-                  <Card className="border-l-4 border-l-orange-500">
+                  <Card
+                    className="border-l-4 border-l-orange-500 cursor-pointer hover:shadow-lg hover:scale-[1.02] transition-all"
+                    onClick={() => setShowCostBreakdown('materials')}
+                    data-testid="materials-cost-card"
+                  >
                     <CardContent className="p-4">
                       <div className="flex items-center justify-between">
                         <div>
-                          <p className="text-xs text-muted-foreground">{t('تكلفة المواد')}</p>
+                          <p className="text-xs text-muted-foreground">{t('تكلفة المواد')} <span className="text-[10px] opacity-70">({t('اضغط للتفاصيل')})</span></p>
                           <p className="text-2xl font-bold text-orange-600">{formatPrice(salesReport.total_materials_cost || 0)}</p>
                         </div>
                         <Package className="h-8 w-8 text-orange-500 opacity-50" />
                       </div>
                     </CardContent>
                   </Card>
-                  <Card className="border-l-4 border-l-amber-500">
+                  <Card
+                    className="border-l-4 border-l-amber-500 cursor-pointer hover:shadow-lg hover:scale-[1.02] transition-all"
+                    onClick={() => setShowCostBreakdown('packaging')}
+                    data-testid="packaging-cost-card"
+                  >
                     <CardContent className="p-4">
                       <div className="flex items-center justify-between">
                         <div>
-                          <p className="text-xs text-muted-foreground">{t('تكلفة التغليف')}</p>
+                          <p className="text-xs text-muted-foreground">{t('تكلفة التغليف')} <span className="text-[10px] opacity-70">({t('اضغط للتفاصيل')})</span></p>
                           <p className="text-2xl font-bold text-amber-600">{formatPrice(salesReport.total_packaging_cost || 0)}</p>
                         </div>
                         <Receipt className="h-8 w-8 text-amber-500 opacity-50" />
@@ -3889,6 +3899,124 @@ export default function Reports() {
             />
           </TabsContent>
         </Tabs>
+
+      {/* ⭐ Dialog: تفصيل تكلفة المواد/التغليف لكل منتج (drill-down عند الضغط على البطاقة) */}
+      <Dialog open={!!showCostBreakdown} onOpenChange={() => setShowCostBreakdown(null)}>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto" data-testid="cost-breakdown-dialog">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              {showCostBreakdown === 'materials' ? (
+                <>
+                  <Package className="h-5 w-5 text-orange-500" />
+                  {t('تفصيل تكلفة المواد لكل منتج')}
+                </>
+              ) : (
+                <>
+                  <Receipt className="h-5 w-5 text-amber-500" />
+                  {t('تفصيل تكلفة التغليف لكل منتج')}
+                </>
+              )}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            {(() => {
+              const breakdown = salesReport?.cost_breakdown_by_product || {};
+              const entries = Object.entries(breakdown);
+              const key = showCostBreakdown === 'materials' ? 'materials_cost' : 'packaging_cost';
+              const filtered = entries
+                .filter(([, v]) => (v[key] || 0) > 0)
+                .sort((a, b) => (b[1][key] || 0) - (a[1][key] || 0));
+              const totalAll = filtered.reduce((s, [, v]) => s + (v[key] || 0), 0);
+              if (filtered.length === 0) {
+                return (
+                  <p className="text-center text-muted-foreground p-6" data-testid="cost-breakdown-empty">
+                    {t('لا توجد بيانات لهذه الفترة')}
+                  </p>
+                );
+              }
+              return (
+                <>
+                  <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50 border" data-testid="cost-breakdown-total">
+                    <span className="text-sm font-medium">{t('الإجمالي')}</span>
+                    <span className={`text-xl font-bold tabular-nums ${showCostBreakdown === 'materials' ? 'text-orange-600' : 'text-amber-600'}`}>
+                      {formatPrice(totalAll)}
+                    </span>
+                  </div>
+                  <div className="rounded-lg border overflow-hidden">
+                    <table className="w-full text-sm">
+                      <thead className="bg-muted/30 text-xs">
+                        <tr>
+                          <th className="p-2 text-right">{t('المنتج')}</th>
+                          <th className="p-2 text-center">{t('الكمية المبيعة')}</th>
+                          <th className="p-2 text-left">{t('التكلفة')}</th>
+                          <th className="p-2 text-left">%</th>
+                          <th className="p-2 text-left">{t('هامش الربح')}</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filtered.map(([name, v], idx) => {
+                          const val = v[key] || 0;
+                          const pct = totalAll > 0 ? (val / totalAll * 100) : 0;
+                          // ⭐ مؤشر الربحية: 🔴 < 10%، 🟡 10-30%، 🟢 > 30%
+                          const margin = Number(v.profit_margin || 0);
+                          const hasMargin = (v.revenue || 0) > 0;
+                          const lowProfit = hasMargin && margin < 10;
+                          const midProfit = hasMargin && margin >= 10 && margin < 30;
+                          const goodProfit = hasMargin && margin >= 30;
+                          const rowClass = lowProfit
+                            ? 'bg-red-500/10 hover:bg-red-500/15 border-l-4 border-l-red-500'
+                            : midProfit
+                              ? 'bg-amber-500/5 hover:bg-amber-500/10 border-l-4 border-l-amber-500'
+                              : goodProfit
+                                ? 'hover:bg-green-500/5 border-l-4 border-l-green-500'
+                                : 'hover:bg-muted/20';
+                          const marginColor = lowProfit ? 'text-red-600 font-bold' : midProfit ? 'text-amber-600 font-semibold' : goodProfit ? 'text-green-600 font-semibold' : 'text-muted-foreground';
+                          const indicator = lowProfit ? '🔴' : midProfit ? '🟡' : goodProfit ? '🟢' : '';
+                          return (
+                            <tr key={idx} className={`border-t ${rowClass}`} data-testid={`cost-breakdown-row-${idx}`}>
+                              <td className={`p-2 font-medium ${lowProfit ? 'text-red-700' : ''}`} data-testid={`cost-breakdown-name-${idx}`}>
+                                {indicator && <span className="ml-1" data-testid={`profit-indicator-${idx}`}>{indicator}</span>}
+                                {name}
+                                {lowProfit && (
+                                  <span className="block text-[10px] text-red-600 font-bold mt-0.5" data-testid={`low-profit-warning-${idx}`}>
+                                    ⚠️ {t('ربحية منخفضة — راجع السعر')}
+                                  </span>
+                                )}
+                              </td>
+                              <td className="p-2 text-center tabular-nums">{v.quantity || 0}</td>
+                              <td className={`p-2 text-left tabular-nums font-semibold ${showCostBreakdown === 'materials' ? 'text-orange-600' : 'text-amber-600'}`}>
+                                {formatPrice(val)}
+                              </td>
+                              <td className="p-2 text-left tabular-nums text-muted-foreground">
+                                {pct.toFixed(1)}%
+                              </td>
+                              <td className={`p-2 text-left tabular-nums ${marginColor}`} data-testid={`profit-margin-${idx}`}>
+                                {hasMargin ? `${margin.toFixed(1)}%` : '—'}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                  {/* ⭐ Legend */}
+                  <div className="text-[11px] text-muted-foreground flex flex-wrap gap-3 px-1" data-testid="profit-legend">
+                    <span className="flex items-center gap-1"><span>🔴</span> {t('ربحية منخفضة')} (&lt;10%)</span>
+                    <span className="flex items-center gap-1"><span>🟡</span> {t('متوسطة')} (10–30%)</span>
+                    <span className="flex items-center gap-1"><span>🟢</span> {t('جيدة')} (&gt;30%)</span>
+                  </div>
+                </>
+              );
+            })()}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowCostBreakdown(null)} data-testid="cost-breakdown-close-btn">
+              {t('إغلاق')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       </main>
     </div>
   );

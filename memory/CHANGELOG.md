@@ -1,6 +1,128 @@
 # Maestro EGP - Changelog
 
 
+## Session: May 24, 2026 (FEATURE) — 🚦 تنبيه أسبوعي للمنتجات منخفضة الربحية
+
+### الميزة المضافة
+بانر تنبيه ذكي يظهر مرة واحدة في الأسبوع (top-left, animate-pulse) عند وجود منتجات في الأسبوع الماضي بهامش ربح < 10%. عند الضغط يفتح حوار بقائمة المنتجات + الكميات + الإيراد/التكلفة/الربح/الهامش. بعد إغلاق التنبيه، لا يظهر مرة أخرى حتى الأسبوع التالي (مخزّن في `localStorage` تحت `maestro_low_profit_dismissed_week` كـ ISO week-id).
+
+### Frontend
+- `src/components/WeeklyLowProfitAlert.jsx` (جديد): يجلب `/api/reports/weekly-low-profit?threshold=10` كل 12 ساعة، يخفي البانر تلقائياً إذا `total_count == 0` أو تم إغلاقه لهذا الأسبوع.
+- `src/App.js`: تركيب `<WeeklyLowProfitAlert />` globally داخل `BrowserRouter` بجوار `<OfflineBanner />` — يظهر على جميع الصفحات.
+
+### Backend
+- `routes/reports_routes.py::get_weekly_low_profit_products`: endpoint جديد يجمع المنتجات المباعة في آخر 7 أيام، يحسب الهامش، ويُرجع المنتجات الخاسرة/الضعيفة مع `week_id` بصيغة ISO.
+- إصلاح حرج: استبدال `OrderStatus.CANCELLED.value` بـ `OrderStatus.CANCELLED` (لأن `OrderStatus` في `routes/shared.py` ليس Enum بل class بثوابت نصّية — الـ `.value` كان يُفجّر الـ endpoint).
+
+### Tests
+- `backend/tests/test_weekly_low_profit_endpoint.py` (5 tests): تضمن تسجيل الـ endpoint، عدم العودة لاستخدام `.value`، tenant/branch scoping، وشكل الاستجابة.
+- `frontend/src/__tests__/weekly_low_profit_alert.test.js` (8 tests): تتأكد من mount عالمي + endpoint URL صحيح + استراتيجية `week_id` في localStorage + data-testid hooks.
+
+
+
+## Session: Feb 21, 2026 (FEATURE) — 🚦 مؤشر ربحية ذكي بـ 3 ألوان في Drill-down
+
+### الميزة المضافة
+في dialog "تفصيل تكلفة المواد/التغليف"، كل صف منتج يُعرض بلون يدلّ على ربحيته:
+- **🔴 أحمر** (margin < 10%): خلفية حمراء + شريط جانبي + تحذير "ربحية منخفضة — راجع السعر".
+- **🟡 أصفر** (10-30%): خلفية صفراء خفيفة + شريط جانبي.
+- **🟢 أخضر** (> 30%): شريط جانبي أخضر + لون رقم النسبة أخضر.
+- **Legend** أسفل الجدول يوضح كل لون.
+
+### Backend (`reports_routes.py`)
+كل منتج في `cost_breakdown_by_product` يحمل الآن:
+- `total_cost` = materials + packaging
+- `profit` = revenue - total_cost
+- `profit_margin` = (profit / revenue * 100)
+
+### Frontend (`Reports.js`)
+عمود جديد "هامش الربح" مع تلوين ديناميكي + شارة 🔴/🟡/🟢 بجانب اسم المنتج. التحذير "راجع السعر" يظهر فقط للمنتجات الخاسرة.
+
+### الاختبارات
+- **`profit_margin_indicator.test.js`**: 13 jest tests (8 UI structure + 5 math).
+- إجمالي: **114/114 frontend jest ✅**.
+
+### قيمة العمل
+- المدير يرى **فوراً** المنتجات التي تستهلك تكلفة عالية مع ربحية ضعيفة.
+- يحمي من البيع بخسارة بدون قصد عند تغيّر أسعار الموردين.
+- يساعد في اتخاذ قرارات تسعير سريعة.
+
+
+## Session: Feb 21, 2026 (FEATURE) — 📊 Drill-down لتكلفة المواد والتغليف في تقرير المبيعات
+
+### الطلب
+المستخدم يريد عند الضغط على بطاقتي "تكلفة المواد" و "تكلفة التغليف" في تقرير المبيعات → أن يرى تفصيلاً لكل منتج مبيع مع تكلفته (مواد/تغليف).
+
+### Backend (`/app/backend/routes/reports_routes.py`)
+1. حقل `by_product` الآن يحمل: `quantity`, `revenue`, **`materials_cost`**, **`packaging_cost`** (لكل منتج).
+2. أُضيف حقل جديد في الاستجابة: `cost_breakdown_by_product` — قاموس مرتّب تنازلياً حسب إجمالي التكلفة.
+
+### Frontend (`/app/frontend/src/pages/Reports.js`)
+1. **بطاقتا "تكلفة المواد" و "تكلفة التغليف" قابلتان للضغط** الآن (hover effect + cursor-pointer + شارة "اضغط للتفاصيل").
+2. **Dialog drill-down** يعرض:
+   - إجمالي تكلفة المواد/التغليف.
+   - جدول كامل: المنتج، الكمية المبيعة، التكلفة، نسبة المساهمة %.
+   - فرز تنازلي حسب التكلفة.
+   - رسالة "لا توجد بيانات" عند فترة فارغة.
+
+### الحماية
+**`cost_breakdown_drilldown.test.js`** (4 jest tests):
+- البطاقات قابلة للضغط ✓
+- Dialog معرّف ✓
+- يستخدم `cost_breakdown_by_product` من backend ✓
+
+### التحقق
+- **101/101 frontend jest ✅** | **30/30 backend pytest ✅** | Lint ✅ | Build ✅.
+
+### قيمة العمل
+المستخدم يستطيع الآن معرفة:
+- أي منتج يستهلك أكبر تكلفة مواد (لمعرفة هوامش الربح).
+- أي منتج يستهلك أكبر تكلفة تغليف (لتحسين التغليف).
+- كل هذا بنقرة واحدة دون فتح كل طلب على حدة.
+
+
+## Session: Feb 21, 2026 (HOTFIX حرج) — 💰 توحيد منطق تكلفة الطلبات في server.py
+
+### المشكلة المُبلَّغة
+تقرير المبيعات يعرض:
+- إجمالي المبيعات: 683,675 IQD
+- إجمالي التكاليف: **809,315 IQD** (أكبر من المبيعات!)
+- **خسارة وهمية: -166,390 IQD** (هامش -24.3%)
+
+### السبب الجذري
+في `server.py` (3 مواضع لحساب تكلفة الطلب) كان هناك **منطق yield مُكرَّر قديم** يختلف عن `_enrich_unit_cost_fields`:
+1. `_UNIT_W` لا يحتوي على "مل" و "لتر" → المكونات السائلة تُتجاهَل في total_grams.
+2. لا يدعم pack_info للمكونات القطعية.
+3. لا يطبّق إصلاح "main_unit الوزنية" (لحم مفروم) → unit_cost أعلى 100x.
+4. الموضع الثاني كان يستخدم `mfg_product.raw_material_cost` (التكلفة الإجمالية للدفعة!) كأنها تكلفة وحدة.
+
+### الإصلاح
+1. **`_get_mfg_unit_cost(db, mfg_product)`** (جديد في `server.py`): يستدعي `_enrich_unit_cost_fields` (المصدر الوحيد للحقيقة) ويُرجع `unit_cost_after_waste` الصحيح.
+2. **استبدال 3 مواضع** في server.py باستخدام `_get_mfg_unit_cost`:
+   - `create_order` (POS): سعر 6157+
+   - `update_order_items`: سعر 6665+
+   - `recompute-costs` (الجديد): سعر 6944+
+3. الـ logic يدعم الآن جميع السيناريوهات: piece_weight, pack_info, count→count, weight main_unit, nested mfg products.
+
+### Endpoint جديد للطلبات القديمة
+**`POST /api/orders/recompute-costs?days=30&dry_run=true`**:
+- يُعيد حساب تكلفة الطلبات السابقة بالمنطق الموحَّد.
+- يدعم `dry_run` لمعاينة الفروقات قبل الكتابة.
+- يحترم tenant_id ويتطلب صلاحية admin/owner/manager.
+- يحفظ `cost_recomputed_at` على كل طلب مُحدَّث.
+- وثائق كاملة في `/app/RECOMPUTE_ORDER_COSTS.md`.
+
+### التحقّق
+- **30/30 backend pytest ✅** | **97/97 frontend jest ✅** | **5/5 pre-deploy ✅**.
+- Server يقلع بدون أخطاء.
+
+### الأثر المتوقَّع للعميل
+بعد النشر + تشغيل `recompute-costs?days=90&dry_run=false`:
+- تكلفة الطلبات الحقيقية ستظهر (مثلاً 200K بدلاً من 800K).
+- هامش الربح سيصبح إيجابياً (مثل +30% بدلاً من -24%).
+- التقارير تعرض أرقام محاسبية دقيقة.
+
+
 ## Session: Feb 21, 2026 (UX HOTFIX) — ⌨️ إصلاح "تجمد" حقل الكمية في MfgLinksEditor
 
 ### المشكلة
