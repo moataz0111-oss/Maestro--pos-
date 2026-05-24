@@ -1,6 +1,38 @@
 # Maestro EGP - Changelog
 
 
+## Session: May 24, 2026 (BUG FIX P0 #3) — توحيد المجاميع الكلية مع تفصيل المنتجات
+
+### المشكلة
+بعد توحيد منطق احتساب التكلفة، ظهرت مشكلة اتساق:
+- **بطاقة "تكلفة المواد" العليا**: 960,895 د.ع (من `order.total_cost` المخزّن)
+- **مجموع Dialog "تفصيل التكلفة"**: 155,346 د.ع (محسوب من unified resolver)
+- الفرق 6.18×!
+
+### السبب الجذري
+المجاميع الكلية (`total_cost`, `total_materials_cost`, `total_packaging_cost`, `total_profit`) كانت تجمع من `order.total_cost` و `order.packaging_cost` و `order.profit` المخزّنة في كل طلب — هذه قيم قديمة محفوظة وقت إنشاء الطلب باستخدام `item.cost` القديم. بينما `cost_breakdown_by_product` كان يحسب ديناميكياً من unified resolver.
+
+### الإصلاح
+المجاميع الكلية في sales report تُحسب الآن من `by_product` (نفس مصدر `cost_breakdown_by_product`):
+```python
+total_materials_cost = sum(v["materials_cost"] for v in by_product.values())
+total_packaging_cost = sum(v["packaging_cost"] for v in by_product.values())
+total_cost = total_materials_cost + total_packaging_cost
+total_profit = total_sales - total_cost
+```
+
+### التحقق
+محاكاة "مشروم برغر" 6 وحدات بـ stale `order.total_cost=48,102`:
+- قبل: البطاقة 48,102 / Dialog 6,096 (تناقض)
+- بعد: **البطاقة 6,096 / Dialog 6,096 (متّسق ✓)**، profit_margin 84.4%
+
+### Tests
+- `backend/tests/test_sales_totals_match_breakdown.py` (3 ✓): يضمن عدم العودة لجمع `order.total_cost`، اشتقاق المجاميع من `by_product`، حفاظ على جميع keys في الـ response.
+
+### المجموع الكلي: 20 backend tests passing
+
+
+
 ## Session: May 24, 2026 (BUG FIX P0 #2) — توحيد منطق احتساب التكلفة بين POS و التقارير
 
 ### المشكلة

@@ -213,10 +213,10 @@ async def get_sales_report(
     pending_orders = [o for o in orders if o.get("payment_status") == "pending"]
     
     total_sales = sum(_sn(o.get("total")) for o in paid_orders)
-    total_cost = sum(_sn(o.get("total_cost")) for o in paid_orders)
-    total_packaging_cost = sum(_sn(o.get("packaging_cost")) for o in paid_orders)
-    total_materials_cost = total_cost - total_packaging_cost
-    total_profit = sum(_sn(o.get("profit")) for o in paid_orders)
+    # ⭐ المجاميع تُحسب ديناميكياً من الـ unified costs map (لا من order.total_cost المخزّن)
+    # السبب: order.total_cost قد يكون قديماً قبل إصلاحات التكلفة، وفي ذلك حالة عدم
+    # اتساق بين البطاقة العليا و Dialog "تفصيل التكلفة لكل منتج". الآن الكل من
+    # نفس المصدر.
     total_orders = len(paid_orders)
     avg_order_value = total_sales / total_orders if total_orders > 0 else 0
     
@@ -324,6 +324,12 @@ async def get_sales_report(
     total_delivery_sales = sum(app["total_sales"] for app in by_app.values())
     total_delivery_commission = sum(app["total_commission"] for app in by_app.values())
     total_delivery_net = sum(app["net_amount"] for app in by_app.values())
+
+    # ⭐ المجاميع موحّدة مع cost_breakdown_by_product (مصدر واحد للحقيقة)
+    total_materials_cost = sum(v.get("materials_cost", 0) for v in by_product.values())
+    total_packaging_cost = sum(v.get("packaging_cost", 0) for v in by_product.values())
+    total_cost = total_materials_cost + total_packaging_cost
+    total_profit = total_sales - total_cost
     
     return {
         "total_sales": total_sales,
