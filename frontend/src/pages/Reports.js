@@ -3097,9 +3097,20 @@ export default function Reports() {
                       <div className="flex items-center justify-between">
                         <div>
                           <p className="text-xs text-muted-foreground">{t('صافي الربح')}</p>
-                          <p className="text-2xl font-bold text-emerald-600">{formatPrice(salesReport.total_profit)}</p>
-                          <p className="text-xs text-muted-foreground mt-1">
-                            {t('بعد خصم التكاليف')}
+                          <p className={`text-2xl font-bold ${
+                            (profitLossReport?.net_profit?.amount ?? salesReport.total_profit) < 0
+                              ? 'text-red-600' : 'text-emerald-600'
+                          }`} data-testid="net-profit-value">
+                            {formatPrice(profitLossReport?.net_profit?.amount ?? salesReport.total_profit)}
+                          </p>
+                          <p className="text-[10px] text-muted-foreground mt-1">
+                            {profitLossReport?.total_operating_costs?.total > 0 ? (
+                              <>
+                                {t('بعد خصم التكاليف التشغيلية')}: −{formatPrice(profitLossReport.total_operating_costs.total)}
+                              </>
+                            ) : (
+                              t('لا توجد تكاليف تشغيلية مُسجّلة لهذه الفترة')
+                            )}
                           </p>
                         </div>
                         <TrendingUp className="h-8 w-8 text-emerald-500 opacity-50" />

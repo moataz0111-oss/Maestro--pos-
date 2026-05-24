@@ -82,9 +82,34 @@ async def _resolve_product_unit_cost(db, product: Dict[str, Any]) -> Dict[str, f
         if links_unit_cost > 0:
             return {"unit_cost": links_unit_cost + operating, "unit_pkg": unit_pkg}
 
-    # ⛑️ Fallback: استخدم product.cost الخام (للمنتجات غير المربوطة بمصنع)
+    # ⛑️ Smart Fallback: لو المنتج غير مربوط بـ manufactured_links، نحاول
+    # البحث عن منتج مُصنّع باسم مطابق أو يحتوي على اسم المنتج (case-insensitive).
+    # يساعد المنتجات التي لم يُكتمل ربطها يدوياً في الإعدادات.
+    name = (product.get("name") or "").strip()
+    if name:
+        tenant_id = product.get("tenant_id")
+        # 1) محاولة مطابقة دقيقة
+        match_q: Dict[str, Any] = {"name": name}
+        if tenant_id:
+            match_q["tenant_id"] = tenant_id
+        mfg_match = await db.manufactured_products.find_one(match_q, {"_id": 0})
+        # 2) إن فشلت، محاولة partial (المنتج المُصنّع يحتوي اسم البيع)
+        if not mfg_match:
+            import re as _re
+            escaped = _re.escape(name)
+            partial_q: Dict[str, Any] = {"name": {"$regex": escaped, "$options": "i"}}
+            if tenant_id:
+                partial_q["tenant_id"] = tenant_id
+            mfg_match = await db.manufactured_products.find_one(partial_q, {"_id": 0})
+        if mfg_match:
+            from routes.inventory_system import _enrich_unit_cost_fields
+            await _enrich_unit_cost_fields(db, mfg_match)
+            auto_cost = _f(mfg_match.get("unit_cost_after_waste"))
+            if auto_cost > 0:
+                return {"unit_cost": auto_cost + operating, "unit_pkg": unit_pkg}
+
+    # ⛑️ Last-resort Fallback: استخدم product.cost الخام
     raw_cost = _f(product.get("cost"))
-    # إذا product.cost يشمل التغليف، نطرحه
     materials_only = max(0.0, raw_cost - unit_pkg)
     return {"unit_cost": materials_only + operating, "unit_pkg": unit_pkg}
 

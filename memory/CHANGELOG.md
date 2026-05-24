@@ -1,6 +1,42 @@
 # Maestro EGP - Changelog
 
 
+## Session: May 24, 2026 (BUG FIX P0 #4 + #5) — صافي الربح + ربط تلقائي ذكي
+
+### 🐛 المشكلة #4: صافي الربح = إجمالي الربح
+البطاقتان في صفحة المبيعات تعرضان نفس القيمة. "صافي الربح" يجب أن يكون **بعد خصم التكاليف التشغيلية** (إيجار، رواتب، كهرباء...).
+
+**السبب**: card "صافي الربح" كانت تستخدم `salesReport.total_profit` (= revenue - cost of goods sold) بدلاً من `profitLossReport.net_profit.amount` (= total_profit - operating_costs).
+
+**الإصلاح** (`pages/Reports.js`):
+- بطاقة "صافي الربح" تستخدم `profitLossReport?.net_profit?.amount` مع fallback لـ `salesReport.total_profit`.
+- اللون أحمر إذا كانت القيمة سالبة.
+- Sub-text يعرض مقدار التكاليف التشغيلية المخصومة (أو ينبّه لو لا توجد تكاليف).
+- `data-testid="net-profit-value"` للاختبارات.
+
+### 🐛 المشكلة #5: "مشروم برغر" ما زال يظهر بـ 8,017
+بعد كل الإصلاحات، product في DB ليس له `manufactured_links`، فيقع في الـ fallback ويستخدم `product.cost = 8017` الخام.
+
+**الإصلاح** — Smart Fallback في `_resolve_product_unit_cost`:
+- إذا المنتج بدون `manufactured_links`، نبحث في `manufactured_products` بالاسم:
+  1. مطابقة دقيقة `name == product.name`
+  2. ثم regex partial match
+- إذا وُجد، نستخدم `unit_cost_after_waste` المحسوب.
+- الـ raw `product.cost` آخر ملاذ.
+
+### التحقق
+- محاكاة: منتج "مشروم برغر" بدون links، مع manufactured_product بنفس الاسم (1,016).
+  - قبل: cost = 48,102 (= 8017 × 6)
+  - **بعد: cost = 6,096 (= 1016 × 6) ✓**
+
+### Tests
+- `backend/tests/test_smart_fallback_manufactured_name_match.py` (4 ✓): يضمن البحث في manufactured_products بالاسم، partial match، استخدام `_enrich_unit_cost_fields`، الحفاظ على last-resort fallback.
+- `frontend/src/__tests__/net_profit_uses_operating_costs.test.js` (4 ✓): يضمن استخدام `profitLossReport.net_profit.amount`، fallback لـ total_profit، عرض مقدار التكاليف المخصومة، لون أحمر عند سالب.
+
+### المجموع: 24 backend tests + 34 frontend tests passing
+
+
+
 ## Session: May 24, 2026 (BUG FIX P0 #3) — توحيد المجاميع الكلية مع تفصيل المنتجات
 
 ### المشكلة
