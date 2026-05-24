@@ -1,6 +1,43 @@
 # Maestro EGP - Changelog
 
 
+## Session: May 24, 2026 (BUG FIX P0 #6) — توحيد profit-loss مع sales report
+
+### المشكلة
+رغم الإصلاحات السابقة، "إجمالي الربح" و "صافي الربح" يعرضان نفس الرقم (738,235 IQD) — مع رسالة "لا توجد تكاليف تشغيلية مُسجّلة".
+
+### السبب الجذري
+- `/reports/profit-loss` endpoint كان يحسب `total_cost_of_goods = sum(order.total_cost)` — نفس بق الـ stale data الذي أصلحناه في sales report.
+- نتيجة: gross_profit خاطئ، net_profit أيضاً خاطئ.
+- بالإضافة: لو الفرع بدون إيجار/رواتب مُسجّلة، تكاليف التشغيل = 0 ⇒ net_profit = gross_profit.
+
+### الإصلاح
+**Backend (`reports_routes.py::get_profit_loss_report`)**:
+- COGS تُحسب الآن ديناميكياً من `_build_current_costs_map` (نفس sales report):
+  ```python
+  total_cost_of_goods += (entry["unit_cost"] + entry["unit_pkg"]) * qty
+  ```
+- باقي المنطق ثابت: `gross_profit = revenue - COGS - delivery_commissions`، `net_profit = gross_profit - total_operating_costs`.
+- التكاليف التشغيلية تحسب من branches (إيجار، كهرباء، ماء، مولد) + employees (رواتب) + expenses، موزّعة على الأيام.
+
+**Frontend (`pages/Reports.js`)**:
+- رسالة بديلة عملية لو `total_operating_costs.total == 0`:
+  > ⚠️ سجّل الإيجار/الرواتب/الكهرباء في الإعدادات لاحتساب الربح الصافي بدقة
+- تنبّه المستخدم لإكمال البيانات بدلاً من ظن أن النظام لا يعمل.
+
+### التحقق
+محاكاة: branch مع rent=1.5M, electricity=300k, water=50k, generator=100k + 3 موظفين برواتب (800k, 600k, 500k) + 51k مصاريف يومية. طلب revenue=50k, COGS الحقيقي=10k:
+- gross_profit: 40,000
+- operating_costs: 179,333 (65k fixed + 63.3k salaries + 51k expenses)
+- **net_profit: -139,333** (خسارة، بعد خصم كل التكاليف ✓)
+
+### Tests
+- `backend/tests/test_profit_loss_uses_unified_cogs.py` (6 ✓): يضمن استخدام unified map، عدم العودة لـ stale total_cost، صيغة COGS = (unit_cost + unit_pkg) × qty، شكل الـ response ثابت، صيغة net_profit.
+
+### المجموع: 29 backend tests + 34 frontend tests passing
+
+
+
 ## Session: May 24, 2026 (BUG FIX P0 #4 + #5) — صافي الربح + ربط تلقائي ذكي
 
 ### 🐛 المشكلة #4: صافي الربح = إجمالي الربح

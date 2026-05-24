@@ -3109,7 +3109,9 @@ export default function Reports() {
                                 {t('بعد خصم التكاليف التشغيلية')}: −{formatPrice(profitLossReport.total_operating_costs.total)}
                               </>
                             ) : (
-                              t('لا توجد تكاليف تشغيلية مُسجّلة لهذه الفترة')
+                              <span className="text-amber-600">
+                                ⚠️ {t('سجّل الإيجار/الرواتب/الكهرباء في الإعدادات لاحتساب الربح الصافي بدقة')}
+                              </span>
                             )}
                           </p>
                         </div>

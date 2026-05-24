@@ -698,7 +698,22 @@ async def get_profit_loss_report(
     orders = await db.orders.find(sales_query, {"_id": 0}).to_list(10000)
     
     total_revenue = sum(o["total"] for o in orders)
-    total_cost_of_goods = sum(o.get("total_cost", 0) for o in orders)
+    # ⭐ COGS يُحسب ديناميكياً من unified costs map (نفس منطق POS و sales report)
+    # — لا من order.total_cost المخزّن (قد يكون قديماً قبل إصلاحات التكلفة).
+    _costs_map = await _build_current_costs_map(db, tenant_id)
+    _by_id = _costs_map["by_id"]
+    _by_name = _costs_map["by_name"]
+    total_cost_of_goods = 0.0
+    for o in orders:
+        for item in o.get("items", []):
+            pid_ref = item.get("product_id")
+            pid_name = item.get("product_name") or item.get("name") or ""
+            entry = _by_id.get(pid_ref) or _by_name.get(pid_name) or {"unit_cost": 0.0, "unit_pkg": 0.0}
+            try:
+                qty = float(item.get("quantity") or 0)
+            except (TypeError, ValueError):
+                qty = 0
+            total_cost_of_goods += (entry["unit_cost"] + entry["unit_pkg"]) * qty
     delivery_commissions = sum(o.get("delivery_commission", 0) for o in orders)
     gross_profit = total_revenue - total_cost_of_goods - delivery_commissions
     
