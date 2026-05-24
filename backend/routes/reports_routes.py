@@ -18,6 +18,102 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/reports", tags=["Reports"])
 
 
+# ==================== UNIFIED PER-PRODUCT COST RESOLVER ====================
+async def _resolve_product_unit_cost(db, product: Dict[str, Any]) -> Dict[str, float]:
+    """يُرجع التكلفة الحقيقية لكل وحدة من المنتج، باستخدام نفس منطق POS:
+    إذا كان المنتج مرتبطاً بمنتج مُصنّع (manufactured_links / manufactured_product_id)
+    فيُحسب من unit_cost_after_waste × consumption_qty (مصدر الحقيقة).
+    وإلا يستخدم product.cost الخام كـ fallback.
+
+    Returns: {"unit_cost": float, "unit_pkg": float}
+        unit_cost = تكلفة المواد الخام + التشغيل (لكل وحدة، بدون التغليف)
+        unit_pkg  = تكلفة التغليف (لكل وحدة)
+    """
+    from routes.inventory_system import _enrich_unit_cost_fields  # late import
+
+    def _f(x):
+        try:
+            return float(x or 0)
+        except (TypeError, ValueError):
+            return 0.0
+
+    unit_pkg = _f(product.get("packaging_cost"))
+    operating = _f(product.get("operating_cost"))
+
+    # ⭐ المسار الأساسي: استخدام manufactured_links (نفس منطق POS)
+    mfg_links = list(product.get("manufactured_links") or [])
+    if not mfg_links and product.get("manufactured_product_id"):
+        mfg_links = [{
+            "manufactured_product_id": product.get("manufactured_product_id"),
+            "consumption_qty": product.get("manufactured_consumption_qty") or 1,
+            "consumption_unit": None,
+        }]
+
+    if mfg_links:
+        links_unit_cost = 0.0
+        for link in mfg_links:
+            mp_id = link.get("manufactured_product_id")
+            if not mp_id:
+                continue
+            mfg_product = await db.manufactured_products.find_one(
+                {"id": mp_id},
+                {"_id": 0, "raw_material_cost": 1, "raw_material_cost_after_waste": 1,
+                 "production_cost": 1, "recipe": 1, "unit": 1, "piece_weight": 1,
+                 "piece_weight_unit": 1, "quantity": 1, "cost_before_waste": 1, "id": 1},
+            )
+            if not mfg_product:
+                continue
+            await _enrich_unit_cost_fields(db, mfg_product)
+            unit_cost_after_waste = _f(mfg_product.get("unit_cost_after_waste"))
+            consumption_qty = _f(link.get("consumption_qty")) or 1.0
+            # تحويل الوحدة (kg→g أو piece) — نستخدم منطق server.py عبر import محلي
+            try:
+                from server import _convert_link_consumption_to_main
+                consumption_qty = _convert_link_consumption_to_main(
+                    consumption_qty,
+                    link.get("consumption_unit") or mfg_product.get("unit") or "حبة",
+                    mfg_product.get("unit") or "حبة",
+                    _f(mfg_product.get("piece_weight")),
+                    mfg_product.get("piece_weight_unit") or "",
+                )
+            except Exception:
+                pass  # في حال فشل التحويل، نستخدم consumption_qty كما هو
+            links_unit_cost += unit_cost_after_waste * consumption_qty
+        if links_unit_cost > 0:
+            return {"unit_cost": links_unit_cost + operating, "unit_pkg": unit_pkg}
+
+    # ⛑️ Fallback: استخدم product.cost الخام (للمنتجات غير المربوطة بمصنع)
+    raw_cost = _f(product.get("cost"))
+    # إذا product.cost يشمل التغليف، نطرحه
+    materials_only = max(0.0, raw_cost - unit_pkg)
+    return {"unit_cost": materials_only + operating, "unit_pkg": unit_pkg}
+
+
+async def _build_current_costs_map(db, tenant_id: Optional[str]) -> Dict[str, Dict[str, Any]]:
+    """يبني خريطة {product_id: {unit_cost, unit_pkg, name}} و {name: ...} للجميع.
+    يستخدم _resolve_product_unit_cost (مصدر الحقيقة الوحيد)."""
+    products_q: Dict[str, Any] = {}
+    if tenant_id:
+        products_q["tenant_id"] = tenant_id
+    by_id: Dict[str, Dict[str, Any]] = {}
+    by_name: Dict[str, Dict[str, Any]] = {}
+    cursor = db.products.find(products_q, {"_id": 0})
+    async for p in cursor:
+        try:
+            resolved = await _resolve_product_unit_cost(db, p)
+        except Exception as e:
+            logger.warning(f"Failed to resolve cost for product {p.get('name')}: {e}")
+            resolved = {"unit_cost": float(p.get("cost") or 0), "unit_pkg": float(p.get("packaging_cost") or 0)}
+        entry = {"unit_cost": resolved["unit_cost"], "unit_pkg": resolved["unit_pkg"], "name": p.get("name", "")}
+        if p.get("id"):
+            by_id[p["id"]] = entry
+        if p.get("name"):
+            by_name[p["name"]] = entry
+    return {"by_id": by_id, "by_name": by_name}
+
+
+
+
 def _apply_business_date_filter(query: dict, start_date: Optional[str], end_date: Optional[str], legacy_field: str = "created_at") -> dict:
     """يُضيف فلتر business_date (مع fallback للحقل القديم للسجلات التي لا تملك business_date).
     يُعدّل الـ query بإضافة $or أو $and حسب السياق."""
@@ -99,33 +195,10 @@ async def get_sales_report(
     delivery_apps = await db.delivery_apps.find({}, {"_id": 0}).to_list(100)
     app_names = {app["id"]: app["name"] for app in delivery_apps}
 
-    # ⭐ خريطة بالـ product_id/name → التكلفة الحالية (الحقل البنفسجي في إعدادات المنتج)
-    # تُستخدم في `cost_breakdown_by_product` كمصدر الحقيقة بدلاً من item.cost
-    # المخزّن في الطلب (الذي قد يكون قديماً قبل إصلاحات التكلفة).
-    products_q: Dict[str, Any] = {}
-    if tenant_id:
-        products_q["tenant_id"] = tenant_id
-    _products_cursor = db.products.find(
-        products_q, {"_id": 0, "id": 1, "name": 1, "cost": 1, "packaging_cost": 1}
-    )
-    _current_cost_by_id: Dict[str, float] = {}
-    _current_pkg_by_id: Dict[str, float] = {}
-    _current_cost_by_name: Dict[str, float] = {}
-    _current_pkg_by_name: Dict[str, float] = {}
-    async for _p in _products_cursor:
-        _pid_db = _p.get("id")
-        _pname = _p.get("name") or ""
-        try:
-            _c = float(_p.get("cost") or 0)
-            _pk = float(_p.get("packaging_cost") or 0)
-        except (TypeError, ValueError):
-            _c, _pk = 0.0, 0.0
-        if _pid_db:
-            _current_cost_by_id[_pid_db] = _c
-            _current_pkg_by_id[_pid_db] = _pk
-        if _pname:
-            _current_cost_by_name[_pname] = _c
-            _current_pkg_by_name[_pname] = _pk
+    # ⭐ خريطة موحّدة بالتكاليف الحالية (تستخدم نفس منطق POS عبر manufactured_links)
+    _costs_map = await _build_current_costs_map(db, tenant_id)
+    _by_id = _costs_map["by_id"]
+    _by_name = _costs_map["by_name"]
     
     def _sn(val):
         if val is None:
@@ -237,16 +310,11 @@ async def get_sales_report(
             qty = item.get("quantity", 0)
             by_product[pid]["quantity"] += qty
             by_product[pid]["revenue"] += _sn(item.get("price")) * qty
-            # ⭐ التكلفة الحالية من تعريف المنتج (مصدر الحقيقة، الحقل البنفسجي)
-            unit_cost = _current_cost_by_id.get(pid_ref)
-            if unit_cost is None:
-                unit_cost = _current_cost_by_name.get(pid, 0.0)
-            unit_pkg = _current_pkg_by_id.get(pid_ref)
-            if unit_pkg is None:
-                unit_pkg = _current_pkg_by_name.get(pid, 0.0)
-            # المواد الخام فقط (دون التغليف) × الكمية
-            by_product[pid]["materials_cost"] += max(0.0, unit_cost - unit_pkg) * qty
-            by_product[pid]["packaging_cost"] += unit_pkg * qty
+            # ⭐ مصدر الحقيقة الوحيد: التكلفة المحسوبة عبر manufactured_links
+            entry = _by_id.get(pid_ref) or _by_name.get(pid) or {"unit_cost": 0.0, "unit_pkg": 0.0}
+            unit_materials_only = max(0.0, entry["unit_cost"] - entry["unit_pkg"]) if entry["unit_cost"] >= entry["unit_pkg"] else entry["unit_cost"]
+            by_product[pid]["materials_cost"] += entry["unit_cost"] * qty
+            by_product[pid]["packaging_cost"] += entry["unit_pkg"] * qty
     
     # ⚠️ الطلبات المعلقة لا تُحتسب كطريقة دفع (لم تُدفع بعد)
     # نعرضها كملخّص منفصل لتطابق تقرير إغلاق الصندوق (الذي يستثني المعلق)
@@ -339,33 +407,11 @@ async def get_weekly_low_profit_products(
 
     paid_orders = await db.orders.find(query, {"_id": 0}).to_list(length=10000)
 
-    # ⭐ خريطة بالـ product_id → التكلفة الحالية (الحقل البنفسجي في إعدادات المنتج)
-    # السبب: item.cost المخزّن في الطلب قد يكون قديماً/خاطئاً (قبل إصلاحات
-    # التكلفة، أو يتضمن إضافات/modifiers). المستخدم يطلب استخدام التكلفة
-    # الحالية من تعريف المنتج كمصدر الحقيقة.
+    # ⭐ خريطة موحّدة بالتكاليف الحالية (تستخدم نفس منطق POS عبر manufactured_links)
     tenant_id = get_user_tenant_id(current_user)
-    products_q: Dict[str, Any] = {}
-    if tenant_id:
-        products_q["tenant_id"] = tenant_id
-    products_cursor = db.products.find(products_q, {"_id": 0, "id": 1, "name": 1, "cost": 1, "packaging_cost": 1})
-    current_cost_by_id: Dict[str, float] = {}
-    current_pkg_by_id: Dict[str, float] = {}
-    current_cost_by_name: Dict[str, float] = {}
-    current_pkg_by_name: Dict[str, float] = {}
-    async for p in products_cursor:
-        pid_db = p.get("id")
-        pname = p.get("name") or ""
-        try:
-            c = float(p.get("cost") or 0)
-            pk = float(p.get("packaging_cost") or 0)
-        except (TypeError, ValueError):
-            c, pk = 0.0, 0.0
-        if pid_db:
-            current_cost_by_id[pid_db] = c
-            current_pkg_by_id[pid_db] = pk
-        if pname:
-            current_cost_by_name[pname] = c
-            current_pkg_by_name[pname] = pk
+    _costs_map = await _build_current_costs_map(db, tenant_id)
+    _by_id = _costs_map["by_id"]
+    _by_name = _costs_map["by_name"]
 
     by_product: Dict[str, Dict[str, float]] = {}
     for o in paid_orders:
@@ -379,19 +425,11 @@ async def get_weekly_low_profit_products(
                 price = float(item.get("price") or 0)
             except (TypeError, ValueError):
                 continue
-            # ✅ استخدم التكلفة الحالية من تعريف المنتج (مصدر الحقيقة)
-            unit_cost = current_cost_by_id.get(pid_ref)
-            if unit_cost is None:
-                unit_cost = current_cost_by_name.get(pid, 0.0)
-            unit_pkg = current_pkg_by_id.get(pid_ref)
-            if unit_pkg is None:
-                unit_pkg = current_pkg_by_name.get(pid, 0.0)
-
+            entry = _by_id.get(pid_ref) or _by_name.get(pid) or {"unit_cost": 0.0, "unit_pkg": 0.0}
             by_product[pid]["quantity"] += qty
             by_product[pid]["revenue"] += price * qty
-            # المواد الخام فقط (دون التغليف) × الكمية
-            by_product[pid]["materials_cost"] += max(0.0, unit_cost - unit_pkg) * qty
-            by_product[pid]["packaging_cost"] += unit_pkg * qty
+            by_product[pid]["materials_cost"] += entry["unit_cost"] * qty
+            by_product[pid]["packaging_cost"] += entry["unit_pkg"] * qty
 
     low_profit: List[Dict[str, Any]] = []
     total_loss = 0.0

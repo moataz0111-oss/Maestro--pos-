@@ -1,6 +1,34 @@
 # Maestro EGP - Changelog
 
 
+## Session: May 24, 2026 (BUG FIX P0 #2) — توحيد منطق احتساب التكلفة بين POS و التقارير
+
+### المشكلة
+بعد الإصلاح الأول، الـ endpoints كانت تستخدم `product.cost` الخام من DB، لكن هذا الحقل قد يكون قديماً ولا يعكس التكلفة الحقيقية للمنتج المُصنّع المربوط. مثال: "مشروم برغر" `product.cost = 8017` بينما التكلفة الحقيقية = 1,016 د.ع (من المنتج المُصنّع المرتبط عبر `manufactured_links`).
+
+### السبب الجذري
+- POS يحسب التكلفة عبر: `_enrich_unit_cost_fields(manufactured_product) × consumption_qty` (مصدر الحقيقة).
+- التقارير كانت تستخدم `product.cost` فقط (المحفوظ في DB) — قد يكون قديم.
+- نتيجة: فروق ضخمة في الأرقام (8x في حالة المشروم، 6.8x في حالة الكلاسيك).
+
+### الإصلاح
+أُضيف Helper موحّد في `reports_routes.py`:
+- `_resolve_product_unit_cost(db, product)`: يحاكي نفس منطق POS — يقرأ `manufactured_links`، يستدعي `_enrich_unit_cost_fields`، ويضرب في `consumption_qty` بعد تحويل الوحدة عبر `_convert_link_consumption_to_main`.
+- `_build_current_costs_map(db, tenant_id)`: يبني خريطة `{by_id, by_name}` لكل المنتجات مرة واحدة.
+
+كلا endpoints `get_weekly_low_profit_products` و sales report's `cost_breakdown_by_product` يستخدمان نفس الخريطة الآن.
+
+### التحقق
+محاكاة: "مشروم برغر" (6 وحدات × سعر 6,500، تكلفة manufactured = 1,016):
+- قبل الإصلاح: تكلفة 48,102 د.ع (= 8,017 × 6)
+- بعد الإصلاح: **تكلفة 6,096 د.ع (= 1,016 × 6) ✓** هامش 84.4%
+
+### Tests
+- `backend/tests/test_reports_unified_cost_resolver.py` (7 ✓): يضمن وجود helper، استيراد `_enrich_unit_cost_fields`، استخدام `manufactured_links` و `_convert_link_consumption_to_main`، fallback لـ raw cost، استخدام الخريطة في كلا endpoints.
+- تحديث `test_weekly_low_profit_uses_current_cost.py` ليعكس الأسماء الجديدة `_by_id`/`_by_name`.
+
+
+
 ## Session: May 24, 2026 (BUG FIX P0) — تصحيح احتساب التكلفة في تقارير الربحية
 
 ### المشاكل
