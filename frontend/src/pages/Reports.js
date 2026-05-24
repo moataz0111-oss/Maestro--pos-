@@ -207,12 +207,12 @@ const ComprehensiveReportTab = ({
   startDate,
   endDate,
   onStartDateChange,
-  onEndDateChange
+  onEndDateChange,
+  showCostBreakdown,
+  setShowCostBreakdown
 }) => {
   // فترة مختارة (dropdown) - تحسب تلقائياً startDate و endDate
   const [period, setPeriod] = useState('today');
-  // ⭐ Dialogs لتفصيل تكلفة المواد والتغليف عند الضغط على البطاقات
-  const [showCostBreakdown, setShowCostBreakdown] = useState(null);  // 'materials' | 'packaging' | null
 
   // حساب نطاق التاريخ بناءً على الفترة المختارة
   const computeDateRange = (p) => {
@@ -2562,6 +2562,8 @@ export default function Reports() {
     showComprehensiveReport: true,
     showBreakEvenReport: true
   });
+  // ⭐ Cost-breakdown drill-down state (shared between Sales tab cards and ComprehensiveReportTab)
+  const [showCostBreakdown, setShowCostBreakdown] = useState(null);  // 'materials' | 'packaging' | null
   
   // تغيير التبويب الافتراضي إذا كان التقرير الشامل معطلاً
   useEffect(() => {
@@ -3016,6 +3018,8 @@ export default function Reports() {
                 endDate={endDate}
                 onStartDateChange={setStartDate}
                 onEndDateChange={setEndDate}
+                showCostBreakdown={showCostBreakdown}
+                setShowCostBreakdown={setShowCostBreakdown}
               />
             </TabsContent>
           )}
@@ -3957,7 +3961,6 @@ export default function Reports() {
                         {filtered.map(([name, v], idx) => {
                           const val = v[key] || 0;
                           const pct = totalAll > 0 ? (val / totalAll * 100) : 0;
-                          // ⭐ مؤشر الربحية: 🔴 < 10%، 🟡 10-30%، 🟢 > 30%
                           const margin = Number(v.profit_margin || 0);
                           const hasMargin = (v.revenue || 0) > 0;
                           const lowProfit = hasMargin && margin < 10;
@@ -3999,7 +4002,6 @@ export default function Reports() {
                       </tbody>
                     </table>
                   </div>
-                  {/* ⭐ Legend */}
                   <div className="text-[11px] text-muted-foreground flex flex-wrap gap-3 px-1" data-testid="profit-legend">
                     <span className="flex items-center gap-1"><span>🔴</span> {t('ربحية منخفضة')} (&lt;10%)</span>
                     <span className="flex items-center gap-1"><span>🟡</span> {t('متوسطة')} (10–30%)</span>

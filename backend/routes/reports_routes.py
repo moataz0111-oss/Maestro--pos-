@@ -98,6 +98,34 @@ async def get_sales_report(
     
     delivery_apps = await db.delivery_apps.find({}, {"_id": 0}).to_list(100)
     app_names = {app["id"]: app["name"] for app in delivery_apps}
+
+    # ⭐ خريطة بالـ product_id/name → التكلفة الحالية (الحقل البنفسجي في إعدادات المنتج)
+    # تُستخدم في `cost_breakdown_by_product` كمصدر الحقيقة بدلاً من item.cost
+    # المخزّن في الطلب (الذي قد يكون قديماً قبل إصلاحات التكلفة).
+    products_q: Dict[str, Any] = {}
+    if tenant_id:
+        products_q["tenant_id"] = tenant_id
+    _products_cursor = db.products.find(
+        products_q, {"_id": 0, "id": 1, "name": 1, "cost": 1, "packaging_cost": 1}
+    )
+    _current_cost_by_id: Dict[str, float] = {}
+    _current_pkg_by_id: Dict[str, float] = {}
+    _current_cost_by_name: Dict[str, float] = {}
+    _current_pkg_by_name: Dict[str, float] = {}
+    async for _p in _products_cursor:
+        _pid_db = _p.get("id")
+        _pname = _p.get("name") or ""
+        try:
+            _c = float(_p.get("cost") or 0)
+            _pk = float(_p.get("packaging_cost") or 0)
+        except (TypeError, ValueError):
+            _c, _pk = 0.0, 0.0
+        if _pid_db:
+            _current_cost_by_id[_pid_db] = _c
+            _current_pkg_by_id[_pid_db] = _pk
+        if _pname:
+            _current_cost_by_name[_pname] = _c
+            _current_pkg_by_name[_pname] = _pk
     
     def _sn(val):
         if val is None:
@@ -203,17 +231,22 @@ async def get_sales_report(
         
         for item in o.get("items", []):
             pid = item.get("product_name") or item.get("name") or "غير معروف"
+            pid_ref = item.get("product_id")
             if pid not in by_product:
                 by_product[pid] = {"quantity": 0, "revenue": 0, "materials_cost": 0, "packaging_cost": 0}
             qty = item.get("quantity", 0)
             by_product[pid]["quantity"] += qty
             by_product[pid]["revenue"] += _sn(item.get("price")) * qty
-            # ⭐ تفصيل تكلفة المواد والتغليف لكل منتج
-            item_cost = _sn(item.get("cost"))
-            item_pkg = _sn(item.get("packaging_cost"))
-            # احتساب التغليف لكل وحدة من المنتج
-            by_product[pid]["materials_cost"] += max(0.0, item_cost - item_pkg)
-            by_product[pid]["packaging_cost"] += item_pkg
+            # ⭐ التكلفة الحالية من تعريف المنتج (مصدر الحقيقة، الحقل البنفسجي)
+            unit_cost = _current_cost_by_id.get(pid_ref)
+            if unit_cost is None:
+                unit_cost = _current_cost_by_name.get(pid, 0.0)
+            unit_pkg = _current_pkg_by_id.get(pid_ref)
+            if unit_pkg is None:
+                unit_pkg = _current_pkg_by_name.get(pid, 0.0)
+            # المواد الخام فقط (دون التغليف) × الكمية
+            by_product[pid]["materials_cost"] += max(0.0, unit_cost - unit_pkg) * qty
+            by_product[pid]["packaging_cost"] += unit_pkg * qty
     
     # ⚠️ الطلبات المعلقة لا تُحتسب كطريقة دفع (لم تُدفع بعد)
     # نعرضها كملخّص منفصل لتطابق تقرير إغلاق الصندوق (الذي يستثني المعلق)
@@ -306,23 +339,59 @@ async def get_weekly_low_profit_products(
 
     paid_orders = await db.orders.find(query, {"_id": 0}).to_list(length=10000)
 
+    # ⭐ خريطة بالـ product_id → التكلفة الحالية (الحقل البنفسجي في إعدادات المنتج)
+    # السبب: item.cost المخزّن في الطلب قد يكون قديماً/خاطئاً (قبل إصلاحات
+    # التكلفة، أو يتضمن إضافات/modifiers). المستخدم يطلب استخدام التكلفة
+    # الحالية من تعريف المنتج كمصدر الحقيقة.
+    tenant_id = get_user_tenant_id(current_user)
+    products_q: Dict[str, Any] = {}
+    if tenant_id:
+        products_q["tenant_id"] = tenant_id
+    products_cursor = db.products.find(products_q, {"_id": 0, "id": 1, "name": 1, "cost": 1, "packaging_cost": 1})
+    current_cost_by_id: Dict[str, float] = {}
+    current_pkg_by_id: Dict[str, float] = {}
+    current_cost_by_name: Dict[str, float] = {}
+    current_pkg_by_name: Dict[str, float] = {}
+    async for p in products_cursor:
+        pid_db = p.get("id")
+        pname = p.get("name") or ""
+        try:
+            c = float(p.get("cost") or 0)
+            pk = float(p.get("packaging_cost") or 0)
+        except (TypeError, ValueError):
+            c, pk = 0.0, 0.0
+        if pid_db:
+            current_cost_by_id[pid_db] = c
+            current_pkg_by_id[pid_db] = pk
+        if pname:
+            current_cost_by_name[pname] = c
+            current_pkg_by_name[pname] = pk
+
     by_product: Dict[str, Dict[str, float]] = {}
     for o in paid_orders:
         for item in o.get("items", []):
             pid = item.get("product_name") or item.get("name") or "غير معروف"
+            pid_ref = item.get("product_id")
             if pid not in by_product:
                 by_product[pid] = {"quantity": 0, "revenue": 0, "materials_cost": 0, "packaging_cost": 0}
-            qty = item.get("quantity", 0)
             try:
+                qty = float(item.get("quantity") or 0)
                 price = float(item.get("price") or 0)
-                cost = float(item.get("cost") or 0)
-                pkg = float(item.get("packaging_cost") or 0)
             except (TypeError, ValueError):
                 continue
+            # ✅ استخدم التكلفة الحالية من تعريف المنتج (مصدر الحقيقة)
+            unit_cost = current_cost_by_id.get(pid_ref)
+            if unit_cost is None:
+                unit_cost = current_cost_by_name.get(pid, 0.0)
+            unit_pkg = current_pkg_by_id.get(pid_ref)
+            if unit_pkg is None:
+                unit_pkg = current_pkg_by_name.get(pid, 0.0)
+
             by_product[pid]["quantity"] += qty
             by_product[pid]["revenue"] += price * qty
-            by_product[pid]["materials_cost"] += max(0.0, cost - pkg)
-            by_product[pid]["packaging_cost"] += pkg
+            # المواد الخام فقط (دون التغليف) × الكمية
+            by_product[pid]["materials_cost"] += max(0.0, unit_cost - unit_pkg) * qty
+            by_product[pid]["packaging_cost"] += unit_pkg * qty
 
     low_profit: List[Dict[str, Any]] = []
     total_loss = 0.0

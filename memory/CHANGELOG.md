@@ -1,6 +1,40 @@
 # Maestro EGP - Changelog
 
 
+## Session: May 24, 2026 (BUG FIX P0) — تصحيح احتساب التكلفة في تقارير الربحية
+
+### المشاكل
+المستخدم أبلغ أن:
+1. **تنبيه الربحية الأسبوعي** يعرض تكلفة 1,989,796 د.ع لـ 148 وحدة "كلاسيك برجر" بينما التكلفة الصحيحة 1,976 × 148 = 292,448 د.ع (الفرق ~6.8×).
+2. **صفحة التقارير** تنهار بـ `ReferenceError: showCostBreakdown is not defined` عند الفتح.
+
+### السبب الجذري
+1. **Endpoint** كان يستخدم `item.cost` المخزّن داخل كل order item — وهذه قيمة قديمة محفوظة من وقت إنشاء الطلب (قبل تحديثات حساب التكلفة) أو تتضمن additions/modifiers. ولم يكن يضرب بالكمية (qty) لأنه كان يفترض أن `item.cost` يحوي إجمالي السطر.
+2. **State** `showCostBreakdown` كان معرّفاً داخل `ComprehensiveReportTab` لكن `setShowCostBreakdown` يُستدعى من بطاقات Sales tab في `Reports` الخارجي — خطأ scope.
+
+### الإصلاحات
+**Backend (`routes/reports_routes.py`)**:
+- `get_weekly_low_profit_products` و sales report's `cost_breakdown_by_product` الآن:
+  - يجلبان التكلفة الحالية من `db.products` (الحقل البنفسجي `cost` + `packaging_cost`).
+  - يضربان `(unit_cost - unit_pkg) × qty` و `unit_pkg × qty`.
+  - lookup بـ `product_id` أولاً ثم fallback إلى `product_name`.
+
+**Frontend (`pages/Reports.js`)**:
+- نقل `useState(showCostBreakdown)` من `ComprehensiveReportTab` إلى `Reports` (outer).
+- تمرير `showCostBreakdown`/`setShowCostBreakdown` كـ props لـ `ComprehensiveReportTab`.
+- نقل الـ Dialog إلى داخل `Reports` (خارج Tabs) — متاح لجميع التابات.
+
+### Tests
+- `backend/tests/test_weekly_low_profit_uses_current_cost.py` (5 ✓): يضمن استخدام products collection، ضرب qty، عدم العودة لـ item.cost، fallback بالاسم، تطبيق نفس المنطق في sales report.
+- `frontend/src/__tests__/cost_breakdown_dialog_scope.test.js` (5 ✓): يضمن state في Reports outer، تمرير props، Dialog في outer، لا redeclare في ComprehensiveReportTab.
+
+### التحقق
+- 24 backend tests passing (5 + 5 + 14).
+- 30 frontend tests passing.
+- Screenshot: صفحة Reports تفتح بدون أخطاء، البطاقة قابلة للضغط، Dialog يفتح.
+
+
+
 ## Session: May 24, 2026 (FEATURE) — 🚦 تنبيه أسبوعي للمنتجات منخفضة الربحية
 
 ### الميزة المضافة
