@@ -2131,7 +2131,9 @@ export default function Settings() {
 
   // ⭐ MfgLinksEditor — قسم ربط متعدد بالمنتجات المُصنّعة (يدعم أكثر من منتج مُصنّع للمنتج الواحد)
   // مثال: برجر = لحم برغر (1 حبة) + خبز (1 حبة) + صوص (50غ)
-  const MfgLinksEditor = ({ form, setForm, formKind = 'add' }) => {
+  // ⚠️ نستدعيها كدالة (مش JSX element) لتجنّب unmount/remount عند الكتابة
+  // داخل الـ Input — هذا كان يُفقِد التركيز بعد كل ضغطة (المستخدم "تجمد").
+  const renderMfgLinksEditor = ({ form, setForm, formKind = 'add' }) => {
     const links = form?.manufactured_links || [];
 
     // ⭐ احتساب تكلفة سطر واحد مع مراعاة وحدة الاستهلاك (حبة/شريحة)
@@ -4306,7 +4308,7 @@ export default function Settings() {
                         </div>
                         
                         {/* ⭐ ربط متعدد بالمنتجات المُصنّعة (يدعم أكثر من منتج مصنّع) */}
-                        <MfgLinksEditor form={productForm} setForm={setProductForm} formKind="add" />
+                        {renderMfgLinksEditor({ form: productForm, setForm: setProductForm, formKind: 'add' })}
                         
                         {/* قسم الإضافات للمنتج الجديد */}
                         <div className="p-3 bg-orange-500/10 border border-orange-500/30 rounded-lg">
@@ -4786,7 +4788,7 @@ export default function Settings() {
                         />
                       </div>
                       {/* ⭐ ربط متعدد بالمنتجات المُصنّعة (تعديل) */}
-                      <MfgLinksEditor form={editProductForm} setForm={setEditProductForm} formKind="edit" />
+                      {renderMfgLinksEditor({ form: editProductForm, setForm: setEditProductForm, formKind: 'edit' })}
                       
                       {/* قسم الإضافات */}
                       <div className="p-3 bg-orange-500/10 border border-orange-500/30 rounded-lg">

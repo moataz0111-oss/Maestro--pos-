@@ -1,6 +1,32 @@
 # Maestro EGP - Changelog
 
 
+## Session: Feb 21, 2026 (UX HOTFIX) — ⌨️ إصلاح "تجمد" حقل الكمية في MfgLinksEditor
+
+### المشكلة
+في حوار "ربط بمنتجات مُصنّعة"، عند كتابة رقم في حقل "الكمية المستهلكة لكل بيع":
+- يقبل **رقم واحد فقط** ثم يفقد التركيز (يبدو "متجمداً").
+- المستخدم يضطر للضغط على الحقل مرة أخرى لكل رقم.
+
+### السبب الجذري
+`MfgLinksEditor` كان مُعرَّفاً كـ **inner function component** داخل `Settings()`. عند كل re-render للوالد (يحدث في كل ضغطة keystroke بسبب `setForm`):
+1. React يرى `MfgLinksEditor` كنوع مكوّن مختلف (دالة جديدة).
+2. يهدم الشجرة القديمة (**unmount**) ويُعيد بناءها (**mount**).
+3. الـ `<Input>` يفقد التركيز.
+
+### الإصلاح
+حوّلت `MfgLinksEditor` من مكوّن React (`<MfgLinksEditor />`) إلى **render function** يُستدعى مباشرة (`{renderMfgLinksEditor({...})}`). الناتج JSX يندمج مباشرة في شجرة الوالد → React يحافظ على هوية الـ Input → التركيز ثابت.
+
+### الحماية ضد التراجع
+**`mfg_links_editor_function_invocation.test.js`** (3 اختبارات):
+- لا استخدام `<MfgLinksEditor>` كـ JSX element.
+- `renderMfgLinksEditor` معرّف كدالة.
+- تُستدعى مرّتين على الأقل (add + edit dialogs).
+
+### التحقّق
+- **97/97 frontend jest ✅** | **30/30 backend pytest ✅** | Lint ✅ | Build ✅.
+
+
 ## Session: Feb 21, 2026 (HOTFIX حاسم) — 🥩 إصلاح حساب اليلد للمنتجات بوحدة وزنية رئيسية
 
 ### المشكلة الجذرية المُكتشَفة من بيانات العميل
