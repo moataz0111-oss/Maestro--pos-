@@ -2579,8 +2579,8 @@ export default function WarehouseManufacturing() {
                                 min_quantity: material.min_quantity,
                                 unit: material.unit,
                                 cost_per_unit: material.cost_per_unit,
-                                piece_weight: material.piece_weight || 0,
-                                piece_weight_unit: material.piece_weight_unit || 'غرام',
+                                pack_quantity: material.pack_quantity || 0,
+                                pack_unit: material.pack_unit || 'غرام',
                                 reason: '',
                               })}
                               title={t('تصحيح إداري لخطأ إدخال (مثل غرام/كغم)')}
@@ -7101,43 +7101,41 @@ export default function WarehouseManufacturing() {
                   />
                 </div>
               </div>
-              {/* ⭐ تعريف القطعة — يُستخدم عند الوحدة "قطعة" لمعرفة وزن القطعة الواحدة */}
-              {adminCorrection.unit === 'قطعة' && (
-                <div className="rounded-md bg-blue-500/5 border border-blue-500/20 p-3" data-testid="piece-definition-section">
-                  <Label className="text-xs font-bold text-blue-700 block mb-2">
-                    📦 {t('تعريف القطعة')} — {t('وزن القطعة الواحدة')}
-                  </Label>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <Label className="text-[11px] text-muted-foreground">{t('وزن القطعة')}</Label>
-                      <Input
-                        type="number" step="0.001" min="0"
-                        value={adminCorrection.piece_weight || 0}
-                        onChange={(e) => setAdminCorrection(prev => ({ ...prev, piece_weight: parseFloat(e.target.value) || 0 }))}
-                        placeholder={t('مثال: 250')}
-                        data-testid="correction-piece-weight"
-                      />
-                    </div>
-                    <div>
-                      <Label className="text-[11px] text-muted-foreground">{t('وحدة الوزن')}</Label>
-                      <Select
-                        value={adminCorrection.piece_weight_unit || 'غرام'}
-                        onValueChange={(v) => setAdminCorrection(prev => ({ ...prev, piece_weight_unit: v }))}
-                      >
-                        <SelectTrigger data-testid="correction-piece-weight-unit"><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          {['غرام','كغم','مل','لتر'].map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}
-                        </SelectContent>
-                      </Select>
-                    </div>
+              {/* ⭐ تعريف القطعة/التعبئة — وزن/كمية الوحدة الواحدة بوحدة فرعية (يدعم أي وحدة) */}
+              <div className="rounded-md bg-blue-500/5 border border-blue-500/20 p-3" data-testid="piece-definition-section">
+                <Label className="text-xs font-bold text-blue-700 block mb-2">
+                  📦 {t('تعريف القطعة/التعبئة')} — {t('1 ')}{adminCorrection.unit || t('قطعة')} = ?
+                </Label>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label className="text-[11px] text-muted-foreground">{t('الكمية')}</Label>
+                    <Input
+                      type="number" step="0.001" min="0"
+                      value={adminCorrection.pack_quantity ?? 0}
+                      onChange={(e) => setAdminCorrection(prev => ({ ...prev, pack_quantity: parseFloat(e.target.value) || 0 }))}
+                      placeholder={t('مثال: 250')}
+                      data-testid="correction-piece-weight"
+                    />
                   </div>
-                  <p className="text-[10px] text-blue-600 mt-2" data-testid="piece-definition-preview">
-                    {Number(adminCorrection.piece_weight) > 0
-                      ? `📐 1 ${t('قطعة')} = ${adminCorrection.piece_weight} ${adminCorrection.piece_weight_unit || 'غرام'}`
-                      : `⚠️ ${t('اضبط وزن القطعة ليُحتسب التحويل بدقة عند استخدامها في الوصفات')}`}
-                  </p>
+                  <div>
+                    <Label className="text-[11px] text-muted-foreground">{t('الوحدة الفرعية')}</Label>
+                    <Select
+                      value={adminCorrection.pack_unit || 'غرام'}
+                      onValueChange={(v) => setAdminCorrection(prev => ({ ...prev, pack_unit: v }))}
+                    >
+                      <SelectTrigger data-testid="correction-piece-weight-unit"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {['غرام','كغم','مل','لتر','شريحة','حبة','قطعة','حصة','كأس'].map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
-              )}
+                <p className="text-[10px] text-blue-600 mt-2" data-testid="piece-definition-preview">
+                  {Number(adminCorrection.pack_quantity) > 0
+                    ? `📐 1 ${adminCorrection.unit || t('قطعة')} = ${adminCorrection.pack_quantity} ${adminCorrection.pack_unit || 'غرام'}`
+                    : `⚠️ ${t('اضبط الكمية ليُحتسب التحويل بدقة عند استخدامها في الوصفات')}`}
+                </p>
+              </div>
               <div>
                 <Label className="text-xs">{t('سبب التصحيح')} *</Label>
                 <Textarea
@@ -7167,8 +7165,8 @@ export default function WarehouseManufacturing() {
                     min_quantity: parseFloat(adminCorrection.min_quantity) || 0,
                     unit: adminCorrection.unit,
                     cost_per_unit: parseFloat(adminCorrection.cost_per_unit) || 0,
-                    piece_weight: adminCorrection.unit === 'قطعة' ? (parseFloat(adminCorrection.piece_weight) || 0) : undefined,
-                    piece_weight_unit: adminCorrection.unit === 'قطعة' ? (adminCorrection.piece_weight_unit || 'غرام') : undefined,
+                    pack_quantity: parseFloat(adminCorrection.pack_quantity) || 0,
+                    pack_unit: adminCorrection.pack_unit || null,
                     reason: adminCorrection.reason,
                   }, { headers });
                   toast.success(t('تم التصحيح وتسجيله في سجل المراجعة'));

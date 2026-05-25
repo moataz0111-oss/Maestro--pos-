@@ -1882,7 +1882,10 @@ async def admin_correct_raw_material(
     # ⭐ السماح بتعديل الاسم
     _set_if("name", lambda v: str(v).strip())
     _set_if("name_en", lambda v: str(v).strip())
-    # ⭐ السماح بتعديل تعريف القطعة (1 قطعة = X غرام/كغم)
+    # ⭐ السماح بتعديل تعريف القطعة/التعبئة (1 وحدة = X من وحدة فرعية، مثل 1 قطعة = 250 غرام)
+    _set_if("pack_quantity", lambda v: float(v) if v else None)
+    _set_if("pack_unit", lambda v: str(v).strip() if v else None)
+    # Legacy aliases for backward compatibility (manufactured products use piece_weight)
     _set_if("piece_weight", float)
     _set_if("piece_weight_unit", lambda v: str(v).strip())
 
@@ -1906,6 +1909,10 @@ async def admin_correct_raw_material(
         mi_sync["raw_material_name"] = update["name"]
     if "cost_per_unit" in update:
         mi_sync["cost_per_unit"] = update["cost_per_unit"]
+    if "pack_quantity" in update:
+        mi_sync["pack_quantity"] = update["pack_quantity"]
+    if "pack_unit" in update:
+        mi_sync["pack_unit"] = update["pack_unit"]
     if "piece_weight" in update:
         mi_sync["piece_weight"] = update["piece_weight"]
     if "piece_weight_unit" in update:

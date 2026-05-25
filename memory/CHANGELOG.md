@@ -1,6 +1,36 @@
 # Maestro EGP - Changelog
 
 
+## Session: May 25, 2026 (BUG FIX) — تعريف القطعة يقرأ القيم المحفوظة (pack_quantity)
+
+### المشكلة
+بعد إضافة قسم "تعريف القطعة" في نموذج "تصحيح إداري"، المستخدم لاحظ أن الحقول تظهر فارغة (وزن القطعة = 0) رغم وجود تعريف محفوظ في DB ("كل قطعة = 10 قطعة" يظهر على البطاقة). أيضاً القسم كان مخفياً ما لم تكن الوحدة = "قطعة".
+
+### السبب الجذري
+1. استخدمت اسم الحقل الخطأ: `piece_weight` (للمنتجات المُصنّعة) بدلاً من `pack_quantity` (للمواد الخام).
+2. القسم كان مغلق خلف شرط `unit === 'قطعة'` — أخفى التعريف على المواد الوزنية.
+
+### الإصلاح
+**Frontend (`WarehouseManufacturing.js`)**:
+- قراءة `material.pack_quantity` و `material.pack_unit` عند فتح dialog (الحقول الفعلية على raw_materials).
+- إزالة الشرط `unit === 'قطعة'` — القسم يظهر دائماً.
+- المعاينة الحيّة تستخدم وحدة المادة: `📐 1 ${unit} = ${pack_quantity} ${pack_unit}`.
+- Select الوحدة الفرعية يضم الآن: غرام، كغم، مل، لتر، شريحة، حبة، قطعة، حصة، كأس.
+- إرسال `pack_quantity` و `pack_unit` دائماً في API call.
+
+**Backend (`inventory_system.py::admin_correct_raw_material`)**:
+- يقبل `pack_quantity` و `pack_unit`.
+- يحتفظ بـ `piece_weight`/`piece_weight_unit` للتوافق الخلفي (manufactured products).
+- يُزامن `pack_quantity`/`pack_unit` إلى `manufacturing_inventory`.
+
+### Tests
+- `backend/tests/test_admin_correct_piece_definition.py` (4 ✓): قبول الحقول الجديدة، مزامنة manufacturing_inventory، حفاظ على piece_weight legacy، حقول أخرى.
+- `frontend/src/__tests__/admin_correction_piece_definition.test.js` (6 ✓): تعبئة من material.pack_*، rendering غير مشروط، الحقول، المعاينة، إرسال API، Select.
+
+### المجموع: 33 backend tests + 41 frontend tests passing
+
+
+
 ## Session: May 25, 2026 (FEATURE) — تعريف القطعة داخل نموذج "تصحيح إداري"
 
 ### الميزة
