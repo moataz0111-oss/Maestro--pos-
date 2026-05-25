@@ -1,6 +1,33 @@
 # Maestro EGP - Changelog
 
 
+## Session: May 25, 2026 (FEATURE) — تعريف القطعة داخل نموذج "تصحيح إداري"
+
+### الميزة
+المستخدم طلب إضافة حقلَي **تعريف القطعة** (`piece_weight` + `piece_weight_unit`) داخل نموذج "تصحيح إداري" للمواد الخام، حتى يتمكن من تعديل تعريف القطعة الواحدة (مثل: "1 قطعة = 250 غرام") من نفس الشاشة بدلاً من الذهاب لشاشة منفصلة.
+
+### الإصلاح
+**Frontend (`pages/WarehouseManufacturing.js`)**:
+- `setAdminCorrection({...})` يُعبّأ بـ `piece_weight` و `piece_weight_unit` من بيانات المادة عند فتح النموذج.
+- قسم جديد ينظهر فقط لو الوحدة = "قطعة" (rounded box أزرق):
+  - حقل وزن القطعة (number)
+  - حقل وحدة الوزن (Select: غرام/كغم/مل/لتر)
+  - معاينة حيّة: `📐 1 قطعة = X غرام` أو تحذير إذا الوزن صفر.
+- الحقول تُرسل في API call شرط أن الوحدة = "قطعة".
+
+**Backend (`routes/inventory_system.py::admin_correct_raw_material`)**:
+- يقبل `piece_weight` (float) و `piece_weight_unit` (str).
+- يُزامن إلى `manufacturing_inventory` للسجلات المرتبطة بنفس المادة (يضمن أن وصفات التصنيع تستخدم تعريف القطعة المُحدّث).
+- يُسجَّل في `inventory_corrections` ضمن diff_log.
+
+### Tests
+- `backend/tests/test_admin_correct_piece_definition.py` (3 ✓): قبول الحقول، مزامنة manufacturing_inventory، حفاظ على الحقول السابقة.
+- `frontend/src/__tests__/admin_correction_piece_definition.test.js` (6 ✓): تعبئة من material، rendering شرطي، الحقول الجديدة، المعاينة، إرسال API شرطي، خيارات الـ Select.
+
+### المجموع: 32 backend tests + 40 frontend tests passing
+
+
+
 ## Session: May 24, 2026 (BUG FIX P0 #6) — توحيد profit-loss مع sales report
 
 ### المشكلة

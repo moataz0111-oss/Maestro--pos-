@@ -1882,6 +1882,9 @@ async def admin_correct_raw_material(
     # ⭐ السماح بتعديل الاسم
     _set_if("name", lambda v: str(v).strip())
     _set_if("name_en", lambda v: str(v).strip())
+    # ⭐ السماح بتعديل تعريف القطعة (1 قطعة = X غرام/كغم)
+    _set_if("piece_weight", float)
+    _set_if("piece_weight_unit", lambda v: str(v).strip())
 
     if not update:
         raise HTTPException(status_code=400, detail="لا حقول للتحديث")
@@ -1903,6 +1906,10 @@ async def admin_correct_raw_material(
         mi_sync["raw_material_name"] = update["name"]
     if "cost_per_unit" in update:
         mi_sync["cost_per_unit"] = update["cost_per_unit"]
+    if "piece_weight" in update:
+        mi_sync["piece_weight"] = update["piece_weight"]
+    if "piece_weight_unit" in update:
+        mi_sync["piece_weight_unit"] = update["piece_weight_unit"]
     if mi_sync:
         mi_sync["last_updated"] = update["last_updated"]
         try:
