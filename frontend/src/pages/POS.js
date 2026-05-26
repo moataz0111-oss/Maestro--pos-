@@ -1943,8 +1943,14 @@ export default function POS() {
             discount: discount,
             branch_id: currentBranchId,
             payment_method: 'pending',
+            // ⭐ حفظ معرف وشركة التوصيل بالاسم الذي يقبله backend sync
+            // (delivery_company_id / delivery_company_name) لمنع تحويلها لـ "آجل عدي"
+            delivery_company_id: orderType === 'delivery' ? (deliveryApp || null) : null,
+            delivery_company_name: orderType === 'delivery' && deliveryApp ? (deliveryApps.find(a => a.id === deliveryApp)?.name || '') : null,
+            delivery_company: orderType === 'delivery' && deliveryApp ? (deliveryApps.find(a => a.id === deliveryApp)?.name || '') : null,
             delivery_app: orderType === 'delivery' ? deliveryApp : null,
             delivery_app_name: orderType === 'delivery' && deliveryApp ? (deliveryApps.find(a => a.id === deliveryApp)?.name || '') : null,
+            customer_type: orderType === 'delivery' && deliveryApp ? 'delivery_company' : (paymentMethod === 'credit' || paymentMethod === 'deferred' ? 'credit' : 'regular'),
             driver_id: selectedDriver || null,
             notes: orderNotes,
             status: 'pending',
@@ -2124,8 +2130,13 @@ export default function POS() {
         tax: 0,
         branch_id: currentBranchId,
         payment_method: paymentMethod,
+        // ⭐ حفظ معرف وشركة التوصيل بالاسم الذي يقبله backend sync
+        delivery_company_id: orderType === 'delivery' ? (deliveryApp || null) : null,
+        delivery_company_name: orderType === 'delivery' && deliveryApp ? (deliveryApps.find(a => a.id === deliveryApp)?.name || '') : null,
+        delivery_company: orderType === 'delivery' && deliveryApp ? (deliveryApps.find(a => a.id === deliveryApp)?.name || '') : null,
         delivery_app: orderType === 'delivery' ? deliveryApp : null,
         delivery_app_name: orderType === 'delivery' && deliveryApp ? (deliveryApps.find(a => a.id === deliveryApp)?.name || '') : null,
+        customer_type: orderType === 'delivery' && deliveryApp ? 'delivery_company' : (paymentMethod === 'credit' || paymentMethod === 'deferred' ? 'credit' : 'regular'),
         driver_id: selectedDriver || null,
         notes: orderNotes,
         status: 'pending',

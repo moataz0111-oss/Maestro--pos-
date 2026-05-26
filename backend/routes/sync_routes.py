@@ -387,6 +387,99 @@ async def fix_order_routing(
 
 
 
+class AssignDeliveryCompanyPayload(BaseModel):
+    delivery_company_id: str
+    delivery_company_name: Optional[str] = None
+    note: Optional[str] = None
+
+
+@router.patch("/orders/{order_id}/assign-delivery-company", response_model=SyncResult)
+async def assign_delivery_company(
+    order_id: str,
+    payload: AssignDeliveryCompanyPayload,
+    current_user: dict = Depends(get_current_user)
+):
+    """نقل طلب موجود (آجل عادي أو نقدي) إلى حساب شركة توصيل/ائتمان معيّنة.
+
+    حالة الاستخدام الأساسية:
+    - الكاشير سجّل طلباً أوفلاين كـ "آجل عدي" بسبب انقطاع الإنترنت، رغم أن
+      العميل من شركة (مثل توترز). هذا endpoint ينقله إلى حساب الشركة دون
+      المساس بـ order_number أو totals.
+
+    صلاحية: المالك / المدير العام / المدير فقط.
+    """
+    if current_user.get("role") not in ["admin", "super_admin", "manager"]:
+        raise HTTPException(status_code=403, detail="غير مسموح — للمالك/المدير فقط")
+
+    tenant_id = get_user_tenant_id(current_user)
+    q = {"id": order_id}
+    if tenant_id:
+        q["tenant_id"] = tenant_id
+    existing = await db.orders.find_one(q, {"_id": 0})
+    if not existing:
+        raise HTTPException(status_code=404, detail="الطلب غير موجود")
+
+    # تأكد أن الشركة موجودة (delivery_apps) واجلب الاسم لو لم يُمرَّر
+    company_name = (payload.delivery_company_name or "").strip()
+    if not company_name:
+        app_q = {"id": payload.delivery_company_id}
+        if tenant_id:
+            app_q["tenant_id"] = tenant_id
+        app_doc = await db.delivery_apps.find_one(app_q, {"_id": 0, "name": 1})
+        company_name = (app_doc or {}).get("name") or payload.delivery_company_id
+
+    old_snapshot = {
+        "customer_type": existing.get("customer_type"),
+        "delivery_company_id": existing.get("delivery_company_id"),
+        "delivery_company": existing.get("delivery_company"),
+        "delivery_company_name": existing.get("delivery_company_name"),
+        "payment_method": existing.get("payment_method"),
+        "payment_status": existing.get("payment_status"),
+        "order_type": existing.get("order_type"),
+    }
+
+    update_set = {
+        "customer_type": "delivery_company",
+        "delivery_company_id": payload.delivery_company_id,
+        "delivery_company": company_name,
+        "delivery_company_name": company_name,
+        "order_type": "delivery",
+        # الدفع ينتقل إلى ذمة الشركة — يبقى unpaid حتى تحصيل من الشركة
+        "payment_method": "delivery_company",
+        "payment_status": existing.get("payment_status") or "unpaid",
+        "company_assigned_at": datetime.now(timezone.utc).isoformat(),
+        "company_assigned_by": current_user.get("id"),
+        "company_assigned_by_name": current_user.get("full_name") or current_user.get("username"),
+        "company_assignment_note": payload.note,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+    history_entry = {
+        "assigned_at": datetime.now(timezone.utc).isoformat(),
+        "assigned_by": current_user.get("id"),
+        "assigned_by_name": current_user.get("full_name") or current_user.get("username"),
+        "old_values": old_snapshot,
+        "new_company_id": payload.delivery_company_id,
+        "new_company_name": company_name,
+        "note": payload.note,
+    }
+
+    await db.orders.update_one(
+        {"id": order_id},
+        {"$set": update_set, "$push": {"company_assignment_history": history_entry}}
+    )
+
+    return SyncResult(
+        success=True,
+        id=order_id,
+        order_number=existing.get("order_number"),
+        message=f"تم نقل الطلب #{existing.get('order_number')} إلى شركة {company_name}"
+    )
+
+
+
+
+
 @router.post("/customers", response_model=SyncResult)
 async def sync_customer(customer: OfflineCustomer, current_user: dict = Depends(get_current_user)):
     """

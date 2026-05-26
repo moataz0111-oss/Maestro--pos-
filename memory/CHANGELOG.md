@@ -1,6 +1,42 @@
 # Maestro EGP - Changelog
 
 
+## Session: May 26, 2026 (BUG FIX + FEATURE P0) — توجيه الطلبات الأوفلاين لشركة التوصيل + نقل يدوي
+
+### المشكلتان
+1. **بَق Offline**: عند انقطاع الإنترنت، طلبات شركة (مثل توترز) تُحفظ محلياً ثم تُرفع كـ "آجل عدي" (regular credit) بدلاً من ربطها بحساب الشركة — لأن الـ frontend كان يخزّن `delivery_app` (الاسم القديم) فقط بدون `delivery_company_id` الذي يقرأه backend sync.
+2. **حل عملي للطلبات الموجودة**: لا يوجد طريقة لنقل طلب آجل عادي إلى حساب شركة.
+
+### الإصلاحات
+
+**Frontend — POS Offline (`pages/POS.js`)** — منع تكرار البق:
+- offline order builders (save+send و checkout) يخزّنان الآن:
+  - `delivery_company_id`, `delivery_company_name`, `delivery_company` (الأسماء التي يقرأها backend sync)
+  - `customer_type: 'delivery_company'` لو الـ orderType = delivery و deliveryApp مختار
+  - `customer_type: 'credit'` لو payment_method credit/deferred
+  - الإبقاء على `delivery_app`/`delivery_app_name` للتوافق الخلفي.
+
+**Backend — Endpoint نقل يدوي (`routes/sync_routes.py`)** — حل للطلبات الموجودة:
+- `PATCH /api/sync/orders/{order_id}/assign-delivery-company`:
+  - يستقبل: `delivery_company_id`, `delivery_company_name` (اختياري — يبحث في delivery_apps لو غير مُمرّر), `note`
+  - يحدّث: `customer_type=delivery_company`, `delivery_company_id`, `delivery_company`, `order_type=delivery`, `payment_method=delivery_company`
+  - **لا يُغيّر** `order_number` أو `total` (للحفاظ على ثبات الأرقام).
+  - يسجّل audit عبر `$push: company_assignment_history` مع old snapshot.
+  - صلاحية: admin/super_admin/manager.
+
+**Frontend — UI زر النقل (`pages/Reports.js`)**:
+- زر 🏢 "نقل لشركة" بجوار "تحصيل" في تبويب الآجل لكل طلب غير محصّل.
+- Dialog يعرض: ملخص الطلب + Select بشركات التوصيل (يُجلب من `/api/delivery-apps`) + حقل ملاحظة + تأكيد.
+- الـ data-testids للاختبار: `assign-company-btn-{orderNumber}`, `assign-company-dialog`, `assign-company-select`, `assign-company-confirm/cancel`.
+
+### التحقق
+- محاكاة عبر curl: ✓ الطلب 100 (آجل عادي) → بعد PATCH → `customer_type=delivery_company`, `delivery_company=توترز`, `order_type=delivery`.
+- **14 اختبارات جديدة passing** (7 backend + 7 frontend).
+
+### المجموع: 46 backend tests + 52 frontend tests passing
+
+
+
 ## Session: May 25, 2026 (FEATURE) — جرد المنتجات المصنعة كقسم منفصل
 
 ### الميزة

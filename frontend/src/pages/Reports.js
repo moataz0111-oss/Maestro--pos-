@@ -870,6 +870,55 @@ const CreditReportTab = ({ creditReport, t, formatPrice, fetchReports, handlePri
   });
   const [collecting, setCollecting] = useState(false);
 
+  // ⭐ نقل طلب آجل إلى حساب شركة (لمعالجة الطلبات الأوفلاين التي ظهرت كآجل عادي)
+  const [assignCompanyOrder, setAssignCompanyOrder] = useState(null);
+  const [deliveryCompanies, setDeliveryCompanies] = useState([]);
+  const [selectedAssignCompanyId, setSelectedAssignCompanyId] = useState('');
+  const [assignCompanyNote, setAssignCompanyNote] = useState('');
+  const [assigningCompany, setAssigningCompany] = useState(false);
+
+  useEffect(() => {
+    if (!assignCompanyOrder) return;
+    (async () => {
+      try {
+        const headers = { Authorization: `Bearer ${localStorage.getItem('token')}` };
+        const { data } = await axios.get(`${API}/delivery-apps`, { headers });
+        const apps = Array.isArray(data) ? data : (data?.delivery_apps || []);
+        setDeliveryCompanies(apps.filter(a => a.is_active !== false));
+      } catch (e) {
+        console.error('Failed to load delivery apps:', e);
+        setDeliveryCompanies([]);
+      }
+    })();
+    setSelectedAssignCompanyId('');
+    setAssignCompanyNote('');
+  }, [assignCompanyOrder]);
+
+  const handleAssignCompany = async () => {
+    if (!assignCompanyOrder || !selectedAssignCompanyId) {
+      toast.error(t('يرجى اختيار الشركة'));
+      return;
+    }
+    setAssigningCompany(true);
+    try {
+      const headers = { Authorization: `Bearer ${localStorage.getItem('token')}` };
+      const company = deliveryCompanies.find(c => c.id === selectedAssignCompanyId);
+      await axios.patch(`${API}/sync/orders/${assignCompanyOrder.id}/assign-delivery-company`, {
+        delivery_company_id: selectedAssignCompanyId,
+        delivery_company_name: company?.name || null,
+        note: assignCompanyNote || null,
+      }, { headers });
+      toast.success(t('تم نقل الطلب إلى الشركة بنجاح'));
+      setAssignCompanyOrder(null);
+      fetchReports();
+    } catch (error) {
+      console.error('Assign company error:', error);
+      toast.error(error?.response?.data?.detail || t('فشل في نقل الطلب'));
+    } finally {
+      setAssigningCompany(false);
+    }
+  };
+
   const handleOpenCollect = (order) => {
     setSelectedOrder(order);
     setCollectForm({
@@ -1000,16 +1049,28 @@ const CreditReportTab = ({ creditReport, t, formatPrice, fetchReports, handlePri
                     </td>
                     <td className="p-3">
                       {!order.is_fully_collected && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleOpenCollect(order)}
-                          className="gap-1 text-green-600 border-green-600 hover:bg-green-50"
-                          data-testid={`collect-btn-${order.order_number}`}
-                        >
-                          <CircleDollarSign className="h-4 w-4" />
-                          {t('تحصيل')}
-                        </Button>
+                        <div className="flex items-center gap-1 flex-wrap">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleOpenCollect(order)}
+                            className="gap-1 text-green-600 border-green-600 hover:bg-green-50"
+                            data-testid={`collect-btn-${order.order_number}`}
+                          >
+                            <CircleDollarSign className="h-4 w-4" />
+                            {t('تحصيل')}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setAssignCompanyOrder(order)}
+                            className="gap-1 text-blue-600 border-blue-600 hover:bg-blue-50"
+                            data-testid={`assign-company-btn-${order.order_number}`}
+                            title={t('نقل الطلب إلى حساب شركة (مثل توترز)')}
+                          >
+                            🏢 {t('نقل لشركة')}
+                          </Button>
+                        </div>
                       )}
                     </td>
                   </tr>
@@ -1100,6 +1161,65 @@ const CreditReportTab = ({ creditReport, t, formatPrice, fetchReports, handlePri
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Dialog نقل طلب آجل إلى شركة */}
+      <Dialog open={!!assignCompanyOrder} onOpenChange={(o) => !o && setAssignCompanyOrder(null)}>
+        <DialogContent data-testid="assign-company-dialog" className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              🏢 {t('نقل الطلب إلى حساب شركة')}
+            </DialogTitle>
+          </DialogHeader>
+          {assignCompanyOrder && (
+            <div className="space-y-3 py-2">
+              <div className="rounded-md bg-blue-500/5 border border-blue-500/20 p-3 text-sm space-y-1">
+                <div className="flex justify-between"><span className="text-muted-foreground">{t('رقم الطلب')}</span><span className="font-bold">#{assignCompanyOrder.order_number}</span></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">{t('العميل الحالي')}</span><span>{assignCompanyOrder.customer_name || '-'}</span></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">{t('المبلغ')}</span><span className="font-bold text-blue-600">{formatPrice(assignCompanyOrder.total)}</span></div>
+              </div>
+              <div>
+                <Label className="text-xs">{t('اختر الشركة')}</Label>
+                <Select value={selectedAssignCompanyId} onValueChange={setSelectedAssignCompanyId}>
+                  <SelectTrigger data-testid="assign-company-select"><SelectValue placeholder={t('اختر شركة...')} /></SelectTrigger>
+                  <SelectContent>
+                    {deliveryCompanies.map(c => (
+                      <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {deliveryCompanies.length === 0 && (
+                  <p className="text-[10px] text-amber-600 mt-1">{t('لا توجد شركات نشطة — أضفها من الإعدادات')}</p>
+                )}
+              </div>
+              <div>
+                <Label className="text-xs">{t('ملاحظة (اختيارية)')}</Label>
+                <Input
+                  value={assignCompanyNote}
+                  onChange={(e) => setAssignCompanyNote(e.target.value)}
+                  placeholder={t('مثال: تم تحويلها بعد انقطاع الإنترنت')}
+                  data-testid="assign-company-note"
+                />
+              </div>
+              <p className="text-[10px] text-muted-foreground">⚠️ {t('سيتم نقل المسؤولية المالية للطلب من العميل إلى الشركة. لا يتأثر رقم الطلب أو إجماليه.')}</p>
+            </div>
+          )}
+          <DialogFooter className="flex gap-2">
+            <Button variant="outline" onClick={() => setAssignCompanyOrder(null)} data-testid="assign-company-cancel">
+              {t('إلغاء')}
+            </Button>
+            <Button
+              onClick={handleAssignCompany}
+              disabled={assigningCompany || !selectedAssignCompanyId}
+              className="bg-blue-600 hover:bg-blue-700"
+              data-testid="assign-company-confirm"
+            >
+              {assigningCompany ? <RefreshCw className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
+              <span className="mr-2">{t('تأكيد النقل')}</span>
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
     </div>
   );
 };
