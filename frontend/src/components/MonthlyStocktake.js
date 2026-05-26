@@ -24,7 +24,8 @@ import { API_URL } from '../utils/api';
 const API = API_URL;
 
 const DEPT_META = {
-  manufacturing: { label: 'قسم التصنيع', color: 'purple' },
+  manufacturing: { label: 'مخزن المصنع (مواد خام)', color: 'purple' },
+  manufactured_products: { label: 'المنتجات المصنعة', color: 'emerald' },
   warehouse_raw: { label: 'المخزن (مواد خام)', color: 'blue' },
   packaging: { label: 'مخزن مواد التغليف', color: 'amber' },
 };

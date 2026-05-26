@@ -2929,9 +2929,10 @@ export default function WarehouseManufacturing() {
           
           {/* التصنيع */}
           <TabsContent value="manufacturing" className="space-y-4">
-            {/* زر الجرد الشهري */}
-            <div className="flex justify-end">
+            {/* ⭐ زرّان للجرد الشهري: مخزن المصنع (مواد خام) + المنتجات المصنعة */}
+            <div className="flex justify-end gap-2 flex-wrap">
               <MonthlyStocktakeButton department="manufacturing" />
+              <MonthlyStocktakeButton department="manufactured_products" />
             </div>
             {/* زر طلب مواد من المخزن */}
             <Card className="border-orange-500/30 bg-orange-500/5">

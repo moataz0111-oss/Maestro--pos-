@@ -1,6 +1,33 @@
 # Maestro EGP - Changelog
 
 
+## Session: May 25, 2026 (FEATURE) — جرد المنتجات المصنعة كقسم منفصل
+
+### الميزة
+المستخدم طلب فصل الجرد الشهري في تبويب "التصنيع" إلى زرّين:
+1. **جرد مخزن المصنع (مواد خام)** = المواد الخام المُحوّلة من المخزن لقسم التصنيع (المتبقي بعد التصنيع).
+2. **جرد المنتجات المصنعة** = المنتجات المُصنّعة الجاهزة (كم لحم برغر، شاورما، إلخ متبقي).
+
+### الإصلاح
+**Backend (`routes/department_stock_count.py`)**:
+- إضافة `"manufactured_products": "manufactured_products"` إلى `DEPARTMENT_COLLECTIONS`.
+- إضافة label عربية: `"المنتجات المصنعة الجاهزة"`.
+- تحديث `manufacturing` label إلى `"مخزن المصنع (مواد خام)"` لتوضيح الفرق.
+- `_build_template` يقرأ الآن `unit_cost_after_waste`/`unit_cost_before_waste` (للمنتجات المُصنّعة) و `computed_yield` كـ fallback للكمية.
+
+**Frontend**:
+- `pages/WarehouseManufacturing.js`: عرض الزرّين جنباً إلى جنب في تبويب التصنيع.
+- `components/MonthlyStocktake.js` + `MonthlyStocktakeHistory.js`: إضافة `DEPT_META.manufactured_products` بلون emerald وأيقونة Factory.
+- الـ `is-due` endpoint يُرجع الأقسام الأربعة (verified via curl).
+
+### Tests
+- `backend/tests/test_stocktake_manufactured_products_dept.py` (6 ✓): قيد التسجيل، label عربية، حقول التكلفة المختلفة، fallback لـ computed_yield، حفاظ على الأقسام الأخرى، تحديث label "manufacturing".
+- `frontend/src/__tests__/manufactured_products_stocktake_button.test.js` (4 ✓): زرّان في تبويب التصنيع، تحديث DEPT_META في كل من Stocktake و History components.
+
+### المجموع: 39 backend tests + 45 frontend tests passing
+
+
+
 ## Session: May 25, 2026 (BUG FIX) — تعريف القطعة يقرأ القيم المحفوظة (pack_quantity)
 
 ### المشكلة

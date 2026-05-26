@@ -26,12 +26,14 @@ router = APIRouter(prefix="/api", tags=["Department Stock Count"])
 
 DEPARTMENT_COLLECTIONS = {
     "manufacturing": "manufacturing_inventory",
+    "manufactured_products": "manufactured_products",
     "warehouse_raw": "raw_materials",
     "packaging": "packaging_materials",
 }
 
 DEPARTMENT_LABELS = {
-    "manufacturing": "قسم التصنيع",
+    "manufacturing": "مخزن المصنع (مواد خام)",
+    "manufactured_products": "المنتجات المصنعة الجاهزة",
     "warehouse_raw": "المخزن الرئيسي (مواد خام)",
     "packaging": "مخزن مواد التغليف",
 }
@@ -88,14 +90,27 @@ async def _build_template(db, department: str, period: str, tenant_id: Optional[
     raw_items = await coll.find(q, {"_id": 0}).to_list(5000)
     items = []
     for it in raw_items:
-        unit_cost = float(it.get("cost_per_unit") or it.get("unit_cost") or 0)
+        # ⭐ المنتجات المُصنّعة تستخدم unit_cost_after_waste/unit_cost_before_waste
+        unit_cost = float(
+            it.get("cost_per_unit")
+            or it.get("unit_cost")
+            or it.get("unit_cost_after_waste")
+            or it.get("unit_cost_before_waste")
+            or 0
+        )
         # حقل الاسم يختلف حسب المجموعة
         item_name = it.get("name") or it.get("raw_material_name") or it.get("material_name") or ""
+        # المنتجات المُصنّعة قد يكون لها computed_yield بدلاً من quantity في بعض الإصدارات
+        system_qty = float(
+            it.get("quantity")
+            if it.get("quantity") is not None
+            else (it.get("computed_yield") or 0)
+        )
         items.append({
             "item_id": it.get("id"),
             "item_name": item_name,
             "unit": it.get("unit", ""),
-            "system_qty": float(it.get("quantity", 0) or 0),
+            "system_qty": system_qty,
             "min_quantity": float(it.get("min_quantity", 0) or 0),
             "unit_cost": round(unit_cost, 2),
             "actual_qty": None,

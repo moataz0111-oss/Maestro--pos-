@@ -14,7 +14,8 @@ import { API_URL } from '../utils/api';
 const API = API_URL;
 
 const DEPT_META = {
-  manufacturing: { label: 'قسم التصنيع', icon: Factory, color: 'purple', bg: 'bg-purple-500/10', border: 'border-purple-500/30', text: 'text-purple-700' },
+  manufacturing: { label: 'مخزن المصنع (مواد خام)', icon: Factory, color: 'purple', bg: 'bg-purple-500/10', border: 'border-purple-500/30', text: 'text-purple-700' },
+  manufactured_products: { label: 'المنتجات المصنعة', icon: Factory, color: 'emerald', bg: 'bg-emerald-500/10', border: 'border-emerald-500/30', text: 'text-emerald-700' },
   warehouse_raw: { label: 'المخزن (مواد خام)', icon: Box, color: 'blue', bg: 'bg-blue-500/10', border: 'border-blue-500/30', text: 'text-blue-700' },
   packaging: { label: 'مخزن مواد التغليف', icon: Package, color: 'amber', bg: 'bg-amber-500/10', border: 'border-amber-500/30', text: 'text-amber-700' },
 };
