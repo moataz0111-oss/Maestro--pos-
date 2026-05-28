@@ -1,6 +1,31 @@
 # Maestro EGP - Changelog
 
 
+## Session: May 29, 2026 (BUG FIX P0) — توحيد التكاليف بين تقرير المبيعات و break-even
+
+### المشكلتان
+1. **بطاقة "صافي الربح" في تبويب المبيعات** كانت تعرض نفس قيمة "إجمالي الأرباح" مع رسالة "سجّل الإيجار/الرواتب..." رغم وجودها مُدخَلة فعلاً.
+2. **التقرير التحليلي** (`break-even/daily` و `break-even/daily-range`) لا يحسب "مصاريف أخرى" من collection `expenses` ضمن الهدف اليومي. النتيجة: 475,000 يومي بدلاً من 638,750 كما يظهر في تقرير الأرباح والخسائر.
+
+### الإصلاحات
+**Frontend (`pages/Reports.js`)**:
+- `fetchReports` في حالة `activeTab === 'sales'` يستدعي الآن `/reports/profit-loss` بالتوازي مع `/reports/sales` عبر `Promise.all`، فيحدث `setProfitLossReport` فوراً.
+- النتيجة: بطاقة "صافي الربح" تعرض القيمة الدقيقة (gross - operating - salaries - expenses) من اللحظة الأولى.
+- `.catch` على profit-loss لمنع تعطيل sales عند الفشل.
+
+**Backend (`server.py`)**:
+- `/break-even/daily`: استعلام `db.expenses` لـ `business_date` (مع fallback لـ `date`) في يوم الهدف، وإضافة `daily_other_expenses` إلى `daily_target`.
+- `/break-even/daily-range`: نفس الاستعلام للنطاق، إضافة `range_other_expenses` إلى `branch_target` و توزيع `covered`/`remaining` بنسبيتها.
+- إضافة قسم `"other_expenses"` لكل فرع في الاستجابة (daily, monthly_estimate, count).
+
+### Tests
+- `backend/tests/test_break_even_includes_expenses.py` (6 ✓).
+- `frontend/src/__tests__/sales_tab_fetches_profit_loss.test.js` (4 ✓).
+
+### المجموع: 52 backend tests + 56 frontend tests passing
+
+
+
 ## Session: May 26, 2026 (BUG FIX + FEATURE P0) — توجيه الطلبات الأوفلاين لشركة التوصيل + نقل يدوي
 
 ### المشكلتان

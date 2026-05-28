@@ -2782,8 +2782,13 @@ export default function Reports() {
     try {
       switch (activeTab) {
         case 'sales':
-          const salesRes = await axios.get(`${API}/reports/sales`, { params });
+          // ⭐ نجلب البيعات + الربح الصافي معاً ليتطابق Net Profit card مع تقرير الأرباح
+          const [salesRes, profitForSalesRes] = await Promise.all([
+            axios.get(`${API}/reports/sales`, { params }),
+            axios.get(`${API}/reports/profit-loss`, { params }).catch(() => ({ data: null })),
+          ]);
           setSalesReport(salesRes.data);
+          if (profitForSalesRes?.data) setProfitLossReport(profitForSalesRes.data);
           break;
         case 'purchases':
           const purchasesRes = await axios.get(`${API}/reports/purchases`, { params });

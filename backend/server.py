@@ -13803,8 +13803,25 @@ async def get_daily_break_even(
         total_monthly_salaries = sum(_sn(emp.get("salary")) for emp in employees)
         daily_salaries = total_monthly_salaries / 30
         
-        # الهدف اليومي = التكاليف الثابتة + الرواتب
-        daily_target = fixed_costs_daily + daily_salaries
+        # ⭐ المصاريف اليومية (من expenses collection — تُسجَّل يوماً بيوم، ليست شهرية)
+        target_date_str = target_date.strftime("%Y-%m-%d")
+        start_of_day = datetime.combine(target_date, datetime.min.time())
+        end_of_day = datetime.combine(target_date, datetime.max.time())
+        daily_expenses_docs = await db.expenses.find({
+            "tenant_id": tenant_id,
+            "branch_id": branch_id_val,
+            "$or": [
+                {"business_date": target_date_str},
+                {
+                    "business_date": {"$exists": False},
+                    "date": {"$gte": start_of_day.isoformat(), "$lte": end_of_day.isoformat()},
+                },
+            ],
+        }, {"_id": 0, "amount": 1}).to_list(10000)
+        daily_other_expenses = sum(_sn(e.get("amount")) for e in daily_expenses_docs)
+        
+        # الهدف اليومي = التكاليف الثابتة + الرواتب + المصاريف اليومية
+        daily_target = fixed_costs_daily + daily_salaries + daily_other_expenses
         
         # جلب الطلبات المكتملة لهذا اليوم في هذا الفرع
         # جلب الطلبات المكتملة في هذا اليوم باستخدام business_date (اليوم التشغيلي)
@@ -13852,12 +13869,14 @@ async def get_daily_break_even(
             remaining_electricity = electricity_cost * ratio
             remaining_generator = generator_cost * ratio
             remaining_salaries = daily_salaries * ratio
+            remaining_other_expenses = daily_other_expenses * ratio
         else:
             remaining_rent = 0
             remaining_water = 0
             remaining_electricity = 0
             remaining_generator = 0
             remaining_salaries = 0
+            remaining_other_expenses = 0
         
         # المبالغ المغطاة من كل تكلفة
         covered_amount = min(daily_gross_profit, daily_target)
@@ -13868,12 +13887,14 @@ async def get_daily_break_even(
             covered_electricity = electricity_cost * covered_ratio
             covered_generator = generator_cost * covered_ratio
             covered_salaries = daily_salaries * covered_ratio
+            covered_other_expenses = daily_other_expenses * covered_ratio
         else:
             covered_rent = 0
             covered_water = 0
             covered_electricity = 0
             covered_generator = 0
             covered_salaries = 0
+            covered_other_expenses = 0
         
         branch_result = {
             "branch_id": branch_id_val,
@@ -13896,6 +13917,14 @@ async def get_daily_break_even(
                 "covered": covered_salaries,
                 "remaining": remaining_salaries,
                 "employees_count": len(employees)
+            },
+            
+            # ⭐ المصاريف اليومية الأخرى (من expenses collection)
+            "other_expenses": {
+                "daily": daily_other_expenses,
+                "covered": covered_other_expenses,
+                "remaining": remaining_other_expenses,
+                "count": len(daily_expenses_docs),
             },
             
             # الهدف والإنجاز
@@ -14011,17 +14040,36 @@ async def get_daily_break_even_range(
         total_monthly_salaries = sum(_sn(emp.get("salary")) for emp in employees)
         salaries_range = (total_monthly_salaries / 30) * days_count
         
+        # ⭐ المصاريف اليومية الأخرى ضمن النطاق (من expenses collection)
+        start_date_str = start_date.strftime("%Y-%m-%d")
+        end_date_str = end_date.strftime("%Y-%m-%d")
+        exp_docs = await db.expenses.find({
+            "tenant_id": tenant_id,
+            "branch_id": branch_id_val,
+            "$or": [
+                {"business_date": {"$gte": start_date_str, "$lte": end_date_str}},
+                {
+                    "business_date": {"$exists": False},
+                    "date": {
+                        "$gte": datetime.combine(start_date, datetime.min.time()).isoformat(),
+                        "$lte": datetime.combine(end_date, datetime.max.time()).isoformat(),
+                    },
+                },
+            ],
+        }, {"_id": 0, "amount": 1}).to_list(20000)
+        range_other_expenses = sum(_sn(e.get("amount")) for e in exp_docs)
+        
         # الهدف الإجمالي للفترة
-        branch_target = fixed_costs + salaries_range
+        branch_target = fixed_costs + salaries_range + range_other_expenses
         
         # الهدف الشهري الكامل (للعرض في monthly view)
         monthly_fixed_costs = rent_monthly + water_monthly + electricity_monthly + generator_monthly
-        branch_monthly_target = monthly_fixed_costs + total_monthly_salaries
+        # متوسط مصاريف يومي × 30 للتقدير الشهري
+        avg_daily_other = (range_other_expenses / days_count) if days_count > 0 else 0
+        branch_monthly_target = monthly_fixed_costs + total_monthly_salaries + (avg_daily_other * 30)
         
         # جلب الطلبات المكتملة في النطاق لهذا الفرع
         # نستخدم business_date (اليوم التشغيلي) للسجلات الجديدة، و fallback لـ created_at للسجلات القديمة
-        start_date_str = start_date.strftime("%Y-%m-%d")
-        end_date_str = end_date.strftime("%Y-%m-%d")
         orders_query = {
             "tenant_id": tenant_id,
             "branch_id": branch_id_val,
@@ -14142,6 +14190,13 @@ async def get_daily_break_even_range(
                 "covered": covered_salaries,
                 "remaining": remaining_salaries,
                 "employees_count": len(employees)
+            },
+            # ⭐ مصاريف يومية أخرى (من expenses collection) ضمن النطاق
+            "other_expenses": {
+                "total": range_other_expenses,
+                "daily": range_other_expenses,
+                "monthly_estimate": avg_daily_other * 30,
+                "count": len(exp_docs),
             }
         }
         
