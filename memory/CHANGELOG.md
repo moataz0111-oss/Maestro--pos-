@@ -1,6 +1,43 @@
 # Maestro EGP - Changelog
 
 
+## Session: May 29, 2026 (FEATURE P0) — إخفاء الأقسام الإدارية + الرواتب الخارجية
+
+### المطلوب
+1. **إخفاء** "المطبخ المركزي / المخزن / المشتريات" من جميع التقارير عدا الموارد البشرية.
+2. **توزيع رواتبهم** على الفروع الفعلية (Al-Jadriya, Al sidyah, Al Yarmouk) بالتساوي كـ "رواتب خارجية"، مع breakdown يومي/شهري لكل موظف.
+
+### الإصلاحات
+
+**Backend** (3 endpoints):
+- `/break-even/daily`, `/break-even/daily-range`, `/break-even/monthly-summary`:
+  - استبعاد الفروع التي `branch_type ∈ {central_kitchen, warehouse, purchasing}` من `db.branches.find`.
+  - فلتر دفاعي إضافي في Python.
+  - جلب موظفي الأقسام الإدارية، حساب `total_external_monthly_salaries`، قسمة على 30 ثم على عدد الفروع الفعلية → `external_daily_per_branch`.
+  - إضافة `external_daily_per_branch` إلى `daily_target` لكل فرع.
+  - response جديد:
+    - per-branch: `external_salaries_share: {daily, monthly_equivalent}`
+    - top-level: `external_salaries: {total_monthly, total_daily, per_branch_daily, employees[], departments[]}`
+    - كل employee في الـ array: `{id, name, department, monthly_salary, daily_salary, share_per_branch_daily}`.
+- `routes/reports_routes.py::get_profit_loss_report`: نفس فلتر الأقسام الإدارية.
+
+**Frontend (`pages/BreakEvenReport.js`)**:
+- قسم "رواتب خارجية موزَّعة على الفرع" يظهر فقط لو `external_salaries_share.daily > 0`.
+- يعرض: حصة الفرع (يومي/شهري) + قائمة الأقسام + عدد الفروع الموزَّع عليها.
+- جدول تفصيلي بكل موظف خارجي: الاسم، القسم، الراتب الشهري، حصة كل فرع.
+- نص توضيحي: ℹ️ "هذه الرواتب تخصّ موظفي الأقسام الإدارية وتُوزَّع بالتساوي".
+
+### التحقق
+- محاكاة curl: مع 3 فروع + 3 أقسام إدارية + 3 موظفين خارجيين (1.2M شهري):
+  - response.branches = 3 (الأقسام مخفية ✓)
+  - external_salaries.total_monthly = 1,200,000 / daily = 40,000 / per_branch_daily = 13,333 ✓
+  - كل فرع.external_salaries_share.daily = 13,333.33 ✓
+  - كل فرع.daily_target يضم 13,333 إضافية ✓
+- **14 اختبار passing** (8 backend + 6 frontend).
+- المجموع: **66 backend + 62 frontend tests passing**.
+
+
+
 ## Session: May 29, 2026 (BUG FIX P0) — توحيد التكاليف بين تقرير المبيعات و break-even
 
 ### المشكلتان

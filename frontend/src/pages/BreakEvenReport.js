@@ -568,6 +568,68 @@ export default function BreakEvenReport() {
                               )}
                             </div>
                           </div>
+
+                          {/* ⭐ الرواتب الخارجية (الأقسام الإدارية موزَّعة على هذا الفرع) */}
+                          {(branch.external_salaries_share?.daily ?? 0) > 0 && (
+                            <div className="md:col-span-2 p-4 rounded-lg border border-amber-500/40 bg-amber-500/5" data-testid="external-salaries-section">
+                              <h3 className="font-semibold text-amber-700 mb-3 flex items-center gap-2">
+                                <Building2 className="h-4 w-4" />
+                                {t('رواتب خارجية موزَّعة على الفرع')} ({t('من الأقسام الإدارية')})
+                              </h3>
+                              <div className="flex flex-wrap items-center gap-4 mb-3">
+                                <div>
+                                  <p className="text-xs text-muted-foreground">{t('حصة الفرع')} {viewMode === 'daily' ? t('يومياً') : t('شهرياً')}</p>
+                                  <p className="text-lg font-bold text-amber-700 tabular-nums" data-testid="external-share-amount">
+                                    {formatPrice(viewMode === 'daily' ? branch.external_salaries_share?.daily : branch.external_salaries_share?.monthly_equivalent)}
+                                  </p>
+                                </div>
+                                {data?.external_salaries?.departments?.length > 0 && (
+                                  <div>
+                                    <p className="text-xs text-muted-foreground">{t('الأقسام')}</p>
+                                    <p className="text-xs">{data.external_salaries.departments.join('، ')}</p>
+                                  </div>
+                                )}
+                                {data?.external_salaries?.branches_count > 0 && (
+                                  <div>
+                                    <p className="text-xs text-muted-foreground">{t('مقسّمة على')}</p>
+                                    <p className="text-xs font-semibold">{data.external_salaries.branches_count} {t('فرع')}</p>
+                                  </div>
+                                )}
+                              </div>
+                              {data?.external_salaries?.employees?.length > 0 && (
+                                <div className="border-t border-amber-500/20 pt-2 mt-2">
+                                  <p className="text-[11px] text-muted-foreground mb-1">{t('تفصيل الموظفين الخارجيين')}:</p>
+                                  <div className="rounded-md border border-amber-500/20 bg-white/40 overflow-hidden">
+                                    <table className="w-full text-xs">
+                                      <thead className="bg-amber-500/10">
+                                        <tr>
+                                          <th className="p-2 text-right">{t('الموظف')}</th>
+                                          <th className="p-2 text-right">{t('القسم')}</th>
+                                          <th className="p-2 text-left">{t('شهري')}</th>
+                                          <th className="p-2 text-left">{t('حصة كل فرع')} ({viewMode === 'daily' ? t('يومي') : t('شهري')})</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody>
+                                        {data.external_salaries.employees.map((emp) => (
+                                          <tr key={emp.id} className="border-t border-amber-500/10" data-testid={`external-emp-${emp.id}`}>
+                                            <td className="p-2">{emp.name}</td>
+                                            <td className="p-2 text-muted-foreground">{emp.department}</td>
+                                            <td className="p-2 text-left tabular-nums">{formatPrice(emp.monthly_salary)}</td>
+                                            <td className="p-2 text-left tabular-nums font-semibold text-amber-700">
+                                              {formatPrice(viewMode === 'daily' ? emp.share_per_branch_daily : (emp.share_per_branch_daily * 30))}
+                                            </td>
+                                          </tr>
+                                        ))}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                </div>
+                              )}
+                              <p className="text-[10px] text-muted-foreground mt-2">
+                                ℹ️ {t('هذه الرواتب تخصّ موظفي الأقسام الإدارية (المطبخ المركزي/المخزن/المشتريات) وتُوزَّع بالتساوي على كل الفروع الفعلية ضمن break-even.')}
+                              </p>
+                            </div>
+                          )}
                           
                           {/* ملخص المبيعات */}
                           <div>

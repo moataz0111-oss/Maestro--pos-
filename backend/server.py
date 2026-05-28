@@ -13761,12 +13761,60 @@ async def get_daily_break_even(
     start_of_day = target_date.replace(hour=0, minute=0, second=0, microsecond=0)
     end_of_day = target_date.replace(hour=23, minute=59, second=59, microsecond=999999)
     
-    # جلب الفرع أو جميع الفروع
+    # جلب الفرع أو جميع الفروع — استبعاد الأقسام الإدارية (مطبخ مركزي/مخزن/مشتريات)
+    # لأنها ليست فروع بيع، فقط الموارد البشرية تظهرها.
+    NON_BRANCH_TYPES = ["central_kitchen", "warehouse", "purchasing"]
     branches_query = {"tenant_id": tenant_id, "is_active": {"$ne": False}}
     if branch_id:
         branches_query["id"] = branch_id
+    else:
+        # استبعد الأقسام الإدارية فقط عند طلب "جميع الفروع"
+        branches_query["$or"] = [
+            {"branch_type": {"$exists": False}},
+            {"branch_type": "branch"},
+            {"branch_type": None},
+            {"branch_type": {"$nin": NON_BRANCH_TYPES}},
+        ]
     
     branches = await db.branches.find(branches_query, {"_id": 0}).to_list(100)
+    # ⭐ صفِّ الفروع الفعلية فقط (دفاع إضافي ضد أي بيانات قديمة)
+    branches = [b for b in branches if (b.get("branch_type") or "branch") == "branch"]
+    
+    # ⭐ احسب رواتب موظفي الأقسام الإدارية (مطبخ مركزي/مخزن/مشتريات) لتوزيعها كـ
+    # "رواتب خارجية" على كل فرع فعلي بالتساوي. هذا يضمن أن التكاليف الإدارية
+    # تُحتسب ضمن break-even الفعلي.
+    external_dept_branches = await db.branches.find({
+        "tenant_id": tenant_id,
+        "is_active": {"$ne": False},
+        "branch_type": {"$in": NON_BRANCH_TYPES},
+    }, {"_id": 0, "id": 1, "name": 1, "branch_type": 1}).to_list(50)
+    external_dept_ids = [b["id"] for b in external_dept_branches]
+    external_employees_docs = []
+    if external_dept_ids:
+        external_employees_docs = await db.employees.find({
+            "tenant_id": tenant_id,
+            "branch_id": {"$in": external_dept_ids},
+            "is_active": {"$ne": False},
+        }, {"_id": 0, "id": 1, "name": 1, "salary": 1, "branch_id": 1}).to_list(500)
+    total_external_monthly_salaries = sum(_sn(e.get("salary")) for e in external_employees_docs)
+    total_external_daily_salaries = total_external_monthly_salaries / 30
+    # نصيب كل فرع فعلي بالتساوي
+    num_active_branches = len([b for b in branches if (b.get("branch_type") or "branch") == "branch"]) or 1
+    external_daily_per_branch = total_external_daily_salaries / num_active_branches if num_active_branches > 0 else 0
+    # خريطة الأقسام {dept_id: name} لاستخدامها في breakdown
+    external_dept_name_map = {b["id"]: b.get("name") or "" for b in external_dept_branches}
+    # تجميع الموظفين الخارجيين مع أسماء أقسامهم لإظهار breakdown
+    external_employees_summary = [
+        {
+            "id": e.get("id"),
+            "name": e.get("name"),
+            "department": external_dept_name_map.get(e.get("branch_id"), ""),
+            "monthly_salary": _sn(e.get("salary")),
+            "daily_salary": _sn(e.get("salary")) / 30,
+            "share_per_branch_daily": (_sn(e.get("salary")) / 30) / num_active_branches if num_active_branches > 0 else 0,
+        }
+        for e in external_employees_docs
+    ]
     
     if not branches:
         return {
@@ -13776,7 +13824,14 @@ async def get_daily_break_even(
             "total_daily_profit": 0,
             "total_coverage_percentage": 0,
             "is_break_even_reached": False,
-            "net_profit_after_break_even": 0
+            "net_profit_after_break_even": 0,
+            "external_salaries": {
+                "total_monthly": total_external_monthly_salaries,
+                "total_daily": total_external_daily_salaries,
+                "per_branch_daily": external_daily_per_branch,
+                "employees": external_employees_summary,
+                "departments": [b.get("name") for b in external_dept_branches],
+            },
         }
     
     result_branches = []
@@ -13820,8 +13875,8 @@ async def get_daily_break_even(
         }, {"_id": 0, "amount": 1}).to_list(10000)
         daily_other_expenses = sum(_sn(e.get("amount")) for e in daily_expenses_docs)
         
-        # الهدف اليومي = التكاليف الثابتة + الرواتب + المصاريف اليومية
-        daily_target = fixed_costs_daily + daily_salaries + daily_other_expenses
+        # الهدف اليومي = التكاليف الثابتة + الرواتب + المصاريف اليومية + حصة الرواتب الخارجية
+        daily_target = fixed_costs_daily + daily_salaries + daily_other_expenses + external_daily_per_branch
         
         # جلب الطلبات المكتملة لهذا اليوم في هذا الفرع
         # جلب الطلبات المكتملة في هذا اليوم باستخدام business_date (اليوم التشغيلي)
@@ -13919,12 +13974,17 @@ async def get_daily_break_even(
                 "employees_count": len(employees)
             },
             
-            # ⭐ المصاريف اليومية الأخرى (من expenses collection)
+            # ⭐ مصاريف يومية أخرى (من expenses collection)
             "other_expenses": {
                 "daily": daily_other_expenses,
                 "covered": covered_other_expenses,
                 "remaining": remaining_other_expenses,
                 "count": len(daily_expenses_docs),
+            },
+            # ⭐ حصة الفرع من الرواتب الخارجية (المطبخ المركزي/المخزن/المشتريات)
+            "external_salaries_share": {
+                "daily": external_daily_per_branch,
+                "monthly_equivalent": external_daily_per_branch * 30,
             },
             
             # الهدف والإنجاز
@@ -13954,7 +14014,16 @@ async def get_daily_break_even(
         "total_coverage_percentage": round(total_coverage, 1),
         "is_break_even_reached": total_daily_profit >= total_daily_target,
         "net_profit_after_break_even": max(0, total_daily_profit - total_daily_target),
-        "total_collected_towards_target": min(total_daily_profit, total_daily_target)
+        "total_collected_towards_target": min(total_daily_profit, total_daily_target),
+        # ⭐ رواتب موظفي الأقسام الإدارية، موزَّعة على الفروع الفعلية
+        "external_salaries": {
+            "total_monthly": total_external_monthly_salaries,
+            "total_daily": total_external_daily_salaries,
+            "per_branch_daily": external_daily_per_branch,
+            "branches_count": num_active_branches,
+            "employees": external_employees_summary,
+            "departments": [b.get("name") for b in external_dept_branches],
+        },
     }
 
 
@@ -13986,12 +14055,52 @@ async def get_daily_break_even_range(
     # حساب عدد الأيام في النطاق
     days_count = (end_date.date() - start_date.date()).days + 1
     
-    # جلب الفرع أو جميع الفروع
+    # جلب الفرع أو جميع الفروع — استبعاد الأقسام الإدارية (نفس منطق /break-even/daily)
+    NON_BRANCH_TYPES = ["central_kitchen", "warehouse", "purchasing"]
     branches_query = {"tenant_id": tenant_id, "is_active": {"$ne": False}}
     if branch_id:
         branches_query["id"] = branch_id
+    else:
+        branches_query["$or"] = [
+            {"branch_type": {"$exists": False}},
+            {"branch_type": "branch"},
+            {"branch_type": None},
+            {"branch_type": {"$nin": NON_BRANCH_TYPES}},
+        ]
     
     branches = await db.branches.find(branches_query, {"_id": 0}).to_list(100)
+    branches = [b for b in branches if (b.get("branch_type") or "branch") == "branch"]
+    
+    # ⭐ رواتب الأقسام الإدارية للفترة، موزَّعة على الفروع الفعلية
+    external_dept_branches_r = await db.branches.find({
+        "tenant_id": tenant_id,
+        "is_active": {"$ne": False},
+        "branch_type": {"$in": NON_BRANCH_TYPES},
+    }, {"_id": 0, "id": 1, "name": 1, "branch_type": 1}).to_list(50)
+    external_dept_ids_r = [b["id"] for b in external_dept_branches_r]
+    external_employees_docs_r = []
+    if external_dept_ids_r:
+        external_employees_docs_r = await db.employees.find({
+            "tenant_id": tenant_id,
+            "branch_id": {"$in": external_dept_ids_r},
+            "is_active": {"$ne": False},
+        }, {"_id": 0, "id": 1, "name": 1, "salary": 1, "branch_id": 1}).to_list(500)
+    total_ext_monthly_r = sum(_sn(e.get("salary")) for e in external_employees_docs_r)
+    total_ext_range_r = (total_ext_monthly_r / 30) * days_count
+    num_real_branches_r = len(branches) or 1
+    external_share_per_branch_range = total_ext_range_r / num_real_branches_r if num_real_branches_r > 0 else 0
+    ext_dept_name_map_r = {b["id"]: b.get("name") or "" for b in external_dept_branches_r}
+    external_employees_summary_r = [
+        {
+            "id": e.get("id"),
+            "name": e.get("name"),
+            "department": ext_dept_name_map_r.get(e.get("branch_id"), ""),
+            "monthly_salary": _sn(e.get("salary")),
+            "range_salary": (_sn(e.get("salary")) / 30) * days_count,
+            "share_per_branch_range": ((_sn(e.get("salary")) / 30) * days_count) / num_real_branches_r if num_real_branches_r > 0 else 0,
+        }
+        for e in external_employees_docs_r
+    ]
     
     if not branches:
         return {
@@ -14059,8 +14168,8 @@ async def get_daily_break_even_range(
         }, {"_id": 0, "amount": 1}).to_list(20000)
         range_other_expenses = sum(_sn(e.get("amount")) for e in exp_docs)
         
-        # الهدف الإجمالي للفترة
-        branch_target = fixed_costs + salaries_range + range_other_expenses
+        # الهدف الإجمالي للفترة (يشمل حصة الرواتب الخارجية)
+        branch_target = fixed_costs + salaries_range + range_other_expenses + external_share_per_branch_range
         
         # الهدف الشهري الكامل (للعرض في monthly view)
         monthly_fixed_costs = rent_monthly + water_monthly + electricity_monthly + generator_monthly
@@ -14223,7 +14332,16 @@ async def get_daily_break_even_range(
         "is_break_even_reached": total_profit >= total_target,
         "net_profit_after_break_even": max(0, total_profit - total_target),
         "net_profit_after_costs": max(0, total_profit - total_target),
-        "total_collected_towards_target": total_collected
+        "total_collected_towards_target": total_collected,
+        # ⭐ رواتب الأقسام الإدارية للنطاق (Daily-Range)
+        "external_salaries": {
+            "total_monthly": total_ext_monthly_r,
+            "total_range": total_ext_range_r,
+            "per_branch_range": external_share_per_branch_range,
+            "branches_count": num_real_branches_r,
+            "employees": external_employees_summary_r,
+            "departments": [b.get("name") for b in external_dept_branches_r],
+        },
     }
 
 
@@ -14257,12 +14375,21 @@ async def get_monthly_break_even_summary(
     
     days_in_month = (end_date - start_date).days + 1
     
-    # جلب الفرع أو جميع الفروع
+    # جلب الفرع أو جميع الفروع — استبعاد الأقسام الإدارية
+    NON_BRANCH_TYPES = ["central_kitchen", "warehouse", "purchasing"]
     branches_query = {"tenant_id": tenant_id, "is_active": {"$ne": False}}
     if branch_id:
         branches_query["id"] = branch_id
+    else:
+        branches_query["$or"] = [
+            {"branch_type": {"$exists": False}},
+            {"branch_type": "branch"},
+            {"branch_type": None},
+            {"branch_type": {"$nin": NON_BRANCH_TYPES}},
+        ]
     
     branches = await db.branches.find(branches_query, {"_id": 0}).to_list(100)
+    branches = [b for b in branches if (b.get("branch_type") or "branch") == "branch"]
     
     result_branches = []
     total_monthly_target = 0

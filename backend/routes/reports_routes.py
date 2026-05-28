@@ -739,14 +739,25 @@ async def get_profit_loss_report(
     total_expenses = sum(e["amount"] for e in expenses)
     
     # ==================== حساب التكاليف التشغيلية ====================
-    # جلب الفروع للحصول على التكاليف الثابتة
+    # جلب الفروع للحصول على التكاليف الثابتة — استبعاد الأقسام الإدارية
+    NON_BRANCH_TYPES = ["central_kitchen", "warehouse", "purchasing"]
     branches_query = {"tenant_id": tenant_id, "is_active": {"$ne": False}}
     if branch_id:
         branches_query["id"] = branch_id
     elif user_branch_id and user_role not in [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.MANAGER]:
         branches_query["id"] = user_branch_id
+    else:
+        branches_query["$or"] = [
+            {"branch_type": {"$exists": False}},
+            {"branch_type": "branch"},
+            {"branch_type": None},
+            {"branch_type": {"$nin": NON_BRANCH_TYPES}},
+        ]
     
     branches = await db.branches.find(branches_query, {"_id": 0}).to_list(100)
+    # الفلتر الدفاعي: استبعاد أي قسم إداري قد يتسلل
+    if not branch_id:
+        branches = [b for b in branches if (b.get("branch_type") or "branch") == "branch"]
     
     # حساب التكاليف الثابتة الشهرية
     total_rent = sum(b.get("rent_cost", 0) for b in branches)
