@@ -61,6 +61,57 @@ import StockCountHistoryDialog from '../components/StockCountHistoryDialog';
 import { useAuth } from '../context/AuthContext';
 import { showApiError } from '../utils/apiError';
 const API = API_URL;
+
+// ⭐ معامل تحويل الوحدات (نفس منطق صفحة التصنيع — مصدر واحد للحقيقة)
+const _UNIT_W = { 'غرام': 1, 'كغم': 1000, 'كيلو': 1000, 'كجم': 1000, 'gram': 1, 'kg': 1000, 'مل': 1, 'لتر': 1000, 'ml': 1, 'liter': 1000, 'l': 1000 };
+
+// خيارات الوحدات لمنتج مُصنّع: وحدته الأصلية + عائلة وزن القطعة (كما أُدخلت في التصنيع)
+const getProductUnitOptions = (mp) => {
+  const units = new Set([mp?.unit || 'حبة']);
+  const pwu = mp?.piece_weight_unit;
+  const pw = Number(mp?.piece_weight || 0);
+  if (pw > 0 && pwu) {
+    if (['غرام', 'كغم', 'كيلو', 'كجم', 'gram', 'kg'].includes(pwu)) {
+      units.add('غرام'); units.add('كغم');
+    } else if (['مل', 'لتر', 'ml', 'liter', 'l'].includes(pwu)) {
+      units.add('مل'); units.add('لتر');
+    }
+  }
+  return Array.from(units);
+};
+
+// تكلفة الوحدة الواحدة للمنتج المُصنّع (سعر أقل وحدة) — يطابق unit_cost_after_waste من الباكند
+const getProductUnitCost = (mp) => {
+  const uc = Number(mp?.unit_cost_after_waste || 0);
+  if (uc > 0) return uc;
+  // fallback للبيانات القديمة: تكلفة الدفعة ÷ الكمية
+  const batch = Number(mp?.raw_material_cost_after_waste) || Number(mp?.production_cost) || Number(mp?.raw_material_cost) || 0;
+  const q = Number(mp?.quantity || 0);
+  return q > 0 ? batch / q : 0;
+};
+
+// تحويل كمية مُدخلة بوحدة مختارة إلى عدد الوحدات الرئيسية للمنتج
+const convertToMainUnit = (mp, inputQty, inputUnit) => {
+  const mpUnit = mp?.unit || 'حبة';
+  const qty = Number(inputQty) || 0;
+  if (!inputUnit || inputUnit === mpUnit) return qty;
+  const fIn = _UNIT_W[inputUnit];
+  const fMain = _UNIT_W[mpUnit];
+  if (fIn && fMain) {
+    // الوحدتان وزنيتان/حجميتان → تحويل مباشر
+    return (qty * fIn) / fMain;
+  }
+  if (fIn) {
+    // الوحدة الرئيسية عددية (حبة/قطعة) والمُدخلة وزنية → عبر وزن القطعة
+    const pw = Number(mp?.piece_weight || 0);
+    const fPw = _UNIT_W[mp?.piece_weight_unit || 'غرام'];
+    if (pw > 0 && fPw) {
+      const pieceWeight = pw * fPw;
+      return (qty * fIn) / pieceWeight;
+    }
+  }
+  return qty;
+};
 export default function BranchOrders() {
   const navigate = useNavigate();
   const { t, isRTL } = useTranslation();
@@ -90,6 +141,7 @@ export default function BranchOrders() {
     priority: 'normal'
   });
   const [selectedProduct, setSelectedProduct] = useState('');
+  const [selectedUnit, setSelectedUnit] = useState(''); // وحدة الإدخال المختارة للمنتج المُصنّع
   const [selectedPackaging, setSelectedPackaging] = useState(''); // مادة التغليف المختارة
   const [packagingQuantity, setPackagingQuantity] = useState(1); // كمية التغليف
   const [quantity, setQuantity] = useState(1);
@@ -136,9 +188,18 @@ export default function BranchOrders() {
     
     const product = manufacturedProducts.find(p => p.id === selectedProduct);
     if (!product) return;
+
+    const mpUnit = product.unit || 'حبة';
+    const inputUnit = selectedUnit || mpUnit;
+    // ⭐ حوّل الكمية المُدخلة إلى عدد الوحدات الرئيسية (التي يحسب عليها الباكند)
+    const mainQty = convertToMainUnit(product, quantity, inputUnit);
+    if (mainQty <= 0) {
+      toast.error(t('الكمية غير صحيحة'));
+      return;
+    }
     
-    if (product.quantity < quantity) {
-      toast.error(`${t('الكمية غير كافية. متوفر:')} ${product.quantity} ${product.unit}`);
+    if (product.quantity < mainQty) {
+      toast.error(`${t('الكمية غير كافية. متوفر:')} ${product.quantity} ${mpUnit}`);
       return;
     }
     
@@ -147,20 +208,29 @@ export default function BranchOrders() {
       toast.error(t('هذا المنتج موجود بالفعل'));
       return;
     }
+
+    // ⭐ سعر أقل وحدة (وليس تكلفة الدفعة كاملة)
+    const unitCost = getProductUnitCost(product);
+    if (inputUnit !== mpUnit) {
+      toast.info(`${t('تم تحويل')} ${quantity} ${inputUnit} → ${mainQty.toFixed(3)} ${mpUnit}`);
+    }
     
     setForm(prev => ({
       ...prev,
       items: [...prev.items, {
         product_id: product.id,
         product_name: product.name,
-        quantity: quantity,
-        unit: product.unit,
-        cost_per_unit: product.raw_material_cost,
+        quantity: mainQty,           // الكمية بالوحدة الرئيسية (للباكند)
+        unit: mpUnit,
+        input_quantity: Number(quantity),  // ما أدخله المستخدم
+        input_unit: inputUnit,
+        cost_per_unit: unitCost,
         available: product.quantity
       }]
     }));
     
     setSelectedProduct('');
+    setSelectedUnit('');
     setQuantity(1);
     toast.success(`${t('تمت إضافة')} ${product.name}`);
   };
@@ -238,6 +308,10 @@ export default function BranchOrders() {
         items: form.items.map(i => ({
           product_id: i.product_id,
           quantity: i.quantity
+        })),
+        packaging_items: form.packaging_items.map(p => ({
+          packaging_material_id: p.packaging_material_id,
+          quantity: p.quantity
         })),
         priority: form.priority,
         notes: form.notes,
@@ -802,7 +876,7 @@ export default function BranchOrders() {
                 </div>
               ) : (
                 <div className="flex gap-2">
-                  <Select value={selectedProduct} onValueChange={setSelectedProduct}>
+                  <Select value={selectedProduct} onValueChange={(v) => { setSelectedProduct(v); const mp = manufacturedProducts.find(p => p.id === v); setSelectedUnit(mp?.unit || ''); }}>
                     <SelectTrigger className="flex-1 bg-background">
                       <SelectValue placeholder={t('اختر منتج...')} />
                     </SelectTrigger>
@@ -818,15 +892,35 @@ export default function BranchOrders() {
                     type="number"
                     min="1"
                     value={quantity}
-                    onChange={(e) => setQuantity(parseInt(e.target.value) || 1)}
-                    className="w-24 bg-background"
+                    onChange={(e) => setQuantity(parseFloat(e.target.value) || 0)}
+                    className="w-20 bg-background"
                     placeholder={t('الكمية')}
+                    data-testid="branch-order-qty"
                   />
+                  {/* ⭐ اختيار وحدة الإدخال حسب وحدات المنتج المُصنّع */}
+                  {(() => {
+                    const mp = manufacturedProducts.find(p => p.id === selectedProduct);
+                    const options = mp ? getProductUnitOptions(mp) : [];
+                    if (!mp || options.length <= 1) {
+                      return <div className="text-xs text-muted-foreground self-center px-2 min-w-[3rem] text-center">{mp?.unit || '-'}</div>;
+                    }
+                    return (
+                      <Select value={selectedUnit || mp.unit} onValueChange={setSelectedUnit}>
+                        <SelectTrigger className="w-24 bg-background" data-testid="branch-order-unit">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {options.map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    );
+                  })()}
                   <Button
                     type="button"
                     size="icon"
                     className="bg-green-500 hover:bg-green-600"
                     onClick={addProductToOrder}
+                    data-testid="branch-order-add-product"
                   >
                     <Plus className="h-4 w-4" />
                   </Button>
@@ -864,15 +958,21 @@ export default function BranchOrders() {
                     type="number"
                     min="1"
                     value={packagingQuantity}
-                    onChange={(e) => setPackagingQuantity(parseInt(e.target.value) || 1)}
-                    className="w-24 bg-background"
+                    onChange={(e) => setPackagingQuantity(parseFloat(e.target.value) || 0)}
+                    className="w-20 bg-background"
                     placeholder={t('الكمية')}
+                    data-testid="branch-order-pkg-qty"
                   />
+                  {/* وحدة مادة التغليف (وحدة واحدة لكل مادة) */}
+                  <div className="text-xs text-muted-foreground self-center px-2 min-w-[3rem] text-center" data-testid="branch-order-pkg-unit">
+                    {packagingMaterials.find(m => m.id === selectedPackaging)?.unit || '-'}
+                  </div>
                   <Button
                     type="button"
                     size="icon"
                     className="bg-amber-500 hover:bg-amber-600"
                     onClick={addPackagingToOrder}
+                    data-testid="branch-order-add-pkg"
                   >
                     <Plus className="h-4 w-4" />
                   </Button>
@@ -931,7 +1031,9 @@ export default function BranchOrders() {
                       <div>
                         <span className="font-medium">{item.product_name}</span>
                         <span className="text-muted-foreground text-sm mr-2">
-                          ({item.quantity} {item.unit} × {formatPrice(item.cost_per_unit)})
+                          {item.input_unit && item.input_unit !== item.unit
+                            ? `(${item.input_quantity} ${item.input_unit} = ${Number(item.quantity).toFixed(2)} ${item.unit} × ${formatPrice(item.cost_per_unit)})`
+                            : `(${Number(item.quantity).toFixed(2)} ${item.unit} × ${formatPrice(item.cost_per_unit)})`}
                         </span>
                       </div>
                       <div className="flex items-center gap-2">

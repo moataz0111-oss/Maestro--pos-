@@ -12516,9 +12516,8 @@ async def get_branch_packaging_inventory(branch_id: Optional[str] = None, curren
     elif branch_id:
         query["branch_id"] = branch_id
     
-    inventory = await db.branch_packaging_inventory.find(query).to_list(500)
+    inventory = await db.branch_packaging_inventory.find(query, {"_id": 0}).to_list(500)
     for item in inventory:
-        item["id"] = item.pop("_id", item.get("id"))
         # حساب الكمية المتبقية
         item["remaining_quantity"] = _sn(item.get("quantity")) - item.get("used_quantity", 0)
     

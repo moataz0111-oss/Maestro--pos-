@@ -1,0 +1,38 @@
+{
+  "summary": "Validated Branch Orders dialog (/branch-orders) end-to-end: packaging unit indicator + persistence + fulfillment. Both frontend UI flow and backend create+fulfill APIs verified successfully.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/test_reports/iteration_186.json"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "BranchOrders.js is large (~1158 lines) — consider splitting the 'New Order' dialog into its own component for maintainability.",
+    "Some console errors observed unrelated to this feature: 'Failed to fetch branches' on the home page (call-center widget) and an ERR_CONNECTION_REFUSED for a localhost call (Print Agent / biometric) — both expected per test_credentials.md but consider gating these fetches behind feature flags to reduce console noise.",
+    "GET /api/packaging-materials and /api/manufactured-products return 'Not authenticated' (403) without a token but the home page tries to call them before redirect — confirm guards in caller components."
+  ],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "100% (all 4 API checks passed: list, create persistence, fulfill, branch-packaging-inventory)",
+    "frontend": "100% (dialog opens, unit indicator correct, packaging total, grand total, submit + toast + order list refresh all working)"
+  },
+  "seed_data_creation": "Pre-existing seed used: 'لحم برغر' (manufactured, 100 حبة, unit_cost 6411.68), 'علبة برغر' (packaging, 500 قطعة, 250 IQD), branch 'الفرع الرئيسي' (76f56acc-...). No re-seed required.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "test_credentials": "admin@maestroegp.com / admin123 (works as expected from /app/memory/test_credentials.md)",
+  "context_for_next_testing_agent": "Branch Orders dialog testids: new-order-btn, select-branch, branch-order-qty, branch-order-add-product, branch-order-pkg-qty, branch-order-pkg-unit, branch-order-add-pkg. Product/packaging Select triggers have no testids; locate via role='combobox' text 'اختر منتج...' / 'اختر مادة تغليف...'. The /api/branch-requests POST is exercised via the dialog submit; GET returns the persisted record with packaging_items + total_cost. Fulfill endpoint: POST /api/branch-requests/{id}/fulfill; on success it deducts from packaging_materials.quantity (and increments transferred_to_branches) and inserts/updates branch-packaging-inventory. branch-packaging-inventory _id (ObjectId) is now correctly excluded — endpoint returns 200 with clean JSON.",
+  "rca of the issue": "N/A — feature working as designed. Verified end-to-end values: created request id 7d1d85ac-cf52-4a08-b210-e5a404a959d1, total_cost=69116.8, packaging_items[0]={علبة برغر, qty=20, cost_per_unit=250, total_cost=5000}, items[0]={لحم برغر, qty=10, cost_per_unit=6411.68, total_cost=64116.8}. After fulfill: packaging_materials.علبة برغر qty 500→480 (transferred 0→20), manufactured.لحم برغر qty 100→90, branch-packaging-inventory shows علبة برغر qty=20 for the receiving branch.",
+  "evidence": {
+    "ui_dialog_text": "علبة برغر (20 قطعة × IQD 250) → IQD 5,000 ; إجمالي التغليف: IQD 5,000 ; لحم برغر (10.00 حبة × IQD 6,412) → IQD 64,117 ; الإجمالي: IQD 69,117 (rounded display of 69,116.8)",
+    "unit_indicator_value": "قطعة",
+    "fulfill_response": "{\"message\":\"تم تنفيذ الطلب بنجاح\",\"request_id\":\"7d1d85ac-cf52-4a08-b210-e5a404a959d1\"} HTTP 200",
+    "branch_packaging_inventory_after_fulfill": "[{packaging_material_name: 'علبة برغر', quantity: 20.0, branch_id: 76f56acc-6948-4a2f-bbf4-feccbddea88f}] HTTP 200 (ObjectId serialization fix verified)"
+  }
+}

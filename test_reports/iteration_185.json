@@ -1,0 +1,38 @@
+{
+  "summary": "Frontend E2E verification of /branch-orders 'طلب جديد من قسم التصنيع' dialog: cost-per-unit bug FIX + new unit dropdown FEATURE. All 8 scenarios PASSED. Cost preview now uses unit_cost_after_waste (~6,412 IQD/حبة) NOT the wrong batch cost (~641,168). Unit dropdown shows حبة/غرام/كغم and converts كغم→حبة with info toast.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Branch orders dialog – item line", "issues": ["Per-unit cost is displayed as rounded whole IQD (6,412) instead of two-decimal (6,411.68); line total likewise shows 64,117 (vs 64,116.80) and 25,647 (vs 25,646.72). Correctness is preserved (rounding only) but problem statement expected 2 decimals. Minor – consider toLocaleString with minimumFractionDigits:2 for consistency."]}
+    ]
+  },
+  "test_report_links": [],
+  "action_items": [
+    "Optional polish: in BranchOrders.js item-line cost formatter, use {minimumFractionDigits:2, maximumFractionDigits:2} so 6,411.68 / 64,116.80 / 25,646.72 render precisely instead of rounded 6,412 / 64,117 / 25,647."
+  ],
+  "critical_code_review_comments": [
+    "Pre-login /api/branches returns 403 (console error 'Failed to fetch branches: AxiosError'). The page retries after token is set so end-user is not affected, but a first-paint axios call fires before auth header is ready – consider gating fetches on auth-ready flag.",
+    "localhost:9999 (local print agent) ERR_CONNECTION_REFUSED — expected in preview env; unchanged from prior iterations."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (skipped)", "frontend": "100% (8/8)"},
+  "test_credentials": "admin@maestroegp.com / admin123",
+  "seed_data_creation": "Used pre-seeded manufactured products: لحم برغر (unit حبة, piece_weight 250, unit_cost_after_waste 6411.68, qty 100), كراة مشروم (unit حبة, unit_cost_after_waste 3403.19). Branch: الفرع الرئيسي.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "On /branch-orders, the New-Order dialog has THREE comboboxes (receiving branch, priority, product). Scope selectors with `page.locator('[role=dialog]').first.locator(...)` because page-level filter combobox 'جميع الطلبات' will otherwise match `[role=combobox]:nth(0)`. The unit dropdown (data-testid=branch-order-unit) renders ONLY after a product is selected; it sits between qty and product comboboxes inside the green 'إضافة منتج من التصنيع' panel. لحم برغر options confirmed: حبة, غرام, كغم. Conversion toast wording: 'تم تحويل 1 كغم → 4.000 حبة'. After submit success toast 'تم إرسال الطلب للتصنيع' appears and order row shows in list with summary 'لحم برغر: 4 حبة' + IQD 25,647.",
+  "verified_scenarios": [
+    "Login admin@maestroegp.com → /branch-orders, splash dismissed, 'طلب جديد' button visible",
+    "Click 'طلب جديد' opens dialog 'طلب جديد من قسم التصنيع'",
+    "Receiving branch combobox lists 'الفرع الرئيسي' (1 option) and selects",
+    "Product combobox lists 'لحم برغر (متوفر: 100 حبة)' and 'كراة مشروم (متوفر: 100 حبة)'",
+    "AFTER selecting لحم برغر: data-testid='branch-order-unit' appears (count=1) AND data-testid='branch-order-qty' present; unit options = ['حبة','غرام','كغم'] (all 3 expected units)",
+    "qty=10 حبة + add → item line 'لحم برغر (10.00 حبة × 6,412 IQD)' total IQD 64,117 (≈64,116.8). NO 6,411,682 / 641,168 wrong batch cost",
+    "Remove + re-add with unit=كغم qty=1 → info toast 'تم تحويل 1 كغم → 4.000 حبة'; item line 'لحم برغر (1 كغم = 4.00 حبة × 6,412 IQD)' total IQD 25,647 (≈25,646.72)",
+    "Dialog 'الإجمالي' shows IQD 25,647 (correct, not millions)",
+    "Click 'إنشاء الطلب' → success toast 'تم إرسال الطلب للتصنيع', order appears in list 'لحم برغر: 4 حبة' IQD 25,647"
+  ],
+  "rca_of_the_issue": "Bug was that BranchOrders.js item-cost formula used raw_material_cost (whole-batch cost in IQD) per piece, producing huge per-unit costs like 641,168 / millions for the line. Fix: new helpers getProductUnitCost (uses unit_cost_after_waste returned by GET /manufactured-products) and convertToMainUnit (auto-converts غرام/كغم to the product's main unit حبة using piece_weight) — now per-unit cost = 6,411.68 IQD/حبة and 1 كغم of لحم برغر (piece_weight 250g) correctly converts to 4 حبة → 4 × 6,411.68 = 25,646.72 IQD. Verified via UI."
+}

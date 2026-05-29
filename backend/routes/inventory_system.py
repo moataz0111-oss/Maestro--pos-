@@ -2455,6 +2455,7 @@ async def create_branch_request(request_data: dict, current_user: dict = Depends
     
     to_branch_id = request_data.get("to_branch_id")
     items = request_data.get("items", [])
+    packaging_items = request_data.get("packaging_items", [])
     priority = request_data.get("priority", "normal")
     notes = request_data.get("notes", "")
     requested_by = request_data.get("requested_by", "")
@@ -2463,8 +2464,8 @@ async def create_branch_request(request_data: dict, current_user: dict = Depends
     if not to_branch_id:
         raise HTTPException(status_code=400, detail="يجب تحديد الفرع")
     
-    if not items:
-        raise HTTPException(status_code=400, detail="يجب إضافة منتجات للطلب")
+    if not items and not packaging_items:
+        raise HTTPException(status_code=400, detail="يجب إضافة منتجات أو مواد تغليف للطلب")
     
     # جلب معلومات الفرع
     branch = await db.branches.find_one({"id": to_branch_id}, {"_id": 0})
@@ -2507,6 +2508,28 @@ async def create_branch_request(request_data: dict, current_user: dict = Depends
                 "available_quantity": product.get("quantity", 0)
             })
     
+    # ⭐ تفاصيل مواد التغليف (تُحفظ وتُحتسب ضمن إجمالي الطلب)
+    packaging_with_details = []
+    for pitem in packaging_items:
+        material_id = pitem.get("packaging_material_id") or pitem.get("material_id")
+        p_qty = float(pitem.get("quantity", 0) or 0)
+        if not material_id or p_qty <= 0:
+            continue
+        material = await db.packaging_materials.find_one({"id": material_id}, {"_id": 0})
+        if material:
+            p_unit_cost = float(material.get("cost_per_unit") or 0)
+            p_cost = p_unit_cost * p_qty
+            total_cost += p_cost
+            packaging_with_details.append({
+                "packaging_material_id": material_id,
+                "name": material.get("name"),
+                "quantity": p_qty,
+                "unit": material.get("unit", "قطعة"),
+                "cost_per_unit": p_unit_cost,
+                "total_cost": p_cost,
+                "available_quantity": material.get("quantity", 0)
+            })
+    
     # إنشاء سجل الطلب
     request_doc = {
         "id": str(uuid.uuid4()),
@@ -2514,6 +2537,7 @@ async def create_branch_request(request_data: dict, current_user: dict = Depends
         "to_branch_id": to_branch_id,
         "to_branch_name": branch.get("name"),
         "items": items_with_details,
+        "packaging_items": packaging_with_details,
         "total_cost": total_cost,
         "status": "pending",  # pending, approved, processing, shipped, delivered, cancelled
         "priority": priority,
@@ -2601,6 +2625,15 @@ async def fulfill_branch_request(request_id: str):
                 "requested": item.get("quantity"),
                 "available": product.get("quantity", 0) if product else 0
             })
+    # التحقق من توفر مواد التغليف
+    for pitem in request.get("packaging_items", []):
+        material = await db.packaging_materials.find_one({"id": pitem.get("packaging_material_id")}, {"_id": 0})
+        if not material or material.get("quantity", 0) < pitem.get("quantity", 0):
+            insufficient.append({
+                "name": pitem.get("name"),
+                "requested": pitem.get("quantity"),
+                "available": material.get("quantity", 0) if material else 0
+            })
     
     if insufficient:
         raise HTTPException(
@@ -2661,6 +2694,49 @@ async def fulfill_branch_request(request_id: str):
                 "cost_per_unit": item.get("cost_per_unit", 0),
                 "last_updated": datetime.now(timezone.utc).isoformat(),
                 "created_at": datetime.now(timezone.utc).isoformat()
+            })
+    
+    # ⭐ تحويل مواد التغليف من المخزن الرئيسي لمخزن الفرع
+    pkg_tenant_id = request.get("tenant_id")
+    for pitem in request.get("packaging_items", []):
+        material_id = pitem.get("packaging_material_id")
+        p_qty = pitem.get("quantity", 0)
+        if not material_id or p_qty <= 0:
+            continue
+        material = await db.packaging_materials.find_one({"id": material_id}, {"_id": 0})
+        if not material:
+            continue
+        new_qty = max(0, material.get("quantity", 0) - p_qty)
+        await db.packaging_materials.update_one(
+            {"id": material_id},
+            {"$set": {
+                "quantity": new_qty,
+                "transferred_to_branches": material.get("transferred_to_branches", 0) + p_qty,
+                "last_updated": datetime.now(timezone.utc).isoformat()
+            }}
+        )
+        branch_pkg = await db.branch_packaging_inventory.find_one({
+            "branch_id": to_branch_id,
+            "packaging_material_id": material_id
+        })
+        if branch_pkg:
+            await db.branch_packaging_inventory.update_one(
+                {"id": branch_pkg["id"]},
+                {"$inc": {"quantity": p_qty},
+                 "$set": {"last_updated": datetime.now(timezone.utc).isoformat()}}
+            )
+        else:
+            await db.branch_packaging_inventory.insert_one({
+                "id": str(uuid.uuid4()),
+                "branch_id": to_branch_id,
+                "packaging_material_id": material_id,
+                "packaging_material_name": material.get("name"),
+                "quantity": p_qty,
+                "used_quantity": 0,
+                "cost_per_unit": material.get("cost_per_unit", 0),
+                "created_at": datetime.now(timezone.utc).isoformat(),
+                "last_updated": datetime.now(timezone.utc).isoformat(),
+                "tenant_id": pkg_tenant_id
             })
     
     # تحديث حالة الطلب
