@@ -7,6 +7,7 @@ from typing import Optional, List, Dict, Any
 from datetime import datetime, timezone, timedelta
 from io import BytesIO
 import logging
+import uuid
 
 from .shared import (
     get_database, get_current_user, get_user_tenant_id, 
@@ -889,9 +890,15 @@ async def get_delivery_credits_report(
     
     orders = await db.orders.find(query, {"_id": 0}).to_list(10000)
     
+    # نِسَب العمولة محفوظة فعلياً في delivery_app_settings (مفتاحها app_id) — وليست في delivery_apps
+    app_settings = await db.delivery_app_settings.find(build_tenant_query(current_user), {"_id": 0}).to_list(100)
+    app_rates = {s["app_id"]: s.get("commission_rate", 0) for s in app_settings}
+    app_names = {s["app_id"]: s.get("name") for s in app_settings if s.get("name")}
+    # دمج مع الشركات الافتراضية لجلب الاسم عند عدم وجود إعداد
     delivery_apps_list = await db.delivery_apps.find({}, {"_id": 0}).to_list(100)
-    app_names = {app["id"]: app["name"] for app in delivery_apps_list}
-    app_rates = {app["id"]: app["commission_rate"] for app in delivery_apps_list}
+    for app in delivery_apps_list:
+        app_names.setdefault(app.get("id"), app.get("name"))
+        app_rates.setdefault(app.get("id"), app.get("commission_rate", 0))
     
     # جلب سجلات التحصيل للتوصيل
     collections_query = {"collection_type": "delivery"}
@@ -952,14 +959,34 @@ async def get_delivery_credits_report(
             by_app[app_name]["credit_count"] += 1
             by_app[app_name]["credit_amount"] += o["total"] - o.get("delivery_commission", 0)
         
+        # تفاصيل أصناف الفاتورة للعرض التفصيلي (drill-down)
+        order_items = []
+        for it in (o.get("items") or []):
+            qty = it.get("quantity", it.get("qty", 1)) or 1
+            unit_price = it.get("price", it.get("unit_price", 0)) or 0
+            line_total = it.get("total", it.get("subtotal", unit_price * qty))
+            order_items.append({
+                "name": it.get("name") or it.get("product_name") or "صنف",
+                "quantity": qty,
+                "price": unit_price,
+                "discount": it.get("discount", 0) or 0,
+                "total": line_total,
+                "notes": it.get("notes") or it.get("note")
+            })
+
         by_app[app_name]["orders"].append({
             "id": o.get("id"),
             "order_number": o["order_number"],
             "total": o["total"],
+            "subtotal": o.get("subtotal", o["total"]),
+            "discount": o.get("discount", 0) or 0,
             "commission": o.get("delivery_commission", 0),
             "net": o["total"] - o.get("delivery_commission", 0),
             "delivery_collected": is_collected,
-            "created_at": o["created_at"]
+            "customer_name": o.get("customer_name"),
+            "payment_method": o.get("payment_method"),
+            "created_at": o["created_at"],
+            "items": order_items
         })
     
     # إضافة المبالغ المحصلة لكل شركة
@@ -1500,26 +1527,63 @@ async def get_credit_collections(
 class DeliveryCollectionCreate(BaseModel):
     delivery_app_id: str
     delivery_app_name: str
-    amount: float
+    amount: float  # المبلغ الفعلي المُحصّل (يُودَع في خزينة المالك)
     collected_by: str
     notes: Optional[str] = None
     order_ids: Optional[List[str]] = None  # قائمة الطلبات المحصلة (اختياري)
+    expected_amount: Optional[float] = None  # صافي المستحق للفترة (قبل العروض)
+    has_offers: bool = False  # هل يوجد عروض/خصومات مع الشركة
+    period_start: Optional[str] = None  # بداية فترة التحصيل
+    period_end: Optional[str] = None  # نهاية فترة التحصيل
+    branch_id: Optional[str] = None
+    branch_name: Optional[str] = None
+    total_sales: Optional[float] = None  # إجمالي المبيعات قبل الاستقطاع (لإعادة الطباعة)
+    commission: Optional[float] = None  # العمولة المستقطعة (لإعادة الطباعة)
 
 @router.post("/delivery/collect")
 async def collect_delivery(
     collection: DeliveryCollectionCreate,
     current_user: dict = Depends(get_current_user)
 ):
-    """تسجيل تحصيل من شركة توصيل"""
+    """تسجيل تحصيل من شركة توصيل + إيداع الصافي في خزينة المالك"""
     db = get_database()
     tenant_id = get_user_tenant_id(current_user)
     
     now = datetime.now(timezone.utc)
+
+    # حساب قيمة ونسبة العرض (الفرق بين المستحق والمُحصّل فعلياً)
+    expected = collection.expected_amount if collection.expected_amount is not None else collection.amount
+    offer_amount = 0.0
+    offer_percentage = 0.0
+    if collection.has_offers and expected and expected > 0:
+        offer_amount = round(expected - collection.amount, 2)
+        offer_percentage = round((offer_amount / expected) * 100, 2)
+
+    # اسم الفرع تلقائياً
+    branch_id = collection.branch_id or current_user.get("branch_id")
+    branch_name = collection.branch_name
+    if branch_id and not branch_name:
+        br = await db.branches.find_one({"id": branch_id}, {"_id": 0, "name": 1})
+        if br:
+            branch_name = br.get("name")
+
+    period_label = ""
+    if collection.period_start and collection.period_end:
+        period_label = f" ({collection.period_start} → {collection.period_end})"
+
     collection_record = {
-        "id": f"del_{now.strftime('%Y%m%d%H%M%S')}",
+        "id": f"del_{now.strftime('%Y%m%d%H%M%S%f')}",
         "delivery_app_id": collection.delivery_app_id,
         "delivery_app_name": collection.delivery_app_name,
-        "amount": collection.amount,
+        "amount": collection.amount,  # المُحصّل فعلياً
+        "expected_amount": expected,  # المستحق قبل العروض
+        "total_sales": collection.total_sales,  # إجمالي المبيعات قبل الاستقطاع
+        "commission": collection.commission,  # العمولة المستقطعة
+        "has_offers": collection.has_offers,
+        "offer_amount": offer_amount,
+        "offer_percentage": offer_percentage,
+        "period_start": collection.period_start,
+        "period_end": collection.period_end,
         "collected_by": collection.collected_by,
         "collected_by_user_id": current_user.get("id"),
         "collected_at": now.isoformat(),
@@ -1528,11 +1592,33 @@ async def collect_delivery(
         "notes": collection.notes,
         "order_ids": collection.order_ids or [],
         "tenant_id": tenant_id,
-        "branch_id": current_user.get("branch_id"),
+        "branch_id": branch_id,
+        "branch_name": branch_name,
         "collection_type": "delivery"
     }
     
     await db.delivery_collections.insert_one(collection_record)
+
+    # إيداع الصافي المُحصّل في خزينة المالك تلقائياً
+    deposit_desc = f"تحصيل توصيل - {collection.delivery_app_name}{period_label}"
+    if collection.has_offers and offer_amount:
+        deposit_desc += f" | عرض مخصوم: {offer_amount:,.0f} ({offer_percentage:.1f}%)"
+    owner_deposit = {
+        "id": str(uuid.uuid4()),
+        "tenant_id": tenant_id,
+        "amount": collection.amount,
+        "date": now.strftime("%Y-%m-%d"),
+        "description": deposit_desc,
+        "source": "delivery_collection",
+        "branch_id": branch_id,
+        "branch_name": branch_name,
+        "external_source": None,
+        "ref_collection_id": collection_record["id"],
+        "delivery_app_name": collection.delivery_app_name,
+        "created_by": collection.collected_by or current_user.get("username") or current_user.get("full_name"),
+        "created_at": now.isoformat()
+    }
+    await db.owner_deposits.insert_one(owner_deposit)
     
     # تحديث الطلبات كمحصلة إذا تم تحديدها
     if collection.order_ids:
@@ -1544,8 +1630,11 @@ async def collect_delivery(
     collection_record.pop("_id", None)
     
     return {
-        "message": "تم تسجيل التحصيل بنجاح",
-        "collection": collection_record
+        "message": "تم تسجيل التحصيل وإيداع المبلغ في خزينة المالك بنجاح",
+        "collection": collection_record,
+        "offer_amount": offer_amount,
+        "offer_percentage": offer_percentage,
+        "deposited_to_safe": collection.amount
     }
 
 @router.get("/delivery/collections")

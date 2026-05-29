@@ -27,6 +27,15 @@ Multi-tenant POS system with biometric integration (ZKTeco), thermal receipt pri
 - Printers filter by branch in Settings
 
 
+## Feature (Feb 2026) — Delivery Company Report: Commission + Drill-down + Offer Collection ✅
+Delivery tab in Reports now: shows real commission rate (read from `delivery_app_settings`, not the empty `delivery_apps`), supports invoice drill-down (company → invoices → itemized details), and a collection flow with an "offers/discounts" toggle that auto-computes the offer amount/percentage and deposits the actual collected net into the Owner's Safe (`owner_deposits`, source=`delivery_collection`) with collector/branch/company/period logged. Collection respects the selected from→to date range.
+
+- Backend: `GET /api/reports/delivery-credits` (commission from settings + per-order items), `POST /api/reports/delivery/collect` (offer calc + owner-safe deposit). Files: `routes/reports_routes.py`.
+- Frontend: `pages/Reports.js` → `DeliveryReportTab` (view-orders/invoice dialogs + offers toggle).
+- Tests: `backend/tests/test_delivery_report_collection_iter183.py` (6 ✓); frontend testing agent iteration_182 (9/9 ✓).
+
+
+
 ## Feature (May 24, 2026) — Weekly Low-Profit Alert Banner ✅
 A proactive once-weekly banner alerts the manager about products sold at low/negative profit margin in the past 7 days. Auto-dismissed for the current ISO week after review (localStorage `maestro_low_profit_dismissed_week`). Mounted globally in `App.js`.
 

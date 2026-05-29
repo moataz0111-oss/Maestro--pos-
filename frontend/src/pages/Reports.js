@@ -10,6 +10,7 @@ import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
+import { Switch } from '../components/ui/switch';
 import { Badge } from '../components/ui/badge';
 import BranchSelector from '../components/BranchSelector';
 import ProductsByChannelTab from '../components/reports/ProductsByChannelTab';
@@ -47,6 +48,9 @@ import {
   CheckCircle,
   CircleDollarSign,
   ChevronDown,
+  Eye,
+  ChevronRight,
+  ChevronLeft,
   User
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -78,6 +82,7 @@ import {
   printExpensesReport,
   printProductsReport,
   printDeliveryReport,
+  printDeliveryCollectionReceipt,
   printCancellationsReport,
   printDiscountsReport,
   printRefundsReport,
@@ -2384,28 +2389,125 @@ const CardReportTab = ({ cardReport, t, formatPrice, fetchReports }) => {
 };
 
 // ===================== Delivery Report Tab (تبويب التوصيل) =====================
-const DeliveryReportTab = ({ deliveryCreditsReport, t, formatPrice, fetchReports, handlePrintDeliveryReport }) => {
+const DeliveryReportTab = ({ deliveryCreditsReport, t, formatPrice, fetchReports, handlePrintDeliveryReport, startDate, endDate, branchName }) => {
   const [showCollectDialog, setShowCollectDialog] = useState(false);
   const [selectedApp, setSelectedApp] = useState(null);
   const [collectForm, setCollectForm] = useState({
     amount: '',
     collected_by: '',
-    notes: ''
+    notes: '',
+    has_offers: false,
+    actual_collected: ''
   });
   const [collecting, setCollecting] = useState(false);
+  // Drill-down state
+  const [showOrdersDialog, setShowOrdersDialog] = useState(false);
+  const [ordersDialogApp, setOrdersDialogApp] = useState(null);
+  const [selectedInvoice, setSelectedInvoice] = useState(null);
+  // سجل التحصيلات
+  const [collections, setCollections] = useState([]);
+  const [loadingCollections, setLoadingCollections] = useState(false);
+  const [showCollectionsLog, setShowCollectionsLog] = useState(false);
+
+  const loadCollections = async () => {
+    setLoadingCollections(true);
+    try {
+      const res = await axios.get(`${API}/reports/delivery/collections`, {
+        params: { start_date: startDate, end_date: endDate }
+      });
+      setCollections(res.data?.collections || []);
+    } catch (e) {
+      console.error('load collections error', e);
+    } finally {
+      setLoadingCollections(false);
+    }
+  };
+
+  useEffect(() => {
+    if (showCollectionsLog) loadCollections();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showCollectionsLog, startDate, endDate]);
+
+  const handleReprint = (c) => {
+    printDeliveryCollectionReceipt({
+      company_name: c.delivery_app_name,
+      period_start: c.period_start,
+      period_end: c.period_end,
+      total_sales: c.total_sales,
+      commission: c.commission,
+      net_receivable: c.expected_amount,
+      has_offers: c.has_offers,
+      offer_amount: c.offer_amount,
+      offer_percentage: c.offer_percentage,
+      collected_amount: c.amount,
+      collected_by: c.collected_by,
+      branch_name: c.branch_name,
+      datetime: c.collected_at ? new Date(c.collected_at).toLocaleString('ar-IQ') : c.date
+    });
+  };
+
+  const exportCollectionsToCSV = () => {
+    if (!collections.length) {
+      toast.error(t('لا توجد تحصيلات للتصدير'));
+      return;
+    }
+    const headers = ['التاريخ', 'شركة التوصيل', 'الفترة من', 'الفترة إلى', 'إجمالي المبيعات', 'العمولة', 'الصافي المستحق', 'قيمة العرض', 'نسبة العرض %', 'المُحصّل', 'اسم المستلم', 'الفرع'];
+    const rows = collections.map((c) => [
+      c.date || '',
+      c.delivery_app_name || '',
+      c.period_start || '',
+      c.period_end || '',
+      c.total_sales || 0,
+      c.commission || 0,
+      c.expected_amount || 0,
+      c.offer_amount || 0,
+      (c.offer_percentage || 0),
+      c.amount || 0,
+      c.collected_by || '',
+      c.branch_name || ''
+    ]);
+    const escapeCsv = (v) => `"${String(v).replace(/"/g, '""')}"`;
+    const csv = [headers, ...rows].map((r) => r.map(escapeCsv).join(',')).join('\r\n');
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `سجل_تحصيلات_التوصيل_${startDate}_${endDate}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast.success(t('تم تصدير السجل بنجاح'));
+  };
+
+  const handleViewOrders = (appName, data) => {
+    setOrdersDialogApp({ name: appName, ...data });
+    setSelectedInvoice(null);
+    setShowOrdersDialog(true);
+  };
 
   const handleOpenCollect = (appName, data) => {
+    const expected = data.remaining_amount != null ? data.remaining_amount : data.net_amount;
     setSelectedApp({ name: appName, ...data });
     setCollectForm({
-      amount: data.remaining_amount || data.net_amount,
+      amount: expected,
       collected_by: '',
-      notes: ''
+      notes: '',
+      has_offers: false,
+      actual_collected: expected
     });
     setShowCollectDialog(true);
   };
 
-  const handleCollect = async () => {
-    if (!collectForm.amount || !collectForm.collected_by) {
+  // قيمة ونسبة العرض المحسوبة تلقائياً
+  const expectedNet = selectedApp ? (selectedApp.remaining_amount != null ? selectedApp.remaining_amount : selectedApp.net_amount) : 0;
+  const actualVal = parseFloat(collectForm.has_offers ? collectForm.actual_collected : collectForm.amount) || 0;
+  const offerAmount = collectForm.has_offers ? Math.max(0, (expectedNet - actualVal)) : 0;
+  const offerPercentage = (collectForm.has_offers && expectedNet > 0) ? ((offerAmount / expectedNet) * 100) : 0;
+
+  const handleCollect = async (withPrint = false) => {
+    const collectedAmount = collectForm.has_offers ? actualVal : (parseFloat(collectForm.amount) || 0);
+    if (!collectedAmount || !collectForm.collected_by) {
       toast.error(t('يرجى إدخال المبلغ واسم المستلم'));
       return;
     }
@@ -2415,13 +2517,38 @@ const DeliveryReportTab = ({ deliveryCreditsReport, t, formatPrice, fetchReports
       await axios.post(`${API}/reports/delivery/collect`, {
         delivery_app_id: selectedApp.id,
         delivery_app_name: selectedApp.name,
-        amount: parseFloat(collectForm.amount),
+        amount: collectedAmount,
+        expected_amount: expectedNet,
+        total_sales: selectedApp.total,
+        commission: selectedApp.commission,
+        has_offers: collectForm.has_offers,
         collected_by: collectForm.collected_by,
-        notes: collectForm.notes
+        notes: collectForm.notes,
+        period_start: startDate,
+        period_end: endDate,
+        order_ids: (selectedApp.orders || []).filter(o => !o.delivery_collected).map(o => o.id)
       });
-      toast.success(t('تم تسجيل التحصيل بنجاح'));
+      toast.success(t('تم التحصيل وإيداع المبلغ في خزينة المالك بنجاح'));
+      if (withPrint) {
+        printDeliveryCollectionReceipt({
+          company_name: selectedApp.name,
+          period_start: startDate,
+          period_end: endDate,
+          total_sales: selectedApp.total,
+          commission: selectedApp.commission,
+          net_receivable: expectedNet,
+          has_offers: collectForm.has_offers,
+          offer_amount: offerAmount,
+          offer_percentage: offerPercentage,
+          collected_amount: collectedAmount,
+          collected_by: collectForm.collected_by,
+          branch_name: branchName,
+          datetime: new Date().toLocaleString('ar-IQ')
+        });
+      }
       setShowCollectDialog(false);
       fetchReports();
+      if (showCollectionsLog) loadCollections();
     } catch (error) {
       console.error('Collection error:', error);
       toast.error(t('فشل في تسجيل التحصيل'));
@@ -2521,6 +2648,16 @@ const DeliveryReportTab = ({ deliveryCreditsReport, t, formatPrice, fetchReports
                     <span className="px-3 py-1 bg-primary/10 text-primary rounded-full text-sm font-bold">
                       {data.count} {t('طلب')}
                     </span>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleViewOrders(appName, data)}
+                      className="gap-1"
+                      data-testid={`view-orders-${appName}`}
+                    >
+                      <Eye className="h-4 w-4" />
+                      {t('عرض الفواتير')}
+                    </Button>
                     {(data.remaining_amount || data.net_amount) > 0 && (
                       <Button
                         size="sm"
@@ -2570,6 +2707,110 @@ const DeliveryReportTab = ({ deliveryCreditsReport, t, formatPrice, fetchReports
         </CardContent>
       </Card>
 
+      {/* سجل التحصيلات */}
+      <Card className="border-border/50 bg-card">
+        <CardHeader>
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <CardTitle className="text-lg text-foreground flex items-center gap-2">
+              <Receipt className="h-5 w-5 text-primary" />
+              {t('سجل التحصيلات')}
+            </CardTitle>
+            <div className="flex items-center gap-2">
+              {showCollectionsLog && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={exportCollectionsToCSV}
+                  className="gap-1"
+                  data-testid="export-collections-csv"
+                >
+                  <FileSpreadsheet className="h-4 w-4" />
+                  {t('تصدير Excel')}
+                </Button>
+              )}
+              <Button
+                size="sm"
+                variant={showCollectionsLog ? 'secondary' : 'default'}
+                onClick={() => setShowCollectionsLog(v => !v)}
+                className="gap-1"
+                data-testid="toggle-collections-log"
+              >
+                <ChevronDown className={`h-4 w-4 transition-transform ${showCollectionsLog ? 'rotate-180' : ''}`} />
+                {showCollectionsLog ? t('إخفاء السجل') : t('عرض السجل')}
+              </Button>
+            </div>
+          </div>
+        </CardHeader>
+        {showCollectionsLog && (
+          <CardContent>
+            {loadingCollections ? (
+              <div className="text-center py-6 text-muted-foreground">
+                <RefreshCw className="h-6 w-6 mx-auto mb-2 animate-spin" />
+                {t('جاري التحميل...')}
+              </div>
+            ) : collections.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground" data-testid="collections-empty">
+                <Receipt className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                <p>{t('لا توجد تحصيلات في هذه الفترة')}</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto" data-testid="collections-log-table">
+                <table className="w-full text-sm">
+                  <thead className="bg-muted/50">
+                    <tr className="text-xs text-muted-foreground">
+                      <th className="p-2 text-right">{t('التاريخ')}</th>
+                      <th className="p-2 text-right">{t('الشركة')}</th>
+                      <th className="p-2 text-center">{t('الفترة')}</th>
+                      <th className="p-2 text-center">{t('المستحق')}</th>
+                      <th className="p-2 text-center">{t('العرض')}</th>
+                      <th className="p-2 text-center">{t('المُحصّل')}</th>
+                      <th className="p-2 text-center">{t('المستلم')}</th>
+                      <th className="p-2 text-center">{t('إجراء')}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {collections.map((c) => (
+                      <tr key={c.id} className="border-t border-border/30" data-testid={`collection-row-${c.id}`}>
+                        <td className="p-2 text-right whitespace-nowrap">{c.date}</td>
+                        <td className="p-2 text-right font-medium">{c.delivery_app_name}</td>
+                        <td className="p-2 text-center text-xs whitespace-nowrap">{c.period_start || '-'} → {c.period_end || '-'}</td>
+                        <td className="p-2 text-center tabular-nums">{formatPrice(c.expected_amount)}</td>
+                        <td className="p-2 text-center tabular-nums text-red-500">
+                          {c.has_offers && c.offer_amount ? `-${formatPrice(c.offer_amount)} (${(c.offer_percentage || 0).toFixed(1)}%)` : '-'}
+                        </td>
+                        <td className="p-2 text-center tabular-nums font-bold text-green-600">{formatPrice(c.amount)}</td>
+                        <td className="p-2 text-center">{c.collected_by || '-'}</td>
+                        <td className="p-2 text-center">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleReprint(c)}
+                            className="gap-1 h-7"
+                            data-testid={`reprint-collection-${c.id}`}
+                          >
+                            <Printer className="h-3.5 w-3.5" />
+                            {t('إعادة طباعة')}
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr className="border-t-2 border-border/50 font-bold bg-muted/30">
+                      <td className="p-2 text-right" colSpan={5}>{t('الإجمالي المُحصّل')}</td>
+                      <td className="p-2 text-center tabular-nums text-green-600" colSpan={3}>
+                        {formatPrice(collections.reduce((s, c) => s + (c.amount || 0), 0))}
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            )}
+          </CardContent>
+        )}
+      </Card>
+
+
       <div className="flex justify-end gap-2 mt-4">
         <Button variant="outline" onClick={handlePrintDeliveryReport} className="gap-2">
           <Printer className="h-4 w-4" />
@@ -2614,19 +2855,67 @@ const DeliveryReportTab = ({ deliveryCreditsReport, t, formatPrice, fetchReports
               </div>
               
               <div className="space-y-3">
-                <div>
-                  <Label>{t('المبلغ المحصل')}</Label>
-                  <Input
-                    type="number"
-                    value={collectForm.amount}
-                    onChange={(e) => setCollectForm({...collectForm, amount: e.target.value})}
-                    placeholder={t('أدخل المبلغ')}
-                    className="mt-1"
+                {/* فترة التحصيل المختارة */}
+                <div className="bg-blue-50 dark:bg-blue-900/20 p-2 rounded-lg text-xs flex items-center gap-2 text-blue-700 dark:text-blue-300">
+                  <Clock className="h-4 w-4" />
+                  {t('فترة التحصيل')}: {startDate} → {endDate}
+                </div>
+
+                {/* سؤال العروض */}
+                <div className="flex items-center justify-between bg-amber-50 dark:bg-amber-900/20 p-3 rounded-lg">
+                  <Label htmlFor="has-offers-switch" className="text-sm cursor-pointer flex items-center gap-2">
+                    <Percent className="h-4 w-4 text-amber-600" />
+                    {t('هل يوجد عروض/خصومات مع هذه الشركة؟')}
+                  </Label>
+                  <Switch
+                    id="has-offers-switch"
+                    data-testid="has-offers-switch"
+                    checked={collectForm.has_offers}
+                    onCheckedChange={(v) => setCollectForm({...collectForm, has_offers: v, actual_collected: v ? '' : collectForm.amount})}
                   />
                 </div>
+
+                {collectForm.has_offers ? (
+                  <>
+                    <div>
+                      <Label>{t('المبلغ الفعلي المُحصّل')}</Label>
+                      <Input
+                        type="number"
+                        data-testid="actual-collected-input"
+                        value={collectForm.actual_collected}
+                        onChange={(e) => setCollectForm({...collectForm, actual_collected: e.target.value})}
+                        placeholder={t('أدخل المبلغ المستلم فعلياً')}
+                        className="mt-1"
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="text-center p-2 bg-red-500/10 rounded-lg">
+                        <p className="text-xs text-red-500">{t('قيمة العرض المخصومة')}</p>
+                        <p className="text-base font-bold text-red-500 tabular-nums" data-testid="offer-amount-value">{formatPrice(offerAmount)}</p>
+                      </div>
+                      <div className="text-center p-2 bg-orange-500/10 rounded-lg">
+                        <p className="text-xs text-orange-500">{t('نسبة العرض')}</p>
+                        <p className="text-base font-bold text-orange-500 tabular-nums" data-testid="offer-percentage-value">{offerPercentage.toFixed(1)}%</p>
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <div>
+                    <Label>{t('المبلغ المحصل')}</Label>
+                    <Input
+                      type="number"
+                      data-testid="collect-amount-input"
+                      value={collectForm.amount}
+                      onChange={(e) => setCollectForm({...collectForm, amount: e.target.value})}
+                      placeholder={t('أدخل المبلغ')}
+                      className="mt-1"
+                    />
+                  </div>
+                )}
                 <div>
                   <Label>{t('اسم المستلم')}</Label>
                   <Input
+                    data-testid="collected-by-input"
                     value={collectForm.collected_by}
                     onChange={(e) => setCollectForm({...collectForm, collected_by: e.target.value})}
                     placeholder={t('من استلم المبلغ')}
@@ -2642,26 +2931,153 @@ const DeliveryReportTab = ({ deliveryCreditsReport, t, formatPrice, fetchReports
                     className="mt-1"
                   />
                 </div>
-                <div className="bg-gray-100 dark:bg-gray-800 p-3 rounded-lg text-sm">
-                  <p className="flex items-center gap-2">
-                    <Clock className="h-4 w-4" />
-                    {t('التاريخ والوقت')}: {new Date().toLocaleString('ar-IQ')}
+                <div className="bg-green-50 dark:bg-green-900/20 p-3 rounded-lg text-sm border border-green-200 dark:border-green-800">
+                  <p className="flex items-center gap-2 font-medium text-green-700 dark:text-green-300">
+                    <Wallet className="h-4 w-4" />
+                    {t('سيتم إيداع')} {formatPrice(collectForm.has_offers ? actualVal : (parseFloat(collectForm.amount) || 0))} {t('في خزينة المالك')}
                   </p>
                 </div>
               </div>
             </div>
           )}
-          <DialogFooter className="flex gap-2">
+          <DialogFooter className="flex flex-col sm:flex-row gap-2">
             <Button variant="outline" onClick={() => setShowCollectDialog(false)}>
               {t('إلغاء')}
             </Button>
-            <Button onClick={handleCollect} disabled={collecting} className="bg-green-600 hover:bg-green-700">
+            <Button onClick={() => handleCollect(false)} disabled={collecting} className="bg-green-600 hover:bg-green-700" data-testid="confirm-collect-btn">
               {collecting ? <RefreshCw className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
               <span className="mr-2">{t('تأكيد التحصيل')}</span>
+            </Button>
+            <Button onClick={() => handleCollect(true)} disabled={collecting} className="bg-blue-600 hover:bg-blue-700" data-testid="confirm-collect-print-btn">
+              {collecting ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Printer className="h-4 w-4" />}
+              <span className="mr-2">{t('تأكيد وطباعة الإيصال')}</span>
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Dialog عرض فواتير شركة التوصيل (Drill-down) */}
+      <Dialog open={showOrdersDialog} onOpenChange={setShowOrdersDialog}>
+        <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Truck className="h-5 w-5 text-primary" />
+              {t('فواتير')} {ordersDialogApp?.name} ({startDate} → {endDate})
+            </DialogTitle>
+          </DialogHeader>
+          {ordersDialogApp && (
+            <div className="space-y-2 py-2" data-testid="delivery-orders-list">
+              {(ordersDialogApp.orders || []).length === 0 && (
+                <p className="text-center text-muted-foreground py-6">{t('لا توجد فواتير في هذه الفترة')}</p>
+              )}
+              {(ordersDialogApp.orders || []).map((order) => (
+                <button
+                  key={order.id}
+                  onClick={() => setSelectedInvoice(order)}
+                  className="w-full text-right p-3 rounded-lg border border-border/50 bg-muted/30 hover:bg-muted/60 transition-colors flex items-center justify-between"
+                  data-testid={`delivery-order-${order.order_number}`}
+                >
+                  <div className="flex items-center gap-3">
+                    <Receipt className="h-4 w-4 text-primary" />
+                    <div className="text-right">
+                      <p className="font-bold text-sm">#{order.order_number}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {order.created_at ? new Date(order.created_at).toLocaleString('ar-IQ') : ''}
+                        {order.customer_name ? ` • ${order.customer_name}` : ''}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="text-left">
+                      <p className="font-bold text-sm text-blue-600 tabular-nums">{formatPrice(order.total)}</p>
+                      <p className="text-xs text-amber-600 tabular-nums">{t('الصافي')}: {formatPrice(order.net)}</p>
+                    </div>
+                    {order.delivery_collected && (
+                      <span className="text-xs px-2 py-0.5 bg-green-500/10 text-green-600 rounded-full">{t('محصّل')}</span>
+                    )}
+                    <ChevronLeft className="h-4 w-4 text-muted-foreground" />
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog تفاصيل الفاتورة (الأصناف) */}
+      <Dialog open={!!selectedInvoice} onOpenChange={(o) => !o && setSelectedInvoice(null)}>
+        <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Receipt className="h-5 w-5 text-primary" />
+              {t('تفاصيل الفاتورة')} #{selectedInvoice?.order_number}
+            </DialogTitle>
+          </DialogHeader>
+          {selectedInvoice && (
+            <div className="space-y-3 py-2" data-testid="invoice-details">
+              <div className="text-xs text-muted-foreground flex justify-between">
+                <span>{selectedInvoice.created_at ? new Date(selectedInvoice.created_at).toLocaleString('ar-IQ') : ''}</span>
+                {selectedInvoice.customer_name && <span>{selectedInvoice.customer_name}</span>}
+              </div>
+              <div className="border border-border/50 rounded-lg overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead className="bg-muted/50">
+                    <tr className="text-xs text-muted-foreground">
+                      <th className="p-2 text-right">{t('الصنف')}</th>
+                      <th className="p-2 text-center">{t('الكمية')}</th>
+                      <th className="p-2 text-center">{t('السعر')}</th>
+                      <th className="p-2 text-center">{t('الخصم')}</th>
+                      <th className="p-2 text-left">{t('الإجمالي')}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(selectedInvoice.items || []).map((it, idx) => (
+                      <tr key={idx} className="border-t border-border/30">
+                        <td className="p-2 text-right font-medium">{it.name}</td>
+                        <td className="p-2 text-center tabular-nums">{it.quantity}</td>
+                        <td className="p-2 text-center tabular-nums">{formatPrice(it.price)}</td>
+                        <td className="p-2 text-center tabular-nums text-red-500">{it.discount ? `-${formatPrice(it.discount)}` : '-'}</td>
+                        <td className="p-2 text-left tabular-nums font-bold">{formatPrice(it.total)}</td>
+                      </tr>
+                    ))}
+                    {(selectedInvoice.items || []).length === 0 && (
+                      <tr><td colSpan={5} className="p-4 text-center text-muted-foreground">{t('لا توجد أصناف')}</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+              <div className="space-y-1 text-sm bg-muted/30 p-3 rounded-lg">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">{t('المجموع الفرعي')}:</span>
+                  <span className="tabular-nums">{formatPrice(selectedInvoice.subtotal)}</span>
+                </div>
+                {selectedInvoice.discount > 0 && (
+                  <div className="flex justify-between text-red-500">
+                    <span>{t('الخصم')}:</span>
+                    <span className="tabular-nums">-{formatPrice(selectedInvoice.discount)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">{t('العمولة')}:</span>
+                  <span className="tabular-nums text-red-500">-{formatPrice(selectedInvoice.commission)}</span>
+                </div>
+                <div className="flex justify-between font-bold border-t border-border/50 pt-1 mt-1">
+                  <span>{t('الإجمالي')}:</span>
+                  <span className="tabular-nums text-blue-600">{formatPrice(selectedInvoice.total)}</span>
+                </div>
+                <div className="flex justify-between font-bold text-amber-600">
+                  <span>{t('الصافي المستحق')}:</span>
+                  <span className="tabular-nums">{formatPrice(selectedInvoice.net)}</span>
+                </div>
+              </div>
+              <Button variant="outline" className="w-full" onClick={() => setSelectedInvoice(null)} data-testid="close-invoice-details">
+                {t('رجوع للفواتير')}
+              </Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
     </div>
   );
 };
@@ -3712,6 +4128,9 @@ export default function Reports() {
               formatPrice={formatPrice}
               fetchReports={fetchReports}
               handlePrintDeliveryReport={handlePrintDeliveryReport}
+              startDate={startDate}
+              endDate={endDate}
+              branchName={branchNameForPrint}
             />
           </TabsContent>
 

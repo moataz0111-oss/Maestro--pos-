@@ -729,6 +729,70 @@ export const printDeliveryReport = (data, branchName, dateRange) => {
 };
 
 /**
+ * طباعة إيصال تحصيل من شركة توصيل - صفحة A4 خارجية (عبر المتصفح / طابعة خارجية)
+ * receipt = { company_name, period_start, period_end, total_sales, commission,
+ *             net_receivable, has_offers, offer_amount, offer_percentage,
+ *             collected_amount, collected_by, branch_name, datetime }
+ */
+export const printDeliveryCollectionReceipt = (receipt) => {
+  const r = receipt || {};
+  const fmt = (v) => formatPrice(v || 0);
+  const content = `
+    <div class="print-header">
+      <h1>إيصال تحصيل - شركة توصيل</h1>
+      <div class="branch-name">${r.branch_name || 'جميع الفروع'}</div>
+      <div class="report-date">تاريخ التحصيل: ${r.datetime || new Date().toLocaleString('ar-IQ')}</div>
+    </div>
+
+    <div class="print-section">
+      <div class="section-title">بيانات التحصيل</div>
+      <table>
+        <tbody>
+          <tr><td style="width:40%"><b>شركة التوصيل</b></td><td>${r.company_name || '-'}</td></tr>
+          <tr><td><b>فترة التحصيل</b></td><td>من ${r.period_start || '-'} إلى ${r.period_end || '-'}</td></tr>
+          <tr><td><b>اسم المُحصِّل</b></td><td>${r.collected_by || '-'}</td></tr>
+          <tr><td><b>الفرع</b></td><td>${r.branch_name || '-'}</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="print-section">
+      <div class="section-title">التفاصيل المالية</div>
+      <table>
+        <tbody>
+          <tr><td style="width:60%">إجمالي المبيعات (قبل الاستقطاع)</td><td>${fmt(r.total_sales)}</td></tr>
+          <tr><td>العمولة المستقطعة</td><td class="text-negative">- ${fmt(r.commission)}</td></tr>
+          <tr><td><b>الصافي المستحق</b></td><td><b>${fmt(r.net_receivable)}</b></td></tr>
+          ${r.has_offers ? `
+          <tr><td>قيمة العرض / الخصم المخصوم</td><td class="text-negative">- ${fmt(r.offer_amount)} (${(r.offer_percentage || 0).toFixed(1)}%)</td></tr>
+          ` : ''}
+          <tr style="background:#eafaf0"><td><b>الصافي المُحصَّل والمُودَع في الخزينة</b></td><td><b class="text-positive">${fmt(r.collected_amount)}</b></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="print-section" style="margin-top:40px">
+      <table style="border:none">
+        <tbody>
+          <tr style="border:none">
+            <td style="border:none;text-align:center;padding-top:30px">
+              <div style="border-top:1px solid #333;width:70%;margin:0 auto;padding-top:5px">توقيع المُحصِّل</div>
+            </td>
+            <td style="border:none;text-align:center;padding-top:30px">
+              <div style="border-top:1px solid #333;width:70%;margin:0 auto;padding-top:5px">توقيع مندوب الشركة</div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="print-footer"><p>إيصال تحصيل توصيل - نظام Maestro EGP | ${new Date().toLocaleString('ar-IQ')}</p></div>
+  `;
+  openPrintWindow('إيصال تحصيل - ' + (r.company_name || ''), content);
+};
+
+
+/**
  * طباعة تقرير الإلغاءات
  */
 export const printCancellationsReport = (data, branchName, dateRange) => {

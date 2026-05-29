@@ -1,0 +1,46 @@
+{
+  "summary": "Frontend E2E testing of Delivery Reporting & Collection (Reports → Delivery tab). All 9 requested scenarios passed: commission rates 15%/18% shown (no 0%), drill-down dialogs (orders list + invoice details with items/subtotal/commission/net), offers toggle auto-calculates 975 IQD / 4.9% from actual 19000 vs expected 19975, success toast appears, and Owner Wallet deposit row created in MongoDB with source='delivery_collection', amount=19000, created_by='احمد المحصل'.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Reports.js is ~4378 lines — recommend splitting tab components (DeliveryReportTab, CashClosureTab, etc.) into separate files for maintainability.",
+    "Several 403 errors in console for /api/users, /api/branches, /api/reports/sales when admin loads /reports — non-blocking for delivery flow but indicates permission middleware mismatch; main agent should audit role permissions.",
+    "Adding data-testid attributes for the report tabs would simplify automation (currently rely on Arabic inner text matching)."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100% (verified via curl + DB check)", "frontend": "100% (9/9 scenarios passed)"},
+  "test_credentials": "admin@maestroegp.com / admin123 (tenant admin)",
+  "seed_data_creation": "Pre-existing seed (delivery_app_settings: توترز 15%, طلبات 18%; orders #1001/#1002/#1003) was already present and current-day dated.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Login flow note: shadcn email/password inputs need keyboard.type() (not page.fill) to trigger React onChange handlers; press Enter to submit. Reports tabs are identified by exact Arabic inner-text match on [role='tab'] — there are 14 tabs total. Delivery tab data-testids confirmed working: view-orders-{appName}, collect-delivery-{appName}, delivery-orders-list, delivery-order-{orderNumber}, invoice-details, close-invoice-details, has-offers-switch, actual-collected-input, offer-amount-value, offer-percentage-value, collected-by-input.",
+  "verification_details": {
+    "commission_rates": {"توترز": "15%", "طلبات": "18%", "zero_rate_seen": false},
+    "drill_down": {
+      "orders_list_dialog": true,
+      "invoices_1001_1002_visible": true,
+      "invoice_items_visible": ["برجر دجاج", "بطاطا"],
+      "summary_fields": ["المجموع الفرعي", "العمولة", "الصافي"]
+    },
+    "collection_offer_calc": {
+      "expected_net": 19975,
+      "actual_collected": 19000,
+      "offer_amount_displayed": "975 IQD",
+      "offer_percentage_displayed": "4.9%"
+    },
+    "success_toast": "تم التحصيل visible",
+    "owner_deposit_db_row": {
+      "amount": 19000,
+      "source": "delivery_collection",
+      "created_by": "احمد المحصل",
+      "delivery_app_name": "توترز",
+      "description": "تحصيل توصيل - توترز (2026-05-29 → 2026-05-29) | عرض مخصوم: 975 (4.9%)"
+    }
+  }
+}

@@ -1,0 +1,44 @@
+{
+  "summary": "Frontend E2E verification of NEW 'تأكيد وطباعة الإيصال' (confirm-collect-print-btn) button in Delivery Collection dialog. All 7 requested scenarios PASSED with zero JS errors.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Reports.js still ~4400 lines — recommend splitting tab components into separate files for maintainability (carried over from iteration_182)."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100% (API deposit verified)", "frontend": "100% (7/7 scenarios passed)"},
+  "test_credentials": "admin@maestroegp.com / admin123",
+  "seed_data_creation": "Used pre-existing seed (توترز 15%, طلبات 18%, orders #1001-#1003).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Delivery collection dialog footer now has 3 buttons: cancel ('إلغاء'), confirm-collect-btn ('تأكيد التحصيل'), confirm-collect-print-btn ('تأكيد وطباعة الإيصال'). The print button performs the same collection POST then opens a popup window (window.open + window.print) rendering an A4 receipt. The popup is captured as about:blank with rendered HTML content. Login flow: after submit, app redirects to '/' (not '/dashboard') and shows a cashier-shift modal on dashboard — navigate directly to /reports to bypass.",
+  "verification_details": {
+    "footer_buttons": ["إلغاء", "تأكيد التحصيل", "تأكيد وطباعة الإيصال", "Close (X)"],
+    "print_button_testid_visible": true,
+    "offer_calc": {"actual": 19000, "expected_net": 19975, "offer_amount": "975 IQD", "offer_percentage": "4.9%"},
+    "popup_window_opened": true,
+    "popup_url": "about:blank",
+    "popup_content_includes": ["إيصال تحصيل - شركة توصيل", "توترز", "من 2026-05-29 إلى 2026-05-29", "أحمد المحصل", "23,500 IQD", "- 3,525 IQD", "الصافي المستحق"],
+    "success_toast": "تم التحصيل وإيداع المبلغ في خزينة المالك بنجاح",
+    "dialog_closed_after_action": true,
+    "js_page_errors": 0,
+    "api_owner_wallet_deposit": {
+      "found": true,
+      "amount": 19000.0,
+      "source": "delivery_collection",
+      "delivery_app_name": "توترز",
+      "created_by": "أحمد المحصل",
+      "description": "تحصيل توصيل - توترز (2026-05-29 → 2026-05-29) | عرض مخصوم: 975 (4.9%)"
+    },
+    "dashboard_summary_after_action": {
+      "تم_التحصيل": "19,000 IQD",
+      "المتبقي_للتحصيل": "13,275 IQD"
+    }
+  }
+}

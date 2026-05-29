@@ -1,0 +1,32 @@
+{
+  "summary": "Frontend E2E verification of NEW Collections Log (سجل التحصيلات) inside Delivery report tab. All 8 requested scenarios PASSED with zero JS page errors.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Reports.js is ~3500 lines — consider splitting DeliveryReportTab and other tabs into separate files for maintainability (>700 line threshold).",
+    "Tab click required a non-force normal click; force=True on Radix TabsTrigger did not propagate value change. Not a bug, just noting for future tests."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (skipped)", "frontend": "100% (8/8)"},
+  "test_credentials": "admin@maestroegp.com / admin123",
+  "seed_data_creation": "Used existing seed (توترز/طلبات + orders #1001-#1003). Created 1 collection during test (توترز, 19,000 IQD with offer 4.9%, collector أحمد المحصل).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Tab switching on /reports requires a regular Locator.click() (NOT force=True) because Radix TabsTrigger value updates only on real pointer events. To click delivery tab: page.locator('[role=tab]').filter(has_text='التوصيل').first.click(). After click, wait 7-8s for splash. Console shows pre-login 403s (expected before token is set) and ERR_CONNECTION_REFUSED to localhost:9999 (local print agent, not available in preview env — expected). Collections Log lazy-loads only when toggle is opened; if you collect first then open the log, both endpoints fire. Reprint opens about:blank popup with rendered A4 HTML (company, period, amounts, collector). CSV download capturable in headless via expect_download — filename سجل_تحصيلات_التوصيل_{from}_{to}.csv + success toast 'تم تصدير السجل بنجاح'.",
+  "verified_scenarios": [
+    "Login + navigate /reports",
+    "Delivery tab activates, 2 companies shown (توترز 15%, طلبات 18%)",
+    "Collection creation with has-offers ON + 19000 + أحمد المحصل + confirm-collect-btn => success toast",
+    "toggle-collections-log expands the log",
+    "collections-log-table shows row: 2026-05-29 | توترز | 2026-05-29 → 2026-05-29 | 19,975 IQD | -975 IQD (4.9%) | 19,000 IQD | أحمد المحصل",
+    "reprint-collection-{id} opens about:blank popup containing توترز, أحمد المحصل, 19,000 IQD, 23,500 IQD, -3,525 IQD, 19,975 IQD",
+    "export-collections-csv triggers download (سجل_تحصيلات_التوصيل_2026-05-29_2026-05-29.csv) + 'تم تصدير' toast",
+    "No JS pageerror; only expected 403s before login + localhost:9999 print agent"
+  ]
+}
