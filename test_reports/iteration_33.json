@@ -115,7 +115,7 @@
   },
   
   "test_credentials": {
-    "api_url": "https://order-invoices-2.preview.emergentagent.com",
+    "api_url": "https://branch-orders-portal.preview.emergentagent.com",
     "super_admin": {
       "email": "owner@maestroegp.com",
       "password": "owner123",

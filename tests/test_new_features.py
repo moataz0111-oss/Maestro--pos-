@@ -16,7 +16,7 @@ import os
 import uuid
 from datetime import datetime
 
-BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://order-invoices-2.preview.emergentagent.com').rstrip('/')
+BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://branch-orders-portal.preview.emergentagent.com').rstrip('/')
 
 
 class TestAuth:

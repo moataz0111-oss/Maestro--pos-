@@ -3100,6 +3100,7 @@ export default function Reports() {
   });
   // ⭐ Cost-breakdown drill-down state (shared between Sales tab cards and ComprehensiveReportTab)
   const [showCostBreakdown, setShowCostBreakdown] = useState(null);  // 'materials' | 'packaging' | null
+  const [showNetProfitBreakdown, setShowNetProfitBreakdown] = useState(false);  // تفصيل صافي الربح
   
   // تغيير التبويب الافتراضي إذا كان التقرير الشامل معطلاً
   useEffect(() => {
@@ -3633,11 +3634,15 @@ export default function Reports() {
                   </Card>
                   {/* صافي الربح - يظهر فقط إذا كانت صلاحية تقرير التحليل مفعلة */}
                   {dashboardSettings.showBreakEvenReport !== false && (
-                  <Card className="border-l-4 border-l-emerald-500">
+                  <Card
+                    className="border-l-4 border-l-emerald-500 cursor-pointer hover:shadow-lg hover:scale-[1.02] transition-all"
+                    onClick={() => setShowNetProfitBreakdown(true)}
+                    data-testid="net-profit-card"
+                  >
                     <CardContent className="p-4">
                       <div className="flex items-center justify-between">
                         <div>
-                          <p className="text-xs text-muted-foreground">{t('صافي الربح')}</p>
+                          <p className="text-xs text-muted-foreground">{t('صافي الربح')} <span className="text-[10px] opacity-70">({t('اضغط للتفاصيل')})</span></p>
                           <p className={`text-2xl font-bold ${
                             (profitLossReport?.net_profit?.amount ?? salesReport.total_profit) < 0
                               ? 'text-red-600' : 'text-emerald-600'
@@ -4570,6 +4575,102 @@ export default function Reports() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowCostBreakdown(null)} data-testid="cost-breakdown-close-btn">
+              {t('إغلاق')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ⭐ Dialog: تفصيل صافي الربح (drill-down عند الضغط على بطاقة صافي الربح) */}
+      <Dialog open={showNetProfitBreakdown} onOpenChange={() => setShowNetProfitBreakdown(false)}>
+        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto" data-testid="net-profit-breakdown-dialog">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <TrendingUp className="h-5 w-5 text-emerald-500" />
+              {t('تفصيل صافي الربح')}
+            </DialogTitle>
+          </DialogHeader>
+          {(() => {
+            const pl = profitLossReport;
+            if (!pl) {
+              return (
+                <p className="text-center text-muted-foreground p-6" data-testid="net-profit-breakdown-empty">
+                  {t('لا توجد بيانات لهذه الفترة')}
+                </p>
+              );
+            }
+            const revenue = pl.revenue?.total_sales || 0;
+            const cogs = pl.cost_of_goods_sold?.total || 0;
+            const commissions = pl.delivery_commissions || 0;
+            const gross = pl.gross_profit?.amount || 0;
+            const rent = pl.fixed_costs?.rent?.period || 0;
+            const electricity = pl.fixed_costs?.electricity?.period || 0;
+            const water = pl.fixed_costs?.water?.period || 0;
+            const generator = pl.fixed_costs?.generator?.period || 0;
+            const salaries = pl.salaries?.total_period || 0;
+            const otherExp = pl.operating_expenses?.total || 0;
+            const opTotal = pl.total_operating_costs?.total || 0;
+            const net = pl.net_profit?.amount || 0;
+            const Row = ({ label, value, sign, color, testid, bold }) => (
+              <div className={`flex justify-between items-center py-1.5 text-sm ${bold ? 'font-bold' : ''}`} data-testid={testid}>
+                <span className={bold ? '' : 'text-muted-foreground'}>{label}</span>
+                <span className={`tabular-nums ${color}`}>
+                  {sign}{formatPrice(value)}
+                </span>
+              </div>
+            );
+            return (
+              <div className="space-y-1">
+                {/* الإيرادات */}
+                <Row label={t('إجمالي المبيعات')} value={revenue} sign="" color="text-foreground" testid="np-revenue" bold />
+                <Row label={t('تكلفة البضاعة المباعة (مواد + تغليف)')} value={cogs} sign="−" color="text-red-600" testid="np-cogs" />
+                {commissions > 0 && (
+                  <Row label={t('عمولات التوصيل')} value={commissions} sign="−" color="text-red-600" testid="np-commissions" />
+                )}
+                <div className="border-t border-border my-1" />
+                <Row label={t('مجمل الربح')} value={gross} sign="" color="text-blue-600" testid="np-gross" bold />
+
+                {/* التكاليف التشغيلية */}
+                <div className="mt-3 p-3 rounded-lg bg-purple-500/5 border border-purple-500/20 space-y-1">
+                  <p className="text-xs font-bold text-purple-600 mb-1">{t('التكاليف التشغيلية')}</p>
+                  {rent > 0 && <Row label={t('الإيجار')} value={rent} sign="−" color="text-red-600" testid="np-rent" />}
+                  {electricity > 0 && <Row label={t('الكهرباء')} value={electricity} sign="−" color="text-red-600" testid="np-electricity" />}
+                  {water > 0 && <Row label={t('الماء')} value={water} sign="−" color="text-red-600" testid="np-water" />}
+                  {generator > 0 && <Row label={t('المولدة')} value={generator} sign="−" color="text-red-600" testid="np-generator" />}
+                  {salaries > 0 && (
+                    <Row
+                      label={`${t('الرواتب')} (${pl.salaries?.employees_count || 0} ${t('موظف')})`}
+                      value={salaries} sign="−" color="text-red-600" testid="np-salaries"
+                    />
+                  )}
+                  {otherExp > 0 && <Row label={t('مصاريف أخرى')} value={otherExp} sign="−" color="text-red-600" testid="np-other-expenses" />}
+                  {opTotal === 0 && (
+                    <p className="text-[11px] text-amber-600 py-1" data-testid="np-no-operating-costs">
+                      ⚠️ {t('سجّل الإيجار/الرواتب/الكهرباء في الإعدادات لاحتساب الربح الصافي بدقة')}
+                    </p>
+                  )}
+                  <div className="border-t border-purple-500/20 pt-1">
+                    <Row label={t('إجمالي التكاليف التشغيلية')} value={opTotal} sign="−" color="text-red-600" testid="np-operating-total" bold />
+                  </div>
+                </div>
+
+                {/* صافي الربح */}
+                <div className={`mt-3 p-4 rounded-lg border-2 ${net >= 0 ? 'bg-green-500/10 border-green-500/30' : 'bg-red-500/10 border-red-500/30'}`} data-testid="np-net-result">
+                  <div className="flex justify-between items-center">
+                    <span className={`font-bold ${net >= 0 ? 'text-green-600' : 'text-red-600'}`}>{t('صافي الربح')}</span>
+                    <span className={`text-2xl font-bold tabular-nums ${net >= 0 ? 'text-green-600' : 'text-red-600'}`} data-testid="np-net-amount">
+                      {formatPrice(net)}
+                    </span>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {t('هامش الربح الصافي')}: {(pl.net_profit?.margin || 0).toFixed(1)}%
+                  </p>
+                </div>
+              </div>
+            );
+          })()}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowNetProfitBreakdown(false)} data-testid="net-profit-breakdown-close-btn">
               {t('إغلاق')}
             </Button>
           </DialogFooter>

@@ -65,17 +65,22 @@ const API = API_URL;
 // ⭐ معامل تحويل الوحدات (نفس منطق صفحة التصنيع — مصدر واحد للحقيقة)
 const _UNIT_W = { 'غرام': 1, 'كغم': 1000, 'كيلو': 1000, 'كجم': 1000, 'gram': 1, 'kg': 1000, 'مل': 1, 'لتر': 1000, 'ml': 1, 'liter': 1000, 'l': 1000 };
 
-// خيارات الوحدات لمنتج مُصنّع: وحدته الأصلية + عائلة وزن القطعة (كما أُدخلت في التصنيع)
+// خيارات الوحدات لمنتج مُصنّع: وحدته الأصلية + عائلة الوزن/الحجم (كما أُدخلت في التصنيع)
+const _WEIGHT_UNITS = ['غرام', 'كغم', 'كيلو', 'كجم', 'gram', 'kg'];
+const _VOLUME_UNITS = ['مل', 'لتر', 'ml', 'liter', 'l'];
 const getProductUnitOptions = (mp) => {
-  const units = new Set([mp?.unit || 'حبة']);
+  const main = mp?.unit || 'حبة';
+  const units = new Set([main]);
   const pwu = mp?.piece_weight_unit;
   const pw = Number(mp?.piece_weight || 0);
+  // إذا كانت الوحدة الرئيسية نفسها وزن/حجم → أضف عائلتها كاملة
+  if (_WEIGHT_UNITS.includes(main)) { units.add('غرام'); units.add('كغم'); }
+  else if (_VOLUME_UNITS.includes(main)) { units.add('مل'); units.add('لتر'); }
+  // إذا كان وزن القطعة معرّفاً → أضف عائلة الوزن/الحجم (التحويل يتم عبر وزن القطعة)
   if (pw > 0 && pwu) {
-    if (['غرام', 'كغم', 'كيلو', 'كجم', 'gram', 'kg'].includes(pwu)) {
-      units.add('غرام'); units.add('كغم');
-    } else if (['مل', 'لتر', 'ml', 'liter', 'l'].includes(pwu)) {
-      units.add('مل'); units.add('لتر');
-    }
+    if (_WEIGHT_UNITS.includes(pwu)) { units.add('غرام'); units.add('كغم'); }
+    else if (_VOLUME_UNITS.includes(pwu)) { units.add('مل'); units.add('لتر'); }
+    units.add(pwu);
   }
   return Array.from(units);
 };
@@ -897,20 +902,23 @@ export default function BranchOrders() {
                     placeholder={t('الكمية')}
                     data-testid="branch-order-qty"
                   />
-                  {/* ⭐ اختيار وحدة الإدخال حسب وحدات المنتج المُصنّع */}
+                  {/* ⭐ اختيار وحدة الإدخال — قائمة منسدلة دائماً لكل المنتجات */}
                   {(() => {
                     const mp = manufacturedProducts.find(p => p.id === selectedProduct);
                     const options = mp ? getProductUnitOptions(mp) : [];
-                    if (!mp || options.length <= 1) {
-                      return <div className="text-xs text-muted-foreground self-center px-2 min-w-[3rem] text-center">{mp?.unit || '-'}</div>;
-                    }
                     return (
-                      <Select value={selectedUnit || mp.unit} onValueChange={setSelectedUnit}>
+                      <Select
+                        value={selectedUnit || mp?.unit || ''}
+                        onValueChange={setSelectedUnit}
+                        disabled={!mp}
+                      >
                         <SelectTrigger className="w-24 bg-background" data-testid="branch-order-unit">
-                          <SelectValue />
+                          <SelectValue placeholder={t('الوحدة')} />
                         </SelectTrigger>
                         <SelectContent>
-                          {options.map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}
+                          {(options.length ? options : [mp?.unit || 'حبة']).map(u => (
+                            <SelectItem key={u} value={u}>{u}</SelectItem>
+                          ))}
                         </SelectContent>
                       </Select>
                     );
@@ -963,10 +971,20 @@ export default function BranchOrders() {
                     placeholder={t('الكمية')}
                     data-testid="branch-order-pkg-qty"
                   />
-                  {/* وحدة مادة التغليف (وحدة واحدة لكل مادة) */}
-                  <div className="text-xs text-muted-foreground self-center px-2 min-w-[3rem] text-center" data-testid="branch-order-pkg-unit">
-                    {packagingMaterials.find(m => m.id === selectedPackaging)?.unit || '-'}
-                  </div>
+                  {/* وحدة مادة التغليف — قائمة منسدلة (وحدة واحدة لكل مادة) */}
+                  {(() => {
+                    const mat = packagingMaterials.find(m => m.id === selectedPackaging);
+                    return (
+                      <Select value={mat?.unit || ''} disabled>
+                        <SelectTrigger className="w-24 bg-background" data-testid="branch-order-pkg-unit">
+                          <SelectValue placeholder={t('الوحدة')} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {mat?.unit && <SelectItem value={mat.unit}>{mat.unit}</SelectItem>}
+                        </SelectContent>
+                      </Select>
+                    );
+                  })()}
                   <Button
                     type="button"
                     size="icon"

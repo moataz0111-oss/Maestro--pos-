@@ -1139,7 +1139,7 @@ async def get_inventory_movements(
     if movement_type:
         query["type"] = movement_type
     
-    # خريطة تصنيف الحركات (4 فئات شاملة)
+    # خريطة تصنيف الحركات (5 فئات شاملة)
     CATEGORY_MAP = {
         "incoming": [
             "in", "purchase_received", "manual_stock_add", "raw_material_stock_add",
@@ -1147,10 +1147,13 @@ async def get_inventory_movements(
         ],
         "to_manufacturing": [
             "warehouse_to_manufacturing", "raw_material_to_manufacturing",
-            "manufacturing_transfer",
+            "manufacturing_transfer", "partial_transfer",
         ],
         "manufacturing": [
-            "product_manufactured", "manufacturing_consumption", "manufacturing",
+            "product_manufactured", "manufacturing",
+        ],
+        "consumption": [
+            "manufacturing_consumption", "manufactured_consumption",
         ],
         "to_branch": [
             "transfer_to_branch", "branch_request_fulfilled", "out",
@@ -1161,14 +1164,17 @@ async def get_inventory_movements(
     
     movements = await db.inventory_movements.find(query, {"_id": 0}).sort("created_at", -1).to_list(2000)
     
-    # تصنيف كل حركة (إضافة category لو غير موجود)
+    # تصنيف كل حركة — النوع هو المرجع (يصحّح أي category مخزّن قديم/غير دقيق)
     type_to_category = {}
     for cat, types in CATEGORY_MAP.items():
         for t in types:
             type_to_category[t] = cat
     for m in movements:
-        if not m.get("category"):
-            m["category"] = type_to_category.get(m.get("type"), "other")
+        derived = type_to_category.get(m.get("type"))
+        if derived:
+            m["category"] = derived
+        elif not m.get("category"):
+            m["category"] = "other"
     
     # ملخص الفترة
     total_in = sum(m.get("quantity", 0) for m in movements if m.get("type") in CATEGORY_MAP["incoming"])
@@ -1214,6 +1220,92 @@ async def get_inventory_movements(
         },
         "daily": sorted(daily_summary.values(), key=lambda x: x["date"], reverse=True),
     }
+
+
+@router.get("/reports/raw-material-consumption")
+async def get_raw_material_consumption(
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    material_id: Optional[str] = None,
+    product_id: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """تقرير حركة استهلاك المواد الخام في التصنيع.
+
+    يُجمّع حركات الاستهلاك (manufacturing_consumption / manufactured_consumption)
+    خلال فترة، ويعرض:
+      - السجل التفصيلي (المادة، المنتج المُصنّع، الكمية، القيمة، التاريخ، المُنفّذ)
+      - ملخص لكل مادة خام (إجمالي الكمية والقيمة)
+      - ملخص لكل منتج مُصنّع (إجمالي قيمة المواد المستهلكة)
+    """
+    db = get_db()
+    if not start_date:
+        start_date = (datetime.now(timezone.utc) - timedelta(days=30)).date().isoformat()
+    if not end_date:
+        end_date = datetime.now(timezone.utc).date().isoformat()
+
+    query = {
+        "type": {"$in": ["manufacturing_consumption", "manufactured_consumption"]},
+        "created_at": {"$gte": start_date + "T00:00:00", "$lte": end_date + "T23:59:59"},
+    }
+    if current_user.get("tenant_id"):
+        query["$or"] = [
+            {"tenant_id": current_user["tenant_id"]},
+            {"tenant_id": {"$exists": False}},
+            {"tenant_id": None},
+        ]
+    if material_id:
+        query["material_id"] = material_id
+    if product_id:
+        query["product_id"] = product_id
+
+    movements = await db.inventory_movements.find(query, {"_id": 0}).sort("created_at", -1).to_list(5000)
+
+    by_material = {}
+    by_product = {}
+    total_qty = 0.0
+    total_value = 0.0
+    for m in movements:
+        qty = abs(m.get("quantity", 0) or 0)
+        val = abs(m.get("total_value", 0) or m.get("cost_after_waste", 0) or 0)
+        total_qty += qty
+        total_value += val
+        mkey = m.get("material_id") or m.get("material_name") or m.get("product_name") or "—"
+        mat = by_material.setdefault(mkey, {
+            "material_id": m.get("material_id"),
+            "material_name": m.get("material_name") or m.get("product_name") or "—",
+            "unit": m.get("unit"), "quantity": 0.0, "value": 0.0, "count": 0
+        })
+        mat["quantity"] += qty
+        mat["value"] += val
+        mat["count"] += 1
+        pkey = m.get("product_id") or m.get("product_name") or "—"
+        prod = by_product.setdefault(pkey, {
+            "product_id": m.get("product_id"),
+            "product_name": m.get("product_name") or "—",
+            "value": 0.0, "count": 0
+        })
+        prod["value"] += val
+        prod["count"] += 1
+
+    for v in by_material.values():
+        v["quantity"] = round(v["quantity"], 3)
+        v["value"] = round(v["value"], 2)
+    for v in by_product.values():
+        v["value"] = round(v["value"], 2)
+
+    return {
+        "movements": movements,
+        "by_material": sorted(by_material.values(), key=lambda x: x["value"], reverse=True),
+        "by_product": sorted(by_product.values(), key=lambda x: x["value"], reverse=True),
+        "summary": {
+            "total_quantity": round(total_qty, 3),
+            "total_value": round(total_value, 2),
+            "movements_count": len(movements),
+            "period": {"start": start_date, "end": end_date},
+        },
+    }
+
 
 
 @router.post("/warehouse-purchase-requests/{request_id}/confirm-receipt")
@@ -2244,7 +2336,8 @@ async def transfer_to_manufacturing(transfer: WarehouseToManufacturingCreate):
     
     # إضافة للتصنيع (وارد)
     for item in items_with_details:
-        existing = await db.manufacturing_inventory.find_one({"raw_material_id": item["raw_material_id"]})
+        rm_id = item["raw_material_id"]
+        existing = await db.manufacturing_inventory.find_one({"$or": [{"raw_material_id": rm_id}, {"material_id": rm_id}]})
         if existing:
             # ⭐ مزامنة تكلفة الوحدة بطريقة المتوسط المُرجّح (Weighted Average)
             # إن كانت الكمية الحالية = 0 (نفذ المخزن) → استخدم سعر التحويل الجديد مباشرة.
@@ -2260,11 +2353,14 @@ async def transfer_to_manufacturing(transfer: WarehouseToManufacturingCreate):
             else:
                 weighted_cpu = old_cpu
             await db.manufacturing_inventory.update_one(
-                {"raw_material_id": item["raw_material_id"]},
+                {"id": existing["id"]} if existing.get("id") else {"$or": [{"raw_material_id": rm_id}, {"material_id": rm_id}]},
                 {
                     "$inc": {"quantity": item["quantity"]},
                     "$set": {
                         "cost_per_unit": round(weighted_cpu, 6),
+                        # توحيد الحقلين لمداواة السجلات القديمة
+                        "raw_material_id": rm_id,
+                        "material_id": rm_id,
                         "last_updated": datetime.now(timezone.utc).isoformat(),
                     }
                 }
@@ -3001,15 +3097,17 @@ async def fulfill_manufacturing_request(
         if new_effective is not None and abs(new_effective - cost_before) > 0.001:
             cost_changed_materials.append(material_id)
 
-        existing = await db.manufacturing_inventory.find_one({"material_id": material_id})
+        existing = await db.manufacturing_inventory.find_one({"$or": [{"material_id": material_id}, {"raw_material_id": material_id}]})
         if existing:
             await db.manufacturing_inventory.update_one(
-                {"material_id": material_id},
+                {"id": existing["id"]} if existing.get("id") else {"$or": [{"material_id": material_id}, {"raw_material_id": material_id}]},
                 {
                     "$inc": {"quantity": quantity},
                     "$set": {
                         "last_updated": datetime.now(timezone.utc).isoformat(),
                         "cost_per_unit": weighted_cost,
+                        "material_id": material_id,
+                        "raw_material_id": material_id,
                     }
                 }
             )
@@ -4170,8 +4268,10 @@ async def produce_product(
                 })
             continue
         # مكوّن من نوع مادة خام (السلوك الأصلي)
+        # ⭐ مطابقة قوية: السجلات القديمة قد تحمل raw_material_id أو material_id فقط
+        rm_id = ingredient.get("raw_material_id")
         manufacturing_item = await db.manufacturing_inventory.find_one({
-            "raw_material_id": ingredient.get("raw_material_id")
+            "$or": [{"raw_material_id": rm_id}, {"material_id": rm_id}]
         })
 
         available = manufacturing_item.get("quantity", 0) if manufacturing_item else 0
@@ -4256,7 +4356,10 @@ async def produce_product(
         })
 
         await db.manufacturing_inventory.update_one(
-            {"raw_material_id": ingredient.get("raw_material_id")},
+            {"$or": [
+                {"raw_material_id": ingredient.get("raw_material_id")},
+                {"material_id": ingredient.get("raw_material_id")}
+            ]},
             {
                 "$inc": {"quantity": -needed},
                 "$set": {"last_updated": now_iso}
@@ -4419,20 +4522,102 @@ async def get_yield_variances(
 
 
 @router.post("/manufactured-products/{product_id}/add-stock")
-async def add_product_stock(product_id: str, quantity: float = 1):
-    """زيادة كمية المنتج مباشرة (بدون خصم مواد خام) - للتعديل اليدوي.
-    ⭐ مزامنة تلقائية: تُحجَّم الوصفة لتطابق الكمية الجديدة (إن كان النمط Batch)."""
+async def add_product_stock(product_id: str, quantity: float = 1, current_user: dict = Depends(get_current_user)):
+    """زيادة كمية المنتج مع خصم المواد الخام (مثل التصنيع تماماً).
+    ⭐ يخصم مكونات الوصفة (مواد خام + منتجات مُصنّعة) من مخزون التصنيع للكمية المُضافة،
+    ويتحقق من توفر المواد قبل الإضافة، ثم يُزامن الوصفة مع الكمية الجديدة."""
     db = get_db()
-    
+
     product = await db.manufactured_products.find_one({"id": product_id})
     if not product:
         raise HTTPException(status_code=404, detail="المنتج غير موجود")
-    
+
     if quantity <= 0:
         raise HTTPException(status_code=400, detail="الكمية يجب أن تكون أكبر من صفر")
-    
+
     now_iso = datetime.now(timezone.utc).isoformat()
-    # زيادة الكمية فقط
+    tenant_id = current_user.get("tenant_id") if current_user else None
+    performed_by_name = (current_user or {}).get("full_name") or (current_user or {}).get("username")
+
+    # ───── احتساب معامل الاستهلاك (نفس منطق التصنيع) ─────
+    piece_weight = float(product.get("piece_weight") or 0)
+    piece_weight_unit = product.get("piece_weight_unit") or "غرام"
+    piece_grams = piece_weight * _UNIT_WEIGHT_MAP.get(piece_weight_unit, 1.0)
+    calculated_yield = 0.0
+    if piece_weight > 0 and piece_grams > 0:
+        tg = await _compute_recipe_total_grams(db, product.get("recipe") or [])
+        if tg > 0:
+            calculated_yield = tg / piece_grams
+    is_batch_mode = calculated_yield > 0
+    # batch mode: الوصفة تمثل calculated_yield قطعة → معامل = quantity / calculated_yield
+    # legacy mode: الوصفة per-unit → معامل = quantity
+    consume_factor = (quantity / calculated_yield) if is_batch_mode else quantity
+
+    recipe = product.get("recipe") or []
+
+    # ───── التحقق من توفر المواد (مطابقة كلا حقلي المعرّف) ─────
+    insufficient = []
+    for ingredient in recipe:
+        needed = (ingredient.get("quantity", 0) or 0) * consume_factor
+        if needed <= 0:
+            continue
+        if ingredient.get("manufactured_product_id"):
+            mfg = await db.manufactured_products.find_one({"id": ingredient["manufactured_product_id"]})
+            available = mfg.get("quantity", 0) if mfg else 0
+            if available < needed:
+                insufficient.append({"name": ingredient.get("raw_material_name") or (mfg.get("name") if mfg else "منتج مُصنّع"), "needed": round(needed, 3), "available": round(available, 3), "unit": ingredient.get("unit"), "source": "manufactured"})
+            continue
+        rm_id = ingredient.get("raw_material_id")
+        mi = await db.manufacturing_inventory.find_one({"$or": [{"raw_material_id": rm_id}, {"material_id": rm_id}]})
+        available = mi.get("quantity", 0) if mi else 0
+        if available < needed:
+            insufficient.append({"name": ingredient.get("raw_material_name"), "needed": round(needed, 3), "available": round(available, 3), "unit": ingredient.get("unit")})
+    if insufficient:
+        raise HTTPException(status_code=400, detail={"message": "مواد غير كافية لإضافة هذه الكمية", "insufficient_materials": insufficient})
+
+    # ───── خصم المكونات + تسجيل حركة استهلاك ─────
+    for ingredient in recipe:
+        needed = (ingredient.get("quantity", 0) or 0) * consume_factor
+        if needed <= 0:
+            continue
+        base_cost = ingredient.get("cost_per_unit", 0) or 0
+        waste_pct = ingredient.get("waste_percentage", 0) or 0
+        effective_cost = (base_cost / (1 - waste_pct / 100)) if (0 < waste_pct < 100) else base_cost
+        line_after = needed * effective_cost
+        if ingredient.get("manufactured_product_id"):
+            await db.manufactured_products.update_one(
+                {"id": ingredient["manufactured_product_id"]},
+                {"$inc": {"quantity": -needed}, "$set": {"last_updated": now_iso}}
+            )
+            await db.inventory_movements.insert_one({
+                "id": str(uuid.uuid4()), "tenant_id": tenant_id,
+                "type": "manufactured_consumption", "category": "manufacturing",
+                "product_id": ingredient["manufactured_product_id"],
+                "product_name": ingredient.get("raw_material_name"),
+                "quantity": -needed, "unit": ingredient.get("unit"),
+                "reason": f"زيادة كمية {product.get('name')} ({quantity} {product.get('unit', 'حبة')})",
+                "performed_by_name": performed_by_name, "created_at": now_iso,
+            })
+            continue
+        await db.manufacturing_inventory.update_one(
+            {"$or": [{"raw_material_id": ingredient.get("raw_material_id")}, {"material_id": ingredient.get("raw_material_id")}]},
+            {"$inc": {"quantity": -needed}, "$set": {"last_updated": now_iso}}
+        )
+        await db.inventory_movements.insert_one({
+            "id": str(uuid.uuid4()), "tenant_id": tenant_id,
+            "type": "manufacturing_consumption", "category": "manufacturing",
+            "material_id": ingredient.get("raw_material_id"),
+            "material_name": ingredient.get("raw_material_name"),
+            "quantity": round(needed, 6), "unit": ingredient.get("unit"),
+            "cost_per_unit": base_cost, "waste_percentage": waste_pct,
+            "total_value": round(line_after, 2), "cost_after_waste": round(line_after, 2),
+            "product_id": product_id, "product_name": product.get("name"),
+            "batch_quantity": quantity, "performed_by_name": performed_by_name,
+            "notes": f"استُهلكت لزيادة {quantity} {product.get('unit')} من {product.get('name')}",
+            "created_at": now_iso,
+        })
+
+    # زيادة الكمية
     await db.manufactured_products.update_one(
         {"id": product_id},
         {
@@ -4487,19 +4672,19 @@ async def add_product_stock(product_id: str, quantity: float = 1):
         )
         recipe_scaled = True
 
-    # تسجيل الحركة
+    # تسجيل حركة الإضافة
     await db.inventory_movements.insert_one({
         "id": str(uuid.uuid4()),
         "type": "manual_stock_add",
         "product_id": product_id,
         "product_name": product.get("name"),
         "quantity": quantity,
-        "notes": f"إضافة يدوية للمخزون{' + مزامنة الوصفة ×' + str(round(scale_factor, 4)) if recipe_scaled else ''}",
+        "notes": f"زيادة كمية مع خصم المواد الخام{' + مزامنة الوصفة ×' + str(round(scale_factor, 4)) if recipe_scaled else ''}",
         "created_at": now_iso,
     })
-    
+
     return {
-        "message": f"تم إضافة {quantity} {product.get('unit')} إلى {product.get('name')}",
+        "message": f"تم إضافة {quantity} {product.get('unit')} إلى {product.get('name')} وخصم المواد الخام",
         "new_quantity": product.get("quantity", 0) + quantity,
         "recipe_scaled": recipe_scaled,
         "scale_factor": round(scale_factor, 6) if recipe_scaled else 1.0,

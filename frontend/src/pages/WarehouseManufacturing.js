@@ -1684,7 +1684,7 @@ export default function WarehouseManufacturing() {
     fetchYieldVariances(f);
   };
   
-  // زيادة كمية المنتج مباشرة (بدون خصم مواد)
+  // زيادة كمية المنتج المصنّع (مع خصم المواد الخام مثل التصنيع)
   const handleAddStock = async () => {
     if (!showAddStockDialog || addStockQuantity <= 0) return;
     
@@ -3822,6 +3822,7 @@ export default function WarehouseManufacturing() {
                     { key: 'incoming', label: '📥 دخول للمخزن', cls: 'data-[active=true]:bg-emerald-500/15 data-[active=true]:text-emerald-700 data-[active=true]:border-emerald-500/50' },
                     { key: 'to_manufacturing', label: '➡️ إرسال للتصنيع', cls: 'data-[active=true]:bg-purple-500/15 data-[active=true]:text-purple-700 data-[active=true]:border-purple-500/50' },
                     { key: 'manufacturing', label: '🏭 تصنيع منتج', cls: 'data-[active=true]:bg-amber-500/15 data-[active=true]:text-amber-700 data-[active=true]:border-amber-500/50' },
+                    { key: 'consumption', label: '🥩 استهلاك المواد الخام', cls: 'data-[active=true]:bg-rose-500/15 data-[active=true]:text-rose-700 data-[active=true]:border-rose-500/50' },
                     { key: 'to_branch', label: '🚚 إرسال للفروع', cls: 'data-[active=true]:bg-blue-500/15 data-[active=true]:text-blue-700 data-[active=true]:border-blue-500/50' },
                   ].map(c => (
                     <Button
@@ -3934,6 +3935,7 @@ export default function WarehouseManufacturing() {
                             incoming: { lbl: '📥 دخول', cls: 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-400' },
                             to_manufacturing: { lbl: '➡️ للتصنيع', cls: 'bg-purple-500/20 text-purple-700 dark:text-purple-400' },
                             manufacturing: { lbl: '🏭 تصنيع', cls: 'bg-amber-500/20 text-amber-700 dark:text-amber-400' },
+                            consumption: { lbl: '🥩 استهلاك خام', cls: 'bg-rose-500/20 text-rose-700 dark:text-rose-400' },
                             to_branch: { lbl: '🚚 للفرع', cls: 'bg-blue-500/20 text-blue-700 dark:text-blue-400' },
                             other: { lbl: m.type, cls: 'bg-gray-500/20 text-gray-700' },
                           };
@@ -4120,12 +4122,14 @@ export default function WarehouseManufacturing() {
                     selectedMovement.category === 'incoming' ? 'bg-emerald-500/20 text-emerald-700' :
                     selectedMovement.category === 'to_manufacturing' ? 'bg-purple-500/20 text-purple-700' :
                     selectedMovement.category === 'manufacturing' ? 'bg-amber-500/20 text-amber-700' :
+                    selectedMovement.category === 'consumption' ? 'bg-rose-500/20 text-rose-700' :
                     selectedMovement.category === 'to_branch' ? 'bg-blue-500/20 text-blue-700' :
                     'bg-gray-500/20 text-gray-700'
                   }>
                     {selectedMovement.category === 'incoming' ? '📥 دخول للمخزن' :
                      selectedMovement.category === 'to_manufacturing' ? '➡️ إرسال للتصنيع' :
                      selectedMovement.category === 'manufacturing' ? '🏭 تصنيع منتج' :
+                     selectedMovement.category === 'consumption' ? '🥩 استهلاك المواد الخام' :
                      selectedMovement.category === 'to_branch' ? '🚚 إرسال للفرع' :
                      selectedMovement.type}
                   </Badge>
@@ -5905,6 +5909,11 @@ export default function WarehouseManufacturing() {
                     <p className="font-bold text-purple-500 tabular-nums">{Math.round((showAddStockDialog.total_produced || showAddStockDialog.quantity || 0) * 1000) / 1000} {showAddStockDialog.unit || 'قطعة'}</p>
                   </div>
                 </div>
+              </div>
+
+              <div className="flex items-start gap-2 p-2 rounded-lg bg-amber-500/10 text-amber-700 dark:text-amber-300 text-xs" data-testid="add-stock-deduct-note">
+                <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+                <span>{t('سيتم خصم المواد الخام من مخزون التصنيع تلقائياً حسب الوصفة (مثل التصنيع تماماً).')}</span>
               </div>
               
               <div>

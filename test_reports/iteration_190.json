@@ -1,0 +1,33 @@
+{
+  "summary": "Verified Net Profit (صافي الربح) drill-down feature on Reports > Sales tab. The net-profit-card is clickable (cursor-pointer + hover scale + hint text 'اضغط للتفاصيل') and opens the net-profit-breakdown-dialog showing the full breakdown (revenue, COGS, gross, operating-costs section with salaries/rent/etc, operating total, and final net amount with margin). Close button works. Existing materials-cost-card and packaging-cost-card still open cost-breakdown-dialog (no regression). Backend /api/reports/profit-loss returns 200.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/reports/profit-loss, /api/branches, /api/dashboard-settings", "issue": "Initial requests after login return 403 because axios doesn't have the Authorization header attached yet on first render of /reports. A subsequent re-fetch (or hot-reload via the refresh button) returns 200 and the data renders correctly. Pre-existing race condition between auth context hydration and useEffect data fetch — not related to this feature."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "SplashScreen (global)", "issue": "An invisible splash-screen overlay [data-testid='splash-screen'] with class 'fixed inset-0 z-[2147483647]' remains in the DOM and intercepts the FIRST pointer click on the Reports page after navigation. elementFromPoint(center of net-profit-card) returns the splash-screen overlay, not the card. The first click is swallowed; subsequent clicks work. Affects all cards (net-profit, materials, packaging) — not specific to this feature. Suggest: remove the splash-screen from DOM (display:none) once fade-out completes, or add pointer-events:none after the transition.", "selector": "[data-testid='splash-screen']", "priority": "MEDIUM"}
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [
+    "(Optional) Fix splash-screen overlay so it does not block the first click after page load on /reports. Add `pointer-events:none` after the fade-out transition or unmount the component when faded out. Not blocking — the Net Profit feature itself works.",
+    "(Optional) Race condition: /api/reports/* and related fetches fire before the JWT is attached to axios on the first render of /reports, causing transient 403s. Ensure axios interceptor or fetch starts only after auth context is ready."
+  ],
+  "critical_code_review_comments": [
+    "Reports.js is now 4684 lines long — far above the 700-line guideline. Split into per-tab subcomponents (SalesTab, ProfitTab, etc.) and extract dialogs into their own files.",
+    "Net Profit dialog implementation itself is clean: uses profitLossReport fields safely with optional chaining, conditionally renders rows when values > 0, shows warning np-no-operating-costs when opTotal===0, and reuses formatPrice. data-testids are all present."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100%", "frontend": "100% (after first-click splash-screen issue worked around)"},
+  "test_credentials": "admin@maestroegp.com / admin123",
+  "seed_data_creation": "None. Database has only seeded admin user + employees data (salaries showed 36,667 IQD from 2 موظف). No orders, so revenue/COGS/gross = 0 and net profit = -36,667 IQD which exercises the negative-result branch of the dialog.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Net Profit drill-down feature is COMPLETE and WORKING. When using Playwright on /reports, the first click after navigation is intercepted by [data-testid='splash-screen']. Either do a dummy click somewhere harmless first, click twice, or remove the splash-screen via JS before testing. Verified testids in opened dialog: np-revenue, np-cogs, np-gross, np-operating-total, np-net-result, np-net-amount, np-salaries (optional), and net-profit-breakdown-close-btn. Dialog title 'تفصيل صافي الربح' renders. With seeded data only (no orders), net profit = -36,667 IQD (negative branch, red styling) and only np-salaries optional row appears.",
+  "rca of the issue": "First click intercepted by [data-testid='splash-screen'] with z-index 2147483647 covering the page. Subsequent clicks work. This is NOT introduced by the Net Profit feature — it's a global splash screen that lingers in the DOM after fade-out without pointer-events:none. The Net Profit feature itself behaves correctly: setShowNetProfitBreakdown(true) opens <Dialog open={showNetProfitBreakdown}> with data-testid='net-profit-breakdown-dialog', rendering all six required rows plus optional ones based on profitLossReport values, and the close button toggles state back to false."
+}

@@ -1,0 +1,38 @@
+{
+  "summary": "Audited Raw Material Consumption report, movements categorization, produce/add-stock deduction across both legacy id fields, and warehouse->manufacturing merge logic. All 6 backend pytest tests PASS. Frontend movements tab consumption category filter button works end-to-end and shows 6 consumption rows (لحم 20كغم x 3 = 240k each, خبز 100حبة x 3 = 25k each) with performer 'مدير النظام'.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_consumption_audit_iter189.py",
+    "/app/test_reports/pytest/iter189_results.xml"
+  ],
+  "action_items": [
+    "(Low) Leftover seed: warehouse now has 2 'TEST_رخام' rows (qty 170 + qty 0) from merge test re-runs because raw_materials/warehouse_inventory are re-inserted with quantity 200 but the previous run's leftover persists when test runs back-to-back. Optional: tighten cleanup in setup (delete pre-existing TEST_* warehouse_inventory rows too) — does not affect production data."
+  ],
+  "critical_code_review_comments": [
+    "WarehouseManufacturing.js is ~7,400 lines — strongly recommend splitting tabs into separate components (Movements, BranchRequests, Mfg, Warehouse) for maintainability and lazy-loading.",
+    "inventory_system.py is ~6,166 lines — split into per-resource routers (raw_materials, manufacturing, transfers, reports).",
+    "Some console 403s on warehouse load (3x) — likely permission-gated endpoints called preemptively; consider gating by user.role before calling.",
+    "Movements category filter button list duplicates a category->badge map in two places (line 3820-3826 vs 3936-3940); extract a single CATEGORY_META constant."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_consumption_audit_iter189.py (new)"
+  ],
+  "success_rate": {
+    "backend": "100% (6/6: health, report endpoints 200, produce deduction both id fields, consumption report aggregation, movements categorization, transfer merge no-duplicate)",
+    "frontend": "100% (movements tab loads, all 6 category buttons render with correct testids, consumption filter activates, 6 consumption rows + performer column visible)"
+  },
+  "test_credentials": "admin@maestroegp.com / admin123 (verified working)",
+  "seed_data_creation": "Re-ran /app/backend/seed_produce_deduction_test.py — created 'برغر اختبار' product (recipe 0.2 كغم لحم + 1 حبة خبز) + MI rows لحم=50 (material_id only) and خبز=1000 (raw_material_id only). Produce of 100 deducted to لحم=30, خبز=900 — confirmed via API.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Backend audit is green. Key invariants verified live: (a) produce()/add-stock match manufacturing_inventory by $or of {raw_material_id, material_id} and decrement -needed; (b) warehouse-to-manufacturing transfer merges into legacy material_id-only MI row (10+30=40, no duplicate) and heals both id fields; (c) /reports/raw-material-consumption returns {movements, by_material, by_product, summary} with material_name, quantity, product_name (source), performed_by_name; (d) /inventory-movements summary.by_category has a 'consumption' bucket; manufacturing_consumption/manufactured_consumption types are excluded from 'manufacturing' bucket; (e) UI filter button data-testid='mv-cat-consumption' (🥩 استهلاك المواد الخام) works and renders rose-colored badges 'استهلاك خام' in rows. UI testids for the 6 buttons: mv-cat-all/incoming/to_manufacturing/manufacturing/consumption/to_branch.",
+  "rca of the issue": "N/A — accuracy audit + new consumption category UI. Verified end-to-end: produce(100) of 'برغر اختبار' generated 2 ingredient consumption movements (لحم 20 كغم @ 12000=240,000 IQD and خبز 100 حبة @ 250=25,000 IQD) with type='manufactured_consumption'; these were categorized under 'consumption' (NOT 'manufacturing'), and the by_product aggregation correctly links them back to 'برغر اختبار'. Re-runs accumulate (6 rows after 3 produce(100) runs)."
+}
