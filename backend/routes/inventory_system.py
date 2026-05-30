@@ -4253,8 +4253,13 @@ async def update_manufactured_product_recipe(
     if payload.piece_weight is not None:
         update_fields["piece_weight"] = payload.piece_weight
     # ⭐ تعريف البورشن للوحدات العدّية (يُستخدم في حساب العائد والتكلفة)
-    update_fields["piece_def_value"] = payload.piece_def_value
-    update_fields["piece_def_unit"] = payload.piece_def_unit
+    # نُحدّثه فقط عند إرساله صراحةً في الطلب (مثل نافذة تعديل الوصفة)،
+    # حتى لا تمسحه عمليات أخرى لا ترسله (مثل المزامنة) → نحافظ على التعريف.
+    _fields_set = getattr(payload, "model_fields_set", set())
+    if "piece_def_value" in _fields_set:
+        update_fields["piece_def_value"] = payload.piece_def_value
+    if "piece_def_unit" in _fields_set:
+        update_fields["piece_def_unit"] = payload.piece_def_unit
     if payload.piece_weight_unit is not None:
         update_fields["piece_weight_unit"] = payload.piece_weight_unit
         # ⭐ مزامنة جميع الإعدادات: عند تغيير وحدة الوزن، نُحدّث product.unit أيضاً

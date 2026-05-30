@@ -1022,14 +1022,27 @@ export default function WarehouseManufacturing() {
     }
   };
 
+  // ⭐⭐ مصدر واحد للحقيقة لوزن القطعة بالغرام — مع أولوية "تعريف البورشن" (piece_def) إذا وُجد.
+  // القاعدة: التعريف له الأولوية. إن لم يوجد تعريف → نأخذ من حقل وزن القطعة (piece_weight).
+  const _PIECE_W = { 'غرام': 1, 'كغم': 1000, 'كيلو': 1000, 'كجم': 1000, 'gram': 1, 'kg': 1000, 'مل': 1, 'لتر': 1000, 'ml': 1, 'liter': 1000, 'l': 1000 };
+  const getPieceGrams = (product) => {
+    const pw = Number(product?.piece_weight || 0);
+    const pwu = product?.piece_weight_unit || 'غرام';
+    const pwuIsWeight = !!_PIECE_W[pwu];
+    const pdv = Number(product?.piece_def_value || 0);
+    const pdu = product?.piece_def_unit;
+    // التعريف (1 وحدة عدّية = X غرام) له الأولوية
+    if (!pwuIsWeight && pdv > 0 && _PIECE_W[pdu]) return pdv * _PIECE_W[pdu];
+    return pw * (_PIECE_W[pwu] || 1);
+  };
+
+
   // ⭐ احتساب تكلفة الوحدة لمنتج مُصنّع (لاستخدامه عند ربط منتج مصنع كمكوّن في وصفة أخرى)
   const _computeMfgUnitCost = (mp) => {
     if (!mp) return 0;
     const batchCost = Number(mp.raw_material_cost_after_waste) || Number(mp.production_cost) || Number(mp.raw_material_cost) || 0;
     const _W = { 'غرام': 1, 'كغم': 1000, 'كيلو': 1000, 'كجم': 1000, 'gram': 1, 'kg': 1000, 'مل': 1, 'لتر': 1000 };
-    const pw = Number(mp.piece_weight || 0);
-    const pwu = mp.piece_weight_unit || 'غرام';
-    const pieceGrams = pw * (_W[pwu] || 1);
+    const pieceGrams = getPieceGrams(mp);  // ⭐ أولوية التعريف
     let totalGrams = 0;
     const _COUNT = new Set(['قطعة','حبة','علبة','كرتون','صحن','piece']);
     for (const ing of (mp.recipe || [])) {
@@ -1179,7 +1192,7 @@ export default function WarehouseManufacturing() {
       const pw = Number(product.piece_weight || 0);
       const pwu = product.piece_weight_unit || 'غرام';
       const pwuIsWeight = !!_W[pwu];
-      const pieceGrams = pw * (_W[pwu] || 1);
+      const pieceGrams = getPieceGrams(product);  // ⭐ أولوية التعريف (1 قطعة = 119 غرام) ثم حقل وزن القطعة
       let totalGrams = 0;
       for (const ing of (product.recipe || [])) {
         const q = Number(ing.quantity || 0);
@@ -1586,7 +1599,7 @@ export default function WarehouseManufacturing() {
     const pdv = Number(product.piece_def_value || 0);
     const pdu = product.piece_def_unit;
     const usesPieceDef = !pwuIsWeight && pdv > 0 && !!_W[pdu];
-    const pieceGrams = usesPieceDef ? pdv * _W[pdu] : pw * (_W[pwu] || 1);
+    const pieceGrams = getPieceGrams(product);  // ⭐ أولوية التعريف
     // إجمالي وزن الوصفة (مع pack_info للمكونات القطعية)
     let totalGrams = 0;
     for (const ing of (product.recipe || [])) {
@@ -3331,9 +3344,7 @@ export default function WarehouseManufacturing() {
                                 // نستخدم الوزن الحقيقي المُعرَّف (piece_def_value + piece_def_unit) — يطابق الباكند.
                                 const pdv = Number(product.piece_def_value || 0);
                                 const pdu = product.piece_def_unit;
-                                const pieceGrams = (!pwuIsWeight && pdv > 0 && _W[pdu])
-                                  ? pdv * _W[pdu]
-                                  : pw * (_W[pwu] || 1);
+                                const pieceGrams = getPieceGrams(product);  // ⭐ أولوية التعريف
                                 let totalGrams = 0;
                                 for (const ing of (product.recipe || [])) {
                                   const q = Number(ing.quantity || 0);
@@ -4793,31 +4804,49 @@ export default function WarehouseManufacturing() {
                 return (
                   <div className="col-span-2">
                     <Label>{label}</Label>
-                    <div className="flex gap-2 mt-1">
-                      <Input
-                        type="number"
-                        min="0"
-                        step="1"
-                        placeholder={t('مثال: 100')}
-                        value={productForm.piece_weight}
-                        onChange={(e) => setProductForm(prev => ({ ...prev, piece_weight: e.target.value }))}
-                        className="flex-1"
-                        data-testid="product-piece-weight"
-                      />
-                      <Select
-                        value={productForm.piece_weight_unit}
-                        onValueChange={(v) => setProductForm(prev => ({ ...prev, piece_weight_unit: v }))}
-                      >
-                        <SelectTrigger className="w-24">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {allowedUnits.map(uu => (
-                            <SelectItem key={uu} value={uu}>{t(uu)}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
+                    {(() => {
+                      const _REAL = new Set(['غرام', 'كغم', 'كيلو', 'كجم', 'مل', 'لتر']);
+                      const isCount = !_REAL.has(productForm.piece_weight_unit || defaultUnit);
+                      return (
+                        <>
+                          <div className="flex gap-2 mt-1">
+                            <Input
+                              type="number"
+                              min="0"
+                              step="1"
+                              placeholder={t('مثال: 100')}
+                              value={isCount ? 1 : productForm.piece_weight}
+                              disabled={isCount}
+                              onChange={(e) => setProductForm(prev => ({ ...prev, piece_weight: e.target.value }))}
+                              className={`flex-1 ${isCount ? 'bg-muted/60 cursor-not-allowed text-muted-foreground' : ''}`}
+                              data-testid="product-piece-weight"
+                            />
+                            <Select
+                              value={productForm.piece_weight_unit}
+                              onValueChange={(v) => setProductForm(prev => {
+                                const _R = new Set(['غرام', 'كغم', 'كيلو', 'كجم', 'مل', 'لتر']);
+                                const c = !_R.has(v);
+                                return { ...prev, piece_weight_unit: v, piece_weight: c ? '1' : prev.piece_weight };
+                              })}
+                            >
+                              <SelectTrigger className="w-24">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {allowedUnits.map(uu => (
+                                  <SelectItem key={uu} value={uu}>{t(uu)}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          {isCount && (
+                            <p className="text-[10px] text-amber-600 mt-1" data-testid="product-piece-weight-locked-hint">
+                              🔒 {t('ثابت 1 — حدّد الوزن الحقيقي في تعريف البورشن بالأسفل')}
+                            </p>
+                          )}
+                        </>
+                      );
+                    })()}
                     <p className="text-xs text-muted-foreground mt-1">{hint}</p>
                     {derivedText && (
                       <p className="text-xs font-bold text-emerald-600 mt-1" data-testid="portion-derivation">
@@ -5426,20 +5455,39 @@ export default function WarehouseManufacturing() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <Label className="text-xs">{t('وزن البورشن/القطعة')}</Label>
-                  <Input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={editRecipeForm.piece_weight}
-                    onChange={(e) => setEditRecipeForm(prev => ({ ...prev, piece_weight: e.target.value }))}
-                    data-testid="edit-recipe-piece-weight"
-                  />
+                  {(() => {
+                    const _REAL = new Set(['غرام', 'كغم', 'كيلو', 'كجم', 'مل', 'لتر']);
+                    const isCount = !_REAL.has(editRecipeForm.piece_weight_unit || 'غرام');
+                    return (
+                      <>
+                        <Input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={isCount ? 1 : editRecipeForm.piece_weight}
+                          disabled={isCount}
+                          onChange={(e) => setEditRecipeForm(prev => ({ ...prev, piece_weight: e.target.value }))}
+                          data-testid="edit-recipe-piece-weight"
+                          className={isCount ? 'bg-muted/60 cursor-not-allowed text-muted-foreground' : ''}
+                        />
+                        {isCount && (
+                          <p className="text-[10px] text-amber-600 mt-1" data-testid="edit-piece-weight-locked-hint">
+                            🔒 {t('ثابت 1 — حدّد الوزن الحقيقي في تعريف البورشن بالأسفل')}
+                          </p>
+                        )}
+                      </>
+                    );
+                  })()}
                 </div>
                 <div>
                   <Label className="text-xs">{t('وحدة الوزن')}</Label>
                   <Select
                     value={editRecipeForm.piece_weight_unit}
-                    onValueChange={(v) => setEditRecipeForm(prev => ({ ...prev, piece_weight_unit: v }))}
+                    onValueChange={(v) => setEditRecipeForm(prev => {
+                      const _REAL = new Set(['غرام', 'كغم', 'كيلو', 'كجم', 'مل', 'لتر']);
+                      const isCount = !_REAL.has(v);
+                      return { ...prev, piece_weight_unit: v, piece_weight: isCount ? '1' : prev.piece_weight };
+                    })}
                   >
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent className="max-h-72">
