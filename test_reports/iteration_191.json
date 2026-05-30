@@ -1,0 +1,36 @@
+{
+  "summary": "Frontend E2E for Branch Order Reduced Fulfillment (iter191). Full happy path verified across factory + kitchen sides. All data-testids found and functional. Backend already verified by main agent (7/7 pytest).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {"flow": "Initial page load after login", "issue": "Transient 403s on /api/branches (Failed to fetch branches) appear in console while splash-screen is fading; does not break functionality but indicates a request fired before auth token is attached/ready. Worth a stability look.", "affected_selectors": ["/api/branches"]}
+    ],
+    "design_issues": []
+  },
+  "test_report_links": ["/app/backend/tests/test_branch_fulfill_reduction_iter191.py"],
+  "action_items": [
+    "(Low priority) Investigate the early 403 on /api/branches right after login — token may not be attached when initial fetchBranches() fires; consider gating the call until auth context is ready, or retrying once on 403."
+  ],
+  "critical_code_review_comments": [
+    "Functionality is complete and matches the PRD: dialog, per-product cap, reject button, notes-to-kitchen, notification banner with item breakdown, ack flow, reduced badge on order card, and order-details reduction section all wired through to backend.",
+    "Kitchen-side notifications can accumulate (admin/manager view sees ALL unread). Previous run notifications were still visible until acked — expected, but consider a 'تم الاطلاع على الكل' bulk ack button if many accumulate."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100% (per main agent + pytest)", "frontend": "100% (all 6 flows pass)"},
+  "test_credentials": "admin@maestroegp.com / admin123",
+  "seed_data_creation": "Used the provided seed: cd /app/backend && python3 seed_branch_fulfill_test.py (request #9001 with لحم برغر 100/30, كراة مشروم 20/5, ارز ريزو 30/12)",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Re-run seed_branch_fulfill_test.py before each pass — fulfilling consumes manufactured stock and marks the request delivered. Splash screen sometimes intercepts the first click — wait until [data-testid='splash-screen'] is removed before interacting (the polling loop in the test script handles this). Kitchen notifications view shows ALL unread for admins (branch_id=null), so prior-run notifications may still be visible until acked.",
+  "test_evidence": {
+    "factory_dialog": "branch-fulfill-dialog opened; 3 branch-row-* with branch-qty-* pre-filled to min(req, avail) (30/5/12); max attribute set; typing 9999 capped to 30; branch-reject-* set value to 0 and applied orange 'rejected' state; branch-notes-to-kitchen accepts text.",
+    "confirm": "branch-fulfill-confirm closed dialog; toast 'تم التنفيذ — تم إخطار مسؤول المطبخ بتخفيض 3 صنف' shown; order card now shows 'تم التسليم' + 'تم تخفيض 3 صنف' badge; manufactured stock decremented (لحم برغر متوفر:10 = 30-20).",
+    "kitchen_banner": "branch-reduction-notifications visible; branch-notif-<id> card lists each item with 'المطلوب: X → المُرسَل: Y' and 'مرفوض' badge for the rejected one; factory note rendered.",
+    "ack": "branch-notif-ack-<id> click made the corresponding card disappear (sub-card count dropped from 8 to 4 = 1 main + 3 items removed).",
+    "order_details": "Eye icon opens order details modal; data-testid='order-details-reduced' section visible with reduced items list (incl. مرفوض badge) and factory note."
+  }
+}

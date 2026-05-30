@@ -27,6 +27,12 @@
   db.packaging_materials.insert_one({'id':<uuid>,'tenant_id':'default','name':'علبة برغر','unit':'قطعة','quantity':500,'min_quantity':50,'cost_per_unit':250,'category':'علب','created_at':<iso>})
   ```
 
+## Seeded Test Data (Branch Order Reduced Fulfillment - iter191)
+- Re-seed with: `cd /app/backend && python3 seed_branch_fulfill_test.py`
+- Creates 3 limited-stock manufactured products (لحم برغر qty=30, كراة مشروم qty=5, ارز ريزو qty=12)
+- Creates pending branch_request #9001 to "الفرع الرئيسي" asking MORE than available (100/20/30)
+- Use to test: factory adjust/reduce dialog (WarehouseManufacturing > طلبات الفروع) + kitchen reduction banner (BranchOrders)
+
 ## Notes
 - Backend runs WITHOUT --reload; restart with `sudo supervisorctl restart backend` after backend code changes.
 - MongoDB (mongod) is started manually: `mongod --dbpath /data/db --bind_ip 0.0.0.0 --port 27017 --fork --logpath /var/log/mongod.log`

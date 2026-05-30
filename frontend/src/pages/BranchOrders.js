@@ -32,7 +32,8 @@ import {
   Box,
   Percent,
   ClipboardCheck,
-  History
+  History,
+  Printer
 } from 'lucide-react';
 import {
   Dialog,
@@ -60,6 +61,7 @@ import DailyStockCountDialog from '../components/DailyStockCountDialog';
 import StockCountHistoryDialog from '../components/StockCountHistoryDialog';
 import { useAuth } from '../context/AuthContext';
 import { showApiError } from '../utils/apiError';
+import { printBranchOrder } from '../utils/printReport';
 const API = API_URL;
 
 // ⭐ معامل تحويل الوحدات (نفس منطق صفحة التصنيع — مصدر واحد للحقيقة)
@@ -137,6 +139,7 @@ export default function BranchOrders() {
   const [selectedBranch, setSelectedBranch] = useState('');
   const [showStockCountDialog, setShowStockCountDialog] = useState(false);
   const [showHistoryDialog, setShowHistoryDialog] = useState(false);
+  const [branchNotifications, setBranchNotifications] = useState([]); // إشعارات تخفيض الكميات من المصنع
   
   const [form, setForm] = useState({
     to_branch_id: '',
@@ -158,17 +161,19 @@ export default function BranchOrders() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [requestsRes, branchesRes, productsRes, packagingRes] = await Promise.all([
+      const [requestsRes, branchesRes, productsRes, packagingRes, notifsRes] = await Promise.all([
         axios.get(`${API}/branch-requests`, { headers }).catch(() => ({ data: [] })),
         axios.get(`${API}/branches`, { headers }).catch(() => ({ data: [] })),
         axios.get(`${API}/manufactured-products`, { headers }).catch(() => ({ data: [] })),
-        axios.get(`${API}/packaging-materials`, { headers }).catch(() => ({ data: [] }))
+        axios.get(`${API}/packaging-materials`, { headers }).catch(() => ({ data: [] })),
+        axios.get(`${API}/branch-request-notifications/unread`, { headers }).catch(() => ({ data: [] }))
       ]);
       
       setOrders(requestsRes.data || []);
       setBranches(branchesRes.data || []);
       setManufacturedProducts(productsRes.data || []);
       setPackagingMaterials(packagingRes.data || []);
+      setBranchNotifications(notifsRes.data || []);
       
       // جلب مخزون الفرع المحدد (منتجات + تغليف)
       if (selectedBranch) {
@@ -354,6 +359,14 @@ export default function BranchOrders() {
       showApiError(error, t('فشل في تحديث الحالة'));
     }
   };
+  const ackBranchNotification = async (notificationId) => {
+    try {
+      await axios.post(`${API}/branch-request-notifications/${notificationId}/ack`, {}, { headers });
+      setBranchNotifications(prev => prev.filter(n => n.id !== notificationId));
+    } catch (error) {
+      showApiError(error, t('فشل في إغلاق الإشعار'));
+    }
+  };
   const getStatusColor = (status) => {
     switch (status) {
       case 'pending': return 'bg-yellow-500/20 text-yellow-500 border-yellow-500/30';
@@ -441,6 +454,63 @@ export default function BranchOrders() {
           </TabsList>
           {/* الطلبات */}
           <TabsContent value="orders" className="space-y-4">
+            {/* ⭐ إشعارات تخفيض الكميات من المصنع */}
+            {branchNotifications.length > 0 && (
+              <div className="space-y-2" data-testid="branch-reduction-notifications">
+                {branchNotifications.map(n => (
+                  <Card key={n.id} className="border-amber-500/40 bg-amber-500/5" data-testid={`branch-notif-${n.id}`}>
+                    <CardContent className="p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-2">
+                            <AlertCircle className="h-5 w-5 text-amber-600" />
+                            <span className="font-bold text-amber-700">
+                              {t('تم تخفيض كميات في طلب')} #{n.request_number}
+                            </span>
+                          </div>
+                          <p className="text-sm text-muted-foreground mb-2">
+                            {t('قام المصنع')} {n.fulfilled_by_name ? `(${n.fulfilled_by_name})` : ''} {t('بتخفيض الكميات التالية')}:
+                          </p>
+                          <div className="space-y-1">
+                            {(n.reduced_items || []).map((r, idx) => (
+                              <div key={idx} className="flex items-center gap-2 text-sm" data-testid={`branch-notif-${n.id}-item-${idx}`}>
+                                <span className="font-medium">{r.product_name}</span>
+                                <span className="text-muted-foreground">
+                                  {t('المطلوب')}: <span className="font-bold">{r.requested}</span> {r.unit}
+                                </span>
+                                <ArrowRight className="h-3 w-3 text-amber-600" />
+                                {r.rejected ? (
+                                  <Badge className="bg-red-500/20 text-red-600">{t('مرفوض')}</Badge>
+                                ) : (
+                                  <span className="text-amber-700">
+                                    {t('المُرسَل')}: <span className="font-bold">{r.sent}</span> {r.unit}
+                                  </span>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                          {n.notes_to_kitchen && (
+                            <p className="text-sm mt-2 p-2 bg-background rounded border border-amber-500/30">
+                              <strong>{t('رسالة المصنع')}:</strong> {n.notes_to_kitchen}
+                            </p>
+                          )}
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="text-amber-700 border-amber-500/40"
+                          onClick={() => ackBranchNotification(n.id)}
+                          data-testid={`branch-notif-ack-${n.id}`}
+                        >
+                          <Check className="h-4 w-4 ml-1" />
+                          {t('تم الاطلاع')}
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
             {/* Filters */}
             <div className="flex gap-2 items-center flex-wrap">
               <Select value={filterStatus} onValueChange={setFilterStatus}>
@@ -485,6 +555,12 @@ export default function BranchOrders() {
                             {order.priority === 'urgent' && (
                               <Badge className="bg-red-500/20 text-red-500">عاجل</Badge>
                             )}
+                            {(order.reduced_items || []).length > 0 && (
+                              <Badge className="bg-amber-500/20 text-amber-600" data-testid={`order-reduced-badge-${order.id}`}>
+                                <AlertCircle className="h-3 w-3 ml-1" />
+                                {t('تم تخفيض')} {order.reduced_items.length} {t('صنف')}
+                              </Badge>
+                            )}
                           </div>
                           
                           <div className="flex items-center gap-4 text-sm text-muted-foreground mb-2">
@@ -496,6 +572,20 @@ export default function BranchOrders() {
                               <Factory className="h-4 w-4" />
                               {order.items?.length || 0} منتج
                             </span>
+                          </div>
+
+                          {/* من طلب / من أرسل */}
+                          <div className="flex flex-col gap-0.5 text-xs mb-2">
+                            {order.requested_by_name && (
+                              <span className="text-muted-foreground" data-testid={`order-requested-by-${order.id}`}>
+                                {t('طلب بواسطة')}: <span className="font-medium text-foreground">{order.requested_by_name}</span>
+                              </span>
+                            )}
+                            {order.fulfilled_by_name && (
+                              <span className="text-green-600" data-testid={`order-fulfilled-by-${order.id}`}>
+                                {t('أرسله')}: <span className="font-medium">{order.fulfilled_by_name}</span>
+                              </span>
+                            )}
                           </div>
                           
                           <div className="flex flex-wrap gap-2 mb-2">
@@ -1134,6 +1224,16 @@ export default function BranchOrders() {
                     {new Date(showOrderDetails.created_at).toLocaleDateString('en-GB')}
                   </span>
                 </div>
+                <div data-testid="order-details-requested-by">
+                  <span className="text-muted-foreground">{t('طلب بواسطة')}:</span>
+                  <span className="font-medium mr-2">{showOrderDetails.requested_by_name || '—'}</span>
+                </div>
+                {showOrderDetails.fulfilled_by_name && (
+                  <div data-testid="order-details-fulfilled-by">
+                    <span className="text-muted-foreground">{t('نفّذه / أرسله')}:</span>
+                    <span className="font-medium mr-2 text-green-600">{showOrderDetails.fulfilled_by_name}</span>
+                  </div>
+                )}
               </div>
               
               <div className="border rounded-lg">
@@ -1166,7 +1266,46 @@ export default function BranchOrders() {
                   <p className="mt-1">{showOrderDetails.notes}</p>
                 </div>
               )}
+              {(showOrderDetails.reduced_items || []).length > 0 && (
+                <div className="bg-amber-500/10 border border-amber-500/30 p-3 rounded-lg" data-testid="order-details-reduced">
+                  <div className="flex items-center gap-2 mb-2">
+                    <AlertCircle className="h-4 w-4 text-amber-600" />
+                    <span className="text-sm font-bold text-amber-700">{t('كميات خُفّضت من المصنع')}</span>
+                  </div>
+                  <div className="space-y-1">
+                    {showOrderDetails.reduced_items.map((r, idx) => (
+                      <div key={idx} className="flex items-center gap-2 text-sm">
+                        <span className="font-medium">{r.product_name}</span>
+                        <span className="text-muted-foreground">{t('المطلوب')}: <span className="font-bold">{r.requested}</span> {r.unit}</span>
+                        <ArrowRight className="h-3 w-3 text-amber-600" />
+                        {r.rejected ? (
+                          <Badge className="bg-red-500/20 text-red-600">{t('مرفوض')}</Badge>
+                        ) : (
+                          <span className="text-amber-700">{t('المُرسَل')}: <span className="font-bold">{r.sent}</span> {r.unit}</span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                  {showOrderDetails.fulfillment_note && (
+                    <p className="text-sm mt-2 p-2 bg-background rounded">
+                      <strong>{t('رسالة المصنع')}:</strong> {showOrderDetails.fulfillment_note}
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
+          )}
+          {showOrderDetails && (
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => printBranchOrder(showOrderDetails)}
+                data-testid="order-print-a4-btn"
+              >
+                <Printer className="h-4 w-4 ml-2" />
+                {t('طباعة A4')}
+              </Button>
+            </DialogFooter>
           )}
         </DialogContent>
       </Dialog>

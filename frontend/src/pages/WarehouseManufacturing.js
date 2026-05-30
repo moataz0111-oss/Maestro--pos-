@@ -126,6 +126,8 @@ export default function WarehouseManufacturing() {
   const [manufacturingRequests, setManufacturingRequests] = useState([]);  // طلبات من المخزن
   // ⭐ Dialog: التنفيذ الجزئي لطلب التصنيع (تعديل الكميات حسب المتوفر)
   const [mfgFulfillDialog, setMfgFulfillDialog] = useState({ open: false, request: null, qtyOverrides: {}, partial: false, notes: '' });
+  // ⭐ Dialog: تنفيذ طلب فرع بكميات مُعدّلة (تخفيض/رفض لكل منتج)
+  const [branchFulfillDialog, setBranchFulfillDialog] = useState({ open: false, request: null, qtyOverrides: {}, pkgOverrides: {}, notes: '' });
   const [warehouseNotifications, setWarehouseNotifications] = useState([]);  // إشعارات المخزن
   
   // Packaging materials states (مواد التغليف)
@@ -810,12 +812,39 @@ export default function WarehouseManufacturing() {
     }
   };
   
-  // تنفيذ طلب فرع
-  const handleFulfillRequest = async (requestId) => {
+  // فتح حوار تنفيذ طلب فرع — يبدأ بكميات افتراضية = الأقل بين (المطلوب، المتوفر)
+  const openBranchFulfillDialog = (request) => {
+    const qtyOverrides = {};
+    (request.items || []).forEach(it => {
+      const avail = Number(it.available_quantity || 0);
+      const req = Number(it.quantity || 0);
+      qtyOverrides[it.product_id] = Math.max(0, Math.min(avail, req));
+    });
+    const pkgOverrides = {};
+    (request.packaging_items || []).forEach(p => {
+      const avail = Number(p.available_quantity || 0);
+      const req = Number(p.quantity || 0);
+      pkgOverrides[p.packaging_material_id] = Math.max(0, Math.min(avail, req));
+    });
+    setBranchFulfillDialog({ open: true, request, qtyOverrides, pkgOverrides, notes: '' });
+  };
+
+  // تنفيذ طلب فرع (يدعم كميات مُعدّلة + إشعار مسؤول المطبخ بالتخفيضات)
+  const handleFulfillRequest = async (requestId, customItems = null, customPkg = null, notesToKitchen = '') => {
     try {
       setSubmitting(true);
-      await axios.post(`${API}/branch-requests/${requestId}/fulfill`, {}, { headers });
-      toast.success(t('تم تنفيذ الطلب وتحويل المنتجات للفرع'));
+      const body = {};
+      if (customItems) body.items = customItems;
+      if (customPkg) body.packaging_items = customPkg;
+      if (notesToKitchen) body.notes_to_kitchen = notesToKitchen;
+      const res = await axios.post(`${API}/branch-requests/${requestId}/fulfill`, body, { headers });
+      const reduced = res.data?.reduced_items || [];
+      if (reduced.length > 0) {
+        toast.success(`${t('تم التنفيذ — تم إخطار مسؤول المطبخ بتخفيض')} ${reduced.length} ${t('صنف')}`);
+      } else {
+        toast.success(t('تم تنفيذ الطلب وتحويل المنتجات للفرع'));
+      }
+      setBranchFulfillDialog({ open: false, request: null, qtyOverrides: {}, pkgOverrides: {}, notes: '' });
       fetchData();
     } catch (error) {
       const detail = error.response?.data?.detail;
@@ -3624,8 +3653,13 @@ export default function WarehouseManufacturing() {
                               {t('إلى')}: <span className="font-medium text-foreground">{request.to_branch_name}</span>
                             </p>
                             {request.requested_by_name && (
-                              <p className="text-sm text-muted-foreground">
+                              <p className="text-sm text-muted-foreground" data-testid={`branch-req-requested-by-${request.id}`}>
                                 {t('طلب بواسطة')}: <span className="font-medium">{request.requested_by_name}</span>
+                              </p>
+                            )}
+                            {request.fulfilled_by_name && (
+                              <p className="text-sm text-green-600" data-testid={`branch-req-fulfilled-by-${request.id}`}>
+                                {t('نفّذه')}: <span className="font-medium">{request.fulfilled_by_name}</span>
                               </p>
                             )}
                           </div>
@@ -3672,8 +3706,9 @@ export default function WarehouseManufacturing() {
                             <Button
                               size="sm"
                               className="bg-green-600 hover:bg-green-700"
-                              onClick={() => handleFulfillRequest(request.id)}
+                              onClick={() => openBranchFulfillDialog(request)}
                               disabled={submitting}
+                              data-testid={`branch-fulfill-open-${request.id}`}
                             >
                               <CheckCircle className="h-4 w-4 mr-1" />
                               {t('تنفيذ وتحويل للفرع')}
@@ -3682,9 +3717,14 @@ export default function WarehouseManufacturing() {
                         )}
                         
                         {request.status === 'delivered' && (
-                          <div className="flex items-center gap-2 text-green-500">
+                          <div className="flex items-center gap-2 text-green-500 flex-wrap">
                             <CheckCircle className="h-5 w-5" />
                             <span className="font-medium">{t('تم التسليم')}</span>
+                            {request.fulfilled_by_name && (
+                              <span className="text-sm text-muted-foreground">
+                                — {t('نفّذه')}: <span className="font-medium text-green-600">{request.fulfilled_by_name}</span>
+                              </span>
+                            )}
                             {request.delivered_at && (
                               <span className="text-sm text-muted-foreground">
                                 - {new Date(request.delivered_at).toLocaleDateString('ar-EG')}
@@ -7310,6 +7350,190 @@ export default function WarehouseManufacturing() {
             >
               {submitting ? <RefreshCw className="h-4 w-4 animate-spin ml-2" /> : <CheckCircle className="h-4 w-4 ml-2" />}
               {t('تنفيذ جزئي وإشعار التصنيع')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ⭐ Dialog: تنفيذ طلب فرع بكميات مُعدّلة — تخفيض/رفض لكل منتج */}
+      <Dialog open={branchFulfillDialog.open} onOpenChange={(open) => setBranchFulfillDialog(prev => ({ ...prev, open }))}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto" data-testid="branch-fulfill-dialog">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-green-700">
+              <CheckCircle className="h-5 w-5" />
+              {t('تنفيذ الطلب')} — {t('تعديل الكميات قبل التحويل للفرع')}
+            </DialogTitle>
+          </DialogHeader>
+          {branchFulfillDialog.request && (
+            <div className="space-y-4">
+              <div className="rounded-md bg-blue-500/10 border border-blue-500/30 px-3 py-2 text-sm text-blue-700">
+                💡 {t('عدّل الكمية المُرسَلة لكل منتج. اضغط "رفض" لأي منتج لا يمكن إرساله. سيصل مسؤول المطبخ رسالة بتفاصيل المنتجات التي تم تخفيضها.')}
+              </div>
+              {/* المنتجات */}
+              <div className="border rounded-lg overflow-hidden">
+                <div className="grid grid-cols-12 gap-2 bg-muted/40 px-3 py-2 text-xs font-medium">
+                  <div className="col-span-4">{t('المنتج')}</div>
+                  <div className="col-span-2 text-center">{t('المطلوب')}</div>
+                  <div className="col-span-2 text-center">{t('المتوفر')}</div>
+                  <div className="col-span-3 text-center">{t('سيُرسَل')}</div>
+                  <div className="col-span-1 text-center">⚙</div>
+                </div>
+                {(branchFulfillDialog.request.items || []).map((it) => {
+                  const avail = Number(it.available_quantity || 0);
+                  const req = Number(it.quantity || 0);
+                  const cur = Number(branchFulfillDialog.qtyOverrides[it.product_id] ?? 0);
+                  const max = Math.min(Math.max(avail, 0), req);
+                  const reduced = cur < req;
+                  return (
+                    <div key={it.product_id} className={`grid grid-cols-12 gap-2 px-3 py-2 items-center border-t text-sm ${cur <= 0 ? 'bg-red-500/5' : reduced ? 'bg-amber-500/5' : ''}`} data-testid={`branch-row-${it.product_id}`}>
+                      <div className="col-span-4 font-medium truncate">{it.product_name}</div>
+                      <div className="col-span-2 text-center">{req} {it.unit}</div>
+                      <div className={`col-span-2 text-center font-bold ${avail >= req ? 'text-green-600' : avail > 0 ? 'text-amber-600' : 'text-red-600'}`}>
+                        {avail}
+                      </div>
+                      <div className="col-span-3 flex items-center gap-1">
+                        <Input
+                          type="number"
+                          min="0"
+                          max={max}
+                          step="0.01"
+                          value={cur}
+                          onChange={(e) => {
+                            let v = parseFloat(e.target.value) || 0;
+                            if (v < 0) v = 0;
+                            if (v > max) v = max;
+                            setBranchFulfillDialog(prev => ({
+                              ...prev,
+                              qtyOverrides: { ...prev.qtyOverrides, [it.product_id]: v }
+                            }));
+                          }}
+                          className="h-8 text-sm text-center"
+                          data-testid={`branch-qty-${it.product_id}`}
+                        />
+                      </div>
+                      <div className="col-span-1 text-center">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 px-1 text-red-500 hover:text-red-700"
+                          title={t('رفض هذا المنتج')}
+                          onClick={() => setBranchFulfillDialog(prev => ({
+                            ...prev,
+                            qtyOverrides: { ...prev.qtyOverrides, [it.product_id]: 0 }
+                          }))}
+                          data-testid={`branch-reject-${it.product_id}`}
+                        >
+                          {t('رفض')}
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              {/* مواد التغليف */}
+              {(branchFulfillDialog.request.packaging_items || []).length > 0 && (
+                <div className="border rounded-lg overflow-hidden">
+                  <div className="grid grid-cols-12 gap-2 bg-amber-500/10 px-3 py-2 text-xs font-medium text-amber-700">
+                    <div className="col-span-4">{t('مادة التغليف')}</div>
+                    <div className="col-span-2 text-center">{t('المطلوب')}</div>
+                    <div className="col-span-2 text-center">{t('المتوفر')}</div>
+                    <div className="col-span-3 text-center">{t('سيُرسَل')}</div>
+                    <div className="col-span-1 text-center">⚙</div>
+                  </div>
+                  {(branchFulfillDialog.request.packaging_items || []).map((p) => {
+                    const avail = Number(p.available_quantity || 0);
+                    const req = Number(p.quantity || 0);
+                    const cur = Number(branchFulfillDialog.pkgOverrides[p.packaging_material_id] ?? 0);
+                    const max = Math.min(Math.max(avail, 0), req);
+                    return (
+                      <div key={p.packaging_material_id} className={`grid grid-cols-12 gap-2 px-3 py-2 items-center border-t text-sm ${cur < req ? 'bg-amber-500/5' : ''}`} data-testid={`branch-pkg-row-${p.packaging_material_id}`}>
+                        <div className="col-span-4 font-medium truncate">{p.name}</div>
+                        <div className="col-span-2 text-center">{req} {p.unit}</div>
+                        <div className={`col-span-2 text-center font-bold ${avail >= req ? 'text-green-600' : avail > 0 ? 'text-amber-600' : 'text-red-600'}`}>{avail}</div>
+                        <div className="col-span-3 flex items-center gap-1">
+                          <Input
+                            type="number"
+                            min="0"
+                            max={max}
+                            step="0.01"
+                            value={cur}
+                            onChange={(e) => {
+                              let v = parseFloat(e.target.value) || 0;
+                              if (v < 0) v = 0;
+                              if (v > max) v = max;
+                              setBranchFulfillDialog(prev => ({
+                                ...prev,
+                                pkgOverrides: { ...prev.pkgOverrides, [p.packaging_material_id]: v }
+                              }));
+                            }}
+                            className="h-8 text-sm text-center"
+                            data-testid={`branch-pkg-qty-${p.packaging_material_id}`}
+                          />
+                        </div>
+                        <div className="col-span-1 text-center">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 px-1 text-red-500 hover:text-red-700"
+                            title={t('رفض')}
+                            onClick={() => setBranchFulfillDialog(prev => ({
+                              ...prev,
+                              pkgOverrides: { ...prev.pkgOverrides, [p.packaging_material_id]: 0 }
+                            }))}
+                            data-testid={`branch-pkg-reject-${p.packaging_material_id}`}
+                          >
+                            {t('رفض')}
+                          </Button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+              <div>
+                <Label className="text-sm mb-1 block">{t('رسالة لمسؤول المطبخ (اختيارية)')}</Label>
+                <Textarea
+                  rows={2}
+                  placeholder={t('مثال: الكمية المطلوبة كبيرة — تم تخفيضها حسب المتوفر حالياً')}
+                  value={branchFulfillDialog.notes}
+                  onChange={(e) => setBranchFulfillDialog(prev => ({ ...prev, notes: e.target.value }))}
+                  data-testid="branch-notes-to-kitchen"
+                />
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setBranchFulfillDialog({ open: false, request: null, qtyOverrides: {}, pkgOverrides: {}, notes: '' })} data-testid="branch-fulfill-cancel">
+              {t('إلغاء')}
+            </Button>
+            <Button
+              className="bg-green-600 hover:bg-green-700"
+              disabled={submitting || !branchFulfillDialog.request}
+              onClick={() => {
+                const items = (branchFulfillDialog.request?.items || []).map(it => ({
+                  product_id: it.product_id,
+                  quantity: Number(branchFulfillDialog.qtyOverrides[it.product_id] || 0),
+                }));
+                const pkg = (branchFulfillDialog.request?.packaging_items || []).map(p => ({
+                  packaging_material_id: p.packaging_material_id,
+                  quantity: Number(branchFulfillDialog.pkgOverrides[p.packaging_material_id] || 0),
+                }));
+                const totalSent = items.reduce((s, x) => s + (x.quantity || 0), 0) + pkg.reduce((s, x) => s + (x.quantity || 0), 0);
+                if (totalSent <= 0) {
+                  toast.error(t('يجب إرسال كمية واحدة على الأقل'));
+                  return;
+                }
+                handleFulfillRequest(
+                  branchFulfillDialog.request.id,
+                  items,
+                  pkg,
+                  branchFulfillDialog.notes
+                );
+              }}
+              data-testid="branch-fulfill-confirm"
+            >
+              {submitting ? <RefreshCw className="h-4 w-4 animate-spin ml-2" /> : <CheckCircle className="h-4 w-4 ml-2" />}
+              {t('تنفيذ وتحويل للفرع')}
             </Button>
           </DialogFooter>
         </DialogContent>

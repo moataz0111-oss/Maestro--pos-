@@ -906,6 +906,90 @@ export const printCreditReport = (data, branchName, dateRange) => {
   openPrintWindow('تقرير الآجل - ' + (branchName || 'جميع الفروع'), content);
 };
 
+/**
+ * طباعة طلب فرع (سند A4) — يفتح نافذة متصفح خارجية للطباعة (بعيداً عن وكيل الطباعة المحلي)
+ */
+export const printBranchOrder = (order) => {
+  if (!order) return;
+  const statusLabels = {
+    pending: 'قيد الانتظار', approved: 'تمت الموافقة', processing: 'قيد التجهيز',
+    shipped: 'تم الشحن', delivered: 'تم التسليم', cancelled: 'ملغي'
+  };
+  const reducedByName = {};
+  (order.reduced_items || []).forEach(r => { reducedByName[r.product_name] = r; });
+  const items = order.items || [];
+  const hasReductions = (order.reduced_items || []).length > 0;
+  const fmtNum = (n) => {
+    const x = Number(n || 0);
+    return Number.isInteger(x) ? x : x.toFixed(2);
+  };
+  const itemsRows = items.map(it => {
+    const req = Number(it.quantity || 0);
+    const red = reducedByName[it.product_name];
+    const sent = red ? Number(red.sent || 0) : req;
+    const cost = Number(it.cost_per_unit || 0);
+    const isReduced = !!red;
+    return `<tr${isReduced ? ' style="background:#fff7ed"' : ''}>
+      <td>${it.product_name || ''}</td>
+      <td>${fmtNum(req)} ${it.unit || ''}</td>
+      <td class="${isReduced ? 'text-warning' : ''}">${fmtNum(sent)} ${it.unit || ''}${isReduced && sent <= 0 ? ' (مرفوض)' : ''}</td>
+      <td>${formatPrice(cost)}</td>
+      <td>${formatPrice(sent * cost)}</td>
+    </tr>`;
+  }).join('');
+
+  const content = `
+    <div class="print-header">
+      <h1>سند طلب فرع — Maestro EGP</h1>
+      <div class="branch-name">طلب رقم #${order.order_number || order.request_number || ''}</div>
+      <div class="report-date">تاريخ الطلب: ${order.created_at ? new Date(order.created_at).toLocaleString('ar-IQ') : ''} | طباعة: ${new Date().toLocaleString('ar-IQ')}</div>
+    </div>
+
+    <div class="print-section">
+      <div class="section-title">معلومات الطلب</div>
+      <div class="two-cols">
+        <div class="row-item"><span>الفرع:</span><strong>${order.to_branch_name || ''}</strong></div>
+        <div class="row-item"><span>الحالة:</span><strong>${statusLabels[order.status] || order.status || ''}</strong></div>
+        <div class="row-item"><span>طلب بواسطة:</span><strong>${order.requested_by_name || '—'}</strong></div>
+        <div class="row-item"><span>نفّذه / أرسله:</span><strong>${order.fulfilled_by_name || '—'}</strong></div>
+        ${order.priority === 'urgent' ? '<div class="row-item"><span>الأولوية:</span><strong class="text-negative">مستعجل</strong></div>' : ''}
+        ${order.delivered_at ? `<div class="row-item"><span>تاريخ التسليم:</span><strong>${new Date(order.delivered_at).toLocaleString('ar-IQ')}</strong></div>` : ''}
+      </div>
+    </div>
+
+    <div class="print-section">
+      <div class="section-title">المنتجات</div>
+      <table>
+        <thead><tr><th>المنتج</th><th>المطلوب</th><th>المُرسَل</th><th>سعر الوحدة</th><th>الإجمالي</th></tr></thead>
+        <tbody>
+          ${itemsRows}
+          <tr class="table-total"><td colspan="4">إجمالي التكلفة</td><td>${formatPrice(order.total_cost || 0)}</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    ${hasReductions ? `
+    <div class="print-section">
+      <div class="highlight-box danger">
+        <strong>تنبيه: تم تخفيض كميات من المصنع</strong>
+        ${(order.reduced_items || []).map(r => `<div class="row-item"><span>${r.product_name}</span><span>المطلوب: ${fmtNum(r.requested)} ${r.unit || ''} ← ${r.rejected ? 'مرفوض' : 'المُرسَل: ' + fmtNum(r.sent) + ' ' + (r.unit || '')}</span></div>`).join('')}
+        ${order.fulfillment_note ? `<div style="margin-top:6px"><strong>رسالة المصنع:</strong> ${order.fulfillment_note}</div>` : ''}
+      </div>
+    </div>` : ''}
+
+    ${order.notes ? `<div class="print-section"><div class="section-title">ملاحظات</div><p>${order.notes}</p></div>` : ''}
+
+    <div style="margin-top:40px" class="three-cols">
+      <div style="text-align:center;border-top:1px solid #333;padding-top:6px">توقيع الطالب<br/>${order.requested_by_name || ''}</div>
+      <div style="text-align:center;border-top:1px solid #333;padding-top:6px">توقيع المنفّذ<br/>${order.fulfilled_by_name || ''}</div>
+      <div style="text-align:center;border-top:1px solid #333;padding-top:6px">توقيع المستلم</div>
+    </div>
+
+    <div class="print-footer"><p>سند طلب فرع - نظام Maestro EGP | ${new Date().toLocaleString('ar-IQ')}</p></div>
+  `;
+  openPrintWindow(`سند طلب #${order.order_number || order.request_number || ''}`, content);
+};
+
 export default {
   openPrintWindow,
   printComprehensiveReport,
@@ -918,5 +1002,6 @@ export default {
   printCancellationsReport,
   printDiscountsReport,
   printRefundsReport,
-  printCreditReport
+  printCreditReport,
+  printBranchOrder
 };

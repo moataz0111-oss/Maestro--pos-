@@ -2666,6 +2666,37 @@ async def get_branch_requests(status: Optional[str] = None, branch_id: Optional[
         query["to_branch_id"] = branch_id
     
     requests = await db.branch_requests.find(query, {"_id": 0}).sort("created_at", -1).to_list(1000)
+
+    # 🔄 تحديث available_quantity لكل منتج من المخزون الحالي (المحفوظ قد يكون قديماً)
+    product_ids = set()
+    pkg_ids = set()
+    for req in requests:
+        for it in (req.get("items") or []):
+            if it.get("product_id"):
+                product_ids.add(it["product_id"])
+        for pit in (req.get("packaging_items") or []):
+            if pit.get("packaging_material_id"):
+                pkg_ids.add(pit["packaging_material_id"])
+    if product_ids:
+        prods = await db.manufactured_products.find(
+            {"id": {"$in": list(product_ids)}}, {"_id": 0, "id": 1, "quantity": 1}
+        ).to_list(5000)
+        qty_by_id = {p["id"]: float(p.get("quantity") or 0) for p in prods}
+        for req in requests:
+            for it in (req.get("items") or []):
+                pid = it.get("product_id")
+                if pid:
+                    it["available_quantity"] = qty_by_id.get(pid, 0)
+    if pkg_ids:
+        mats = await db.packaging_materials.find(
+            {"id": {"$in": list(pkg_ids)}}, {"_id": 0, "id": 1, "quantity": 1}
+        ).to_list(5000)
+        pqty_by_id = {m["id"]: float(m.get("quantity") or 0) for m in mats}
+        for req in requests:
+            for pit in (req.get("packaging_items") or []):
+                mid = pit.get("packaging_material_id")
+                if mid:
+                    pit["available_quantity"] = pqty_by_id.get(mid, 0)
     return requests
 
 @router.put("/branch-requests/{request_id}/status")
@@ -2699,21 +2730,93 @@ async def update_branch_request_status(request_id: str, status_data: dict):
     return {"message": "تم تحديث الحالة", "status": new_status}
 
 @router.post("/branch-requests/{request_id}/fulfill")
-async def fulfill_branch_request(request_id: str):
-    """تنفيذ طلب الفرع (تحويل المنتجات)"""
+async def fulfill_branch_request(
+    request_id: str,
+    payload: Optional[dict] = None,
+    current_user: dict = Depends(get_current_user),
+):
+    """تنفيذ طلب الفرع (تحويل المنتجات) — يدعم تعديل/تخفيض الكميات لكل منتج.
+
+    Body اختياري:
+        - items: [{product_id, quantity}] — كميات مُرسلة مُعدّلة (أقل من المطلوب = تخفيض، 0 = رفض)
+        - packaging_items: [{packaging_material_id, quantity}] — كميات تغليف مُعدّلة
+        - notes_to_kitchen: str — رسالة من المصنع لمسؤول المطبخ
+    إذا لم يُرسَل payload: يُنفّذ الكميات الأصلية كاملةً.
+    """
     db = get_db()
-    
+    payload = payload or {}
+    tenant_id = get_user_tenant_id(current_user)
+
     # جلب الطلب
     request = await db.branch_requests.find_one({"id": request_id}, {"_id": 0})
     if not request:
         raise HTTPException(status_code=404, detail="الطلب غير موجود")
-    
+
     if request.get("status") not in ["pending", "approved", "processing"]:
         raise HTTPException(status_code=400, detail="لا يمكن تنفيذ هذا الطلب")
-    
-    # التحقق من توفر الكميات
-    insufficient = []
+
+    # الكميات المُخصّصة من المصنع
+    custom_items = payload.get("items") or []
+    custom_pkg = payload.get("packaging_items") or []
+    notes_to_kitchen = (payload.get("notes_to_kitchen") or "").strip()
+
+    custom_qty_by_pid: Dict[str, float] = {}
+    for ci in custom_items:
+        pid = ci.get("product_id")
+        if pid:
+            custom_qty_by_pid[pid] = max(0.0, float(ci.get("quantity") or 0))
+    custom_qty_by_pkg: Dict[str, float] = {}
+    for cp in custom_pkg:
+        mid = cp.get("packaging_material_id")
+        if mid:
+            custom_qty_by_pkg[mid] = max(0.0, float(cp.get("quantity") or 0))
+
+    # ابنِ قوائم التنفيذ (الكمية المُرسلة لا تتجاوز المطلوب) + تتبّع التخفيضات
+    items_to_fulfill = []
+    reduced_items = []
     for item in request.get("items", []):
+        pid = item.get("product_id")
+        original_qty = float(item.get("quantity") or 0)
+        send_qty = custom_qty_by_pid.get(pid, original_qty) if custom_items else original_qty
+        if send_qty > original_qty:
+            send_qty = original_qty
+        if send_qty < original_qty:
+            reduced_items.append({
+                "product_name": item.get("product_name"),
+                "requested": original_qty,
+                "sent": send_qty,
+                "unit": item.get("unit", "قطعة"),
+                "rejected": send_qty <= 0,
+            })
+        if send_qty <= 0:
+            continue
+        items_to_fulfill.append({**item, "quantity": send_qty, "original_quantity": original_qty})
+
+    pkg_to_fulfill = []
+    for pitem in request.get("packaging_items", []):
+        mid = pitem.get("packaging_material_id")
+        original_qty = float(pitem.get("quantity") or 0)
+        send_qty = custom_qty_by_pkg.get(mid, original_qty) if custom_pkg else original_qty
+        if send_qty > original_qty:
+            send_qty = original_qty
+        if send_qty < original_qty:
+            reduced_items.append({
+                "product_name": pitem.get("name"),
+                "requested": original_qty,
+                "sent": send_qty,
+                "unit": pitem.get("unit", "قطعة"),
+                "rejected": send_qty <= 0,
+            })
+        if send_qty <= 0:
+            continue
+        pkg_to_fulfill.append({**pitem, "quantity": send_qty})
+
+    if not items_to_fulfill and not pkg_to_fulfill:
+        raise HTTPException(status_code=400, detail="لا توجد كميات للتنفيذ — جميع الأصناف مرفوضة")
+
+    # التحقق من توفر الكميات (المُعدّلة)
+    insufficient = []
+    for item in items_to_fulfill:
         product = await db.manufactured_products.find_one({"id": item.get("product_id")}, {"_id": 0})
         if not product or product.get("quantity", 0) < item.get("quantity", 0):
             insufficient.append({
@@ -2721,8 +2824,7 @@ async def fulfill_branch_request(request_id: str):
                 "requested": item.get("quantity"),
                 "available": product.get("quantity", 0) if product else 0
             })
-    # التحقق من توفر مواد التغليف
-    for pitem in request.get("packaging_items", []):
+    for pitem in pkg_to_fulfill:
         material = await db.packaging_materials.find_one({"id": pitem.get("packaging_material_id")}, {"_id": 0})
         if not material or material.get("quantity", 0) < pitem.get("quantity", 0):
             insufficient.append({
@@ -2730,7 +2832,7 @@ async def fulfill_branch_request(request_id: str):
                 "requested": pitem.get("quantity"),
                 "available": material.get("quantity", 0) if material else 0
             })
-    
+
     if insufficient:
         raise HTTPException(
             status_code=400,
@@ -2744,7 +2846,7 @@ async def fulfill_branch_request(request_id: str):
     to_branch_id = request.get("to_branch_id")
     branch = await db.branches.find_one({"id": to_branch_id}, {"_id": 0})
     
-    for item in request.get("items", []):
+    for item in items_to_fulfill:
         product_id = item.get("product_id")
         quantity = item.get("quantity")
         
@@ -2794,7 +2896,7 @@ async def fulfill_branch_request(request_id: str):
     
     # ⭐ تحويل مواد التغليف من المخزن الرئيسي لمخزن الفرع
     pkg_tenant_id = request.get("tenant_id")
-    for pitem in request.get("packaging_items", []):
+    for pitem in pkg_to_fulfill:
         material_id = pitem.get("packaging_material_id")
         p_qty = pitem.get("quantity", 0)
         if not material_id or p_qty <= 0:
@@ -2836,16 +2938,21 @@ async def fulfill_branch_request(request_id: str):
             })
     
     # تحديث حالة الطلب
+    now_iso = datetime.now(timezone.utc).isoformat()
+    fulfilled_by_name = current_user.get("full_name") or current_user.get("username") or ""
     await db.branch_requests.update_one(
         {"id": request_id},
         {"$set": {
             "status": "delivered",
-            "shipped_at": datetime.now(timezone.utc).isoformat(),
-            "delivered_at": datetime.now(timezone.utc).isoformat()
+            "shipped_at": now_iso,
+            "delivered_at": now_iso,
+            "fulfilled_by_name": fulfilled_by_name,
+            "reduced_items": reduced_items,
+            "fulfillment_note": notes_to_kitchen,
         }}
     )
     
-    # تسجيل الحركة
+    # تسجيل الحركة (بالكميات المُرسلة فعلياً)
     await db.inventory_movements.insert_one({
         "id": str(uuid.uuid4()),
         "type": "branch_request_fulfilled",
@@ -2853,11 +2960,81 @@ async def fulfill_branch_request(request_id: str):
         "from_location": "manufacturing",
         "to_location": to_branch_id,
         "to_location_name": branch.get("name") if branch else "",
-        "items": request.get("items", []),
-        "created_at": datetime.now(timezone.utc).isoformat()
+        "items": [{"product_id": it.get("product_id"), "product_name": it.get("product_name"),
+                   "quantity": it.get("quantity"), "unit": it.get("unit")} for it in items_to_fulfill],
+        "created_at": now_iso
     })
-    
-    return {"message": "تم تنفيذ الطلب بنجاح", "request_id": request_id}
+
+    # ⭐ إشعار مسؤول المطبخ بالتخفيضات (إن وُجدت)
+    if reduced_items:
+        try:
+            await db.branch_request_notifications.insert_one({
+                "id": str(uuid.uuid4()),
+                "type": "branch_order_reduced",
+                "request_id": request_id,
+                "request_number": request.get("request_number"),
+                "to_branch_id": to_branch_id,
+                "to_branch_name": branch.get("name") if branch else request.get("to_branch_name"),
+                "requested_by": request.get("requested_by"),
+                "requested_by_name": request.get("requested_by_name"),
+                "reduced_items": reduced_items,
+                "reduced_count": len(reduced_items),
+                "notes_to_kitchen": notes_to_kitchen,
+                "fulfilled_by_name": fulfilled_by_name,
+                "status": "unread",
+                "created_at": now_iso,
+                "tenant_id": tenant_id or request.get("tenant_id"),
+            })
+        except Exception:
+            pass  # لا تُفشل العملية بسبب خطأ في الإشعار
+
+    return {
+        "message": "تم تنفيذ الطلب بنجاح",
+        "request_id": request_id,
+        "reduced_items": reduced_items,
+        "transferred_count": len(items_to_fulfill),
+    }
+
+# ==================== BRANCH REQUEST NOTIFICATIONS (إشعارات مسؤول المطبخ) ====================
+
+@router.get("/branch-request-notifications/unread")
+async def get_unread_branch_request_notifications(current_user: dict = Depends(get_current_user)):
+    """إشعارات مسؤول المطبخ غير المقروءة (تخفيض كميات من المصنع)."""
+    db = get_db()
+    tenant_id = get_user_tenant_id(current_user)
+    query: Dict[str, Any] = {"status": "unread"}
+    if tenant_id:
+        query["tenant_id"] = tenant_id
+    # مسؤول الفرع يرى إشعارات فرعه فقط؛ المدير/المالك يرى الكل
+    user_branch = current_user.get("branch_id")
+    user_role = current_user.get("role")
+    if user_branch and user_role not in [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.MANAGER]:
+        query["to_branch_id"] = user_branch
+    notifications = await db.branch_request_notifications.find(
+        query, {"_id": 0}
+    ).sort([("created_at", -1)]).limit(200).to_list(200)
+    return notifications
+
+
+@router.post("/branch-request-notifications/{notification_id}/ack")
+async def ack_branch_request_notification(
+    notification_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """اعتماد (إخفاء) إشعار تخفيض الكميات لمسؤول المطبخ."""
+    db = get_db()
+    res = await db.branch_request_notifications.update_one(
+        {"id": notification_id},
+        {"$set": {
+            "status": "acknowledged",
+            "acknowledged_at": datetime.now(timezone.utc).isoformat(),
+            "acknowledged_by": current_user.get("id"),
+            "acknowledged_by_name": current_user.get("full_name") or current_user.get("username"),
+        }}
+    )
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="الإشعار غير موجود")
+    return {"message": "تم اعتماد الإشعار"}
 
 # ==================== MANUFACTURING REQUESTS (طلبات التصنيع من المخزن) ====================
 
