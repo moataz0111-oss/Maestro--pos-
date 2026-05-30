@@ -1,0 +1,35 @@
+{
+  "summary": "Frontend E2E for Produce-Dialog auto-request of short raw materials (iter192). Full happy path PASSES. The shortfall summary, amber auto-request button, request creation, badge increment, and dialog persistence all work as specified.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": ["/app/test_reports/iteration_192.json"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "WarehouseManufacturing.js is now 7718 lines — very large; consider splitting into sub-components (Produce dialog, Mfg-requests tab, etc.) for maintainability.",
+    "Console shows transient 403s on /api/branches right after login during splash-screen fade (same observation as iter191). Token may fire before auth context is ready. Low priority but worth gating fetches behind auth-ready state.",
+    "Note: with the default produce quantity (1 piece), دجاج زنجر تست does NOT trigger shortage (needs 0.1869 كغم vs 9 كغم available). Shortage only appears when qty >= ~49. The problem statement said 'producing default quantity makes the material short' — this only holds for very small inventory or larger default qty. The button correctly only shows when at least one material is actually short, which is the desired behavior."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (skipped per request)", "frontend": "100% (all 7 assertions pass)"},
+  "test_credentials": "admin@maestroegp.com / admin123",
+  "seed_data_creation": "Used existing seed: دجاج زنجر تست (qty 0, piece 191g, recipe 0.1869kg صدر دجاج), manufacturing_inventory صدر دجاج تست = 9 كغم. Tested with produce qty=100 to force shortage of 10.1 كغم.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Public frontend URL is https://branch-orders-portal.preview.emergentagent.com (NOT maestro-egp.* which returns Preview Unavailable). Login first then navigate to /warehouse-manufacturing. The التصنيع tab is data-testid='tab-manufacturing' (not 'tab-mfg-requests'). To trigger shortage on دجاج زنجر تست, set [data-testid='produce-quantity-input'] to a value >= ~49 (e.g., 100). The auto-request button only renders when shortItems.length > 0. Sonner toasts auto-dismiss in ~4s — capture quickly or assert side-effects (badge increment, new request in طلبات التصنيع tab).",
+  "test_evidence": {
+    "produce_dialog_open": "[data-testid='produce-dialog'] shown with title 'تصنيع: دجاج زنجر تست', recipe row صدر دجاج تست with red ناقص badge, مطلوب 19.1 كغم, متوفر 9 كغم.",
+    "shortfall_summary": "[data-testid='produce-shortfall-summary'] visible: '⚠️ 1 مادة ناقصة — اطلب تحويلها من المخزن قبل التصنيع'.",
+    "auto_request_button": "[data-testid='auto-request-short-materials-btn'] visible, amber bg-amber-500, label exactly 'اطلب المواد الناقصة من المخزن تلقائياً'.",
+    "click_outcome": "Pending badge on [data-testid='tab-mfg-requests'] went 1 -> 2. New request #2 created with item 'صدر دجاج تست' qty 10.1 كغم, cost 50,500 IQD, status بانتظار التنفيذ, notes='طلب تلقائي للمواد الناقصة لتصنيع 100 قطعة من دجاج زنجر تست'. Shortfall math correct: 19.1 - 9 = 10.1 كغم.",
+    "dialog_persistence": "Dialog remained open after the auto-request click (per requirement 'WITHOUT leaving the produce dialog').",
+    "toast_text": "Could not capture via querySelector('[data-sonner-toast]') in test — likely auto-dismissed within the 5s wait window. The toast IS implemented in code (handleAutoRequestShortMaterials lines 1925-1928) and the underlying API call succeeded (verified via badge + new request)."
+  },
+  "rca_of_the_issue": "No bugs found. Feature implemented and working end-to-end as specified."
+}

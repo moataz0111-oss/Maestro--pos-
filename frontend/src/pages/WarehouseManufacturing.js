@@ -331,6 +331,7 @@ export default function WarehouseManufacturing() {
   const [showBranchTransferDialog, setShowBranchTransferDialog] = useState(false);
   const [showAddProductDialog, setShowAddProductDialog] = useState(false);
   const [showProduceDialog, setShowProduceDialog] = useState(null);
+  const [requestingShortMaterials, setRequestingShortMaterials] = useState(false);  // 🤖 طلب تلقائي للمواد الناقصة
   const [showAddStockDialog, setShowAddStockDialog] = useState(null);  // زيادة كمية المنتج المصنع
   const [showAddRawMaterialStockDialog, setShowAddRawMaterialStockDialog] = useState(null);  // زيادة كمية المادة الخام
   const [selectedRecipe, setSelectedRecipe] = useState(null);
@@ -1901,6 +1902,36 @@ export default function WarehouseManufacturing() {
       showApiError(error, t('فشل في إرسال الطلب'));
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  // 🤖 طلب تلقائي للمواد الناقصة من المخزن (من داخل حوار التصنيع)
+  const handleAutoRequestShortMaterials = async (shortItems, productName, qty, unit) => {
+    if (!shortItems || shortItems.length === 0) return;
+    setRequestingShortMaterials(true);
+    try {
+      const userData = JSON.parse(localStorage.getItem('user') || '{}');
+      const res = await axios.post(`${API}/manufacturing-requests`, {
+        items: shortItems.map(it => ({
+          material_id: it.raw_material_id,
+          quantity: Math.round((it.shortfall || 0) * 1000) / 1000,
+        })),
+        priority: 'high',
+        notes: `طلب تلقائي للمواد الناقصة لتصنيع ${qty} ${unit || ''} من ${productName}`,
+        requested_by: userData.id,
+        requested_by_name: userData.name || userData.email,
+      }, { headers });
+      const created = (res.data?.items || []).length;
+      if (created === 0) {
+        toast.error(t('تعذّر إنشاء الطلب — المواد غير موجودة في المخزن'));
+      } else {
+        toast.success(`${t('تم إرسال طلب تلقائي بـ')} ${created} ${t('مادة ناقصة للمخزن')} (#${res.data?.request_number || ''})`);
+      }
+      fetchData();
+    } catch (error) {
+      showApiError(error, t('فشل في إرسال طلب المواد الناقصة'));
+    } finally {
+      setRequestingShortMaterials(false);
     }
   };
   
@@ -5567,17 +5598,47 @@ export default function WarehouseManufacturing() {
                           );
                         })}
                       </div>
-                      {/* ملخص: عدد المواد الناقصة */}
+                      {/* ملخص: عدد المواد الناقصة + طلب تلقائي */}
                       {(() => {
-                        const shortCount = (showProduceDialog.recipe || []).filter(ing => {
+                        const shortItems = (showProduceDialog.recipe || []).map(ing => {
                           const needed = (Number(ing.quantity) || 0) * mult;
                           const invItem = manufacturingInventory.find(m => (m.material_id || m.raw_material_id) === ing.raw_material_id);
-                          return (Number(invItem?.quantity) || 0) < needed;
-                        }).length;
-                        if (shortCount === 0) return null;
+                          const available = Number(invItem?.quantity) || 0;
+                          return {
+                            raw_material_id: ing.raw_material_id,
+                            raw_material_name: ing.raw_material_name,
+                            unit: ing.unit,
+                            needed,
+                            available,
+                            shortfall: Math.max(0, needed - available),
+                          };
+                        }).filter(x => x.shortfall > 1e-9);
+                        if (shortItems.length === 0) return null;
                         return (
-                          <div className="mt-2 p-2 rounded bg-red-500/15 border-2 border-red-500/40 text-red-700 text-sm font-bold text-center" data-testid="produce-shortfall-summary">
-                            ⚠️ {shortCount} {t('مادة ناقصة — اطلب تحويلها من المخزن قبل التصنيع')}
+                          <div className="mt-2 space-y-2" data-testid="produce-shortfall-summary">
+                            <div className="p-2 rounded bg-red-500/15 border-2 border-red-500/40 text-red-700 text-sm font-bold text-center">
+                              ⚠️ {shortItems.length} {t('مادة ناقصة — اطلب تحويلها من المخزن قبل التصنيع')}
+                            </div>
+                            <Button
+                              type="button"
+                              className="w-full bg-amber-500 hover:bg-amber-600 text-white"
+                              disabled={requestingShortMaterials}
+                              onClick={() => handleAutoRequestShortMaterials(
+                                shortItems,
+                                showProduceDialog.name,
+                                produceQuantity,
+                                showProduceDialog.unit || 'حبة'
+                              )}
+                              data-testid="auto-request-short-materials-btn"
+                            >
+                              {requestingShortMaterials
+                                ? <RefreshCw className="h-4 w-4 animate-spin ml-2" />
+                                : <Send className="h-4 w-4 ml-2" />}
+                              {t('اطلب المواد الناقصة من المخزن تلقائياً')}
+                            </Button>
+                            <p className="text-[10px] text-muted-foreground text-center">
+                              {t('سيُرسَل طلب للمخزن بالكميات الناقصة المحسوبة حسب وزن القطعة والوصفة')}
+                            </p>
                           </div>
                         );
                       })()}

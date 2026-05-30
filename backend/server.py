@@ -6182,7 +6182,7 @@ async def create_order(order: OrderCreate, current_user: dict = Depends(get_curr
                         {"id": mp_id},
                         {"_id": 0, "raw_material_cost": 1, "raw_material_cost_after_waste": 1,
                          "production_cost": 1, "recipe": 1, "piece_weight": 1, "piece_weight_unit": 1,
-                         "quantity": 1, "unit": 1, "cost_before_waste": 1}
+                         "quantity": 1, "total_produced": 1, "unit": 1, "cost_before_waste": 1}
                     )
                     if not mfg_product:
                         continue
@@ -6665,7 +6665,7 @@ async def update_order_items(order_id: str, request: UpdateOrderItemsRequest, cu
                         {"id": mp_id},
                         {"_id": 0, "raw_material_cost": 1, "raw_material_cost_after_waste": 1,
                          "production_cost": 1, "recipe": 1, "unit": 1, "piece_weight": 1,
-                         "piece_weight_unit": 1, "quantity": 1, "cost_before_waste": 1}
+                         "piece_weight_unit": 1, "quantity": 1, "total_produced": 1, "cost_before_waste": 1}
                     )
                     if mfg_product:
                         # ⭐ مصدر وحيد للحقيقة (نفس منطق _enrich_unit_cost_fields)
@@ -6995,7 +6995,7 @@ async def recompute_order_costs(
             {"id": mid},
             {"_id": 0, "raw_material_cost": 1, "raw_material_cost_after_waste": 1,
              "production_cost": 1, "recipe": 1, "piece_weight": 1, "piece_weight_unit": 1,
-             "quantity": 1, "unit": 1, "cost_before_waste": 1}
+             "quantity": 1, "total_produced": 1, "unit": 1, "cost_before_waste": 1}
         )
         mfg_cache[mid] = m
         return m

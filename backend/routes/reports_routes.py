@@ -60,7 +60,7 @@ async def _resolve_product_unit_cost(db, product: Dict[str, Any]) -> Dict[str, f
                 {"id": mp_id},
                 {"_id": 0, "raw_material_cost": 1, "raw_material_cost_after_waste": 1,
                  "production_cost": 1, "recipe": 1, "unit": 1, "piece_weight": 1,
-                 "piece_weight_unit": 1, "quantity": 1, "cost_before_waste": 1, "id": 1},
+                 "piece_weight_unit": 1, "quantity": 1, "total_produced": 1, "cost_before_waste": 1, "id": 1},
             )
             if not mfg_product:
                 continue

@@ -3948,7 +3948,13 @@ async def _enrich_unit_cost_fields(db, product: dict) -> dict:
 
     final_yield = calc_yield or count_yield
     stored_qty = float(product.get("quantity") or 0)
-    denom = final_yield or stored_qty or 1.0
+    # ⭐ إصلاح حرج: عند تعذّر حساب العائد من الوصفة، نستخدم العدد الأصلي المُنتَج
+    # (total_produced) قبل المخزون الحالي — وإلا فإن المنتج الذي نفد مخزونه
+    # (quantity=0, yield=0) يُعطي denom=1 فتصبح تكلفة الوحدة = تكلفة الدفعة كاملة!
+    # كذلك استخدام المخزون الحالي يُضخّم التكلفة تدريجياً مع البيع. العائد الصحيح =
+    # العدد الكلي الذي تُنتجه الدفعة = total_produced.
+    total_produced = float(product.get("total_produced") or 0)
+    denom = final_yield or total_produced or stored_qty or 1.0
 
     batch_after = float(product.get("raw_material_cost_after_waste") or product.get("production_cost") or product.get("raw_material_cost") or 0)
     batch_before = float(product.get("cost_before_waste") or product.get("raw_material_cost") or 0)
