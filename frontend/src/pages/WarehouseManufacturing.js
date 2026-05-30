@@ -47,7 +47,8 @@ import {
   DollarSign,
   Edit,
   Check,
-  AlertCircle
+  AlertCircle,
+  Calculator
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -410,6 +411,7 @@ export default function WarehouseManufacturing() {
   const [produceQuantity, setProduceQuantity] = useState(1);
   const [actualYield, setActualYield] = useState('');  // 📊 العدد الفعلي المُنتَج (اختياري) — لتسجيل فرق العائد
   const [showYieldVarianceDialog, setShowYieldVarianceDialog] = useState(false);
+  const [costCheckProduct, setCostCheckProduct] = useState(null); // 🧮 منتج "تحقّق سريع من التكلفة"
   const [yieldVarianceData, setYieldVarianceData] = useState({ records: [], summary: {} });
   const [yieldVarianceFilter, setYieldVarianceFilter] = useState({ product_id: '', days: 30 });
   const [loadingYieldVariance, setLoadingYieldVariance] = useState(false);
@@ -1569,6 +1571,69 @@ export default function WarehouseManufacturing() {
       pieces_count: Math.floor(total_grams / pieceGrams),
     };
   };
+
+  // 🧮 تحقّق سريع من التكلفة — يحسب المعادلة خطوة بخطوة (يطابق منطق الباكند _enrich_unit_cost_fields)
+  const computeCostBreakdown = (product) => {
+    if (!product) return null;
+    const _W = {
+      'غرام': 1, 'كغم': 1000, 'كيلو': 1000, 'كجم': 1000, 'gram': 1, 'kg': 1000,
+      'مل': 1, 'لتر': 1000, 'ml': 1, 'liter': 1000, 'l': 1000
+    };
+    const _COUNT = new Set(['قطعة', 'قطع', 'حبة', 'حبات', 'علبة', 'علب', 'كرتون', 'كراتين', 'صحن', 'piece', 'pieces', 'unit']);
+    const pw = Number(product.piece_weight || 0);
+    const pwu = product.piece_weight_unit || 'غرام';
+    const pwuIsWeight = !!_W[pwu];
+    const pdv = Number(product.piece_def_value || 0);
+    const pdu = product.piece_def_unit;
+    const usesPieceDef = !pwuIsWeight && pdv > 0 && !!_W[pdu];
+    const pieceGrams = usesPieceDef ? pdv * _W[pdu] : pw * (_W[pwu] || 1);
+    // إجمالي وزن الوصفة (مع pack_info للمكونات القطعية)
+    let totalGrams = 0;
+    for (const ing of (product.recipe || [])) {
+      const q = Number(ing.quantity || 0);
+      const f = _W[ing.unit];
+      if (f) {
+        totalGrams += q * f;
+      } else if (_COUNT.has(ing.unit) || !ing.unit) {
+        const mat = rawMaterials?.find?.(r => r.id === ing.raw_material_id);
+        if (mat && mat.pack_quantity && mat.pack_unit) {
+          const pf = _W[mat.pack_unit] || 0;
+          if (pf > 0) totalGrams += q * Number(mat.pack_quantity) * pf;
+        }
+      }
+    }
+    const mainUnitFactor = _W[product.unit];
+    const calcYieldRaw = (pieceGrams > 0 && totalGrams > 0) ? totalGrams / pieceGrams : 0;
+    const calcYield = (mainUnitFactor && totalGrams > 0) ? totalGrams / mainUnitFactor : calcYieldRaw;
+    const storedQty = Number(product.quantity || 0);
+    const totalProduced = Number(product.total_produced || 0);
+    const yieldFromRecipe = calcYield > 0;
+    const finalYield = calcYield || totalProduced || storedQty || 0;
+    const denom = finalYield || 1;
+    const batchBefore = Number(product.raw_material_cost ?? product.cost_before_waste ?? 0);
+    const batchAfter = Number(product.raw_material_cost_after_waste ?? product.production_cost ?? product.raw_material_cost ?? 0);
+    const backendUnitAfter = Number(product.unit_cost_after_waste || 0);
+    const backendUnitBefore = Number(product.unit_cost_before_waste || 0);
+    const unitAfter = backendUnitAfter > 0 ? backendUnitAfter : (batchAfter / denom);
+    const unitBefore = backendUnitBefore > 0 ? backendUnitBefore : (batchBefore / denom);
+    const costPerGram = pieceGrams > 0 ? unitAfter / pieceGrams : 0;
+    // الوحدة الرئيسية وزنية؟ (لا تحتاج تعريف بورشن)
+    const mainUnitIsWeight = !!mainUnitFactor;
+    const pieceDefined = (pwuIsWeight && pw > 0) || usesPieceDef;
+    const needsPieceDef = !mainUnitIsWeight;
+    const showWarning = needsPieceDef && !pieceDefined && totalGrams > 0;
+    const _COUNT_DISP = new Set(['قطعة','حبة','شريحة','حصة','كأس','كاب','قدح','صحن','علبة','كرتون','كيس','باكيت','رول','زجاجة','ربطة','piece']);
+    const _WEIGHT_DISP = new Set(['غرام','كغم','كيلو','كجم','مل','لتر','gram','kg','ml','l','liter']);
+    const useSmart = product.piece_weight_unit && _COUNT_DISP.has(product.piece_weight_unit) && _WEIGHT_DISP.has(product.unit);
+    const unitLabel = useSmart ? product.piece_weight_unit : (product.unit || 'حبة');
+    return {
+      pw, pwu, pwuIsWeight, pdv, pdu, usesPieceDef, pieceGrams,
+      totalGrams, finalYield, yieldFromRecipe, batchAfter, batchBefore, unitAfter, unitBefore,
+      costPerGram, pieceDefined, showWarning, mainUnitIsWeight, unitLabel,
+      pieceDefLabel: usesPieceDef ? `${pdv} ${pdu}` : (pwuIsWeight ? `${pw} ${pwu}` : ''),
+    };
+  };
+
   // 🗑️ حذف سجل من مخزون قسم التصنيع
   const handleDeleteMfgInventoryItem = async (item) => {
     const name = item.material_name || item.raw_material_name || t('السجل');
@@ -3172,8 +3237,34 @@ export default function WarehouseManufacturing() {
                                 {product.piece_weight && (
                                   <Badge variant="outline" className="text-orange-500 border-orange-500">
                                     {t('القطعة')} = {product.piece_weight} {product.piece_weight_unit || 'غرام'}
+                                    {(() => {
+                                      const _WEIGHT = new Set(['غرام','كغم','كيلو','كجم','مل','لتر']);
+                                      const pwu = product.piece_weight_unit || 'غرام';
+                                      const pdv = Number(product.piece_def_value || 0);
+                                      const pdu = product.piece_def_unit;
+                                      if (!_WEIGHT.has(pwu) && pdv > 0 && pdu) {
+                                        return <span className="font-bold"> = {pdv} {t(pdu)}</span>;
+                                      }
+                                      return null;
+                                    })()}
                                   </Badge>
                                 )}
+                                {/* 🔴 شارة تحذير تلقائية: وحدة عدّية بلا تعريف وزن */}
+                                {(() => {
+                                  const b = computeCostBreakdown(product);
+                                  if (!b || !b.showWarning) return null;
+                                  return (
+                                    <button
+                                      onClick={() => setCostCheckProduct(product)}
+                                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-red-500/15 text-red-600 border border-red-500/50 hover:bg-red-500/25 transition-colors animate-pulse"
+                                      title={t('وزن الوحدة غير مُعرّف — اضغط لمعرفة التفاصيل')}
+                                      data-testid={`undefined-weight-warning-${product.id}`}
+                                    >
+                                      <AlertCircle className="h-3 w-3" />
+                                      {t('وزن الوحدة غير مُعرّف')}
+                                    </button>
+                                  );
+                                })()}
                               </div>
                               
                               {/* إحصائيات الكمية */}
@@ -3236,7 +3327,13 @@ export default function WarehouseManufacturing() {
                                 const pw = Number(product.piece_weight || 0);
                                 const pwu = product.piece_weight_unit || 'غرام';
                                 const pwuIsWeight = !!_W[pwu];
-                                const pieceGrams = pw * (_W[pwu] || 1);
+                                // ⭐ تعريف البورشن: عند وحدة عدّية (حصة/قطعة/شريحة...) لا وزن لها،
+                                // نستخدم الوزن الحقيقي المُعرَّف (piece_def_value + piece_def_unit) — يطابق الباكند.
+                                const pdv = Number(product.piece_def_value || 0);
+                                const pdu = product.piece_def_unit;
+                                const pieceGrams = (!pwuIsWeight && pdv > 0 && _W[pdu])
+                                  ? pdv * _W[pdu]
+                                  : pw * (_W[pwu] || 1);
                                 let totalGrams = 0;
                                 for (const ing of (product.recipe || [])) {
                                   const q = Number(ing.quantity || 0);
@@ -3339,7 +3436,7 @@ export default function WarehouseManufacturing() {
                                       const diff = Math.abs(finalYield - storedQty);
                                       const isOutOfSync = storedQty > 0 && diff >= 0.5;
                                       const yieldHint = calcYield > 0
-                                        ? `${t('وزن القطعة')} ${pw} ${pwu} · ${t('إجمالي الوصفة')} ${totalGrams.toFixed(0)} ${t('غرام')}`
+                                        ? `${t('وزن القطعة')} ${(!pwuIsWeight && pdv > 0 && _W[pdu]) ? `${pw} ${pwu} = ${pdv} ${pdu}` : `${pw} ${pwu}`} · ${t('إجمالي الوصفة')} ${totalGrams.toFixed(0)} ${t('غرام')}`
                                         : `${t('وزن القطعة')} ${pw} ${pwu} · ${t('قطعية')}`;
                                       return (
                                         <div className={`mb-2 p-2 rounded-md border text-xs flex items-center justify-between gap-2 flex-wrap ${isOutOfSync ? 'bg-orange-500/10 border-orange-500/40 text-orange-800' : 'bg-amber-500/10 border-amber-500/30 text-amber-800'}`} data-testid="yield-banner">
@@ -3550,6 +3647,15 @@ export default function WarehouseManufacturing() {
                               >
                                 <TrendingDown className="h-4 w-4 ml-2" />
                                 {t('فرق العائد')}
+                              </Button>
+                              <Button
+                                onClick={() => setCostCheckProduct(product)}
+                                variant="outline"
+                                className="border-teal-500 text-teal-600 hover:bg-teal-50"
+                                data-testid={`cost-check-btn-${product.id}`}
+                              >
+                                <Calculator className="h-4 w-4 ml-2" />
+                                {t('تحقّق التكلفة')}
                               </Button>
                             </div>
                           </div>
@@ -5162,6 +5268,119 @@ export default function WarehouseManufacturing() {
           </form>
         </DialogContent>
       </Dialog>
+      {/* 🧮 Dialog: تحقّق سريع من التكلفة */}
+      <Dialog open={!!costCheckProduct} onOpenChange={(o) => !o && setCostCheckProduct(null)}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto" data-testid="cost-check-dialog">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Calculator className="h-5 w-5 text-teal-500" />
+              {t('تحقّق سريع من التكلفة')}
+            </DialogTitle>
+          </DialogHeader>
+          {costCheckProduct && (() => {
+            const b = computeCostBreakdown(costCheckProduct);
+            if (!b) return null;
+            const Row = ({ label, value, strong, color }) => (
+              <div className="flex items-center justify-between gap-3 py-1.5">
+                <span className="text-sm text-muted-foreground">{label}</span>
+                <span className={`text-sm tabular-nums ${strong ? 'font-bold' : ''} ${color || ''}`}>{value}</span>
+              </div>
+            );
+            return (
+              <div className="space-y-3" data-testid="cost-check-body">
+                <p className="font-bold text-base">{costCheckProduct.name}</p>
+
+                {/* تنبيه: الوحدة العدّية غير مُعرّفة */}
+                {b.showWarning && (
+                  <div className="p-3 rounded-lg bg-red-500/10 border-2 border-red-500/50 text-red-700 text-sm space-y-1.5" data-testid="cost-check-warning">
+                    <p className="font-bold flex items-center gap-2">
+                      <AlertCircle className="h-4 w-4" /> {t('تنبيه: وزن الوحدة غير مُعرّف!')}
+                    </p>
+                    <p className="text-xs leading-relaxed">
+                      {t('الوحدة')} "{b.unitLabel}" {t('عدّية بلا وزن مُعرّف، لذلك يحسب النظام التكلفة لكل غرام بدل الوحدة الكاملة — وهذا يُسبّب خطأً في السعر.')}
+                    </p>
+                    <button
+                      onClick={() => { const p = costCheckProduct; setCostCheckProduct(null); openEditRecipe(p); }}
+                      className="text-xs font-bold px-3 py-1.5 rounded bg-red-600 hover:bg-red-700 text-white mt-1"
+                      data-testid="cost-check-define-btn"
+                    >
+                      {t('عرّف وزن')} {b.unitLabel} {t('الآن')}
+                    </button>
+                  </div>
+                )}
+
+                {/* المعادلة خطوة بخطوة */}
+                <div className="rounded-lg border border-teal-300/40 bg-teal-500/5 p-3 divide-y divide-teal-200/30">
+                  {b.yieldFromRecipe ? (
+                    <>
+                      <Row label={`1) ${t('إجمالي وزن الوصفة')}`} value={`${b.totalGrams.toLocaleString()} ${t('غرام')}`} strong />
+                      {!b.mainUnitIsWeight && (
+                        <Row
+                          label={`2) ${t('وزن')} ${b.unitLabel} ${t('الواحدة')}`}
+                          value={b.pieceDefined ? `${b.pieceGrams.toLocaleString()} ${t('غرام')}` : `${t('غير مُعرّف')} (= 1 ${t('غرام')})`}
+                          strong
+                          color={b.pieceDefined ? 'text-teal-700' : 'text-red-600'}
+                        />
+                      )}
+                      <Row
+                        label={`${b.mainUnitIsWeight ? '2' : '3'}) ${t('العائد المحسوب')}`}
+                        value={`${b.totalGrams.toLocaleString()} ÷ ${b.mainUnitIsWeight ? 1 : b.pieceGrams.toLocaleString()} = ${b.finalYield.toFixed(2)} ${b.unitLabel}`}
+                        strong
+                        color="text-blue-600"
+                      />
+                      <Row label={`${b.mainUnitIsWeight ? '3' : '4'}) ${t('التكلفة بعد الهدر')}`} value={formatPrice(b.batchAfter)} strong />
+                      <Row
+                        label={`${b.mainUnitIsWeight ? '4' : '5'}) ${t('سعر')} ${b.unitLabel} ${t('الواحدة')}`}
+                        value={`${formatPrice(b.batchAfter)} ÷ ${b.finalYield.toFixed(2)} = ${formatPrice(b.unitAfter)}`}
+                        strong
+                        color="text-emerald-600"
+                      />
+                    </>
+                  ) : (
+                    <>
+                      <Row
+                        label={`1) ${t('العائد (من الكمية المُنتَجة)')}`}
+                        value={b.finalYield > 0 ? `${b.finalYield.toFixed(2)} ${b.unitLabel}` : t('غير متوفر')}
+                        strong
+                        color="text-blue-600"
+                      />
+                      <Row label={`2) ${t('التكلفة بعد الهدر')}`} value={formatPrice(b.batchAfter)} strong />
+                      <Row
+                        label={`3) ${t('سعر')} ${b.unitLabel} ${t('الواحدة')}`}
+                        value={b.finalYield > 0 ? `${formatPrice(b.batchAfter)} ÷ ${b.finalYield.toFixed(2)} = ${formatPrice(b.unitAfter)}` : formatPrice(b.unitAfter)}
+                        strong
+                        color="text-emerald-600"
+                      />
+                      <div className="pt-2">
+                        <p className="text-[11px] text-amber-700">
+                          ℹ️ {t('تعذّر حساب وزن الوصفة من المكونات (مكونات عدّية بلا تعبئة)، لذلك حُسب العائد من الكمية المُنتَجة.')}
+                        </p>
+                      </div>
+                    </>
+                  )}
+                </div>
+
+                {/* الخلاصة */}
+                <div className="rounded-lg bg-emerald-500/10 border-2 border-emerald-500/40 p-3 text-center">
+                  <p className="text-xs text-muted-foreground">{t('سعر')} {b.unitLabel} {t('الواحدة (بعد الهدر)')}</p>
+                  <p className="text-2xl font-bold text-emerald-600 tabular-nums" data-testid="cost-check-final-price">{formatPrice(b.unitAfter)}</p>
+                  {b.yieldFromRecipe && !b.mainUnitIsWeight && b.pieceDefined && (
+                    <p className="text-[11px] text-muted-foreground mt-1">
+                      ↳ {t('سعر الغرام الواحد')}: <strong>{formatPrice(b.costPerGram)}</strong> · 1 {b.unitLabel} = {b.pieceGrams.toLocaleString()} {t('غرام')}
+                    </p>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCostCheckProduct(null)} data-testid="cost-check-close">
+              {t('إغلاق')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* ⭐ Dialog: تعديل وصفة منتج موجود */}
       <Dialog open={!!showEditRecipeDialog} onOpenChange={(o) => !o && setShowEditRecipeDialog(null)}>
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto" data-testid="edit-recipe-dialog">
