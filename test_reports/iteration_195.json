@@ -1,0 +1,31 @@
+{
+  "summary": "Verified Iter195 'Piece Definition' fields on Create Manufactured Product. Backend POST /api/manufactured-products correctly accepts and persists piece_def_value (float) and piece_def_unit (str). Frontend dialog shows the amber 'create-piece-definition-box' conditionally exactly as expected: HIDDEN when piece_weight_unit is a real weight unit (default غرام) and VISIBLE when a count-based unit (قطعة) is picked; both create-piece-def-value and create-piece-def-unit inputs render and accept input. Final UI submission could not complete in this preview env because the manufacturing inventory has zero raw materials (Recipe required) — backend curl path is already proven to work.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Tabs (Radix) - tab-manufacturing", "issue": "Clicking [data-testid='tab-manufacturing'] via Playwright real mouse click and keyboard ArrowLeft both fail to switch the tab (data-state stays 'inactive'); only dispatching synthetic PointerEvents via JS works. This indicates the Radix TabsTrigger may be missing pointer-events handling or is blocked by an overlay in some layouts. Real users seem unaffected, but it's worth verifying there is no stacking-context/pointer-events issue.", "selector": "[data-testid='tab-manufacturing']", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_piece_def_create_iter195.py",
+    "/app/test_reports/pytest/piece_def_create_iter195.xml"
+  ],
+  "action_items": [
+    "(Optional) Investigate why TabsTrigger [data-testid='tab-manufacturing'] click does not switch tab via standard mouse click in headless Chromium; check for overlay or pointer-events: none on the trigger.",
+    "Seed minimal raw material in manufacturing inventory to allow end-to-end UI happy-path test of product creation (currently inventory empty)."
+  ],
+  "critical_code_review_comments": [
+    "WarehouseManufacturing.js is >7800 lines — strongly recommend splitting into smaller feature modules (createProductDialog, editRecipeDialog, transfers, requests).",
+    "Tab switching reliability: consider adding explicit onClick on TabsTrigger (in addition to Radix's value handling) for resilience under automation."
+  ],
+  "updated_files": ["/app/backend/tests/test_piece_def_create_iter195.py"],
+  "success_rate": {"backend": "100%", "frontend": "100% (conditional box + inputs verified; full submit blocked by empty inventory, not by feature)"},
+  "test_credentials": "admin@maestroegp.com / admin123",
+  "seed_data_creation": "Backend test creates and deletes TEST_pd_* products; no manual seed required.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Iter195 feature (piece_def_value/unit on Create dialog) is verified working at both backend persistence layer (test_piece_def_create_iter195.py - 2/2 passed) and frontend conditional rendering. End-to-end UI submit was not completed because manufacturing inventory has no raw materials in this preview env (recipe ingredient required). To run the full UI happy-path test, seed at least one raw material into manufacturingInventory or transfer one from المخزن first.",
+  "rca of the issue": "N/A - feature is working as designed."
+}

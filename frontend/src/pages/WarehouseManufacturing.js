@@ -368,6 +368,8 @@ export default function WarehouseManufacturing() {
     unit: 'قطعة',
     piece_weight: '', // وزن القطعة بالغرام (اختياري)
     piece_weight_unit: 'غرام', // وحدة وزن القطعة
+    piece_def_value: '', // ⭐ تعريف البورشن للوحدات العدّية (1 قطعة = X)
+    piece_def_unit: 'غرام', // ⭐ وحدة التعريف الحقيقية
     recipe: [],
     quantity: 0,
     min_quantity: 0,
@@ -1298,6 +1300,9 @@ export default function WarehouseManufacturing() {
 
   // ===================== ⭐ تعديل وصفة منتج موجود =====================
   const openEditRecipe = (product) => {
+    const _REAL_UNITS = new Set(['غرام', 'كغم', 'كيلو', 'كجم', 'مل', 'لتر']);
+    const pwu = product.piece_weight_unit || 'غرام';
+    const isCountUnit = !_REAL_UNITS.has(pwu);
     setEditRecipeForm({
       recipe: (product.recipe || []).map(ing => ({
         raw_material_id: ing.raw_material_id,
@@ -1310,7 +1315,10 @@ export default function WarehouseManufacturing() {
         input_quantity: ing.input_quantity ?? ing.quantity,
       })),
       piece_weight: product.piece_weight ?? '',
-      piece_weight_unit: product.piece_weight_unit || 'غرام',
+      piece_weight_unit: pwu,
+      // ⭐ تعريف البورشن: عند اختيار وحدة عدّية، نحدّد وزنها الحقيقي بوحدة قابلة للقياس
+      piece_def_value: isCountUnit ? (product.piece_def_value ?? product.piece_weight ?? '') : '',
+      piece_def_unit: isCountUnit ? (product.piece_def_unit || 'غرام') : 'غرام',
       reason: '',
       name: product.name || '',
       name_en: product.name_en || '',
@@ -1492,6 +1500,14 @@ export default function WarehouseManufacturing() {
           return Number.isFinite(n) ? n : null;
         })(),
         piece_weight_unit: editRecipeForm.piece_weight_unit || null,
+        // ⭐ تعريف البورشن للوحدات العدّية (1 قطعة = piece_def_value piece_def_unit)
+        piece_def_value: (() => {
+          const v = editRecipeForm.piece_def_value;
+          if (v === '' || v === null || v === undefined) return null;
+          const n = Number(v);
+          return Number.isFinite(n) ? n : null;
+        })(),
+        piece_def_unit: editRecipeForm.piece_def_unit || null,
         reason: editRecipeForm.reason || '',
         name: editRecipeForm.name || undefined,
         name_en: editRecipeForm.name_en || undefined,
@@ -1610,6 +1626,14 @@ export default function WarehouseManufacturing() {
       const costAfterWaste = calculateRecipeCostAfterWaste();
       const payload = {
         ...productForm,
+        // ⭐ تعريف البورشن للوحدات العدّية (1 قطعة = piece_def_value piece_def_unit)
+        piece_def_value: (() => {
+          const v = productForm.piece_def_value;
+          if (v === '' || v === null || v === undefined) return null;
+          const n = Number(v);
+          return Number.isFinite(n) ? n : null;
+        })(),
+        piece_def_unit: productForm.piece_def_unit || null,
         production_cost: parseFloat(costAfterWaste.toFixed(2)),  // التكلفة المعتمدة
         cost_before_waste: parseFloat(costBeforeWaste.toFixed(2)),  // مرجعية للموردين
         // نُبقي selling_price = 0 (هذا حقل قديم، التكلفة هي الأهم؛ سعر البيع يُحدَّد في قائمة الطعام)
@@ -1624,6 +1648,8 @@ export default function WarehouseManufacturing() {
         unit: 'قطعة',
         piece_weight: '',
         piece_weight_unit: 'غرام',
+        piece_def_value: '',
+        piece_def_unit: 'غرام',
         recipe: [],
         quantity: 0,
         min_quantity: 0,
@@ -4695,6 +4721,48 @@ export default function WarehouseManufacturing() {
                   </div>
                 );
               })()}
+
+              {/* ⭐ تعريف البورشن: يظهر عند اختيار وحدة عدّية لوزن القطعة (قطعة/شريحة/علبة...) لحساب دقيق */}
+              {(() => {
+                const _REAL = new Set(['غرام', 'كغم', 'كيلو', 'كجم', 'مل', 'لتر']);
+                const pwu = productForm.piece_weight_unit || 'غرام';
+                if (_REAL.has(pwu)) return null;
+                return (
+                  <div className="col-span-2 p-3 rounded-lg bg-amber-500/10 border-2 border-amber-500/40 space-y-2" data-testid="create-piece-definition-box">
+                    <Label className="flex items-center gap-2 font-bold text-amber-700 text-sm">
+                      ⚖️ {t('عرّف وزن البورشن لحساب دقيق للتكلفة')}
+                    </Label>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-sm font-medium">1 {t(pwu)} =</span>
+                      <Input
+                        type="number"
+                        min="0"
+                        step="0.001"
+                        className="h-9 w-28 text-center"
+                        placeholder={t('القيمة')}
+                        value={productForm.piece_def_value}
+                        onChange={(e) => setProductForm(prev => ({ ...prev, piece_def_value: e.target.value }))}
+                        data-testid="create-piece-def-value"
+                      />
+                      <Select
+                        value={productForm.piece_def_unit || 'غرام'}
+                        onValueChange={(v) => setProductForm(prev => ({ ...prev, piece_def_unit: v }))}
+                      >
+                        <SelectTrigger className="h-9 w-28" data-testid="create-piece-def-unit"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="غرام">{t('غرام')}</SelectItem>
+                          <SelectItem value="كغم">{t('كغم')}</SelectItem>
+                          <SelectItem value="مل">{t('مل')}</SelectItem>
+                          <SelectItem value="لتر">{t('لتر')}</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <p className="text-[10px] text-muted-foreground">
+                      {t('مثال: 1 قطعة برغر = 120 غرام. هذا يمنع تضخّم التكاليف عند الوحدات العدّية.')}
+                    </p>
+                  </div>
+                );
+              })()}
               
               <div className="rounded-lg p-3 bg-emerald-500/10 border border-emerald-500/30 space-y-2">
                 <Label className="flex items-center gap-2 font-bold text-emerald-700">
@@ -5182,14 +5250,61 @@ export default function WarehouseManufacturing() {
                   </Select>
                 </div>
               </div>
+
+              {/* ⭐ تعريف البورشن: يظهر عند اختيار وحدة عدّية (قطعة/شريحة/علبة...) لحساب دقيق */}
               {(() => {
-                const pw = Number(editRecipeForm.piece_weight || 0);
+                const _REAL = new Set(['غرام', 'كغم', 'كيلو', 'كجم', 'مل', 'لتر']);
                 const pwu = editRecipeForm.piece_weight_unit || 'غرام';
+                if (_REAL.has(pwu)) return null;
+                return (
+                  <div className="p-3 rounded-lg bg-amber-500/10 border-2 border-amber-500/40 space-y-2" data-testid="piece-definition-box">
+                    <Label className="flex items-center gap-2 font-bold text-amber-700 text-sm">
+                      ⚖️ {t('عرّف وزن البورشن لحساب دقيق للتكلفة')}
+                    </Label>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-sm font-medium">1 {t(pwu)} =</span>
+                      <Input
+                        type="number"
+                        min="0"
+                        step="0.001"
+                        className="h-9 w-28 text-center"
+                        placeholder={t('القيمة')}
+                        value={editRecipeForm.piece_def_value}
+                        onChange={(e) => setEditRecipeForm(prev => ({ ...prev, piece_def_value: e.target.value }))}
+                        data-testid="piece-def-value"
+                      />
+                      <Select
+                        value={editRecipeForm.piece_def_unit || 'غرام'}
+                        onValueChange={(v) => setEditRecipeForm(prev => ({ ...prev, piece_def_unit: v }))}
+                      >
+                        <SelectTrigger className="h-9 w-28" data-testid="piece-def-unit"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="غرام">{t('غرام')}</SelectItem>
+                          <SelectItem value="كغم">{t('كغم')}</SelectItem>
+                          <SelectItem value="مل">{t('مل')}</SelectItem>
+                          <SelectItem value="لتر">{t('لتر')}</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <p className="text-[10px] text-muted-foreground">
+                      {t('مثال: 1 قطعة برغر = 120 غرام. هذا يمنع تضخّم التكاليف عند الوحدات العدّية.')}
+                    </p>
+                  </div>
+                );
+              })()}
+
+              {(() => {
+                const _REAL = new Set(['غرام', 'كغم', 'كيلو', 'كجم', 'مل', 'لتر']);
+                const pwu = editRecipeForm.piece_weight_unit || 'غرام';
+                const isCount = !_REAL.has(pwu);
+                // الوزن الحقيقي للبورشن: من التعريف عند الوحدة العدّية، وإلا من وزن البورشن
+                const pw = isCount ? Number(editRecipeForm.piece_def_value || 0) : Number(editRecipeForm.piece_weight || 0);
+                const unit = isCount ? (editRecipeForm.piece_def_unit || 'غرام') : pwu;
                 if (pw <= 0) return null;
-                const W = { 'غرام': 1, 'كغم': 1000, 'مل': 1, 'لتر': 1000 };
-                const pwInBase = pw * (W[pwu] || 1);
+                const W = { 'غرام': 1, 'كغم': 1000, 'كيلو': 1000, 'كجم': 1000, 'مل': 1, 'لتر': 1000 };
+                const pwInBase = pw * (W[unit] || 1);
                 if (pwInBase <= 0) return null;
-                const baseLabel = (pwu === 'مل' || pwu === 'لتر') ? t('اللتر') : t('الكيلو');
+                const baseLabel = (unit === 'مل' || unit === 'لتر') ? t('اللتر') : t('الكيلو');
                 const portionsPerBase = Math.round((1000 / pwInBase) * 100) / 100;
                 if (!Number.isFinite(portionsPerBase) || portionsPerBase <= 0) return null;
                 return (

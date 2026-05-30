@@ -292,6 +292,8 @@ class ManufacturedProductCreate(BaseModel):
     unit: str = "قطعة"
     piece_weight: Optional[float] = None  # وزن القطعة (اختياري)
     piece_weight_unit: Optional[str] = "غرام"  # وحدة وزن القطعة
+    piece_def_value: Optional[float] = None  # ⭐ تعريف البورشن للوحدات العدّية (1 قطعة = X)
+    piece_def_unit: Optional[str] = None     # ⭐ وحدة التعريف الحقيقية (غرام/كغم/مل/لتر)
     recipe: List[RecipeIngredient]  # الوصفة
     quantity: float = 0.0  # الكمية المصنعة المتوفرة
     min_quantity: float = 0.0
@@ -3784,6 +3786,8 @@ async def create_manufactured_product(
         "unit": product.unit,
         "piece_weight": product.piece_weight,  # ⭐ وزن القطعة (للنمط Batch)
         "piece_weight_unit": product.piece_weight_unit or "غرام",
+        "piece_def_value": product.piece_def_value,  # ⭐ تعريف البورشن للوحدات العدّية
+        "piece_def_unit": product.piece_def_unit,     # ⭐ وحدة التعريف الحقيقية
         "recipe": recipe_items,
         "quantity": product.quantity,
         "min_quantity": product.min_quantity,
@@ -3857,7 +3861,14 @@ async def _enrich_unit_cost_fields(db, product: dict) -> dict:
 
     pw = float(product.get("piece_weight") or 0)
     pwu = product.get("piece_weight_unit") or "غرام"
-    piece_grams = pw * UNIT_W.get(pwu, 1.0)
+    # ⭐ تعريف البورشن: عند وحدة عدّية (قطعة/شريحة/علبة...) لا وزن لها، نستخدم
+    # الوزن الحقيقي المُعرَّف للقطعة (piece_def_value + piece_def_unit) لحساب دقيق.
+    pdv = float(product.get("piece_def_value") or 0)
+    pdu = product.get("piece_def_unit")
+    if (pwu not in UNIT_W) and pdv > 0 and pdu and UNIT_W.get(pdu):
+        piece_grams = pdv * UNIT_W.get(pdu)
+    else:
+        piece_grams = pw * UNIT_W.get(pwu, 1.0)
 
     recipe = product.get("recipe") or []
 
@@ -4167,6 +4178,8 @@ class ManufacturedProductRecipeUpdate(BaseModel):
     recipe: List[RecipeIngredient]
     piece_weight: Optional[float] = None
     piece_weight_unit: Optional[str] = None
+    piece_def_value: Optional[float] = None  # ⭐ تعريف البورشن: قيمة الوزن الحقيقي للوحدة العدّية
+    piece_def_unit: Optional[str] = None     # ⭐ وحدة التعريف الحقيقية (غرام/كغم/مل/لتر)
     reason: Optional[str] = None  # سبب التعديل (للتدقيق)
     name: Optional[str] = None  # ⭐ تعديل اسم الوصفة
     name_en: Optional[str] = None
@@ -4177,7 +4190,8 @@ class ManufacturedProductRecipeUpdate(BaseModel):
         """⭐ تطبيع: قيم نصية فارغة → None لتجنّب أخطاء float_parsing."""
         if not isinstance(data, dict):
             return data
-        for key in ("piece_weight", "piece_weight_unit", "reason", "name", "name_en"):
+        for key in ("piece_weight", "piece_weight_unit", "piece_def_value",
+                    "piece_def_unit", "reason", "name", "name_en"):
             v = data.get(key)
             if isinstance(v, str) and v.strip() == "":
                 data[key] = None
@@ -4238,6 +4252,9 @@ async def update_manufactured_product_recipe(
     }
     if payload.piece_weight is not None:
         update_fields["piece_weight"] = payload.piece_weight
+    # ⭐ تعريف البورشن للوحدات العدّية (يُستخدم في حساب العائد والتكلفة)
+    update_fields["piece_def_value"] = payload.piece_def_value
+    update_fields["piece_def_unit"] = payload.piece_def_unit
     if payload.piece_weight_unit is not None:
         update_fields["piece_weight_unit"] = payload.piece_weight_unit
         # ⭐ مزامنة جميع الإعدادات: عند تغيير وحدة الوزن، نُحدّث product.unit أيضاً
