@@ -5501,7 +5501,7 @@ export default function WarehouseManufacturing() {
       </Dialog>
       {/* Dialog: تصنيع منتج */}
       <Dialog open={!!showProduceDialog} onOpenChange={() => setShowProduceDialog(null)}>
-        <DialogContent>
+        <DialogContent className="max-h-[90vh] overflow-y-auto" data-testid="produce-dialog">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Factory className="h-5 w-5 text-green-500" />
@@ -5536,7 +5536,7 @@ export default function WarehouseManufacturing() {
                           <span className="block text-[10px] mt-0.5">{t('العائد الحالي من الوصفة')}: {calcYield.toFixed(3)} {showProduceDialog.unit || 'حبة'}</span>
                         </div>
                       )}
-                      <div className="space-y-1.5">
+                      <div className="space-y-1.5 max-h-[40vh] overflow-y-auto pr-1" data-testid="produce-materials-list">
                         {showProduceDialog.recipe?.map((ing, idx) => {
                           const needed = (Number(ing.quantity) || 0) * mult;
                           const invItem = manufacturingInventory.find(m => (m.material_id || m.raw_material_id) === ing.raw_material_id);
