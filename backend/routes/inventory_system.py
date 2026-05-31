@@ -58,6 +58,66 @@ def normalize_arabic(text: str) -> str:
     return s
 
 
+def normalize_arabic_loose(text: str) -> str:
+    """نسخة "مرنة" من التطبيع للمطابقة الاحتياطية فقط (عند فشل المطابقة الدقيقة):
+    - تطبّق normalize_arabic أولاً
+    - تحذف "ال" التعريف من بداية كل كلمة (الطماطة → طماطة)
+    - تحذف جميع المسافات تماماً (شرائح طماطة → شرائحطماطه)
+    - تطوي الحروف المكرّرة المتتالية (موزاريلا/موززاريلا تتقاربان)
+    تُستخدم كحلٍّ أخير لأن دمج "ال" والمسافات قد يوحّد أسماء متقاربة."""
+    s = normalize_arabic(text)
+    if not s:
+        return ""
+    words = []
+    for w in s.split(" "):
+        if len(w) > 3 and w.startswith("ال"):
+            w = w[2:]
+        words.append(w)
+    s = "".join(words)
+    # طي الحروف المكرّرة المتتالية (مثل ـلل → ـل)
+    s = _re.sub(r"(.)\1+", r"\1", s)
+    return s
+
+
+from difflib import SequenceMatcher as _SeqMatcher
+
+
+def match_product_by_name(name: str, products: list):
+    """يطابق اسم عنصر طلب فرع مع قائمة منتجات مصنّعة بثلاث مراحل آمنة:
+      1) مطابقة دقيقة بعد التطبيع (أ/ة/ى... + مسافات).
+      2) مطابقة مرنة (حذف "ال" والمسافات وطي التكرار) — تلتقط شرائح الطماطة ≈ شرائح طماطة.
+      3) تشابه عالٍ (≥0.86) وغير غامض — يلتقط الأخطاء الإملائية مثل موزريلا ≈ موزاريلا
+         مع رفض المطابقة الغامضة (إذا تقارب مرشّحان) منعاً لربط منتج بآخر خطأً.
+    يعيد المنتج (الأكبر كمية عند تكرار الاسم) أو None."""
+    tn = normalize_arabic(name)
+    if not tn:
+        return None
+    # 1) دقيق
+    exact = [p for p in products if normalize_arabic(p.get("name") or "") == tn]
+    if exact:
+        return max(exact, key=lambda x: float(x.get("quantity") or 0))
+    # 2) مرن
+    tl = normalize_arabic_loose(name)
+    loose = [p for p in products if normalize_arabic_loose(p.get("name") or "") == tl]
+    if loose:
+        return max(loose, key=lambda x: float(x.get("quantity") or 0))
+    # 3) تشابه عالٍ غير غامض
+    scored = []
+    for p in products:
+        pn = normalize_arabic(p.get("name") or "")
+        if pn:
+            scored.append((_SeqMatcher(None, tn, pn).ratio(), p))
+    if not scored:
+        return None
+    scored.sort(key=lambda x: x[0], reverse=True)
+    best_ratio, best_prod = scored[0]
+    if best_ratio >= 0.86:
+        # رفض الغموض: يجب أن يتفوّق الأفضل بفارق واضح عن الثاني
+        if len(scored) == 1 or (best_ratio - scored[1][0]) >= 0.04:
+            return best_prod
+    return None
+
+
 # خرائط تحويل الوحدات إلى وحدة أساسية (غرام أو مل تُعامل ك "غرام" للعائد)
 _UNIT_WEIGHT_MAP = {
     "غرام": 1.0, "كغم": 1000.0, "كيلو": 1000.0, "كجم": 1000.0,
@@ -2844,23 +2904,14 @@ async def get_branch_requests(status: Optional[str] = None, branch_id: Optional[
         {}, {"_id": 0, "id": 1, "name": 1, "quantity": 1}
     ).to_list(50000)
     qty_by_id = {p["id"]: float(p.get("quantity") or 0) for p in all_prods}
-    qty_by_name = {}
-    for p in all_prods:
-        nm = normalize_arabic(p.get("name") or "")
-        if not nm:
-            continue
-        q = float(p.get("quantity") or 0)
-        # عند تكرار الاسم نأخذ السجل ذا الكمية الأكبر (مخزون المصنع الحقيقي)
-        if nm not in qty_by_name or q > qty_by_name[nm]:
-            qty_by_name[nm] = q
     for req in requests:
         for it in (req.get("items") or []):
             pid = it.get("product_id")
-            nm = normalize_arabic(it.get("product_name") or "")
-            # ⭐ نُفضّل المطابقة بالاسم (مخزون المصنع الحقيقي/الأكبر) لأن مرجع product_id
+            # ⭐ نُفضّل المطابقة بالاسم (دقيق → مرن → تشابه عالٍ) لأن مرجع product_id
             # قد يشير لسجل قديم/مكرّر بكمية سالبة بينما يوجد سجل حقيقي بنفس الاسم.
-            if nm and nm in qty_by_name:
-                it["available_quantity"] = qty_by_name[nm]
+            matched = match_product_by_name(it.get("product_name") or "", all_prods)
+            if matched is not None:
+                it["available_quantity"] = float(matched.get("quantity") or 0)
             elif pid and pid in qty_by_id:
                 it["available_quantity"] = qty_by_id[pid]
             # else: نُبقي القيمة المحفوظة كما هي
@@ -2917,16 +2968,15 @@ async def update_branch_request_status(request_id: str, status_data: dict):
     return {"message": "تم تحديث الحالة", "status": new_status}
 
 async def _resolve_request_product(db, item: dict, tenant_id):
-    """يحل المنتج المصنّع الفعلي لعنصر طلب فرع: بالاسم أولاً (مخزون المصنع الحقيقي/الأكبر)
+    """يحل المنتج المصنّع الفعلي لعنصر طلب فرع: بالاسم أولاً (دقيق → مرن → تشابه عالٍ آمن)
     ثم بالمعرّف — لأن مرجع product_id قد يشير لسجل قديم/مكرّر بكمية سالبة. عند تكرار الاسم
-    نختار السجل ذا الكمية الأكبر. المطابقة بالاسم تتم بعد تطبيع النص العربي (أ/إ/آ→ا، ة→ه،
-    ى→ي، إزالة التشكيل والمسافات) لتفادي فشل المطابقة بسبب اختلافات الإملاء. يعيد الوثيقة أو None."""
-    nm = normalize_arabic(item.get("product_name") or "")
-    if nm:
+    نختار السجل ذا الكمية الأكبر. يعيد الوثيقة أو None."""
+    nm = item.get("product_name") or ""
+    if nm.strip():
         all_prods = await db.manufactured_products.find({}, {"_id": 0}).to_list(50000)
-        cands = [p for p in all_prods if normalize_arabic(p.get("name") or "") == nm]
-        if cands:
-            return max(cands, key=lambda x: float(x.get("quantity") or 0))
+        matched = match_product_by_name(nm, all_prods)
+        if matched is not None:
+            return matched
     pid = item.get("product_id")
     if pid:
         p = await db.manufactured_products.find_one({"id": pid}, {"_id": 0})

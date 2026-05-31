@@ -37,3 +37,8 @@
 - Backend runs WITHOUT --reload; restart with `sudo supervisorctl restart backend` after backend code changes.
 - MongoDB (mongod) is started manually: `mongod --dbpath /data/db --bind_ip 0.0.0.0 --port 27017 --fork --logpath /var/log/mongod.log`
 - Local Print Agent (http://localhost:9999) is NOT available in the test environment. Biometric/print should show "Not Connected" — expected.
+
+## Central Role Test Users (iter — dashboard restriction)
+- Warehouse keeper: wkeeper@maestroegp.com / wkeeper123 (role warehouse_keeper)
+- Purchasing: buyer@maestroegp.com / buyer123 (role purchasing)
+- These verify the simplified dashboard (only their module tile, no stats/close-register/customer-menu/branch-selector).

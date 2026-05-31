@@ -119,9 +119,20 @@ export default function Dashboard() {
   // المدير/المالك/المشرف يرون كل شيء - الكاشير يحتاج صلاحية مفعلة
   const isManagerRole = ['admin', 'super_admin', 'manager'].includes(user?.role);
   const canSee = (permKey) => isManagerRole || user?.permissions?.includes(permKey);
+
+  // ⭐ الأدوار المركزية (مخزن/مصنّع/مشتريات): لوحة مبسّطة — أيقونة واحدة فقط، بلا إحصائيات
+  // ولا أزرار الكاشير (إغلاق الصندوق/قائمة العملاء). كل دور يرى وحدته فقط.
+  const isCentralRole = ['warehouse_keeper', 'manufacturer', 'purchasing'].includes(user?.role);
+  const centralRoleActionIds = {
+    warehouse_keeper: ['warehouse-manufacturing'],
+    manufacturer: ['warehouse-manufacturing'],
+    purchasing: ['purchasing'],
+  };
   
   // دالة للتحقق من صلاحيات لوحة التحكم
   const hasDashboardPermission = (permissionId) => {
+    // ⭐ الأدوار المركزية لا ترى الإحصائيات إطلاقاً
+    if (isCentralRole && permissionId === 'dashboard_statistics') return false;
     // المدير والسوبر أدمن لديهم جميع الصلاحيات
     if (user?.role === 'admin' || user?.role === 'super_admin') return true;
     // مدير الفرع لديه معظم الصلاحيات
@@ -1578,6 +1589,11 @@ export default function Dashboard() {
     
     // مدير الفرع يرى كل شيء
     if (user?.role === 'branch_manager') return true;
+
+    // ⭐ الأدوار المركزية: تُقيَّد بأيقونة واحدة فقط (وحدتها) — تتجاوز أي منطق آخر
+    if (isCentralRole) {
+      return (centralRoleActionIds[user.role] || []).includes(action.id);
+    }
     
     // التحقق من صلاحيات الموظف
     const permissionMap = {
@@ -1963,7 +1979,7 @@ export default function Dashboard() {
             <PriceAlertsBell user={user} />
 
             {/* Branch Selector - مكون اختيار الفرع العام */}
-            <BranchSelector />
+            {!isCentralRole && <BranchSelector />}
 
             {/* Language Switcher - تبديل اللغة السريع */}
             <LanguageSwitcher variant="ghost" />
@@ -1980,6 +1996,7 @@ export default function Dashboard() {
             </Button>
 
             {/* Dashboard Background Button - لجميع المستخدمين */}
+            {!isCentralRole && (
             <Button
               variant="outline"
               size="sm"
@@ -1990,6 +2007,7 @@ export default function Dashboard() {
               <Image className="h-4 w-4" />
               {t('الخلفيات')}
             </Button>
+            )}
 
             {/* Super Admin Button - للمالك فقط */}
             {(user?.role === 'super_admin' || (user?.role === 'admin' && !user?.tenant_id)) && (
@@ -2031,6 +2049,7 @@ export default function Dashboard() {
             )}
 
             {/* Close Cash Register Button */}
+            {!isCentralRole && (
             <Button
               variant="outline"
               size="sm"
@@ -2041,10 +2060,11 @@ export default function Dashboard() {
               <Calculator className="h-4 w-4" />
               {t('إغلاق الصندوق')}
             </Button>
+            )}
 
             {/* Share Menu Link Button */}
             {/* قائمة العملاء - يظهر فقط إذا كانت الميزة مفعلة */}
-            {dashboardSettings.showCustomerMenu && (
+            {dashboardSettings.showCustomerMenu && !isCentralRole && (
               <Button
                 variant="outline"
                 size="sm"
