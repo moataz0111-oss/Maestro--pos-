@@ -418,6 +418,7 @@ export default function WarehouseManufacturing() {
   const [savingRecipe, setSavingRecipe] = useState(false);
   
   const [produceQuantity, setProduceQuantity] = useState(1);
+  const [produceUnitMode, setProduceUnitMode] = useState('');  // ⭐ الوحدة المختارة في التصنيع (صغرى/كبرى)
   const [actualYield, setActualYield] = useState('');  // 📊 العدد الفعلي المُنتَج (اختياري) — لتسجيل فرق العائد
   const [showYieldVarianceDialog, setShowYieldVarianceDialog] = useState(false);
   const [costCheckProduct, setCostCheckProduct] = useState(null); // 🧮 منتج "تحقّق سريع من التكلفة"
@@ -1710,6 +1711,72 @@ export default function WarehouseManufacturing() {
     return { yield: sum / pwNum, packs };
   };
 
+  // ⭐ وحدة عرض العائد في التصنيع: عندما تكون الوحدة الفرعية عدّية (شريحة) وتختلف عن
+  // الوحدة الرئيسية، يُحسب العائد بها فعلاً — فنعرضها بدل الوحدة الرئيسية لتفادي اللبس
+  // (مثال: "184 شريحة" بدل "184 قطعة").
+  const getProduceUnit = (product) => {
+    if (!product) return 'حبة';
+    const _W = { 'غرام': 1, 'كغم': 1000, 'كيلو': 1000, 'كجم': 1000, 'مل': 1, 'لتر': 1000, 'gram': 1, 'kg': 1000, 'ml': 1, 'liter': 1000, 'l': 1000 };
+    const pwu = product.piece_weight_unit;
+    if (pwu && !_W[pwu] && pwu !== product.unit) return pwu;
+    return product.unit || 'حبة';
+  };
+
+  // ⭐ محوّل وحدة التصنيع: يكتشف "الوحدة الكبرى" (قطعة) ونسبتها للوحدة الصغرى (شريحة)
+  // من تعبئة المادة الخام في الوصفة (1 قطعة = 46 شريحة) — بلا أرقام يدوية. يتيح للمستخدم
+  // حرية التصنيع بالوحدة الصغرى أو الكبرى مع تحويل تلقائي.
+  const getProduceLargeUnit = (product) => {
+    if (!product) return null;
+    const _W = { 'غرام': 1, 'كغم': 1000, 'كيلو': 1000, 'كجم': 1000, 'مل': 1, 'لتر': 1000, 'gram': 1, 'kg': 1000, 'ml': 1, 'liter': 1000, 'l': 1000 };
+    const pwu = product.piece_weight_unit;
+    if (!pwu || _W[pwu]) return null; // الوحدة الفرعية يجب أن تكون عدّية
+    for (const ing of (product.recipe || [])) {
+      const mat = rawMaterials?.find?.(r => r.id === ing.raw_material_id);
+      const ipq = Number(mat?.pack_quantity || ing.pack_quantity || 0);
+      const ipu = mat?.pack_unit || ing.pack_unit;
+      if (ipq > 0 && ipu === pwu && ing.unit && ing.unit !== pwu) {
+        return { unit: ing.unit, ratio: ipq }; // 1 [ing.unit] = ipq [pwu]
+      }
+    }
+    return null;
+  };
+
+  // خيارات الوحدة في حوار التصنيع: الوحدة الصغرى (العائد) + الكبرى/الموزونة حسب التعريف.
+  // يدعم: عدّ←عدّ (قطعة=46 شريحة) + موزون (1 حبة=120 غرام → كغم/غرام) + وحدة رئيسية موزونة (كغم→غرام).
+  const getProduceUnitOptions = (product) => {
+    if (!product) return [{ unit: 'حبة', ratio: 1 }];
+    const _W = { 'غرام': 1, 'كغم': 1000, 'كيلو': 1000, 'كجم': 1000, 'مل': 1, 'لتر': 1000, 'gram': 1, 'kg': 1000, 'ml': 1, 'liter': 1000, 'l': 1000 };
+    const small = getProduceUnit(product);
+    const opts = [{ unit: small, ratio: 1 }];
+    const seen = new Set([small]);
+    // (1) عدّ←عدّ: وحدة كبرى من تعبئة المادة الخام (1 قطعة = 46 شريحة)
+    const large = getProduceLargeUnit(product);
+    if (large && !seen.has(large.unit)) { opts.push(large); seen.add(large.unit); }
+    // (2) منتج موزون: 1 [عائد] = piece_weight piece_weight_unit (1 حبة = 120 غرام)
+    const pw = Number(product.piece_weight || 0);
+    const pwu = product.piece_weight_unit;
+    let basePerYield = 0;  // غرام أو مل لكل وحدة عائد
+    let isVolume = false;
+    if (pw > 0 && _W[pwu]) {
+      basePerYield = pw * _W[pwu];
+      isVolume = (pwu === 'مل' || pwu === 'لتر');
+    } else if (_W[small]) {
+      // الوحدة الرئيسية نفسها موزونة (كغم/لتر)
+      basePerYield = _W[small];
+      isVolume = (small === 'مل' || small === 'لتر');
+    }
+    if (basePerYield > 0) {
+      const bigU = isVolume ? 'لتر' : 'كغم';
+      const smallU = isVolume ? 'مل' : 'غرام';
+      if (!seen.has(bigU)) { opts.push({ unit: bigU, ratio: 1000 / basePerYield }); seen.add(bigU); }
+      if (!seen.has(smallU)) { opts.push({ unit: smallU, ratio: 1 / basePerYield }); seen.add(smallU); }
+    }
+    return opts;
+  };
+
+
+
+
   // 🏭 الكمية المتوفرة لمكوّن: من مخزون المنتجات المُصنّعة إذا كان المكوّن منتجاً مُصنّعاً،
   // وإلا من مخزون المواد الخام. يصحّح خطأ ظهور "ناقص" لمنتج مُصنّع متوفر في المصنع.
   const getIngredientAvailable = (ing) => {
@@ -1936,11 +2003,16 @@ export default function WarehouseManufacturing() {
     
     setSubmitting(true);
     try {
-      // 📊 actual_yield اختياري — إن أدخله المستخدم نمرّره لتسجيل الفرق
+      // ⭐ تحويل الكمية من الوحدة المختارة (صغرى/كبرى) إلى وحدة العائد التي يتوقعها الـ backend
+      const _opts = getProduceUnitOptions(showProduceDialog);
+      const _sel = _opts.find(o => o.unit === produceUnitMode) || _opts[0];
+      const _ratio = _sel?.ratio || 1;
+      const qtyInYield = produceQuantity * _ratio;
+      // 📊 actual_yield اختياري — إن أدخله المستخدم نمرّره لتسجيل الفرق (محوّلاً لوحدة العائد)
       const ayNum = (actualYield === '' || actualYield === null) ? null : Number(actualYield);
       const hasActual = ayNum !== null && !isNaN(ayNum) && ayNum >= 0;
-      const url = `${API}/manufactured-products/${showProduceDialog.id}/produce?quantity=${produceQuantity}` +
-        (hasActual ? `&actual_yield=${ayNum}` : '');
+      const url = `${API}/manufactured-products/${showProduceDialog.id}/produce?quantity=${qtyInYield}` +
+        (hasActual ? `&actual_yield=${ayNum * _ratio}` : '');
       const res = await axios.post(url, {}, { headers });
       const d = res.data || {};
       // 📊 إشعار فرق العائد إن وُجد
@@ -1948,7 +2020,7 @@ export default function WarehouseManufacturing() {
         const variance = Number(d.yield_variance);
         const pct = Number(d.yield_variance_pct);
         const sign = variance > 0 ? '+' : '';
-        const msg = `${t('فرق العائد')}: ${sign}${variance.toFixed(2)} ${showProduceDialog.unit || 'حبة'} (${sign}${pct.toFixed(2)}%)`;
+        const msg = `${t('فرق العائد')}: ${sign}${variance.toFixed(2)} ${t(getProduceUnit(showProduceDialog))} (${sign}${pct.toFixed(2)}%)`;
         if (variance < 0) {
           toast.warning(`${t('تم التصنيع — لكن مع هدر')} · ${msg}`, { duration: 8000 });
         } else {
@@ -1957,7 +2029,7 @@ export default function WarehouseManufacturing() {
       } else if (d.recipe_scaled) {
         toast.success(
           t('تم التصنيع بنجاح') +
-          ` · ${t('تم تعديل الوصفة تلقائياً لتُنتج بالضبط')} ${produceQuantity} ${showProduceDialog.unit || 'حبة'} (${t('عامل')}: ×${d.scale_factor})`
+          ` · ${t('تم تعديل الوصفة تلقائياً لتُنتج بالضبط')} ${produceQuantity} ${t(produceUnitMode || getProduceUnit(showProduceDialog))} (${t('عامل')}: ×${d.scale_factor})`
         );
       } else {
         toast.success(t('تم التصنيع بنجاح'));
@@ -3716,6 +3788,21 @@ export default function WarehouseManufacturing() {
                                                   </p>
                                                 </div>
                                               )}
+                                              {/* ⭐ سعر الوحدة الكبرى (قطعة) لمنتجات عدّ←عدّ: 1 قطعة = 46 شريحة */}
+                                              {(() => {
+                                                const lg = getProduceLargeUnit(product);
+                                                if (!lg) return null;
+                                                return (
+                                                  <div className="mt-1.5 pt-1.5 border-t border-amber-300/30" data-testid="large-unit-price">
+                                                    <p className="text-[10px] text-muted-foreground">
+                                                      1 {t(lg.unit)} = {lg.ratio} {t(unitLabel)}
+                                                    </p>
+                                                    <p className="text-[11px] font-bold text-orange-700 dark:text-orange-400 tabular-nums">
+                                                      ↳ {t('سعر')} {t(lg.unit)} = {formatPrice(unitAfter * lg.ratio)}
+                                                    </p>
+                                                  </div>
+                                                );
+                                              })()}
                                             </>
                                           );
                                         })()}
@@ -3781,7 +3868,7 @@ export default function WarehouseManufacturing() {
                             {/* أزرار الإجراءات */}
                             <div className="flex flex-col gap-2">
                               <Button
-                                onClick={() => setShowProduceDialog(product)}
+                                onClick={() => { setShowProduceDialog(product); setProduceQuantity(1); setActualYield(''); setProduceUnitMode(getProduceUnit(product)); }}
                                 className="bg-green-500 hover:bg-green-600"
                                 data-testid="produce-btn"
                               >
@@ -6206,14 +6293,25 @@ export default function WarehouseManufacturing() {
                   // ⭐ نمط الوصفة موحّد عبر computeRecipeYield (يطابق بطاقة المنتج تماماً)
                   const { calcYield } = computeRecipeYield(showProduceDialog);
                   const isBatch = calcYield > 0;
-                  const scale = isBatch && calcYield > 0 ? produceQuantity / calcYield : 1;
-                  const mult = isBatch ? scale : produceQuantity;  // batch: scale × 1 each ingredient; legacy: ×quantity
+                  // ⭐ الكمية المُدخلة بالوحدة المختارة → نحوّلها لوحدة العائد (الصغرى)
+                  const _opts = getProduceUnitOptions(showProduceDialog);
+                  const _sel = _opts.find(o => o.unit === produceUnitMode) || _opts[0];
+                  const _ratio = _sel?.ratio || 1;
+                  const qtyInYield = produceQuantity * _ratio;
+                  const scale = isBatch && calcYield > 0 ? qtyInYield / calcYield : 1;
+                  const mult = isBatch ? scale : qtyInYield;  // batch: scale × 1 each ingredient; legacy: ×quantity
+                  const produceUnit = getProduceUnit(showProduceDialog);
                   return (
                     <>
                       {isBatch && Math.abs(scale - 1) > 1e-4 && (
                         <div className="mb-2 p-2 rounded bg-amber-500/10 border border-amber-500/30 text-xs text-amber-800">
-                          ℹ️ {t('سيتم تعديل الوصفة تلقائياً بنسبة')} <strong>×{scale.toFixed(4)}</strong> {t('لتُنتج بالضبط')} {produceQuantity} {showProduceDialog.unit || 'حبة'}
-                          <span className="block text-[10px] mt-0.5">{t('العائد الحالي من الوصفة')}: {calcYield.toFixed(3)} {showProduceDialog.unit || 'حبة'}</span>
+                          ℹ️ {t('سيتم تعديل الوصفة تلقائياً بنسبة')} <strong>×{scale.toFixed(4)}</strong> {t('لتُنتج بالضبط')} {Math.round(qtyInYield * 1000) / 1000} {t(produceUnit)}
+                          {_ratio !== 1 && (
+                            <span className="block text-[10px] mt-0.5 text-emerald-700">
+                              {produceQuantity} {t(produceUnitMode)} × {_ratio} = {Math.round(qtyInYield * 1000) / 1000} {t(produceUnit)}
+                            </span>
+                          )}
+                          <span className="block text-[10px] mt-0.5">{t('العائد الحالي من الوصفة')}: {calcYield.toFixed(3)} {t(produceUnit)}</span>
                         </div>
                       )}
                       <div className="space-y-1.5 max-h-[40vh] overflow-y-auto pr-1" data-testid="produce-materials-list">
@@ -6318,7 +6416,7 @@ export default function WarehouseManufacturing() {
                                           type="button"
                                           size="sm"
                                           className="bg-emerald-600 hover:bg-emerald-700 text-white h-7 text-xs whitespace-nowrap"
-                                          onClick={() => { setShowProduceDialog(subProduct); setProduceQuantity(1); setActualYield(''); }}
+                                          onClick={() => { setShowProduceDialog(subProduct); setProduceQuantity(1); setActualYield(''); setProduceUnitMode(getProduceUnit(subProduct)); }}
                                           data-testid={`produce-sub-btn-${m.manufactured_product_id}`}
                                         >
                                           <Factory className="h-3.5 w-3.5 ml-1" />
@@ -6340,13 +6438,43 @@ export default function WarehouseManufacturing() {
 
               <div>
                 <Label>{t('كمية التصنيع')}</Label>
-                <Input
-                  type="number"
-                  min="1"
-                  value={produceQuantity}
-                  onChange={(e) => setProduceQuantity(parseInt(e.target.value) || 1)}
-                  data-testid="produce-quantity-input"
-                />
+                {(() => {
+                  const opts = getProduceUnitOptions(showProduceDialog);
+                  const sel = opts.find(o => o.unit === produceUnitMode) || opts[0];
+                  const hasChoice = opts.length > 1;
+                  return (
+                    <>
+                      <div className="flex items-center gap-2">
+                        <Input
+                          type="number"
+                          min="0"
+                          step="any"
+                          value={produceQuantity}
+                          onChange={(e) => setProduceQuantity(parseFloat(e.target.value) || 0)}
+                          data-testid="produce-quantity-input"
+                          className="flex-1"
+                        />
+                        {hasChoice && (
+                          <Select value={sel?.unit} onValueChange={(v) => setProduceUnitMode(v)}>
+                            <SelectTrigger className="w-32" data-testid="produce-unit-select"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              {opts.map((o) => (
+                                <SelectItem key={o.unit} value={o.unit} data-testid={`produce-unit-${o.unit}`}>
+                                  {t(o.unit)}{o.ratio !== 1 ? ` (=${o.ratio} ${t(getProduceUnit(showProduceDialog))})` : ''}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        )}
+                      </div>
+                      {hasChoice && sel && sel.ratio !== 1 && (
+                        <p className="text-[11px] text-emerald-700 mt-1" data-testid="produce-unit-hint">
+                          {t('تصنع بالوحدة الكبرى')}: {produceQuantity} {t(sel.unit)} = {Math.round(produceQuantity * sel.ratio * 1000) / 1000} {t(getProduceUnit(showProduceDialog))}
+                        </p>
+                      )}
+                    </>
+                  );
+                })()}
               </div>
 
               {/* 📊 العدد الفعلي المُنتَج (اختياري) — لتسجيل فرق العائد */}
@@ -6381,7 +6509,7 @@ export default function WarehouseManufacturing() {
                       className={`text-xs font-semibold ${positive ? 'text-green-700' : 'text-red-700'}`}
                       data-testid="yield-variance-preview"
                     >
-                      {positive ? '⬆️' : '⚠️'} {t('فرق العائد')}: {positive ? '+' : ''}{variance.toFixed(2)} {showProduceDialog.unit || 'حبة'} ({positive ? '+' : ''}{pct.toFixed(2)}%)
+                      {positive ? '⬆️' : '⚠️'} {t('فرق العائد')}: {positive ? '+' : ''}{variance.toFixed(2)} {t(getProduceUnit(showProduceDialog))} ({positive ? '+' : ''}{pct.toFixed(2)}%)
                     </p>
                   );
                 })()}

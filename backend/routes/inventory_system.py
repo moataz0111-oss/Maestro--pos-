@@ -90,6 +90,47 @@ def _resolve_recipe_yield(product: dict, total_grams: float) -> float:
     return 0.0
 
 
+async def _compute_recipe_count_yield(db, product: dict) -> float:
+    """العائد العدّي (عدّ←عدّ): عندما تكون وحدة البورشن الفرعية عدّية (شريحة) والمكوّنات
+    قطعية بتعبئة عدّية مطابقة (1 قطعة = 46 شريحة) → العائد = Σ(كمية × تعبئة) ÷ piece_weight.
+    يطابق مسار count_yield في _enrich_unit_cost_fields. يُستخدم كاحتياط في مسارات التصنيع
+    وزيادة الكمية عندما يعجز الحساب الوزني (total_grams = 0) — لأن الوحدات العدّية لا
+    تُحوَّل إلى غرامات. هذا يمنع السقوط في النمط per-unit الذي يستهلك كميات خاطئة."""
+    pw = float(product.get("piece_weight") or 0)
+    pwu = product.get("piece_weight_unit") or ""
+    if pw <= 0 or _UNIT_WEIGHT_MAP.get(pwu):
+        return 0.0  # لا piece_weight أو الوحدة الفرعية وزنية → ليس مسار عدّ←عدّ
+    recipe = product.get("recipe") or []
+    raw_ids = [ing.get("raw_material_id") for ing in recipe if ing.get("raw_material_id")]
+    raw_map = {}
+    if raw_ids:
+        async for mat in db.raw_materials.find(
+            {"id": {"$in": raw_ids}}, {"_id": 0, "id": 1, "pack_quantity": 1, "pack_unit": 1}
+        ):
+            raw_map[mat["id"]] = mat
+    total = 0.0
+    for ing in recipe:
+        qty = float(ing.get("quantity") or 0)
+        if qty <= 0:
+            continue
+        if ing.get("unit") == pwu:
+            total += qty
+            continue
+        ipq = float(ing.get("pack_quantity") or 0)
+        ipu = ing.get("pack_unit")
+        if ipq <= 0 or not ipu:
+            mat = raw_map.get(ing.get("raw_material_id"))
+            if mat:
+                ipq = float(mat.get("pack_quantity") or 0)
+                ipu = mat.get("pack_unit")
+        if ipq <= 0 or not ipu:
+            continue
+        if ipu == pwu or not _UNIT_WEIGHT_MAP.get(ipu):
+            total += qty * ipq
+    return (total / pw) if total > 0 else 0.0
+
+
+
 
 async def _ingredient_weight_grams(db, ing: dict) -> float:
     """
@@ -2763,36 +2804,53 @@ async def get_branch_requests(status: Optional[str] = None, branch_id: Optional[
     
     requests = await db.branch_requests.find(query, {"_id": 0}).sort("created_at", -1).to_list(1000)
 
-    # 🔄 تحديث available_quantity لكل منتج من المخزون الحالي (المحفوظ قد يكون قديماً)
-    product_ids = set()
-    pkg_ids = set()
+    # 🔄 تحديث available_quantity من مخزون المصنع الحالي (المحفوظ قد يكون قديماً/سالباً).
+    # ⭐ الإصلاح: نطابق بالمعرّف أولاً، ثم بالاسم — لأن بعض الطلبات تُنشأ من جهة الفرع
+    # بمرجع product_id مفقود/مختلف، فيبقى التوفّر القديم السالب رغم توفّر المنتج فعلاً
+    # في المصنع. المطابقة بالاسم تضمن قراءة المخزون الحقيقي دائماً.
+    prod_query = {"tenant_id": tenant_id} if tenant_id else {}
+    all_prods = await db.manufactured_products.find(
+        prod_query, {"_id": 0, "id": 1, "name": 1, "quantity": 1}
+    ).to_list(20000)
+    qty_by_id = {p["id"]: float(p.get("quantity") or 0) for p in all_prods}
+    qty_by_name = {}
+    for p in all_prods:
+        nm = (p.get("name") or "").strip()
+        if not nm:
+            continue
+        q = float(p.get("quantity") or 0)
+        # عند تكرار الاسم نأخذ السجل ذا الكمية الأكبر (مخزون المصنع الحقيقي)
+        if nm not in qty_by_name or q > qty_by_name[nm]:
+            qty_by_name[nm] = q
     for req in requests:
         for it in (req.get("items") or []):
-            if it.get("product_id"):
-                product_ids.add(it["product_id"])
+            pid = it.get("product_id")
+            nm = (it.get("product_name") or "").strip()
+            if pid and pid in qty_by_id:
+                it["available_quantity"] = qty_by_id[pid]
+            elif nm and nm in qty_by_name:
+                it["available_quantity"] = qty_by_name[nm]
+            # else: نُبقي القيمة المحفوظة كما هي
+
+    pkg_ids = set()
+    for req in requests:
         for pit in (req.get("packaging_items") or []):
             if pit.get("packaging_material_id"):
                 pkg_ids.add(pit["packaging_material_id"])
-    if product_ids:
-        prods = await db.manufactured_products.find(
-            {"id": {"$in": list(product_ids)}}, {"_id": 0, "id": 1, "quantity": 1}
-        ).to_list(5000)
-        qty_by_id = {p["id"]: float(p.get("quantity") or 0) for p in prods}
-        for req in requests:
-            for it in (req.get("items") or []):
-                pid = it.get("product_id")
-                if pid:
-                    it["available_quantity"] = qty_by_id.get(pid, 0)
     if pkg_ids:
         mats = await db.packaging_materials.find(
-            {"id": {"$in": list(pkg_ids)}}, {"_id": 0, "id": 1, "quantity": 1}
+            {"id": {"$in": list(pkg_ids)}}, {"_id": 0, "id": 1, "name": 1, "quantity": 1}
         ).to_list(5000)
         pqty_by_id = {m["id"]: float(m.get("quantity") or 0) for m in mats}
+        pqty_by_name = {(m.get("name") or "").strip(): float(m.get("quantity") or 0) for m in mats if (m.get("name") or "").strip()}
         for req in requests:
             for pit in (req.get("packaging_items") or []):
                 mid = pit.get("packaging_material_id")
-                if mid:
-                    pit["available_quantity"] = pqty_by_id.get(mid, 0)
+                pnm = (pit.get("name") or "").strip()
+                if mid and mid in pqty_by_id:
+                    pit["available_quantity"] = pqty_by_id[mid]
+                elif pnm and pnm in pqty_by_name:
+                    pit["available_quantity"] = pqty_by_name[pnm]
     return requests
 
 @router.put("/branch-requests/{request_id}/status")
@@ -2824,6 +2882,27 @@ async def update_branch_request_status(request_id: str, status_data: dict):
         raise HTTPException(status_code=404, detail="الطلب غير موجود")
     
     return {"message": "تم تحديث الحالة", "status": new_status}
+
+async def _resolve_request_product(db, item: dict, tenant_id):
+    """يحل المنتج المصنّع الفعلي لعنصر طلب فرع: بالمعرّف أولاً ثم بالاسم — للطلبات
+    ذات المرجع product_id المفقود/المختلف (سبب ظهور التوفّر بالسالب). عند تكرار الاسم
+    نختار السجل ذا الكمية الأكبر (مخزون المصنع الحقيقي). يعيد الوثيقة أو None."""
+    pid = item.get("product_id")
+    if pid:
+        p = await db.manufactured_products.find_one({"id": pid}, {"_id": 0})
+        if p:
+            return p
+    nm = (item.get("product_name") or "").strip()
+    if nm:
+        q = {"name": nm}
+        if tenant_id:
+            q["tenant_id"] = tenant_id
+        cands = await db.manufactured_products.find(q, {"_id": 0}).to_list(50)
+        if cands:
+            return max(cands, key=lambda x: float(x.get("quantity") or 0))
+    return None
+
+
 
 @router.post("/branch-requests/{request_id}/fulfill")
 async def fulfill_branch_request(
@@ -2910,15 +2989,19 @@ async def fulfill_branch_request(
     if not items_to_fulfill and not pkg_to_fulfill:
         raise HTTPException(status_code=400, detail="لا توجد كميات للتنفيذ — جميع الأصناف مرفوضة")
 
-    # التحقق من توفر الكميات (المُعدّلة)
+    # التحقق من توفر الكميات (المُعدّلة) — يحل المنتج بالمعرّف أو الاسم لتفادي
+    # ظهور "كمية غير كافية" لمنتج متوفر فعلاً بسبب مرجع product_id قديم/مختلف.
     insufficient = []
     for item in items_to_fulfill:
-        product = await db.manufactured_products.find_one({"id": item.get("product_id")}, {"_id": 0})
-        if not product or product.get("quantity", 0) < item.get("quantity", 0):
+        product = await _resolve_request_product(db, item, tenant_id)
+        if product:
+            item["_resolved_pid"] = product.get("id")
+        avail = float(product.get("quantity") or 0) if product else 0
+        if not product or avail < float(item.get("quantity") or 0):
             insufficient.append({
                 "name": item.get("product_name"),
                 "requested": item.get("quantity"),
-                "available": product.get("quantity", 0) if product else 0
+                "available": avail,
             })
     for pitem in pkg_to_fulfill:
         material = await db.packaging_materials.find_one({"id": pitem.get("packaging_material_id")}, {"_id": 0})
@@ -2943,7 +3026,7 @@ async def fulfill_branch_request(
     branch = await db.branches.find_one({"id": to_branch_id}, {"_id": 0})
     
     for item in items_to_fulfill:
-        product_id = item.get("product_id")
+        product_id = item.get("_resolved_pid") or item.get("product_id")
         quantity = item.get("quantity")
         
         # خصم من المنتجات المصنعة وزيادة المحول
@@ -4606,6 +4689,11 @@ async def produce_product(
     total_grams = await _compute_recipe_total_grams(db, product.get("recipe") or [])
     # ⭐ العائد يحترم تعريف البورشن (piece_def_value) + الوحدة الرئيسية الوزنية
     calculated_yield = _resolve_recipe_yield(product, total_grams)
+    # ⭐ احتياط عدّ←عدّ: للمنتجات الحصصية بوحدة فرعية عدّية (شريحة) ومكوّنات قطعية
+    # (1 قطعة = 46 شريحة) يكون total_grams = 0 فيعجز الحساب الوزني. نحسب العائد العدّي
+    # حتى لا يسقط النظام في النمط per-unit الذي يستهلك المواد بكميات خاطئة.
+    if calculated_yield <= 0:
+        calculated_yield = await _compute_recipe_count_yield(db, product)
 
     is_batch_mode = calculated_yield > 0
     now_iso = datetime.now(timezone.utc).isoformat()
@@ -4977,6 +5065,9 @@ async def add_product_stock(product_id: str, quantity: float = 1, current_user: 
     # ⭐ العائد يحترم تعريف البورشن (piece_def_value) + الوحدة الرئيسية الوزنية
     tg = await _compute_recipe_total_grams(db, product.get("recipe") or [])
     calculated_yield = _resolve_recipe_yield(product, tg)
+    # ⭐ احتياط عدّ←عدّ (انظر produce) — يمنع استهلاك خاطئ للوحدات العدّية
+    if calculated_yield <= 0:
+        calculated_yield = await _compute_recipe_count_yield(db, product)
     is_batch_mode = calculated_yield > 0
     # batch mode: الوصفة تمثل calculated_yield قطعة → معامل = quantity / calculated_yield
     # legacy mode: الوصفة per-unit → معامل = quantity
@@ -5065,6 +5156,9 @@ async def add_product_stock(product_id: str, quantity: float = 1, current_user: 
     total_grams = await _compute_recipe_total_grams(db, fresh.get("recipe") or [])
     # ⭐ العائد يحترم تعريف البورشن (piece_def_value) + الوحدة الرئيسية الوزنية
     calc_yield = _resolve_recipe_yield(fresh, total_grams)
+    # ⭐ احتياط عدّ←عدّ (انظر produce)
+    if calc_yield <= 0:
+        calc_yield = await _compute_recipe_count_yield(db, fresh)
     target_qty = float(fresh.get("quantity") or 0)
     if calc_yield > 0 and target_qty > 0 and abs(calc_yield - target_qty) >= 0.5:
         scale_factor = target_qty / calc_yield
