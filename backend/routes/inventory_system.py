@@ -154,6 +154,45 @@ async def _compute_recipe_total_grams(db, recipe: list) -> float:
     return total
 
 
+async def _consumed_as_ingredient_map(db, product_id: Optional[str] = None) -> dict:
+    """يُرجع {product_id: {unit: qty}} لكميات المنتجات المُصنّعة المُستهلَكة كمكوّن
+    في تصنيع منتجات أخرى (Nested Recipes) — من حركات الاستهلاك manufactured_consumption.
+    تُستخدم لخصمها من 'المتبقي' فيُصحّح المخزون ذاتياً حتى للبيانات القائمة."""
+    match = {"type": "manufactured_consumption"}
+    if product_id:
+        match["product_id"] = product_id
+    consumed: dict = {}
+    cursor = db.inventory_movements.aggregate([
+        {"$match": match},
+        {"$group": {"_id": {"pid": "$product_id", "unit": "$unit"}, "q": {"$sum": "$quantity"}}},
+    ])
+    async for row in cursor:
+        key = row.get("_id") or {}
+        pid = key.get("pid")
+        if not pid:
+            continue
+        unit = key.get("unit")
+        consumed.setdefault(pid, {})
+        consumed[pid][unit] = consumed[pid].get(unit, 0.0) + abs(float(row.get("q", 0) or 0))
+    return consumed
+
+
+def _consumed_in_product_unit(consumed_map: dict, product_id: str, product_unit: Optional[str]) -> float:
+    """يحوّل كميات الاستهلاك (المسجَّلة بوحداتها) إلى وحدة المنتج لطرحها من المتبقي."""
+    entries = consumed_map.get(product_id)
+    if not entries:
+        return 0.0
+    target_f = _UNIT_WEIGHT_MAP.get(product_unit or "")
+    total = 0.0
+    for unit, qty in entries.items():
+        src_f = _UNIT_WEIGHT_MAP.get(unit or "")
+        if unit == product_unit or not target_f or not src_f:
+            total += qty  # نفس الوحدة أو وحدات عدّية → بدون تحويل
+        else:
+            total += qty * src_f / target_f  # تحويل وزني/حجمي (مثل غرام→كغم)
+    return total
+
+
 async def _resolve_ingredient_ids(db, ing: dict, tenant_id: Optional[str] = None) -> dict:
     """🔧 محاولة الربط التلقائي للمكوّن بالاسم إن كان كلا المعرّفين فارغ.
 
@@ -4051,22 +4090,30 @@ async def get_manufactured_products():
     """جلب جميع المنتجات المصنعة"""
     db = get_db()
     products = await db.manufactured_products.find({}, {"_id": 0}).to_list(1000)
-    
-    # إضافة الحقول الإحصائية - المتبقي = إجمالي المُصنّع - المحول
+
+    # ⭐ المستهلَك كمكوّن في تصنيع منتجات أخرى (Nested Recipes) — يُخصم من المتبقي.
+    # يُجمَع من حركات الاستهلاك (manufactured_consumption) فيُصحّح ذاتياً للبيانات القائمة.
+    consumed_map = await _consumed_as_ingredient_map(db)
+
+    # إضافة الحقول الإحصائية - المتبقي = إجمالي المُصنّع - المحول - المستهلَك كمكوّن
     for product in products:
-        total = product.get("total_produced", 0)
-        transferred = product.get("transferred_quantity", 0)
-        # المتبقي = إجمالي المُصنّع - المحول للفروع
-        remaining = total - transferred
+        total = product.get("total_produced", 0) or 0
+        transferred = product.get("transferred_quantity", 0) or 0
+        consumed = _consumed_in_product_unit(consumed_map, product.get("id"), product.get("unit"))
+        # المتبقي = إجمالي المُصنّع - المحول للفروع - المستهلَك في تصنيع منتجات أخرى
+        remaining = total - transferred - consumed
+        if remaining < 0:
+            remaining = 0.0
         product["total_produced"] = total
         product["transferred_quantity"] = transferred
-        product["remaining_quantity"] = remaining
-        product["quantity"] = remaining  # تحديث الكمية لتتوافق
+        product["consumed_as_ingredient"] = round(consumed, 6)
+        product["remaining_quantity"] = round(remaining, 6)
+        product["quantity"] = round(remaining, 6)  # تحديث الكمية لتتوافق
         # ⭐ ملء حقول التكلفة (قبل/بعد الهدر) للمنتجات القديمة
         _backfill_cost_fields(product)
         # ⭐ حساب موحّد لتكلفة الوحدة (يدعم pack_info) — مصدر واحد للحقيقة
         await _enrich_unit_cost_fields(db, product)
-    
+
     return products
 
 
@@ -4332,6 +4379,15 @@ async def get_manufactured_product(product_id: str):
     product = await db.manufactured_products.find_one({"id": product_id}, {"_id": 0})
     if not product:
         raise HTTPException(status_code=404, detail="المنتج غير موجود")
+    # ⭐ المتبقي = إجمالي المُصنّع - المحول - المستهلَك كمكوّن في تصنيع منتجات أخرى
+    total = product.get("total_produced", 0) or 0
+    transferred = product.get("transferred_quantity", 0) or 0
+    consumed_map = await _consumed_as_ingredient_map(db, product_id)
+    consumed = _consumed_in_product_unit(consumed_map, product_id, product.get("unit"))
+    remaining = max(total - transferred - consumed, 0.0)
+    product["consumed_as_ingredient"] = round(consumed, 6)
+    product["remaining_quantity"] = round(remaining, 6)
+    product["quantity"] = round(remaining, 6)
     _backfill_cost_fields(product)
     await _enrich_unit_cost_fields(db, product)
     return product

@@ -951,6 +951,19 @@ export default function WarehouseManufacturing() {
     return null;
   };
 
+  // ⭐ الوحدة الافتراضية للإدخال: للمواد المُعرّفة بالوزن/الحجم (1 قطعة = X كغم/مل)
+  // نجعل الإدخال بالغرام/المل افتراضياً، فيُحوَّل تلقائياً عبر التعريف إلى عدد قطع كسري دقيق
+  // (يمنع احتساب «القطعة كاملة» عند إدخال كمية صغيرة بالغرام).
+  const defaultInputUnitFor = (materialId, materialUnit) => {
+    const pi = _packInfoFor(materialId);
+    if (pi) {
+      const g = _findUnitGroup(pi.pack_unit);
+      if (g === 'weight') return 'غرام';
+      if (g === 'volume') return 'مل';
+    }
+    return materialUnit || '';
+  };
+
   // ⭐ تنسيق ذكي للكميات في الواجهة:
   // - يحذف floating-point noise (0.17500000000000002 → 0.175)
   // - يُحوّل تلقائياً للوحدة الأنسب (0.175 كغم → 175 غرام)
@@ -5133,7 +5146,7 @@ export default function WarehouseManufacturing() {
                         value={newIngredient.raw_material_id} 
                         onValueChange={(v) => {
                           const m = manufacturingInventory.find(x => (x.material_id || x.raw_material_id) === v);
-                          setNewIngredient(prev => ({ ...prev, raw_material_id: v, input_unit: m?.unit || '' }));
+                          setNewIngredient(prev => ({ ...prev, raw_material_id: v, input_unit: defaultInputUnitFor(v, m?.unit) }));
                         }}
                       >
                         <SelectTrigger className="flex-1 min-w-[200px] bg-background">
@@ -5171,7 +5184,7 @@ export default function WarehouseManufacturing() {
                       const finalUnits = units.length > 0 ? units : [matUnit];
                       return (
                         <Select
-                          value={newIngredient.input_unit || matUnit}
+                          value={newIngredient.input_unit || defaultInputUnitFor(newIngredient.raw_material_id, matUnit)}
                           onValueChange={(v) => setNewIngredient(prev => ({ ...prev, input_unit: v }))}
                         >
                           <SelectTrigger className="w-24 bg-background" data-testid="recipe-new-unit">
@@ -5800,7 +5813,7 @@ export default function WarehouseManufacturing() {
                       value={editNewIngredient.raw_material_id}
                       onValueChange={(v) => {
                         const m = manufacturingInventory.find(x => (x.material_id || x.raw_material_id) === v);
-                        setEditNewIngredient(prev => ({ ...prev, raw_material_id: v, input_unit: m?.unit || '' }));
+                        setEditNewIngredient(prev => ({ ...prev, raw_material_id: v, input_unit: defaultInputUnitFor(v, m?.unit) }));
                       }}
                     >
                       <SelectTrigger className="flex-1 min-w-[200px] bg-background" data-testid="edit-recipe-select-material">
@@ -5840,7 +5853,7 @@ export default function WarehouseManufacturing() {
                     const finalUnits = units.length > 0 ? units : [matUnit];
                     return (
                       <Select
-                        value={editNewIngredient.input_unit || matUnit}
+                        value={editNewIngredient.input_unit || defaultInputUnitFor(editNewIngredient.raw_material_id, matUnit)}
                         onValueChange={(v) => setEditNewIngredient(prev => ({ ...prev, input_unit: v }))}
                       >
                         <SelectTrigger className="w-24 bg-background" data-testid="edit-recipe-new-unit">

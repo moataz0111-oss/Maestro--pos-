@@ -1,0 +1,39 @@
+{
+  "summary": "Verified the BBQ-test ingredient-unit default fix end-to-end on Warehouse Manufacturing → Add Manufactured Product dialog. When 'باربكيو تست' (1 قطعة = 4.2 كغم, 2858 IQD/قطعة) is selected as a raw ingredient, the input-unit dropdown (data-testid='recipe-new-unit') now defaults to 'غرام' (NOT 'قطعة'). Entering quantity 476 then clicking add-ingredient stores it as 0.113 قطعة (input_quantity=476 غرام persisted), with cost 324 IQD — matching 0.113333 × 2858. A toast 'تم تحويل 476 غرام → 0.113 قطعة (4.2 كغم/قطعة)' is shown. Product 'سبيشيال تست' (unit كغم) was created successfully and the recipe persisted correctly via /api/manufactured-products.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "WarehouseManufacturing.js is now ~8400 lines — should be split into modular sub-components (Add/Edit Product dialogs, Recipe Editor, Cost Breakdown card). Maintainability risk is high for future fixes in this file."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (skipped per request)", "frontend": "100%"},
+  "test_credentials": "admin@maestroegp.com / admin123 (tenant default)",
+  "seed_data_creation": "Used pre-seeded material 'باربكيو تست' (id=rm-bbq-test-001) and created product 'سبيشيال تست' as part of the test (still present in DB after run).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Recipe-unit-default fix verified. Verification points: (1) recipe-new-unit defaults to غرام when selecting a pack-defined material (1 قطعة = 4.2 كغم); (2) addIngredientToRecipe converts 476 غرام → 0.113333 قطعة via convertWithPackInfo; (3) persisted recipe entry has input_unit=غرام, input_quantity=476, quantity=0.113333 قطعة. Note: a product 'سبيشيال تست' (unit كغم) was created during the test — delete it manually if it interferes with future runs.",
+  "verification_evidence": {
+    "default_input_unit_after_material_select": "غرام",
+    "toast_after_add_ingredient": "تم تحويل 476 غرام → 0.113 قطعة (4.2 كغم/قطعة)",
+    "displayed_ingredient_quantity": "0.113 قطعة",
+    "displayed_ingredient_cost": "324 IQD",
+    "expected_cost_calc": "0.113333 × 2858 ≈ 323.91 IQD",
+    "api_persisted_recipe_entry": {
+      "raw_material_id": "rm-bbq-test-001",
+      "quantity": 0.113333,
+      "unit": "قطعة",
+      "input_unit": "غرام",
+      "input_quantity": 476,
+      "cost_per_unit": 2858
+    },
+    "create_product_toast": "تم إضافة المنتج المصنع",
+    "product_name": "سبيشيال تست",
+    "product_unit": "كغم"
+  }
+}
