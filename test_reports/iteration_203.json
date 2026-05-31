@@ -1,0 +1,27 @@
+{
+  "summary": "Verified new nested-manufacturing shortcut UX in produce dialog. Login → /warehouse-manufacturing → tab-manufacturing → produce-btn for 'جارلك مايو'. With produce-quantity raised so recipe demand (8+ كغم) exceeds مايونيز stock (2 كغم), the green emerald-styled [data-testid=produce-mfg-shortfall] block appears with header '🏭 1 منتج مُصنّع ناقص — صنّعه أولاً', shows مايونيز row with 'ناقص' red badge ('مطلوب: 18 كغم متوفر: 2 كغم'), and contains green button [data-testid=produce-sub-btn-mayo-demo] labeled 'صنّع مايونيز الآن' (bg rgb(5,150,105) = emerald-600). Clicking the button correctly switches the produce dialog: title changes from 'تصنيع: جارلك مايو' to 'تصنيع: مايونيز' and produce-quantity-input resets to 1. The raw-material [data-testid=auto-request-short-materials-btn] is correctly NOT rendered since the shortage is on a manufactured (not raw) ingredient. All 4 acceptance checks PASS.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/test_reports/produce_dialog_qty8_short.png",
+    "/app/test_reports/produce_dialog_mayo_switched.png"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Pre-existing /api/branches 403 for admin still logs console errors on /warehouse-manufacturing (carried over from iter196-202). Not blocking this feature.",
+    "At default produce-quantity=1 the recipe auto-scales mayo requirement down to ~1 كغم (≤ 2 available) so mfg-shortfall block hides — this is correct behavior. The feature only triggers once user-entered quantity creates a real shortfall, matching the seeded ‘need 8 / have 2’ scenario at qty≥1 of the base recipe.",
+    "produce-mfg-shortfall block is rendered inside the produce-dialog content tree and properly per-item; each row has [data-testid=produce-sub-btn-{manufactured_product_id}] template, allowing easy multi-sub-product extension."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (frontend only)", "frontend": "100% (4/4 acceptance checks)"},
+  "test_credentials": "admin@maestroegp.com / admin123 (tenant=default) — confirmed working",
+  "seed_data_creation": "Used existing seeds: mayo-demo (qty=2 كغم, manufactured) and garlicmayo-demo (recipe needs مايونيز 8 كغم). No modifications.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Feature lives in /app/frontend/src/pages/WarehouseManufacturing.js ~L6092-6123. mfgShort array drives [data-testid=produce-mfg-shortfall] (emerald container). Each entry renders a row with [data-testid=produce-sub-btn-{manufactured_product_id}]; onClick does setShowProduceDialog(subProduct); setProduceQuantity(1); setActualYield(''). To reproduce: click produce-btn for جارلك مايو, then set produce-quantity-input to a value that makes 8*qty > mayo.quantity (default qty=1 keeps it within stock so block hides — must raise qty). Note: تصنيع tab testid is [data-testid=tab-manufacturing]; the produce button selector is shared [data-testid=produce-btn] across cards so locate the card by direct ownText match on the product name then querySelector inside that ancestor.",
+  "rca of the issue": "N/A — feature works as specified."
+}

@@ -1,0 +1,24 @@
+{
+  "summary": "Verified bug fix for produce dialog showing manufactured ingredients as 'متوفر 0/ناقص'. Backend regression PASS (mayo deducted 10→2 on produce garlicmayo qty=8). Frontend PASS: In produce dialog for جارلك مايو, the مايونيز row in [data-testid=produce-materials-list]>[data-testid=produce-row-0] renders 'مطلوب: 8 كغم / متوفر: 10 كغم' with green 'مُصنّع' badge (text-emerald-600 beaker icon, bg-emerald-500/15 badge) and NO 'ناقص' red badge. [data-testid=produce-shortfall-summary] and [data-testid=auto-request-short-materials-btn] are correctly ABSENT (since 10 ≥ 8). Default qty=1 case also verified (متوفر 10 كغم displayed). getIngredientAvailable helper successfully reads manufactured_products stock for ingredients with manufactured_product_id. Reseeded mayo-demo qty=10 and garlicmayo-demo qty=0 after testing.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": ["/app/test_reports/produce_dialog.png", "/app/test_reports/produce_dialog_qty8.png", "/app/test_reports/regression_raw_short.png"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Regression scenario for raw-material shortage (لحم برغر at qty=5000) could not be fully validated end-to-end because that product's produce dialog rendered an empty produce-materials-list (no recipe rows). This is unrelated to the مايونيز fix but indicates لحم برغر may have no raw ingredients seeded or its recipe items lack required identifiers — worth a quick look. The auto-request button code path itself was not exercised in this run for raw-short case; main agent may want to add a seed product with raw shortage to harden regression.",
+    "Existing observation from iter201 still applies: /api/branches returns 403 for admin and causes 'Failed to fetch branches' console errors on /warehouse-manufacturing (does not affect produce dialog).",
+    "input[type=number] value-set via Playwright fill() did not trigger React re-render in produce dialog (the displayed مطلوب stayed at 8 after setting 20). For automated qty-change testing the agent must use page.evaluate to dispatch input events or use page.fill + page.keyboard.press('Tab'). Not a product bug."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100% (1/1)", "frontend": "100% (3/3 assertions on مايونيز row)"},
+  "test_credentials": "admin@maestroegp.com / admin123 (tenant=default) — confirmed working",
+  "seed_data_creation": "Used existing mayo-demo and garlicmayo-demo seeds; reseeded to mayo qty=10, garlicmayo qty=0 after produce test (verified via direct MongoDB update — PUT /api/manufactured-products/{id} did not persist 'quantity' update, see RCA below)",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Bug RCA confirmed fixed at frontend layer (getIngredientAvailable helper in WarehouseManufacturing.js ~L1631). Produce dialog renders [data-testid=produce-materials-list] containing [data-testid=produce-row-{N}] rows. مُصنّع badge identifies manufactured ingredients. NOTE: PUT /api/manufactured-products/{id} with body {quantity:10} returned 200 but did not actually persist the change (returned object had 'quantity:None') — likely the update model excludes quantity field. Used direct mongo update for reseed. Not in-scope for this iteration but worth flagging.",
+  "rca of the issue": "Original bug: produce dialog availability check only consulted raw-material inventory (rawMaterials state), ignoring manufactured-product ingredients. After fix (getIngredientAvailable), ingredients with manufactured_product_id resolve their available stock from manufacturedProducts state. Verified: مايونيز (manufactured, 10 كغم) now correctly shows متوفر: 10 كغم + green 'مُصنّع' badge in جارلك مايو produce dialog — matches the green-styled emerald-600 row in the screenshot. Backend produce endpoint was already correct (deducted mayo 10→2 on qty=8 produce)."
+}

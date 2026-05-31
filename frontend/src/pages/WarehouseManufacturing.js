@@ -1627,6 +1627,17 @@ export default function WarehouseManufacturing() {
     return { pieceGrams, totalGrams, calcYieldRaw, calcYield, mainUnitFactor, usesPieceDef };
   };
 
+  // 🏭 الكمية المتوفرة لمكوّن: من مخزون المنتجات المُصنّعة إذا كان المكوّن منتجاً مُصنّعاً،
+  // وإلا من مخزون المواد الخام. يصحّح خطأ ظهور "ناقص" لمنتج مُصنّع متوفر في المصنع.
+  const getIngredientAvailable = (ing) => {
+    if (ing?.manufactured_product_id) {
+      const mp = manufacturedProducts.find(m => m.id === ing.manufactured_product_id);
+      return Number(mp?.quantity) || 0;
+    }
+    const invItem = manufacturingInventory.find(m => (m.material_id || m.raw_material_id) === ing?.raw_material_id);
+    return Number(invItem?.quantity) || 0;
+  };
+
   // 🧮 تحقّق سريع من التكلفة — يحسب المعادلة خطوة بخطوة (يطابق منطق الباكند _enrich_unit_cost_fields)
   const computeCostBreakdown = (product) => {
     if (!product) return null;
@@ -5983,16 +5994,8 @@ export default function WarehouseManufacturing() {
                 <p className="text-sm font-medium text-green-700 mb-2">{t('المواد التي سيتم خصمها (مع المتوفر):')}</p>
                 {/* ⭐ احتسب نمط الوصفة: batch (إذا piece_weight موجود ومجموع الوزن > 0) أم legacy */}
                 {(() => {
-                  const _W = { 'غرام': 1, 'كغم': 1000, 'كيلو': 1000, 'كجم': 1000, 'gram': 1, 'kg': 1000 };
-                  const pw = Number(showProduceDialog.piece_weight || 0);
-                  const pwu = showProduceDialog.piece_weight_unit || 'غرام';
-                  const pieceGrams = pw * (_W[pwu] || 1);
-                  let totalGrams = 0;
-                  for (const ing of (showProduceDialog.recipe || [])) {
-                    const f = _W[ing.unit];
-                    if (f) totalGrams += Number(ing.quantity || 0) * f;
-                  }
-                  const calcYield = (pieceGrams > 0 && totalGrams > 0) ? totalGrams / pieceGrams : 0;
+                  // ⭐ نمط الوصفة موحّد عبر computeRecipeYield (يطابق بطاقة المنتج تماماً)
+                  const { calcYield } = computeRecipeYield(showProduceDialog);
                   const isBatch = calcYield > 0;
                   const scale = isBatch && calcYield > 0 ? produceQuantity / calcYield : 1;
                   const mult = isBatch ? scale : produceQuantity;  // batch: scale × 1 each ingredient; legacy: ×quantity
@@ -6007,8 +6010,8 @@ export default function WarehouseManufacturing() {
                       <div className="space-y-1.5 max-h-[40vh] overflow-y-auto pr-1" data-testid="produce-materials-list">
                         {showProduceDialog.recipe?.map((ing, idx) => {
                           const needed = (Number(ing.quantity) || 0) * mult;
-                          const invItem = manufacturingInventory.find(m => (m.material_id || m.raw_material_id) === ing.raw_material_id);
-                          const available = Number(invItem?.quantity) || 0;
+                          const isManufactured = !!ing.manufactured_product_id;
+                          const available = getIngredientAvailable(ing);  // ⭐ مخزون مُصنّع أو مادة خام
                           const isShort = available < needed;
                           return (
                             <div
@@ -6017,8 +6020,11 @@ export default function WarehouseManufacturing() {
                               data-testid={`produce-row-${idx}`}
                             >
                               <div className="flex items-center gap-2">
-                                <Beaker className={`h-3.5 w-3.5 ${isShort ? 'text-red-600' : 'text-purple-500'}`} />
+                                <Beaker className={`h-3.5 w-3.5 ${isShort ? 'text-red-600' : (isManufactured ? 'text-emerald-600' : 'text-purple-500')}`} />
                                 <span className="font-medium">{ing.raw_material_name}</span>
+                                {isManufactured && (
+                                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-700 font-bold">{t('مُصنّع')}</span>
+                                )}
                                 {isShort && (
                                   <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-500 text-white font-bold">{t('ناقص')}</span>
                                 )}
@@ -6035,47 +6041,86 @@ export default function WarehouseManufacturing() {
                           );
                         })}
                       </div>
-                      {/* ملخص: عدد المواد الناقصة + طلب تلقائي */}
+                      {/* ملخص: مواد خام ناقصة (تُطلب من المخزن) + منتجات مُصنّعة ناقصة (تُصنّع) */}
                       {(() => {
-                        const shortItems = (showProduceDialog.recipe || []).map(ing => {
+                        const allShort = (showProduceDialog.recipe || []).map(ing => {
                           const needed = (Number(ing.quantity) || 0) * mult;
-                          const invItem = manufacturingInventory.find(m => (m.material_id || m.raw_material_id) === ing.raw_material_id);
-                          const available = Number(invItem?.quantity) || 0;
+                          const available = getIngredientAvailable(ing);
                           return {
                             raw_material_id: ing.raw_material_id,
+                            manufactured_product_id: ing.manufactured_product_id,
                             raw_material_name: ing.raw_material_name,
                             unit: ing.unit,
                             needed,
                             available,
                             shortfall: Math.max(0, needed - available),
+                            isManufactured: !!ing.manufactured_product_id,
                           };
                         }).filter(x => x.shortfall > 1e-9);
-                        if (shortItems.length === 0) return null;
+                        const rawShort = allShort.filter(x => !x.isManufactured);
+                        const mfgShort = allShort.filter(x => x.isManufactured);
+                        if (allShort.length === 0) return null;
                         return (
                           <div className="mt-2 space-y-2" data-testid="produce-shortfall-summary">
-                            <div className="p-2 rounded bg-red-500/15 border-2 border-red-500/40 text-red-700 text-sm font-bold text-center">
-                              ⚠️ {shortItems.length} {t('مادة ناقصة — اطلب تحويلها من المخزن قبل التصنيع')}
-                            </div>
-                            <Button
-                              type="button"
-                              className="w-full bg-amber-500 hover:bg-amber-600 text-white"
-                              disabled={requestingShortMaterials}
-                              onClick={() => handleAutoRequestShortMaterials(
-                                shortItems,
-                                showProduceDialog.name,
-                                produceQuantity,
-                                showProduceDialog.unit || 'حبة'
-                              )}
-                              data-testid="auto-request-short-materials-btn"
-                            >
-                              {requestingShortMaterials
-                                ? <RefreshCw className="h-4 w-4 animate-spin ml-2" />
-                                : <Send className="h-4 w-4 ml-2" />}
-                              {t('اطلب المواد الناقصة من المخزن تلقائياً')}
-                            </Button>
-                            <p className="text-[10px] text-muted-foreground text-center">
-                              {t('سيُرسَل طلب للمخزن بالكميات الناقصة المحسوبة حسب وزن القطعة والوصفة')}
-                            </p>
+                            {rawShort.length > 0 && (
+                              <>
+                                <div className="p-2 rounded bg-red-500/15 border-2 border-red-500/40 text-red-700 text-sm font-bold text-center">
+                                  ⚠️ {rawShort.length} {t('مادة خام ناقصة — اطلب تحويلها من المخزن قبل التصنيع')}
+                                </div>
+                                <Button
+                                  type="button"
+                                  className="w-full bg-amber-500 hover:bg-amber-600 text-white"
+                                  disabled={requestingShortMaterials}
+                                  onClick={() => handleAutoRequestShortMaterials(
+                                    rawShort,
+                                    showProduceDialog.name,
+                                    produceQuantity,
+                                    showProduceDialog.unit || 'حبة'
+                                  )}
+                                  data-testid="auto-request-short-materials-btn"
+                                >
+                                  {requestingShortMaterials
+                                    ? <RefreshCw className="h-4 w-4 animate-spin ml-2" />
+                                    : <Send className="h-4 w-4 ml-2" />}
+                                  {t('اطلب المواد الناقصة من المخزن تلقائياً')}
+                                </Button>
+                                <p className="text-[10px] text-muted-foreground text-center">
+                                  {t('سيُرسَل طلب للمخزن بالكميات الناقصة المحسوبة حسب وزن القطعة والوصفة')}
+                                </p>
+                              </>
+                            )}
+                            {mfgShort.length > 0 && (
+                              <div className="p-2 rounded bg-emerald-500/10 border-2 border-emerald-500/40 space-y-1.5" data-testid="produce-mfg-shortfall">
+                                <p className="text-emerald-800 text-xs font-bold text-center">
+                                  🏭 {mfgShort.length} {t('منتج مُصنّع ناقص — صنّعه أولاً')}
+                                </p>
+                                {mfgShort.map((m, i) => {
+                                  const subProduct = manufacturedProducts.find(p => p.id === m.manufactured_product_id);
+                                  return (
+                                    <div key={i} className="flex items-center justify-between gap-2 bg-background/40 rounded px-2 py-1">
+                                      <div className="text-xs">
+                                        <span className="font-bold">{m.raw_material_name}</span>
+                                        <span className="text-muted-foreground block text-[10px]">
+                                          {t('ناقص')}: {formatRecipeQuantity(m.shortfall, m.unit).text}
+                                        </span>
+                                      </div>
+                                      {subProduct && (
+                                        <Button
+                                          type="button"
+                                          size="sm"
+                                          className="bg-emerald-600 hover:bg-emerald-700 text-white h-7 text-xs whitespace-nowrap"
+                                          onClick={() => { setShowProduceDialog(subProduct); setProduceQuantity(1); setActualYield(''); }}
+                                          data-testid={`produce-sub-btn-${m.manufactured_product_id}`}
+                                        >
+                                          <Factory className="h-3.5 w-3.5 ml-1" />
+                                          {t('صنّع')} {m.raw_material_name} {t('الآن')}
+                                        </Button>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
                           </div>
                         );
                       })()}
