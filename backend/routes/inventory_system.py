@@ -4021,25 +4021,26 @@ async def _enrich_unit_cost_fields(db, product: dict) -> dict:
             count_yield = sum_in_pwu / pw
 
     final_yield = calc_yield or count_yield
-    # ⭐ كمية إنتاج الوصفة الفعلية (actual_recipe_yield) لها الأولوية متى كانت
-    # مُعرّفة (>0) — تعالج تمدّد/انكماش الكتلة أثناء الطبخ. الوصفات القديمة بلا
-    # هذا الحقل تبقى بنفس سلوكها (يُحسب العائد من مجموع المكونات).
+    # ⭐ كمية إنتاج الوصفة الفعلية (actual_recipe_yield) تُستخدم كعائد الوصفة المحسوب
+    # متى كانت مُعرّفة (>0) — تعالج تمدّد/انكماش الكتلة أثناء الطبخ.
     ary = float(product.get("actual_recipe_yield") or 0)
     if ary > 0:
         final_yield = ary
     stored_qty = float(product.get("quantity") or 0)
-    # ⭐ إصلاح حرج: عند تعذّر حساب العائد من الوصفة، نستخدم العدد الأصلي المُنتَج
-    # (total_produced) قبل المخزون الحالي — وإلا فإن المنتج الذي نفد مخزونه
-    # (quantity=0, yield=0) يُعطي denom=1 فتصبح تكلفة الوحدة = تكلفة الدفعة كاملة!
-    # كذلك استخدام المخزون الحالي يُضخّم التكلفة تدريجياً مع البيع. العائد الصحيح =
-    # العدد الكلي الذي تُنتجه الدفعة = total_produced.
     total_produced = float(product.get("total_produced") or 0)
-    denom = final_yield or total_produced or stored_qty or 1.0
+    last_batch = float(product.get("last_batch_yield") or 0)
+    # ⭐ تكلفة الوحدة = كلفة الدفعة ÷ عدد الوحدات التي تُنتجها الدفعة فعلياً.
+    # الأولوية: عائد آخر دفعة (دقيق، يُحفظ عند كل تصنيع) ← الكمية المُصنّعة فعلياً
+    # (إجمالي المُصنّع) ← العائد المحسوب من المكونات (للمنتجات التي لم تُصنَّع بعد).
+    # هكذا يصبح سعر الكيلو = الكلفة ÷ الكمية المُنتجة (مثل 48,334 ÷ 30 = 1,611) ويُصحّح
+    # نفسه تلقائياً دون أي تدخّل يدوي، حتى لو بقي حقل العائد الفعلي قديماً من قبل.
+    prod_yield = last_batch or total_produced or final_yield
+    denom = prod_yield or stored_qty or 1.0
 
     batch_after = float(product.get("raw_material_cost_after_waste") or product.get("production_cost") or product.get("raw_material_cost") or 0)
     batch_before = float(product.get("cost_before_waste") or product.get("raw_material_cost") or 0)
 
-    product["computed_yield"] = round(final_yield, 6)
+    product["computed_yield"] = round(prod_yield or final_yield, 6)
     product["unit_cost_after_waste"] = round(batch_after / denom, 6)
     product["unit_cost_before_waste"] = round(batch_before / denom, 6)
     return product
@@ -4776,7 +4777,9 @@ async def produce_product(
                 "quantity": effective_yield,
                 "total_produced": effective_yield
             },
-            "$set": {"last_updated": now_iso}
+            # ⭐ عائد آخر دفعة = الكمية المُنتجة فعلياً في هذا التصنيع. يُستخدم كمقام دقيق
+            # لتكلفة الوحدة (الكلفة المخزّنة تخص هذه الدفعة) — يمنع القسمة على عائد قديم.
+            "$set": {"last_batch_yield": effective_yield, "last_updated": now_iso}
         }
     )
     

@@ -1677,8 +1677,10 @@ export default function WarehouseManufacturing() {
     const { pieceGrams, totalGrams, calcYield, mainUnitFactor, usesPieceDef } = computeRecipeYield(product);
     const storedQty = Number(product.quantity || 0);
     const totalProduced = Number(product.total_produced || 0);
+    const lastBatch = Number(product.last_batch_yield || 0);
     const yieldFromRecipe = calcYield > 0;
-    const finalYield = calcYield || totalProduced || storedQty || 0;
+    // ⭐ العائد الفعلي = عائد آخر دفعة ← الكمية المُصنّعة فعلياً ← العائد المحسوب من المكونات
+    const finalYield = lastBatch || totalProduced || calcYield || storedQty || 0;
     const denom = finalYield || 1;
     const batchBefore = Number(product.raw_material_cost ?? product.cost_before_waste ?? 0);
     const batchAfter = Number(product.raw_material_cost_after_waste ?? product.production_cost ?? product.raw_material_cost ?? 0);
@@ -3498,9 +3500,15 @@ export default function WarehouseManufacturing() {
                                   if (sumInPwu > 0) countYield = sumInPwu / pw;
                                 }
                                 const finalYield = calcYield || countYield;
+                                const totalProduced = Number(product.total_produced || 0);
+                                const lastBatch = Number(product.last_batch_yield || 0);
+                                // ⭐ العائد الفعلي = عائد آخر دفعة ← الكمية المُصنّعة فعلياً ← العائد المحسوب
+                                // من المكونات. هكذا سعر الوحدة = الكلفة ÷ الكمية المُنتجة فعلاً.
+                                const prodYield = lastBatch || totalProduced || finalYield;
+                                const isProduced = (lastBatch || totalProduced) > 0;
                                 const storedQty = Number(product.quantity || 0);
-                                const denom = finalYield || storedQty || 1;
-                                const hasPerPiece = (finalYield > 0) || (storedQty > 1);
+                                const denom = prodYield || storedQty || 1;
+                                const hasPerPiece = (prodYield > 0) || (storedQty > 1);
                                 const batchBefore = Number(product.raw_material_cost ?? product.cost_before_waste ?? 0);
                                 const batchAfter = Number(product.raw_material_cost_after_waste ?? product.production_cost ?? product.raw_material_cost ?? 0);
                                 // ⭐ المسار الموحّد: استخدم unit_cost_after_waste من Backend عند توفّره (مصدر واحد للحقيقة)
@@ -3547,18 +3555,22 @@ export default function WarehouseManufacturing() {
                                       );
                                     })()}
                                     {/* شريط العائد المحسوب */}
-                                    {finalYield > 0 && (() => {
+                                    {prodYield > 0 && (() => {
                                       const diff = Math.abs(finalYield - storedQty);
-                                      // ⭐ عند تثبيت كمية الإنتاج الفعلية يدوياً، لا نُظهر تنبيه المزامنة
-                                      // (العائد مُثبّت من المستخدم — المزامنة قد تُخلّ بالعلاقة المقصودة).
-                                      const isOutOfSync = ary <= 0 && storedQty > 0 && diff >= 0.5;
+                                      // ⭐ عند تثبيت كمية الإنتاج الفعلية يدوياً أو بعد التصنيع، لا نُظهر تنبيه المزامنة.
+                                      const isOutOfSync = ary <= 0 && !isProduced && storedQty > 0 && diff >= 0.5;
                                       const yieldHint = calcYield > 0
                                         ? `${t('وزن القطعة')} ${(!pwuIsWeight && pdv > 0 && _W[pdu]) ? `${pw} ${pwu} = ${pdv} ${pdu}` : `${pw} ${pwu}`} · ${t('إجمالي الوصفة')} ${totalGrams.toFixed(0)} ${t('غرام')}`
                                         : `${t('وزن القطعة')} ${pw} ${pwu} · ${t('قطعية')}`;
+                                      // ⭐ التلميح: مُصنّع فعلياً ← كمية إنتاج محددة يدوياً ← تفاصيل الوصفة
+                                      const hint = isProduced
+                                        ? `${t('مُصنّع فعلياً')}: ${prodYield.toFixed(3)} ${unitLabel}`
+                                        : (ary > 0 ? `${t('محددة يدوياً')}: ${ary} ${unitLabel}` : yieldHint);
+                                      const showActualBadge = ary > 0 && !isProduced;
                                       return (
                                         <div className={`mb-2 p-2 rounded-md border text-xs flex items-center justify-between gap-2 flex-wrap ${isOutOfSync ? 'bg-orange-500/10 border-orange-500/40 text-orange-800' : 'bg-amber-500/10 border-amber-500/30 text-amber-800'}`} data-testid="yield-banner">
-                                          <span>📐 {t('العائد المحسوب من الوصفة')}: <strong className="tabular-nums">{finalYield.toFixed(3)} {unitLabel}</strong>{ary > 0 && <span className="ml-1 px-1.5 py-0.5 rounded bg-sky-600 text-white text-[10px] font-bold" data-testid="actual-yield-badge">{t('كمية إنتاج فعلية')}</span>}</span>
-                                          <span className="text-[10px] text-muted-foreground">{ary > 0 ? `${t('محددة يدوياً')}: ${ary} ${unitLabel}` : yieldHint}</span>
+                                          <span>📐 {t(isProduced ? 'العائد (الكمية المُصنّعة)' : 'العائد المحسوب من الوصفة')}: <strong className="tabular-nums">{prodYield.toFixed(3)} {unitLabel}</strong>{showActualBadge && <span className="ml-1 px-1.5 py-0.5 rounded bg-sky-600 text-white text-[10px] font-bold" data-testid="actual-yield-badge">{t('كمية إنتاج فعلية')}</span>}</span>
+                                          <span className="text-[10px] text-muted-foreground">{hint}</span>
                                           {isOutOfSync && (
                                             <button
                                               onClick={() => syncRecipeToProducedQty(product)}

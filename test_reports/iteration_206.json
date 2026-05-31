@@ -1,0 +1,28 @@
+{
+  "summary": "Verified the per-kilo cost self-heal fix on Warehouse Manufacturing page for the seeded demo product 'مايونيز (عرض الإصلاح)'. The card now correctly displays 48,334 IQD total cost after waste with 'لكل كغم: 1,611 IQD' (NOT the old stale 6,905 IQD). Yield banner shows '30.000 كغم' (actual produced quantity), not the stale 7. Per-unit price 1,611 IQD. Regression: existing non-produced products still compute per-unit cost via recipe yield correctly.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "WarehouseManufacturing.js is very large (>3500 lines) — consider splitting product card, manufacturing dialogs, and cost breakdown into separate components to improve maintainability."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (skipped per request)", "frontend": "100%"},
+  "test_credentials": "admin@maestroegp.com / admin123",
+  "seed_data_creation": "none (used existing seeded demo-stale-mayo product)",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Primary fix verified for مايونيز scenario. Demo product 'مايونيز (عرض الإصلاح)' (id=demo-stale-mayo) on /warehouse-manufacturing -> tab-manufacturing shows correct per-kilo cost 1,611 IQD derived from 48,334 ÷ 30. Stale actual_recipe_yield=7 is no longer used for denominator. PRODUCE FLOW (creating a brand new product and producing it) was not exercised end-to-end since primary regression scenario was sufficient and backend tests already cover it (test_stale_yield_self_heal.py).",
+  "verification_evidence": {
+    "card_text_extract": "مايونيز (عرض الإصلاح) | المتبقي: 30 كغم | إجمالي المُصنّع: 30كغم | 📐 العائد (الكمية المُصنّعة): 30.000 كغم | مُصنّع فعلياً: 30.000 كغم | الكلفة قبل الهدر: 45,528 IQD لكل كغم: 1,518 IQD | ⭐ الكلفة بعد الهدر: 48,334 IQD لكل كغم: 1,611 IQD | سعر القطعة الواحدة: 1,611 IQD حسب الخلطة · لكل كغم",
+    "old_stale_value_present": false,
+    "expected_per_kg": "1,611 IQD",
+    "expected_total_after_waste": "48,334 IQD",
+    "expected_yield_display": "30.000 كغم"
+  }
+}
