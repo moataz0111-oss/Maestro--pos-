@@ -1,0 +1,34 @@
+{
+  "summary": "Frontend verification of yield-banner fix for fahita-view on /warehouse-manufacturing (التصنيع tab). FIX IS INCOMPLETE — yield banner still shows '300.000 حصة' instead of expected '3.750 حصة'. Cost section is CORRECT (1,856 IQD total, 495 IQD لكل حصة).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "WarehouseManufacturing.js — yield-banner (inline calc)",
+        "issue": "Yield banner for 'دجاج فاهيتا (عرض)' displays '300.000 حصة' (BUG) instead of expected '3.750 حصة'. The fix was applied to computeCostBreakdown() at line 1626-1630 (where `usesPieceDef` correctly gates the weight-main override), but there is a DUPLICATE inline yield calculation at line 3434-3437 inside the JSX render block that powers the yield-banner. That duplicate calc was NOT updated and still does `calcYield = totalGrams/mainUnitFactor` unconditionally when product.unit is weight, ignoring piece_def_value. As a result the banner renders the wrong number. The cost side is correct because the unit_cost shown ('لكل حصة 495 IQD') comes from product.unit_cost_after_waste returned by backend (already fixed) — not from the buggy local calcYield.",
+        "selector": "[data-testid='yield-banner']",
+        "priority": "HIGH"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": ["/app/test_reports/iter199_yield.png"],
+  "action_items": [
+    "Apply the same fix from /app/frontend/src/pages/WarehouseManufacturing.js line 1630 to the duplicate inline calc at line 3434-3437. Change:\n  const calcYield = (mainUnitFactor && totalGrams > 0) ? totalGrams / mainUnitFactor : calcYieldRaw;\n→ to:\n  const usesPieceDef = !!(pdv > 0 && pdu);\n  const calcYield = (mainUnitFactor && totalGrams > 0 && !usesPieceDef) ? totalGrams / mainUnitFactor : calcYieldRaw;\n(pdv and pdu are already declared at lines 3412-3413 in this same block.)",
+    "Better: extract this yield-calculation logic into a shared helper to avoid future drift between computeCostBreakdown and the JSX inline calc (DRY violation — the same ~40 lines of yield math are duplicated)."
+  ],
+  "critical_code_review_comments": [
+    "WarehouseManufacturing.js (8243 lines) — yield calculation is duplicated in at least TWO places (computeCostBreakdown ~line 1597 AND inline JSX at ~line 3400). The fix was only applied to one, causing this bug. DRY violation: extract to a single helper computeYield(product, rawMaterials).",
+    "File size remains excessive (>700 lines guideline). Should be split into smaller modules.",
+    "The yield-banner data-testid is good ✅. However the per-product card lacks a stable testid (e.g., data-testid={`product-card-${product.id}`}) — would make targeted testing more reliable than scanning all banners and walking up the DOM."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (skipped)", "frontend": "33% (1/3: cost number is correct; yield-banner number is WRONG; regression OK — other cards render fine)"},
+  "test_credentials": "admin@maestroegp.com / admin123 (tenant=default)",
+  "seed_data_creation": "Used existing seed fahita-view (id=fahita-view, name='دجاج فاهيتا (عرض)', unit=غرام, piece_def_value=80, piece_def_unit=غرام, piece_weight=1, piece_weight_unit=حصة, recipe=[{مكونات, 300, غرام}], quantity=0) — verified in MongoDB before testing.",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Login (admin@maestroegp.com/admin123) works. Navigate to /warehouse-manufacturing, wait ~8s, click [data-testid=tab-manufacturing] (twice if needed). Three cards render: 'لحم برغر' (count حبة), 'كراة مشروم' (count حبة), 'دجاج فاهيتا (عرض)' (weight غرام + piece حصة). The yield-banner for fahita reads literally: '📐 العائد المحسوب من الوصفة: 300.000 حصة · وزن القطعة 1 حصة = 80 غرام · إجمالي الوصفة 300 غرام'. Expected after full fix: '3.750 حصة'. To verify fix retest playwright: read textContent of [data-testid=yield-banner] and assert it contains '3.750 حصة' for the fahita card.",
+  "rca of the issue": "Root cause: incomplete fix. The yield formula was duplicated in two places in WarehouseManufacturing.js:\n  (A) computeCostBreakdown() at line 1626-1630 — FIXED with `!usesPieceDef` guard.\n  (B) Inline JSX calc at line 3434-3437 that powers the yield-banner — NOT FIXED.\nThe banner renders `finalYield.toFixed(3)` where finalYield comes from the buggy (B) calc. For fahita-view (unit=غرام, mainUnitFactor=1, totalGrams=300, pieceGrams=80, piece_def_value=80): (B) returns 300/1 = 300 ❌. After applying the same guard, it should fall through to calcYieldRaw = 300/80 = 3.75 ✅.\nReproduction: Login admin → /warehouse-manufacturing → tab التصنيع → observe 'دجاج فاهيتا (عرض)' card yield-banner shows 300.000 حصة. Mitigation: apply identical `!usesPieceDef` guard to line 3435 (pdv/pdu are already declared above at 3412-3413). Long-term: extract computeYield to a shared helper to eliminate the duplication."
+}

@@ -77,3 +77,25 @@ def test_weight_product_unaffected():
                  "piece_def_value": 0, "piece_def_unit": None,
                  "recipe": [{"raw_material_name": "لحم", "quantity": 1000, "unit": "غرام"}]})
     assert p["computed_yield"] == 4.0  # 1000 / 250
+
+
+
+def test_weight_main_unit_with_piece_def_yields_in_portions():
+    """دجاج فاهيتا CASE: unit=غرام (weight) BUT counted in حصص (1 حصة=80غ via piece_def).
+    The weight-main-unit override must NOT apply → yield in حصص = grams/80, NOT grams/1.
+    Recipe = 300 غرام → 300/80 = 3.75 حصة (NOT 300)."""
+    p = _enrich({"unit": "غرام", "piece_weight": 1, "piece_weight_unit": "حصة",
+                 "piece_def_value": 80, "piece_def_unit": "غرام",
+                 "raw_material_cost": 1856, "raw_material_cost_after_waste": 1856,
+                 "recipe": [{"raw_material_name": "مكونات", "quantity": 300, "unit": "غرام"}]})
+    assert round(p["computed_yield"], 3) == 3.75, f"yield={p['computed_yield']} (expected 3.75 حصة)"
+    # cost per حصة = 1856 / 3.75 ≈ 494.93 (NOT 6.19 per gram)
+    assert round(p["unit_cost_after_waste"], 2) == 494.93
+
+
+def test_pure_weight_product_keeps_grams_yield():
+    """Pure weight product (لحم مفروم, no piece_def) → override applies, yield in grams."""
+    p = _enrich({"unit": "غرام", "piece_weight": 60, "piece_weight_unit": "غرام",
+                 "piece_def_value": 0, "piece_def_unit": None,
+                 "recipe": [{"raw_material_name": "لحم", "quantity": 10000, "unit": "غرام"}]})
+    assert p["computed_yield"] == 10000.0

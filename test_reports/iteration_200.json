@@ -1,0 +1,42 @@
+{
+  "summary": "Frontend-only RETEST of yield-banner fix for 'دجاج فاهيتا (عرض)' (fahita-view). Confirmed the duplicate inline yield calc at line ~3435 is now properly gated with !usesPieceDefYield. Yield banner now displays '3.750 حصة' as expected. Cost box shows 1,856 IQD total and 495 IQD per حصة. Regression check: other product cards (لحم برغر, كراة مشروم) render correctly without errors.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_results": {
+    "fahita_yield_banner": {
+      "expected": "3.750 حصة",
+      "actual": "📐 العائد المحسوب من الوصفة: 3.750 حصة وزن القطعة 1 حصة = 80 غرام · إجمالي الوصفة 300 غرام",
+      "pass": true
+    },
+    "fahita_cost_box": {
+      "expected_total": "~1856 IQD",
+      "expected_per_serving": "~495 IQD",
+      "actual_total_before_waste": "1,856 IQD (424 IQD per حصة)",
+      "actual_total_after_waste": "1,856 IQD (495 IQD per حصة)",
+      "actual_unit_price": "495 IQD لكل حصة",
+      "pass": true
+    },
+    "regression_other_cards": {
+      "luhm_burger": "100 حبة, 6,412 IQD per حبة - OK",
+      "kura_mushroom": "100 حبة, 3,403 IQD per حبة - OK",
+      "pass": true
+    }
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Note: Console showed 403 errors on /api/branches calls during navigation - unrelated to manufacturing tab/yield logic, but worth investigating tenant/permission handling for branches endpoint."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (skipped)", "frontend": "100%"},
+  "test_credentials": "admin@maestroegp.com / admin123 (tenant=default)",
+  "seed_data_creation": "None - used existing fahita-view seed",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Yield-banner fix for fahita-view is VERIFIED working. The !usesPieceDefYield gate on the duplicate inline calc (line ~3435 in WarehouseManufacturing.js) correctly prevents the divide-by-mainUnitFactor when piece_def_value is used as yield source. Banner shows 3.750 حصة, cost 1856/495 IQD as expected. Other products unaffected.",
+  "rca_of_the_issue": "Previously, a duplicate inline yield calculation at WarehouseManufacturing.js line ~3435 was computing totalGrams/mainUnitFactor without gating, overriding the piece_def-based yield (3.750) with 300 (raw grams). Fix gates this with usesPieceDefYield flag matching computeCostBreakdown logic. Verified: yield-banner now reads '3.750 حصة'."
+}

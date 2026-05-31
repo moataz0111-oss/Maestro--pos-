@@ -1,0 +1,23 @@
+{
+  "summary": "Verified frontend yield helper refactor in WarehouseManufacturing.js. Logged in as admin, navigated to /warehouse-manufacturing, clicked tab-manufacturing. Both target yield banners render correctly: fahita-view shows '3.750 حصة' (300غ ÷ 80 piece_def, weight main unit) and burger-view shows '100.000 حبة' (25000غ ÷ 250 piece_weight, count main unit with حبة). 4 total yield banners rendered cleanly across all manufacturing product cards. No JS/render errors. Refactor is behavior-preserving.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": ["/app/test_reports/manufacturing_view.png"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Product cards in manufacturing tab lack a data-testid attribute on the card container (e.g. product-card-{id}). Yield-banners are findable, but per-card identification requires scanning text. Adding data-testid='product-card-{product.id}' would harden future automated regression testing.",
+    "Note: /api/branches returns 403 for admin (admin@maestroegp.com); unrelated to this refactor but causes 'Failed to fetch branches' console error on every page load — main agent may want to suppress this for admin users without branch scope."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (frontend-only)", "frontend": "100%"},
+  "test_credentials": "admin@maestroegp.com / admin123 (tenant=default) — confirmed working",
+  "seed_data_creation": "No new seed; used existing fahita-view + burger-view demo products in tenant=default",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Login via [data-testid=login-email]/[login-password]/[login-submit] requires keyboard typing (press_sequentially), not page.fill (page.fill doesn't trigger React controlled-input state updates and form submits with empty values). Manufacturing tab needs ~8s load wait, plus tab-manufacturing click to ensure full hydration. Yield banners use [data-testid='yield-banner']. Product cards currently have no per-card data-testid.",
+  "rca of the issue": "n/a — refactor verification only, no bug to RCA"
+}

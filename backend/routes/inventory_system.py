@@ -37,6 +37,53 @@ _UNIT_WEIGHT_MAP = {
 _COUNT_UNITS = {"قطعة", "قطع", "حبة", "حبات", "علبة", "علب", "كرتون", "كراتين", "صحن", "piece", "pieces", "unit"}
 
 
+def _resolve_piece_grams(product: dict) -> float:
+    """يُرجع الوزن الحقيقي للقطعة الواحدة بالغرام، مع احترام تعريف البورشن.
+    ⭐ piece_def_value (1 حصة = 80 غرام) له الأولوية المطلقة متى كان صالحاً —
+    حتى لو كانت piece_weight_unit وزنية/فارغة. وإلا يُستخدم piece_weight × معامل الوحدة.
+    (يطابق منطق _enrich_unit_cost_fields و getPieceGrams في الواجهة)."""
+    pw = float(product.get("piece_weight") or 0)
+    pwu = product.get("piece_weight_unit") or "غرام"
+    pdv = float(product.get("piece_def_value") or 0)
+    pdu = product.get("piece_def_unit")
+    if pdv > 0 and pdu and _UNIT_WEIGHT_MAP.get(pdu):
+        return pdv * _UNIT_WEIGHT_MAP[pdu]
+    return pw * _UNIT_WEIGHT_MAP.get(pwu, 1.0)
+
+
+def _has_piece_definition(product: dict) -> bool:
+    """هل المنتج يُعدّ/يُباع بالقطعة/الحصة (له تعريف بورشن صريح piece_def_value)؟
+    عندها يُحسب عائد العرض بالقطع (total_grams ÷ piece_grams) وليس بالغرام،
+    ويُمنع تجاوز "الوحدة الرئيسية الوزنية" الذي يُحوّل العائد إلى غرامات."""
+    pdv = float(product.get("piece_def_value") or 0)
+    pdu = product.get("piece_def_unit")
+    return pdv > 0 and bool(pdu) and bool(_UNIT_WEIGHT_MAP.get(pdu))
+
+
+
+def _resolve_recipe_yield(product: dict, total_grams: float) -> float:
+    """العائد (عدد وحدات المنتج التي تُنتجها الوصفة) من إجمالي وزن الوصفة بالغرام.
+    يطابق منطق _enrich_unit_cost_fields:
+      1) إذا الوحدة الرئيسية وزنية (غرام/كغم/مل/لتر) → العائد = total_grams ÷ معامل الوحدة.
+      2) وإلا → العائد = total_grams ÷ piece_grams (مع احترام piece_def_value).
+    نمط الدفعة يُفعّل فقط عند وجود piece_weight أو تعريف بورشن (حفاظاً على النمط القديم per-unit)."""
+    if total_grams <= 0:
+        return 0.0
+    pw = float(product.get("piece_weight") or 0)
+    pdv = float(product.get("piece_def_value") or 0)
+    if pw <= 0 and pdv <= 0:
+        return 0.0  # لا piece_weight ولا تعريف → النمط القديم (per-unit)
+    main_unit = (product.get("unit") or "").strip()
+    main_factor = _UNIT_WEIGHT_MAP.get(main_unit)
+    if main_factor:
+        return total_grams / main_factor
+    piece_grams = _resolve_piece_grams(product)
+    if piece_grams > 0:
+        return total_grams / piece_grams
+    return 0.0
+
+
+
 async def _ingredient_weight_grams(db, ing: dict) -> float:
     """
     ⭐ يحسب الوزن الفعلي للمكوّن بالغرام، مع دعم تحويل العلبة/الكرتون عبر pack_info.
@@ -3931,7 +3978,10 @@ async def _enrich_unit_cost_fields(db, product: dict) -> dict:
     #   → unit_cost = 108,299 / 10,250 = 10.57 IQD/غرام (ليس 634 IQD لكل قطعة 60غ).
     main_unit_str = (product.get("unit") or "").strip()
     main_unit_factor = UNIT_W.get(main_unit_str)
-    if main_unit_factor and total_grams > 0:
+    # ⭐ لا يُطبّق تجاوز الوحدة الوزنية إذا كان للمنتج تعريف بورشن صريح (piece_def_value):
+    # في هذه الحالة المنتج يُعدّ بالحصص، فالعائد = total_grams ÷ piece_grams (بالحصص)
+    # وليس total_grams ÷ 1 (بالغرام). مثال: دجاج فاهيتا 300غ ÷ 80 = 3.75 حصة (وليس 300).
+    if main_unit_factor and total_grams > 0 and not _has_piece_definition(product):
         calc_yield = total_grams / main_unit_factor
 
     # عائد بديل قطعي (لوحدات فرعية كـ شريحة)
@@ -4476,14 +4526,9 @@ async def produce_product(
         raise HTTPException(status_code=404, detail="المنتج غير موجود")
 
     # ───── احتساب العائد من الوصفة (مع دعم pack_info للعلب/الكراتين) ─────
-    piece_weight = float(product.get("piece_weight") or 0)
-    piece_weight_unit = product.get("piece_weight_unit") or "غرام"
-    calculated_yield = 0.0
-    piece_grams = piece_weight * _UNIT_WEIGHT_MAP.get(piece_weight_unit, 1.0)
-    if piece_weight > 0 and piece_grams > 0:
-        total_grams = await _compute_recipe_total_grams(db, product.get("recipe") or [])
-        if total_grams > 0:
-            calculated_yield = total_grams / piece_grams
+    total_grams = await _compute_recipe_total_grams(db, product.get("recipe") or [])
+    # ⭐ العائد يحترم تعريف البورشن (piece_def_value) + الوحدة الرئيسية الوزنية
+    calculated_yield = _resolve_recipe_yield(product, total_grams)
 
     is_batch_mode = calculated_yield > 0
     now_iso = datetime.now(timezone.utc).isoformat()
@@ -4843,14 +4888,9 @@ async def add_product_stock(product_id: str, quantity: float = 1, current_user: 
     performed_by_name = (current_user or {}).get("full_name") or (current_user or {}).get("username")
 
     # ───── احتساب معامل الاستهلاك (نفس منطق التصنيع) ─────
-    piece_weight = float(product.get("piece_weight") or 0)
-    piece_weight_unit = product.get("piece_weight_unit") or "غرام"
-    piece_grams = piece_weight * _UNIT_WEIGHT_MAP.get(piece_weight_unit, 1.0)
-    calculated_yield = 0.0
-    if piece_weight > 0 and piece_grams > 0:
-        tg = await _compute_recipe_total_grams(db, product.get("recipe") or [])
-        if tg > 0:
-            calculated_yield = tg / piece_grams
+    # ⭐ العائد يحترم تعريف البورشن (piece_def_value) + الوحدة الرئيسية الوزنية
+    tg = await _compute_recipe_total_grams(db, product.get("recipe") or [])
+    calculated_yield = _resolve_recipe_yield(product, tg)
     is_batch_mode = calculated_yield > 0
     # batch mode: الوصفة تمثل calculated_yield قطعة → معامل = quantity / calculated_yield
     # legacy mode: الوصفة per-unit → معامل = quantity
@@ -4936,11 +4976,9 @@ async def add_product_stock(product_id: str, quantity: float = 1, current_user: 
     recipe_scaled = False
     scale_factor = 1.0
     fresh = await db.manufactured_products.find_one({"id": product_id})
-    pw = float(fresh.get("piece_weight") or 0)
-    pwu = fresh.get("piece_weight_unit") or "غرام"
-    piece_grams = pw * _UNIT_WEIGHT_MAP.get(pwu, 1.0)
     total_grams = await _compute_recipe_total_grams(db, fresh.get("recipe") or [])
-    calc_yield = (total_grams / piece_grams) if (piece_grams > 0 and total_grams > 0) else 0
+    # ⭐ العائد يحترم تعريف البورشن (piece_def_value) + الوحدة الرئيسية الوزنية
+    calc_yield = _resolve_recipe_yield(fresh, total_grams)
     target_qty = float(fresh.get("quantity") or 0)
     if calc_yield > 0 and target_qty > 0 and abs(calc_yield - target_qty) >= 0.5:
         scale_factor = target_qty / calc_yield

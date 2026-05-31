@@ -27,6 +27,17 @@ Multi-tenant POS system with biometric integration (ZKTeco), thermal receipt pri
 - Printers filter by branch in Settings
 
 
+## BUG FIX (31 May 2026) — yield wrong for weight-unit products counted in portions ✅
+- Symptom: دجاج فاهيتا (unit=غرام, 1 حصة=80غ) showed العائد 300.003 حصة + 6 IQD/حصة; correct = 3.75 حصة + ~495 IQD/حصة.
+- Root cause: "weight-main-unit override" computed yield=grams÷1, ignoring piece_def_value. Logic duplicated in 3 places (backend _enrich, frontend computeCostBreakdown, + inline JSX yield-banner calc).
+- Fix: _has_piece_definition gate — override skipped when valid piece_def_value exists (all 3 sites). Production consume path (_resolve_recipe_yield) intentionally NOT gated (stays grams-based; raw deduction verified intact).
+- Verified: _enrich yield=3.75/cost=494.93; 31 tests pass; testing agent iter200 frontend banner shows "3.750 حصة".
+
+## BUG FIX (31 May 2026) — "زيادة الكمية" ignored portion definition ✅
+- Symptom: add-stock dialog for a حصص-counted product (1 حصة=80غ) computed 300 حصة → 300 غرام (used piece_weight=1, ignored piece_def_value=80).
+- Fix: backend `_resolve_piece_grams` + `_resolve_recipe_yield` (mirror _enrich; respect piece_def_value + weight-main-unit override) used in manufacture / add-stock / recipe-sync paths; frontend add-stock dialog conversion+hint+result now use getPieceGrams.
+- Verified: e2e add-stock 24000غ deducts exactly 24000غ raw (300 portions×80g); 15 tests pass; testing agent iter198 backend 100%.
+
 ## FEATURE (31 May 2026) — "Fix Missing Definitions" batch tool ✅
 - `GET /api/manufactured-products/missing-piece-def`: scans count-unit manufactured products lacking a valid piece_def_value (with computable recipe grams).
 - `POST /api/manufactured-products/fix-piece-definitions`: batch-updates piece_def_value/unit (tenant-isolated, validates inputs).

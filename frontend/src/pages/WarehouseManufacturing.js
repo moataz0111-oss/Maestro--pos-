@@ -1593,24 +1593,18 @@ export default function WarehouseManufacturing() {
     };
   };
 
-  // 🧮 تحقّق سريع من التكلفة — يحسب المعادلة خطوة بخطوة (يطابق منطق الباكند _enrich_unit_cost_fields)
-  const computeCostBreakdown = (product) => {
-    if (!product) return null;
+  // 🧮 مصدر واحد لحساب وزن الوصفة والعائد — يستخدمه كل من computeCostBreakdown
+  // وبطاقة المنتج (شريط العائد). يمنع تكرار منطق "تجاوز الوحدة الوزنية" الذي سبّب
+  // أخطاء سابقة عند تعديله في مكان دون الآخر. يطابق Backend _enrich_unit_cost_fields.
+  const computeRecipeYield = (product) => {
     const _W = {
       'غرام': 1, 'كغم': 1000, 'كيلو': 1000, 'كجم': 1000, 'gram': 1, 'kg': 1000,
       'مل': 1, 'لتر': 1000, 'ml': 1, 'liter': 1000, 'l': 1000
     };
     const _COUNT = new Set(['قطعة', 'قطع', 'حبة', 'حبات', 'علبة', 'علب', 'كرتون', 'كراتين', 'صحن', 'piece', 'pieces', 'unit']);
-    const pw = Number(product.piece_weight || 0);
-    const pwu = product.piece_weight_unit || 'غرام';
-    const pwuIsWeight = !!_W[pwu];
-    const pdv = Number(product.piece_def_value || 0);
-    const pdu = product.piece_def_unit;
-    const usesPieceDef = pdv > 0 && !!_W[pdu];
-    const pieceGrams = getPieceGrams(product);  // ⭐ أولوية التعريف
-    // إجمالي وزن الوصفة (مع pack_info للمكونات القطعية)
+    const pieceGrams = getPieceGrams(product);
     let totalGrams = 0;
-    for (const ing of (product.recipe || [])) {
+    for (const ing of (product?.recipe || [])) {
       const q = Number(ing.quantity || 0);
       const f = _W[ing.unit];
       if (f) {
@@ -1623,9 +1617,30 @@ export default function WarehouseManufacturing() {
         }
       }
     }
-    const mainUnitFactor = _W[product.unit];
     const calcYieldRaw = (pieceGrams > 0 && totalGrams > 0) ? totalGrams / pieceGrams : 0;
-    const calcYield = (mainUnitFactor && totalGrams > 0) ? totalGrams / mainUnitFactor : calcYieldRaw;
+    const mainUnitFactor = _W[product?.unit];
+    const pdv = Number(product?.piece_def_value || 0);
+    const usesPieceDef = pdv > 0 && !!_W[product?.piece_def_unit];
+    // ⭐ لا يُطبّق تجاوز الوحدة الوزنية إذا كان للمنتج تعريف بورشن (يُعدّ بالحصص):
+    // العائد = total_grams ÷ piece_grams (بالحصص) وليس ÷ 1 (بالغرام).
+    const calcYield = (mainUnitFactor && totalGrams > 0 && !usesPieceDef) ? totalGrams / mainUnitFactor : calcYieldRaw;
+    return { pieceGrams, totalGrams, calcYieldRaw, calcYield, mainUnitFactor, usesPieceDef };
+  };
+
+  // 🧮 تحقّق سريع من التكلفة — يحسب المعادلة خطوة بخطوة (يطابق منطق الباكند _enrich_unit_cost_fields)
+  const computeCostBreakdown = (product) => {
+    if (!product) return null;
+    const _W = {
+      'غرام': 1, 'كغم': 1000, 'كيلو': 1000, 'كجم': 1000, 'gram': 1, 'kg': 1000,
+      'مل': 1, 'لتر': 1000, 'ml': 1, 'liter': 1000, 'l': 1000
+    };
+    const pw = Number(product.piece_weight || 0);
+    const pwu = product.piece_weight_unit || 'غرام';
+    const pwuIsWeight = !!_W[pwu];
+    const pdv = Number(product.piece_def_value || 0);
+    const pdu = product.piece_def_unit;
+    // ⭐ مصدر موحّد للعائد (يمنع الانحراف عن بطاقة المنتج)
+    const { pieceGrams, totalGrams, calcYield, mainUnitFactor, usesPieceDef } = computeRecipeYield(product);
     const storedQty = Number(product.quantity || 0);
     const totalProduced = Number(product.total_produced || 0);
     const yieldFromRecipe = calcYield > 0;
@@ -1883,35 +1898,28 @@ export default function WarehouseManufacturing() {
   const handleAddStock = async () => {
     if (!showAddStockDialog || addStockQuantity <= 0) return;
     
-    // ⭐ تحويل الكمية المُدخلة إلى وحدة المنتج الأصلية (unit)
+    // ⭐ تحويل الكمية المُدخلة إلى وحدة المنتج الأصلية (unit) — يحترم تعريف البورشن (piece_def_value)
     let qtyInProductUnit = addStockQuantity;
     const mainUnit = showAddStockDialog.unit;
     const pwu = showAddStockDialog.piece_weight_unit;
-    const pw = Number(showAddStockDialog.piece_weight || 0);
     const _WT = { 'غرام': 1, 'كغم': 1000, 'كيلو': 1000, 'كجم': 1000, 'مل': 1, 'لتر': 1000 };
     const _WEIGHT_UNITS_SET = new Set(['غرام','كغم','كيلو','كجم','مل','لتر']);
-    
-    if (addStockUnit && addStockUnit !== mainUnit && pw > 0) {
+    const pieceGramsBase = getPieceGrams(showAddStockDialog); // غرام لكل قطعة (1 حصة = 80غ)
+
+    if (addStockUnit && addStockUnit !== mainUnit && pieceGramsBase > 0) {
       const mainIsWeight = _WEIGHT_UNITS_SET.has(mainUnit);
       const pieceUnitImplicit = (pwu && !_WEIGHT_UNITS_SET.has(pwu)) ? pwu : 'قطعة';
-      
-      // الحالة A: المنتج وزن (غرام/كغم) + المستخدم اختار "قطعة" → اضرب بـ piece_weight (مع تحويل وحدات)
+
+      // الحالة A: المنتج وزن (غرام/كغم) + المستخدم اختار "قطعة/حصة" → × وزن القطعة الحقيقي ثم تحويل لوحدة المنتج
       if (mainIsWeight && addStockUnit === pieceUnitImplicit) {
-        const pieceWeightInMainUnit = pw * (_WT[pwu] || 1) / (_WT[mainUnit] || 1);
-        qtyInProductUnit = addStockQuantity * pieceWeightInMainUnit;
+        qtyInProductUnit = addStockQuantity * pieceGramsBase / (_WT[mainUnit] || 1);
       }
-      // الحالة B: المنتج قطعي + المستخدم اختار الوحدة الفرعية (شريحة/غرام...) → قسّم على piece_weight
-      else if (addStockUnit === pwu) {
-        qtyInProductUnit = addStockQuantity / pw;
+      // الحالة B: المنتج قطعي + المستخدم اختار وحدة وزن (غرام/كغم) → قسّم على وزن القطعة الحقيقي
+      else if (!mainIsWeight && _WT[addStockUnit]) {
+        qtyInProductUnit = (addStockQuantity * _WT[addStockUnit]) / pieceGramsBase;
       }
-      // الحالة C: المنتج قطعي + المستخدم اختار وحدة وزن غير pwu بالضبط (مثل كغم↔غرام) → تحويل قاعدة + قسمة
-      else if (!mainIsWeight && _WT[addStockUnit] && _WT[pwu]) {
-        const inputInBase = addStockQuantity * _WT[addStockUnit];
-        const pieceInBase = pw * _WT[pwu];
-        if (pieceInBase > 0) qtyInProductUnit = inputInBase / pieceInBase;
-      }
-      // الحالة D: كلاهما وزن مختلفان (غرام ↔ كغم)
-      else if (_WT[addStockUnit] && _WT[mainUnit]) {
+      // الحالة C: كلاهما وزن مختلفان (غرام ↔ كغم)
+      else if (mainIsWeight && _WT[addStockUnit] && _WT[mainUnit]) {
         qtyInProductUnit = addStockQuantity * (_WT[addStockUnit] / _WT[mainUnit]);
       }
     }
@@ -3408,38 +3416,13 @@ export default function WarehouseManufacturing() {
                                   'غرام': 1, 'كغم': 1000, 'كيلو': 1000, 'كجم': 1000, 'gram': 1, 'kg': 1000,
                                   'مل': 1, 'لتر': 1000, 'ml': 1, 'liter': 1000, 'l': 1000
                                 };
-                                const _COUNT = new Set(['قطعة', 'قطع', 'حبة', 'حبات', 'علبة', 'علب', 'كرتون', 'كراتين', 'صحن', 'piece', 'pieces', 'unit']);
                                 const pw = Number(product.piece_weight || 0);
                                 const pwu = product.piece_weight_unit || 'غرام';
                                 const pwuIsWeight = !!_W[pwu];
-                                // ⭐ تعريف البورشن: عند وحدة عدّية (حصة/قطعة/شريحة...) لا وزن لها،
-                                // نستخدم الوزن الحقيقي المُعرَّف (piece_def_value + piece_def_unit) — يطابق الباكند.
                                 const pdv = Number(product.piece_def_value || 0);
                                 const pdu = product.piece_def_unit;
-                                const pieceGrams = getPieceGrams(product);  // ⭐ أولوية التعريف
-                                let totalGrams = 0;
-                                for (const ing of (product.recipe || [])) {
-                                  const q = Number(ing.quantity || 0);
-                                  const f = _W[ing.unit];
-                                  if (f) {
-                                    totalGrams += q * f;
-                                  } else if (_COUNT.has(ing.unit) || !ing.unit) {
-                                    // ابحث عن pack_info من rawMaterials
-                                    const mat = rawMaterials?.find?.(r => r.id === ing.raw_material_id);
-                                    if (mat && mat.pack_quantity && mat.pack_unit) {
-                                      const pf = _W[mat.pack_unit] || 0;
-                                      if (pf > 0) totalGrams += q * Number(mat.pack_quantity) * pf;
-                                    }
-                                  }
-                                }
-                                const calcYieldRaw = (pieceGrams > 0 && totalGrams > 0) ? totalGrams / pieceGrams : 0;
-                                // ⭐ تصحيح: إذا main_unit وزنية (غرام/كغم/مل/لتر) → yield = totalGrams/main_factor
-                                //   (مثال: لحم مفروم unit="غرام", piece_weight=60, total=10,250
-                                //    → yield = 10,250/1 = 10,250 غرام، unit_cost = 10.57/غرام).
-                                const mainUnitFactor = _W[product.unit];
-                                const calcYield = (mainUnitFactor && totalGrams > 0)
-                                  ? totalGrams / mainUnitFactor
-                                  : calcYieldRaw;
+                                // ⭐ مصدر موحّد للعائد (نفس دالة computeCostBreakdown — يمنع الانحراف)
+                                const { pieceGrams, totalGrams, calcYield } = computeRecipeYield(product);
                                 // ⭐ احتساب عائد بديل للوصفات القطعية (يطابق منطق Backend _enrich_unit_cost_fields):
                                 //   - إذا pack_unit == piece_weight_unit (نص متطابق) → عائد مباشر
                                 //   - إذا كلاهما وحدات عدّية (count, ليست وزنية) → نفترض التكافؤ count↔count
@@ -3683,7 +3666,7 @@ export default function WarehouseManufacturing() {
                                 onClick={() => setShowAddStockDialog(product)}
                                 variant="outline"
                                 className="border-purple-500 text-purple-600 hover:bg-purple-50"
-                                data-testid="add-stock-btn"
+                                data-testid={`add-stock-btn-${product.id}`}
                               >
                                 <Plus className="h-4 w-4 ml-2" />
                                 {t('زيادة الكمية')}
@@ -6505,12 +6488,12 @@ export default function WarehouseManufacturing() {
                   {(() => {
                     const mainUnit = showAddStockDialog.unit || 'قطعة';
                     const pwu = showAddStockDialog.piece_weight_unit;
-                    const pw = Number(showAddStockDialog.piece_weight || 0);
+                    const pieceGramsBase = getPieceGrams(showAddStockDialog); // يحترم piece_def_value
                     const _WEIGHT_UNITS = new Set(['غرام','كغم','كيلو','كجم','مل','لتر','gram','kg','ml','l','liter']);
                     const mainIsWeight = _WEIGHT_UNITS.has(mainUnit);
                     
-                    // الحالة 1: المنتج وزن + piece_weight > 0 → عرض "قطعة" كخيار إضافي
-                    if (pw > 0 && mainIsWeight) {
+                    // الحالة 1: المنتج وزن + وزن قطعة حقيقي → عرض "قطعة/حصة" كخيار إضافي
+                    if (pieceGramsBase > 0 && mainIsWeight) {
                       const pieceUnit = (pwu && !_WEIGHT_UNITS.has(pwu)) ? pwu : 'قطعة';
                       return (
                         <Select
@@ -6529,7 +6512,7 @@ export default function WarehouseManufacturing() {
                     }
                     
                     // الحالة 2: المنتج قطعي + piece_weight_unit مختلف
-                    if (pw > 0 && pwu && pwu !== mainUnit) {
+                    if (pieceGramsBase > 0 && pwu && pwu !== mainUnit) {
                       return (
                         <Select
                           value={addStockUnit || mainUnit}
@@ -6550,18 +6533,22 @@ export default function WarehouseManufacturing() {
                   })()}
                 </div>
                 {/* معلومة الوحدة الفرعية */}
-                {Number(showAddStockDialog.piece_weight || 0) > 0 && showAddStockDialog.piece_weight_unit && (
-                  <p className="text-[11px] text-amber-700 dark:text-amber-300 mt-1">
+                {(Number(showAddStockDialog.piece_weight || 0) > 0 || Number(showAddStockDialog.piece_def_value || 0) > 0) && (showAddStockDialog.piece_weight_unit || showAddStockDialog.piece_def_unit) && (
+                  <p className="text-[11px] text-amber-700 dark:text-amber-300 mt-1" data-testid="add-stock-piece-hint">
                     💡 1 {(() => {
                       const mainUnit = showAddStockDialog.unit;
                       const pwu = showAddStockDialog.piece_weight_unit;
                       const _WEIGHT_SET = new Set(['غرام','كغم','كيلو','كجم','مل','لتر']);
-                      // إذا المنتج وزن، اعرض "قطعة = X" بدلاً من "غرام = غرام"
-                      if (_WEIGHT_SET.has(mainUnit)) {
-                        const pieceUnit = (pwu && !_WEIGHT_SET.has(pwu)) ? pwu : 'قطعة';
-                        return `${pieceUnit} = ${showAddStockDialog.piece_weight} ${pwu}`;
-                      }
-                      return `${mainUnit} = ${showAddStockDialog.piece_weight} ${pwu}`;
+                      const pdv = Number(showAddStockDialog.piece_def_value || 0);
+                      const pdu = showAddStockDialog.piece_def_unit;
+                      const pw = Number(showAddStockDialog.piece_weight || 0);
+                      // الوحدة العدّية المعروضة
+                      const pieceUnit = _WEIGHT_SET.has(mainUnit)
+                        ? ((pwu && !_WEIGHT_SET.has(pwu)) ? pwu : 'قطعة')
+                        : mainUnit;
+                      // ⭐ الوزن الحقيقي: تعريف البورشن (piece_def_value) له الأولوية
+                      if (pdv > 0 && pdu) return `${pieceUnit} = ${pdv} ${pdu}`;
+                      return `${pieceUnit} = ${pw} ${pwu || 'غرام'}`;
                     })()}
                   </p>
                 )}
@@ -6569,29 +6556,31 @@ export default function WarehouseManufacturing() {
               
               <div className="p-3 bg-green-500/10 rounded-lg text-center">
                 <p className="text-sm text-muted-foreground">{t('الكمية بعد الإضافة')}</p>
-                <p className="text-xl font-bold text-green-500">
+                <p className="text-xl font-bold text-green-500" data-testid="add-stock-result">
                   {(() => {
                     const mainUnit = showAddStockDialog.unit;
                     const pwu = showAddStockDialog.piece_weight_unit;
-                    const pw = Number(showAddStockDialog.piece_weight || 0);
                     const _WT = { 'غرام': 1, 'كغم': 1000, 'كيلو': 1000, 'كجم': 1000, 'مل': 1, 'لتر': 1000 };
                     const _WEIGHT_SET = new Set(['غرام','كغم','كيلو','كجم','مل','لتر']);
+                    const pieceGramsBase = getPieceGrams(showAddStockDialog); // يحترم piece_def_value
+                    const mainIsWeight = _WEIGHT_SET.has(mainUnit);
+                    const pieceUnit = (pwu && !_WEIGHT_SET.has(pwu)) ? pwu : 'قطعة';
                     let qtyInProduct = addStockQuantity;
-                    if (addStockUnit && addStockUnit !== mainUnit && pw > 0) {
-                      const mainIsWeight = _WEIGHT_SET.has(mainUnit);
-                      const pieceUnitImplicit = (pwu && !_WEIGHT_SET.has(pwu)) ? pwu : 'قطعة';
-                      if (mainIsWeight && addStockUnit === pieceUnitImplicit) {
-                        const pieceInMain = pw * (_WT[pwu] || 1) / (_WT[mainUnit] || 1);
-                        qtyInProduct = addStockQuantity * pieceInMain;
-                      } else if (addStockUnit === pwu) {
-                        qtyInProduct = addStockQuantity / pw;
-                      } else if (!mainIsWeight && _WT[addStockUnit] && _WT[pwu]) {
-                        qtyInProduct = (addStockQuantity * _WT[addStockUnit]) / (pw * _WT[pwu]);
-                      } else if (_WT[addStockUnit] && _WT[mainUnit]) {
+                    if (addStockUnit && addStockUnit !== mainUnit && pieceGramsBase > 0) {
+                      if (mainIsWeight && addStockUnit === pieceUnit) {
+                        qtyInProduct = addStockQuantity * pieceGramsBase / (_WT[mainUnit] || 1);
+                      } else if (!mainIsWeight && _WT[addStockUnit]) {
+                        qtyInProduct = (addStockQuantity * _WT[addStockUnit]) / pieceGramsBase;
+                      } else if (mainIsWeight && _WT[addStockUnit] && _WT[mainUnit]) {
                         qtyInProduct = addStockQuantity * (_WT[addStockUnit] / _WT[mainUnit]);
                       }
                     }
                     const total = (showAddStockDialog.quantity || 0) + qtyInProduct;
+                    // ⭐ عرض ذكي: إذا الوحدة الرئيسية وزنية وهناك وحدة عدّية (حصة)، اعرض بعدد الحصص
+                    if (mainIsWeight && pieceGramsBase > 0 && pwu && !_WEIGHT_SET.has(pwu)) {
+                      const totalGrams = total * (_WT[mainUnit] || 1);
+                      return `${(totalGrams / pieceGramsBase).toFixed(3)} ${pwu}`;
+                    }
                     return `${total.toFixed(3)} ${mainUnit}`;
                   })()}
                 </p>
