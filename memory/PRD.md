@@ -1,5 +1,13 @@
 # Maestro EGP - Multi-Tenant POS System PRD
 
+## BUG FIX (Feb 2026) — تكلفة الوحدة للمنتجات الحصصية كانت منخفضة (Steak) ✅
+- العرض: "لحم ستيك" أظهر تكلفة 26 بدل 2052 لأن إنتاج 100 حصة تراكمياً قسم الكلفة على total_produced(100) بدل عائد الوصفة.
+- الجذر: إصلاح "self-healing batch cost" سابق جعل المقام = `last_batch_yield`/`total_produced` (الكمية التراكمية) بدل عائد الوصفة نفسها — يضخّم المقام ويُنقص التكلفة للمنتجات الحصصية. (المايونيز عمل صدفةً لأن وصفته تُحجَّم عند الإنتاج).
+- الإصلاح: في `_enrich_unit_cost_fields` (inventory_system.py) أصبح `denom = final_yield` حيث `final_yield = actual_recipe_yield` أو العائد المحسوب من المكوّنات (كل منتج حسب إدخاله). نُسخ المنطق المطابق في الواجهة (`WarehouseManufacturing.js`: computeCostBreakdown + بانر العائد inline).
+- التحقق: 22 اختبار انحدار يمرّ (enrich/actual_yield/produce-scale/nested-e2e + اختبار حصص جديد يؤكد 51,300÷25=2,052 لا ÷100). تأكيد حيّ عبر API: لحم برغر يستخدم عائد وصفته 90 لا total_produced=100.
+- ملاحظة: المايونيز الواقعي يبقى صحيحاً عبر تحجيم actual_recipe_yield أثناء الإنتاج (test_produce_scales_actual_yield → 1714.28).
+
+
 ## Original Problem Statement
 Multi-tenant POS system with biometric integration (ZKTeco), thermal receipt printing via Local Print Agent, shift management, expense tracking, multi-branch support, and order management. Arabic (RTL) interface.
 

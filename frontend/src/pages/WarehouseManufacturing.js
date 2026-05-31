@@ -1689,11 +1689,13 @@ export default function WarehouseManufacturing() {
     // ⭐ مصدر موحّد للعائد (يمنع الانحراف عن بطاقة المنتج)
     const { pieceGrams, totalGrams, calcYield, mainUnitFactor, usesPieceDef } = computeRecipeYield(product);
     const storedQty = Number(product.quantity || 0);
-    const totalProduced = Number(product.total_produced || 0);
-    const lastBatch = Number(product.last_batch_yield || 0);
     const yieldFromRecipe = calcYield > 0;
-    // ⭐ العائد الفعلي = عائد آخر دفعة ← الكمية المُصنّعة فعلياً ← العائد المحسوب من المكونات
-    const finalYield = lastBatch || totalProduced || calcYield || storedQty || 0;
+    // ⭐ العائد الفعلي = عائد الوصفة نفسها (كل منتج حسب إدخاله):
+    //    actual_recipe_yield المُعرّف له ← العائد المحسوب من مكوّناته ← الكمية المخزّنة.
+    //    لا نستخدم الكمية التراكمية المُنتجة (total_produced) لأنها تُضخّم المقام وتُنقص
+    //    التكلفة للمنتجات الحصصية. (مطابق لمنطق الـ backend في _enrich_unit_cost_fields)
+    const actualRecipeYield = Number(product.actual_recipe_yield || 0);
+    const finalYield = actualRecipeYield > 0 ? actualRecipeYield : (calcYield || storedQty || 0);
     const denom = finalYield || 1;
     const batchBefore = Number(product.raw_material_cost ?? product.cost_before_waste ?? 0);
     const batchAfter = Number(product.raw_material_cost_after_waste ?? product.production_cost ?? product.raw_material_cost ?? 0);
@@ -3512,13 +3514,14 @@ export default function WarehouseManufacturing() {
                                   }
                                   if (sumInPwu > 0) countYield = sumInPwu / pw;
                                 }
-                                const finalYield = calcYield || countYield;
+                                let finalYield = calcYield || countYield;
+                                const actualRecipeYield = Number(product.actual_recipe_yield || 0);
+                                if (actualRecipeYield > 0) finalYield = actualRecipeYield;
                                 const totalProduced = Number(product.total_produced || 0);
-                                const lastBatch = Number(product.last_batch_yield || 0);
-                                // ⭐ العائد الفعلي = عائد آخر دفعة ← الكمية المُصنّعة فعلياً ← العائد المحسوب
-                                // من المكونات. هكذا سعر الوحدة = الكلفة ÷ الكمية المُنتجة فعلاً.
-                                const prodYield = lastBatch || totalProduced || finalYield;
-                                const isProduced = (lastBatch || totalProduced) > 0;
+                                // ⭐ المقام = عائد الوصفة نفسها (كل منتج حسب إدخاله): actual_recipe_yield
+                                // ← العائد المحسوب من المكوّنات. لا نستخدم الكمية التراكمية المُنتجة.
+                                const prodYield = finalYield;
+                                const isProduced = totalProduced > 0;
                                 const storedQty = Number(product.quantity || 0);
                                 const denom = prodYield || storedQty || 1;
                                 const hasPerPiece = (prodYield > 0) || (storedQty > 1);

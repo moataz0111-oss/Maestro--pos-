@@ -4066,20 +4066,20 @@ async def _enrich_unit_cost_fields(db, product: dict) -> dict:
     if ary > 0:
         final_yield = ary
     stored_qty = float(product.get("quantity") or 0)
-    total_produced = float(product.get("total_produced") or 0)
-    last_batch = float(product.get("last_batch_yield") or 0)
-    # ⭐ تكلفة الوحدة = كلفة الدفعة ÷ عدد الوحدات التي تُنتجها الدفعة فعلياً.
-    # الأولوية: عائد آخر دفعة (دقيق، يُحفظ عند كل تصنيع) ← الكمية المُصنّعة فعلياً
-    # (إجمالي المُصنّع) ← العائد المحسوب من المكونات (للمنتجات التي لم تُصنَّع بعد).
-    # هكذا يصبح سعر الكيلو = الكلفة ÷ الكمية المُنتجة (مثل 48,334 ÷ 30 = 1,611) ويُصحّح
-    # نفسه تلقائياً دون أي تدخّل يدوي، حتى لو بقي حقل العائد الفعلي قديماً من قبل.
-    prod_yield = last_batch or total_produced or final_yield
-    denom = prod_yield or stored_qty or 1.0
+    # ⭐ تكلفة الوحدة = كلفة الوصفة المخزّنة ÷ عائد هذه الوصفة بالذات (final_yield).
+    # كل منتج يُحسب حسب إدخاله الخاص: العائد إمّا من actual_recipe_yield المُعرّف له،
+    # أو محسوب من مكوّناته (calc_yield/count_yield مع احترام piece_def_value).
+    # البسط (raw_material_cost_after_waste) يخصّ هذه الوصفة نفسها، فالمقام يجب أن يكون
+    # عائد الوصفة نفسها — لا الكمية التراكمية المُنتجة (total_produced) التي كانت تُضخّم
+    # القسمة وتُنقص التكلفة للمنتجات الحصصية (مثل لحم ستيك: 2052 وليس 26).
+    # في نمط الدفعة تُحجَّم الوصفة عند الإنتاج فيتطابق البسط والمقام تلقائياً
+    # (مثل المايونيز: 48,334 ÷ 30 = 1,611).
+    denom = final_yield or stored_qty or 1.0
 
     batch_after = float(product.get("raw_material_cost_after_waste") or product.get("production_cost") or product.get("raw_material_cost") or 0)
     batch_before = float(product.get("cost_before_waste") or product.get("raw_material_cost") or 0)
 
-    product["computed_yield"] = round(prod_yield or final_yield, 6)
+    product["computed_yield"] = round(final_yield or stored_qty, 6)
     product["unit_cost_after_waste"] = round(batch_after / denom, 6)
     product["unit_cost_before_waste"] = round(batch_before / denom, 6)
     return product

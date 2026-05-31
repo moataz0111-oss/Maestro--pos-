@@ -6,7 +6,7 @@
 import os
 import requests
 
-API = os.environ.get("REACT_APP_BACKEND_URL", "https://recipe-mass-variance.preview.emergentagent.com").rstrip("/") + "/api"
+API = os.environ.get("REACT_APP_BACKEND_URL", "https://batch-accounting-1.preview.emergentagent.com").rstrip("/") + "/api"
 ADMIN = {"email": "admin@maestroegp.com", "password": "admin123"}
 
 
