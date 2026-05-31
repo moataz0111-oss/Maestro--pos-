@@ -67,6 +67,13 @@ def _resolve_recipe_yield(product: dict, total_grams: float) -> float:
       1) إذا الوحدة الرئيسية وزنية (غرام/كغم/مل/لتر) → العائد = total_grams ÷ معامل الوحدة.
       2) وإلا → العائد = total_grams ÷ piece_grams (مع احترام piece_def_value).
     نمط الدفعة يُفعّل فقط عند وجود piece_weight أو تعريف بورشن (حفاظاً على النمط القديم per-unit)."""
+    # ⭐ كمية إنتاج الوصفة الفعلية (actual_recipe_yield) لها الأولوية المطلقة متى
+    # كانت مُعرّفة (>0) — تُعالج تمدّد/انكماش الكتلة أثناء الطبخ (مثل المايونيز:
+    # مجموع المكونات 6.795 كغم لكن الناتج الفعلي 7 كغم). تبقى الوصفات القديمة
+    # بلا هذا الحقل بنفس سلوكها تماماً.
+    ary = float(product.get("actual_recipe_yield") or 0)
+    if ary > 0:
+        return ary
     if total_grams <= 0:
         return 0.0
     pw = float(product.get("piece_weight") or 0)
@@ -341,6 +348,7 @@ class ManufacturedProductCreate(BaseModel):
     piece_weight_unit: Optional[str] = "غرام"  # وحدة وزن القطعة
     piece_def_value: Optional[float] = None  # ⭐ تعريف البورشن للوحدات العدّية (1 قطعة = X)
     piece_def_unit: Optional[str] = None     # ⭐ وحدة التعريف الحقيقية (غرام/كغم/مل/لتر)
+    actual_recipe_yield: Optional[float] = None  # ⭐ كمية إنتاج الوصفة الفعلية (تمدّد/انكماش الطبخ)
     recipe: List[RecipeIngredient]  # الوصفة
     quantity: float = 0.0  # الكمية المصنعة المتوفرة
     min_quantity: float = 0.0
@@ -3835,6 +3843,7 @@ async def create_manufactured_product(
         "piece_weight_unit": product.piece_weight_unit or "غرام",
         "piece_def_value": product.piece_def_value,  # ⭐ تعريف البورشن للوحدات العدّية
         "piece_def_unit": product.piece_def_unit,     # ⭐ وحدة التعريف الحقيقية
+        "actual_recipe_yield": product.actual_recipe_yield,  # ⭐ كمية إنتاج الوصفة الفعلية
         "recipe": recipe_items,
         "quantity": product.quantity,
         "min_quantity": product.min_quantity,
@@ -4012,6 +4021,12 @@ async def _enrich_unit_cost_fields(db, product: dict) -> dict:
             count_yield = sum_in_pwu / pw
 
     final_yield = calc_yield or count_yield
+    # ⭐ كمية إنتاج الوصفة الفعلية (actual_recipe_yield) لها الأولوية متى كانت
+    # مُعرّفة (>0) — تعالج تمدّد/انكماش الكتلة أثناء الطبخ. الوصفات القديمة بلا
+    # هذا الحقل تبقى بنفس سلوكها (يُحسب العائد من مجموع المكونات).
+    ary = float(product.get("actual_recipe_yield") or 0)
+    if ary > 0:
+        final_yield = ary
     stored_qty = float(product.get("quantity") or 0)
     # ⭐ إصلاح حرج: عند تعذّر حساب العائد من الوصفة، نستخدم العدد الأصلي المُنتَج
     # (total_produced) قبل المخزون الحالي — وإلا فإن المنتج الذي نفد مخزونه
@@ -4328,6 +4343,7 @@ class ManufacturedProductRecipeUpdate(BaseModel):
     piece_weight_unit: Optional[str] = None
     piece_def_value: Optional[float] = None  # ⭐ تعريف البورشن: قيمة الوزن الحقيقي للوحدة العدّية
     piece_def_unit: Optional[str] = None     # ⭐ وحدة التعريف الحقيقية (غرام/كغم/مل/لتر)
+    actual_recipe_yield: Optional[float] = None  # ⭐ كمية إنتاج الوصفة الفعلية (تمدّد/انكماش الطبخ)
     reason: Optional[str] = None  # سبب التعديل (للتدقيق)
     name: Optional[str] = None  # ⭐ تعديل اسم الوصفة
     name_en: Optional[str] = None
@@ -4339,7 +4355,7 @@ class ManufacturedProductRecipeUpdate(BaseModel):
         if not isinstance(data, dict):
             return data
         for key in ("piece_weight", "piece_weight_unit", "piece_def_value",
-                    "piece_def_unit", "reason", "name", "name_en"):
+                    "piece_def_unit", "actual_recipe_yield", "reason", "name", "name_en"):
             v = data.get(key)
             if isinstance(v, str) and v.strip() == "":
                 data[key] = None
@@ -4406,6 +4422,10 @@ async def update_manufactured_product_recipe(
     _fields_set = getattr(payload, "model_fields_set", set())
     if "piece_def_value" in _fields_set:
         update_fields["piece_def_value"] = payload.piece_def_value
+    # ⭐ كمية إنتاج الوصفة الفعلية — نُحدّثها فقط عند إرسالها صراحةً (للحفاظ عليها
+    # عند عمليات أخرى لا ترسلها مثل المزامنة).
+    if "actual_recipe_yield" in _fields_set:
+        update_fields["actual_recipe_yield"] = payload.actual_recipe_yield
     if "piece_def_unit" in _fields_set:
         update_fields["piece_def_unit"] = payload.piece_def_unit
     if payload.piece_weight_unit is not None:

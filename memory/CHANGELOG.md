@@ -3516,3 +3516,36 @@ for ing in recipe:
 
 ### التحقق (لقطة شاشة)
 - اختيار "قطعة" → الحقل = 1 و disabled=true، التلميح ظاهر، ومربع التعريف ظاهر. ✅
+
+---
+
+## [2026-05-31] Feature: كمية إنتاج الوصفة الفعلية (Actual Recipe Yield) — Iter204/205
+
+### المشكلة
+عند الطبخ قد تتغيّر كتلة الناتج عن مجموع أوزان المكونات (مثل المايونيز: مجموع المكونات
+6.795 كغم لكن الناتج الفعلي 7 كغم بعد إضافة الماء). كان النظام يفترض دائماً أن العائد = مجموع
+المكونات، مما يُنتج معامل حجم (scale factor) خاطئاً عند المزامنة/الإنتاج.
+
+### الحل (حقل اختياري لا يكسر الوصفات القديمة)
+حقل جديد `actual_recipe_yield` على المنتج المُصنّع. عند ضبطه (>0) يأخذ الأولوية على
+`total_grams` في حساب العائد وتكلفة الوحدة. عند تركه فارغاً/صفر يبقى السلوك القديم كما هو تماماً.
+
+### Backend (`routes/inventory_system.py`)
+- `_resolve_recipe_yield`: يُرجع `actual_recipe_yield` متى كان >0 (يُستخدم في endpoint الإنتاج/الحجم).
+- `_enrich_unit_cost_fields`: يتجاوز `final_yield` بـ `actual_recipe_yield` متى وُجد.
+- إضافة الحقل لنماذج الإنشاء (`ManufacturedProductCreate`) وتعديل الوصفة (`ManufacturedProductRecipeUpdate`)
+  وحفظه (الـ PATCH يحفظه فقط عند إرساله صراحةً — model_fields_set).
+- اختبارات: `/app/backend/tests/test_actual_recipe_yield.py` (3 اختبارات ناجحة: التجاوز، الرجوع للسلوك القديم، الـ PATCH).
+
+### Frontend (`pages/WarehouseManufacturing.js`)
+- حقل إدخال "كمية إنتاج الوصفة الفعلية (اختياري)" في نافذتي الإنشاء والتعديل (testid: create/edit-actual-recipe-yield).
+- `computeRecipeYield`: يحترم `actual_recipe_yield`. شارة "كمية إنتاج فعلية" في شريط العائد + إخفاء زر المزامنة عند التثبيت اليدوي.
+- `syncRecipeToProducedQty`: يحترم العائد الفعلي.
+
+### إصلاحات أخطاء (Iter205 — تم التحقق منها)
+- (HIGH) منع انقلاب وحدة المنتج (كغم → غرام) عند تعديل العائد فقط: إرسال `piece_weight_unit` في الـ PATCH
+  فقط عند تغييره فعلياً (مقارنة بـ `_origPwu`).
+- (MINOR) منع خطأ 422 عند ترك "وزن القطعة" فارغاً لمنتج كغم: تحويل النص الفارغ إلى null في payload الإنشاء.
+
+### التحقق
+- Backend: 3/3 اختبارات ناجحة. Frontend: 100% (testing agent iteration_204 + 205).

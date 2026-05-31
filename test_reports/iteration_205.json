@@ -1,0 +1,42 @@
+{
+  "summary": "Focused frontend retest of 2 fixes from iteration_204 on WarehouseManufacturing 'Actual Recipe Yield' feature. BOTH BUGS VERIFIED FIXED. Regressions also OK (existing recipes without actual_recipe_yield still display ingredient-sum banner without actual-yield badge; existing kg products with actual_recipe_yield preserve kg unit).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "bug_retest_results": [
+    {
+      "bug": "BUG#1 (HIGH) — Unit must NOT flip on edit",
+      "status": "FIXED",
+      "evidence": "Edited the existing 'TEST_pa_none_*' كغم product via 'تعديل الوصفة'. Pre-edit banner: '7.000 كغم' with badge 'محددة يدوياً: 7 كغم'. Changed only edit-actual-recipe-yield from 7 -> 8 and clicked 'حفظ التعديلات'. POST-edit banner shows '8.000 كغم' with badge 'محددة يدوياً: 8 كغم' — unit correctly stayed كغم and did NOT flip to غرام. Success toast 'تم تحديث الوصفة بنجاح' observed."
+    },
+    {
+      "bug": "BUG#2 (MINOR) — Create كغم product with empty piece_weight",
+      "status": "FIXED",
+      "evidence": "Opened 'منتج مصنع' add dialog, set name=TEST_PW_NONE_74530, unit=كغم, added لحم raw ingredient (qty=1 كغم), left وزن البورشن/القطعة EMPTY, did not set actual_recipe_yield. Submitted. Network capture: POST /api/manufactured-products returned 200 OK (NO 422). Request payload confirmed: 'piece_weight':null (empty value correctly coerced to null by handleAddProduct as per fix). Manufactured products counter incremented 9 -> 10 on the dashboard."
+    },
+    {
+      "bug": "REGRESSION — Edit recipe without changing piece_weight_unit",
+      "status": "PASS",
+      "evidence": "Other kg products on screen (banner[3] 'مايونيز بدون عائد فعلي' = 6.795 كغم computed from ingredients sum with no actual-yield badge, banner[4] 8.500 كغم with badge) still display their original كغم unit. Existing recipe without actual_recipe_yield (banner[3]) correctly shows ingredient-sum yield without the manually-set badge."
+    }
+  ],
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Multiple console errors: GET /api/branches and settings endpoints return 403 (tenant noise per request context, non-blocking but should be addressed eventually for clean console).",
+    "WarehouseManufacturing.js is 8360 lines — strongly recommend splitting into smaller modules (forms, banners, dialogs) for maintainability per code review guidelines (>700 lines threshold)."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (skipped)", "frontend": "100% (3/3 scenarios)"},
+  "test_credentials": "admin@maestroegp.com / admin123 (used as provided)",
+  "seed_data_creation": "Created one product 'TEST_PW_NONE_74530' (كغم, piece_weight=null, 1kg لحم ingredient) during BUG#2 verification. Also mutated existing TEST_pa_none_* kg product's actual_recipe_yield from 7 -> 8 during BUG#1 verification.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Both fixes for iteration_204 (unit-flip on recipe edit + 422 when piece_weight is empty in kg products) are verified fixed end-to-end through the UI on the public REACT_APP_BACKEND_URL. POST payload captured during BUG#2 confirms 'piece_weight':null is sent (not empty string). PATCH /recipe during BUG#1 preserved kg unit, confirming the _origPwu compare-then-send logic is working. Tenant-noise 403s on /branches and settings remain in console but are not blocking. Manufactured-products dashboard counter now shows 10 (was 9 before retest)."
+}

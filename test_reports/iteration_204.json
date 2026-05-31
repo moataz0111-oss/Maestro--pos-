@@ -1,0 +1,33 @@
+{
+  "summary": "Frontend testing of 'Actual Recipe Yield' (كمية إنتاج الوصفة الفعلية) feature on Warehouse Manufacturing page. Login OK, both create & edit dialogs render the new sky-blue input correctly, save round-trips actual_recipe_yield, banner shows العائد المحسوب with the 'كمية إنتاج فعلية' badge, sync button is suppressed when actual yield is set, and old products without the field keep the original computed-from-ingredients behavior. ONE display regression found: after editing actual_recipe_yield on a كغم product, the banner unit on the card flips to 'غرام' (product.unit appears to be overwritten/defaulted on save in the edit recipe flow).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Edit Recipe dialog (WarehouseManufacturing.js / handleUpdateRecipe payload)", "issue": "Saving the Edit Recipe dialog for a كغم-unit product changes product.unit to غرام. Reproduced: created 'مايونيز اختبار 33581' with unit=كغم and actual_recipe_yield=7 → card banner correctly showed 'العائد المحسوب من الوصفة: 7.000 كغم'. Then opened Edit Recipe, changed only the actual_recipe_yield from 7 to 8, saved (success toast 'تم تحديث الوصفة بنجاح'). After refresh the card banner now reads 'العائد المحسوب من الوصفة: 8.000 غرام' and 'محددة يدوياً: 8 غرام' — i.e. product.unit silently became غرام even though the user never touched a unit field. The Edit Recipe modal does not expose a product-unit selector; only 'وحدة الوزن' (piece_weight_unit) is shown (defaulted to غرام). Likely the PATCH/PUT payload from handleUpdateRecipe writes unit=piece_weight_unit (or omits unit and backend defaults to غرام). actual-yield-badge still appears, but the unit label on the yield-banner is wrong.", "selector": "[data-testid=\"edit-actual-recipe-yield\"] save → [data-testid=\"yield-banner\"]", "priority": "HIGH"}
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "feature_acceptance": {
+    "create_dialog_has_sky_box_with_label_and_testid": "PASS — sky-blue box class 'bg-sky-500/10 border-2 border-sky-500/40', label '⚖️ كمية إنتاج الوصفة الفعلية (اختياري)', helper text exactly matches example 'مجموع المكونات 6.795 كغم لكن الناتج الفعلي 7 كغم بعد إضافة الماء', input data-testid='create-actual-recipe-yield', placeholder 'مثال: 7'.",
+    "create_product_with_actual_yield_saves": "PASS — created 'مايونيز اختبار 33581', unit كغم, 1 ingredient (لحم 6.795 كغم), actual_recipe_yield=7. Success toast 'تم إضافة المنتج المصنع'. Card appeared with yield-banner='📐 العائد المحسوب من الوصفة: 7.000 كغم … محددة يدوياً: 7 كغم', actual-yield-badge='كمية إنتاج فعلية' present, sync button NOT present.",
+    "edit_dialog_renders_and_prefills": "PASS — opening Edit Recipe shows input data-testid='edit-actual-recipe-yield' visible, value='7' (prefilled), placeholder 'مثال: 7'. Sky-blue box label '⚖️ كمية إنتاج الوصفة الفعلية (اختياري)' shown.",
+    "edit_save_updates_card_banner": "PARTIAL PASS — changing to 8 and saving updates the banner value to 8.000 and keeps the badge, BUT the unit displayed flips to غرام (see HIGH bug above).",
+    "regression_old_recipe_without_field": "PASS — 'مايونيز بدون عائد فعلي' (no actual_recipe_yield) shows banner='📐 العائد المحسوب من الوصفة: 6.795 كغم … وزن القطعة 0 غرام · إجمالي الوصفة 6795 غرام', NO actual-yield-badge, NO sync button (because no production has happened yet — produced=0). Piece-unit product 'لحم برغر' also unchanged (no yield-banner for piece products, as expected by existing logic)."
+  },
+  "test_report_links": [],
+  "action_items": [
+    "Fix Edit Recipe save (handleUpdateRecipe in /app/frontend/src/pages/WarehouseManufacturing.js) so that product.unit is preserved (do not send/overwrite unit with piece_weight_unit; either include the current product.unit in the PATCH body or omit it). Verify by editing actual_recipe_yield on a كغم product and confirming the yield-banner still shows كغم, not غرام."
+  ],
+  "critical_code_review_comments": [
+    "handleAddProduct spreads productForm into payload and only sanitizes piece_def_value/actual_recipe_yield; if backend ever tightens validation on other empty-string numeric fields it will 422. Today, leaving 'وزن البورشن/القطعة' (piece_weight) empty when unit=كغم produced 422 'Input should be a valid number' (had to fill 1000 to proceed). Either make piece_weight optional in the kg flow or coerce '' → null before POST.",
+    "Edit Recipe modal does not show the product-level 'unit' selector, but the save flow appears to mutate product.unit — surface the unit (read-only or editable) in the modal so users see what is being saved, and never derive product.unit from piece_weight_unit."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (skipped per request)", "frontend": "5/6 acceptance items PASS, 1 PARTIAL"},
+  "test_credentials": "admin@maestroegp.com / admin123 (from review_request; /app/memory/test_credentials.md present)",
+  "seed_data_creation": "Created manufactured product 'مايونيز اختبار 33581' (id=product-9dd8594f-0570-4c6e-94ca-687125ccfe10) with unit=كغم, ingredient=لحم 6.795 كغم, actual_recipe_yield=7 → later edited to 8.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Use admin@maestroegp.com / admin123. Manufacturing tab is data-testid='tab-manufacturing'; add button is data-testid='add-product-btn'. The page shows a splash overlay (data-testid='splash-screen') for ~5-10s after first load — wait for it to disappear before clicking. Some Settings/Branches GETs return 403 for this tenant (pre-existing, not blocking). The new feature works end-to-end except for the unit-flip after Edit Recipe save (HIGH bug reported)."
+}

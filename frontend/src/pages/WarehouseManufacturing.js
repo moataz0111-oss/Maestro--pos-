@@ -379,6 +379,7 @@ export default function WarehouseManufacturing() {
     piece_weight_unit: 'غرام', // وحدة وزن القطعة
     piece_def_value: '', // ⭐ تعريف البورشن للوحدات العدّية (1 قطعة = X)
     piece_def_unit: 'غرام', // ⭐ وحدة التعريف الحقيقية
+    actual_recipe_yield: '', // ⭐ كمية إنتاج الوصفة الفعلية (تمدّد/انكماش الطبخ)
     recipe: [],
     quantity: 0,
     min_quantity: 0,
@@ -1240,11 +1241,14 @@ export default function WarehouseManufacturing() {
       }
       const finalYield = calcYield || countYield;
       const targetQty = Number(product.quantity || 0);
-      if (finalYield <= 0 || targetQty <= 0) {
+      // ⭐ كمية إنتاج الوصفة الفعلية لها الأولوية (تمدّد/انكماش الطبخ)
+      const aryS = Number(product.actual_recipe_yield || 0);
+      const effYield = aryS > 0 ? aryS : finalYield;
+      if (effYield <= 0 || targetQty <= 0) {
         toast.error(t('لا يمكن المزامنة — تأكد من وجود وزن قطعة + كمية مُصنّعة'));
         return;
       }
-      const scale = targetQty / finalYield;
+      const scale = targetQty / effYield;
       if (Math.abs(scale - 1.0) < 0.0001) {
         toast.info(t('الوصفة متطابقة مع الكمية المُصنّعة — لا حاجة للمزامنة'));
         return;
@@ -1275,7 +1279,7 @@ export default function WarehouseManufacturing() {
       setSyncPreview({
         product,
         scale,
-        calcYield: finalYield,  // ⭐ يستخدم finalYield (يشمل countYield)
+        calcYield: effYield,  // ⭐ يستخدم effYield (يشمل actual_recipe_yield إن وُجد)
         targetQty,
         rows,
         totalOldCost,
@@ -1339,9 +1343,11 @@ export default function WarehouseManufacturing() {
       })),
       piece_weight: product.piece_weight ?? '',
       piece_weight_unit: pwu,
+      _origPwu: pwu,  // ⭐ القيمة الأصلية لوحدة وزن القطعة — لإرسالها فقط عند تغييرها فعلياً
       // ⭐ تعريف البورشن: عند اختيار وحدة عدّية، نحدّد وزنها الحقيقي بوحدة قابلة للقياس
       piece_def_value: isCountUnit ? (product.piece_def_value ?? product.piece_weight ?? '') : '',
       piece_def_unit: isCountUnit ? (product.piece_def_unit || 'غرام') : 'غرام',
+      actual_recipe_yield: product.actual_recipe_yield ?? '',
       reason: '',
       name: product.name || '',
       name_en: product.name_en || '',
@@ -1522,7 +1528,11 @@ export default function WarehouseManufacturing() {
           const n = Number(v);
           return Number.isFinite(n) ? n : null;
         })(),
-        piece_weight_unit: editRecipeForm.piece_weight_unit || null,
+        piece_weight_unit: (editRecipeForm.piece_weight_unit && editRecipeForm.piece_weight_unit !== editRecipeForm._origPwu)
+          ? editRecipeForm.piece_weight_unit
+          : null,
+        // ⭐ أرسل وحدة وزن القطعة فقط إذا غيّرها المستخدم فعلياً — يمنع تحويل
+        // وحدة المنتج الرئيسية بالخطأ (مثل: كغم → غرام) عند تعديل حقول أخرى.
         // ⭐ تعريف البورشن للوحدات العدّية (1 قطعة = piece_def_value piece_def_unit)
         piece_def_value: (() => {
           const v = editRecipeForm.piece_def_value;
@@ -1531,6 +1541,13 @@ export default function WarehouseManufacturing() {
           return Number.isFinite(n) ? n : null;
         })(),
         piece_def_unit: editRecipeForm.piece_def_unit || null,
+        // ⭐ كمية إنتاج الوصفة الفعلية (تمدّد/انكماش الطبخ)
+        actual_recipe_yield: (() => {
+          const v = editRecipeForm.actual_recipe_yield;
+          if (v === '' || v === null || v === undefined) return null;
+          const n = Number(v);
+          return Number.isFinite(n) && n > 0 ? n : null;
+        })(),
         reason: editRecipeForm.reason || '',
         name: editRecipeForm.name || undefined,
         name_en: editRecipeForm.name_en || undefined,
@@ -1623,8 +1640,12 @@ export default function WarehouseManufacturing() {
     const usesPieceDef = pdv > 0 && !!_W[product?.piece_def_unit];
     // ⭐ لا يُطبّق تجاوز الوحدة الوزنية إذا كان للمنتج تعريف بورشن (يُعدّ بالحصص):
     // العائد = total_grams ÷ piece_grams (بالحصص) وليس ÷ 1 (بالغرام).
-    const calcYield = (mainUnitFactor && totalGrams > 0 && !usesPieceDef) ? totalGrams / mainUnitFactor : calcYieldRaw;
-    return { pieceGrams, totalGrams, calcYieldRaw, calcYield, mainUnitFactor, usesPieceDef };
+    let calcYield = (mainUnitFactor && totalGrams > 0 && !usesPieceDef) ? totalGrams / mainUnitFactor : calcYieldRaw;
+    // ⭐ كمية إنتاج الوصفة الفعلية لها الأولوية (تمدّد/انكماش الطبخ). الوصفات بلا
+    // هذا الحقل تبقى بنفس الحساب القديم تماماً.
+    const ary = Number(product?.actual_recipe_yield || 0);
+    if (ary > 0) calcYield = ary;
+    return { pieceGrams, totalGrams, calcYieldRaw, calcYield, mainUnitFactor, usesPieceDef, ary };
   };
 
   // 🏭 الكمية المتوفرة لمكوّن: من مخزون المنتجات المُصنّعة إذا كان المكوّن منتجاً مُصنّعاً،
@@ -1799,6 +1820,20 @@ export default function WarehouseManufacturing() {
           return Number.isFinite(n) ? n : null;
         })(),
         piece_def_unit: productForm.piece_def_unit || null,
+        // ⭐ وزن القطعة: حوّل النص الفارغ إلى null لتجنّب خطأ 422
+        piece_weight: (() => {
+          const v = productForm.piece_weight;
+          if (v === '' || v === null || v === undefined) return null;
+          const n = Number(v);
+          return Number.isFinite(n) ? n : null;
+        })(),
+        // ⭐ كمية إنتاج الوصفة الفعلية (تمدّد/انكماش الطبخ)
+        actual_recipe_yield: (() => {
+          const v = productForm.actual_recipe_yield;
+          if (v === '' || v === null || v === undefined) return null;
+          const n = Number(v);
+          return Number.isFinite(n) && n > 0 ? n : null;
+        })(),
         production_cost: parseFloat(costAfterWaste.toFixed(2)),  // التكلفة المعتمدة
         cost_before_waste: parseFloat(costBeforeWaste.toFixed(2)),  // مرجعية للموردين
         // نُبقي selling_price = 0 (هذا حقل قديم، التكلفة هي الأهم؛ سعر البيع يُحدَّد في قائمة الطعام)
@@ -1815,6 +1850,7 @@ export default function WarehouseManufacturing() {
         piece_weight_unit: 'غرام',
         piece_def_value: '',
         piece_def_unit: 'غرام',
+        actual_recipe_yield: '',
         recipe: [],
         quantity: 0,
         min_quantity: 0,
@@ -3433,7 +3469,7 @@ export default function WarehouseManufacturing() {
                                 const pdv = Number(product.piece_def_value || 0);
                                 const pdu = product.piece_def_unit;
                                 // ⭐ مصدر موحّد للعائد (نفس دالة computeCostBreakdown — يمنع الانحراف)
-                                const { pieceGrams, totalGrams, calcYield } = computeRecipeYield(product);
+                                const { pieceGrams, totalGrams, calcYield, ary } = computeRecipeYield(product);
                                 // ⭐ احتساب عائد بديل للوصفات القطعية (يطابق منطق Backend _enrich_unit_cost_fields):
                                 //   - إذا pack_unit == piece_weight_unit (نص متطابق) → عائد مباشر
                                 //   - إذا كلاهما وحدات عدّية (count, ليست وزنية) → نفترض التكافؤ count↔count
@@ -3511,14 +3547,16 @@ export default function WarehouseManufacturing() {
                                     {/* شريط العائد المحسوب */}
                                     {finalYield > 0 && (() => {
                                       const diff = Math.abs(finalYield - storedQty);
-                                      const isOutOfSync = storedQty > 0 && diff >= 0.5;
+                                      // ⭐ عند تثبيت كمية الإنتاج الفعلية يدوياً، لا نُظهر تنبيه المزامنة
+                                      // (العائد مُثبّت من المستخدم — المزامنة قد تُخلّ بالعلاقة المقصودة).
+                                      const isOutOfSync = ary <= 0 && storedQty > 0 && diff >= 0.5;
                                       const yieldHint = calcYield > 0
                                         ? `${t('وزن القطعة')} ${(!pwuIsWeight && pdv > 0 && _W[pdu]) ? `${pw} ${pwu} = ${pdv} ${pdu}` : `${pw} ${pwu}`} · ${t('إجمالي الوصفة')} ${totalGrams.toFixed(0)} ${t('غرام')}`
                                         : `${t('وزن القطعة')} ${pw} ${pwu} · ${t('قطعية')}`;
                                       return (
                                         <div className={`mb-2 p-2 rounded-md border text-xs flex items-center justify-between gap-2 flex-wrap ${isOutOfSync ? 'bg-orange-500/10 border-orange-500/40 text-orange-800' : 'bg-amber-500/10 border-amber-500/30 text-amber-800'}`} data-testid="yield-banner">
-                                          <span>📐 {t('العائد المحسوب من الوصفة')}: <strong className="tabular-nums">{finalYield.toFixed(3)} {unitLabel}</strong></span>
-                                          <span className="text-[10px] text-muted-foreground">{yieldHint}</span>
+                                          <span>📐 {t('العائد المحسوب من الوصفة')}: <strong className="tabular-nums">{finalYield.toFixed(3)} {unitLabel}</strong>{ary > 0 && <span className="ml-1 px-1.5 py-0.5 rounded bg-sky-600 text-white text-[10px] font-bold" data-testid="actual-yield-badge">{t('كمية إنتاج فعلية')}</span>}</span>
+                                          <span className="text-[10px] text-muted-foreground">{ary > 0 ? `${t('محددة يدوياً')}: ${ary} ${unitLabel}` : yieldHint}</span>
                                           {isOutOfSync && (
                                             <button
                                               onClick={() => syncRecipeToProducedQty(product)}
@@ -4965,6 +5003,29 @@ export default function WarehouseManufacturing() {
                 );
               })()}
               
+              {/* ⭐ كمية إنتاج الوصفة الفعلية: تعالج تمدّد/انكماش الكتلة أثناء الطبخ */}
+              <div className="col-span-2 p-3 rounded-lg bg-sky-500/10 border-2 border-sky-500/40 space-y-2" data-testid="create-actual-yield-box">
+                <Label className="flex items-center gap-2 font-bold text-sky-700 text-sm">
+                  ⚖️ {t('كمية إنتاج الوصفة الفعلية (اختياري)')}
+                </Label>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.001"
+                    className="h-9 w-36 text-center"
+                    placeholder={t('مثال: 7')}
+                    value={productForm.actual_recipe_yield}
+                    onChange={(e) => setProductForm(prev => ({ ...prev, actual_recipe_yield: e.target.value }))}
+                    data-testid="create-actual-recipe-yield"
+                  />
+                  <span className="text-sm font-medium">{t(productForm.unit || 'وحدة')}</span>
+                </div>
+                <p className="text-[10px] text-muted-foreground leading-relaxed">
+                  {t('اتركه فارغاً ليُحسب العائد من مجموع المكونات. حدّده فقط إذا تغيّرت الكتلة أثناء الطبخ (مثل: مجموع المكونات 6.795 كغم لكن الناتج الفعلي 7 كغم بعد إضافة الماء).')}
+                </p>
+              </div>
+
               <div className="rounded-lg p-3 bg-emerald-500/10 border border-emerald-500/30 space-y-2">
                 <Label className="flex items-center gap-2 font-bold text-emerald-700">
                   <DollarSign className="h-4 w-4" />
@@ -5646,6 +5707,29 @@ export default function WarehouseManufacturing() {
                   </p>
                 );
               })()}
+
+              {/* ⭐ كمية إنتاج الوصفة الفعلية: تعالج تمدّد/انكماش الكتلة أثناء الطبخ */}
+              <div className="p-3 rounded-lg bg-sky-500/10 border-2 border-sky-500/40 space-y-2" data-testid="edit-actual-yield-box">
+                <Label className="flex items-center gap-2 font-bold text-sky-700 text-sm">
+                  ⚖️ {t('كمية إنتاج الوصفة الفعلية (اختياري)')}
+                </Label>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.001"
+                    className="h-9 w-36 text-center"
+                    placeholder={t('مثال: 7')}
+                    value={editRecipeForm.actual_recipe_yield ?? ''}
+                    onChange={(e) => setEditRecipeForm(prev => ({ ...prev, actual_recipe_yield: e.target.value }))}
+                    data-testid="edit-actual-recipe-yield"
+                  />
+                  <span className="text-sm font-medium">{t(showEditRecipeDialog?.unit || 'وحدة')}</span>
+                </div>
+                <p className="text-[10px] text-muted-foreground leading-relaxed">
+                  {t('اتركه فارغاً ليُحسب العائد من مجموع المكونات. حدّده فقط إذا تغيّرت الكتلة أثناء الطبخ (مثل: مجموع المكونات 6.795 كغم لكن الناتج الفعلي 7 كغم بعد إضافة الماء).')}
+                </p>
+              </div>
 
               {/* إضافة مكون جديد */}
               <div className="p-3 bg-purple-500/5 border border-purple-500/30 rounded-lg space-y-2">
