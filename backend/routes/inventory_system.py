@@ -5030,8 +5030,37 @@ async def get_yield_variances(
     total_actual = round(sum(float(r.get("actual_yield") or 0) for r in rows), 3)
     total_units_variance = round(total_actual - total_expected, 3)
 
+    # 📊 تجميع لكل منتج — يكشف أي المنتجات يهدر أكثر (مرتّب: الأكثر خسارة أولاً)
+    prod_agg: Dict[str, Any] = {}
+    for r in rows:
+        pid = r.get("product_id") or r.get("product_name") or "?"
+        a = prod_agg.get(pid)
+        if not a:
+            a = {
+                "product_id": r.get("product_id"),
+                "product_name": r.get("product_name"),
+                "unit": r.get("unit"),
+                "batches": 0, "expected_yield": 0.0, "actual_yield": 0.0, "variance_value": 0.0,
+            }
+            prod_agg[pid] = a
+        a["batches"] += 1
+        a["expected_yield"] += float(r.get("expected_yield") or 0)
+        a["actual_yield"] += float(r.get("actual_yield") or 0)
+        a["variance_value"] += float(r.get("variance_value") or 0)
+    by_product = []
+    for a in prod_agg.values():
+        exp = a["expected_yield"]
+        a["units_variance"] = round(a["actual_yield"] - exp, 3)
+        a["variance_pct"] = round(((a["actual_yield"] - exp) / exp * 100) if exp else 0.0, 2)
+        a["expected_yield"] = round(exp, 3)
+        a["actual_yield"] = round(a["actual_yield"], 3)
+        a["variance_value"] = round(a["variance_value"], 2)
+        by_product.append(a)
+    by_product.sort(key=lambda x: x["variance_value"])  # الأكثر خسارة (أكثر سلبية) أولاً
+
     return {
         "records": rows,
+        "by_product": by_product,
         "summary": {
             "total_records": total_records,
             "total_expected_yield": total_expected,

@@ -2519,6 +2519,16 @@ export default function WarehouseManufacturing() {
                   <Wrench className={`h-4 w-4 ml-2 ${missingDefLoading ? 'animate-spin' : ''}`} />
                   {missingDefLoading ? t('جاري الفحص...') : t('إصلاح التعريفات المفقودة')}
                 </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => openYieldVarianceDialog()}
+                  className="border-indigo-500 text-indigo-600 hover:bg-indigo-50"
+                  data-testid="yield-variance-report-btn"
+                  title={t('تقرير فروقات العائد لكل المنتجات — يكشف الهدر الخفي')}
+                >
+                  <TrendingDown className="h-4 w-4 ml-2" />
+                  {t('تقرير العائد')}
+                </Button>
                 <Button 
                   variant="outline"
                   onClick={() => setShowBranchTransferDialog(true)}
@@ -6628,6 +6638,51 @@ export default function WarehouseManufacturing() {
                 </p>
               </div>
             </div>
+
+            {/* 📊 ملخّص لكل منتج — يكشف أي المنتجات يهدر أكثر */}
+            {(yieldVarianceData.by_product || []).length > 0 && (
+              <div className="rounded-lg border overflow-hidden mb-3" data-testid="yield-variance-by-product">
+                <div className="bg-amber-500/10 px-3 py-1.5 text-xs font-bold text-amber-700 border-b">
+                  📊 {t('الهدر لكل منتج')} ({t('الأكثر خسارة أولاً')})
+                </div>
+                <table className="w-full text-sm">
+                  <thead className="bg-muted/50 text-xs">
+                    <tr>
+                      <th className="p-2 text-right">{t('المنتج')}</th>
+                      <th className="p-2 text-center">{t('دفعات')}</th>
+                      <th className="p-2 text-center">{t('متوقَّع')}</th>
+                      <th className="p-2 text-center">{t('فعلي')}</th>
+                      <th className="p-2 text-center">{t('فرق')}</th>
+                      <th className="p-2 text-center">{t('%')}</th>
+                      <th className="p-2 text-left">{t('قيمة الفرق')}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(yieldVarianceData.by_product || []).map((a, idx) => {
+                      const uv = Number(a.units_variance) || 0;
+                      const neg = uv < 0;
+                      return (
+                        <tr key={a.product_id || idx} className="border-t hover:bg-muted/30" data-testid={`yield-variance-product-${idx}`}>
+                          <td className="p-2 font-medium">{a.product_name}</td>
+                          <td className="p-2 text-center tabular-nums text-muted-foreground">{a.batches}</td>
+                          <td className="p-2 text-center tabular-nums">{Number(a.expected_yield).toFixed(2)}</td>
+                          <td className="p-2 text-center tabular-nums">{Number(a.actual_yield).toFixed(2)}</td>
+                          <td className={`p-2 text-center tabular-nums font-bold ${neg ? 'text-red-600' : uv > 0 ? 'text-green-600' : 'text-muted-foreground'}`}>
+                            {uv >= 0 ? '+' : ''}{uv.toFixed(2)} {t(a.unit || '')}
+                          </td>
+                          <td className={`p-2 text-center tabular-nums ${neg ? 'text-red-600' : uv > 0 ? 'text-green-600' : 'text-muted-foreground'}`}>
+                            {Number(a.variance_pct) >= 0 ? '+' : ''}{Number(a.variance_pct).toFixed(2)}%
+                          </td>
+                          <td className={`p-2 text-left tabular-nums font-semibold ${neg ? 'text-red-600' : uv > 0 ? 'text-green-600' : ''}`}>
+                            {formatPrice(a.variance_value || 0)}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
 
             {/* جدول السجلات */}
             <div className="rounded-lg border overflow-hidden">
