@@ -874,6 +874,21 @@ export default function WarehouseManufacturing() {
     }
   };
   
+  // 🗑️ حذف طلب فرع نهائياً (بعد تأكيد)
+  const handleDeleteBranchRequest = async (request) => {
+    if (!window.confirm(t('هل تريد حذف هذا الطلب نهائياً؟ لا يمكن التراجع.'))) return;
+    try {
+      setSubmitting(true);
+      await axios.delete(`${API}/branch-requests/${request.id}`, { headers });
+      toast.success(t('تم حذف الطلب نهائياً'));
+      fetchData();
+    } catch (error) {
+      showApiError(error, t('فشل في حذف الطلب'));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   // 🔁 تحويل وحدات الوزن/الحجم — يُرجع الكمية بوحدة المادة الأصلية + ملاحظة بالتحويل
   // مثال: المستخدم أدخل 100 غرام، والمادة بالكغم → يُحوَّل إلى 0.1 كغم.
   const _UNIT_GROUPS = {
@@ -4121,6 +4136,18 @@ export default function WarehouseManufacturing() {
                                 year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
                               })}
                             </p>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="text-red-500 hover:text-red-600 hover:bg-red-500/10 mt-1 h-7 px-2"
+                              onClick={() => handleDeleteBranchRequest(request)}
+                              disabled={submitting}
+                              data-testid={`branch-req-delete-${request.id}`}
+                              title={t('حذف الطلب نهائياً')}
+                            >
+                              <Trash2 className="h-3.5 w-3.5 mr-1" />
+                              {t('حذف')}
+                            </Button>
                           </div>
                         </div>
                         
@@ -4129,14 +4156,25 @@ export default function WarehouseManufacturing() {
                           <p className="text-sm font-medium mb-2">{t('المنتجات المطلوبة')}:</p>
                           <div className="space-y-2">
                             {request.items?.map((item, idx) => (
-                              <div key={idx} className="flex items-center justify-between text-sm">
-                                <span>{item.product_name}</span>
-                                <div className="flex items-center gap-2">
-                                  <Badge variant="outline">{item.quantity} {item.unit}</Badge>
-                                  <span className={item.available_quantity >= item.quantity ? 'text-green-500' : 'text-red-500'}>
-                                    ({t('متوفر')}: {item.available_quantity || 0})
-                                  </span>
+                              <div key={idx} className="flex flex-col gap-0.5 text-sm">
+                                <div className="flex items-center justify-between">
+                                  <span>{item.product_name}</span>
+                                  <div className="flex items-center gap-2">
+                                    <Badge variant="outline">{item.quantity} {item.unit}</Badge>
+                                    <span className={item.available_quantity >= item.quantity ? 'text-green-500' : 'text-red-500'}>
+                                      ({t('متوفر')}: {item.available_quantity || 0})
+                                    </span>
+                                  </div>
                                 </div>
+                                {(item.available_quantity || 0) === 0 && item.suggestion && (
+                                  <div
+                                    className="text-xs text-amber-500 flex items-center gap-1"
+                                    data-testid={`branch-req-suggestion-${request.id}-${idx}`}
+                                  >
+                                    <AlertTriangle className="h-3 w-3" />
+                                    {t('هل تقصد')}: <span className="font-medium text-amber-400">{item.suggestion.name}</span> ({t('متوفر')}: {item.suggestion.quantity})
+                                  </div>
+                                )}
                               </div>
                             ))}
                           </div>

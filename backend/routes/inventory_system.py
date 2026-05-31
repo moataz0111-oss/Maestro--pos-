@@ -118,6 +118,31 @@ def match_product_by_name(name: str, products: list):
     return None
 
 
+def suggest_product_by_name(name: str, products: list, min_score: float = 0.45):
+    """يقترح أقرب منتج مصنّع لاسم لم يُطابَق تلقائياً (للعرض كاقتراح "هل تقصد:").
+    يعيد {name, quantity, id, score} لأفضل تطابق فوق `min_score`، وإلا None.
+    عتبة أدنى من عتبة المطابقة التلقائية (0.86) لأنه اقتراح بصري فقط لا ربط فعلي."""
+    tn = normalize_arabic(name)
+    if not tn or not products:
+        return None
+    best_ratio, best_prod = 0.0, None
+    for p in products:
+        pn = normalize_arabic(p.get("name") or "")
+        if not pn:
+            continue
+        r = _SeqMatcher(None, tn, pn).ratio()
+        if r > best_ratio:
+            best_ratio, best_prod = r, p
+    if best_prod is not None and best_ratio >= min_score:
+        return {
+            "name": best_prod.get("name"),
+            "quantity": float(best_prod.get("quantity") or 0),
+            "id": best_prod.get("id"),
+            "score": round(best_ratio, 2),
+        }
+    return None
+
+
 # خرائط تحويل الوحدات إلى وحدة أساسية (غرام أو مل تُعامل ك "غرام" للعائد)
 _UNIT_WEIGHT_MAP = {
     "غرام": 1.0, "كغم": 1000.0, "كيلو": 1000.0, "كجم": 1000.0,
@@ -2912,9 +2937,20 @@ async def get_branch_requests(status: Optional[str] = None, branch_id: Optional[
             matched = match_product_by_name(it.get("product_name") or "", all_prods)
             if matched is not None:
                 it["available_quantity"] = float(matched.get("quantity") or 0)
+                it.pop("suggestion", None)
             elif pid and pid in qty_by_id:
                 it["available_quantity"] = qty_by_id[pid]
-            # else: نُبقي القيمة المحفوظة كما هي
+                it.pop("suggestion", None)
+            else:
+                # ⭐ لا يوجد منتج مصنّع مطابق بالاسم ولا بالمعرّف → التوفّر الحقيقي = 0
+                # (نُصفّر القيمة المحفوظة القديمة لتفادي عرض أرقام سالبة مضلّلة كـ -1342)
+                it["available_quantity"] = 0
+                # 💡 نقترح أقرب منتج بالاسم لمساعدة المصنّع على معرفة المقصود
+                sug = suggest_product_by_name(it.get("product_name") or "", all_prods)
+                if sug:
+                    it["suggestion"] = sug
+                else:
+                    it.pop("suggestion", None)
 
     pkg_ids = set()
     for req in requests:
@@ -2966,6 +3002,16 @@ async def update_branch_request_status(request_id: str, status_data: dict):
         raise HTTPException(status_code=404, detail="الطلب غير موجود")
     
     return {"message": "تم تحديث الحالة", "status": new_status}
+
+@router.delete("/branch-requests/{request_id}")
+async def delete_branch_request(request_id: str, current_user: dict = Depends(get_current_user)):
+    """حذف طلب فرع نهائياً. للأدوار المركزية/الإدارة فقط.
+    لا يُعيد أي مخزون لأن الطلب المعلّق لم يُخصم منه أصلاً."""
+    db = get_db()
+    result = await db.branch_requests.delete_one({"id": request_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="الطلب غير موجود")
+    return {"message": "تم حذف الطلب نهائياً", "request_id": request_id}
 
 async def _resolve_request_product(db, item: dict, tenant_id):
     """يحل المنتج المصنّع الفعلي لعنصر طلب فرع: بالاسم أولاً (دقيق → مرن → تشابه عالٍ آمن)
