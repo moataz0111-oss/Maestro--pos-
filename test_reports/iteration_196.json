@@ -1,0 +1,34 @@
+{
+  "summary": "Iter196: Verified _build_current_costs_map / _resolve_product_unit_cost refactor for N+1 fix. All Reports endpoints (sales, profit-loss, weekly-low-profit) and Smart Reports endpoints (sales, products, hourly) return 200 with full cost/profit structure, all under 200ms on the small default-tenant dataset (8 products / 3 orders). The frontend Reports page (التقارير) renders correctly (NOT blank), all 14 tabs visible, and date-range changes complete in 0.46s with the page still showing cost/profit numbers. The 16 existing regression tests for the unified cost resolver still pass.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Reports tabs", "issues": ["Tabs (role='tab') for التقارير do not carry data-testid attributes; only their visible text identifies them. Adding data-testid='tab-sales', 'tab-profit-loss', etc. would harden automated testing."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_reports_perf_iter196.py",
+    "/app/test_reports/pytest/reports_perf_iter196.xml",
+    "/app/backend/tests/test_reports_unified_cost_resolver.py",
+    "/app/backend/tests/test_weekly_low_profit_uses_current_cost.py",
+    "/app/backend/tests/test_smart_fallback_manufactured_name_match.py"
+  ],
+  "action_items": [
+    "(Optional, non-blocking) Add data-testid attributes to Reports tabs (tab-overall, tab-sales, tab-profit-loss, tab-weekly-low-profit, etc.) for more robust E2E test automation.",
+    "(Optional) Note: page initially fires GETs (/api/users, /api/branches, /api/reports/sales, /api/reports/profit-loss, /api/settings/dashboard) before the Authorization header is attached on first nav after login, producing momentary 403s that immediately retry to 200. Not a regression and not user-visible, but a small race in the API client could be tightened."
+  ],
+  "critical_code_review_comments": [
+    "The cache (mfg_cache) is correctly built once per request inside _build_current_costs_map and passed into _resolve_product_unit_cost, eliminating the N+1 pattern. The fallback path (no cache) is preserved, so existing direct callers of _resolve_product_unit_cost are unaffected. Refactor looks clean.",
+    "Consider adding a server-side timing log (e.g. structured log of cache size + resolve duration) on the three report endpoints — would make future regressions easier to spot for tenants with hundreds of manufactured products."
+  ],
+  "updated_files": ["/app/backend/tests/test_reports_perf_iter196.py"],
+  "success_rate": {"backend": "100% (10/10 new perf tests + 16/16 existing regression tests)", "frontend": "100% (Reports page renders, tabs visible, date change works, no blank state)"},
+  "test_credentials": "admin@maestroegp.com / admin123",
+  "seed_data_creation": "None required; used existing default-tenant data (8 products, 2 manufactured, 3 orders).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Iter196 N+1 fix on /app/backend/routes/reports_routes.py is verified working. Backend perf tests live in /app/backend/tests/test_reports_perf_iter196.py and assert <5s response per endpoint (actual times: ~100-200ms on small dataset). For larger tenants the main agent's bench (tests/bench_costmap.py) reported 12.4x speedup with identical cost values. Frontend Reports page (route /reports) is fully responsive: login → navigate → tabs visible → date filter triggers correct /api/reports/sales & /api/reports/profit-loss requests in ~0.5s. No blank screen, no errors. Note: on first navigation to /reports right after login, a few API calls (e.g. /api/reports/sales, /api/users, /api/branches) briefly 403 before the Authorization header is attached, then immediately retry to 200 — momentary and not user-visible.",
+  "rca of the issue": "Original issue: Reports page rendered blank / very slow because _build_current_costs_map performed an N+1 DB lookup — for each sale's product it re-fetched manufactured products and re-ran _resolve_product_unit_cost against the DB. The fix pre-fetches manufactured_products once into mfg_cache (id+name keyed), enriches each entry once via enrich_unit_cost_fields, and threads mfg_cache through _resolve_product_unit_cost so the per-product resolution becomes a memory lookup. Confirmed: all cost/profit fields remain present, response shape unchanged, regression suite passes, frontend renders and date filter works."
+}

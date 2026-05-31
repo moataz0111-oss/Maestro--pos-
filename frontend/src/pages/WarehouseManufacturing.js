@@ -48,7 +48,8 @@ import {
   Edit,
   Check,
   AlertCircle,
-  Calculator
+  Calculator,
+  Wrench
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -153,6 +154,13 @@ export default function WarehouseManufacturing() {
   // === مزامنة شاملة للوصفات اليتيمة ===
   const [syncOrphansResult, setSyncOrphansResult] = useState(null);  // {success, scanned, orphans_total, linked, ...}
   const [syncOrphansLoading, setSyncOrphansLoading] = useState(false);
+
+  // === إصلاح التعريفات المفقودة (piece_def_value) ===
+  const [missingDefDialogOpen, setMissingDefDialogOpen] = useState(false);
+  const [missingDefItems, setMissingDefItems] = useState([]); // [{id, name, unit, total_recipe_grams, suggested_value, suggested_unit, ...}]
+  const [missingDefInputs, setMissingDefInputs] = useState({}); // { [id]: { value, unit } }
+  const [missingDefLoading, setMissingDefLoading] = useState(false);
+  const [missingDefSaving, setMissingDefSaving] = useState(false);
   
   // === Owner notification & details modal ===
   const [showOwnerDetailsModal, setShowOwnerDetailsModal] = useState(false);
@@ -1028,11 +1036,11 @@ export default function WarehouseManufacturing() {
   const getPieceGrams = (product) => {
     const pw = Number(product?.piece_weight || 0);
     const pwu = product?.piece_weight_unit || 'غرام';
-    const pwuIsWeight = !!_PIECE_W[pwu];
     const pdv = Number(product?.piece_def_value || 0);
     const pdu = product?.piece_def_unit;
-    // التعريف (1 وحدة عدّية = X غرام) له الأولوية
-    if (!pwuIsWeight && pdv > 0 && _PIECE_W[pdu]) return pdv * _PIECE_W[pdu];
+    // ⭐ التعريف (1 قطعة = X غرام/مل) له الأولوية المطلقة متى وُجد وكان صالحاً —
+    // حتى لو كانت piece_weight_unit وزنية أو فارغة (بيانات قديمة/تالفة).
+    if (pdv > 0 && _PIECE_W[pdu]) return pdv * _PIECE_W[pdu];
     return pw * (_PIECE_W[pwu] || 1);
   };
 
@@ -1598,7 +1606,7 @@ export default function WarehouseManufacturing() {
     const pwuIsWeight = !!_W[pwu];
     const pdv = Number(product.piece_def_value || 0);
     const pdu = product.piece_def_unit;
-    const usesPieceDef = !pwuIsWeight && pdv > 0 && !!_W[pdu];
+    const usesPieceDef = pdv > 0 && !!_W[pdu];
     const pieceGrams = getPieceGrams(product);  // ⭐ أولوية التعريف
     // إجمالي وزن الوصفة (مع pack_info للمكونات القطعية)
     let totalGrams = 0;
@@ -1687,6 +1695,59 @@ export default function WarehouseManufacturing() {
       setSyncOrphansLoading(false);
     }
   };
+
+  // 🛠️ فحص التعريفات المفقودة وفتح نافذة الإصلاح الجماعي
+  const handleOpenMissingDef = async () => {
+    setMissingDefLoading(true);
+    try {
+      const res = await axios.get(`${API}/manufactured-products/missing-piece-def`, { headers });
+      const items = res.data?.items || [];
+      if (items.length === 0) {
+        toast.success(t('ممتاز! لا توجد منتجات تنقصها تعريفات. كل البيانات سليمة.'));
+        setMissingDefLoading(false);
+        return;
+      }
+      const inputs = {};
+      items.forEach(it => {
+        inputs[it.id] = {
+          value: it.suggested_value > 0 ? String(it.suggested_value) : '',
+          unit: it.suggested_unit || 'غرام',
+        };
+      });
+      setMissingDefItems(items);
+      setMissingDefInputs(inputs);
+      setMissingDefDialogOpen(true);
+    } catch (error) {
+      showApiError(error, t('فشل في فحص التعريفات المفقودة'));
+    } finally {
+      setMissingDefLoading(false);
+    }
+  };
+
+  // 💾 حفظ التعريفات المُدخلة دفعة واحدة
+  const handleSaveMissingDef = async () => {
+    const payloadItems = Object.entries(missingDefInputs)
+      .map(([id, v]) => ({ id, piece_def_value: Number(v.value || 0), piece_def_unit: v.unit || 'غرام' }))
+      .filter(it => it.piece_def_value > 0);
+    if (payloadItems.length === 0) {
+      toast.error(t('أدخل قيمة واحدة على الأقل (1 وحدة = كم غرام)'));
+      return;
+    }
+    setMissingDefSaving(true);
+    try {
+      const res = await axios.post(`${API}/manufactured-products/fix-piece-definitions`, { items: payloadItems }, { headers });
+      toast.success(`${t('تم إصلاح')} ${res.data?.updated || 0} ${t('منتج')}`);
+      setMissingDefDialogOpen(false);
+      setMissingDefItems([]);
+      setMissingDefInputs({});
+      fetchData();
+    } catch (error) {
+      showApiError(error, t('فشل في حفظ التعريفات'));
+    } finally {
+      setMissingDefSaving(false);
+    }
+  };
+
 
   // إضافة منتج مصنع
   const handleAddProduct = async (e) => {
@@ -2253,6 +2314,17 @@ export default function WarehouseManufacturing() {
                 >
                   <RefreshCw className={`h-4 w-4 ml-2 ${syncOrphansLoading ? 'animate-spin' : ''}`} />
                   {syncOrphansLoading ? t('جاري المزامنة...') : t('مزامنة شاملة')}
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={handleOpenMissingDef}
+                  disabled={missingDefLoading}
+                  className="border-red-500 text-red-600 hover:bg-red-50"
+                  data-testid="fix-missing-piece-def-btn"
+                  title={t('فحص المنتجات العدّية التي تنقصها تعريف وزن القطعة وإصلاحها دفعة واحدة')}
+                >
+                  <Wrench className={`h-4 w-4 ml-2 ${missingDefLoading ? 'animate-spin' : ''}`} />
+                  {missingDefLoading ? t('جاري الفحص...') : t('إصلاح التعريفات المفقودة')}
                 </Button>
                 <Button 
                   variant="outline"
@@ -3247,18 +3319,18 @@ export default function WarehouseManufacturing() {
                                 <Badge className={product.quantity <= product.min_quantity ? 'bg-red-500/20 text-red-500' : 'bg-green-500/20 text-green-500'}>
                                   {t('المتبقي')}: {product.quantity} {product.unit}
                                 </Badge>
-                                {product.piece_weight && (
+                                {(product.piece_weight || product.piece_def_value) && (
                                   <Badge variant="outline" className="text-orange-500 border-orange-500">
-                                    {t('القطعة')} = {product.piece_weight} {product.piece_weight_unit || 'غرام'}
                                     {(() => {
                                       const _WEIGHT = new Set(['غرام','كغم','كيلو','كجم','مل','لتر']);
                                       const pwu = product.piece_weight_unit || 'غرام';
                                       const pdv = Number(product.piece_def_value || 0);
                                       const pdu = product.piece_def_unit;
-                                      if (!_WEIGHT.has(pwu) && pdv > 0 && pdu) {
-                                        return <span className="font-bold"> = {pdv} {t(pdu)}</span>;
+                                      // ⭐ التعريف له الأولوية في العرض (يطابق منطق الحساب)
+                                      if (pdv > 0 && _WEIGHT.has(pdu)) {
+                                        return <>{t('القطعة')} = <span className="font-bold">{pdv} {t(pdu)}</span></>;
                                       }
-                                      return null;
+                                      return <>{t('القطعة')} = {product.piece_weight} {pwu}</>;
                                     })()}
                                   </Badge>
                                 )}
@@ -7983,6 +8055,76 @@ export default function WarehouseManufacturing() {
       </Dialog>
 
       {/* 🔧 Dialog: نتيجة المزامنة الشاملة للمكونات اليتيمة */}
+      {/* 🛠️ نافذة إصلاح التعريفات المفقودة */}
+      <Dialog open={missingDefDialogOpen} onOpenChange={(open) => { if (!open) { setMissingDefDialogOpen(false); } }}>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto" data-testid="missing-piece-def-dialog">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Wrench className="h-5 w-5 text-red-500" />
+              {t('إصلاح التعريفات المفقودة')}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-sm text-red-700">
+              <p className="font-bold">{missingDefItems.length} {t('منتج عدّي تنقصه تعريف وزن القطعة')}</p>
+              <p className="text-xs mt-1">{t('هذه المنتجات تُحسب تكلفتها وعائدها بشكل خاطئ. أدخل "1 وحدة = كم غرام" لكل منتج ثم احفظ الكل.')}</p>
+            </div>
+            <div className="space-y-2">
+              {missingDefItems.map((it) => (
+                <div key={it.id} className="flex items-center gap-2 p-2 rounded-lg border bg-muted/20 flex-wrap" data-testid={`missing-def-row-${it.id}`}>
+                  <div className="flex-1 min-w-[140px]">
+                    <p className="font-bold text-sm">{it.name}</p>
+                    <p className="text-[11px] text-muted-foreground">
+                      {t('الوحدة')}: {it.unit} · {t('وزن الوصفة')}: {it.total_recipe_grams} {t('غرام')}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-1 text-sm">
+                    <span className="text-muted-foreground whitespace-nowrap">1 {it.unit} =</span>
+                    <Input
+                      type="number"
+                      min="0"
+                      step="any"
+                      className="h-9 w-24"
+                      placeholder={t('القيمة')}
+                      value={missingDefInputs[it.id]?.value ?? ''}
+                      onChange={(e) => setMissingDefInputs(prev => ({ ...prev, [it.id]: { ...prev[it.id], value: e.target.value } }))}
+                      data-testid={`missing-def-value-${it.id}`}
+                    />
+                    <Select
+                      value={missingDefInputs[it.id]?.unit || 'غرام'}
+                      onValueChange={(v) => setMissingDefInputs(prev => ({ ...prev, [it.id]: { ...prev[it.id], unit: v } }))}
+                    >
+                      <SelectTrigger className="h-9 w-24" data-testid={`missing-def-unit-${it.id}`}><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="غرام">{t('غرام')}</SelectItem>
+                        <SelectItem value="كغم">{t('كغم')}</SelectItem>
+                        <SelectItem value="مل">{t('مل')}</SelectItem>
+                        <SelectItem value="لتر">{t('لتر')}</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={() => setMissingDefDialogOpen(false)} data-testid="missing-def-cancel-btn">
+                {t('إلغاء')}
+              </Button>
+              <Button
+                onClick={handleSaveMissingDef}
+                disabled={missingDefSaving}
+                className="bg-green-600 hover:bg-green-700 text-white"
+                data-testid="missing-def-save-btn"
+              >
+                <CheckCircle className="h-4 w-4 ml-2" />
+                {missingDefSaving ? t('جاري الحفظ...') : t('حفظ الكل')}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+
       <Dialog open={!!syncOrphansResult} onOpenChange={(open) => !open && setSyncOrphansResult(null)}>
         <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto" data-testid="sync-orphans-result-dialog">
           <DialogHeader>

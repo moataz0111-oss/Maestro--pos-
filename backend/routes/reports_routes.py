@@ -20,7 +20,7 @@ router = APIRouter(prefix="/reports", tags=["Reports"])
 
 
 # ==================== UNIFIED PER-PRODUCT COST RESOLVER ====================
-async def _resolve_product_unit_cost(db, product: Dict[str, Any]) -> Dict[str, float]:
+async def _resolve_product_unit_cost(db, product: Dict[str, Any], mfg_cache: Optional[Dict[str, Any]] = None) -> Dict[str, float]:
     """يُرجع التكلفة الحقيقية لكل وحدة من المنتج، باستخدام نفس منطق POS:
     إذا كان المنتج مرتبطاً بمنتج مُصنّع (manufactured_links / manufactured_product_id)
     فيُحسب من unit_cost_after_waste × consumption_qty (مصدر الحقيقة).
@@ -56,16 +56,23 @@ async def _resolve_product_unit_cost(db, product: Dict[str, Any]) -> Dict[str, f
             mp_id = link.get("manufactured_product_id")
             if not mp_id:
                 continue
-            mfg_product = await db.manufactured_products.find_one(
-                {"id": mp_id},
-                {"_id": 0, "raw_material_cost": 1, "raw_material_cost_after_waste": 1,
-                 "production_cost": 1, "recipe": 1, "unit": 1, "piece_weight": 1,
-                 "piece_weight_unit": 1, "piece_def_value": 1, "piece_def_unit": 1,
-                 "quantity": 1, "total_produced": 1, "cost_before_waste": 1, "id": 1},
-            )
-            if not mfg_product:
-                continue
-            await _enrich_unit_cost_fields(db, mfg_product)
+            # ⚡ مسار سريع: استخدم الذاكرة المؤقتة المُحضّرة مسبقاً (يلغي استعلامات N×M)
+            if mfg_cache is not None:
+                mfg_product = mfg_cache["by_id"].get(mp_id)
+                if not mfg_product:
+                    continue
+                # المنتج مُخصّب مسبقاً (unit_cost_after_waste جاهز) — لا حاجة لاستعلام
+            else:
+                mfg_product = await db.manufactured_products.find_one(
+                    {"id": mp_id},
+                    {"_id": 0, "raw_material_cost": 1, "raw_material_cost_after_waste": 1,
+                     "production_cost": 1, "recipe": 1, "unit": 1, "piece_weight": 1,
+                     "piece_weight_unit": 1, "piece_def_value": 1, "piece_def_unit": 1,
+                     "quantity": 1, "total_produced": 1, "cost_before_waste": 1, "id": 1},
+                )
+                if not mfg_product:
+                    continue
+                await _enrich_unit_cost_fields(db, mfg_product)
             unit_cost_after_waste = _f(mfg_product.get("unit_cost_after_waste"))
             consumption_qty = _f(link.get("consumption_qty")) or 1.0
             # تحويل الوحدة (kg→g أو piece) — نستخدم منطق server.py عبر import محلي
@@ -90,25 +97,39 @@ async def _resolve_product_unit_cost(db, product: Dict[str, Any]) -> Dict[str, f
     name = (product.get("name") or "").strip()
     if name:
         tenant_id = product.get("tenant_id")
-        # 1) محاولة مطابقة دقيقة
-        match_q: Dict[str, Any] = {"name": name}
-        if tenant_id:
-            match_q["tenant_id"] = tenant_id
-        mfg_match = await db.manufactured_products.find_one(match_q, {"_id": 0})
-        # 2) إن فشلت، محاولة partial (المنتج المُصنّع يحتوي اسم البيع)
-        if not mfg_match:
-            import re as _re
-            escaped = _re.escape(name)
-            partial_q: Dict[str, Any] = {"name": {"$regex": escaped, "$options": "i"}}
+        # ⚡ مسار سريع: ابحث في الذاكرة المؤقتة بدل استعلامات قاعدة البيانات
+        if mfg_cache is not None:
+            mfg_match = mfg_cache["by_name"].get(name)
+            if not mfg_match:
+                _low = name.lower()
+                for _mname, _m in mfg_cache["by_name"].items():
+                    if _low in (_mname or "").lower():
+                        mfg_match = _m
+                        break
+            if mfg_match:
+                auto_cost = _f(mfg_match.get("unit_cost_after_waste"))
+                if auto_cost > 0:
+                    return {"unit_cost": auto_cost + operating, "unit_pkg": unit_pkg}
+        else:
+            # 1) محاولة مطابقة دقيقة
+            match_q: Dict[str, Any] = {"name": name}
             if tenant_id:
-                partial_q["tenant_id"] = tenant_id
-            mfg_match = await db.manufactured_products.find_one(partial_q, {"_id": 0})
-        if mfg_match:
-            from routes.inventory_system import _enrich_unit_cost_fields
-            await _enrich_unit_cost_fields(db, mfg_match)
-            auto_cost = _f(mfg_match.get("unit_cost_after_waste"))
-            if auto_cost > 0:
-                return {"unit_cost": auto_cost + operating, "unit_pkg": unit_pkg}
+                match_q["tenant_id"] = tenant_id
+            mfg_match = await db.manufactured_products.find_one(match_q, {"_id": 0})
+            # 2) إن فشلت، محاولة partial (المنتج المُصنّع يحتوي اسم البيع)
+            if not mfg_match:
+                import re as _re
+                escaped = _re.escape(name)
+                partial_q: Dict[str, Any] = {"name": {"$regex": escaped, "$options": "i"}}
+                if tenant_id:
+                    partial_q["tenant_id"] = tenant_id
+                mfg_match = await db.manufactured_products.find_one(partial_q, {"_id": 0})
+            if mfg_match:
+                from routes.inventory_system import _enrich_unit_cost_fields
+                await _enrich_unit_cost_fields(db, mfg_match)
+                auto_cost = _f(mfg_match.get("unit_cost_after_waste"))
+                if auto_cost > 0:
+                    return {"unit_cost": auto_cost + operating, "unit_pkg": unit_pkg}
 
     # ⛑️ Last-resort Fallback: استخدم product.cost الخام
     raw_cost = _f(product.get("cost"))
@@ -118,16 +139,42 @@ async def _resolve_product_unit_cost(db, product: Dict[str, Any]) -> Dict[str, f
 
 async def _build_current_costs_map(db, tenant_id: Optional[str]) -> Dict[str, Dict[str, Any]]:
     """يبني خريطة {product_id: {unit_cost, unit_pkg, name}} و {name: ...} للجميع.
-    يستخدم _resolve_product_unit_cost (مصدر الحقيقة الوحيد)."""
+    يستخدم _resolve_product_unit_cost (مصدر الحقيقة الوحيد).
+
+    ⚡ تحسين الأداء: بدلاً من استعلام قاعدة البيانات لكل منتج مُصنّع داخل الحلقة
+    (تضخم N×M)، نجلب جميع المنتجات المُصنّعة ونُخصّبها (enrich) مرة واحدة فقط في
+    ذاكرة مؤقتة، ثم نحلّ تكلفة كل منتج بيع من الذاكرة. هذا يجعل التقارير شبه فورية."""
+    from routes.inventory_system import _enrich_unit_cost_fields
+
     products_q: Dict[str, Any] = {}
     if tenant_id:
         products_q["tenant_id"] = tenant_id
+
+    # ⚡ الخطوة 1: جلب + تخصيب جميع المنتجات المُصنّعة مرة واحدة فقط
+    mfg_q: Dict[str, Any] = {}
+    if tenant_id:
+        mfg_q["tenant_id"] = tenant_id
+    mfg_list = await db.manufactured_products.find(mfg_q, {"_id": 0}).to_list(length=None)
+    mfg_by_id: Dict[str, Any] = {}
+    mfg_by_name: Dict[str, Any] = {}
+    for mp in mfg_list:
+        try:
+            await _enrich_unit_cost_fields(db, mp)
+        except Exception as e:
+            logger.warning(f"Failed to enrich manufactured product {mp.get('name')}: {e}")
+        if mp.get("id"):
+            mfg_by_id[mp["id"]] = mp
+        if mp.get("name"):
+            mfg_by_name.setdefault(mp["name"], mp)
+    mfg_cache = {"by_id": mfg_by_id, "by_name": mfg_by_name}
+
+    # ⚡ الخطوة 2: حلّ تكلفة كل منتج بيع من الذاكرة (بدون استعلامات إضافية)
     by_id: Dict[str, Dict[str, Any]] = {}
     by_name: Dict[str, Dict[str, Any]] = {}
     cursor = db.products.find(products_q, {"_id": 0})
     async for p in cursor:
         try:
-            resolved = await _resolve_product_unit_cost(db, p)
+            resolved = await _resolve_product_unit_cost(db, p, mfg_cache=mfg_cache)
         except Exception as e:
             logger.warning(f"Failed to resolve cost for product {p.get('name')}: {e}")
             resolved = {"unit_cost": float(p.get("cost") or 0), "unit_pkg": float(p.get("packaging_cost") or 0)}

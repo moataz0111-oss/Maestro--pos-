@@ -3865,7 +3865,11 @@ async def _enrich_unit_cost_fields(db, product: dict) -> dict:
     # الوزن الحقيقي المُعرَّف للقطعة (piece_def_value + piece_def_unit) لحساب دقيق.
     pdv = float(product.get("piece_def_value") or 0)
     pdu = product.get("piece_def_unit")
-    if (pwu not in UNIT_W) and pdv > 0 and pdu and UNIT_W.get(pdu):
+    # ⭐ تعريف البورشن (piece_def_value + piece_def_unit) له الأولوية المطلقة متى
+    # كان مُعرّفاً وصالحاً — حتى لو كانت piece_weight_unit وزنية أو فارغة (بيانات
+    # قديمة/تالفة). هذا يمنع تجاهل التعريف (مثال: 1 شريحة = 80غ) واحتساب عائد خاطئ
+    # (40÷1 بدل 40÷80) عندما يُحفظ piece_weight=1 مع وحدة وزنية افتراضية.
+    if pdv > 0 and pdu and UNIT_W.get(pdu):
         piece_grams = pdv * UNIT_W.get(pdu)
     else:
         piece_grams = pw * UNIT_W.get(pwu, 1.0)
@@ -3998,6 +4002,100 @@ async def get_manufactured_products():
         await _enrich_unit_cost_fields(db, product)
     
     return products
+
+
+# ⭐ إصلاح التعريفات المفقودة: فحص + تحديث جماعي لـ piece_def_value
+# ⚠️ يجب التسجيل قبل `/manufactured-products/{product_id}` لتجنب تصادم المسار
+class PieceDefFixItem(BaseModel):
+    id: str
+    piece_def_value: float
+    piece_def_unit: str = "غرام"
+
+
+class PieceDefFixPayload(BaseModel):
+    items: List[PieceDefFixItem]
+
+
+@router.get("/manufactured-products/missing-piece-def")
+async def get_missing_piece_definitions(current_user: dict = Depends(get_current_user)):
+    """يفحص المنتجات المُصنّعة ذات الوحدة الرئيسية العدّية التي تنقصها تعريف بورشن صالح
+    (piece_def_value) ولها وصفة وزنية قابلة للحساب — فيكون عائدها/تكلفتها خاطئاً (مثل 40÷1).
+
+    يُرجع قائمة المنتجات الناقصة مع اقتراح قيمة عند توفّر مصدر موثوق (piece_weight وزني)."""
+    db = get_db()
+    tenant_id = current_user.get("tenant_id")
+    query: Dict[str, Any] = {}
+    if tenant_id:
+        query["tenant_id"] = tenant_id
+    products = await db.manufactured_products.find(query, {"_id": 0}).to_list(5000)
+    missing = []
+    for p in products:
+        main_unit = (p.get("unit") or "").strip()
+        if main_unit in _UNIT_WEIGHT_MAP:
+            continue  # وحدة رئيسية وزنية → لا تحتاج تعريف بورشن
+        pw = float(p.get("piece_weight") or 0)
+        pwu = p.get("piece_weight_unit") or "غرام"
+        pwu_is_weight = pwu in _UNIT_WEIGHT_MAP
+        pdv = float(p.get("piece_def_value") or 0)
+        pdu = p.get("piece_def_unit")
+        has_valid_def = pdv > 0 and pdu and (pdu in _UNIT_WEIGHT_MAP)
+        # تعريف حقيقي بديل: وزن قطعة وزني > 1 (وليس الـ placeholder المقفل =1)
+        has_real_piece_weight = pwu_is_weight and pw > 1
+        if has_valid_def or has_real_piece_weight:
+            continue
+        total_grams = await _compute_recipe_total_grams(db, p.get("recipe") or [])
+        if total_grams <= 0:
+            continue  # لا وصفة وزنية قابلة للحساب → التعريف لا يؤثر
+        suggested_value = pw if (pwu_is_weight and pw > 0 and pw != 1) else 0
+        missing.append({
+            "id": p.get("id"),
+            "name": p.get("name"),
+            "unit": main_unit,
+            "piece_weight": pw,
+            "piece_weight_unit": pwu,
+            "total_recipe_grams": round(total_grams, 2),
+            "current_piece_def_value": pdv,
+            "current_piece_def_unit": pdu,
+            "suggested_value": suggested_value,
+            "suggested_unit": pwu if pwu_is_weight else "غرام",
+        })
+    missing.sort(key=lambda x: x.get("name") or "")
+    return {"count": len(missing), "items": missing}
+
+
+@router.post("/manufactured-products/fix-piece-definitions")
+async def fix_piece_definitions(
+    payload: PieceDefFixPayload,
+    current_user: dict = Depends(get_current_user),
+):
+    """تحديث جماعي لـ piece_def_value / piece_def_unit لمجموعة منتجات مُصنّعة.
+    يتحقّق من ملكية المستأجر، ويتجاهل القيم غير الصالحة (قيمة <= 0 أو وحدة غير وزنية)."""
+    db = get_db()
+    tenant_id = current_user.get("tenant_id")
+    updated = 0
+    skipped = []
+    now_iso = datetime.now(timezone.utc).isoformat()
+    for item in payload.items:
+        if item.piece_def_value <= 0 or item.piece_def_unit not in _UNIT_WEIGHT_MAP:
+            skipped.append({"id": item.id, "reason": "قيمة أو وحدة غير صالحة"})
+            continue
+        q: Dict[str, Any] = {"id": item.id}
+        if tenant_id:
+            q["tenant_id"] = tenant_id
+        res = await db.manufactured_products.update_one(
+            q,
+            {"$set": {
+                "piece_def_value": float(item.piece_def_value),
+                "piece_def_unit": item.piece_def_unit,
+                "updated_at": now_iso,
+            }},
+        )
+        if res.matched_count:
+            updated += 1
+        else:
+            skipped.append({"id": item.id, "reason": "غير موجود أو لا يخص هذا المستأجر"})
+    return {"success": True, "updated": updated, "skipped": skipped}
+
 
 
 # ⭐ مزامنة شاملة: ربط المكونات اليتيمة (orphan) بأسمائها تلقائياً

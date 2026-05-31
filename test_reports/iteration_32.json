@@ -82,7 +82,7 @@
   },
   
   "test_credentials": {
-    "api_url": "https://pos-manufacturing.preview.emergentagent.com",
+    "api_url": "https://inventory-yield-fix.preview.emergentagent.com",
     "client_graffiti": {
       "email": "hanialdujaili@gmail.com",
       "password": "graffiti123",

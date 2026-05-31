@@ -1,0 +1,33 @@
+{
+  "summary": "Iter197: Verified the new 'Fix Missing Piece Definitions' feature end-to-end. Backend GET /api/manufactured-products/missing-piece-def and POST /api/manufactured-products/fix-piece-definitions are working correctly (6/6 pytest tests pass): scan returns the seeded corrupt product 'rab-missing-demo' (40g recipe, شريحة unit, piece_def_value=0); batch fix with piece_def_value=80, piece_def_unit=غرام updates the record and the product's computed_yield becomes exactly 0.5 (40/80). Invalid value (<=0), non-weight unit (حبة), and foreign tenant ids are correctly placed in the 'skipped' array. Re-scan after a successful fix excludes the now-defined product. Frontend (route /warehouse-manufacturing, tab 'التصنيع') flow also works: red 'إصلاح التعريفات المفقودة' button opens the dialog, dialog lists 'دجاج راب (يحتاج تعريف)' with input data-testid='missing-def-value-rab-missing-demo', filling 80 and clicking 'حفظ الكل' produces success toast 'تم إصلاح 1 منتج', dialog closes, and a second re-open immediately shows the empty-state message 'ممتاز! لا توجد منتجات تنقصها تعريفات'.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_missing_piece_def_iter197.py",
+    "/app/test_reports/pytest/iter197_missing_piece_def.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "fix_piece_definitions endpoint correctly enforces tenant isolation by adding tenant_id to the update filter; foreign/non-existent ids fall into 'skipped' rather than silently succeeding.",
+    "get_missing_piece_definitions correctly excludes products whose main unit is already a weight unit (in _UNIT_WEIGHT_MAP) and those with a real piece_weight > 1 (so the legitimate الـ piece_weight path still works as alternative truth source).",
+    "Both endpoints are registered before the dynamic /manufactured-products/{product_id} route in inventory_system.py (lines 4019 & 4066) — confirmed they are reachable without route collision.",
+    "Minor (non-blocking): error responses inside skipped[] are returned as free-text Arabic strings ('قيمة أو وحدة غير صالحة', 'غير موجود أو لا يخص هذا المستأجر'). Consider adding a stable error_code field (e.g. 'INVALID_VALUE', 'NOT_FOUND') so frontends can switch on it without string matching."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_missing_piece_def_iter197.py"
+  ],
+  "success_rate": {
+    "backend": "100% (6/6 pytest tests passed)",
+    "frontend": "100% (login → /warehouse-manufacturing → tab-manufacturing → fix-missing-piece-def-btn → dialog → fill 80 → save → toast + dialog close → re-scan shows empty list)"
+  },
+  "test_credentials": "admin@maestroegp.com / admin123 (tenant=default)",
+  "seed_data_creation": "Used the existing seeded demo product 'rab-missing-demo' (tenant=default, unit شريحة, piece_weight=1غرام, piece_def_value=0, recipe=40g دجاج). The pytest fixture (reset_demo_before_each) resets piece_def_value back to 0 and piece_def_unit to None before AND after every test, so the suite is idempotent regardless of run order and leaves DB in the original 'needs fixing' state for the main agent.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "The two new endpoints live in /app/backend/routes/inventory_system.py at lines 4019 (GET missing-piece-def) and 4066 (POST fix-piece-definitions). Re-seed the demo product to its 'broken' state at any time with: db.manufactured_products.update_one({'id':'rab-missing-demo'},{'\\$set':{'piece_def_value':0,'piece_def_unit':None}}). The frontend button is hidden until tab data-testid='tab-manufacturing' is active (it lives in the activeTab==='manufacturing' branch in WarehouseManufacturing.js around line 2305). Selectors used and verified: fix-missing-piece-def-btn, missing-piece-def-dialog, missing-def-value-{id}, missing-def-unit-{id}, missing-def-save-btn.",
+  "rca of the issue": "Not a bug-fix iteration — this is a new feature verification. The feature itself correctly addresses the underlying root cause: previously, manufactured products with a count main unit (e.g. شريحة) whose piece_def_value was missing/0 were falling back to a 1-gram placeholder weight, making computed_yield = recipe_grams / 1 (e.g. 40 instead of the correct 40/80 = 0.5). The new scan endpoint surfaces exactly that population (count unit + recipe grams > 0 + no valid piece_def AND no real piece_weight>1), and the batch fix sets a proper piece_def_value so _enrich_unit_cost_fields then yields the correct half-portion ratio. Verified on the seeded rab-missing-demo product: after POST with piece_def_value=80, GET /api/manufactured-products returns computed_yield=0.5 exactly."
+}

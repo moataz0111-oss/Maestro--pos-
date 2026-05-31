@@ -27,6 +27,20 @@ Multi-tenant POS system with biometric integration (ZKTeco), thermal receipt pri
 - Printers filter by branch in Settings
 
 
+## FEATURE (31 May 2026) — "Fix Missing Definitions" batch tool ✅
+- `GET /api/manufactured-products/missing-piece-def`: scans count-unit manufactured products lacking a valid piece_def_value (with computable recipe grams).
+- `POST /api/manufactured-products/fix-piece-definitions`: batch-updates piece_def_value/unit (tenant-isolated, validates inputs).
+- Frontend: red "إصلاح التعريفات المفقودة" button (manufacturing tab) → dialog listing missing products with per-row "1 unit = X gram" inputs → "حفظ الكل".
+- Verified: testing agent iter197 = 100% (backend 6/6 + full frontend flow).
+
+## PERF FIX (31 May 2026) — Reports page N+1 query elimination ✅
+- **Symptom**: Reports page loaded blank / very slow on open and on date-range change.
+- **Root cause**: `_build_current_costs_map` (routes/reports_routes.py) ran N×M DB queries — per sale-product it re-queried manufactured_products and re-ran `_enrich_unit_cost_fields` (2 queries each) + regex name lookups.
+- **Fix**: Pre-fetch + pre-enrich all manufactured_products ONCE into an in-memory `mfg_cache`; thread it through `_resolve_product_unit_cost(db, product, mfg_cache=None)` so per-product resolution is a memory lookup. DB fallback path preserved.
+- **Validated**: 12.4× faster (bench: 16.8ms vs 209ms on 300 products), identical cost values (0 mismatches), 16/16 regression tests pass, testing agent iter196 = 100% (page renders, date filter works in 0.46s).
+- **Next (P1)**: "دجاج راب" portion yield bug — ✅ FIXED (31 May 2026). Root cause: `_enrich_unit_cost_fields` only honored piece_def_value when piece_weight_unit was a count unit; products with piece_def_value set but a weight/null piece_weight_unit had their definition IGNORED → 40/1. Fix: piece_def_value now has absolute priority when valid (backend + frontend mirror). Verified e2e + 5 new regression tests.
+
+
 ## Feature (Feb 2026) — Delivery Company Report: Commission + Drill-down + Offer Collection ✅
 Delivery tab in Reports now: shows real commission rate (read from `delivery_app_settings`, not the empty `delivery_apps`), supports invoice drill-down (company → invoices → itemized details), and a collection flow with an "offers/discounts" toggle that auto-computes the offer amount/percentage and deposits the actual collected net into the Owner's Safe (`owner_deposits`, source=`delivery_collection`) with collector/branch/company/period logged. Collection respects the selected from→to date range.
 

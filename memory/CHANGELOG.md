@@ -1,6 +1,60 @@
 # Maestro EGP - Changelog
 
 
+## Session: 31 May 2026 (FEATURE) — زر "إصلاح التعريفات المفقودة" (إصلاح جماعي)
+
+### المطلوب
+أداة تفحص كل المنتجات المُصنّعة العدّية التي تنقصها `piece_def_value` صالحة وتعرضها دفعة واحدة لتعريفها بسرعة (بدل تتبّع كل منتج معطوب يدوياً).
+
+### ما تم
+- **Backend (`routes/inventory_system.py`)**:
+  - `GET /api/manufactured-products/missing-piece-def`: يُرجع المنتجات ذات الوحدة الرئيسية العدّية + وصفة وزنية > 0 + بلا تعريف صالح (ولا `piece_weight` وزني > 1). مع اقتراح قيمة عند توفّر مصدر موثوق.
+  - `POST /api/manufactured-products/fix-piece-definitions`: تحديث جماعي لـ `piece_def_value`/`piece_def_unit` (عزل المستأجر + تجاهل القيم غير الصالحة في `skipped`).
+- **Frontend (`WarehouseManufacturing.js`)**: زر أحمر "إصلاح التعريفات المفقودة" في تبويب التصنيع + نافذة تعرض المنتجات الناقصة مع إدخال "1 وحدة = X غرام" لكل منتج وزر "حفظ الكل".
+
+### الاختبار
+- testing agent (iter197) = **100%**: backend 6/6، والمسار الأمامي كامل (فتح النافذة → إدخال 80 → حفظ → نجاح → النافذة تُغلق → إعادة الفحص فارغة). بعد الإصلاح `computed_yield=0.5`. ✅
+
+
+
+## Session: 31 May 2026 (BUG FIX) — حساب بورشن "دجاج راب" (40÷1 بدل 40÷80)
+
+### المشكلة
+"دجاج راب" يحسب العائد 40÷1 = 40 بدل 40÷80 = 0.5 → تكلفة وحدة خاطئة، رغم أن المستخدم عرّف القطعة (1 شريحة = 80غ).
+
+### السبب الجذري (تم إعادة إنتاجه)
+شرط احتساب piece_grams في `_enrich_unit_cost_fields` كان يستخدم تعريف البورشن **فقط** عندما تكون `piece_weight_unit` وحدة عدّية (`pwu not in UNIT_W`). إذا كان المنتج يملك `piece_def_value=80` لكن `piece_weight_unit` وزنية (`غرام`) أو فارغة (بيانات قديمة/تالفة)، كان التعريف **يُتجاهَل** ويرجع للنمط `piece_weight(=1)` → 40÷1.
+
+### ما تم
+- **Backend (`routes/inventory_system.py` `_enrich_unit_cost_fields`)**: التعريف (`piece_def_value × piece_def_unit`) أصبح له **الأولوية المطلقة** متى وُجد وكان صالحاً — بصرف النظر عن `piece_weight_unit`. الشرط الجديد: `if pdv > 0 and pdu and UNIT_W.get(pdu)`.
+- **Frontend (`WarehouseManufacturing.js`)**: مرآة لنفس المنطق في `getPieceGrams` و`computeCostBreakdown.usesPieceDef`، وشارة عرض "القطعة = X" تُظهر التعريف الحقيقي.
+
+### الاختبار
+- أُعيد إنتاج الخطأ ثم أُصلح: 4 حالات (تعريف نظيف / تعريف مع وحدة وزنية / تعريف مع وحدة فارغة / بلا تعريف). 
+- اختبار regression جديد `tests/test_piece_def_priority_yield.py` (5 حالات) + 16 اختبار سابق = 21 ناجح.
+- تحقق e2e عبر API: منتج تالف (pwu=غرام، pdv=80) أصبح computed_yield=0.5 وunit_cost_after_waste=2000 (كان 40 و25). ✅
+
+
+
+## Session: 31 May 2026 (PERF / BUG FIX) — تسريع صفحة التقارير (إزالة استعلامات N+1)
+
+### المشكلة (من المستخدم + صور)
+صفحة التقارير تُحمّل فارغة أو ببطء شديد عند الفتح وعند تغيير نطاق التاريخ.
+
+### السبب الجذري
+`_build_current_costs_map` في `routes/reports_routes.py` كانت تمرّ على كل منتج بيع وتستدعي `_resolve_product_unit_cost` التي تستعلم قاعدة البيانات لكل منتج مُصنّع مرتبط + تستدعي `_enrich_unit_cost_fields` (استعلامان لكل استدعاء) + استعلامات regex بالاسم → تضخم استعلامات N×M عند كل تحميل/تغيير تاريخ.
+
+### ما تم
+- `_build_current_costs_map`: تجلب جميع `manufactured_products` للمستأجر مرة واحدة، وتُخصّبها (enrich) مرة واحدة في ذاكرة مؤقتة `mfg_cache` (مفهرسة by_id و by_name).
+- `_resolve_product_unit_cost(db, product, mfg_cache=None)`: أُضيف مسار سريع — عند تمرير `mfg_cache` يقرأ من الذاكرة بدل قاعدة البيانات (للمسار المرتبط وللـ fallback بالاسم). مسار قاعدة البيانات الأصلي محفوظ للمستدعين الآخرين (عقد اختبارات الـ regression).
+- يستفيد منها 3 نقاط: `/reports/sales`, `/reports/weekly-low-profit`, `/reports/profit-loss`.
+
+### الاختبار
+- Benchmark (`tests/bench_costmap.py`) على 300 منتج / 40 مُصنّع: **أسرع 12.4× (16.8ms مقابل 209ms)** ونتائج **مطابقة تماماً** (0 اختلاف في unit_cost/unit_pkg).
+- جميع اختبارات الـ regression الـ16 ناجحة. testing agent (iter196): جميع نقاط التقارير 200، صفحة التقارير تُعرض (غير فارغة)، تغيير التاريخ يعمل في 0.46s. ✅
+
+
+
 ## Session: Feb 2026 (FEATURE) — تعريف وزن البورشن للوحدات العدّية (دقة التكاليف)
 
 ### المطلوب (من المستخدم + صورة)

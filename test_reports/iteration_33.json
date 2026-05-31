@@ -115,7 +115,7 @@
   },
   
   "test_credentials": {
-    "api_url": "https://pos-manufacturing.preview.emergentagent.com",
+    "api_url": "https://inventory-yield-fix.preview.emergentagent.com",
     "super_admin": {
       "email": "owner@maestroegp.com",
       "password": "owner123",
