@@ -634,3 +634,15 @@ The owner explicitly rejected having salary advances appear as "expenses on the 
 
 ### Verified visually
 - Clicked "الفرع الرئيسي" card → modal opened with all bits populated, chart rendered with the 100k / 35k / 65k pattern, lists populated. ✅
+---
+
+## [2026-02] إصلاح P0: مطابقة توفّر طلبات الفروع بالتطبيع العربي
+
+**المشكلة:** شاشة "طلبات الفروع" كانت تعرض كميات توفّر خاطئة/سالبة (مثل -17) رغم وجود مخزون فعلي في المصنع. السبب الجذري: المطابقة بين اسم المنتج في المصنع واسم العنصر في الطلب كانت حرفية وتفشل بسبب اختلافات الإملاء العربي.
+
+**الحل (`/app/backend/routes/inventory_system.py`):**
+- أُضيفت دالة `normalize_arabic()` توحّد: أ/إ/آ/ٱ → ا، ة → ه، ى → ي، ؤ/ئ → و/ي، إزالة الهمزة المنفردة والتشكيل والتطويل (ـ)، تحويل الأرقام العربية الهندية → لاتينية، ودمج المسافات.
+- طُبّقت في `get_branch_requests` عند بناء `qty_by_name` والبحث (للمنتجات ومواد التغليف).
+- طُبّقت في `_resolve_request_product` (مسار التنفيذ/fulfill) لتطابق المخزون الحقيقي.
+
+**التحقق:** اختبار حيّ عبر API أظهر تحوّل التوفّر من -17 إلى 200 لاسم بإملاء مختلف ومعرّف مفقود. 7 اختبارات وحدة جديدة (`tests/test_arabic_normalize.py`) + 17 اختبار تراجع للتصنيع تمر بنجاح.

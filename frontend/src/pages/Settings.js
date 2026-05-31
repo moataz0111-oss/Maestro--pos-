@@ -3061,7 +3061,7 @@ export default function Settings() {
                               <div className="grid grid-cols-2 gap-4">
                                 <div>
                                   <Label className="text-foreground">{t('الصلاحية')}</Label>
-                                  <Select value={userForm.role} onValueChange={(v) => setUserForm({ ...userForm, role: v })}>
+                                  <Select value={userForm.role} onValueChange={(v) => setUserForm({ ...userForm, role: v, branch_id: ['warehouse_keeper', 'manufacturer', 'purchasing'].includes(v) ? '' : userForm.branch_id })}>
                                     <SelectTrigger className="mt-1">
                                       <SelectValue />
                                     </SelectTrigger>
@@ -3078,6 +3078,8 @@ export default function Settings() {
                                     </SelectContent>
                                   </Select>
                                 </div>
+                                {/* ⭐ يختفي حقل الفرع للأدوار المركزية (مخزن/مصنع/مشتريات) — لا يعملون في الفروع */}
+                                {!['warehouse_keeper', 'manufacturer', 'purchasing'].includes(userForm.role) && (
                                 <div>
                                   <Label className="text-foreground">{t('الفرع')}</Label>
                                   <Select value={userForm.branch_id} onValueChange={(v) => setUserForm({ ...userForm, branch_id: v })}>
@@ -3091,6 +3093,7 @@ export default function Settings() {
                                     </SelectContent>
                                   </Select>
                                 </div>
+                                )}
                               </div>
                               <Button type="submit" className="w-full bg-primary text-primary-foreground">{t('إنشاء المستخدم')}</Button>
                             </form>
@@ -3303,7 +3306,7 @@ export default function Settings() {
                             <div className="grid grid-cols-2 gap-4">
                               <div>
                                 <Label className="text-foreground">{t('الدور')}</Label>
-                                <Select value={editUserForm.role} onValueChange={(val) => setEditUserForm(prev => ({...prev, role: val}))}>
+                                <Select value={editUserForm.role} onValueChange={(val) => setEditUserForm(prev => ({...prev, role: val, branch_id: ['warehouse_keeper', 'manufacturer', 'purchasing'].includes(val) ? '' : prev.branch_id}))}>
                                   <SelectTrigger className="bg-background border-input" data-testid="edit-user-role">
                                     <SelectValue />
                                   </SelectTrigger>
@@ -3320,6 +3323,8 @@ export default function Settings() {
                                   </SelectContent>
                                 </Select>
                               </div>
+                              {/* ⭐ يختفي حقل الفرع للأدوار المركزية (مخزن/مصنع/مشتريات) */}
+                              {!['warehouse_keeper', 'manufacturer', 'purchasing'].includes(editUserForm.role) && (
                               <div>
                                 <Label className="text-foreground">{t('الفرع')}</Label>
                                 <Select value={editUserForm.branch_id || 'all'} onValueChange={(val) => setEditUserForm(prev => ({...prev, branch_id: val === 'all' ? '' : val}))}>
@@ -3334,6 +3339,7 @@ export default function Settings() {
                                   </SelectContent>
                                 </Select>
                               </div>
+                              )}
                             </div>
                             <div>
                               <Label className="text-foreground">{t('كلمة المرور الجديدة (اختياري)')}</Label>

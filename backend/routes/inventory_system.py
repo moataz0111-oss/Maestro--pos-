@@ -28,6 +28,36 @@ router = APIRouter(prefix="/api", tags=["Inventory System"])
 
 # ==================== HELPERS ====================
 
+import re as _re
+
+# علامات التشكيل العربية (الحركات) لإزالتها عند التطبيع
+_ARABIC_DIACRITICS = _re.compile(r"[\u0610-\u061A\u064B-\u065F\u0670\u06D6-\u06ED\u0640]")
+
+
+def normalize_arabic(text: str) -> str:
+    """يوحّد النص العربي لمطابقة آمنة بين أسماء المنتجات والطلبات.
+    - أ/إ/آ/ٱ → ا، ة → ه، ى → ي، ؤ → و، ئ → ي
+    - إزالة التشكيل والتطويل (ـ)
+    - توحيد الأرقام العربية الهندية إلى لاتينية
+    - دمج المسافات المتعددة وإزالة الأطراف والتحويل للأحرف الصغيرة (للاتيني)."""
+    if not text:
+        return ""
+    s = str(text)
+    s = _ARABIC_DIACRITICS.sub("", s)
+    # توحيد الهمزات والألفات
+    trans = {
+        "أ": "ا", "إ": "ا", "آ": "ا", "ٱ": "ا",
+        "ة": "ه", "ى": "ي", "ؤ": "و", "ئ": "ي", "ء": "",
+        # أرقام عربية هندية → لاتينية
+        "٠": "0", "١": "1", "٢": "2", "٣": "3", "٤": "4",
+        "٥": "5", "٦": "6", "٧": "7", "٨": "8", "٩": "9",
+    }
+    s = s.translate(str.maketrans(trans))
+    # دمج المسافات (يشمل المسافات غير الفاصلة) وتقليم الأطراف
+    s = _re.sub(r"\s+", " ", s).strip().lower()
+    return s
+
+
 # خرائط تحويل الوحدات إلى وحدة أساسية (غرام أو مل تُعامل ك "غرام" للعائد)
 _UNIT_WEIGHT_MAP = {
     "غرام": 1.0, "كغم": 1000.0, "كيلو": 1000.0, "كجم": 1000.0,
@@ -2808,14 +2838,15 @@ async def get_branch_requests(status: Optional[str] = None, branch_id: Optional[
     # ⭐ الإصلاح: نطابق بالمعرّف أولاً، ثم بالاسم — لأن بعض الطلبات تُنشأ من جهة الفرع
     # بمرجع product_id مفقود/مختلف، فيبقى التوفّر القديم السالب رغم توفّر المنتج فعلاً
     # في المصنع. المطابقة بالاسم تضمن قراءة المخزون الحقيقي دائماً.
-    prod_query = {"tenant_id": tenant_id} if tenant_id else {}
+    # نجلب المنتجات بلا فلتر tenant (الأسماء/المعرّفات تأتي من طلبات نفس المستأجر أصلاً)
+    # لتفادي حالة اختلاف tenant_id بين المنتج والطلب التي تُفرغ الخريطة وتُبقي السالب.
     all_prods = await db.manufactured_products.find(
-        prod_query, {"_id": 0, "id": 1, "name": 1, "quantity": 1}
-    ).to_list(20000)
+        {}, {"_id": 0, "id": 1, "name": 1, "quantity": 1}
+    ).to_list(50000)
     qty_by_id = {p["id"]: float(p.get("quantity") or 0) for p in all_prods}
     qty_by_name = {}
     for p in all_prods:
-        nm = (p.get("name") or "").strip()
+        nm = normalize_arabic(p.get("name") or "")
         if not nm:
             continue
         q = float(p.get("quantity") or 0)
@@ -2825,11 +2856,13 @@ async def get_branch_requests(status: Optional[str] = None, branch_id: Optional[
     for req in requests:
         for it in (req.get("items") or []):
             pid = it.get("product_id")
-            nm = (it.get("product_name") or "").strip()
-            if pid and pid in qty_by_id:
-                it["available_quantity"] = qty_by_id[pid]
-            elif nm and nm in qty_by_name:
+            nm = normalize_arabic(it.get("product_name") or "")
+            # ⭐ نُفضّل المطابقة بالاسم (مخزون المصنع الحقيقي/الأكبر) لأن مرجع product_id
+            # قد يشير لسجل قديم/مكرّر بكمية سالبة بينما يوجد سجل حقيقي بنفس الاسم.
+            if nm and nm in qty_by_name:
                 it["available_quantity"] = qty_by_name[nm]
+            elif pid and pid in qty_by_id:
+                it["available_quantity"] = qty_by_id[pid]
             # else: نُبقي القيمة المحفوظة كما هي
 
     pkg_ids = set()
@@ -2842,11 +2875,11 @@ async def get_branch_requests(status: Optional[str] = None, branch_id: Optional[
             {"id": {"$in": list(pkg_ids)}}, {"_id": 0, "id": 1, "name": 1, "quantity": 1}
         ).to_list(5000)
         pqty_by_id = {m["id"]: float(m.get("quantity") or 0) for m in mats}
-        pqty_by_name = {(m.get("name") or "").strip(): float(m.get("quantity") or 0) for m in mats if (m.get("name") or "").strip()}
+        pqty_by_name = {normalize_arabic(m.get("name") or ""): float(m.get("quantity") or 0) for m in mats if normalize_arabic(m.get("name") or "")}
         for req in requests:
             for pit in (req.get("packaging_items") or []):
                 mid = pit.get("packaging_material_id")
-                pnm = (pit.get("name") or "").strip()
+                pnm = normalize_arabic(pit.get("name") or "")
                 if mid and mid in pqty_by_id:
                     pit["available_quantity"] = pqty_by_id[mid]
                 elif pnm and pnm in pqty_by_name:
@@ -2884,22 +2917,21 @@ async def update_branch_request_status(request_id: str, status_data: dict):
     return {"message": "تم تحديث الحالة", "status": new_status}
 
 async def _resolve_request_product(db, item: dict, tenant_id):
-    """يحل المنتج المصنّع الفعلي لعنصر طلب فرع: بالمعرّف أولاً ثم بالاسم — للطلبات
-    ذات المرجع product_id المفقود/المختلف (سبب ظهور التوفّر بالسالب). عند تكرار الاسم
-    نختار السجل ذا الكمية الأكبر (مخزون المصنع الحقيقي). يعيد الوثيقة أو None."""
+    """يحل المنتج المصنّع الفعلي لعنصر طلب فرع: بالاسم أولاً (مخزون المصنع الحقيقي/الأكبر)
+    ثم بالمعرّف — لأن مرجع product_id قد يشير لسجل قديم/مكرّر بكمية سالبة. عند تكرار الاسم
+    نختار السجل ذا الكمية الأكبر. المطابقة بالاسم تتم بعد تطبيع النص العربي (أ/إ/آ→ا، ة→ه،
+    ى→ي، إزالة التشكيل والمسافات) لتفادي فشل المطابقة بسبب اختلافات الإملاء. يعيد الوثيقة أو None."""
+    nm = normalize_arabic(item.get("product_name") or "")
+    if nm:
+        all_prods = await db.manufactured_products.find({}, {"_id": 0}).to_list(50000)
+        cands = [p for p in all_prods if normalize_arabic(p.get("name") or "") == nm]
+        if cands:
+            return max(cands, key=lambda x: float(x.get("quantity") or 0))
     pid = item.get("product_id")
     if pid:
         p = await db.manufactured_products.find_one({"id": pid}, {"_id": 0})
         if p:
             return p
-    nm = (item.get("product_name") or "").strip()
-    if nm:
-        q = {"name": nm}
-        if tenant_id:
-            q["tenant_id"] = tenant_id
-        cands = await db.manufactured_products.find(q, {"_id": 0}).to_list(50)
-        if cands:
-            return max(cands, key=lambda x: float(x.get("quantity") or 0))
     return None
 
 
