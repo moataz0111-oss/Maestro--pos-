@@ -1656,11 +1656,58 @@ export default function WarehouseManufacturing() {
     // ⭐ لا يُطبّق تجاوز الوحدة الوزنية إذا كان للمنتج تعريف بورشن (يُعدّ بالحصص):
     // العائد = total_grams ÷ piece_grams (بالحصص) وليس ÷ 1 (بالغرام).
     let calcYield = (mainUnitFactor && totalGrams > 0 && !usesPieceDef) ? totalGrams / mainUnitFactor : calcYieldRaw;
+    // ⭐ مسار عدّ←عدّ: عندما تكون وحدة البورشن عدّية (شريحة) والمكوّنات قطعية ذات
+    // تعبئة عدّية مطابقة (1 قطعة = 46 شريحة) → العائد = Σ(كمية × تعبئة) ÷ piece_weight.
+    // بلا أي تعريف وزن بالغرام — الوحدة الفرعية معرّفة داخل القطعة على المادة الخام.
+    const pwuStr = product?.piece_weight_unit || '';
+    const pwuIsWeight = !!_W[pwuStr];
+    const pwNum = Number(product?.piece_weight || 0);
+    let countYield = 0;
+    if (calcYield === 0 && !pwuIsWeight && pwNum > 0) {
+      let sumInPwu = 0;
+      for (const ing of (product?.recipe || [])) {
+        const q = Number(ing.quantity || 0);
+        if (ing.unit === pwuStr) { sumInPwu += q; continue; }
+        const mat = rawMaterials?.find?.(r => r.id === ing.raw_material_id);
+        const ipq = Number(mat?.pack_quantity || ing.pack_quantity || 0);
+        const ipu = mat?.pack_unit || ing.pack_unit;
+        if (ipq <= 0 || !ipu) continue;
+        if (ipu === pwuStr || !_W[ipu]) sumInPwu += q * ipq; // تطابق الوحدة أو كلاهما عدّي
+      }
+      if (sumInPwu > 0) countYield = sumInPwu / pwNum;
+    }
+    if (countYield > 0 && calcYield === 0) calcYield = countYield;
     // ⭐ كمية إنتاج الوصفة الفعلية لها الأولوية (تمدّد/انكماش الطبخ). الوصفات بلا
     // هذا الحقل تبقى بنفس الحساب القديم تماماً.
     const ary = Number(product?.actual_recipe_yield || 0);
     if (ary > 0) calcYield = ary;
-    return { pieceGrams, totalGrams, calcYieldRaw, calcYield, mainUnitFactor, usesPieceDef, ary };
+    return { pieceGrams, totalGrams, calcYieldRaw, calcYield, countYield, mainUnitFactor, usesPieceDef, ary };
+  };
+
+  // ⭐ عائد عدّ←عدّ من نموذج الوصفة (للواجهة): يحسب عدد الوحدات الفرعية (شريحة) من
+  // تعبئة المواد الخام (1 قطعة = 46 شريحة) دون الحاجة لتعريف وزن بالغرام.
+  // يُرجع { yield, packs:[{name, perPiece, unit}] } أو null إن لم يكن متاحاً.
+  const computeFormCountYield = (recipe, pwu, pw) => {
+    const _W = { 'غرام': 1, 'كغم': 1000, 'كيلو': 1000, 'كجم': 1000, 'مل': 1, 'لتر': 1000, 'gram': 1, 'kg': 1000, 'ml': 1, 'liter': 1000, 'l': 1000 };
+    const pwNum = Number(pw || 0);
+    if (!pwu || _W[pwu] || pwNum <= 0) return null; // وحدة وزنية أو بلا piece_weight
+    let sum = 0;
+    const packs = [];
+    for (const ing of (recipe || [])) {
+      const q = Number(ing.quantity || 0);
+      if (q <= 0) continue;
+      if (ing.unit === pwu) { sum += q; packs.push({ name: ing.raw_material_name, perPiece: 1, unit: pwu }); continue; }
+      const mat = rawMaterials?.find?.(r => r.id === ing.raw_material_id);
+      const ipq = Number(mat?.pack_quantity || ing.pack_quantity || 0);
+      const ipu = mat?.pack_unit || ing.pack_unit;
+      if (ipq <= 0 || !ipu) continue;
+      if (ipu === pwu || !_W[ipu]) {
+        sum += q * ipq;
+        packs.push({ name: ing.raw_material_name || mat?.name, perPiece: ipq, srcUnit: ing.unit || 'قطعة' });
+      }
+    }
+    if (sum <= 0) return null;
+    return { yield: sum / pwNum, packs };
   };
 
   // 🏭 الكمية المتوفرة لمكوّن: من مخزون المنتجات المُصنّعة إذا كان المكوّن منتجاً مُصنّعاً،
@@ -4991,11 +5038,33 @@ export default function WarehouseManufacturing() {
                 );
               })()}
 
-              {/* ⭐ تعريف البورشن: يظهر عند اختيار وحدة عدّية لوزن القطعة (قطعة/شريحة/علبة...) لحساب دقيق */}
+              {/* ⭐ تعريف البورشن: يظهر عند اختيار وحدة عدّية لوزن القطعة (قطعة/شريحة/علبة...) لحساب دقيق.
+                  إن أمكن اشتقاق العائد تلقائياً من تعبئة المادة الخام نُظهر صندوقاً أخضر بلا غرامات. */}
               {(() => {
                 const _REAL = new Set(['غرام', 'كغم', 'كيلو', 'كجم', 'مل', 'لتر']);
                 const pwu = productForm.piece_weight_unit || 'غرام';
                 if (_REAL.has(pwu)) return null;
+                const auto = computeFormCountYield(productForm.recipe, pwu, productForm.piece_weight);
+                if (auto) {
+                  return (
+                    <div className="col-span-2 p-3 rounded-lg bg-emerald-500/10 border-2 border-emerald-500/40 space-y-1" data-testid="create-piece-def-auto-box">
+                      <Label className="flex items-center gap-2 font-bold text-emerald-700 text-sm">
+                        ✓ {t('العائد يُحسب تلقائياً من تعبئة المادة الخام')}
+                      </Label>
+                      {auto.packs.map((p, i) => (
+                        <p key={i} className="text-xs text-muted-foreground">
+                          1 {t(p.srcUnit || 'قطعة')}{p.name ? ` (${p.name})` : ''} = {p.perPiece} {t(pwu)}
+                        </p>
+                      ))}
+                      <p className="text-sm font-bold text-emerald-600" data-testid="create-piece-def-auto-yield">
+                        {t('العائد')} = {Math.round(auto.yield * 100) / 100} {t(pwu)}
+                      </p>
+                      <p className="text-[10px] text-muted-foreground">
+                        {t('لا حاجة لتعريف وزن الوحدة بالغرام — الوحدة الفرعية معرّفة داخل القطعة على المادة الخام.')}
+                      </p>
+                    </div>
+                  );
+                }
                 return (
                   <div className="col-span-2 p-3 rounded-lg bg-amber-500/10 border-2 border-amber-500/40 space-y-2" data-testid="create-piece-definition-box">
                     <Label className="flex items-center gap-2 font-bold text-amber-700 text-sm">
@@ -5675,11 +5744,34 @@ export default function WarehouseManufacturing() {
                 </div>
               </div>
 
-              {/* ⭐ تعريف البورشن: يظهر عند اختيار وحدة عدّية (قطعة/شريحة/علبة...) لحساب دقيق */}
+              {/* ⭐ تعريف البورشن: يظهر عند اختيار وحدة عدّية (قطعة/شريحة/علبة...) لحساب دقيق.
+                  إن أمكن اشتقاق العائد تلقائياً من تعبئة المادة الخام (1 قطعة = 46 شريحة)
+                  نُظهر صندوقاً أخضر ولا نطلب تعريف وزن بالغرام. */}
               {(() => {
                 const _REAL = new Set(['غرام', 'كغم', 'كيلو', 'كجم', 'مل', 'لتر']);
                 const pwu = editRecipeForm.piece_weight_unit || 'غرام';
                 if (_REAL.has(pwu)) return null;
+                const auto = computeFormCountYield(editRecipeForm.recipe, pwu, editRecipeForm.piece_weight);
+                if (auto) {
+                  return (
+                    <div className="p-3 rounded-lg bg-emerald-500/10 border-2 border-emerald-500/40 space-y-1" data-testid="piece-def-auto-box">
+                      <Label className="flex items-center gap-2 font-bold text-emerald-700 text-sm">
+                        ✓ {t('العائد يُحسب تلقائياً من تعبئة المادة الخام')}
+                      </Label>
+                      {auto.packs.map((p, i) => (
+                        <p key={i} className="text-xs text-muted-foreground">
+                          1 {t(p.srcUnit || 'قطعة')}{p.name ? ` (${p.name})` : ''} = {p.perPiece} {t(pwu)}
+                        </p>
+                      ))}
+                      <p className="text-sm font-bold text-emerald-600" data-testid="piece-def-auto-yield">
+                        {t('العائد')} = {Math.round(auto.yield * 100) / 100} {t(pwu)}
+                      </p>
+                      <p className="text-[10px] text-muted-foreground">
+                        {t('لا حاجة لتعريف وزن الوحدة بالغرام — الوحدة الفرعية معرّفة داخل القطعة على المادة الخام.')}
+                      </p>
+                    </div>
+                  );
+                }
                 return (
                   <div className="p-3 rounded-lg bg-amber-500/10 border-2 border-amber-500/40 space-y-2" data-testid="piece-definition-box">
                     <Label className="flex items-center gap-2 font-bold text-amber-700 text-sm">
@@ -5721,6 +5813,9 @@ export default function WarehouseManufacturing() {
                 const _REAL = new Set(['غرام', 'كغم', 'كيلو', 'كجم', 'مل', 'لتر']);
                 const pwu = editRecipeForm.piece_weight_unit || 'غرام';
                 const isCount = !_REAL.has(pwu);
+                // ⭐ لا نُظهر اشتقاق "الكيلو = X بورشن" عندما يُشتق العائد تلقائياً من
+                // تعبئة عدّية (عدّ←عدّ) — لأنه مُربك وغير ذي صلة هنا.
+                if (isCount && computeFormCountYield(editRecipeForm.recipe, pwu, editRecipeForm.piece_weight)) return null;
                 // الوزن الحقيقي للبورشن: من التعريف عند الوحدة العدّية، وإلا من وزن البورشن
                 const pw = isCount ? Number(editRecipeForm.piece_def_value || 0) : Number(editRecipeForm.piece_weight || 0);
                 const unit = isCount ? (editRecipeForm.piece_def_unit || 'غرام') : pwu;

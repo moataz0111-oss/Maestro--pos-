@@ -268,6 +268,68 @@ def test_count_based_pack_info_matching_pwu_string():
     assert abs(product["unit_cost_after_waste"] - 550.0) < 0.01
 
 
+def test_cheese_slices_count_to_count_ignores_gram_piece_def():
+    """🧀 جبن امريكي شرائح (سيناريو المستخدم الحقيقي):
+    المادة الخام "جبن شيدر شرائح" مُعرّفة 1 قطعة = 46 شريحة.
+    الوصفة: 4 قطعة (كلفة 30,000) → العائد = 4×46 = 184 شريحة، الكلفة = 163.04/شريحة.
+    يجب أن يعمل المسار عدّ←عدّ سواءً وُجد تعريف غرام وهمي (1 شريحة = 1 غرام) أم لا —
+    لأن الشريحة وحدة عدّ معرّفة داخل القطعة، لا وزن بالغرام."""
+    db = _make_db_with_raw_materials([
+        {"id": "cheddar", "pack_quantity": 46, "pack_unit": "شريحة"},
+    ])
+    base = {
+        "unit": "شريحة",
+        "piece_weight": 1,
+        "piece_weight_unit": "شريحة",
+        "raw_material_cost_after_waste": 30000,
+        "cost_before_waste": 30000,
+        "quantity": 0,
+        "recipe": [
+            {"raw_material_id": "cheddar", "unit": "قطعة", "quantity": 4},
+        ],
+    }
+    # (أ) بلا تعريف غرام — المطلوب
+    p1 = dict(base)
+    asyncio.run(_enrich_unit_cost_fields(db, p1))
+    assert abs(p1["computed_yield"] - 184.0) < 0.001, p1["computed_yield"]
+    assert abs(p1["unit_cost_after_waste"] - (30000.0 / 184.0)) < 0.01, p1["unit_cost_after_waste"]
+    # (ب) مع تعريف غرام وهمي (1 شريحة = 1 غرام) — يجب أن يبقى عدّ←عدّ هو الحاكم
+    db2 = _make_db_with_raw_materials([
+        {"id": "cheddar", "pack_quantity": 46, "pack_unit": "شريحة"},
+    ])
+    p2 = dict(base); p2["piece_def_value"] = 1; p2["piece_def_unit"] = "غرام"
+    asyncio.run(_enrich_unit_cost_fields(db2, p2))
+    assert abs(p2["computed_yield"] - 184.0) < 0.001, p2["computed_yield"]
+    assert abs(p2["unit_cost_after_waste"] - (30000.0 / 184.0)) < 0.01, p2["unit_cost_after_waste"]
+
+
+def test_various_slices_per_piece_count_to_count():
+    """🧀 أنماط شرائح مختلفة (بيانات المستخدم): تأكيد عموم منطق عدّ←عدّ لأي N.
+    جبن مدخن: 1 قطعة = 10 شرائح، 3 قطعة بكلفة 11,250 → 30 شريحة، 375/شريحة.
+    """
+    cases = [
+        # (slices_per_piece, qty_pieces, batch_cost, expected_yield, expected_unit)
+        (10, 3, 11250, 30.0, 375.0),     # جبن مدخن
+        (46, 4, 30000, 184.0, 30000 / 184.0),  # جبن شيدر
+        (8, 5, 16000, 40.0, 400.0),
+    ]
+    for spp, qty, cost, exp_y, exp_u in cases:
+        db = _make_db_with_raw_materials([
+            {"id": "ch", "pack_quantity": spp, "pack_unit": "شريحة"},
+        ])
+        p = {
+            "unit": "شريحة", "piece_weight": 1, "piece_weight_unit": "شريحة",
+            "raw_material_cost_after_waste": cost, "cost_before_waste": cost, "quantity": 0,
+            "recipe": [{"raw_material_id": "ch", "unit": "قطعة", "quantity": qty}],
+        }
+        asyncio.run(_enrich_unit_cost_fields(db, p))
+        assert abs(p["computed_yield"] - exp_y) < 0.001, (spp, p["computed_yield"])
+        assert abs(p["unit_cost_after_waste"] - exp_u) < 0.01, (spp, p["unit_cost_after_waste"])
+
+
+
+
+
 def test_count_pack_not_applied_when_pwu_is_weight():
     """Safety: if piece_weight_unit is weight (غرام), count-based pack_unit
     must NOT trigger the count_yield path (avoids unit-confusion bugs)."""
