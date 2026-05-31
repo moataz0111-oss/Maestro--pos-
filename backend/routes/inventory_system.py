@@ -4579,17 +4579,24 @@ async def produce_product(
             sp = product.get("selling_price", 0) or 0
             new_pcost = round(rm_cost_aw, 2)
             new_pmargin = round(sp - new_pcost, 2) if sp > 0 else 0
+            _scaled_set = {
+                "recipe": new_recipe,
+                "raw_material_cost": round(rm_cost, 2),
+                "raw_material_cost_after_waste": round(rm_cost_aw, 2),
+                "cost_before_waste": round(rm_cost, 2),
+                "production_cost": new_pcost,
+                "profit_margin": new_pmargin,
+                "last_updated": now_iso,
+            }
+            # ⭐ حرج: إذا كانت كمية الإنتاج الفعلية مثبّتة يدوياً، حجّمها بنفس المعامل
+            # حتى لا تبقى قديمة (مثل 7) بينما تُمثّل الوصفة المُحجّمة دفعة أكبر (مثل 30).
+            # وإلا تُقسَّم الكلفة على 7 بدل 30 فيظهر سعر الكيلو مضخّماً.
+            _old_ary = float(product.get("actual_recipe_yield") or 0)
+            if _old_ary > 0:
+                _scaled_set["actual_recipe_yield"] = round(_old_ary * scale_factor, 6)
             await db.manufactured_products.update_one(
                 {"id": product_id},
-                {"$set": {
-                    "recipe": new_recipe,
-                    "raw_material_cost": round(rm_cost, 2),
-                    "raw_material_cost_after_waste": round(rm_cost_aw, 2),
-                    "cost_before_waste": round(rm_cost, 2),
-                    "production_cost": new_pcost,
-                    "profit_margin": new_pmargin,
-                    "last_updated": now_iso,
-                }}
+                {"$set": _scaled_set}
             )
             product = await db.manufactured_products.find_one({"id": product_id})
             recipe_scaled = True

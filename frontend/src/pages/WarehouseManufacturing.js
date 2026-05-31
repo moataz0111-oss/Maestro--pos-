@@ -1303,12 +1303,14 @@ export default function WarehouseManufacturing() {
         cost_per_unit: r.cost_per_unit,
         waste_percentage: r.waste_percentage,
       }));
-      await axios.patch(`${API}/manufactured-products/${product.id}/recipe`, {
+      // ⭐ إذا كانت كمية الإنتاج الفعلية مثبّتة، حجّمها بنفس المعامل حتى لا تبقى قديمة
+      const aryS = Number(product.actual_recipe_yield || 0);
+      const patchBody = {
         recipe: newRecipe,
-        piece_weight: product.piece_weight,
-        piece_weight_unit: product.piece_weight_unit,
         reason: `مزامنة الوصفة مع الكمية المُصنّعة (${targetQty} ${product.unit || 'حبة'}) — عامل التحجيم ×${scale.toFixed(6)}`,
-      }, { headers });
+      };
+      if (aryS > 0) patchBody.actual_recipe_yield = Math.round(aryS * scale * 1e6) / 1e6;
+      await axios.patch(`${API}/manufactured-products/${product.id}/recipe`, patchBody, { headers });
       toast.success(t('تمت مزامنة الوصفة بنجاح') + ` (×${scale.toFixed(4)})`);
       setSyncPreview(null);
       fetchData();
