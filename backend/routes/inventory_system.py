@@ -2919,22 +2919,24 @@ async def get_branch_requests(status: Optional[str] = None, branch_id: Optional[
     
     requests = await db.branch_requests.find(query, {"_id": 0}).sort("created_at", -1).to_list(1000)
 
-    # 🔄 تحديث available_quantity من مخزون المصنع الحالي (المحفوظ قد يكون قديماً/سالباً).
-    # ⭐ الإصلاح: نطابق بالمعرّف أولاً، ثم بالاسم — لأن بعض الطلبات تُنشأ من جهة الفرع
-    # بمرجع product_id مفقود/مختلف، فيبقى التوفّر القديم السالب رغم توفّر المنتج فعلاً
-    # في المصنع. المطابقة بالاسم تضمن قراءة المخزون الحقيقي دائماً.
-    # نجلب المنتجات بلا فلتر tenant (الأسماء/المعرّفات تأتي من طلبات نفس المستأجر أصلاً)
-    # لتفادي حالة اختلاف tenant_id بين المنتج والطلب التي تُفرغ الخريطة وتُبقي السالب.
+    # 🔄 تحديث available_quantity من مخزون المصنع الحالي (= حقل quantity = "المتبقي" على بطاقة المنتج).
+    # ⭐ نطابق ضمن نفس المستأجر أولاً (نفس منتجات تبويب التصنيع التي يراها المستخدم) لضمان
+    #    أن "المتوفر" في طلب الفرع = "المتبقي" تماماً لمنتج المستخدم نفسه، وتفادي قراءة
+    #    سجلات مكرّرة من مستأجرين آخرين بكميات مختلفة. نرجع لكل المنتجات فقط إن لم نجد بنفس المستأجر.
     all_prods = await db.manufactured_products.find(
-        {}, {"_id": 0, "id": 1, "name": 1, "quantity": 1}
+        {}, {"_id": 0, "id": 1, "name": 1, "quantity": 1, "tenant_id": 1}
     ).to_list(50000)
     qty_by_id = {p["id"]: float(p.get("quantity") or 0) for p in all_prods}
     for req in requests:
+        req_tenant = req.get("tenant_id")
+        # منتجات نفس مستأجر الطلب (هي ما يراه المستخدم في تبويب التصنيع)
+        scope = [p for p in all_prods if p.get("tenant_id") == req_tenant] if req_tenant else []
+        if not scope:
+            scope = all_prods
         for it in (req.get("items") or []):
             pid = it.get("product_id")
-            # ⭐ نُفضّل المطابقة بالاسم (دقيق → مرن → تشابه عالٍ) لأن مرجع product_id
-            # قد يشير لسجل قديم/مكرّر بكمية سالبة بينما يوجد سجل حقيقي بنفس الاسم.
-            matched = match_product_by_name(it.get("product_name") or "", all_prods)
+            # ⭐ نُفضّل المطابقة بالاسم (دقيق → مرن → تشابه عالٍ) ضمن نفس المستأجر.
+            matched = match_product_by_name(it.get("product_name") or "", scope)
             if matched is not None:
                 it["available_quantity"] = float(matched.get("quantity") or 0)
                 it.pop("suggestion", None)
@@ -2946,7 +2948,7 @@ async def get_branch_requests(status: Optional[str] = None, branch_id: Optional[
                 # (نُصفّر القيمة المحفوظة القديمة لتفادي عرض أرقام سالبة مضلّلة كـ -1342)
                 it["available_quantity"] = 0
                 # 💡 نقترح أقرب منتج بالاسم لمساعدة المصنّع على معرفة المقصود
-                sug = suggest_product_by_name(it.get("product_name") or "", all_prods)
+                sug = suggest_product_by_name(it.get("product_name") or "", scope)
                 if sug:
                     it["suggestion"] = sug
                 else:
@@ -3019,8 +3021,12 @@ async def _resolve_request_product(db, item: dict, tenant_id):
     نختار السجل ذا الكمية الأكبر. يعيد الوثيقة أو None."""
     nm = item.get("product_name") or ""
     if nm.strip():
+        # نطابق ضمن نفس مستأجر الطلب أولاً (منتج المستخدم نفسه)، ثم نرجع لكل المنتجات
         all_prods = await db.manufactured_products.find({}, {"_id": 0}).to_list(50000)
-        matched = match_product_by_name(nm, all_prods)
+        scope = [p for p in all_prods if p.get("tenant_id") == tenant_id] if tenant_id else []
+        if not scope:
+            scope = all_prods
+        matched = match_product_by_name(nm, scope)
         if matched is not None:
             return matched
     pid = item.get("product_id")
