@@ -736,3 +736,9 @@ The owner explicitly rejected having salary advances appear as "expenses on the 
 - مُتحقَّق بصرياً: 8 حبة = 1.6 كغم، 10 حبة = 2 كغم.
 
 > ⚠️ يتطلب إعادة نشر (Deploy) لتظهر على VPS.
+
+---
+
+## [2026-02] إصلاح خطأ HTTP 422 عند التصنيع بوحدات كسرية (كيلو/غرام)
+- المشكلة: مسار `POST /manufactured-products/{id}/produce` كان يطلب `quantity: int`، فعند التحويل بالكيلو/الغرام ينتج كمية كسرية (57.142) → خطأ 422 int_parsing.
+- الإصلاح: تغيير `quantity` إلى `float`. مُتحقَّق حيّاً: تصنيع 57.142857 قطعة نجح (الكلفة 571.43) بلا خطأ.

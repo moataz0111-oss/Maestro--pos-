@@ -4829,7 +4829,7 @@ async def update_manufactured_product_recipe(
 @router.post("/manufactured-products/{product_id}/produce")
 async def produce_product(
     product_id: str,
-    quantity: int = 1,
+    quantity: float = 1,
     actual_yield: Optional[float] = None,
     current_user: dict = Depends(get_current_user),
 ):
