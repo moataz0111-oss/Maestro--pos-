@@ -925,7 +925,8 @@ async def close_cash_register(close_data: CashRegisterClose, current_user: dict 
     bypass_count = bool(getattr(close_data, "force_close_without_count", False)) and is_manager
     if not bypass_count and target_branch_id:
         from datetime import datetime as _dt, timezone as _tz, timedelta as _td
-        today_iso = _dt.now(_tz.utc).date().isoformat()
+        # ⭐ اليوم التشغيلي = business_date للوردية المفتوحة (يطابق الشفت الليلي حتى بعد منتصف الليل)
+        biz_date = shift.get("business_date") or await resolve_business_date(tenant_id, target_branch_id)
         # هل في الفرع مخزون منتجات؟
         inv_q = {"branch_id": target_branch_id, "quantity": {"$gt": 0}}
         if tenant_id:
@@ -937,8 +938,10 @@ async def close_cash_register(close_data: CashRegisterClose, current_user: dict 
         has_inv = await db.branch_inventory.count_documents(inv_q, limit=1) > 0
         had_received = False
         if not has_inv:
-            s_iso = today_iso + "T00:00:00"
-            e_iso = today_iso + "T23:59:59"
+            # نافذة ±يوم حول اليوم التشغيلي ثم مطابقة بتاريخ العراق (يدعم التسليم بعد منتصف الليل)
+            _bd = _dt.fromisoformat(biz_date).date()
+            s_iso = (_bd - _td(days=1)).isoformat() + "T00:00:00"
+            e_iso = (_bd + _td(days=1)).isoformat() + "T23:59:59"
             bo_q = {
                 "to_branch_id": target_branch_id,
                 "status": "delivered",
@@ -946,10 +949,13 @@ async def close_cash_register(close_data: CashRegisterClose, current_user: dict 
             }
             if tenant_id:
                 bo_q["tenant_id"] = tenant_id
-            had_received = await db.branch_orders_new.count_documents(bo_q, limit=1) > 0
+            async for _bo in db.branch_orders_new.find(bo_q, {"_id": 0, "delivered_at": 1}):
+                if iraq_date_from_utc(_bo.get("delivered_at")) == biz_date:
+                    had_received = True
+                    break
         
         if has_inv or had_received:
-            count_q = {"branch_id": target_branch_id, "business_date": today_iso, "status": "submitted"}
+            count_q = {"branch_id": target_branch_id, "business_date": biz_date, "status": "submitted"}
             if tenant_id:
                 count_q["tenant_id"] = tenant_id
             submitted = await db.branch_stock_counts.find_one(count_q, {"_id": 0, "id": 1})
@@ -960,7 +966,7 @@ async def close_cash_register(close_data: CashRegisterClose, current_user: dict 
                         "code": "STOCK_COUNT_REQUIRED",
                         "message": "يجب إدخال الجرد اليومي للمنتجات قبل إغلاق الصندوق. اطلب من مسؤول المطبخ تسجيل الجرد.",
                         "branch_id": target_branch_id,
-                        "business_date": today_iso,
+                        "business_date": biz_date,
                     },
                 )
     

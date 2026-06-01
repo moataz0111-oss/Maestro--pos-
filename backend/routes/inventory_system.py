@@ -3032,6 +3032,74 @@ async def delete_branch_request(request_id: str, current_user: dict = Depends(ge
         raise HTTPException(status_code=404, detail="الطلب غير موجود")
     return {"message": "تم حذف الطلب نهائياً", "request_id": request_id}
 
+
+@router.post("/branch-requests/bulk-delete")
+async def bulk_delete_branch_requests(payload: dict, current_user: dict = Depends(get_current_user)):
+    """حذف جماعي لطلبات الفروع. payload: { request_ids: [..] }.
+    يحذف فقط الطلبات ضمن مستأجر المستخدم (إن وُجد). آمن: الطلبات المعلّقة لم تُخصم من المخزون."""
+    db = get_db()
+    request_ids = payload.get("request_ids") or []
+    if not isinstance(request_ids, list) or not request_ids:
+        raise HTTPException(status_code=400, detail="request_ids مطلوبة")
+    tenant_id = current_user.get("tenant_id") if current_user else None
+    query: Dict[str, Any] = {"id": {"$in": request_ids}}
+    if tenant_id:
+        query["tenant_id"] = tenant_id
+    result = await db.branch_requests.delete_many(query)
+    return {"message": f"تم حذف {result.deleted_count} طلب", "deleted_count": result.deleted_count}
+
+
+
+@router.put("/branch-requests/{request_id}/relink-item")
+async def relink_branch_request_item(
+    request_id: str,
+    payload: dict,
+    current_user: dict = Depends(get_current_user),
+):
+    """يربط عنصراً غير مُطابَق في طلب فرع بمنتج مُصنّع مقترح (زر "هل تقصد؟").
+    payload: { item_index: int, product_id: str }.
+    يُحدّث product_id واسم المنتج للعنصر فيصبح "المتوفّر" دقيقاً فوراً."""
+    db = get_db()
+    tenant_id = current_user.get("tenant_id") if current_user else None
+
+    try:
+        item_index = int(payload.get("item_index"))
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="item_index غير صالح")
+    product_id = payload.get("product_id")
+    if not product_id:
+        raise HTTPException(status_code=400, detail="product_id مطلوب")
+
+    req = await db.branch_requests.find_one({"id": request_id}, {"_id": 0})
+    if not req:
+        raise HTTPException(status_code=404, detail="الطلب غير موجود")
+    items = req.get("items") or []
+    if item_index < 0 or item_index >= len(items):
+        raise HTTPException(status_code=400, detail="فهرس العنصر خارج النطاق")
+
+    prod = await db.manufactured_products.find_one({"id": product_id}, {"_id": 0})
+    if not prod:
+        raise HTTPException(status_code=404, detail="المنتج المُصنّع غير موجود")
+    if tenant_id and prod.get("tenant_id") and prod.get("tenant_id") != tenant_id:
+        raise HTTPException(status_code=403, detail="المنتج يخص مستأجراً آخر")
+
+    items[item_index]["product_id"] = product_id
+    items[item_index]["product_name"] = prod.get("name")
+    items[item_index].pop("suggestion", None)
+
+    await db.branch_requests.update_one(
+        {"id": request_id}, {"$set": {"items": items}}
+    )
+    return {
+        "message": "تم ربط العنصر بالمنتج",
+        "request_id": request_id,
+        "item_index": item_index,
+        "product_id": product_id,
+        "product_name": prod.get("name"),
+    }
+
+
+
 async def _resolve_request_product(db, item: dict, tenant_id):
     """يحل المنتج المصنّع الفعلي لعنصر طلب فرع — بآلية المصنع النظيفة:
     بالمعرّف (product_id) أولاً = قراءة "المتبقي" الحقيقي مباشرةً، ثم بالاسم احتياطاً
@@ -5141,6 +5209,11 @@ async def produce_product(
         "total_value": round(batch_cost_after_waste, 2),
         "cost_before_waste": round(batch_cost_before_waste, 2),
         "cost_after_waste": round(batch_cost_after_waste, 2),
+        # ⭐ لقطة تكلفة الدفعة + المتوسط المرجّح (WAC) وقت الإنتاج — لسجل الدفعات
+        "batch_unit_cost_after": round((batch_cost_after_waste / effective_yield) if effective_yield > 0 else 0.0, 6),
+        "batch_unit_cost_before": round((batch_cost_before_waste / effective_yield) if effective_yield > 0 else 0.0, 6),
+        "wac_unit_after": round(new_wac_after, 6),
+        "wac_unit_before": round(new_wac_before, 6),
         "consumed_ingredients": consumed_details,
         "performed_by_name": performed_by_name,
         "notes": f"تصنيع {effective_yield} {product.get('unit')} من {product.get('name')}"
@@ -5189,6 +5262,82 @@ async def produce_product(
         "yield_variance_pct": round(yield_variance_pct, 3),
         "yield_variance_record": variance_record,
     }
+
+
+# ============================================================================
+# 📦 سجل دفعات الإنتاج — تاريخ كل دفعة (الكمية، تكلفة الوحدة، WAC)
+# ============================================================================
+
+@router.get("/manufactured-products/{product_id}/batches")
+async def get_product_batches(
+    product_id: str,
+    limit: int = 100,
+    current_user: dict = Depends(get_current_user),
+):
+    """يُرجع سجل دفعات الإنتاج لمنتج مُصنّع (من حركات المخزون من نوع product_manufactured).
+
+    لكل دفعة: التاريخ، الكمية، إجمالي تكلفة الدفعة، تكلفة الوحدة (لتلك الدفعة)،
+    والمتوسط المرجّح للتكلفة (WAC) وقت الإنتاج إن توفّر.
+    """
+    db = get_db()
+    tenant_id = current_user.get("tenant_id") if current_user else None
+
+    query: Dict[str, Any] = {"type": "product_manufactured", "product_id": product_id}
+    if tenant_id:
+        query["tenant_id"] = tenant_id
+
+    rows = await db.inventory_movements.find(query, {"_id": 0}).sort("created_at", -1).to_list(limit)
+
+    batches = []
+    for r in rows:
+        qty = float(r.get("quantity") or 0)
+        total_after = float(r.get("cost_after_waste") or r.get("total_value") or 0)
+        total_before = float(r.get("cost_before_waste") or 0)
+        # تكلفة الوحدة لهذه الدفعة: المخزّنة إن وُجدت، وإلا تُحسب من الإجمالي/الكمية
+        unit_after = r.get("batch_unit_cost_after")
+        if unit_after is None:
+            unit_after = (total_after / qty) if qty > 0 else 0.0
+        unit_before = r.get("batch_unit_cost_before")
+        if unit_before is None:
+            unit_before = (total_before / qty) if qty > 0 else 0.0
+        batches.append({
+            "id": r.get("id"),
+            "created_at": r.get("created_at"),
+            "quantity": round(qty, 3),
+            "unit": r.get("unit"),
+            "total_cost_after": round(total_after, 2),
+            "total_cost_before": round(total_before, 2),
+            "unit_cost_after": round(float(unit_after), 4),
+            "unit_cost_before": round(float(unit_before), 4),
+            "wac_unit_after": (round(float(r["wac_unit_after"]), 4) if r.get("wac_unit_after") is not None else None),
+            "wac_unit_before": (round(float(r["wac_unit_before"]), 4) if r.get("wac_unit_before") is not None else None),
+            "performed_by_name": r.get("performed_by_name"),
+            "notes": r.get("notes"),
+        })
+
+    # الحالة الحالية للمنتج (WAC المخزّن + إجمالي المُنتَج)
+    product = await db.manufactured_products.find_one(
+        {"id": product_id}, {"_id": 0, "name": 1, "unit": 1, "wac_unit_after": 1, "wac_unit_before": 1, "total_produced": 1}
+    ) or {}
+
+    total_qty = round(sum(b["quantity"] for b in batches), 3)
+    total_value = round(sum(b["total_cost_after"] for b in batches), 2)
+
+    return {
+        "product_id": product_id,
+        "product_name": product.get("name"),
+        "unit": product.get("unit"),
+        "current_wac_after": (round(float(product["wac_unit_after"]), 4) if product.get("wac_unit_after") is not None else None),
+        "current_wac_before": (round(float(product["wac_unit_before"]), 4) if product.get("wac_unit_before") is not None else None),
+        "batches": batches,
+        "summary": {
+            "total_batches": len(batches),
+            "total_quantity": total_qty,
+            "total_value": total_value,
+            "avg_unit_cost": round((total_value / total_qty) if total_qty > 0 else 0.0, 4),
+        },
+    }
+
 
 
 # ============================================================================
@@ -6641,22 +6790,54 @@ async def waste_efficiency_report(
             agg[pid]["cost_before_waste"] += m.get("cost_before_waste", 0) or 0
             agg[pid]["cost_after_waste"] += m.get("cost_after_waste", 0) or 0
             agg[pid]["movements_count"] += 1
+            # ⭐ تفصيل المكوّنات المستهلكة لكل منتج (للعرض عند الضغط على المنتج)
+            ing_map = agg[pid].setdefault("_ingredients", {})
+            for ing in m.get("consumed_ingredients", []) or []:
+                rid = ing.get("raw_material_id") or ing.get("raw_material_name")
+                if not rid:
+                    continue
+                d = ing_map.setdefault(rid, {
+                    "name": ing.get("raw_material_name", "—"),
+                    "unit": ing.get("unit", ""),
+                    "quantity": 0.0,
+                    "cost_before_waste": 0.0,
+                    "cost_after_waste": 0.0,
+                })
+                d["quantity"] += ing.get("quantity", 0) or 0
+                d["cost_before_waste"] += ing.get("cost_before_waste", 0) or 0
+                d["cost_after_waste"] += ing.get("cost_after_waste", 0) or 0
     
     # حساب الفروق والنسب
     rows = []
     total_before = 0.0
     total_after = 0.0
     for entry in agg.values():
+        # ⭐ استخرج تفصيل المكوّنات (إن وُجد) قبل النسخ
+        ing_detail = entry.pop("_ingredients", {})
         before = round(entry["cost_before_waste"], 2)
         after = round(entry["cost_after_waste"], 2)
         diff = round(after - before, 2)
         waste_pct = round(((after - before) / before * 100), 2) if before > 0 else 0.0
+        details = []
+        for d in ing_detail.values():
+            d_before = round(d["cost_before_waste"], 2)
+            d_after = round(d["cost_after_waste"], 2)
+            details.append({
+                "name": d["name"],
+                "unit": d["unit"],
+                "quantity": round(d["quantity"], 3),
+                "cost_before_waste": d_before,
+                "cost_after_waste": d_after,
+                "waste_value": round(d_after - d_before, 2),
+            })
+        details.sort(key=lambda x: x["waste_value"], reverse=True)
         rows.append({
             **entry,
             "cost_before_waste": before,
             "cost_after_waste": after,
             "waste_value": diff,
             "waste_percentage": waste_pct,
+            "details": details,
         })
         total_before += before
         total_after += after
@@ -6684,6 +6865,440 @@ async def waste_efficiency_report(
             "group_by": group_by,
         },
     }
+
+
+# ============================================================================
+# 📊 تقرير هدر وتكلفة مواد الفروع (مبني على المبيعات + الجرد)
+# ============================================================================
+
+_BR_WASTE_WEIGHT_MAP = {
+    "غرام": 1.0, "كغم": 1000.0, "كيلو": 1000.0, "كجم": 1000.0,
+    "gram": 1.0, "kg": 1000.0,
+    "مل": 1.0, "لتر": 1000.0, "ml": 1.0, "liter": 1000.0, "l": 1000.0,
+}
+
+
+def _br_convert_consumption(consumption_qty, consumption_unit, main_unit, piece_weight, piece_weight_unit):
+    """يُحوّل كمية مستهلكة من وحدة الرابط إلى الوحدة الرئيسية للمنتج المُصنّع
+    (مطابق لمنطق الخصم الفعلي في server.py)."""
+    cu = (consumption_unit or "").strip()
+    mu = (main_unit or "").strip()
+    pwu = (piece_weight_unit or "").strip()
+    pw = float(piece_weight or 0)
+    if not cu or cu == mu:
+        return consumption_qty
+    if cu == pwu and pw > 0:
+        return consumption_qty / pw
+    cf = _BR_WASTE_WEIGHT_MAP.get(cu)
+    mf = _BR_WASTE_WEIGHT_MAP.get(mu)
+    if cf is not None and mf is not None:
+        return consumption_qty * cf / mf
+    pf = _BR_WASTE_WEIGHT_MAP.get(pwu)
+    if cf is not None and pf is not None and pw > 0:
+        return (consumption_qty * cf / pf) / pw
+    return consumption_qty
+
+
+@router.get("/reports/branch-waste-efficiency")
+async def branch_waste_efficiency_report(
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    branch_id: Optional[str] = None,
+    current_user: dict = Depends(get_current_user),
+):
+    """⭐ تقرير الفروع: تكلفة المواد (المنتجات المُصنّعة) المُستهلكة عبر المبيعات لكل فرع،
+    قبل/بعد الهدر (حسب نسب الهدر المعرّفة)، بالإضافة لقيمة الفقد الفعلي من الجرد (variance).
+
+    - يعتمد على الطلبات (orders) المُفكَّكة إلى مكوّناتها المُصنّعة (مطابق للخصم الفعلي).
+    - branch_id: فلترة بفرع البيع. اختياري (الكل عند الغياب).
+    - الفقد الفعلي: من حركات branch_loss الناتجة عن الجرد.
+    """
+    role = (current_user or {}).get("role", "")
+    if role not in ("admin", "super_admin", "manager", "branch_manager"):
+        raise HTTPException(status_code=403, detail="هذا التقرير متاح للمالك/المدير فقط")
+
+    db = get_db()
+    tenant_id = current_user.get("tenant_id")
+
+    if not start_date:
+        start_date = (datetime.now(timezone.utc) - timedelta(days=30)).date().isoformat()
+    if not end_date:
+        end_date = datetime.now(timezone.utc).date().isoformat()
+
+    # === الطلبات في الفترة (حسب business_date مع fallback لـ created_at) ===
+    s_iso = start_date + "T00:00:00"
+    e_iso = end_date + "T23:59:59"
+    orders_query = {
+        "status": {"$nin": ["cancelled", "refunded"]},
+        "$or": [
+            {"business_date": {"$gte": start_date, "$lte": end_date}},
+            {"business_date": {"$exists": False}, "created_at": {"$gte": s_iso, "$lte": e_iso}},
+            {"business_date": None, "created_at": {"$gte": s_iso, "$lte": e_iso}},
+        ],
+    }
+    if branch_id:
+        orders_query["branch_id"] = branch_id
+    if tenant_id:
+        orders_query["tenant_id"] = tenant_id
+
+    day_orders = await db.orders.find(
+        orders_query, {"_id": 0, "items": 1}
+    ).to_list(20000)
+
+    # تحميل المنتجات النهائية المرتبطة
+    finished_ids = set()
+    for o in day_orders:
+        for it in o.get("items", []) or []:
+            if it.get("product_id"):
+                finished_ids.add(it["product_id"])
+    products_map = {}
+    if finished_ids:
+        async for p in db.products.find(
+            {"id": {"$in": list(finished_ids)}},
+            {"_id": 0, "id": 1, "manufactured_links": 1, "manufactured_product_id": 1, "manufactured_consumption_qty": 1},
+        ):
+            products_map[p["id"]] = p
+
+    # تحميل المنتجات المُصنّعة (تكلفة الوحدة قبل/بعد الهدر + الوحدة)
+    mp_ids = set()
+    for p in products_map.values():
+        links = list(p.get("manufactured_links") or [])
+        if not links and p.get("manufactured_product_id"):
+            links = [{"manufactured_product_id": p.get("manufactured_product_id")}]
+        for lk in links:
+            if lk.get("manufactured_product_id"):
+                mp_ids.add(lk["manufactured_product_id"])
+    mp_map = {}
+    if mp_ids:
+        async for mp in db.manufactured_products.find(
+            {"id": {"$in": list(mp_ids)}},
+            {"_id": 0, "id": 1, "name": 1, "unit": 1, "piece_weight": 1, "piece_weight_unit": 1,
+             "raw_material_cost": 1, "raw_material_cost_after_waste": 1},
+        ):
+            mp_map[mp["id"]] = mp
+
+    # تجميع الكميات المُستهلكة لكل منتج مُصنّع
+    consumed = {}  # mp_id -> qty
+    for o in day_orders:
+        for it in o.get("items", []) or []:
+            qty_sold = float(it.get("quantity", 0) or 0)
+            if qty_sold <= 0:
+                continue
+            prod = products_map.get(it.get("product_id"))
+            if not prod:
+                continue
+            links = list(prod.get("manufactured_links") or [])
+            if not links and prod.get("manufactured_product_id"):
+                links = [{"manufactured_product_id": prod.get("manufactured_product_id"),
+                          "consumption_qty": prod.get("manufactured_consumption_qty") or 1}]
+            for lk in links:
+                mp_id = lk.get("manufactured_product_id")
+                if not mp_id:
+                    continue
+                cq = float(lk.get("consumption_qty") or 1)
+                cu = lk.get("consumption_unit")
+                mp = mp_map.get(mp_id)
+                if cu and mp:
+                    cq = _br_convert_consumption(cq, cu, mp.get("unit") or "حبة",
+                                                 float(mp.get("piece_weight") or 0), mp.get("piece_weight_unit") or "")
+                consumed[mp_id] = consumed.get(mp_id, 0) + cq * qty_sold
+
+    # === الفقد الفعلي من الجرد (branch_loss) ===
+    loss_query = {
+        "type": "branch_loss",
+        "created_at": {"$gte": s_iso, "$lte": e_iso},
+    }
+    if branch_id:
+        loss_query["branch_id"] = branch_id
+    if tenant_id:
+        loss_query["$or"] = [
+            {"tenant_id": tenant_id}, {"tenant_id": {"$exists": False}}, {"tenant_id": None},
+        ]
+    loss_map = {}  # mp_id -> {qty, value}
+    async for lm in db.inventory_movements.find(loss_query, {"_id": 0}):
+        pid = lm.get("product_id")
+        if not pid:
+            continue
+        d = loss_map.setdefault(pid, {"qty": 0.0, "value": 0.0})
+        d["qty"] += abs(float(lm.get("quantity", 0) or 0))
+        d["value"] += abs(float(lm.get("total_value") or lm.get("cost_after_waste") or 0))
+
+    # === بناء الصفوف ===
+    rows = []
+    total_before = total_after = total_loss = 0.0
+    all_ids = set(consumed.keys()) | set(loss_map.keys())
+    for mp_id in all_ids:
+        mp = mp_map.get(mp_id)
+        if not mp:
+            mp = await db.manufactured_products.find_one(
+                {"id": mp_id},
+                {"_id": 0, "id": 1, "name": 1, "unit": 1, "raw_material_cost": 1, "raw_material_cost_after_waste": 1},
+            ) or {}
+        qty = round(consumed.get(mp_id, 0.0), 3)
+        unit_before = float(mp.get("raw_material_cost") or 0)
+        unit_after = float(mp.get("raw_material_cost_after_waste") or mp.get("raw_material_cost") or 0)
+        cost_before = round(qty * unit_before, 2)
+        cost_after = round(qty * unit_after, 2)
+        loss = loss_map.get(mp_id, {"qty": 0.0, "value": 0.0})
+        waste_val = round(cost_after - cost_before, 2)
+        waste_pct = round((waste_val / cost_before * 100), 2) if cost_before > 0 else 0.0
+        rows.append({
+            "id": mp_id,
+            "name": mp.get("name") or "—",
+            "unit": mp.get("unit") or "",
+            "quantity": qty,
+            "cost_before_waste": cost_before,
+            "cost_after_waste": cost_after,
+            "waste_value": waste_val,
+            "waste_percentage": waste_pct,
+            "loss_qty": round(loss["qty"], 3),
+            "loss_value": round(loss["value"], 2),
+        })
+        total_before += cost_before
+        total_after += cost_after
+        total_loss += loss["value"]
+
+    rows.sort(key=lambda r: (r["loss_value"] + r["waste_value"]), reverse=True)
+    total_diff = round(total_after - total_before, 2)
+    total_pct = round((total_diff / total_before * 100), 2) if total_before > 0 else 0.0
+
+    # === فقد مواد التغليف من الجرد (branch_packaging_loss) ===
+    pkg_loss_query = {
+        "type": "branch_packaging_loss",
+        "created_at": {"$gte": s_iso, "$lte": e_iso},
+    }
+    if branch_id:
+        pkg_loss_query["branch_id"] = branch_id
+    if tenant_id:
+        pkg_loss_query["$or"] = [
+            {"tenant_id": tenant_id}, {"tenant_id": {"$exists": False}}, {"tenant_id": None},
+        ]
+    pkg_agg = {}  # packaging_material_id -> {name, unit, qty, value}
+    pkg_total_loss = 0.0
+    async for pm in db.inventory_movements.find(pkg_loss_query, {"_id": 0}):
+        pid = pm.get("product_id") or pm.get("material_name") or "—"
+        d = pkg_agg.setdefault(pid, {
+            "id": pid,
+            "name": pm.get("product_name") or pm.get("material_name") or "—",
+            "unit": pm.get("unit") or "قطعة",
+            "loss_qty": 0.0,
+            "loss_value": 0.0,
+        })
+        qv = abs(float(pm.get("quantity", 0) or 0))
+        vv = abs(float(pm.get("total_value") or pm.get("cost_after_waste") or 0))
+        d["loss_qty"] += qv
+        d["loss_value"] += vv
+        pkg_total_loss += vv
+    packaging_rows = []
+    for d in pkg_agg.values():
+        packaging_rows.append({
+            **d,
+            "loss_qty": round(d["loss_qty"], 3),
+            "loss_value": round(d["loss_value"], 2),
+        })
+    packaging_rows.sort(key=lambda r: r["loss_value"], reverse=True)
+
+    return {
+        "rows": rows,
+        "summary": {
+            "total_cost_before_waste": round(total_before, 2),
+            "total_cost_after_waste": round(total_after, 2),
+            "total_waste_value": total_diff,
+            "total_waste_percentage": total_pct,
+            "total_loss_value": round(total_loss, 2),
+            "items_count": len(rows),
+            "orders_count": len(day_orders),
+            "period": {"start": start_date, "end": end_date},
+        },
+        "packaging_rows": packaging_rows,
+        "packaging_summary": {
+            "total_loss_value": round(pkg_total_loss, 2),
+            "items_count": len(packaging_rows),
+        },
+        "filters": {"branch_id": branch_id},
+    }
+
+
+@router.get("/reports/branch-comparison")
+async def branch_comparison_report(
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    current_user: dict = Depends(get_current_user),
+):
+    """⭐ لوحة مقارنة الفروع: نسبة الفقد + تكلفة المواد لكل فرع جنباً إلى جنب.
+    يفكّك مبيعات كل فرع لمكوّناتها المُصنّعة، ويضيف الفقد الفعلي من الجرد (branch_loss)،
+    ويرتّب الفروع من الأعلى هدراً للأقل."""
+    role = (current_user or {}).get("role", "")
+    if role not in ("admin", "super_admin", "manager", "branch_manager"):
+        raise HTTPException(status_code=403, detail="هذا التقرير متاح للمالك/المدير فقط")
+
+    db = get_db()
+    tenant_id = current_user.get("tenant_id")
+
+    if not start_date:
+        start_date = (datetime.now(timezone.utc) - timedelta(days=30)).date().isoformat()
+    if not end_date:
+        end_date = datetime.now(timezone.utc).date().isoformat()
+    s_iso = start_date + "T00:00:00"
+    e_iso = end_date + "T23:59:59"
+
+    # === الطلبات في الفترة (كل الفروع) ===
+    orders_query = {
+        "status": {"$nin": ["cancelled", "refunded"]},
+        "$or": [
+            {"business_date": {"$gte": start_date, "$lte": end_date}},
+            {"business_date": {"$exists": False}, "created_at": {"$gte": s_iso, "$lte": e_iso}},
+            {"business_date": None, "created_at": {"$gte": s_iso, "$lte": e_iso}},
+        ],
+    }
+    if tenant_id:
+        orders_query["tenant_id"] = tenant_id
+    day_orders = await db.orders.find(orders_query, {"_id": 0, "items": 1, "branch_id": 1}).to_list(50000)
+
+    # تحميل المنتجات النهائية + المُصنّعة دفعة واحدة
+    finished_ids = set()
+    for o in day_orders:
+        for it in o.get("items", []) or []:
+            if it.get("product_id"):
+                finished_ids.add(it["product_id"])
+    products_map = {}
+    if finished_ids:
+        async for p in db.products.find(
+            {"id": {"$in": list(finished_ids)}},
+            {"_id": 0, "id": 1, "manufactured_links": 1, "manufactured_product_id": 1, "manufactured_consumption_qty": 1},
+        ):
+            products_map[p["id"]] = p
+    mp_ids = set()
+    for p in products_map.values():
+        links = list(p.get("manufactured_links") or [])
+        if not links and p.get("manufactured_product_id"):
+            links = [{"manufactured_product_id": p.get("manufactured_product_id")}]
+        for lk in links:
+            if lk.get("manufactured_product_id"):
+                mp_ids.add(lk["manufactured_product_id"])
+    mp_map = {}
+    if mp_ids:
+        async for mp in db.manufactured_products.find(
+            {"id": {"$in": list(mp_ids)}},
+            {"_id": 0, "id": 1, "unit": 1, "piece_weight": 1, "piece_weight_unit": 1,
+             "raw_material_cost": 1, "raw_material_cost_after_waste": 1},
+        ):
+            mp_map[mp["id"]] = mp
+
+    # === تجميع التكلفة لكل فرع ===
+    branch_agg = {}  # branch_id -> {before, after}
+    for o in day_orders:
+        bid = o.get("branch_id") or "—"
+        agg = branch_agg.setdefault(bid, {"before": 0.0, "after": 0.0})
+        for it in o.get("items", []) or []:
+            qty_sold = float(it.get("quantity", 0) or 0)
+            if qty_sold <= 0:
+                continue
+            prod = products_map.get(it.get("product_id"))
+            if not prod:
+                continue
+            links = list(prod.get("manufactured_links") or [])
+            if not links and prod.get("manufactured_product_id"):
+                links = [{"manufactured_product_id": prod.get("manufactured_product_id"),
+                          "consumption_qty": prod.get("manufactured_consumption_qty") or 1}]
+            for lk in links:
+                mp_id = lk.get("manufactured_product_id")
+                if not mp_id:
+                    continue
+                cq = float(lk.get("consumption_qty") or 1)
+                cu = lk.get("consumption_unit")
+                mp = mp_map.get(mp_id)
+                if not mp:
+                    continue
+                if cu:
+                    cq = _br_convert_consumption(cq, cu, mp.get("unit") or "حبة",
+                                                 float(mp.get("piece_weight") or 0), mp.get("piece_weight_unit") or "")
+                consumed_qty = cq * qty_sold
+                agg["before"] += consumed_qty * float(mp.get("raw_material_cost") or 0)
+                agg["after"] += consumed_qty * float(mp.get("raw_material_cost_after_waste") or mp.get("raw_material_cost") or 0)
+
+    # === الفقد الفعلي من الجرد لكل فرع ===
+    loss_query = {"type": "branch_loss", "created_at": {"$gte": s_iso, "$lte": e_iso}}
+    if tenant_id:
+        loss_query["$or"] = [
+            {"tenant_id": tenant_id}, {"tenant_id": {"$exists": False}}, {"tenant_id": None},
+        ]
+    branch_loss = {}
+    async for lm in db.inventory_movements.find(loss_query, {"_id": 0, "branch_id": 1, "total_value": 1, "cost_after_waste": 1}):
+        bid = lm.get("branch_id") or "—"
+        branch_loss[bid] = branch_loss.get(bid, 0.0) + abs(float(lm.get("total_value") or lm.get("cost_after_waste") or 0))
+
+    # === فقد مواد التغليف من الجرد لكل فرع ===
+    pkg_loss_query = {"type": "branch_packaging_loss", "created_at": {"$gte": s_iso, "$lte": e_iso}}
+    if tenant_id:
+        pkg_loss_query["$or"] = [
+            {"tenant_id": tenant_id}, {"tenant_id": {"$exists": False}}, {"tenant_id": None},
+        ]
+    branch_pkg_loss = {}
+    async for pm in db.inventory_movements.find(pkg_loss_query, {"_id": 0, "branch_id": 1, "total_value": 1, "cost_after_waste": 1}):
+        bid = pm.get("branch_id") or "—"
+        branch_pkg_loss[bid] = branch_pkg_loss.get(bid, 0.0) + abs(float(pm.get("total_value") or pm.get("cost_after_waste") or 0))
+
+    # أسماء الفروع
+    branch_names = {}
+    async for b in db.branches.find({}, {"_id": 0, "id": 1, "name": 1}):
+        branch_names[b["id"]] = b.get("name")
+
+    # === بناء الصفوف ===
+    rows = []
+    all_bids = set(branch_agg.keys()) | set(branch_loss.keys()) | set(branch_pkg_loss.keys())
+    for bid in all_bids:
+        agg = branch_agg.get(bid, {"before": 0.0, "after": 0.0})
+        before = round(agg["before"], 2)
+        after = round(agg["after"], 2)
+        waste_value = round(after - before, 2)
+        loss_value = round(branch_loss.get(bid, 0.0), 2)
+        packaging_loss = round(branch_pkg_loss.get(bid, 0.0), 2)
+        # نسبة الفقد = (الهدر + الفقد الفعلي) / تكلفة المواد بعد الهدر
+        denom = after if after > 0 else 0
+        loss_pct = round(((waste_value + loss_value) / denom * 100), 2) if denom > 0 else 0.0
+        rows.append({
+            "branch_id": bid,
+            "branch_name": branch_names.get(bid) or (bid if bid != "—" else "غير محدد"),
+            "cost_before_waste": before,
+            "cost_after_waste": after,
+            "waste_value": waste_value,
+            "loss_value": loss_value,
+            "packaging_loss": packaging_loss,
+            "total_loss": round(waste_value + loss_value, 2),
+            "loss_percentage": loss_pct,
+        })
+
+    rows.sort(key=lambda r: r["total_loss"], reverse=True)
+    for i, r in enumerate(rows):
+        r["rank"] = i + 1
+
+    # ترتيب منفصل للفروع حسب فقد التغليف (الأعلى أولاً)
+    packaging_ranking = sorted(
+        [
+            {"branch_id": r["branch_id"], "branch_name": r["branch_name"], "packaging_loss": r["packaging_loss"]}
+            for r in rows if r["packaging_loss"] > 0
+        ],
+        key=lambda r: r["packaging_loss"], reverse=True,
+    )
+    for i, r in enumerate(packaging_ranking):
+        r["rank"] = i + 1
+
+    return {
+        "rows": rows,
+        "packaging_ranking": packaging_ranking,
+        "summary": {
+            "branches_count": len(rows),
+            "total_cost_after_waste": round(sum(r["cost_after_waste"] for r in rows), 2),
+            "total_loss": round(sum(r["total_loss"] for r in rows), 2),
+            "total_actual_loss": round(sum(r["loss_value"] for r in rows), 2),
+            "total_packaging_loss": round(sum(r["packaging_loss"] for r in rows), 2),
+            "period": {"start": start_date, "end": end_date},
+        },
+    }
+
+
+
 
 
 

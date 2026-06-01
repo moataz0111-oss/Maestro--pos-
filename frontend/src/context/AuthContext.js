@@ -9,6 +9,21 @@ const AuthContext = createContext(null);
 
 const API = API_URL;
 
+// ⭐ Interceptor عام: يرفق التوكن من localStorage مع كل طلب وقت الإرسال.
+// يمنع سباق التهيئة (مثل 403 على /api/branches عند تحميل الصفحة قبل ضبط axios.defaults).
+let __authInterceptorRegistered = false;
+if (!__authInterceptorRegistered) {
+  axios.interceptors.request.use((config) => {
+    const tok = localStorage.getItem('token');
+    if (tok && !config.headers?.Authorization) {
+      config.headers = config.headers || {};
+      config.headers.Authorization = `Bearer ${tok}`;
+    }
+    return config;
+  });
+  __authInterceptorRegistered = true;
+}
+
 // دالة لتخزين جميع ملفات التطبيق للعمل Offline
 const cacheAppAssets = () => {
   if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {

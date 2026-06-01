@@ -10,7 +10,7 @@ import requests
 import os
 import uuid
 
-BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://cogs-calc-system.preview.emergentagent.com')
+BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://branch-stock-counter.preview.emergentagent.com')
 
 class TestCustomerMenuAPI:
     """Customer Menu API Tests"""

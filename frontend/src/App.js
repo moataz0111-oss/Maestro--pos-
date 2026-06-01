@@ -9,6 +9,7 @@ import { LanguageProvider } from "./context/LanguageContext";
 import { OfflineProvider } from "./context/OfflineContext";
 import OfflineBanner from "./components/OfflineBanner";
 import WeeklyLowProfitAlert from "./components/WeeklyLowProfitAlert";
+import StockCountAlert from "./components/StockCountAlert";
 import ErrorBoundary from "./components/ErrorBoundary";
 import InstallPWA from "./components/InstallPWA";
 import React, { Suspense, lazy, useEffect, useState } from "react";
@@ -662,6 +663,7 @@ function App() {
                     <BrowserRouter>
                       <OfflineBanner />
                       <WeeklyLowProfitAlert />
+                      <StockCountAlert />
                       <AppRoutes />
                       <AutoSyncRunner />
                       <StartupSplash />

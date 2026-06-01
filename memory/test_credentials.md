@@ -33,6 +33,12 @@
 - Creates pending branch_request #9001 to "الفرع الرئيسي" asking MORE than available (100/20/30)
 - Use to test: factory adjust/reduce dialog (WarehouseManufacturing > طلبات الفروع) + kitchen reduction banner (BranchOrders)
 
+## Seeded Test Data (Branch Packaging Count - iter212)
+- Branch 'الفرع الرئيسي' (76f56acc-...) has packaging item 'علبة برغر اختبار'
+  (packaging_material_id=0c88ceb8-e71a-4d12-831b-5d7678b34c2a, unit قطعة, cost 250, quantity 100, used_quantity varies after counts).
+- Endpoints: GET /api/branch-stock-count/packaging-today?branch_id= ; POST /api/branch-stock-count/submit-packaging
+- Re-seed snippet: insert branch_packaging_inventory {tenant_id:'default', branch_id, packaging_material_id, name, unit, quantity, used_quantity, cost_per_unit}
+
 ## Notes
 - Backend runs WITHOUT --reload; restart with `sudo supervisorctl restart backend` after backend code changes.
 - MongoDB (mongod) is started manually: `mongod --dbpath /data/db --bind_ip 0.0.0.0 --port 27017 --fork --logpath /var/log/mongod.log`

@@ -1,0 +1,39 @@
+{
+  "summary": "Frontend UI testing of DailyStockCountDialog toggle + packaging count flow. Static code review of /app/frontend/src/components/DailyStockCountDialog.js confirms ALL required data-testids and logic are correctly implemented (toggle, products/packaging views, live variance/loss calc, separate submit buttons, packaging submit calls POST /api/branch-stock-count/submit-packaging with correct payload). HOWEVER, end-to-end Playwright UI verification could NOT be completed in this environment due to two pre-existing blockers that are NOT introduced by this task: (1) /api/branches returns 403 for the admin token immediately after login (Failed to fetch branches: AxiosError) — this leaves the branches dropdown empty for the session, so 'الفرع الرئيسي' option cannot be selected. (2) Clicking [data-testid=tab-inventory] (Radix Tabs) does not switch the active tab content in the automated browser — three independent attempts with force=True and scroll_into_view all left الطلبات tab active (screenshots confirm). Because the branch select cannot be populated without /api/branches succeeding, and the inventory tab cannot be activated, the open-stock-count-btn cannot be reached via UI automation. Note: branches ARE cached in localStorage from prior session (verified), so the UI logic should work for a real human user; the 403 is a backend/auth header propagation issue under automated session.",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "/api/branches", "issue": "Returns 403 immediately after successful login (token present in localStorage with tenant_id=default, role=admin). Reproduced 3 consecutive times. Caused 'Failed to fetch branches: AxiosError' console error and an empty branch dropdown. May be a tenant header / interceptor race condition (token set in localStorage but not yet attached to axios.defaults.headers when /api/branches is fired on mount).", "priority": "HIGH"}
+    ],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "BranchOrders.js tabs", "issue": "Programmatic click on [data-testid=tab-inventory] (Radix TabsTrigger) does not switch active tab in automated browser — tab content remains on 'orders'. May indicate the TabsTrigger swallows synthetic clicks, or that an overlay (splash/cached toast) intercepts. Possible workaround: add controlled `value` + `onValueChange` on the parent Tabs component so we can also drive it via URL/state for testing.", "selector": "[data-testid=tab-inventory]", "priority": "MEDIUM"}
+    ],
+    "integration_issues": [
+      {"flow": "Branch selection on inventory tab", "issue": "Cannot reach because /api/branches 403 leaves dropdown empty AND tab switch fails. Both must be resolved before E2E can proceed.", "affected_selectors": ["[role=combobox]", "[data-testid=open-stock-count-btn]"]}
+    ],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [
+    "Investigate why /api/branches returns 403 right after login despite valid JWT in localStorage. Check axios interceptor — token may not be set on axios.defaults.headers.common['Authorization'] before initial /api/branches request fires from BranchOrders mount. Likely race: token saved → setUser → component mounts and fetches before interceptor runs. Add Authorization header inside the interceptor (request-level) not the global defaults so each request reads the latest token.",
+    "Add data-testid=branch-select to the Select inside the inventory TabsContent for unambiguous selection.",
+    "(OPTIONAL) For testability: expose Tabs `value` via URL query param e.g. ?tab=inventory so direct navigation can put the user on the inventory tab without relying on Radix click handling.",
+    "Once 403 + tab switch are fixed, re-run packaging count E2E flow (toggle → fill 65 → assert variance=5, loss=1,250 → submit → success toast)."
+  ],
+  "critical_code_review_comments": [
+    "DailyStockCountDialog.js (636 lines) is approaching the 700-line threshold — products view and packaging view share a lot of boilerplate (summary cards, table header, row rendering, notes input). Recommend extracting a generic <CountTable> component that accepts items, computed totals, idField, and inputTestidPrefix. Will roughly halve file size and remove duplication.",
+    "On dialog open, fetchTemplate() AND fetchPackaging() are both fired regardless of which view the user will look at. Acceptable for fast feedback when toggling, but wastes one request if the user never opens the packaging view. Consider lazy-fetch on first switch to packaging.",
+    "handleSubmit / handleSubmitPackaging swallow axios error and just toast a generic 'فشل ...' — backend often returns useful messages (e.g. 'الجرد مسجل مسبقًا اليوم'). Surface err.response.data.detail when present.",
+    "Both submit handlers re-fetch only their own template after success but do not refresh the OTHER tab. If a user submits packaging then switches to products, the products totals could be stale if backend cross-affects them (it does NOT today, but worth a note)."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (frontend-only request)", "frontend": "0% E2E completed — code review PASS, but UI flow blocked by /api/branches 403 + Radix Tab click not activating"},
+  "test_credentials": "admin@maestroegp.com / admin123",
+  "seed_data_creation": "None created (relied on existing seeded packaging material 'علبة برغر اختبار' per request).",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "DailyStockCountDialog.js implementation is correct per static review — toggle (data-testid=count-view-toggle, toggle-products-count, toggle-packaging-count), tables (stock-count-table, packaging-count-table), packaging row testids (pkg-count-row-{id}, pkg-actual-input-{id}), summary (pkg-total-variance, pkg-total-loss-value), submit buttons (submit-stock-count, submit-packaging-count) all wired. The blockers are environmental: (1) /api/branches 403 after login — likely axios auth header race, NOT caused by this task; (2) Radix Tabs trigger click via Playwright force=True does not switch active tab. After main agent fixes the 403 (or you find a workaround like reload after login + wait > 5s), the test script in this iteration (see browser_automation calls in chat history) is ready to run as-is. The cached localStorage branches entry IS valid (branch 76f56acc-... 'الفرع الرئيسي') so a human session would work; only the automated session fails.",
+  "rca of the issue": "Two distinct environmental issues blocking E2E: (A) Branches 403 — JWT is correctly stored in localStorage immediately after login (verified: contains user_id, role=admin, tenant_id=default, exp=4933944757), but the first /api/branches GET after page mount returns 403. Hypothesis: axios.defaults.headers.common['Authorization'] is set inside an effect that runs AFTER BranchOrders' initial useEffect → fetchBranches. Fix: move auth header into a request interceptor that always reads from localStorage at send time. (B) Tab switch — Radix TabsTrigger uses an internal data-state mechanism; Playwright force=true click dispatches synthetic event but Radix may require the original 'pointerdown'/'pointerup' sequence. Workaround for testing: click via page.dispatch_event('click') with bubbles, or add Tabs `value`/`onValueChange` controlled state synced to URL ?tab=inventory."
+}

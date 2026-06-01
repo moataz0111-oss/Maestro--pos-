@@ -1,0 +1,57 @@
+{
+  "summary": "اختبار 3 تحسينات جديدة + regression. كل الاختبارات الخلفية اجتازت (6/6) وكل الواجهات الجديدة الثلاث تعمل (Bulk-delete، Sparkline، Custom units لكل من المواد الخام والورقيات).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_bulk_delete_branch_requests_iter209.py",
+    "/app/test_reports/pytest/iter209.xml"
+  ],
+  "tested_features": {
+    "bulk_delete_backend": {
+      "POST /api/branch-requests/bulk-delete - empty list": "400 OK",
+      "POST /api/branch-requests/bulk-delete - missing field": "400 OK",
+      "POST /api/branch-requests/bulk-delete - invalid type": "400 OK",
+      "POST /api/branch-requests/bulk-delete - unknown ids": "200 deleted_count=0 OK",
+      "POST /api/branch-requests/bulk-delete - success path": "200 deleted_count=3 OK، تأكدنا أن السجلات حُذفت فعلياً في mongo"
+    },
+    "bulk_delete_ui": {
+      "branch-req-checkbox-{id}": "ظهرت 3 صناديق اختيار (لـ 3 سجلات تجريبية في mongo)",
+      "branch-req-select-all": "موجود ومرئي ويعمل",
+      "branch-req-bulk-delete": "يظهر بعد التحديد بصياغة 'حذف المحدد (n)' وتمت العملية بنجاح، وانخفض العدد إلى 0 بعد التأكيد"
+    },
+    "sparkline": {
+      "batch-cost-sparkline": "يظهر داخل batch-history-dialog لمنتج 'برغر اختبار' (3 دفعات)، يعرض 'مستقرة' + 'الأقدم: 2,650 IQD' + 'الأحدث: 2,650 IQD' (السلوك صحيح حيث جميع الدفعات بنفس التكلفة، كما ذُكر في التعليمات)"
+    },
+    "custom_units": {
+      "raw-material-unit-select → 'أخرى (مخصّص)...'": "ok، raw-material-custom-unit ظهر وقُبلت قيمة 'شريحة'",
+      "packaging-unit-select → 'أخرى (مخصّص)...'": "ok، packaging-custom-unit ظهر وقُبلت قيمة 'لفّة'"
+    },
+    "regression_p3": {
+      "batch-history-btn-{id}": "ok يعمل ويفتح حوار سجل الدفعات",
+      "branch-req-suggestion": "غير ظاهر في هذه الجلسة لأن السجلات التجريبية لم تحتوي على أسماء منتجات قريبة من مواد المخزن المسجلة (شرط ظهور الاقتراح). التيستيد موجود في الكود ولم يتغير منذ iteration_208."
+    }
+  },
+  "action_items": [],
+  "critical_code_review_comments": [
+    "WarehouseManufacturing.js يبلغ 9231 سطراً — كبير جداً، يُنصح بتقسيمه إلى مكوّنات فرعية حسب التبويب (Warehouse, BranchRequests, Manufacturing, Packaging) لتسهيل الصيانة والاختبار.",
+    "حوار splash/loader العائم بـ z-index>=9000 ويغطي الشاشة كاملة أحياناً (تطلب من Playwright إخفاؤه يدوياً)، يُنصح بإضافة data-testid='splash-overlay' مع pointer-events:none في وضع الإنتاج عند انتهاء التحميل، أو إضافة فحص window.__APP_READY__.",
+    "bulk-delete endpoint يستخدم body params (dict). أفضل ممارسة استخدام Pydantic model للتحقق من النوع وإعطاء 422 بدلاً من 400 للحالات غير الصالحة، ولكن السلوك الحالي يفي بالغرض."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_bulk_delete_branch_requests_iter209.py (جديد)"
+  ],
+  "success_rate": {"backend": "100% (6/6)", "frontend": "100% للميزات الجديدة الثلاث"},
+  "test_credentials": "admin@maestroegp.com / admin123 (tenant default)",
+  "seed_data_creation": "تم إدراج 3 سجلات branch_requests مؤقتاً في mongo (branch_name='TEST_UI_BULK') وحُذفت جميعها عبر الـ UI bulk-delete وعبر cleanup الإضافي. لا يوجد بيانات تجريبية متبقية.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "ملاحظات: (1) أثناء اختبار الـ UI، تظهر طبقة splash بـ z-index>=9000 تعترض النقرات على Radix Tabs — الحل: page.evaluate لإخفائها عبر style.display='none' (لا تستخدم el.remove() لأنها تسبب React removeChild errors). (2) لتفعيل تبويبات Radix عبر JS، استخدم تسلسل أحداث pointerdown/mousedown/pointerup/mouseup/click بدلاً من .click() المباشر. (3) لاختبار branch-req-suggestion يجب إنشاء طلب فرع يحتوي على اسم منتج يشبه (fuzzy) اسم مادة في raw_materials. (4) DB_NAME=maestro_pos.",
+  "rca_of_the_issue": "لا توجد مشاكل."
+}

@@ -28,6 +28,9 @@ import {
   Building2,
   RefreshCw,
   AlertTriangle,
+  ChevronDown,
+  ChevronLeft,
+  Package,
 } from 'lucide-react';
 import { useTranslation } from '../hooks/useTranslation';
 import { formatPrice } from '../utils/currency';
@@ -60,8 +63,9 @@ export default function WasteEfficiencyReport({ branches = [] }) {
   const [endDate, setEndDate] = useState(isoDay(today));
   const [branchId, setBranchId] = useState('all'); // فرع المطبخ
   const [receivingBranchId, setReceivingBranchId] = useState('all'); // الفرع المستلم
-  const [data, setData] = useState({ rows: [], summary: null });
+  const [data, setData] = useState({ rows: [], summary: null, packaging_rows: [], packaging_summary: null });
   const [loading, setLoading] = useState(false);
+  const [expandedRow, setExpandedRow] = useState(null); // معرّف الصف المفتوح لعرض تفصيل المكوّنات
 
   const applyQuickRange = (key) => {
     setRangeKey(key);
@@ -82,17 +86,17 @@ export default function WasteEfficiencyReport({ branches = [] }) {
       const params = {
         start_date: startDate,
         end_date: endDate,
-        group_by: groupBy,
       };
       if (branchId !== 'all') params.branch_id = branchId;
-      if (receivingBranchId !== 'all') params.receiving_branch_id = receivingBranchId;
-      const res = await axios.get(`${API}/reports/waste-efficiency`, { params });
+      const res = await axios.get(`${API}/reports/branch-waste-efficiency`, { params });
       setData({
         rows: res.data?.rows || [],
         summary: res.data?.summary || null,
+        packaging_rows: res.data?.packaging_rows || [],
+        packaging_summary: res.data?.packaging_summary || null,
       });
     } catch (_e) {
-      setData({ rows: [], summary: null });
+      setData({ rows: [], summary: null, packaging_rows: [], packaging_summary: null });
     } finally {
       setLoading(false);
     }
@@ -101,7 +105,7 @@ export default function WasteEfficiencyReport({ branches = [] }) {
   useEffect(() => {
     fetchReport();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [startDate, endDate, branchId, receivingBranchId, groupBy]);
+  }, [startDate, endDate, branchId]);
 
   const summary = data.summary;
   const wastePct = summary?.total_waste_percentage || 0;
@@ -117,8 +121,8 @@ export default function WasteEfficiencyReport({ branches = [] }) {
             <div className="flex items-center gap-2">
               <Percent className="h-5 w-5 text-orange-500" />
               <div>
-                <h3 className="font-bold text-lg">{t('تقرير كفاءة الهدر')}</h3>
-                <p className="text-xs text-muted-foreground">{t('مقارنة الكلفة قبل وبعد الهدر — لتقييم كفاءة المطابخ')}</p>
+                <h3 className="font-bold text-lg">{t('تقرير هدر وتكلفة مواد الفروع')}</h3>
+                <p className="text-xs text-muted-foreground">{t('تكلفة المنتجات المُصنّعة المُستهلكة في الفروع عبر البيع + الفقد الفعلي من الجرد')}</p>
               </div>
             </div>
             <Button variant="outline" size="sm" onClick={fetchReport} disabled={loading} data-testid="refresh-waste-report">
@@ -143,7 +147,7 @@ export default function WasteEfficiencyReport({ branches = [] }) {
           </div>
 
           {/* فلاتر مخصصة */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <div>
               <Label className="text-xs">{t('من تاريخ')}</Label>
               <Input
@@ -165,27 +169,10 @@ export default function WasteEfficiencyReport({ branches = [] }) {
             <div>
               <Label className="text-xs flex items-center gap-1">
                 <Building2 className="h-3 w-3" />
-                {t('فرع المطبخ (التصنيع)')}
+                {t('الفرع')}
               </Label>
               <Select value={branchId} onValueChange={setBranchId}>
-                <SelectTrigger data-testid="waste-kitchen-branch">
-                  <SelectValue placeholder={t('كل المطابخ')} />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">{t('كل المطابخ')}</SelectItem>
-                  {branches.map(b => (
-                    <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label className="text-xs flex items-center gap-1">
-                <Building2 className="h-3 w-3" />
-                {t('الفرع المستلم')}
-              </Label>
-              <Select value={receivingBranchId} onValueChange={setReceivingBranchId}>
-                <SelectTrigger data-testid="waste-receiving-branch">
+                <SelectTrigger data-testid="waste-branch">
                   <SelectValue placeholder={t('كل الفروع')} />
                 </SelectTrigger>
                 <SelectContent>
@@ -204,32 +191,32 @@ export default function WasteEfficiencyReport({ branches = [] }) {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <Card className="border-blue-500/30 bg-blue-500/5">
           <CardContent className="p-3">
-            <p className="text-xs text-muted-foreground">{t('إجمالي الكلفة قبل الهدر')}</p>
+            <p className="text-xs text-muted-foreground">{t('تكلفة المواد قبل الهدر')}</p>
             <p className="text-xl font-bold text-blue-600 tabular-nums" data-testid="total-cost-before">
               {formatPrice(summary?.total_cost_before_waste || 0)}
             </p>
-            <p className="text-[10px] text-muted-foreground mt-1">{t('للمقارنة مع فواتير الموردين')}</p>
+            <p className="text-[10px] text-muted-foreground mt-1">{t('تكلفة الوصفة النظرية للمباع')}</p>
           </CardContent>
         </Card>
         <Card className="border-emerald-500/30 bg-emerald-500/5">
           <CardContent className="p-3">
-            <p className="text-xs text-muted-foreground">{t('إجمالي الكلفة بعد الهدر')}</p>
+            <p className="text-xs text-muted-foreground">{t('تكلفة المواد بعد الهدر')}</p>
             <p className="text-xl font-bold text-emerald-600 tabular-nums" data-testid="total-cost-after">
               {formatPrice(summary?.total_cost_after_waste || 0)}
             </p>
-            <p className="text-[10px] text-muted-foreground mt-1">{t('الكلفة الفعلية المستهلكة')}</p>
+            <p className="text-[10px] text-muted-foreground mt-1">{t('بنسبة الهدر المعرّفة')}</p>
           </CardContent>
         </Card>
-        <Card className={`${wasteValue > 0 ? 'border-red-500/30 bg-red-500/5' : 'border-muted'}`}>
+        <Card className={`${(summary?.total_loss_value || 0) > 0 ? 'border-red-500/30 bg-red-500/5' : 'border-muted'}`}>
           <CardContent className="p-3">
             <p className="text-xs text-muted-foreground flex items-center gap-1">
               <TrendingDown className="h-3 w-3 text-red-500" />
-              {t('قيمة الفاقد')}
+              {t('الفقد الفعلي (الجرد)')}
             </p>
-            <p className="text-xl font-bold text-red-600 tabular-nums" data-testid="total-waste-value">
-              {formatPrice(wasteValue)}
+            <p className="text-xl font-bold text-red-600 tabular-nums" data-testid="total-loss-value">
+              {formatPrice(summary?.total_loss_value || 0)}
             </p>
-            <p className="text-[10px] text-muted-foreground mt-1">{t('الفرق المستهلك بسبب الهدر')}</p>
+            <p className="text-[10px] text-muted-foreground mt-1">{t('فرق المبيعات والمتبقي من الجرد')}</p>
           </CardContent>
         </Card>
         <Card className={`${wastePct > 10 ? 'border-red-500/30 bg-red-500/5' : wastePct > 5 ? 'border-orange-500/30 bg-orange-500/5' : 'border-emerald-500/30 bg-emerald-500/5'}`}>
@@ -248,74 +235,114 @@ export default function WasteEfficiencyReport({ branches = [] }) {
         </Card>
       </div>
 
-      {/* اختيار التجميع */}
-      <Tabs value={groupBy} onValueChange={setGroupBy}>
-        <TabsList className="grid grid-cols-2 w-full max-w-xl">
-          <TabsTrigger value="product" className="gap-2" data-testid="tab-by-product">
-            <Factory className="h-4 w-4" />
-            {t('حسب المنتج المصنع (بعد التصنيع — للفروع)')}
-          </TabsTrigger>
-          <TabsTrigger value="raw_material" className="gap-2" data-testid="tab-by-raw">
-            <Beaker className="h-4 w-4" />
-            {t('حسب المادة الخام (قبل التصنيع)')}
-          </TabsTrigger>
-        </TabsList>
+      {/* جدول التقرير */}
+      <Card>
+        <CardContent className="p-4">
+          {data.rows.length === 0 ? (
+            <div className="text-center py-12 text-muted-foreground" data-testid="waste-empty">
+              <AlertTriangle className="h-10 w-10 mx-auto mb-2 opacity-40" />
+              <p>{t('لا توجد بيانات لهذه الفترة')}</p>
+              <p className="text-xs mt-1">{t('سيظهر التقرير بعد بيع منتجات في الفروع خلال الفترة المحددة')}</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm" data-testid="waste-table">
+                <thead className="bg-muted/50">
+                  <tr>
+                    <th className="px-3 py-2 text-right">{t('المنتج المُصنّع')}</th>
+                    <th className="px-3 py-2 text-center">{t('الكمية المُستهلكة (مباعة)')}</th>
+                    <th className="px-3 py-2 text-center">{t('تكلفة قبل الهدر')}</th>
+                    <th className="px-3 py-2 text-center">{t('تكلفة بعد الهدر')}</th>
+                    <th className="px-3 py-2 text-center">{t('قيمة الهدر')}</th>
+                    <th className="px-3 py-2 text-center">{t('الفقد الفعلي (الجرد)')}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.rows.map(r => (
+                    <tr key={r.id} className="border-t border-border hover:bg-muted/30" data-testid={`waste-row-${r.id}`}>
+                      <td className="px-3 py-2 font-medium">{r.name}</td>
+                      <td className="px-3 py-2 text-center tabular-nums">
+                        {(r.quantity || 0).toLocaleString()} <span className="text-[10px] text-muted-foreground">{r.unit}</span>
+                      </td>
+                      <td className="px-3 py-2 text-center text-blue-600 tabular-nums">{formatPrice(r.cost_before_waste)}</td>
+                      <td className="px-3 py-2 text-center text-emerald-600 tabular-nums">{formatPrice(r.cost_after_waste)}</td>
+                      <td className="px-3 py-2 text-center text-orange-600 tabular-nums">
+                        {formatPrice(r.waste_value)}
+                        {r.waste_percentage > 0 && <span className="text-[10px] text-muted-foreground"> ({r.waste_percentage.toFixed(1)}%)</span>}
+                      </td>
+                      <td className="px-3 py-2 text-center tabular-nums">
+                        {(r.loss_value || 0) > 0 ? (
+                          <span className="text-red-600 font-medium" data-testid={`waste-loss-${r.id}`}>
+                            <TrendingDown className="h-3 w-3 inline ml-1 text-red-500" />
+                            {formatPrice(r.loss_value)}
+                            {(r.loss_qty || 0) > 0 && <span className="block text-[10px] text-muted-foreground">{(r.loss_qty).toLocaleString()} {r.unit}</span>}
+                          </span>
+                        ) : (
+                          <span className="text-emerald-600 text-xs">{t('مطابق')}</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
-        <TabsContent value={groupBy} className="space-y-2">
-          <Card>
-            <CardContent className="p-4">
-              {data.rows.length === 0 ? (
-                <div className="text-center py-12 text-muted-foreground" data-testid="waste-empty">
-                  <AlertTriangle className="h-10 w-10 mx-auto mb-2 opacity-40" />
-                  <p>{t('لا توجد بيانات لهذه الفترة')}</p>
-                  <p className="text-xs mt-1">{t('سيظهر التقرير بعد إنتاج منتجات مصنّعة في الفترة المحددة')}</p>
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm" data-testid="waste-table">
-                    <thead className="bg-muted/50">
-                      <tr>
-                        <th className="px-3 py-2 text-right">{groupBy === 'product' ? t('المنتج') : t('المادة الخام')}</th>
-                        <th className="px-3 py-2 text-center">{t('الكمية المُنتجة/المستهلكة')}</th>
-                        <th className="px-3 py-2 text-center">{t('الكلفة قبل الهدر')}</th>
-                        <th className="px-3 py-2 text-center">{t('الكلفة بعد الهدر')}</th>
-                        <th className="px-3 py-2 text-center">{t('قيمة الفاقد')}</th>
-                        <th className="px-3 py-2 text-center">{t('نسبة الهدر')}</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {data.rows.map(r => {
-                        const pctColor = r.waste_percentage > 10 ? 'text-red-600 bg-red-100 dark:bg-red-950/40' :
-                                         r.waste_percentage > 5 ? 'text-orange-600 bg-orange-100 dark:bg-orange-950/40' :
-                                         'text-emerald-600 bg-emerald-100 dark:bg-emerald-950/40';
-                        return (
-                          <tr key={r.id} className="border-t border-border hover:bg-muted/30" data-testid={`waste-row-${r.id}`}>
-                            <td className="px-3 py-2 font-medium">{r.name}</td>
-                            <td className="px-3 py-2 text-center tabular-nums">
-                              {(r.quantity || 0).toLocaleString()} <span className="text-[10px] text-muted-foreground">{r.unit}</span>
-                            </td>
-                            <td className="px-3 py-2 text-center text-blue-600 tabular-nums">{formatPrice(r.cost_before_waste)}</td>
-                            <td className="px-3 py-2 text-center text-emerald-600 tabular-nums">{formatPrice(r.cost_after_waste)}</td>
-                            <td className="px-3 py-2 text-center text-red-600 tabular-nums">
-                              {r.waste_value > 0 && <TrendingUp className="h-3 w-3 inline ml-1 text-red-500" />}
-                              {formatPrice(r.waste_value)}
-                            </td>
-                            <td className="px-3 py-2 text-center">
-                              <Badge className={pctColor}>
-                                {r.waste_percentage.toFixed(2)}%
-                              </Badge>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+      {/* ════════ قسم فقد مواد التغليف ════════ */}
+      <Card data-testid="packaging-waste-section">
+        <CardContent className="p-4 space-y-3">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <Package className="h-5 w-5 text-amber-500" />
+              <div>
+                <h3 className="font-bold text-base">{t('فقد مواد التغليف')}</h3>
+                <p className="text-xs text-muted-foreground">{t('العلب والأكياس المفقودة من جرد التغليف في الفروع')}</p>
+              </div>
+            </div>
+            <Badge className={`${(data.packaging_summary?.total_loss_value || 0) > 0 ? 'bg-red-500/15 text-red-700' : 'bg-emerald-500/15 text-emerald-700'} text-sm`}>
+              {t('إجمالي فقد التغليف')}: <span className="font-bold tabular-nums mr-1" data-testid="packaging-total-loss">{formatPrice(data.packaging_summary?.total_loss_value || 0)}</span>
+            </Badge>
+          </div>
+
+          {(data.packaging_rows || []).length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground" data-testid="packaging-waste-empty">
+              <Package className="h-8 w-8 mx-auto mb-2 opacity-40" />
+              <p className="text-sm">{t('لا يوجد فقد تغليف مسجّل لهذه الفترة')}</p>
+              <p className="text-[11px] mt-1">{t('يظهر هنا عند تسجيل جرد التغليف ووجود نقص بين المتوقع والفعلي')}</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm" data-testid="packaging-waste-table">
+                <thead className="bg-muted/50">
+                  <tr>
+                    <th className="px-3 py-2 text-right">{t('مادة التغليف')}</th>
+                    <th className="px-3 py-2 text-center">{t('الكمية المفقودة')}</th>
+                    <th className="px-3 py-2 text-center">{t('قيمة الفقد')}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.packaging_rows.map(r => (
+                    <tr key={r.id} className="border-t border-border hover:bg-muted/30" data-testid={`packaging-waste-row-${r.id}`}>
+                      <td className="px-3 py-2 font-medium">{r.name}</td>
+                      <td className="px-3 py-2 text-center tabular-nums">
+                        {(r.loss_qty || 0).toLocaleString()} <span className="text-[10px] text-muted-foreground">{r.unit}</span>
+                      </td>
+                      <td className="px-3 py-2 text-center tabular-nums">
+                        <span className="text-red-600 font-medium">
+                          <TrendingDown className="h-3 w-3 inline ml-1 text-red-500" />
+                          {formatPrice(r.loss_value)}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

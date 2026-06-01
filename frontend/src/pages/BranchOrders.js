@@ -31,6 +31,7 @@ import {
   Factory,
   Box,
   Percent,
+  Trophy,
   ClipboardCheck,
   History,
   Printer
@@ -57,6 +58,7 @@ import {
 } from '../components/ui/tabs';
 import { Badge } from '../components/ui/badge';
 import WasteEfficiencyReport from '../components/WasteEfficiencyReport';
+import BranchComparisonReport from '../components/BranchComparisonReport';
 import DailyStockCountDialog from '../components/DailyStockCountDialog';
 import StockCountHistoryDialog from '../components/StockCountHistoryDialog';
 import { useAuth } from '../context/AuthContext';
@@ -158,6 +160,27 @@ export default function BranchOrders() {
   useEffect(() => {
     fetchData();
   }, [selectedTab, selectedBranch]);
+
+  // ⭐ فتح الجرد عند النقر على تنبيه الجرد المعلّق (من StockCountAlert العام)
+  useEffect(() => {
+    const openCount = (branchId) => {
+      if (!branchId) return;
+      setSelectedBranch(branchId);
+      setShowStockCountDialog(true);
+    };
+    // من sessionStorage عند الوصول من شاشة أخرى
+    try {
+      const pendingBranch = sessionStorage.getItem('open_stock_count_branch');
+      if (pendingBranch) {
+        sessionStorage.removeItem('open_stock_count_branch');
+        setTimeout(() => openCount(pendingBranch), 400);
+      }
+    } catch (e) { /* */ }
+    // من حدث مباشر عندما نكون بالفعل في الشاشة
+    const handler = (e) => openCount(e.detail?.branch_id);
+    window.addEventListener('emergent:open-stock-count', handler);
+    return () => window.removeEventListener('emergent:open-stock-count', handler);
+  }, []);
   const fetchData = async () => {
     setLoading(true);
     try {
@@ -436,7 +459,7 @@ export default function BranchOrders() {
       <main className="max-w-7xl mx-auto p-4 space-y-4">
         {/* Tabs */}
         <Tabs value={selectedTab} onValueChange={setSelectedTab}>
-          <TabsList className={`grid ${canViewWasteReport ? 'grid-cols-3' : 'grid-cols-2'} w-full max-w-xl`}>
+          <TabsList className={`grid ${canViewWasteReport ? 'grid-cols-4' : 'grid-cols-2'} w-full max-w-2xl`}>
             <TabsTrigger value="orders" className="gap-2" data-testid="tab-orders">
               <Truck className="h-4 w-4" />
               {t('الطلبات')}
@@ -449,6 +472,12 @@ export default function BranchOrders() {
               <TabsTrigger value="waste" className="gap-2" data-testid="tab-waste">
                 <Percent className="h-4 w-4" />
                 {t('كفاءة الهدر')}
+              </TabsTrigger>
+            )}
+            {canViewWasteReport && (
+              <TabsTrigger value="comparison" className="gap-2" data-testid="tab-comparison">
+                <Trophy className="h-4 w-4" />
+                {t('مقارنة الفروع')}
               </TabsTrigger>
             )}
           </TabsList>
@@ -882,11 +911,17 @@ export default function BranchOrders() {
               </div>
             )}
           </TabsContent>
-          {/* كفاءة الهدر - للمالك/المدير فقط */}
+          {/* كفاءة الهدر + مقارنة الفروع - للمالك/المدير فقط */}
           {canViewWasteReport && (
+            <>
             <TabsContent value="waste" className="space-y-4">
               <WasteEfficiencyReport branches={branches} />
             </TabsContent>
+
+            <TabsContent value="comparison" className="space-y-4">
+              <BranchComparisonReport />
+            </TabsContent>
+            </>
           )}
         </Tabs>
       </main>

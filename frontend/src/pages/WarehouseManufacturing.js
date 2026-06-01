@@ -11,6 +11,7 @@ import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Textarea } from '../components/ui/textarea';
 import { Badge } from '../components/ui/badge';
+import { Checkbox } from '../components/ui/checkbox';
 import {
   ArrowRight,
   Plus,
@@ -49,7 +50,8 @@ import {
   Check,
   AlertCircle,
   Calculator,
-  Wrench
+  Wrench,
+  History
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -425,6 +427,10 @@ export default function WarehouseManufacturing() {
   const [yieldVarianceData, setYieldVarianceData] = useState({ records: [], summary: {} });
   const [yieldVarianceFilter, setYieldVarianceFilter] = useState({ product_id: '', days: 30 });
   const [loadingYieldVariance, setLoadingYieldVariance] = useState(false);
+  // 📦 سجل دفعات الإنتاج
+  const [showBatchHistoryDialog, setShowBatchHistoryDialog] = useState(false);
+  const [batchHistoryData, setBatchHistoryData] = useState(null);
+  const [loadingBatchHistory, setLoadingBatchHistory] = useState(false);
   const [addStockQuantity, setAddStockQuantity] = useState(1);  // كمية زيادة المخزون
   const [addStockUnit, setAddStockUnit] = useState('');  // ⭐ وحدة الزيادة (قطعة/غرام/شريحة...)
   const [addRawMaterialStockQuantity, setAddRawMaterialStockQuantity] = useState(1);  // كمية زيادة المادة الخام
@@ -906,6 +912,56 @@ export default function WarehouseManufacturing() {
       setSubmitting(false);
     }
   };
+
+  // ⭐ ربط عنصر غير مطابق في طلب فرع بالمنتج المقترح ("هل تقصد؟" قابل للنقر)
+  const [relinkingItem, setRelinkingItem] = useState(null); // `${requestId}-${idx}`
+  const handleRelinkBranchItem = async (request, idx, suggestion) => {
+    if (!suggestion?.id) return;
+    const key = `${request.id}-${idx}`;
+    try {
+      setRelinkingItem(key);
+      await axios.put(`${API}/branch-requests/${request.id}/relink-item`, {
+        item_index: idx,
+        product_id: suggestion.id,
+      }, { headers });
+      toast.success(`${t('تم ربط العنصر بـ')} ${suggestion.name}`);
+      await fetchData();
+    } catch (error) {
+      showApiError(error, t('فشل في ربط العنصر'));
+    } finally {
+      setRelinkingItem(null);
+    }
+  };
+
+  // ⭐ تحديد جماعي لطلبات الفروع + حذف جماعي
+  const [selectedRequestIds, setSelectedRequestIds] = useState([]);
+  const toggleRequestSelected = (id) => {
+    setSelectedRequestIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  };
+  const toggleSelectAllRequests = () => {
+    setSelectedRequestIds(prev => prev.length === branchRequests.length ? [] : branchRequests.map(r => r.id));
+  };
+  const handleBulkDeleteRequests = async () => {
+    if (selectedRequestIds.length === 0) return;
+    if (!window.confirm(`${t('هل تريد حذف')} ${selectedRequestIds.length} ${t('طلب نهائياً؟ لا يمكن التراجع.')}`)) return;
+    try {
+      setSubmitting(true);
+      const res = await axios.post(`${API}/branch-requests/bulk-delete`, { request_ids: selectedRequestIds }, { headers });
+      toast.success(`${t('تم حذف')} ${res.data?.deleted_count ?? selectedRequestIds.length} ${t('طلب')}`);
+      setSelectedRequestIds([]);
+      await fetchData();
+    } catch (error) {
+      showApiError(error, t('فشل الحذف الجماعي'));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // ⭐ وحدات حرة مخصّصة (نص حر) في نماذج المواد الخام والورقيات
+  const [rawUnitCustom, setRawUnitCustom] = useState(false);
+  const [pkgUnitCustom, setPkgUnitCustom] = useState(false);
+
+
 
   // 🔁 تحويل وحدات الوزن/الحجم — يُرجع الكمية بوحدة المادة الأصلية + ملاحظة بالتحويل
   // مثال: المستخدم أدخل 100 غرام، والمادة بالكغم → يُحوَّل إلى 0.1 كغم.
@@ -1567,10 +1623,81 @@ export default function WarehouseManufacturing() {
     }));
   };
 
-  const updateEditIngredientQty = (index, qty) => {
+  // ⭐ تحويل وزني عبر وزن القطعة لمنتج مُصنّع كمكوّن (غرام/كغم/مل/لتر ↔ حبة)
+  const _MFG_W = { 'غرام': 1, 'كغم': 1000, 'كيلو': 1000, 'كجم': 1000, 'gram': 1, 'kg': 1000, 'مل': 1, 'لتر': 1000, 'ml': 1, 'liter': 1000, 'l': 1000 };
+
+  // ⭐ تحويل كمية مُدخلة بوحدة عرض إلى الوحدة الأساسية للمكوّن (للتكلفة) — يدعم الوزن/الحجم + تعريف القطعة
+  const _recipeInputToBase = (ing, inputQty, inputUnit) => {
+    const baseUnit = ing.unit;
+    const n = Number(inputQty) || 0;
+    if (!inputUnit || inputUnit === baseUnit) return n;
+    let conv = convertQuantityToMaterialUnit(n, inputUnit, baseUnit);
+    if (!conv.converted) {
+      // منتج مُصنّع كمكوّن: حوّل عبر وزن القطعة (غرام/كغم → حبة)
+      if (ing.manufactured_product_id) {
+        const mp = manufacturedProducts.find(m => m.id === ing.manufactured_product_id);
+        const pw = Number(mp?.piece_weight || 0);
+        const fIn = _MFG_W[inputUnit];
+        const fPw = _MFG_W[mp?.piece_weight_unit || 'غرام'];
+        if (fIn && pw > 0 && fPw) {
+          const pieceGrams = pw * fPw;
+          return Math.round(((n * fIn) / pieceGrams) * 1e6) / 1e6;
+        }
+      }
+      const packInfo = _packInfoFor(ing.raw_material_id);
+      const packConv = convertWithPackInfo(n, inputUnit, baseUnit, packInfo);
+      if (packConv) conv = packConv;
+    }
+    return conv.converted ? conv.qty : n;
+  };
+
+  // ⭐ العكس: من الوحدة الأساسية إلى وحدة العرض (لتحديث الرقم المعروض عند تغيير الوحدة مع الحفاظ على نفس الكمية الفعلية)
+  const _recipeBaseToInput = (ing, baseQty, targetUnit) => {
+    const baseUnit = ing.unit;
+    const n = Number(baseQty) || 0;
+    if (!targetUnit || targetUnit === baseUnit) return n;
+    let conv = convertQuantityToMaterialUnit(n, baseUnit, targetUnit);
+    if (conv.converted) return conv.qty;
+    // منتج مُصنّع: حبة → غرام/كغم عبر وزن القطعة
+    if (ing.manufactured_product_id) {
+      const mp = manufacturedProducts.find(m => m.id === ing.manufactured_product_id);
+      const pw = Number(mp?.piece_weight || 0);
+      const fTarget = _MFG_W[targetUnit];
+      const fPw = _MFG_W[mp?.piece_weight_unit || 'غرام'];
+      if (fTarget && pw > 0 && fPw) {
+        const totalGrams = n * pw * fPw; // عدد القطع × وزن القطعة بالغرام
+        return Math.round((totalGrams / fTarget) * 1e6) / 1e6;
+      }
+    }
+    // عكس تعريف القطعة: أساسي(قطعة) × وزن القطعة → بوحدة pack ثم إلى الوحدة الهدف
+    const pi = _packInfoFor(ing.raw_material_id);
+    if (pi && pi.pack_quantity > 0) {
+      const qtyInPackUnit = n * pi.pack_quantity; // بوحدة pi.pack_unit
+      if (targetUnit === pi.pack_unit) return Math.round(qtyInPackUnit * 1e6) / 1e6;
+      const cc = convertQuantityToMaterialUnit(qtyInPackUnit, pi.pack_unit, targetUnit);
+      if (cc.converted) return cc.qty;
+      return Math.round(qtyInPackUnit * 1e6) / 1e6;
+    }
+    return n;
+  };
+
+  // ⭐ تحديث مكوّن موجود بوحدة عرض مختارة (الكمية و/أو الوحدة) — يحوّل تلقائياً للوحدة الأساسية للتكلفة
+  const updateEditIngredientInput = (index, newQty, newUnit) => {
     setEditRecipeForm(prev => ({
       ...prev,
-      recipe: prev.recipe.map((ing, i) => i === index ? { ...ing, quantity: parseFloat(qty) || 0 } : ing)
+      recipe: prev.recipe.map((ing, i) => {
+        if (i !== index) return ing;
+        if (newUnit != null && newQty == null) {
+          // تغيير الوحدة فقط: نحافظ على الكمية الفعلية (الأساسية) ونُعيد حساب الرقم المعروض
+          const dispQty = _recipeBaseToInput(ing, ing.quantity, newUnit);
+          return { ...ing, input_unit: newUnit, input_quantity: Math.round(dispQty * 1e6) / 1e6 };
+        }
+        // تغيير الكمية: نحوّل المُدخل (بوحدة العرض) → الأساسية للتكلفة
+        const inputUnit = ing.input_unit || ing.unit;
+        const inputQty = parseFloat(newQty) || 0;
+        const baseQty = _recipeInputToBase(ing, inputQty, inputUnit);
+        return { ...ing, input_unit: inputUnit, input_quantity: inputQty, quantity: baseQty };
+      })
     }));
   };
 
@@ -1603,6 +1730,11 @@ export default function WarehouseManufacturing() {
             cost_per_unit: Number(ing.cost_per_unit) || 0,
             waste_percentage: Number(ing.waste_percentage) || 0,
           };
+          // ⭐ احفظ وحدة العرض المختارة وكميتها لتبقى بعد الحفظ/إعادة الفتح (extra allowed بالموديل)
+          if (ing.input_unit && ing.input_unit !== ing.unit) {
+            base.input_unit = ing.input_unit;
+            base.input_quantity = Number(ing.input_quantity) || 0;
+          }
           // ⭐ احفظ المعرّف الصحيح بحسب نوع المكوّن (مادة خام أو منتج مُصنّع)
           if (ing.manufactured_product_id) {
             base.manufactured_product_id = ing.manufactured_product_id;
@@ -2154,6 +2286,22 @@ export default function WarehouseManufacturing() {
     setShowYieldVarianceDialog(true);
     fetchYieldVariances(f);
   };
+
+  // 📦 فتح سجل دفعات الإنتاج لمنتج مُصنّع
+  const openBatchHistoryDialog = async (product) => {
+    setShowBatchHistoryDialog(true);
+    setBatchHistoryData(null);
+    setLoadingBatchHistory(true);
+    try {
+      const res = await axios.get(`${API}/manufactured-products/${product.id}/batches`, { headers });
+      setBatchHistoryData(res.data);
+    } catch (error) {
+      showApiError(error, t('فشل في جلب سجل الدفعات'));
+      setBatchHistoryData({ batches: [], summary: {}, product_name: product.name, unit: product.unit });
+    } finally {
+      setLoadingBatchHistory(false);
+    }
+  };
   
   // زيادة كمية المنتج المصنّع (مع خصم المواد الخام مثل التصنيع)
   const handleAddStock = async () => {
@@ -2702,7 +2850,7 @@ export default function WarehouseManufacturing() {
                 <BoxSelect className="h-4 w-4" />
                 {t('طلبات التصنيع')}
                 {manufacturingRequests.filter(r => r.status === 'pending').length > 0 && (
-                  <Badge className="absolute -top-2 -right-2 bg-orange-500 text-white text-xs px-1.5 py-0.5 rounded-full">
+                  <Badge className="absolute -top-2 -right-2 bg-orange-500 text-white text-xs px-1.5 py-0.5 rounded-full pointer-events-none">
                     {manufacturingRequests.filter(r => r.status === 'pending').length}
                   </Badge>
                 )}
@@ -2714,7 +2862,7 @@ export default function WarehouseManufacturing() {
                 <Box className="h-4 w-4" />
                 {t('الورقيات')}
                 {packagingRequests.filter(r => r.status === 'pending').length > 0 && (
-                  <Badge className="absolute -top-2 -right-2 bg-amber-500 text-white text-xs px-1.5 py-0.5 rounded-full">
+                  <Badge className="absolute -top-2 -right-2 bg-amber-500 text-white text-xs px-1.5 py-0.5 rounded-full pointer-events-none">
                     {packagingRequests.filter(r => r.status === 'pending').length}
                   </Badge>
                 )}
@@ -2733,7 +2881,7 @@ export default function WarehouseManufacturing() {
                 <Building2 className="h-4 w-4" />
                 {t('طلبات الفروع')}
                 {branchRequests.filter(r => r.status === 'pending').length > 0 && (
-                  <Badge className="absolute -top-2 -right-2 bg-red-500 text-white text-xs px-1.5 py-0.5 rounded-full">
+                  <Badge className="absolute -top-2 -right-2 bg-red-500 text-white text-xs px-1.5 py-0.5 rounded-full pointer-events-none">
                     {branchRequests.filter(r => r.status === 'pending').length}
                   </Badge>
                 )}
@@ -4021,6 +4169,15 @@ export default function WarehouseManufacturing() {
                                 {t('فرق العائد')}
                               </Button>
                               <Button
+                                onClick={() => openBatchHistoryDialog(product)}
+                                variant="outline"
+                                className="border-indigo-500 text-indigo-600 hover:bg-indigo-50"
+                                data-testid={`batch-history-btn-${product.id}`}
+                              >
+                                <History className="h-4 w-4 ml-2" />
+                                {t('سجل الدفعات')}
+                              </Button>
+                              <Button
                                 onClick={() => setCostCheckProduct(product)}
                                 variant="outline"
                                 className="border-teal-500 text-teal-600 hover:bg-teal-50"
@@ -4142,11 +4299,36 @@ export default function WarehouseManufacturing() {
             
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
+                <CardTitle className="flex items-center gap-2 flex-wrap">
                   <Building2 className="h-5 w-5 text-primary" />
                   {t('طلبات الفروع الواردة')}
                   {branchRequests.filter(r => r.status === 'pending').length > 0 && (
                     <Badge className="bg-red-500">{branchRequests.filter(r => r.status === 'pending').length} {t('جديد')}</Badge>
+                  )}
+                  {branchRequests.length > 0 && (
+                    <div className="flex items-center gap-2 ml-auto">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-8 text-xs"
+                        onClick={toggleSelectAllRequests}
+                        data-testid="branch-req-select-all"
+                      >
+                        {selectedRequestIds.length === branchRequests.length ? t('إلغاء تحديد الكل') : t('تحديد الكل')}
+                      </Button>
+                      {selectedRequestIds.length > 0 && (
+                        <Button
+                          size="sm"
+                          className="h-8 text-xs bg-red-600 hover:bg-red-700"
+                          onClick={handleBulkDeleteRequests}
+                          disabled={submitting}
+                          data-testid="branch-req-bulk-delete"
+                        >
+                          <Trash2 className="h-3.5 w-3.5 ml-1" />
+                          {t('حذف المحدد')} ({selectedRequestIds.length})
+                        </Button>
+                      )}
+                    </div>
                   )}
                 </CardTitle>
               </CardHeader>
@@ -4159,9 +4341,16 @@ export default function WarehouseManufacturing() {
                 ) : (
                   <div className="space-y-4">
                     {branchRequests.map(request => (
-                      <div key={request.id} className={`p-4 border rounded-lg ${request.status === 'pending' ? 'border-orange-500 bg-orange-500/5' : ''}`}>
+                      <div key={request.id} className={`p-4 border rounded-lg ${selectedRequestIds.includes(request.id) ? 'border-red-500 bg-red-500/5 ring-1 ring-red-500/40' : request.status === 'pending' ? 'border-orange-500 bg-orange-500/5' : ''}`}>
                         <div className="flex items-start justify-between mb-3">
-                          <div>
+                          <div className="flex items-start gap-2">
+                            <Checkbox
+                              checked={selectedRequestIds.includes(request.id)}
+                              onCheckedChange={() => toggleRequestSelected(request.id)}
+                              className="mt-1.5"
+                              data-testid={`branch-req-checkbox-${request.id}`}
+                            />
+                            <div>
                             <div className="flex items-center gap-2 mb-1">
                               <span className="font-bold text-lg">{t('طلب')} #{request.request_number}</span>
                               <Badge className={
@@ -4197,6 +4386,7 @@ export default function WarehouseManufacturing() {
                                 {t('نفّذه')}: <span className="font-medium">{request.fulfilled_by_name}</span>
                               </p>
                             )}
+                            </div>
                           </div>
                           <div className="text-left">
                             <p className="text-xs text-muted-foreground">
@@ -4235,13 +4425,22 @@ export default function WarehouseManufacturing() {
                                   </div>
                                 </div>
                                 {(item.available_quantity || 0) === 0 && item.suggestion && (
-                                  <div
-                                    className="text-xs text-amber-500 flex items-center gap-1"
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRelinkBranchItem(request, idx, item.suggestion)}
+                                    disabled={relinkingItem === `${request.id}-${idx}`}
+                                    className="text-xs text-amber-500 hover:text-amber-300 flex items-center gap-1 group transition-colors disabled:opacity-60 w-fit"
                                     data-testid={`branch-req-suggestion-${request.id}-${idx}`}
+                                    title={t('انقر لربط المنتج فوراً')}
                                   >
-                                    <AlertTriangle className="h-3 w-3" />
-                                    {t('هل تقصد')}: <span className="font-medium text-amber-400">{item.suggestion.name}</span> ({t('متوفر')}: {item.suggestion.quantity})
-                                  </div>
+                                    {relinkingItem === `${request.id}-${idx}` ? (
+                                      <RefreshCw className="h-3 w-3 animate-spin" />
+                                    ) : (
+                                      <AlertTriangle className="h-3 w-3" />
+                                    )}
+                                    {t('هل تقصد')}: <span className="font-medium text-amber-400 underline decoration-dotted group-hover:decoration-solid">{item.suggestion.name}</span> ({t('متوفر')}: {item.suggestion.quantity})
+                                    <span className="text-[10px] text-amber-600 group-hover:text-amber-400">— {t('اربط')}</span>
+                                  </button>
                                 )}
                               </div>
                             ))}
@@ -4881,10 +5080,13 @@ export default function WarehouseManufacturing() {
               <div>
                 <Label>{t('الوحدة')}</Label>
                 <Select 
-                  value={rawMaterialForm.unit} 
-                  onValueChange={(v) => setRawMaterialForm(prev => ({ ...prev, unit: v }))}
+                  value={rawUnitCustom ? '__custom__' : rawMaterialForm.unit} 
+                  onValueChange={(v) => {
+                    if (v === '__custom__') { setRawUnitCustom(true); setRawMaterialForm(prev => ({ ...prev, unit: '' })); }
+                    else { setRawUnitCustom(false); setRawMaterialForm(prev => ({ ...prev, unit: v })); }
+                  }}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger data-testid="raw-material-unit-select">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -4895,8 +5097,18 @@ export default function WarehouseManufacturing() {
                     <SelectItem value="قطعة">{t('قطعة')}</SelectItem>
                     <SelectItem value="علبة">{t('علبة')}</SelectItem>
                     <SelectItem value="كرتون">{t('كرتون')}</SelectItem>
+                    <SelectItem value="__custom__">{t('أخرى (مخصّص)...')}</SelectItem>
                   </SelectContent>
                 </Select>
+                {rawUnitCustom && (
+                  <Input
+                    className="mt-2"
+                    placeholder={t('اكتب الوحدة المخصّصة (مثل: شريحة، كأس، حصة)')}
+                    value={rawMaterialForm.unit}
+                    onChange={(e) => setRawMaterialForm(prev => ({ ...prev, unit: e.target.value }))}
+                    data-testid="raw-material-custom-unit"
+                  />
+                )}
               </div>
               <div>
                 <Label>{t('الكمية')}</Label>
@@ -5727,6 +5939,129 @@ export default function WarehouseManufacturing() {
         </DialogContent>
       </Dialog>
       {/* 🧮 Dialog: تحقّق سريع من التكلفة */}
+      {/* 📦 Dialog: سجل دفعات الإنتاج */}
+      <Dialog open={showBatchHistoryDialog} onOpenChange={(o) => !o && setShowBatchHistoryDialog(false)}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto" data-testid="batch-history-dialog">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <History className="h-5 w-5 text-indigo-500" />
+              {t('سجل دفعات الإنتاج')}{batchHistoryData?.product_name ? `: ${batchHistoryData.product_name}` : ''}
+            </DialogTitle>
+          </DialogHeader>
+
+          {loadingBatchHistory ? (
+            <div className="py-12 flex items-center justify-center text-muted-foreground" data-testid="batch-history-loading">
+              <RefreshCw className="h-6 w-6 animate-spin ml-2" /> {t('جارٍ التحميل...')}
+            </div>
+          ) : !batchHistoryData || (batchHistoryData.batches || []).length === 0 ? (
+            <div className="py-12 text-center text-muted-foreground" data-testid="batch-history-empty">
+              <History className="h-10 w-10 mx-auto mb-2 opacity-40" />
+              <p>{t('لا توجد دفعات إنتاج مسجّلة بعد')}</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {/* ملخّص علوي */}
+              <div className="grid grid-cols-3 gap-2">
+                <div className="p-2.5 rounded-lg bg-indigo-500/10 border border-indigo-500/30 text-center">
+                  <p className="text-[10px] text-muted-foreground">{t('عدد الدفعات')}</p>
+                  <p className="font-bold text-indigo-600 tabular-nums" data-testid="batch-summary-count">{batchHistoryData.summary?.total_batches || 0}</p>
+                </div>
+                <div className="p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-center">
+                  <p className="text-[10px] text-muted-foreground">{t('إجمالي المُنتَج')}</p>
+                  <p className="font-bold text-emerald-600 tabular-nums" data-testid="batch-summary-qty">{batchHistoryData.summary?.total_quantity || 0} {batchHistoryData.unit || ''}</p>
+                </div>
+                <div className="p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-center">
+                  <p className="text-[10px] text-muted-foreground">⭐ {t('المتوسط المرجّح الحالي (WAC)')}</p>
+                  <p className="font-bold text-amber-600 tabular-nums" data-testid="batch-summary-wac">
+                    {batchHistoryData.current_wac_after != null ? formatPrice(batchHistoryData.current_wac_after) : formatPrice(batchHistoryData.summary?.avg_unit_cost || 0)}
+                  </p>
+                </div>
+              </div>
+
+              {/* 📈 Sparkline لتطوّر تكلفة الوحدة عبر الدفعات */}
+              {(() => {
+                const chron = [...(batchHistoryData.batches || [])].reverse(); // الأقدم → الأحدث
+                const vals = chron.map(b => Number(b.unit_cost_after) || 0);
+                if (vals.length < 2) return null;
+                const min = Math.min(...vals), max = Math.max(...vals);
+                const range = max - min || 1;
+                const W = 600, H = 48, pad = 6;
+                const stepX = (W - pad * 2) / (vals.length - 1);
+                const pts = vals.map((v, i) => {
+                  const x = pad + i * stepX;
+                  const y = H - pad - ((v - min) / range) * (H - pad * 2);
+                  return [x, y];
+                });
+                const path = pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(' ');
+                const first = vals[0], last = vals[vals.length - 1];
+                const flat = Math.abs(last - first) < 1e-6;
+                const up = last > first;
+                const color = flat ? '#64748b' : (up ? '#ef4444' : '#10b981');
+                const pct = first ? (((last - first) / first) * 100) : 0;
+                return (
+                  <div className="p-3 rounded-lg border bg-background" data-testid="batch-cost-sparkline">
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-[11px] font-medium text-muted-foreground">{t('تطوّر تكلفة الوحدة عبر الدفعات')}</span>
+                      <span className="text-[11px] font-bold flex items-center gap-1" style={{ color }}>
+                        {flat ? t('مستقرة') : (up
+                          ? <><TrendingUp className="h-3 w-3" /> {t('ارتفاع')} {pct.toFixed(1)}%</>
+                          : <><TrendingDown className="h-3 w-3" /> {t('انخفاض')} {Math.abs(pct).toFixed(1)}%</>)}
+                      </span>
+                    </div>
+                    <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: 48 }} preserveAspectRatio="none">
+                      <path d={path} fill="none" stroke={color} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
+                      {pts.map((p, i) => <circle key={i} cx={p[0]} cy={p[1]} r="2.5" fill={color} />)}
+                    </svg>
+                    <div className="flex justify-between text-[10px] text-muted-foreground mt-1">
+                      <span>{t('الأقدم')}: <span className="tabular-nums">{formatPrice(first)}</span></span>
+                      <span>{t('الأحدث')}: <span className="tabular-nums">{formatPrice(last)}</span></span>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* جدول الدفعات */}
+              <div className="border rounded-lg overflow-hidden">
+                <div className="grid grid-cols-12 gap-1 px-3 py-2 bg-muted/50 text-[11px] font-medium text-muted-foreground">
+                  <div className="col-span-4">{t('التاريخ')}</div>
+                  <div className="col-span-2 text-center">{t('الكمية')}</div>
+                  <div className="col-span-3 text-center">{t('تكلفة الوحدة')}</div>
+                  <div className="col-span-3 text-center">{t('WAC وقتها')}</div>
+                </div>
+                <div className="divide-y">
+                  {(batchHistoryData.batches || []).map((b, i) => (
+                    <div key={b.id || i} className="grid grid-cols-12 gap-1 px-3 py-2 text-xs items-center hover:bg-muted/30" data-testid={`batch-row-${i}`}>
+                      <div className="col-span-4">
+                        <p className="font-medium">{b.created_at ? new Date(b.created_at).toLocaleDateString('ar-EG', { year: 'numeric', month: 'short', day: 'numeric' }) : '—'}</p>
+                        <p className="text-[10px] text-muted-foreground">
+                          {b.created_at ? new Date(b.created_at).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }) : ''}
+                          {b.performed_by_name ? ` · ${b.performed_by_name}` : ''}
+                        </p>
+                      </div>
+                      <div className="col-span-2 text-center tabular-nums font-medium">{b.quantity} {b.unit || ''}</div>
+                      <div className="col-span-3 text-center tabular-nums text-emerald-600 font-medium">{formatPrice(b.unit_cost_after)}</div>
+                      <div className="col-span-3 text-center tabular-nums text-amber-600">
+                        {b.wac_unit_after != null ? formatPrice(b.wac_unit_after) : <span className="text-muted-foreground">—</span>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <p className="text-[10px] text-muted-foreground text-center">
+                {t('تُعرض الدفعات من الأحدث إلى الأقدم. "WAC وقتها" يُسجَّل للدفعات الجديدة فقط.')}
+              </p>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowBatchHistoryDialog(false)} data-testid="batch-history-close">
+              {t('إغلاق')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+
       <Dialog open={!!costCheckProduct} onOpenChange={(o) => !o && setCostCheckProduct(null)}>
         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto" data-testid="cost-check-dialog">
           <DialogHeader>
@@ -6319,12 +6654,43 @@ export default function WarehouseManufacturing() {
                               type="number"
                               min="0"
                               step="0.001"
-                              value={ing.quantity}
-                              onChange={(e) => updateEditIngredientQty(index, e.target.value)}
+                              value={ing.input_quantity ?? ing.quantity}
+                              onChange={(e) => updateEditIngredientInput(index, e.target.value)}
                               className="w-24 h-8"
                               data-testid={`edit-recipe-qty-${index}`}
                             />
-                            <span className="text-xs text-muted-foreground w-12">{ing.unit}</span>
+                            {(() => {
+                              // ⭐ قائمة الوحدات المتاحة للمكوّن الموجود (وزن/حجم/قطعة أو وزن القطعة لمنتج مُصنّع)
+                              let unitOptions = [];
+                              if (ing.manufactured_product_id) {
+                                const mp = manufacturedProducts.find(m => m.id === ing.manufactured_product_id);
+                                const set = new Set([ing.unit || mp?.unit || 'حبة']);
+                                const pwu = mp?.piece_weight_unit;
+                                if (pwu && Number(mp?.piece_weight || 0) > 0) {
+                                  if (['غرام', 'gram', 'كغم', 'kg', 'كيلو', 'كجم'].includes(pwu)) { set.add('غرام'); set.add('كغم'); }
+                                  else if (['مل', 'ml', 'لتر', 'liter', 'l'].includes(pwu)) { set.add('مل'); set.add('لتر'); }
+                                }
+                                unitOptions = Array.from(set);
+                              } else {
+                                const packInfo = _packInfoFor(ing.raw_material_id);
+                                unitOptions = availableInputUnitsFor(ing.unit, packInfo?.pack_unit);
+                              }
+                              if (!unitOptions || unitOptions.length === 0) unitOptions = [ing.unit].filter(Boolean);
+                              const curUnit = ing.input_unit || ing.unit;
+                              if (unitOptions.length <= 1) {
+                                return <span className="text-xs text-muted-foreground w-12 text-center">{curUnit}</span>;
+                              }
+                              return (
+                                <Select value={curUnit} onValueChange={(v) => updateEditIngredientInput(index, null, v)}>
+                                  <SelectTrigger className="w-20 h-8 bg-background text-xs px-2" data-testid={`edit-recipe-unit-${index}`}>
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {unitOptions.map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}
+                                  </SelectContent>
+                                </Select>
+                              );
+                            })()}
                             <Button
                               type="button"
                               variant="ghost"
@@ -6336,8 +6702,13 @@ export default function WarehouseManufacturing() {
                               <Trash2 className="h-3.5 w-3.5" />
                             </Button>
                           </div>
-                          <div className="text-[11px] text-muted-foreground pl-6">
-                            {t('بعد الهدر:')} <span className="font-medium text-emerald-600 tabular-nums">{formatPrice(costAfter)}</span>
+                          <div className="text-[11px] text-muted-foreground pl-6 flex items-center gap-2 flex-wrap">
+                            {(ing.input_unit && ing.input_unit !== ing.unit) && (
+                              <span className="text-blue-600 dark:text-blue-400 tabular-nums" data-testid={`edit-recipe-base-eq-${index}`}>
+                                = {Number(ing.quantity || 0).toFixed(3).replace(/\.?0+$/, '')} {ing.unit}
+                              </span>
+                            )}
+                            <span>{t('بعد الهدر:')} <span className="font-medium text-emerald-600 tabular-nums">{formatPrice(costAfter)}</span></span>
                           </div>
                         </div>
                       );
@@ -7471,8 +7842,14 @@ export default function WarehouseManufacturing() {
             <div className="grid grid-cols-3 gap-4">
               <div>
                 <Label>{t('الوحدة')}</Label>
-                <Select value={packagingForm.unit} onValueChange={(v) => setPackagingForm({...packagingForm, unit: v})}>
-                  <SelectTrigger>
+                <Select
+                  value={pkgUnitCustom ? '__custom__' : packagingForm.unit}
+                  onValueChange={(v) => {
+                    if (v === '__custom__') { setPkgUnitCustom(true); setPackagingForm({...packagingForm, unit: ''}); }
+                    else { setPkgUnitCustom(false); setPackagingForm({...packagingForm, unit: v}); }
+                  }}
+                >
+                  <SelectTrigger data-testid="packaging-unit-select">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -7482,8 +7859,18 @@ export default function WarehouseManufacturing() {
                     <SelectItem value="رول">{t('رول')}</SelectItem>
                     <SelectItem value="ورقة">{t('ورقة')}</SelectItem>
                     <SelectItem value="حزمة">{t('حزمة')}</SelectItem>
+                    <SelectItem value="__custom__">{t('أخرى (مخصّص)...')}</SelectItem>
                   </SelectContent>
                 </Select>
+                {pkgUnitCustom && (
+                  <Input
+                    className="mt-2"
+                    placeholder={t('اكتب الوحدة')}
+                    value={packagingForm.unit}
+                    onChange={(e) => setPackagingForm({...packagingForm, unit: e.target.value})}
+                    data-testid="packaging-custom-unit"
+                  />
+                )}
               </div>
               <div>
                 <Label>{t('الكمية')}</Label>

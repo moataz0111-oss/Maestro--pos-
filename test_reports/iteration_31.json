@@ -94,7 +94,7 @@
   },
   
   "test_credentials": {
-    "api_url": "https://cogs-calc-system.preview.emergentagent.com",
+    "api_url": "https://branch-stock-counter.preview.emergentagent.com",
     "owner": {
       "email": "owner@maestroegp.com",
       "password": "owner123",
