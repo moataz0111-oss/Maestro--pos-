@@ -1590,9 +1590,23 @@ export default function Dashboard() {
     // مدير الفرع يرى كل شيء
     if (user?.role === 'branch_manager') return true;
 
-    // ⭐ الأدوار المركزية: تُقيَّد بأيقونة واحدة فقط (وحدتها) — تتجاوز أي منطق آخر
+    // ⭐ الأدوار المركزية: تُعرض وحدتها الافتراضية + أي صلاحية إضافية مُنحت لها يدوياً
+    // (مثل إضافة "المشتريات" لأمين المخزن — يجب أن تظهر بطاقتها أيضاً)
     if (isCentralRole) {
-      return (centralRoleActionIds[user.role] || []).includes(action.id);
+      if ((centralRoleActionIds[user.role] || []).includes(action.id)) return true;
+      const userPerms = Array.isArray(user?.permissions) ? user.permissions : [];
+      // ربط معرّف البطاقة بمعرّف الصلاحية في الإعدادات
+      const actionToPermId = {
+        'warehouse-manufacturing': 'inventory',
+        'branch-orders': 'branch_orders',
+        'inventory-reports': 'inventory_reports',
+        'ratings': 'reviews',
+        'call-logs': 'call_logs',
+        'owner-wallet': 'owner_wallet',
+        'external-branches': 'external_branches',
+      };
+      const permId = actionToPermId[action.id] || action.id;
+      return userPerms.includes(permId);
     }
     
     // التحقق من صلاحيات الموظف

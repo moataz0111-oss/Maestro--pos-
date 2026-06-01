@@ -1,6 +1,37 @@
 # Maestro EGP - Changelog
 
 
+## Session: 02 Jun 2026 (FEATURE) — زر نقص/تصفير كمية المادة الخام (للمالك/المدير العام فقط)
+
+### المطلوب (المستخدم + صورة)
+زر على بطاقة المادة الخام يُنقص الكمية أو يصفّرها، يظهر فقط لمالك المطعم/المدير العام.
+
+### ما تم
+- **Backend** (`inventory_system.py`): `POST /raw-materials-new/{id}/reduce-stock?quantity=X&zero=true` — مقيّد بـ`admin`/`super_admin` فقط (403 لغيرهم)، يُنقص الكمية (لا تقل عن صفر) أو يصفّرها، ويسجّل حركة `raw_material_stock_reduce`.
+- **Frontend** (`WarehouseManufacturing.js`): زر برتقالي «−» على بطاقة المادة الخام يظهر فقط لـ`hasRole(['admin','super_admin'])` → يفتح نافذة بإدخال الكمية + زرّي «نقص الكمية» و«تصفير الكمية».
+
+### الاختبار
+- curl: أمين المخزن → 403، الأدمن: نقص 30 (100→70) وتصفير (70→0). ✅
+- Screenshot (admin): الزر يظهر على البطاقة، النافذة تفتح بالعنوان والكمية الحالية وزرّي النقص/التصفير. ✅ Lint نظيف.
+
+
+
+## Session: 02 Jun 2026 (BUG FIX) — الأدوار المركزية تتجاهل الصلاحيات الإضافية المُضافة
+
+### المشكلة (المستخدم + صورة)
+عند إضافة صلاحية «المشتريات» لمستخدم بدور مركزي (أمين مخزن «عبد الرحمن»)، لم تُطبَّق — ظلّت لوحته تعرض بطاقة «المخزن والتصنيع» فقط ولم تظهر بطاقة «المشتريات».
+
+### السبب الجذري (`pages/Dashboard.js` → `filteredActions`)
+كتلة الأدوار المركزية كانت تُرجِع **البطاقة الافتراضية للدور فقط** (`centralRoleActionIds[role]`) وتتجاهل تماماً أي صلاحيات إضافية في `user.permissions`.
+
+### الإصلاح
+- للأدوار المركزية: تُعرض البطاقة الافتراضية + أي بطاقة يملك المستخدم صلاحيتها صراحةً (`user.permissions`)، مع خريطة تربط معرّف البطاقة بمعرّف الصلاحية في الإعدادات (`warehouse-manufacturing→inventory`, `branch-orders→branch_orders`, `purchasing→purchasing`, ...).
+
+### الاختبار
+- إنشاء مستخدم `abdwk@maestroegp.com` (warehouse_keeper + permissions ['inventory','purchasing']) → DOM يؤكّد ظهور بطاقتي `quick-action-warehouse-manufacturing` و`quick-action-purchasing` معاً. ✅ (كانت تظهر بطاقة المخزن فقط قبل الإصلاح). Lint نظيف.
+
+
+
 ## Session: 01 Jun 2026 (FEATURE) — فقد التغليف داخل «لوحة مقارنة الفروع»
 
 ### المطلوب

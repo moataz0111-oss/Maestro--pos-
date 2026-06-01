@@ -48,3 +48,7 @@
 - Warehouse keeper: wkeeper@maestroegp.com / wkeeper123 (role warehouse_keeper)
 - Purchasing: buyer@maestroegp.com / buyer123 (role purchasing)
 - These verify the simplified dashboard (only their module tile, no stats/close-register/customer-menu/branch-selector).
+
+## Central Role + Extra Permission (iter215 — bug fix)
+- abdwk@maestroegp.com / abd123 (role warehouse_keeper, permissions ['inventory','purchasing'], name عبد الرحمن)
+- Verifies: a central-role user granted an EXTRA permission (المشتريات) now sees BOTH tiles (warehouse-manufacturing + purchasing) on the dashboard. Before the fix, central roles ignored extra permissions and showed only their single default tile.

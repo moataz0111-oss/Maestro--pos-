@@ -345,6 +345,8 @@ export default function WarehouseManufacturing() {
   const [requestingShortMaterials, setRequestingShortMaterials] = useState(false);  // 🤖 طلب تلقائي للمواد الناقصة
   const [showAddStockDialog, setShowAddStockDialog] = useState(null);  // زيادة كمية المنتج المصنع
   const [showAddRawMaterialStockDialog, setShowAddRawMaterialStockDialog] = useState(null);  // زيادة كمية المادة الخام
+  const [showReduceRawStockDialog, setShowReduceRawStockDialog] = useState(null);  // نقص/تصفير كمية المادة الخام (مالك/مدير عام)
+  const [reduceRawStockQuantity, setReduceRawStockQuantity] = useState('');
   const [selectedRecipe, setSelectedRecipe] = useState(null);
   const [showRequestMaterialsDialog, setShowRequestMaterialsDialog] = useState(false);  // طلب مواد
   
@@ -2378,6 +2380,30 @@ export default function WarehouseManufacturing() {
     }
   };
 
+  // === نقص/تصفير كمية المادة الخام (مالك/مدير عام فقط) ===
+  const handleReduceRawStock = async ({ zero }) => {
+    if (!showReduceRawStockDialog) return;
+    const qty = parseFloat(reduceRawStockQuantity) || 0;
+    if (!zero && qty <= 0) {
+      toast.error(t('أدخل كمية أكبر من صفر'));
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const url = `${API}/raw-materials-new/${showReduceRawStockDialog.id}/reduce-stock?` +
+        (zero ? 'zero=true' : `quantity=${qty}`);
+      await axios.post(url, {}, { headers });
+      toast.success(zero ? t('تم تصفير الكمية') : t('تم نقص الكمية بنجاح'));
+      setShowReduceRawStockDialog(null);
+      setReduceRawStockQuantity('');
+      fetchData();
+    } catch (error) {
+      showApiError(error, t('فشل في تعديل الكمية'));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   // === تعديل المادة الخام (قبل التحويل فقط) ===
   const handleUpdateRawMaterial = async () => {
     if (!editRawMaterial) return;
@@ -3214,6 +3240,19 @@ export default function WarehouseManufacturing() {
                       >
                         <Plus className="h-4 w-4" />
                       </Button>
+                      {/* ⭐ نقص/تصفير الكمية — للمالك/المدير العام فقط */}
+                      {hasRole(['admin', 'super_admin']) && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="border-orange-500 text-orange-600 hover:bg-orange-50"
+                          onClick={() => { setShowReduceRawStockDialog(material); setReduceRawStockQuantity(''); }}
+                          data-testid={`reduce-raw-material-stock-btn-${material.id}`}
+                          title={t('نقص / تصفير الكمية')}
+                        >
+                          <Minus className="h-4 w-4" />
+                        </Button>
+                      )}
                       {/* تعديل/حذف للمالك فقط، ومسموح فقط قبل التحويل للتصنيع */}
                       {isAdmin && (
                         <>
@@ -3228,8 +3267,8 @@ export default function WarehouseManufacturing() {
                           >
                             <Pencil className="h-4 w-4" />
                           </Button>
-                          {/* ⭐ تصحيح إداري — يعمل حتى بعد التحويل (للأخطاء مثل غرام/كغم) */}
-                          {material.is_transferred && (
+                          {/* ⭐ تصحيح إداري — يعمل حتى بعد التحويل (للأخطاء مثل غرام/كغم) — للمالك/المدير العام فقط */}
+                          {material.is_transferred && hasRole(['admin', 'super_admin']) && (
                             <Button
                               variant="outline"
                               size="sm"
@@ -7650,8 +7689,80 @@ export default function WarehouseManufacturing() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-      
-      {/* Dialog: طلب مواد خام من المخزن */}
+
+      {/* Dialog: نقص / تصفير كمية المادة الخام (مالك/مدير عام) */}
+      <Dialog open={!!showReduceRawStockDialog} onOpenChange={(o) => { if (!o) { setShowReduceRawStockDialog(null); setReduceRawStockQuantity(''); } }}>
+        <DialogContent data-testid="reduce-raw-stock-dialog">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Minus className="h-5 w-5 text-orange-500" />
+              {t('نقص / تصفير كمية المادة الخام')}
+            </DialogTitle>
+          </DialogHeader>
+
+          {showReduceRawStockDialog && (
+            <div className="space-y-4">
+              <div className="p-4 bg-orange-500/10 rounded-lg">
+                <h3 className="font-bold text-lg mb-2">{showReduceRawStockDialog.name}</h3>
+                <div className="text-sm">
+                  <span className="text-muted-foreground">{t('الكمية الحالية')}: </span>
+                  <span className="font-bold text-green-500">{showReduceRawStockDialog.quantity} {showReduceRawStockDialog.unit}</span>
+                </div>
+              </div>
+
+              <div>
+                <Label>{t('الكمية المراد نقصها')}</Label>
+                <div className="flex items-center gap-2 mt-1">
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.5"
+                    value={reduceRawStockQuantity}
+                    onChange={(e) => setReduceRawStockQuantity(e.target.value)}
+                    placeholder="0"
+                    className="w-32 text-center text-lg font-bold"
+                    data-testid="reduce-raw-stock-input"
+                  />
+                  <span className="text-sm text-muted-foreground">{showReduceRawStockDialog.unit}</span>
+                </div>
+                {parseFloat(reduceRawStockQuantity) > 0 && (
+                  <p className="text-xs text-muted-foreground mt-2">
+                    {t('الكمية بعد النقص')}: <span className="font-bold text-orange-600">
+                      {Math.max(0, (parseFloat(showReduceRawStockDialog.quantity) || 0) - (parseFloat(reduceRawStockQuantity) || 0))} {showReduceRawStockDialog.unit}
+                    </span>
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
+
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => { setShowReduceRawStockDialog(null); setReduceRawStockQuantity(''); }}>
+              {t('إلغاء')}
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => handleReduceRawStock({ zero: true })}
+              disabled={submitting}
+              className="border-red-500 text-red-600 hover:bg-red-50"
+              data-testid="zero-raw-stock-btn"
+            >
+              {submitting ? <RefreshCw className="h-4 w-4 animate-spin ml-2" /> : <Trash2 className="h-4 w-4 ml-2" />}
+              {t('تصفير الكمية')}
+            </Button>
+            <Button
+              onClick={() => handleReduceRawStock({ zero: false })}
+              disabled={submitting || !(parseFloat(reduceRawStockQuantity) > 0)}
+              className="bg-orange-500 hover:bg-orange-600"
+              data-testid="confirm-reduce-raw-stock-btn"
+            >
+              {submitting ? <RefreshCw className="h-4 w-4 animate-spin ml-2" /> : <Minus className="h-4 w-4 ml-2" />}
+              {t('نقص الكمية')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={showRequestMaterialsDialog} onOpenChange={setShowRequestMaterialsDialog}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>

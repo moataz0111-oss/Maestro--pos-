@@ -2520,6 +2520,65 @@ async def add_raw_material_stock(material_id: str, quantity: float = 1, current_
     }
 
 
+@router.post("/raw-materials-new/{material_id}/reduce-stock")
+async def reduce_raw_material_stock(
+    material_id: str,
+    quantity: float = 0,
+    zero: bool = False,
+    current_user: dict = Depends(get_current_user),
+):
+    """نقص كمية المادة الخام أو تصفيرها — متاح فقط للمالك/المدير العام (admin/super_admin).
+    zero=true ⇒ تصفير الكمية بالكامل. وإلا يُنقص بمقدار quantity (لا تقل عن صفر)."""
+    role = (current_user or {}).get("role", "")
+    if role not in ("admin", "super_admin"):
+        raise HTTPException(status_code=403, detail="هذا الإجراء متاح للمالك/المدير العام فقط")
+
+    db = get_db()
+    tenant_id = get_user_tenant_id(current_user)
+
+    query = {"id": material_id}
+    if tenant_id:
+        query["tenant_id"] = tenant_id
+    material = await db.raw_materials.find_one(query)
+    if not material:
+        raise HTTPException(status_code=404, detail="المادة غير موجودة")
+
+    current_qty = float(material.get("quantity", 0) or 0)
+    if zero:
+        reduce_by = current_qty
+    else:
+        if quantity <= 0:
+            raise HTTPException(status_code=400, detail="الكمية يجب أن تكون أكبر من صفر")
+        reduce_by = min(float(quantity), current_qty)
+
+    new_qty = round(current_qty - reduce_by, 3)
+    now_iso = datetime.now(timezone.utc).isoformat()
+
+    await db.raw_materials.update_one(
+        {"id": material_id},
+        {"$set": {"quantity": new_qty, "last_updated": now_iso}},
+    )
+
+    await db.inventory_movements.insert_one({
+        "id": str(uuid.uuid4()),
+        "tenant_id": tenant_id,
+        "type": "raw_material_stock_reduce",
+        "material_id": material_id,
+        "material_name": material.get("name"),
+        "quantity": reduce_by,
+        "unit": material.get("unit"),
+        "notes": "تصفير الكمية يدوياً (مالك/مدير عام)" if zero else "نقص يدوي للكمية (مالك/مدير عام)",
+        "performed_by_name": current_user.get("full_name") or current_user.get("username"),
+        "created_at": now_iso,
+    })
+
+    return {
+        "message": ("تم تصفير كمية " if zero else "تم نقص كمية ") + str(material.get("name")),
+        "reduced_by": reduce_by,
+        "new_quantity": new_qty,
+    }
+
+
 # ==================== WAREHOUSE TO MANUFACTURING (تحويل من المخزن للتصنيع) ====================
 
 @router.post("/warehouse-to-manufacturing")
