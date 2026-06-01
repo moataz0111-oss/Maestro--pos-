@@ -349,6 +349,22 @@ def _consumed_in_product_unit(consumed_map: dict, product_id: str, product_unit:
     return total
 
 
+async def _remaining_qty_map(db, products: list) -> dict:
+    """يُرجع {product_id: المتبقي} بنفس معادلة بطاقة المصنع تماماً:
+    المتبقي = إجمالي المُصنّع − المحوّل للفروع − المستهلَك كمكوّن (مقصوصاً عند ≥ 0).
+    ⭐ هذا هو نفس ما يُعرض في تبويب التصنيع (GET /manufactured-products)،
+    فيضمن أن "المتوفر" في طلبات الفروع = "المتبقي" المعروض بالضبط."""
+    consumed_map = await _consumed_as_ingredient_map(db)
+    result = {}
+    for p in products:
+        total = p.get("total_produced", 0) or 0
+        transferred = p.get("transferred_quantity", 0) or 0
+        consumed = _consumed_in_product_unit(consumed_map, p.get("id"), p.get("unit"))
+        remaining = total - transferred - consumed
+        result[p.get("id")] = round(remaining, 6) if remaining > 0 else 0.0
+    return result
+
+
 async def _resolve_ingredient_ids(db, ing: dict, tenant_id: Optional[str] = None) -> dict:
     """🔧 محاولة الربط التلقائي للمكوّن بالاسم إن كان كلا المعرّفين فارغ.
 
@@ -2919,14 +2935,15 @@ async def get_branch_requests(status: Optional[str] = None, branch_id: Optional[
     
     requests = await db.branch_requests.find(query, {"_id": 0}).sort("created_at", -1).to_list(1000)
 
-    # 🔄 تحديث available_quantity من مخزون المصنع الحالي (= حقل quantity = "المتبقي" على بطاقة المنتج).
-    # ⭐ نطابق ضمن نفس المستأجر أولاً (نفس منتجات تبويب التصنيع التي يراها المستخدم) لضمان
-    #    أن "المتوفر" في طلب الفرع = "المتبقي" تماماً لمنتج المستخدم نفسه، وتفادي قراءة
-    #    سجلات مكرّرة من مستأجرين آخرين بكميات مختلفة. نرجع لكل المنتجات فقط إن لم نجد بنفس المستأجر.
+    # 🔄 تحديث available_quantity ليساوي "المتبقي" المعروض على بطاقة المنتج في تبويب التصنيع.
+    # ⭐⭐ السبب الجذري: "المتبقي" ليس حقل quantity الخام، بل = إجمالي المُصنّع − المحوّل − المستهلَك
+    #    (تُحسب في GET /manufactured-products). لذا نقرأ نفس المعادلة هنا عبر _remaining_qty_map
+    #    حتى يتطابق "المتوفر" في طلب الفرع مع "المتبقي" المعروض تماماً.
     all_prods = await db.manufactured_products.find(
-        {}, {"_id": 0, "id": 1, "name": 1, "quantity": 1, "tenant_id": 1}
+        {}, {"_id": 0, "id": 1, "name": 1, "quantity": 1, "tenant_id": 1,
+             "total_produced": 1, "transferred_quantity": 1, "unit": 1}
     ).to_list(50000)
-    qty_by_id = {p["id"]: float(p.get("quantity") or 0) for p in all_prods}
+    remaining_by_id = await _remaining_qty_map(db, all_prods)
     for req in requests:
         req_tenant = req.get("tenant_id")
         # منتجات نفس مستأجر الطلب (هي ما يراه المستخدم في تبويب التصنيع)
@@ -2935,24 +2952,24 @@ async def get_branch_requests(status: Optional[str] = None, branch_id: Optional[
             scope = all_prods
         for it in (req.get("items") or []):
             pid = it.get("product_id")
-            # ⭐ نُفضّل المطابقة بالاسم (دقيق → مرن → تشابه عالٍ) ضمن نفس المستأجر.
-            matched = match_product_by_name(it.get("product_name") or "", scope)
-            if matched is not None:
-                it["available_quantity"] = float(matched.get("quantity") or 0)
-                it.pop("suggestion", None)
-            elif pid and pid in qty_by_id:
-                it["available_quantity"] = qty_by_id[pid]
+            # ⭐ آلية المصنع (الأنظف والأدق): نقرأ "المتبقي" مباشرةً بمعرّف المنتج (product_id).
+            if pid and pid in remaining_by_id:
+                it["available_quantity"] = remaining_by_id[pid]
                 it.pop("suggestion", None)
             else:
-                # ⭐ لا يوجد منتج مصنّع مطابق بالاسم ولا بالمعرّف → التوفّر الحقيقي = 0
-                # (نُصفّر القيمة المحفوظة القديمة لتفادي عرض أرقام سالبة مضلّلة كـ -1342)
-                it["available_quantity"] = 0
-                # 💡 نقترح أقرب منتج بالاسم لمساعدة المصنّع على معرفة المقصود
-                sug = suggest_product_by_name(it.get("product_name") or "", scope)
-                if sug:
-                    it["suggestion"] = sug
-                else:
+                # احتياط للطلبات القديمة بمعرّف مفقود/تالف: مطابقة بالاسم ضمن نفس المستأجر
+                matched = match_product_by_name(it.get("product_name") or "", scope)
+                if matched is not None:
+                    it["available_quantity"] = remaining_by_id.get(matched.get("id"), 0)
                     it.pop("suggestion", None)
+                else:
+                    # لا منتج مطابق → التوفّر الحقيقي = 0 (بدل رقم سالب مضلّل) + اقتراح أقرب اسم
+                    it["available_quantity"] = 0
+                    sug = suggest_product_by_name(it.get("product_name") or "", scope)
+                    if sug:
+                        it["suggestion"] = sug
+                    else:
+                        it.pop("suggestion", None)
 
     pkg_ids = set()
     for req in requests:
@@ -3016,12 +3033,17 @@ async def delete_branch_request(request_id: str, current_user: dict = Depends(ge
     return {"message": "تم حذف الطلب نهائياً", "request_id": request_id}
 
 async def _resolve_request_product(db, item: dict, tenant_id):
-    """يحل المنتج المصنّع الفعلي لعنصر طلب فرع: بالاسم أولاً (دقيق → مرن → تشابه عالٍ آمن)
-    ثم بالمعرّف — لأن مرجع product_id قد يشير لسجل قديم/مكرّر بكمية سالبة. عند تكرار الاسم
-    نختار السجل ذا الكمية الأكبر. يعيد الوثيقة أو None."""
+    """يحل المنتج المصنّع الفعلي لعنصر طلب فرع — بآلية المصنع النظيفة:
+    بالمعرّف (product_id) أولاً = قراءة "المتبقي" الحقيقي مباشرةً، ثم بالاسم احتياطاً
+    للطلبات القديمة بمعرّف تالف (دقيق → مرن → تشابه عالٍ آمن، ضمن نفس المستأجر).
+    يعيد الوثيقة أو None."""
+    pid = item.get("product_id")
+    if pid:
+        p = await db.manufactured_products.find_one({"id": pid}, {"_id": 0})
+        if p:
+            return p
     nm = item.get("product_name") or ""
     if nm.strip():
-        # نطابق ضمن نفس مستأجر الطلب أولاً (منتج المستخدم نفسه)، ثم نرجع لكل المنتجات
         all_prods = await db.manufactured_products.find({}, {"_id": 0}).to_list(50000)
         scope = [p for p in all_prods if p.get("tenant_id") == tenant_id] if tenant_id else []
         if not scope:
@@ -3029,11 +3051,6 @@ async def _resolve_request_product(db, item: dict, tenant_id):
         matched = match_product_by_name(nm, scope)
         if matched is not None:
             return matched
-    pid = item.get("product_id")
-    if pid:
-        p = await db.manufactured_products.find_one({"id": pid}, {"_id": 0})
-        if p:
-            return p
     return None
 
 
@@ -3125,12 +3142,23 @@ async def fulfill_branch_request(
 
     # التحقق من توفر الكميات (المُعدّلة) — يحل المنتج بالمعرّف أو الاسم لتفادي
     # ظهور "كمية غير كافية" لمنتج متوفر فعلاً بسبب مرجع product_id قديم/مختلف.
+    # ⭐ نتحقق ضد "المتبقي" (= المُصنّع − المحوّل − المستهلَك) وليس الحقل الخام quantity،
+    #    حتى يتطابق التحقق مع ما يُعرض للمستخدم بالضبط.
+    _consumed_map = await _consumed_as_ingredient_map(db)
+
+    def _remaining_of(p):
+        total = p.get("total_produced", 0) or 0
+        transferred = p.get("transferred_quantity", 0) or 0
+        consumed = _consumed_in_product_unit(_consumed_map, p.get("id"), p.get("unit"))
+        r = total - transferred - consumed
+        return r if r > 0 else 0.0
+
     insufficient = []
     for item in items_to_fulfill:
         product = await _resolve_request_product(db, item, tenant_id)
         if product:
             item["_resolved_pid"] = product.get("id")
-        avail = float(product.get("quantity") or 0) if product else 0
+        avail = _remaining_of(product) if product else 0
         if not product or avail < float(item.get("quantity") or 0):
             insufficient.append({
                 "name": item.get("product_name"),
@@ -4299,6 +4327,15 @@ async def _enrich_unit_cost_fields(db, product: dict) -> dict:
     product["computed_yield"] = round(final_yield or stored_qty, 6)
     product["unit_cost_after_waste"] = round(batch_after / denom, 6)
     product["unit_cost_before_waste"] = round(batch_before / denom, 6)
+    # ⭐ متوسط التكلفة المرجّح (WAC): إذا خُزِّن سعر وحدة مرجّح عبر الدفعات (يُحدّث عند كل
+    # تصنيع جديد بسعر مختلف) فهو مصدر الحقيقة لسعر الوحدة بدل كلفة آخر وصفة. ثابت تجاه
+    # السحوبات (التحويل/الاستهلاك) بطبيعته، لذا لا حاجة لتعديله إلا عند التصنيع.
+    wac_after = float(product.get("wac_unit_after") or 0)
+    wac_before = float(product.get("wac_unit_before") or 0)
+    if wac_after > 0:
+        product["unit_cost_after_waste"] = round(wac_after, 6)
+    if wac_before > 0:
+        product["unit_cost_before_waste"] = round(wac_before, 6)
     return product
 
 
@@ -5047,6 +5084,30 @@ async def produce_product(
     yield_variance = effective_yield - float(quantity)
     yield_variance_pct = (yield_variance / float(quantity) * 100.0) if quantity > 0 else 0.0
 
+    # ⭐⭐ متوسط التكلفة المرجّح (WAC): عند تصنيع دفعة جديدة بسعر مختلف عن المخزون الحالي،
+    # يُعاد حساب سعر الوحدة ليصبح متوسطاً مرجّحاً:
+    #   سعر الوحدة الجديد = (سعر الوحدة القديم × المتبقي القديم + كلفة الدفعة) ÷ الكمية الكلية
+    # مثال: 100 وحدة @ 10 + 50 وحدة @ (800÷50=16) → 150 وحدة @ 12.
+    _cmap = await _consumed_as_ingredient_map(db, product_id)
+    prev_remaining = (
+        (product.get("total_produced", 0) or 0)
+        - (product.get("transferred_quantity", 0) or 0)
+        - _consumed_in_product_unit(_cmap, product_id, product.get("unit"))
+    )
+    if prev_remaining < 0:
+        prev_remaining = 0.0
+    # سعر الوحدة القديم: المرجّح المخزّن إن وُجد، وإلا المحسوب من الوصفة الحالية
+    _prev_enriched = await _enrich_unit_cost_fields(db, dict(product))
+    prev_wac_after = float(product.get("wac_unit_after") or _prev_enriched.get("unit_cost_after_waste") or 0)
+    prev_wac_before = float(product.get("wac_unit_before") or _prev_enriched.get("unit_cost_before_waste") or 0)
+    new_total_qty = prev_remaining + effective_yield
+    if new_total_qty > 0:
+        new_wac_after = (prev_wac_after * prev_remaining + batch_cost_after_waste) / new_total_qty
+        new_wac_before = (prev_wac_before * prev_remaining + batch_cost_before_waste) / new_total_qty
+    else:
+        new_wac_after = (batch_cost_after_waste / effective_yield) if effective_yield > 0 else 0.0
+        new_wac_before = (batch_cost_before_waste / effective_yield) if effective_yield > 0 else 0.0
+
     # زيادة كمية المنتج المصنع وإجمالي الإنتاج (باستخدام العدد الفعلي)
     await db.manufactured_products.update_one(
         {"id": product_id},
@@ -5057,7 +5118,12 @@ async def produce_product(
             },
             # ⭐ عائد آخر دفعة = الكمية المُنتجة فعلياً في هذا التصنيع. يُستخدم كمقام دقيق
             # لتكلفة الوحدة (الكلفة المخزّنة تخص هذه الدفعة) — يمنع القسمة على عائد قديم.
-            "$set": {"last_batch_yield": effective_yield, "last_updated": now_iso}
+            "$set": {
+                "last_batch_yield": effective_yield,
+                "last_updated": now_iso,
+                "wac_unit_after": round(new_wac_after, 6),
+                "wac_unit_before": round(new_wac_before, 6),
+            }
         }
     )
     
@@ -5393,6 +5459,8 @@ async def reset_product_quantity(product_id: str, current_user: dict = Depends(g
                 "quantity": 0,
                 "total_produced": 0,
                 "transferred_quantity": 0,
+                "wac_unit_after": 0,
+                "wac_unit_before": 0,
                 "last_updated": now_iso,
             }
         }

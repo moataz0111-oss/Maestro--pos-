@@ -129,7 +129,7 @@ export default function WarehouseManufacturing() {
   // ⭐ Dialog: التنفيذ الجزئي لطلب التصنيع (تعديل الكميات حسب المتوفر)
   const [mfgFulfillDialog, setMfgFulfillDialog] = useState({ open: false, request: null, qtyOverrides: {}, partial: false, notes: '' });
   // ⭐ Dialog: تنفيذ طلب فرع بكميات مُعدّلة (تخفيض/رفض لكل منتج)
-  const [branchFulfillDialog, setBranchFulfillDialog] = useState({ open: false, request: null, qtyOverrides: {}, pkgOverrides: {}, notes: '' });
+  const [branchFulfillDialog, setBranchFulfillDialog] = useState({ open: false, request: null, qtyOverrides: {}, unitOverrides: {}, pkgOverrides: {}, notes: '' });
   const [warehouseNotifications, setWarehouseNotifications] = useState([]);  // إشعارات المخزن
   
   // Packaging materials states (مواد التغليف)
@@ -762,9 +762,18 @@ export default function WarehouseManufacturing() {
         product_name: product.name,
         quantity: 1,
         unit: product.unit || 'قطعة',
+        send_unit: product.unit || 'قطعة',
         available: product.quantity
       }]
     }));
+  };
+  // تحديث وحدة الإرسال لصنف التحويل للفرع
+  const updateBranchTransferUnit = (index, sendUnit) => {
+    setBranchTransferForm(prev => {
+      const newItems = [...prev.items];
+      newItems[index] = { ...newItems[index], send_unit: sendUnit };
+      return { ...prev, items: newItems };
+    });
   };
   // تحديث كمية تحويل الفرع
   const updateBranchTransferQty = (index, qty) => {
@@ -792,14 +801,16 @@ export default function WarehouseManufacturing() {
       return;
     }
     
-    // التحقق من الكميات
+    // التحقق من الكميات (بعد تحويلها للوحدة الأساسية التي يُخصم بها المخزون)
     for (const item of branchTransferForm.items) {
       if (item.quantity <= 0) {
         toast.error(t('الكمية يجب أن تكون أكبر من صفر'));
         return;
       }
-      if (item.quantity > item.available) {
-        toast.error(t('الكمية المطلوبة أكبر من المتاح'));
+      const mp = manufacturedProducts.find(m => m.id === item.product_id);
+      const baseQty = convertTransferToBase(mp, item.quantity, item.send_unit);
+      if (baseQty > Number(item.available)) {
+        toast.error(`${t('الكمية المطلوبة أكبر من المتاح')}: ${item.product_name}`);
         return;
       }
     }
@@ -809,10 +820,15 @@ export default function WarehouseManufacturing() {
       await axios.post(`${API}/warehouse-transfers`, {
         transfer_type: 'manufacturing_to_branch',
         to_branch_id: branchTransferForm.to_branch_id,
-        items: branchTransferForm.items.map(i => ({
-          product_id: i.product_id,
-          quantity: i.quantity
-        })),
+        items: branchTransferForm.items.map(i => {
+          const mp = manufacturedProducts.find(m => m.id === i.product_id);
+          // نرسل دائماً بالوحدة الأساسية (عدد الحبات/القطع) بعد التحويل التلقائي
+          const baseQty = convertTransferToBase(mp, i.quantity, i.send_unit);
+          return {
+            product_id: i.product_id,
+            quantity: Math.round(baseQty * 1e6) / 1e6,
+          };
+        }),
         notes: branchTransferForm.notes
       }, { headers });
       
@@ -830,10 +846,12 @@ export default function WarehouseManufacturing() {
   // فتح حوار تنفيذ طلب فرع — يبدأ بكميات افتراضية = الأقل بين (المطلوب، المتوفر)
   const openBranchFulfillDialog = (request) => {
     const qtyOverrides = {};
+    const unitOverrides = {};
     (request.items || []).forEach(it => {
       const avail = Number(it.available_quantity || 0);
       const req = Number(it.quantity || 0);
       qtyOverrides[it.product_id] = Math.max(0, Math.min(avail, req));
+      unitOverrides[it.product_id] = it.unit || 'قطعة';
     });
     const pkgOverrides = {};
     (request.packaging_items || []).forEach(p => {
@@ -841,7 +859,7 @@ export default function WarehouseManufacturing() {
       const req = Number(p.quantity || 0);
       pkgOverrides[p.packaging_material_id] = Math.max(0, Math.min(avail, req));
     });
-    setBranchFulfillDialog({ open: true, request, qtyOverrides, pkgOverrides, notes: '' });
+    setBranchFulfillDialog({ open: true, request, qtyOverrides, unitOverrides, pkgOverrides, notes: '' });
   };
 
   // تنفيذ طلب فرع (يدعم كميات مُعدّلة + إشعار مسؤول المطبخ بالتخفيضات)
@@ -859,7 +877,7 @@ export default function WarehouseManufacturing() {
       } else {
         toast.success(t('تم تنفيذ الطلب وتحويل المنتجات للفرع'));
       }
-      setBranchFulfillDialog({ open: false, request: null, qtyOverrides: {}, pkgOverrides: {}, notes: '' });
+      setBranchFulfillDialog({ open: false, request: null, qtyOverrides: {}, unitOverrides: {}, pkgOverrides: {}, notes: '' });
       fetchData();
     } catch (error) {
       const detail = error.response?.data?.detail;
@@ -1072,6 +1090,49 @@ export default function WarehouseManufacturing() {
     // حتى لو كانت piece_weight_unit وزنية أو فارغة (بيانات قديمة/تالفة).
     if (pdv > 0 && _PIECE_W[pdu]) return pdv * _PIECE_W[pdu];
     return pw * (_PIECE_W[pwu] || 1);
+  };
+
+  // ⭐ خيارات الوحدات المتاحة عند التحويل للفرع: الوحدة الأساسية + الوزنية (إن كان للقطعة وزن معرّف)
+  const _TRANSFER_W = { 'غرام': 1, 'كغم': 1000, 'كيلو': 1000, 'كجم': 1000, 'مل': 1, 'لتر': 1000 };
+  const getTransferUnitOptions = (product) => {
+    const base = product?.unit || 'قطعة';
+    const opts = [base];
+    if (_TRANSFER_W[base]) {
+      // الوحدة الأساسية وزنية → أتح غرام/كغم
+      ['غرام', 'كغم'].forEach(u => { if (u !== base) opts.push(u); });
+    } else if (getPieceGrams(product) > 0) {
+      // الوحدة الأساسية عدّية ولها وزن قطعة معرّف → أتح الوزن
+      opts.push('غرام', 'كغم');
+    }
+    return [...new Set(opts)];
+  };
+
+  // ⭐ تحويل كمية مُدخلة بوحدة الإرسال إلى عدد بالوحدة الأساسية للمنتج (التي يُخصم بها المخزون)
+  const convertTransferToBase = (product, qty, sendUnit) => {
+    const base = product?.unit || 'قطعة';
+    qty = Number(qty) || 0;
+    if (!sendUnit || sendUnit === base) return qty;
+    const fIn = _TRANSFER_W[sendUnit];
+    if (_TRANSFER_W[base]) {
+      // وزن → وزن
+      return fIn ? (qty * fIn) / _TRANSFER_W[base] : qty;
+    }
+    // وزن → حبات/قطع عبر وزن القطعة
+    const pieceGrams = getPieceGrams(product);
+    return (fIn && pieceGrams > 0) ? (qty * fIn) / pieceGrams : qty;
+  };
+
+  // ⭐ عكس التحويل: من الوحدة الأساسية إلى وحدة العرض المختارة (لعرض القيمة في نافذة التنفيذ)
+  const convertBaseToUnit = (product, baseQty, sendUnit) => {
+    const base = product?.unit || 'قطعة';
+    baseQty = Number(baseQty) || 0;
+    if (!sendUnit || sendUnit === base) return baseQty;
+    const fOut = _TRANSFER_W[sendUnit];
+    if (_TRANSFER_W[base]) {
+      return fOut ? (baseQty * _TRANSFER_W[base]) / fOut : baseQty;
+    }
+    const pieceGrams = getPieceGrams(product);
+    return (fOut && pieceGrams > 0) ? (baseQty * pieceGrams) / fOut : baseQty;
   };
 
 
@@ -3676,6 +3737,13 @@ export default function WarehouseManufacturing() {
                                 const backendUnitBefore = Number(product.unit_cost_before_waste || 0);
                                 const unitBefore = backendUnitBefore > 0 ? backendUnitBefore : (batchBefore / denom);
                                 const unitAfter = backendUnitAfter > 0 ? backendUnitAfter : (batchAfter / denom);
+                                // ⭐⭐ إجمالي كلفة المخزون المصنّع = سعر الوحدة × الكمية المتبقية.
+                                // المستخدم يريد أن تعرض بطاقتا "الكلفة قبل/بعد الهدر" الإجمالي لكل
+                                // المخزون المُصنّع (مثل 5 قطع) لا كلفة دفعة/وحدة واحدة. سعر الوحدة يبقى
+                                // في السطر الفرعي. عند عدم وجود مخزون أو سعر وحدة → نعرض كلفة الدفعة (السلوك القديم).
+                                const stockQtyForTotal = Number(product.quantity || 0);
+                                const totalCostBefore = (stockQtyForTotal > 0 && unitBefore > 0) ? unitBefore * stockQtyForTotal : batchBefore;
+                                const totalCostAfter = (stockQtyForTotal > 0 && unitAfter > 0) ? unitAfter * stockQtyForTotal : batchAfter;
                                 // ⭐ وحدة العرض الذكية: إذا كان piece_weight_unit وحدة قطعية و product.unit وزنية → استخدم piece_weight_unit
                                 const _COUNT_UNITS_DISP = new Set(['قطعة','حبة','شريحة','حصة','كأس','كاب','قدح','صحن','علبة','كرتون','كيس','باكيت','رول','زجاجة','ربطة','piece']);
                                 const _WEIGHT_UNITS_DISP = new Set(['غرام','كغم','كيلو','كجم','مل','لتر','gram','kg','ml','l','liter']);
@@ -3746,15 +3814,15 @@ export default function WarehouseManufacturing() {
                                     })()}
                                     <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm mb-3">
                                       <div className="p-2 rounded-md bg-blue-500/5 border border-blue-300/30" data-testid="cost-before-waste-card">
-                                        <p className="text-[11px] text-muted-foreground">{t('الكلفة قبل الهدر')}</p>
-                                        <p className="font-bold text-blue-600 tabular-nums">{formatPrice(batchBefore)}</p>
+                                        <p className="text-[11px] text-muted-foreground">{t('الكلفة قبل الهدر')}{stockQtyForTotal > 0 && <span className="text-[9px]"> ({t('إجمالي')} {Math.round(stockQtyForTotal * 1000) / 1000} {unitLabel})</span>}</p>
+                                        <p className="font-bold text-blue-600 tabular-nums">{formatPrice(totalCostBefore)}</p>
                                         {hasPerPiece && (
                                           <p className="text-[10px] text-blue-700 mt-0.5 tabular-nums">{t('لكل')} {unitLabel}: <strong>{formatPrice(unitBefore)}</strong></p>
                                         )}
                                       </div>
                                       <div className="p-2 rounded-md bg-emerald-500/10 border-2 border-emerald-500/40" data-testid="cost-after-waste-card">
-                                        <p className="text-[11px] text-muted-foreground">⭐ {t('الكلفة بعد الهدر')}</p>
-                                        <p className="font-bold text-emerald-600 tabular-nums">{formatPrice(batchAfter)}</p>
+                                        <p className="text-[11px] text-muted-foreground">⭐ {t('الكلفة بعد الهدر')}{stockQtyForTotal > 0 && <span className="text-[9px]"> ({t('إجمالي')} {Math.round(stockQtyForTotal * 1000) / 1000} {unitLabel})</span>}</p>
+                                        <p className="font-bold text-emerald-600 tabular-nums">{formatPrice(totalCostAfter)}</p>
                                         {hasPerPiece && (
                                           <p className="text-[10px] text-emerald-700 mt-0.5 tabular-nums">{t('لكل')} {unitLabel}: <strong>{formatPrice(unitAfter)}</strong></p>
                                         )}
@@ -4972,7 +5040,7 @@ export default function WarehouseManufacturing() {
                     <div key={index} className="px-3 py-2 flex items-center justify-between gap-2">
                       <div className="flex-1">
                         <span className="font-medium">{item.raw_material_name}</span>
-                        <span className="text-xs text-muted-foreground mr-2">{t('(متوفر: {item.available})')}</span>
+                        <span className="text-xs text-muted-foreground mr-2">({t('متوفر')}: {item.available})</span>
                       </div>
                       <div className="flex items-center gap-2">
                         <Input
@@ -6846,29 +6914,62 @@ export default function WarehouseManufacturing() {
               <div>
                 <Label className="mb-2 block">{t('المنتجات المختارة للتحويل')}</Label>
                 <div className="space-y-2">
-                  {branchTransferForm.items.map((item, idx) => (
-                    <div key={idx} className="flex items-center gap-2 p-2 bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-700 rounded">
-                      <span className="flex-1 font-medium text-foreground">{item.product_name}</span>
-                      <Input 
-                        type="number"
-                        min="1"
-                        step="1"
-                        max={item.available}
-                        value={item.quantity}
-                        onChange={(e) => updateBranchTransferQty(idx, e.target.value)}
-                        className="w-24 bg-white dark:bg-gray-800 text-black dark:text-white border-gray-300 dark:border-gray-600"
-                      />
-                      <span className="text-sm text-muted-foreground">{item.unit}</span>
-                      <span className="text-xs text-green-600 dark:text-green-400">{t('(متاح: {item.available})')}</span>
-                      <Button 
-                        variant="ghost" 
-                        size="icon"
-                        onClick={() => removeBranchTransferItem(idx)}
-                      >
-                        <X className="h-4 w-4 text-red-500" />
-                      </Button>
+                  {branchTransferForm.items.map((item, idx) => {
+                    const mp = manufacturedProducts.find(m => m.id === item.product_id);
+                    const unitOptions = getTransferUnitOptions(mp || { unit: item.unit });
+                    const baseQty = convertTransferToBase(mp, item.quantity, item.send_unit || item.unit);
+                    const baseUnit = item.unit;
+                    const showConversion = (item.send_unit && item.send_unit !== baseUnit);
+                    return (
+                    <div key={idx} className="flex flex-col gap-1 p-2 bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-700 rounded">
+                      <div className="flex items-center gap-2">
+                        <span className="flex-1 font-medium text-foreground">{item.product_name}</span>
+                        <Input 
+                          type="number"
+                          min="0"
+                          step="any"
+                          value={item.quantity}
+                          onChange={(e) => updateBranchTransferQty(idx, e.target.value)}
+                          className="w-24 bg-white dark:bg-gray-800 text-black dark:text-white border-gray-300 dark:border-gray-600"
+                          data-testid={`branch-transfer-qty-${idx}`}
+                        />
+                        <Select
+                          value={item.send_unit || item.unit}
+                          onValueChange={(v) => updateBranchTransferUnit(idx, v)}
+                        >
+                          <SelectTrigger className="w-24" data-testid={`branch-transfer-unit-${idx}`}>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {unitOptions.map(u => (
+                              <SelectItem key={u} value={u}>{u}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <Button 
+                          variant="ghost" 
+                          size="icon"
+                          onClick={() => removeBranchTransferItem(idx)}
+                        >
+                          <X className="h-4 w-4 text-red-500" />
+                        </Button>
+                      </div>
+                      <div className="flex items-center justify-between text-xs pr-1">
+                        <span className="text-green-600 dark:text-green-400">
+                          {t('المتاح')}: {Math.round((Number(item.available) || 0) * 1000) / 1000} {baseUnit}
+                        </span>
+                        {showConversion && (
+                          <span
+                            className={`font-medium ${baseQty > Number(item.available) ? 'text-red-500' : 'text-blue-500'}`}
+                            data-testid={`branch-transfer-conv-${idx}`}
+                          >
+                            {t('سيُخصم')}: {Math.round(baseQty * 1000) / 1000} {baseUnit}
+                          </span>
+                        )}
+                      </div>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -8351,26 +8452,35 @@ export default function WarehouseManufacturing() {
               {/* المنتجات */}
               <div className="border rounded-lg overflow-hidden">
                 <div className="grid grid-cols-12 gap-2 bg-muted/40 px-3 py-2 text-xs font-medium">
-                  <div className="col-span-4">{t('المنتج')}</div>
+                  <div className="col-span-3">{t('المنتج')}</div>
                   <div className="col-span-2 text-center">{t('المطلوب')}</div>
                   <div className="col-span-2 text-center">{t('المتوفر')}</div>
-                  <div className="col-span-3 text-center">{t('سيُرسَل')}</div>
+                  <div className="col-span-2 text-center">{t('سيُرسَل')}</div>
+                  <div className="col-span-2 text-center">{t('الوحدة')}</div>
                   <div className="col-span-1 text-center">⚙</div>
                 </div>
                 {(branchFulfillDialog.request.items || []).map((it) => {
-                  const avail = Number(it.available_quantity || 0);
-                  const req = Number(it.quantity || 0);
+                  const mp = manufacturedProducts.find(m => m.id === it.product_id) || { unit: it.unit };
+                  const selUnit = branchFulfillDialog.unitOverrides[it.product_id] || it.unit || 'قطعة';
+                  const unitOpts = getTransferUnitOptions(mp);
+                  // التوفّر والطلب بالوحدة الأساسية → نحوّلهما لوحدة العرض المختارة
+                  const availBase = Number(it.available_quantity || 0);
+                  const reqBase = Number(it.quantity || 0);
+                  const avail = convertBaseToUnit(mp, availBase, selUnit);
+                  const req = convertBaseToUnit(mp, reqBase, selUnit);
+                  // القيمة المُدخلة مُخزّنة بوحدة العرض المختارة مباشرةً
                   const cur = Number(branchFulfillDialog.qtyOverrides[it.product_id] ?? 0);
                   const max = Math.min(Math.max(avail, 0), req);
-                  const reduced = cur < req;
+                  const reduced = cur < req - 1e-9;
+                  const r3 = (n) => Math.round(n * 1000) / 1000;
                   return (
                     <div key={it.product_id} className={`grid grid-cols-12 gap-2 px-3 py-2 items-center border-t text-sm ${cur <= 0 ? 'bg-red-500/5' : reduced ? 'bg-amber-500/5' : ''}`} data-testid={`branch-row-${it.product_id}`}>
-                      <div className="col-span-4 font-medium truncate">{it.product_name}</div>
-                      <div className="col-span-2 text-center">{req} {it.unit}</div>
+                      <div className="col-span-3 font-medium truncate">{it.product_name}</div>
+                      <div className="col-span-2 text-center">{r3(req)} {selUnit}</div>
                       <div className={`col-span-2 text-center font-bold ${avail >= req ? 'text-green-600' : avail > 0 ? 'text-amber-600' : 'text-red-600'}`}>
-                        {avail}
+                        {r3(avail)}
                       </div>
-                      <div className="col-span-3 flex items-center gap-1">
+                      <div className="col-span-2">
                         <Input
                           type="number"
                           min="0"
@@ -8389,6 +8499,28 @@ export default function WarehouseManufacturing() {
                           className="h-8 text-sm text-center"
                           data-testid={`branch-qty-${it.product_id}`}
                         />
+                      </div>
+                      <div className="col-span-2">
+                        <Select
+                          value={selUnit}
+                          onValueChange={(newUnit) => {
+                            // حوّل القيمة الحالية من الوحدة القديمة → أساسية → الوحدة الجديدة
+                            const baseQty = convertTransferToBase(mp, cur, selUnit);
+                            const newVal = convertBaseToUnit(mp, baseQty, newUnit);
+                            setBranchFulfillDialog(prev => ({
+                              ...prev,
+                              unitOverrides: { ...prev.unitOverrides, [it.product_id]: newUnit },
+                              qtyOverrides: { ...prev.qtyOverrides, [it.product_id]: Math.round(newVal * 1000) / 1000 }
+                            }));
+                          }}
+                        >
+                          <SelectTrigger className="h-8" data-testid={`branch-unit-${it.product_id}`}>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {unitOpts.map(u => (<SelectItem key={u} value={u}>{u}</SelectItem>))}
+                          </SelectContent>
+                        </Select>
                       </div>
                       <div className="col-span-1 text-center">
                         <Button
@@ -8482,17 +8614,23 @@ export default function WarehouseManufacturing() {
             </div>
           )}
           <DialogFooter>
-            <Button variant="outline" onClick={() => setBranchFulfillDialog({ open: false, request: null, qtyOverrides: {}, pkgOverrides: {}, notes: '' })} data-testid="branch-fulfill-cancel">
+            <Button variant="outline" onClick={() => setBranchFulfillDialog({ open: false, request: null, qtyOverrides: {}, unitOverrides: {}, pkgOverrides: {}, notes: '' })} data-testid="branch-fulfill-cancel">
               {t('إلغاء')}
             </Button>
             <Button
               className="bg-green-600 hover:bg-green-700"
               disabled={submitting || !branchFulfillDialog.request}
               onClick={() => {
-                const items = (branchFulfillDialog.request?.items || []).map(it => ({
-                  product_id: it.product_id,
-                  quantity: Number(branchFulfillDialog.qtyOverrides[it.product_id] || 0),
-                }));
+                const items = (branchFulfillDialog.request?.items || []).map(it => {
+                  const mp = manufacturedProducts.find(m => m.id === it.product_id) || { unit: it.unit };
+                  const selUnit = branchFulfillDialog.unitOverrides[it.product_id] || it.unit || 'قطعة';
+                  // نحوّل الكمية المُدخلة (بوحدة العرض) إلى الوحدة الأساسية قبل الإرسال
+                  const baseQty = convertTransferToBase(mp, Number(branchFulfillDialog.qtyOverrides[it.product_id] || 0), selUnit);
+                  return {
+                    product_id: it.product_id,
+                    quantity: Math.round(baseQty * 1e6) / 1e6,
+                  };
+                });
                 const pkg = (branchFulfillDialog.request?.packaging_items || []).map(p => ({
                   packaging_material_id: p.packaging_material_id,
                   quantity: Number(branchFulfillDialog.pkgOverrides[p.packaging_material_id] || 0),
