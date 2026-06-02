@@ -7031,8 +7031,7 @@ async def branch_waste_efficiency_report(
     if mp_ids:
         async for mp in db.manufactured_products.find(
             {"id": {"$in": list(mp_ids)}},
-            {"_id": 0, "id": 1, "name": 1, "unit": 1, "piece_weight": 1, "piece_weight_unit": 1,
-             "raw_material_cost": 1, "raw_material_cost_after_waste": 1},
+            {"_id": 0},
         ):
             mp_map[mp["id"]] = mp
 
@@ -7090,12 +7089,17 @@ async def branch_waste_efficiency_report(
         mp = mp_map.get(mp_id)
         if not mp:
             mp = await db.manufactured_products.find_one(
-                {"id": mp_id},
-                {"_id": 0, "id": 1, "name": 1, "unit": 1, "raw_material_cost": 1, "raw_material_cost_after_waste": 1},
+                {"id": mp_id}, {"_id": 0},
             ) or {}
         qty = round(consumed.get(mp_id, 0.0), 3)
-        unit_before = float(mp.get("raw_material_cost") or 0)
-        unit_after = float(mp.get("raw_material_cost_after_waste") or mp.get("raw_material_cost") or 0)
+        # ⭐ تكلفة الوحدة (لا تكلفة الدفعة) — نفس مصدر الحقيقة المستخدم في المبيعات/POS
+        # (raw_material_cost هو إجمالي تكلفة الدفعة، لذا يجب القسمة على الإنتاجية).
+        try:
+            await _enrich_unit_cost_fields(db, mp)
+        except Exception:
+            pass
+        unit_after = float(mp.get("unit_cost_after_waste") or 0)
+        unit_before = float(mp.get("unit_cost_before_waste") or unit_after or 0)
         cost_before = round(qty * unit_before, 2)
         cost_after = round(qty * unit_after, 2)
         loss = loss_map.get(mp_id, {"qty": 0.0, "value": 0.0})
