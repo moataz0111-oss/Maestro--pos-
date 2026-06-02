@@ -142,7 +142,7 @@ export const saveOfflineOrder = async (order) => {
     const offlineOrder = {
       ...order,
       id: order.id || generateUUID(),
-      offline_id: generateOfflineId(),
+      offline_id: order.offline_id || generateOfflineId(),
       is_synced: false,
       is_offline: true,
       created_at: order.created_at || new Date().toISOString(),

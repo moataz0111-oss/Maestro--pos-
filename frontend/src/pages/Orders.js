@@ -34,7 +34,9 @@ import {
   WifiOff,
   Cloud,
   CloudOff,
-  Wrench
+  Wrench,
+  Layers,
+  Trash2
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -75,6 +77,57 @@ export default function Orders() {
     customer_name: '', customer_phone: '', delivery_address: '', notes: '',
   });
   const [fixSubmitting, setFixSubmitting] = useState(false);
+
+  // === أداة تنظيف الطلبات المكررة القديمة (مالك/مدير عام) ===
+  const isOwnerOrGM = ['admin', 'super_admin', 'manager'].includes(user?.role);
+  const [showDuplicatesDialog, setShowDuplicatesDialog] = useState(false);
+  const [dupGroups, setDupGroups] = useState([]);
+  const [dupTotal, setDupTotal] = useState(0);
+  const [dupLoading, setDupLoading] = useState(false);
+  const [dupCleaningId, setDupCleaningId] = useState(null);
+
+  const fetchDuplicates = async () => {
+    setDupLoading(true);
+    try {
+      const end = new Date();
+      const start = new Date();
+      start.setDate(start.getDate() - 90);
+      const params = {
+        start_date: start.toISOString().slice(0, 10),
+        end_date: end.toISOString().slice(0, 10),
+      };
+      if (selectedBranch) params.branch_id = selectedBranch;
+      const res = await axios.get(`${API}/orders/duplicates`, { params });
+      setDupGroups(res.data?.groups || []);
+      setDupTotal(res.data?.total_duplicates || 0);
+    } catch (e) {
+      showApiError(e, t('فشل تحميل الطلبات المكررة'));
+    } finally {
+      setDupLoading(false);
+    }
+  };
+
+  const openDuplicatesDialog = () => {
+    setShowDuplicatesDialog(true);
+    fetchDuplicates();
+  };
+
+  const handleCleanDuplicate = async (orderId, orderNumber) => {
+    setDupCleaningId(orderId);
+    try {
+      await axios.delete(`${API}/orders/${orderId}/force-delete`);
+      toast.success(t('تم حذف الطلب المكرر') + ` #${orderNumber}`);
+      setDupGroups(prev => prev
+        .map(g => ({ ...g, duplicates: g.duplicates.filter(d => d.id !== orderId) }))
+        .filter(g => g.duplicates.length > 0));
+      setDupTotal(prev => Math.max(0, prev - 1));
+      fetchData();
+    } catch (e) {
+      showApiError(e, t('فشل حذف الطلب المكرر'));
+    } finally {
+      setDupCleaningId(null);
+    }
+  };
   
   // Sound notification state
   const [soundEnabled, setSoundEnabled] = useState(() => {
@@ -426,6 +479,19 @@ export default function Orders() {
               </Button>
             </div>
             
+            {isOwnerOrGM && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={openDuplicatesDialog}
+                className="border-orange-500 text-orange-600 hover:bg-orange-50"
+                data-testid="open-duplicates-cleanup-btn"
+                title={t('تنظيف الطلبات المكررة')}
+              >
+                <Layers className="h-4 w-4 ml-1" />
+                {t('تنظيف المكرر')}
+              </Button>
+            )}
             <Button variant="outline" size="icon" onClick={fetchData} data-testid="refresh-btn">
               <RefreshCw className="h-4 w-4" />
             </Button>
@@ -846,6 +912,73 @@ export default function Orders() {
               {fixSubmitting ? t('جاري الحفظ...') : t('حفظ التصحيح')}
             </Button>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* === أداة تنظيف الطلبات المكررة القديمة === */}
+      <Dialog open={showDuplicatesDialog} onOpenChange={setShowDuplicatesDialog}>
+        <DialogContent className="max-w-3xl max-h-[88vh] overflow-y-auto" data-testid="duplicates-dialog">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Layers className="h-5 w-5 text-orange-500" />
+              {t('تنظيف الطلبات المكررة القديمة')}
+            </DialogTitle>
+            <p className="text-xs text-muted-foreground">
+              {t('يعرض الطلبات التي لها نسخة مدفوعة حقيقية ونسخة مكررة غير مدفوعة (آخر 90 يوماً). احذف النسخة المكررة بضغطة.')}
+            </p>
+          </DialogHeader>
+
+          {dupLoading ? (
+            <div className="flex justify-center py-12">
+              <RefreshCw className="h-6 w-6 animate-spin text-primary" />
+            </div>
+          ) : dupGroups.length === 0 ? (
+            <div className="text-center py-12 text-muted-foreground" data-testid="no-duplicates">
+              <Check className="h-10 w-10 mx-auto mb-2 text-emerald-500 opacity-70" />
+              <p>{t('لا توجد طلبات مكررة 🎉')}</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="text-sm font-medium">
+                {t('عدد النسخ المكررة')}: <span className="text-orange-600 font-bold" data-testid="duplicates-count">{dupTotal}</span>
+              </div>
+              {dupGroups.map((g, idx) => (
+                <div key={g.signature + idx} className="border rounded-lg p-3 space-y-2" data-testid={`dup-group-${idx}`}>
+                  {/* الطلب الأصلي (يُحتفظ به) */}
+                  <div className="flex items-center justify-between p-2 rounded bg-emerald-500/10 border border-emerald-500/20">
+                    <div className="text-sm">
+                      <span className="font-bold text-emerald-700">#{g.keep.order_number}</span>
+                      <span className="mx-2 text-muted-foreground">{g.keep.customer_name || t('زبون')}</span>
+                      <span className="text-muted-foreground">{formatPrice(g.keep.total)}</span>
+                      <span className="mx-2 text-[11px] text-emerald-600">✓ {t('مدفوع — يُحتفظ به')}</span>
+                    </div>
+                  </div>
+                  {/* النسخ المكررة (للحذف) */}
+                  {g.duplicates.map(d => (
+                    <div key={d.id} className="flex items-center justify-between p-2 rounded bg-red-500/5 border border-red-500/20" data-testid={`dup-row-${d.id}`}>
+                      <div className="text-sm">
+                        <span className="font-bold text-red-600">#{d.order_number}</span>
+                        <span className="mx-2 text-muted-foreground">{formatPrice(d.total)}</span>
+                        <span className="text-[11px] text-red-500">{t('غير مدفوع — مكرر')}</span>
+                        {d.is_offline_order && <span className="mx-1 text-[10px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-700">{t('أوفلاين')}</span>}
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="border-red-500 text-red-600 hover:bg-red-50"
+                        disabled={dupCleaningId === d.id}
+                        onClick={() => handleCleanDuplicate(d.id, d.order_number)}
+                        data-testid={`delete-duplicate-${d.id}`}
+                      >
+                        {dupCleaningId === d.id ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4 ml-1" />}
+                        {t('حذف المكرر')}
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
+          )}
         </DialogContent>
       </Dialog>
 

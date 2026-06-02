@@ -1660,6 +1660,10 @@ export default function POS() {
     const savedBranchIdForKitchen = localStorage.getItem('selectedBranchId');
     const currentBranchId = getBranchIdForApi() || savedBranchIdForKitchen || user?.branch_id;
 
+    // ⭐ مفتاح ثبات (idempotency) واحد لكل عملية إنشاء — يُرسل أونلاين وأوفلاين
+    // لمنع تكرار الطلب عند ضياع رد السيرفر (lost-ACK) ثم مزامنة النسخة المحلية.
+    const clientOrderId = offlineStorage.generateOfflineId();
+
     // تحديث حالة جميع العناصر لـ "إرسال"
     const initialStatus = {};
     cart.forEach((_, idx) => { initialStatus[idx] = 'sending'; });
@@ -1795,7 +1799,8 @@ export default function POS() {
           delivery_app_name: orderType === 'delivery' && deliveryApp ? (deliveryApps.find(a => a.id === deliveryApp)?.name || '') : null,
           driver_id: orderType === 'delivery' ? selectedDriver : null,
           notes: orderNotes,
-          auto_ready: isDeliveryOrder  // معلق للسفري والطاولات، جاهز للتوصيل فقط
+          auto_ready: isDeliveryOrder,  // معلق للسفري والطاولات، جاهز للتوصيل فقط
+          offline_id: clientOrderId  // ⭐ مفتاح الثبات لمنع التكرار عند المزامنة
         };
         
         const res = await axios.post(`${API}/orders`, orderData);
@@ -1955,7 +1960,8 @@ export default function POS() {
             notes: orderNotes,
             status: 'pending',
             cashier_id: user?.id,
-            cashier_name: user?.name || user?.full_name
+            cashier_name: user?.name || user?.full_name,
+            offline_id: clientOrderId  // ⭐ نفس مفتاح الثبات المُرسل أونلاين
           };
           
           const savedOrder = await offlineStorage.saveOfflineOrder(offlineOrder);
@@ -2087,6 +2093,10 @@ export default function POS() {
     const currentBranchId = getBranchIdForApi() || savedBranchIdForSubmit || user?.branch_id;
     console.log('📍 Branch ID for order:', currentBranchId);
 
+    // ⭐ مفتاح ثبات (idempotency) واحد لكل عملية إنشاء — يُرسل أونلاين وأوفلاين
+    // لمنع تكرار الطلب عند ضياع رد السيرفر ثم مزامنة النسخة المحلية.
+    const clientOrderId = offlineStorage.generateOfflineId();
+
     setSubmitting(true);
     
     // دالة مساعدة لحفظ الطلب محلياً
@@ -2141,7 +2151,8 @@ export default function POS() {
         notes: orderNotes,
         status: 'pending',
         cashier_id: user?.id,
-        cashier_name: user?.name || user?.full_name
+        cashier_name: user?.name || user?.full_name,
+        offline_id: clientOrderId  // ⭐ نفس مفتاح الثبات المُرسل أونلاين
       };
 
       const savedOrder = await offlineStorage.saveOfflineOrder(offlineOrder);
@@ -2353,7 +2364,8 @@ export default function POS() {
           delivery_app: orderType === 'delivery' ? deliveryApp : null,
           delivery_app_name: orderType === 'delivery' && deliveryApp ? (deliveryApps.find(a => a.id === deliveryApp)?.name || '') : null,
           driver_id: selectedDriver || null,
-          notes: orderNotes
+          notes: orderNotes,
+          offline_id: clientOrderId  // ⭐ مفتاح الثبات لمنع التكرار عند المزامنة
         };
         
         const res = await axios.post(`${API}/orders`, orderData);

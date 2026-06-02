@@ -1608,6 +1608,9 @@ class OrderCreate(BaseModel):
     is_delivery_company: bool = False  # هل الطلب لشركة توصيل
     driver_id: Optional[str] = None
     auto_ready: bool = False  # الطلب جاهز تلقائياً
+    # ⭐ مفتاح الثبات (idempotency) لمنع تكرار طلبات الأوفلاين عند ضياع رد السيرفر
+    offline_id: Optional[str] = None
+    is_offline_order: Optional[bool] = False
 
 class OrderResponse(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -6017,6 +6020,22 @@ async def create_order(order: OrderCreate, current_user: dict = Depends(get_curr
     
     # ===== Idempotency: منع إنشاء طلب مكرر خلال 30 ثانية =====
     # السبب الجذري للطلب المكرر #11 في فرع السيدية: ضغط مزدوج/إعادة محاولة من POS
+    # ⭐ ثبات (Idempotency) عبر offline_id: مفتاح ثابت يُرسله الكاشير مع كل عملية إنشاء.
+    # إن وُجد طلب بنفس offline_id (حتى لو مرّت دقائق) نُعيده بدل إنشاء نسخة مكررة.
+    # هذا يحل تكرار الأوفلاين عند ضياع رد السيرفر ثم مزامنة النسخة المحلية.
+    incoming_offline_id = getattr(order, "offline_id", None)
+    if incoming_offline_id:
+        existing_by_offline = await db.orders.find_one(
+            {"offline_id": incoming_offline_id, **({"tenant_id": tenant_id} if tenant_id else {})},
+            {"_id": 0},
+        )
+        if existing_by_offline:
+            logger.info(
+                f"Order idempotency: returning existing #{existing_by_offline.get('order_number')} "
+                f"for offline_id={incoming_offline_id} (no duplicate created)"
+            )
+            return existing_by_offline
+
     # نقارن: tenant + branch + cashier + customer + items hash + total
     try:
         items_sig_data = sorted([
@@ -6317,6 +6336,8 @@ async def create_order(order: OrderCreate, current_user: dict = Depends(get_curr
         "preferred_payment": order.preferred_payment,
         "payment_status": payment_status,
         "order_fingerprint": order_fingerprint,
+        "offline_id": incoming_offline_id,  # ⭐ مفتاح الثبات لمنع التكرار عند المزامنة
+        "is_offline_order": bool(getattr(order, "is_offline_order", False)),
         "delivery_app": order.delivery_app,
         "delivery_app_name": delivery_app_name,  # اسم شركة التوصيل
         "delivery_commission": delivery_commission,
@@ -6554,6 +6575,104 @@ async def get_orders(
     
     orders = await db.orders.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
     return orders
+
+def _order_dup_signature(o: dict) -> str:
+    """بصمة محتوى الطلب لاكتشاف التطابق (فرع+نوع+عميل+عناصر+إجمالي+يوم العمل)."""
+    items_sig = "|".join(sorted(
+        f"{(it.get('product_id') or it.get('product_name') or '')}:{float(it.get('quantity') or 0):.2f}"
+        for it in (o.get("items") or [])
+    ))
+    biz = o.get("business_date") or (o.get("created_at") or "")[:10]
+    return (
+        f"{o.get('branch_id') or ''}|{o.get('order_type') or ''}|"
+        f"{(o.get('customer_name') or '').strip()}|{(o.get('customer_phone') or '').strip()}|"
+        f"{items_sig}|{round(float(o.get('total') or 0), 2)}|{biz}"
+    )
+
+
+def _order_is_paid(o: dict) -> bool:
+    pm = (o.get("payment_method") or "").lower()
+    ps = (o.get("payment_status") or "").lower()
+    return pm not in ("pending", "معلق", "") and ps not in ("pending", "unpaid", "معلق", "غير مدفوع", "")
+
+
+@api_router.get("/orders/duplicates")
+async def find_duplicate_orders(
+    branch_id: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    current_user: dict = Depends(get_current_user),
+):
+    """كشف الطلبات المكررة القديمة (مالك/مدير عام فقط).
+
+    يُرجِع فقط المجموعات التي فيها طلب **مدفوع** حقيقي + نسخة **غير مدفوعة** مطابقة
+    (السيناريو الناتج عن تكرار الأوفلاين). الطلبات المعلّقة العادية لا تُعتبر تكراراً
+    لأنها بلا طلب مدفوع مطابق.
+    """
+    if current_user.get("role") not in [UserRole.ADMIN, UserRole.SUPER_ADMIN, UserRole.MANAGER]:
+        raise HTTPException(status_code=403, detail="هذه الأداة متاحة للمالك/المدير العام فقط")
+
+    tenant_id = get_user_tenant_id(current_user)
+    query = {"status": {"$nin": ["cancelled", "refunded"]}}
+    if tenant_id:
+        query["tenant_id"] = tenant_id
+    if branch_id:
+        query["branch_id"] = branch_id
+    if start_date and end_date:
+        query["business_date"] = {"$gte": start_date, "$lte": end_date}
+    elif start_date:
+        query["business_date"] = {"$gte": start_date}
+
+    groups_map: dict = {}
+    async for o in db.orders.find(query, {"_id": 0}):
+        groups_map.setdefault(_order_dup_signature(o), []).append(o)
+
+    result_groups = []
+    total_dups = 0
+    for sig, items in groups_map.items():
+        if len(items) < 2:
+            continue
+        paid = [o for o in items if _order_is_paid(o)]
+        unpaid = [o for o in items if not _order_is_paid(o)]
+        # يجب وجود طلب مدفوع حقيقي + نسخة غير مدفوعة مطابقة
+        if not paid or not unpaid:
+            continue
+        items.sort(key=lambda x: x.get("created_at") or "")
+        paid.sort(key=lambda x: x.get("created_at") or "")
+        keep = paid[0]
+
+        def _slim(o):
+            return {
+                "id": o.get("id"),
+                "order_number": o.get("order_number"),
+                "total": o.get("total"),
+                "order_type": o.get("order_type"),
+                "customer_name": o.get("customer_name"),
+                "payment_method": o.get("payment_method"),
+                "payment_status": o.get("payment_status"),
+                "is_offline_order": bool(o.get("is_offline_order")),
+                "is_paid": _order_is_paid(o),
+                "created_at": o.get("created_at"),
+                "business_date": o.get("business_date"),
+            }
+
+        removable = [o for o in unpaid if o.get("id") != keep.get("id")]
+        if not removable:
+            continue
+        total_dups += len(removable)
+        result_groups.append({
+            "signature": sig,
+            "keep": _slim(keep),
+            "duplicates": [_slim(o) for o in removable],
+        })
+
+    result_groups.sort(key=lambda g: g["keep"].get("order_number") or 0, reverse=True)
+    return {
+        "groups": result_groups,
+        "total_groups": len(result_groups),
+        "total_duplicates": total_dups,
+    }
+
 
 @api_router.get("/orders/{order_id}", response_model=OrderResponse)
 async def get_order(order_id: str, current_user: dict = Depends(get_current_user)):
