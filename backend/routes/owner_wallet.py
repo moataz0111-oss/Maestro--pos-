@@ -11,12 +11,35 @@ from .shared import get_database, get_current_user, get_user_tenant_id
 
 router = APIRouter(prefix="/owner-wallet", tags=["owner-wallet"])
 
+
+# ==================== طرق الدفع (نقدي + حسابات غير نقدية مخصّصة) ====================
+def _is_cash_method(m) -> bool:
+    """هل طريقة الدفع نقدية؟ (القديمة بلا طريقة تُعتبر نقدية للتوافق)."""
+    return (not m) or str(m).strip().lower() in ("cash", "نقدي", "نقد", "نقدا", "كاش")
+
+
+async def _save_payment_method(db, tenant_id, method):
+    """حفظ طريقة الدفع غير النقدية تلقائياً لتظهر لاحقاً في القائمة."""
+    if _is_cash_method(method):
+        return
+    name = str(method).strip()
+    exists = await db.owner_payment_methods.find_one({"tenant_id": tenant_id, "name": name})
+    if not exists:
+        await db.owner_payment_methods.insert_one({
+            "id": str(uuid.uuid4()),
+            "tenant_id": tenant_id,
+            "name": name,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        })
+
+
 # ==================== MODELS ====================
 class DepositCreate(BaseModel):
     amount: float
     date: str  # YYYY-MM-DD
     description: Optional[str] = None
     source: str = "cash_sales"  # cash_sales, card_sales, other
+    payment_method: Optional[str] = "cash"  # نقدي / اسم الحساب غير النقدي (بطاقة كي، زين كاش، حساب بنكي...)
     branch_id: Optional[str] = None  # معرف الفرع
     branch_name: Optional[str] = None  # اسم الفرع
     external_source: Optional[str] = None  # عند اختيار "أخرى" — مصدر خارجي (مشروع آخر، قرض، إلخ)
@@ -27,6 +50,7 @@ class WithdrawalCreate(BaseModel):
     beneficiary: str  # اسم المستفيد
     description: Optional[str] = None
     category: str = "transfer"  # transfer, payment, personal
+    payment_method: Optional[str] = "cash"  # نقدي / اسم الحساب غير النقدي للسحب منه
     branch_id: Optional[str] = None
     branch_name: Optional[str] = None
     external_source: Optional[str] = None
@@ -81,6 +105,59 @@ async def get_wallet_summary(current_user: dict = Depends(get_current_user)):
     
     # رصيد الخزينة = الأرباح المحولة - الأرباح المسحوبة
     safe_balance = total_profit_transferred - total_profit_withdrawn
+
+    # ===== الأرصدة حسب طريقة الدفع =====
+    # النقد الفعلي = إيداعات نقدية - سحوبات نقدية (دون الطرق غير النقدية)
+    cash_deposits = sum(d.get("amount", 0) for d in deposits if _is_cash_method(d.get("payment_method")))
+    cash_withdrawals = sum(w.get("amount", 0) for w in withdrawals if _is_cash_method(w.get("payment_method")))
+    cash_balance = cash_deposits - cash_withdrawals
+
+    # أرصدة الحسابات غير النقدية (بطاقة كي/زين كاش/حساب بنكي...) مع تفصيل بالفرع
+    method_map: dict = {}
+
+    def _method_entry(m):
+        return method_map.setdefault(m, {
+            "method": m, "deposits": 0.0, "withdrawals": 0.0, "branches": {},
+        })
+
+    def _branch_entry(entry, rec):
+        bid = rec.get("branch_id") or (f"ext:{rec.get('external_source')}" if rec.get("external_source") else "__none__")
+        return entry["branches"].setdefault(bid, {
+            "branch_id": rec.get("branch_id"),
+            "branch_name": rec.get("branch_name") or rec.get("external_source") or "غير محدد",
+            "deposits": 0.0, "withdrawals": 0.0,
+        })
+
+    for d in deposits:
+        m = d.get("payment_method")
+        if _is_cash_method(m):
+            continue
+        e = _method_entry(str(m).strip())
+        amt = d.get("amount", 0)
+        e["deposits"] += amt
+        _branch_entry(e, d)["deposits"] += amt
+    for w in withdrawals:
+        m = w.get("payment_method")
+        if _is_cash_method(m):
+            continue
+        e = _method_entry(str(m).strip())
+        amt = w.get("amount", 0)
+        e["withdrawals"] += amt
+        _branch_entry(e, w)["withdrawals"] += amt
+
+    method_balances = []
+    for m, e in method_map.items():
+        e["balance"] = round(e["deposits"] - e["withdrawals"], 2)
+        branches = []
+        for b in e["branches"].values():
+            b["balance"] = round(b["deposits"] - b["withdrawals"], 2)
+            branches.append(b)
+        e["branches"] = sorted(branches, key=lambda x: x["balance"], reverse=True)
+        e["deposits"] = round(e["deposits"], 2)
+        e["withdrawals"] = round(e["withdrawals"], 2)
+        method_balances.append(e)
+    method_balances.sort(key=lambda x: x["balance"], reverse=True)
+    total_non_cash = round(sum(e["balance"] for e in method_balances), 2)
     
     # آخر 10 معاملات
     all_transactions = []
@@ -112,8 +189,84 @@ async def get_wallet_summary(current_user: dict = Depends(get_current_user)):
         "transfers_count": len(profit_transfers),
         "remaining_transfers": remaining_transfers,  # عدد التحويلات المتبقية
         "can_transfer": can_transfer,  # هل يمكن التحويل
+        "cash_balance": round(cash_balance, 2),  # النقد الفعلي (نقدي فقط)
+        "method_balances": method_balances,  # أرصدة الحسابات غير النقدية + تفصيل بالفرع
+        "total_non_cash": total_non_cash,  # إجمالي الأرصدة غير النقدية
         "recent_transactions": all_transactions[:10]
     }
+
+
+@router.get("/payment-methods")
+async def get_payment_methods(current_user: dict = Depends(get_current_user)):
+    """قائمة طرق الدفع غير النقدية المحفوظة (تظهر تلقائياً عند الإيداع/السحب)."""
+    db = get_database()
+    tenant_id = get_user_tenant_id(current_user)
+    query = {"tenant_id": tenant_id} if tenant_id else {}
+    methods = await db.owner_payment_methods.find(query, {"_id": 0}).sort("name", 1).to_list(200)
+    return methods
+
+
+@router.get("/monthly-breakdown")
+async def get_monthly_breakdown(current_user: dict = Depends(get_current_user)):
+    """تفصيل شهري لكل بطاقة رئيسية:
+    - الإيداعات/السحوبات: مجموع شهري (تدفّق)
+    - الرصيد المتاح/الخزينة الشخصية: رصيد تراكمي في نهاية كل شهر
+    """
+    db = get_database()
+    tenant_id = get_user_tenant_id(current_user)
+    query = {"tenant_id": tenant_id} if tenant_id else {}
+
+    deposits = await db.owner_deposits.find(query, {"_id": 0}).to_list(5000)
+    withdrawals = await db.owner_withdrawals.find(query, {"_id": 0}).to_list(5000)
+    profit_transfers = await db.owner_profit_transfers.find(query, {"_id": 0}).to_list(5000)
+    profit_withdrawals = await db.owner_profit_withdrawals.find(query, {"_id": 0}).to_list(5000)
+
+    def _month(s):
+        return (s or "")[:7]  # YYYY-MM
+
+    dep_m, wd_m, tr_m, pw_m = {}, {}, {}, {}
+    for d in deposits:
+        k = _month(d.get("date"))
+        if k:
+            dep_m[k] = dep_m.get(k, 0) + d.get("amount", 0)
+    for w in withdrawals:
+        k = _month(w.get("date"))
+        if k:
+            wd_m[k] = wd_m.get(k, 0) + w.get("amount", 0)
+    for p in profit_transfers:
+        k = _month(p.get("month"))
+        if k:
+            tr_m[k] = tr_m.get(k, 0) + p.get("amount", 0)
+    for pw in profit_withdrawals:
+        k = _month(pw.get("date"))
+        if k:
+            pw_m[k] = pw_m.get(k, 0) + pw.get("amount", 0)
+
+    all_months = sorted(set(list(dep_m) + list(wd_m) + list(tr_m) + list(pw_m)))
+
+    deposits_list, withdrawals_list, available_list, safe_list = [], [], [], []
+    run_avail, run_safe = 0.0, 0.0
+    for m in all_months:
+        dep = dep_m.get(m, 0)
+        wd = wd_m.get(m, 0)
+        tr = tr_m.get(m, 0)
+        pw = pw_m.get(m, 0)
+        run_avail += (dep - wd - tr)
+        run_safe += (tr - pw)
+        deposits_list.append({"month": m, "amount": round(dep, 2)})
+        withdrawals_list.append({"month": m, "amount": round(wd, 2)})
+        available_list.append({"month": m, "amount": round(run_avail, 2)})
+        safe_list.append({"month": m, "amount": round(run_safe, 2)})
+
+    # الأحدث أولاً للعرض
+    return {
+        "deposits": list(reversed(deposits_list)),
+        "withdrawals": list(reversed(withdrawals_list)),
+        "available_balance": list(reversed(available_list)),
+        "safe_balance": list(reversed(safe_list)),
+    }
+
+
 
 @router.get("/deposits")
 async def get_deposits(
@@ -164,6 +317,7 @@ async def create_deposit(
         "date": deposit.date,
         "description": deposit.description,
         "source": deposit.source,
+        "payment_method": (deposit.payment_method or "cash").strip(),
         "branch_id": deposit.branch_id,
         "branch_name": branch_name,
         "external_source": deposit.external_source,
@@ -172,6 +326,7 @@ async def create_deposit(
     }
     
     await db.owner_deposits.insert_one(new_deposit)
+    await _save_payment_method(db, tenant_id, deposit.payment_method)
     new_deposit.pop("_id", None)
     return new_deposit
 
@@ -240,6 +395,7 @@ async def create_withdrawal(
         "beneficiary": withdrawal.beneficiary,
         "description": withdrawal.description,
         "category": withdrawal.category,
+        "payment_method": (withdrawal.payment_method or "cash").strip(),
         "branch_id": withdrawal.branch_id,
         "branch_name": branch_name,
         "external_source": withdrawal.external_source,
@@ -248,6 +404,7 @@ async def create_withdrawal(
     }
     
     await db.owner_withdrawals.insert_one(new_withdrawal)
+    await _save_payment_method(db, tenant_id, withdrawal.payment_method)
     new_withdrawal.pop("_id", None)
     return new_withdrawal
 

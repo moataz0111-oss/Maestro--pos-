@@ -109,8 +109,10 @@ export default function OwnerWallet() {
   const [closingDialogOpen, setClosingDialogOpen] = useState(false);
   
   // بيانات النماذج
-  const [newDeposit, setNewDeposit] = useState({ amount: '', date: new Date().toISOString().split('T')[0], description: '', source: 'cash_sales', branch_id: '', external_source: '' });
-  const [newWithdrawal, setNewWithdrawal] = useState({ amount: '', date: new Date().toISOString().split('T')[0], beneficiary: '', description: '', category: 'transfer', branch_id: '', external_source: '' });
+  const [newDeposit, setNewDeposit] = useState({ amount: '', date: new Date().toISOString().split('T')[0], description: '', source: 'cash_sales', branch_id: '', external_source: '', payment_method: 'cash', custom_method: '' });
+  const [newWithdrawal, setNewWithdrawal] = useState({ amount: '', date: new Date().toISOString().split('T')[0], beneficiary: '', description: '', category: 'transfer', branch_id: '', external_source: '', payment_method: 'cash', custom_method: '' });
+  // طرق الدفع غير النقدية المحفوظة (بطاقة كي، زين كاش، حساب بنكي...)
+  const [paymentMethods, setPaymentMethods] = useState([]);
   const [newProfitTransfer, setNewProfitTransfer] = useState({ amount: '', month: selectedDate, description: '', branch_id: '', external_source: '' });
   const [newClosing, setNewClosing] = useState({ month: selectedDate, total_sales: '', total_expenses: '', net_profit: '', notes: '' });
   // الفروع المتاحة + الخيار "أخرى"
@@ -127,6 +129,42 @@ export default function OwnerWallet() {
   const [profitWithdrawAmount, setProfitWithdrawAmount] = useState('');
   const [profitWithdrawReason, setProfitWithdrawReason] = useState('');
   const [isWithdrawingProfit, setIsWithdrawingProfit] = useState(false);
+
+  // 📅 تفصيل شهري للبطاقات الرئيسية (إيداعات/سحوبات/رصيد متاح/خزينة)
+  const [monthlyDialog, setMonthlyDialog] = useState(null); // 'deposits' | 'withdrawals' | 'available_balance' | 'safe_balance'
+  const [monthlyData, setMonthlyData] = useState(null);
+  const [monthlyLoading, setMonthlyLoading] = useState(false);
+
+  const openMonthlyBreakdown = async (metric) => {
+    setMonthlyDialog(metric);
+    if (monthlyData) return; // مُحمّل مسبقاً
+    setMonthlyLoading(true);
+    try {
+      const { data } = await axios.get(`${API}/owner-wallet/monthly-breakdown`);
+      setMonthlyData(data);
+    } catch (err) {
+      toast.error(t('فشل تحميل التفصيل الشهري'));
+    } finally {
+      setMonthlyLoading(false);
+    }
+  };
+
+  // اسم الشهر بالعربية من YYYY-MM
+  const monthLabel = (ym) => {
+    if (!ym) return '';
+    const [y, m] = ym.split('-');
+    const names = ['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
+    const idx = parseInt(m, 10) - 1;
+    return `${names[idx] || m} ${y}`;
+  };
+
+  const metricMeta = {
+    deposits: { title: t('إجمالي الإيداعات'), textClass: 'text-emerald-600', cumulative: false },
+    withdrawals: { title: t('إجمالي السحوبات'), textClass: 'text-rose-600', cumulative: false },
+    available_balance: { title: t('الرصيد المتاح'), textClass: 'text-blue-600', cumulative: true },
+    safe_balance: { title: t('الخزينة الشخصية'), textClass: 'text-amber-600', cumulative: true },
+  };
+
 
   // 📊 جلب تفاصيل فرع/مصدر مع نطاق تاريخ
   const fetchBranchDetails = async () => {
@@ -211,13 +249,14 @@ export default function OwnerWallet() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [summaryRes, depositsRes, withdrawalsRes, transfersRes, profitWithdrawalsRes, closingsRes] = await Promise.all([
+      const [summaryRes, depositsRes, withdrawalsRes, transfersRes, profitWithdrawalsRes, closingsRes, methodsRes] = await Promise.all([
         axios.get(`${API}/owner-wallet/summary`),
         axios.get(`${API}/owner-wallet/deposits?month=${selectedDate.slice(0, 7)}`),
         axios.get(`${API}/owner-wallet/withdrawals?month=${selectedDate.slice(0, 7)}`),
         axios.get(`${API}/owner-wallet/profit-transfers`),
         axios.get(`${API}/owner-wallet/profit-withdrawals`),
-        axios.get(`${API}/owner-wallet/monthly-closings`)
+        axios.get(`${API}/owner-wallet/monthly-closings`),
+        axios.get(`${API}/owner-wallet/payment-methods`)
       ]);
       
       setSummary(summaryRes.data);
@@ -226,6 +265,7 @@ export default function OwnerWallet() {
       setProfitTransfers(transfersRes.data);
       setProfitWithdrawals(profitWithdrawalsRes.data);
       setMonthlyClosings(closingsRes.data);
+      setPaymentMethods(Array.isArray(methodsRes.data) ? methodsRes.data : []);
     } catch (error) {
       console.error('Failed to fetch wallet data:', error);
       toast.error(t('فشل في جلب البيانات'));
@@ -253,7 +293,14 @@ export default function OwnerWallet() {
         date: newDeposit.date,
         description: newDeposit.description,
         source: newDeposit.source,
+        payment_method: newDeposit.payment_method === '__other__'
+          ? (newDeposit.custom_method || '').trim()
+          : newDeposit.payment_method,
       };
+      if (newDeposit.payment_method === '__other__' && !newDeposit.custom_method?.trim()) {
+        toast.error(t('يرجى كتابة اسم طريقة الدفع'));
+        return;
+      }
       if (newDeposit.branch_id === 'other') {
         payload.external_source = newDeposit.external_source.trim();
       } else {
@@ -262,7 +309,7 @@ export default function OwnerWallet() {
       await axios.post(`${API}/owner-wallet/deposits`, payload);
       toast.success(t('تم إضافة الإيداع بنجاح'));
       setDepositDialogOpen(false);
-      setNewDeposit({ amount: '', date: new Date().toISOString().split('T')[0], description: '', source: 'cash_sales', branch_id: '', external_source: '' });
+      setNewDeposit({ amount: '', date: new Date().toISOString().split('T')[0], description: '', source: 'cash_sales', branch_id: '', external_source: '', payment_method: 'cash', custom_method: '' });
       fetchData();
     } catch (error) {
       showApiError(error, t('فشل في إضافة الإيداع'));
@@ -289,7 +336,14 @@ export default function OwnerWallet() {
         beneficiary: newWithdrawal.beneficiary,
         description: newWithdrawal.description,
         category: newWithdrawal.category,
+        payment_method: newWithdrawal.payment_method === '__other__'
+          ? (newWithdrawal.custom_method || '').trim()
+          : newWithdrawal.payment_method,
       };
+      if (newWithdrawal.payment_method === '__other__' && !newWithdrawal.custom_method?.trim()) {
+        toast.error(t('يرجى كتابة اسم طريقة الدفع'));
+        return;
+      }
       if (newWithdrawal.branch_id === 'other') {
         payload.external_source = newWithdrawal.external_source.trim();
       } else {
@@ -298,7 +352,7 @@ export default function OwnerWallet() {
       await axios.post(`${API}/owner-wallet/withdrawals`, payload);
       toast.success(t('تم إضافة السحب بنجاح'));
       setWithdrawalDialogOpen(false);
-      setNewWithdrawal({ amount: '', date: new Date().toISOString().split('T')[0], beneficiary: '', description: '', category: 'transfer', branch_id: '', external_source: '' });
+      setNewWithdrawal({ amount: '', date: new Date().toISOString().split('T')[0], beneficiary: '', description: '', category: 'transfer', branch_id: '', external_source: '', payment_method: 'cash', custom_method: '' });
       fetchData();
     } catch (error) {
       showApiError(error, t('فشل في إضافة السحب'));
@@ -464,7 +518,7 @@ export default function OwnerWallet() {
       <main className="max-w-7xl mx-auto px-6 py-6 space-y-6">
         {/* الملخص الرئيسي */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <Card className="bg-gradient-to-br from-emerald-500 to-emerald-600 text-white border-0 shadow-lg">
+          <Card className="bg-gradient-to-br from-emerald-500 to-emerald-600 text-white border-0 shadow-lg cursor-pointer hover:shadow-xl hover:scale-[1.02] transition-all" onClick={() => openMonthlyBreakdown('deposits')} data-testid="summary-card-deposits">
             <CardContent className="p-5">
               <div className="flex items-center justify-between">
                 <div>
@@ -477,7 +531,7 @@ export default function OwnerWallet() {
             </CardContent>
           </Card>
 
-          <Card className="bg-gradient-to-br from-rose-500 to-rose-600 text-white border-0 shadow-lg">
+          <Card className="bg-gradient-to-br from-rose-500 to-rose-600 text-white border-0 shadow-lg cursor-pointer hover:shadow-xl hover:scale-[1.02] transition-all" onClick={() => openMonthlyBreakdown('withdrawals')} data-testid="summary-card-withdrawals">
             <CardContent className="p-5">
               <div className="flex items-center justify-between">
                 <div>
@@ -490,7 +544,7 @@ export default function OwnerWallet() {
             </CardContent>
           </Card>
 
-          <Card className="bg-gradient-to-br from-blue-500 to-blue-600 text-white border-0 shadow-lg">
+          <Card className="bg-gradient-to-br from-blue-500 to-blue-600 text-white border-0 shadow-lg cursor-pointer hover:shadow-xl hover:scale-[1.02] transition-all" onClick={() => openMonthlyBreakdown('available_balance')} data-testid="summary-card-available">
             <CardContent className="p-5">
               <div className="flex items-center justify-between">
                 <div>
@@ -503,7 +557,7 @@ export default function OwnerWallet() {
             </CardContent>
           </Card>
 
-          <Card className="bg-gradient-to-br from-amber-500 to-amber-600 text-white border-0 shadow-lg">
+          <Card className="bg-gradient-to-br from-amber-500 to-amber-600 text-white border-0 shadow-lg cursor-pointer hover:shadow-xl hover:scale-[1.02] transition-all" onClick={() => openMonthlyBreakdown('safe_balance')} data-testid="summary-card-safe">
             <CardContent className="p-5">
               <div className="flex items-center justify-between">
                 <div>
@@ -519,6 +573,99 @@ export default function OwnerWallet() {
             </CardContent>
           </Card>
         </div>
+
+        {/* 💳 أرصدة الحسابات - النقد الفعلي + كل طريقة دفع غير نقدية منفصلة */}
+        {(() => {
+          const methods = summary.method_balances || [];
+          // ألوان متناوبة للبطاقات غير النقدية
+          const palette = [
+            { ring: 'border-violet-300 dark:border-violet-700', bg: 'bg-violet-50/60 dark:bg-violet-950/20', text: 'text-violet-700 dark:text-violet-300', icon: 'text-violet-500' },
+            { ring: 'border-sky-300 dark:border-sky-700', bg: 'bg-sky-50/60 dark:bg-sky-950/20', text: 'text-sky-700 dark:text-sky-300', icon: 'text-sky-500' },
+            { ring: 'border-teal-300 dark:border-teal-700', bg: 'bg-teal-50/60 dark:bg-teal-950/20', text: 'text-teal-700 dark:text-teal-300', icon: 'text-teal-500' },
+            { ring: 'border-fuchsia-300 dark:border-fuchsia-700', bg: 'bg-fuchsia-50/60 dark:bg-fuchsia-950/20', text: 'text-fuchsia-700 dark:text-fuchsia-300', icon: 'text-fuchsia-500' },
+            { ring: 'border-indigo-300 dark:border-indigo-700', bg: 'bg-indigo-50/60 dark:bg-indigo-950/20', text: 'text-indigo-700 dark:text-indigo-300', icon: 'text-indigo-500' },
+            { ring: 'border-cyan-300 dark:border-cyan-700', bg: 'bg-cyan-50/60 dark:bg-cyan-950/20', text: 'text-cyan-700 dark:text-cyan-300', icon: 'text-cyan-500' },
+          ];
+          return (
+            <div data-testid="account-balances-section">
+              <h3 className="text-base font-semibold mb-3 flex items-center gap-2 text-foreground">
+                <CircleDollarSign className="h-5 w-5 text-amber-500" />
+                {t('أرصدة الحسابات')}
+                <Badge variant="outline" className="ml-2">{methods.length + 1}</Badge>
+              </h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                {/* بطاقة النقد الفعلي */}
+                <Card className="border-2 border-emerald-300 dark:border-emerald-700 bg-emerald-50/60 dark:bg-emerald-950/20" data-testid="balance-card-cash">
+                  <CardContent className="p-4 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <Banknote className="h-5 w-5 text-emerald-500" />
+                      <div>
+                        <p className="font-bold text-sm">{t('النقد الفعلي')}</p>
+                        <p className="text-xs text-muted-foreground">{t('نقدي فقط')}</p>
+                      </div>
+                    </div>
+                    <div className="pt-2 border-t">
+                      <p className="text-xs text-muted-foreground">{t('الرصيد المتاح')}</p>
+                      <p className={`text-xl font-bold tabular-nums ${(summary.cash_balance || 0) < 0 ? 'text-red-600' : 'text-emerald-700 dark:text-emerald-400'}`}>
+                        {formatPrice(summary.cash_balance || 0)}
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* بطاقة لكل طريقة دفع غير نقدية */}
+                {methods.map((m, idx) => {
+                  const c = palette[idx % palette.length];
+                  const isNegative = (m.balance || 0) < 0;
+                  return (
+                    <Card key={m.method} className={`border-2 ${isNegative ? 'border-red-500 bg-red-50 dark:bg-red-950/20' : `${c.ring} ${c.bg}`}`} data-testid={`balance-card-${m.method}`}>
+                      <CardContent className="p-4 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <CreditCard className={`h-5 w-5 ${isNegative ? 'text-red-500' : c.icon}`} />
+                            <div>
+                              <p className="font-bold text-sm">{m.method}</p>
+                              <p className="text-xs text-muted-foreground">{t('حساب غير نقدي')}</p>
+                            </div>
+                          </div>
+                          {isNegative && <Badge variant="destructive" className="text-xs">{t('سالب!')}</Badge>}
+                        </div>
+                        <div className="grid grid-cols-2 gap-2 text-xs">
+                          <div>
+                            <p className="text-emerald-600 font-medium">↓ {t('إيداعات')}</p>
+                            <p className="font-bold tabular-nums">{formatPrice(m.deposits || 0)}</p>
+                          </div>
+                          <div>
+                            <p className="text-rose-600 font-medium">↑ {t('سحوبات')}</p>
+                            <p className="font-bold tabular-nums">{formatPrice(m.withdrawals || 0)}</p>
+                          </div>
+                        </div>
+                        <div className="pt-2 border-t">
+                          <p className="text-xs text-muted-foreground">{t('الرصيد المتاح')}</p>
+                          <p className={`text-xl font-bold tabular-nums ${isNegative ? 'text-red-600' : c.text}`}>
+                            {formatPrice(m.balance || 0)}
+                          </p>
+                        </div>
+                        {/* تفصيل بالفرع/المصدر */}
+                        {Array.isArray(m.branches) && m.branches.length > 0 && (
+                          <div className="pt-2 border-t space-y-1">
+                            {m.branches.slice(0, 4).map((b, bi) => (
+                              <div key={bi} className="flex items-center justify-between text-[11px]">
+                                <span className="text-muted-foreground truncate max-w-[60%]">{b.branch_name}</span>
+                                <span className={`font-medium tabular-nums ${(b.balance || 0) < 0 ? 'text-red-600' : 'text-foreground'}`}>{formatPrice(b.balance || 0)}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })()}
+
 
         {/* 🏪 بطاقات الفروع - رصيد كل فرع منفصلاً */}
         {(() => {
@@ -703,6 +850,31 @@ export default function OwnerWallet() {
                   </Select>
                 </div>
                 <div>
+                  <Label>{t('طريقة الدفع / الحساب')}</Label>
+                  <Select value={newDeposit.payment_method} onValueChange={(v) => setNewDeposit({...newDeposit, payment_method: v})}>
+                    <SelectTrigger data-testid="deposit-payment-method-select"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="cash">💵 {t('نقدي')}</SelectItem>
+                      {paymentMethods.map(m => (
+                        <SelectItem key={m.id} value={m.name}>💳 {m.name}</SelectItem>
+                      ))}
+                      <SelectItem value="__other__">➕ {t('طريقة أخرى (اكتبها)')}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {newDeposit.payment_method === '__other__' && (
+                    <Input
+                      className="mt-2"
+                      value={newDeposit.custom_method}
+                      onChange={(e) => setNewDeposit({...newDeposit, custom_method: e.target.value})}
+                      placeholder={t('مثال: بطاقة كي، ماستر كارد، حساب بنك بغداد...')}
+                      data-testid="deposit-custom-method"
+                    />
+                  )}
+                  {newDeposit.payment_method !== 'cash' && (
+                    <p className="text-[11px] text-amber-600 mt-1">{t('إيداع غير نقدي — يظهر في الإجمالي وفي بطاقة الحساب، وليس في النقد الفعلي')}</p>
+                  )}
+                </div>
+                <div>
                   <Label>{t('الوصف')}</Label>
                   <Input
                     value={newDeposit.description}
@@ -790,6 +962,38 @@ export default function OwnerWallet() {
                       <SelectItem value="other">{t('أخرى')}</SelectItem>
                     </SelectContent>
                   </Select>
+                </div>
+                <div>
+                  <Label>{t('السحب من حساب')}</Label>
+                  <Select value={newWithdrawal.payment_method} onValueChange={(v) => setNewWithdrawal({...newWithdrawal, payment_method: v})}>
+                    <SelectTrigger data-testid="withdrawal-payment-method-select"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="cash">💵 {t('نقدي')}</SelectItem>
+                      {paymentMethods.map(m => (
+                        <SelectItem key={m.id} value={m.name}>💳 {m.name}</SelectItem>
+                      ))}
+                      <SelectItem value="__other__">➕ {t('طريقة أخرى (اكتبها)')}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {newWithdrawal.payment_method === '__other__' && (
+                    <Input
+                      className="mt-2"
+                      value={newWithdrawal.custom_method}
+                      onChange={(e) => setNewWithdrawal({...newWithdrawal, custom_method: e.target.value})}
+                      placeholder={t('مثال: بطاقة كي، ماستر كارد، حساب بنك بغداد...')}
+                      data-testid="withdrawal-custom-method"
+                    />
+                  )}
+                  {(() => {
+                    const pm = newWithdrawal.payment_method;
+                    if (pm === 'cash' || pm === '__other__') return null;
+                    const mb = (summary.method_balances || []).find(x => x.method === pm);
+                    const bal = mb ? mb.balance : 0;
+                    return <p className={`text-[11px] mt-1 ${bal < parseFloat(newWithdrawal.amount || 0) ? 'text-red-600' : 'text-emerald-600'}`}>
+                      {t('الرصيد المتاح في')} {pm}: <span className="font-bold">{formatPrice(bal)}</span>
+                      {bal < parseFloat(newWithdrawal.amount || 0) && ' — ' + t('الرصيد غير كافٍ!')}
+                    </p>;
+                  })()}
                 </div>
                 <div>
                   <Label>{t('الوصف')}</Label>
@@ -1201,6 +1405,61 @@ export default function OwnerWallet() {
             </Card>
           </TabsContent>
         </Tabs>
+
+        {/* 📅 Dialog: التفصيل الشهري للبطاقة المختارة */}
+        <Dialog open={!!monthlyDialog} onOpenChange={(o) => !o && setMonthlyDialog(null)}>
+          <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto" data-testid="monthly-breakdown-dialog">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-lg">
+                <Calendar className="h-5 w-5 text-primary" />
+                {t('التفصيل الشهري')} — <span className={metricMeta[monthlyDialog]?.textClass || 'text-primary'}>{metricMeta[monthlyDialog]?.title}</span>
+              </DialogTitle>
+            </DialogHeader>
+            {monthlyLoading ? (
+              <div className="py-10 flex justify-center"><RefreshCw className="h-6 w-6 animate-spin text-primary" /></div>
+            ) : (() => {
+              const rows = (monthlyData && monthlyDialog) ? (monthlyData[monthlyDialog] || []) : [];
+              const meta = metricMeta[monthlyDialog] || {};
+              if (rows.length === 0) {
+                return (
+                  <div className="text-center py-10 text-muted-foreground">
+                    <FileText className="h-10 w-10 mx-auto mb-2 opacity-50" />
+                    <p className="text-sm">{t('لا توجد بيانات شهرية')}</p>
+                  </div>
+                );
+              }
+              return (
+                <div className="space-y-2">
+                  <p className="text-xs text-muted-foreground mb-2">
+                    {meta.cumulative ? t('الرصيد التراكمي في نهاية كل شهر') : t('المجموع لكل شهر')}
+                  </p>
+                  {rows.map((r) => {
+                    const isNeg = (r.amount || 0) < 0;
+                    return (
+                      <div
+                        key={r.month}
+                        className="flex items-center justify-between p-3 rounded-lg bg-muted/40 hover:bg-muted/70 transition-colors"
+                        data-testid={`monthly-row-${r.month}`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <Calendar className="h-4 w-4 text-muted-foreground" />
+                          <div>
+                            <span className="font-medium text-sm block">{monthLabel(r.month)}</span>
+                            <span className="text-[11px] text-muted-foreground tabular-nums">{r.month.split('-')[1]}/{r.month.split('-')[0]}</span>
+                          </div>
+                        </div>
+                        <span className={`font-bold tabular-nums ${isNeg ? 'text-red-600' : (meta.textClass || 'text-foreground')}`}>
+                          {formatPrice(r.amount || 0)}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
+          </DialogContent>
+        </Dialog>
+
 
         {/* 📊 Dialog: تفاصيل الفرع/المصدر مع رسم بياني */}
         <Dialog open={!!detailDialog} onOpenChange={(o) => !o && setDetailDialog(null)}>

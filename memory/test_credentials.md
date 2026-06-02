@@ -35,7 +35,7 @@
 
 ## Seeded Test Data (Branch Packaging Count - iter212)
 - Branch 'الفرع الرئيسي' (76f56acc-...) has packaging item 'علبة برغر اختبار'
-  (packaging_material_id=0c88ceb8-e71a-4d12-831b-5d7678b34c2a, unit قطعة, cost 250, quantity 100, used_quantity varies after counts).
+  (packaging_material_id=mfg-inventory-sync, unit قطعة, cost 250, quantity 100, used_quantity varies after counts).
 - Endpoints: GET /api/branch-stock-count/packaging-today?branch_id= ; POST /api/branch-stock-count/submit-packaging
 - Re-seed snippet: insert branch_packaging_inventory {tenant_id:'default', branch_id, packaging_material_id, name, unit, quantity, used_quantity, cost_per_unit}
 
