@@ -112,6 +112,23 @@ export default function Orders() {
     fetchDuplicates();
   };
 
+  // حذف مباشر لطلب غير مدفوع (مالك/مدير عام) من القائمة
+  const [forceDeletingId, setForceDeletingId] = useState(null);
+  const handleForceDeleteOrder = async (order) => {
+    const num = order.order_number || order.id?.slice(-6);
+    if (!window.confirm(t('حذف نهائي للطلب') + ` #${num}؟ ` + t('لا يمكن التراجع — يُحذف من المبيعات والتقارير.'))) return;
+    setForceDeletingId(order.id);
+    try {
+      await axios.delete(`${API}/orders/${order.id}/force-delete`);
+      toast.success(t('تم حذف الطلب') + ` #${num}`);
+      fetchData();
+    } catch (e) {
+      showApiError(e, t('فشل حذف الطلب'));
+    } finally {
+      setForceDeletingId(null);
+    }
+  };
+
   const handleCleanDuplicate = async (orderId, orderNumber) => {
     setDupCleaningId(orderId);
     try {
@@ -627,6 +644,21 @@ export default function Orders() {
                           >
                             <Eye className="h-4 w-4" />
                           </Button>
+
+                          {/* حذف نهائي لطلب غير مدفوع — للمالك/المدير العام فقط */}
+                          {isOwnerOrGM && order.status !== 'cancelled' && !['paid', 'credit'].includes((order.payment_status || '').toLowerCase()) && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="border-red-500 text-red-600 hover:bg-red-50"
+                              disabled={forceDeletingId === order.id}
+                              onClick={() => handleForceDeleteOrder(order)}
+                              data-testid={`force-delete-order-${order.id}`}
+                              title={t('حذف نهائي (غير مدفوع)')}
+                            >
+                              {forceDeletingId === order.id ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                            </Button>
+                          )}
                           
                           {order.status === 'pending' && (
                             <Button

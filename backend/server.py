@@ -6577,23 +6577,25 @@ async def get_orders(
     return orders
 
 def _order_dup_signature(o: dict) -> str:
-    """بصمة محتوى الطلب لاكتشاف التطابق (فرع+نوع+عميل+عناصر+إجمالي+يوم العمل)."""
-    items_sig = "|".join(sorted(
-        f"{(it.get('product_id') or it.get('product_name') or '')}:{float(it.get('quantity') or 0):.2f}"
-        for it in (o.get("items") or [])
-    ))
+    """بصمة محتوى الطلب لاكتشاف التطابق.
+    متساهلة عمداً: لا تعتمد على product_id (لأن النسخة الأوفلاين قد تخزّن العناصر
+    باسم المنتج فقط) — نعتمد على: الفرع + النوع + العميل + الإجمالي + عدد العناصر
+    + إجمالي الكميات + يوم العمل. مع شرط (مدفوع + غير مدفوع) لمنع الإيجابيات الكاذبة.
+    """
+    items = o.get("items") or []
+    item_count = len(items)
+    total_qty = round(sum(float(it.get("quantity") or 0) for it in items), 2)
     biz = o.get("business_date") or (o.get("created_at") or "")[:10]
     return (
         f"{o.get('branch_id') or ''}|{o.get('order_type') or ''}|"
         f"{(o.get('customer_name') or '').strip()}|{(o.get('customer_phone') or '').strip()}|"
-        f"{items_sig}|{round(float(o.get('total') or 0), 2)}|{biz}"
+        f"{round(float(o.get('total') or 0), 2)}|{item_count}|{total_qty}|{biz}"
     )
 
 
 def _order_is_paid(o: dict) -> bool:
-    pm = (o.get("payment_method") or "").lower()
-    ps = (o.get("payment_status") or "").lower()
-    return pm not in ("pending", "معلق", "") and ps not in ("pending", "unpaid", "معلق", "غير مدفوع", "")
+    # التعريف المعتمد في النظام (نفس منطق الإرجاع): مدفوع فقط إذا كانت الحالة paid أو credit
+    return (o.get("payment_status") or "").lower() in ("paid", "credit")
 
 
 @api_router.get("/orders/duplicates")
@@ -7285,9 +7287,8 @@ async def force_delete_unpaid_order(
     if not order:
         raise HTTPException(status_code=404, detail="الطلب غير موجود")
     
-    pm = (order.get("payment_method") or "").lower()
-    payment_status = (order.get("payment_status") or "").lower()
-    is_paid = pm not in ("pending", "معلق", "") and payment_status not in ("pending", "unpaid", "معلق", "غير مدفوع", "")
+    # التعريف المعتمد: مدفوع فقط إذا كانت الحالة paid أو credit (مطابق لمنطق الإرجاع وأداة الكشف)
+    is_paid = (order.get("payment_status") or "").lower() in ("paid", "credit")
     
     # يُسمح فقط لطلب غير مدفوع
     if is_paid:
