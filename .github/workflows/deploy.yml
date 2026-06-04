@@ -5,6 +5,13 @@ on:
     branches: [ main ]
   workflow_dispatch:
 
+# 🔒 قفل تزامن: نشر واحد فقط في كل مرة.
+# أي نشر جديد يُلغي النشر القديم العالق تلقائياً → يمنع تزاحم عدة عمليات بناء
+# على نفس الـVPS (السبب الجذري للتأخير والتعليق).
+concurrency:
+  group: deploy-maestro-vps
+  cancel-in-progress: true
+
 jobs:
   deploy:
     name: Deploy to VPS

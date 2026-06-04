@@ -20,7 +20,7 @@ import requests
 import os
 import uuid
 
-BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://mfg-inventory-sync.preview.emergentagent.com')
+BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://offline-pos-system-17.preview.emergentagent.com')
 
 class TestDriverAppLogin:
     """Test driver login functionality"""

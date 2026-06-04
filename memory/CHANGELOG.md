@@ -1,6 +1,22 @@
 # Maestro EGP - Changelog
 
 
+## Session: 05 Jun 2026 (BUG FIX P0 + FEATURE) — صلاحية المالك لزر التنظيف + تصفير تحصيل شركة توصيل
+
+### 🔴 P0 — زر "تنظيف ورديات رؤساء الأقسام" يفشل بـ "فشل التنظيف"
+- **السبب الجذري**: نقطة النهاية `POST /api/shifts/cleanup-non-cashier` كانت تسمح فقط للأدوار `[admin, super_admin, manager, branch_manager]` — ولم تشمل دور **`owner`**. حساب المالك في الإنتاج (role=owner) كان يُرفض بـ 403 "غير مصرح" (نجح في المعاينة لأنه اختُبر بـ admin).
+- **الإصلاح** (`routes/shifts_routes.py`): أُضيف `"owner"` لقائمة الأدوار المسموحة.
+- تأكيد: الزر يعرض أصلاً `error.response.data.detail` الحقيقي. اختبار curl بحساب admin يعيد 200.
+
+### ✅ FEATURE — تصفير تحصيل شركة توصيل (تصفير التحصيل)
+- شكوى المستخدم: تحصيل "مزاجك" يظهر مبلغاً خاطئاً متراكماً (2,063,500 محصّل مقابل 1,193,188 صافٍ) ويظهر في شهر 6 بدل 5؛ يريد تصفيره.
+- **Backend** (`routes/reports_routes.py`): نقطة نهاية جديدة `POST /api/reports/delivery/reset-collections` (للمالك/المدير) — تحذف سجلات `delivery_collections` للشركة (مطابقة بالمعرّف أو الاسم) + تحذف إيداعاتها المرتبطة من `owner_deposits` (عبر `ref_collection_id`) + تعيد طلباتها لحالة `delivery_collected=False`. تُرجع الأعداد والمبلغ المُعاد.
+- **Frontend** (`pages/Reports.js`): زر أحمر **"تصفير التحصيل"** في بطاقة كل شركة (يظهر فقط عند `collected_amount > 0`) مع تأكيد، يستدعي النقطة ويعيد تحميل التقرير. `data-testid=reset-collection-{appName}`.
+- تأكيد E2E عبر curl: إنشاء تحصيل 50,000 → إيداع 1 → تصفير → حُذف السجل والإيداع، المبلغ مُعاد. lint نظيف.
+
+---
+
+
 ## Session: 02 Jun 2026 (FEATURE + تحسين) — أداة تنظيف الطلبات المكررة + كشف أكثر تساهلاً
 
 ### المطلوب

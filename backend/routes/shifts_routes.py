@@ -442,7 +442,7 @@ async def cleanup_non_cashier_shifts(current_user: dict = Depends(get_current_us
     تُزيل الفروقات النقدية الوهمية من تقرير الورديات."""
     db = get_database()
     tenant_id = get_user_tenant_id(current_user)
-    if current_user.get("role", "") not in ["admin", "super_admin", "manager", "branch_manager"]:
+    if current_user.get("role", "") not in ["admin", "super_admin", "manager", "branch_manager", "owner"]:
         raise HTTPException(status_code=403, detail="غير مصرح")
 
     user_query = {"role": {"$in": list(NON_CASHIER_ROLES)}}

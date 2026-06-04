@@ -2519,6 +2519,26 @@ const DeliveryReportTab = ({ deliveryCreditsReport, t, formatPrice, fetchReports
     setShowCollectDialog(true);
   };
 
+  const [resettingApp, setResettingApp] = useState(null);
+  const handleResetCollection = async (appName, data) => {
+    const collected = data.collected_amount || 0;
+    if (!window.confirm(t('سيتم تصفير تحصيلات شركة') + ` "${appName}" ` + t('بالكامل وحذف إيداعاتها من خزينة المالك وإعادة طلباتها لحالة (غير محصّلة). متابعة؟'))) return;
+    setResettingApp(appName);
+    try {
+      const res = await axios.post(`${API}/reports/delivery/reset-collections`, {
+        delivery_app_id: data.id,
+        delivery_app_name: appName
+      });
+      toast.success(res.data?.message || t('تم تصفير التحصيل'));
+      fetchReports();
+      if (showCollectionsLog) loadCollections();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || t('فشل تصفير التحصيل'));
+    } finally {
+      setResettingApp(null);
+    }
+  };
+
   // قيمة ونسبة العرض المحسوبة تلقائياً
   const expectedNet = selectedApp ? (selectedApp.remaining_amount != null ? selectedApp.remaining_amount : selectedApp.net_amount) : 0;
   const actualVal = parseFloat(collectForm.has_offers ? collectForm.actual_collected : collectForm.amount) || 0;
@@ -2752,6 +2772,20 @@ const DeliveryReportTab = ({ deliveryCreditsReport, t, formatPrice, fetchReports
                       >
                         <CircleDollarSign className="h-4 w-4" />
                         {t('تحصيل')}
+                      </Button>
+                    )}
+                    {(data.collected_amount || 0) > 0 && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleResetCollection(appName, data)}
+                        disabled={resettingApp === appName}
+                        className="gap-1 border-red-500/50 text-red-500 hover:bg-red-500/10"
+                        data-testid={`reset-collection-${appName}`}
+                        title={t('تصفير تحصيلات هذه الشركة بالكامل')}
+                      >
+                        {resettingApp === appName ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                        {t('تصفير التحصيل')}
                       </Button>
                     )}
                   </div>

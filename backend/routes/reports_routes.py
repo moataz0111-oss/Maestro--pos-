@@ -305,6 +305,7 @@ async def get_sales_report(
         "cash": "نقدي",
         "card": "بطاقة",
         "credit": "آجل",
+        "delivery_company": "شركة توصيل (غير محددة)",
     }
     
     # شركات التوصيل الافتراضية (للتحويل من المعرف للاسم)
@@ -321,17 +322,20 @@ async def get_sales_report(
         order_total = _sn(o.get("total"))
         
         # التحقق إذا كان الطلب لشركة توصيل
-        is_company = o.get("is_delivery_company", False) or o.get("delivery_app") or o.get("delivery_app_name")
+        is_company = o.get("is_delivery_company", False) or o.get("delivery_app") or o.get("delivery_app_name") or pm == "delivery_company"
         has_driver = o.get("driver_id") and o.get("order_type") == "delivery" and not is_company
         
         # تحديد اسم طريقة الدفع
-        if pm == "credit" and is_company:
-            # آجل شركات توصيل - يظهر باسم الشركة
+        if is_company:
+            # ⭐ طلب شركة توصيل (آجل أو delivery_company) — يُجمَّع باسم الشركة دائماً
             app_name = o.get("delivery_app_name")
             if not app_name and o.get("delivery_app"):
-                app_name = default_delivery_apps_names.get(o.get("delivery_app"), app_names.get(o.get("delivery_app"), "شركات توصيل"))
+                app_name = default_delivery_apps_names.get(o.get("delivery_app"), app_names.get(o.get("delivery_app"), None))
+            if not app_name and o.get("delivery_company_name"):
+                app_name = o.get("delivery_company_name")
             if not app_name:
-                app_name = o.get("customer_name") or "شركات توصيل"
+                # طلب لشركة لكن بلا اسم محدد → يحتاج توجيه من المالك
+                app_name = "شركة توصيل (غير محددة)"
             pm_display = app_name
         elif pm == "credit" and has_driver:
             # توصيل سائقين عاديين (ليس شركة)
@@ -1734,6 +1738,82 @@ async def collect_delivery(
         "deposited_to_safe": collection.amount,
         "branch_breakdown": branch_breakdown
     }
+
+class DeliveryResetCollections(BaseModel):
+    delivery_app_id: Optional[str] = None  # معرّف الشركة
+    delivery_app_name: Optional[str] = None  # اسم الشركة (احتياط للشركات اليدوية بلا معرّف)
+    start_date: Optional[str] = None  # تصفير ضمن فترة (اختياري) — افتراضياً يُصفّر الكل
+    end_date: Optional[str] = None
+
+@router.post("/delivery/reset-collections")
+async def reset_delivery_collections(
+    payload: DeliveryResetCollections,
+    current_user: dict = Depends(get_current_user)
+):
+    """تصفير تحصيلات شركة توصيل: حذف سجلات التحصيل + إلغاء إيداعاتها من خزينة المالك + إعادة الطلبات لحالة (غير محصّلة).
+    للمالك/المدير فقط."""
+    db = get_database()
+    tenant_id = get_user_tenant_id(current_user)
+    if current_user.get("role", "") not in ["admin", "super_admin", "manager", "branch_manager", "owner"]:
+        raise HTTPException(status_code=403, detail="غير مصرح")
+
+    if not payload.delivery_app_id and not payload.delivery_app_name:
+        raise HTTPException(status_code=400, detail="يجب تحديد الشركة (المعرّف أو الاسم)")
+
+    # مطابقة الشركة بالمعرّف أو بالاسم (للشركات اليدوية بلا معرّف)
+    name_id_or = []
+    if payload.delivery_app_id:
+        name_id_or.append({"delivery_app_id": payload.delivery_app_id})
+    if payload.delivery_app_name:
+        name_id_or.append({"delivery_app_name": payload.delivery_app_name})
+
+    query = {"collection_type": "delivery", "$or": name_id_or}
+    if tenant_id:
+        query["tenant_id"] = tenant_id
+    if payload.start_date:
+        query["date"] = {"$gte": payload.start_date}
+    if payload.end_date:
+        query.setdefault("date", {})["$lte"] = payload.end_date
+
+    collections = await db.delivery_collections.find(query, {"_id": 0}).to_list(5000)
+    if not collections:
+        return {"deleted_collections": 0, "deleted_deposits": 0, "restored_orders": 0, "amount_reversed": 0,
+                "message": "لا توجد تحصيلات لهذه الشركة"}
+
+    collection_ids = [c["id"] for c in collections]
+    amount_reversed = sum(c.get("amount", 0) or 0 for c in collections)
+    # جمع الطلبات المرتبطة لإعادتها لحالة غير محصّلة
+    order_ids = []
+    for c in collections:
+        order_ids.extend(c.get("order_ids") or [])
+
+    # حذف الإيداعات المرتبطة من خزينة المالك
+    dep_query = {"ref_collection_id": {"$in": collection_ids}}
+    if tenant_id:
+        dep_query["tenant_id"] = tenant_id
+    dep_result = await db.owner_deposits.delete_many(dep_query)
+
+    # حذف سجلات التحصيل
+    col_result = await db.delivery_collections.delete_many({"id": {"$in": collection_ids}})
+
+    # إعادة الطلبات لحالة غير محصّلة
+    restored = 0
+    if order_ids:
+        oq = {"id": {"$in": list(set(order_ids))}}
+        if tenant_id:
+            oq["tenant_id"] = tenant_id
+        ores = await db.orders.update_many(oq, {"$set": {"delivery_collected": False}, "$unset": {"delivery_collected_at": ""}})
+        restored = ores.modified_count
+
+    return {
+        "deleted_collections": col_result.deleted_count,
+        "deleted_deposits": dep_result.deleted_count,
+        "restored_orders": restored,
+        "amount_reversed": amount_reversed,
+        "message": f"تم تصفير التحصيل: حُذف {col_result.deleted_count} سجل تحصيل وأُلغي {dep_result.deleted_count} إيداع بمبلغ {amount_reversed:,.0f} من خزينة المالك"
+    }
+
+
 
 @router.get("/delivery/collections")
 async def get_delivery_collections(
