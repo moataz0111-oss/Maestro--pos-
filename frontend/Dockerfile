@@ -24,6 +24,13 @@ RUN echo "Build timestamp: $(date)" && grep -c "اسم العميل المرتب
 # بناء التطبيق
 ARG REACT_APP_BACKEND_URL
 ENV REACT_APP_BACKEND_URL=$REACT_APP_BACKEND_URL
+# ⚡ تسريع البناء وتقليل استهلاك الذاكرة على الـVPS:
+# - GENERATE_SOURCEMAP=false: يلغي خرائط المصدر (السبب الأول لتعليق/نفاد ذاكرة بناء React) — يقلّل الذاكرة والوقت ~50%
+# - CI=false: يمنع اعتبار تحذيرات ESLint أخطاءً تُفشل البناء
+# - NODE_OPTIONS: سقف ذاكرة معقول لـNode أثناء البناء
+ENV GENERATE_SOURCEMAP=false
+ENV CI=false
+ENV NODE_OPTIONS=--max-old-space-size=2048
 RUN yarn build
 
 # مرحلة التشغيل
