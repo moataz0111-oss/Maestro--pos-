@@ -386,7 +386,6 @@ async def get_sales_report(
             by_product[pid]["revenue"] += _sn(item.get("price")) * qty
             # ⭐ مصدر الحقيقة الوحيد: التكلفة المحسوبة عبر manufactured_links
             entry = _by_id.get(pid_ref) or _by_name.get(pid) or {"unit_cost": 0.0, "unit_pkg": 0.0}
-            unit_materials_only = max(0.0, entry["unit_cost"] - entry["unit_pkg"]) if entry["unit_cost"] >= entry["unit_pkg"] else entry["unit_cost"]
             by_product[pid]["materials_cost"] += entry["unit_cost"] * qty
             by_product[pid]["packaging_cost"] += entry["unit_pkg"] * qty
     
@@ -993,19 +992,27 @@ async def get_delivery_credits_report(
                 "orders": []
             }
         
+        # إعادة حساب العمولة من النسبة الحالية للشركة (القيمة المخزّنة قد تكون محسوبة بنسبة قديمة)
+        _rate = app_rates.get(app_id, 0) or 0
+        _order_total = o.get("total", 0) or 0
+        if _rate and _rate > 0:
+            order_commission = round(_order_total * _rate / 100, 2)
+        else:
+            order_commission = o.get("delivery_commission", 0) or 0
+
         by_app[app_name]["count"] += 1
-        by_app[app_name]["total"] += o["total"]
-        by_app[app_name]["commission"] += o.get("delivery_commission", 0)
-        by_app[app_name]["net_amount"] += o["total"] - o.get("delivery_commission", 0)
+        by_app[app_name]["total"] += _order_total
+        by_app[app_name]["commission"] += order_commission
+        by_app[app_name]["net_amount"] += _order_total - order_commission
         
         # جميع طلبات التوصيل تعتبر آجلة حتى يتم تحصيلها
         is_collected = o.get("delivery_collected", False)
         if is_collected:
             by_app[app_name]["paid_count"] += 1
-            by_app[app_name]["paid_amount"] += o["total"] - o.get("delivery_commission", 0)
+            by_app[app_name]["paid_amount"] += _order_total - order_commission
         else:
             by_app[app_name]["credit_count"] += 1
-            by_app[app_name]["credit_amount"] += o["total"] - o.get("delivery_commission", 0)
+            by_app[app_name]["credit_amount"] += _order_total - order_commission
         
         # تفاصيل أصناف الفاتورة للعرض التفصيلي (drill-down)
         order_items = []
@@ -1028,8 +1035,8 @@ async def get_delivery_credits_report(
             "total": o["total"],
             "subtotal": o.get("subtotal", o["total"]),
             "discount": o.get("discount", 0) or 0,
-            "commission": o.get("delivery_commission", 0),
-            "net": o["total"] - o.get("delivery_commission", 0),
+            "commission": order_commission,
+            "net": _order_total - order_commission,
             "delivery_collected": is_collected,
             "customer_name": o.get("customer_name"),
             "payment_method": o.get("payment_method"),
@@ -1042,9 +1049,13 @@ async def get_delivery_credits_report(
         app_id = data["id"]
         data["collected_amount"] = collected_by_app.get(app_id, 0)
         data["remaining_amount"] = data["net_amount"] - data["collected_amount"]
+        # نسبة عرض فعّالة للشركات اليدوية (بلا إعداد نسبة) لتطابق العمولة المعروضة
+        if (not data["commission_rate"]) and data["total"] > 0 and data["commission"] > 0:
+            data["commission_rate"] = round(data["commission"] / data["total"] * 100, 1)
     
-    total_all = sum(o["total"] for o in orders)
-    total_commission = sum(o.get("delivery_commission", 0) for o in orders)
+    # الإجماليات تُحسب من العمولة المُعاد حسابها (وليست المخزّنة)
+    total_all = sum(d["total"] for d in by_app.values())
+    total_commission = sum(d["commission"] for d in by_app.values())
     total_net = total_all - total_commission
     total_collected = sum(collected_by_app.values())
     total_remaining = total_net - total_collected
@@ -1598,6 +1609,8 @@ async def collect_delivery(
     tenant_id = get_user_tenant_id(current_user)
     
     now = datetime.now(timezone.utc)
+    # ⭐ تاريخ التحصيل = نهاية فترة التحصيل (ليُحتسب ضمن الشهر الصحيح، مثلاً 31/5) وليس يوم التنفيذ
+    collection_date = collection.period_end or now.strftime("%Y-%m-%d")
 
     # حساب قيمة ونسبة العرض (الفرق بين المستحق والمُحصّل فعلياً)
     expected = collection.expected_amount if collection.expected_amount is not None else collection.amount
@@ -1635,7 +1648,7 @@ async def collect_delivery(
         "collected_by": collection.collected_by,
         "collected_by_user_id": current_user.get("id"),
         "collected_at": now.isoformat(),
-        "date": now.strftime("%Y-%m-%d"),
+        "date": collection_date,
         "time": now.strftime("%H:%M:%S"),
         "notes": collection.notes,
         "order_ids": collection.order_ids or [],
@@ -1644,29 +1657,65 @@ async def collect_delivery(
         "branch_name": branch_name,
         "collection_type": "delivery"
     }
-    
+
+    # ⭐ تقسيم التحصيل حسب الفرع تلقائياً من طلبات الفترة (كل فرع يأخذ حصته من المُحصّل)
+    # بما أن جميع الطلبات لنفس الشركة بنفس نسبة العمولة، فالحصة تتناسب مع إجمالي مبيعات كل فرع.
+    branch_breakdown = []
+    order_ids = collection.order_ids or []
+    if order_ids:
+        oq = {"id": {"$in": order_ids}}
+        if tenant_id:
+            oq["tenant_id"] = tenant_id
+        ords = await db.orders.find(oq, {"_id": 0, "total": 1, "branch_id": 1, "branch_name": 1}).to_list(10000)
+        per_branch = {}
+        grand_total = 0.0
+        for o in ords:
+            t = o.get("total", 0) or 0
+            bid = o.get("branch_id") or "__none__"
+            pb = per_branch.setdefault(bid, {"branch_id": o.get("branch_id") or branch_id, "branch_name": o.get("branch_name") or branch_name, "total": 0.0})
+            pb["total"] += t
+            grand_total += t
+        if grand_total > 0 and len(per_branch) >= 1:
+            items = list(per_branch.values())
+            assigned = 0.0
+            for i, info in enumerate(items):
+                if i < len(items) - 1:
+                    share = round(collection.amount * (info["total"] / grand_total), 2)
+                else:
+                    share = round(collection.amount - assigned, 2)  # الباقي للأخير لتفادي فروق التقريب
+                assigned += share
+                branch_breakdown.append({"branch_id": info["branch_id"], "branch_name": info["branch_name"], "amount": share})
+    collection_record["branch_breakdown"] = branch_breakdown
+
     await db.delivery_collections.insert_one(collection_record)
 
-    # إيداع الصافي المُحصّل في خزينة المالك تلقائياً
+    # إيداع الصافي المُحصّل في خزينة المالك تلقائياً — مُقسّماً على الفروع إن أمكن
     deposit_desc = f"تحصيل توصيل - {collection.delivery_app_name}{period_label}"
     if collection.has_offers and offer_amount:
         deposit_desc += f" | عرض مخصوم: {offer_amount:,.0f} ({offer_percentage:.1f}%)"
-    owner_deposit = {
-        "id": str(uuid.uuid4()),
-        "tenant_id": tenant_id,
-        "amount": collection.amount,
-        "date": now.strftime("%Y-%m-%d"),
-        "description": deposit_desc,
-        "source": "delivery_collection",
-        "branch_id": branch_id,
-        "branch_name": branch_name,
-        "external_source": None,
-        "ref_collection_id": collection_record["id"],
-        "delivery_app_name": collection.delivery_app_name,
-        "created_by": collection.collected_by or current_user.get("username") or current_user.get("full_name"),
-        "created_at": now.isoformat()
-    }
-    await db.owner_deposits.insert_one(owner_deposit)
+
+    # قائمة الإيداعات: إيداع لكل فرع حسب حصته، أو إيداع واحد عند غياب التفصيل
+    deposit_targets = branch_breakdown if branch_breakdown else [
+        {"branch_id": branch_id, "branch_name": branch_name, "amount": collection.amount}
+    ]
+    for tgt in deposit_targets:
+        if not tgt.get("amount"):
+            continue
+        await db.owner_deposits.insert_one({
+            "id": str(uuid.uuid4()),
+            "tenant_id": tenant_id,
+            "amount": tgt["amount"],
+            "date": collection_date,
+            "description": deposit_desc + (f" | الفرع: {tgt.get('branch_name')}" if len(deposit_targets) > 1 and tgt.get("branch_name") else ""),
+            "source": "delivery_collection",
+            "branch_id": tgt.get("branch_id"),
+            "branch_name": tgt.get("branch_name"),
+            "external_source": None,
+            "ref_collection_id": collection_record["id"],
+            "delivery_app_name": collection.delivery_app_name,
+            "created_by": collection.collected_by or current_user.get("username") or current_user.get("full_name"),
+            "created_at": now.isoformat()
+        })
     
     # تحديث الطلبات كمحصلة إذا تم تحديدها
     if collection.order_ids:
@@ -1682,7 +1731,8 @@ async def collect_delivery(
         "collection": collection_record,
         "offer_amount": offer_amount,
         "offer_percentage": offer_percentage,
-        "deposited_to_safe": collection.amount
+        "deposited_to_safe": collection.amount,
+        "branch_breakdown": branch_breakdown
     }
 
 @router.get("/delivery/collections")

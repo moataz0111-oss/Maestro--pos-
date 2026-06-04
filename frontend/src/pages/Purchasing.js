@@ -147,6 +147,18 @@ export default function Purchasing() {
     fetchData();
   }, [fetchData]);
 
+  // 🔄 تحديث صامت دوري لطلبات الشراء الواردة من المخزن — تظهر فوراً دون إعادة تحميل
+  useEffect(() => {
+    const id = setInterval(async () => {
+      try {
+        const res = await axios.get(`${API}/warehouse-purchase-requests`, { headers });
+        setWarehouseRequests(res.data || []);
+      } catch (_) { /* silent */ }
+    }, 12000);
+    return () => clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // حساب إجمالي الفاتورة
   const calculateTotal = () => {
     return invoiceForm.items.reduce((sum, item) => sum + (item.quantity * item.unit_price), 0);

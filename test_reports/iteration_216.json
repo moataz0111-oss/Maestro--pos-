@@ -1,0 +1,31 @@
+{
+  "summary": "Frontend verification of 3 new features in Maestro EGP POS (Arabic RTL): (1) POS sync indicator buttons, (2) delivery report Collect-All flow, (3) collections log per-branch breakdown. POS page loads cleanly with pending-orders-btn visible; sync-now-btn/unsynced-count-badge correctly hidden when no offline orders (expected). Delivery report Collect-All happy-path WORKS end-to-end: tab switch to التوصيل, collect-all-btn renders with correct count+amount (تحصيل الكل (2) — 32,275 IQD), dialog opens with both companies (توترز 19,975, طلبات 12,300, total 32,275), receiver input + confirm fires POST and the collect-all-btn disappears (because remaining→0). Toast not detected via selector and collections-log-table couldn't be expanded by clicking the heading; the toggle is the يellow 'عرض السجل' button (data-testid not exposed). Per-branch breakdown therefore not visually confirmed but the flow that produces it succeeded.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "DeliveryReportTab - collections log toggle", "issue": "The 'عرض السجل' button that expands data-testid=collections-log-table has no data-testid; testers/automation cannot deterministically open the log. Heading text 'سجل التحصيلات' is not clickable.", "selector": "button containing text 'عرض السجل'", "priority": "MEDIUM"},
+      {"component": "DeliveryReportTab - success toast", "issue": "After confirm-collect-all the success toast was not detectable via [data-sonner-toast]/[role=status]/li[data-state]. Either the toast lives elsewhere in the DOM or it fades faster than a 7s wait. Verify a toast actually fires on success.", "selector": "n/a", "priority": "LOW"},
+      {"component": "Delivery summary cards transient state", "issue": "Before confirming a fresh collect-all, top KPI cards showed 'تم التحصيل: 32,275' AND 'المتبقي للتحصيل: 32,275' simultaneously, and per-company rows showed both 'تم التحصيل' and 'المتبقي' equal to the full net. This indicates a stale/double-count display before the new collection. After confirm the collect-all button correctly disappears, but verify whether the report cleanly refreshes (تم=net, متبقي=0) without leaving doubled values.", "selector": "n/a", "priority": "MEDIUM"}
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [
+    "Add data-testid (e.g., collections-log-toggle) to the 'عرض السجل' button so automation can open the collections log and verify data-testid=collection-branches-{id} per-branch breakdown.",
+    "Verify success toast is rendered (sonner Toaster present at app root) after successful /api/reports/delivery/collect call and that confirm-collect-all triggers it.",
+    "Re-check delivery KPI/company-row math after collect-all: ensure 'تم التحصيل' = collected, 'المتبقي' = remaining (and not both showing the same net amount)."
+  ],
+  "critical_code_review_comments": [
+    "Reports.js is >3600 lines – split DeliveryReportTab and other large tab subcomponents into separate files for maintainability.",
+    "Radix Tabs triggers do not respond to synthetic pointer events / coordinate clicks in headless runs; only Playwright's locator.click() switched the tab. Not a product bug, but worth knowing for any e2e tooling."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (skipped)", "frontend": "85%"},
+  "test_credentials": "admin@maestroegp.com / admin123",
+  "seed_data_creation": "Used existing seed (توترز 15%, طلبات 18%) in May 2026 window 2026-05-01 → 2026-05-31.",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "To trigger the delivery tab in Reports.js use Playwright's locator click: page.locator('button[role=\"tab\"]', has_text='التوصيل').first.click() AFTER clicking the page body once to clear date-input focus. mouse.click on bounding box and JS pointer dispatch do NOT switch Radix Tabs in this env. Then set date range 2026-05-01 → 2026-05-31. To open the collections log click the yellow button labelled 'عرض السجل' (no testid currently). Collect-All happy path confirmed working; remaining verification: success toast + per-branch breakdown after opening the log.",
+  "rca of the issue": "N/A - features working as designed. Only missing data-testid on the log toggle prevented full verification of the per-branch breakdown."
+}

@@ -33,6 +33,7 @@ import {
   Search,
   Target,
   Printer,
+  Trash2,
   FileSpreadsheet,
   Wallet,
   Receipt,
@@ -1506,6 +1507,21 @@ const CashRegisterClosingTab = ({ t, formatPrice, selectedBranchId, branches, ge
     printWindow.print();
   };
 
+  const [cleaningShifts, setCleaningShifts] = useState(false);
+  const handleCleanupNonCashier = async () => {
+    if (!window.confirm(t('سيتم حذف الورديات التي فُتحت خطأً لرؤساء الأقسام (مخزن/تصنيع/مطبخ/مشتريات). متابعة؟'))) return;
+    setCleaningShifts(true);
+    try {
+      const res = await axios.post(`${API_URL}/shifts/cleanup-non-cashier`, {}, { headers });
+      toast.success(res.data?.message || t('تم التنظيف'));
+      fetchReport();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || t('فشل التنظيف'));
+    } finally {
+      setCleaningShifts(false);
+    }
+  };
+
   return (
     <div className="space-y-6" id="cash-register-print-area">
       {/* الفلاتر الخاصة بإغلاق الصندوق */}
@@ -1548,6 +1564,10 @@ const CashRegisterClosingTab = ({ t, formatPrice, selectedBranchId, branches, ge
         <Button onClick={handlePrintReport} className="bg-teal-600 hover:bg-teal-700">
           <Printer className="h-4 w-4 ml-2" />
           {t('طباعة')}
+        </Button>
+        <Button onClick={handleCleanupNonCashier} disabled={cleaningShifts} variant="outline" className="border-red-500/50 text-red-400 hover:bg-red-500/10" data-testid="cleanup-non-cashier-shifts" title={t('حذف ورديات رؤساء الأقسام التي فُتحت خطأً (مخزن/تصنيع/مطبخ/مشتريات)')}>
+          {cleaningShifts ? <RefreshCw className="h-4 w-4 ml-2 animate-spin" /> : <Trash2 className="h-4 w-4 ml-2" />}
+          {t('تنظيف ورديات رؤساء الأقسام')}
         </Button>
       </div>
 
@@ -2557,6 +2577,55 @@ const DeliveryReportTab = ({ deliveryCreditsReport, t, formatPrice, fetchReports
     }
   };
 
+  // ===== تحصيل الكل: تحصيل جميع الشركات المستحقة دفعة واحدة (يُقسَّم كل تحصيل على فروعه تلقائياً) =====
+  const [showCollectAllDialog, setShowCollectAllDialog] = useState(false);
+  const [collectAllReceiver, setCollectAllReceiver] = useState('');
+  const [collectingAll, setCollectingAll] = useState(false);
+
+  const handleCollectAll = async () => {
+    if (!collectAllReceiver.trim()) {
+      toast.error(t('يرجى إدخال اسم المستلم'));
+      return;
+    }
+    const pending = Object.entries(deliveryCreditsReport.by_delivery_app || {})
+      .filter(([, d]) => (d.remaining_amount != null ? d.remaining_amount : d.net_amount) > 0);
+    if (pending.length === 0) {
+      toast.info(t('لا توجد مبالغ مستحقة للتحصيل'));
+      return;
+    }
+    setCollectingAll(true);
+    let ok = 0, fail = 0;
+    for (const [appName, data] of pending) {
+      const net = data.remaining_amount != null ? data.remaining_amount : data.net_amount;
+      try {
+        await axios.post(`${API}/reports/delivery/collect`, {
+          delivery_app_id: data.id,
+          delivery_app_name: appName,
+          amount: net,
+          expected_amount: net,
+          total_sales: data.total,
+          commission: data.commission,
+          has_offers: false,
+          collected_by: collectAllReceiver.trim(),
+          notes: t('تحصيل جماعي'),
+          period_start: startDate,
+          period_end: endDate,
+          order_ids: (data.orders || []).filter(o => !o.delivery_collected).map(o => o.id)
+        });
+        ok++;
+      } catch (e) {
+        fail++;
+      }
+    }
+    setCollectingAll(false);
+    setShowCollectAllDialog(false);
+    if (ok > 0) toast.success(t('تم تحصيل') + ` ${ok} ` + t('شركة') + (fail ? ` (${fail} ${t('فشل')})` : ''));
+    else toast.error(t('فشل التحصيل الجماعي'));
+    fetchReports();
+    if (showCollectionsLog) loadCollections();
+  };
+
+
   if (!deliveryCreditsReport) return null;
 
   return (
@@ -2614,7 +2683,7 @@ const DeliveryReportTab = ({ deliveryCreditsReport, t, formatPrice, fetchReports
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs text-muted-foreground">{t('المتبقي للتحصيل')}</p>
-                <p className="text-xl font-bold text-purple-600">{formatPrice(deliveryCreditsReport.total_remaining || deliveryCreditsReport.net_receivable)}</p>
+                <p className="text-xl font-bold text-purple-600">{formatPrice(deliveryCreditsReport.total_remaining != null ? deliveryCreditsReport.total_remaining : deliveryCreditsReport.net_receivable)}</p>
               </div>
               <Truck className="h-7 w-7 text-purple-500 opacity-50" />
             </div>
@@ -2624,11 +2693,27 @@ const DeliveryReportTab = ({ deliveryCreditsReport, t, formatPrice, fetchReports
 
       {/* تفاصيل كل شركة */}
       <Card className="border-border/50 bg-card">
-        <CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="text-lg text-foreground flex items-center gap-2">
             <Truck className="h-5 w-5 text-primary" />
             {t('تفاصيل كل شركة توصيل')}
           </CardTitle>
+          {(() => {
+            const pending = Object.entries(deliveryCreditsReport.by_delivery_app || {})
+              .filter(([, d]) => (d.remaining_amount != null ? d.remaining_amount : d.net_amount) > 0);
+            const totalPending = pending.reduce((s, [, d]) => s + (d.remaining_amount != null ? d.remaining_amount : d.net_amount), 0);
+            if (pending.length === 0) return null;
+            return (
+              <Button
+                className="bg-green-600 hover:bg-green-700 text-white gap-1"
+                onClick={() => { setCollectAllReceiver(''); setShowCollectAllDialog(true); }}
+                data-testid="collect-all-btn"
+              >
+                <DollarSign className="h-4 w-4" />
+                {t('تحصيل الكل')} ({pending.length}) — {formatPrice(totalPending)}
+              </Button>
+            );
+          })()}
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
@@ -2658,7 +2743,7 @@ const DeliveryReportTab = ({ deliveryCreditsReport, t, formatPrice, fetchReports
                       <Eye className="h-4 w-4" />
                       {t('عرض الفواتير')}
                     </Button>
-                    {(data.remaining_amount || data.net_amount) > 0 && (
+                    {(data.remaining_amount != null ? data.remaining_amount : data.net_amount) > 0 && (
                       <Button
                         size="sm"
                         onClick={() => handleOpenCollect(appName, data)}
@@ -2691,7 +2776,7 @@ const DeliveryReportTab = ({ deliveryCreditsReport, t, formatPrice, fetchReports
                   </div>
                   <div className="text-center p-3 bg-purple-500/10 rounded-lg">
                     <p className="text-xs text-purple-600">{t('المتبقي')}</p>
-                    <p className="text-lg font-bold text-purple-600 tabular-nums">{formatPrice(data.remaining_amount || data.net_amount)}</p>
+                    <p className="text-lg font-bold text-purple-600 tabular-nums">{formatPrice(data.remaining_amount != null ? data.remaining_amount : data.net_amount)}</p>
                   </div>
                 </div>
               </div>
@@ -2772,7 +2857,19 @@ const DeliveryReportTab = ({ deliveryCreditsReport, t, formatPrice, fetchReports
                     {collections.map((c) => (
                       <tr key={c.id} className="border-t border-border/30" data-testid={`collection-row-${c.id}`}>
                         <td className="p-2 text-right whitespace-nowrap">{c.date}</td>
-                        <td className="p-2 text-right font-medium">{c.delivery_app_name}</td>
+                        <td className="p-2 text-right font-medium">
+                          {c.delivery_app_name}
+                          {Array.isArray(c.branch_breakdown) && c.branch_breakdown.length > 1 && (
+                            <div className="mt-1 space-y-0.5" data-testid={`collection-branches-${c.id}`}>
+                              {c.branch_breakdown.map((b, bi) => (
+                                <div key={bi} className="flex items-center justify-between gap-2 text-[11px] text-muted-foreground bg-muted/40 rounded px-1.5 py-0.5">
+                                  <span className="truncate">🏪 {b.branch_name || t('غير محدد')}</span>
+                                  <span className="tabular-nums font-medium text-emerald-600">{formatPrice(b.amount)}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </td>
                         <td className="p-2 text-center text-xs whitespace-nowrap">{c.period_start || '-'} → {c.period_end || '-'}</td>
                         <td className="p-2 text-center tabular-nums">{formatPrice(c.expected_amount)}</td>
                         <td className="p-2 text-center tabular-nums text-red-500">
@@ -2818,6 +2915,58 @@ const DeliveryReportTab = ({ deliveryCreditsReport, t, formatPrice, fetchReports
         </Button>
       </div>
 
+      {/* Dialog: تحصيل الكل */}
+      <Dialog open={showCollectAllDialog} onOpenChange={setShowCollectAllDialog}>
+        <DialogContent className="sm:max-w-lg" data-testid="collect-all-dialog">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <DollarSign className="h-5 w-5 text-green-600" />
+              {t('تحصيل جميع الشركات المستحقة')}
+            </DialogTitle>
+          </DialogHeader>
+          {(() => {
+            const pending = Object.entries(deliveryCreditsReport.by_delivery_app || {})
+              .filter(([, d]) => (d.remaining_amount != null ? d.remaining_amount : d.net_amount) > 0);
+            const totalPending = pending.reduce((s, [, d]) => s + (d.remaining_amount != null ? d.remaining_amount : d.net_amount), 0);
+            return (
+              <div className="space-y-4">
+                <div className="p-3 rounded-lg bg-muted/50 text-sm">
+                  <p>{t('الفترة')}: <span className="font-medium">{startDate} → {endDate}</span></p>
+                  <p className="mt-1">{t('عدد الشركات')}: <span className="font-bold">{pending.length}</span></p>
+                  <p className="mt-1">{t('إجمالي المستحق')}: <span className="font-bold text-green-600">{formatPrice(totalPending)}</span></p>
+                </div>
+                <div className="max-h-48 overflow-y-auto space-y-1">
+                  {pending.map(([name, d]) => (
+                    <div key={name} className="flex items-center justify-between text-sm px-2 py-1 rounded bg-muted/30">
+                      <span>{name}</span>
+                      <span className="tabular-nums font-medium text-green-600">{formatPrice(d.remaining_amount != null ? d.remaining_amount : d.net_amount)}</span>
+                    </div>
+                  ))}
+                </div>
+                <div>
+                  <Label>{t('اسم المستلم')}</Label>
+                  <Input
+                    value={collectAllReceiver}
+                    onChange={(e) => setCollectAllReceiver(e.target.value)}
+                    placeholder={t('من استلم المبلغ')}
+                    data-testid="collect-all-receiver"
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground">{t('سيتم إيداع كل مبلغ في خزينة المالك مُقسَّماً على فروعه تلقائياً.')}</p>
+                <div className="flex justify-end gap-2">
+                  <Button variant="outline" onClick={() => setShowCollectAllDialog(false)} disabled={collectingAll}>{t('إلغاء')}</Button>
+                  <Button className="bg-green-600 hover:bg-green-700 text-white gap-1" onClick={handleCollectAll} disabled={collectingAll} data-testid="confirm-collect-all">
+                    {collectingAll ? <RefreshCw className="h-4 w-4 animate-spin" /> : <DollarSign className="h-4 w-4" />}
+                    {collectingAll ? t('جاري التحصيل...') : t('تأكيد تحصيل الكل')}
+                  </Button>
+                </div>
+              </div>
+            );
+          })()}
+        </DialogContent>
+      </Dialog>
+
+
       {/* Dialog تحصيل التوصيل */}
       <Dialog open={showCollectDialog} onOpenChange={setShowCollectDialog}>
         <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -2849,7 +2998,7 @@ const DeliveryReportTab = ({ deliveryCreditsReport, t, formatPrice, fetchReports
                   </div>
                   <div>
                     <span className="text-muted-foreground">{t('المتبقي')}:</span>
-                    <span className="font-bold text-purple-600 mr-1">{formatPrice(selectedApp.remaining_amount || selectedApp.net_amount)}</span>
+                    <span className="font-bold text-purple-600 mr-1">{formatPrice(selectedApp.remaining_amount != null ? selectedApp.remaining_amount : selectedApp.net_amount)}</span>
                   </div>
                 </div>
               </div>

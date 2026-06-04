@@ -32,7 +32,8 @@ export const OfflineProvider = ({ children }) => {
     pendingItems: 0,
     lastSync: null,
     syncProgress: null,
-    syncCompleted: false
+    syncCompleted: false,
+    lastSyncedCount: 0
   });
   const [isInitialized, setIsInitialized] = useState(false);
   const syncInProgress = useRef(false);
@@ -127,7 +128,8 @@ export const OfflineProvider = ({ children }) => {
           pendingItems: 0,
           lastSync: new Date().toISOString(),
           syncProgress: null,
-          syncCompleted: true
+          syncCompleted: true,
+          lastSyncedCount: totalSynced
         });
 
         // حفظ أن المزامنة تمت

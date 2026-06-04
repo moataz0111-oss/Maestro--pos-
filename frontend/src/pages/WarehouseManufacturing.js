@@ -500,6 +500,29 @@ export default function WarehouseManufacturing() {
       setLoading(false);
     }
   };
+
+  // 🔄 تحديث صامت دوري لقوائم الطلبات — تظهر الطلبات الواردة (من الفروع/المخزن/التغليف) فوراً دون إعادة تحميل
+  const refreshRequestLists = async () => {
+    try {
+      const [branchReqRes, mfgReqRes, pkgReqRes, notifRes] = await Promise.all([
+        axios.get(`${API}/branch-requests`, { headers }).catch(() => null),
+        axios.get(`${API}/manufacturing-requests`, { headers }).catch(() => null),
+        axios.get(`${API}/packaging-requests`, { headers }).catch(() => null),
+        axios.get(`${API}/warehouse-notifications`, { headers }).catch(() => null),
+      ]);
+      if (branchReqRes) setBranchRequests(branchReqRes.data || []);
+      if (mfgReqRes) setManufacturingRequests(mfgReqRes.data || []);
+      if (pkgReqRes) setPackagingRequests(pkgReqRes.data || []);
+      if (notifRes) setWarehouseNotifications(notifRes.data || []);
+    } catch (_) { /* silent */ }
+  };
+
+  useEffect(() => {
+    const id = setInterval(refreshRequestLists, 12000);
+    return () => clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // إضافة مادة خام
   const handleAddRawMaterial = async (e) => {
     e.preventDefault();

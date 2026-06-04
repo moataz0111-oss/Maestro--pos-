@@ -73,10 +73,12 @@ export default function Orders() {
   const [fixRoutingOrder, setFixRoutingOrder] = useState(null);
   const [fixForm, setFixForm] = useState({
     order_type: 'dine_in', payment_method: 'cash', payment_status: 'paid',
-    customer_type: 'regular', delivery_company_name: '', delivery_company_order_id: '',
+    customer_type: 'regular', delivery_company_id: '', delivery_company_name: '', delivery_company_order_id: '',
     customer_name: '', customer_phone: '', delivery_address: '', notes: '',
   });
   const [fixSubmitting, setFixSubmitting] = useState(false);
+  // قائمة شركات التوصيل (لاختيار الشركة عند تصحيح المسار)
+  const [deliveryApps, setDeliveryApps] = useState([]);
 
   // === أداة تنظيف الطلبات المكررة القديمة (مالك/مدير عام) ===
   const isOwnerOrGM = ['admin', 'super_admin', 'manager'].includes(user?.role);
@@ -158,6 +160,16 @@ export default function Orders() {
   useEffect(() => {
     localStorage.setItem('maestro_sound_enabled', soundEnabled.toString());
   }, [soundEnabled]);
+
+  // جلب شركات التوصيل مرة واحدة (لاختيارها عند تصحيح المسار)
+  useEffect(() => {
+    (async () => {
+      try {
+        const { data } = await axios.get(`${API}/delivery-apps`);
+        setDeliveryApps(Array.isArray(data) ? data : (data?.apps || []));
+      } catch (e) { /* تجاهل */ }
+    })();
+  }, []);
 
   useEffect(() => {
     fetchData();
@@ -322,7 +334,8 @@ export default function Orders() {
       payment_method: order.payment_method || 'cash',
       payment_status: order.payment_status || 'paid',
       customer_type: order.customer_type || 'regular',
-      delivery_company_name: order.delivery_company_name || '',
+      delivery_company_id: order.delivery_company_id || order.delivery_app || '',
+      delivery_company_name: order.delivery_company_name || order.delivery_app_name || '',
       delivery_company_order_id: order.delivery_company_order_id || '',
       customer_name: order.customer_name || '',
       customer_phone: order.customer_phone || '',
@@ -342,6 +355,7 @@ export default function Orders() {
       const isDelivery = payload.order_type === 'delivery' || payload.payment_method === 'delivery_company' || payload.customer_type === 'delivery_company';
       if (!isDelivery) {
         payload.delivery_address = null;
+        payload.delivery_company_id = null;
         payload.delivery_company_name = null;
         payload.delivery_company_order_id = null;
       }
@@ -881,12 +895,36 @@ export default function Orders() {
                 <div className="grid grid-cols-2 gap-3 p-3 bg-blue-500/5 border border-blue-500/30 rounded">
                   <div>
                     <Label>{t('شركة التوصيل')}</Label>
-                    <Input
-                      placeholder="طلباتي / طلبات / Uber Eats"
-                      value={fixForm.delivery_company_name}
-                      onChange={(e) => setFixForm({ ...fixForm, delivery_company_name: e.target.value })}
-                      data-testid="fix-delivery-company"
-                    />
+                    <Select
+                      value={fixForm.delivery_company_id || '__manual__'}
+                      onValueChange={(v) => {
+                        if (v === '__manual__') {
+                          setFixForm({ ...fixForm, delivery_company_id: '' });
+                        } else {
+                          const app = deliveryApps.find(a => a.id === v);
+                          setFixForm({ ...fixForm, delivery_company_id: v, delivery_company_name: app?.name || fixForm.delivery_company_name });
+                        }
+                      }}
+                    >
+                      <SelectTrigger data-testid="fix-delivery-company-select"><SelectValue placeholder={t('اختر الشركة')} /></SelectTrigger>
+                      <SelectContent>
+                        {deliveryApps.map(a => (
+                          <SelectItem key={a.id} value={a.id}>
+                            {a.name}{a.commission_rate ? ` (${a.commission_rate}%)` : ''}
+                          </SelectItem>
+                        ))}
+                        <SelectItem value="__manual__">{t('أخرى (اكتب الاسم)')}</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    {!fixForm.delivery_company_id && (
+                      <Input
+                        className="mt-2"
+                        placeholder="طلباتي / طلبات / Uber Eats"
+                        value={fixForm.delivery_company_name}
+                        onChange={(e) => setFixForm({ ...fixForm, delivery_company_name: e.target.value })}
+                        data-testid="fix-delivery-company"
+                      />
+                    )}
                   </div>
                   <div>
                     <Label>{t('رقم طلب الشركة')}</Label>

@@ -27,6 +27,19 @@ def _safe_num(val, default=0):
     except (TypeError, ValueError):
         return default
 
+# الأدوار التي لا تتعامل مع نقد المبيعات — رؤساء أقسام لا يجوز فتح وردية كاشير لهم
+# (أمين مخزن، تصنيع/مطبخ، مشتريات، كول سنتر، محاسب). يمنع ظهور فروقات نقد وهمية في تقرير الورديات.
+NON_CASHIER_ROLES = {
+    "warehouse_keeper", "manufacturer", "purchasing",
+    "call_center", "kitchen", "chef", "accountant",
+}
+
+def _can_open_shift(role: str) -> bool:
+    """يُسمح بفتح وردية للأدوار التي تتعامل مع نقد المبيعات فقط (كاشير/كابتن/مشرف...).
+    رؤساء الأقسام (مخزن/تصنيع/مطبخ/مشتريات) مستثنون."""
+    return (role or "").strip().lower() not in NON_CASHIER_ROLES
+
+
 # ==================== MODELS ====================
 class ShiftCreate(BaseModel):
     cashier_id: str
@@ -203,6 +216,11 @@ async def quick_open_shift(data: QuickOpenShift, current_user: dict = Depends(ge
     db = get_database()
     tenant_id = get_user_tenant_id(current_user)
     user_id = current_user["id"]
+
+    # 🚫 رؤساء الأقسام (مخزن/تصنيع/مطبخ/مشتريات) لا يفتح لهم وردية كاشير
+    if not _can_open_shift(current_user.get("role", "")):
+        return {"shift": None, "was_existing": False, "blocked": True,
+                "message": "هذا الحساب رئيس قسم ولا يتعامل مع نقد المبيعات — لا تُفتح له وردية"}
     
     branch_id = data.branch_id or current_user.get("branch_id")
     if not branch_id:
@@ -274,6 +292,10 @@ async def open_shift_for_cashier(data: OpenShiftForCashier, current_user: dict =
     cashier = await db.users.find_one({"id": data.cashier_id}, {"_id": 0, "password": 0})
     if not cashier:
         raise HTTPException(status_code=404, detail="الكاشير غير موجود")
+
+    # 🚫 لا يمكن فتح وردية لرئيس قسم (مخزن/تصنيع/مطبخ/مشتريات)
+    if not _can_open_shift(cashier.get("role", "")):
+        raise HTTPException(status_code=400, detail="هذا الحساب رئيس قسم ولا يتعامل مع نقد المبيعات — لا يمكن فتح وردية له")
     
     branch_id = data.branch_id or current_user.get("branch_id")
     if not branch_id:
@@ -346,6 +368,11 @@ async def auto_open_shift(current_user: dict = Depends(get_current_user)):
             raise HTTPException(status_code=404, detail="لا توجد وردية مفتوحة - يرجى فتح وردية لكاشير")
     
     # كاشير عادي: فتح وردية تلقائياً
+    # 🚫 رؤساء الأقسام (مخزن/تصنيع/مطبخ/مشتريات) لا تُفتح لهم وردية تلقائياً
+    if not _can_open_shift(user_role):
+        return {"shift": None, "was_existing": False, "blocked": True,
+                "message": "هذا الحساب رئيس قسم ولا يتعامل مع نقد المبيعات — لا تُفتح له وردية"}
+
     query = {"cashier_id": current_user["id"], "status": "open"}
     if tenant_id:
         query["tenant_id"] = tenant_id
@@ -408,6 +435,38 @@ async def auto_open_shift(current_user: dict = Depends(get_current_user)):
     del shift_doc["_id"]
     
     return {"shift": shift_doc, "was_existing": False, "message": "تم فتح وردية جديدة تلقائياً"}
+
+@router.post("/shifts/cleanup-non-cashier")
+async def cleanup_non_cashier_shifts(current_user: dict = Depends(get_current_user)):
+    """حذف الورديات التي فُتحت خطأً لرؤساء الأقسام (مخزن/تصنيع/مطبخ/مشتريات) — للمالك/المدير فقط.
+    تُزيل الفروقات النقدية الوهمية من تقرير الورديات."""
+    db = get_database()
+    tenant_id = get_user_tenant_id(current_user)
+    if current_user.get("role", "") not in ["admin", "super_admin", "manager", "branch_manager"]:
+        raise HTTPException(status_code=403, detail="غير مصرح")
+
+    user_query = {"role": {"$in": list(NON_CASHIER_ROLES)}}
+    if tenant_id:
+        user_query["tenant_id"] = tenant_id
+    non_cashier_users = await db.users.find(user_query, {"_id": 0, "id": 1, "full_name": 1, "role": 1}).to_list(1000)
+    non_cashier_ids = [u["id"] for u in non_cashier_users]
+
+    if not non_cashier_ids:
+        return {"deleted": 0, "users": [], "message": "لا توجد ورديات لرؤساء أقسام"}
+
+    del_query = {"cashier_id": {"$in": non_cashier_ids}}
+    if tenant_id:
+        del_query["tenant_id"] = tenant_id
+    # عيّنة قبل الحذف لإظهارها في الرد
+    affected = await db.shifts.find(del_query, {"_id": 0, "cashier_name": 1, "role": 1}).to_list(1000)
+    result = await db.shifts.delete_many(del_query)
+    return {
+        "deleted": result.deleted_count,
+        "users": [{"name": u.get("full_name"), "role": u.get("role")} for u in non_cashier_users],
+        "affected_shifts": len(affected),
+        "message": f"تم حذف {result.deleted_count} وردية فُتحت خطأً لرؤساء الأقسام"
+    }
+
 
 @router.post("/shifts/{shift_id}/close")
 async def close_shift(shift_id: str, close_data: ShiftClose, current_user: dict = Depends(get_current_user)):

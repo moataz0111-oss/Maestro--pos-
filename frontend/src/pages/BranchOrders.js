@@ -161,6 +161,13 @@ export default function BranchOrders() {
     fetchData();
   }, [selectedTab, selectedBranch]);
 
+  // 🔄 تحديث صامت دوري — تظهر تحديثات الطلبات (من المصنع/المخزن) فوراً دون إعادة تحميل
+  useEffect(() => {
+    const id = setInterval(() => fetchData(true), 12000);
+    return () => clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedTab, selectedBranch]);
+
   // ⭐ فتح الجرد عند النقر على تنبيه الجرد المعلّق (من StockCountAlert العام)
   useEffect(() => {
     const openCount = (branchId) => {
@@ -181,8 +188,8 @@ export default function BranchOrders() {
     window.addEventListener('emergent:open-stock-count', handler);
     return () => window.removeEventListener('emergent:open-stock-count', handler);
   }, []);
-  const fetchData = async () => {
-    setLoading(true);
+  const fetchData = async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       const [requestsRes, branchesRes, productsRes, packagingRes, notifsRes] = await Promise.all([
         axios.get(`${API}/branch-requests`, { headers }).catch(() => ({ data: [] })),
@@ -210,7 +217,7 @@ export default function BranchOrders() {
     } catch (error) {
       console.error('Error fetching data:', error);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
   const addProductToOrder = () => {

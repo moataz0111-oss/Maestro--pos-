@@ -57,6 +57,9 @@ class OfflineOrder(BaseModel):
     paid_amount: Optional[float] = 0
     change_amount: Optional[float] = 0
     # === حقول شركات التوصيل (طلبات/طلباتي/Uber/...) ===
+    delivery_app: Optional[str] = None
+    delivery_app_name: Optional[str] = None
+    is_delivery_company: Optional[bool] = False
     delivery_company: Optional[str] = None
     delivery_company_id: Optional[str] = None
     delivery_company_name: Optional[str] = None
@@ -109,6 +112,19 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
 
 def get_user_tenant_id(user: dict) -> str:
     return user.get("tenant_id")
+
+
+async def _get_company_commission_rate(tenant_id: Optional[str], app_id: Optional[str]) -> float:
+    """جلب نسبة عمولة شركة التوصيل الحالية من delivery_app_settings (مفتاحها app_id)."""
+    if not app_id:
+        return 0
+    q = {"app_id": app_id}
+    if tenant_id:
+        q["tenant_id"] = tenant_id
+    s = await db.delivery_app_settings.find_one(q, {"_id": 0})
+    if not s:
+        s = await db.delivery_app_settings.find_one({"app_id": app_id}, {"_id": 0})
+    return (s or {}).get("commission_rate", 0) or 0
 
 async def get_next_order_number(tenant_id: str, branch_id: Optional[str] = None, business_date: Optional[str] = None) -> int:
     """الحصول على رقم الطلب التالي — يستخدم نفس عدّاد online orders (يومي حسب الفرع)
@@ -179,6 +195,21 @@ async def sync_order(order: OfflineOrder, current_user: dict = Depends(get_curre
             else:
                 inferred_customer_type = "regular"
 
+        # === تحديد شركة التوصيل + عمولتها (نفس سلوك الأونلاين) ===
+        # ⭐ إصلاح: الأوفلاين كان يحفظ delivery_company_* فقط دون delivery_app/is_delivery_company
+        # فتختفي الطلبات من تقرير شركات التوصيل وتظهر كـ "delivery_company" عامة في طرق الدفع.
+        da_id = order.delivery_app or order.delivery_company_id
+        da_name = order.delivery_app_name or order.delivery_company_name or order.delivery_company
+        is_dc = bool(
+            order.is_delivery_company or da_id or da_name
+            or (order.customer_type == "delivery_company")
+            or ((order.payment_method or "").lower() == "delivery_company")
+        )
+        delivery_commission = 0
+        if is_dc and da_id:
+            _rate = await _get_company_commission_rate(tenant_id, da_id)
+            delivery_commission = round((order.total or 0) * _rate / 100, 2)
+
         # إنشاء الطلب الجديد
         new_order = {
             "id": str(uuid.uuid4()),
@@ -209,6 +240,10 @@ async def sync_order(order: OfflineOrder, current_user: dict = Depends(get_curre
             "paid_amount": order.paid_amount or 0,
             "change_amount": order.change_amount or 0,
             # === شركات التوصيل ===
+            "delivery_app": da_id,
+            "delivery_app_name": da_name,
+            "is_delivery_company": is_dc,
+            "delivery_commission": delivery_commission,
             "delivery_company": order.delivery_company,
             "delivery_company_id": order.delivery_company_id,
             "delivery_company_name": order.delivery_company_name,
@@ -358,6 +393,31 @@ async def fix_order_routing(
     if not update_set:
         raise HTTPException(status_code=400, detail="لا توجد حقول لتحديثها")
 
+    # ⭐ توجيه شركة التوصيل: عيّن الحقول التي يعتمد عليها تقرير شركات التوصيل
+    # (delivery_app / delivery_app_name / is_delivery_company / delivery_commission)
+    _is_dc = (
+        (payload.payment_method or "").lower() == "delivery_company"
+        or payload.customer_type == "delivery_company"
+        or bool(payload.delivery_company_id)
+    )
+    if _is_dc:
+        _app_id = payload.delivery_company_id
+        _name = payload.delivery_company_name or existing.get("delivery_company_name")
+        # محاولة مطابقة الاسم بشركة معروفة لجلب المعرف والنسبة عند عدم تمرير المعرف
+        if not _app_id and _name:
+            match = await db.delivery_app_settings.find_one(
+                {"name": _name, **({"tenant_id": tenant_id} if tenant_id else {})}, {"_id": 0}
+            ) or await db.delivery_apps.find_one(
+                {"name": _name, **({"tenant_id": tenant_id} if tenant_id else {})}, {"_id": 0}
+            )
+            if match:
+                _app_id = match.get("app_id") or match.get("id")
+        update_set["delivery_app"] = _app_id
+        update_set["delivery_app_name"] = _name
+        update_set["is_delivery_company"] = True
+        _rate = await _get_company_commission_rate(tenant_id, _app_id)
+        update_set["delivery_commission"] = round((existing.get("total", 0) or 0) * _rate / 100, 2)
+
     update_set["routing_fixed_at"] = datetime.now(timezone.utc).isoformat()
     update_set["routing_fixed_by"] = current_user.get("id")
     update_set["routing_fixed_by_name"] = current_user.get("full_name") or current_user.get("username")
@@ -438,11 +498,20 @@ async def assign_delivery_company(
         "order_type": existing.get("order_type"),
     }
 
+    # نسبة العمولة الحالية للشركة (لتظهر في تقرير شركات التوصيل بشكل صحيح)
+    _rate = await _get_company_commission_rate(tenant_id, payload.delivery_company_id)
+    _commission = round((existing.get("total", 0) or 0) * _rate / 100, 2)
+
     update_set = {
         "customer_type": "delivery_company",
         "delivery_company_id": payload.delivery_company_id,
         "delivery_company": company_name,
         "delivery_company_name": company_name,
+        # ⭐ إصلاح: تعيين حقول التوصيل التي يعتمد عليها التقرير لتوجيه قيمة الطلب لشركته
+        "delivery_app": payload.delivery_company_id,
+        "delivery_app_name": company_name,
+        "is_delivery_company": True,
+        "delivery_commission": _commission,
         "order_type": "delivery",
         # الدفع ينتقل إلى ذمة الشركة — يبقى unpaid حتى تحصيل من الشركة
         "payment_method": "delivery_company",

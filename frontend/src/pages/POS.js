@@ -46,6 +46,9 @@ import {
   Receipt,
   List,
   RefreshCw,
+  CloudOff,
+  UploadCloud,
+  CheckCircle2,
   AlertCircle,
   Bell,
   Eye,
@@ -102,7 +105,7 @@ const getErrorMessage = (error, defaultMsg) => {
 export default function POS() {
   const { user } = useAuth();
   const { selectedBranchId, branches, getBranchIdForApi, refreshPendingCounts, updatePendingCount } = useBranch();
-  const { isOnline, isOffline, syncStatus, updateSyncStatus } = useOffline();
+  const { isOnline, isOffline, syncStatus, updateSyncStatus, startSync } = useOffline();
   const { t, isRTL, lang } = useTranslation();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -169,6 +172,61 @@ export default function POS() {
   // حالات جديدة للطلبات المعلقة والعملاء
   const [pendingOrders, setPendingOrders] = useState([]);
   const [pendingOrdersDialogOpen, setPendingOrdersDialogOpen] = useState(false);
+  const [manualSyncing, setManualSyncing] = useState(false);
+  const [syncFlash, setSyncFlash] = useState(0);
+  const lastSyncRef = useRef(null);
+
+  // 🟢 إشعار بصري + صوتي للكاشير عند نجاح مزامنة الطلبات الأوفلاين
+  useEffect(() => {
+    if (syncStatus.lastSync && syncStatus.lastSync !== lastSyncRef.current) {
+      lastSyncRef.current = syncStatus.lastSync;
+      const cnt = syncStatus.lastSyncedCount || 0;
+      if (cnt > 0) {
+        setSyncFlash(cnt);
+        try {
+          const AC = window.AudioContext || window.webkitAudioContext;
+          const ctx = new AC();
+          const playTone = (freq, start, dur) => {
+            const o = ctx.createOscillator();
+            const g = ctx.createGain();
+            o.connect(g); g.connect(ctx.destination);
+            o.frequency.value = freq; o.type = 'sine';
+            g.gain.setValueAtTime(0.0001, ctx.currentTime + start);
+            g.gain.exponentialRampToValueAtTime(0.25, ctx.currentTime + start + 0.02);
+            g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + start + dur);
+            o.start(ctx.currentTime + start);
+            o.stop(ctx.currentTime + start + dur);
+          };
+          playTone(660, 0, 0.15);
+          playTone(880, 0.15, 0.22);
+        } catch (e) { /* صوت غير متاح */ }
+        setTimeout(() => setSyncFlash(0), 2800);
+      }
+    }
+  }, [syncStatus.lastSync, syncStatus.lastSyncedCount]);
+
+  // 🔄 تحديث عدّاد الطلبات غير المُزامَنة بشكل دوري
+  useEffect(() => {
+    updateSyncStatus();
+    const id = setInterval(() => { updateSyncStatus(); }, 6000);
+    return () => clearInterval(id);
+  }, [updateSyncStatus]);
+
+  // مزامنة يدوية فورية (زر "مزامنة الآن")
+  const handleManualSync = async () => {
+    if (isOffline) { toast.error(t('لا يوجد اتصال بالإنترنت')); return; }
+    setManualSyncing(true);
+    try {
+      await startSync();
+      await updateSyncStatus();
+    } catch (e) {
+      toast.error(t('فشلت المزامنة، حاول مجدداً'));
+    } finally {
+      setManualSyncing(false);
+    }
+  };
+
+
   const [editingOrder, setEditingOrder] = useState(null); // الطلب الحالي الذي يتم تعديله
   const [customerSearchPhone, setCustomerSearchPhone] = useState('');
   const [customerData, setCustomerData] = useState(null);
@@ -3148,6 +3206,46 @@ export default function POS() {
                 </span>
               )}
             </Button>
+
+            {/* مؤشر الطلبات غير المُزامَنة + زر "مزامنة الآن" */}
+            {(syncStatus.pendingOrders > 0 || isOffline) && (
+              <Button
+                variant="outline"
+                className={`relative ${isOffline ? 'border-red-500/50 text-red-500' : 'border-amber-500/50 text-amber-600'} hover:bg-amber-500/10`}
+                onClick={handleManualSync}
+                disabled={syncStatus.isSyncing || manualSyncing || isOffline}
+                data-testid="sync-now-btn"
+                title={isOffline ? t('لا يوجد اتصال') : t('مزامنة الطلبات غير المُرسَلة الآن')}
+              >
+                {(syncStatus.isSyncing || manualSyncing) ? (
+                  <RefreshCw className="h-4 w-4 ml-2 animate-spin" />
+                ) : isOffline ? (
+                  <CloudOff className="h-4 w-4 ml-2" />
+                ) : (
+                  <UploadCloud className="h-4 w-4 ml-2" />
+                )}
+                {(syncStatus.isSyncing || manualSyncing) ? t('جاري المزامنة...') : isOffline ? t('غير متصل') : t('مزامنة الآن')}
+                {syncStatus.pendingOrders > 0 && (
+                  <span className="absolute -top-2 -left-2 min-w-[1.5rem] h-6 px-1 bg-amber-500 text-white text-xs rounded-full flex items-center justify-center font-bold" data-testid="unsynced-count-badge">
+                    {syncStatus.pendingOrders}
+                  </span>
+                )}
+              </Button>
+            )}
+
+            {/* 🟢 ومضة نجاح المزامنة (بصري + صوتي) */}
+            {syncFlash > 0 && (
+              <div
+                className="fixed top-6 left-1/2 -translate-x-1/2 z-[9999] flex items-center gap-3 bg-emerald-500 text-white px-6 py-3 rounded-2xl shadow-2xl animate-in fade-in slide-in-from-top-4 duration-300"
+                data-testid="sync-success-flash"
+              >
+                <CheckCircle2 className="h-7 w-7 animate-pulse" />
+                <div>
+                  <p className="font-bold text-base leading-tight">{t('تمت المزامنة بنجاح')}</p>
+                  <p className="text-sm opacity-90">{t('تم رفع')} {syncFlash} {t('طلب إلى الخادم')}</p>
+                </div>
+              </div>
+            )}
             
             {/* زر إرجاع الطلبات */}
             {canRefund() && (

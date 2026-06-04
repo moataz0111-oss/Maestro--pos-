@@ -165,6 +165,46 @@ export default function OwnerWallet() {
     safe_balance: { title: t('الخزينة الشخصية'), textClass: 'text-amber-600', cumulative: true },
   };
 
+  // 💳 إدارة معاملات حساب دفع معيّن (عرض/حذف كل الإيداعات والسحوبات لهذا الحساب بكل التواريخ)
+  const [methodTxnDialog, setMethodTxnDialog] = useState(null); // اسم الحساب أو '__cash__'
+  const [methodTxnData, setMethodTxnData] = useState({ deposits: [], withdrawals: [], loading: false });
+
+  const isCashMethod = (m) => !m || ['cash', 'نقد', 'نقدي', 'نقداً', 'نقدا', 'كاش'].includes(String(m).trim().toLowerCase());
+
+  const openMethodTransactions = async (method) => {
+    setMethodTxnDialog(method);
+    setMethodTxnData({ deposits: [], withdrawals: [], loading: true });
+    try {
+      const params = 'start_date=2000-01-01&end_date=2999-12-31';
+      const [dep, wd] = await Promise.all([
+        axios.get(`${API}/owner-wallet/deposits?${params}`),
+        axios.get(`${API}/owner-wallet/withdrawals?${params}`),
+      ]);
+      const cash = method === '__cash__';
+      const matchM = (x) => cash ? isCashMethod(x.payment_method) : (String(x.payment_method || '').trim() === String(method).trim());
+      setMethodTxnData({
+        deposits: (dep.data || []).filter(matchM),
+        withdrawals: (wd.data || []).filter(matchM),
+        loading: false,
+      });
+    } catch (e) {
+      setMethodTxnData({ deposits: [], withdrawals: [], loading: false });
+    }
+  };
+
+  const deleteMethodTxn = async (kind, id) => {
+    if (!window.confirm(t('تأكيد الحذف؟'))) return;
+    try {
+      await axios.delete(`${API}/owner-wallet/${kind === 'deposit' ? 'deposits' : 'withdrawals'}/${id}`);
+      toast.success(t('تم الحذف'));
+      openMethodTransactions(methodTxnDialog);
+      fetchData();
+    } catch (e) {
+      toast.error(t('فشل الحذف'));
+    }
+  };
+
+
 
   // 📊 جلب تفاصيل فرع/مصدر مع نطاق تاريخ
   const fetchBranchDetails = async () => {
@@ -595,7 +635,7 @@ export default function OwnerWallet() {
               </h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
                 {/* بطاقة النقد الفعلي */}
-                <Card className="border-2 border-emerald-300 dark:border-emerald-700 bg-emerald-50/60 dark:bg-emerald-950/20" data-testid="balance-card-cash">
+                <Card className="border-2 border-emerald-300 dark:border-emerald-700 bg-emerald-50/60 dark:bg-emerald-950/20 cursor-pointer hover:shadow-lg hover:scale-[1.02] transition-all" onClick={() => openMethodTransactions('__cash__')} data-testid="balance-card-cash">
                   <CardContent className="p-4 space-y-2">
                     <div className="flex items-center gap-2">
                       <Banknote className="h-5 w-5 text-emerald-500" />
@@ -618,7 +658,7 @@ export default function OwnerWallet() {
                   const c = palette[idx % palette.length];
                   const isNegative = (m.balance || 0) < 0;
                   return (
-                    <Card key={m.method} className={`border-2 ${isNegative ? 'border-red-500 bg-red-50 dark:bg-red-950/20' : `${c.ring} ${c.bg}`}`} data-testid={`balance-card-${m.method}`}>
+                    <Card key={m.method} className={`border-2 cursor-pointer hover:shadow-lg hover:scale-[1.02] transition-all ${isNegative ? 'border-red-500 bg-red-50 dark:bg-red-950/20' : `${c.ring} ${c.bg}`}`} onClick={() => openMethodTransactions(m.method)} data-testid={`balance-card-${m.method}`}>
                       <CardContent className="p-4 space-y-2">
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
@@ -1405,6 +1445,68 @@ export default function OwnerWallet() {
             </Card>
           </TabsContent>
         </Tabs>
+
+        {/* 💳 Dialog: معاملات حساب الدفع (إيداعات + سحوبات بكل التواريخ + حذف) */}
+        <Dialog open={!!methodTxnDialog} onOpenChange={(o) => !o && setMethodTxnDialog(null)}>
+          <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto" data-testid="method-transactions-dialog">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-lg">
+                <CreditCard className="h-5 w-5 text-primary" />
+                {t('معاملات الحساب')} — <span className="text-primary">{methodTxnDialog === '__cash__' ? t('النقد الفعلي') : methodTxnDialog}</span>
+              </DialogTitle>
+            </DialogHeader>
+            {methodTxnData.loading ? (
+              <div className="py-10 flex justify-center"><RefreshCw className="h-6 w-6 animate-spin text-primary" /></div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* الإيداعات */}
+                <div>
+                  <p className="font-semibold text-sm text-emerald-600 mb-2 flex items-center gap-1">
+                    <ArrowDownCircle className="h-4 w-4" /> {t('الإيداعات')} ({methodTxnData.deposits.length})
+                  </p>
+                  <div className="space-y-2 max-h-[55vh] overflow-y-auto">
+                    {methodTxnData.deposits.length === 0 ? (
+                      <p className="text-xs text-muted-foreground text-center py-4">{t('لا توجد إيداعات')}</p>
+                    ) : methodTxnData.deposits.map((d) => (
+                      <div key={d.id} className="p-2.5 bg-emerald-50 dark:bg-emerald-950/30 rounded-lg flex items-center justify-between" data-testid={`method-deposit-${d.id}`}>
+                        <div className="min-w-0">
+                          <p className="font-bold text-emerald-700 dark:text-emerald-400 text-sm">{formatPrice(d.amount)}</p>
+                          <p className="text-[11px] text-muted-foreground truncate">{formatDate(d.date)}{d.description ? ` • ${d.description}` : ''}</p>
+                          {d.branch_name && <p className="text-[11px] text-purple-600">🏪 {d.branch_name}</p>}
+                        </div>
+                        <Button variant="ghost" size="icon" className="shrink-0" onClick={() => deleteMethodTxn('deposit', d.id)} data-testid={`delete-method-deposit-${d.id}`}>
+                          <Trash2 className="h-4 w-4 text-red-500" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                {/* السحوبات */}
+                <div>
+                  <p className="font-semibold text-sm text-rose-600 mb-2 flex items-center gap-1">
+                    <ArrowUpCircle className="h-4 w-4" /> {t('السحوبات')} ({methodTxnData.withdrawals.length})
+                  </p>
+                  <div className="space-y-2 max-h-[55vh] overflow-y-auto">
+                    {methodTxnData.withdrawals.length === 0 ? (
+                      <p className="text-xs text-muted-foreground text-center py-4">{t('لا توجد سحوبات')}</p>
+                    ) : methodTxnData.withdrawals.map((w) => (
+                      <div key={w.id} className="p-2.5 bg-rose-50 dark:bg-rose-950/30 rounded-lg flex items-center justify-between" data-testid={`method-withdrawal-${w.id}`}>
+                        <div className="min-w-0">
+                          <p className="font-bold text-rose-700 dark:text-rose-400 text-sm">{formatPrice(w.amount)}</p>
+                          <p className="text-[11px] text-muted-foreground truncate">{formatDate(w.date)}{w.beneficiary ? ` • ${w.beneficiary}` : ''}</p>
+                        </div>
+                        <Button variant="ghost" size="icon" className="shrink-0" onClick={() => deleteMethodTxn('withdrawal', w.id)} data-testid={`delete-method-withdrawal-${w.id}`}>
+                          <Trash2 className="h-4 w-4 text-red-500" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
+
 
         {/* 📅 Dialog: التفصيل الشهري للبطاقة المختارة */}
         <Dialog open={!!monthlyDialog} onOpenChange={(o) => !o && setMonthlyDialog(null)}>
