@@ -1866,7 +1866,7 @@ async def get_unassigned_delivery_orders(
         if o.get("payment_status") not in ["paid", "credit", None]:
             continue
         paid_company_count += 1
-        if _resolve_company_name(o, app_names) is None:  # غير محددة فعلاً
+        if not _resolve_company_name(o, app_names):  # غير محددة (None أو نص فارغ "") — نفس فحص التقرير `if not app_name`
             result.append({
                 "id": o.get("id"),
                 "order_number": o.get("order_number"),
