@@ -20,11 +20,6 @@ jobs:
         image: mongo:7
         ports:
           - 27017:27017
-        options: >-
-          --health-cmd "mongosh --eval 'db.runCommand({ping:1})' || mongo --eval 'db.runCommand({ping:1})'"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 10
 
     steps:
     - name: 📥 Checkout
@@ -39,6 +34,20 @@ jobs:
 
     - name: 📦 Install backend deps
       run: pip install -r backend/requirements.txt
+
+    - name: ⏳ Wait for MongoDB
+      run: |
+        python - <<'PY'
+        import time, sys
+        from pymongo import MongoClient
+        for i in range(30):
+            try:
+                MongoClient("mongodb://localhost:27017", serverSelectionTimeoutMS=1000).admin.command("ping")
+                print("✅ MongoDB ready"); sys.exit(0)
+            except Exception as e:
+                print(f"... waiting for mongo ({i+1}/30): {e}"); time.sleep(2)
+        print("🛑 MongoDB never became ready"); sys.exit(1)
+        PY
 
     - name: 🧪 Run curated financial tests (يمنع نشر كود يكسر الحسابات)
       working-directory: backend
