@@ -1841,22 +1841,15 @@ async def get_unassigned_delivery_orders(
     db = get_database()
     tenant_id = get_user_tenant_id(current_user)
 
-    # نفس قاعدة استبعاد التقرير
+    # نفس قاعدة استبعاد التقرير بالضبط (بلا فلتر is_company في Mongo — نُطبّقه في Python لمطابقة التقرير 100%)
     query = {"status": {"$nin": ["cancelled", "refunded"]}, "is_refunded": {"$ne": True}}
     if tenant_id:
         query["tenant_id"] = tenant_id
     else:
         query["$or"] = [{"tenant_id": {"$exists": False}}, {"tenant_id": None}]
-    # مرشّحو "طلب شركة توصيل" (is_company truthy)
-    query["$and"] = [{"$or": [
-        {"is_delivery_company": True},
-        {"delivery_app": {"$nin": [None, ""]}},
-        {"delivery_app_name": {"$nin": [None, ""]}},
-        {"payment_method": "delivery_company"},
-    ]}]
     query = _apply_business_date_filter(query, start_date, end_date)
 
-    candidates = await db.orders.find(query, {"_id": 0}).sort("created_at", -1).to_list(10000)
+    candidates = await db.orders.find(query, {"_id": 0}).sort("created_at", -1).to_list(20000)
     delivery_apps = await db.delivery_apps.find({}, {"_id": 0}).to_list(100)
     app_names = {app["id"]: app["name"] for app in delivery_apps}
 
@@ -1864,6 +1857,11 @@ async def get_unassigned_delivery_orders(
     for o in candidates:
         # نفس فلتر التقرير: تُعرض المبيعات للطلبات paid/credit/None
         if o.get("payment_status") not in ["paid", "credit", None]:
+            continue
+        # is_company بنفس منطق التقرير تماماً (truthy، يقبل bool/int/string)
+        pm = o.get("payment_method", "cash")
+        is_company = bool(o.get("is_delivery_company")) or o.get("delivery_app") or o.get("delivery_app_name") or pm == "delivery_company"
+        if not is_company:
             continue
         if _resolve_company_name(o, app_names) is None:  # غير محددة فعلاً
             result.append({
