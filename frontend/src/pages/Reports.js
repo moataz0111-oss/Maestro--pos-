@@ -2709,27 +2709,34 @@ const DeliveryReportTab = ({ deliveryCreditsReport, t, formatPrice, fetchReports
   const [reassignCompanyId, setReassignCompanyId] = useState('');
   const [selectedUnassignedIds, setSelectedUnassignedIds] = useState([]);
   const [reassigning, setReassigning] = useState(false);
+  const [unassignedDebug, setUnassignedDebug] = useState(null);
 
   const openReassignDialog = async () => {
     setShowReassignDialog(true);
     setLoadingUnassigned(true);
     setSelectedUnassignedIds([]);
     setReassignCompanyId('');
+    setUnassignedOrders([]);
+    const headers = { Authorization: `Bearer ${localStorage.getItem('token')}` };
+    // 1) جلب الطلبات غير المحددة (الأهم) — مستقل
     try {
-      const headers = { Authorization: `Bearer ${localStorage.getItem('token')}` };
-      const [ordersRes, appsRes] = await Promise.all([
-        axios.get(`${API}/reports/delivery/unassigned-orders`, { params: { start_date: startDate, end_date: endDate }, headers }),
-        axios.get(`${API}/delivery-apps`, { headers }),
-      ]);
+      const ordersRes = await axios.get(`${API}/reports/delivery/unassigned-orders`, { params: { start_date: startDate, end_date: endDate }, headers });
       const orders = ordersRes.data?.orders || [];
       setUnassignedOrders(orders);
-      setSelectedUnassignedIds(orders.map(o => o.id)); // تحديد الكل افتراضياً
+      setSelectedUnassignedIds(orders.map(o => o.id));
+      setUnassignedDebug(ordersRes.data?.debug || null);
+    } catch (e) {
+      toast.error((t('فشل جلب الطلبات غير المحددة') + ': ') + (e?.response?.data?.detail || e?.message || ''));
+    } finally {
+      setLoadingUnassigned(false);
+    }
+    // 2) جلب قائمة شركات التوصيل (للقائمة المنسدلة) — مستقل، فشله لا يمنع عرض الطلبات
+    try {
+      const appsRes = await axios.get(`${API}/delivery-apps`, { headers });
       const apps = Array.isArray(appsRes.data) ? appsRes.data : (appsRes.data?.delivery_apps || []);
       setReassignCompanies(apps.filter(a => a.is_active !== false));
     } catch (e) {
-      toast.error(t('فشل جلب الطلبات غير المحددة'));
-    } finally {
-      setLoadingUnassigned(false);
+      // غير حرج — يمكن الإرجاع للآجل حتى لو لم تُحمّل الشركات
     }
   };
 
@@ -3510,6 +3517,12 @@ const DeliveryReportTab = ({ deliveryCreditsReport, t, formatPrice, fetchReports
             <div className="text-center py-8 text-muted-foreground" data-testid="no-unassigned-orders">
               <Truck className="h-12 w-12 mx-auto mb-3 opacity-40" />
               <p>{t('لا توجد طلبات غير محددة في هذه الفترة')}</p>
+              {unassignedDebug && (
+                <p className="text-[11px] mt-3 text-amber-400/80" dir="ltr" data-testid="unassigned-debug">
+                  candidates: {unassignedDebug.candidates} | delivery-company: {unassignedDebug.delivery_company_orders} | paid: {unassignedDebug.paid_company_orders}<br/>
+                  range: {unassignedDebug.start_date} → {unassignedDebug.end_date}
+                </p>
+              )}
             </div>
           ) : (
             <div className="space-y-4">

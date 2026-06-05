@@ -1853,16 +1853,19 @@ async def get_unassigned_delivery_orders(
     delivery_apps = await db.delivery_apps.find({}, {"_id": 0}).to_list(100)
     app_names = {app["id"]: app["name"] for app in delivery_apps}
 
+    is_company_count = 0
+    paid_company_count = 0
     result = []
     for o in candidates:
-        # نفس فلتر التقرير: تُعرض المبيعات للطلبات paid/credit/None
-        if o.get("payment_status") not in ["paid", "credit", None]:
-            continue
-        # is_company بنفس منطق التقرير تماماً (truthy، يقبل bool/int/string)
         pm = o.get("payment_method", "cash")
         is_company = bool(o.get("is_delivery_company")) or o.get("delivery_app") or o.get("delivery_app_name") or pm == "delivery_company"
         if not is_company:
             continue
+        is_company_count += 1
+        # نفس فلتر التقرير: تُعرض المبيعات للطلبات paid/credit/None
+        if o.get("payment_status") not in ["paid", "credit", None]:
+            continue
+        paid_company_count += 1
         if _resolve_company_name(o, app_names) is None:  # غير محددة فعلاً
             result.append({
                 "id": o.get("id"),
@@ -1873,7 +1876,19 @@ async def get_unassigned_delivery_orders(
                 "created_at": o.get("created_at"),
                 "payment_status": o.get("payment_status"),
             })
-    return {"orders": result, "count": len(result), "total_amount": sum(o.get("total", 0) or 0 for o in result)}
+    return {
+        "orders": result,
+        "count": len(result),
+        "total_amount": sum(o.get("total", 0) or 0 for o in result),
+        "debug": {
+            "candidates": len(candidates),
+            "delivery_company_orders": is_company_count,
+            "paid_company_orders": paid_company_count,
+            "start_date": start_date,
+            "end_date": end_date,
+            "tenant_id": tenant_id,
+        },
+    }
 
 class ReassignUnassignedPayload(BaseModel):
     order_ids: List[str]
