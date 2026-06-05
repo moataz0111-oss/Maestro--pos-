@@ -1,6 +1,24 @@
 # Maestro EGP - Changelog
 
 
+## Session: 05 Jun 2026 (تكملة) — أداة توجيه طلبات التوصيل غير المحددة + ميزة "استلام الشفت" + إصلاح زر التنظيف نهائياً
+
+### 🔴 إصلاح نهائي لزر "تنظيف ورديات رؤساء الأقسام" (فشل التنظيف)
+- سببان جذريان: (1) `handleCleanupNonCashier` في `Reports.js` كان يشير إلى متغير `headers` غير معرّف في نطاقه → ReferenceError يُلتقط فيظهر "فشل التنظيف". أُصلح بتعريف `reqHeaders` محلياً. (2) النقطة الخلفية كانت تحذف من `shifts` فقط؛ الآن تحذف أيضاً من `cash_register_closings` (مصدر بطاقات تقرير الإغلاق) → تختفي زيادات علي/عبدالرحمن الوهمية (+165,000) ويُصحّح الإجمالي. + دور `owner`.
+
+### ✅ أداة توجيه طلبات "شركة توصيل (غير محددة)"
+- Backend (`reports_routes.py`): `GET /api/reports/delivery/unassigned-orders` + `POST /api/reports/delivery/reassign-unassigned` (تعيين لشركة محددة مع إعادة حساب العمولة، أو إرجاع للآجل العادي `return_to_credit`).
+- Frontend (`DeliveryReportTab`): زر "توجيه الطلبات غير المحددة" → حوار يعرض الطلبات مع اختيار الشركة الهدف (أو إرجاعها للآجل). data-testid: open-reassign-unassigned, reassign-unassigned-dialog, reassign-company-select, confirm-reassign, confirm-return-to-credit. **اختبار: PASS (iter217)**.
+
+### ✅ ميزة "استلام الشفت" (إيداع تلقائي في الخزينة)
+- Backend (`shifts_routes.py`): `POST /api/reports/cash-register-closing/{id}/receive` — يقبل shift_id أو closing id، يُنشئ `owner_deposit` (source=shift_cash) بتاريخ الشفت الفعلي وفرعه، المبلغ = المُستلم − المصاريف الخارجية، **idempotent** (received_at). أُضيفت الحقول لـ ShiftResponse.
+- Frontend (`CashRegisterClosingTab`): زر "استلام الشفت" على كل شفت مُغلق + حوار (نقد معدود، مبلغ مُستلم، مصاريف خارجية بعد الإغلاق، صافي مُودَع) + بطاقة "المُستلم من الشفتات" + شارة "تم الاستلام". data-testid: receive-shift-{idx}, receive-shift-dialog, receive-external-expenses-input, receive-net-deposit, confirm-receive-shift, total-received-shifts. **اختبار: PASS (iter217)**.
+
+### 📌 ملاحظة نشر: بناء الواجهة على VPS بطيء (10-20د) بسبب الملفات الضخمة وذاكرة الـVPS — اقتُرح نقل البناء لـGitHub Actions (لم يُنفَّذ بعد، بانتظار موافقة المستخدم).
+
+---
+
+
 ## Session: 05 Jun 2026 (BUG FIX P0 + FEATURE) — صلاحية المالك لزر التنظيف + تصفير تحصيل شركة توصيل
 
 ### 🔴 P0 — زر "تنظيف ورديات رؤساء الأقسام" يفشل بـ "فشل التنظيف"

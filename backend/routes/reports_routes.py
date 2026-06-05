@@ -1814,6 +1814,123 @@ async def reset_delivery_collections(
     }
 
 
+# ==================== UNASSIGNED DELIVERY ORDERS (شركة توصيل غير محددة) ====================
+def _unassigned_delivery_filter():
+    """طلب لشركة توصيل لكن بلا شركة محددة (لا اسم ولا معرّف قابل للحل)."""
+    no_name = [{"delivery_app_name": {"$in": [None, ""]}},
+               {"delivery_company_name": {"$in": [None, ""]}},
+               {"delivery_app": {"$in": [None, ""]}}]
+    is_company = [{"is_delivery_company": True}, {"payment_method": "delivery_company"}]
+    return {"$and": [{"$or": is_company}, *no_name,
+                     {"status": {"$nin": ["cancelled", "refunded", "deleted"]}}]}
+
+@router.get("/delivery/unassigned-orders")
+async def get_unassigned_delivery_orders(
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """قائمة طلبات التوصيل التي بلا شركة محددة (تظهر كـ 'شركة توصيل (غير محددة)') — للتوجيه اليدوي."""
+    db = get_database()
+    tenant_id = get_user_tenant_id(current_user)
+    query = _unassigned_delivery_filter()
+    if tenant_id:
+        query["$and"].append({"tenant_id": tenant_id})
+    query = _apply_business_date_filter(query, start_date, end_date)
+    orders = await db.orders.find(query, {"_id": 0}).sort("created_at", -1).to_list(5000)
+    result = [{
+        "id": o.get("id"),
+        "order_number": o.get("order_number"),
+        "total": o.get("total", 0),
+        "customer_name": o.get("customer_name"),
+        "branch_name": o.get("branch_name"),
+        "created_at": o.get("created_at"),
+        "payment_status": o.get("payment_status"),
+    } for o in orders]
+    return {"orders": result, "count": len(result), "total_amount": sum(o.get("total", 0) or 0 for o in orders)}
+
+class ReassignUnassignedPayload(BaseModel):
+    order_ids: List[str]
+    delivery_company_id: Optional[str] = None
+    delivery_company_name: Optional[str] = None
+    return_to_credit: bool = False  # إرجاع للآجل العادي بدل تعيين شركة
+
+@router.post("/delivery/reassign-unassigned")
+async def reassign_unassigned_delivery_orders(
+    payload: ReassignUnassignedPayload,
+    current_user: dict = Depends(get_current_user)
+):
+    """توجيه جماعي لطلبات 'شركة توصيل (غير محددة)': إمّا تعيينها لشركة محددة، أو إرجاعها للآجل العادي."""
+    db = get_database()
+    tenant_id = get_user_tenant_id(current_user)
+    if current_user.get("role", "") not in ["admin", "super_admin", "manager", "branch_manager", "owner"]:
+        raise HTTPException(status_code=403, detail="غير مصرح")
+    if not payload.order_ids:
+        raise HTTPException(status_code=400, detail="لم تُحدَّد أي طلبات")
+
+    oq = {"id": {"$in": payload.order_ids}}
+    if tenant_id:
+        oq["tenant_id"] = tenant_id
+    now_iso = datetime.now(timezone.utc).isoformat()
+
+    if payload.return_to_credit:
+        # إرجاع للآجل العادي: إزالة كل وسوم شركة التوصيل
+        update_set = {
+            "customer_type": None,
+            "is_delivery_company": False,
+            "delivery_app": None,
+            "delivery_app_name": None,
+            "delivery_company_id": None,
+            "delivery_company": None,
+            "delivery_company_name": None,
+            "delivery_commission": 0,
+            "payment_method": "credit",
+            "payment_status": "unpaid",
+            "company_unassigned_at": now_iso,
+            "updated_at": now_iso,
+        }
+        res = await db.orders.update_many(oq, {"$set": update_set})
+        return {"updated": res.modified_count, "mode": "return_to_credit",
+                "message": f"تم إرجاع {res.modified_count} طلب للآجل العادي — يمكنك الآن توجيهها يدوياً"}
+
+    # تعيين لشركة محددة
+    if not payload.delivery_company_id:
+        raise HTTPException(status_code=400, detail="يجب اختيار الشركة")
+    company_name = (payload.delivery_company_name or "").strip()
+    if not company_name:
+        app_doc = await db.delivery_apps.find_one({"id": payload.delivery_company_id}, {"_id": 0, "name": 1})
+        company_name = (app_doc or {}).get("name") or payload.delivery_company_id
+
+    # نسبة العمولة الحالية للشركة
+    settings = await db.delivery_app_settings.find_one(
+        {"app_id": payload.delivery_company_id, **({"tenant_id": tenant_id} if tenant_id else {})}, {"_id": 0})
+    rate = (settings or {}).get("commission_rate", 0) or 0
+
+    orders = await db.orders.find(oq, {"_id": 0, "id": 1, "total": 1}).to_list(5000)
+    updated = 0
+    for o in orders:
+        commission = round((o.get("total", 0) or 0) * rate / 100, 2) if rate else 0
+        await db.orders.update_one({"id": o["id"]}, {"$set": {
+            "customer_type": "delivery_company",
+            "delivery_company_id": payload.delivery_company_id,
+            "delivery_company": company_name,
+            "delivery_company_name": company_name,
+            "delivery_app": payload.delivery_company_id,
+            "delivery_app_name": company_name,
+            "is_delivery_company": True,
+            "delivery_commission": commission,
+            "order_type": "delivery",
+            "payment_method": "delivery_company",
+            "company_assigned_at": now_iso,
+            "company_assigned_by_name": current_user.get("full_name") or current_user.get("username"),
+            "updated_at": now_iso,
+        }})
+        updated += 1
+    return {"updated": updated, "mode": "assigned", "company_name": company_name,
+            "message": f"تم توجيه {updated} طلب إلى شركة {company_name}"}
+
+
+
 
 @router.get("/delivery/collections")
 async def get_delivery_collections(

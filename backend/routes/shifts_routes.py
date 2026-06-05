@@ -86,6 +86,12 @@ class ShiftResponse(BaseModel):
     cancelled_amount: float = 0.0
     discounts_total: float = 0.0
     business_date: Optional[str] = None
+    # استلام نقد الشفت (إيداع تلقائي في الخزينة)
+    received_at: Optional[str] = None
+    received_by: Optional[str] = None
+    received_amount: Optional[float] = None
+    received_external_expenses: Optional[float] = None
+    received_net_deposit: Optional[float] = None
 
 # ==================== SHIFT CRUD ====================
 @router.post("/shifts", response_model=ShiftResponse)
@@ -460,12 +466,102 @@ async def cleanup_non_cashier_shifts(current_user: dict = Depends(get_current_us
     # عيّنة قبل الحذف لإظهارها في الرد
     affected = await db.shifts.find(del_query, {"_id": 0, "cashier_name": 1, "role": 1}).to_list(1000)
     result = await db.shifts.delete_many(del_query)
+    # ⭐ حذف سجلات الإغلاق (cash_register_closings) لرؤساء الأقسام أيضاً —
+    # لأن بطاقات تقرير الإغلاق تُقرأ من هذه المجموعة وليست من shifts،
+    # فبقاؤها يُبقي فروقات الزيادة/النقص الوهمية ويُفسد الإجمالي.
+    closings_result = await db.cash_register_closings.delete_many(del_query)
     return {
         "deleted": result.deleted_count,
+        "deleted_closings": closings_result.deleted_count,
         "users": [{"name": u.get("full_name"), "role": u.get("role")} for u in non_cashier_users],
         "affected_shifts": len(affected),
-        "message": f"تم حذف {result.deleted_count} وردية فُتحت خطأً لرؤساء الأقسام"
+        "message": f"تم حذف {result.deleted_count} وردية و{closings_result.deleted_count} سجل إغلاق فُتحت خطأً لرؤساء الأقسام"
     }
+
+
+class ReceiveShiftCash(BaseModel):
+    received_amount: Optional[float] = None  # المبلغ الفعلي المُستلم (افتراضياً النقد المعدود)
+    external_expenses: float = 0.0  # مصاريف خارجية صُرفت بعد إغلاق الشفت
+    external_expenses_note: Optional[str] = None
+    received_by: Optional[str] = None
+
+@router.post("/reports/cash-register-closing/{closing_id}/receive")
+async def receive_shift_cash(closing_id: str, data: ReceiveShiftCash, current_user: dict = Depends(get_current_user)):
+    """استلام نقد الشفت وإيداعه تلقائياً في خزينة المالك (إيداعات الفرع) بتاريخ الشفت الفعلي.
+    المبلغ المُودَع = (النقد المُستلم − المصاريف الخارجية بعد الإغلاق). يُسمح بالاستلام مرة واحدة فقط.
+    يقبل المعرّف سواء كان معرّف الوردية (shift_id) أو معرّف سجل الإغلاق."""
+    db = get_database()
+    tenant_id = get_user_tenant_id(current_user)
+    if current_user.get("role", "") not in ["admin", "super_admin", "manager", "branch_manager", "owner"]:
+        raise HTTPException(status_code=403, detail="غير مصرح")
+
+    tq = {"tenant_id": tenant_id} if tenant_id else {}
+    # المعرّف القادم من الواجهة غالباً معرّف الوردية (البطاقات تُبنى من shifts)
+    shift = await db.shifts.find_one({"id": closing_id, **tq}, {"_id": 0})
+    closing = await db.cash_register_closings.find_one(
+        {"$or": [{"id": closing_id}, {"shift_id": closing_id}], **tq}, {"_id": 0})
+    source = shift or closing
+    if not source:
+        raise HTTPException(status_code=404, detail="سجل الشفت غير موجود")
+    if (shift and shift.get("received_at")) or (closing and closing.get("received_at")):
+        raise HTTPException(status_code=400, detail="تم استلام هذا الشفت مسبقاً")
+
+    counted = _safe_num(source.get("closing_cash") if source.get("closing_cash") is not None
+                        else (source.get("counted_cash") if source.get("counted_cash") is not None else source.get("actual_cash")))
+    received = _safe_num(data.received_amount) if data.received_amount is not None else counted
+    ext = _safe_num(data.external_expenses)
+    net_deposit = round(received - ext, 2)
+
+    now = datetime.now(timezone.utc)
+    deposit_date = source.get("business_date") or (source.get("closed_at") or source.get("ended_at") or now.isoformat())[:10]
+    branch_id = source.get("branch_id")
+    branch_name = source.get("branch_name") or ""
+    receiver = data.received_by or current_user.get("full_name") or current_user.get("username")
+
+    deposit_id = None
+    if net_deposit > 0:
+        deposit_id = str(uuid.uuid4())
+        await db.owner_deposits.insert_one({
+            "id": deposit_id,
+            "tenant_id": tenant_id,
+            "amount": net_deposit,
+            "date": deposit_date,
+            "description": f"استلام نقد شفت — {source.get('cashier_name', '')}" + (f" | مصاريف خارجية: {ext:,.0f}" if ext else ""),
+            "source": "shift_cash",
+            "payment_method": "cash",
+            "branch_id": branch_id,
+            "branch_name": branch_name,
+            "external_source": None,
+            "ref_closing_id": closing_id,
+            "created_by": receiver,
+            "created_at": now.isoformat(),
+        })
+
+    received_fields = {
+        "received_at": now.isoformat(),
+        "received_by": receiver,
+        "received_amount": received,
+        "received_external_expenses": ext,
+        "received_external_expenses_note": data.external_expenses_note,
+        "received_net_deposit": net_deposit,
+        "received_deposit_id": deposit_id,
+    }
+    if shift:
+        await db.shifts.update_one({"id": shift["id"]}, {"$set": received_fields})
+    if closing:
+        await db.cash_register_closings.update_one({"id": closing["id"]}, {"$set": received_fields})
+
+    return {
+        "closing_id": closing_id,
+        "received_amount": received,
+        "external_expenses": ext,
+        "net_deposit": net_deposit,
+        "deposit_date": deposit_date,
+        "branch_name": branch_name,
+        "deposit_id": deposit_id,
+        "message": f"تم استلام {received:,.0f} وإيداع {net_deposit:,.0f} في خزينة فرع {branch_name} بتاريخ {deposit_date}"
+    }
+
 
 
 @router.post("/shifts/{shift_id}/close")

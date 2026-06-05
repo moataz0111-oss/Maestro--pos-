@@ -1247,6 +1247,43 @@ const CashRegisterClosingTab = ({ t, formatPrice, selectedBranchId, branches, ge
   const [shiftExpensesDetails, setShiftExpensesDetails] = useState({}); // {shiftIdx: [expenses]}
   const [loadingExpenses, setLoadingExpenses] = useState(false);
 
+  // ===== استلام نقد الشفت (إيداع تلقائي في الخزينة) =====
+  const [receiveDialog, setReceiveDialog] = useState(null); // {closing}
+  const [receiveForm, setReceiveForm] = useState({ received_amount: '', external_expenses: '', external_expenses_note: '', received_by: '' });
+  const [receiving, setReceiving] = useState(false);
+  const totalReceived = closingsHistory.reduce((s, c) => s + (c.received_net_deposit || 0), 0);
+
+  const openReceiveDialog = (closing) => {
+    const counted = closing.closing_cash ?? closing.counted_cash ?? closing.actual_cash ?? 0;
+    setReceiveForm({ received_amount: counted, external_expenses: '', external_expenses_note: '', received_by: '' });
+    setReceiveDialog({ closing });
+  };
+
+  const handleReceiveShift = async () => {
+    if (!receiveDialog) return;
+    const received = parseFloat(receiveForm.received_amount) || 0;
+    const ext = parseFloat(receiveForm.external_expenses) || 0;
+    if (received <= 0) { toast.error(t('أدخل المبلغ المُستلم')); return; }
+    setReceiving(true);
+    try {
+      const token = localStorage.getItem('token');
+      const headers = token ? { Authorization: `Bearer ${token}` } : {};
+      const res = await axios.post(`${API_URL}/reports/cash-register-closing/${receiveDialog.closing.id}/receive`, {
+        received_amount: received,
+        external_expenses: ext,
+        external_expenses_note: receiveForm.external_expenses_note || null,
+        received_by: receiveForm.received_by || null,
+      }, { headers });
+      toast.success(res.data?.message || t('تم استلام الشفت وإيداعه في الخزينة'));
+      setReceiveDialog(null);
+      fetchReport();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || t('فشل استلام الشفت'));
+    } finally {
+      setReceiving(false);
+    }
+  };
+
   // حساب النقد المعدود والفرق من الإغلاقات
   const totalCountedCash = closingsHistory.reduce((sum, c) => sum + (c.closing_cash || c.counted_cash || 0), 0);
   const totalExpectedCash = closingsHistory.reduce((sum, c) => sum + (c.expected_cash || 0), 0);
@@ -1512,7 +1549,9 @@ const CashRegisterClosingTab = ({ t, formatPrice, selectedBranchId, branches, ge
     if (!window.confirm(t('سيتم حذف الورديات التي فُتحت خطأً لرؤساء الأقسام (مخزن/تصنيع/مطبخ/مشتريات). متابعة؟'))) return;
     setCleaningShifts(true);
     try {
-      const res = await axios.post(`${API_URL}/shifts/cleanup-non-cashier`, {}, { headers });
+      const token = localStorage.getItem('token');
+      const reqHeaders = token ? { Authorization: `Bearer ${token}` } : {};
+      const res = await axios.post(`${API_URL}/shifts/cleanup-non-cashier`, {}, { headers: reqHeaders });
       toast.success(res.data?.message || t('تم التنظيف'));
       fetchReport();
     } catch (e) {
@@ -1596,7 +1635,7 @@ const CashRegisterClosingTab = ({ t, formatPrice, selectedBranchId, branches, ge
 
       {/* حقل النقد المعدود ومربعات Over/Short */}
       {report && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           {/* النقد المعدود (الفعلي) - من الإغلاقات */}
           <Card className="bg-gradient-to-br from-blue-900/40 to-blue-800/20 border-blue-700/30">
             <CardContent className="p-4">
@@ -1642,6 +1681,21 @@ const CashRegisterClosingTab = ({ t, formatPrice, selectedBranchId, branches, ge
                   <p className={`text-2xl font-bold ${isShortCash ? 'text-red-400' : 'text-red-600'}`}>
                     {isShortCash ? formatPrice(Math.abs(cashDifference)) : formatPrice(0)}
                   </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* إجمالي المستلم من الشفتات (مُودَع في الخزينة) */}
+          <Card className="bg-gradient-to-br from-cyan-900/40 to-cyan-800/20 border-cyan-700/30 border-2">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3">
+                <div className="p-3 rounded-lg bg-cyan-500/20">
+                  <Wallet className="h-6 w-6 text-cyan-400" />
+                </div>
+                <div>
+                  <p className="text-sm text-cyan-300">{t('المُستلم من الشفتات (للخزينة)')}</p>
+                  <p className="text-2xl font-bold text-cyan-400" data-testid="total-received-shifts">{formatPrice(totalReceived)}</p>
                 </div>
               </div>
             </CardContent>
@@ -1711,6 +1765,24 @@ const CashRegisterClosingTab = ({ t, formatPrice, selectedBranchId, branches, ge
                     </Badge>
                     {closing.is_active && (
                       <Badge className="bg-green-500/30 text-green-400 animate-pulse">{t('نشط')}</Badge>
+                    )}
+                    {!closing.is_active && (
+                      closing.received_at ? (
+                        <Badge className="bg-blue-500/20 text-blue-300 gap-1" data-testid={`shift-received-badge-${idx}`} title={`${t('أُودِع')}: ${formatPrice(closing.received_net_deposit || 0)}`}>
+                          <CheckCircle className="h-3.5 w-3.5" /> {t('تم الاستلام')}
+                        </Badge>
+                      ) : (
+                        <Button
+                          size="sm"
+                          onClick={(e) => { e.stopPropagation(); openReceiveDialog(closing); }}
+                          className="bg-blue-600 hover:bg-blue-700 gap-1 h-8"
+                          data-testid={`receive-shift-${idx}`}
+                          title={t('استلام نقد الشفت وإيداعه في الخزينة')}
+                        >
+                          <Wallet className="h-4 w-4" />
+                          {t('استلام الشفت')}
+                        </Button>
+                      )
                     )}
                     <ChevronDown className={`h-5 w-5 text-gray-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
                   </div>
@@ -2164,6 +2236,69 @@ const CashRegisterClosingTab = ({ t, formatPrice, selectedBranchId, branches, ge
       ) : (
         <div className="text-center py-12 text-gray-400">{t('لا توجد بيانات')}</div>
       )}
+
+      {/* نموذج استلام نقد الشفت */}
+      <Dialog open={!!receiveDialog} onOpenChange={(o) => !o && setReceiveDialog(null)}>
+        <DialogContent className="bg-gray-900 border-gray-700 text-white max-w-md" data-testid="receive-shift-dialog">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-cyan-400">
+              <Wallet className="h-5 w-5" />
+              {t('استلام نقد الشفت')}
+            </DialogTitle>
+          </DialogHeader>
+          {receiveDialog && (
+            <div className="space-y-4">
+              <div className="bg-gray-800/50 rounded-lg p-3 text-sm space-y-1">
+                <div className="flex justify-between"><span className="text-gray-400">{t('الكاشير')}</span><span className="font-bold">{receiveDialog.closing.cashier_name}</span></div>
+                <div className="flex justify-between"><span className="text-gray-400">{t('اليوم التشغيلي')}</span><span>{receiveDialog.closing.business_date || '-'}</span></div>
+                <div className="flex justify-between"><span className="text-gray-400">{t('الفرع')}</span><span>{receiveDialog.closing.branch_name || '-'}</span></div>
+                <div className="flex justify-between"><span className="text-gray-400">{t('النقد المعدود')}</span><span className="font-bold text-blue-300">{formatPrice(receiveDialog.closing.closing_cash ?? receiveDialog.closing.counted_cash ?? receiveDialog.closing.actual_cash ?? 0)}</span></div>
+              </div>
+              <div>
+                <Label className="text-gray-300">{t('المبلغ الفعلي المُستلم')}</Label>
+                <Input type="number" value={receiveForm.received_amount}
+                  onChange={(e) => setReceiveForm(f => ({ ...f, received_amount: e.target.value }))}
+                  className="bg-gray-800 border-gray-700 text-white" data-testid="receive-amount-input" />
+              </div>
+              <div>
+                <Label className="text-gray-300">{t('مصاريف خارجية بعد الإغلاق (اختياري)')}</Label>
+                <Input type="number" value={receiveForm.external_expenses}
+                  onChange={(e) => setReceiveForm(f => ({ ...f, external_expenses: e.target.value }))}
+                  placeholder="0" className="bg-gray-800 border-gray-700 text-white" data-testid="receive-external-expenses-input" />
+              </div>
+              {parseFloat(receiveForm.external_expenses) > 0 && (
+                <div>
+                  <Label className="text-gray-300">{t('سبب المصاريف الخارجية')}</Label>
+                  <Input value={receiveForm.external_expenses_note}
+                    onChange={(e) => setReceiveForm(f => ({ ...f, external_expenses_note: e.target.value }))}
+                    className="bg-gray-800 border-gray-700 text-white" data-testid="receive-external-note-input" />
+                </div>
+              )}
+              <div>
+                <Label className="text-gray-300">{t('المُستلِم (اختياري)')}</Label>
+                <Input value={receiveForm.received_by}
+                  onChange={(e) => setReceiveForm(f => ({ ...f, received_by: e.target.value }))}
+                  className="bg-gray-800 border-gray-700 text-white" data-testid="receive-by-input" />
+              </div>
+              <div className="bg-cyan-900/30 border border-cyan-700/40 rounded-lg p-3 text-center">
+                <p className="text-xs text-cyan-300">{t('المبلغ المُودَع في الخزينة')}</p>
+                <p className="text-2xl font-bold text-cyan-400" data-testid="receive-net-deposit">
+                  {formatPrice(Math.max(0, (parseFloat(receiveForm.received_amount) || 0) - (parseFloat(receiveForm.external_expenses) || 0)))}
+                </p>
+                <p className="text-[11px] text-gray-400 mt-1">{t('= المُستلم − المصاريف الخارجية')}</p>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setReceiveDialog(null)} className="border-gray-600">{t('إلغاء')}</Button>
+            <Button onClick={handleReceiveShift} disabled={receiving} className="bg-cyan-600 hover:bg-cyan-700 gap-1" data-testid="confirm-receive-shift">
+              {receiving ? <RefreshCw className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
+              {t('تأكيد الاستلام والإيداع')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
     </div>
   );
 };
@@ -2539,6 +2674,66 @@ const DeliveryReportTab = ({ deliveryCreditsReport, t, formatPrice, fetchReports
     }
   };
 
+  // ===== توجيه الطلبات غير المحددة (شركة توصيل غير محددة) =====
+  const [showReassignDialog, setShowReassignDialog] = useState(false);
+  const [unassignedOrders, setUnassignedOrders] = useState([]);
+  const [loadingUnassigned, setLoadingUnassigned] = useState(false);
+  const [reassignCompanies, setReassignCompanies] = useState([]);
+  const [reassignCompanyId, setReassignCompanyId] = useState('');
+  const [selectedUnassignedIds, setSelectedUnassignedIds] = useState([]);
+  const [reassigning, setReassigning] = useState(false);
+
+  const openReassignDialog = async () => {
+    setShowReassignDialog(true);
+    setLoadingUnassigned(true);
+    setSelectedUnassignedIds([]);
+    setReassignCompanyId('');
+    try {
+      const headers = { Authorization: `Bearer ${localStorage.getItem('token')}` };
+      const [ordersRes, appsRes] = await Promise.all([
+        axios.get(`${API}/reports/delivery/unassigned-orders`, { params: { start_date: startDate, end_date: endDate }, headers }),
+        axios.get(`${API}/delivery-apps`, { headers }),
+      ]);
+      const orders = ordersRes.data?.orders || [];
+      setUnassignedOrders(orders);
+      setSelectedUnassignedIds(orders.map(o => o.id)); // تحديد الكل افتراضياً
+      const apps = Array.isArray(appsRes.data) ? appsRes.data : (appsRes.data?.delivery_apps || []);
+      setReassignCompanies(apps.filter(a => a.is_active !== false));
+    } catch (e) {
+      toast.error(t('فشل جلب الطلبات غير المحددة'));
+    } finally {
+      setLoadingUnassigned(false);
+    }
+  };
+
+  const toggleUnassigned = (id) => {
+    setSelectedUnassignedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  };
+
+  const submitReassign = async (returnToCredit = false) => {
+    if (selectedUnassignedIds.length === 0) { toast.error(t('اختر طلباً واحداً على الأقل')); return; }
+    if (!returnToCredit && !reassignCompanyId) { toast.error(t('اختر الشركة')); return; }
+    setReassigning(true);
+    try {
+      const headers = { Authorization: `Bearer ${localStorage.getItem('token')}` };
+      const company = reassignCompanies.find(c => c.id === reassignCompanyId);
+      const res = await axios.post(`${API}/reports/delivery/reassign-unassigned`, {
+        order_ids: selectedUnassignedIds,
+        delivery_company_id: returnToCredit ? null : reassignCompanyId,
+        delivery_company_name: returnToCredit ? null : (company?.name || null),
+        return_to_credit: returnToCredit,
+      }, { headers });
+      toast.success(res.data?.message || t('تم التوجيه'));
+      setShowReassignDialog(false);
+      fetchReports();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || t('فشل التوجيه'));
+    } finally {
+      setReassigning(false);
+    }
+  };
+
+
   // قيمة ونسبة العرض المحسوبة تلقائياً
   const expectedNet = selectedApp ? (selectedApp.remaining_amount != null ? selectedApp.remaining_amount : selectedApp.net_amount) : 0;
   const actualVal = parseFloat(collectForm.has_offers ? collectForm.actual_collected : collectForm.amount) || 0;
@@ -2718,7 +2913,18 @@ const DeliveryReportTab = ({ deliveryCreditsReport, t, formatPrice, fetchReports
             <Truck className="h-5 w-5 text-primary" />
             {t('تفاصيل كل شركة توصيل')}
           </CardTitle>
-          {(() => {
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              className="border-amber-500/50 text-amber-500 hover:bg-amber-500/10 gap-1"
+              onClick={openReassignDialog}
+              data-testid="open-reassign-unassigned"
+              title={t('توجيه طلبات شركة التوصيل غير المحددة لشركاتها الصحيحة')}
+            >
+              <Truck className="h-4 w-4" />
+              {t('توجيه الطلبات غير المحددة')}
+            </Button>
+            {(() => {
             const pending = Object.entries(deliveryCreditsReport.by_delivery_app || {})
               .filter(([, d]) => (d.remaining_amount != null ? d.remaining_amount : d.net_amount) > 0);
             const totalPending = pending.reduce((s, [, d]) => s + (d.remaining_amount != null ? d.remaining_amount : d.net_amount), 0);
@@ -2734,6 +2940,7 @@ const DeliveryReportTab = ({ deliveryCreditsReport, t, formatPrice, fetchReports
               </Button>
             );
           })()}
+          </div>
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
@@ -3260,6 +3467,68 @@ const DeliveryReportTab = ({ deliveryCreditsReport, t, formatPrice, fetchReports
           )}
         </DialogContent>
       </Dialog>
+
+      {/* توجيه الطلبات غير المحددة */}
+      <Dialog open={showReassignDialog} onOpenChange={setShowReassignDialog}>
+        <DialogContent className="bg-card border-border text-foreground max-w-2xl max-h-[85vh] overflow-y-auto" data-testid="reassign-unassigned-dialog">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-amber-500">
+              <Truck className="h-5 w-5" />
+              {t('توجيه طلبات شركة التوصيل غير المحددة')}
+            </DialogTitle>
+          </DialogHeader>
+          {loadingUnassigned ? (
+            <div className="text-center py-8"><RefreshCw className="h-6 w-6 mx-auto animate-spin text-amber-500" /></div>
+          ) : unassignedOrders.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground" data-testid="no-unassigned-orders">
+              <Truck className="h-12 w-12 mx-auto mb-3 opacity-40" />
+              <p>{t('لا توجد طلبات غير محددة في هذه الفترة')}</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 flex-wrap">
+                <select
+                  value={reassignCompanyId}
+                  onChange={(e) => setReassignCompanyId(e.target.value)}
+                  className="bg-muted border border-border rounded-md px-3 py-2 flex-1 min-w-[180px]"
+                  data-testid="reassign-company-select"
+                >
+                  <option value="">{t('اختر الشركة الهدف...')}</option>
+                  {reassignCompanies.map(c => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+                <Button onClick={() => submitReassign(false)} disabled={reassigning} className="bg-green-600 hover:bg-green-700 gap-1" data-testid="confirm-reassign">
+                  {reassigning ? <RefreshCw className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
+                  {t('توجيه للشركة')} ({selectedUnassignedIds.length})
+                </Button>
+              </div>
+              <div className="flex items-center justify-between text-xs text-muted-foreground">
+                <button className="underline" onClick={() => setSelectedUnassignedIds(unassignedOrders.map(o => o.id))}>{t('تحديد الكل')}</button>
+                <button className="underline" onClick={() => setSelectedUnassignedIds([])}>{t('إلغاء التحديد')}</button>
+              </div>
+              <div className="border border-border rounded-lg divide-y divide-border max-h-72 overflow-y-auto">
+                {unassignedOrders.map(o => (
+                  <label key={o.id} className="flex items-center gap-3 p-2 cursor-pointer hover:bg-muted/40" data-testid={`unassigned-order-${o.order_number}`}>
+                    <input type="checkbox" checked={selectedUnassignedIds.includes(o.id)} onChange={() => toggleUnassigned(o.id)} />
+                    <span className="font-bold text-sm">#{o.order_number}</span>
+                    <span className="text-sm flex-1 truncate">{o.customer_name || '-'}</span>
+                    <span className="text-xs text-muted-foreground">{o.branch_name || ''}</span>
+                    <span className="tabular-nums text-sm text-emerald-500">{formatPrice(o.total)}</span>
+                  </label>
+                ))}
+              </div>
+              <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-3 text-sm text-amber-300">
+                {t('أو أرجِع الطلبات المحددة للآجل العادي لتوجيهها يدوياً لاحقاً:')}
+                <Button variant="outline" onClick={() => submitReassign(true)} disabled={reassigning} className="mt-2 w-full border-amber-500/50 text-amber-400 hover:bg-amber-500/10" data-testid="confirm-return-to-credit">
+                  {t('إرجاع للآجل العادي')} ({selectedUnassignedIds.length})
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
 
     </div>
   );

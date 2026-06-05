@@ -6,41 +6,116 @@ on:
   workflow_dispatch:
 
 # 🔒 قفل تزامن: نشر واحد فقط في كل مرة.
-# أي نشر جديد يُلغي النشر القديم العالق تلقائياً → يمنع تزاحم عدة عمليات بناء
-# على نفس الـVPS (السبب الجذري للتأخير والتعليق).
+# أي نشر جديد يُلغي النشر القديم العالق تلقائياً → يمنع تزاحم عدة عمليات بناء.
 concurrency:
   group: deploy-maestro-vps
   cancel-in-progress: true
 
 jobs:
-  deploy:
-    name: Deploy to VPS
+  test:
+    name: 🧪 Backend Financial Tests (بوابة الحسابات)
     runs-on: ubuntu-latest
-    
+    services:
+      mongodb:
+        image: mongo:7
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --eval 'db.runCommand({ping:1})' || mongo --eval 'db.runCommand({ping:1})'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
     steps:
     - name: 📥 Checkout
       uses: actions/checkout@v4
-      
+
+    - name: 🐍 Setup Python 3.11
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+        cache: 'pip'
+        cache-dependency-path: backend/requirements.txt
+
+    - name: 📦 Install backend deps
+      run: pip install -r backend/requirements.txt
+
+    - name: 🧪 Run curated financial tests (يمنع نشر كود يكسر الحسابات)
+      working-directory: backend
+      env:
+        MONGO_URL: mongodb://localhost:27017
+        DB_NAME: ci_test
+      run: bash tests/run_ci_financial_tests.sh
+
+  deploy:
+    name: Deploy to VPS
+    needs: test          # ⛔ لا ينشر إلا إذا نجحت بوابة اختبارات الحسابات
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write   # مطلوب لدفع صورة الواجهة إلى GHCR
+
+    steps:
+    - name: 📥 Checkout
+      uses: actions/checkout@v4
+
+    # =============================================
+    # ⚡ بناء الواجهة على خوادم GitHub السريعة (بدل الـVPS المحدود الذاكرة)
+    #    → يقلّل وقت البناء من ~18 دقيقة إلى ~3 دقائق، ويُلغي تعليق/نفاد ذاكرة الـVPS
+    # =============================================
+    - name: 🏷️ Compute frontend image name (lowercase)
+      id: img
+      run: echo "name=ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')-frontend" >> "$GITHUB_OUTPUT"
+
+    - name: 🐳 Set up Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: 🔑 Login to GHCR
+      uses: docker/login-action@v3
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: 🏗️ Build & push frontend image
+      uses: docker/build-push-action@v5
+      with:
+        context: ./frontend
+        push: true
+        tags: |
+          ${{ steps.img.outputs.name }}:latest
+          ${{ steps.img.outputs.name }}:${{ github.sha }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+    # =============================================
+    # 🚀 النشر على الـVPS: بناء الـBackend محلياً + سحب صورة الواجهة الجاهزة
+    # =============================================
     - name: 🔑 Deploy
       uses: appleboy/ssh-action@v1.0.3
+      env:
+        GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        GHCR_USER: ${{ github.actor }}
+        FRONTEND_IMAGE: ${{ steps.img.outputs.name }}
       with:
         host: 158.220.118.54
         username: root
         key: ${{ secrets.VPS_SSH_KEY }}
         port: 22
         command_timeout: 60m
+        envs: GHCR_TOKEN,GHCR_USER,FRONTEND_IMAGE
         script: |
           echo "🚀 بدء النشر..."
           cd /var/www/maestro
-          
+
           # سحب الكود
           git fetch origin && git reset --hard origin/main
-          
+
           # =============================================
           # ضمان عمل الشبكة
           # =============================================
           docker network create maestro_maestro-network 2>/dev/null || true
-          
+
           # =============================================
           # ضمان عمل MongoDB
           # =============================================
@@ -50,13 +125,10 @@ jobs:
             docker run -d --name maestro-mongodb --network maestro_maestro-network -v maestro_mongodb_data:/data/db mongo:7
             sleep 10
           fi
-          
+
           # =============================================
-          # تحديث Backend
+          # تحديث Backend (يُبنى محلياً — خفيف، وطبقات pip تُكاش)
           # =============================================
-          # ✅ نزيل --no-cache: Docker layer cache يعيد استخدام
-          # طبقات pip install تلقائياً إذا requirements.txt ما تغير،
-          # ويُعيد بناء طبقة الكود عند أي تغيير في الملفات.
           echo "📦 تحديث Backend..."
           docker build -t maestro_backend:new ./backend
           docker stop backend 2>/dev/null || true
@@ -68,35 +140,31 @@ jobs:
             -e MONGO_URL="mongodb://maestro-mongodb:27017" \
             -e DB_NAME="maestro_db" \
             maestro_backend:latest
-          
+
           # انتظار Backend
           echo "⏳ انتظار Backend..."
           sleep 10
-          
+
           # =============================================
-          # تحديث Frontend
+          # تحديث Frontend — سحب الصورة الجاهزة من GHCR (لا بناء على الـVPS)
           # =============================================
-          # ✅ بدون --no-cache: yarn install ينعاد فقط لو package.json/yarn.lock تغيروا
-          # ✅ file-based cachebust: نكتب timestamp في ملف داخل build context
-          #    → COPY يكتشف تغير الملف → يبطل الكاش لكل ما بعده
-          #    (يعمل مع classic Docker builder بدون BuildKit/buildx)
-          echo "🎨 تحديث Frontend..."
-          date +%s > ./frontend/.cachebust
-          docker build -t maestro_frontend:new ./frontend
+          echo "🎨 تحديث Frontend (سحب صورة جاهزة من GHCR)..."
+          echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
+          docker pull "$FRONTEND_IMAGE:latest"
           docker stop frontend 2>/dev/null || true
           docker rm frontend 2>/dev/null || true
-          docker tag maestro_frontend:new maestro_frontend:latest
           docker run -d --name frontend \
             --network maestro_maestro-network \
-            maestro_frontend:latest
-          
+            "$FRONTEND_IMAGE:latest"
+          docker logout ghcr.io 2>/dev/null || true
+
           # =============================================
           # ضمان SSL certificates
           # =============================================
           mkdir -p /var/www/maestro/ssl
           cp /var/www/maestro/certbot/conf/archive/maestroegp.com/fullchain1.pem /var/www/maestro/ssl/fullchain.pem 2>/dev/null || true
           cp /var/www/maestro/certbot/conf/archive/maestroegp.com/privkey1.pem /var/www/maestro/ssl/privkey.pem 2>/dev/null || true
-          
+
           # =============================================
           # تحديث Nginx
           # =============================================
@@ -109,7 +177,7 @@ jobs:
             -v /var/www/maestro/nginx.conf:/etc/nginx/nginx.conf:ro \
             -v /var/www/maestro/ssl:/etc/nginx/ssl:ro \
             nginx:alpine
-          
+
           # =============================================
           # التحقق النهائي
           # =============================================
@@ -117,15 +185,15 @@ jobs:
           echo ""
           echo "📊 حالة الخدمات:"
           docker ps --format "table {{.Names}}\t{{.Status}}"
-          
+
           echo ""
           if curl -s http://127.0.0.1/api/health | grep -q "ok"; then
             echo "✅ النشر نجح!"
           else
             echo "⚠️ تحذير: قد يحتاج وقت للبدء"
           fi
-          
+
           # تنظيف
           docker image prune -f 2>/dev/null || true
-          
+
           echo "✅ انتهى!"
