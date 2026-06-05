@@ -257,6 +257,7 @@ async def get_sales_report(
         "delivery_app_name": 1,
         "delivery_commission": 1,
         "is_delivery_company": 1,
+        "delivery_company_name": 1,
         "driver_id": 1,
         "driver_name": 1,
         "packaging_cost": 1,
@@ -354,8 +355,10 @@ async def get_sales_report(
             app_name = o.get("delivery_app_name")
             if not app_name and app_id:
                 app_name = default_delivery_apps_names.get(app_id, app_names.get(app_id, app_id))
+            if not app_name and o.get("delivery_company_name"):
+                app_name = o.get("delivery_company_name")
             if not app_name:
-                app_name = o.get("customer_name") or "شركة توصيل"
+                app_name = "شركة توصيل (غير محددة)"
             
             if app_name not in by_app:
                 by_app[app_name] = {

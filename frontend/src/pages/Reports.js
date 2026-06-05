@@ -2709,7 +2709,6 @@ const DeliveryReportTab = ({ deliveryCreditsReport, t, formatPrice, fetchReports
   const [reassignCompanyId, setReassignCompanyId] = useState('');
   const [selectedUnassignedIds, setSelectedUnassignedIds] = useState([]);
   const [reassigning, setReassigning] = useState(false);
-  const [unassignedDebug, setUnassignedDebug] = useState(null);
 
   const openReassignDialog = async () => {
     setShowReassignDialog(true);
@@ -2724,7 +2723,6 @@ const DeliveryReportTab = ({ deliveryCreditsReport, t, formatPrice, fetchReports
       const orders = ordersRes.data?.orders || [];
       setUnassignedOrders(orders);
       setSelectedUnassignedIds(orders.map(o => o.id));
-      setUnassignedDebug(ordersRes.data?.debug || null);
     } catch (e) {
       toast.error((t('فشل جلب الطلبات غير المحددة') + ': ') + (e?.response?.data?.detail || e?.message || ''));
     } finally {
@@ -3517,15 +3515,6 @@ const DeliveryReportTab = ({ deliveryCreditsReport, t, formatPrice, fetchReports
             <div className="text-center py-8 text-muted-foreground" data-testid="no-unassigned-orders">
               <Truck className="h-12 w-12 mx-auto mb-3 opacity-40" />
               <p>{t('لا توجد طلبات غير محددة في هذه الفترة')}</p>
-              {unassignedDebug && (
-                <div className="text-[10px] mt-3 text-amber-400/80 text-left" dir="ltr" data-testid="unassigned-debug">
-                  <div>candidates: {unassignedDebug.candidates} | delivery-company: {unassignedDebug.delivery_company_orders} | paid: {unassignedDebug.paid_company_orders} | unassigned: {unassignedDebug.unassigned_inline}</div>
-                  <div>range: {unassignedDebug.start_date} → {unassignedDebug.end_date}</div>
-                  {Array.isArray(unassignedDebug.samples) && unassignedDebug.samples.length > 0 && (
-                    <pre className="mt-2 p-2 bg-black/40 rounded overflow-x-auto text-[9px] leading-tight max-h-40">{JSON.stringify(unassignedDebug.samples, null, 1)}</pre>
-                  )}
-                </div>
-              )}
             </div>
           ) : (
             <div className="space-y-4">
