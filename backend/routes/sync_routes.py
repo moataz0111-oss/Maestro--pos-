@@ -6,6 +6,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
 from typing import Optional, List, Any
 from motor.motor_asyncio import AsyncIOMotorClient
+from pymongo.errors import DuplicateKeyError
 import os
 import jwt
 import uuid
@@ -266,7 +267,21 @@ async def sync_order(order: OfflineOrder, current_user: dict = Depends(get_curre
         }
         
         # حفظ الطلب
-        await db.orders.insert_one(new_order)
+        try:
+            await db.orders.insert_one(new_order)
+        except DuplicateKeyError:
+            # سباق مزامنة: طلب بنفس offline_id موجود بالفعل (قفل قاعدة البيانات) — نُعيد الموجود بلا تكرار
+            existing = await db.orders.find_one(
+                {"offline_id": order.offline_id, "tenant_id": tenant_id}, {"_id": 0}
+            )
+            if existing:
+                return SyncResult(
+                    success=True,
+                    id=existing.get("id"),
+                    order_number=existing.get("order_number"),
+                    message="الطلب موجود مسبقاً (منع تكرار)"
+                )
+            raise
         
         # تحديث المخزون (إذا كان هناك منتجات)
         for item in order.items:
@@ -323,6 +338,92 @@ async def sync_order(order: OfflineOrder, current_user: dict = Depends(get_curre
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"خطأ في المزامنة: {str(e)}")
+
+
+# ==================== أداة تنظيف الطلبات المكررة ====================
+@router.get("/duplicate-orders")
+async def list_duplicate_orders(current_user: dict = Depends(get_current_user)):
+    """عرض مجموعات الطلبات المكررة (نفس offline_id) للمراجعة قبل الحذف. للمالك/المدير فقط."""
+    if current_user.get("role", "") not in ["admin", "super_admin", "manager", "branch_manager", "owner"]:
+        raise HTTPException(status_code=403, detail="غير مصرح")
+    tenant_id = get_user_tenant_id(current_user)
+    match = {"offline_id": {"$type": "string", "$ne": ""}}
+    if tenant_id:
+        match["tenant_id"] = tenant_id
+    pipeline = [
+        {"$match": match},
+        {"$group": {"_id": "$offline_id", "count": {"$sum": 1},
+                    "orders": {"$push": {"id": "$id", "order_number": "$order_number",
+                                         "total": "$total", "created_at": "$created_at",
+                                         "status": "$status"}}}},
+        {"$match": {"count": {"$gt": 1}}},
+        {"$sort": {"count": -1}},
+        {"$limit": 500},
+    ]
+    groups = await db.orders.aggregate(pipeline).to_list(500)
+    total_dups = sum(g["count"] - 1 for g in groups)
+    return {"duplicate_groups": len(groups), "extra_orders_to_remove": total_dups, "groups": groups}
+
+
+@router.post("/cleanup-duplicate-orders")
+async def cleanup_duplicate_orders(current_user: dict = Depends(get_current_user)):
+    """حذف الطلبات المكررة (نفس offline_id) مع الإبقاء على نسخة واحدة لكل مجموعة،
+    ثم إنشاء الفهرس الفريد لمنع التكرار مستقبلاً. للمالك/المدير فقط.
+    قاعدة الإبقاء: نُبقي الطلب صاحب أصغر رقم طلب رسمي (أو الأقدم إن تساوَوا)."""
+    if current_user.get("role", "") not in ["admin", "super_admin", "manager", "branch_manager", "owner"]:
+        raise HTTPException(status_code=403, detail="غير مصرح")
+    tenant_id = get_user_tenant_id(current_user)
+    match = {"offline_id": {"$type": "string", "$ne": ""}}
+    if tenant_id:
+        match["tenant_id"] = tenant_id
+    pipeline = [
+        {"$match": match},
+        {"$group": {"_id": "$offline_id", "count": {"$sum": 1},
+                    "orders": {"$push": {"id": "$id", "order_number": "$order_number", "created_at": "$created_at"}}}},
+        {"$match": {"count": {"$gt": 1}}},
+    ]
+    groups = await db.orders.aggregate(pipeline).to_list(5000)
+
+    deleted_ids = []
+    for g in groups:
+        orders = g["orders"]
+        # رتّب: صاحب رقم طلب رسمي أولاً، ثم الأصغر رقماً، ثم الأقدم
+        def sort_key(o):
+            num = o.get("order_number")
+            return (0 if num is not None else 1, num if num is not None else 1e18, o.get("created_at") or "")
+        orders_sorted = sorted(orders, key=sort_key)
+        keep = orders_sorted[0]
+        for o in orders_sorted[1:]:
+            if o.get("id") and o["id"] != keep.get("id"):
+                deleted_ids.append(o["id"])
+
+    removed = 0
+    if deleted_ids:
+        res = await db.orders.delete_many({"id": {"$in": deleted_ids}})
+        removed = res.deleted_count
+
+    # محاولة إنشاء الفهرس الفريد الآن بعد إزالة التكرارات
+    index_created = False
+    index_msg = ""
+    try:
+        await db.orders.create_index(
+            [("tenant_id", 1), ("offline_id", 1)],
+            unique=True,
+            partialFilterExpression={"offline_id": {"$type": "string"}},
+            name="uniq_tenant_offline_id",
+        )
+        index_created = True
+    except Exception as e:
+        index_msg = str(e)
+
+    return {
+        "duplicate_groups": len(groups),
+        "removed_orders": removed,
+        "unique_index_created": index_created,
+        "index_note": index_msg,
+        "message": f"تم حذف {removed} طلباً مكرراً" + (" وتفعيل قفل منع التكرار ✅" if index_created else " (تعذّر إنشاء الفهرس — راجع index_note)")
+    }
+
 
 
 class OrderRoutingFix(BaseModel):

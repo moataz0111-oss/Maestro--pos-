@@ -1561,6 +1561,29 @@ const CashRegisterClosingTab = ({ t, formatPrice, selectedBranchId, branches, ge
     }
   };
 
+  const [cleaningDupes, setCleaningDupes] = useState(false);
+  const handleCleanupDuplicateOrders = async () => {
+    setCleaningDupes(true);
+    try {
+      const token = localStorage.getItem('token');
+      const reqHeaders = token ? { Authorization: `Bearer ${token}` } : {};
+      const check = await axios.get(`${API_URL}/sync/duplicate-orders`, { headers: reqHeaders });
+      const extra = check.data?.extra_orders_to_remove || 0;
+      if (extra === 0) {
+        toast.success(t('لا توجد طلبات مكررة — قفل منع التكرار مُفعّل ✅'));
+        return;
+      }
+      if (!window.confirm(t('تم العثور على') + ` ${extra} ` + t('طلب مكرر. سيتم حذف النسخ الزائدة والإبقاء على واحدة لكل طلب. متابعة؟'))) return;
+      const res = await axios.post(`${API_URL}/sync/cleanup-duplicate-orders`, {}, { headers: reqHeaders });
+      toast.success(res.data?.message || t('تم تنظيف الطلبات المكررة'));
+      fetchReport();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || t('فشل تنظيف الطلبات المكررة'));
+    } finally {
+      setCleaningDupes(false);
+    }
+  };
+
   return (
     <div className="space-y-6" id="cash-register-print-area">
       {/* الفلاتر الخاصة بإغلاق الصندوق */}
@@ -1607,6 +1630,10 @@ const CashRegisterClosingTab = ({ t, formatPrice, selectedBranchId, branches, ge
         <Button onClick={handleCleanupNonCashier} disabled={cleaningShifts} variant="outline" className="border-red-500/50 text-red-400 hover:bg-red-500/10" data-testid="cleanup-non-cashier-shifts" title={t('حذف ورديات رؤساء الأقسام التي فُتحت خطأً (مخزن/تصنيع/مطبخ/مشتريات)')}>
           {cleaningShifts ? <RefreshCw className="h-4 w-4 ml-2 animate-spin" /> : <Trash2 className="h-4 w-4 ml-2" />}
           {t('تنظيف ورديات رؤساء الأقسام')}
+        </Button>
+        <Button onClick={handleCleanupDuplicateOrders} disabled={cleaningDupes} variant="outline" className="border-amber-500/50 text-amber-400 hover:bg-amber-500/10" data-testid="cleanup-duplicate-orders" title={t('كشف وحذف الطلبات المكررة (الناتجة عن تداخل الأوفلاين/الأونلاين) وتفعيل قفل منع التكرار')}>
+          {cleaningDupes ? <RefreshCw className="h-4 w-4 ml-2 animate-spin" /> : <Trash2 className="h-4 w-4 ml-2" />}
+          {t('تنظيف الطلبات المكررة')}
         </Button>
       </div>
 

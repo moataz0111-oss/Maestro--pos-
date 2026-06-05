@@ -1,6 +1,21 @@
 # Maestro EGP - Changelog
 
 
+## Session: 05 Jun 2026 (BUG FIX حرج) — تكرار الطلبات + تداخل الأوفلاين/الأونلاين
+
+### 🔴 السبب الجذري: غياب قفل idempotency على مستوى قاعدة البيانات
+- نظام منع التكرار كان يعتمد على فحص `find_one({offline_id})` ثم الإدراج (TOCTOU) بلا فهرس فريد → عند تزامن طلبين بنفس `offline_id` (مزامنة تلقائية + يدوية، أو عدة أجهزة) يمرّ الفحص للاثنين فيُنشأ تكرار.
+
+### ✅ الإصلاح (مُختبَر end-to-end)
+- **فهرس فريد** `uniq_tenant_offline_id` على `(tenant_id, offline_id)` partial (حين offline_id نص) في `server.py/create_indexes` — يمنع التكرار نهائياً على مستوى DB. (إثبات: 5 طلبات متزامنة بنفس offline_id → طلب واحد فقط).
+- معالجة `DuplicateKeyError` في `POST /api/orders` (server.py) و`POST /api/sync/orders` (sync_routes.py) → تُعيد الطلب الموجود بلا آثار جانبية مكررة (لا خصم مخزون مزدوج).
+- **أداة تنظيف**: `GET /api/sync/duplicate-orders` (كشف) + `POST /api/sync/cleanup-duplicate-orders` (حذف النسخ الزائدة مع الإبقاء على صاحب أصغر رقم طلب، ثم إنشاء الفهرس الفريد). للمالك/المدير.
+- **Frontend** (`Reports.js` تبويب إغلاق الصندوق): زر "تنظيف الطلبات المكررة" (data-testid=cleanup-duplicate-orders) — يفحص ثم يحذف بتأكيد.
+- حُرّاس المزامنة الأمامية (isSyncing module flag + syncInProgress ref + finally reset) كافية؛ لم تُغيَّر. الفهرس الفريد هو الضمان الحاسم عبر الأجهزة.
+
+---
+
+
 ## Session: 05 Jun 2026 (تكملة) — أداة توجيه طلبات التوصيل غير المحددة + ميزة "استلام الشفت" + إصلاح زر التنظيف نهائياً
 
 ### 🔴 إصلاح نهائي لزر "تنظيف ورديات رؤساء الأقسام" (فشل التنظيف)

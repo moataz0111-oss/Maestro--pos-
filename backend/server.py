@@ -5,6 +5,7 @@ from fastapi.middleware.gzip import GZipMiddleware
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
+from pymongo.errors import DuplicateKeyError
 import os
 import logging
 from pathlib import Path
@@ -155,6 +156,19 @@ async def create_indexes():
         await db.orders.create_index([("tenant_id", 1), ("status", 1)])
         await db.orders.create_index([("tenant_id", 1), ("created_at", -1)])
         await db.orders.create_index([("cashier_id", 1), ("created_at", -1)])
+        # 🔒 فهرس فريد على offline_id لكل tenant — قفل idempotency على مستوى قاعدة البيانات
+        # يمنع تكرار الطلب نهائياً حتى عند تزامن المزامنة (سباق طلبين بنفس المفتاح).
+        # partial: يُطبَّق فقط حين يكون offline_id نصاً (يتجاهل null حتى لا تتعارض الطلبات بلا offline_id).
+        try:
+            await db.orders.create_index(
+                [("tenant_id", 1), ("offline_id", 1)],
+                unique=True,
+                partialFilterExpression={"offline_id": {"$type": "string"}},
+                name="uniq_tenant_offline_id",
+            )
+        except Exception as _e:
+            # غالباً بسبب وجود تكرارات قديمة — يُنشأ الفهرس تلقائياً بعد تشغيل أداة التنظيف.
+            print(f"⚠️ تعذّر إنشاء فهرس offline_id الفريد (ربما توجد تكرارات): {_e}")
         
         # Products indexes
         await db.products.create_index("id", unique=True)
@@ -6350,7 +6364,18 @@ async def create_order(order: OrderCreate, current_user: dict = Depends(get_curr
         "updated_at": datetime.now(timezone.utc).isoformat()
     }
     
-    await db.orders.insert_one(order_doc)
+    try:
+        await db.orders.insert_one(order_doc)
+    except DuplicateKeyError:
+        # سباق: طلب بنفس offline_id أُدرج بالفعل (قفل قاعدة البيانات) — نُعيد الموجود بلا تكرار/آثار جانبية
+        existing_dup = await db.orders.find_one(
+            {"offline_id": incoming_offline_id, **({"tenant_id": tenant_id} if tenant_id else {})},
+            {"_id": 0},
+        )
+        if existing_dup:
+            logger.info(f"Order idempotency (DB lock): returning existing #{existing_dup.get('order_number')} for offline_id={incoming_offline_id}")
+            return existing_dup
+        raise
     del order_doc["_id"]
     
     # تحديث معلومات العميل إذا كان موجوداً
