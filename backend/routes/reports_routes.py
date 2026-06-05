@@ -1855,6 +1855,8 @@ async def get_unassigned_delivery_orders(
 
     is_company_count = 0
     paid_company_count = 0
+    unassigned_inline = 0  # محسوب بمنطق التقرير الحرفي (للتشخيص)
+    samples = []
     result = []
     for o in candidates:
         pm = o.get("payment_method", "cash")
@@ -1866,7 +1868,29 @@ async def get_unassigned_delivery_orders(
         if o.get("payment_status") not in ["paid", "credit", None]:
             continue
         paid_company_count += 1
-        if not _resolve_company_name(o, app_names):  # غير محددة (None أو نص فارغ "") — نفس فحص التقرير `if not app_name`
+
+        # منطق التقرير الحرفي بالكامل (نفس get_sales_report) لتحديد "غير محددة"
+        app_name = o.get("delivery_app_name")
+        if not app_name and o.get("delivery_app"):
+            app_name = _DEFAULT_DELIVERY_APPS.get(o.get("delivery_app"), app_names.get(o.get("delivery_app"), None))
+        if not app_name and o.get("delivery_company_name"):
+            app_name = o.get("delivery_company_name")
+        is_unassigned = not app_name
+
+        if len(samples) < 5:
+            samples.append({
+                "order_number": o.get("order_number"),
+                "delivery_app": repr(o.get("delivery_app")),
+                "delivery_app_name": repr(o.get("delivery_app_name")),
+                "delivery_company_name": repr(o.get("delivery_company_name")),
+                "payment_method": o.get("payment_method"),
+                "is_delivery_company": repr(o.get("is_delivery_company")),
+                "resolved": repr(app_name),
+                "is_unassigned": is_unassigned,
+            })
+
+        if is_unassigned:
+            unassigned_inline += 1
             result.append({
                 "id": o.get("id"),
                 "order_number": o.get("order_number"),
@@ -1876,6 +1900,7 @@ async def get_unassigned_delivery_orders(
                 "created_at": o.get("created_at"),
                 "payment_status": o.get("payment_status"),
             })
+    logger.info(f"[unassigned-debug] range={start_date}..{end_date} tenant={tenant_id} candidates={len(candidates)} company={is_company_count} paid={paid_company_count} unassigned={unassigned_inline} samples={samples}")
     return {
         "orders": result,
         "count": len(result),
@@ -1884,9 +1909,11 @@ async def get_unassigned_delivery_orders(
             "candidates": len(candidates),
             "delivery_company_orders": is_company_count,
             "paid_company_orders": paid_company_count,
+            "unassigned_inline": unassigned_inline,
             "start_date": start_date,
             "end_date": end_date,
             "tenant_id": tenant_id,
+            "samples": samples,
         },
     }
 

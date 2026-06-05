@@ -3518,10 +3518,13 @@ const DeliveryReportTab = ({ deliveryCreditsReport, t, formatPrice, fetchReports
               <Truck className="h-12 w-12 mx-auto mb-3 opacity-40" />
               <p>{t('لا توجد طلبات غير محددة في هذه الفترة')}</p>
               {unassignedDebug && (
-                <p className="text-[11px] mt-3 text-amber-400/80" dir="ltr" data-testid="unassigned-debug">
-                  candidates: {unassignedDebug.candidates} | delivery-company: {unassignedDebug.delivery_company_orders} | paid: {unassignedDebug.paid_company_orders}<br/>
-                  range: {unassignedDebug.start_date} → {unassignedDebug.end_date}
-                </p>
+                <div className="text-[10px] mt-3 text-amber-400/80 text-left" dir="ltr" data-testid="unassigned-debug">
+                  <div>candidates: {unassignedDebug.candidates} | delivery-company: {unassignedDebug.delivery_company_orders} | paid: {unassignedDebug.paid_company_orders} | unassigned: {unassignedDebug.unassigned_inline}</div>
+                  <div>range: {unassignedDebug.start_date} → {unassignedDebug.end_date}</div>
+                  {Array.isArray(unassignedDebug.samples) && unassignedDebug.samples.length > 0 && (
+                    <pre className="mt-2 p-2 bg-black/40 rounded overflow-x-auto text-[9px] leading-tight max-h-40">{JSON.stringify(unassignedDebug.samples, null, 1)}</pre>
+                  )}
+                </div>
               )}
             </div>
           ) : (
