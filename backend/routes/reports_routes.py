@@ -1815,14 +1815,20 @@ async def reset_delivery_collections(
 
 
 # ==================== UNASSIGNED DELIVERY ORDERS (شركة توصيل غير محددة) ====================
-def _unassigned_delivery_filter():
-    """طلب لشركة توصيل لكن بلا شركة محددة (لا اسم ولا معرّف قابل للحل)."""
-    no_name = [{"delivery_app_name": {"$in": [None, ""]}},
-               {"delivery_company_name": {"$in": [None, ""]}},
-               {"delivery_app": {"$in": [None, ""]}}]
-    is_company = [{"is_delivery_company": True}, {"payment_method": "delivery_company"}]
-    return {"$and": [{"$or": is_company}, *no_name,
-                     {"status": {"$nin": ["cancelled", "refunded", "deleted"]}}]}
+# خريطة شركات التوصيل الافتراضية (نفس منطق تقرير المبيعات)
+_DEFAULT_DELIVERY_APPS = {
+    "toters": "توترز", "talabat": "طلبات", "baly": "بالي",
+    "alsaree3": "عالسريع", "talabati": "طلباتي",
+}
+
+def _resolve_company_name(o, app_names):
+    """يطابق منطق تقرير المبيعات بالضبط لتحديد اسم الشركة (أو None = غير محددة)."""
+    app_name = o.get("delivery_app_name")
+    if not app_name and o.get("delivery_app"):
+        app_name = _DEFAULT_DELIVERY_APPS.get(o.get("delivery_app"), app_names.get(o.get("delivery_app"), None))
+    if not app_name and o.get("delivery_company_name"):
+        app_name = o.get("delivery_company_name")
+    return app_name  # None → غير محددة
 
 @router.get("/delivery/unassigned-orders")
 async def get_unassigned_delivery_orders(
@@ -1830,24 +1836,46 @@ async def get_unassigned_delivery_orders(
     end_date: Optional[str] = None,
     current_user: dict = Depends(get_current_user)
 ):
-    """قائمة طلبات التوصيل التي بلا شركة محددة (تظهر كـ 'شركة توصيل (غير محددة)') — للتوجيه اليدوي."""
+    """قائمة طلبات التوصيل التي بلا شركة محددة (تظهر كـ 'شركة توصيل (غير محددة)' في تقرير المبيعات) — للتوجيه اليدوي.
+    يطابق منطق التقرير تماماً: طلب لشركة توصيل لا يُحلّ اسمها من delivery_app_name/delivery_app/delivery_company_name."""
     db = get_database()
     tenant_id = get_user_tenant_id(current_user)
-    query = _unassigned_delivery_filter()
+
+    # نفس قاعدة استبعاد التقرير
+    query = {"status": {"$nin": ["cancelled", "refunded"]}, "is_refunded": {"$ne": True}}
     if tenant_id:
-        query["$and"].append({"tenant_id": tenant_id})
+        query["tenant_id"] = tenant_id
+    else:
+        query["$or"] = [{"tenant_id": {"$exists": False}}, {"tenant_id": None}]
+    # مرشّحو "طلب شركة توصيل" (is_company truthy)
+    query["$and"] = [{"$or": [
+        {"is_delivery_company": True},
+        {"delivery_app": {"$nin": [None, ""]}},
+        {"delivery_app_name": {"$nin": [None, ""]}},
+        {"payment_method": "delivery_company"},
+    ]}]
     query = _apply_business_date_filter(query, start_date, end_date)
-    orders = await db.orders.find(query, {"_id": 0}).sort("created_at", -1).to_list(5000)
-    result = [{
-        "id": o.get("id"),
-        "order_number": o.get("order_number"),
-        "total": o.get("total", 0),
-        "customer_name": o.get("customer_name"),
-        "branch_name": o.get("branch_name"),
-        "created_at": o.get("created_at"),
-        "payment_status": o.get("payment_status"),
-    } for o in orders]
-    return {"orders": result, "count": len(result), "total_amount": sum(o.get("total", 0) or 0 for o in orders)}
+
+    candidates = await db.orders.find(query, {"_id": 0}).sort("created_at", -1).to_list(10000)
+    delivery_apps = await db.delivery_apps.find({}, {"_id": 0}).to_list(100)
+    app_names = {app["id"]: app["name"] for app in delivery_apps}
+
+    result = []
+    for o in candidates:
+        # نفس فلتر التقرير: تُعرض المبيعات للطلبات paid/credit/None
+        if o.get("payment_status") not in ["paid", "credit", None]:
+            continue
+        if _resolve_company_name(o, app_names) is None:  # غير محددة فعلاً
+            result.append({
+                "id": o.get("id"),
+                "order_number": o.get("order_number"),
+                "total": o.get("total", 0),
+                "customer_name": o.get("customer_name"),
+                "branch_name": o.get("branch_name"),
+                "created_at": o.get("created_at"),
+                "payment_status": o.get("payment_status"),
+            })
+    return {"orders": result, "count": len(result), "total_amount": sum(o.get("total", 0) or 0 for o in result)}
 
 class ReassignUnassignedPayload(BaseModel):
     order_ids: List[str]
