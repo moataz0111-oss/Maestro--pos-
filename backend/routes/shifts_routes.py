@@ -34,10 +34,53 @@ NON_CASHIER_ROLES = {
     "call_center", "kitchen", "chef", "accountant",
 }
 
+# الكابتن يعمل تحت وردية الكاشير المرتبط به ولا يفتح وردية منفصلة
+CAPTAIN_ROLES = {"captain"}
+
+# الأدوار التي لا تظهر ورديتها في تقرير إغلاق الصندوق (تُعرض ورديات الكاشير حصراً)
+NON_CASHIER_SHIFT_ROLES = NON_CASHIER_ROLES | CAPTAIN_ROLES
+
 def _can_open_shift(role: str) -> bool:
-    """يُسمح بفتح وردية للأدوار التي تتعامل مع نقد المبيعات فقط (كاشير/كابتن/مشرف...).
-    رؤساء الأقسام (مخزن/تصنيع/مطبخ/مشتريات) مستثنون."""
-    return (role or "").strip().lower() not in NON_CASHIER_ROLES
+    """يُسمح بفتح وردية للأدوار التي تتعامل مع نقد المبيعات فقط (كاشير/مشرف...).
+    رؤساء الأقسام (مخزن/تصنيع/مطبخ/مشتريات) والكابتن مستثنون."""
+    r = (role or "").strip().lower()
+    return r not in NON_CASHIER_ROLES and r not in CAPTAIN_ROLES
+
+def _shift_open_block_reason(role: str):
+    """سبب منع فتح وردية (أو None إن كان مسموحاً). الكابتن يعمل تحت وردية الكاشير."""
+    r = (role or "").strip().lower()
+    if r in CAPTAIN_ROLES:
+        return "الكابتن يعمل تحت وردية الكاشير المرتبط به — لا تُفتح له وردية منفصلة"
+    if r in NON_CASHIER_ROLES:
+        return "هذا الحساب رئيس قسم ولا يتعامل مع نقد المبيعات — لا تُفتح له وردية"
+    return None
+
+async def _get_pending_captain_cash(db, shift_id, tenant_id):
+    """يُرجع تجميع نقد الكباتن غير المُسلَّم (held) لوردية معيّنة: قائمة لكل كابتن + الإجمالي."""
+    q = {"shift_id": shift_id, "captain_id": {"$ne": None}, "captain_cash_status": "held"}
+    if tenant_id:
+        q["tenant_id"] = tenant_id
+    held = await db.orders.find(
+        q, {"_id": 0, "captain_id": 1, "captain_name": 1, "total": 1}).to_list(5000)
+    by_cap = {}
+    for o in held:
+        cid = o.get("captain_id")
+        if cid not in by_cap:
+            by_cap[cid] = {"captain_id": cid, "captain_name": o.get("captain_name"), "amount": 0.0, "count": 0}
+        by_cap[cid]["amount"] += float(o.get("total") or 0)
+        by_cap[cid]["count"] += 1
+    return list(by_cap.values()), sum(c["amount"] for c in by_cap.values())
+
+async def _ensure_captains_settled(db, shift_id, tenant_id):
+    """يمنع إغلاق وردية الكاشير إذا بقي نقد كابتن غير مُسلَّم (HTTP 409)."""
+    captains, total = await _get_pending_captain_cash(db, shift_id, tenant_id)
+    if captains:
+        raise HTTPException(status_code=409, detail={
+            "code": "CAPTAIN_CASH_PENDING",
+            "message": "لا يمكن إغلاق الوردية — يوجد كباتن لم يسلّموا نقدهم بعد. حصّل المبالغ أولاً من قسم إدارة الطلبات والكابتن.",
+            "captains": captains,
+            "total_pending": total,
+        })
 
 
 # ==================== MODELS ====================
@@ -105,6 +148,10 @@ async def open_shift(shift: ShiftCreate, current_user: dict = Depends(get_curren
     cashier = await db.users.find_one({"id": shift.cashier_id}, {"_id": 0, "password": 0})
     if not cashier:
         raise HTTPException(status_code=404, detail="الكاشير غير موجود")
+
+    _block = _shift_open_block_reason(cashier.get("role", ""))
+    if _block:
+        raise HTTPException(status_code=400, detail=_block)
     
     shift_doc = {
         "id": str(uuid.uuid4()),
@@ -223,10 +270,10 @@ async def quick_open_shift(data: QuickOpenShift, current_user: dict = Depends(ge
     tenant_id = get_user_tenant_id(current_user)
     user_id = current_user["id"]
 
-    # 🚫 رؤساء الأقسام (مخزن/تصنيع/مطبخ/مشتريات) لا يفتح لهم وردية كاشير
-    if not _can_open_shift(current_user.get("role", "")):
-        return {"shift": None, "was_existing": False, "blocked": True,
-                "message": "هذا الحساب رئيس قسم ولا يتعامل مع نقد المبيعات — لا تُفتح له وردية"}
+    # 🚫 رؤساء الأقسام والكابتن لا يفتح لهم وردية كاشير منفصلة
+    _block = _shift_open_block_reason(current_user.get("role", ""))
+    if _block:
+        return {"shift": None, "was_existing": False, "blocked": True, "message": _block}
     
     branch_id = data.branch_id or current_user.get("branch_id")
     if not branch_id:
@@ -299,9 +346,10 @@ async def open_shift_for_cashier(data: OpenShiftForCashier, current_user: dict =
     if not cashier:
         raise HTTPException(status_code=404, detail="الكاشير غير موجود")
 
-    # 🚫 لا يمكن فتح وردية لرئيس قسم (مخزن/تصنيع/مطبخ/مشتريات)
-    if not _can_open_shift(cashier.get("role", "")):
-        raise HTTPException(status_code=400, detail="هذا الحساب رئيس قسم ولا يتعامل مع نقد المبيعات — لا يمكن فتح وردية له")
+    # 🚫 لا يمكن فتح وردية لرئيس قسم أو لكابتن
+    _block = _shift_open_block_reason(cashier.get("role", ""))
+    if _block:
+        raise HTTPException(status_code=400, detail=_block)
     
     branch_id = data.branch_id or current_user.get("branch_id")
     if not branch_id:
@@ -374,10 +422,10 @@ async def auto_open_shift(current_user: dict = Depends(get_current_user)):
             raise HTTPException(status_code=404, detail="لا توجد وردية مفتوحة - يرجى فتح وردية لكاشير")
     
     # كاشير عادي: فتح وردية تلقائياً
-    # 🚫 رؤساء الأقسام (مخزن/تصنيع/مطبخ/مشتريات) لا تُفتح لهم وردية تلقائياً
-    if not _can_open_shift(user_role):
-        return {"shift": None, "was_existing": False, "blocked": True,
-                "message": "هذا الحساب رئيس قسم ولا يتعامل مع نقد المبيعات — لا تُفتح له وردية"}
+    # 🚫 رؤساء الأقسام والكابتن لا تُفتح لهم وردية تلقائياً
+    _block = _shift_open_block_reason(user_role)
+    if _block:
+        return {"shift": None, "was_existing": False, "blocked": True, "message": _block}
 
     query = {"cashier_id": current_user["id"], "status": "open"}
     if tenant_id:
@@ -441,6 +489,199 @@ async def auto_open_shift(current_user: dict = Depends(get_current_user)):
     del shift_doc["_id"]
     
     return {"shift": shift_doc, "was_existing": False, "message": "تم فتح وردية جديدة تلقائياً"}
+
+# ==================== ربط الكابتن بوردية الكاشير ====================
+class CaptainLinkPayload(BaseModel):
+    captain_id: str
+
+@router.get("/shifts/available-captains")
+async def get_available_captains(branch_id: Optional[str] = None, current_user: dict = Depends(get_current_user)):
+    """قائمة مستخدمي دور الكابتن (للكاشير/المدير لربطهم بالوردية) مع حالة الربط الحالية."""
+    db = get_database()
+    tenant_id = get_user_tenant_id(current_user)
+    q = {"role": "captain", "is_active": {"$ne": False}}
+    if tenant_id:
+        q["tenant_id"] = tenant_id
+    captains = await db.users.find(q, {"_id": 0, "password": 0}).to_list(200)
+    target_branch = branch_id or current_user.get("branch_id")
+    if target_branch:
+        captains = [c for c in captains if not c.get("branch_id") or c.get("branch_id") == target_branch]
+    links = await db.captain_shift_links.find(
+        {"active": True, **({"tenant_id": tenant_id} if tenant_id else {})}, {"_id": 0}
+    ).to_list(500)
+    linked_map = {lk["captain_id"]: lk for lk in links}
+    for c in captains:
+        link = linked_map.get(c["id"])
+        c["linked_shift_id"] = link.get("shift_id") if link else None
+        c["linked_cashier_name"] = link.get("cashier_name") if link else None
+    return captains
+
+@router.post("/shifts/{shift_id}/link-captain")
+async def link_captain_to_shift(shift_id: str, payload: CaptainLinkPayload, current_user: dict = Depends(get_current_user)):
+    """ربط كابتن بوردية كاشير مفتوحة — يقوم به الكاشير صاحب الوردية أو المدير."""
+    db = get_database()
+    tenant_id = get_user_tenant_id(current_user)
+    shift = await db.shifts.find_one({"id": shift_id}, {"_id": 0})
+    if not shift or shift.get("status") != "open":
+        raise HTTPException(status_code=404, detail="الوردية غير موجودة أو مغلقة")
+    role = current_user.get("role", "")
+    is_manager = role in ["admin", "super_admin", "manager", "branch_manager", "owner"]
+    if not is_manager and shift.get("cashier_id") != current_user["id"]:
+        raise HTTPException(status_code=403, detail="يمكن فقط لصاحب الوردية أو المدير ربط كابتن")
+    captain = await db.users.find_one({"id": payload.captain_id}, {"_id": 0, "password": 0})
+    if not captain:
+        raise HTTPException(status_code=404, detail="الكابتن غير موجود")
+    if (captain.get("role") or "").strip().lower() != "captain":
+        raise HTTPException(status_code=400, detail="هذا المستخدم ليس كابتن")
+    captain_name = captain.get("full_name") or captain.get("username", "")
+    now = datetime.now(timezone.utc).isoformat()
+    # إلغاء أي ربط سابق نشط لهذا الكابتن + إزالته من أي وردية أخرى
+    await db.captain_shift_links.update_many(
+        {"captain_id": payload.captain_id, "active": True, **({"tenant_id": tenant_id} if tenant_id else {})},
+        {"$set": {"active": False, "unlinked_at": now}})
+    await db.shifts.update_many(
+        {"id": {"$ne": shift_id}}, {"$pull": {"linked_captains": {"captain_id": payload.captain_id}}})
+    link_doc = {
+        "id": str(uuid.uuid4()), "captain_id": payload.captain_id, "captain_name": captain_name,
+        "shift_id": shift_id, "cashier_id": shift.get("cashier_id"), "cashier_name": shift.get("cashier_name"),
+        "branch_id": shift.get("branch_id"), "active": True, "linked_at": now, "linked_by": current_user["id"],
+    }
+    if tenant_id:
+        link_doc["tenant_id"] = tenant_id
+    await db.captain_shift_links.insert_one(link_doc)
+    await db.shifts.update_one({"id": shift_id}, {"$pull": {"linked_captains": {"captain_id": payload.captain_id}}})
+    await db.shifts.update_one(
+        {"id": shift_id},
+        {"$push": {"linked_captains": {"captain_id": payload.captain_id, "captain_name": captain_name, "linked_at": now}}})
+    return {"success": True, "message": f"تم ربط الكابتن {captain_name} بالوردية",
+            "captain_id": payload.captain_id, "captain_name": captain_name}
+
+@router.post("/shifts/{shift_id}/unlink-captain")
+async def unlink_captain_from_shift(shift_id: str, payload: CaptainLinkPayload, current_user: dict = Depends(get_current_user)):
+    """فصل كابتن عن وردية كاشير."""
+    db = get_database()
+    shift = await db.shifts.find_one({"id": shift_id}, {"_id": 0})
+    if not shift:
+        raise HTTPException(status_code=404, detail="الوردية غير موجودة")
+    role = current_user.get("role", "")
+    is_manager = role in ["admin", "super_admin", "manager", "branch_manager", "owner"]
+    if not is_manager and shift.get("cashier_id") != current_user["id"]:
+        raise HTTPException(status_code=403, detail="غير مصرح")
+    now = datetime.now(timezone.utc).isoformat()
+    await db.captain_shift_links.update_many(
+        {"captain_id": payload.captain_id, "shift_id": shift_id, "active": True},
+        {"$set": {"active": False, "unlinked_at": now}})
+    await db.shifts.update_one(
+        {"id": shift_id}, {"$pull": {"linked_captains": {"captain_id": payload.captain_id}}})
+    return {"success": True, "message": "تم فصل الكابتن عن الوردية"}
+
+@router.get("/captain/my-shift")
+async def get_my_captain_shift(current_user: dict = Depends(get_current_user)):
+    """للكابتن: جلب وردية الكاشير المرتبط بها حالياً (لإنشاء الطلبات عليها)."""
+    db = get_database()
+    tenant_id = get_user_tenant_id(current_user)
+    link = await db.captain_shift_links.find_one(
+        {"captain_id": current_user["id"], "active": True, **({"tenant_id": tenant_id} if tenant_id else {})},
+        {"_id": 0})
+    if not link:
+        return {"linked": False, "shift": None, "message": "لم يربطك أي كاشير بورديته بعد"}
+    shift = await db.shifts.find_one({"id": link["shift_id"]}, {"_id": 0})
+    if not shift or shift.get("status") != "open":
+        await db.captain_shift_links.update_one({"id": link["id"]}, {"$set": {"active": False}})
+        return {"linked": False, "shift": None, "message": "وردية الكاشير المرتبط أُغلقت"}
+    return {"linked": True, "shift": shift, "cashier_name": shift.get("cashier_name"),
+            "cashier_id": shift.get("cashier_id")}
+
+# ==================== إدارة الطلبات والكابتن (التحصيل) ====================
+class CaptainCollectPayload(BaseModel):
+    shift_id: str
+    captain_id: str
+
+@router.get("/captains/shift-summary")
+async def get_captains_shift_summary(shift_id: Optional[str] = None, branch_id: Optional[str] = None,
+                                     current_user: dict = Depends(get_current_user)):
+    """ملخص الكباتن لوردية مفتوحة: لكل كابتن كم باع / كم سلّم (مُحصّل) / كم متبقٍ معه (نقد غير مُسلَّم)."""
+    db = get_database()
+    tenant_id = get_user_tenant_id(current_user)
+    # حلّ الوردية: المُمرَّرة، أو وردية الكاشير الحالي، أو أحدث وردية مفتوحة في الفرع
+    if not shift_id:
+        sq = {"status": "open"}
+        if tenant_id:
+            sq["tenant_id"] = tenant_id
+        role = current_user.get("role", "")
+        if role not in ["admin", "super_admin", "manager", "branch_manager", "owner"]:
+            sq["cashier_id"] = current_user["id"]
+        elif branch_id:
+            sq["branch_id"] = branch_id
+        sh = await db.shifts.find_one(sq, {"_id": 0, "id": 1}, sort=[("started_at", -1)])
+        shift_id = sh["id"] if sh else None
+    if not shift_id:
+        return {"shift_id": None, "captains": [], "totals": {"sold": 0, "handed": 0, "pending": 0}}
+
+    q = {"shift_id": shift_id, "captain_id": {"$ne": None},
+         "status": {"$nin": ["cancelled", "canceled", "deleted", "refunded"]}}
+    if tenant_id:
+        q["tenant_id"] = tenant_id
+    orders = await db.orders.find(
+        q, {"_id": 0, "captain_id": 1, "captain_name": 1, "total": 1, "payment_method": 1,
+            "captain_cash_status": 1, "order_number": 1, "order_type": 1, "created_at": 1}).to_list(10000)
+
+    by_cap = {}
+    for o in orders:
+        cid = o.get("captain_id")
+        if cid not in by_cap:
+            by_cap[cid] = {"captain_id": cid, "captain_name": o.get("captain_name"),
+                           "sold": 0.0, "handed": 0.0, "pending": 0.0,
+                           "orders_count": 0, "pending_count": 0, "orders": []}
+        c = by_cap[cid]
+        amt = float(o.get("total") or 0)
+        c["sold"] += amt
+        c["orders_count"] += 1
+        is_cash = o.get("payment_method") == "cash"
+        if is_cash and o.get("captain_cash_status") == "held":
+            c["pending"] += amt
+            c["pending_count"] += 1
+        elif is_cash and o.get("captain_cash_status") == "collected":
+            c["handed"] += amt
+        c["orders"].append({
+            "order_number": o.get("order_number"), "order_type": o.get("order_type"),
+            "total": amt, "payment_method": o.get("payment_method"),
+            "captain_cash_status": o.get("captain_cash_status"), "created_at": o.get("created_at")})
+    captains = list(by_cap.values())
+    totals = {
+        "sold": sum(c["sold"] for c in captains),
+        "handed": sum(c["handed"] for c in captains),
+        "pending": sum(c["pending"] for c in captains),
+    }
+    return {"shift_id": shift_id, "captains": captains, "totals": totals}
+
+@router.post("/captains/collect")
+async def collect_captain_cash(payload: CaptainCollectPayload, current_user: dict = Depends(get_current_user)):
+    """الكاشير يؤكّد استلام نقد الكابتن → تُعلَّم طلباته النقدية 'مُحصّلة' (تدخل ضمن درج الكاشير عند الإغلاق)."""
+    db = get_database()
+    tenant_id = get_user_tenant_id(current_user)
+    shift = await db.shifts.find_one({"id": payload.shift_id}, {"_id": 0})
+    if not shift or shift.get("status") != "open":
+        raise HTTPException(status_code=404, detail="الوردية غير موجودة أو مغلقة")
+    role = current_user.get("role", "")
+    is_manager = role in ["admin", "super_admin", "manager", "branch_manager", "owner"]
+    if not is_manager and shift.get("cashier_id") != current_user["id"]:
+        raise HTTPException(status_code=403, detail="فقط كاشير الوردية أو المدير يؤكّد الاستلام")
+    q = {"shift_id": payload.shift_id, "captain_id": payload.captain_id,
+         "payment_method": "cash", "captain_cash_status": "held"}
+    if tenant_id:
+        q["tenant_id"] = tenant_id
+    held = await db.orders.find(q, {"_id": 0, "total": 1}).to_list(5000)
+    collected_amount = sum(float(o.get("total") or 0) for o in held)
+    now = datetime.now(timezone.utc).isoformat()
+    res = await db.orders.update_many(q, {"$set": {
+        "captain_cash_status": "collected",
+        "captain_cash_collected_by": current_user["id"],
+        "captain_cash_collected_by_name": current_user.get("full_name") or current_user.get("username", ""),
+        "captain_cash_collected_at": now,
+    }})
+    return {"success": True, "collected_orders": res.modified_count, "collected_amount": collected_amount,
+            "message": f"تم تأكيد استلام {collected_amount:,.0f} د.ع من الكابتن ({res.modified_count} طلب)"}
 
 @router.post("/shifts/cleanup-non-cashier")
 async def cleanup_non_cashier_shifts(current_user: dict = Depends(get_current_user)):
@@ -573,6 +814,9 @@ async def close_shift(shift_id: str, close_data: ShiftClose, current_user: dict 
         raise HTTPException(status_code=404, detail="الشفت غير موجود")
     if shift.get("status") == "closed":
         raise HTTPException(status_code=400, detail="الشفت مغلق بالفعل")
+    
+    # 🚫 منع الإغلاق إذا بقي نقد كابتن غير مُسلَّم
+    await _ensure_captains_settled(db, shift_id, shift.get("tenant_id") or get_user_tenant_id(current_user))
     
     shift_start = shift.get("started_at") or shift.get("opened_at") or ""
     shift_cashier = shift.get("cashier_id") or ""
@@ -755,9 +999,11 @@ async def get_shifts(
     status: Optional[str] = None,
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
+    cashiers_only: bool = False,
     current_user: dict = Depends(get_current_user)
 ):
-    """جلب قائمة الورديات - يدعم الفلترة بالـ business_date (اليوم التشغيلي)"""
+    """جلب قائمة الورديات - يدعم الفلترة بالـ business_date (اليوم التشغيلي).
+    cashiers_only=True يستبعد ورديات رؤساء الأقسام (مخزن/تصنيع/مطبخ/مشتريات) — تظهر ورديات الكاشير حصراً."""
     db = get_database()
     query = {}
     if branch_id:
@@ -789,6 +1035,25 @@ async def get_shifts(
         ]
     
     shifts = await db.shifts.find(query, {"_id": 0}).sort("started_at", -1).to_list(100)
+
+    # ⭐ استبعاد ورديات رؤساء الأقسام (مخزن/تصنيع/مطبخ/مشتريات) — تظهر ورديات الكاشير حصراً.
+    # نحدّد الدور من المستخدم الحالي (مصدر موثوق) ثم من حقل role المخزّن على الوردية كاحتياط.
+    if cashiers_only and shifts:
+        cashier_ids = list({s.get("cashier_id") for s in shifts if s.get("cashier_id")})
+        role_by_id = {}
+        if cashier_ids:
+            users = await db.users.find(
+                {"id": {"$in": cashier_ids}}, {"_id": 0, "id": 1, "role": 1}
+            ).to_list(1000)
+            role_by_id = {u["id"]: (u.get("role") or "").strip().lower() for u in users}
+
+        def _is_non_cashier(s):
+            r = role_by_id.get(s.get("cashier_id"))
+            if r is None:
+                r = (s.get("role") or "").strip().lower()
+            return r in NON_CASHIER_SHIFT_ROLES
+
+        shifts = [s for s in shifts if not _is_non_cashier(s)]
     
     # معالجة القيم الفارغة والحقول القديمة
     for shift in shifts:
@@ -1074,6 +1339,9 @@ async def close_cash_register(close_data: CashRegisterClose, current_user: dict 
     shift_start = shift.get("started_at") or shift.get("opened_at") or datetime.now(timezone.utc).isoformat()
     shift_cashier_id = shift.get("cashier_id") or current_user.get("id")
     branch = await db.branches.find_one({"id": shift.get("branch_id", "")}, {"_id": 0, "name": 1})
+
+    # 🚫 منع الإغلاق إذا بقي نقد كابتن غير مُسلَّم
+    await _ensure_captains_settled(db, shift_id, tenant_id)
     
     # ====== فحص الجرد اليومي للفرع (لا يُسمح بالإغلاق قبل تسجيل الجرد إن كان هناك مخزون) ======
     # المالك/المدير يمكنه التجاوز عبر علم force_close_without_count

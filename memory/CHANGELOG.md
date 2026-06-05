@@ -1,6 +1,55 @@
 # Maestro EGP - Changelog
 
 
+## Session: 05 Jun 2026 (ميزة كبيرة) — "الكابتن يعمل تحت وردية الكاشير" + قسم إدارة الطلبات والكابتن
+
+### المتطلبات (قرارات المستخدم)
+- الكابتن لا يفتح وردية منفصلة؛ **الكاشير يربطه بورديته** (1ج).
+- الكاشير يُنشئ طلبات التوصيل؛ **الكابتن يُنشئ داخلي + سفري** وتُحسب على وردية الكاشير المرتبط.
+- الكابتن يسلّم النقد → **الكاشير يؤكّد الاستلام** → يدخل الدرج وتُعلَّم الطلبات مُحصّلة.
+- قسم "إدارة الطلبات والكابتن" (صفحتان) للمالك+الكاشير+المدراء (وليس الكابتن).
+- **مُنِع إغلاق وردية الكاشير** قبل تحصيل كل نقد الكباتن.
+- منع رؤساء الأقسام **والكابتن** من فتح وردية من الجذر.
+
+### Backend (`shifts_routes.py`, `server.py`)
+- `CAPTAIN_ROLES` + `_shift_open_block_reason()`: يمنع الكابتن/رؤساء الأقسام في كل نقاط فتح الوردية (POST /shifts, /shifts/open, /open-for-cashier, /auto-open). `get_shifts?cashiers_only=true` يستبعد الكابتن أيضاً.
+- ربط: `GET /shifts/available-captains`, `POST /shifts/{id}/link-captain`, `POST /shifts/{id}/unlink-captain`, `GET /captain/my-shift` (مجموعة `captain_shift_links`).
+- `create_order` (server.py): إن كان المنشئ كابتن → التحقق من النوع (داخلي/سفري فقط، التوصيل 400)، حلّ وردية الكاشير المرتبط، `cashier_id`=كاشير الوردية، حفظ `captain_id`/`captain_name`/`captain_cash_status='held'`. `OrderResponse` يُرجع حقول الكابتن.
+- التحصيل: `GET /captains/shift-summary` (لكل كابتن باع/سلّم/متبقٍ + الطلبات)، `POST /captains/collect` (الكاشير يؤكّد → 'collected'). `_ensure_captains_settled()` يمنع الإغلاق (409 `CAPTAIN_CASH_PENDING`) في `close_shift` و`close_cash_register`.
+
+### Frontend
+- صفحة جديدة `CaptainsManagement.js` (تبويبان: الكباتن/الطلبات) + بطاقات الإجماليات + ربط/فصل الكباتن + تأكيد الاستلام عبر AlertDialog. مسار `/captains-management` (App.js) + بطاقة لوحة التحكم (Dashboard.js) تظهر للمالك+الكاشير+المدراء.
+- `POS.js`: الكابتن يحمّل وردية الكاشير عبر `/captain/my-shift` (لا auto-open)، والتوصيل مخفي له أصلاً.
+
+### الاختبار (iteration_218)
+- Backend: 10/10 ميزة + 4/4 regression (delivery "غير محددة" + cashiers_only) — كلها PASS.
+- Frontend: الصفحة والعناصر كاملة، وتدفّق التحصيل مُتحقَّق بصرياً (متبقٍ 12,000 → 0، مُسلَّم → 12,000، toast نجاح).
+- إصلاحات ما بعد الاختبار: tenant_id في seed، تطبيع حالة order_type، استبدال window.confirm بـ AlertDialog.
+- حسابات الاختبار + seed: `seed_captain_test_data.py` (موثّقة في test_credentials.md).
+
+---
+
+
+## Session: 05 Jun 2026 (طلب المستخدم) — حذف زرّي التنظيف + ورديات الكاشير حصراً في إغلاق الصندوق
+
+### المطلوب (صور المستخدم — أزرار محاطة بالأحمر)
+1. حذف زر "تنظيف الطلبات المكررة" نهائياً.
+2. إخفاء زر "تنظيف ورديات رؤساء الأقسام".
+3. الإصلاح الجذري: تقرير إغلاق الصندوق يجب أن يعرض ورديات الكاشير **حصراً** — أي وردية لمستخدم غير كاشير (رئيس قسم) كانت تظهر ويجب ألا تظهر.
+
+### ما تم
+- **Frontend (`Reports.js`)**: حُذف زرّا `cleanup-duplicate-orders` و`cleanup-non-cashier-shifts` من شريط تبويب إغلاق الصندوق + دالتاهما (`handleCleanupDuplicateOrders`, `handleCleanupNonCashier`) + حالتاهما (`cleaningDupes`, `cleaningShifts`).
+- **Backend (`shifts_routes.py` → `GET /shifts`)**: أُضيف بارامتر `cashiers_only: bool = False`. عند `true` يُستبعد كل وردية صاحبها بدور ضمن `NON_CASHIER_ROLES` (مخزن/تصنيع/مطبخ/مشتريات/كول سنتر/محاسب). الدور يُحلّ من `users` عبر `cashier_id` (مصدر موثوق) ثم من حقل `role` على الوردية كاحتياط.
+- **Frontend (`Reports.js` → `fetchReport`)**: نداءا `/shifts?status=closed` و`status=open` يمرّران الآن `&cashiers_only=true` → بطاقات الورديات (مغلقة + نشطة) تعرض الكاشير حصراً. هذا يُغني عن زر التنظيف اليدوي (الجذر مُعالَج).
+- نقطة `POST /shifts/cleanup-non-cashier` بقيت في الـbackend (غير مستدعاة من الواجهة، غير ضارّة).
+
+### الاختبار
+- E2E curl: بذر وردية كاشير + وردية warehouse_keeper مفتوحتين → `/shifts?status=open` يعرض الاثنتين؛ `?cashiers_only=true` يستبعد امين المخزن ويُبقي الكاشير. ✅
+- لقطة شاشة (تبويب إغلاق الصندوق): الزرّان اختفيا (count=0)، تعرض الكاشير فقط. lint نظيف. ✅
+
+---
+
+
 ## Session: 05 Jun 2026 (BUG FIX P0 نهائي) — تطابق "غير محددة" بين تقرير المبيعات وأداة التوجيه (الخيار b)
 
 ### 🔴 السبب الجذري الحقيقي (projection ناقص)

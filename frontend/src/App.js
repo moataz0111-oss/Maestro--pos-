@@ -83,6 +83,7 @@ const SystemContact = lazy(() => import("./pages/SystemContact"));
 const BreakEvenReport = lazy(() => import("./pages/BreakEvenReport"));
 const PriceIncreaseReport = lazy(() => import("./pages/PriceIncreaseReport"));
 const OwnerWallet = lazy(() => import("./pages/OwnerWallet"));
+const CaptainsManagement = lazy(() => import("./pages/CaptainsManagement"));
 const ExternalBranchesManagement = lazy(() => import("./pages/ExternalBranchesManagement"));
 
 // Components
@@ -563,6 +564,15 @@ function AppRoutes() {
         element={
           <ProtectedRoute>
             <OwnerWallet />
+          </ProtectedRoute>
+        } 
+      />
+      {/* إدارة الطلبات والكابتن */}
+      <Route 
+        path="/captains-management" 
+        element={
+          <ProtectedRoute>
+            <CaptainsManagement />
           </ProtectedRoute>
         } 
       />

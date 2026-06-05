@@ -1,0 +1,74 @@
+{
+  "summary": "End-to-end testing of 'Captain works under Cashier shift' feature for Maestro EGP. Backend: 10/10 captain-feature tests PASS + 4/4 unassigned-delivery regression tests PASS. Frontend: all data-testids present and wired correctly; captain row shows 12,000 IQD held, orders tab shows seeded order #1004 with 'بحوزة الكابتن' badge. One UX brittleness: collect button uses native window.confirm() which is hard to drive from Playwright (same pattern flagged in iter217 cleanup feature).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "seed script /app/backend/seed_captain_test_data.py", "issue": "Inserts captain_shift_links documents WITHOUT tenant_id field, but /api/captain/my-shift and /api/shifts/available-captains both filter by tenant_id when present. Result: a freshly-seeded link is invisible to the API until a re-link is performed via POST /api/shifts/{shift_id}/link-captain. Fix: add tenant_id='default' to the inserted captain_shift_links document and to the shift document."},
+      {"endpoint": "POST /api/orders (captain)", "issue": "Backend rejects uppercase order_type values like 'DINE_IN' with the Arabic delivery-only message (because 'DINE_IN' is not in the allowed ('dine_in','takeaway') set). Recommend either accepting case-insensitive order_type or returning a more accurate 422/'invalid order_type' message instead of the misleading delivery message."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {"flow": "Collect held cash (تأكيد الاستلام)", "issue": "Click handler uses native window.confirm() (CaptainsManagement.js line 55). Playwright cannot easily auto-accept native confirms after the page has rendered; must register page.on('dialog', d=>d.accept()) BEFORE the click. Backend /api/captains/collect itself works correctly (verified via pytest). Recommend switching to shadcn AlertDialog for consistency with the rest of the app and to make UI testing reliable.", "affected_selectors": ["[data-testid^='collect-btn-']"]}
+    ],
+    "design_issues": [
+      {"screen": "/captains-management", "issues": ["Page header, totals cards, captains/orders tabs and table all render correctly with proper RTL layout. No contrast issues observed."]}
+    ]
+  },
+  "test_results_backend": {
+    "test_captain_blocked_from_open_shift": "PASS (blocked=true on /api/shifts/open)",
+    "test_captain_blocked_from_auto_open": "PASS (blocked=true on /api/shifts/auto-open)",
+    "test_wkeeper_blocked_from_open_shift": "PASS (warehouse_keeper blocked)",
+    "test_available_captains_admin": "PASS (returns array with linked_shift_id/linked_cashier_name)",
+    "test_captain_my_shift_linked": "PASS (linked=true after API link)",
+    "test_captain_creates_dinein_attributed": "PASS (cashier_id, shift_id, captain_id, captain_cash_status='held' all set on order)",
+    "test_captain_delivery_rejected": "PASS (400 with Arabic message التوصيل من اختصاص الكاشير)",
+    "test_shift_summary_shows_held": "PASS (totals.pending > 0)",
+    "test_close_blocked_then_collect_then_close": "PASS (409 CAPTAIN_CASH_PENDING → POST /captains/collect → pending=0 → close 200)",
+    "test_shifts_cashiers_only_excludes_non_cashier": "PASS (no warehouse_keeper/captain shifts returned)"
+  },
+  "test_results_frontend": {
+    "dashboard_tile_visible": true,
+    "dashboard_tile_navigates": "Partial - click attempted but beforeunload warning fired; direct nav to /captains-management works fine and page loads",
+    "captains_management_page_testid_present": true,
+    "total_sold_card": "إجمالي مبيعات الكباتن 12,000 IQD",
+    "total_handed_card": "المُسلَّم للكاشير 0 IQD",
+    "total_pending_card": "المتبقي مع الكباتن 12,000 IQD",
+    "captain_row_present": true,
+    "captain_row_text": "كابتن أحمد 1 طلب باع 12,000 IQD سلّم 0 IQD متبقٍ معه 12,000 IQD تأكيد الاستلام",
+    "collect_btn_testid_present": "collect-btn-72e97f57-1456-4ee8-b5bf-6790585fa881",
+    "link_section_present": true,
+    "orders_tab_switch_works": true,
+    "captain_orders_table_present": true,
+    "order_1004_visible_with_held_badge": true,
+    "collect_action_pending_drops_to_zero": "INCONCLUSIVE in UI (native window.confirm not auto-accepted in test); backend endpoint verified working in pytest"
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_captain_under_cashier_iter218.py",
+    "/app/test_reports/pytest/captain_iter218.xml",
+    "/app/backend/tests/test_unassigned_delivery_consistency.py"
+  ],
+  "action_items": [
+    "Fix /app/backend/seed_captain_test_data.py: add tenant_id='default' to the captain_shift_links insert (and ideally to the shifts insert) so /api/captain/my-shift returns linked=true straight after seeding without needing a manual re-link.",
+    "Replace native window.confirm() in /app/frontend/src/pages/CaptainsManagement.js handleCollect (line 55) with a shadcn AlertDialog for consistency with rest of app and to make UI testing reliable. Same recommendation applies to handleCleanupNonCashier in Reports.js from iter217.",
+    "(Minor) For POST /api/orders, when a captain submits an order_type not in {'dine_in','takeaway'} (e.g. uppercase 'DINE_IN'), the backend returns the Arabic 'delivery is for cashier only' error which is misleading. Either normalize case (e.g. order.order_type.lower()) before the check or return a clearer message."
+  ],
+  "critical_code_review_comments": [
+    "/app/backend/server.py is huge (>8000 lines) — create_order alone spans ~270 lines (6090-6360). Captain attribution logic in create_order is tightly coupled to the function; consider extracting a `_resolve_captain_shift_context(user, db)` helper used by both create_order and offline sync paths.",
+    "Backend captain order_type check at server.py:6098 uses strict lowercase membership ('dine_in','takeaway'). Be defensive: normalize order_type case OR add a centralized OrderType enum.",
+    "Seed script omits tenant_id on captain_shift_links — silent data integrity bug; would also affect any future seed/test consumer.",
+    "Frontend CaptainsManagement.js uses window.confirm — inconsistent with shadcn AlertDialog used elsewhere; brittle for automated tests and worse UX in RTL.",
+    "/api/captain/my-shift returns full shift document including internal mongo fields — fine since the projection excludes _id, but consider only exposing the subset the captain POS actually needs."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_captain_under_cashier_iter218.py (new)"
+  ],
+  "success_rate": {"backend": "100% (10/10 feature + 4/4 regression)", "frontend": "~90% (all UI elements verified; collect-action UI not auto-completable due to native confirm)"},
+  "test_credentials": "admin@maestroegp.com/admin123, cap1@maestroegp.com/cap123, wkeeper@maestroegp.com/wkeeper123 — all worked",
+  "seed_data_creation": "Used /app/backend/seed_captain_test_data.py (with workaround: re-link via API). State at end-of-run: shift is now CLOSED (because test_close_blocked_then_collect_then_close closed it). Re-seed before any further run.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend feature is solid — all 10 captain tests + 4 delivery regression tests pass. Only the seed script needs the tenant_id fix and the frontend collect UI should be migrated off native window.confirm. The seeded shift at end of this run is CLOSED; re-run seed_captain_test_data.py before any further testing. To exercise the collect UI from Playwright, register `page.on('dialog', lambda d: asyncio.ensure_future(d.accept()))` BEFORE clicking collect-btn — that should drive the native confirm.",
+  "rca of the issue": "1) The 'my-shift returns linked=false right after seed' bug RCA: seed inserts captain_shift_links WITHOUT tenant_id; /api/captain/my-shift queries with {captain_id, active:true, tenant_id:'default'} → no match. Mitigation: add tenant_id to seed inserts. 2) The 'collect-btn UI did not visibly clear pending' RCA: handler uses native window.confirm; Playwright override of window.confirm via page.evaluate did not take effect in time (no /captains/collect network call observed). Mitigation: page.on('dialog', d=>d.accept()) registered BEFORE click, or convert to AlertDialog."
+}

@@ -1645,6 +1645,9 @@ class OrderResponse(BaseModel):
     profit: float = 0.0
     branch_id: Optional[str] = None  # Made optional for customer orders
     cashier_id: Optional[str] = None  # Made optional for orders without cashier
+    captain_id: Optional[str] = None  # هوية الكابتن إن أنشأ الطلب
+    captain_name: Optional[str] = None
+    captain_cash_status: Optional[str] = None  # held | collected | None
     status: str = "pending"  # Default status
     payment_method: str = "cash"  # Default payment method
     payment_status: str = "pending"  # Default for legacy orders
@@ -6087,6 +6090,25 @@ async def create_order(order: OrderCreate, current_user: dict = Depends(get_curr
     
     # سيتم حساب order_number لاحقاً (بعد استخراج business_date من الشفت لضمان الاتساق)
     
+    # ===== الكابتن: الطلب يُحسب حصراً على وردية الكاشير المرتبط بها =====
+    captain_id = None
+    captain_name = None
+    captain_link = None
+    if (current_user.get("role") or "").strip().lower() == "captain":
+        _ot = (order.order_type or "").strip().lower()
+        if _ot == "delivery":
+            raise HTTPException(status_code=400, detail="الكابتن يمكنه إنشاء طلبات داخلي/سفري فقط — التوصيل من اختصاص الكاشير")
+        if _ot not in ("dine_in", "takeaway"):
+            raise HTTPException(status_code=400, detail="نوع الطلب غير صالح للكابتن — يُسمح بالداخلي والسفري فقط")
+        _link_q = {"captain_id": current_user["id"], "active": True}
+        if tenant_id:
+            _link_q["tenant_id"] = tenant_id
+        captain_link = await db.captain_shift_links.find_one(_link_q, {"_id": 0})
+        if not captain_link:
+            raise HTTPException(status_code=400, detail="لم يربطك أي كاشير بورديته — اطلب من الكاشير ربطك أولاً")
+        captain_id = current_user["id"]
+        captain_name = current_user.get("full_name") or current_user.get("username", "")
+    
     # البحث عن الوردية المفتوحة — أولوية لشفت الكاشير نفسه (وليس أي شفت في الفرع)
     base_shift_query = {"status": "open"}
     if tenant_id:
@@ -6095,18 +6117,27 @@ async def create_order(order: OrderCreate, current_user: dict = Depends(get_curr
         base_shift_query["branch_id"] = order.branch_id
     
     # 1) جرب شفت الكاشير الخاص أولاً (الأكثر دقة)
-    current_shift = await db.shifts.find_one(
-        {**base_shift_query, "cashier_id": current_user.get("id")},
-        {"_id": 0, "id": 1, "cashier_id": 1, "business_date": 1, "started_at": 1, "opened_at": 1},
-        sort=[("started_at", -1)]
-    )
-    # 2) إن لم يوجد، خذ أحدث شفت مفتوح في الفرع
-    if not current_shift:
+    if captain_link:
+        # الكابتن: الطلب يُحسب حصراً على وردية الكاشير المرتبط بها
         current_shift = await db.shifts.find_one(
-            base_shift_query,
+            {"id": captain_link["shift_id"], "status": "open"},
+            {"_id": 0, "id": 1, "cashier_id": 1, "cashier_name": 1, "business_date": 1, "started_at": 1, "opened_at": 1},
+        )
+        if not current_shift:
+            raise HTTPException(status_code=400, detail="وردية الكاشير المرتبط أُغلقت — اطلب من الكاشير ربطك من جديد")
+    else:
+        current_shift = await db.shifts.find_one(
+            {**base_shift_query, "cashier_id": current_user.get("id")},
             {"_id": 0, "id": 1, "cashier_id": 1, "business_date": 1, "started_at": 1, "opened_at": 1},
             sort=[("started_at", -1)]
         )
+        # 2) إن لم يوجد، خذ أحدث شفت مفتوح في الفرع
+        if not current_shift:
+            current_shift = await db.shifts.find_one(
+                base_shift_query,
+                {"_id": 0, "id": 1, "cashier_id": 1, "business_date": 1, "started_at": 1, "opened_at": 1},
+                sort=[("started_at", -1)]
+            )
     
     # إذا لم توجد وردية مفتوحة
     if not current_shift:
@@ -6154,6 +6185,9 @@ async def create_order(order: OrderCreate, current_user: dict = Depends(get_curr
     user_role = current_user.get("role", "")
     is_owner = user_role in ["admin", "super_admin", "manager", "branch_manager"]
     if is_owner and current_shift and current_shift.get("cashier_id") != current_user.get("id"):
+        effective_cashier_id = current_shift["cashier_id"]
+    elif captain_link and current_shift:
+        # الكابتن: الطلب يُنسب لكاشير الوردية (يُحسب على ورديته) مع حفظ هوية الكابتن
         effective_cashier_id = current_shift["cashier_id"]
     else:
         effective_cashier_id = current_user["id"]
@@ -6342,6 +6376,9 @@ async def create_order(order: OrderCreate, current_user: dict = Depends(get_curr
         "profit": profit,
         "branch_id": order.branch_id,
         "cashier_id": effective_cashier_id,
+        "captain_id": captain_id,  # هوية الكابتن إن أنشأ الطلب (يُحسب على وردية الكاشير)
+        "captain_name": captain_name,
+        "captain_cash_status": ("held" if captain_id and order.payment_method == "cash" else None),
         "shift_id": shift_id,  # ربط الطلب بالوردية الحالية
         "business_date": shift_business_date,  # اليوم التشغيلي (حسب الوردية المفتوحة)
         "tenant_id": tenant_id,  # فصل البيانات لكل عميل

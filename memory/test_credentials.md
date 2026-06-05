@@ -52,3 +52,13 @@
 ## Central Role + Extra Permission (iter215 — bug fix)
 - abdwk@maestroegp.com / abd123 (role warehouse_keeper, permissions ['inventory','purchasing'], name عبد الرحمن)
 - Verifies: a central-role user granted an EXTRA permission (المشتريات) now sees BOTH tiles (warehouse-manufacturing + purchasing) on the dashboard. Before the fix, central roles ignored extra permissions and showed only their single default tile.
+
+
+## Captain Feature Test Users (iter — إدارة الطلبات والكابتن)
+- Captain: cap1@maestroegp.com / cap123 (role captain, name كابتن أحمد) — works under cashier shift, no own shift
+- Cashier: cashier1@maestroegp.com / cash123 (role cashier) — if seeded; else existing cashier 803d (كاشير اختبار)
+- Re-seed with: `cd /app/backend && python3 seed_captain_test_data.py`
+- Seeds: open cashier shift + captain linked + 1 HELD captain takeaway order (12,000)
+- Flow: captain creates dine_in/takeaway (delivery blocked) → counts on cashier shift as captain_cash_status='held' → cashier confirms via POST /api/captains/collect → 'collected' → close blocked 409 CAPTAIN_CASH_PENDING until settled
+- Endpoints: GET /api/captain/my-shift, GET /api/shifts/available-captains, POST /api/shifts/{id}/link-captain, POST /api/shifts/{id}/unlink-captain, GET /api/captains/shift-summary, POST /api/captains/collect
+- UI: Dashboard tile "إدارة الطلبات والكابتن" → /captains-management (tabs الكباتن/الطلبات), visible to owner+cashier+managers (NOT captain)

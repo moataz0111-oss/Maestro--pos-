@@ -586,7 +586,22 @@ export default function POS() {
       }
       
       // إذا لم تكن هناك وردية مفتوحة، افتح واحدة تلقائياً
-      if (!shiftRes.data) {
+      if (isCaptain) {
+        // ⭐ الكابتن لا يفتح وردية — يعمل على وردية الكاشير المرتبط بها
+        try {
+          const myShiftRes = await axios.get(`${API}/captain/my-shift`);
+          if (myShiftRes.data?.linked && myShiftRes.data?.shift) {
+            setCurrentShift(myShiftRes.data.shift);
+            localStorage.setItem('currentShift', JSON.stringify(myShiftRes.data.shift));
+          } else {
+            setCurrentShift(null);
+            toast.warning(myShiftRes.data?.message || t('لم يربطك أي كاشير بورديته بعد — اطلب من الكاشير ربطك'));
+          }
+        } catch (capShiftErr) {
+          console.log('Could not load captain shift:', capShiftErr);
+          setCurrentShift(null);
+        }
+      } else if (!shiftRes.data) {
         try {
           const autoOpenRes = await axios.post(`${API}/shifts/auto-open`);
           setCurrentShift(autoOpenRes.data.shift);

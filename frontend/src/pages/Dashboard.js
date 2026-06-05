@@ -1574,6 +1574,7 @@ export default function Dashboard() {
     { label: t('برنامج الولاء'), icon: Gift, path: '/loyalty', color: 'bg-gradient-to-br from-pink-400 to-pink-600', key: 'showLoyalty', id: 'loyalty' },
     { label: t('الكوبونات'), icon: Gift, path: '/coupons', color: 'bg-gradient-to-br from-violet-400 to-violet-600', key: 'showCoupons', id: 'coupons' },
     { label: t('خزينة المالك'), icon: Wallet, path: '/owner-wallet', color: 'bg-gradient-to-br from-amber-400 to-amber-600', key: 'showOwnerWallet', id: 'owner-wallet' },
+    { label: t('إدارة الطلبات والكابتن'), icon: Users, path: '/captains-management', color: 'bg-gradient-to-br from-orange-400 to-orange-600', key: 'showCaptainsManagement', id: 'captains-management' },
     { label: t('الفروع الخارجية'), icon: Store, path: '/external-branches', color: 'bg-gradient-to-br from-blue-400 to-blue-600', key: 'showExternalBranches', id: 'external-branches' },
     { label: t('الإعدادات'), icon: Settings, path: '/settings', color: 'bg-gradient-to-br from-gray-400 to-gray-600', key: 'showSettings', id: 'settings' },
   ];
@@ -1583,6 +1584,11 @@ export default function Dashboard() {
     // التحقق من إعدادات الصفحة الرئيسية (إذا كان القيمة undefined أو true، نعرض الأيقونة)
     // فقط نخفيها إذا كانت القيمة === false بشكل صريح
     if (dashboardSettings[action.key] === false) return false;
+    
+    // ⭐ إدارة الطلبات والكابتن: تظهر للمالك + الكاشير + المدراء (وليس للكابتن نفسه)
+    if (action.id === 'captains-management') {
+      return ['cashier', 'supervisor', 'admin', 'super_admin', 'branch_manager', 'manager', 'owner'].includes(user?.role);
+    }
     
     // المدير (admin) يرى كل شيء
     if (user?.role === 'admin' || user?.role === 'super_admin') return true;
