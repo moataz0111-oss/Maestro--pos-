@@ -1625,6 +1625,11 @@ class OrderCreate(BaseModel):
     # ⭐ مفتاح الثبات (idempotency) لمنع تكرار طلبات الأوفلاين عند ضياع رد السيرفر
     offline_id: Optional[str] = None
     is_offline_order: Optional[bool] = False
+    # ⭐ بيانات شركة التوصيل + رقم الطلب الخارجي (مفتاح منع التكرار التجاري)
+    delivery_company: Optional[str] = None
+    delivery_company_id: Optional[str] = None
+    delivery_company_name: Optional[str] = None
+    delivery_company_order_id: Optional[str] = None
 
 class OrderResponse(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -6053,6 +6058,38 @@ async def create_order(order: OrderCreate, current_user: dict = Depends(get_curr
             )
             return existing_by_offline
 
+    # ⭐⭐ منع تكرار طلبات شركات التوصيل بنفس رقم الطلب الخارجي (مثل رقم طلبات/مزاجك)
+    #    يمنع إدخال نفس الطلب مرتين نهائياً — حتى من جهازين مختلفين أو أونلاين/أوفلاين.
+    incoming_ext_ref = (getattr(order, "delivery_company_order_id", None) or "").strip()
+    if incoming_ext_ref:
+        _company_keys = [k for k in [
+            getattr(order, "delivery_app", None), getattr(order, "delivery_company_id", None),
+            getattr(order, "delivery_company", None), getattr(order, "delivery_app_name", None),
+            getattr(order, "delivery_company_name", None),
+        ] if k]
+        _ext_q = {
+            "delivery_company_order_id": incoming_ext_ref,
+            "status": {"$nin": ["cancelled", "canceled", "deleted", "refunded"]},
+            **({"tenant_id": tenant_id} if tenant_id else {}),
+        }
+        if _company_keys:
+            _ext_q["$or"] = [
+                {"delivery_app": {"$in": _company_keys}},
+                {"delivery_company_id": {"$in": _company_keys}},
+                {"delivery_company": {"$in": _company_keys}},
+                {"delivery_app_name": {"$in": _company_keys}},
+                {"delivery_company_name": {"$in": _company_keys}},
+            ]
+        existing_ext = await db.orders.find_one(_ext_q, {"_id": 0})
+        if existing_ext:
+            logger.info(f"Duplicate delivery order blocked: ext_ref={incoming_ext_ref} -> existing #{existing_ext.get('order_number')}")
+            raise HTTPException(status_code=409, detail={
+                "code": "DUPLICATE_DELIVERY_ORDER",
+                "message": f"رقم طلب شركة التوصيل ({incoming_ext_ref}) مُدخَل مسبقاً بالطلب رقم #{existing_ext.get('order_number')} — لم يُنشأ طلب مكرر",
+                "order_number": existing_ext.get("order_number"),
+                "order_id": existing_ext.get("id"),
+            })
+
     # نقارن: tenant + branch + cashier + customer + items hash + total
     try:
         items_sig_data = sorted([
@@ -6060,10 +6097,14 @@ async def create_order(order: OrderCreate, current_user: dict = Depends(get_curr
             for it in order.items
         ])
         items_sig = "|".join(items_sig_data)
+        # ⭐ نضمّن رقم طلب شركة التوصيل وطريقة الدفع في البصمة: طلبان مختلفان لشركة التوصيل
+        #    (برقمين خارجيين مختلفين) لهما بصمتان مختلفتان فلا يُدمجان خطأً ولا يُفقَد طلب.
+        _ext_for_fp = (getattr(order, "delivery_company_order_id", None) or "").strip()
         order_fingerprint = hashlib.sha1(
             f"{tenant_id or ''}|{order.branch_id}|{current_user.get('id','')}|"
             f"{order.customer_name or ''}|{order.customer_phone or ''}|"
-            f"{order.order_type}|{items_sig}|{float(order.discount or 0):.2f}".encode("utf-8")
+            f"{order.order_type}|{items_sig}|{float(order.discount or 0):.2f}|"
+            f"{order.payment_method or ''}|{_ext_for_fp}".encode("utf-8")
         ).hexdigest()
         
         dedupe_cutoff_dt = datetime.now(timezone.utc) - timedelta(seconds=30)
@@ -6077,6 +6118,9 @@ async def create_order(order: OrderCreate, current_user: dict = Depends(get_curr
             },
             {"_id": 0},
         )
+        # حماية إضافية: لا تَدمج طلبين لشركة توصيل برقمين خارجيين مختلفين (تجنّب فقدان طلب)
+        if existing_dup and _ext_for_fp and (existing_dup.get("delivery_company_order_id") or "") != _ext_for_fp:
+            existing_dup = None
         if existing_dup:
             logger.info(
                 f"Order dedup: returning existing #{existing_dup.get('order_number')} "
@@ -6388,6 +6432,10 @@ async def create_order(order: OrderCreate, current_user: dict = Depends(get_curr
         "payment_status": payment_status,
         "order_fingerprint": order_fingerprint,
         "offline_id": incoming_offline_id,  # ⭐ مفتاح الثبات لمنع التكرار عند المزامنة
+        "delivery_company_order_id": (getattr(order, "delivery_company_order_id", None) or None),  # رقم الطلب لدى شركة التوصيل (مفتاح منع تكرار تجاري)
+        "delivery_company_id": getattr(order, "delivery_company_id", None),
+        "delivery_company_name": getattr(order, "delivery_company_name", None) or delivery_app_name,
+        "delivery_company": getattr(order, "delivery_company", None),
         "is_offline_order": bool(getattr(order, "is_offline_order", False)),
         "delivery_app": order.delivery_app,
         "delivery_app_name": delivery_app_name,  # اسم شركة التوصيل

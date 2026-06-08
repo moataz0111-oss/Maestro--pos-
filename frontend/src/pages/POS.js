@@ -144,6 +144,7 @@ export default function POS() {
   const [discount, setDiscount] = useState(0);
   const [discountType, setDiscountType] = useState('fixed'); // fixed or percentage
   const [deliveryApp, setDeliveryApp] = useState('');
+  const [deliveryCompanyOrderId, setDeliveryCompanyOrderId] = useState('');  // رقم الطلب لدى شركة التوصيل (منع تكرار)
   const [deliveryApps, setDeliveryApps] = useState([]);
   const [drivers, setDrivers] = useState([]);
   const [selectedDriver, setSelectedDriver] = useState('');
@@ -1138,6 +1139,7 @@ export default function POS() {
       setBuzzerNumber(order.buzzer_number || '');
       setDiscount(order.discount || 0);
       setDeliveryApp(order.delivery_app || '');
+      setDeliveryCompanyOrderId(order.delivery_company_order_id || '');
       setOrderNotes(order.notes || '');
       // ✅ استعادة طريقة الدفع المفضلة (التي اختارها الكاشير عند الحفظ الأول)
       // إذا متوفرة، نستخدمها — وإلا نقع على payment_method (لو الطلب مش معلق)
@@ -1518,6 +1520,7 @@ export default function POS() {
     setDiscount(0);
     setSelectedTable(null);
     setDeliveryApp('');
+    setDeliveryCompanyOrderId('');
     setSelectedDriver('');
     setOrderNotes('');
     setEditingOrder(null);
@@ -1716,6 +1719,11 @@ export default function POS() {
         toast.error(t('يرجى اختيار شركة توصيل أو سائق'));
         return;
       }
+      // ⭐ رقم طلب شركة التوصيل إجباري عند اختيار شركة — لضمان منع التكرار 100٪
+      if (deliveryApp && !deliveryCompanyOrderId.trim()) {
+        toast.error(t('يرجى إدخال رقم الطلب لدى شركة التوصيل (إجباري لمنع التكرار)'));
+        return;
+      }
       if (selectedDriver) {
         if (!deliveryAddress) { toast.error(t('يرجى إدخال عنوان التوصيل')); return; }
         if (!customerName) { toast.error(t('يرجى إدخال اسم العميل')); return; }
@@ -1733,10 +1741,11 @@ export default function POS() {
     const savedBranchIdForKitchen = localStorage.getItem('selectedBranchId');
     const currentBranchId = getBranchIdForApi() || savedBranchIdForKitchen || user?.branch_id;
 
-    // ⭐ مفتاح ثبات (idempotency) واحد لكل عملية إنشاء — يُرسل أونلاين وأوفلاين
-    // لمنع تكرار الطلب عند ضياع رد السيرفر (lost-ACK) ثم مزامنة النسخة المحلية.
-    const clientOrderId = offlineStorage.generateOfflineId();
+    // ⭐ مفتاح ثبات (idempotency) واحد يرافق الطلب طوال حياته (إنشاء→تعليق→دفع→مزامنة).
+    // عند تعديل/دفع طلب معلّق نُعيد استخدام مفتاحه الأصلي بدل توليد مفتاح جديد — يمنع نسخة مكررة.
+    const clientOrderId = editingOrder?.offline_id || offlineStorage.generateOfflineId();
 
+    // [pending-flow] reuse stable key
     // تحديث حالة جميع العناصر لـ "إرسال"
     const initialStatus = {};
     cart.forEach((_, idx) => { initialStatus[idx] = 'sending'; });
@@ -1870,6 +1879,7 @@ export default function POS() {
           coupon_discount: couponDiscount || 0,
           delivery_app: orderType === 'delivery' ? deliveryApp : null,
           delivery_app_name: orderType === 'delivery' && deliveryApp ? (deliveryApps.find(a => a.id === deliveryApp)?.name || '') : null,
+          delivery_company_order_id: orderType === 'delivery' ? (deliveryCompanyOrderId?.trim() || null) : null,
           driver_id: orderType === 'delivery' ? selectedDriver : null,
           notes: orderNotes,
           auto_ready: isDeliveryOrder,  // معلق للسفري والطاولات، جاهز للتوصيل فقط
@@ -1997,6 +2007,13 @@ export default function POS() {
     } catch (error) {
       console.error('Failed to save order:', error);
       
+      // ⭐ طلب توصيل مكرر بنفس رقم الشركة — لا تُنشئ نسخة، أظهر تحذيراً واضحاً
+      if (error?.response?.status === 409 && error.response.data?.detail?.code === 'DUPLICATE_DELIVERY_ORDER') {
+        toast.error(error.response.data.detail.message || t('هذا الطلب مُدخَل مسبقاً'));
+        setSubmitting(false);
+        return;
+      }
+      
       // إذا كان خطأ شبكة، حفظ الطلب محلياً
       if (!error.response) {
         console.log('🔄 Network error, saving kitchen order offline...');
@@ -2028,6 +2045,7 @@ export default function POS() {
             delivery_company: orderType === 'delivery' && deliveryApp ? (deliveryApps.find(a => a.id === deliveryApp)?.name || '') : null,
             delivery_app: orderType === 'delivery' ? deliveryApp : null,
             delivery_app_name: orderType === 'delivery' && deliveryApp ? (deliveryApps.find(a => a.id === deliveryApp)?.name || '') : null,
+            delivery_company_order_id: orderType === 'delivery' ? (deliveryCompanyOrderId?.trim() || null) : null,
             customer_type: orderType === 'delivery' && deliveryApp ? 'delivery_company' : (paymentMethod === 'credit' || paymentMethod === 'deferred' ? 'credit' : 'regular'),
             driver_id: selectedDriver || null,
             notes: orderNotes,
@@ -2132,6 +2150,11 @@ export default function POS() {
         toast.error(t('يرجى اختيار شركة توصيل أو سائق'));
         return;
       }
+      // ⭐ رقم طلب شركة التوصيل إجباري عند اختيار شركة — لضمان منع التكرار 100٪
+      if (deliveryApp && !deliveryCompanyOrderId.trim()) {
+        toast.error(t('يرجى إدخال رقم الطلب لدى شركة التوصيل (إجباري لمنع التكرار)'));
+        return;
+      }
       
       // عند اختيار سائق - إجبار إدخال بيانات العميل
       if (selectedDriver) {
@@ -2166,9 +2189,9 @@ export default function POS() {
     const currentBranchId = getBranchIdForApi() || savedBranchIdForSubmit || user?.branch_id;
     console.log('📍 Branch ID for order:', currentBranchId);
 
-    // ⭐ مفتاح ثبات (idempotency) واحد لكل عملية إنشاء — يُرسل أونلاين وأوفلاين
-    // لمنع تكرار الطلب عند ضياع رد السيرفر ثم مزامنة النسخة المحلية.
-    const clientOrderId = offlineStorage.generateOfflineId();
+    // ⭐ مفتاح ثبات (idempotency) واحد يرافق الطلب طوال حياته (إنشاء→تعليق→دفع→مزامنة).
+    // عند تعديل/دفع طلب معلّق نُعيد استخدام مفتاحه الأصلي بدل توليد مفتاح جديد — يمنع نسخة مكررة.
+    const clientOrderId = editingOrder?.offline_id || offlineStorage.generateOfflineId();
 
     setSubmitting(true);
     
@@ -2219,6 +2242,7 @@ export default function POS() {
         delivery_company: orderType === 'delivery' && deliveryApp ? (deliveryApps.find(a => a.id === deliveryApp)?.name || '') : null,
         delivery_app: orderType === 'delivery' ? deliveryApp : null,
         delivery_app_name: orderType === 'delivery' && deliveryApp ? (deliveryApps.find(a => a.id === deliveryApp)?.name || '') : null,
+        delivery_company_order_id: orderType === 'delivery' ? (deliveryCompanyOrderId?.trim() || null) : null,
         customer_type: orderType === 'delivery' && deliveryApp ? 'delivery_company' : (paymentMethod === 'credit' || paymentMethod === 'deferred' ? 'credit' : 'regular'),
         driver_id: selectedDriver || null,
         notes: orderNotes,
@@ -2436,6 +2460,7 @@ export default function POS() {
           coupon_discount: couponDiscount || 0,
           delivery_app: orderType === 'delivery' ? deliveryApp : null,
           delivery_app_name: orderType === 'delivery' && deliveryApp ? (deliveryApps.find(a => a.id === deliveryApp)?.name || '') : null,
+          delivery_company_order_id: orderType === 'delivery' ? (deliveryCompanyOrderId?.trim() || null) : null,
           driver_id: selectedDriver || null,
           notes: orderNotes,
           offline_id: clientOrderId  // ⭐ مفتاح الثبات لمنع التكرار عند المزامنة
@@ -2592,6 +2617,13 @@ export default function POS() {
       setTables(tablesRes.data);
     } catch (error) {
       console.error('Failed to submit order:', error);
+      
+      // ⭐ طلب توصيل مكرر بنفس رقم الشركة — لا تُنشئ نسخة، أظهر تحذيراً واضحاً
+      if (error?.response?.status === 409 && error.response.data?.detail?.code === 'DUPLICATE_DELIVERY_ORDER') {
+        toast.error(error.response.data.detail.message || t('هذا الطلب مُدخَل مسبقاً'));
+        setSubmitting(false);
+        return;
+      }
       
       // إذا كان خطأ شبكة (لا يوجد response)، حفظ الطلب محلياً
       if (!error.response) {
@@ -3761,6 +3793,22 @@ export default function POS() {
                   <p className="text-xs text-blue-500 mt-1">
                     ℹ️ {t('شركة التوصيل ستستلم الطلب - لا حاجة للعنوان')}
                   </p>
+                )}
+                {/* ⭐ رقم الطلب لدى شركة التوصيل — إجباري لمنع التكرار نهائياً */}
+                {deliveryApp && (
+                  <div className="mt-2">
+                    <label className="text-xs font-medium text-red-500 flex items-center gap-1 mb-1">
+                      {t('رقم الطلب لدى شركة التوصيل')} <span className="text-red-600">*</span>
+                    </label>
+                    <Input
+                      placeholder={t('مثال: 9242 — إجباري لمنع تكرار الطلب')}
+                      value={deliveryCompanyOrderId}
+                      onChange={(e) => setDeliveryCompanyOrderId(e.target.value)}
+                      data-testid="delivery-company-order-id"
+                      inputMode="text"
+                      className={`focus:border-blue-500 ${!deliveryCompanyOrderId.trim() ? 'border-red-400' : 'border-green-400'}`}
+                    />
+                  </div>
                 )}
               </div>
             </div>

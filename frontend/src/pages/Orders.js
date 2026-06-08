@@ -87,6 +87,10 @@ export default function Orders() {
   const [dupTotal, setDupTotal] = useState(0);
   const [dupLoading, setDupLoading] = useState(false);
   const [dupCleaningId, setDupCleaningId] = useState(null);
+  // === كشف متقدم على مستوى العمل (نفس رقم طلب الشركة / بصمة المحتوى) ===
+  const [bizGroups, setBizGroups] = useState([]);
+  const [bizExtra, setBizExtra] = useState(0);
+  const [bizCleaning, setBizCleaning] = useState(false);
 
   const fetchDuplicates = async () => {
     setDupLoading(true);
@@ -99,13 +103,33 @@ export default function Orders() {
         end_date: end.toISOString().slice(0, 10),
       };
       if (selectedBranch) params.branch_id = selectedBranch;
-      const res = await axios.get(`${API}/orders/duplicates`, { params });
+      const [res, bizRes] = await Promise.all([
+        axios.get(`${API}/orders/duplicates`, { params }),
+        axios.get(`${API}/sync/business-duplicate-orders`).catch(() => ({ data: { groups: [], extra_orders_to_remove: 0 } })),
+      ]);
       setDupGroups(res.data?.groups || []);
       setDupTotal(res.data?.total_duplicates || 0);
+      setBizGroups(bizRes.data?.groups || []);
+      setBizExtra(bizRes.data?.extra_orders_to_remove || 0);
     } catch (e) {
       showApiError(e, t('فشل تحميل الطلبات المكررة'));
     } finally {
       setDupLoading(false);
+    }
+  };
+
+  const handleBizCleanup = async () => {
+    if (!window.confirm(t('سيتم حذف') + ` ${bizExtra} ` + t('نسخة مكررة (على مستوى العمل) مع الإبقاء على نسخة واحدة لكل طلب. متابعة؟'))) return;
+    setBizCleaning(true);
+    try {
+      const res = await axios.post(`${API}/sync/cleanup-business-duplicates`);
+      toast.success(res.data?.message || t('تم تنظيف التكرارات'));
+      fetchDuplicates();
+      fetchData();
+    } catch (e) {
+      showApiError(e, t('فشل تنظيف التكرارات'));
+    } finally {
+      setBizCleaning(false);
     }
   };
 
@@ -1002,10 +1026,54 @@ export default function Orders() {
             <div className="flex justify-center py-12">
               <RefreshCw className="h-6 w-6 animate-spin text-primary" />
             </div>
-          ) : dupGroups.length === 0 ? (
-            <div className="text-center py-12 text-muted-foreground" data-testid="no-duplicates">
+          ) : (
+           <div className="space-y-5">
+            {/* === كشف متقدم: نفس رقم طلب شركة التوصيل / بصمة محتوى متطابقة === */}
+            <div className="rounded-lg border border-orange-500/30 bg-orange-500/5 p-3 space-y-3" data-testid="advanced-duplicates-section">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <div className="text-sm">
+                  <span className="font-bold text-orange-600">{t('فحص متقدم (نفس رقم طلب الشركة / محتوى متطابق)')}</span>
+                  <div className="text-xs text-muted-foreground mt-0.5">
+                    {bizExtra > 0
+                      ? `${t('وُجدت')} ${bizGroups.length} ${t('مجموعة مكررة')} (${bizExtra} ${t('نسخة زائدة')})`
+                      : t('لا توجد تكرارات على مستوى العمل ✅')}
+                  </div>
+                </div>
+                {bizExtra > 0 && (
+                  <Button
+                    size="sm"
+                    className="bg-orange-600 hover:bg-orange-700"
+                    disabled={bizCleaning}
+                    onClick={handleBizCleanup}
+                    data-testid="auto-clean-business-duplicates-btn"
+                  >
+                    {bizCleaning ? <RefreshCw className="h-4 w-4 ml-1 animate-spin" /> : <Trash2 className="h-4 w-4 ml-1" />}
+                    {t('تنظيف تلقائي')} ({bizExtra})
+                  </Button>
+                )}
+              </div>
+              {bizGroups.length > 0 && (
+                <div className="space-y-2 max-h-48 overflow-y-auto">
+                  {bizGroups.map((g, i) => (
+                    <div key={i} className="text-xs p-2 rounded bg-background/60 border" data-testid={`biz-dup-group-${i}`}>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-orange-500/15 text-orange-700">
+                        {g.type === 'external_ref' ? t('نفس رقم طلب الشركة') : t('محتوى متطابق')}
+                      </span>
+                      <span className="mx-2 text-muted-foreground">
+                        {(g.orders || []).map(o => `#${o.order_number}`).join('، ')}
+                      </span>
+                      <span className="text-emerald-600">→ {t('يُبقى')} #{Math.min(...(g.orders || []).map(o => o.order_number || Infinity))}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* === الكشف الكلاسيكي (نسخة مدفوعة + نسخة مكررة غير مدفوعة) === */}
+            {dupGroups.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground" data-testid="no-duplicates">
               <Check className="h-10 w-10 mx-auto mb-2 text-emerald-500 opacity-70" />
-              <p>{t('لا توجد طلبات مكررة 🎉')}</p>
+              <p>{t('لا توجد طلبات مكررة (الكشف الكلاسيكي) 🎉')}</p>
             </div>
           ) : (
             <div className="space-y-4">
@@ -1048,6 +1116,8 @@ export default function Orders() {
                 </div>
               ))}
             </div>
+          )}
+           </div>
           )}
         </DialogContent>
       </Dialog>

@@ -167,6 +167,35 @@ async def sync_order(order: OfflineOrder, current_user: dict = Depends(get_curre
                     order_number=existing.get("order_number"),
                     message="الطلب موجود مسبقاً"
                 )
+
+        # ⭐⭐ منع تكرار طلبات شركات التوصيل بنفس رقم الطلب الخارجي (مثل رقم طلبات/مزاجك)
+        ext_ref = (order.delivery_company_order_id or "").strip() if getattr(order, "delivery_company_order_id", None) else ""
+        if ext_ref:
+            company_keys = [k for k in [
+                order.delivery_app, order.delivery_company_id, order.delivery_company,
+                order.delivery_app_name, order.delivery_company_name,
+            ] if k]
+            ext_q = {
+                "delivery_company_order_id": ext_ref,
+                "status": {"$nin": ["cancelled", "canceled", "deleted", "refunded"]},
+                "tenant_id": tenant_id,
+            }
+            if company_keys:
+                ext_q["$or"] = [
+                    {"delivery_app": {"$in": company_keys}},
+                    {"delivery_company_id": {"$in": company_keys}},
+                    {"delivery_company": {"$in": company_keys}},
+                    {"delivery_app_name": {"$in": company_keys}},
+                    {"delivery_company_name": {"$in": company_keys}},
+                ]
+            existing_ext = await db.orders.find_one(ext_q, {"_id": 0})
+            if existing_ext:
+                return SyncResult(
+                    success=True,
+                    id=existing_ext.get("id"),
+                    order_number=existing_ext.get("order_number"),
+                    message=f"طلب التوصيل #{existing_ext.get('order_number')} موجود مسبقاً (منع تكرار)"
+                )
         
         # الحصول على رقم الطلب التالي — يستخدم نفس عدّاد الأونلاين (branch_id + business_date)
         order_branch_id = order.branch_id or current_user.get("branch_id")
@@ -423,6 +452,92 @@ async def cleanup_duplicate_orders(current_user: dict = Depends(get_current_user
         "index_note": index_msg,
         "message": f"تم حذف {removed} طلباً مكرراً" + (" وتفعيل قفل منع التكرار ✅" if index_created else " (تعذّر إنشاء الفهرس — راجع index_note)")
     }
+
+
+@router.get("/business-duplicate-orders")
+async def detect_business_duplicate_orders(current_user: dict = Depends(get_current_user)):
+    """كشف التكرارات على مستوى العمل (وليس فقط offline_id):
+    1) نفس رقم طلب شركة التوصيل (delivery_company_order_id) لنفس الشركة.
+    2) بصمة محتوى متطابقة (فرع+نوع+إجمالي+عدد أصناف+دفع) خلال 10 دقائق.
+    للمالك/المدير فقط — للمراجعة قبل التنظيف."""
+    if current_user.get("role", "") not in ["admin", "super_admin", "manager", "branch_manager", "owner"]:
+        raise HTTPException(status_code=403, detail="غير مصرح")
+    tenant_id = get_user_tenant_id(current_user)
+    base = {"status": {"$nin": ["cancelled", "canceled", "deleted", "refunded"]}}
+    if tenant_id:
+        base["tenant_id"] = tenant_id
+
+    groups = []
+    # (1) نفس رقم طلب شركة التوصيل لنفس الشركة
+    ext_pipeline = [
+        {"$match": {**base, "delivery_company_order_id": {"$type": "string", "$ne": ""}}},
+        {"$group": {"_id": {"ref": "$delivery_company_order_id",
+                            "company": {"$ifNull": ["$delivery_app_name", {"$ifNull": ["$delivery_company_name", "$delivery_app"]}]}},
+                    "count": {"$sum": 1},
+                    "orders": {"$push": {"id": "$id", "order_number": "$order_number", "total": "$total",
+                                          "created_at": "$created_at", "delivery_company_order_id": "$delivery_company_order_id"}}}},
+        {"$match": {"count": {"$gt": 1}}},
+        {"$limit": 500},
+    ]
+    for g in await db.orders.aggregate(ext_pipeline).to_list(500):
+        groups.append({"type": "external_ref", "key": g["_id"], "count": g["count"], "orders": g["orders"]})
+
+    # (2) بصمة محتوى متطابقة خلال 10 دقائق (يلتقط التكرارات القديمة بلا رقم خارجي)
+    fp_pipeline = [
+        {"$match": base},
+        {"$project": {"id": 1, "order_number": 1, "total": 1, "created_at": 1, "branch_id": 1,
+                      "order_type": 1, "payment_method": 1,
+                      "bucket": {"$substr": [{"$ifNull": ["$created_at", ""]}, 0, 15]},  # دقّة دقيقة تقريباً (YYYY-MM-DDTHH:M)
+                      "items_count": {"$size": {"$ifNull": ["$items", []]}}}},
+        {"$group": {"_id": {"b": "$branch_id", "t": "$order_type", "tot": "$total",
+                            "ic": "$items_count", "pm": "$payment_method", "win": "$bucket"},
+                    "count": {"$sum": 1},
+                    "orders": {"$push": {"id": "$id", "order_number": "$order_number", "total": "$total", "created_at": "$created_at"}}}},
+        {"$match": {"count": {"$gt": 1}}},
+        {"$limit": 500},
+    ]
+    seen_ids = set()
+    for g in groups:
+        for o in g["orders"]:
+            seen_ids.add(o.get("id"))
+    for g in await db.orders.aggregate(fp_pipeline).to_list(500):
+        if all(o.get("id") in seen_ids for o in g["orders"]):
+            continue
+        groups.append({"type": "content_fingerprint", "key": g["_id"], "count": g["count"], "orders": g["orders"]})
+
+    total_extra = sum(g["count"] - 1 for g in groups)
+    return {"duplicate_groups": len(groups), "extra_orders_to_remove": total_extra, "groups": groups}
+
+
+@router.post("/cleanup-business-duplicates")
+async def cleanup_business_duplicate_orders(current_user: dict = Depends(get_current_user)):
+    """حذف التكرارات على مستوى العمل (رقم طلب الشركة + بصمة المحتوى) مع الإبقاء على نسخة واحدة
+    (الأقدم/أصغر رقم طلب). للمالك/المدير فقط."""
+    if current_user.get("role", "") not in ["admin", "super_admin", "manager", "branch_manager", "owner"]:
+        raise HTTPException(status_code=403, detail="غير مصرح")
+    detection = await detect_business_duplicate_orders(current_user)
+
+    def sort_key(o):
+        num = o.get("order_number")
+        return (0 if num is not None else 1, num if num is not None else 1e18, o.get("created_at") or "")
+
+    deleted_ids = []
+    for g in detection["groups"]:
+        orders_sorted = sorted(g["orders"], key=sort_key)
+        keep = orders_sorted[0]
+        for o in orders_sorted[1:]:
+            if o.get("id") and o["id"] != keep.get("id"):
+                deleted_ids.append(o["id"])
+
+    deleted_ids = list(set(deleted_ids))
+    removed = 0
+    if deleted_ids:
+        res = await db.orders.delete_many({"id": {"$in": deleted_ids}})
+        removed = res.deleted_count
+    return {"duplicate_groups": detection["duplicate_groups"], "removed_orders": removed,
+            "message": f"تم حذف {removed} طلباً مكرراً (على مستوى العمل) ✅"}
+
+
 
 
 
