@@ -11,6 +11,10 @@ concurrency:
   group: deploy-maestro-vps
   cancel-in-progress: true
 
+# 🟢 فرض تشغيل جميع إجراءات JavaScript على Node.js 24 → يُزيل تحذير إهمال Node 20 نهائياً من اللوق
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   deploy:
     name: Deploy to VPS
@@ -94,7 +98,7 @@ jobs:
           # تحديث Backend (يُبنى محلياً — خفيف، وطبقات pip تُكاش)
           # =============================================
           echo "📦 تحديث Backend..."
-          docker build -t maestro_backend:new ./backend
+          DOCKER_BUILDKIT=1 docker build -t maestro_backend:new ./backend
           docker stop backend 2>/dev/null || true
           docker rm backend 2>/dev/null || true
           docker tag maestro_backend:new maestro_backend:latest
@@ -113,7 +117,7 @@ jobs:
           # تحديث Frontend — سحب الصورة الجاهزة من GHCR (لا بناء على الـVPS)
           # =============================================
           echo "🎨 تحديث Frontend (سحب صورة جاهزة من GHCR)..."
-          echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
+          echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin 2>&1 | grep -v "credentials are stored unencrypted\|Configure a credential helper\|credential-store" || true
           docker pull "$FRONTEND_IMAGE:latest"
           docker stop frontend 2>/dev/null || true
           docker rm frontend 2>/dev/null || true
