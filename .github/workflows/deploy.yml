@@ -192,22 +192,32 @@ jobs:
           # =============================================
           # التحقق النهائي (تحذيرات فقط — لا نُفشل النشر بعد أن عاد الموقع)
           # =============================================
-          sleep 3
+          sleep 5
           echo ""
           echo "📊 حالة الخدمات:"
           docker ps --format "table {{.Names}}\t{{.Status}}"
           echo ""
-          if curl -s http://127.0.0.1/api/health | grep -q "ok"; then
-            echo "✅ النشر نجح والموقع يعمل!"
+          BACKEND_OK=0
+          for i in 1 2 3 4 5 6; do
+            if curl -s http://127.0.0.1/api/health | grep -q "ok"; then
+              BACKEND_OK=1
+              break
+            fi
+            echo "⏳ انتظار جاهزية الـBackend... ($i)"
+            sleep 8
+          done
+          if [ "$BACKEND_OK" = "1" ]; then
+            echo "✅ النشر نجح والموقع يعمل والـBackend يستجيب!"
           else
-            echo "⚠️ تحذير: قد يحتاج الـBackend وقتاً للبدء"
+            echo "❌❌❌ الـBackend لا يستجيب (502). سجلّ أخطاء الـBackend (آخر 100 سطر): ❌❌❌"
+            echo "==================== BACKEND LOGS START ===================="
+            docker logs backend --tail 100 2>&1 || true
+            echo "==================== BACKEND LOGS END ======================"
+            echo "حالة حاوية الـBackend:"
+            docker ps -a --filter "name=backend" --format "table {{.Names}}\t{{.Status}}" || true
           fi
           RESET_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST "http://127.0.0.1/api/advances/reset-before-month?month=2026-01")
-          if [ "$RESET_CODE" = "404" ]; then
-            echo "⚠️ تنبيه: الـBackend قد لا يكون محدّثاً (المسار رجع 404) — لكن الموقع يعمل."
-          else
-            echo "✅ الـBackend محدَّث (رمز $RESET_CODE)."
-          fi
+          echo "🔎 reset route code: $RESET_CODE"
 
           # تنظيف
           docker image prune -f 2>/dev/null || true

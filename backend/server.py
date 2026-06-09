@@ -473,20 +473,54 @@ async def init_database():
 
 @app.on_event("startup")
 async def startup_event():
-    """يتم تشغيله عند بدء التطبيق"""
+    """يتم تشغيله عند بدء التطبيق.
+    يبقى خفيفاً جداً: تهيئة الحسابات/الفهارس الأساسية فقط، ثم يفتح uvicorn المنفذ فوراً.
+    كل الترحيلات الثقيلة (التي تمرّ على كامل قاعدة البيانات) تُؤجَّل للخلفية عبر
+    asyncio.create_task لتفادي تعليق الإقلاع وخطأ 502 Bad Gateway على الإنتاج."""
     logger.info("🚀 Starting Maestro EGP API...")
+    # أساسي وخفيف: تهيئة الحسابات والفروع والفهارس (لازم لتسجيل الدخول فوراً)
     await init_database()
-    
-    # تشغيل التحديثات التلقائية لجميع العملاء
-    await apply_automatic_updates()
-    
-    # إضافة الخلفيات الافتراضية إذا لم تكن موجودة
     await seed_default_backgrounds()
-    
-    # ترحيل تلقائي لـ business_date (idempotent - آمن للتشغيل المتكرر)
-    await auto_migrate_business_dates()
-    
-    logger.info("✅ Application started successfully")
+
+    # تأجيل كل الترحيلات الثقيلة للخلفية (لا تحجب فتح المنفذ ولا فحص الصحة)
+    asyncio.create_task(_run_deferred_startup_tasks())
+
+    logger.info("✅ Application started successfully (heavy migrations deferred to background)")
+
+
+async def _run_deferred_startup_tasks():
+    """ينفّذ كل الترحيلات/التهيئات الثقيلة في الخلفية تسلسلياً بعد إقلاع الخادم وفتح المنفذ.
+    كل مهمة محمية بـ try/except حتى لا يُفشل فشلُ مهمة واحدة بقيّةَ المهام، ونتيح المجال
+    للطلبات الواردة بين كل ترحيل وآخر."""
+    # مهلة قصيرة لضمان أن uvicorn فتح المنفذ واستجاب لفحص الصحة أولاً
+    await asyncio.sleep(2)
+    logger.info("🛠️ Starting deferred background migrations...")
+    _deferred = [
+        ("setup_database_indexes", setup_database_indexes),
+        ("apply_automatic_updates", apply_automatic_updates),
+        ("auto_migrate_business_dates", auto_migrate_business_dates),
+        ("seed_department_branches", seed_department_branches),
+        ("cleanup_stale_biometric_jobs", cleanup_stale_biometric_jobs),
+        ("fix_pending_orders_extras_calc", fix_pending_orders_extras_calc),
+        ("cleanup_mistaken_expense_moataz36", cleanup_mistaken_expense_moataz36),
+        ("cleanup_duplicate_expenses", cleanup_duplicate_expenses),
+        ("purge_ghost_order_saidiya_11_20260430", purge_ghost_order_saidiya_11_20260430),
+        ("settle_driver_collected_orders_as_cash", settle_driver_collected_orders_as_cash),
+        ("backfill_closing_business_date", backfill_closing_business_date),
+        ("auto_heal_shifts_and_business_dates", auto_heal_shifts_and_business_dates),
+        ("fix_yamen_orders_jadriya_20260503", fix_yamen_orders_jadriya_20260503),
+        ("seed_initial_cost_layers_v1", seed_initial_cost_layers_v1),
+        ("backfill_tenant_id_on_products_v1", backfill_tenant_id_on_products_v1),
+        ("renumber_offline_orders_chronologically_v1", renumber_offline_orders_chronologically_v1),
+        ("renumber_offline_orders_chronologically_v2", renumber_offline_orders_chronologically_v2),
+    ]
+    for name, fn in _deferred:
+        try:
+            await fn()
+        except Exception as e:
+            logger.error(f"❌ Deferred startup task '{name}' failed: {e}")
+        await asyncio.sleep(0)
+    logger.info("✅ All deferred background migrations finished")
 
 async def auto_migrate_business_dates():
     """ترحيل تلقائي آمن لحقل business_date (اليوم التشغيلي) لجميع العملاء.
@@ -17623,7 +17657,6 @@ async def cancel_biometric_job(job_id: str, current_user: dict = Depends(get_cur
     return {"ok": True}
 
 
-@app.on_event("startup")
 async def cleanup_stale_biometric_jobs():
     """تنظيف الجوبات العالقة (processing > 5 دقائق) عند الإقلاع."""
     try:
@@ -19267,7 +19300,6 @@ async def start_auto_close_scheduler():
     logger.info("✅ Auto day close scheduler started")
 
 # إضافة indexes عند بدء التطبيق
-@app.on_event("startup")
 async def setup_database_indexes():
     """إعداد indexes لتحسين الأداء"""
     try:
@@ -19277,7 +19309,6 @@ async def setup_database_indexes():
         logger.error(f"Failed to create indexes: {e}")
 
 
-@app.on_event("startup")
 async def fix_pending_orders_extras_calc():
     """إصلاح الطلبات المعلقة التي حُسِبت بالصيغة الخاطئة القديمة.
     
@@ -19350,7 +19381,6 @@ async def fix_pending_orders_extras_calc():
         logger.error(f"❌ fix_pending_orders_extras migration failed: {e}")
 
 
-@app.on_event("startup")
 async def cleanup_mistaken_expense_moataz36():
     """حذف مصروف أُدخل بالخطأ "ا-معتز#36" (غداء إدارة) — مرة واحدة فقط، بطلب المالك.
     آمن: يحفظ نسخة كاملة من كل مستند محذوف في system_migrations (قابلة للاسترجاع)،
@@ -19409,7 +19439,6 @@ async def cleanup_mistaken_expense_moataz36():
 
 
 
-@app.on_event("startup")
 async def seed_department_branches():
     """إنشاء 3 أقسام افتراضية (مطبخ مركزي، مخزن، مشتريات) لكل tenant.
     
@@ -19484,7 +19513,6 @@ async def seed_department_branches():
         logger.error(f"❌ {MIG_KEY} migration failed: {e}")
 
 
-@app.on_event("startup")
 async def cleanup_duplicate_expenses():
     """حذف مصروف الغاز 50,000 المكرر تحديداً (one-shot).
     
@@ -19601,7 +19629,6 @@ async def cleanup_duplicate_expenses():
         logger.error(f"❌ cleanup_duplicate_gas_expense migration failed: {e}")
 
 
-@app.on_event("startup")
 async def purge_ghost_order_saidiya_11_20260430():
     """حذف نهائي للطلب الشبح المكرر #11 في فرع السيدية (one-shot).
     
@@ -19706,7 +19733,6 @@ async def purge_ghost_order_saidiya_11_20260430():
         logger.error(f"❌ purge_ghost_order_saidiya_11_20260430 migration failed: {e}")
 
 
-@app.on_event("startup")
 async def settle_driver_collected_orders_as_cash():
     """تصحيح الطلبات المحصّلة من السائقين التي بقيت معلقة في التقارير (one-shot).
     
@@ -19776,7 +19802,6 @@ async def settle_driver_collected_orders_as_cash():
         logger.error(f"❌ settle_driver_collected_orders_as_cash migration failed: {e}")
 
 
-@app.on_event("startup")
 async def backfill_closing_business_date():
     """تعبئة business_date في سجلات cash_register_closings القديمة (one-shot).
     
@@ -19829,7 +19854,6 @@ async def backfill_closing_business_date():
         logger.error(f"❌ backfill_closing_business_date migration failed: {e}")
 
 
-@app.on_event("startup")
 async def auto_heal_shifts_and_business_dates():
     """إصلاح شامل تلقائي للشفتات العالقة و business_dates الخاطئة (يعمل دورياً عند كل إقلاع).
     
@@ -20040,7 +20064,6 @@ async def auto_heal_shifts_and_business_dates():
         logger.error(f"❌ auto_heal_shifts_and_business_dates failed: {e}")
 
 
-@app.on_event("startup")
 async def fix_yamen_orders_jadriya_20260503():
     """إصلاح مستهدف لطلبات يامن #32-#59 في فرع الجادرية ليوم 2026-05-03.
     
@@ -20124,7 +20147,6 @@ async def fix_yamen_orders_jadriya_20260503():
 
 
 
-@app.on_event("startup")
 async def seed_initial_cost_layers_v1():
     """يُهيّء طبقة تكلفة أولية لكل مادة خام موجودة دون طبقات (one-shot).
 
@@ -20193,7 +20215,6 @@ async def seed_initial_cost_layers_v1():
         logger.error(f"❌ seed_initial_cost_layers_v1 failed: {e}")
 
 
-@app.on_event("startup")
 async def backfill_tenant_id_on_products_v1():
     """ملء tenant_id المفقود على manufactured_products و products (one-shot).
     
@@ -20248,7 +20269,6 @@ async def backfill_tenant_id_on_products_v1():
         logger.error(f"❌ backfill_tenant_id_on_products_v1 failed: {e}")
 
 
-@app.on_event("startup")
 async def renumber_offline_orders_chronologically_v2():
     """إصلاح ترقيم طلبات الأوفلاين v2 — يكتشف الانجراف دون الاعتماد على is_offline_order flag.
     
@@ -20334,7 +20354,6 @@ async def renumber_offline_orders_chronologically_v2():
         logger.error(f"❌ renumber_offline_orders_chronologically_v2 failed: {e}")
 
 
-@app.on_event("startup")
 async def renumber_offline_orders_chronologically_v1():
     """إصلاح ترقيم طلبات الأوفلاين التي حصلت على أرقام خاطئة من العدّاد العام القديم.
     
@@ -21360,7 +21379,7 @@ async def get_menu_link(request: Request, current_user: dict = Depends(get_curre
         base_url = f"{parsed.scheme}://{parsed.netloc}"
     else:
         # fallback للـ environment variable
-        base_url = os.environ.get('REACT_APP_BACKEND_URL', 'https://offline-pos-multi.preview.emergentagent.com')
+        base_url = os.environ.get('REACT_APP_BACKEND_URL', 'https://pos-inventory-sync-7.preview.emergentagent.com')
     
     menu_url = f"{base_url}/menu/{tenant.get('menu_slug', tenant_id)}"
     

@@ -1,5 +1,16 @@
 # Maestro EGP - Multi-Tenant POS System PRD
 
+## FIX P0 (9 يونيو 2026) — إصلاح 502 Bad Gateway على الإنتاج (تعليق الإقلاع بسبب الترحيلات الثقيلة) ✅
+- العَرَض: الموقع المباشر متوقف تماماً (502) لأن 17 خطّاف `@app.on_event("startup")` في `server.py` كانت تُنفَّذ متزامنة قبل أن يفتح uvicorn المنفذ. على قاعدة بيانات الإنتاج الكبيرة، ترحيلات مثل `auto_heal_shifts_and_business_dates` و`auto_migrate_business_dates` و`apply_automatic_updates` تمرّ على كامل المستندات فتتجاوز مهلة Nginx.
+- الإصلاح (`server.py`):
+  - `startup_event` بقي خفيفاً: `init_database()` (الحسابات/الفروع/الفهارس — لازم لتسجيل الدخول) + `seed_default_backgrounds()` فقط، ثم يفتح المنفذ فوراً.
+  - أُضيفت `_run_deferred_startup_tasks()` تُجدوَل عبر `asyncio.create_task` وتُنفّذ كل الترحيلات الثقيلة (17 مهمة) تسلسلياً في الخلفية بعد فتح المنفذ، كل مهمة محمية بـ try/except مع `await asyncio.sleep(0)` بينها.
+  - أُزيلت decorators `@app.on_event("startup")` من 15 دالة ترحيل + دالة `cleanup_mistaken_expense_moataz36` (كان عليها decorator مكرر)، وبقيت تُستدعى من المشغّل. بقي `start_auto_close_scheduler` كخطّاف (غير حاجب أصلاً).
+- التحقق محلياً: فحص الصحة يستجيب خلال 534مللي ثانية بعد إعادة التشغيل، تسجيل الدخول 200 عبر الرابط الخارجي، وسجلّات تؤكد "All deferred background migrations finished".
+- ⚠️ يتطلب ضغط "Save to Github" لنشر الإصلاح للإنتاج.
+
+
+
 ## FEATURE (9 يونيو 2026) — تبويب "الدفعات المصروفة" + فلتر بالشهر المستحق ✅
 - Backend (`server.py` → `list_salary_payments`): أُضيف باراميتر `salary_month` (YYYY-MM) لـ `GET /payroll/payments` — يعرض كل الدفعات المخصومة من إيداعات ذلك الشهر بصرف النظر عن تاريخ الصرف الفعلي. تحقّق curl: 2026-06 → دفعة واحدة، 2026-05 → صفر.
 - Frontend (`HR.js`): تبويب جديد **"الدفعات المصروفة"** (`salary-payments-tab`) فيه فلتر شهر (`salary-payments-month-filter`، افتراضي الشهر الحالي) + زر تحديث + 3 بطاقات (إجمالي المصروف/عدد الدفعات/عدد الموظفين) + جدول (الموظف/الفرع/تاريخ القيد/تاريخ الصرف الفعلي/طريقة الدفع/من صرفها/المبلغ) مع صف الإجمالي. يحترم فلتر الفرع الحالي.
