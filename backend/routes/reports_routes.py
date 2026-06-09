@@ -979,7 +979,20 @@ async def get_delivery_credits_report(
         "alsaree3": "عالسريع",
         "talabati": "طلباتي",
     }
-    
+
+    # ⭐ خريطة التكاليف الموحّدة (نفس منطق تقرير المبيعات) لحساب كلفة المواد لكل شركة
+    _costs_map = await _build_current_costs_map(db, tenant_id)
+    _by_id = _costs_map["by_id"]
+    _by_name = _costs_map["by_name"]
+
+    def _cn(val):
+        if val is None:
+            return 0
+        try:
+            return float(val)
+        except (TypeError, ValueError):
+            return 0
+
     by_app = {}
     for o in orders:
         app_id = o.get("delivery_app")
@@ -996,6 +1009,7 @@ async def get_delivery_credits_report(
                 "count": 0, "total": 0, "commission": 0, "net_amount": 0,
                 "paid_count": 0, "credit_count": 0, "paid_amount": 0, "credit_amount": 0,
                 "collected_amount": 0, "remaining_amount": 0,
+                "materials_cost": 0, "packaging_cost": 0, "products": {},
                 "orders": []
             }
         
@@ -1027,8 +1041,23 @@ async def get_delivery_credits_report(
             qty = it.get("quantity", it.get("qty", 1)) or 1
             unit_price = it.get("price", it.get("unit_price", 0)) or 0
             line_total = it.get("total", it.get("subtotal", unit_price * qty))
+            pname = it.get("name") or it.get("product_name") or "صنف"
+            pid_ref = it.get("product_id")
+            # ⭐ كلفة المواد/التغليف لهذا الصنف من نفس مصدر تقرير المبيعات
+            _cost_entry = _by_id.get(pid_ref) or _by_name.get(pname) or {"unit_cost": 0.0, "unit_pkg": 0.0}
+            _mat = _cn(_cost_entry.get("unit_cost")) * qty
+            _pkg = _cn(_cost_entry.get("unit_pkg")) * qty
+            by_app[app_name]["materials_cost"] += _mat
+            by_app[app_name]["packaging_cost"] += _pkg
+            _prod = by_app[app_name]["products"].setdefault(
+                pname, {"quantity": 0, "revenue": 0, "materials_cost": 0, "packaging_cost": 0}
+            )
+            _prod["quantity"] += qty
+            _prod["revenue"] += unit_price * qty
+            _prod["materials_cost"] += _mat
+            _prod["packaging_cost"] += _pkg
             order_items.append({
-                "name": it.get("name") or it.get("product_name") or "صنف",
+                "name": pname,
                 "quantity": qty,
                 "price": unit_price,
                 "discount": it.get("discount", 0) or 0,
@@ -1059,6 +1088,23 @@ async def get_delivery_credits_report(
         # نسبة عرض فعّالة للشركات اليدوية (بلا إعداد نسبة) لتطابق العمولة المعروضة
         if (not data["commission_rate"]) and data["total"] > 0 and data["commission"] > 0:
             data["commission_rate"] = round(data["commission"] / data["total"] * 100, 1)
+        # ⭐ كلفة المواد الإجمالية + تفصيل المنتجات (مرتّب الأعلى كلفة أولاً) للـ drill-down
+        data["total_materials_cost"] = data.get("materials_cost", 0)
+        data["total_packaging_cost"] = data.get("packaging_cost", 0)
+        data["cost_breakdown_by_product"] = dict(
+            sorted(
+                {
+                    name: {
+                        **pv,
+                        "total_cost": pv.get("materials_cost", 0) + pv.get("packaging_cost", 0),
+                    }
+                    for name, pv in data.get("products", {}).items()
+                }.items(),
+                key=lambda x: x[1].get("materials_cost", 0) + x[1].get("packaging_cost", 0),
+                reverse=True,
+            )
+        )
+        data.pop("products", None)
     
     # الإجماليات تُحسب من العمولة المُعاد حسابها (وليست المخزّنة)
     total_all = sum(d["total"] for d in by_app.values())
@@ -1066,6 +1112,8 @@ async def get_delivery_credits_report(
     total_net = total_all - total_commission
     total_collected = sum(collected_by_app.values())
     total_remaining = total_net - total_collected
+    total_materials_cost = sum(d.get("materials_cost", 0) for d in by_app.values())
+    total_packaging_cost = sum(d.get("packaging_cost", 0) for d in by_app.values())
     
     return {
         "total_sales": total_all,  # إجمالي المبيعات قبل الاستقطاع
@@ -1073,6 +1121,8 @@ async def get_delivery_credits_report(
         "net_receivable": total_net,  # صافي المستحق (بعد الاستقطاع)
         "total_collected": total_collected,  # المبلغ المحصل
         "total_remaining": total_remaining,  # المتبقي للتحصيل
+        "total_materials_cost": total_materials_cost,  # كلفة المواد الإجمالية لكل التوصيل
+        "total_packaging_cost": total_packaging_cost,  # كلفة التغليف الإجمالية
         "total_orders": len(orders),
         "by_delivery_app": by_app,
         "collections": delivery_collections

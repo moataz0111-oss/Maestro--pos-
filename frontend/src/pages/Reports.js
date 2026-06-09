@@ -2534,6 +2534,8 @@ const DeliveryReportTab = ({ deliveryCreditsReport, t, formatPrice, fetchReports
     actual_collected: ''
   });
   const [collecting, setCollecting] = useState(false);
+  // ⭐ drill-down كلفة المواد لكل شركة
+  const [companyCostApp, setCompanyCostApp] = useState(null);
   // Drill-down state
   const [showOrdersDialog, setShowOrdersDialog] = useState(false);
   const [ordersDialogApp, setOrdersDialogApp] = useState(null);
@@ -2982,26 +2984,38 @@ const DeliveryReportTab = ({ deliveryCreditsReport, t, formatPrice, fetchReports
                   </div>
                 </div>
                 
-                <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-                  <div className="text-center p-3 bg-blue-500/10 rounded-lg">
-                    <p className="text-xs text-blue-600">{t('المبيعات (قبل الاستقطاع)')}</p>
-                    <p className="text-lg font-bold text-blue-600 tabular-nums">{formatPrice(data.total)}</p>
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2">
+                  <div className="flex items-center justify-between gap-2 px-3 py-2.5 bg-blue-500/10 rounded-lg">
+                    <span className="text-[11px] text-blue-600 whitespace-nowrap">{t('المبيعات (قبل الاستقطاع)')}</span>
+                    <span className="text-sm font-bold text-blue-600 tabular-nums whitespace-nowrap">{formatPrice(data.total)}</span>
                   </div>
-                  <div className="text-center p-3 bg-red-500/10 rounded-lg">
-                    <p className="text-xs text-red-500">{t('العمولة المستقطعة')}</p>
-                    <p className="text-lg font-bold text-red-500 tabular-nums">-{formatPrice(data.commission)}</p>
+                  <button
+                    type="button"
+                    onClick={() => setCompanyCostApp({ name: appName, ...data })}
+                    className="flex items-center justify-between gap-2 px-3 py-2.5 bg-orange-500/10 rounded-lg hover:bg-orange-500/20 transition-colors cursor-pointer"
+                    data-testid={`company-materials-cost-${appName}`}
+                    title={t('اضغط لعرض كلفة المواد لكل منتج لهذه الشركة')}
+                  >
+                    <span className="text-[11px] text-orange-600 whitespace-nowrap flex items-center gap-1">
+                      <Package className="h-3 w-3" />{t('كلفة المواد')}
+                    </span>
+                    <span className="text-sm font-bold text-orange-600 tabular-nums whitespace-nowrap">{formatPrice(data.total_materials_cost != null ? data.total_materials_cost : (data.materials_cost || 0))}</span>
+                  </button>
+                  <div className="flex items-center justify-between gap-2 px-3 py-2.5 bg-red-500/10 rounded-lg">
+                    <span className="text-[11px] text-red-500 whitespace-nowrap">{t('العمولة المستقطعة')}</span>
+                    <span className="text-sm font-bold text-red-500 tabular-nums whitespace-nowrap">-{formatPrice(data.commission)}</span>
                   </div>
-                  <div className="text-center p-3 bg-amber-500/10 rounded-lg">
-                    <p className="text-xs text-amber-600">{t('الصافي (بعد الاستقطاع)')}</p>
-                    <p className="text-lg font-bold text-amber-600 tabular-nums">{formatPrice(data.net_amount)}</p>
+                  <div className="flex items-center justify-between gap-2 px-3 py-2.5 bg-amber-500/10 rounded-lg">
+                    <span className="text-[11px] text-amber-600 whitespace-nowrap">{t('الصافي (بعد الاستقطاع)')}</span>
+                    <span className="text-sm font-bold text-amber-600 tabular-nums whitespace-nowrap">{formatPrice(data.net_amount)}</span>
                   </div>
-                  <div className="text-center p-3 bg-green-500/10 rounded-lg">
-                    <p className="text-xs text-green-600">{t('تم التحصيل')}</p>
-                    <p className="text-lg font-bold text-green-600 tabular-nums">{formatPrice(data.collected_amount || 0)}</p>
+                  <div className="flex items-center justify-between gap-2 px-3 py-2.5 bg-green-500/10 rounded-lg">
+                    <span className="text-[11px] text-green-600 whitespace-nowrap">{t('تم التحصيل')}</span>
+                    <span className="text-sm font-bold text-green-600 tabular-nums whitespace-nowrap">{formatPrice(data.collected_amount || 0)}</span>
                   </div>
-                  <div className="text-center p-3 bg-purple-500/10 rounded-lg">
-                    <p className="text-xs text-purple-600">{t('المتبقي')}</p>
-                    <p className="text-lg font-bold text-purple-600 tabular-nums">{formatPrice(data.remaining_amount != null ? data.remaining_amount : data.net_amount)}</p>
+                  <div className="flex items-center justify-between gap-2 px-3 py-2.5 bg-purple-500/10 rounded-lg">
+                    <span className="text-[11px] text-purple-600 whitespace-nowrap">{t('المتبقي')}</span>
+                    <span className="text-sm font-bold text-purple-600 tabular-nums whitespace-nowrap">{formatPrice(data.remaining_amount != null ? data.remaining_amount : data.net_amount)}</span>
                   </div>
                 </div>
               </div>
@@ -3017,7 +3031,82 @@ const DeliveryReportTab = ({ deliveryCreditsReport, t, formatPrice, fetchReports
         </CardContent>
       </Card>
 
-      {/* سجل التحصيلات */}
+      {/* ⭐ Dialog: تفصيل كلفة المواد لكل منتج لهذه الشركة (drill-down) */}
+      <Dialog open={!!companyCostApp} onOpenChange={() => setCompanyCostApp(null)}>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto" data-testid="company-cost-breakdown-dialog">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Package className="h-5 w-5 text-orange-500" />
+              {t('كلفة المواد حسب مبيع')} — {companyCostApp?.name}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            {(() => {
+              const breakdown = companyCostApp?.cost_breakdown_by_product || {};
+              const entries = Object.entries(breakdown)
+                .filter(([, v]) => (v.materials_cost || 0) > 0)
+                .sort((a, b) => (b[1].materials_cost || 0) - (a[1].materials_cost || 0));
+              const totalMat = entries.reduce((s, [, v]) => s + (v.materials_cost || 0), 0);
+              const totalRev = entries.reduce((s, [, v]) => s + (v.revenue || 0), 0);
+              if (entries.length === 0) {
+                return (
+                  <p className="text-center text-muted-foreground p-6" data-testid="company-cost-empty">
+                    {t('لا توجد بيانات لهذه الفترة')}
+                  </p>
+                );
+              }
+              return (
+                <>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="flex items-center justify-between p-3 rounded-lg bg-blue-500/10 border border-blue-500/20">
+                      <span className="text-sm font-medium text-blue-600">{t('إجمالي المبيعات')}</span>
+                      <span className="text-lg font-bold tabular-nums text-blue-600">{formatPrice(totalRev)}</span>
+                    </div>
+                    <div className="flex items-center justify-between p-3 rounded-lg bg-orange-500/10 border border-orange-500/20" data-testid="company-cost-total">
+                      <span className="text-sm font-medium text-orange-600">{t('إجمالي كلفة المواد')}</span>
+                      <span className="text-lg font-bold tabular-nums text-orange-600">{formatPrice(totalMat)}</span>
+                    </div>
+                  </div>
+                  <div className="rounded-lg border overflow-hidden">
+                    <table className="w-full text-sm">
+                      <thead className="bg-muted/30 text-xs">
+                        <tr>
+                          <th className="p-2 text-right">{t('المنتج')}</th>
+                          <th className="p-2 text-center">{t('الكمية المبيعة')}</th>
+                          <th className="p-2 text-left">{t('المبيعات')}</th>
+                          <th className="p-2 text-left">{t('كلفة المواد')}</th>
+                          <th className="p-2 text-left">%</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {entries.map(([name, v], idx) => {
+                          const val = v.materials_cost || 0;
+                          const pct = totalMat > 0 ? (val / totalMat * 100) : 0;
+                          return (
+                            <tr key={idx} className="border-t hover:bg-muted/20" data-testid={`company-cost-row-${idx}`}>
+                              <td className="p-2 font-medium">{name}</td>
+                              <td className="p-2 text-center tabular-nums">{v.quantity || 0}</td>
+                              <td className="p-2 text-left tabular-nums text-blue-600">{formatPrice(v.revenue || 0)}</td>
+                              <td className="p-2 text-left tabular-nums font-semibold text-orange-600">{formatPrice(val)}</td>
+                              <td className="p-2 text-left tabular-nums text-muted-foreground">{pct.toFixed(1)}%</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              );
+            })()}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCompanyCostApp(null)} data-testid="company-cost-close-btn">
+              {t('إغلاق')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Card className="border-border/50 bg-card">
         <CardHeader>
           <div className="flex items-center justify-between flex-wrap gap-2">

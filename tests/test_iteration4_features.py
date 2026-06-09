@@ -12,7 +12,7 @@ import requests
 import os
 import time
 
-BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://pos-inventory-sync-6.preview.emergentagent.com')
+BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://warehouse-pos-hub-1.preview.emergentagent.com')
 
 class TestAuth:
     """Authentication tests"""

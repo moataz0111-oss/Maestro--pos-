@@ -223,6 +223,34 @@ export const OfflineProvider = ({ children }) => {
     return () => unsubscribe();
   }, []);
 
+  // ⭐ مزامنة دورية احتياطية (إصلاح "محفوظ محلياً - في انتظار المزامنة" العالق):
+  // checkAndSync يعمل فقط عند *تغيّر* حالة الاتصال أو عند الإقلاع. لكن إذا حُفظ الطلب
+  // محلياً بسبب انقطاع لحظي/مهلة طلب (timeout/502 أثناء إقلاع الخادم) دون أن تتغيّر
+  // navigator.onLine، فلن يُعاد تشغيل المزامنة وتبقى الطلبات عالقة لساعات → خطر تكرار يدوي.
+  // الحل: مؤقّت كل 20 ثانية يرفع أي طلبات عالقة تلقائياً طالما يوجد اتصال.
+  // الرفع آمن 100٪: نقطة /sync/orders مُحكمة ضد التكرار عبر offline_id (تُعيد الطلب الموجود).
+  useEffect(() => {
+    if (!isInitialized) return;
+    const RESYNC_INTERVAL = 20 * 1000;
+    const timer = setInterval(async () => {
+      try {
+        if (!isOnline || syncInProgress.current) return;
+        const token = localStorage.getItem('token');
+        if (!token) return;
+        const hasPending = await hasRealPendingOrders();
+        if (hasPending) {
+          console.log('🔁 مزامنة دورية: توجد طلبات عالقة محلياً — جاري الرفع التلقائي...');
+          await performSync();
+        }
+        // تحديث العداد دائماً ليبقى مؤشّر المزامنة دقيقاً
+        await updateSyncStatus();
+      } catch (e) {
+        // صامت — لا نزعج المستخدم بأخطاء المزامنة الخلفية
+      }
+    }, RESYNC_INTERVAL);
+    return () => clearInterval(timer);
+  }, [isInitialized, isOnline, hasRealPendingOrders, performSync, updateSyncStatus]);
+
   // بدء المزامنة يدوياً (للاستخدام من الخارج إذا لزم الأمر)
   const startSync = useCallback(async () => {
     localStorage.removeItem(SYNC_DONE_KEY); // إعادة تعيين

@@ -53,7 +53,7 @@
   ],
   "success_rate": {"backend": "100% (8/8 DUP + 14/14 regression)", "frontend": "code-review only (static); UI live walkthrough not completed due to splash timing"},
   "test_credentials": "admin@maestroegp.com/admin123 worked; backend BASE_URL read from /app/frontend/.env REACT_APP_BACKEND_URL",
-  "seed_data_creation": "Ran /app/backend/seed_captain_test_data.py twice (once for regression, once to leave an OPEN shift behind for the main agent). End-of-run shift=afa3b5e7-2850-4d9f-84b5-146eeb778676 was OPEN after final seed — but DUP tests created several delivery orders against it, so it may show non-zero sales. Re-seed before any further test run.",
+  "seed_data_creation": "Ran /app/backend/seed_captain_test_data.py twice (once for regression, once to leave an OPEN shift behind for the main agent). End-of-run shift=warehouse-pos-hub-1 was OPEN after final seed — but DUP tests created several delivery orders against it, so it may show non-zero sales. Re-seed before any further test run.",
   "retest_needed": true,
   "main_agent_can_self_test": true,
   "context_for_next_testing_agent": "Backend dup-prevention all GREEN. Main outstanding issue: content-fingerprint dedup at server.py:6094-6126 does NOT honour delivery_company_order_id — fix by including it in the hash OR re-validating the matched order's ext_ref before returning it. Frontend code review is sufficient (testid+placeholder+payload wiring confirmed); if live UI is needed, wait at least 7-8 seconds after navigating to /pos so the splash screen finishes before trying to click 'توصيل'. The test file /app/backend/tests/test_dup_delivery_iter219.py is idempotent and can be re-run after re-seeding.",
