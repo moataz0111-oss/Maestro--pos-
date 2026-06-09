@@ -309,8 +309,17 @@ export default function HR() {
     fetchDevices();
   }, []);
 
+  // الجلب عند تغيّر الفلاتر — أول تحميل بمؤشّر، والتغييرات اللاحقة بصمت + debounce
+  // (يمنع إعادة تحميل الصفحة عند كتابة كل رقم في حقل التاريخ/السنة الذي كان يقطع الكتابة)
+  const firstHrLoadRef = useRef(true);
   useEffect(() => {
-    fetchData();
+    if (firstHrLoadRef.current) {
+      firstHrLoadRef.current = false;
+      fetchData();
+      return;
+    }
+    const tid = setTimeout(() => fetchData(true), 600);
+    return () => clearTimeout(tid);
   }, [selectedBranchId, selectedMonth, dateMode, startDate, endDate, selectedYear, isOffline]);
 
   // تنظيف الخصومات المكررة القديمة تلقائياً وبصمت عند فتح الصفحة (مرة واحدة)
@@ -1297,7 +1306,11 @@ export default function HR() {
       toast.success(res.data?.message || t('تم تصفير أرصدة الأشهر السابقة'));
       fetchData();
     } catch (error) {
-      showApiError(error, t('فشل تصفير أرصدة الأشهر السابقة'));
+      if (error?.response?.status === 404) {
+        toast.error(t('الخادم لم يُحدَّث بعد (404). يرجى التأكد من اكتمال النشر عبر Save to Github ثم إعادة المحاولة'));
+      } else {
+        showApiError(error, t('فشل تصفير أرصدة الأشهر السابقة'));
+      }
     }
   };
 
@@ -2266,8 +2279,8 @@ export default function HR() {
                     <span className="text-xs text-muted-foreground">{t('من')}</span>
                     <Input
                       type="date"
-                      value={startDate}
-                      onChange={(e) => setStartDate(e.target.value)}
+                      defaultValue={startDate}
+                      onChange={(e) => { if (e.target.value) setStartDate(e.target.value); }}
                       className="w-36 h-10"
                       data-testid="start-date-picker"
                     />
@@ -2276,8 +2289,8 @@ export default function HR() {
                     <span className="text-xs text-muted-foreground">{t('إلى')}</span>
                     <Input
                       type="date"
-                      value={endDate}
-                      onChange={(e) => setEndDate(e.target.value)}
+                      defaultValue={endDate}
+                      onChange={(e) => { if (e.target.value) setEndDate(e.target.value); }}
                       className="w-36 h-10"
                       data-testid="end-date-picker"
                     />

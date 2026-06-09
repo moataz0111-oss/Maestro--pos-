@@ -98,7 +98,11 @@ jobs:
           # تحديث Backend (يُبنى محلياً — خفيف، وطبقات pip تُكاش)
           # =============================================
           echo "📦 تحديث Backend..."
-          DOCKER_BUILDKIT=1 docker build -t maestro_backend:new ./backend
+          # 🔴 إن فشل بناء الـBackend، أوقف النشر فوراً بدل إبقاء النسخة القديمة بصمت
+          if ! DOCKER_BUILDKIT=1 docker build -t maestro_backend:new ./backend; then
+            echo "❌ فشل بناء صورة الـBackend — تم إيقاف النشر. النسخة القديمة ما زالت تعمل."
+            exit 1
+          fi
           docker stop backend 2>/dev/null || true
           docker rm backend 2>/dev/null || true
           docker tag maestro_backend:new maestro_backend:latest
@@ -159,6 +163,17 @@ jobs:
             echo "✅ النشر نجح!"
           else
             echo "⚠️ تحذير: قد يحتاج وقت للبدء"
+          fi
+
+          # 🔎 التحقق من أن الكود الجديد فعلاً على الخادم (المسار يجب أن يرجع 401/403 لا 404)
+          echo ""
+          echo "🔎 التحقق من تحديث الـBackend..."
+          RESET_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST "http://127.0.0.1/api/advances/reset-before-month?month=2026-01")
+          if [ "$RESET_CODE" = "404" ]; then
+            echo "❌ الـBackend لم يُحدَّث (المسار الجديد غير موجود — 404). تحقّق من بناء الحاوية."
+            exit 1
+          else
+            echo "✅ الـBackend محدَّث (المسار الجديد موجود — رمز $RESET_CODE)."
           fi
 
           # تنظيف
