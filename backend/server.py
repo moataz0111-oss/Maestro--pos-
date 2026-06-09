@@ -474,16 +474,26 @@ async def init_database():
 @app.on_event("startup")
 async def startup_event():
     """يتم تشغيله عند بدء التطبيق.
-    يبقى خفيفاً جداً: تهيئة الحسابات/الفهارس الأساسية فقط، ثم يفتح uvicorn المنفذ فوراً.
-    كل الترحيلات الثقيلة (التي تمرّ على كامل قاعدة البيانات) تُؤجَّل للخلفية عبر
-    asyncio.create_task لتفادي تعليق الإقلاع وخطأ 502 Bad Gateway على الإنتاج."""
+    محصّن بالكامل: لا يُسمح لأي خطأ في التهيئة بإسقاط الخادم (يمنع crash-loop/502 على الإنتاج).
+    يبقى خفيفاً: تهيئة الحسابات/الفهارس الأساسية فقط، ثم يفتح uvicorn المنفذ فوراً.
+    كل الترحيلات الثقيلة تُؤجَّل للخلفية عبر asyncio.create_task."""
     logger.info("🚀 Starting Maestro EGP API...")
     # أساسي وخفيف: تهيئة الحسابات والفروع والفهارس (لازم لتسجيل الدخول فوراً)
-    await init_database()
-    await seed_default_backgrounds()
+    # محاط بـ try/except حتى لا يُسقط أي خطأ في قاعدة البيانات إقلاعَ الخادم
+    try:
+        await init_database()
+    except Exception as e:
+        logger.error(f"❌ init_database failed at startup (continuing anyway): {e}")
+    try:
+        await seed_default_backgrounds()
+    except Exception as e:
+        logger.error(f"❌ seed_default_backgrounds failed at startup (continuing anyway): {e}")
 
     # تأجيل كل الترحيلات الثقيلة للخلفية (لا تحجب فتح المنفذ ولا فحص الصحة)
-    asyncio.create_task(_run_deferred_startup_tasks())
+    try:
+        asyncio.create_task(_run_deferred_startup_tasks())
+    except Exception as e:
+        logger.error(f"❌ Failed to schedule deferred startup tasks (continuing anyway): {e}")
 
     logger.info("✅ Application started successfully (heavy migrations deferred to background)")
 

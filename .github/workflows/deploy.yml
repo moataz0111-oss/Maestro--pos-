@@ -66,7 +66,6 @@ jobs:
     #    → يُلغي فشل/نفاد ذاكرة الـVPS أثناء pip install
     # =============================================
     - name: 🏗️ Build & push backend image
-      continue-on-error: true
       uses: docker/build-push-action@v6
       with:
         context: ./backend
@@ -87,13 +86,14 @@ jobs:
         GHCR_USER: ${{ github.actor }}
         FRONTEND_IMAGE: ${{ steps.img.outputs.name }}
         BACKEND_IMAGE: ${{ steps.img.outputs.backend }}
+        GIT_SHA: ${{ github.sha }}
       with:
         host: 158.220.118.54
         username: root
         key: ${{ secrets.VPS_SSH_KEY }}
         port: 22
         command_timeout: 60m
-        envs: GHCR_TOKEN,GHCR_USER,FRONTEND_IMAGE,BACKEND_IMAGE
+        envs: GHCR_TOKEN,GHCR_USER,FRONTEND_IMAGE,BACKEND_IMAGE,GIT_SHA
         script: |
           echo "🚀 بدء النشر..."
           cd /var/www/maestro
@@ -140,8 +140,15 @@ jobs:
           # =============================================
           # تحديث Backend — لا نُوقف القديمة إلا عند نجاح سحب الجديدة (يضمن عدم توقف الموقع)
           # =============================================
-          echo "📦 تحديث Backend (سحب صورة جاهزة من GHCR)..."
-          if docker pull "$BACKEND_IMAGE:latest"; then
+          echo "📦 تحديث Backend (سحب صورة هذا الإصدار بالـSHA من GHCR)..."
+          BK_TAG="$BACKEND_IMAGE:$GIT_SHA"
+          if ! docker pull "$BK_TAG"; then
+            echo "⚠️ صورة الـSHA غير موجودة (قد يكون البناء فشل) — محاولة :latest"
+            BK_TAG="$BACKEND_IMAGE:latest"
+            docker pull "$BK_TAG" || BK_TAG=""
+          fi
+          if [ -n "$BK_TAG" ]; then
+            echo "🚀 تشغيل الـBackend من: $BK_TAG"
             docker stop backend 2>/dev/null || true
             docker rm backend 2>/dev/null || true
             docker run -d --name backend --restart unless-stopped \
@@ -149,7 +156,7 @@ jobs:
               -v /var/www/maestro/uploads:/app/uploads \
               -e MONGO_URL="mongodb://maestro-mongodb:27017" \
               -e DB_NAME="maestro_db" \
-              "$BACKEND_IMAGE:latest"
+              "$BK_TAG"
             sleep 10
           else
             echo "⚠️ تعذّر سحب صورة الـBackend — الإبقاء على النسخة الحالية. الموقع يبقى يعمل."
