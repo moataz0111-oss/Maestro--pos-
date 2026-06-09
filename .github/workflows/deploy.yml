@@ -6,10 +6,11 @@ on:
   workflow_dispatch:
 
 # 🔒 قفل تزامن: نشر واحد فقط في كل مرة.
-# أي نشر جديد يُلغي النشر القديم العالق تلقائياً → يمنع تزاحم عدة عمليات بناء.
+# ⚠️ لا نُلغي النشر الجاري (cancel-in-progress=false) لأن إلغاءه في منتصف إعادة تشغيل
+#    الحاويات (بعد إيقاف nginx وقبل تشغيله) كان يُسقط الموقع. الآن تُصطفّ عمليات النشر بالتتابع.
 concurrency:
   group: deploy-maestro-vps
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 # 🟢 فرض تشغيل جميع إجراءات JavaScript على Node.js 24 → يُزيل تحذير إهمال Node 20 نهائياً من اللوق
 env:
