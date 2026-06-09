@@ -161,7 +161,35 @@ async def get_deductions(
     
     return deductions
 
-# ==================== RESET DEDUCTIONS (Owner only, once per month, after 15th of next month) ====================
+@router.post("/deductions/cleanup-duplicates")
+async def cleanup_duplicate_deductions(current_user: dict = Depends(get_current_user)):
+    """تنظيف الخصومات التلقائية المكررة (نفس الموظف+اليوم+النوع) — يبقي الأقدم ويحذف الباقي.
+    إصلاح بيانات قديمة نتجت قبل جعل مزامنة البصمة idempotent."""
+    db = get_database()
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.MANAGER, UserRole.SUPER_ADMIN]:
+        raise HTTPException(status_code=403, detail="غير مصرح")
+
+    query = build_tenant_query(current_user)
+    query["created_by"] = "system"
+    deductions = await db.deductions.find(query).sort("created_at", 1).to_list(10000)
+
+    seen = {}
+    to_delete = []
+    for d in deductions:
+        key = (d.get("employee_id"), d.get("date"), d.get("deduction_type"))
+        if key in seen:
+            to_delete.append(d["id"])
+        else:
+            seen[key] = d["id"]
+
+    removed = 0
+    if to_delete:
+        res = await db.deductions.delete_many({"id": {"$in": to_delete}})
+        removed = res.deleted_count
+
+    return {"removed": removed, "kept": len(seen), "message": f"تم حذف {removed} خصم مكرر"}
+
+
 @router.get("/deductions/reset-eligibility")
 async def check_deductions_reset_eligibility(current_user: dict = Depends(get_current_user)):
     """فحص إذا كان المالك يستطيع تصفير الخصومات الآن"""

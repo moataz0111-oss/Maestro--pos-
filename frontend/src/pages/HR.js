@@ -80,6 +80,7 @@ import {
   Camera,
   Upload,
   RefreshCw,
+  Bell,
   Calculator
 } from 'lucide-react';
 import { toast, Toaster } from 'sonner';
@@ -213,7 +214,8 @@ export default function HR() {
   const [employeeForm, setEmployeeForm] = useState({
     name: '', name_en: '', phone: '', email: '', national_id: '', position: '', department: '',
     branch_id: '', hire_date: '', salary: '', salary_type: 'monthly', work_hours_per_day: 8,
-    shift_start: '09:00', shift_end: '17:00', break_start: '', break_end: '', work_days: [0, 1, 2, 3, 4, 5]
+    shift_start: '09:00', shift_end: '17:00', break_start: '', break_end: '', work_days: [0, 1, 2, 3, 4, 5],
+    is_general_manager: false
   });
   const [attendanceForm, setAttendanceForm] = useState({
     employee_id: '', date: new Date().toISOString().slice(0, 10), check_in: '', check_out: '', status: 'present', notes: ''
@@ -790,7 +792,7 @@ export default function HR() {
       name: '', phone: '', email: '', national_id: '', position: '', department: '',
       branch_id: '', hire_date: '', salary: '', salary_type: 'monthly', work_hours_per_day: 8,
       shift_start: '09:00', shift_end: '17:00', break_start: '', break_end: '', work_days: [0, 1, 2, 3, 4, 5],
-      biometric_uid: ''
+      biometric_uid: '', is_general_manager: false
     });
   };
 
@@ -1127,6 +1129,53 @@ export default function HR() {
       showApiError(error, t('فشل في فحص الأهلية'));
     }
   };
+
+  // تنظيف الخصومات التلقائية المكررة (إصلاح بيانات قديمة)
+  const handleCleanupDuplicateDeductions = async () => {
+    if (!window.confirm(t('سيتم حذف الخصومات التلقائية المكررة (نفس الموظف واليوم) والإبقاء على واحدة فقط. متابعة؟'))) return;
+    try {
+      const token = localStorage.getItem('token');
+      const res = await axios.post(`${API}/deductions/cleanup-duplicates`, {}, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      toast.success(res.data?.message || t('تم تنظيف الخصومات المكررة'));
+      fetchData();
+    } catch (error) {
+      showApiError(error, t('فشل تنظيف الخصومات المكررة'));
+    }
+  };
+
+  // تصفير رصيد السلف لموظف (لمسح أرصدة الشهور السابقة/التجريبية مثل حساب الأونر)
+  const handleResetAdvances = async (emp) => {
+    if (!window.confirm(t('سيتم تصفير رصيد السلف المتبقي لـ') + ` "${emp.name}" ` + t('إلى صفر. متابعة؟'))) return;
+    try {
+      const token = localStorage.getItem('token');
+      const res = await axios.post(`${API}/employees/${emp.id}/reset-advances`, {}, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      toast.success(res.data?.message || t('تم تصفير رصيد السلف'));
+      fetchData();
+    } catch (error) {
+      showApiError(error, t('فشل تصفير رصيد السلف'));
+    }
+  };
+
+  // تصفير أرصدة السلف لكل الأشهر السابقة (بدء الاحتساب من الشهر المحدد) — استثناء الشهور التجريبية
+  const handleResetPreviousAdvances = async () => {
+    if (!window.confirm(t('سيتم تصفير جميع أرصدة السلف للأشهر السابقة وبدء الاحتساب من الشهر') + ` ${selectedMonth}. ` + t('متابعة؟'))) return;
+    try {
+      const token = localStorage.getItem('token');
+      const res = await axios.post(`${API}/advances/reset-before-month?month=${selectedMonth}`, {}, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      toast.success(res.data?.message || t('تم تصفير أرصدة الأشهر السابقة'));
+      fetchData();
+    } catch (error) {
+      showApiError(error, t('فشل تصفير أرصدة الأشهر السابقة'));
+    }
+  };
+
+
 
   // تنفيذ تصفير الخصومات (حذف نهائي)
   const handleConfirmResetDeductions = async () => {
@@ -1619,7 +1668,9 @@ export default function HR() {
     pendingAdvances: advances.filter(a => a.status === 'approved' && a.remaining_amount > 0).reduce((sum, a) => sum + a.remaining_amount, 0),
     monthlyDeductions: deductions.reduce((sum, d) => sum + d.amount, 0),
     monthlyBonuses: bonuses.reduce((sum, b) => sum + b.amount, 0),
-    netPayable: payrollSummary?.totals?.net_payable || 0
+    netPayable: payrollSummary?.totals?.net_payable || 0,
+    paidAmount: payrollSummary?.totals?.paid_amount || 0,
+    remaining: payrollSummary?.totals?.remaining != null ? payrollSummary.totals.remaining : (payrollSummary?.totals?.net_payable || 0)
   };
 
   const filteredEmployees = employees.filter(e => 
@@ -2045,7 +2096,7 @@ export default function HR() {
 
       {/* Stats */}
       <div className="container mx-auto px-4 py-6">
-        <div className="grid grid-cols-2 md:grid-cols-6 gap-4 mb-6">
+        <div className="grid grid-cols-2 md:grid-cols-7 gap-4 mb-6">
           <Card className="bg-blue-500/10 border-blue-500/20">
             <CardContent className="p-4 text-center">
               <Users className="h-8 w-8 text-blue-500 mx-auto mb-2" />
@@ -2100,6 +2151,13 @@ export default function HR() {
               <p className="text-sm text-muted-foreground">{t('المستحقات')}</p>
             </CardContent>
           </Card>
+          <Card className="bg-purple-500/10 border-purple-500/20" data-testid="top-card-paid">
+            <CardContent className="p-4 text-center">
+              <Banknote className="h-8 w-8 text-purple-500 mx-auto mb-2" />
+              <p className="text-lg font-bold text-purple-500">{formatPrice(stats.paidAmount)}</p>
+              <p className="text-sm text-muted-foreground">{t('الدفعات المصروفة')}</p>
+            </CardContent>
+          </Card>
         </div>
 
         {/* Tabs */}
@@ -2131,9 +2189,6 @@ export default function HR() {
               {filteredOvertimeRequests.filter(r => r.status === 'pending').length > 0 && (
                 <Badge className="bg-orange-500/20 text-orange-500 text-xs">{filteredOvertimeRequests.filter(r => r.status === 'pending').length}</Badge>
               )}
-            </TabsTrigger>
-            <TabsTrigger value="payroll" className="flex items-center gap-2">
-              <FileText className="h-4 w-4" /> {t('كشوفات الرواتب')}
             </TabsTrigger>
             <TabsTrigger value="ratings" className="flex items-center gap-2">
               <Award className="h-4 w-4" /> {t('تقييم الموظفين')}
@@ -2310,6 +2365,18 @@ export default function HR() {
                             ))}
                           </div>
                         </div>
+                        {/* 👑 مدير عام / أونر */}
+                        <div className="flex items-center justify-between rounded-lg border border-amber-300 bg-amber-50/50 p-3">
+                          <div>
+                            <Label className="font-semibold text-amber-700">{t('مدير عام / أونر')}</Label>
+                            <p className="text-xs text-muted-foreground">{t('لا يُحتسب عليه الحضور أو السلف أو الخصومات التلقائية')}</p>
+                          </div>
+                          <Switch
+                            checked={!!employeeForm.is_general_manager}
+                            onCheckedChange={(v) => setEmployeeForm({...employeeForm, is_general_manager: v})}
+                            data-testid="gm-switch"
+                          />
+                        </div>
                         <div className="flex justify-end gap-2">
                           <Button type="button" variant="outline" onClick={() => setEmployeeDialogOpen(false)}>{t('إلغاء')}</Button>
                           <Button type="submit">{editingEmployee ? t('تحديث') : t('إضافة')}</Button>
@@ -2347,6 +2414,9 @@ export default function HR() {
                                 </div>
                               )}
                               {emp.name}
+                              {emp.is_general_manager && (
+                                <Badge className="bg-amber-500/15 text-amber-700 border-amber-300 mr-1" data-testid={`gm-badge-${emp.id}`}>{t('مدير عام')}</Badge>
+                              )}
                             </div>
                           </td>
                           <td className="p-3">{emp.phone}</td>
@@ -2394,12 +2464,18 @@ export default function HR() {
                                   shift_start: emp.shift_start || '09:00', shift_end: emp.shift_end || '17:00',
                                   break_start: emp.break_start || '', break_end: emp.break_end || '',
                                   work_days: emp.work_days || [0,1,2,3,4,5],
-                                  biometric_uid: emp.biometric_uid || ''
+                                  biometric_uid: emp.biometric_uid || '',
+                                  is_general_manager: !!emp.is_general_manager
                                 });
                                 setEmployeeDialogOpen(true);
                               }} title={t('تعديل')}>
                                 <Edit className="h-4 w-4" />
                               </Button>
+                              {hasRole(['admin', 'super_admin', 'manager']) && (
+                                <Button size="sm" variant="outline" className="border-amber-300 text-amber-600 hover:bg-amber-50" onClick={() => handleResetAdvances(emp)} title={t('تصفير رصيد السلف')} data-testid={`reset-advances-${emp.id}`}>
+                                  <RefreshCw className="h-4 w-4" />
+                                </Button>
+                              )}
                               <Button size="sm" variant="destructive" onClick={() => handleDeleteEmployee(emp.id)} title={t('حذف')}>
                                 <Trash2 className="h-4 w-4" />
                               </Button>
@@ -2423,6 +2499,9 @@ export default function HR() {
                   {t('تقرير الرواتب الشامل')} - {dateMode === 'year' ? selectedYear : dateMode === 'custom' ? `${startDate} → ${endDate}` : selectedMonth}
                 </CardTitle>
                 <div className="flex gap-2">
+                  <Button variant="outline" onClick={bulkCalculatePayroll} data-testid="bulk-calc-payroll">
+                    <Calculator className="h-4 w-4 ml-2" /> {t('احتساب الرواتب بالجملة')}
+                  </Button>
                   <Button onClick={() => window.print()}>
                     <Printer className="h-4 w-4 ml-2" /> {t('طباعة')}
                   </Button>
@@ -2494,8 +2573,23 @@ export default function HR() {
                           {payrollSummary.employees?.map((emp, idx) => (
                             <tr key={emp.id} className="border-b hover:bg-muted/30">
                               <td className="p-3">{idx + 1}</td>
-                              <td className="p-3 font-medium">{emp.name}</td>
-                              <td className="p-3">{emp.branch_name}</td>
+                              <td className="p-3 font-medium">
+                                <div className="flex items-center gap-1.5">
+                                  {emp.name}
+                                  {emp.is_general_manager && (
+                                    <Badge className="bg-amber-500/15 text-amber-700 border-amber-300 text-[10px]">{t('مدير عام')}</Badge>
+                                  )}
+                                  {(emp.pending_advances || 0) > 0 && (
+                                    <span
+                                      className="inline-flex items-center gap-1 text-[10px] text-orange-600 bg-orange-500/10 border border-orange-300 rounded-full px-1.5 py-0.5"
+                                      title={t('سلف معلّقة (رصيد متبقٍّ)')}
+                                      data-testid={`pending-advance-notice-${emp.id}`}
+                                    >
+                                      <Bell className="h-3 w-3" /> {t('سلفة معلّقة')}: {formatPrice(emp.pending_advances)}
+                                    </span>
+                                  )}
+                                </div>
+                              </td>
                               <td className="p-3">{emp.position}</td>
                               <td className="p-3">{formatPrice(emp.basic_salary)}</td>
                               <td className="p-3 text-green-600">{formatPrice(emp.bonuses)}</td>
@@ -2505,20 +2599,40 @@ export default function HR() {
                               <td className="p-3 text-purple-600 font-medium" data-testid={`paid-${emp.id}`}>{formatPrice(emp.paid_amount || 0)}</td>
                               <td className="p-3 text-cyan-700 font-bold" data-testid={`remaining-${emp.id}`}>{formatPrice(emp.remaining != null ? emp.remaining : emp.net_payable)}</td>
                               <td className="p-3">
-                                <div className="flex gap-1">
-                                  <Button 
-                                    size="sm" 
-                                    variant="outline"
-                                    onClick={() => {
-                                      const fullEmp = employees.find(x => x.id === emp.id) || emp;
-                                      openAccountStatement(fullEmp);
-                                    }}
-                                    title={t('كشف حساب')}
-                                    data-testid={`statement-from-summary-${emp.id}`}
-                                  >
-                                    <FileText className="h-4 w-4" />
-                                  </Button>
-                                </div>
+                                {(() => {
+                                  const pay = filteredPayrolls.find(p => p.employee_id === emp.id);
+                                  const fullEmp = employees.find(x => x.id === emp.id) || emp;
+                                  return (
+                                    <div className="flex items-center gap-1 flex-wrap">
+                                      {pay ? (
+                                        <>
+                                          {getPayrollStatusBadge(pay.status)}
+                                          {pay.status !== 'paid' && (
+                                            <Button size="sm" onClick={() => payPayroll(pay.id)} data-testid={`pay-${emp.id}`} title={t('صرف')}>
+                                              <Banknote className="h-4 w-4 ml-1" /> {t('صرف')}
+                                            </Button>
+                                          )}
+                                          <Button size="sm" variant="outline" onClick={() => window.open(`/payroll/print/${pay.id}`, '_blank')} title={t('طباعة الكشف')} data-testid={`print-payslip-${emp.id}`}>
+                                            <Printer className="h-4 w-4" />
+                                          </Button>
+                                        </>
+                                      ) : (
+                                        <Button size="sm" variant="outline" onClick={() => calculatePayroll(emp.id)} data-testid={`calc-payroll-${emp.id}`} title={t('حساب الراتب')}>
+                                          <Calculator className="h-4 w-4 ml-1" /> {t('حساب الراتب')}
+                                        </Button>
+                                      )}
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() => openAccountStatement(fullEmp)}
+                                        title={t('كشف حساب')}
+                                        data-testid={`statement-from-summary-${emp.id}`}
+                                      >
+                                        <FileText className="h-4 w-4" />
+                                      </Button>
+                                    </div>
+                                  );
+                                })()}
                               </td>
                             </tr>
                           ))}
@@ -2836,9 +2950,21 @@ export default function HR() {
           {/* Advances Tab */}
           <TabsContent value="advances">
             <Card>
-              <CardHeader className="flex flex-row items-center justify-between">
+              <CardHeader className="flex flex-row items-center justify-between flex-wrap gap-2">
                 <CardTitle>{t('السلف')}</CardTitle>
-                <Dialog open={advanceDialogOpen} onOpenChange={setAdvanceDialogOpen}>
+                <div className="flex items-center gap-2">
+                  {hasRole(['admin', 'super_admin', 'manager']) && (
+                    <Button
+                      variant="outline"
+                      className="border-amber-300 text-amber-600 hover:bg-amber-50"
+                      onClick={handleResetPreviousAdvances}
+                      data-testid="reset-previous-advances-btn"
+                      title={t('تصفير أرصدة السلف للأشهر السابقة وبدء الاحتساب من الشهر المحدد')}
+                    >
+                      <RefreshCw className="h-4 w-4 ml-2" /> {t('بدء الاحتساب من')} {selectedMonth}
+                    </Button>
+                  )}
+                  <Dialog open={advanceDialogOpen} onOpenChange={setAdvanceDialogOpen}>
                   <DialogTrigger asChild>
                     <Button><Plus className="h-4 w-4 ml-2" /> {t('سلفة جديدة')}</Button>
                   </DialogTrigger>
@@ -2875,6 +3001,7 @@ export default function HR() {
                     </form>
                   </DialogContent>
                 </Dialog>
+                </div>
               </CardHeader>
               <CardContent>
                 <div className="overflow-x-auto">
@@ -2917,6 +3044,17 @@ export default function HR() {
               <CardHeader className="flex flex-row items-center justify-between flex-wrap gap-2">
                 <CardTitle>{t('الخصومات')} - {dateLabel}</CardTitle>
                 <div className="flex items-center gap-2">
+                  {/* زر تنظيف الخصومات المكررة (إصلاح بيانات قديمة) */}
+                  {hasRole(['admin', 'super_admin', 'manager']) && (
+                    <Button
+                      variant="outline"
+                      onClick={handleCleanupDuplicateDeductions}
+                      data-testid="cleanup-dup-deductions-btn"
+                      className="border-amber-300 text-amber-600 hover:bg-amber-50"
+                    >
+                      <RefreshCw className="h-4 w-4 ml-2" /> {t('تنظيف المكرر')}
+                    </Button>
+                  )}
                   {/* زر تصفير الخصومات - للمالك فقط */}
                   {hasRole(['admin', 'super_admin']) && (
                     <Button
@@ -3353,118 +3491,6 @@ export default function HR() {
           </TabsContent>
 
           {/* Payroll Tab */}
-          <TabsContent value="payroll">
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between flex-wrap gap-2">
-                <CardTitle>{t('كشوفات الرواتب')} - {dateLabel}</CardTitle>
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="default"
-                    size="sm"
-                    className="gap-2"
-                    onClick={bulkCalculatePayroll}
-                    disabled={bulkCalculating}
-                    data-testid="bulk-calculate-payroll-btn"
-                  >
-                    {bulkCalculating ? (
-                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    ) : (
-                      <Calculator className="h-4 w-4" />
-                    )}
-                    {t('احتساب الرواتب بالجملة')}
-                  </Button>
-                  <Badge className="bg-primary/10 text-primary" data-testid="payroll-count-badge">
-                    {filteredPayrolls.length} {t('كشف')} / {employees.length} {t('موظف')}
-                  </Badge>
-                </div>
-              </CardHeader>
-              <CardContent>
-                {employees.length === 0 ? (
-                  <div className="text-center py-8 text-muted-foreground">
-                    <Users className="h-12 w-12 mx-auto mb-3 opacity-30" />
-                    <p>{t('لا يوجد موظفون في هذا الفرع')}</p>
-                  </div>
-                ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="border-b">
-                        <th className="text-right p-3">{t('الموظف')}</th>
-                        <th className="text-right p-3">{t('الراتب الأساسي')}</th>
-                        <th className="text-right p-3">{t('الخصومات')}</th>
-                        <th className="text-right p-3">{t('المكافآت')}</th>
-                        <th className="text-right p-3">{t('استقطاع السلف')}</th>
-                        <th className="text-right p-3">{t('صافي الراتب')}</th>
-                        <th className="text-right p-3 text-purple-600">{t('مدفوع نقداً')}</th>
-                        <th className="text-right p-3 text-cyan-600">{t('المتبقي')}</th>
-                        <th className="text-right p-3">{t('الحالة')}</th>
-                        <th className="text-right p-3">{t('الإجراءات')}</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {employees.map(emp => {
-                        // ابحث عن كشف راتب محفوظ لهذا الموظف في الشهر الحالي
-                        const pay = filteredPayrolls.find(p => p.employee_id === emp.id);
-                        if (pay) {
-                          return (
-                            <tr key={pay.id} className="border-b hover:bg-muted/50" data-testid={`payroll-row-${pay.id}`}>
-                              <td className="p-3 font-medium">{pay.employee_name}</td>
-                              <td className="p-3">{formatPrice(pay.basic_salary)}</td>
-                              <td className="p-3 text-red-500">-{formatPrice(pay.total_deductions)}</td>
-                              <td className="p-3 text-green-500">+{formatPrice(pay.total_bonuses)}</td>
-                              <td className="p-3 text-yellow-500">-{formatPrice(pay.advance_deduction)}</td>
-                              <td className="p-3 font-bold">{formatPrice(pay.net_salary)}</td>
-                              <td className="p-3 text-purple-600 font-medium" data-testid={`payslip-paid-${pay.id}`}>{formatPrice(pay.paid_amount || 0)}</td>
-                              <td className="p-3 text-cyan-700 font-bold" data-testid={`payslip-remaining-${pay.id}`}>{formatPrice(pay.remaining != null ? pay.remaining : pay.net_salary)}</td>
-                              <td className="p-3">{getPayrollStatusBadge(pay.status)}</td>
-                              <td className="p-3">
-                                <div className="flex gap-2">
-                                  {pay.status !== 'paid' && (
-                                    <Button size="sm" onClick={() => payPayroll(pay.id)}>
-                                      <Banknote className="h-4 w-4 ml-2" /> {t('صرف')}
-                                    </Button>
-                                  )}
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={() => window.open(`/payroll/print/${pay.id}`, '_blank')}
-                                  >
-                                    <Printer className="h-4 w-4" />
-                                  </Button>
-                                </div>
-                              </td>
-                            </tr>
-                          );
-                        }
-                        // لم يُنشأ كشف راتب بعد — أظهر صفاً مع زر "حساب الراتب"
-                        return (
-                          <tr key={emp.id} className="border-b hover:bg-muted/50 bg-muted/20" data-testid={`payroll-pending-${emp.id}`}>
-                            <td className="p-3 font-medium">{emp.name}</td>
-                            <td className="p-3">{formatPrice(emp.salary || 0)}</td>
-                            <td className="p-3 text-muted-foreground">-</td>
-                            <td className="p-3 text-muted-foreground">-</td>
-                            <td className="p-3 text-muted-foreground">-</td>
-                            <td className="p-3 text-muted-foreground italic">{t('لم يُحسب')}</td>
-                            <td className="p-3 text-muted-foreground">-</td>
-                            <td className="p-3 text-muted-foreground">-</td>
-                            <td className="p-3">
-                              <Badge variant="outline" className="text-muted-foreground">{t('بانتظار الإنشاء')}</Badge>
-                            </td>
-                            <td className="p-3">
-                              <Button size="sm" variant="outline" onClick={() => calculatePayroll(emp.id)} data-testid={`calc-payroll-${emp.id}`}>
-                                <Calculator className="h-4 w-4 ml-2" /> {t('حساب الراتب')}
-                              </Button>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
 
           {/* Biometric Devices Tab */}
           <TabsContent value="biometric">

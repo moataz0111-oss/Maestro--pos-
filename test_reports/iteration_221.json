@@ -1,0 +1,43 @@
+{
+  "summary": "Merged-payroll UI verification PASSED. The separate 'كشوفات الرواتب' tab is removed; only 10 tabs remain (الموظفين / تقرير الرواتب / الكشف اليومي / الحضور / السلف / الخصومات / المكافآت / الأوقات الإضافية / تقييم الموظفين / أجهزة البصمة). The top dashboard now exposes a 7th card 'الدفعات المصروفة' (data-testid=top-card-paid). Inside 'تقرير الرواتب' the report cards include 'الدفعات المصروفة' and 'المتبقي للموظفين' and the table has مدفوع نقداً / المتبقي columns with paid-/remaining- testids. The actions column correctly switches state per employee: when no payslip exists → calc-payroll-{employeeId} ('حساب الراتب'); after creating via the معاينة كشف الراتب dialog → status badge + pay-{employeeId} ('صرف') + print-payslip-{employeeId} ('طباعة الكشف'). End-to-end flow verified for موظف 1 (emp c2420786-…): clicked calc-payroll → preview dialog opened → 'إنشاء كشف الراتب' created the payslip → row showed مسودة badge + صرف + print → clicked صرف (window.confirm auto-accepted) → status badge flipped to 'تم الصرف' and the pay button disappeared (print stays). Header bulk-calc-payroll button is present, enabled, and after click it created the missing payslip for موظف 2 (calc-payroll button gone). The 'كشف حساب' (statement-from-summary-{id}) button is still rendered for every row. No JS console errors related to the merged UI; only pre-existing realtime-broker ERR_CONNECTION_REFUSED noise (carry-over from iteration 220). Layout is one unified payroll page as requested.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "HR header — connection broker badge", "issue": "Badge stays 'الوسيط غير متصل' and the console keeps logging ERR_CONNECTION_REFUSED for the realtime websocket. REST endpoints work fine, no functional impact. Carry-over from prior iterations.", "selector": "header status badge", "priority": "LOW"},
+      {"component": "HR header — branch selector label", "issue": "Branch combobox still renders the count badge concatenated as 'جميع الفروع1212'. Cosmetic only.", "selector": "[data-testid='branch-selector']", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "verified_features": {
+    "Tabs list no longer contains 'كشوفات الرواتب'": "PASS (only 10 tabs, no payslips tab)",
+    "'تقرير الرواتب' tab present": "PASS",
+    "Top dashboard 7th card 'الدفعات المصروفة' (top-card-paid)": "PASS",
+    "Report cards 'الدفعات المصروفة' (card-total-paid) + 'المتبقي للموظفين'": "PASS",
+    "Table columns مدفوع نقداً / المتبقي with paid-/remaining- testids": "PASS",
+    "Actions column 'حساب الراتب' calc-payroll-{empId} for employee w/o payslip": "PASS (2 buttons rendered for موظف 1 + موظف 2)",
+    "Calc opens 'معاينة كشف الراتب' dialog with salary breakdown": "PASS",
+    "'إنشاء كشف الراتب' creates the payslip": "PASS",
+    "After creation: status badge + pay-{empId} (صرف) + print-payslip-{empId}": "PASS",
+    "Clicking 'صرف' flips status to paid (badge → 'تم الصرف', pay button disappears)": "PASS",
+    "Header bulk-calc-payroll button present, clickable, generates missing payslips": "PASS",
+    "'كشف حساب' statement-from-summary-{id} still rendered for every row": "PASS",
+    "No critical console errors / layout intact": "PASS"
+  },
+  "test_report_links": [],
+  "action_items": [
+    "(LOW/cosmetic) Investigate realtime-broker websocket — badge stays 'الوسيط غير متصل' and console is spammed with ERR_CONNECTION_REFUSED.",
+    "(LOW/cosmetic) Fix branch selector label rendering 'جميع الفروع1212'."
+  ],
+  "critical_code_review_comments": [
+    "payPayroll uses window.confirm() — fine functionally, but a shadcn AlertDialog would be more consistent with the rest of the app's UX (and easier for E2E tests). Same for bulkCalculatePayroll.",
+    "HR.js is now ~4438 lines. Strongly recommend splitting the large TabsContent blocks (salary-report, daily-payroll, attendance, advances, deductions, bonuses, overtime, ratings, biometric) into individual components under src/pages/hr/* to keep file <700 lines and improve maintainability."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (skipped per request)", "frontend": "100%"},
+  "test_credentials": "admin@maestroegp.com / admin123 (tenant: default)",
+  "seed_data_creation": "Created two payslips for shahr 2026-06: موظف 1 (c2420786-...) created via the معاينة dialog and then paid via PUT /payroll/{id}/pay; موظف 2 (6b73794f-...) created via bulk-calc-payroll. Both can be cleaned up via DELETE /api/payroll/{id} if desired.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "The merge is verified end-to-end. The 'salary-report' TabsContent is now the single payroll page and contains: top dashboard (incl. top-card-paid), report cards (incl. card-total-paid), report table (incl. paid-/remaining- columns and the merged actions: calc-payroll-{id} OR (pay-{id} + print-payslip-{id}) plus statement-from-summary-{id}), and the header bulk-calc-payroll button. Note: payPayroll() uses native window.confirm — Playwright tests must register page.on('dialog', d => d.accept()) before clicking pay-{id}, otherwise the click is a no-op."
+}

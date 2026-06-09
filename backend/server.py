@@ -1811,6 +1811,7 @@ class EmployeeCreate(BaseModel):
     break_start: Optional[str] = None  # وقت بداية الاستراحة HH:MM
     break_end: Optional[str] = None    # وقت نهاية الاستراحة HH:MM
     work_days: Optional[list] = None   # أيام العمل [0=الأحد, 1=الإثنين, ..., 6=السبت]
+    is_general_manager: bool = False   # مدير عام/أونر: لا يُحتسب عليه الحضور/السلف/الخصومات
 
 class EmployeeResponse(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -1838,6 +1839,7 @@ class EmployeeResponse(BaseModel):
     tenant_id: Optional[str] = None
     face_photo: Optional[str] = None
     face_photo_updated_at: Optional[str] = None
+    is_general_manager: bool = False
 
 class EmployeeUpdate(BaseModel):
     name: Optional[str] = None
@@ -1859,6 +1861,7 @@ class EmployeeUpdate(BaseModel):
     break_end: Optional[str] = None
     work_days: Optional[list] = None
     face_photo: Optional[str] = None
+    is_general_manager: Optional[bool] = None
 
 # نموذج الحضور والانصراف
 class AttendanceCreate(BaseModel):
@@ -3839,6 +3842,55 @@ async def get_advances(
     
     return advances
 
+@api_router.post("/employees/{employee_id}/reset-advances")
+async def reset_employee_advances(employee_id: str, current_user: dict = Depends(get_current_user)):
+    """تصفير رصيد السلف لموظف (تسوية المتبقي إلى صفر) — يُستخدم لمسح أرصدة الشهور السابقة/التجريبية."""
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.MANAGER, UserRole.SUPER_ADMIN]:
+        raise HTTPException(status_code=403, detail="غير مصرح")
+    query = build_tenant_query(current_user)
+    query["employee_id"] = employee_id
+    query["remaining_amount"] = {"$gt": 0}
+    advances = await db.advances.find(query, {"_id": 0}).to_list(1000)
+    cleared_total = sum((a.get("remaining_amount", 0) or 0) for a in advances)
+    res = await db.advances.update_many(
+        {"id": {"$in": [a["id"] for a in advances]}},
+        {"$set": {
+            "remaining_amount": 0,
+            "monthly_deduction": 0,
+            "status": "settled",
+            "settled_at": datetime.now(timezone.utc).isoformat(),
+            "settled_by": current_user["id"]
+        }}
+    )
+    return {"reset_count": res.modified_count, "cleared_amount": cleared_total,
+            "message": f"تم تصفير رصيد {res.modified_count} سلفة بقيمة {cleared_total}"}
+
+@api_router.post("/advances/reset-before-month")
+async def reset_advances_before_month(month: str, current_user: dict = Depends(get_current_user)):
+    """تصفير أرصدة جميع السلف المسجّلة قبل بداية الشهر المحدد (استثناء الأشهر التجريبية السابقة).
+    يبدأ الاحتساب الدقيق من الشهر المحدد. month بصيغة YYYY-MM."""
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.MANAGER, UserRole.SUPER_ADMIN]:
+        raise HTTPException(status_code=403, detail="غير مصرح")
+    cutoff = f"{month}-01"
+    query = build_tenant_query(current_user)
+    query["remaining_amount"] = {"$gt": 0}
+    query["created_at"] = {"$lt": cutoff}
+    advances = await db.advances.find(query, {"_id": 0}).to_list(5000)
+    cleared_total = sum((a.get("remaining_amount", 0) or 0) for a in advances)
+    res = await db.advances.update_many(
+        {"id": {"$in": [a["id"] for a in advances]}},
+        {"$set": {
+            "remaining_amount": 0,
+            "monthly_deduction": 0,
+            "status": "settled",
+            "settled_at": datetime.now(timezone.utc).isoformat(),
+            "settled_by": current_user["id"],
+            "settled_reason": f"تصفير أرصدة الأشهر السابقة - بدء الاحتساب من {month}"
+        }}
+    )
+    return {"reset_count": res.modified_count, "cleared_amount": cleared_total,
+            "message": f"تم تصفير {res.modified_count} سلفة من الأشهر السابقة (إجمالي {cleared_total}). الاحتساب يبدأ من {month}"}
+
 # ==================== EMPLOYEE RATINGS - تقييم الموظفين التلقائي ====================
 
 @api_router.get("/employee-ratings")
@@ -4261,6 +4313,16 @@ async def get_payroll_summary_report(
         advances = advances_by_emp.get(emp_id, [])
         emp_advances = sum(_sn(a.get("monthly_deduction", 0)) for a in advances)
         pending_advances = sum(_sn(a.get("remaining_amount", 0)) for a in advances)
+        
+        # 👑 المدير العام/الأونر: لا يُحتسب عليه الحضور/السلف/الخصومات (راتب كامل بلا أي خصم)
+        if bool(emp.get("is_general_manager")):
+            emp_deductions = 0
+            emp_advances = 0
+            pending_advances = 0
+            absent_days = 0
+            deductions = []
+            earned_salary = basic_salary
+            worked_days = present_days + late_days
         
         # الوقت الإضافي الموافق عليه
         emp_overtime = overtime_by_emp.get(emp_id, [])
@@ -17256,60 +17318,101 @@ async def _auto_process_attendance_internal(current_user: dict):
                 await db.overtime_requests.insert_one(ot_doc)
         
         # إنشاء خصم تلقائي للتأخير (أكثر من 15 دقيقة)
-        if late_minutes > 15:
+        if late_minutes > 15 and not emp.get("is_general_manager"):
             late_hours = round(late_minutes / 60, 2)
             hourly_rate = emp.get("salary", 0) / 30 / required_hours if required_hours > 0 else 0
             deduction_amount = round(hourly_rate * late_hours)
             
             if deduction_amount > 0:
-                ded_doc = {
-                    "id": str(uuid.uuid4()),
+                # 🟢 منع التكرار: حدّث الخصم التلقائي الموجود لنفس (موظف+يوم+نوع) بدل إدراج نسخة جديدة
+                existing_ded = await db.deductions.find_one({
                     "employee_id": emp["id"],
-                    "employee_name": emp.get("name"),
-                    "deduction_type": "late",
-                    "amount": deduction_amount,
-                    "hours": late_hours,
-                    "days": None,
-                    "reason": f"تأخير {late_minutes} دقيقة - تلقائي من البصمة",
                     "date": date_str,
-                    "business_date": date_str,
-                    "tenant_id": tenant_id,
+                    "deduction_type": "late",
                     "created_by": "system",
-                    "created_at": datetime.now(timezone.utc).isoformat()
-                }
-                await db.deductions.insert_one(ded_doc)
-                created_deductions += 1
+                    "tenant_id": tenant_id
+                })
+                if existing_ded:
+                    await db.deductions.update_one(
+                        {"id": existing_ded["id"]},
+                        {"$set": {
+                            "amount": deduction_amount,
+                            "hours": late_hours,
+                            "reason": f"تأخير {late_minutes} دقيقة - تلقائي من البصمة",
+                            "updated_at": datetime.now(timezone.utc).isoformat()
+                        }}
+                    )
+                else:
+                    ded_doc = {
+                        "id": str(uuid.uuid4()),
+                        "employee_id": emp["id"],
+                        "employee_name": emp.get("name"),
+                        "deduction_type": "late",
+                        "amount": deduction_amount,
+                        "hours": late_hours,
+                        "days": None,
+                        "reason": f"تأخير {late_minutes} دقيقة - تلقائي من البصمة",
+                        "date": date_str,
+                        "business_date": date_str,
+                        "tenant_id": tenant_id,
+                        "created_by": "system",
+                        "created_at": datetime.now(timezone.utc).isoformat()
+                    }
+                    await db.deductions.insert_one(ded_doc)
+                    created_deductions += 1
         
         # إنشاء خصم للخروج المبكر (أكثر من 15 دقيقة)
-        if early_leave_minutes > 15:
+        if early_leave_minutes > 15 and not emp.get("is_general_manager"):
             el_hours = round(early_leave_minutes / 60, 2)
             hourly_rate = emp.get("salary", 0) / 30 / required_hours if required_hours > 0 else 0
             el_amount = round(hourly_rate * el_hours)
             
             if el_amount > 0:
-                ded_doc = {
-                    "id": str(uuid.uuid4()),
+                # 🟢 منع التكرار: حدّث خصم الخروج المبكر الموجود لنفس (موظف+يوم) بدل إدراج نسخة جديدة
+                existing_el = await db.deductions.find_one({
                     "employee_id": emp["id"],
-                    "employee_name": emp.get("name"),
-                    "deduction_type": "early_leave",
-                    "amount": el_amount,
-                    "hours": el_hours,
-                    "days": None,
-                    "reason": f"خروج مبكر {early_leave_minutes} دقيقة - تلقائي من البصمة",
                     "date": date_str,
-                    "business_date": date_str,
-                    "tenant_id": tenant_id,
+                    "deduction_type": "early_leave",
                     "created_by": "system",
-                    "created_at": datetime.now(timezone.utc).isoformat()
-                }
-                await db.deductions.insert_one(ded_doc)
-                created_deductions += 1
+                    "tenant_id": tenant_id
+                })
+                if existing_el:
+                    await db.deductions.update_one(
+                        {"id": existing_el["id"]},
+                        {"$set": {
+                            "amount": el_amount,
+                            "hours": el_hours,
+                            "reason": f"خروج مبكر {early_leave_minutes} دقيقة - تلقائي من البصمة",
+                            "updated_at": datetime.now(timezone.utc).isoformat()
+                        }}
+                    )
+                else:
+                    ded_doc = {
+                        "id": str(uuid.uuid4()),
+                        "employee_id": emp["id"],
+                        "employee_name": emp.get("name"),
+                        "deduction_type": "early_leave",
+                        "amount": el_amount,
+                        "hours": el_hours,
+                        "days": None,
+                        "reason": f"خروج مبكر {early_leave_minutes} دقيقة - تلقائي من البصمة",
+                        "date": date_str,
+                        "business_date": date_str,
+                        "tenant_id": tenant_id,
+                        "created_by": "system",
+                        "created_at": datetime.now(timezone.utc).isoformat()
+                    }
+                    await db.deductions.insert_one(ded_doc)
+                    created_deductions += 1
     
     # 5. معالجة الغياب: فحص أيام العمل بدون بصمة
     today = datetime.now(timezone.utc)
     yesterday = (today - __import__('datetime').timedelta(days=1)).strftime("%Y-%m-%d")
     
     for emp in employees:
+        # 👑 المدير العام/الأونر: لا يُسجَّل له غياب تلقائي
+        if emp.get("is_general_manager"):
+            continue
         work_days = emp.get("work_days")
         if not work_days:
             continue
