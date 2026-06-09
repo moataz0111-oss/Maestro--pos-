@@ -3090,6 +3090,7 @@ const DeliveryReportTab = ({ deliveryCreditsReport, t, formatPrice, fetchReports
                           <th className="p-2 text-center">{t('الكمية المبيعة')}</th>
                           <th className="p-2 text-left">{t('المبيعات')}</th>
                           <th className="p-2 text-left">{t('كلفة المواد')}</th>
+                          <th className="p-2 text-left">%</th>
                           <th className="p-2 text-left">{t('هامش الربح')}</th>
                         </tr>
                       </thead>
@@ -3098,6 +3099,7 @@ const DeliveryReportTab = ({ deliveryCreditsReport, t, formatPrice, fetchReports
                           const rev = v.revenue || 0;
                           const cost = (v.materials_cost || 0) + (v.packaging_cost || 0);
                           const margin = rev > 0 ? ((rev - cost) / rev * 100) : 0;
+                          const pct = totalMat > 0 ? ((v.materials_cost || 0) / totalMat * 100) : 0;
                           return (
                             <tr key={idx} className="border-t hover:bg-muted/20" data-testid={`company-cost-row-${idx}`}>
                               <td className="p-2 font-medium">
@@ -3109,6 +3111,7 @@ const DeliveryReportTab = ({ deliveryCreditsReport, t, formatPrice, fetchReports
                               <td className="p-2 text-center tabular-nums">{v.quantity || 0}</td>
                               <td className="p-2 text-left tabular-nums text-blue-600">{formatPrice(rev)}</td>
                               <td className="p-2 text-left tabular-nums font-semibold text-orange-600">{formatPrice(v.materials_cost || 0)}</td>
+                              <td className="p-2 text-left tabular-nums text-muted-foreground">{pct.toFixed(1)}%</td>
                               <td className={`p-2 text-left tabular-nums font-semibold ${marginText(margin)}`}>{margin.toFixed(1)}%</td>
                             </tr>
                           );
@@ -5059,7 +5062,11 @@ export default function Reports() {
               }
               return (
                 <>
-                  <div className="grid grid-cols-3 gap-2" data-testid="cost-breakdown-total">
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2" data-testid="cost-breakdown-total">
+                    <div className="flex flex-col items-center justify-center text-center gap-0.5 p-3 rounded-lg bg-blue-500/10 border border-blue-500/20">
+                      <span className="text-xs font-medium text-blue-600">{t('إجمالي المبيعات')}</span>
+                      <span className="text-lg font-bold tabular-nums text-blue-600">{formatPrice(totalRev)}</span>
+                    </div>
                     <div className="flex flex-col items-center justify-center text-center gap-0.5 p-3 rounded-lg bg-muted/50 border">
                       <span className="text-xs font-medium">{t('الإجمالي')}</span>
                       <span className={`text-lg font-bold tabular-nums ${showCostBreakdown === 'materials' ? 'text-orange-600' : 'text-amber-600'}`}>
@@ -5081,6 +5088,7 @@ export default function Reports() {
                         <tr>
                           <th className="p-2 text-right">{t('المنتج')}</th>
                           <th className="p-2 text-center">{t('الكمية المبيعة')}</th>
+                          <th className="p-2 text-left">{t('المبيعات')}</th>
                           <th className="p-2 text-left">{t('التكلفة')}</th>
                           <th className="p-2 text-left">%</th>
                           <th className="p-2 text-left">{t('هامش الربح')}</th>
@@ -5116,6 +5124,7 @@ export default function Reports() {
                                 )}
                               </td>
                               <td className="p-2 text-center tabular-nums">{v.quantity || 0}</td>
+                              <td className="p-2 text-left tabular-nums text-blue-600">{formatPrice(v.revenue || 0)}</td>
                               <td className={`p-2 text-left tabular-nums font-semibold ${showCostBreakdown === 'materials' ? 'text-orange-600' : 'text-amber-600'}`}>
                                 {formatPrice(val)}
                               </td>
