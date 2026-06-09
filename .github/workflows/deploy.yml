@@ -227,8 +227,6 @@ jobs:
             docker logs backend 2>&1 | grep -iE "Error|Exception|No module|cannot open|cannot import|Traceback" | tail -15 || echo "(لا يوجد سطر خطأ واضح)"
             echo "🔴🔴🔴 END ROOT CAUSE 🔴🔴🔴"
           fi
-          RESET_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST "http://127.0.0.1/api/advances/reset-before-month?month=2026-01")
-          echo "🔎 reset route code: $RESET_CODE"
 
           # تنظيف
           docker image prune -f 2>/dev/null || true
