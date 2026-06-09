@@ -3047,7 +3047,14 @@ const DeliveryReportTab = ({ deliveryCreditsReport, t, formatPrice, fetchReports
                 .filter(([, v]) => (v.materials_cost || 0) > 0)
                 .sort((a, b) => (b[1].materials_cost || 0) - (a[1].materials_cost || 0));
               const totalMat = entries.reduce((s, [, v]) => s + (v.materials_cost || 0), 0);
+              const totalPkg = entries.reduce((s, [, v]) => s + (v.packaging_cost || 0), 0);
               const totalRev = entries.reduce((s, [, v]) => s + (v.revenue || 0), 0);
+              const totalCost = totalMat + totalPkg;
+              const costPct = totalRev > 0 ? (totalCost / totalRev * 100) : 0;        // إجمالي نسبة الكلفة
+              const marginPct = totalRev > 0 ? ((totalRev - totalCost) / totalRev * 100) : 0; // إجمالي هامش الربح
+              // لون مؤشّر الربحية: 🔴 منخفضة (<10%) / 🟡 متوسطة (10-30%) / 🟢 جيدة (>30%)
+              const marginColor = (m) => (m < 10 ? 'bg-red-500' : (m <= 30 ? 'bg-amber-500' : 'bg-green-500'));
+              const marginText = (m) => (m < 10 ? 'text-red-500' : (m <= 30 ? 'text-amber-600' : 'text-green-600'));
               if (entries.length === 0) {
                 return (
                   <p className="text-center text-muted-foreground p-6" data-testid="company-cost-empty">
@@ -3057,14 +3064,22 @@ const DeliveryReportTab = ({ deliveryCreditsReport, t, formatPrice, fetchReports
               }
               return (
                 <>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="flex items-center justify-between p-3 rounded-lg bg-blue-500/10 border border-blue-500/20">
-                      <span className="text-sm font-medium text-blue-600">{t('إجمالي المبيعات')}</span>
-                      <span className="text-lg font-bold tabular-nums text-blue-600">{formatPrice(totalRev)}</span>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                    <div className="flex flex-col items-center justify-center text-center gap-0.5 p-3 rounded-lg bg-blue-500/10 border border-blue-500/20">
+                      <span className="text-xs font-medium text-blue-600">{t('إجمالي المبيعات')}</span>
+                      <span className="text-base font-bold tabular-nums text-blue-600">{formatPrice(totalRev)}</span>
                     </div>
-                    <div className="flex items-center justify-between p-3 rounded-lg bg-orange-500/10 border border-orange-500/20" data-testid="company-cost-total">
-                      <span className="text-sm font-medium text-orange-600">{t('إجمالي كلفة المواد')}</span>
-                      <span className="text-lg font-bold tabular-nums text-orange-600">{formatPrice(totalMat)}</span>
+                    <div className="flex flex-col items-center justify-center text-center gap-0.5 p-3 rounded-lg bg-orange-500/10 border border-orange-500/20" data-testid="company-cost-total">
+                      <span className="text-xs font-medium text-orange-600">{t('إجمالي كلفة المواد')}</span>
+                      <span className="text-base font-bold tabular-nums text-orange-600">{formatPrice(totalMat)}</span>
+                    </div>
+                    <div className="flex flex-col items-center justify-center text-center gap-0.5 p-3 rounded-lg bg-rose-500/10 border border-rose-500/20" data-testid="company-cost-pct">
+                      <span className="text-xs font-medium text-rose-600">{t('إجمالي نسبة الكلفة')}</span>
+                      <span className="text-base font-bold tabular-nums text-rose-600">{costPct.toFixed(1)}%</span>
+                    </div>
+                    <div className={`flex flex-col items-center justify-center text-center gap-0.5 p-3 rounded-lg bg-green-500/10 border border-green-500/20`} data-testid="company-margin-pct">
+                      <span className="text-xs font-medium text-green-600">{t('إجمالي هامش الربح')}</span>
+                      <span className={`text-base font-bold tabular-nums ${marginText(marginPct)}`}>{marginPct.toFixed(1)}%</span>
                     </div>
                   </div>
                   <div className="rounded-lg border overflow-hidden">
@@ -3075,25 +3090,37 @@ const DeliveryReportTab = ({ deliveryCreditsReport, t, formatPrice, fetchReports
                           <th className="p-2 text-center">{t('الكمية المبيعة')}</th>
                           <th className="p-2 text-left">{t('المبيعات')}</th>
                           <th className="p-2 text-left">{t('كلفة المواد')}</th>
-                          <th className="p-2 text-left">%</th>
+                          <th className="p-2 text-left">{t('هامش الربح')}</th>
                         </tr>
                       </thead>
                       <tbody>
                         {entries.map(([name, v], idx) => {
-                          const val = v.materials_cost || 0;
-                          const pct = totalMat > 0 ? (val / totalMat * 100) : 0;
+                          const rev = v.revenue || 0;
+                          const cost = (v.materials_cost || 0) + (v.packaging_cost || 0);
+                          const margin = rev > 0 ? ((rev - cost) / rev * 100) : 0;
                           return (
                             <tr key={idx} className="border-t hover:bg-muted/20" data-testid={`company-cost-row-${idx}`}>
-                              <td className="p-2 font-medium">{name}</td>
+                              <td className="p-2 font-medium">
+                                <span className="flex items-center gap-2">
+                                  <span className={`inline-block h-2.5 w-2.5 rounded-full ${marginColor(margin)}`} />
+                                  {name}
+                                </span>
+                              </td>
                               <td className="p-2 text-center tabular-nums">{v.quantity || 0}</td>
-                              <td className="p-2 text-left tabular-nums text-blue-600">{formatPrice(v.revenue || 0)}</td>
-                              <td className="p-2 text-left tabular-nums font-semibold text-orange-600">{formatPrice(val)}</td>
-                              <td className="p-2 text-left tabular-nums text-muted-foreground">{pct.toFixed(1)}%</td>
+                              <td className="p-2 text-left tabular-nums text-blue-600">{formatPrice(rev)}</td>
+                              <td className="p-2 text-left tabular-nums font-semibold text-orange-600">{formatPrice(v.materials_cost || 0)}</td>
+                              <td className={`p-2 text-left tabular-nums font-semibold ${marginText(margin)}`}>{margin.toFixed(1)}%</td>
                             </tr>
                           );
                         })}
                       </tbody>
                     </table>
+                  </div>
+                  {/* شريط توضيحي لمؤشّرات الربحية */}
+                  <div className="flex items-center justify-center flex-wrap gap-4 text-xs text-muted-foreground pt-1">
+                    <span className="flex items-center gap-1"><span className="inline-block h-2.5 w-2.5 rounded-full bg-red-500" />{t('ربحية منخفضة (<10%)')}</span>
+                    <span className="flex items-center gap-1"><span className="inline-block h-2.5 w-2.5 rounded-full bg-amber-500" />{t('متوسطة (10-30%)')}</span>
+                    <span className="flex items-center gap-1"><span className="inline-block h-2.5 w-2.5 rounded-full bg-green-500" />{t('جيدة (>30%)')}</span>
                   </div>
                 </>
               );
@@ -5018,6 +5045,11 @@ export default function Reports() {
                 .filter(([, v]) => (v[key] || 0) > 0)
                 .sort((a, b) => (b[1][key] || 0) - (a[1][key] || 0));
               const totalAll = filtered.reduce((s, [, v]) => s + (v[key] || 0), 0);
+              const totalRev = filtered.reduce((s, [, v]) => s + (v.revenue || 0), 0);
+              const totalFullCost = filtered.reduce((s, [, v]) => s + (v.materials_cost || 0) + (v.packaging_cost || 0), 0);
+              const aggCostPct = totalRev > 0 ? (totalAll / totalRev * 100) : 0;       // نسبة هذه الكلفة من المبيعات
+              const aggMarginPct = totalRev > 0 ? ((totalRev - totalFullCost) / totalRev * 100) : 0; // إجمالي هامش الربح
+              const aggMarginColor = aggMarginPct < 10 ? 'text-red-500' : (aggMarginPct <= 30 ? 'text-amber-600' : 'text-green-600');
               if (filtered.length === 0) {
                 return (
                   <p className="text-center text-muted-foreground p-6" data-testid="cost-breakdown-empty">
@@ -5027,11 +5059,21 @@ export default function Reports() {
               }
               return (
                 <>
-                  <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50 border" data-testid="cost-breakdown-total">
-                    <span className="text-sm font-medium">{t('الإجمالي')}</span>
-                    <span className={`text-xl font-bold tabular-nums ${showCostBreakdown === 'materials' ? 'text-orange-600' : 'text-amber-600'}`}>
-                      {formatPrice(totalAll)}
-                    </span>
+                  <div className="grid grid-cols-3 gap-2" data-testid="cost-breakdown-total">
+                    <div className="flex flex-col items-center justify-center text-center gap-0.5 p-3 rounded-lg bg-muted/50 border">
+                      <span className="text-xs font-medium">{t('الإجمالي')}</span>
+                      <span className={`text-lg font-bold tabular-nums ${showCostBreakdown === 'materials' ? 'text-orange-600' : 'text-amber-600'}`}>
+                        {formatPrice(totalAll)}
+                      </span>
+                    </div>
+                    <div className="flex flex-col items-center justify-center text-center gap-0.5 p-3 rounded-lg bg-rose-500/10 border border-rose-500/20" data-testid="cost-breakdown-cost-pct">
+                      <span className="text-xs font-medium text-rose-600">{t('إجمالي نسبة الكلفة')}</span>
+                      <span className="text-lg font-bold tabular-nums text-rose-600">{aggCostPct.toFixed(1)}%</span>
+                    </div>
+                    <div className="flex flex-col items-center justify-center text-center gap-0.5 p-3 rounded-lg bg-green-500/10 border border-green-500/20" data-testid="cost-breakdown-margin-pct">
+                      <span className="text-xs font-medium text-green-600">{t('إجمالي هامش الربح')}</span>
+                      <span className={`text-lg font-bold tabular-nums ${aggMarginColor}`}>{aggMarginPct.toFixed(1)}%</span>
+                    </div>
                   </div>
                   <div className="rounded-lg border overflow-hidden">
                     <table className="w-full text-sm">
