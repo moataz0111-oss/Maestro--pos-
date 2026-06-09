@@ -169,6 +169,10 @@ export default function HR() {
   const [dailyPayroll, setDailyPayroll] = useState(null);
   const [dailyPayrollDate, setDailyPayrollDate] = useState(new Date().toISOString().slice(0, 10));
   const [dailyPayrollLoading, setDailyPayrollLoading] = useState(false);
+  // الدفعات المصروفة (فلتر بالشهر المستحق)
+  const [salaryPayments, setSalaryPayments] = useState([]);
+  const [salaryPaymentsLoading, setSalaryPaymentsLoading] = useState(false);
+  const [salaryPaymentsMonth, setSalaryPaymentsMonth] = useState(new Date().toISOString().slice(0, 7));
   const [paymentDialog, setPaymentDialog] = useState(null); // {employee_id, employee_name, suggested_amount}
   const [paymentForm, setPaymentForm] = useState({ amount: '', notes: '', payment_method: 'cash' });
   const [paymentSubmitting, setPaymentSubmitting] = useState(false);
@@ -308,6 +312,29 @@ export default function HR() {
   useEffect(() => {
     fetchData();
   }, [selectedBranchId, selectedMonth, dateMode, startDate, endDate, selectedYear, isOffline]);
+
+  // تنظيف الخصومات المكررة القديمة تلقائياً وبصمت عند فتح الصفحة (مرة واحدة)
+  // يمسح الخصومات التلقائية المكررة (نفس الموظف+اليوم+النوع) من البيانات القديمة دون تدخّل المستخدم
+  const autoCleanupDoneRef = useRef(false);
+  useEffect(() => {
+    if (autoCleanupDoneRef.current) return;
+    autoCleanupDoneRef.current = true;
+    const silentCleanup = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        const res = await axios.post(`${API}/deductions/cleanup-duplicates`, {}, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        // إعادة جلب البيانات بصمت فقط إذا تم حذف خصومات مكررة فعلاً
+        if (res.data?.removed > 0) {
+          fetchData(true);
+        }
+      } catch {
+        // تجاهل بصمت (مثلاً 404 على نسخة غير محدّثة، أو لا صلاحية)
+      }
+    };
+    silentCleanup();
+  }, []);
 
   // تحديث تلقائي للبيانات كل دقيقة - بصمت بدون إظهار شاشة التحميل (silent refresh)
   useEffect(() => {
@@ -495,6 +522,100 @@ export default function HR() {
     }
   }, [activeTab, dailyPayrollDate, selectedBranchId]);
 
+  // جلب الدفعات المصروفة حسب الشهر المستحق
+  const fetchSalaryPayments = async () => {
+    setSalaryPaymentsLoading(true);
+    try {
+      const token = localStorage.getItem('token');
+      const branchParam = selectedBranchId ? `&branch_id=${selectedBranchId}` : '';
+      const res = await axios.get(
+        `${API}/payroll/payments?salary_month=${salaryPaymentsMonth}${branchParam}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      setSalaryPayments(res.data || []);
+    } catch (error) {
+      showApiError(error, t('فشل في تحميل الدفعات المصروفة'));
+    } finally {
+      setSalaryPaymentsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'salary-payments') {
+      fetchSalaryPayments();
+    }
+  }, [activeTab, salaryPaymentsMonth, selectedBranchId]);
+
+  // طباعة الدفعات المصروفة — صفحة خارجية نظيفة بكل التفاصيل
+  const printSalaryPayments = () => {
+    if (!salaryPayments.length) {
+      toast.error(t('لا توجد دفعات للطباعة'));
+      return;
+    }
+    const total = salaryPayments.reduce((s, p) => s + (p.amount || 0), 0);
+    const empCount = new Set(salaryPayments.map(p => p.employee_id)).size;
+    const methodLabel = (m) => m === 'cash' ? t('نقدي') : m === 'bank' ? t('بنك') : (m || '-');
+    const rows = salaryPayments.map((p, idx) => `
+      <tr>
+        <td>${idx + 1}</td>
+        <td class="name">${p.employee_name || '-'}</td>
+        <td>${p.branch_name || '-'}</td>
+        <td>${p.payment_date || '-'}</td>
+        <td>${p.actual_payment_date || p.payment_date || '-'}</td>
+        <td>${methodLabel(p.payment_method)}</td>
+        <td>${p.notes || '-'}</td>
+        <td>${p.paid_by_name || '-'}</td>
+        <td class="bold purple">${formatPrice(p.amount || 0)}</td>
+      </tr>`).join('');
+    const w = window.open('', '_blank');
+    if (!w) { toast.error(t('فشل فتح نافذة الطباعة')); return; }
+    w.document.write(`<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="utf-8"/>
+      <title>${t('الدفعات المصروفة')} - ${salaryPaymentsMonth}</title>
+      <style>
+        * { box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Arial, sans-serif; margin: 24px; color: #1a1a1a; }
+        .header { text-align: center; border-bottom: 3px solid #9333ea; padding-bottom: 12px; margin-bottom: 18px; }
+        .logo { font-size: 24px; font-weight: 800; color: #9333ea; letter-spacing: 1px; }
+        .title { font-size: 20px; font-weight: 700; margin-top: 4px; }
+        .period { font-size: 14px; color: #555; margin-top: 4px; }
+        .cards { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+        .card { flex: 1 1 28%; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px; text-align: center; background: #faf5ff; }
+        .card .lbl { font-size: 11px; color: #64748b; }
+        .card .val { font-size: 18px; font-weight: 700; margin-top: 2px; color: #9333ea; }
+        table { width: 100%; border-collapse: collapse; font-size: 12px; }
+        th, td { border: 1px solid #e2e8f0; padding: 7px 6px; text-align: right; }
+        thead th { background: #9333ea; color: #fff; font-weight: 600; }
+        tfoot td { background: #f1f5f9; font-weight: 800; }
+        tbody tr:nth-child(even) { background: #fafafa; }
+        .name { font-weight: 600; }
+        .purple { color: #9333ea; } .bold { font-weight: 700; }
+        .footer { margin-top: 24px; text-align: center; font-size: 11px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 8px; }
+        @media print { body { margin: 10px; } .card, thead th { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+      </style></head><body>
+      <div class="header">
+        <div class="logo">Maestro EGP</div>
+        <div class="title">${t('الدفعات المصروفة')}</div>
+        <div class="period">${t('الشهر المستحق')}: ${salaryPaymentsMonth}${selectedBranchId ? '' : ' — ' + t('جميع الفروع')}</div>
+      </div>
+      <div class="cards">
+        <div class="card"><div class="lbl">${t('إجمالي المصروف من إيداعات هذا الشهر')}</div><div class="val">${formatPrice(total)}</div></div>
+        <div class="card"><div class="lbl">${t('عدد الدفعات')}</div><div class="val">${salaryPayments.length}</div></div>
+        <div class="card"><div class="lbl">${t('عدد الموظفين')}</div><div class="val">${empCount}</div></div>
+      </div>
+      <table>
+        <thead><tr>
+          <th>#</th><th>${t('الموظف')}</th><th>${t('الفرع')}</th><th>${t('تاريخ القيد')}</th>
+          <th>${t('تاريخ الصرف الفعلي')}</th><th>${t('طريقة الدفع')}</th><th>${t('ملاحظات')}</th><th>${t('صرفها')}</th><th>${t('المبلغ')}</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+        <tfoot><tr><td colspan="8">${t('الإجمالي')}</td><td class="purple">${formatPrice(total)}</td></tr></tfoot>
+      </table>
+      <div class="footer"><p>${t('تم إنشاؤه من نظام Maestro EGP')}</p><p>${new Date().toLocaleString('en-GB')}</p></div>
+      <script>window.onload = function(){ window.print(); }</script>
+      </body></html>`);
+    w.document.close();
+  };
+
   // 💰 صرف دفعة من راتب موظف
   const submitSalaryPayment = async () => {
     if (!paymentDialog) return;
@@ -514,6 +635,7 @@ export default function HR() {
           payment_date: dailyPayrollDate,
           payment_method: paymentForm.payment_method,
           notes: paymentForm.notes,
+          ...(paymentDialog.salary_month ? { salary_month: paymentDialog.salary_month } : {}),
         },
         { headers: { Authorization: `Bearer ${token}` } }
       );
@@ -528,6 +650,10 @@ export default function HR() {
       });
       fetchDailyPayroll();
       fetchData(); // refresh المستحقات + تقرير الرواتب
+      // تحديث كشف الحساب المفتوح فوراً ليُصفّر المتبقي
+      if (statementOpen && statementEmployee) {
+        openAccountStatement(statementEmployee);
+      }
     } catch (error) {
       showApiError(error, t('فشل في صرف الدفعة'));
     } finally {
@@ -1401,6 +1527,99 @@ export default function HR() {
     window.print();
   };
 
+  // طباعة تقرير الرواتب الشامل — تقرير A4 نظيف بضغطة واحدة
+  const printSalaryReport = () => {
+    if (!payrollSummary || !(payrollSummary.employees || []).length) {
+      toast.error(t('لا توجد بيانات رواتب لهذا الشهر'));
+      return;
+    }
+    const period = dateMode === 'year' ? selectedYear : dateMode === 'custom' ? `${startDate} → ${endDate}` : selectedMonth;
+    const tt = payrollSummary.totals || {};
+    const rows = (payrollSummary.employees || []).map((emp, idx) => `
+      <tr>
+        <td>${idx + 1}</td>
+        <td class="name">${emp.name || ''}${emp.is_general_manager ? ' <span class="gm">مدير عام</span>' : ''}</td>
+        <td>${emp.position || '-'}</td>
+        <td>${formatPrice(emp.basic_salary || 0)}</td>
+        <td class="green">${formatPrice(emp.bonuses || 0)}</td>
+        <td class="red">${formatPrice(emp.deductions || 0)}</td>
+        <td class="yellow">${formatPrice(emp.advances_deduction || 0)}</td>
+        <td class="bold cyan">${formatPrice(emp.net_payable || 0)}</td>
+        <td class="purple">${formatPrice(emp.paid_amount || 0)}</td>
+        <td class="bold">${formatPrice(emp.remaining != null ? emp.remaining : (emp.net_payable || 0))}</td>
+      </tr>`).join('');
+    const remainingTotal = tt.remaining != null ? tt.remaining : (tt.net_payable || 0);
+    const w = window.open('', '_blank');
+    if (!w) { toast.error(t('فشل فتح نافذة الطباعة')); return; }
+    w.document.write(`<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="utf-8"/>
+      <title>${t('تقرير الرواتب الشامل')} - ${period}</title>
+      <style>
+        * { box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Arial, sans-serif; margin: 24px; color: #1a1a1a; }
+        .header { text-align: center; border-bottom: 3px solid #0891b2; padding-bottom: 12px; margin-bottom: 18px; }
+        .logo { font-size: 24px; font-weight: 800; color: #0891b2; letter-spacing: 1px; }
+        .title { font-size: 20px; font-weight: 700; margin-top: 4px; }
+        .period { font-size: 14px; color: #555; margin-top: 4px; }
+        .cards { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+        .card { flex: 1 1 15%; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px; text-align: center; background: #f8fafc; }
+        .card .lbl { font-size: 11px; color: #64748b; }
+        .card .val { font-size: 16px; font-weight: 700; margin-top: 2px; }
+        table { width: 100%; border-collapse: collapse; font-size: 12px; }
+        th, td { border: 1px solid #e2e8f0; padding: 7px 6px; text-align: right; }
+        thead th { background: #0891b2; color: #fff; font-weight: 600; }
+        tfoot td { background: #f1f5f9; font-weight: 800; }
+        tbody tr:nth-child(even) { background: #fafafa; }
+        .name { font-weight: 600; }
+        .gm { background: #fef3c7; color: #b45309; border: 1px solid #fcd34d; border-radius: 6px; padding: 1px 5px; font-size: 9px; }
+        .green { color: #16a34a; } .red { color: #dc2626; } .yellow { color: #ca8a04; }
+        .cyan { color: #0891b2; } .purple { color: #9333ea; } .bold { font-weight: 700; }
+        .signature { margin-top: 40px; display: flex; justify-content: space-between; }
+        .sig-box { width: 45%; text-align: center; }
+        .sig-line { border-top: 1px solid #333; margin-top: 40px; padding-top: 4px; font-size: 12px; }
+        .footer { margin-top: 24px; text-align: center; font-size: 11px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 8px; }
+        @media print { body { margin: 10px; } .card { background: #f8fafc !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; } thead th { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+      </style></head><body>
+      <div class="header">
+        <div class="logo">Maestro EGP</div>
+        <div class="title">${t('تقرير الرواتب الشامل')}</div>
+        <div class="period">${t('الفترة')}: ${period}</div>
+      </div>
+      <div class="cards">
+        <div class="card"><div class="lbl">${t('الرواتب الأساسية')}</div><div class="val">${formatPrice(tt.basic_salary || 0)}</div></div>
+        <div class="card"><div class="lbl">${t('المكافآت')}</div><div class="val green">${formatPrice(tt.total_bonuses || 0)}</div></div>
+        <div class="card"><div class="lbl">${t('الخصومات')}</div><div class="val red">${formatPrice(tt.total_deductions || 0)}</div></div>
+        <div class="card"><div class="lbl">${t('السلف')}</div><div class="val yellow">${formatPrice(tt.total_advances || 0)}</div></div>
+        <div class="card"><div class="lbl">${t('الدفعات المصروفة')}</div><div class="val purple">${formatPrice(tt.paid_amount || 0)}</div></div>
+        <div class="card"><div class="lbl">${t('المتبقي للموظفين')}</div><div class="val cyan">${formatPrice(remainingTotal)}</div></div>
+      </div>
+      <table>
+        <thead><tr>
+          <th>#</th><th>${t('الموظف')}</th><th>${t('الوظيفة')}</th><th>${t('الراتب الأساسي')}</th>
+          <th>${t('المكافآت')}</th><th>${t('الخصومات')}</th><th>${t('السلف')}</th>
+          <th>${t('صافي الراتب')}</th><th>${t('مدفوع نقداً')}</th><th>${t('المتبقي')}</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+        <tfoot><tr>
+          <td colspan="3">${t('الإجمالي')}</td>
+          <td>${formatPrice(tt.basic_salary || 0)}</td>
+          <td class="green">${formatPrice(tt.total_bonuses || 0)}</td>
+          <td class="red">${formatPrice(tt.total_deductions || 0)}</td>
+          <td class="yellow">${formatPrice(tt.total_advances || 0)}</td>
+          <td class="cyan">${formatPrice(tt.net_payable || 0)}</td>
+          <td class="purple">${formatPrice(tt.paid_amount || 0)}</td>
+          <td>${formatPrice(remainingTotal)}</td>
+        </tr></tfoot>
+      </table>
+      <div class="signature">
+        <div class="sig-box"><div class="sig-line">${t('توقيع المحاسب')}</div></div>
+        <div class="sig-box"><div class="sig-line">${t('توقيع المدير')}: ${user?.full_name || ''}</div></div>
+      </div>
+      <div class="footer"><p>${t('تم إنشاؤه من نظام Maestro EGP')}</p><p>${new Date().toLocaleString('en-GB')}</p></div>
+      <script>window.onload = function(){ window.print(); }</script>
+      </body></html>`);
+    w.document.close();
+  };
+
 
   // Bonus handlers
   const handleCreateBonus = async (e) => {
@@ -2172,6 +2391,9 @@ export default function HR() {
             <TabsTrigger value="daily-payroll" className="flex items-center gap-2" data-testid="daily-payroll-tab">
               <DollarSign className="h-4 w-4" /> {t('الكشف اليومي')}
             </TabsTrigger>
+            <TabsTrigger value="salary-payments" className="flex items-center gap-2" data-testid="salary-payments-tab">
+              <Banknote className="h-4 w-4" /> {t('الدفعات المصروفة')}
+            </TabsTrigger>
             <TabsTrigger value="attendance" className="flex items-center gap-2">
               <Calendar className="h-4 w-4" /> {t('الحضور')}
             </TabsTrigger>
@@ -2502,7 +2724,7 @@ export default function HR() {
                   <Button variant="outline" onClick={bulkCalculatePayroll} data-testid="bulk-calc-payroll">
                     <Calculator className="h-4 w-4 ml-2" /> {t('احتساب الرواتب بالجملة')}
                   </Button>
-                  <Button onClick={() => window.print()}>
+                  <Button onClick={printSalaryReport} data-testid="print-salary-report-btn">
                     <Printer className="h-4 w-4 ml-2" /> {t('طباعة')}
                   </Button>
                 </div>
@@ -2812,6 +3034,104 @@ export default function HR() {
               </CardContent>
             </Card>
           </TabsContent>
+
+          {/* Salary Payments Tab — الدفعات المصروفة حسب الشهر المستحق */}
+          <TabsContent value="salary-payments">
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between flex-wrap gap-3">
+                <CardTitle className="flex items-center gap-2">
+                  <Banknote className="h-5 w-5" />
+                  {t('الدفعات المصروفة')} — {t('الشهر المستحق')}: {salaryPaymentsMonth}
+                </CardTitle>
+                <div className="flex items-center gap-2">
+                  <Label className="text-sm whitespace-nowrap">{t('الشهر المستحق')}:</Label>
+                  <Input
+                    type="month"
+                    value={salaryPaymentsMonth}
+                    onChange={(e) => setSalaryPaymentsMonth(e.target.value)}
+                    className="w-44"
+                    data-testid="salary-payments-month-filter"
+                  />
+                  <Button variant="outline" size="sm" onClick={fetchSalaryPayments} data-testid="salary-payments-refresh">
+                    <RefreshCw className="h-4 w-4" />
+                  </Button>
+                  <Button size="sm" onClick={printSalaryPayments} data-testid="salary-payments-print">
+                    <Printer className="h-4 w-4 ml-2" /> {t('طباعة')}
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {salaryPaymentsLoading ? (
+                  <div className="text-center py-8 text-muted-foreground">{t('جاري التحميل')}...</div>
+                ) : salaryPayments.length > 0 ? (
+                  <>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
+                      <Card className="bg-purple-500/10">
+                        <CardContent className="p-4 text-center">
+                          <p className="text-sm text-muted-foreground">{t('إجمالي المصروف من إيداعات هذا الشهر')}</p>
+                          <p className="text-xl font-bold text-purple-600" data-testid="salary-payments-total">
+                            {formatPrice(salaryPayments.reduce((s, p) => s + (p.amount || 0), 0))}
+                          </p>
+                        </CardContent>
+                      </Card>
+                      <Card className="bg-cyan-500/10">
+                        <CardContent className="p-4 text-center">
+                          <p className="text-sm text-muted-foreground">{t('عدد الدفعات')}</p>
+                          <p className="text-xl font-bold text-cyan-600">{salaryPayments.length}</p>
+                        </CardContent>
+                      </Card>
+                      <Card className="bg-green-500/10">
+                        <CardContent className="p-4 text-center">
+                          <p className="text-sm text-muted-foreground">{t('عدد الموظفين')}</p>
+                          <p className="text-xl font-bold text-green-600">{new Set(salaryPayments.map(p => p.employee_id)).size}</p>
+                        </CardContent>
+                      </Card>
+                    </div>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead className="bg-muted/50">
+                          <tr>
+                            <th className="p-3 text-right">{t('الموظف')}</th>
+                            <th className="p-3 text-right">{t('الفرع')}</th>
+                            <th className="p-3 text-right">{t('تاريخ القيد')}</th>
+                            <th className="p-3 text-right">{t('تاريخ الصرف الفعلي')}</th>
+                            <th className="p-3 text-right">{t('طريقة الدفع')}</th>
+                            <th className="p-3 text-right">{t('صرفها')}</th>
+                            <th className="p-3 text-right">{t('المبلغ')}</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {salaryPayments.map(p => (
+                            <tr key={p.id} className="border-b hover:bg-muted/30">
+                              <td className="p-3 font-medium">{p.employee_name || '-'}</td>
+                              <td className="p-3">{p.branch_name || '-'}</td>
+                              <td className="p-3">{p.payment_date}</td>
+                              <td className="p-3 text-muted-foreground">{p.actual_payment_date || p.payment_date}</td>
+                              <td className="p-3">{p.payment_method === 'cash' ? t('نقدي') : p.payment_method === 'bank' ? t('بنك') : (p.payment_method || '-')}</td>
+                              <td className="p-3 text-muted-foreground">{p.paid_by_name || '-'}</td>
+                              <td className="p-3 font-bold text-purple-600">{formatPrice(p.amount || 0)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                        <tfoot className="bg-muted/50 font-bold">
+                          <tr>
+                            <td colSpan="6" className="p-3">{t('الإجمالي')}</td>
+                            <td className="p-3 text-purple-600">{formatPrice(salaryPayments.reduce((s, p) => s + (p.amount || 0), 0))}</td>
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
+                  </>
+                ) : (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <Banknote className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                    <p>{t('لا توجد دفعات مخصومة من إيداعات هذا الشهر')}</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
 
           {/* Attendance Tab */}
           <TabsContent value="attendance">
@@ -4121,8 +4441,55 @@ export default function HR() {
                   </div>
                 </div>
 
+                {/* صافي المتبقي للموظف — رقم بارز واحد */}
+                {(() => {
+                  const st = statementData.totals || {};
+                  const basic = statementData.employee?.salary || 0;
+                  const bonuses = st.total_bonuses || 0;
+                  const deductions = st.total_deductions || 0;
+                  const advances = st.total_advances || 0;
+                  const paid = st.total_salary_payments || 0;
+                  const netRemaining = basic + bonuses - deductions - advances - paid;
+                  return (
+                    <div
+                      className={`rounded-lg p-4 text-center border ${netRemaining >= 0 ? 'bg-emerald-500/10 border-emerald-300' : 'bg-red-500/10 border-red-300'}`}
+                      data-testid="statement-net-remaining"
+                    >
+                      <p className="text-sm text-muted-foreground">{t('صافي المتبقي للموظف')}</p>
+                      <p className={`text-3xl font-extrabold ${netRemaining >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                        {formatPrice(netRemaining)}
+                      </p>
+                      <p className="text-[11px] text-muted-foreground mt-1 leading-relaxed">
+                        {t('الراتب الأساسي')} ({formatPrice(basic)}) + {t('المكافآت')} ({formatPrice(bonuses)}) − {t('الخصومات')} ({formatPrice(deductions)}) − {t('السلف')} ({formatPrice(advances)}) − {t('الدفعات المصروفة')} ({formatPrice(paid)})
+                      </p>
+                      {netRemaining > 0 && (user?.role === 'admin' || user?.role === 'super_admin' || user?.role === 'manager') && (
+                        <Button
+                          className="mt-3 bg-emerald-500 hover:bg-emerald-600 text-white print:hidden"
+                          onClick={() => {
+                            setPaymentDialog({
+                              employee_id: statementEmployee.id,
+                              employee_name: statementEmployee.name,
+                              suggested: Math.max(0, netRemaining),
+                              from_statement: true,
+                              salary_month: (dateMode === 'month' ? selectedMonth : selectedMonth) || new Date().toISOString().slice(0, 7),
+                            });
+                            setPaymentForm({
+                              amount: String(Math.round(netRemaining)),
+                              notes: t('صرف المتبقي بالكامل'),
+                              payment_method: 'cash',
+                            });
+                          }}
+                          data-testid="pay-full-remaining-btn"
+                        >
+                          <Banknote className="h-4 w-4 ml-2" /> {t('صرف المتبقي بالكامل')}
+                        </Button>
+                      )}
+                    </div>
+                  );
+                })()}
+
                 {/* Totals cards */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3" data-testid="statement-totals">
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-3" data-testid="statement-totals">
                   <Card className="bg-red-500/10">
                     <CardContent className="p-3 text-center">
                       <p className="text-xs text-muted-foreground">{t('إجمالي الخصومات')}</p>
@@ -4139,6 +4506,12 @@ export default function HR() {
                     <CardContent className="p-3 text-center">
                       <p className="text-xs text-muted-foreground">{t('السلف المتبقية')}</p>
                       <p className="text-lg font-bold text-yellow-600">{formatPrice(statementData.totals?.remaining_advances || 0)}</p>
+                    </CardContent>
+                  </Card>
+                  <Card className="bg-purple-500/10" data-testid="statement-salary-payments-card">
+                    <CardContent className="p-3 text-center">
+                      <p className="text-xs text-muted-foreground">{t('الدفعات المصروفة')}</p>
+                      <p className="text-lg font-bold text-purple-600">{formatPrice(statementData.totals?.total_salary_payments || 0)}</p>
                     </CardContent>
                   </Card>
                   <Card className="bg-cyan-500/10">
@@ -4281,6 +4654,51 @@ export default function HR() {
                   ) : <p className="text-sm text-muted-foreground">{t('لا توجد كشوف رواتب')}</p>}
                 </div>
 
+                {/* Salary Payments - الدفعات المصروفة (دفعات الكشف اليومي النقدية) */}
+                <div>
+                  <h3 className="font-bold text-purple-600 mb-2 flex items-center gap-2">
+                    <Banknote className="h-4 w-4" /> {t('الدفعات المصروفة')} ({statementData.salary_payments?.length || 0})
+                  </h3>
+                  {statementData.salary_payments?.length > 0 ? (
+                    <div className="overflow-x-auto border rounded">
+                      <table className="w-full text-sm">
+                        <thead className="bg-purple-50 dark:bg-purple-950/20">
+                          <tr>
+                            <th className="p-2 text-right">{t('التاريخ')}</th>
+                            <th className="p-2 text-right">{t('الشهر المستحق')}</th>
+                            <th className="p-2 text-right">{t('طريقة الدفع')}</th>
+                            <th className="p-2 text-right">{t('ملاحظات')}</th>
+                            <th className="p-2 text-right">{t('صرفها')}</th>
+                            <th className="p-2 text-right">{t('المبلغ')}</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {statementData.salary_payments.map(p => (
+                            <tr key={p.id} className="border-t">
+                              <td className="p-2 font-medium">{p.payment_date}</td>
+                              <td className="p-2">
+                                {p.salary_month ? (
+                                  <Badge className="bg-purple-500/15 text-purple-700 border-purple-300 text-[10px]">{p.salary_month}</Badge>
+                                ) : <span className="text-muted-foreground">-</span>}
+                              </td>
+                              <td className="p-2">{p.payment_method === 'cash' ? t('نقدي') : p.payment_method === 'bank' ? t('بنك') : (p.payment_method || '-')}</td>
+                              <td className="p-2 text-muted-foreground">{p.notes || '-'}</td>
+                              <td className="p-2 text-muted-foreground">{p.paid_by_name || '-'}</td>
+                              <td className="p-2 font-bold text-purple-600">{formatPrice(p.amount || 0)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                        <tfoot className="bg-purple-50/50 dark:bg-purple-950/10 font-bold">
+                          <tr>
+                            <td className="p-2" colSpan="5">{t('الإجمالي')}</td>
+                            <td className="p-2 text-purple-600">{formatPrice(statementData.totals?.total_salary_payments || 0)}</td>
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
+                  ) : <p className="text-sm text-muted-foreground">{t('لا توجد دفعات مصروفة')}</p>}
+                </div>
+
                 {/* Actions */}
                 <div className="flex justify-end gap-2 pt-4 border-t print:hidden">
                   <Button variant="outline" onClick={() => setStatementOpen(false)} data-testid="close-statement-btn">
@@ -4318,6 +4736,11 @@ export default function HR() {
                   <p className="text-xs text-muted-foreground">
                     {t('تاريخ الصرف')}: {dailyPayrollDate}
                   </p>
+                  {paymentDialog.salary_month && (
+                    <p className="text-xs text-purple-600 mt-1 font-medium" data-testid="payment-salary-month-note">
+                      {t('يُسحب من خزينة المالك من إيداعات شهر')} {paymentDialog.salary_month} ({t('الشهر المستحق')})
+                    </p>
+                  )}
                 </div>
                 <div>
                   <Label>{t('المبلغ المُصرَف نقداً')} *</Label>

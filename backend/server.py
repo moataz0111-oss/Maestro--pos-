@@ -3874,7 +3874,14 @@ async def reset_advances_before_month(month: str, current_user: dict = Depends(g
     cutoff = f"{month}-01"
     query = build_tenant_query(current_user)
     query["remaining_amount"] = {"$gt": 0}
-    query["created_at"] = {"$lt": cutoff}
+    # نفلتر حسب *تاريخ السلفة* (الأهم) مع تعويض created_at عند غياب التاريخ
+    query["$or"] = [
+        {"date": {"$lt": cutoff}},
+        {"$and": [
+            {"$or": [{"date": None}, {"date": ""}, {"date": {"$exists": False}}]},
+            {"created_at": {"$lt": cutoff}}
+        ]}
+    ]
     advances = await db.advances.find(query, {"_id": 0}).to_list(5000)
     cleared_total = sum((a.get("remaining_amount", 0) or 0) for a in advances)
     res = await db.advances.update_many(
@@ -4385,6 +4392,7 @@ class SalaryPaymentCreate(BaseModel):
     payment_date: Optional[str] = None  # YYYY-MM-DD (defaults to today)
     notes: Optional[str] = None
     payment_method: Optional[str] = "cash"  # cash | bank | other
+    salary_month: Optional[str] = None  # YYYY-MM — الشهر المستحق؛ يُؤرَّخ السحب من خزينة المالك بآخر يوم منه
 
 
 @api_router.post("/payroll/payments")
@@ -4411,7 +4419,20 @@ async def create_salary_payment(
         raise HTTPException(status_code=404, detail="الموظف غير موجود")
 
     payment_id = str(uuid.uuid4())
-    pay_date = payload.payment_date or datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    actual_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    # تحديد تاريخ القيد: إذا حُدِّد الشهر المستحق (salary_month) نُؤرّخ بآخر يوم منه
+    # (مثال: صرف في 1/7 لراتب شهر 6 → القيد بتاريخ 2026-06-30 ويُسحب من إيداعات شهر 6)
+    salary_month = (payload.salary_month or "").strip() or None
+    if salary_month:
+        import calendar as _cal
+        try:
+            _y, _m = int(salary_month[:4]), int(salary_month[5:7])
+            _last = _cal.monthrange(_y, _m)[1]
+            pay_date = f"{salary_month}-{_last:02d}"
+        except Exception:
+            raise HTTPException(status_code=400, detail="صيغة الشهر المستحق غير صحيحة (المتوقع YYYY-MM)")
+    else:
+        pay_date = payload.payment_date or actual_date
     paid_by_name = current_user.get("full_name") or current_user.get("username")
 
     # جلب اسم الفرع من جدول branches
@@ -4428,16 +4449,24 @@ async def create_salary_payment(
             branch_q["tenant_id"] = tenant_id
         br_deposits = await db.owner_deposits.find(branch_q, {"_id": 0}).to_list(5000)
         br_withdrawals = await db.owner_withdrawals.find(branch_q, {"_id": 0}).to_list(5000)
-        br_total_dep = sum(d.get("amount", 0) for d in br_deposits)
-        br_total_wd = sum(w.get("amount", 0) for w in br_withdrawals)
-        # خصم تحويلات الأرباح للخزينة الشخصية لنفس الفرع
         br_transfers = await db.owner_profit_transfers.find(branch_q, {"_id": 0}).to_list(5000)
-        br_total_tf = sum(t.get("amount", 0) for t in br_transfers)
+        if salary_month:
+            # السحب من إيداعات الشهر المستحق فقط لهذا الفرع
+            _m = lambda x: str((x or {}).get("date", "")).startswith(salary_month)
+            br_total_dep = sum(d.get("amount", 0) for d in br_deposits if _m(d))
+            br_total_wd = sum(w.get("amount", 0) for w in br_withdrawals if _m(w))
+            br_total_tf = sum(t.get("amount", 0) for t in br_transfers if _m(t))
+            scope_label = f" لشهر {salary_month}"
+        else:
+            br_total_dep = sum(d.get("amount", 0) for d in br_deposits)
+            br_total_wd = sum(w.get("amount", 0) for w in br_withdrawals)
+            br_total_tf = sum(t.get("amount", 0) for t in br_transfers)
+            scope_label = ""
         branch_balance = br_total_dep - br_total_wd - br_total_tf
         if float(payload.amount) > branch_balance:
             raise HTTPException(
                 status_code=400,
-                detail=f"رصيد فرع \"{emp_branch_name or emp_branch_id}\" غير كافٍ في خزينة المالك. المتاح: {branch_balance:,.0f} IQD، المطلوب: {float(payload.amount):,.0f} IQD"
+                detail=f"رصيد فرع \"{emp_branch_name or emp_branch_id}\"{scope_label} غير كافٍ في خزينة المالك. المتاح: {branch_balance:,.0f} IQD، المطلوب: {float(payload.amount):,.0f} IQD"
             )
 
     # 1) سجل الدفعة في salary_payments
@@ -4449,6 +4478,8 @@ async def create_salary_payment(
         "branch_name": emp_branch_name,
         "amount": round(float(payload.amount), 2),
         "payment_date": pay_date,
+        "salary_month": salary_month,
+        "actual_payment_date": actual_date,
         "payment_method": payload.payment_method or "cash",
         "notes": payload.notes,
         "paid_by": current_user.get("id"),
@@ -4464,8 +4495,10 @@ async def create_salary_payment(
         "tenant_id": tenant_id,
         "amount": round(float(payload.amount), 2),
         "date": pay_date,
+        "salary_month": salary_month,
+        "actual_payment_date": actual_date,
         "beneficiary": f"راتب: {emp.get('name')}",
-        "description": payload.notes or "دفعة على راتب الموظف",
+        "description": (payload.notes or "دفعة على راتب الموظف") + (f" (مستحق شهر {salary_month})" if salary_month else ""),
         "category": "salary_payment",
         "branch_id": emp_branch_id,
         "branch_name": emp_branch_name,
@@ -4488,9 +4521,11 @@ async def list_salary_payments(
     branch_id: Optional[str] = None,
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
+    salary_month: Optional[str] = None,
     current_user: dict = Depends(get_current_user)
 ):
-    """عرض دفعات الرواتب - فلترة بالموظف/الفرع/الفترة."""
+    """عرض دفعات الرواتب - فلترة بالموظف/الفرع/الفترة/الشهر المستحق.
+    salary_month (YYYY-MM): يعرض كل الدفعات المخصومة من إيداعات ذلك الشهر بصرف النظر عن تاريخ الصرف الفعلي."""
     tenant_id = get_user_tenant_id(current_user)
     q = {}
     if tenant_id:
@@ -4499,6 +4534,8 @@ async def list_salary_payments(
         q["employee_id"] = employee_id
     if branch_id:
         q["branch_id"] = branch_id
+    if salary_month:
+        q["salary_month"] = salary_month
     if start_date or end_date:
         date_q = {}
         if start_date:
@@ -21265,7 +21302,7 @@ async def get_menu_link(request: Request, current_user: dict = Depends(get_curre
         base_url = f"{parsed.scheme}://{parsed.netloc}"
     else:
         # fallback للـ environment variable
-        base_url = os.environ.get('REACT_APP_BACKEND_URL', 'https://warehouse-pos-hub-1.preview.emergentagent.com')
+        base_url = os.environ.get('REACT_APP_BACKEND_URL', 'https://offline-pos-multi.preview.emergentagent.com')
     
     menu_url = f"{base_url}/menu/{tenant.get('menu_slug', tenant_id)}"
     

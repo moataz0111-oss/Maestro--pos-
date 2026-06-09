@@ -858,6 +858,14 @@ async def get_employee_account_statement(
         {**sub_q, **date_filter}, {"_id": 0}
     ).sort("date", -1).to_list(2000)
 
+    # الدفعات المصروفة (دفعات الكشف اليومي النقدية)
+    payments_q = dict(sub_q)
+    if start_date and end_date:
+        payments_q["payment_date"] = {"$gte": start_date, "$lte": end_date}
+    salary_payments = await db.salary_payments.find(
+        payments_q, {"_id": 0}
+    ).sort("payment_date", -1).to_list(2000)
+
     totals = {
         "total_deductions": sum(d.get("amount", 0) or 0 for d in deductions),
         "total_bonuses": sum(b.get("amount", 0) or 0 for b in bonuses),
@@ -865,6 +873,7 @@ async def get_employee_account_statement(
         "remaining_advances": sum(a.get("remaining_amount", 0) or 0 for a in advances if a.get("status") in ["approved", "paid"]),
         "total_paid_payrolls": sum(p.get("net_salary", 0) or 0 for p in payrolls if p.get("status") == "paid"),
         "total_pending_payrolls": sum(p.get("net_salary", 0) or 0 for p in payrolls if p.get("status") != "paid"),
+        "total_salary_payments": round(sum(p.get("amount", 0) or 0 for p in salary_payments), 2),
         "attendance_days": len([a for a in attendance if a.get("status") in ["present", "late"]]),
         "absent_days": len([a for a in attendance if a.get("status") == "absent"]),
     }
@@ -877,6 +886,7 @@ async def get_employee_account_statement(
         "advances": advances,
         "payrolls": payrolls,
         "attendance": attendance,
+        "salary_payments": salary_payments,
         "totals": totals,
         "generated_at": datetime.now(timezone.utc).isoformat()
     }
