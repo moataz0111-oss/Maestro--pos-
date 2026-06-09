@@ -19350,6 +19350,64 @@ async def fix_pending_orders_extras_calc():
         logger.error(f"❌ fix_pending_orders_extras migration failed: {e}")
 
 
+@app.on_event("startup")
+async def cleanup_mistaken_expense_moataz36():
+    """حذف مصروف أُدخل بالخطأ "ا-معتز#36" (غداء إدارة) — مرة واحدة فقط، بطلب المالك.
+    آمن: يحفظ نسخة كاملة من كل مستند محذوف في system_migrations (قابلة للاسترجاع)،
+    ثم يُعيد احتساب إجمالي مصاريف الورديات المفتوحة المتأثرة. لا يُضاف أي زر حذف في الواجهة.
+    المطابقة الدقيقة: الوصف يحتوي على "معتز" و "36" معاً (لتفادي حذف أي مصروف آخر).
+    """
+    try:
+        from datetime import datetime as _dt, timezone as _tz
+        MIG_KEY = "cleanup_mistaken_expense_moataz36_v1"
+        done = await db.system_migrations.find_one({"key": MIG_KEY})
+        if done:
+            return
+
+        candidates = await db.expenses.find({"description": {"$regex": "معتز"}}, {"_id": 0}).to_list(2000)
+        def _has36(e):
+            return "36" in (e.get("description") or "") or "36" in (str(e.get("reference_number") or ""))
+        to_delete = [e for e in candidates if "معتز" in (e.get("description") or "") and _has36(e)]
+
+        deleted_ids = []
+        affected = set()
+        for e in to_delete:
+            await db.expenses.delete_one({"id": e["id"]})
+            deleted_ids.append(e["id"])
+            if e.get("branch_id"):
+                affected.add((e.get("tenant_id"), e.get("branch_id")))
+            logger.info(f"   🗑️ حُذف مصروف بالخطأ: {e.get('description')} | {e.get('amount')} | {e.get('date')}")
+
+        # إعادة احتساب إجمالي مصاريف الورديات المفتوحة المتأثرة
+        for tid, bid in affected:
+            shift_q = {"branch_id": bid, "status": "open"}
+            if tid:
+                shift_q["tenant_id"] = tid
+            sh = await db.shifts.find_one(shift_q, {"_id": 0, "id": 1, "started_at": 1, "opening_cash": 1, "opening_balance": 1, "cash_sales": 1})
+            if not sh:
+                continue
+            exp_q = {"branch_id": bid, "category": {"$ne": "refund"}, "created_at": {"$gte": sh.get("started_at", "")}}
+            if tid:
+                exp_q["tenant_id"] = tid
+            exps = await db.expenses.find(exp_q, {"_id": 0, "amount": 1}).to_list(500)
+            total_exp = sum(float(x.get("amount") or 0) for x in exps)
+            oc = float(sh.get("opening_cash") or sh.get("opening_balance") or 0)
+            cs = float(sh.get("cash_sales") or 0)
+            await db.shifts.update_one({"id": sh["id"]}, {"$set": {"total_expenses": total_exp, "expected_cash": oc + cs - total_exp}})
+
+        await db.system_migrations.insert_one({
+            "key": MIG_KEY,
+            "executed_at": _dt.now(_tz.utc).isoformat(),
+            "deleted_count": len(deleted_ids),
+            "deleted_ids": deleted_ids,
+            "deleted_docs_backup": to_delete,  # نسخة احتياطية كاملة للاسترجاع عند الحاجة
+        })
+        logger.info(f"✅ {MIG_KEY} complete: حُذف {len(deleted_ids)} مصروف")
+    except Exception as e:
+        logger.error(f"❌ cleanup_mistaken_expense_moataz36 migration failed: {e}")
+
+
+
 
 @app.on_event("startup")
 async def seed_department_branches():
