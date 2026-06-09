@@ -1,0 +1,38 @@
+{
+  "summary": "HR module verification PASSED end-to-end. /hr loads (no console 500s, employees موظف 1/موظف 2 visible after 'جميع الفروع'). Payroll report tab: colored cards including 'الدفعات المصروفة' (data-testid=card-total-paid) and 'المتبقي للموظفين' both render; employees table has 'مدفوع نقداً'/'المتبقي' columns with paid-{id}/remaining-{id} testids and a footer totals row. Payslips tab header shows 'مدفوع نقداً'/'المتبقي' and pending rows correctly show '-'. Disbursed 5,000 IQD via POST /api/payroll/payments to موظف 1 → report immediately reflects paid=5,000 IQD, net=16,667 IQD, remaining=11,667 IQD (net - paid), card-total-paid='5,000 IQD', card 'المتبقي للموظفين'='11,667 IQD', footer totals consistent. Attendance tab: created a check-in for موظف 1 on 2026-06-10; break-out-{attendanceId} and break-in-{attendanceId} cells render Arabic 'لا يوجد استراحة' as required for an employee with no break configured. Owner-treasury withdrawal untouched (linked_owner_withdrawal_id is created by the payment endpoint).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "HR header — connection broker badge", "issue": "Badge shows 'الوسيط غير متصل' (offline) and console logs repeated ERR_CONNECTION_REFUSED for the realtime broker. REST APIs (employees/payroll/attendance/payments) all work fine, so functionality is unaffected, but the badge gives a misleading 'offline' impression to the user. Carry-over from previous iterations.", "selector": "header badge near 'إدارة الموارد البشرية'", "priority": "LOW"},
+      {"component": "HR header — branch selector label", "issue": "Branch combobox label renders as 'جميع الفروع1212' (count badge '12' concatenated without spacing next to the label, and twice). Cosmetic but ugly.", "selector": "[data-testid='branch-selector']", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "verified_features": {
+    "/hr loads without 500": true,
+    "Employees visible with 'جميع الفروع'": true,
+    "Payroll report tab — card 'الدفعات المصروفة' (card-total-paid)": "PASS — '5,000 IQD' after disbursement",
+    "Payroll report tab — card 'المتبقي للموظفين'": "PASS — '11,667 IQD' after disbursement",
+    "Payroll report table — 'مدفوع نقداً'/'المتبقي' columns + paid-/remaining- testids + footer totals": "PASS",
+    "Payslips tab header has 'مدفوع نقداً'/'المتبقي', pending rows show '-'": "PASS",
+    "Disbursement deducts from net (المتبقي = صافي − مدفوع)": "PASS — 16,667 − 5,000 = 11,667 IQD exactly",
+    "Attendance break-out-/break-in- show 'لا يوجد استراحة' for employees with no break configured": "PASS",
+    "Owner-treasury withdrawal mechanism untouched": "PASS — POST /api/payroll/payments returns linked_owner_withdrawal_id"
+  },
+  "test_report_links": [],
+  "action_items": [
+    "(LOW/cosmetic) Investigate the realtime-broker WebSocket connection in HR — badge stays 'الوسيط غير متصل' and ERR_CONNECTION_REFUSED is spammed in the console.",
+    "(LOW/cosmetic) Fix the 'جميع الفروع1212' label by separating the count badge from the option label in the branch selector."
+  ],
+  "critical_code_review_comments": [
+    "Attendance break-out/break-in cells use data-testid='break-out-{attendance_id}' and 'break-in-{attendance_id}' (the row's attendance record id), not '{employeeId}' as the review request suggested. Functional behaviour is correct; the discrepancy is only in the testid naming vs the request wording. Leaving as-is unless main agent prefers per-employee testid."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "admin@maestroegp.com / admin123 (tenant: default)",
+  "seed_data_creation": "Created via API for testing: (1) attendance record id=cd3f23d6-... for موظف 1 on 2026-06-10 (check_in 09:00, check_out 17:00, no break); (2) salary payment 5,000 IQD on 2026-06-15 to موظف 1 via POST /api/payroll/payments (id=56e78486-..., linked_owner_withdrawal_id=62df4dae-...). These can be deleted via DELETE /api/payroll/payments/{id} and DELETE /api/attendance/{id} if needed.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "All HR features in this iteration are working end-to-end. Backend logic (net=16,667 with no deductions/bonuses/advances/overtime for موظف 1 with 500K basic on a fresh month) is consistent across /api/payroll/calculate, /api/payroll, and /api/reports/payroll-summary. The disbursement endpoint that the daily-payroll-tab UI calls is POST /api/payroll/payments (it auto-creates an owner_withdrawals entry). The realtime broker websocket being offline is a pre-existing environment quirk and does not impact REST functionality."
+}

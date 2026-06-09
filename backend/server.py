@@ -1821,11 +1821,11 @@ class EmployeeResponse(BaseModel):
     national_id: Optional[str] = None
     position: str
     department: Optional[str] = None
-    branch_id: str
-    hire_date: str
+    branch_id: Optional[str] = None
+    hire_date: Optional[str] = None
     salary: float
-    salary_type: str
-    work_hours_per_day: float
+    salary_type: str = "monthly"
+    work_hours_per_day: float = 8.0
     user_id: Optional[str] = None
     biometric_uid: Optional[str] = None
     shift_start: Optional[str] = None

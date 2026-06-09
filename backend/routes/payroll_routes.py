@@ -494,6 +494,16 @@ async def calculate_payroll(
     # صافي الراتب = الراتب المستحق + وقت إضافي موافق + مكافآت - خصومات - سلف
     net_salary = round(earned_salary + overtime_pay + total_bonuses - total_deductions - advance_deduction, 2)
     
+    # 💰 الدفعات النقدية المصروفة من الكشف اليومي (لا تمسّ آلية خزينة المالك)
+    month_start = f"{month}-01"
+    month_end = f"{month}-31"
+    payments = await db.salary_payments.find({
+        "employee_id": employee_id,
+        "payment_date": {"$gte": month_start, "$lte": month_end}
+    }, {"_id": 0}).to_list(2000)
+    paid_amount = round(sum(p.get("amount", 0) or 0 for p in payments), 2)
+    remaining = round(net_salary - paid_amount, 2)
+    
     return {
         "employee_id": employee_id,
         "employee_name": employee.get("name"),
@@ -514,7 +524,9 @@ async def calculate_payroll(
         "total_bonuses": total_bonuses,
         "bonuses_breakdown": bonuses,
         "advance_deduction": advance_deduction,
-        "net_salary": net_salary
+        "net_salary": net_salary,
+        "paid_amount": paid_amount,
+        "remaining": remaining
     }
 
 # ==================== PAYROLL CRUD ====================
@@ -561,7 +573,7 @@ async def get_payroll(
     
     payrolls = await db.payroll.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
     
-    # تحديث أسماء الموظفين من البيانات الحالية
+    # تحديث أسماء الموظفين من البيانات الحالية + إرفاق الدفعات النقدية المصروفة
     if payrolls:
         emp_ids = list(set(p.get("employee_id") for p in payrolls if p.get("employee_id")))
         if emp_ids:
@@ -571,6 +583,19 @@ async def get_payroll(
                 eid = p.get("employee_id")
                 if eid and eid in name_map:
                     p["employee_name"] = name_map[eid]
+        # 💰 إجمالي الدفعات النقدية المصروفة لكل (موظف+شهر) من الكشف اليومي
+        for p in payrolls:
+            eid = p.get("employee_id")
+            pmonth = p.get("month")
+            paid_amount = 0
+            if eid and pmonth:
+                pays = await db.salary_payments.find({
+                    "employee_id": eid,
+                    "payment_date": {"$gte": f"{pmonth}-01", "$lte": f"{pmonth}-31"}
+                }, {"_id": 0}).to_list(2000)
+                paid_amount = round(sum(x.get("amount", 0) or 0 for x in pays), 2)
+            p["paid_amount"] = paid_amount
+            p["remaining"] = round((p.get("net_salary", 0) or 0) - paid_amount, 2)
     
     return payrolls
 

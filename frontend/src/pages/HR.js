@@ -2432,7 +2432,7 @@ export default function HR() {
                 {payrollSummary ? (
                   <>
                     {/* ملخص الإجماليات */}
-                    <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
+                    <div className="grid grid-cols-2 md:grid-cols-6 gap-4 mb-6">
                       <Card className="bg-blue-500/10">
                         <CardContent className="p-4 text-center">
                           <p className="text-sm text-muted-foreground">{t('الرواتب الأساسية')}</p>
@@ -2457,10 +2457,16 @@ export default function HR() {
                           <p className="text-xl font-bold text-yellow-500">{formatPrice(payrollSummary.totals?.total_advances || 0)}</p>
                         </CardContent>
                       </Card>
+                      <Card className="bg-purple-500/10" data-testid="card-total-paid">
+                        <CardContent className="p-4 text-center">
+                          <p className="text-sm text-muted-foreground">{t('الدفعات المصروفة')}</p>
+                          <p className="text-xl font-bold text-purple-500">{formatPrice(payrollSummary.totals?.paid_amount || 0)}</p>
+                        </CardContent>
+                      </Card>
                       <Card className="bg-cyan-500/10">
                         <CardContent className="p-4 text-center">
-                          <p className="text-sm text-muted-foreground">{t('صافي المستحقات')}</p>
-                          <p className="text-xl font-bold text-cyan-500">{formatPrice(payrollSummary.totals?.net_payable || 0)}</p>
+                          <p className="text-sm text-muted-foreground">{t('المتبقي للموظفين')}</p>
+                          <p className="text-xl font-bold text-cyan-500">{formatPrice(payrollSummary.totals?.remaining != null ? payrollSummary.totals.remaining : (payrollSummary.totals?.net_payable || 0))}</p>
                         </CardContent>
                       </Card>
                     </div>
@@ -2479,6 +2485,8 @@ export default function HR() {
                             <th className="p-3 text-right">{t('الخصومات')}</th>
                             <th className="p-3 text-right">{t('السلف')}</th>
                             <th className="p-3 text-right">{t('صافي الراتب')}</th>
+                            <th className="p-3 text-right text-purple-600">{t('مدفوع نقداً')}</th>
+                            <th className="p-3 text-right text-cyan-600">{t('المتبقي')}</th>
                             <th className="p-3 text-right">{t('الإجراءات')}</th>
                           </tr>
                         </thead>
@@ -2494,6 +2502,8 @@ export default function HR() {
                               <td className="p-3 text-red-600">{formatPrice(emp.deductions)}</td>
                               <td className="p-3 text-yellow-600">{formatPrice(emp.advances_deduction)}</td>
                               <td className="p-3 font-bold text-cyan-600">{formatPrice(emp.net_payable)}</td>
+                              <td className="p-3 text-purple-600 font-medium" data-testid={`paid-${emp.id}`}>{formatPrice(emp.paid_amount || 0)}</td>
+                              <td className="p-3 text-cyan-700 font-bold" data-testid={`remaining-${emp.id}`}>{formatPrice(emp.remaining != null ? emp.remaining : emp.net_payable)}</td>
                               <td className="p-3">
                                 <div className="flex gap-1">
                                   <Button 
@@ -2521,6 +2531,8 @@ export default function HR() {
                             <td className="p-3 text-red-600">{formatPrice(payrollSummary.totals?.total_deductions || 0)}</td>
                             <td className="p-3 text-yellow-600">{formatPrice(payrollSummary.totals?.total_advances || 0)}</td>
                             <td className="p-3 text-cyan-600">{formatPrice(payrollSummary.totals?.net_payable || 0)}</td>
+                            <td className="p-3 text-purple-600">{formatPrice(payrollSummary.totals?.paid_amount || 0)}</td>
+                            <td className="p-3 text-cyan-700">{formatPrice(payrollSummary.totals?.remaining != null ? payrollSummary.totals.remaining : (payrollSummary.totals?.net_payable || 0))}</td>
                             <td className="p-3"></td>
                           </tr>
                         </tfoot>
@@ -2779,19 +2791,37 @@ export default function HR() {
                           const h12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
                           return `${h12}:${String(m).padStart(2, '0')} ${period}`;
                         };
+                        // 🟢 تعويض من بطاقة الموظف عند عدم البصم + إظهار الاستراحة حسب تعريف البطاقة
+                        const emp = employees.find(e => e.id === att.employee_id);
+                        const hasBreak = !!(emp && emp.break_start && emp.break_end);
+                        const hasAnyPunch = !!(att.check_in || att.check_out || att.break_in || att.break_out);
+                        const effCheckIn = att.check_in || (hasAnyPunch ? emp?.shift_start : null);
+                        const effCheckOut = att.check_out || (hasAnyPunch ? emp?.shift_end : null);
+                        const effBreakOut = att.break_out || (hasAnyPunch ? emp?.break_start : null);
+                        const effBreakIn = att.break_in || (hasAnyPunch ? emp?.break_end : null);
+                        let dispHours = att.worked_hours;
+                        if ((dispHours == null) && effCheckIn && effCheckOut) {
+                          const [ih, im] = effCheckIn.split(':').map(Number);
+                          const [oh, om] = effCheckOut.split(':').map(Number);
+                          if (!isNaN(ih) && !isNaN(oh)) {
+                            let mins = (oh * 60 + om) - (ih * 60 + im);
+                            if (mins < 0) mins += 24 * 60;
+                            dispHours = mins / 60;
+                          }
+                        }
                         return (
                         <tr key={att.id} className="border-b hover:bg-muted/50">
                           <td className="p-3 font-medium">{att.employee_name}</td>
                           <td className="p-3">{att.date}</td>
-                          <td className="p-3">{formatTime12(att.check_in)}</td>
+                          <td className="p-3">{formatTime12(effCheckIn)}</td>
                           <td className="p-3 text-amber-700 bg-amber-50/30" data-testid={`break-out-${att.id}`}>
-                            {formatTime12(att.break_out)}
+                            {hasBreak ? formatTime12(effBreakOut) : <span className="text-muted-foreground text-xs">{t('لا يوجد استراحة')}</span>}
                           </td>
                           <td className="p-3 text-emerald-700 bg-emerald-50/30" data-testid={`break-in-${att.id}`}>
-                            {formatTime12(att.break_in)}
+                            {hasBreak ? formatTime12(effBreakIn) : <span className="text-muted-foreground text-xs">{t('لا يوجد استراحة')}</span>}
                           </td>
-                          <td className="p-3">{formatTime12(att.check_out)}</td>
-                          <td className="p-3">{att.worked_hours?.toFixed(1) || '-'}</td>
+                          <td className="p-3">{formatTime12(effCheckOut)}</td>
+                          <td className="p-3">{dispHours != null ? dispHours.toFixed(1) : '-'}</td>
                           <td className="p-3">{getStatusBadge(att.status)}</td>
                         </tr>
                         );
@@ -3365,6 +3395,8 @@ export default function HR() {
                         <th className="text-right p-3">{t('المكافآت')}</th>
                         <th className="text-right p-3">{t('استقطاع السلف')}</th>
                         <th className="text-right p-3">{t('صافي الراتب')}</th>
+                        <th className="text-right p-3 text-purple-600">{t('مدفوع نقداً')}</th>
+                        <th className="text-right p-3 text-cyan-600">{t('المتبقي')}</th>
                         <th className="text-right p-3">{t('الحالة')}</th>
                         <th className="text-right p-3">{t('الإجراءات')}</th>
                       </tr>
@@ -3382,6 +3414,8 @@ export default function HR() {
                               <td className="p-3 text-green-500">+{formatPrice(pay.total_bonuses)}</td>
                               <td className="p-3 text-yellow-500">-{formatPrice(pay.advance_deduction)}</td>
                               <td className="p-3 font-bold">{formatPrice(pay.net_salary)}</td>
+                              <td className="p-3 text-purple-600 font-medium" data-testid={`payslip-paid-${pay.id}`}>{formatPrice(pay.paid_amount || 0)}</td>
+                              <td className="p-3 text-cyan-700 font-bold" data-testid={`payslip-remaining-${pay.id}`}>{formatPrice(pay.remaining != null ? pay.remaining : pay.net_salary)}</td>
                               <td className="p-3">{getPayrollStatusBadge(pay.status)}</td>
                               <td className="p-3">
                                 <div className="flex gap-2">
@@ -3411,6 +3445,8 @@ export default function HR() {
                             <td className="p-3 text-muted-foreground">-</td>
                             <td className="p-3 text-muted-foreground">-</td>
                             <td className="p-3 text-muted-foreground italic">{t('لم يُحسب')}</td>
+                            <td className="p-3 text-muted-foreground">-</td>
+                            <td className="p-3 text-muted-foreground">-</td>
                             <td className="p-3">
                               <Badge variant="outline" className="text-muted-foreground">{t('بانتظار الإنشاء')}</Badge>
                             </td>
@@ -3741,6 +3777,21 @@ export default function HR() {
                       {formatPrice(payrollPreview.net_salary)}
                     </span>
                   </div>
+                  {(payrollPreview.paid_amount || 0) > 0 && (
+                    <>
+                      <div className="flex justify-between">
+                        <span>- {t('مدفوع نقداً (دفعات الكشف اليومي)')}</span>
+                        <span className="text-purple-600 font-semibold" data-testid="preview-paid">-{formatPrice(payrollPreview.paid_amount || 0)}</span>
+                      </div>
+                      <hr className="border-primary/30" />
+                      <div className="flex justify-between text-lg font-bold">
+                        <span>{t('المتبقي للصرف')}</span>
+                        <span className="text-cyan-600" data-testid="preview-remaining">
+                          {formatPrice(payrollPreview.remaining != null ? payrollPreview.remaining : (payrollPreview.net_salary - (payrollPreview.paid_amount || 0)))}
+                        </span>
+                      </div>
+                    </>
+                  )}
                   {payrollPreview.net_salary < 0 && (
                     <div className="mt-2 p-2 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800 rounded text-xs text-red-700 dark:text-red-400">
                       ⚠️ {t('صافي الراتب سالب - الموظف مدين للشركة بمبلغ')} {formatPrice(Math.abs(payrollPreview.net_salary))}
