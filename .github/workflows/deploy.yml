@@ -31,9 +31,12 @@ jobs:
     # ⚡ بناء الواجهة على خوادم GitHub السريعة (بدل الـVPS المحدود الذاكرة)
     #    → يقلّل وقت البناء من ~18 دقيقة إلى ~3 دقائق، ويُلغي تعليق/نفاد ذاكرة الـVPS
     # =============================================
-    - name: 🏷️ Compute frontend image name (lowercase)
+    - name: 🏷️ Compute image names (lowercase)
       id: img
-      run: echo "name=ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')-frontend" >> "$GITHUB_OUTPUT"
+      run: |
+        REPO=$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')
+        echo "name=ghcr.io/${REPO}-frontend" >> "$GITHUB_OUTPUT"
+        echo "backend=ghcr.io/${REPO}-backend" >> "$GITHUB_OUTPUT"
 
     - name: 🐳 Set up Buildx
       uses: docker/setup-buildx-action@v3
@@ -57,6 +60,21 @@ jobs:
         cache-to: type=gha,mode=max
 
     # =============================================
+    # ⚡ بناء الـBackend أيضاً على خوادم GitHub (بدل الـVPS المحدود الذاكرة)
+    #    → يُلغي فشل/نفاد ذاكرة الـVPS أثناء pip install
+    # =============================================
+    - name: 🏗️ Build & push backend image
+      uses: docker/build-push-action@v6
+      with:
+        context: ./backend
+        push: true
+        tags: |
+          ${{ steps.img.outputs.backend }}:latest
+          ${{ steps.img.outputs.backend }}:${{ github.sha }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+    # =============================================
     # 🚀 النشر على الـVPS: بناء الـBackend محلياً + سحب صورة الواجهة الجاهزة
     # =============================================
     - name: 🔑 Deploy
@@ -65,13 +83,14 @@ jobs:
         GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         GHCR_USER: ${{ github.actor }}
         FRONTEND_IMAGE: ${{ steps.img.outputs.name }}
+        BACKEND_IMAGE: ${{ steps.img.outputs.backend }}
       with:
         host: 158.220.118.54
         username: root
         key: ${{ secrets.VPS_SSH_KEY }}
         port: 22
         command_timeout: 60m
-        envs: GHCR_TOKEN,GHCR_USER,FRONTEND_IMAGE
+        envs: GHCR_TOKEN,GHCR_USER,FRONTEND_IMAGE,BACKEND_IMAGE
         script: |
           echo "🚀 بدء النشر..."
           cd /var/www/maestro
@@ -95,23 +114,26 @@ jobs:
           fi
 
           # =============================================
-          # تحديث Backend (يُبنى محلياً — خفيف، وطبقات pip تُكاش)
+          # تسجيل الدخول إلى GHCR (لسحب صور الـBackend والـFrontend الجاهزة)
           # =============================================
-          echo "📦 تحديث Backend..."
-          # 🔴 إن فشل بناء الـBackend، أوقف النشر فوراً بدل إبقاء النسخة القديمة بصمت
-          if ! DOCKER_BUILDKIT=1 docker build -t maestro_backend:new ./backend; then
-            echo "❌ فشل بناء صورة الـBackend — تم إيقاف النشر. النسخة القديمة ما زالت تعمل."
+          echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin 2>&1 | grep -v "credentials are stored unencrypted\|Configure a credential helper\|credential-store" || true
+
+          # =============================================
+          # تحديث Backend — سحب الصورة الجاهزة من GHCR (بُنيت على GitHub، لا بناء على الـVPS)
+          # =============================================
+          echo "📦 تحديث Backend (سحب صورة جاهزة من GHCR)..."
+          if ! docker pull "$BACKEND_IMAGE:latest"; then
+            echo "❌ فشل سحب صورة الـBackend من GHCR — تم إيقاف النشر."
             exit 1
           fi
           docker stop backend 2>/dev/null || true
           docker rm backend 2>/dev/null || true
-          docker tag maestro_backend:new maestro_backend:latest
           docker run -d --name backend \
             --network maestro_maestro-network \
             -v /var/www/maestro/uploads:/app/uploads \
             -e MONGO_URL="mongodb://maestro-mongodb:27017" \
             -e DB_NAME="maestro_db" \
-            maestro_backend:latest
+            "$BACKEND_IMAGE:latest"
 
           # انتظار Backend
           echo "⏳ انتظار Backend..."
@@ -121,7 +143,6 @@ jobs:
           # تحديث Frontend — سحب الصورة الجاهزة من GHCR (لا بناء على الـVPS)
           # =============================================
           echo "🎨 تحديث Frontend (سحب صورة جاهزة من GHCR)..."
-          echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin 2>&1 | grep -v "credentials are stored unencrypted\|Configure a credential helper\|credential-store" || true
           docker pull "$FRONTEND_IMAGE:latest"
           docker stop frontend 2>/dev/null || true
           docker rm frontend 2>/dev/null || true
