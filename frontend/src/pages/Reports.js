@@ -2984,38 +2984,38 @@ const DeliveryReportTab = ({ deliveryCreditsReport, t, formatPrice, fetchReports
                   </div>
                 </div>
                 
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2">
-                  <div className="flex items-center justify-between gap-2 px-3 py-2.5 bg-blue-500/10 rounded-lg">
-                    <span className="text-[11px] text-blue-600 whitespace-nowrap">{t('المبيعات (قبل الاستقطاع)')}</span>
-                    <span className="text-sm font-bold text-blue-600 tabular-nums whitespace-nowrap">{formatPrice(data.total)}</span>
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3 items-stretch">
+                  <div className="flex flex-col items-center justify-center text-center gap-1.5 p-4 bg-blue-500/10 rounded-xl min-h-[92px]">
+                    <p className="text-xs font-medium text-blue-600 leading-tight">{t('المبيعات (قبل الاستقطاع)')}</p>
+                    <p className="text-lg font-bold text-blue-600 tabular-nums">{formatPrice(data.total)}</p>
                   </div>
                   <button
                     type="button"
                     onClick={() => setCompanyCostApp({ name: appName, ...data })}
-                    className="flex items-center justify-between gap-2 px-3 py-2.5 bg-orange-500/10 rounded-lg hover:bg-orange-500/20 transition-colors cursor-pointer"
+                    className="flex flex-col items-center justify-center text-center gap-1.5 p-4 bg-orange-500/10 rounded-xl min-h-[92px] hover:bg-orange-500/20 transition-colors cursor-pointer"
                     data-testid={`company-materials-cost-${appName}`}
                     title={t('اضغط لعرض كلفة المواد لكل منتج لهذه الشركة')}
                   >
-                    <span className="text-[11px] text-orange-600 whitespace-nowrap flex items-center gap-1">
-                      <Package className="h-3 w-3" />{t('كلفة المواد')}
-                    </span>
-                    <span className="text-sm font-bold text-orange-600 tabular-nums whitespace-nowrap">{formatPrice(data.total_materials_cost != null ? data.total_materials_cost : (data.materials_cost || 0))}</span>
+                    <p className="text-xs font-medium text-orange-600 leading-tight flex items-center gap-1">
+                      <Package className="h-3.5 w-3.5" />{t('كلفة المواد')}
+                    </p>
+                    <p className="text-lg font-bold text-orange-600 tabular-nums">{formatPrice(data.total_materials_cost != null ? data.total_materials_cost : (data.materials_cost || 0))}</p>
                   </button>
-                  <div className="flex items-center justify-between gap-2 px-3 py-2.5 bg-red-500/10 rounded-lg">
-                    <span className="text-[11px] text-red-500 whitespace-nowrap">{t('العمولة المستقطعة')}</span>
-                    <span className="text-sm font-bold text-red-500 tabular-nums whitespace-nowrap">-{formatPrice(data.commission)}</span>
+                  <div className="flex flex-col items-center justify-center text-center gap-1.5 p-4 bg-red-500/10 rounded-xl min-h-[92px]">
+                    <p className="text-xs font-medium text-red-500 leading-tight">{t('العمولة المستقطعة')}</p>
+                    <p className="text-lg font-bold text-red-500 tabular-nums">-{formatPrice(data.commission)}</p>
                   </div>
-                  <div className="flex items-center justify-between gap-2 px-3 py-2.5 bg-amber-500/10 rounded-lg">
-                    <span className="text-[11px] text-amber-600 whitespace-nowrap">{t('الصافي (بعد الاستقطاع)')}</span>
-                    <span className="text-sm font-bold text-amber-600 tabular-nums whitespace-nowrap">{formatPrice(data.net_amount)}</span>
+                  <div className="flex flex-col items-center justify-center text-center gap-1.5 p-4 bg-amber-500/10 rounded-xl min-h-[92px]">
+                    <p className="text-xs font-medium text-amber-600 leading-tight">{t('الصافي (بعد الاستقطاع)')}</p>
+                    <p className="text-lg font-bold text-amber-600 tabular-nums">{formatPrice(data.net_amount)}</p>
                   </div>
-                  <div className="flex items-center justify-between gap-2 px-3 py-2.5 bg-green-500/10 rounded-lg">
-                    <span className="text-[11px] text-green-600 whitespace-nowrap">{t('تم التحصيل')}</span>
-                    <span className="text-sm font-bold text-green-600 tabular-nums whitespace-nowrap">{formatPrice(data.collected_amount || 0)}</span>
+                  <div className="flex flex-col items-center justify-center text-center gap-1.5 p-4 bg-green-500/10 rounded-xl min-h-[92px]">
+                    <p className="text-xs font-medium text-green-600 leading-tight">{t('تم التحصيل')}</p>
+                    <p className="text-lg font-bold text-green-600 tabular-nums">{formatPrice(data.collected_amount || 0)}</p>
                   </div>
-                  <div className="flex items-center justify-between gap-2 px-3 py-2.5 bg-purple-500/10 rounded-lg">
-                    <span className="text-[11px] text-purple-600 whitespace-nowrap">{t('المتبقي')}</span>
-                    <span className="text-sm font-bold text-purple-600 tabular-nums whitespace-nowrap">{formatPrice(data.remaining_amount != null ? data.remaining_amount : data.net_amount)}</span>
+                  <div className="flex flex-col items-center justify-center text-center gap-1.5 p-4 bg-purple-500/10 rounded-xl min-h-[92px]">
+                    <p className="text-xs font-medium text-purple-600 leading-tight">{t('المتبقي')}</p>
+                    <p className="text-lg font-bold text-purple-600 tabular-nums">{formatPrice(data.remaining_amount != null ? data.remaining_amount : data.net_amount)}</p>
                   </div>
                 </div>
               </div>
