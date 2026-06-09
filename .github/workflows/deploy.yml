@@ -21,7 +21,7 @@ jobs:
 
     steps:
     - name: 📥 Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
 
     # =============================================
     # ⚡ بناء الواجهة على خوادم GitHub السريعة (بدل الـVPS المحدود الذاكرة)
@@ -42,7 +42,7 @@ jobs:
         password: ${{ secrets.GITHUB_TOKEN }}
 
     - name: 🏗️ Build & push frontend image
-      uses: docker/build-push-action@v5
+      uses: docker/build-push-action@v6
       with:
         context: ./frontend
         push: true
