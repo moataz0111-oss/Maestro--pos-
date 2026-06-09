@@ -26,7 +26,9 @@ COPY requirements.txt .
 
 # تثبيت المتطلبات
 RUN pip install --no-cache-dir -r requirements.txt
-RUN pip install emergentintegrations --extra-index-url https://d33sy5i8bnduwe.cloudfront.net/simple/
+# emergentintegrations تُستورد بشكل كسول داخل الدوال فقط (LLM/Stripe) وليست لازمة لإقلاع الخادم.
+# نجعلها غير حابسة للبناء حتى لا يفشل النشر إن تعذّر الوصول لفهرس Emergent من خوادم GitHub.
+RUN pip install emergentintegrations --extra-index-url https://d33sy5i8bnduwe.cloudfront.net/simple/ || echo "⚠️ emergentintegrations install skipped (LLM/Stripe features may be limited; core POS unaffected)"
 
 # نسخ كود التطبيق
 COPY . .
