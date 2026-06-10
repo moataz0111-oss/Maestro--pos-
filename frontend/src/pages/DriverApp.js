@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { API_URL } from '../utils/api';
+import { BrandLogo } from '../components/BrandLogo';
 import axios from 'axios';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
@@ -430,11 +431,8 @@ export default function DriverApp() {
         <Toaster position="top-center" richColors />
         <Card className="w-full max-w-md shadow-2xl">
           <CardHeader className="text-center">
-            <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-gradient-to-br from-blue-500 to-green-500 flex items-center justify-center shadow-lg">
-              <Truck className="h-10 w-10 text-white" />
-            </div>
-            <CardTitle className="text-2xl">{t('تطبيق السائق')}</CardTitle>
-            <p className="text-gray-500">{t('سجل دخولك برقم هاتفك والرمز السري')}</p>
+            <BrandLogo size={96} tagline={t('تطبيق السائق') + ' — ' + t('التوصيل')} dark={true} className="mb-1" />
+            <p className="text-gray-500 mt-2">{t('سجل دخولك برقم هاتفك والرمز السري')}</p>
           </CardHeader>
           <CardContent className="space-y-4">
             {/* حالة الاتصال */}

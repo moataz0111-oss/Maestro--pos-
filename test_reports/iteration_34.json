@@ -132,7 +132,7 @@
   },
   
   "test_credentials": {
-    "api_url": "https://offline-pos-system-18.preview.emergentagent.com",
+    "api_url": "https://multi-tenant-pwa-pos.preview.emergentagent.com",
     "owner": {
       "email": "owner@maestroegp.com",
       "password": "owner123",

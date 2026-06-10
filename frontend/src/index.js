@@ -6,6 +6,13 @@ import App from "@/App";
 // تسجيل Service Worker للعمل Offline - بدون إعادة تحميل تلقائية
 const registerServiceWorker = async () => {
   if ('serviceWorker' in navigator) {
+    // ⭐ لا نسجّل عامل خدمة المشرف (sw-offline) على صفحات الزبائن/السائق/التتبّع.
+    // هذا العامل كان يُسجَّل على نطاق "/" فيتحكّم بصفحة القائمة ويخزّن index.html ومانيفست المشرف،
+    // مما يسبب فتح التطبيق المثبّت على صفحة دخول الموظفين (وأيقونة سوداء) على iOS.
+    const path = window.location.pathname;
+    if (path.indexOf('/menu') === 0 || path.indexOf('/track') === 0 || path.indexOf('/driver-app') === 0) {
+      return;
+    }
     try {
       const registration = await navigator.serviceWorker.register('/sw-offline.js', {
         scope: '/',

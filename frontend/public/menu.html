@@ -2,18 +2,10 @@
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="utf-8" />
-    <script>
-        // ⭐ المانيفست الديناميكي يُكتب أول شيء (قبل أن يقرأ iOS أي مانيفست)
-        // start_url يحمل معرف المطعم — يضمن أن التطبيق المثبّت يفتح القائمة وليس صفحة دخول الموظفين
-        (function() {
-            var r = '';
-            try {
-                r = new URLSearchParams(window.location.search).get('r') || localStorage.getItem('customer_restaurant') || '';
-            } catch (e) {}
-            var href = r ? ('/api/manifest/menu/' + encodeURIComponent(r)) : '/manifest-menu.json';
-            document.write('<link rel="manifest" href="' + href + '" />');
-        })();
-    </script>
+    <!-- ⭐ مانيفست ثابت (static) داخل صلب HTML — هذا ما يقرأه iOS Safari فعلياً عند "إضافة إلى الشاشة الرئيسية".
+         ملاحظة حاسمة: iOS Safari يتجاهل تماماً أي مانيفست يُحقَن لاحقاً عبر JavaScript/document.write،
+         لذلك يجب أن يبقى وسم المانيفست ثابتاً هنا حتى يلتقط أيقونة القائمة (البرتقالية) و start_url الصحيح. -->
+    <link rel="manifest" href="/manifest-menu.json" />
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
     <meta name="theme-color" content="#f97316" />
     <meta name="description" content="اطلب طعامك المفضل - قائمة الطعام" />
@@ -191,19 +183,41 @@
 <body>
     <!-- شاشة التحميل -->
     <div id="loading-screen">
-        <div class="logo-container">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-                <path d="M11 9H9V2H7v7H5V2H3v7c0 2.12 1.66 3.84 3.75 3.97V22h2.5v-9.03C11.34 12.84 13 11.12 13 9V2h-2v7zm5-3v8h2.5v8H21V2c-2.76 0-5 2.24-5 4z"/>
-            </svg>
-        </div>
-        <div class="spinner"></div>
-        <p class="loading-text">جاري تحميل القائمة...</p>
+        <style>
+            #loading-screen .mh-logo { animation: mh-float 3.4s ease-in-out infinite; filter: drop-shadow(0 6px 24px rgba(255,200,80,0.45)); }
+            @keyframes mh-float { 0%,100%{transform:translateY(0);} 50%{transform:translateY(-6px);} }
+            #loading-screen .mh-ring { transform-origin:100px 100px; transform-box:fill-box; animation: mh-spin 6s linear infinite; }
+            @keyframes mh-spin { to { transform: rotate(360deg); } }
+            #loading-screen .mh-name { font-size:30px; font-weight:900; letter-spacing:0.02em; margin-top:14px; color:#fff; text-shadow:0 4px 24px rgba(0,0,0,0.35); }
+            #loading-screen .mh-name .egp { background:linear-gradient(180deg,#ffe7a0 0%,#f59e0b 100%); -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; }
+            #loading-screen .mh-tag { margin-top:6px; font-size:14px; opacity:0.95; }
+        </style>
+        <svg class="mh-logo" viewBox="0 0 200 200" width="118" height="118" aria-hidden="true">
+            <defs>
+                <linearGradient id="mhGold" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stop-color="#ffe7a0"/><stop offset="50%" stop-color="#ffd166"/><stop offset="100%" stop-color="#f59e0b"/>
+                </linearGradient>
+                <radialGradient id="mhDisc" cx="50%" cy="50%" r="50%">
+                    <stop offset="0%" stop-color="#1a1a2e"/><stop offset="70%" stop-color="#0f0f1e"/><stop offset="100%" stop-color="#000"/>
+                </radialGradient>
+            </defs>
+            <circle cx="100" cy="100" r="86" fill="url(#mhDisc)"/>
+            <circle cx="100" cy="100" r="86" stroke="url(#mhGold)" stroke-width="2" fill="none" opacity="0.7"/>
+            <g class="mh-ring"><circle cx="100" cy="100" r="94" stroke="url(#mhGold)" stroke-width="3" fill="none" stroke-dasharray="40 200" stroke-linecap="round"/></g>
+            <polygon points="100,30 158,62 158,138 100,170 42,138 42,62" fill="none" stroke="url(#mhGold)" stroke-width="3.5"/>
+            <path d="M55 142 V70 L100 120 L145 70 V142" fill="none" stroke="url(#mhGold)" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
+            <circle cx="100" cy="100" r="4" fill="url(#mhGold)"/>
+        </svg>
+        <div class="mh-name" dir="ltr">Maestro <span class="egp">EGP</span></div>
+        <div class="mh-tag">جاري تحميل القائمة...</div>
+        <div class="spinner" style="margin-top:18px;"></div>
     </div>
     
     <!-- ⭐ صفحة التثبيت — مانيفست القائمة مضمون هنا 100% (لا يمكن أن يلتقط iOS مانيفست المشرف) -->
     <div id="install-page">
         <div class="install-card">
-            <img class="install-icon" src="/icons/customer-icon-192.png" alt="قائمة الطعام" />
+            <img class="install-icon" src="/icons/customer-icon-192.png" alt="Maestro EGP" />
+            <div style="font-size:22px;font-weight:900;letter-spacing:0.02em;color:#1f2937;margin-bottom:4px;" dir="ltr">Maestro <span style="background:linear-gradient(180deg,#ffd166 0%,#f59e0b 100%);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;">EGP</span></div>
             <div class="install-title">📲 ثبّت تطبيق قائمة الطعام</div>
             <p class="install-sub">أضف التطبيق لشاشتك الرئيسية واطلب طعامك المفضل بضغطة واحدة</p>
             
@@ -237,6 +251,31 @@
     
     <script>
         (function() {
+            // ⭐ تنظيف عمّال خدمة المشرف العالقين (sw-offline على نطاق "/") وكاشاتهم —
+            // هؤلاء كانوا يخزّنون index.html ومانيفست المشرف ويخدمونهما على صفحة القائمة،
+            // مما يسبب الأيقونة السوداء وفتح صفحة دخول الموظفين عند التثبيت على iOS.
+            try {
+                if ('serviceWorker' in navigator && navigator.serviceWorker.getRegistrations) {
+                    navigator.serviceWorker.getRegistrations().then(function(regs) {
+                        regs.forEach(function(reg) {
+                            var s = (reg.scope || '');
+                            // أبقِ فقط عامل خدمة القائمة (scope يحوي /menu)؛ ألغِ تسجيل أي عامل آخر (المشرف)
+                            if (s.indexOf('/menu') === -1) { reg.unregister(); }
+                        });
+                    }).catch(function() {});
+                }
+            } catch (e) {}
+            try {
+                if (window.caches && caches.keys) {
+                    caches.keys().then(function(names) {
+                        names.forEach(function(n) {
+                            // كاشات المشرف تبدأ بـ maestro- ؛ احذفها حتى لا تُخدَم على القائمة
+                            if (n.indexOf('maestro') === 0) { caches.delete(n); }
+                        });
+                    }).catch(function() {});
+                }
+            } catch (e) {}
+
             // استخراج معرف المطعم من URL
             var pathParts = window.location.pathname.split('/').filter(Boolean);
             var restaurant = null;
@@ -297,9 +336,24 @@
                 }
             } else {
                 // وضع التشغيل العادي / standalone: توجيه مباشر لقائمة المطعم
-                setTimeout(function() {
-                    window.location.replace(targetUrl);
-                }, 100);
+                if (restaurant) {
+                    setTimeout(function() { window.location.replace(targetUrl); }, 100);
+                } else {
+                    // لا يوجد معرف مطعم محفوظ (تخزين iOS المثبّت معزول عن Safari) —
+                    // على سيرفر مطعم واحد: نكتشف المطعم تلقائياً ونفتحه مباشرة بدل صفحة الاختيار.
+                    fetch('/api/customer/restaurants')
+                        .then(function(r) { return r.json(); })
+                        .then(function(list) {
+                            if (Array.isArray(list) && list.length === 1 && (list[0].menu_slug || list[0].id)) {
+                                var slug = list[0].menu_slug || list[0].id;
+                                try { localStorage.setItem('customer_restaurant', slug); } catch (e) {}
+                                window.location.replace('/menu/' + slug);
+                            } else {
+                                window.location.replace('/menu');
+                            }
+                        })
+                        .catch(function() { window.location.replace('/menu'); });
+                }
             }
             
             // تسجيل Service Worker للـ PWA

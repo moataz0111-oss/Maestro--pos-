@@ -9,25 +9,48 @@
         <!-- PWA Meta Tags for iOS -->
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-        <meta name="apple-mobile-web-app-title" content="Maestro EGP" />
         <meta name="mobile-web-app-capable" content="yes" />
         
-        <!-- Apple Touch Icons -->
-        <link rel="apple-touch-icon" href="%PUBLIC_URL%/icons/admin-icon-192.png" />
-        <link rel="apple-touch-icon" sizes="152x152" href="%PUBLIC_URL%/icons/admin-icon-192.png" />
-        <link rel="apple-touch-icon" sizes="180x180" href="%PUBLIC_URL%/icons/admin-icon-512.png" />
-        <link rel="apple-touch-icon" sizes="167x167" href="%PUBLIC_URL%/icons/admin-icon-192.png" />
-        
-        <!-- Favicons -->
-        <link rel="icon" type="image/png" sizes="32x32" href="%PUBLIC_URL%/icons/admin-icon-192.png" />
-        <link rel="icon" type="image/png" sizes="16x16" href="%PUBLIC_URL%/icons/admin-icon-192.png" />
-        <link rel="shortcut icon" href="%PUBLIC_URL%/icons/admin-icon-192.png" />
-        
-        <!-- Manifest - نظام الإدارة افتراضياً -->
-        <link rel="manifest" id="app-manifest" href="%PUBLIC_URL%/manifest.json" />
-        
-        <!-- Splash Screen for iOS -->
-        <meta name="apple-touch-startup-image" href="%PUBLIC_URL%/icons/admin-icon-512.png" />
+        <!-- ⭐ كل وسوم الهوية (مانيفست + أيقونات + اسم + لون) تُكتب لحظة التحليل حسب المسار -->
+        <!-- لا توجد أي وسوم ثابتة للمشرف — حتى لا يلتقطها iOS في صفحات الزبائن/السائق إطلاقاً -->
+        <script>
+            (function() {
+                var p = window.location.pathname;
+                var kind = p.indexOf('/menu') === 0 ? 'menu' : (p.indexOf('/driver-app') === 0 ? 'driver' : 'admin');
+                var i192, i512, title, theme, manifest;
+                if (kind === 'menu') {
+                    var parts = p.split('/').filter(Boolean);
+                    var tenant = parts.length > 1 ? parts[1] : '';
+                    try { if (!tenant) tenant = localStorage.getItem('customer_restaurant') || ''; } catch (e) {}
+                    i192 = '/icons/customer-icon-192.png'; i512 = '/icons/customer-icon-512.png';
+                    title = 'قائمة الطعام'; theme = '#f97316';
+                    manifest = tenant ? ('/api/manifest/menu/' + encodeURIComponent(tenant)) : '/manifest-menu.json';
+                    document.title = 'قائمة الطعام - اطلب الآن';
+                } else if (kind === 'driver') {
+                    i192 = '/icons/icon-192.png'; i512 = '/icons/icon-512.png';
+                    title = 'تطبيق السائق'; theme = '#16a34a';
+                    manifest = '/manifest-driver.json';
+                    document.title = 'تطبيق السائق - التوصيل';
+                } else {
+                    i192 = '/icons/admin-icon-192.png'; i512 = '/icons/admin-icon-512.png';
+                    title = 'Maestro EGP'; theme = '#1e40af';
+                    manifest = '/manifest.json';
+                }
+                document.write(
+                    '<meta name="theme-color" content="' + theme + '" />' +
+                    '<meta name="apple-mobile-web-app-title" content="' + title + '" />' +
+                    '<link rel="apple-touch-icon" href="' + i192 + '" />' +
+                    '<link rel="apple-touch-icon" sizes="152x152" href="' + i192 + '" />' +
+                    '<link rel="apple-touch-icon" sizes="180x180" href="' + i512 + '" />' +
+                    '<link rel="apple-touch-icon" sizes="167x167" href="' + i192 + '" />' +
+                    '<link rel="icon" type="image/png" sizes="32x32" href="' + i192 + '" />' +
+                    '<link rel="icon" type="image/png" sizes="16x16" href="' + i192 + '" />' +
+                    '<link rel="shortcut icon" href="' + i192 + '" />' +
+                    '<link rel="manifest" id="app-manifest" href="' + manifest + '" />' +
+                    '<meta name="apple-touch-startup-image" href="' + i512 + '" />'
+                );
+            })();
+        </script>
         
         <title>Maestro EGP</title>
         <script src="https://assets.emergent.sh/scripts/emergent-main.js"></script>
@@ -39,7 +62,7 @@
             (function() {
                 try {
                     var path = window.location.pathname;
-                    var isRoot = path === '/' || path === '/index.html';
+                    var isRoot = path === '/' || path === '/index.html' || path === '/login';
                     var isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
                     var hasStaff = localStorage.getItem('token') || localStorage.getItem('cached_user');
                     if (isRoot && isStandalone && !hasStaff) {

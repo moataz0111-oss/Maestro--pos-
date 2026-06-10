@@ -3,6 +3,7 @@ import { useTranslation } from '../hooks/useTranslation';
 import { useParams, useSearchParams } from 'react-router-dom';
 import axios from 'axios';
 import { API_URL, BACKEND_URL } from '../utils/api';
+import { BrandLogo } from '../components/BrandLogo';
 import { Card, CardContent } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
@@ -1125,7 +1126,8 @@ export default function CustomerMenu() {
     return (
       <div className="min-h-screen bg-gradient-to-br from-orange-50 to-red-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="w-16 h-16 border-4 border-orange-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <BrandLogo size={96} tagline={null} dark={false} className="mb-4" />
+          <div className="w-10 h-10 border-4 border-orange-500 border-t-transparent rounded-full animate-spin mx-auto mt-6 mb-3"></div>
           <p className="text-gray-600 font-medium">{t('جاري تحميل القائمة')}...</p>
         </div>
       </div>
