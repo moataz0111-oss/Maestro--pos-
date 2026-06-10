@@ -20805,6 +20805,45 @@ async def get_customer_restaurants():
     return restaurants
 
 
+@api_router.get("/manifest/menu/{tenant_id}")
+async def get_menu_manifest(tenant_id: str):
+    """مانيفست PWA ديناميكي لقائمة الزبون.
+    start_url يحمل معرف المطعم نفسه — يحل مشكلة iOS:
+    1) التطبيق المثبّت كان يفتح على "/" (صفحة دخول الموظفين)
+    2) التخزين المعزول في standalone لا يعرف المطعم المحفوظ
+    """
+    tenant = await db.tenants.find_one({"id": tenant_id}, {"_id": 0, "name": 1, "name_ar": 1}) or {}
+    settings = await db.tenant_settings.find_one({"tenant_id": tenant_id}, {"_id": 0, "restaurant_name": 1}) or {}
+    name = tenant.get("name") or tenant.get("name_ar") or settings.get("restaurant_name") or "قائمة الطعام"
+    from fastapi.responses import Response as FastAPIResponse
+    import json as _json
+    manifest = {
+        "short_name": name[:20],
+        "name": f"{name} - اطلب الآن",
+        "description": "اطلب طعامك المفضل بسهولة",
+        "icons": [
+            {"src": "/icons/customer-icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
+            {"src": "/icons/customer-icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"},
+            {"src": "/icons/customer-icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable"},
+            {"src": "/icons/customer-icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"}
+        ],
+        "id": f"/menu/{tenant_id}",
+        "start_url": f"/menu.html?r={tenant_id}",
+        "scope": "/menu",
+        "display": "standalone",
+        "orientation": "any",
+        "theme_color": "#f97316",
+        "background_color": "#fff7ed",
+        "lang": "ar",
+        "dir": "rtl"
+    }
+    return FastAPIResponse(
+        content=_json.dumps(manifest, ensure_ascii=False),
+        media_type="application/manifest+json",
+        headers={"Cache-Control": "no-cache, no-store, must-revalidate"}
+    )
+
+
 @api_router.get("/customer/menu/{tenant_id}")
 async def get_customer_menu(tenant_id: str):
     """جلب قائمة الطعام للعملاء - بدون توثيق"""

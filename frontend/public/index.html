@@ -65,7 +65,16 @@
                 var appleTitle = document.querySelector('meta[name="apple-mobile-web-app-title"]');
                 var appleIcons = document.querySelectorAll('link[rel="apple-touch-icon"]');
                 if (path.startsWith('/menu')) {
-                    if (manifestLink) manifestLink.href = '/manifest-menu.json?v=' + Date.now();
+                    // ⭐ مانيفست ديناميكي من الباك إند يحمل معرف المطعم في start_url
+                    // (يضمن أن التطبيق المثبّت يفتح على قائمة المطعم وليس صفحة دخول الموظفين)
+                    var mparts = path.split('/').filter(Boolean);
+                    var mtenant = mparts.length > 1 ? mparts[1] : '';
+                    try { if (!mtenant) mtenant = localStorage.getItem('customer_restaurant') || ''; } catch (e) {}
+                    if (manifestLink) {
+                        manifestLink.href = mtenant
+                            ? ('/api/manifest/menu/' + encodeURIComponent(mtenant))
+                            : ('/manifest-menu.json?v=' + Date.now());
+                    }
                     if (themeColor) themeColor.content = '#f97316';
                     appleIcons.forEach(function(icon) { icon.href = icon.href.replace('admin-icon', 'customer-icon'); });
                     if (appleTitle) appleTitle.content = 'قائمة الطعام';

@@ -1,5 +1,18 @@
 # Maestro EGP - Multi-Tenant POS System PRD
 
+## BUGFIX جذري (10 يونيو 2026) — تثبيت PWA قائمة الطعام كان يفتح صفحة دخول الموظفين 📲 ✅
+**السبب الجذري (من فيديو المستخدم على iOS):**
+1. iOS التقط مانيفست المشرف (`start_url: "/"`) لأن التبديل الديناميكي للمانيفست غير موثوق على iOS (+ كاش SW قديم cache-first).
+2. التطبيق المثبّت على iOS له تخزين معزول عن Safari → لا يجد `customer_restaurant` المحفوظ → redirect الجذر يفشل → تظهر صفحة الدخول.
+**الحل (متعدد الطبقات):**
+- **مانيفست ديناميكي من الباك إند:** `GET /api/manifest/menu/{tenant_id}` (server.py قرب get_customer_menu) — start_url=`/menu.html?r={tenant}` (المعرف داخل الرابط نفسه، لا اعتماد على localStorage)، الاسم = اسم المطعم، أيقونات الزبون، scope=/menu، Cache-Control: no-store.
+- **صفحة تثبيت ثابتة:** `menu.html?install=1&r=X` — تبقى بلا redirect وتعرض تعليمات iOS (مشاركة → إضافة للشاشة الرئيسية) + زر تثبيت مباشر لأندرويد (beforeinstallprompt). المانيفست يُكتب أول سطر في head عبر document.write (مضمون قبل قراءة iOS). في standalone تتجاهل install وتوجه للقائمة.
+- **زر "ثبت التطبيق" في CustomerMenu:** deferredPrompt إن وجد (أندرويد)، وإلا ينتقل لصفحة التثبيت — كلا البانرين يستخدمان نفس handleInstallClick.
+- **index.html + CustomerMenu:** يبدلان المانيفست إلى `/api/manifest/menu/{tenant}` (المستخرج من المسار).
+- **sw-customer.js v3:** network-first للمستندات والمانيفست (كان cache-first يمنع وصول أي تحديث للزبائن!) + skipWaiting/clients.claim + حذف الكاشات القديمة.
+**تحقق E2E (Playwright):** صفحة القائمة تحمل المانيفست الديناميكي واسم المطعم في apple-title ✓، صفحة التثبيت تبقى ثابتة بالتعليمات ✓، إطلاق `/menu.html?r=default` يوجه لـ `/menu/default` ✓، مانيفستات المشرف/السائق سليمة ✓.
+**⚠️ هام للمستخدم:** يجب إعادة النشر (Deploy) ليصل الإصلاح لـ maestroegp.com، وحذف الأيقونة القديمة المثبتة وإعادة التثبيت من زر "ثبت التطبيق".
+
 ## FEATURE (10 يونيو 2026) — تقرير أداء السائقين 🏆 ✅
 - **Backend:** `GET /api/drivers/performance?period=today|week|month&branch_id=` (routes/drivers_routes.py — مُعرّف قبل مسارات `/{driver_id}`): لكل سائق: `deliveries` (المُسلّمة)، `active_orders`، `total_fees` (أجور التوصيل)، `total_collected`، `avg_delivery_minutes` (من `out_for_delivery_at` أو `created_at` حتى `delivered_at`، استبعاد >24س)، `distance_km` (تقديرية فرع→زبون Haversine، تتطلب إحداثيات الفرع). يشمل السائقين بلا طلبات والسائقين المحذوفين. مرتب بعدد التوصيلات ثم الأجور + `totals` للفترة. يستبعد طلبات شركات التوصيل.
 - **طابع زمني جديد:** `out_for_delivery_at` يُسجل الآن عند تغيير الحالة لـ"خرج للتوصيل" في endpoint حالة السائق + endpoint الحالة العام (server.py) — لدقة متوسط الزمن مستقبلاً.

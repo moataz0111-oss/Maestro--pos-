@@ -296,11 +296,12 @@ export default function CustomerMenu() {
   }, [deliveryLocation, tenantId, selectedBranch]);
   // PWA Install handling - تحديث manifest للعملاء
   useEffect(() => {
-    // تغيير manifest link لاستخدام manifest العملاء الجديد
+    // مانيفست ديناميكي يحمل معرف المطعم في start_url (يمنع فتح التطبيق المثبّت على صفحة دخول الموظفين)
     const manifestLink = document.querySelector('link[rel="manifest"]');
     if (manifestLink) {
-      // استخدام manifest-menu.json الجديد
-      manifestLink.href = '/manifest-menu.json?v=' + Date.now();
+      manifestLink.href = tenantId
+        ? `/api/manifest/menu/${encodeURIComponent(tenantId)}`
+        : '/manifest-menu.json?v=' + Date.now();
     }
     
     // تحديث meta tags
@@ -349,7 +350,11 @@ export default function CustomerMenu() {
       }
       setDeferredPrompt(null);
       setShowInstallBanner(false);
+      return;
     }
+    // iOS (أو عدم توفر prompt): صفحة تثبيت ثابتة بمانيفست القائمة المضمون 100%
+    // تمنع نهائياً التقاط iOS لمانيفست المشرف وفتح التطبيق على صفحة دخول الموظفين
+    window.location.href = `/menu.html?install=1${tenantId ? `&r=${encodeURIComponent(tenantId)}` : ''}`;
   };
   // تسجيل إشعارات Push
   const registerPushNotifications = async () => {
